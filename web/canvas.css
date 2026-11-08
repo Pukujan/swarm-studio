@@ -96,3 +96,18 @@ body { display: grid; grid-template: 52px 1fr / 270px 1fr 290px; }
 .feed .item.sys { color: var(--muted); font-style: italic; }
 .feed .item.err { color: #ff8a8d; }
 @keyframes in { from { opacity: 0; transform: translateY(-4px); } }
+
+/* Narrow hosts (a Hermes Desktop page beside other panes): give the canvas the room. */
+@media (max-width: 1180px) {
+  body { grid-template-columns: 220px 1fr 230px; }
+  .agents { grid-template-columns: 1fr; }
+}
+@media (max-width: 920px) {
+  body { grid-template-columns: 1fr 210px; }
+  .panel.left { display: none; }
+  .brand { display: none; }
+}
+@media (max-width: 620px) {
+  body { grid-template-columns: 1fr; }
+  .panel.right { display: none; }
+}

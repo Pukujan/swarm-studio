@@ -1,8 +1,9 @@
 /**
  * Swarm Studio — Desktop half.
  *
- * A pane that shows the live Swarm Studio canvas, and a status-bar chip that
- * says how many agents are working. The canvas is a local page served on
+ * A "Swarm Studio" page (sidebar entry) and a pane docked beside the chat,
+ * both showing the live Swarm Studio canvas, and a status-bar chip that says
+ * how many agents are working. The canvas is a local page served on
  * 127.0.0.1 by this plugin's Node server; it is embedded through
  * SandboxedFrame (opaque origin, scripts only), never with app privileges.
  *
@@ -10,10 +11,22 @@
  * @hermes/plugin-sdk, react and react/jsx-runtime are imported.
  */
 
-import { Button, EmptyState, SandboxedFrame, haptic, host, useQuery } from '@hermes/plugin-sdk'
+import {
+  Button,
+  EmptyState,
+  PANES_AREA,
+  ROUTES_AREA,
+  SIDEBAR_NAV_AREA,
+  STATUSBAR_AREAS,
+  SandboxedFrame,
+  haptic,
+  host,
+  useQuery
+} from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'swarm-studio'
+const ROUTE = '/swarm'
 
 function useCanvas(ctx) {
   return useQuery({
@@ -24,7 +37,7 @@ function useCanvas(ctx) {
   })
 }
 
-function Pane({ ctx }) {
+function Canvas({ ctx }) {
   const { data, isLoading, error, refetch } = useCanvas(ctx)
 
   if (isLoading) {
@@ -89,22 +102,25 @@ function Chip({ ctx }) {
   })
 }
 
+function Page({ ctx }) {
+  return jsx('div', { className: 'flex h-full min-h-0 flex-col', children: jsx(Canvas, { ctx }) })
+}
+
 export default {
   id: ID,
   name: 'Swarm Studio',
   register(ctx) {
-    ctx.register({
-      id: 'pane',
-      area: 'panes',
-      title: 'swarm',
-      data: { placement: 'right', width: '720px' },
-      render: () => jsx(Pane, { ctx })
-    })
-    ctx.register({
-      id: 'chip',
-      area: 'statusBar.right',
-      order: 141,
-      render: () => jsx(Chip, { ctx })
-    })
+    ctx.registerMany([
+      { id: 'page', area: ROUTES_AREA, data: { path: ROUTE }, render: () => jsx(Page, { ctx }) },
+      { id: 'nav', area: SIDEBAR_NAV_AREA, data: { path: ROUTE, label: 'Swarm Studio', codicon: 'organization' } },
+      {
+        id: 'pane',
+        area: PANES_AREA,
+        title: 'swarm',
+        data: { placement: 'right', dock: { pane: 'workspace', pos: 'right' }, width: '560px', minWidth: '360px' },
+        render: () => jsx(Canvas, { ctx })
+      },
+      { id: 'chip', area: STATUSBAR_AREAS.right, order: 141, render: () => jsx(Chip, { ctx }) }
+    ])
   }
 }
