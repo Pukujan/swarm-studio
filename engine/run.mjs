@@ -1,0 +1,245 @@
+// One swarm run: a streamed plan feeds a task queue that a fixed pool of agents
+// drains in parallel. Layers start the moment the planner finishes writing them.
+// Everything that happens is emitted as an event; the canvas only draws events.
+
+import { streamChat } from './llm.mjs'
+import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
+
+const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
+
+export const AGENT_NAMES = [
+  'Ada', 'Basil', 'Cleo', 'Dax', 'Esme', 'Finn', 'Gia', 'Hugo', 'Iris', 'Jude', 'Kai', 'Luna',
+  'Milo', 'Nova', 'Otis', 'Pia', 'Quin', 'Remy', 'Sage', 'Tess', 'Uma', 'Vito', 'Wren', 'Xan'
+]
+const AGENT_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#FFD93D', '#6BCB77', '#4D96FF', '#FF8FAB', '#C77DFF', '#FF9F1C',
+  '#2EC4B6', '#E76F51', '#90BE6D', '#F9C74F', '#43AA8B', '#F3722C', '#577590', '#F94144',
+  '#9B5DE5', '#00BBF9', '#00F5D4', '#FEE440', '#F15BB5', '#8AC926', '#1982C4', '#FF595E'
+]
+
+class TaskQueue {
+  constructor() {
+    this.items = []
+    this.waiters = []
+    this.closed = false
+  }
+  push(task) {
+    const waiter = this.waiters.shift()
+    if (waiter) waiter(task)
+    else this.items.push(task)
+  }
+  close() {
+    this.closed = true
+    for (const w of this.waiters.splice(0)) w(null)
+  }
+  next() {
+    if (this.items.length) return Promise.resolve(this.items.shift())
+    if (this.closed) return Promise.resolve(null)
+    return new Promise(resolve => this.waiters.push(resolve))
+  }
+}
+
+/**
+ * Pull complete JSON objects out of a growing text stream, whatever the layout:
+ * one per line, several per line, pretty-printed, inside a fence or an array.
+ */
+function lineParser(onObject) {
+  let buffer = ''
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+  let i = 0
+  return {
+    push(text) {
+      buffer += text
+      for (; i < buffer.length; i++) {
+        const c = buffer[i]
+        if (inString) {
+          if (escaped) escaped = false
+          else if (c === '\\') escaped = true
+          else if (c === '"') inString = false
+        } else if (c === '"') {
+          if (depth > 0) inString = true
+        } else if (c === '{') {
+          if (depth++ === 0) start = i
+        } else if (c === '}' && depth > 0) {
+          if (--depth === 0) {
+            try {
+              onObject(JSON.parse(buffer.slice(start, i + 1)))
+            } catch {
+              /* a malformed plan object is skipped, not fatal */
+            }
+            buffer = buffer.slice(i + 1)
+            i = -1
+          }
+        }
+      }
+    },
+    end() {}
+  }
+}
+
+const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
+
+export async function runSwarm({ provider, brief, agents = 16, plannerModel, workerModel, emit, signal }) {
+  const t0 = performance.now()
+  const elapsed = () => Math.round(performance.now() - t0)
+  const plan = { theme: null, pages: [], shared: [] }
+  const queue = new TaskQueue()
+  const stats = { planned: 0, done: 0, failed: 0 }
+
+  const pool = Array.from({ length: Math.min(agents, AGENT_NAMES.length) }, (_, i) => ({
+    id: `a${i}`,
+    name: AGENT_NAMES[i],
+    color: AGENT_COLORS[i]
+  }))
+
+  emit('run:start', { brief, agents: pool, plannerModel, workerModel })
+
+  // --- planning: a quick sitemap pass, then one planner per page in parallel.
+  // Page planners start a beat apart so pages come to life one after another.
+  // Every layer is dispatched the moment its JSON line is complete.
+  const STAGGER_MS = 1500
+  const pagePlanners = []
+
+  function addLayer(obj, fallbackPage) {
+    if (obj.type !== 'layer' || !obj.id) return
+    const layer = { ...obj, links: Array.isArray(obj.links) ? obj.links : [] }
+    if (layer.page === '*') {
+      if (plan.shared.some(l => l.id === layer.id)) return
+      plan.shared.push(layer)
+    } else {
+      const page = plan.pages.find(p => p.id === (fallbackPage || layer.page))
+      if (!page || page.layers.some(l => l.id === layer.id)) return
+      layer.page = page.id
+      page.layers.push(layer)
+    }
+    stats.planned++
+    emit('layer:plan', { page: layer.page, id: layer.id, role: layer.role, height: layer.height || 360, links: layer.links })
+    queue.push({ kind: 'build', layer })
+  }
+
+  function planPage(page, attempt = 1) {
+    const parser = lineParser(obj => addLayer(obj, page.id))
+    return new Promise(r => setTimeout(r, attempt === 1 ? page.index * STAGGER_MS : 0))
+      .then(() => {
+        emit('page:planning', { page: page.id })
+        return streamChat(provider, {
+          model: plannerModel,
+          messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page }),
+          maxTokens: 3000,
+          temperature: 0.8,
+          extra: NO_THINKING,
+          signal,
+          onDelta: d => {
+            emit('plan:delta', { page: page.id, text: d })
+            parser.push(d)
+          }
+        })
+      })
+      .then(() => {
+        parser.end()
+        if (!page.layers.length && attempt < 2) {
+          emit('error', { where: `planner:${page.id}`, message: 'no layers parsed, replanning' })
+          return planPage(page, attempt + 1)
+        }
+        emit('page:planned', { page: page.id, layers: page.layers.length, ms: elapsed() })
+      })
+      .catch(err => emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }))
+  }
+
+  const sitemapParser = lineParser(obj => {
+    if (obj.type === 'theme') {
+      plan.theme = obj
+      emit('theme', obj)
+    } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id)) {
+      const page = { ...obj, index: plan.pages.length, layers: [] }
+      plan.pages.push(page)
+      emit('page', { id: page.id, title: page.title, purpose: page.purpose, index: page.index })
+    } else {
+      addLayer(obj)
+    }
+  })
+
+  const planning = streamChat(provider, {
+    model: plannerModel,
+    messages: [
+      { role: 'system', content: SITEMAP_SYSTEM },
+      { role: 'user', content: `Brief: ${brief}` }
+    ],
+    maxTokens: 2000,
+    temperature: 0.8,
+    extra: NO_THINKING,
+    signal,
+    onDelta: d => {
+      emit('plan:delta', { text: d })
+      sitemapParser.push(d)
+    }
+  })
+    .then(() => {
+      sitemapParser.end()
+      emit('sitemap:done', { ms: elapsed(), pages: plan.pages.length })
+      // page planners need the whole page list (for links), so they start here
+      for (const page of plan.pages) pagePlanners.push(planPage(page))
+      return Promise.all(pagePlanners)
+    })
+    .then(() => emit('plan:done', { ms: elapsed(), pages: plan.pages.length, layers: stats.planned }))
+    .catch(err => {
+      emit('error', { where: 'planner', message: String(err.message || err) })
+    })
+    .finally(() => queue.close())
+
+  // --- workers: each agent loops over the queue until the plan is finished and drained
+  async function work(agent) {
+    for (;;) {
+      const task = await queue.next()
+      if (!task) break
+      await buildLayer(agent, task.layer)
+    }
+    emit('agent:idle', { agent: agent.id, reason: 'done' })
+  }
+
+  async function buildLayer(agent, layer) {
+    const page = plan.pages.find(p => p.id === layer.page) || { id: '*', title: 'All pages', layers: [] }
+    emit('agent:assign', { agent: agent.id, page: layer.page, layer: layer.id, role: layer.role })
+    const started = performance.now()
+    let text = ''
+    let saidCount = 0
+    try {
+      await streamChat(provider, {
+        model: workerModel,
+        messages: workerMessages({ theme: plan.theme || {}, plan, page, layer }),
+        maxTokens: 3000,
+        extra: NO_THINKING,
+        signal,
+        onDelta: d => {
+          text += d
+          emit('layer:delta', { page: layer.page, layer: layer.id, agent: agent.id, text: d })
+          const says = [...text.matchAll(SAY_RE)]
+          for (; saidCount < says.length; saidCount++) {
+            emit('agent:say', { agent: agent.id, layer: layer.id, text: says[saidCount][1].trim() })
+          }
+        }
+      })
+      stats.done++
+      layer.html = text
+      emit('layer:done', {
+        page: layer.page,
+        layer: layer.id,
+        agent: agent.id,
+        ms: Math.round(performance.now() - started),
+        done: stats.done,
+        planned: stats.planned
+      })
+    } catch (err) {
+      stats.failed++
+      emit('layer:failed', { page: layer.page, layer: layer.id, agent: agent.id, message: String(err.message || err) })
+    }
+  }
+
+  await Promise.all([planning, ...pool.map(work)])
+  const result = { ms: elapsed(), ...stats, pages: plan.pages.length }
+  emit('run:done', result)
+  return { plan, result }
+}

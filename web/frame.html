@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+  :root { --font-heading: Georgia, serif; --font-body: system-ui, sans-serif; --radius: 12px;
+          --background: #fafafa; --foreground: #111; --primary: #222; --primary-foreground: #fff;
+          --muted: #eee; --muted-foreground: #666; --border: #ddd; --accent: #c60; --card: #fff; }
+  html, body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-body); }
+  body { min-height: 400px; overflow: hidden; }
+  [data-slot] { position: relative; }
+  [data-slot].wire, [data-slot].streaming { min-height: var(--h); }
+  [data-slot].wire { outline: 2px dashed color-mix(in srgb, var(--agent, #8892a0) 85%, transparent); outline-offset: -8px;
+    background: repeating-linear-gradient(135deg, transparent 0 14px, color-mix(in srgb, var(--agent, #8892a0) 8%, transparent) 14px 15px); }
+  [data-slot].wire::before { content: attr(data-label); position: absolute; left: 20px; top: 20px; font: 600 15px/1 ui-monospace, monospace;
+    letter-spacing: .05em; text-transform: uppercase; color: color-mix(in srgb, var(--agent, #8892a0) 90%, black); }
+  [data-slot].planned { opacity: .55; }
+  [data-slot].drawing { animation: draw .6s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes draw { from { clip-path: inset(0 100% 100% 0); } to { clip-path: inset(0 0 0 0); } }
+  [data-slot].streaming { outline: 3px solid color-mix(in srgb, var(--agent) 75%, transparent); outline-offset: -3px; }
+  [data-slot].flash { animation: flash 1.1s ease-out; }
+  @keyframes flash { from { box-shadow: inset 0 0 0 6px var(--agent); } to { box-shadow: inset 0 0 0 0 transparent; } }
+  [data-slot].failed { outline: 3px dashed #e5484d; outline-offset: -8px; }
+</style>
+</head>
+<body></body>
+</html>
