@@ -7,6 +7,7 @@
 //        SWARM_PLANNER_MODEL, SWARM_WORKER_MODEL, SWARM_AGENTS
 
 import { createServer } from 'node:http'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,9 +24,15 @@ const plannerModel = process.env.SWARM_PLANNER_MODEL || 'cb/deepseek-v4.1-flash'
 const workerModel = process.env.SWARM_WORKER_MODEL || 'cb/deepseek-v4.1-flash'
 const defaultAgents = Number(process.env.SWARM_AGENTS || 16)
 
+// Runs spend the user's API credits, so starting one (and watching one) needs
+// this token. The canvas page carries it inline; other websites can't read
+// that page (no CORS on it, and the Host check stops DNS rebinding).
+const token = process.env.SWARM_TOKEN || randomBytes(24).toString('base64url')
+const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
+
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' }
 
-let current = null // { id, events: [], controller, done }
+let current = null // { id, events: [], controller, done, result, working }
 const clients = new Set()
 
 function broadcast(event) {
@@ -38,13 +45,16 @@ function startRun({ brief, agents }) {
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
   mkdirSync(dir, { recursive: true })
-  const run = { id, dir, events: [], controller: new AbortController(), done: false }
+  const run = { id, dir, events: [], controller: new AbortController(), done: false, result: null, working: new Set() }
   current = run
 
   const emit = (type, data) => {
     if (current !== run) return
     const event = { type, t: Date.now(), run: id, ...data }
     run.events.push(event)
+    if (type === 'agent:assign') run.working.add(data.agent)
+    if (type === 'layer:done' || type === 'layer:failed') run.working.delete(data.agent)
+    if (type === 'run:done') run.result = data
     broadcast(event)
     if (type !== 'layer:delta' && type !== 'plan:delta') appendFileSync(join(dir, 'events.jsonl'), JSON.stringify(event) + '\n')
   }
@@ -66,6 +76,22 @@ function startRun({ brief, agents }) {
   return run
 }
 
+function tokenOk(given) {
+  const a = Buffer.from(String(given || ''))
+  const b = Buffer.from(token)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+// The canvas as one document (styles, script, frame template and token inline), so it
+// also works inside the Desktop pane's sandboxed frame, whose origin is opaque.
+function canvasPage() {
+  const read = f => readFileSync(join(webDir, f), 'utf8')
+  const boot = JSON.stringify({ token, frameHtml: read('frame.html') }).replace(/</g, '\\u003c')
+  return read('index.html')
+    .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
+    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
+}
+
 function sendFile(res, file) {
   if (!existsSync(file)) {
     res.writeHead(404).end('not found')
@@ -77,6 +103,33 @@ function sendFile(res, file) {
 
 const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
+  if (!hosts.has(req.headers.host)) {
+    res.writeHead(421).end('wrong host')
+    return
+  }
+
+  // The API answers any origin (the Desktop pane's is opaque) but needs the token.
+  const api = url.pathname === '/events' || url.pathname.startsWith('/api/')
+  if (api) {
+    res.setHeader('access-control-allow-origin', '*')
+    res.setHeader('access-control-allow-headers', 'content-type, x-swarm-token')
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204).end()
+      return
+    }
+    const given = req.headers['x-swarm-token'] || url.searchParams.get('k')
+    if (url.pathname !== '/api/state' && !tokenOk(given)) {
+      res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'token required' }))
+      return
+    }
+  }
+
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(canvasPage())
+    return
+  }
 
   if (url.pathname === '/events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
@@ -109,11 +162,19 @@ const server = createServer((req, res) => {
 
   if (url.pathname === '/api/state') {
     res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ run: current?.id || null, done: current?.done ?? null, events: current?.events.length || 0, plannerModel, workerModel }))
+    res.end(JSON.stringify({
+      app: 'swarm-studio',
+      run: current?.id || null,
+      done: current?.done ?? null,
+      working: current?.working.size || 0,
+      result: current?.result || null,
+      plannerModel,
+      workerModel
+    }))
     return
   }
 
-  const rel = url.pathname === '/' ? 'index.html' : normalize(url.pathname).replace(/^(\.\.[/\\])+/, '').replace(/^[/\\]+/, '')
+  const rel = normalize(url.pathname).replace(/^(\.\.[/\\])+/, '').replace(/^[/\\]+/, '')
   sendFile(res, join(webDir, rel))
 })
 

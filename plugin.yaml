@@ -1,0 +1,14 @@
+name: swarm-studio
+version: 0.1.0
+description: "A swarm of agents designs and builds a multi-page website live on a canvas: a planner sets the theme and pages, then a dozen-plus agents stream every section in parallel, with cursors, design tools, wires between pages and a clickable prototype."
+author: Pukujan
+kind: standalone
+requires_hermes: ">=0.23"
+provides_tools:
+  - swarm_design
+  - swarm_canvas
+requires_env:
+  - name: SWARM_STUDIO_API_KEY
+    description: "API key for an OpenAI-compatible chat endpoint (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"
+    secret: true
+license: Apache-2.0

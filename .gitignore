@@ -2,3 +2,5 @@ node_modules/
 bench/results/
 bench/pages/
 runs/
+__pycache__/
+*.pyc

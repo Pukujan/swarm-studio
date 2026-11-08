@@ -3,6 +3,10 @@
 // cursor move, tool and bubble comes from a real model stream.
 
 const $ = s => document.querySelector(s)
+// Inlined by the server: the API token and the page-frame template. Frames are
+// built from srcdoc so they share this document's origin even when it is opaque
+// (inside the Desktop pane's sandboxed frame).
+const BOOT = window.SWARM || {}
 const FRAME_W = 1280
 const GAP = 260
 const els = {
@@ -198,6 +202,8 @@ function detectTool(text) {
 }
 
 // ---------- frames and layers
+// Each page is an iframe driven by messages (see frame.html): this side sends
+// theme and slot updates, the frame reports its geometry back as `geo`.
 
 function addFrame(p) {
   if (S.frames.some(f => f.id === p.id)) return
@@ -205,21 +211,37 @@ function addFrame(p) {
   el.className = 'frame'
   const x = p.index * (FRAME_W + GAP)
   el.style.left = `${x}px`
-  el.innerHTML = `<div class="frame-label"></div><iframe src="frame.html" title=""></iframe>`
+  el.innerHTML = `<div class="frame-label"></div><iframe title=""></iframe>`
   el.querySelector('.frame-label').textContent = p.title
   el.querySelector('.frame-label').insertAdjacentHTML('beforeend', `<small>/${p.id}</small>`)
   const iframe = el.querySelector('iframe')
-  const frame = { id: p.id, title: p.title, index: p.index, x, h: 700, el, iframe, doc: null, ready: false, slots: new Map() }
-  iframe.addEventListener('load', () => {
-    frame.doc = iframe.contentDocument
-    frame.ready = true
-    applyTheme(frame)
-    for (const k of S.order) ensureSlot(frame, S.layers.get(k))
-  })
+  iframe.title = p.title
+  if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
+  else iframe.src = 'frame.html'
+  const frame = { id: p.id, title: p.title, index: p.index, x, h: 700, el, iframe, ready: false, slots: new Map(), geo: { slots: {}, gotos: [] } }
   els.world.append(el)
   S.frames.push(frame)
   S.treeDirty = true
 }
+
+function post(f, msg) {
+  f.iframe.contentWindow?.postMessage(msg, '*')
+}
+
+window.addEventListener('message', e => {
+  const f = S.frames.find(fr => fr.iframe.contentWindow === e.source)
+  if (!f) return
+  const m = e.data || {}
+  if (m.type === 'ready') {
+    f.ready = true
+    f.slots.clear()
+    applyTheme(f)
+    for (const k of S.order) ensureSlot(f, S.layers.get(k))
+  } else if (m.type === 'geo') {
+    f.geo = m
+    linkWires(f)
+  }
+})
 
 function addLayer(e) {
   const k = key(e.page, e.id)
@@ -236,34 +258,13 @@ const belongs = (f, l) => l.page === '*' || l.page === f.id
 
 function ensureSlot(f, l) {
   if (!f.ready || !l || !belongs(f, l) || f.slots.has(l.key)) return
-  const el = f.doc.createElement('div')
-  el.dataset.slot = l.key
-  const body = f.doc.body
-  if (l.page === '*' && l.id === 'nav') body.prepend(el)
-  else if (l.page === '*' && l.id === 'footer') body.append(el)
-  else {
-    const footer = f.slots.get('*/footer')?.el
-    footer ? body.insertBefore(el, footer) : body.append(el)
-  }
-  f.slots.set(l.key, { el, ver: -1, status: null, t: 0 })
+  const where = l.page === '*' && l.id === 'nav' ? 'start' : l.page === '*' && l.id === 'footer' ? 'end' : 'before-footer'
+  post(f, { type: 'slot', key: l.key, where })
+  f.slots.set(l.key, { ver: -1, status: null, t: 0 })
 }
 
 function applyTheme(f) {
-  if (!f.ready || !S.theme) return
-  const root = f.doc.documentElement
-  for (const [k, v] of Object.entries(S.theme.vars || {})) root.style.setProperty(k, v)
-  const { heading = 'Georgia', body = 'Inter' } = S.theme.fonts || {}
-  root.style.setProperty('--font-heading', `'${heading}', Georgia, serif`)
-  root.style.setProperty('--font-body', `'${body}', system-ui, sans-serif`)
-  if (S.theme.radius) root.style.setProperty('--radius', S.theme.radius)
-  if (!f.doc.getElementById('fonts')) {
-    const link = f.doc.createElement('link')
-    link.id = 'fonts'
-    link.rel = 'stylesheet'
-    const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`
-    link.href = `https://fonts.googleapis.com/css2?${fam(heading)}&${fam(body)}&display=swap`
-    f.doc.head.append(link)
-  }
+  if (f.ready && S.theme) post(f, { type: 'theme', theme: { vars: S.theme.vars, fonts: S.theme.fonts, radius: S.theme.radius } })
 }
 
 function clean(t) {
@@ -281,29 +282,25 @@ function syncSlots(now) {
     for (const [k, slot] of f.slots) {
       const l = S.layers.get(k)
       const a = l.agent && S.agents.get(l.agent)
+      const msg = { type: 'slot', key: k }
       if (slot.status !== l.status) {
         const prev = slot.status
         slot.status = l.status
-        const cls = { planned: 'wire planned', assigned: 'wire', streaming: 'streaming', done: '', failed: 'wire failed' }[l.status]
-        slot.el.className = cls
-        if (l.status === 'assigned') { slot.el.classList.add('drawing'); setTimeout(() => slot.el.classList.remove('drawing'), 650) }
-        if (l.status === 'done' && prev) { slot.el.classList.add('flash'); setTimeout(() => slot.el.classList.remove('flash'), 1100) }
-        slot.el.style.setProperty('--h', `${l.height}px`)
-        if (a) slot.el.style.setProperty('--agent', a.color)
-        slot.el.dataset.label = `${l.role} · ${a ? a.name : 'queued'}`
+        msg.cls = { planned: 'wire planned', assigned: 'wire', streaming: 'streaming', done: '', failed: 'wire failed' }[l.status]
+        if (l.status === 'assigned') msg.anim = 'drawing'
+        if (l.status === 'done' && prev) msg.anim = 'flash'
+        msg.h = l.height
+        if (a) msg.color = a.color
+        msg.label = `${l.role} · ${a ? a.name : 'queued'}`
       }
       if (slot.ver !== l.ver && (l.status === 'done' || now - slot.t > 90)) {
-        slot.el.innerHTML = clean(l.text)
+        msg.html = clean(l.text)
         slot.ver = l.ver
         slot.t = now
       }
-      // wires go in once the finished markup is on the page (live or replayed)
-      if (l.status === 'done' && !slot.wired && slot.ver === l.ver) {
-        slot.wired = true
-        addWires(l)
-      }
+      if (Object.keys(msg).length > 2) post(f, msg)
     }
-    const h = Math.max(700, f.doc.body.scrollHeight)
+    const h = Math.max(700, f.geo.height || 0)
     if (h !== f.h) {
       f.h = h
       f.iframe.style.height = `${h}px`
@@ -311,29 +308,14 @@ function syncSlots(now) {
   }
 }
 
-// ---------- geometry
+// ---------- geometry (all from the frames' reports)
 
 function slotFor(l) {
   const f = l.page === '*' ? S.frames[0] : S.frames.find(fr => fr.id === l.page)
-  const slot = f?.slots.get(l.key)
-  return slot ? { f, el: slot.el } : null
-}
-
-function lastTextRect(node) {
-  for (let n = node.lastChild; n; n = n.previousSibling) {
-    if (n.nodeType === 3 && n.textContent.trim()) {
-      const r = n.ownerDocument.createRange()
-      r.selectNodeContents(n)
-      const rects = r.getClientRects()
-      if (rects.length) return rects[rects.length - 1]
-    } else if (n.nodeType === 1) {
-      const r = lastTextRect(n)
-      if (r) return r
-      const b = n.getBoundingClientRect()
-      if (b.width && b.height) return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width }
-    }
-  }
-  return null
+  const g = f?.geo.slots[l.key]
+  if (!g) return null
+  const [left, top, width, height] = g.box
+  return { f, box: { left, top, width, height, right: left + width }, last: g.last }
 }
 
 // Where an agent's cursor should be, in world coordinates.
@@ -342,16 +324,15 @@ function agentTarget(a, now) {
   if (!l) return null
   const s = slotFor(l)
   if (!s) return null
-  const box = s.el.getBoundingClientRect()
+  const box = s.box
   if (!l.text.trim() || l.status === 'assigned') {
     // dragging out the frame for its layer: top-left to bottom-right
     const p = Math.min(1, (now - a.assignedAt) / 650)
     const e = 1 - Math.pow(1 - p, 3)
     return { x: s.f.x + box.left + 30 + e * (box.width - 60), y: box.top + 30 + e * (Math.max(box.height, l.height) - 60) }
   }
-  const r = lastTextRect(s.el)
-  if (!r) return { x: s.f.x + box.left + 40, y: box.top + 40 }
-  return { x: s.f.x + Math.min(r.right, box.right - 10), y: r.bottom - 6 }
+  if (!s.last) return { x: s.f.x + box.left + 40, y: box.top + 40 }
+  return { x: s.f.x + s.last[0], y: s.last[1] - 6 }
 }
 
 // Idle agents wait on a bench left of the first page instead of floating around.
@@ -364,17 +345,15 @@ const now = () => performance.now()
 
 const toScreen = (x, y) => ({ x: x * cam.s + cam.x, y: y * cam.s + cam.y })
 
-// ---------- wires
+// ---------- wires: one per (page -> page) link, drawn once the linking layer is done
 
-function addWires(l) {
-  const s = slotFor(l)
-  if (!s) return
-  const seen = new Set()
-  for (const el of s.el.querySelectorAll('[data-goto]')) {
-    const target = el.dataset.goto
-    if (seen.has(target) || target === s.f.id || !S.frames.some(f => f.id === target)) continue
-    seen.add(target)
-    const k = `${s.f.id}->${target}`
+function linkWires(f) {
+  for (const g of f.geo.gotos) {
+    const l = S.layers.get(g.key)
+    if (!l || l.status !== 'done') continue
+    if (l.page === '*' && f !== S.frames[0]) continue // shared nav: wire it from the home page only
+    if (g.target === f.id || !S.frames.some(fr => fr.id === g.target)) continue
+    const k = `${f.id}->${g.target}`
     if (S.wires.has(k)) continue
     const a = l.agent && S.agents.get(l.agent)
     const color = a?.color || '#7c9cff'
@@ -388,22 +367,21 @@ function addWires(l) {
     path.classList.add('fresh')
     dot.classList.add('fresh')
     setTimeout(() => { path.classList.remove('fresh'); dot.classList.remove('fresh') }, 2600)
-    S.wires.set(k, { from: el, f: s.f, target, path, dot })
+    S.wires.set(k, { f, key: g.key, target: g.target, path, dot })
   }
 }
 
 function drawWires() {
   for (const w of S.wires.values()) {
     const t = S.frames.find(f => f.id === w.target)
-    if (!t || !w.from.isConnected) continue
-    const r = w.from.getBoundingClientRect()
-    const a = toScreen(w.f.x + r.right, r.top + r.height / 2)
+    const g = w.f.geo.gotos.find(x => x.key === w.key && x.target === w.target) || w.f.geo.gotos.find(x => x.target === w.target)
+    if (!t || !g) continue
+    const [left, top, width, height] = g.box
+    const a = toScreen(w.f.x + left + width, top + height / 2)
     const b = toScreen(t.x, 40)
     const dx = Math.max(80, Math.abs(b.x - a.x) * 0.45)
     const back = b.x < a.x
-    const c1 = { x: a.x + dx, y: a.y }
-    const c2 = { x: back ? b.x - dx : b.x - dx, y: b.y - (back ? 120 : 0) }
-    w.path.setAttribute('d', `M${a.x},${a.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${b.x},${b.y}`)
+    w.path.setAttribute('d', `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y - (back ? 120 : 0)} ${b.x},${b.y}`)
     w.dot.setAttribute('cx', b.x)
     w.dot.setAttribute('cy', b.y)
   }
@@ -418,7 +396,7 @@ function bboxActive() {
     if (!a.layer) continue
     const s = slotFor(S.layers.get(a.layer))
     if (!s) continue
-    const b = s.el.getBoundingClientRect()
+    const b = s.box
     add(s.f.x + b.left, b.top, s.f.x + b.right, b.top + Math.max(b.height, 300))
   }
   if (x0 === Infinity) for (const f of S.frames) add(f.x, -120, f.x + FRAME_W, f.h)
@@ -624,9 +602,10 @@ function prototypeClick(e) {
   const vr = els.viewport.getBoundingClientRect()
   const wx = (e.clientX - vr.left - cam.x) / cam.s, wy = (e.clientY - vr.top - cam.y) / cam.s
   const f = S.frames.find(fr => wx >= fr.x && wx <= fr.x + FRAME_W && wy >= 0 && wy <= fr.h)
-  if (!f?.ready) return
-  const hit = f.doc.elementFromPoint(wx - f.x, wy)?.closest('[data-goto]')
-  if (hit) focusPage(hit.dataset.goto)
+  if (!f) return
+  const x = wx - f.x
+  const hit = f.geo.gotos.find(({ box: [l, t, w, h] }) => x >= l && x <= l + w && wy >= t && wy <= t + h)
+  if (hit) focusPage(hit.target)
 }
 
 els.viewport.addEventListener('dblclick', () => setAuto(true))
@@ -657,7 +636,7 @@ els.form.addEventListener('submit', async e => {
   const brief = els.brief.value.trim()
   if (!brief) return
   setAuto(true)
-  await fetch('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) })
+  await fetch('/api/run', { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': BOOT.token || '' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) })
 })
 
 // ---------- start
@@ -665,7 +644,7 @@ els.form.addEventListener('submit', async e => {
 fresh()
 setAuto(true)
 renderToolbar()
-const es = new EventSource('/events')
+const es = new EventSource(`/events?k=${encodeURIComponent(BOOT.token || '')}`)
 es.onmessage = m => {
   try { on(JSON.parse(m.data)) } catch (err) { console.error(err) }
 }
