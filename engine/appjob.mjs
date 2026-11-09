@@ -222,7 +222,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!existsSync(join(dir, 'package.json'))) throw new Error('no app yet')
     if (jobs.get(id)?.state === 'working') throw new Error('the app is still building')
     const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm-app'
-    const r = await publishVercel({ dir, name: `${name}-app`.slice(0, 80), creds, dataDir, build: true, env, onStage: stage => broadcast({ type: 'app:stage', t: Date.now(), run: id, stage: `deploy: ${stage}` }) })
+    // the stages and Vercel's build log are saved with the run, so the Auto show's deploy shot replays too
+    const r = await publishVercel({ dir, name: `${name}-app`.slice(0, 80), creds, dataDir, build: true, env,
+      onStage: stage => send(id, 'app:stage', { stage: `deploy: ${stage}` }),
+      onLog: lines => send(id, 'app:stage', { stage: 'deploy: building', log: lines.slice(-12) }) })
     send(id, 'app:deployed', { url: r.url, project: r.repo, pending: !!r.pending })
     const j = jobs.get(id)
     if (j) j.deployed = r.url

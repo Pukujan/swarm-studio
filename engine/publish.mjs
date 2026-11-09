@@ -141,7 +141,7 @@ async function rest(base, token, path, init = {}) {
 // the files are the finished static site.
 const SKIP = /(^|\/)(node_modules|\.git|dist|\.output|\.vercel|\.engine)(\/|$)|\.DS_Store$/
 
-export async function publishVercel({ dir, name, creds, dataDir, build = false, env = null, onStage = () => {} }) {
+export async function publishVercel({ dir, name, creds, dataDir, build = false, env = null, onStage = () => {}, onLog = null }) {
   const api = (path, init) => rest(creds.base || 'https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
   onStage('project')
   const own = ownProjects(dataDir, 'vercel')
@@ -173,9 +173,20 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
   onStage('building')
   let d = dep.body
   const start = Date.now()
+  // the build log, a few new lines per poll, for whoever is watching (the Auto show's terminal tile)
+  let logged = 0
+  const log = async () => {
+    if (!onLog) return
+    try {
+      const r = await api(`/v3/deployments/${dep.body.id}/events?builds=1&limit=200`)
+      const lines = (Array.isArray(r.body) ? r.body : []).map(x => String(x?.payload?.text ?? x?.text ?? '').trim()).filter(Boolean)
+      if (lines.length > logged) { onLog(lines.slice(logged).slice(-12).map(l => l.slice(0, 200))); logged = lines.length }
+    } catch {}
+  }
   while (!['READY', 'ERROR', 'CANCELED'].includes(d.readyState) && Date.now() - start < (build ? 600000 : 240000)) {
     await wait(2500)
     d = (await api(`/v13/deployments/${dep.body.id}`)).body || d
+    await log()
   }
   if (d.readyState !== 'READY') throw new Error(`Vercel deployment ${String(d.readyState || 'timed out').toLowerCase()}`)
   // The project's own <name>.vercel.app is public. Team and per-deployment

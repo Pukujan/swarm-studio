@@ -7,11 +7,11 @@
 //        SWARM_PLANNER_MODEL, SWARM_WORKER_MODEL, SWARM_AGENTS
 
 import { createServer } from 'node:http'
-import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream } from 'node:fs'
+import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { basename, dirname, extname, join, normalize } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
@@ -24,6 +24,7 @@ import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { autoJob } from '../engine/auto.mjs'
+import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS, fxFor } from '../engine/video.mjs'
 
@@ -657,7 +658,64 @@ const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => m.appJobs
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
 const connectors = hermesConnectors({ py: PY, pyEnv, broadcast })
-const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, connectors })
+const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, connectors,
+  writeLaunch: id => writeLaunch(join(runsDir, id), readEvents(id), id) })
+
+// ---------- the Auto show (spec 07): the summary card's numbers, the launch kit, chatter lines
+
+// Files and lines the app engine wrote: the app's own source, without dependencies or builds.
+function appStats(id) {
+  const dir = join(runsDir, id, 'app')
+  if (!existsSync(dir)) return { files: 0, lines: 0 }
+  let files = 0, lines = 0
+  const walk = (d, depth = 0) => {
+    if (depth > 8) return
+    for (const f of readdirSync(d, { withFileTypes: true })) {
+      if (/^(node_modules|\.git|dist|\.output|\.vercel|\.engine|\.nitro|\.cache|public)$/.test(f.name)) continue
+      const p = join(d, f.name)
+      if (f.isDirectory()) walk(p, depth + 1)
+      else if (/\.(tsx?|jsx?|mjs|css|html|vue|svelte)$/.test(f.name) && !/\.d\.ts$/.test(f.name)) {
+        try { const st = statSync(p); if (st.size > 400000) continue; files++; lines += readFileSync(p, 'utf8').split('\n').length } catch {}
+      }
+    }
+  }
+  walk(dir)
+  return { files, lines }
+}
+
+// Messaging targets Hermes's gateway can send to (Discord, Slack, Telegram), from
+// `hermes send --list`. Read-only; cached a minute.
+const HERMES_BIN = [join(homedir(), '.local', 'bin', 'hermes'), 'hermes'].find(p => p === 'hermes' || existsSync(p))
+const gateway = { at: 0, platforms: {} }
+function gatewayTargets() {
+  if (Date.now() - gateway.at < 60000) return Promise.resolve(gateway.platforms)
+  return new Promise(ok => execFile(HERMES_BIN, ['send', '--list', '--json'], { timeout: 20000, maxBuffer: 1 << 20 }, (err, out) => {
+    let platforms = {}
+    try { platforms = JSON.parse(String(out)).platforms || {} } catch {}
+    gateway.at = Date.now()
+    gateway.platforms = Object.fromEntries(Object.entries(platforms).filter(([k]) => ['discord', 'slack', 'telegram'].includes(k)))
+    ok(gateway.platforms)
+  }))
+}
+
+// Occasional real words from the crew: a short fixed list, read by the studio's TTS (the
+// Pro's TTS job through SWARM_TTS_URL, or Kokoro when the video tools already have it),
+// pitched up in the browser, cached by text. Nothing is made for any other text.
+const CHATTER_LINES = ['ship it!', 'looks good!', 'boss fight!', 'on it!', 'we did it!', 'nice!', 'Launch!', 'Good work, crew.', 'Next system!']
+const chatterDir = join(dataDir, 'chatter')
+const chatterBusy = new Set()
+const chatterFile = (text, voice) => join(chatterDir, `${createHash('sha1').update(`${voice}|${text}`).digest('hex').slice(0, 16)}.wav`)
+const chatterTts = () => !!process.env.SWARM_TTS_URL || existsSync(join(dataDir, 'video-tools', 'node_modules', 'kokoro-js'))
+async function chatterMake(text, voice) {
+  const file = chatterFile(text, voice)
+  if (existsSync(file) || chatterBusy.has(file)) return
+  chatterBusy.add(file)
+  const dir = mkdtempSync(join(tmpdir(), 'swarm-chatter-'))
+  try {
+    const [r] = await speak({ dataDir, lines: [text], voice, dir })
+    if (r?.file) { mkdirSync(chatterDir, { recursive: true }); copyFileSync(r.file, file) }
+  } catch {} finally { chatterBusy.delete(file); try { rmSync(dir, { recursive: true, force: true }) } catch {} }
+}
 
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
@@ -814,6 +872,8 @@ function canvasPage() {
   return read('index.html')
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
     .replace('<script src="crew.js"></script>', () => `<script>${read('crew.js')}</script>`)
+    .replace('<script src="chatter.js"></script>', () => `<script>${read('chatter.js')}</script>`)
+    .replace('<script src="show.js"></script>', () => `<script>${read('show.js')}</script>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
 }
 
@@ -1197,6 +1257,73 @@ const server = createServer((req, res) => {
   // The App tab: the design (or a game spec) as a working app, built by dyad's
   // engine. GET the state, POST { ask } for the first build or one more change,
   // /files for the code, /open to start its dev server again, /stop.
+  // The summary card's numbers: from the run's events, plus what the app engine wrote.
+  const runShow = url.pathname.match(/^\/api\/runs\/([^/]+)\/show$/)
+  if (runShow && RUN_ID.test(runShow[1])) {
+    const events = readEvents(runShow[1])
+    if (!events) return res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no such run' }))
+    const f = runFacts(events, runShow[1])
+    return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ...f, ...appStats(runShow[1]), launch: !!readLaunch(join(runsDir, runShow[1])) }))
+  }
+
+  // The launch kit. GET reads it, POST writes it (again) from the run's facts, /mark logs
+  // what the person did with a post, /send hands one confirmed post to Hermes's gateway.
+  // Nothing is ever posted from here on its own: /send needs the person's confirm, the
+  // exact text they saw, and a gateway connection for that platform.
+  const runLaunch = url.pathname.match(/^\/api\/runs\/([^/]+)\/launch(?:\/(mark|send))?$/)
+  if (runLaunch && RUN_ID.test(runLaunch[1])) {
+    const [, id, sub] = runLaunch
+    const dir = join(runsDir, id)
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    if (!existsSync(join(dir, 'events.jsonl'))) return reply(404, { error: 'no such run' })
+    if (req.method === 'GET' && !sub) { const kit = readLaunch(dir); return kit ? reply(200, kit) : reply(404, { error: 'no launch kit yet' }) }
+    if (req.method !== 'POST') return reply(405, { error: 'POST' })
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
+    req.on('end', async () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      try {
+        if (!sub) return reply(200, writeLaunch(dir, readEvents(id), id))
+        if (sub === 'mark') return reply(200, markLaunch(dir, input))
+        // send: one post, one platform, confirmed by the person in the canvas's confirm box
+        const kit = readLaunch(dir)
+        const post = kit?.posts.find(p => p.id === input.post)
+        if (!post || post.how !== 'gateway') return reply(400, { error: 'only Discord, Slack and Telegram posts go through the gateway' })
+        if (input.confirm !== true) return reply(400, { error: 'a send needs the confirm' })
+        if (String(input.text) !== post.text) return reply(409, { error: 'the text changed since you confirmed it; check it again' })
+        const targets = await gatewayTargets()
+        if (!targets[post.network]) return reply(409, { error: `Hermes's gateway has no ${post.label} connection` })
+        const target = String(input.target || post.network)
+        if (!new RegExp(`^${post.network}(:[\\w#.:@+-]{1,120})?$`).test(target)) return reply(400, { error: 'that is not a target on this platform' })
+        const tmp = mkdtempSync(join(tmpdir(), 'swarm-launch-')), file = join(tmp, 'post.txt')
+        writeFileSync(file, post.text)
+        execFile(HERMES_BIN, ['send', '--to', target, '--file', file, '--json'], { timeout: 60000 }, (err, out, errOut) => {
+          rmSync(tmp, { recursive: true, force: true })
+          if (err) return reply(502, { error: String(errOut || err.message).split('\n').filter(Boolean).at(-1)?.slice(0, 300) || 'the send failed' })
+          reply(200, markLaunch(dir, { post: post.id, action: 'sent', target }))
+        })
+      } catch (err) { reply(400, { error: String(err.message || err) }) }
+    })
+    return
+  }
+
+  if (url.pathname === '/api/gateway' && req.method === 'GET') {
+    gatewayTargets().then(p => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ platforms: p })))
+    return
+  }
+
+  // A crew line's audio: cached, or made in the background (the canvas babbles meanwhile).
+  if (url.pathname === '/api/chatter/say' && req.method === 'GET') {
+    const text = CHATTER_LINES.find(l => l === url.searchParams.get('text'))
+    const voice = /^hermia$/i.test(url.searchParams.get('who') || '') ? 'af_heart' : 'af_sky'
+    if (!text || !chatterTts()) return res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no voice for that' }))
+    const file = chatterFile(text, voice)
+    if (existsSync(file)) return res.writeHead(200, { 'content-type': 'audio/wav', 'cache-control': 'max-age=86400' }).end(readFileSync(file))
+    chatterMake(text, voice)
+    return res.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({ making: true }))
+  }
+
   const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
