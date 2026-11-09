@@ -16,6 +16,7 @@ import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun } from '../engine/export.mjs'
+import { MOTION_CSS, SNAPPY, swarmMotion } from '../engine/motion.mjs'
 import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -273,7 +274,7 @@ function tours(id, input) {
 
 // ---------- visual review: the reviewer model looks at a screenshot of a finished
 // page (taken by the canvas, which owns the frames) and builders fix what it finds.
-const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export'])
+const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion'])
 const reviewing = new Set()
 const REVIEW_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
 async function review(id, input) {
@@ -442,7 +443,7 @@ const webVersion = () => String(Math.max(...readdirSync(webDir).map(f => statSyn
 
 function canvasPage() {
   const read = f => readFileSync(join(webDir, f), 'utf8')
-  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html') }).replace(/</g, '\\u003c')
+  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source } }).replace(/</g, '\\u003c')
   return read('index.html')
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
@@ -649,7 +650,7 @@ const server = createServer((req, res) => {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'bad command' }))
         return
       }
-      broadcast({ type: 'cmd', op: input.op, ...(input.run ? { run: input.run } : {}), ...(typeof input.text === 'string' ? { text: input.text.slice(0, 600) } : {}), ...(typeof input.target === 'string' ? { target: input.target.slice(0, 120) } : {}) })
+      broadcast({ type: 'cmd', op: input.op, ...(input.run ? { run: input.run } : {}), ...(typeof input.text === 'string' ? { text: input.text.slice(0, 600) } : {}), ...(typeof input.target === 'string' ? { target: input.target.slice(0, 120) } : {}), ...(typeof input.on === 'boolean' ? { on: input.on } : {}) })
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, clients: clients.size }))
     })
     return

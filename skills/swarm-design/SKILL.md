@@ -38,13 +38,14 @@ Don't invent facts the person didn't give (prices, addresses, team names); the p
 
 Call `swarm_studio` with an `action` (the person can type the same as `/swarm <action>`):
 
-- `files`: recent builds, numbered (1 = latest). `open` with `build` shows one on the canvas; `play` opens it as a clickable prototype.
+- `files`: recent builds, numbered (1 = latest). `open` with `build` shows one on the canvas; `play` opens it as a clickable prototype, with motion: each section's headings, copy, pictures and cards rise in one after another as they scroll into view, buttons lift under the pointer, and bold or playful themes move quicker and springier (the ✨ Motion button or the M key turns it off). Exports keep the same motion.
 - `review`: a vision model photographs every page, names up to 3 problems per page, and agents rewrite those sections live. Use it when the person asks to check, polish or fix a design. It runs on the open canvas, so the canvas must be open.
 - `fix` with `text`: the person's comment on the design ("make the hero darker", "the footer is too tall") goes to an agent, who rewrites that section live. On the open canvas a selected section is the one changed; otherwise the planner works out which sections the comment is about. Use it whenever the person asks for a change to a build instead of starting a new one.
 - `export`: writes the build as files under `runs/<id>/export/<name>/` and a zip: `html/` (static pages), `react/` (Vite + React + Tailwind, one component per section, builds as is) and `aba/` (`spec.md` and `blueprint.json` for an app builder such as ABA). Use it when the person wants the code, wants to deploy, or wants a real app built from the design.
 - `video`: cuts a ~20-second promo video of a build (default the latest; `build` picks another). The planner writes a storyboard from the site's own copy and generated photos, and HyperFrames renders it in the site's theme to `runs/<id>/video/promo.mp4` (about a minute; the first video also fetches HyperFrames and ffmpeg from npm). The tool waits and returns the file path; the canvas shows the storyboard, the render and the player.
 - `models`: show which model plans, builds and reviews; with `role` and `model` change one (`reset` goes back to Hermes's setting, `off` turns the reviewer off).
 - `images`: generated photos come from Hermes's image providers, by default the person's Codex login (`gpt-image-2-low`). `provider: "off"` for shapes and SVG only. Each image uses that provider's quota.
+- `motion` with `value` `on`/`off`: the prototype's scroll-in reveals and hover lifts.
 - `lite`: `on` for machines short on memory (one live page at a time).
 
 ## After the run

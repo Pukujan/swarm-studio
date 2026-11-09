@@ -15,7 +15,7 @@ const els = {
   theme: $('#theme'), tree: $('#tree'), agents: $('#agents-list'), agentCount: $('#agent-count'), feed: $('#feed'),
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
   newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
-  plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'),
+  plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'), plMotion: $('#pl-motion'),
   dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), exportBtn: $('#export-btn'), modelsBtn: $('#models-btn'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
@@ -1175,6 +1175,7 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !els.player.hidden) return tour.on ? stopTour() : closePlayer()
   if (e.key === 'Escape' && S.sel) { S.sel = null; design.last = ''; return }
   if (e.key === 'v' && !els.player.hidden) return toggleTourMenu()
+  if (e.key === 'm' && !els.player.hidden && !e.target.closest('input, select, textarea')) return setMotion()
   if (e.target.closest('input, select, textarea')) return
   if (e.key === 'd') return togglePanel('design')
   if (e.key === 'p' && S.frames.length) return els.player.hidden ? openPlayer() : closePlayer()
@@ -1203,7 +1204,7 @@ els.brief.addEventListener('keydown', e => {
 // with data-goto move between pages; nothing else navigates.
 
 const DEVICES = { desktop: { w: 1280, h: 800 }, mobile: { w: 390, h: 844 } }
-const player = { page: null, device: store.get('device', 'desktop'), history: [] }
+const player = { page: null, device: store.get('device', 'desktop'), history: [], motion: store.get('motion', true) }
 
 const PLAYER_SCRIPT = `<script>
 addEventListener('click', e => {
@@ -1296,8 +1297,25 @@ html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111
 body.hint [data-goto]{outline:3px solid #7c9cffcc;outline-offset:2px}
 .tour-hover{outline:2px solid #7c9cffaa;outline-offset:3px;filter:brightness(1.06)}
 .tour-press{transform:scale(.96);transition:transform .1s}</style>
-${PLAYER_SCRIPT}</head><body>${html}</body></html>`
+${PLAYER_SCRIPT}${motionTags()}</head><body>${html}</body></html>`
 }
+
+// Motion in Play mode: the same reveal the exports get, in the feel the theme asks for.
+function motionTags() {
+  const m = BOOT.motion
+  if (!player.motion || !m) return ''
+  const t = S.theme || {}
+  const preset = new RegExp(m.snappy).test(`${t.name || ''} ${t.direction || ''}`.toLowerCase()) ? 'snappy' : 'gentle'
+  return `<style>${m.css}</style><script>addEventListener('load', () => setTimeout(() => (${m.src})(document.body, ${JSON.stringify(preset)}), 60))<\/script>`
+}
+
+function setMotion(on = !player.motion) {
+  player.motion = on
+  store.set('motion', on)
+  els.plMotion.classList.toggle('on', on)
+  if (player.page && !els.player.hidden) showPage(player.page, false)
+}
+commandOps.motion = c => setMotion(c.on === undefined ? !player.motion : !!c.on)
 
 function fitDevice() {
   const d = DEVICES[player.device]
@@ -1581,6 +1599,8 @@ els.play.onclick = () => openPlayer()
 $('#pl-close').onclick = closePlayer
 els.plBack.onclick = () => player.history.length && showPage(player.history.pop(), false)
 $('#pl-restart').onclick = () => { player.history = []; showPage(S.frames[0].id, false) }
+els.plMotion.onclick = () => setMotion()
+els.plMotion.classList.toggle('on', player.motion)
 els.plPage.onchange = () => showPage(els.plPage.value)
 for (const b of document.querySelectorAll('#pl-device button')) b.onclick = () => setDevice(b.dataset.device)
 window.addEventListener('resize', () => !els.player.hidden && fitDevice())
