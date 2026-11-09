@@ -4,40 +4,43 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Swarm Studio</title>
+<link rel="icon" type="image/svg+xml" href="brand/hermia-mark.svg">
 <link rel="stylesheet" href="canvas.css">
+<script src="crew.js"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">◆</span> Swarm Studio</div>
+    <div class="brand" title="Swarm Studio, run by Commander Hermia"><img class="logo" src="brand/hermia-mark.svg" alt="" width="28" height="28"><span class="word">Swarm <em>Studio</em></span></div>
     <div class="file-name" id="file-name">Untitled</div>
     <div class="seg views" id="views" title="Switch views; builds keep running in the others">
       <button data-view="canvas" class="on">Canvas</button>
       <button data-view="video">Video<i class="vbadge"></i></button>
       <button data-view="app">App<i class="vbadge"></i></button>
     </div>
-    <button class="toggle auto-btn" id="auto-btn" title="Auto mode: one prompt, and the swarm designs the site, reviews it, cuts the video, builds the app with mini games and a credit shop, and deploys it">⚡ Auto</button>
-    <button class="toggle game-btn" id="game-btn" title="Make an original browser game: a few questions, then the swarm builds it">🎮 Game</button>
+    <button class="toggle auto-btn" id="auto-btn" title="Auto mode: one prompt, and the swarm designs the site, reviews it, cuts the video, builds the app with mini games and a credit shop, and deploys it"><i data-i="zap"></i><span class="t">Auto</span></button>
+    <button class="toggle game-btn" id="game-btn" title="Make an original browser game: a few questions, then the swarm builds it"><i data-i="gamepad-2"></i><span class="t">Game</span></button>
     <div class="spacer"></div>
-    <div class="undo-redo"><button class="toggle" id="undo-btn" title="Undo (⌘Z / Ctrl+Z)" disabled>↶</button><button class="toggle" id="redo-btn" title="Redo (⇧⌘Z / Ctrl+Y)" disabled>↷</button></div>
-    <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled>▶ Play</button>
+    <div class="undo-redo"><button class="toggle" id="undo-btn" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" disabled><i data-i="undo-2"></i></button><button class="toggle" id="redo-btn" title="Redo (⇧⌘Z / Ctrl+Y)" aria-label="Redo" disabled><i data-i="redo-2"></i></button></div>
+    <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled><i data-i="play"></i><span class="t">Play</span></button>
     <div class="more pubwrap">
-      <button class="toggle" id="publish-btn" title="Put this build online: the website, or the working app" aria-haspopup="true" disabled>🚀 Publish ▾</button>
+      <button class="toggle" id="publish-btn" title="Put this build online: the website, or the working app" aria-haspopup="true" disabled><i data-i="rocket"></i><span class="t">Publish</span><i data-i="chevron-down" class="caret"></i></button>
       <div class="more-menu pub-menu" id="pub-menu" hidden>
-        <button class="pub-opt" data-pub="site"><b>🌐 Website</b><small>The designed pages, no server. GitHub Pages, Vercel, Cloudflare or this computer.</small></button>
-        <button class="pub-opt" data-pub="app"><b>⚙️ Working app</b><small>The site with its server: orders save, /admin works. Live on Vercel.</small><em class="pub-why"></em></button>
+        <div class="menu-title">Put it <em>online</em></div>
+        <button class="pub-opt" data-pub="site"><b><i data-i="globe"></i>Website</b><small>The designed pages, no server. GitHub Pages, Vercel, Cloudflare or this computer.</small></button>
+        <button class="pub-opt" data-pub="app"><b><i data-i="server"></i>Working app</b><small>The site with its server: orders save, /admin works. Live on Vercel.</small><em class="pub-why"></em></button>
       </div>
     </div>
     <div class="more">
-      <button class="toggle" id="more-btn" title="Review, video, export, models and panels" aria-haspopup="true">☰ More <span id="agent-count" class="count">0</span></button>
+      <button class="toggle" id="more-btn" title="Review, video, export, models and panels" aria-haspopup="true"><i data-i="menu"></i><span class="t">More</span> <span id="agent-count" class="count">0</span></button>
       <div class="more-menu" id="more-menu" hidden>
-        <button class="toggle" id="review-btn" title="Have the reviewer model look at every page and fix what it finds" disabled>🔎 Review</button>
-        <button class="toggle" id="video-btn" title="Cut a promo video of this build, with a voiceover and music" disabled>🎬 Video</button>
-        <button class="toggle" id="export-btn" title="Export: static HTML, a React + Tailwind project, and a handoff for an app builder (ABA)" disabled>⬇ Export</button>
-        <button class="toggle" id="models-btn" title="Pick the models for planning, building, reviewing and images">Models</button>
-        <button class="toggle" data-panel="design" title="Design properties and variables (D)">Design</button>
-        <button class="toggle" data-panel="planner" title="Planner: theme and plan stream">Planner</button>
-        <button class="toggle" data-panel="agents" title="Agents and what each is doing">Agents</button>
-        <button class="toggle" id="breakroom-btn" title="Show or hide the break room, where idle agents wait">☕ Break room</button>
+        <button class="toggle" id="review-btn" title="Have the reviewer model look at every page and fix what it finds" disabled><i data-i="search-check"></i>Review</button>
+        <button class="toggle" id="video-btn" title="Cut a promo video of this build, with a voiceover and music" disabled><i data-i="clapperboard"></i>Video</button>
+        <button class="toggle" id="export-btn" title="Export: static HTML, a React + Tailwind project, and a handoff for an app builder (ABA)" disabled><i data-i="download"></i>Export</button>
+        <button class="toggle" id="models-btn" title="Pick the models for planning, building, reviewing and images"><i data-i="sliders-horizontal"></i>Models</button>
+        <button class="toggle" data-panel="design" title="Design properties and variables (D)"><i data-i="palette"></i>Design</button>
+        <button class="toggle" data-panel="planner" title="Planner: theme and plan stream"><i data-i="map"></i>Planner</button>
+        <button class="toggle" data-panel="agents" title="Agents and what each is doing"><i data-i="users"></i>Agents</button>
+        <button class="toggle" id="breakroom-btn" title="Show or hide the break room, where idle agents wait"><i data-i="coffee"></i>Break room</button>
       </div>
     </div>
     <div class="clock"><span id="timer">00.0s</span></div>
@@ -45,11 +48,11 @@
 
   <aside class="side">
     <nav class="tabs">
-      <button data-tab="chat" class="on">Chat</button>
-      <button data-tab="log" title="What each agent is doing">Log</button>
-      <button data-tab="pages" title="Pages, their sections and what is in each: click to select, 👁 to hide">Layers</button>
-      <button data-tab="files">Files</button>
-      <button class="side-min-btn" id="side-min" title="Make the side panel a small chat over the canvas">⇤</button>
+      <button data-tab="chat" class="on"><i data-i="message-circle"></i>Chat</button>
+      <button data-tab="log" title="What each agent is doing"><i data-i="scroll-text"></i>Log</button>
+      <button data-tab="pages" title="Pages, their sections and what is in each: click to select, the eye to hide"><i data-i="layers"></i>Layers</button>
+      <button data-tab="files"><i data-i="folder"></i>Files</button>
+      <button class="side-min-btn" id="side-min" title="Make the side panel a small chat over the canvas" aria-label="Shrink the side panel"><i data-i="panel-left-close"></i></button>
     </nav>
 
     <section class="tab chat on" data-tab="chat">
@@ -58,12 +61,13 @@
         <textarea id="brief" rows="3" autocomplete="off" placeholder="Describe a product. The swarm designs and builds its site."></textarea>
         <div class="row">
           <select id="agents" class="chip" title="How many agents build at once">
-            <option value="4">👥 4</option><option value="5">👥 5</option><option value="6">👥 6</option><option value="8">👥 8</option><option value="12">👥 12</option><option value="16" selected>👥 16</option><option value="20">👥 20</option><option value="24">👥 24</option>
+            <option value="4">4 agents</option><option value="5">5 agents</option><option value="6">6 agents</option><option value="8">8 agents</option><option value="12">12 agents</option><option value="16" selected>16 agents</option><option value="20">20 agents</option><option value="24">24 agents</option>
           </select>
-          <select id="build-model" class="chip model" title="The model every builder agent uses. Planner and reviewer: ☰ More → Models"><option value="">Hermes default</option></select>
+          <select id="build-model" class="chip model" title="The model every builder agent uses. Planner and reviewer: More, then Models"><option value="">Hermes default</option></select>
           <button type="submit">Build</button>
         </div>
       </form>
+      <div class="built-for">Built for Hermes Agent</div>
     </section>
 
     <section class="tab log" data-tab="log">
@@ -75,7 +79,7 @@
     </section>
 
     <section class="tab files" data-tab="files">
-      <button id="new-file" class="new-file">+ New file</button>
+      <button id="new-file" class="new-file"><i data-i="plus"></i>New file</button>
       <div id="files" class="file-list"></div>
     </section>
   </aside>
@@ -83,7 +87,7 @@
   <main id="viewport" class="viewport">
     <div id="world" class="world"></div>
     <svg id="wires" class="wires"></svg>
-    <div class="dock" id="dock"><span class="dock-title">☕ break room</span><button class="dock-hide" id="dock-hide" title="Hide the break room (bring it back in ☰ More)">×</button></div>
+    <div class="dock" id="dock"><span class="dock-title"><i data-i="coffee"></i>break room</span><button class="dock-hide" id="dock-hide" title="Hide the break room (bring it back in More)" aria-label="Hide the break room"><i data-i="x"></i></button></div>
     <div id="cursors" class="cursors"></div>
     <div class="toolbar" id="toolbar"></div>
     <div class="status" id="status">Ready</div>
@@ -108,9 +112,9 @@
       <div class="spacer"></div>
       <div class="seg" id="app-mode"><button data-mode="preview" class="on">Preview</button><button data-mode="code">Code</button></div>
       <div class="seg" id="app-device"><button data-w="390">Phone</button><button data-w="820">Tablet</button><button data-w="0" class="on">Desktop</button></div>
-      <button class="toggle" id="app-reload" title="Reload the app">⟳</button>
-      <a class="toggle" id="app-open" target="_blank" rel="noopener" title="Open the app in its own tab">↗</a>
-      <button class="toggle" id="app-stop" hidden>■ Stop</button>
+      <button class="toggle" id="app-reload" title="Reload the app" aria-label="Reload the app"><i data-i="rotate-cw"></i></button>
+      <a class="toggle" id="app-open" target="_blank" rel="noopener" title="Open the app in its own tab" aria-label="Open the app in its own tab"><i data-i="external-link"></i></a>
+      <button class="toggle" id="app-stop" hidden><i data-i="square"></i>Stop</button>
     </div>
     <div class="app-body">
       <div class="app-steps" id="app-steps"></div>
@@ -125,7 +129,7 @@
     <nav class="dtabs">
       <button data-dtab="design" class="on">Design</button>
       <button data-dtab="vars">Variables</button>
-      <button class="dclose" id="design-close" title="Close (opens again when you select a section)">×</button>
+      <button class="dclose" id="design-close" title="Close (opens again when you select a section)" aria-label="Close"><i data-i="x"></i></button>
     </nav>
     <section class="dtab on" data-dtab="design" id="d-design"></section>
     <section class="dtab" data-dtab="vars" id="d-vars"></section>
@@ -133,16 +137,16 @@
 
   <div class="player" id="player" hidden>
     <div class="player-bar">
-      <button class="pl-btn" id="pl-close" title="Close (Esc)">✕</button>
+      <button class="pl-btn" id="pl-close" title="Close (Esc)" aria-label="Close"><i data-i="x"></i></button>
       <select id="pl-page" title="Page"></select>
-      <button class="pl-btn" id="pl-back" title="Back">← Back</button>
-      <button class="pl-btn" id="pl-restart" title="Back to page 1">Restart</button>
+      <button class="pl-btn" id="pl-back" title="Back"><i data-i="arrow-left"></i>Back</button>
+      <button class="pl-btn" id="pl-restart" title="Back to page 1"><i data-i="rotate-ccw"></i>Restart</button>
       <div class="tour-pick">
-        <button class="pl-btn tours" id="pl-tours" title="Watch someone use the site (V)">👀 Watch a visitor</button>
+        <button class="pl-btn tours" id="pl-tours" title="Watch someone use the site (V)"><i data-i="eye"></i>Watch a visitor</button>
         <div class="tour-menu" id="pl-tour-menu" hidden></div>
       </div>
       <div class="spacer"></div>
-      <button class="pl-btn" id="pl-motion" title="Motion: sections reveal as they scroll in (M)">✨ Motion</button>
+      <button class="pl-btn" id="pl-motion" title="Motion: sections reveal as they scroll in (M)"><i data-i="sparkles"></i>Motion</button>
       <div class="seg" id="pl-device">
         <button data-device="desktop" class="on">Desktop</button>
         <button data-device="mobile">Mobile</button>
@@ -152,7 +156,7 @@
       <div class="device" id="pl-shell"><iframe id="pl-frame" title="Prototype" sandbox="allow-scripts"></iframe></div>
       <div class="persona" id="pl-persona" hidden></div>
     </div>
-    <div class="tour-cursor" id="pl-cursor" hidden><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l15 9.5-6.6 1.2 3.9 7.6-3 1.5-3.9-7.7L4 18.6z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg><div class="think" id="pl-think"></div></div>
+    <div class="tour-cursor" id="pl-cursor" hidden><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l15 9.5-6.6 1.2 3.9 7.6-3 1.5-3.9-7.7L4 18.6z" fill="#F2F2F2" stroke="#05051a" stroke-width="1.5" stroke-linejoin="round"/></svg><div class="think" id="pl-think"></div></div>
     <div class="pl-hint">Click links to move between pages · clicking anywhere else shows where the links are</div>
   </div>
 
