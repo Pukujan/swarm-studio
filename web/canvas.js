@@ -22,6 +22,8 @@ const els = {
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
 const commandOps = {}
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
+// undo and redo steps (see undo() below)
+const history = { undo: [], redo: [] }
 // Per-viewer UI memory. Storage throws inside the Desktop pane's opaque origin, so it is optional.
 const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(`swarm.${k}`)) ?? d } catch { return d } },
@@ -47,6 +49,7 @@ const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nex
 function fresh(run = null) {
   S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null, images: new Map(), imgQueued: 0, imgSettled: 0 }
   banter.queue = []
+  history.undo = []; history.redo = []; renderUndo()
   els.world.innerHTML = '<div class="ghosts" id="ghosts"></div>'
   els.cursors.innerHTML = ''
   els.wires.innerHTML = ''
@@ -170,8 +173,11 @@ function on(e) {
       // whole-site edits made earlier (bigger headings, more spacing) apply to late sections too;
       // a reviewer's fix was written from the edited section, so it has them already
       if (!e.fixed) for (const ce of S.classEdits) restyle(l, ce)
+      l.before = null
       fillImages(l)
-      if (e.fixed) { feed(S.agents.get(e.agent), `fixed ${e.layer}`, 'sys', e.layer); chatAgent(S.agents.get(e.agent), `Done: the ${l.role || e.layer} is updated (${((e.ms || 0) / 1000).toFixed(0)}s). /trace shows what I was asked and wrote.`, e.layer) }
+      if (e.fixed && !e.restored && l.before && live(e)) remember({ kind: 'layer', key: l.key, page: e.page, layer: e.layer, before: l.before, after: e.html, label: `${l.role || e.layer} rewrite` })
+      if (e.restored && e.by !== CLIENT && live(e)) feed(null, `${l.role || e.layer} was put back to an earlier version`, 'sys')
+      if (e.fixed && !e.restored) { feed(S.agents.get(e.agent), `fixed ${e.layer}`, 'sys', e.layer); chatAgent(S.agents.get(e.agent), `Done: the ${l.role || e.layer} is updated (${((e.ms || 0) / 1000).toFixed(0)}s). /trace shows what I was asked and wrote.`, e.layer) }
       if (e.done != null) S.done = e.done
       S.treeDirty = true
       const a = S.agents.get(e.agent)
@@ -243,7 +249,7 @@ function on(e) {
       break
     case 'layer:reset': {
       const l = S.layers.get(key(e.page, e.layer))
-      if (l) { l.text = ''; l.ver++; l.status = 'assigned'; S.treeDirty = true }
+      if (l) { if (l.text) l.before = l.text; l.text = ''; l.ver++; l.status = 'assigned'; S.treeDirty = true }
       break
     }
     case 'export':
@@ -953,7 +959,10 @@ function renderToolbar() {
     const list = by[t.id]
     const f = toolFlash.get(t.id)
     const lit = f && performance.now() < f.until ? ` style="background:${f.color};color:#0b0d12"` : ''
-    return `<div class="tool${list.length ? ' active' : ''}${t.id === 'comment' && cmt.mode ? ' armed' : ''}"${lit} data-tool="${t.id}" title="${t.id === 'comment' ? 'Comment: click a section and tell an agent what to change' : t.label}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
+    // Move, Text and Comment are yours; the rest light up while an agent uses them
+    const mine = USER_TOOLS[t.id]
+    const armed = (t.id === 'comment' && cmt.mode) || (t.id === 'text' && txt.mode) || (t.id === 'move' && !cmt.mode && !txt.mode)
+    return `${t.id === 'frame' ? '<span class="tsep"></span>' : ''}<div class="tool${mine ? ' mine' : ' agent-only'}${list.length ? ' active' : ''}${armed ? ' armed' : ''}"${lit} data-tool="${t.id}" title="${mine || `${t.label}: lights up while an agent uses it. To change something, use 💬 Comment or ✏️ Text.`}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
   }).join('')
   if (html !== toolbarKey) els.toolbar.innerHTML = toolbarKey = html
 }
@@ -1191,9 +1200,11 @@ window.addEventListener('keydown', e => {
   if (e.key === 'v' && !els.player.hidden) return toggleTourMenu()
   if (e.key === 'm' && !els.player.hidden && !e.target.closest('input, select, textarea')) return setMotion()
   if (e.target.closest('input, select, textarea')) return
+  if (e.metaKey || e.ctrlKey || e.altKey) return
   if (e.key === 'd') return togglePanel('design')
   if (e.key === 'p' && S.frames.length) return els.player.hidden ? openPlayer() : closePlayer()
   if (!els.player.hidden) return
+  if (e.key === 'v' || e.key === 't' || e.key === 'c') return els.toolbar.querySelector(`[data-tool="${{ v: 'move', t: 'text', c: 'comment' }[e.key]}"]`)?.click()
   if (e.key === 'a') setAuto(true)
   if (e.key === '0') { setAuto(false); const b = bboxActive(); S.frames.length && fit({ x0: S.frames[0].x - 560, y0: -140, x1: S.frames.at(-1).x + FRAME_W, y1: Math.max(...S.frames.map(f => f.h)) }) }
 })
@@ -1212,6 +1223,8 @@ const SLASH = [
   ['files', '[words]', 'search your builds'],
   ['open', '<n|words>', 'open a build (n from /files)'],
   ['info', '', 'this build\'s details, tags and note'],
+  ['undo', '', 'take back the last change (⌘Z / Ctrl+Z)'],
+  ['redo', '', 'put it back again (⇧⌘Z / Ctrl+Y)'],
   ['trace', '[section|on|off]', 'every model call: what each agent was asked and what it answered'],
   ['folder', '<name|none>', 'file this build in a folder'],
   ['models', '', 'pick the planner, builder and reviewer models'],
@@ -1257,6 +1270,8 @@ async function runSlash(text) {
       const f = files.find(x => x.id === shownRun())
       return f ? fileInfo(f) : botMsg('Open a saved build first.')
     }
+    case 'undo': return undo()
+    case 'redo': return redo()
     case 'trace': {
       if (!needRun()) return
       if (/^(on|off)$/i.test(arg)) { await saveMeta(shownRun(), { trace: arg.toLowerCase() === 'on' }); return botMsg(`Traces for this build are ${arg.toLowerCase()}.`) }
@@ -1880,7 +1895,7 @@ function renderDesign(now) {
     const where = `${l.page === '*' ? 'shared' : l.page} · ${l.status === 'done' ? 'done' : 'building'}`
     const mode = S.sel ? 'selected ✕' : design.pinned ? 'pinned' : 'following'
     const hint = l.status === 'done' ? '<div class="dhint">Click a value to change this section. Variables change every page.</div>' : `<div class="dhint">Editable when ${esc(owner?.name || 'its agent')} finishes. Click any finished section on the canvas to edit it.</div>`
-    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${l.status === 'done' && S.run ? `<button class="dtrace" title="Every model call for this section: the prompt and what came back">🔍 Trace of this section</button>` : ''}${body}`
+    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${l.status === 'done' && S.run ? `<div class="drow2"><button class="dtrace" title="Every model call for this section: the prompt and what came back">🔍 Trace</button><button class="dversions" title="Every version this section has had; put any one back">🕘 Versions</button></div>` : ''}${body}`
   }
   if (html !== design.last) {
     design.last = html
@@ -1888,6 +1903,8 @@ function renderDesign(now) {
     const pin = els.dDesign.querySelector('.pin')
     if (pin) pin.onclick = () => { if (S.sel) S.sel = null; else design.pinned = design.pinned ? null : design.agent; design.last = '' }
     const tr = els.dDesign.querySelector('.dtrace')
+    const vs = els.dDesign.querySelector('.dversions')
+    if (vs) vs.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) sectionVersions(l, vs) }
     if (tr) tr.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) traceView(S.run, { layer: l.id, title: l.role || l.id }) }
   }
 }
@@ -2058,13 +2075,125 @@ async function commitEdit(edit) {
   const run = viewing && viewing !== 'new' ? viewing : S.run
   if (!run) return
   const e = { ...edit, id: `${CLIENT}${Date.now().toString(36)}`, by: CLIENT, t: Date.now() }
+  if (!edit.quiet) remember(undoFor(e))
+  delete e.quiet
   applyEdit(e)
+  if (edit.quiet) return saveEdit(run, e)
   feed(null, `You edited the design: ${describeEdit(e)}`, 'sys')
   const owner = e.kind === 'section' && S.agents.get(S.layers.get(e.layer)?.agent)
   const a = owner || pick([...S.agents.values()].filter(x => x.layer) .concat([...S.agents.values()]))
   if (a) setTimeout(() => say(a, pick(REACT[e.kind](e))), 500)
+  return saveEdit(run, e)
+}
+async function saveEdit(run, e) {
   const res = await api(`/api/runs/${encodeURIComponent(run)}/edit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(e) }).catch(() => null)
   if (!res?.ok) feed(null, 'That edit is shown here but could not be saved with the file.', 'err')
+}
+
+// ---------- undo and redo: ⌘Z / Ctrl+Z, ⇧⌘Z / Ctrl+Y. Your design edits and the
+// agents' rewrites of a section both go back, and stay back when the file reopens.
+function remember(step) {
+  if (!step) return
+  history.undo.push(step)
+  if (history.undo.length > 100) history.undo.shift()
+  history.redo = []
+  renderUndo()
+}
+// what puts an edit back: the value before it, or the section as it was
+function undoFor(e) {
+  const t = S.theme || {}
+  if (e.kind === 'var') return { kind: 'edit', label: describeEdit(e), back: { kind: 'var', name: e.name, value: t.vars?.[e.name] }, again: { kind: 'var', name: e.name, value: e.value } }
+  if (e.kind === 'font') return { kind: 'edit', label: describeEdit(e), back: { kind: 'font', role: e.role, value: t.fonts?.[e.role] }, again: { kind: 'font', role: e.role, value: e.value } }
+  if (e.kind === 'radius') return { kind: 'edit', label: describeEdit(e), back: { kind: 'radius', value: t.radius }, again: { kind: 'radius', value: e.value } }
+  if (e.kind === 'scale') return { kind: 'edit', label: describeEdit(e), back: { kind: 'scale', axis: e.axis, value: String(-Number(e.value)) }, again: { kind: 'scale', axis: e.axis, value: e.value } }
+  if (e.kind === 'size') return { kind: 'edit', label: describeEdit(e), back: { kind: 'size', from: e.value, value: e.from }, again: { kind: 'size', from: e.from, value: e.value } }
+  if (e.kind === 'section') {
+    const l = S.layers.get(e.layer)
+    if (!l?.text) return null
+    return { kind: 'layer', key: l.key, page: l.page, layer: l.id, before: l.text, after: null, edit: e, label: describeEdit(e) }
+  }
+  return null
+}
+async function restoreLayer(step, html, why) {
+  const run = viewing && viewing !== 'new' ? viewing : S.run
+  const l = S.layers.get(step.key)
+  if (!run || !l || html == null) return
+  l.text = html; l.ver++; l.status = 'done'; S.treeDirty = true
+  design.last = ''
+  await api(`/api/runs/${encodeURIComponent(run)}/restore`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page: step.page, layer: step.layer, html, by: CLIENT, why }) }).catch(() => null)
+}
+async function undo() {
+  const step = history.undo.pop()
+  if (!step) return botMsg('Nothing to undo.')
+  if (step.kind === 'edit') { if (step.back.value != null) await commitEdit({ ...step.back, quiet: true }) }
+  else {
+    // a section edit: keep what it looked like after, for redo
+    if (step.after == null) step.after = S.layers.get(step.key)?.text
+    await restoreLayer(step, step.before, 'undo')
+  }
+  history.redo.push(step)
+  feed(null, `↶ Undid ${step.label}`, 'sys')
+  renderUndo()
+}
+async function redo() {
+  const step = history.redo.pop()
+  if (!step) return botMsg('Nothing to redo.')
+  if (step.kind === 'edit') await commitEdit({ ...step.again, quiet: true })
+  else await restoreLayer(step, step.after, 'redo')
+  history.undo.push(step)
+  feed(null, `↷ Redid ${step.label}`, 'sys')
+  renderUndo()
+}
+function renderUndo() {
+  const u = document.getElementById('undo-btn'), r = document.getElementById('redo-btn')
+  if (!u) return
+  u.disabled = !history.undo.length
+  r.disabled = !history.redo.length
+  u.title = history.undo.length ? `Undo ${history.undo.at(-1).label} (⌘Z / Ctrl+Z)` : 'Nothing to undo (⌘Z / Ctrl+Z)'
+  r.title = history.redo.length ? `Redo ${history.redo.at(-1).label} (⇧⌘Z / Ctrl+Y)` : 'Nothing to redo (⇧⌘Z / Ctrl+Y)'
+}
+document.getElementById('undo-btn').onclick = () => undo()
+document.getElementById('redo-btn').onclick = () => redo()
+window.addEventListener('keydown', e => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+  // typing in a field keeps the field's own undo
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return
+  const k = e.key.toLowerCase()
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+  else if ((k === 'z' && e.shiftKey) || (k === 'y' && e.ctrlKey && !e.metaKey)) { e.preventDefault(); redo() }
+})
+
+// Every version a section has had: as built, each fix, each restore. Any one comes back.
+async function sectionVersions(l, at) {
+  document.querySelector('.fmenu')?.remove()
+  const run = viewing && viewing !== 'new' ? viewing : S.run
+  const events = await (await api(`/api/runs/${encodeURIComponent(run)}/events`)).json().catch(() => [])
+  const asks = events.filter(e => e.type === 'comment:take' && e.page === l.page && e.layer === l.id)
+  // each distinct version once, named after where it first came from (undo and redo only repeat one)
+  const seen = new Set()
+  const versions = events.filter(e => e.type === 'layer:done' && e.page === l.page && e.layer === l.id && e.html && !seen.has(e.html) && seen.add(e.html))
+  const m = document.createElement('div')
+  m.className = 'fmenu versions'
+  const when = t => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const what = e => e.restored ? (e.why === 'text' ? 'your text edit' : 'put back') : e.fixed ? `rewrite${(() => { const a = asks.filter(x => x.t <= e.t).at(-1); return a ? `: “${a.text.slice(0, 40)}”` : ' after review' })()}` : 'as built'
+  m.innerHTML = `<div class="fmh">Versions of ${esc(l.role || l.id)}</div>${versions.slice().reverse().map((e, i) => `<button data-i="${versions.length - 1 - i}"${e.html === l.text ? ' class="on"' : ''}>${esc(when(e.t))} · ${esc(what(e))} · ${Math.round(e.html.length / 100) / 10}k${e.html === l.text ? ' ✓ now' : ''}</button>`).join('') || '<div class="fmh">No saved versions.</div>'}`
+  document.body.append(m)
+  const r = at.getBoundingClientRect()
+  Object.assign(m.style, { top: `${Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 8)}px`, left: `${Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8))}px` })
+  const close = () => { m.remove(); removeEventListener('mousedown', away) }
+  const away = e => { if (!m.contains(e.target)) close() }
+  setTimeout(() => addEventListener('mousedown', away))
+  m.onclick = async e => {
+    const b = e.target.closest('button[data-i]')
+    if (!b) return
+    close()
+    const v = versions[Number(b.dataset.i)]
+    if (v.html === l.text) return
+    const step = { kind: 'layer', key: l.key, page: l.page, layer: l.id, before: l.text, after: v.html, label: `${l.role || l.id} back to ${when(v.t)}` }
+    remember(step)
+    await restoreLayer(step, v.html, 'version')
+    feed(null, `🕘 ${l.role || l.id} is back to the ${when(v.t)} version (⌘Z undoes it)`, 'sys')
+  }
 }
 
 // One small menu for every editable value, Figma style.
@@ -2160,6 +2289,7 @@ function loadPickerFonts() {
 function selectAt(f, x, y) {
   const hit = Object.entries(f.geo.slots).find(([, g]) => { const [l, t, w, h] = g.box; return x >= l && x <= l + w && y >= t && y <= t + h })
   S.sel = hit ? hit[0] : null
+  if (txt.mode && S.sel && S.layers.get(S.sel)?.status === 'done') { txt.mode = false; toolbarKey = ''; els.viewport.classList.remove('texting'); textEdit(S.layers.get(S.sel)) }
   if (cmt.mode && S.sel) { cmt.mode = false; cmt.open = S.sel; toolbarKey = ''; els.viewport.classList.remove('commenting') }
   else if (cmt.open !== S.sel) cmt.open = null
   design.pinned = null
@@ -2320,6 +2450,62 @@ commandOps.publish = c => publishNow(['local', 'vercel', 'cloudflare'].includes(
 // Comment tool in the toolbar arms it: the next section clicked opens it. A
 // comment with no section (from /swarm fix) is routed by the planner.
 const cmt = { mode: false, open: null, el: null, key: '' }
+const txt = { mode: false }
+const USER_TOOLS = {
+  move: 'Move (V): drag to pan, click a section to select it',
+  text: 'Text (T): click a section and edit its words yourself',
+  comment: 'Comment (C): click a section and tell an agent what to change'
+}
+
+// ✏️ Text: every piece of text in a section as a field. Saved as the section's new
+// version, so ⌘Z undoes it and it stays when the file reopens.
+function textEdit(l) {
+  document.querySelector('.finfo-wrap')?.remove()
+  const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
+  const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+  const nodes = []
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) if (n.textContent.trim() && !n.parentElement.closest('svg, script, style')) nodes.push(n)
+  if (!nodes.length) return botMsg('That section has no text to edit.')
+  const wrap = document.createElement('div')
+  wrap.className = 'finfo-wrap'
+  wrap.innerHTML = `<div class="finfo textedit"><button class="fix" title="Close">×</button><h3>✏️ Edit text <small></small></h3><div class="te-list"></div><div class="fi-foot"><span class="dim">Tip: ⌘Z undoes it after saving.</span><button class="fi-save">Save</button></div></div>`
+  wrap.querySelector('h3 small').textContent = l.role || l.id
+  const list = wrap.querySelector('.te-list')
+  nodes.forEach((n, i) => {
+    const t = n.textContent.trim(), tag = n.parentElement.tagName.toLowerCase()
+    const row = document.createElement('label')
+    row.innerHTML = `<span>${esc(/^h[1-6]$/.test(tag) ? 'heading' : tag === 'a' || tag === 'button' ? 'button / link' : tag === 'p' ? 'text' : tag)}</span>`
+    const f = document.createElement(t.length > 60 ? 'textarea' : 'input')
+    f.value = t.replace(/\s+/g, ' ')
+    f.dataset.i = i
+    if (f.tagName === 'TEXTAREA') f.rows = Math.min(5, Math.ceil(t.length / 70))
+    row.append(f)
+    list.append(row)
+  })
+  document.body.append(wrap)
+  const close = () => { wrap.remove(); removeEventListener('keydown', key) }
+  const key = e => { if (e.key === 'Escape') close() }
+  addEventListener('keydown', key)
+  wrap.onclick = e => { if (e.target === wrap) close() }
+  wrap.querySelector('.fix').onclick = close
+  wrap.querySelector('.fi-save').onclick = async () => {
+    let changed = 0
+    for (const f of list.querySelectorAll('[data-i]')) {
+      const n = nodes[Number(f.dataset.i)], old = n.textContent, now = f.value.trim()
+      if (now === old.trim().replace(/\s+/g, ' ')) continue
+      // keep the spacing around the words
+      n.textContent = old.match(/^\s*/)[0] + now + old.match(/\s*$/)[0]
+      changed++
+    }
+    close()
+    if (!changed) return
+    const step = { kind: 'layer', key: l.key, page: l.page, layer: l.id, before: l.text, after: doc.body.innerHTML.trim(), label: `text in ${l.role || l.id}` }
+    remember(step)
+    await restoreLayer(step, step.after, 'text')
+    feed(null, `✏️ You changed ${changed} piece${changed > 1 ? 's' : ''} of text in ${l.role || l.id}`, 'sys')
+  }
+  list.querySelector('[data-i]')?.focus()
+}
 
 function drawComment() {
   const l = S.sel && S.layers.get(S.sel)
@@ -2374,7 +2560,19 @@ commandOps.fix = c => {
 }
 
 els.toolbar.addEventListener('click', e => {
-  if (e.target.closest('[data-tool]')?.dataset.tool !== 'comment') return
+  const tool = e.target.closest('[data-tool]')?.dataset.tool
+  if (tool === 'move') { cmt.mode = txt.mode = false; toolbarKey = ''; els.viewport.classList.remove('commenting', 'texting'); return }
+  if (tool === 'text') {
+    cmt.mode = false; els.viewport.classList.remove('commenting')
+    const l = S.sel && S.layers.get(S.sel)
+    if (l?.status === 'done') { txt.mode = false; toolbarKey = ''; return textEdit(l) }
+    txt.mode = !txt.mode; toolbarKey = ''
+    els.viewport.classList.toggle('texting', txt.mode)
+    if (txt.mode) feed(null, '✏️ Click a section to edit its words.', 'sys')
+    return
+  }
+  if (tool !== 'comment') return
+  txt.mode = false; els.viewport.classList.remove('texting')
   if (S.sel && S.layers.get(S.sel)?.status === 'done') { cmt.open = S.sel; return }
   cmt.mode = !cmt.mode
   toolbarKey = ''

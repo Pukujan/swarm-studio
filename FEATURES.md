@@ -20,6 +20,9 @@ Every feature works in three places: on the canvas, as a `/swarm …` command, a
 |---|---|---|---|
 | **Design panel** | Click any section and change its layout, padding, gap, fill, stroke, radius and type. Variables change every page. Edits are saved with the build. Opens by itself when you select a section and closes after; × closes it. | **☰ More → Design** (D) | — |
 | **Comments to agents** | Pin a comment on a section ("make the hero darker"). An agent picks it up, rewrites that section live and says in the chat when it's done. A rewrite that comes back cut off is thrown away and the section stays as it was. Without a section selected, the planner works out which sections you mean. | 💬 tool | `/swarm fix <what to change>` |
+| **Undo and redo** | ⌘Z / Ctrl+Z undoes your last change, ⇧⌘Z / Ctrl+Y redoes it: Design edits, your text edits, an agent's rewrite of a section, and putting back a version. Undone changes stay undone when the file reopens. ↶ ↷ in the top bar too. | **↶ ↷**, ⌘Z | `/undo` · `/redo` in the chat |
+| **Versions** | Every version a section has had (as built, each review fix, each rewrite from your comments, your text edits), each listed once. Put any one back; ⌘Z undoes that too. | **🕘 Versions** in the Design panel | — |
+| **Your tools** | The bottom bar: **Move** (V) selects and pans, **✏️ Text** (T) lets you edit every word of a section yourself, **💬 Comment** (C) asks an agent. Frame, Shape, Image and Connect light up while an agent uses them. | bottom toolbar | — |
 | **Visual review** | Every page is checked at desktop and phone width. Measured problems come first: a panel sitting on top of other text, or a half-written tag, found by measuring the page, not guessed. Then a vision model looks at both screenshots and names what a visitor would notice. Agents fix it all live, one agent per section. | **🔎 Review** | `/swarm review [n]` |
 
 ## Show

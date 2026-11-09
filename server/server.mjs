@@ -790,6 +790,24 @@ const server = createServer((req, res) => {
     return
   }
 
+  // Put a section back as an earlier version had it (undo, redo, Versions). Saved
+  // as the section's latest finished state, so it replays when the file reopens.
+  const runRestore = url.pathname.match(/^\/api\/runs\/([^/]+)\/restore$/)
+  if (runRestore && req.method === 'POST' && RUN_ID.test(runRestore[1])) {
+    let body = ''
+    req.on('data', c => (body += c))
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const events = readEvents(runRestore[1])
+      const ok = events && typeof input.html === 'string' && input.html.length < 300000 && events.some(e => e.type === 'layer:done' && e.page === input.page && e.layer === input.layer)
+      if (!ok) { res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no such section' })); return }
+      record(runRestore[1], { type: 'layer:done', t: Date.now(), run: runRestore[1], page: input.page, layer: input.layer, html: input.html, fixed: true, restored: true, by: safe(input.by, 24) ? input.by : undefined, why: String(input.why || '').slice(0, 40) || undefined })
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }))
+    })
+    return
+  }
+
   const runEvents = url.pathname.match(/^\/api\/runs\/([^/]+)\/events$/)
   if (runEvents) {
     const events = readEvents(runEvents[1])
