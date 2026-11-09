@@ -1,17 +1,21 @@
 # Who it's for
 
-Swarm Studio has two homes and seven audiences. Six of them build, and each gets a **lens**: one app, but its
+Swarm has one front door, the Feed, and seven audiences. Six of them build, and each gets a **lens**: one app, but its
 own tools and its own flow. The seventh browses the Feed and may become a builder.
 
-## Two homes
+## The Feed first, the Studio inside it
 
-| Home | Where | What happens there |
+Hermes opens the **Feed**, the way Kresilo opens on its home feed. It works like TikTok: one build per screen,
+swipe for the next, and the build's own visuals and assets do the talking. The **Studio** is inside it: + Create
+starts a build, and Projects holds your builds (the galaxy). The same Feed is public at swarm.design-bakery.com.
+
+| Place | How you get there | What happens there |
 |---|---|---|
-| **Studio** (private) | `hermes swarm`, the galaxy | You make things. Your builds are the stars. |
-| **Feed** (public) | swarm.design-bakery.com, plus the Feed tools inside Hermes | People show off builds and tell their story, try them, remix them, save them to boards and join Jams. |
+| **Feed** | `/swarm` in Hermes, or swarm.design-bakery.com | Swipe builds, open their assets and story, remix, follow makers, join jams, plan on boards. |
+| **Studio** | + Create, or Projects › a build | You make things: the orbit, its stations and rooms. |
 
-A finished build travels from the Studio to the Feed (Post to Feed). A Feed card travels back into the Studio
-(Remix). That loop is the product.
+A finished build travels from the Studio to Home (Post to Feed). A build on Home travels back into the Studio
+(Remix). That loop is the product. The full map is in [SITEMAP.md](SITEMAP.md).
 
 ## Six lenses
 
@@ -34,18 +38,18 @@ with the Just make it lens.
 For the hackathon there's one more watcher: **the judges**, who see a demo video under 90 s. Just make it, Game
 and Design are the lenses that film best.
 
-## How a lens is chosen (proposed, awaiting owner)
+## How a lens is chosen
 
 You type the idea; the studio guesses the lens from it ("a roguelike where…" → Game) and shows the guess as one
 small chip beside Build. Tap the chip to change it, the way Maps offers driving, walking or transit. Nobody is
 ever asked "who are you?".
 
-## Open decisions (owner)
+## Decisions (owner, 2026-11-09)
 
-1. Guess the lens from the idea, with a chip to change it, or show 6 buttons up front?
-2. Is the split right? Mix = design + app; Launch = site + promo + posts.
-3. Game: only the game, or game + trailer + Arcade publishing?
-4. Scope for 2026-11-11 17:00 EST: build the structure (layers, one input, lens chip, stations per lens, sheets,
-   ⌘K) and polish Just make it, Game and Design; the other lenses run over today's tools and grow later?
-5. Should the Studio show the Feed as its outermost layer (beyond the galaxy), or as a separate site that Hermes
-   links to?
+1. The lens is guessed from the idea and shown as a chip you can change.
+2. Mix = design + app; Launch = site + promo video + posts.
+3. Game = the game first, then the Film studio for a trailer, and Arcade publishing.
+4. For 2026-11-11 17:00 EST: build the structure and polish Just make it, Game and Design; the other lenses
+   run over today's tools and grow later.
+5. The Feed is the front door, like Kresilo: Hermes opens it, and the Studio is inside it (TikTok-style, visuals
+   only).

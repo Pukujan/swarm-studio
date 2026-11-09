@@ -68,3 +68,8 @@ entries at the bottom with the date; don't rewrite old ones.
 **The commander**
 > what about the Nous Portal girl's cyber version, or a moving PNG image or something that sounds like she is
 > the commander?
+
+**The front door**
+> the flow is wrong, I want the plugin to open the feed directly, like how Kresilo works
+>
+> yup, and it's a TikTok-style navigation, it doesn't need project descriptions, just more visuals and assets
