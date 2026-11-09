@@ -25,6 +25,11 @@ HELP = """Swarm Studio commands
   /swarm files [words]            recent builds, or search them (tag:x folder:x on:vercel has:video)
   /swarm info [n|id]              a build's details: theme, models, pages, live links, video, tags
   /swarm open <n|id>              open a build on the canvas (n from /swarm files)
+  /swarm folders                  your folders and what is in each
+  /swarm folder <n|id> <name|none>   file a build in a folder (made if new), or take it out
+  /swarm trace [n|id] [words]     every model call of a build: who, which page and layer, time, tokens
+  /swarm trace [n|id] call <id>   one call in full: the prompt sent and the raw answer
+  /swarm trace [n|id] on|off      record traces for a build or not (on by default)
   /swarm play                     play the open build as a clickable prototype
   /swarm review [n|id]            a vision model checks every page; agents fix what it finds
   /swarm fix <what to change>     an agent reworks the selected section (or the planner finds which)
@@ -41,7 +46,7 @@ HELP = """Swarm Studio commands
 
 TARGETS = ("github", "vercel", "cloudflare", "local")
 
-SUBCOMMANDS = {"help", "files", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite"}
+SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -134,6 +139,48 @@ def _info(r: dict) -> str:
     return "\n".join(f"{k + ':':<12} {v}" for k, v in rows if v)
 
 
+def _folders() -> str:
+    runs, got = _runs(), _api("/api/folders")
+    names = got.get("folders") or []
+    if not names:
+        return "No folders yet. File a build with /swarm folder <n> <name>."
+    lines = []
+    for n in names:
+        inside = [(i, r) for i, r in enumerate(runs, 1) if r.get("folder") == n]
+        lines.append(f"📁 {n} ({len(inside)})" + "".join(f"\n   {i:>2}. {r['title'][:52]}" for i, r in inside[:8]) + ("\n   …" if len(inside) > 8 else ""))
+    loose = sum(1 for r in runs if not r.get("folder"))
+    return "\n".join(lines) + f"\n{loose} builds are not in a folder."
+
+
+def _trace(args: list[str]) -> str:
+    ref = args[0] if args and (args[0].isdigit() or args[0].startswith("20")) else ""
+    rest = args[1:] if ref else args
+    r = _pick_run(ref)
+    if not r:
+        return "No such build. See /swarm files."
+    base = f"/api/runs/{r['id']}/trace"
+    if rest and rest[0].lower() in ("on", "off"):
+        _api(f"/api/runs/{r['id']}/meta", {"trace": rest[0].lower() == "on"})
+        return f"Traces for “{r['title']}” are {rest[0].lower()}."
+    if len(rest) >= 2 and rest[0].lower() == "call":
+        c = _api(f"{base}?call={rest[1]}")
+        clip = lambda t, n: t if len(t) <= n else t[:n] + f"… [{len(t) - n} more chars]"
+        msgs = "\n".join(f"--- {m['role']} ---\n{clip(m['content'] if isinstance(m['content'], str) else json.dumps(m['content']), 2500)}" for m in c.get("messages", []))
+        head = f"{c.get('kind')} · {c.get('agent') or ''} {c.get('page') or ''}/{c.get('layer') or ''} · {c.get('model')} · {c.get('ms')}ms · {'ok' if c.get('ok') else 'FAILED: ' + str(c.get('error'))}"
+        return f"{head}\n{msgs}\n--- answer ---\n{clip(c.get('output') or '', 4000)}"
+    got = _api(base)
+    calls = got.get("calls") or []
+    q = " ".join(rest).lower()
+    if q:
+        calls = [c for c in calls if all(w in " ".join(str(c.get(k) or "") for k in ("kind", "agent", "page", "layer", "model")).lower() for w in q.split())]
+    if not calls:
+        return (f"No traced calls for “{r['title']}”" + (f" matching “{q}”" if q else "") + "." +
+                ("" if got.get("on", True) else " Traces are off for it: /swarm trace on."))
+    lines = [f"{time.strftime('%H:%M:%S', time.localtime(c['t'] / 1000))}  {c.get('kind', ''):<9} {(c.get('agent') or ''):<4} {((c.get('layer') or c.get('page') or ''))[:34]:<34} {c['ms'] / 1000:>5.1f}s  {(str((c.get('tokens') or {}).get('out')) + ' tok') if (c.get('tokens') or {}).get('out') else '':>9}  {'ok' if c.get('ok') else 'FAILED'}  [{c['id']}]" for c in calls[-30:]]
+    more = f"(last 30 of {len(calls)})\n" if len(calls) > 30 else ""
+    return f"Model calls for “{r['title']}”:\n{more}" + "\n".join(lines) + "\nOne in full: /swarm trace call <id>."
+
+
 def is_command(text: str) -> bool:
     words = text.strip().split()
     if not words or words[0].lower() not in SUBCOMMANDS:
@@ -142,7 +189,7 @@ def is_command(text: str) -> bool:
     # a video with an idea runs long; it starts with a style or a build number, which a brief wouldn't
     if words[0].lower() == "video" and len(words) > 1 and (words[1].lower() in VIDEO_STYLES or words[1].isdigit()):
         return True
-    return words[0].lower() in ("fix", "files") or len(words) <= 4
+    return words[0].lower() in ("fix", "files", "folder", "trace") or len(words) <= 4
 
 
 def run(text: str) -> str:
@@ -160,6 +207,21 @@ def _dispatch(cmd: str, args: list[str]) -> str:
 
     if cmd == "files":
         return _files(" ".join(args))
+
+    if cmd == "folders":
+        return _folders()
+
+    if cmd == "folder":
+        r = _pick_run(args[0] if args else "")
+        if not r or len(args) < 2:
+            return "Say which build and which folder: /swarm folder <n> <name>, or none to take it out."
+        name = " ".join(args[1:]).strip()
+        name = "" if name.lower() == "none" else name
+        _api(f"/api/runs/{r['id']}/meta", {"folder": name})
+        return f"Filed “{r['title']}” in 📁 {name}." if name else f"Took “{r['title']}” out of its folder."
+
+    if cmd == "trace":
+        return _trace(args)
 
     if cmd == "info":
         r = _pick_run(args[0] if args else "")
@@ -331,13 +393,13 @@ def _video(ref: str, wait: bool, voice: str = "", music: bool = True, style: str
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, and set the models, image generation and lite mode.",
+    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, file builds in folders, read the trace of every model call an agent made (the prompt and raw answer, to see why a section came out as it did), show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, and set the models, image generation and lite mode.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "help"]},
+            "action": {"type": "string", "enum": ["files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "help"]},
             "build": {"type": "string", "description": "for open/info/review/fix/export/publish/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
-            "text": {"type": "string", "description": "for files: search words (tag:x, folder:x, on:vercel, has:video work too); for video: the person's idea for it; for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
+            "text": {"type": "string", "description": "for folder: the folder name ('none' to take it out); for trace: words to filter calls (a layer, page, agent or kind like build/fix/review), or 'call <id>' for one call in full, or on/off; for files: search words (tag:x, folder:x, on:vercel, has:video work too); for video: the person's idea for it; for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
             "provider": {"type": "string", "description": "for images: a Hermes image provider (openai-codex, xai, …), 'auto' or 'off'; omit to show"},
@@ -371,6 +433,8 @@ def tool(args: dict | None = None, **_: object) -> str:
         "open": [a.get("build") or "1"],
         "files": str(a.get("text") or "").split(),
         "info": [a["build"]] if a.get("build") else [],
+        "folder": [a.get("build") or "1", *str(a.get("text") or "none").split()],
+        "trace": [*([a["build"]] if a.get("build") else []), *str(a.get("text") or "").split()],
         "review": [a["build"]] if a.get("build") else [],
         "export": [a["build"]] if a.get("build") else [],
         "models": [a["role"], a.get("model") or "reset"] if a.get("role") else [],

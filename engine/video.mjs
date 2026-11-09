@@ -135,7 +135,7 @@ export function fallbackStory(c) {
 }
 
 export async function writeStory({ provider, model, c, signal, style, idea }) {
-  const res = await streamChat(provider, { model, messages: storyPrompt(c, { style, idea }), maxTokens: 1500, temperature: 0.7, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
+  const res = await streamChat(provider, { trace: { kind: 'video' }, model, messages: storyPrompt(c, { style, idea }), maxTokens: 1500, temperature: 0.7, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
   const s = res.text.indexOf('{'), e = res.text.lastIndexOf('}')
   if (s < 0 || e <= s) throw new Error('no JSON in the storyboard')
   const scenes = checkStory(JSON.parse(res.text.slice(s, e + 1)), c)

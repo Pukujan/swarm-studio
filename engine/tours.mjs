@@ -62,6 +62,7 @@ export function checkTours(raw, pages) {
 
 export async function writeTours({ provider, model, brief, pages, signal }) {
   const res = await streamChat(provider, {
+    trace: { kind: 'tours' },
     model,
     messages: prompt(brief, pages),
     maxTokens: 3500,

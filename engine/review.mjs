@@ -36,7 +36,7 @@ function parse(text) {
 }
 
 export async function reviewPage({ provider, model, brief, page, sections, image, signal }) {
-  const res = await streamChat(provider, { model, messages: reviewMessages({ brief, page, sections, image }), maxTokens: 900, temperature: 0.2, extra: NO_THINKING, signal })
+  const res = await streamChat(provider, { trace: { kind: 'review', page }, model, messages: reviewMessages({ brief, page, sections, image }), maxTokens: 900, temperature: 0.2, extra: NO_THINKING, signal })
   const raw = parse(res.text)
   const keys = new Set(sections.map(s => s.key))
   const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n)
@@ -53,6 +53,7 @@ export async function reviewPage({ provider, model, brief, page, sections, image
 export async function routeComment({ provider, model, text, sections, signal }) {
   const list = sections.map(s => `${s.key} "${s.role}"${s.head ? `: ${s.head}` : ''}`).join('\n')
   const res = await streamChat(provider, {
+    trace: { kind: 'route' },
     model,
     messages: [
       { role: 'system', content: 'A person left a comment on a website a team of agents built. Pick the section or sections it is about (at most 3; a change to something that appears on every page, like the nav or footer, is the shared "*/" section). Return JSON only: {"sections":["section key"],"reply":"what the agent taking it says back, first person, casual, under 12 words"}' },
@@ -83,6 +84,11 @@ Current section:
 ${html}`
     }
   ]
-  const res = await streamChat(provider, { model, messages, maxTokens: 3500, temperature: 0.4, extra: NO_THINKING, signal, onDelta })
+  // room for the whole section again plus what is added: a big section (a map, a
+  // table) cut off at a fixed limit loses its end and breaks
+  const maxTokens = Math.min(16000, Math.max(4000, Math.ceil(html.length / 1.6)))
+  const res = await streamChat(provider, { trace: { kind: comment ? 'fix' : 'review-fix' }, model, messages, maxTokens, temperature: 0.4, extra: NO_THINKING, signal, onDelta })
+  const out = res.text.replace(/^\s*```(?:html)?\s*/i, '').replace(/\s*```\s*$/, '')
+  if (!/<\/(section|nav|footer|header|div)>\s*(<!--[\s\S]*?-->\s*)*$/i.test(out)) throw new Error('the rewrite was cut off before the end, so the section was kept as it was')
   return res.text
 }

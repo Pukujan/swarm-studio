@@ -1,6 +1,9 @@
 // Streaming chat client for any OpenAI-compatible endpoint (InferHub, OpenRouter, ...).
 // Zero dependencies: Node's fetch + SSE parsing. Every call reports timing so the
-// engine and the speed test measure the same thing.
+// engine and the speed test measure the same thing. Every call is also traced
+// (engine/trace.mjs) when a run is listening.
+
+import { traceCall } from './trace.mjs'
 
 export function providerFromEnv(env = process.env) {
   const baseUrl = env.SWARM_BASE_URL || 'https://api.inferhub.dev/v1'
@@ -13,8 +16,20 @@ export function providerFromEnv(env = process.env) {
  * Stream one chat completion. Calls onDelta(text) for every content chunk.
  * Resolves with { text, ttftMs, totalMs, outputTokens, tokPerSec, usage }.
  */
-export async function streamChat(provider, { model, messages, maxTokens = 2048, temperature = 0.7, extra = {}, signal, onDelta }) {
+export async function streamChat(provider, opts) {
   const started = performance.now()
+  const { model, messages, maxTokens = 2048, temperature = 0.7, trace } = opts
+  try {
+    const res = await chat(provider, opts, started)
+    traceCall({ label: trace, provider, model, messages, maxTokens, temperature, started, res })
+    return res
+  } catch (error) {
+    traceCall({ label: trace, provider, model, messages, maxTokens, temperature, started, error })
+    throw error
+  }
+}
+
+async function chat(provider, { model, messages, maxTokens = 2048, temperature = 0.7, extra = {}, signal, onDelta }, started) {
   const send = withExtra => fetch(`${provider.baseUrl}/chat/completions`, {
     method: 'POST',
     signal,
