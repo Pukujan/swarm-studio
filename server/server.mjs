@@ -18,9 +18,10 @@ import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun } from '../engine/export.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
-import { MOTION_CSS, SNAPPY, swarmMotion } from '../engine/motion.mjs'
+import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.mjs'
+import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
-import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
+import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -386,18 +387,44 @@ async function makeVideo(id, input = {}) {
       scenes = fallbackStory(c)
     }
     const agents = c.agents
-    send('video:story', { scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: s.image ? `/img/${id}/${basename(c.images.find(x => x.n === s.image).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
+    send('video:story', { cast: scenes.cast, music: scenes.music, scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: s.image ? `/img/${id}/${basename(c.images.find(x => x.n === s.image).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
     mkdirSync(dir, { recursive: true })
     stagePictures(c, dir)
-    const comp = composition(scenes, c)
-    writeFileSync(join(dir, 'index.html'), comp.html)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify(scenes, null, 2))
     const t = await tools
-    progress(1, 'rendering')
-    const out = join(dir, 'promo.mp4')
-    await render({ tools: t, dir, out, quality: ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft', onProgress: (pct, code) => progress(Math.max(1, pct), code === 'assemble' ? 'assembling' : 'rendering') })
+    // the voiceover first: each scene stretches to fit its line
+    const preset = motionPreset(c.theme)
+    let voices = []
+    if (input.voice !== 'off') {
+      try {
+        // a voice the person picked reads everything; otherwise the storyboard's cast
+        const picked = VOICES[input.voice] || (/^[a-z][fm]_[a-z]+$/.test(input.voice || '') ? input.voice : null)
+        const cast = scenes.cast || {}, narrator = picked || cast.narrator || VOICES[preset]
+        voices = await speak({ dataDir, dir, lines: scenes.map(s => s.say || ''), voice: narrator, voices: picked ? [] : scenes.map(s => (s.who === 'second' && cast.second) || narrator), onStage: stage => progress(1, stage) })
+      } catch (err) {
+        send('video:note', { message: `no voiceover this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
+      }
+    }
+    const lengths = scenes.map((s, i) => sceneLength(s, voices[i]?.seconds))
+    const comp = composition(scenes, c, lengths)
+    writeFileSync(join(dir, 'index.html'), comp.html)
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ cast: scenes.cast, music: scenes.music, scenes }, null, 2))
+    progress(2, 'rendering')
+    const silent = join(dir, 'promo-silent.mp4'), out = join(dir, 'promo.mp4')
+    await render({ tools: t, dir, out: silent, quality: ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft', onProgress: (pct, code) => progress(Math.max(2, Math.min(96, pct)), code === 'assemble' ? 'assembling' : 'rendering') })
+    // music to the theme's mood with a whoosh into every cut, the voice on top
+    progress(97, 'mixing the sound')
+    const starts = lengths.map((_, i) => lengths.slice(0, i).reduce((a, b) => a + b, 0))
+    let sound = false
+    try {
+      const musicFile = input.music === false ? null : join(dir, 'music.wav')
+      if (musicFile) music({ seconds: comp.seconds, preset: scenes.music || preset, cuts: starts.slice(1), file: musicFile })
+      sound = await mix({ ffmpeg: t.ffmpeg, env: { ...process.env, PATH: t.path }, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: starts[i] + VOICE_LEAD }), out })
+    } catch (err) {
+      send('video:note', { message: `sound failed, the video is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
+    }
+    if (!sound) copyFileSync(silent, out)
     Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${Date.now()}`, file: out, seconds: comp.seconds })
-    send('video:done', { src: job.src, file: out, seconds: comp.seconds, ms: Date.now() - job.t })
+    send('video:done', { src: job.src, file: out, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound })
   })().catch(err => {
     Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })

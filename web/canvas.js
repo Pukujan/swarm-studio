@@ -2447,11 +2447,14 @@ function videoEvent(e) {
   } else if (e.type === 'video:story') {
     video.story = e.scenes
     if (fresh) e.scenes.forEach((sc, i) => setTimeout(() => feed(S.agents.get(sc.agent), `scene ${i + 1} · ${sc.kind}: “${sc.headline}”`, ''), i * 350))
+    if (fresh && e.cast?.narrator) feed(null, `🎙 cast for the theme: ${e.cast.narrator}${e.cast.second ? ` with ${e.cast.second}` : ''} reading, ${e.music || 'matching'} music`, 'sys')
   } else if (e.type === 'video:progress') {
     Object.assign(video, { busy: true, pct: e.pct, stage: e.stage })
   } else if (e.type === 'video:done') {
     Object.assign(video, { busy: false, pct: 100, src: e.src, file: e.file, stage: 'done' })
-    if (fresh) feed(null, `🎬 promo video ready (${Math.round(e.seconds)}s, rendered in ${Math.round(e.ms / 1000)}s)`, 'sys')
+    if (fresh) feed(null, `🎬 promo video ready (${Math.round(e.seconds)}s${e.voice ? ', with voiceover' : ''}${e.music ? ', with music' : ''}, made in ${Math.round(e.ms / 1000)}s)`, 'sys')
+  } else if (e.type === 'video:note') {
+    if (fresh) feed(null, `🎬 ${e.message}`, 'err')
   } else if (e.type === 'video:failed') {
     Object.assign(video, { busy: false, message: e.message, stage: 'failed' })
     if (fresh) feed(null, `🎬 video: ${e.message}`, 'err')
@@ -2463,7 +2466,7 @@ function videoEvent(e) {
 function renderVideo() {
   const el = video.el
   if (!el) return
-  const stage = { storyboard: 'Writing the storyboard…', rendering: 'Rendering frames in headless Chrome…', assembling: 'Encoding the MP4…' }[video.stage] || video.stage
+  const stage = { storyboard: 'Writing the storyboard…', rendering: 'Rendering frames in headless Chrome…', assembling: 'Encoding the MP4…', 'recording the voiceover': 'Kokoro is reading the voiceover…', 'mixing the sound': 'Mixing the music and the voice…' }[video.stage] || video.stage
   // progress only moves the bar, so the storyboard cards don't replay their entrance
   const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message])
   if (el.dataset.sig === sig) {
@@ -2477,24 +2480,53 @@ function renderVideo() {
     const a = S.agents.get(sc.agent)
     return `<div class="vscene" style="--c:${a?.color || '#888'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
   }).join('')
+  const opts = `<div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const body = video.src && !video.busy
-    ? `<video src="${esc(video.src)}" controls autoplay muted playsinline></video><div class="vfoot"><span title="${esc(video.file)}">Saved with the build: video/promo.mp4</span><button class="vagain">Make a new cut</button></div>`
+    ? `<video src="${esc(video.src)}" controls autoplay playsinline></video><div class="vfoot"><span title="${esc(video.file)}">Saved with the build: video/promo.mp4</span><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
       ? `<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
-        : `<div class="vstage">A 20-second promo of this build: the planner writes the storyboard from your pages and pictures, HyperFrames renders it in your theme.</div><div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
+        : `<div class="vstage">A short promo of this build: the planner writes the storyboard and a voiceover from your pages and pictures, HyperFrames renders it in your theme, and Kokoro reads it over music made for it, all on this machine.</div>${opts}<div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
   el.innerHTML = `<div class="vhead">🎬 Promo video<button class="vclose" title="Close">×</button></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
   el.querySelector('.vclose').onclick = () => toggleVideo(false)
   const again = el.querySelector('.vagain')
   if (again) again.onclick = () => makeVideo()
+  const vid = el.querySelector('video')
+  // with sound now: play it out loud when the browser allows, muted when it doesn't
+  if (vid) vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) })
+  el.querySelector('.vbig')?.addEventListener('click', () => bigScreen(true))
+  el.querySelector('.vvoice')?.addEventListener('change', e => { videoOpts.voice = e.target.value; store.set('videoVoice', videoOpts.voice) })
+  el.querySelector('.vmusic')?.addEventListener('change', e => { videoOpts.music = e.target.checked; store.set('videoMusic', videoOpts.music) })
+}
+
+// The voiceover: Kokoro, on this machine, in one of its voices; or none.
+const VOICE_OPTS = [['', 'Kokoro · fits the theme'], ['af_heart', 'Kokoro · Heart'], ['af_bella', 'Kokoro · Bella'], ['am_michael', 'Kokoro · Michael'], ['bf_emma', 'Kokoro · Emma (UK)'], ['bm_george', 'Kokoro · George (UK)'], ['off', 'No voice']]
+const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true }
+
+// The video filling the whole pane (and the screen, where the app allows it).
+function bigScreen(on) {
+  document.querySelector('.video-big')?.remove()
+  if (!on || !video.src) return
+  const wrap = document.createElement('div')
+  wrap.className = 'video-big'
+  wrap.innerHTML = `<video src="${esc(video.src)}" controls autoplay playsinline></video><button class="vbclose" title="Back to the canvas (Esc)">×</button>`
+  document.body.append(wrap)
+  const v = wrap.querySelector('video')
+  const small = video.el?.querySelector('video')
+  if (small) { v.currentTime = small.currentTime; small.pause() }
+  v.play().catch(() => { v.muted = true; v.play().catch(() => {}) })
+  wrap.querySelector('.vbclose').onclick = () => bigScreen(false)
+  wrap.requestFullscreen?.().catch(() => {}) // the pane may not allow it; filling the pane is the fallback
+  const esc_ = e => { if (e.key === 'Escape' && !document.fullscreenElement) { bigScreen(false); removeEventListener('keydown', esc_) } }
+  addEventListener('keydown', esc_)
 }
 
 async function makeVideo() {
   const run = shownRun()
   if (!run || video.busy) return
   toggleVideo(true)
-  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music }) })
   if (!res.ok) {
     const out = await res.json().catch(() => ({}))
     Object.assign(video, { run, message: out.error || `HTTP ${res.status}`, busy: false })
