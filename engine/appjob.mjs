@@ -195,12 +195,12 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   // The app on Vercel: the source goes up and Vercel builds it, so Nitro's
   // routes become functions (Nitro picks its Vercel output by itself there).
-  async function deploy(id, { creds, dataDir, publishVercel }) {
+  async function deploy(id, { creds, dataDir, publishVercel, env = null }) {
     const dir = dirOf(id)
     if (!existsSync(join(dir, 'package.json'))) throw new Error('no app yet')
     if (jobs.get(id)?.state === 'working') throw new Error('the app is still building')
     const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm-app'
-    const r = await publishVercel({ dir, name: `${name}-app`.slice(0, 80), creds, dataDir, build: true, onStage: stage => broadcast({ type: 'app:stage', t: Date.now(), run: id, stage: `deploy: ${stage}` }) })
+    const r = await publishVercel({ dir, name: `${name}-app`.slice(0, 80), creds, dataDir, build: true, env, onStage: stage => broadcast({ type: 'app:stage', t: Date.now(), run: id, stage: `deploy: ${stage}` }) })
     send(id, 'app:deployed', { url: r.url, project: r.repo, pending: !!r.pending })
     const j = jobs.get(id)
     if (j) j.deployed = r.url
