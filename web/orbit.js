@@ -20,13 +20,14 @@ function makeOrbit() {
   root.className = 'orbit'
   root.hidden = true
   root.innerHTML = `<canvas aria-hidden="true"></canvas><div class="ob-labels"></div><div class="ob-crew"></div><div class="ob-talk"></div><div class="ob-empty" hidden></div><div class="ob-list"></div>
+    <button class="ui-btn ui-btn-outline ui-btn-sm ob-recentre" hidden>${ico('target')}Recentre</button>
     <div class="think-log" hidden role="dialog" aria-label="Hermia's thinking"><header><b>Hermia’s <em>thinking</em></b><button class="x" title="Close (Esc)" aria-label="Close">${ico('x')}</button></header><ol></ol></div>
     <div class="comm" role="status" aria-live="polite">
-      <div class="comm-thought" hidden title="Hermia's reasoning: click for the full log"></div>
+      <div class="comm-thought" hidden></div>
       <img src="brand/hermia-mark.svg" alt="">
-      <button class="comm-text" title="Hermia's orders and reasoning: click for the full log"><b>HERMIA</b><span>Standing by.</span></button>
-      <button class="comm-btn comm-log" title="Hermia's thinking: everything she reasoned and ordered">${ico('brain')}<span class="t">Thinking</span> <em></em></button>
-      <button class="comm-btn comm-chat" title="Open the chat column">${ico('chat')}<span class="t">Chat</span></button>
+      <button class="comm-text"><b>HERMIA</b><span>Standing by.</span></button>
+      <button class="comm-btn comm-log" aria-label="Thinking">${ico('brain')}<span class="t">Thinking</span> <em></em></button>
+      <button class="comm-btn comm-chat" aria-label="Chat">${ico('chat')}<span class="t">Chat</span></button>
     </div>`
   document.body.append(root)
   const canvas = root.querySelector('canvas'), labelsEl = root.querySelector('.ob-labels'), crewEl = root.querySelector('.ob-crew'), talkEl = root.querySelector('.ob-talk')
@@ -69,7 +70,10 @@ function makeOrbit() {
       : '<li class="none">Nothing yet. Her reasoning and orders land here while the crew builds.</li>'
     if (atEnd) logList.scrollTop = logList.scrollHeight
   }
-  const openLog = (on = logEl.hidden) => { logEl.hidden = !on; if (on) { renderLog(); logList.scrollTop = logList.scrollHeight } }
+  const openLog = (on = logEl.hidden) => {
+    logEl.hidden = !on
+    if (on) { renderLog(); logList.scrollTop = logList.scrollHeight; window.SwarmUI?.layer(logEl, () => openLog(false), { extra: [root.querySelector('.comm')] }) }
+  }
   root.querySelector('.comm-text').onclick = () => openLog()
   root.querySelector('.comm-log').onclick = () => openLog()
   thoughtEl.onclick = () => openLog(true)
@@ -207,7 +211,6 @@ function makeOrbit() {
       el.className = 'ob-label station off'
       el.style.setProperty('--st', color)
       el.innerHTML = `<i class="dot"></i><span>${C.STATIONS[view]}</span><small></small>`
-      el.title = { canvas: 'Design deck: the canvas, every page and section', video: 'Film studio: the promo video', app: 'Engine room: the working app, its code and the code wall' }[view]
       el.onclick = () => C.go('station', view)
       labelsEl.append(el)
       stations.push({ view, g, obj, el, pos: v() })
@@ -304,7 +307,6 @@ function makeOrbit() {
       p.el.querySelector('.bar i').style.width = `${n ? (d / n * 100).toFixed(0) : 0}%`
       p.el.querySelector('small').textContent = n ? `${d}/${n} sections` : 'planned'
       p.el.classList.toggle('busy', p.busy)
-      p.el.title = `${f.title}: open it on the Design deck`
       if (ready && !p.mat.uniforms.uHas.value) p.mat.uniforms.uColor.value.set(tc.list[f.index % Math.max(1, tc.list.length)] || P.frameHi)
     }
     for (const [id, p] of planets) if (!seen.has(id)) { p.el.remove(); if (p.mesh) scene.remove(p.mesh, p.ring); planets.delete(id) }
@@ -481,6 +483,45 @@ function makeOrbit() {
   let raf = 0, last = 0, clock = 0, frames = 0, fpsAt = 0
   const mouse = { x: 0, y: 0 }
   root.addEventListener('pointermove', e => { const r = root.getBoundingClientRect(); mouse.x = (e.clientX - r.left) / r.width * 2 - 1; mouse.y = (e.clientY - r.top) / r.height * 2 - 1 })
+  // Space can be moved (spec 12, rule 5): drag turns the view, the wheel or a pinch zooms, Recentre
+  // brings it back. A press that moves less than a few pixels is still a click on a planet.
+  const nav = { yaw: 0, pitch: 0, zoom: 1, ty: 0, tp: 0, tz: 1, ptrs: new Map(), drag: false, moved: false, pinch: 0 }
+  const recentreBtn = root.querySelector('.ob-recentre')
+  const clampNav = () => { nav.tp = Math.max(-0.55, Math.min(0.5, nav.tp)); nav.tz = Math.max(0.5, Math.min(1.7, nav.tz)) }
+  const showRecentre = () => { recentreBtn.hidden = Math.abs(nav.ty) < 0.02 && Math.abs(nav.tp) < 0.02 && Math.abs(nav.tz - 1) < 0.02 }
+  recentreBtn.onclick = () => { nav.ty = 0; nav.tp = 0; nav.tz = 1; showRecentre() }
+  canvas.style.touchAction = 'none'
+  canvas.addEventListener('pointerdown', e => {
+    nav.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY })
+    if (nav.ptrs.size === 1) { nav.moved = false; nav.drag = true }
+    if (nav.ptrs.size === 2) { const [a, b] = [...nav.ptrs.values()]; nav.pinch = Math.hypot(a.x - b.x, a.y - b.y) }
+    try { canvas.setPointerCapture(e.pointerId) } catch {}
+  })
+  canvas.addEventListener('pointermove', e => {
+    const p = nav.ptrs.get(e.pointerId)
+    if (!p) return
+    const dx = e.clientX - p.x, dy = e.clientY - p.y
+    p.x = e.clientX; p.y = e.clientY
+    if (Math.hypot(p.x - p.x0, p.y - p.y0) > 5) nav.moved = true
+    if (nav.ptrs.size === 2) {
+      const [a, b] = [...nav.ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y)
+      if (nav.pinch) nav.tz *= nav.pinch / Math.max(20, d)
+      nav.pinch = d
+    } else if (nav.moved) { nav.ty -= dx * 0.006; nav.tp += dy * 0.004 }
+    clampNav(); showRecentre()
+  })
+  const up = e => { nav.ptrs.delete(e.pointerId); if (nav.ptrs.size < 2) nav.pinch = 0; if (!nav.ptrs.size) nav.drag = false }
+  canvas.addEventListener('pointerup', up)
+  canvas.addEventListener('pointercancel', up)
+  canvas.addEventListener('wheel', e => { e.preventDefault(); nav.tz *= Math.exp(e.deltaY * 0.0012); clampNav(); showRecentre() }, { passive: false })
+  // keepOut: the boxes the stations and labels must stay clear of (rule 4), in the scene's pixels
+  function keepOuts() {
+    const rr = root.getBoundingClientRect(), out = []
+    const add = (el, pad = 6) => { if (!el || el.hidden || !el.getClientRects().length) return; const b = el.getBoundingClientRect(); if (b.width && b.height && b.bottom > rr.top && b.top < rr.bottom) out.push({ x: b.left - rr.left - pad, y: b.top - rr.top - pad, w: b.width + pad * 2, h: b.height + pad * 2 }) }
+    add(root.querySelector('.comm')); add(thoughtEl, 14); add(recentreBtn)
+    const ap = document.querySelector('.auto-panel'); if (ap && !ap.hidden) add(ap, 8)
+    return out
+  }
   function project(p, w, h) {
     tmpV.copy(p).project(camera)
     return { x: (tmpV.x + 1) / 2 * w, y: (1 - tmpV.y) / 2 * h, z: tmpV.z, d: camera.position.distanceTo(p) }
@@ -500,11 +541,19 @@ function makeOrbit() {
     let far = 6
     for (const p of planets.values()) far = Math.max(far, p.r)
     const dist = (far + 3.4) * 1.8
-    const tx = still ? 0 : mouse.x * 1.4, ty = dist * 0.66 + (still ? 0 : -mouse.y * 0.9), tz = dist * 0.82
-    camera.position.x += (tx - camera.position.x) * 0.04
-    camera.position.y += (ty - camera.position.y) * 0.04
-    camera.position.z += (tz - camera.position.z) * 0.04
-    camera.lookAt(0, -far * 0.2, 0)
+    const kn = 1 - Math.exp(-dt * (nav.drag ? 18 : 6))
+    nav.yaw += (nav.ty - nav.yaw) * kn; nav.pitch += (nav.tp - nav.pitch) * kn; nav.zoom += (nav.tz - nav.zoom) * kn
+    const lookY = -far * 0.2, hy = dist * 0.66 - lookY, hz = dist * 0.82
+    const r0 = Math.hypot(hy, hz) * nav.zoom, el0 = Math.max(0.12, Math.min(1.45, Math.atan2(hy, hz) + nav.pitch))
+    const drift = still || nav.drag ? 0 : 1
+    const px = mouse.x * 1.4 * drift, flat = r0 * Math.cos(el0)
+    const tx = Math.sin(nav.yaw) * flat + Math.cos(nav.yaw) * px, tz = Math.cos(nav.yaw) * flat - Math.sin(nav.yaw) * px
+    const ty = lookY + r0 * Math.sin(el0) - mouse.y * 0.9 * drift
+    const kc = nav.drag ? 0.35 : 0.06
+    camera.position.x += (tx - camera.position.x) * kc
+    camera.position.y += (ty - camera.position.y) * kc
+    camera.position.z += (tz - camera.position.z) * kc
+    camera.lookAt(0, lookY, 0)
     sunMat.uniforms.uTime.value = clock
     sunMat.uniforms.uHot.value = s?.run && !s.tEnd ? 1 : 0
     sun.rotation.y = clock * 0.1
@@ -538,8 +587,8 @@ function makeOrbit() {
     // stations: fixed on an outer ring, in front, turning slowly
     const sr = outer + 1.5
     stations.forEach((st, i) => {
-      const a = Math.PI * (0.78 - i * 0.28)
-      st.g.position.set(Math.cos(a) * sr, -0.6, Math.sin(a) * sr * 0.8)
+      const a = Math.PI * (0.78 - i * 0.28), x0 = Math.cos(a) * sr, z0 = Math.sin(a) * sr * 0.8, cy = Math.cos(nav.yaw), sy = Math.sin(nav.yaw)
+      st.g.position.set(x0 * cy + z0 * sy, -0.6, -x0 * sy + z0 * cy)
       if (st.view === 'video') { st.obj.rotation.z = -clock * 0.9; st.obj.rotation.y = 0.35 } else st.obj.rotation.y = clock * 0.6 + i
       st.obj.rotation.x = st.view === 'canvas' ? -0.35 : st.view === 'video' ? -0.75 : 0.5
       st.pos.copy(st.g.position)
@@ -555,7 +604,28 @@ function makeOrbit() {
     if (O.sunMeasured !== O.sunTitle + O.sunStatus) { O.sunMeasured = O.sunTitle + O.sunStatus; O.sunW = O.sunEl.offsetWidth; O.sunH = O.sunEl.offsetHeight }
     const sunBox = { x: sp.x - O.sunW / 2, y: sp.y + sunPx + 10, w: O.sunW, h: O.sunH }
     const sunDisc = { x: sp.x - sunPx * .8, y: sp.y - sunPx * .8, w: sunPx * 1.6, h: sunPx * 1.6 }
-    const labelBoxes = [sunBox]
+    const outs = keepOuts()
+    const labelBoxes = [sunBox, ...outs]
+    // stations: under their object if that spot is free, else the nearest free spot; never hidden, never under a bar
+    for (const st of stations) {
+      const q = project(st.pos, w, h)
+      if (!st.lw || st.lt !== st.el.textContent) { st.lt = st.el.textContent; st.lw = st.el.offsetWidth; st.lh = st.el.offsetHeight }
+      const bw = st.lw, bh = st.lh
+      const fits = b => b.x >= 8 && b.y >= 8 && b.x + b.w <= w - 8 && b.y + b.h <= h - 8 && !labelBoxes.some(k => hit(b, k, 6))
+      const bx = Math.max(8, Math.min(w - 8 - bw, q.x - bw / 2)), by = Math.max(8, Math.min(h - 8 - bh, q.y + 24))
+      let box = null
+      for (let r = 0; r <= 420 && !box; r += 12) {
+        for (const [dx, dy] of [[0, -r], [0, r], [-r, 0], [r, 0], [-r, -r], [r, -r]]) {
+          const b = { x: bx + dx, y: by + dy, w: bw, h: bh }
+          if (fits(b)) { box = b; break }
+        }
+      }
+      box ||= { x: bx, y: by, w: bw, h: bh }
+      labelBoxes.push(box)
+      st.box = box
+      st.el.style.transform = `translate(${box.x.toFixed(1)}px, ${box.y.toFixed(1)}px)`
+      st.el.classList.remove('off')
+    }
     O.sunEl.style.transform = `translate(-50%, 0) translate(${sp.x.toFixed(1)}px, ${(sp.y + sunPx + 10).toFixed(1)}px)`
     for (const p of planets.values()) {
       if (!p.mesh) continue
@@ -570,11 +640,6 @@ function makeOrbit() {
       p.el.style.transform = `translate(-50%, 0) translate(${q.x.toFixed(1)}px, ${ly.toFixed(1)}px)`
       p.sx = q.x; p.sy = q.y; p.spx = rpx
       p.el.classList.toggle('off', q.z > 1 || clash)
-    }
-    for (const st of stations) {
-      const q = project(st.pos, w, h)
-      st.el.style.transform = `translate(-50%, 0) translate(${q.x.toFixed(1)}px, ${(q.y + 24).toFixed(1)}px)`
-      st.el.classList.toggle('off', q.z > 1 || q.y > h - 60)
     }
     // minions fly to their section's moon, the radio crew to the Engine room, the idle ones park above the sun
     const engine = stations.find(x => x.view === 'app')
@@ -602,6 +667,7 @@ function makeOrbit() {
     }
     const thought = thoughtEl && !thoughtEl.hidden ? thoughtEl.getBoundingClientRect() : null, rr = thought && root.getBoundingClientRect()
     placeBubbles(w, h - 64, [sunBox, sunDisc, ...labelBoxes.slice(1), ...(thought ? [{ x: thought.left - rr.left, y: thought.top - rr.top, w: thought.width, h: thought.height }] : [])])
+    O.boxes = { stations: stations.map(s => ({ view: s.view, ...s.box })) }
 
     frames++
     if (now - fpsAt > 1000) { O.fps = Math.round(frames * 1000 / (now - fpsAt || 1)); frames = 0; fpsAt = now }
@@ -614,6 +680,7 @@ function makeOrbit() {
 
   // clicking a planet on the canvas opens it on the Design deck
   canvas.addEventListener('click', e => {
+    if (nav.moved) { nav.moved = false; return }
     const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top
     let best = null, bd = 40
     for (const p of planets.values()) { const d = Math.hypot(p.sx - x, p.sy - y); if (d < Math.max(bd, p.spx || 0)) { bd = d; best = p } }
@@ -653,11 +720,13 @@ function makeOrbit() {
       O.loading = true
       try { await init(); for (const p of planets.values()) { p.el.remove() } planets.clear() } catch (err) { console.error('orbit: three.js did not load', err) }
     }
+    showRecentre()
     sync()
     clearInterval(O.timer)
     O.timer = setInterval(sync, 250)
     kick()
   }
+  O.nav = nav
   O.hide = () => {
     O.on = false
     clearInterval(O.timer)

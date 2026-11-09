@@ -28,6 +28,7 @@ const ICON = {
   brain: '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   layout: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>',
+  target: '<line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/>',
   gamepad: '<line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="2"/>'
 }
 const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ''}</svg>`
@@ -148,15 +149,15 @@ function colorOf(THREE, f, P) {
 function makeGalaxy(root) {
   const G = { on: false, files: [], systems: [], hover: null, flying: null, fps: 0 }
   root.innerHTML = `<canvas aria-label="Your galaxy: every build is a star system" tabindex="-1"></canvas><div class="gx-labels"></div>
-    <button class="gx-chart-btn" title="Every build in the galaxy, as a list">${ico('list')}Star chart <em></em></button>
+    <button class="gx-chart-btn">${ico('list')}Star chart <em></em></button>
     <div class="gx-chart" hidden role="list"></div>
+    <button class="ui-btn ui-btn-outline ui-btn-sm gx-recentre" hidden>${ico('target')}Recentre</button>
     <div class="gx-dock">
       <h1 class="gx-title">Where to <em>next</em>?</h1>
-      <p class="gx-sub">Hermia and her crew build it. Every world you make becomes a star.</p>
       <div class="gx-chips"></div>
-      <form class="gx-form" autocomplete="off"><input name="q" placeholder="A night market in Taipei, a cat café, a puzzle game…" aria-label="Where to next? Describe what to build">
-        <button type="button" class="gx-auto" title="Auto: the site, a review, the app, the games, a video and a deploy">${ico('zap')}<span class="t">Auto</span></button>
-        <button type="submit" class="gx-go" title="Launch: the crew designs and builds the site">${ico('rocket')}Launch</button></form>
+      <form class="gx-form" autocomplete="off"><input name="q" placeholder="What should the crew build?" aria-label="Where to next? Describe what to build">
+        <button type="button" class="gx-auto" aria-label="Auto">${ico('zap')}<span class="t">Auto</span></button>
+        <button type="submit" class="gx-go">${ico('rocket')}Launch</button></form>
     </div>`
   const canvas = root.querySelector('canvas'), labels = root.querySelector('.gx-labels')
   const chart = root.querySelector('.gx-chart'), chartBtn = root.querySelector('.gx-chart-btn')
@@ -173,11 +174,15 @@ function makeGalaxy(root) {
     C.go('orbit')
   }
   form.querySelector('.gx-auto').onclick = () => { sw.submit(input.value.trim(), true); input.value = '' }
-  chartBtn.onclick = () => { chart.hidden = !chart.hidden; if (!chart.hidden) chart.querySelector('button')?.focus() }
+  chartBtn.onclick = () => {
+    chart.hidden = !chart.hidden
+    if (!chart.hidden) { chart.querySelector('button')?.focus(); W.SwarmUI?.layer(chart, () => { chart.hidden = true }, { extra: [chartBtn] }) }
+  }
   root.addEventListener('keydown', e => { if (e.key === 'Escape' && !chart.hidden) { chart.hidden = true; chartBtn.focus() } })
 
   let T, renderer, scene, camera, group, galaxyMat, sysPoints, sysMat, ship, core, ready = false
-  const mouse = { x: 0, y: 0, px: -1, py: -1, in: false }
+  const mouse = { x: 0, y: 0, px: -1, py: -1, in: false }, par = { x: 0, y: 0 }
+  const nav = { yaw: 0, pitch: 0, zoom: 1, ty: 0, tp: 0, tz: 1, ptrs: new Map(), drag: false, moved: false, pinch: 0 }
   const HOME = { x: 0, y: 9.5, z: 15 }
   const LOOK_Y = -2.6 // looking a little below the core lifts the disc above the prompt
   const camState = { pos: null, look: null }
@@ -385,10 +390,12 @@ function makeGalaxy(root) {
     const dt = Math.min(0.05, (now - (last || now)) / 1000)
     last = now
     const still = reduced()
-    if (!still && !G.flying) clock += dt
+    if (!still && !G.flying && !G.hoverMouse && !G.hover) clock += dt // a star you point at holds still
     galaxyMat.uniforms.uTime.value = clock
     sysMat.uniforms.uTime.value = still ? 1.2 : now / 1000
-    group.rotation.y = -clock * 0.022
+    const kn = 1 - Math.exp(-dt * (nav.drag ? 18 : 6))
+    nav.yaw += (nav.ty - nav.yaw) * kn; nav.pitch += (nav.tp - nav.pitch) * kn; nav.zoom += (nav.tz - nav.zoom) * kn
+    group.rotation.y = -clock * 0.022 + nav.yaw
     ship.position.y = 1.25 + (still ? 0 : Math.sin(now / 900) * 0.12)
     core.material.opacity = 0.55 + (still ? 0 : Math.sin(now / 1400) * 0.06)
 
@@ -400,11 +407,16 @@ function makeGalaxy(root) {
       camera.lookAt(camState.look)
       if (k >= 1 && !fl.done) { fl.done = true; fl.then() }
     } else {
-      const tx = HOME.x + (still ? 0 : mouse.x * 1.8), ty = HOME.y + (still ? 0 : -mouse.y * 1.1)
-      const kk = 1 - Math.exp(-dt * 2.5)
+      // home, tilted by the drag and zoomed by the wheel, with a little parallax from the mouse
+      // the parallax holds still while a star is under the pointer, so the star you aim at stays put
+      if (still || nav.drag) { par.x = 0; par.y = 0 } else if (!G.hoverMouse && !G.hover) { par.x = mouse.x; par.y = mouse.y }
+      const hy = HOME.y - LOOK_Y, r0 = Math.hypot(hy, HOME.z) * nav.zoom
+      const el = Math.max(0.15, Math.min(1.42, Math.atan2(hy, HOME.z) + nav.pitch))
+      const tx = HOME.x + par.x * 0.7, ty = LOOK_Y + r0 * Math.sin(el) - par.y * 0.45, tz = r0 * Math.cos(el)
+      const kk = 1 - Math.exp(-dt * (nav.drag ? 14 : 2.5))
       camera.position.x += (tx - camera.position.x) * kk
       camera.position.y += (ty - camera.position.y) * kk
-      camera.position.z += (HOME.z - camera.position.z) * kk
+      camera.position.z += (tz - camera.position.z) * kk
       camState.look.x *= 1 - kk; camState.look.z *= 1 - kk; camState.look.y += (LOOK_Y - camState.look.y) * kk
       camera.lookAt(camState.look)
     }
@@ -425,16 +437,21 @@ function makeGalaxy(root) {
     const w = canvas.clientWidth, h = canvas.clientHeight
     group.updateMatrixWorld()
     const narrow = w < 600
-    const dockH = root.querySelector('.gx-dock').offsetHeight + 34
+    // stars under the prompt dock or the Auto pill can't be picked, so they get no label
+    const rr = root.getBoundingClientRect()
+    const rel = (el, pad) => { const r = el.getBoundingClientRect(); return { x0: r.left - rr.left - pad, y0: r.top - rr.top - pad, x1: r.right - rr.left + pad, y1: r.bottom - rr.top + pad } }
+    const blocked = [rel(root.querySelector('.gx-dock'), 24)]
+    const ap = document.querySelector('.auto-panel')
+    if (ap && !ap.hidden && ap.getClientRects().length) blocked.push(rel(ap, 12)) // fixed: no offsetParent
     const want = []
     let best = null, bestD = narrow ? 26 : 22
     for (const s of G.systems) {
       wp.copy(s.local).applyMatrix4(group.matrixWorld).project(camera)
-      s.vis = wp.z < 1 && Math.abs(wp.x) < 1.05 && Math.abs(wp.y) < 1.05
       s.sx = (wp.x + 1) / 2 * w
       s.sy = (1 - wp.y) / 2 * h
+      s.vis = wp.z < 1 && s.sx > 12 && s.sx < w - 12 && s.sy > 12 && s.sy < h - 12 // only stars you can point at
       if (!s.vis) continue
-      if (s.sy > h - dockH) s.vis = false // never under the prompt
+      if (blocked.some(b => s.sx > b.x0 && s.sx < b.x1 && s.sy > b.y0 && s.sy < b.y1)) s.vis = false // never under the prompt
       if (!s.vis) continue
       if (mouse.in) { const d = Math.hypot(s.sx - mouse.px, s.sy - mouse.py); if (d < bestD) { bestD = d; best = s } }
     }
@@ -447,15 +464,20 @@ function makeGalaxy(root) {
     wp.set(0, 1.25, 0).project(camera)
     const cx = (wp.x + 1) / 2 * w, cy = (1 - wp.y) / 2 * h
     const taken = [{ x0: cx - 70, y0: cy - 40, x1: cx + 70, y1: cy + 30 }], limit = narrow ? 5 : 9
+    // and so do the top bar and the buttons on the galaxy (rule 4: nothing overlaps)
+    taken.push({ x0: 0, y0: 0, x1: w, y1: 60 - rr.top }, ...blocked)
+    for (const b of [chartBtn, root.querySelector('.gx-recentre')]) if (b && !b.hidden && b.offsetParent) { const r = b.getBoundingClientRect(); taken.push({ x0: r.left - rr.left - 6, y0: r.top - rr.top - 6, x1: r.right - rr.left + 6, y1: r.bottom - rr.top + 6 }) }
     let shown = 0
     for (const s of G.systems) s.show = false
     for (const s of want) {
       if (s !== hot && !s.f.live && shown >= limit) continue
       s.bw ||= s.el?.offsetWidth || Math.min(260, 14 + (s.f.title || '').length * 9)
       const bw = s.bw, bh = 18
-      const box = { x0: s.sx + 6, y0: s.sy - 9, x1: s.sx + 6 + bw, y1: s.sy - 9 + bh }
-      if (s !== hot && box.x1 > w - 8) continue
-      if (s !== hot && taken.some(t => box.x0 < t.x1 && box.x1 > t.x0 && box.y0 < t.y1 && box.y1 > t.y0)) continue
+      // near the right edge the label sits to the left of its star
+      s.flip = s.sx + 6 + bw > w - 8
+      const box = s.flip ? { x0: s.sx - 6 - bw, y0: s.sy - 9, x1: s.sx - 6, y1: s.sy - 9 + bh } : { x0: s.sx + 6, y0: s.sy - 9, x1: s.sx + 6 + bw, y1: s.sy - 9 + bh }
+      if (s !== hot && box.x0 < 8) continue
+      if ((s !== hot || taken.slice(1).some(t => box.x0 < t.x1 && box.x1 > t.x0 && box.y0 < t.y1 && box.y1 > t.y0)) && taken.some(t => box.x0 < t.x1 && box.x1 > t.x0 && box.y0 < t.y1 && box.y1 > t.y0)) continue
       taken.push(box)
       s.show = true
       shown++
@@ -465,9 +487,10 @@ function makeGalaxy(root) {
     for (const s of G.systems) {
       const on = s.show && !G.flying
       if (s.el) {
-        s.el.style.transform = `translate(${(s.sx + 4).toFixed(1)}px, ${(s.sy - 9).toFixed(1)}px)`
+        s.el.style.transform = `translate(${(s.flip ? s.sx - 4 - (s.bw || 0) : s.sx + 4).toFixed(1)}px, ${(s.sy - 9).toFixed(1)}px)`
         s.el.classList.toggle('off', !on)
         s.el.classList.toggle('hot', s === hot)
+        s.el.classList.toggle('flip', !!s.flip)
         s.el.tabIndex = on ? 0 : -1
       }
       const hv = s === hot ? 1 : 0
@@ -481,8 +504,42 @@ function makeGalaxy(root) {
     mouse.px = e.clientX - r.left; mouse.py = e.clientY - r.top; mouse.in = true
     mouse.x = (mouse.px / r.width) * 2 - 1; mouse.y = (mouse.py / r.height) * 2 - 1
   })
-  canvas.addEventListener('pointerleave', () => { mouse.in = false; G.hoverMouse = null; root.classList.remove('hot') })
-  canvas.addEventListener('click', () => { const s = G.hover || G.hoverMouse; if (s) pick(s) })
+  // passing over a star's own label is still being over the galaxy
+  canvas.addEventListener('pointerenter', () => { mouse.in = true })
+  canvas.addEventListener('pointerleave', e => { if (!nav.drag && !root.contains(e.relatedTarget)) { mouse.in = false; G.hoverMouse = null; root.classList.remove('hot') } })
+  canvas.addEventListener('click', () => { if (nav.moved) { nav.moved = false; return } const s = G.hover || G.hoverMouse; if (s) pick(s) })
+  // Space can be moved (spec 12, rule 5): drag turns the galaxy, the wheel or a pinch zooms,
+  // Recentre brings it back. A press that moves less than a few pixels is still a click on a star.
+  const recentre = root.querySelector('.gx-recentre')
+  const clampNav = () => { nav.tp = Math.max(-0.5, Math.min(0.55, nav.tp)); nav.tz = Math.max(0.45, Math.min(1.6, nav.tz)) }
+  const showRecentre = () => { recentre.hidden = Math.abs(nav.ty) < 0.02 && Math.abs(nav.tp) < 0.02 && Math.abs(nav.tz - 1) < 0.02 }
+  recentre.onclick = () => { nav.ty = 0; nav.tp = 0; nav.tz = 1; showRecentre() }
+  canvas.style.touchAction = 'none'
+  canvas.addEventListener('pointerdown', e => {
+    nav.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY })
+    if (nav.ptrs.size === 1) { nav.moved = false; nav.drag = true }
+    if (nav.ptrs.size === 2) { const [a, b] = [...nav.ptrs.values()]; nav.pinch = Math.hypot(a.x - b.x, a.y - b.y) }
+    try { canvas.setPointerCapture(e.pointerId) } catch {}
+  })
+  canvas.addEventListener('pointermove', e => {
+    const p = nav.ptrs.get(e.pointerId)
+    if (!p) return
+    const dx = e.clientX - p.x, dy = e.clientY - p.y
+    p.x = e.clientX; p.y = e.clientY
+    if (Math.hypot(p.x - p.x0, p.y - p.y0) > 5) nav.moved = true
+    if (nav.ptrs.size === 2) {
+      const [a, b] = [...nav.ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y)
+      if (nav.pinch) nav.tz *= nav.pinch / Math.max(20, d)
+      nav.pinch = d
+    } else if (nav.moved) { nav.ty += dx * 0.006; nav.tp += dy * 0.004 }
+    if (nav.moved) root.classList.add('dragging')
+    clampNav(); showRecentre()
+  })
+  const up = e => { nav.ptrs.delete(e.pointerId); if (nav.ptrs.size < 2) nav.pinch = 0; if (!nav.ptrs.size) { nav.drag = false; root.classList.remove('dragging') } }
+  canvas.addEventListener('pointerup', up)
+  canvas.addEventListener('pointercancel', up)
+  canvas.addEventListener('wheel', e => { e.preventDefault(); nav.tz *= Math.exp(e.deltaY * 0.0012); clampNav(); showRecentre() }, { passive: false })
+  G.nav = nav; G.mouse = mouse
 
   // fly into a system (about 900 ms), then hand off to the build's orbit view
   function pick(s) {
@@ -577,7 +634,7 @@ function renderBack() {
   if (!b) return
   const to = C.mode === 'station' ? 'orbit' : 'galaxy'
   b.innerHTML = `${ico('back')}<span class="t">${to === 'orbit' ? 'Orbit' : 'Galaxy'}</span>`
-  b.title = to === 'orbit' ? 'Back to this build’s orbit' : 'Back to the galaxy: all your builds'
+  b.setAttribute('aria-label', to === 'orbit' ? 'Back to the orbit' : 'Back to the galaxy')
 }
 
 // Classic view: today's layout, exactly. Remembered per browser (storage may throw; that is fine).
@@ -596,7 +653,30 @@ function setClassic(on) {
   }
 }
 
+// The way home, from any view (spec 12): the logo always lands on the galaxy (it also leaves
+// Classic view), and Esc climbs one level, room → orbit → galaxy, when no panel is open.
+C.home = () => { if (sw.wall) return; if (C.classic) setClassic(false); C.go('galaxy') }
+C.up = () => { if (C.classic || sw.wall) return false; if (C.mode === 'station') { C.go('orbit'); return true } if (C.mode === 'orbit') { C.go('galaxy'); return true } return false }
+// anything that answers Esc itself (a panel, a menu, the player, a selection) goes first
+const OPEN = '.game-pop, .models-pop, .export-pop, .show-sum, .fmenu, .fname-pop, .ui-overlay, .ui-popover, .combo-list, .player:not([hidden]), .slash-pop:not([hidden]), .think-log:not([hidden]), .gx-chart:not([hidden]), #more-menu:not([hidden]), #pub-menu:not([hidden]), .dpick, .finfo-wrap, .video-big, .cbox.open'
+function escUp(e) {
+  if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+  if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.fullscreenElement) return
+  if (W.SwarmUI?.open?.() || document.querySelector(OPEN) || sw.S?.sel || C.galaxy?.flying) return
+  if (C.up()) { e.preventDefault(); e.stopPropagation() }
+}
+
 function chrome() {
+  // the logo: home to the galaxy, from every view
+  const brand = $('.topbar .brand')
+  if (brand) {
+    brand.setAttribute('role', 'button')
+    brand.tabIndex = 0
+    brand.setAttribute('aria-label', 'Swarm Studio: back to the galaxy home')
+    brand.onclick = () => C.home()
+    brand.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); C.home() } }
+  }
+  addEventListener('keydown', escUp, true)
   // the back button: Galaxy from an orbit, Orbit from a station
   const back = document.createElement('button')
   back.className = 'toggle cosmos-back'
@@ -607,8 +687,8 @@ function chrome() {
   const menu = $('#more-menu')
   if (menu) {
     menu.insertAdjacentHTML('beforeend', `<div class="cosmos-sep" role="separator"></div>
-      <button class="toggle cosmos-only" id="cosmos-game" title="Make an original browser game">${ico('gamepad')}Game</button>
-      <button class="toggle" id="cosmos-classic" title="The studio's classic layout: chat column, canvas and the Canvas / Video / App map. Remembered in this browser.">${ico('layout')}Classic view</button>`)
+      <button class="toggle cosmos-only" id="cosmos-game">${ico('gamepad')}Game</button>
+      <button class="toggle" id="cosmos-classic">${ico('layout')}Classic view</button>`)
     $('#cosmos-game').onclick = () => $('#game-btn')?.click()
     $('#cosmos-classic').onclick = () => setClassic(!C.classic)
     $('#cosmos-classic').classList.toggle('on', C.classic)
@@ -616,7 +696,6 @@ function chrome() {
   // in a station, the chat column comes back with one button
   const chat = document.createElement('button')
   chat.className = 'cosmos-chatbtn'
-  chat.title = 'Open the chat, files and layers'
   chat.innerHTML = '<img src="brand/hermia-mark.svg" alt="">Chat'
   chat.onclick = () => C.chat(true)
   body.append(chat)
@@ -625,7 +704,7 @@ function chrome() {
   if (tabs) {
     const x = document.createElement('button')
     x.className = 'cosmos-only cosmos-fold'
-    x.title = 'Fold the chat back into the comm-link'
+    x.title = 'Fold chat'
     x.setAttribute('aria-label', x.title)
     x.innerHTML = ico('x')
     x.style.marginLeft = 'auto'

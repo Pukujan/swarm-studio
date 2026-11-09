@@ -1,0 +1,257 @@
+/* Swarm Studio UI kit (docs/specs/12-flow-map.md, "The kit"): shadcn/ui's tokens and component
+   recipes, ported to plain CSS classes and mapped onto the space theme. Every dialog, wizard,
+   panel and dashboard is built from these; no one-off form controls (rule 13).
+   Original code; the recipes follow shadcn/ui (MIT). Loaded last, so it wins over older rules. */
+
+:root {
+  --ui-background: #05051a;
+  --ui-foreground: #f2f2f2;
+  --ui-card: #0c0c30;
+  --ui-card-foreground: #f2f2f2;
+  --ui-popover: #0e0e36;
+  --ui-muted: rgb(242 242 242 / .06);
+  --ui-muted-foreground: #a9a9d0;       /* 8:1 on --ui-card */
+  --ui-primary: #f2f200;                /* the one "do this" yellow */
+  --ui-primary-foreground: #05051a;     /* dark text on yellow (rule 9) */
+  --ui-secondary: rgb(242 242 242 / .09);
+  --ui-secondary-foreground: #f2f2f2;
+  --ui-accent: rgb(70 70 255 / .22);    /* hover and selected surfaces: Hermes blue */
+  --ui-accent-foreground: #f2f2f2;
+  --ui-blue: #4646ff;
+  --ui-destructive: #ff6b6b;
+  --ui-warning: #ffc94d;
+  --ui-success: #00f279;
+  --ui-border: rgb(242 242 242 / .13);
+  --ui-input: rgb(242 242 242 / .2);
+  --ui-ring: #6b6bff;
+  --ui-radius: 12px;
+  --ui-font: var(--mono, ui-monospace, Menlo, monospace);
+  --ui-head: var(--label, 'Barlow Condensed', 'Arial Narrow', sans-serif);
+  --ui-display: var(--display, 'Big Shoulders Display', Impact, sans-serif);
+  --ui-shadow: 0 24px 60px -12px rgb(0 0 0 / .65), 0 0 0 1px rgb(70 70 255 / .12);
+}
+
+/* ---------- one fix for every checkbox and radio in the app. Older rules such as
+   ".game-pop input { width: 100% }" stretched them away from their labels; this rule is more
+   specific than any of those, so a checkbox is always its own small square. */
+html input:is([type="checkbox"], [type="radio"]) {
+  width: 18px; height: 18px; min-width: 18px; flex: none; margin: 0; padding: 0;
+  accent-color: var(--ui-primary); vertical-align: middle; box-shadow: none;
+}
+
+.ui [hidden], [class^="ui-"][hidden], [class*=" ui-"][hidden] { display: none !important; }
+
+/* ---------- Button */
+.ui-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 40px; padding: 0 16px; border-radius: calc(var(--ui-radius) - 2px);
+  border: 1px solid transparent; background: var(--ui-secondary); color: var(--ui-secondary-foreground);
+  font: 600 14px/1 var(--ui-head); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
+  cursor: pointer; text-decoration: none; transition: background .16s, border-color .16s, color .16s, box-shadow .16s;
+}
+.ui-btn:hover { background: rgb(242 242 242 / .14); }
+.ui-btn:focus-visible, .ui-toggle:focus-visible, .ui-tab:focus-visible, .ui-chip:focus-visible, .ui-collapsible > summary:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: 2px; }
+.ui-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ui-btn .ico, .ui-btn svg { width: 16px; height: 16px; flex: none; }
+.ui-btn-default { background: var(--ui-primary); color: var(--ui-primary-foreground); }
+.ui-btn-default:hover { background: #ffff3d; color: var(--ui-primary-foreground); }
+.ui-btn-blue { background: var(--ui-blue); color: #fff; }
+.ui-btn-blue:hover { background: #5a5aff; }
+.ui-btn-outline { background: transparent; border-color: var(--ui-input); color: var(--ui-foreground); }
+.ui-btn-outline:hover { background: var(--ui-accent); border-color: var(--ui-ring); }
+.ui-btn-ghost { background: transparent; color: var(--ui-foreground); }
+.ui-btn-ghost:hover { background: var(--ui-muted); }
+.ui-btn-destructive { background: transparent; border-color: rgb(255 107 107 / .5); color: var(--ui-destructive); }
+.ui-btn-sm { min-height: 40px; padding: 0 12px; font-size: 12.5px; }
+.ui-btn-lg { min-height: 48px; padding: 0 22px; font-size: 16px; }
+.ui-btn-icon { width: 40px; padding: 0; }
+.ui-btn-link { background: none; border: 0; min-height: 0; padding: 2px 0; color: var(--ui-muted-foreground); text-transform: none; letter-spacing: 0; font: 500 12.5px/1.3 var(--ui-font); text-decoration: underline; text-underline-offset: 3px; }
+.ui-btn-link:hover { background: none; color: var(--ui-foreground); }
+
+/* ---------- Card */
+.ui-card { background: var(--ui-card); color: var(--ui-card-foreground); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
+.ui-card-header { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px 0; }
+.ui-card-title { margin: 0; font: 600 16px/1.2 var(--ui-head); letter-spacing: .05em; text-transform: uppercase; }
+.ui-card-desc { margin: 0; color: var(--ui-muted-foreground); font: 13px/1.45 var(--ui-font); }
+.ui-card-content { padding: 14px 18px; }
+.ui-card-footer { display: flex; gap: 8px; align-items: center; padding: 0 18px 16px; }
+
+/* ---------- Dialog: an overlay, a centred card, header / body / footer; closes on ×, Esc and outside click (ui.js) */
+.ui-overlay {
+  position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 72px 16px 16px;
+  background: rgb(2 2 12 / .62); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  animation: ui-fade .18s ease-out;
+}
+.ui-dialog {
+  position: relative; display: flex; flex-direction: column; width: min(560px, 100%); max-height: min(calc(100dvh - 88px), 820px);
+  background: linear-gradient(180deg, #10103a, var(--ui-card)); color: var(--ui-foreground);
+  border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) + 4px); box-shadow: var(--ui-shadow);
+  font: 14px/1.5 var(--ui-font); animation: ui-rise .2s cubic-bezier(.2, .7, .2, 1);
+}
+.ui-dialog-lg { width: min(820px, 100%); }
+.ui-dialog-header { display: flex; flex-direction: column; gap: 6px; padding: 20px 64px 4px 22px; }
+.ui-dialog-kicker { display: inline-flex; align-items: center; gap: 7px; color: var(--ui-muted-foreground); font: 600 12px/1 var(--ui-head); letter-spacing: .16em; text-transform: uppercase; }
+.ui-dialog-kicker .ico { width: 14px; height: 14px; color: var(--ui-primary); }
+.ui-dialog-title { margin: 0; font: 800 30px/1.02 var(--ui-display); letter-spacing: .01em; text-transform: uppercase; color: var(--ui-foreground); }
+.ui-dialog-title em { font-family: var(--serif, Georgia, serif); font-style: italic; font-weight: 500; text-transform: none; color: var(--ui-primary); }
+.ui-dialog-desc { margin: 0; color: var(--ui-muted-foreground); font: 13px/1.45 var(--ui-font); }
+.ui-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 14px 22px 18px; overflow-y: auto; min-height: 0; }
+.ui-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--ui-border); background: rgb(2 2 12 / .25); border-radius: 0 0 calc(var(--ui-radius) + 4px) calc(var(--ui-radius) + 4px); }
+.ui-dialog-footer .ui-grow { margin-right: auto; }
+.ui-dialog-close { position: absolute; top: 12px; right: 12px; }
+@keyframes ui-fade { from { opacity: 0 } }
+@keyframes ui-rise { from { opacity: 0; transform: translateY(8px) scale(.985) } }
+
+/* ---------- Label, Input, Textarea, Select */
+.ui-label { display: block; color: var(--ui-foreground); font: 600 12.5px/1.2 var(--ui-head); letter-spacing: .12em; text-transform: uppercase; }
+.ui-field { display: flex; flex-direction: column; gap: 6px; }
+.ui-input, .ui-textarea, .ui-select {
+  width: 100%; min-height: 40px; padding: 9px 12px; border-radius: calc(var(--ui-radius) - 2px);
+  border: 1px solid var(--ui-input); background: rgb(2 2 12 / .45); color: var(--ui-foreground);
+  font: 14px/1.5 var(--ui-font); text-transform: none; letter-spacing: 0;
+}
+.ui-textarea { min-height: 96px; resize: vertical; display: block; }
+.ui-input::placeholder, .ui-textarea::placeholder { color: #8a8ab8; }
+.ui-input:focus, .ui-textarea:focus, .ui-select:focus { outline: 0; border-color: var(--ui-ring); box-shadow: 0 0 0 3px rgb(107 107 255 / .3); }
+
+/* ---------- Checkbox + Label row: the box sits right next to its own words */
+.ui-check { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: calc(var(--ui-radius) - 2px); border: 1px solid var(--ui-border); background: var(--ui-muted); cursor: pointer; font: 13.5px/1.4 var(--ui-font); color: var(--ui-foreground); }
+.ui-check:hover { border-color: var(--ui-input); }
+.ui-check > span { min-width: 0; }
+.ui-check small { display: block; margin-top: 2px; color: var(--ui-muted-foreground); font-size: 12px; }
+html .ui-checkbox {
+  appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px;
+  border: 1.5px solid var(--ui-input); background: rgb(2 2 12 / .5); display: grid; place-items: center; cursor: pointer;
+}
+html .ui-checkbox:checked { background: var(--ui-primary); border-color: var(--ui-primary); }
+html .ui-checkbox:checked::after { content: ''; width: 9px; height: 5px; border: solid var(--ui-primary-foreground); border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg); }
+html .ui-checkbox:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: 2px; }
+
+/* ---------- Switch */
+html .ui-switch { appearance: none; -webkit-appearance: none; position: relative; width: 36px; min-width: 36px; height: 20px; border-radius: 99px; background: var(--ui-input); cursor: pointer; transition: background .16s; }
+html .ui-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #f2f2f2; transition: transform .16s; }
+html .ui-switch:checked { background: var(--ui-primary); }
+html .ui-switch:checked::after { transform: translateX(16px); background: var(--ui-primary-foreground); }
+
+/* ---------- Toggle group (segmented choice) and Tabs */
+.ui-toggle-group, .ui-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: var(--ui-radius); background: rgb(2 2 12 / .5); border: 1px solid var(--ui-border); }
+.ui-toggle-group.ui-block { display: flex; }
+.ui-toggle-group.ui-block > .ui-toggle { flex: 1; }
+.ui-toggle, .ui-tab {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 14px;
+  border: 0; border-radius: calc(var(--ui-radius) - 4px); background: transparent; color: var(--ui-muted-foreground);
+  font: 600 13.5px/1 var(--ui-head); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; white-space: nowrap;
+}
+.ui-toggle:hover, .ui-tab:hover { color: var(--ui-foreground); background: var(--ui-muted); }
+.ui-toggle.on, .ui-toggle[aria-pressed="true"], .ui-toggle[aria-checked="true"], .ui-tab.on, .ui-tab[aria-selected="true"] { background: var(--ui-foreground); color: var(--ui-background); }
+.ui-toggle small { font: 11.5px/1 var(--ui-font); letter-spacing: 0; text-transform: none; opacity: .75; }
+
+/* ---------- Chip: an example or a quick answer */
+.ui-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 13px; border-radius: 99px; border: 1px solid var(--ui-input); background: transparent; color: var(--ui-foreground); font: 13px/1.2 var(--ui-font); cursor: pointer; text-align: left; }
+.ui-chip:hover { border-color: var(--ui-ring); background: var(--ui-accent); }
+.ui-chip.on, .ui-chip[aria-pressed="true"] { background: var(--ui-foreground); color: var(--ui-background); border-color: var(--ui-foreground); }
+
+/* ---------- Collapsible / Accordion (native details) */
+.ui-collapsible { border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) - 2px); background: rgb(2 2 12 / .25); }
+.ui-collapsible > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; list-style: none; font: 600 13.5px/1 var(--ui-head); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-foreground); }
+.ui-collapsible > summary::-webkit-details-marker { display: none; }
+.ui-collapsible > summary small { margin-left: auto; font: 12px/1.2 var(--ui-font); letter-spacing: 0; text-transform: none; color: var(--ui-muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ui-collapsible > summary::after { content: ''; flex: none; width: 7px; height: 7px; border: solid var(--ui-muted-foreground); border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); transition: transform .16s; }
+.ui-collapsible[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
+.ui-collapsible-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 14px 14px; }
+
+/* ---------- Badge */
+.ui-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--ui-border); background: var(--ui-muted); color: var(--ui-foreground); font: 600 11.5px/1.2 var(--ui-head); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+.ui-badge-ok { color: var(--ui-success); border-color: rgb(0 242 121 / .35); }
+.ui-badge-warn { color: var(--ui-warning); border-color: rgb(255 201 77 / .4); }
+.ui-badge-busy { color: var(--ui-primary); border-color: rgb(242 242 0 / .4); }
+
+/* ---------- Progress and the step indicator */
+.ui-progress { position: relative; height: 6px; border-radius: 99px; background: rgb(242 242 242 / .1); overflow: hidden; }
+.ui-progress > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--ui-primary); transition: width .3s; }
+.ui-steps { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ui-steps li { flex: 1; height: 6px; border-radius: 99px; background: rgb(242 242 242 / .12); }
+.ui-steps li.done { background: rgb(242 242 0 / .55); }
+.ui-steps li.on { background: var(--ui-primary); box-shadow: 0 0 10px rgb(242 242 0 / .5); }
+.ui-steps-label { color: var(--ui-muted-foreground); font: 600 12px/1 var(--ui-head); letter-spacing: .14em; text-transform: uppercase; }
+
+/* ---------- Slider */
+html .ui-slider { appearance: none; -webkit-appearance: none; width: 100%; height: 6px; border-radius: 99px; background: linear-gradient(to right, var(--ui-primary) 0 var(--v, 50%), rgb(242 242 242 / .32) var(--v, 50%)); accent-color: var(--ui-primary); }
+html .ui-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--ui-primary); border: 2px solid var(--ui-background); cursor: pointer; }
+html .ui-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ui-primary); border: 2px solid var(--ui-background); }
+
+/* ---------- Popover and Tooltip. The tooltip is only the name of an icon-only control, 1 to 3 words
+   ("Close", "Zoom in"), taken from its title by ui.js after 500 ms. Explanations are deleted, never
+   hidden in a hover (docs/ux/RULES.md, rule 9). */
+.ui-popover { position: fixed; z-index: 420; min-width: 220px; max-width: min(380px, calc(100vw - 24px)); padding: 12px; border-radius: var(--ui-radius); background: var(--ui-popover); color: var(--ui-foreground); border: 1px solid var(--ui-border); box-shadow: var(--ui-shadow); font: 13px/1.45 var(--ui-font); animation: ui-fade .14s ease-out; }
+.ui-popover-title { margin: 0 0 8px; font: 600 13px/1 var(--ui-head); letter-spacing: .12em; text-transform: uppercase; color: var(--ui-muted-foreground); }
+.ui-tooltip { position: fixed; z-index: 450; padding: 5px 9px; border-radius: 7px; background: #f2f2f2; color: #05051a; font: 500 12px/1.2 var(--ui-font); white-space: nowrap; pointer-events: none; animation: ui-fade .12s ease-out; }
+
+/* ---------- Separator */
+.ui-separator { height: 1px; border: 0; margin: 4px 0; background: var(--ui-border); }
+
+/* ---------- Icon row: a few steps or facts as icons with one word each */
+.ui-iconrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ui-iconrow li { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; padding: 8px 4px; border-radius: 10px; background: var(--ui-muted); text-align: center; font: 11.5px/1.2 var(--ui-font); color: var(--ui-muted-foreground); }
+.ui-iconrow li b { font-size: 20px; line-height: 1; font-weight: 400; }
+
+@media (max-width: 560px) {
+  .ui-overlay { padding: 60px 8px 8px; align-items: end; }
+  .ui-dialog { max-height: calc(100dvh - 68px); }
+  .ui-dialog-title { font-size: 25px; }
+  .ui-dialog-header { padding: 18px 56px 2px 16px; }
+  .ui-dialog-body { padding: 12px 16px 16px; }
+  .ui-dialog-footer { padding: 12px 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .ui-overlay, .ui-dialog, .ui-popover, .ui-tooltip { animation: none; } }
+
+/* ---------- the Start sheet (today's Auto box) and the New game wizard keep their look; their
+   children never shrink (a squeezed flex child was the "sliver" prompt box) and a tall sheet scrolls
+   from its top instead of cutting it off. */
+.game-pop { justify-content: safe center; }
+.game-pop > * { flex-shrink: 0; }
+
+/* ---------- one sound control (rule 11): the crew button opens the crew sound popover. It keeps one
+   width whichever word it shows, so nothing beside it moves when the state changes. */
+.topbar .crew-mute { justify-content: center; width: 92px; min-height: 34px; }
+.topbar .crew-mute[data-mode="quiet"] > svg:first-of-type { display: none; } /* quiet swaps the icon, it doesn't add one */
+@media (max-width: 900px) { .topbar .crew-mute { width: 40px; padding: 0; } }
+.sound-pop { width: 260px; display: flex; flex-direction: column; gap: 12px; }
+.sound-pop .sound-vol { gap: 8px; }
+
+/* ---------- the Auto progress panel never covers the comm bar or an open sheet (rule 4) */
+body.cosmos-orbit .auto-panel { bottom: 78px; max-height: calc(100% - 150px); }
+/* an open sheet slides over the pill like over the rest of the stage: the pill keeps its place (rule 29) */
+body:has(.game-pop) .auto-panel { z-index: 30; }
+@media (max-width: 600px) { body.cosmos-orbit .auto-panel { bottom: 70px; } }
+/* on a galaxy too narrow for the pill beside the prompt dock, it waits under the top bar instead */
+@media (max-width: 1140px) { body.cosmos-galaxy .auto-panel { top: 68px; bottom: auto; max-height: max(180px, calc(100vh - 340px)); } }
+
+/* ---------- phones in Classic view: the grid is one column there, so the App and Video views
+   (placed in column 2 on a desktop) made an implicit column that squeezed the top bar to a sliver
+   and put the side panel over it. They take the row under the side panel instead. */
+@media (max-width: 700px) {
+  body:not(.cosmos) .appview, body:not(.cosmos).view-video .video-pop { grid-area: 3 / 1 / 4 / -1; }
+  body:not(.cosmos) .show-sum { grid-area: 2 / 1 / -1 / -1; }
+}
+
+/* Classic top bar: on a laptop-or-smaller window the button words fold into their icons (each keeps
+   its name as its aria-label) so ☰, and with it the Classic view switch, stays on screen */
+@media (max-width: 1180px) {
+  body:not(.cosmos) .topbar :is(#game-btn, #play-btn, #publish-btn, #more-btn) .t,
+  body:not(.cosmos) .topbar #publish-btn .caret { display: none; }
+}
+
+/* orbit: page and station names stay readable above the flying crew; a minion's name shows while it talks */
+.orbit .ob-crew { z-index: 1; }
+.orbit .ob-labels { z-index: 2; }
+.orbit .ob-talk { z-index: 3; }
+.ob-minion:not(.talking) .nm { display: none; }
+
+/* Hermia's thought cloud keeps clear of the Auto pill: narrower beside it, and on a phone it waits */
+body:has(.auto-panel:not([hidden])) .orbit .comm-thought { max-width: min(560px, calc(100% - 300px)); }
+@media (max-width: 600px) { body:has(.auto-panel:not([hidden])) .orbit .comm-thought { display: none; } }
+/* the open panel is wider than the pill: the cloud keeps to the space left of it */
+body:has(.auto-panel:not([hidden]):not(.min)) .orbit .comm-thought { max-width: calc(100% - 420px); }
+@media (max-width: 700px) { body:has(.auto-panel:not([hidden]):not(.min)) .orbit .comm-thought { display: none; } }

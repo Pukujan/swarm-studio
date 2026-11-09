@@ -16,7 +16,10 @@ body.cosmos #more-btn { padding: 4px 9px; }
 .cosmos-back { display: none; align-items: center; gap: 6px; }
 .cosmos-back .ico { width: 15px; height: 15px; }
 body.cosmos-orbit .cosmos-back, body.cosmos-station .cosmos-back { display: inline-flex; }
-body.cosmos-orbit .brand, body.cosmos-station .brand { display: none; }
+/* the logo stays in every view: it is the way home (spec 12); next to Back it is just the mark */
+body.cosmos-orbit .brand .word, body.cosmos-station .brand .word { display: none; }
+.topbar .brand[role="button"] { cursor: pointer; border-radius: 10px; min-height: 40px; align-items: center; }
+.topbar .brand[role="button"]:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 2px; }
 body.cosmos-galaxy .file-name, body.cosmos-galaxy #play-btn, body.cosmos-galaxy .pubwrap { display: none; }
 body.cosmos-galaxy .topbar { background: transparent; border-bottom-color: transparent; backdrop-filter: none; }
 body.cosmos .file-name { color: var(--text); font: 600 14px var(--label); letter-spacing: .06em; text-transform: uppercase; }
@@ -233,5 +236,16 @@ body.cosmos .side-min-btn { display: none; }
 /* the wall tiles never show any of it */
 html.wall .galaxy, html.wall .orbit, html.wall .cosmos-chatbtn { display: none !important; }
 
-/* spec 07's chatter dock: sit above the comm-link strip instead of on Hermia, right side so it clears her thought cloud */
-body.cosmos-orbit .sound-dock, body.cosmos-station .sound-dock { left: auto !important; right: 14px !important; top: auto !important; bottom: 76px !important; }
+/* ---------- moving space (spec 12, rule 5): drag to turn, wheel or pinch to zoom, Recentre */
+.galaxy canvas, .orbit canvas { cursor: grab; touch-action: none; }
+.galaxy.dragging canvas { cursor: grabbing; }
+.galaxy.hot:not(.dragging) canvas { cursor: pointer; }
+.gx-recentre { position: absolute; left: 16px; top: 104px; z-index: 3; }
+.ob-recentre { position: absolute; left: 14px; top: 14px; z-index: 6; }
+.galaxy.flying .gx-recentre { opacity: 0; pointer-events: none; }
+/* stations are real buttons: a 40 px hit area (rule 3) */
+.ob-label.station { min-height: 40px; padding: 6px 14px 6px 10px; }
+/* near the right edge a star's label hangs to its left */
+.gx-label.flip { align-items: flex-end; padding: 2px 12px 3px 6px; text-align: right; }
+.gx-label.flip::before { left: auto; right: 0; }
+.gx-label.flip.live::after { left: auto; right: 100%; }
