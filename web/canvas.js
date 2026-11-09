@@ -220,6 +220,7 @@ function on(e) {
       break
     }
     case 'agent:say': {
+      if (e.app) radioEvent(e)
       const a = S.agents.get(e.agent)
       if (!a) break
       // replays (a reopened file, a late join) go to the feed without a burst of bubbles
@@ -264,8 +265,12 @@ function on(e) {
       feed(a, `failed ${e.layer}: ${e.message}`, 'err')
       break
     }
+    case 'crew:act':
+      radioEvent(e)
+      break
     case 'crew:lead': {
       // the app engine's lead agent, speaking as Hermia: thinking out loud and giving orders
+      radioEvent(e)
       feed(null, `🛰️ Hermia${e.to ? ` → ${e.to}` : ''}: ${e.text}`, 'sys')
       const to = e.to && [...S.agents.values()].find(x => x.name === e.to)
       if (to && Date.now() - e.t < 5000) say(to, `Hermia: ${e.text.slice(0, 120)}`, 3200)
@@ -475,6 +480,8 @@ function addFrame(p) {
   el.innerHTML = `<div class="frame-label"></div><iframe title=""></iframe>`
   el.querySelector('.frame-label').textContent = `Page ${p.index + 1} · ${p.title}`
   el.querySelector('.frame-label').insertAdjacentHTML('beforeend', `<small>/${p.id}</small>`)
+  // each page is a star node: it glows, and an orbit ring turns while an agent works on it
+  el.querySelector('.frame-label').insertAdjacentHTML('afterbegin', '<i class="node" aria-hidden="true"></i>')
   const iframe = el.querySelector('iframe')
   iframe.title = p.title
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
@@ -1278,6 +1285,8 @@ function frameLoop(now) {
     }
     const done = [...S.layers.values()].filter(l => l.status === 'done').length
     renderStatus(working, done)
+    const busyPages = new Set([...S.agents.values()].map(a => a.layer && S.layers.get(a.layer)?.page).filter(Boolean))
+    for (const f of S.frames) f.el.classList.toggle('active', busyPages.has(f.id))
     els.play.disabled = !S.frames.length
     els.reviewBtn.disabled = review.busy || !reviewerOn() || !S.done
     setLabel(els.reviewBtn, review.busy ? 'Reviewing…' : 'Review')
@@ -3019,7 +3028,7 @@ function renderVideo() {
   el.dataset.sig = sig
   const story = video.story.map((sc, i) => {
     const a = S.agents.get(sc.agent)
-    return `<div class="vscene" style="--c:${a?.color || '#888'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
+    return `<div class="vscene" style="--c:${a?.color || 'var(--muted)'}"><i class="node" aria-hidden="true"></i>${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
   }).join('')
   const opts = `<div class="vopts"><label>Style <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Cut <select class="vcut">${VIDEO_CUTS.map(([v, l]) => `<option value="${v}" ${videoOpts.transition === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><input class="videa" placeholder="Your idea for the video (optional): “end on the night market crowd”, “for Instagram, upbeat”" value="${esc(videoOpts.idea || '')}"><div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const cut = video.cuts[video.pick], latest = video.pick < 0 || video.pick === video.cuts.length - 1
@@ -3880,6 +3889,7 @@ function setView(v) {
   if (game.el) closeGame()
   const was = view
   view = v
+  if (was !== v) warp(v)
   document.body.classList.toggle('view-video', v === 'video')
   document.body.classList.toggle('view-app', v === 'app')
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === v)
@@ -3892,8 +3902,26 @@ function setView(v) {
 }
 for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.view)
 
+// Each view is a star system; switching is a short warp: stars streak past for about 400 ms.
+// Off under prefers-reduced-motion (the CSS hides it too).
+const warpEl = document.createElement('div')
+warpEl.className = 'warp'
+warpEl.setAttribute('aria-hidden', 'true')
+warpEl.innerHTML = Array.from({ length: 56 }, (_, i) => {
+  const a = (i * 137.5) % 360, r0 = 4 + (i * 7) % 18, len = 8 + (i * 11) % 22
+  return `<i style="--a:${a.toFixed(1)}deg;--r0:${r0}vmax;--len:${len}vmax;--d:${(i % 7) * 18}ms"></i>`
+}).join('')
+document.body.append(warpEl)
+function warp(to) {
+  const el = document.querySelector('body > .warp')
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  el.dataset.to = to
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go')
+  clearTimeout(warp.t); warp.t = setTimeout(() => el.classList.remove('go'), 520)
+}
+
 function renderBadges() {
-  const [, vb, ab] = document.querySelectorAll('#views .vbadge')
+  const vb = document.querySelector('#views [data-view="video"] .vbadge'), ab = document.querySelector('#views [data-view="app"] .vbadge')
   if (vb) vb.className = `vbadge ${video.busy ? 'working' : video.message ? 'failed' : video.src ? 'done' : ''}`
   if (ab) ab.className = `vbadge ${appv.run === shownRun() ? { working: 'working', done: 'done', failed: 'failed' }[appv.state] || '' : ''}`
 }
@@ -4281,19 +4309,24 @@ $('#dock-hide')?.addEventListener('click', () => setBreakroom(false))
 
 // ---------- crews: while an app or game builds, a game spec is written or a video
 // renders, a few agents work over that screen, each on one real step at a time.
-const CREW_NAMES = ['Ada', 'Basil', 'Cleo', 'Dax'].map(n => [n, Crew.color(n)])
+const CREW_NAMES = (Crew.NAMES || ['Mochi', 'Lumi', 'Zuzu', 'Tofu']).slice(0, 4).map(n => [n, Crew.color(n)])
 const crewLayer = document.createElement('div')
 crewLayer.className = 'crew-layer'
 document.body.append(crewLayer)
 const crew = { members: [], key: '', last: 0 }
+const radioLine = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+radioLine.setAttribute('class', 'radio-line')
+radioLine.setAttribute('aria-hidden', 'true')
+radioLine.innerHTML = '<path/>'
+crewLayer.append(radioLine)
 
 // Which screen is busy, where the agents may point, and what they are each doing.
 function crewJob() {
   if (game.el && game.busy) return { key: 'game', host: game.el, spots: '.gbody, .spin, h3, .gspec', n: 3, lines: ['inventing the world', 'naming the hero', 'drafting enemies', 'picking the engine', 'tuning game feel', 'writing win and lose'], tool: ['text', 'comment', 'frame'] }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
     return cw.thinking
-      ? { key: 'app-plan', host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
-      : { key: 'app-code', host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['writing code'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+      ? { key: `app-plan|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+      : { key: `app-code|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['writing code'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
   }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
@@ -4337,17 +4370,18 @@ function crewTick(now) {
     crew.members = []
     if (job) {
       const r = job.host.getBoundingClientRect()
-      crew.members = crewMembers(job.n).map(([name, color], i) => {
+      crew.members = (job.names || crewMembers(job.n)).map(([name, color], i) => {
         const el = document.createElement('div')
         el.className = 'cursor crew'
-        el.innerHTML = `${ARROW(color, name)}<div class="tag" style="background:${color};color:${Crew.ink(color)}">${TOOL[job.tool[i % job.tool.length]].svg}<span>${esc(name)}</span><em class="doing"></em></div>`
+        el.innerHTML = `${ARROW(color, name)}<div class="tag" style="background:${color};color:${Crew.ink(color)}">${TOOL[job.tool[i % job.tool.length]].svg}<span>${esc(name)}</span><em class="doing"></em></div><div class="bubble"></div>`
         crewLayer.append(el)
         const x = r.left + r.width / 2 + (i - 1) * 40, y = r.bottom - 20
-        return { el, doing: el.querySelector('.doing'), x, y, tx: x, ty: y, next: now + i * 450, line: i, pressAt: 0 }
+        return { el, name, doing: el.querySelector('.doing'), bubble: el.querySelector('.bubble'), said: 0, x, y, tx: x, ty: y, next: now + i * 450, line: i, pressAt: 0 }
       })
     }
   }
-  if (!job) return
+  if (!job) { radioLine.hidden = true; return }
+  let lineTo = null
   for (const [i, m] of crew.members.entries()) {
     // pinned: the cursor rides its file's caret while the code types out
     const pin = job.pin?.(i)
@@ -4363,11 +4397,28 @@ function crewTick(now) {
       m.line = (m.line + 1 + Math.floor(Math.random() * 2)) % job.lines.length
       setText(m.doing, job.lines[m.line] || '')
     }
+    if (job.radio && radioOn()) {
+      // the radio wins: what this helper is really doing, and what it just said
+      const act = radio.acts.get(m.name), said = radio.says.get(m.name)
+      if (heardIn(act, 15000)) setText(m.doing, act.text)
+      const talking = heardIn(said, 5500)
+      if (talking && m.said !== said.t) { m.said = said.t; m.bubble.innerHTML = '<span></span>'; m.bubble.firstChild.textContent = said.text.slice(0, 160) }
+      m.el.classList.toggle('talking', !!talking)
+      if (radio.lead?.to === m.name && heardIn(radio.lead, 7000)) lineTo = m
+    }
     m.x += (m.tx - m.x) * 0.08
     m.y += (m.ty - m.y) * 0.08
     m.el.classList.toggle('moving', Math.abs(m.tx - m.x) + Math.abs(m.ty - m.y) > 6)
     m.el.style.transform = `translate(${m.x.toFixed(1)}px, ${m.y.toFixed(1)}px)`
     m.el.classList.toggle('press', now > m.pressAt && now < m.pressAt + 160)
+  }
+  // Hermia's dotted line, from her strip to the helper she is giving an order to
+  const from = lineTo && cw.el?.querySelector('.cw-radio:not([hidden]) .cw-radio-av')?.getBoundingClientRect()
+  radioLine.hidden = !from?.width
+  if (!radioLine.hidden) {
+    const x1 = from.left + from.width / 2, y1 = from.bottom, x2 = lineTo.x + 6, y2 = lineTo.y + 4
+    radioLine.firstChild.setAttribute('d', `M${x1.toFixed(1)} ${y1.toFixed(1)}C${x1.toFixed(1)} ${(y1 + 80).toFixed(1)} ${x2.toFixed(1)} ${(y2 - 80).toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`)
+    radioLine.style.setProperty('--c', Crew.color(lineTo.name))
   }
 }
 requestAnimationFrame(crewTick)
@@ -4572,6 +4623,27 @@ api('/api/auto').then(r => r.ok ? r.json() : null).then(e => { if (e?.steps && (
 // ---------- the code wall: while the engine builds an app or a game, the files it
 // writes type out in tiles, one agent per tile with its cursor on the caret.
 const CW_TILES = 4
+// ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
+// and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
+// talking to, each helper's reply as a bubble on its cursor, and what it is doing right now
+// (crew:act, live only) as its name-pill status.
+const radio = { run: null, lead: null, acts: new Map(), says: new Map(), order: [] }
+function radioEvent(e) {
+  const run = e.run || appv.run || shownRun()
+  if (radio.run !== run) Object.assign(radio, { run, lead: null, acts: new Map(), says: new Map(), order: [] })
+  const t = e.t || Date.now()
+  const meet = n => { if (n && n !== 'Hermia' && !radio.order.includes(n)) radio.order.push(n) }
+  if (e.type === 'crew:lead') { radio.lead = { text: e.text, to: e.to, kind: e.kind || 'think', t }; meet(e.to) }
+  else if (e.type === 'crew:act') { radio.acts.set(e.name, { text: e.text, t }); meet(e.name) }
+  else if (e.type === 'agent:say') { radio.says.set(e.name, { text: e.text, kind: e.kind, t }); meet(e.name) }
+}
+const radioOn = () => radio.run && radio.run === appv.run
+// the wall's crew: the helpers the radio has heard from first, then the build's agents
+function wallNames() {
+  const heard = radioOn() ? radio.order.slice(0, CW_TILES).map(n => [n, Crew.color(n)]) : []
+  return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
+}
+const heardIn = (x, ms) => x && Date.now() - x.t < ms
 const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false, shown: false, thinking: false, planKey: '' }
 const clock = ms => { const t = Math.max(0, Math.round(ms / 1000)); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s` }
 const kTokens = n => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
@@ -4610,7 +4682,7 @@ function codeWall() {
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" title="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
+    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" title="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-radio" hidden></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
     appEls.preview.append(cw.el)
   }
@@ -4639,11 +4711,20 @@ function codeWall() {
     appApi(`/files?path=${encodeURIComponent(path)}`).then(r => { tile.text = String(r.text || '').slice(0, 6000) }).catch(() => { tile.text = '' }).finally(() => { tile.loading = false; if (!tile.text) tile.doneAt = 0 })
   }
   const grid = cw.el.querySelector('.cw-grid')
-  const names = crewMembers(CW_TILES)
+  const names = wallNames()
+  // Hermia's strip: her newest line, and who it is for
+  const strip = cw.el.querySelector('.cw-radio'), lead = radioOn() ? radio.lead : null
+  strip.hidden = !lead
+  if (lead && strip.dataset.t !== String(lead.t)) {
+    strip.dataset.t = lead.t
+    const kind = { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind
+    strip.className = `cw-radio ${lead.kind}`
+    strip.innerHTML = `<span class="cw-radio-av">${HERMIA}</span><div class="cw-radio-main"><div class="cw-radio-who"><b>Hermia</b>${lead.to ? `<span class="to">→</span><b style="color:${Crew.color(lead.to)}">${esc(lead.to)}</b>` : ''}<em>${esc(kind)}</em></div><p>${esc(lead.text)}</p></div>`
+  }
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
     d.className = 'cw-tile'
-    d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
+    d.innerHTML = '<div class="cw-file"><i class="node" aria-hidden="true"></i><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
     grid.append(d)
   }
   let writing = 0
@@ -4676,17 +4757,19 @@ function codeWall() {
   cw.thinking = !!plan
   planEl.hidden = !plan
   if (plan) {
-    const name = names[0]?.[0] || 'Ada', age = clock(Date.now() - plan.since)
+    const acts = radioOn() ? [...radio.acts.entries()].filter(([, x]) => heardIn(x, 60000)).sort((x, y) => y[1].t - x[1].t) : []
+    const name = acts[0]?.[0] || names[0]?.[0] || 'Mochi', age = clock(Date.now() - plan.since)
     const key = `${name}|${plan.turn}|${plan.tokens}|${plan.files.join()}`
     if (cw.planKey !== key) {
       cw.planKey = key
       planEl.innerHTML = `<span class="cw-plan-av">${Crew.avatar(name, 40)}</span>`
         + `<div class="cw-plan-main"><b class="pop-title"><span>${esc(name)}</span> is planning the next <em>files</em></b>`
         + `<div class="cw-plan-meta"><span>${ico('brain-circuit')}turn ${plan.turn}</span>${plan.tokens ? `<span>${kTokens(plan.tokens)} tokens of context</span>` : ''}<span class="cw-plan-age"></span></div>`
-        + `<div class="cw-plan-bar"><i></i></div></div>`
+        + `<div class="cw-plan-act"></div><div class="cw-plan-bar"><i></i></div></div>`
         + (plan.files.length ? `<div class="cw-plan-files"><small>Last written</small>${plan.files.map(f => `<code title="${esc(f)}">${esc(f.split('/').slice(-2).join('/'))}</code>`).join('')}</div>` : '')
     }
     setText(planEl.querySelector('.cw-plan-age'), `${age} since the last file`)
+    setText(planEl.querySelector('.cw-plan-act'), acts[0] ? `${acts[0][0]}: ${acts[0][1].text}` : '')
     setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · planning turn ${plan.turn} (${age})`)
   } else {
     cw.planKey = ''

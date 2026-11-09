@@ -1270,5 +1270,67 @@ em { font-style: italic; }
   .auto-panel { left: 16px; right: 16px; width: auto; }
 }
 
+/* ---------- Star systems (spec 08): each view is a star on a small map, switching is a warp,
+   each unit of work is a star node, the crew are alien minions talking on the radio */
+.seg.starmap { position: relative; background: none; border: 0; padding: 0 2px; gap: 2px; align-items: stretch; }
+.starmap::before { content: ''; position: absolute; left: 26px; right: 26px; top: 12px; border-top: 1px dashed rgb(var(--glass-rgb) / .22); }
+.seg.starmap button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 12px 3px; border-radius: 10px; background: none; color: var(--muted); font: 600 11.5px/1 var(--label); letter-spacing: .1em; }
+.seg.starmap button:hover { color: var(--text); background: rgb(var(--glass-rgb) / .04); }
+.seg.starmap button.on { background: none; color: var(--text); }
+.starmap button[data-sys="canvas"] { --sys: var(--text); --sys-rgb: var(--glass-rgb); }
+.starmap button[data-sys="video"] { --sys: var(--info); --sys-rgb: 0 242 242; }
+.starmap button[data-sys="app"] { --sys: var(--ok); --sys-rgb: var(--ok-rgb); }
+.starmap .star { position: relative; display: block; width: 7px; height: 7px; margin: 2.5px 0; border-radius: 50%; background: var(--sys); box-shadow: 0 0 6px rgb(var(--sys-rgb) / .8); transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
+.starmap .star::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgb(var(--sys-rgb) / .7); opacity: 0; transform: scale(.6); transition: opacity .2s, transform .2s var(--ease); }
+.starmap button.on .star { transform: scale(1.35); box-shadow: 0 0 0 2px rgb(var(--sys-rgb) / .25), 0 0 14px 2px rgb(var(--sys-rgb) / .9); }
+.starmap button.on .star::after { opacity: 1; transform: none; animation: orbit 6s linear infinite; }
+.starmap button.on span { text-shadow: 0 0 12px rgb(var(--sys-rgb) / .6); }
+.starmap .vbadge { top: 3px; right: 6px; }
+.starmap + .auto-btn { position: relative; margin-left: 10px; }
+.starmap + .auto-btn::before { content: ''; position: absolute; right: 100%; top: 50%; width: 12px; border-top: 1px dashed rgb(var(--accent-rgb) / .5); }
+@keyframes orbit { to { transform: rotate(360deg); } }
+
+.warp { position: fixed; inset: 52px 0 0 0; z-index: 150; pointer-events: none; overflow: hidden; opacity: 0; }
+.warp::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgb(var(--frame-rgb) / .35), transparent 62%); }
+.warp i { position: absolute; left: 50%; top: 50%; width: var(--len); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgb(var(--glass-rgb) / .95)); transform-origin: 0 50%; opacity: 0; }
+.warp[data-to="video"] i:nth-child(3n) { background: linear-gradient(90deg, transparent, var(--info)); }
+.warp[data-to="app"] i:nth-child(3n) { background: linear-gradient(90deg, transparent, var(--ok)); }
+.warp[data-to="canvas"] i:nth-child(3n) { background: linear-gradient(90deg, transparent, var(--accent)); }
+.warp.go { animation: warp-fade .44s var(--ease) both; }
+.warp.go i { animation: warp-streak .4s cubic-bezier(.55, 0, .9, .5) var(--d) both; }
+@keyframes warp-fade { 0% { opacity: 0; } 12% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes warp-streak { from { opacity: 0; transform: rotate(var(--a)) translateX(var(--r0)) scaleX(.05); } 25% { opacity: 1; } to { opacity: 0; transform: rotate(var(--a)) translateX(calc(var(--r0) + 55vmax)) scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .warp { display: none; } }
+
+.node { position: relative; display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text); vertical-align: middle; box-shadow: 0 0 0 2px rgb(var(--frame-rgb) / .45), 0 0 10px rgb(var(--frame-rgb) / .9); transition: background .3s, box-shadow .3s; }
+.node::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 1px dashed rgb(var(--accent-rgb) / .75); opacity: 0; transition: opacity .3s; }
+.frame.active .node, .cw-tile.typing .node { background: var(--accent); box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / .3), 0 0 14px rgb(var(--accent-rgb) / .9); }
+.frame.active .node::after, .cw-tile.typing .node::after { opacity: 1; animation: orbit 4s linear infinite; }
+.frame-label .node { width: 30px; height: 30px; margin-right: 26px; vertical-align: 8px; box-shadow: 0 0 0 6px rgb(var(--frame-rgb) / .45), 0 0 40px rgb(var(--frame-rgb) / .9); }
+.frame-label .node::after { inset: -22px; border-width: 3px; }
+.frame.active .frame-label .node { box-shadow: 0 0 0 6px rgb(var(--accent-rgb) / .3), 0 0 50px rgb(var(--accent-rgb) / .9); }
+.codewall .cw-file .node { margin: 0 2px 0 1px; }
+.video-pop .vscene { position: relative; }
+.video-pop .vscene .node { position: absolute; top: 9px; right: 9px; z-index: 1; width: 6px; height: 6px; }
+
+/* the radio: Hermia's strip on the wall, her dotted line to the helper, replies on cursors */
+.codewall .cw-radio { flex: none; display: flex; gap: 12px; align-items: flex-start; padding: 10px 14px; border-radius: 14px; background: rgb(var(--deep-rgb) / .85); border: 1px solid var(--panel-edge); border-left: 3px solid var(--frame-hi); animation: in .3s var(--ease); }
+.codewall .cw-radio.assign { border-left-color: var(--accent); }
+.codewall .cw-radio.ack { border-left-color: var(--ok); }
+.cw-radio-av { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: rgb(var(--frame-rgb) / .25); box-shadow: 0 0 0 1px rgb(var(--frame-rgb) / .8), 0 0 18px var(--glow); }
+.cw-radio-av .hermia { width: 32px; height: 32px; }
+.cw-radio-main { min-width: 0; }
+.cw-radio-who { display: flex; align-items: center; gap: 7px; font: 600 13px/1 var(--label); letter-spacing: .1em; text-transform: uppercase; }
+.cw-radio-who .to { color: var(--muted); }
+.cw-radio-who em { margin-left: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-2); font: 500 10.5px/1.3 var(--mono); font-style: normal; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.cw-radio.assign .cw-radio-who em { border-color: rgb(var(--accent-rgb) / .6); color: var(--accent); }
+.cw-radio p { margin: 5px 0 0; font: 12.5px/1.45 var(--font); color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.radio-line { position: fixed; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.radio-line path { fill: none; stroke: var(--c, var(--accent)); stroke-width: 1.6; stroke-dasharray: 2 6; stroke-linecap: round; animation: radio-dash .8s linear infinite; filter: drop-shadow(0 0 4px var(--c, var(--accent))); }
+@keyframes radio-dash { to { stroke-dashoffset: -16; } }
+.cw-plan-act { font: 500 12px/1.3 var(--mono); color: var(--info); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-plan-act:empty { display: none; }
+.cursor.crew .bubble { border-left-color: var(--accent); }
+
 /* the hidden attribute always wins over a display set by a theme rule (Stop on a finished app, empty panels) */
 [hidden] { display: none !important; }

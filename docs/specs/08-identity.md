@@ -79,13 +79,24 @@ A small "Built for Hermes Agent" line in the footer and the README is fine.
 
 ## The crew (the agents)
 
-- **Who they are:** little round "courier" sprites. Each is a soft blob body with tiny ankle wings (Hermes' winged sandals), one antenna, and a visor in the agent's colour.
+- **Who they are:** cute alien minion workers who came with Hermia from beyond the galaxy. Each is a round blob body in a soft tint of the agent's colour, with antennae, one or two big goggle eyes on a visor strap in the agent's colour, and tiny ankle wings (Hermes' winged sandals).
+- **Names:** short, original, star-like and easy to say (Mochi, Lumi, Zuzu, Tofu, Pebble, Comet, Miso, Orbi, …), never characters from existing shows. The list lives in `web/crew.js`; a name's place in it picks its F2 colour, so the engine's list (`engine/run.mjs`) should use the same order.
 - **Avatars:** SVG, generated in code from the agent's name, so they stay consistent at any size:
   - the body colour is from the F2 palette;
-  - the visor shape, antenna style and one accessory (headset, goggles, a tool belt, a scarf) are picked by a seed;
+  - the goggles (two eyes or one big one), antenna style and one accessory (none, a tool belt, a scarf, overall straps) are picked by a seed;
   - each one is a single `<svg>` that animates cheaply: a 4 s blink, a mouth that opens in sync with its chatter syllables, wings that flap while it moves, and a hop when it finishes a task.
 - **Where they appear:** on each cursor (the avatar replaces the plain arrow head, with the name pill beside it), in agent messages in Chat, the break room, the code wall tiles ("Ada is writing `routes.ts`"), and the final summary card's crew line.
 - **Images:** the generator never draws them. Generated sprite sheets don't stay consistent, so the crew is code only.
+
+## Star systems
+
+The studio is a little universe. Hermia came from beyond the galaxy with her crew, and the work happens across a few star systems.
+
+- **Each view is a star system.** Canvas, Video and App are stars on a small star map in the top bar (it replaces the segmented control); Auto is the yellow star at the end of the map. Each star has its own colour (Canvas off-white, Video cyan, App green, Auto yellow). The current one is bigger, glows, and has a dashed orbit ring turning round it.
+- **Switching views is a warp.** For about 400 ms stars streak outward from the middle of the screen, with a few streaks in the colour of the system you are going to. It is turned off under `prefers-reduced-motion`.
+- **Each unit of work is a star node.** A page frame, a code file tile and a video scene each carry a glowing node. While an agent works on it, the node turns yellow and gets a soft orbit ring.
+- **The crew talk on the radio.** On the App code wall, the engine's lead agent speaks as Hermia: her newest line sits in a strip at the top of the wall, and when she gives an order a dotted line runs from her to that helper's cursor. Helpers answer in bubbles on their cursors, and their name pill shows what they are doing right now ("reading SharedNav.tsx", "writing store.ts"). Between batches, a planning tile says who is planning, for how long, with how much context.
+- All of it stays inside the palette above; no new colours.
 
 ## The Commander's artwork
 

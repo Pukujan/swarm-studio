@@ -12,11 +12,11 @@
   <header class="topbar">
     <div class="brand" title="Swarm Studio, run by Commander Hermia"><img class="logo" src="brand/hermia-mark.svg" alt="" width="28" height="28"><span class="word">Swarm <em>Studio</em></span></div>
     <div class="file-name" id="file-name">Untitled</div>
-    <div class="seg views" id="views" title="Switch views; builds keep running in the others">
-      <button data-view="canvas" class="on">Canvas</button>
-      <button data-view="video">Video<i class="vbadge"></i></button>
-      <button data-view="app">App<i class="vbadge"></i></button>
-    </div>
+    <nav class="seg views starmap" id="views" title="Switch views; builds keep running in the others" aria-label="Star systems">
+      <button data-view="canvas" class="on" data-sys="canvas"><i class="star" aria-hidden="true"></i><span>Canvas</span></button>
+      <button data-view="video" data-sys="video"><i class="star" aria-hidden="true"></i><span>Video</span><i class="vbadge"></i></button>
+      <button data-view="app" data-sys="app"><i class="star" aria-hidden="true"></i><span>App</span><i class="vbadge"></i></button>
+    </nav>
     <button class="toggle auto-btn" id="auto-btn" title="Auto mode: one prompt, and the swarm designs the site, reviews it, cuts the video, builds the app with mini games and a credit shop, and deploys it"><i data-i="zap"></i><span class="t">Auto</span></button>
     <button class="toggle game-btn" id="game-btn" title="Make an original browser game: a few questions, then the swarm builds it"><i data-i="gamepad-2"></i><span class="t">Game</span></button>
     <div class="spacer"></div>
