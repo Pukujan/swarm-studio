@@ -1002,6 +1002,19 @@ const server = createServer((req, res) => {
   sendFile(res, join(webDir, rel))
 })
 
+// A video that was rendering when the server stopped never finishes: say so in
+// its run, so the canvas stops waiting and offers to make it again.
+function closeStoppedVideos() {
+  if (!existsSync(runsDir)) return
+  for (const id of readdirSync(runsDir).filter(x => RUN_ID.test(x))) {
+    const file = join(runsDir, id, 'events.jsonl')
+    try { if (!readFileSync(file, 'utf8').includes('"video:start"')) continue } catch { continue }
+    const last = readEvents(id).findLast(e => /^video:(start|done|failed)$/.test(e.type))
+    if (last?.type === 'video:start') record(id, { type: 'video:failed', t: Date.now(), run: id, message: 'Swarm Studio restarted before the video finished. Make it again.' })
+  }
+}
+closeStoppedVideos()
+
 server.listen(port, '127.0.0.1', () => {
   console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
 })
