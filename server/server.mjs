@@ -271,6 +271,7 @@ function tours(id, input) {
 
 // ---------- visual review: the reviewer model looks at a screenshot of a finished
 // page (taken by the canvas, which owns the frames) and builders fix what it finds.
+const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export'])
 const reviewing = new Set()
 const REVIEW_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
 async function review(id, input) {
@@ -465,6 +466,24 @@ const server = createServer((req, res) => {
       review(runReview[1], input)
         .then(result => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result)))
         .catch(err => res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    })
+    return
+  }
+
+  // Commands from Hermes (/swarm review, the swarm_studio tool) that the open
+  // canvas carries out, because it owns the frames.
+  if (url.pathname === '/api/cmd' && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => (body += c))
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      if (!CMD_OPS.has(input.op) || (input.run !== undefined && !RUN_ID.test(String(input.run)))) {
+        res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'bad command' }))
+        return
+      }
+      broadcast({ type: 'cmd', op: input.op, ...(input.run ? { run: input.run } : {}), ...(typeof input.text === 'string' ? { text: input.text.slice(0, 600) } : {}), ...(typeof input.target === 'string' ? { target: input.target.slice(0, 120) } : {}) })
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, clients: clients.size }))
     })
     return
   }

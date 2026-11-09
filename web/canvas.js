@@ -2278,6 +2278,7 @@ function connect() {
   es.onmessage = m => {
     try {
       const e = JSON.parse(m.data)
+      if (e.type === 'cmd') return command(e)
       if (e.type === 'reset' || e.type === 'run:start') {
         liveId = e.run
         if (viewing) { viewing = null; fresh(e.run) }
@@ -2289,6 +2290,17 @@ function connect() {
     }
   }
 }
+
+// Commands sent from Hermes (/swarm review, the swarm_studio tool).
+async function command(c) {
+  const open = c.run && c.run !== (viewing && viewing !== 'new' ? viewing : S.run)
+  if (open) { await openRun(c.run); await new Promise(r => setTimeout(r, 4000)) }
+  if (c.op === 'play') openPlayer()
+  if (c.op === 'review') reviewRun()
+  if (c.op in commandOps) commandOps[c.op](c)
+}
+// later features (video, fix, export) add themselves here
+const commandOps = {}
 
 // A newer canvas on disk: reload once nothing is building and nobody is mid-edit.
 setInterval(async () => {

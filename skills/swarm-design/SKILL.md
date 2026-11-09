@@ -34,6 +34,16 @@ Don't invent facts the person didn't give (prices, addresses, team names); the p
 - In Hermes Desktop the **swarm** pane shows the canvas live; elsewhere give the person the URL from the result (it only opens on this computer).
 - The person can also type `/swarm <brief>` or run `hermes swarm "<brief>"` themselves.
 
+## Everything else: the `swarm_studio` tool
+
+Call `swarm_studio` with an `action` (the person can type the same as `/swarm <action>`):
+
+- `files`: recent builds, numbered (1 = latest). `open` with `build` shows one on the canvas; `play` opens it as a clickable prototype.
+- `review`: a vision model photographs every page, names up to 3 problems per page, and agents rewrite those sections live. Use it when the person asks to check, polish or fix a design. It runs on the open canvas, so the canvas must be open.
+- `models`: show which model plans, builds and reviews; with `role` and `model` change one (`reset` goes back to Hermes's setting, `off` turns the reviewer off).
+- `images`: generated photos come from Hermes's image providers, by default the person's Codex login (`gpt-image-2-low`). `provider: "off"` for shapes and SVG only. Each image uses that provider's quota.
+- `lite`: `on` for machines short on memory (one live page at a time).
+
 ## After the run
 
 - Tell the person what was built in a sentence or two (theme name, the pages), and point them at the canvas: clicking a linked button on any page flies to the page it links to.
