@@ -18,6 +18,42 @@ export const GAMES_ASK = `Add a 🎮 Play page at /play, linked in the nav, with
 3. A quick memory or puzzle game with the brand's things.
 Each game shows its score, keeps a best score in localStorage, and has win and lose screens with Play again. After a round the player can save a score with a name: POST /api/scores { game, name, score }; the page shows the top 10 per game from GET /api/scores. Sounds are synthesised with the Web Audio API after the first click or key. Draw everything in code; original names only, nothing from existing games. Keep the rest of the app as it is.`
 
+// Big game mode: one real game instead of three mini ones, when the product is a game.
+const GENRE = /\b(rogue-?like|rogue-?lite|platformer|metroidvania|shoot[' ]?em[ -]?up|shmup|bullet[ -]hell|tower[ -]defen[cs]e|deck-?builder|card game|survivors?-like|twin-stick|top-down action|action rpg|arpg|fighting game|racing game|puzzle game|rhythm game)\b/i
+export function gameMode(prompt, choice) {
+  if (choice === 'mini' || choice === 'big') return choice
+  const p = String(prompt || '')
+  if (GENRE.test(p)) return 'big'
+  // "a playable trial", "a game demo": the product is the game itself
+  return /\b(game|trial|demo)\b/i.test(p) && /\b(playable|play it|trial|demo|indie)\b/i.test(p) && !/\bmini[ -]?games?\b/i.test(p) ? 'big' : 'mini'
+}
+
+const ROGUELIKE = `It is a room-based action roguelike:
+- Controls: move with WASD or the arrows; aim with the mouse (on touch, the move direction); attack with click or J; dash with Space or K (a short dash with brief invulnerability); hold attack to charge a special. On touch, show a move stick and two buttons (attack, dash).
+- A run is 6–8 rooms: fight rooms that lock until cleared, a blessing room that offers 1 of 3 upgrades, one shop that spends the coins enemies drop, then the boss.
+- Enemies: a fast melee one, a ranged one, a slow one that charges, and one boss with two phases (the second phase faster, with a new attack). Telegraph every enemy attack.
+- At least 8 stacking upgrades (for example chain lightning, a dash trail that hurts, crit chance, lifesteal, attack speed, a bigger special, extra dash, thorns).
+- Between runs, shards collected unlock permanent upgrades on a hub screen, saved in localStorage.`
+
+const GENERIC_GAME = `It is one complete game in the genre the brief names: a title screen, a core loop done really well, rising difficulty over several stages or waves, at least 6 upgrades or unlocks, a final challenge (a boss, a last level or a high-score push), a win and a loss screen, and progress saved in localStorage.`
+
+export function bigGameAsk(prompt, skills = '') {
+  const kind = /rogue|top-down action|action rpg|arpg|twin-stick|hack.?and.?slash/i.test(prompt) ? ROGUELIKE : GENERIC_GAME
+  return `This product IS a game. Build ONE real, polished game, not mini games, on a 🎮 Play page at /play, linked in the nav. The brief: ${String(prompt).slice(0, 1200)}
+
+Code: a canvas game in src/games/<slug>/, split into modules: scene (the loop), player, enemies, rooms (or levels), upgrades, ui and audio. Fixed timestep at 60 fps, capped entity and particle counts, no DOM work inside the loop. It must run smoothly on a laptop's built-in graphics.
+
+${kind}
+
+Feel (required): screen shake and about 60 ms of hit-stop on hits; enemies flash white when hit; damage numbers pop up; a dash trail and particles from a capped pool; sound effects synthesised with Web Audio after the first click or key.
+
+Look: the game wears the site's theme (its CSS variables and fonts). Use the site's generated images (the files in public/ and the images the pages already use) for room backgrounds, the title art, upgrade cards and the boss portrait. Draw characters and enemies in code, with glow and particles.
+
+Scores and credits: a run costs 1 credit if the app has credits; at the end of a run the player can save a score with a name: POST /api/scores { game, name, score }; the play page shows the top 10 from GET /api/scores.
+
+Original only: an original world, hero, enemies and names; nothing from existing games. Keep the rest of the app as it is.${skills ? `\n\nGame-making notes to follow:\n${skills}` : ''}`
+}
+
 export const supabaseAsk = app => `Keep the app's data in Supabase. Add @supabase/supabase-js with add_dependency. In the server store module, create one client from process.env.SUPABASE_URL and the key process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY (server code only, never in client code). Every record goes in the existing table swarm_records (columns: id uuid default, app text, kind text, data jsonb, created_at timestamptz default now()) with app = '${app}' and kind = the collection (orders, signups, scores…); data holds the record. Reads filter by app and kind, newest first. Keep every API route, type and response shape the same. When the address or both keys are missing, fall back to the in-memory store so local development still works.`
 
 // The table Supabase needs once, shown to the person when it is missing.
@@ -60,7 +96,7 @@ const STEPS = [
   ['review', '🔎 Review every page'],
   ['video', '🎬 Cut the promo video'],
   ['app', '⚙️ Build the working app'],
-  ['games', '🎮 Add the mini games'],
+  ['games', '🎮 Add the games'],
   ['shop', '💳 Sell a $2 credit pack (demo checkout)'],
   ['data', '🗄️ Keep the data in Supabase'],
   ['deploy', '🚀 Deploy to Vercel']
@@ -71,7 +107,7 @@ export function autoJob(d) {
   // d: { runsDir, startRun, current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel }
   let job = null
 
-  const view = () => job && { state: job.state, run: job.run, prompt: job.prompt, t0: job.t0, ms: (job.end || Date.now()) - job.t0, url: job.url, message: job.message, steps: job.steps.map(s => ({ ...s })) }
+  const view = () => job && { state: job.state, run: job.run, prompt: job.prompt, games: job.games, t0: job.t0, ms: (job.end || Date.now()) - job.t0, url: job.url, message: job.message, steps: job.steps.map(s => ({ ...s })) }
   const push = (save = true) => {
     const v = view()
     if (save && job.run) d.record(job.run, { type: 'auto', t: Date.now(), run: job.run, ...v })
@@ -157,6 +193,17 @@ export function autoJob(d) {
     return s
   }
 
+  async function games() {
+    if (job.games === 'big') {
+      const g = await import('./game.mjs')
+      const skills = g.skillText(['gamedev/roguelike', 'gamedev/game-feel', 'gamedev/procedural-gen', 'gamedev/input-systems'], 9000)
+      await appTurn('games', { ask: bigGameAsk(job.prompt, skills) }, 'one big game on /play: core loop, rooms, enemies, upgrades, the boss, then polish', 10)
+      return set('games', 'done', '/play: one full game')
+    }
+    await appTurn('games', { ask: GAMES_ASK }, 'three mini games on a 🎮 Play page', 6)
+    set('games', 'done', '/play: roguelike, reflex and puzzle')
+  }
+
   async function data() {
     let env = supabaseEnv()
     // no keys: the person's Supabase sign-in through Hermes (🔌 Connect on the canvas)
@@ -195,7 +242,7 @@ export function autoJob(d) {
     const plan = [
       ['design', design, true], ['review', review, false], ['video', video, false],
       ['app', () => appTurn('app', {}, 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
-      ['games', () => appTurn('games', { ask: GAMES_ASK }, 'three mini games on a 🎮 Play page', 6).then(() => set('games', 'done', '/play: roguelike, reflex and puzzle')), false],
+      ['games', games, false],
       ['shop', shop, false],
       ['data', data, false]
     ]
@@ -216,11 +263,12 @@ export function autoJob(d) {
     push()
   }
 
-  function start({ prompt }) {
+  function start({ prompt, games }) {
     prompt = String(prompt || '').trim().slice(0, 1200)
     if (!prompt) throw new Error('say what to make')
     if (job?.state === 'working') throw new Error('auto mode is already running')
-    job = { state: 'working', prompt, t0: Date.now(), run: null, url: null, steps: STEPS.map(([id, label]) => ({ id, label, state: 'wait' })) }
+    const mode = gameMode(prompt, games)
+    job = { state: 'working', prompt, games: mode, t0: Date.now(), run: null, url: null, steps: STEPS.map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
     go().catch(err => { Object.assign(job, { state: 'failed', message: String(err.message || err), end: Date.now() }); push() })
     return view()
