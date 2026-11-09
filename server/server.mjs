@@ -329,7 +329,7 @@ async function review(id, input) {
     // one builder per section, with every note for it
     // a vision model squinting at a long screenshot sometimes calls a full page blank;
     // a section with real text in it isn't, so that note is dropped
-    const BLANK = /\b(blank|empty|no (visible )?(text|content)|nothing (is )?(visible|rendered)|missing from the page|not rendered|solid (dark )?(fill|colou?r))\b/i
+    const BLANK = /\b(blank|empty|missing|nothing (is )?(visible|rendered|shown)|not (rendered|shown|present)|solid (dark )?(fill|colou?r))\b|\bno\b[^.;]*\b(visible|content|present|shown|rendered)\b/i
     const words = key => (sections.find(x => x.key === key)?.html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length
     const real = i => !(BLANK.test(i.problem) && words(i.section) > 80)
     const seen = [...result.issues, ...(phone?.result?.issues || []).map(i => ({ ...i, problem: `On phones: ${i.problem}` }))]
