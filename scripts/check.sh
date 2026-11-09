@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# The checks CI runs on every pull request, and you can run before pushing:
+# every file parses, every engine module loads (so a wrong import fails here,
+# not mid-build), the Python plugin compiles, and the server starts and answers.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "· syntax"
+for f in $(git ls-files '*.mjs' '*.js' | grep -v '^dyad/\|^gameskills/'); do node --check "$f"; done
+
+echo "· engine modules load"
+for f in engine/*.mjs; do node --input-type=module -e "await import('./$f')"; done
+
+echo "· python"
+python3 -m py_compile $(git ls-files '*.py' | grep -v '^dyad/')
+
+echo "· server starts"
+tmp=$(mktemp -d)
+port=4391
+SWARM_RUNS_DIR=$tmp/runs SWARM_DATA_DIR=$tmp/data SWARM_OUTPUT_DIR=$tmp/out SWARM_TOKEN=ci node server/server.mjs --port $port > $tmp/server.log 2>&1 &
+pid=$!
+trap 'kill $pid 2>/dev/null || true; rm -rf "$tmp"' EXIT
+for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:$port/ && break; sleep 0.5; done
+# a reply is read in full before it is searched (grep -q stopping early would fail curl under pipefail)
+get() { curl -sf -H 'x-swarm-token: ci' "http://127.0.0.1:$port$1" > "$tmp/reply" || { cat "$tmp/server.log"; echo "$1 did not answer"; exit 1; }; }
+has() { grep -q "$1" "$tmp/reply" || { echo "unexpected reply: $(head -c 300 "$tmp/reply")"; exit 1; }; }
+curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<title>Swarm Studio'
+get /api/state; has '"working"'
+get /api/runs
+get /api/game; has '"questions"'
+# without the token the API refuses
+[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/api/runs)" != 200 ] || { echo 'the API answered without a token'; exit 1; }
+echo "all checks passed"
