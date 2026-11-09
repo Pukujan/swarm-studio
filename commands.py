@@ -133,7 +133,7 @@ def _info(r: dict) -> str:
         ("Work since", " · ".join(x for x in [f"{r['images']} pictures" if r.get("images") else "", f"{r['reviews']} reviews" if r.get("reviews") else "",
                                                f"{r['edits']} edits" if r.get("edits") else "", f"{r['exports']} exports" if r.get("exports") else ""] if x)),
         ("Live at", " · ".join(f"{k}: {u}" for k, u in (r.get("sites") or {}).items())),
-        ("Video", f"runs/{r['id']}/video/promo.mp4" if r.get("video") else ""),
+        ("Video", (r.get("videoFile") or f"runs/{r['id']}/video/promo.mp4") if r.get("video") else ""),
         ("Folder", r.get("folder")), ("Tags", ", ".join(r.get("tags") or [])), ("Note", r.get("note")), ("ID", r["id"]),
     ]
     return "\n".join(f"{k + ':':<12} {v}" for k, v in rows if v)
