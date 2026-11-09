@@ -237,7 +237,8 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         trace: { kind: 'build', agent: agent.id, page: layer.page, layer: layer.id },
         model: workerModel,
         messages: workerMessages({ theme: plan.theme || {}, plan, page, layer, images }),
-        maxTokens: 3000,
+        // most sections take under 2000; a map or a big drawing needs more, and cut short it breaks
+        maxTokens: 6000,
         extra: NO_THINKING,
         signal,
         onDelta: d => {
