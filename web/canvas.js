@@ -43,7 +43,7 @@ let S
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
 function fresh(run = null) {
-  S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0 }
+  S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null }
   banter.queue = []
   els.world.innerHTML = '<div class="ghosts" id="ghosts"></div>'
   els.cursors.innerHTML = ''
@@ -164,6 +164,8 @@ function on(e) {
       l.ms = e.ms
       // saved runs carry the finished HTML, so a file can be reopened without the stream
       if (e.html) { l.text = e.html; l.ver++ }
+      // whole-site edits made earlier (bigger headings, more spacing) apply to late sections too
+      for (const ce of S.classEdits) restyle(l, ce)
       S.done = e.done
       S.treeDirty = true
       const a = S.agents.get(e.agent)
@@ -196,6 +198,9 @@ function on(e) {
       break
     case 'error':
       feed(null, `${e.where}: ${e.message}`, 'err')
+      break
+    case 'edit':
+      applyEdit(e)
       break
   }
 }
@@ -691,7 +696,10 @@ function drawWires() {
     const b = toScreen(t.x, 40)
     const dx = Math.max(80, Math.abs(b.x - a.x) * 0.45)
     const back = b.x < a.x
-    w.path.setAttribute('d', `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y - (back ? 120 : 0)} ${b.x},${b.y}`)
+    const d = `M${a.x.toFixed(1)},${a.y.toFixed(1)} C${(a.x + dx).toFixed(1)},${a.y.toFixed(1)} ${(b.x - dx).toFixed(1)},${(b.y - (back ? 120 : 0)).toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`
+    if (d === w.d) continue
+    w.d = d
+    w.path.setAttribute('d', d)
     w.dot.setAttribute('cx', b.x)
     w.dot.setAttribute('cy', b.y)
   }
@@ -795,9 +803,19 @@ function renderTree() {
   }
 }
 
+// The panels redraw only when what they show has changed: rebuilding them every
+// tick kept the page re-laying itself out ~60 times a second, which on a small
+// Mac starved the GPU once the finished pages were on the canvas.
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v }
+let agentsKey = '', toolbarKey = ''
 function renderAgents() {
-  els.agents.innerHTML = ''
   let working = 0
+  const sig = [...S.agents.values()].map(a => { const l = a.layer && S.layers.get(a.layer); if (l) working++; return `${a.id}${l?.key}${a.idle}${a.tool}${design.pinned === a.id}` }).join()
+  setText(els.agentCount, S.agents.size ? `${working}/${S.agents.size}` : '0')
+  if (sig === agentsKey) return working
+  agentsKey = sig
+  working = 0
+  els.agents.innerHTML = ''
   for (const a of S.agents.values()) {
     const l = a.layer && S.layers.get(a.layer)
     if (l) working++
@@ -809,19 +827,19 @@ function renderAgents() {
     row.querySelector('.task').textContent = l ? `${l.page === '*' ? 'shared' : l.page} · ${l.role}` : a.idle ? 'idle' : 'waiting'
     els.agents.append(row)
   }
-  els.agentCount.textContent = S.agents.size ? `${working}/${S.agents.size}` : '0'
   return working
 }
 
 function renderToolbar() {
   const by = Object.fromEntries(TOOLS.map(t => [t.id, []]))
   for (const a of S.agents.values()) if (a.layer || performance.now() < a.toolUntil) by[a.tool].push(a)
-  els.toolbar.innerHTML = TOOLS.map(t => {
+  const html = TOOLS.map(t => {
     const list = by[t.id]
     const f = toolFlash.get(t.id)
     const lit = f && performance.now() < f.until ? ` style="background:${f.color};color:#0b0d12"` : ''
     return `<div class="tool${list.length ? ' active' : ''}"${lit} title="${t.label}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
   }).join('')
+  if (html !== toolbarKey) els.toolbar.innerHTML = toolbarKey = html
 }
 
 // The Chat tab is the conversation: your briefs and the swarm's progress and
@@ -903,10 +921,14 @@ function frameLoop(now) {
   cam.s += (cam.ts - cam.s) * k
   cam.x += (cam.tx - cam.x) * k
   cam.y += (cam.ty - cam.y) * k
-  els.world.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.s})`
-  const g = 60 * cam.s
-  els.viewport.style.backgroundSize = `${g}px ${g}px`
-  els.viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`
+  const camKey = `translate(${cam.x.toFixed(1)}px, ${cam.y.toFixed(1)}px) scale(${cam.s.toFixed(4)})`
+  if (camKey !== cam.key) {
+    cam.key = camKey
+    els.world.style.transform = camKey
+    const g = 60 * cam.s
+    els.viewport.style.backgroundSize = `${g}px ${g}px`
+    els.viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`
+  }
 
   for (const a of S.agents.values()) {
     // Switching between screen space (dock) and world space (canvas) converts the
@@ -935,7 +957,8 @@ function frameLoop(now) {
       a.sx = p.x
       a.sy = p.y
     }
-    a.el.style.transform = `translate(${a.sx}px, ${a.sy}px)`
+    const pos = `translate(${a.sx.toFixed(1)}px, ${a.sy.toFixed(1)}px)`
+    if (pos !== a.pos) { a.pos = pos; a.el.style.transform = pos }
     a.el.classList.toggle('docked', a.docked)
     a.el.classList.toggle('flip', a.docked && a.seat % DOCK.cols >= 2)
     a.el.classList.toggle('talking', now < a.sayUntil)
@@ -949,6 +972,7 @@ function frameLoop(now) {
     const working = renderAgents()
     renderToolbar()
     renderDesign(now)
+    drawSelBox()
     if (S.treeDirty) { S.treeDirty = false; renderTree() }
     if (S.planDirty) {
       S.planDirty = false
@@ -956,15 +980,15 @@ function frameLoop(now) {
       els.plan.scrollTop = els.plan.scrollHeight
     }
     const done = [...S.layers.values()].filter(l => l.status === 'done').length
-    els.status.textContent = `${working} agents working · ${done}/${S.layers.size} layers · ${S.frames.length} pages`
+    setText(els.status, `${working} agents working · ${done}/${S.layers.size} layers · ${S.frames.length} pages`)
     els.play.disabled = !S.frames.length
     if (S.progress) {
       const done = [...S.layers.values()].filter(l => l.status === 'done').length
-      S.progress.querySelector('.txt').textContent = S.layers.size
+      setText(S.progress.querySelector('.txt'), S.layers.size
         ? `${S.planText ? `${S.planText} ` : ''}${working} agents building · ${done}/${S.layers.size} sections across ${S.frames.length} pages`
-        : 'Planning the pages…'
+        : 'Planning the pages…')
     }
-    if (S.t0 && !(viewing && !S.tEnd)) els.timer.textContent = `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`
+    if (S.t0 && !(viewing && !S.tEnd)) setText(els.timer, `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`)
   }
   requestAnimationFrame(frameLoop)
 }
@@ -999,10 +1023,11 @@ function prototypeClick(e) {
   const vr = els.viewport.getBoundingClientRect()
   const wx = (e.clientX - vr.left - cam.x) / cam.s, wy = (e.clientY - vr.top - cam.y) / cam.s
   const f = S.frames.find(fr => wx >= fr.x && wx <= fr.x + FRAME_W && wy >= 0 && wy <= fr.h)
-  if (!f) return
+  if (!f) { if (S.sel) { S.sel = null; design.last = '' } return }
   const x = wx - f.x
   const hit = f.geo.gotos.find(({ box: [l, t, w, h] }) => x >= l && x <= l + w && wy >= t && wy <= t + h)
   if (hit) focusPage(hit.target)
+  else selectAt(f, x, wy)
 }
 
 els.viewport.addEventListener('dblclick', () => setAuto(true))
@@ -1025,6 +1050,7 @@ els.viewport.addEventListener('wheel', e => {
 }, { passive: false })
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !els.player.hidden) return tour.on ? stopTour() : closePlayer()
+  if (e.key === 'Escape' && S.sel) { S.sel = null; design.last = ''; return }
   if (e.key === 'v' && !els.player.hidden) return toggleTourMenu()
   if (e.target.closest('input, select, textarea')) return
   if (e.key === 'd') return togglePanel('design')
@@ -1190,6 +1216,7 @@ function openPlayer(page) {
   for (const f of S.frames) els.plPage.add(new Option(`Page ${f.index + 1} · ${f.title}`, f.id))
   player.history = []
   els.player.hidden = false
+  els.viewport.classList.add('behind')
   setDevice(player.device, false)
   showPage(page || S.frames[0].id, false)
   if (S.tEnd) loadTours()
@@ -1199,6 +1226,7 @@ function closePlayer() {
   stopTour()
   toggleTourMenu(false)
   els.player.hidden = true
+  els.viewport.classList.remove('behind')
   els.plFrame.srcdoc = ''
 }
 
@@ -1485,7 +1513,8 @@ function sectionProps(l) {
   const vars = S.theme?.vars || {}
   const varSw = name => `<span class="sw" style="background:${esc(vars[`--${name}`] || 'transparent')}"></span>${esc(name)}`
   const rows = []
-  const row = (sec, k, label, val) => val != null && val !== '' && rows.push({ sec, k, label, val })
+  const EDITABLE = { dir: 'dir', gap: 'gap', align: 'align', pad: 'pad', bg: 'bg', hsize: 'hsize', radius: 'radius' }
+  const row = (sec, k, label, val) => val != null && val !== '' && rows.push({ sec, k, label, val, edit: EDITABLE[k] })
   const s = slotFor(l)
   row('Frame', 'w', 'W', s ? Math.round(s.box.width) : 1280)
   row('Frame', 'h', 'H', s ? Math.round(s.box.height) : l.height)
@@ -1500,9 +1529,9 @@ function sectionProps(l) {
     row('Auto layout', 'align', 'align', al ? al[2] : 'start')
   }
   const px = tw(root, /^px-(\S+)$/) || tw(root, /^p-(\S+)$/), py = tw(root, /^py-(\S+)$/) || tw(root, /^p-(\S+)$/)
-  if (px || py) row('Auto layout', 'pad', 'padding', `${py ? space(py[1]) : 0} · ${px ? space(px[1]) : 0}`)
+  row('Auto layout', 'pad', 'padding', `${py ? space(py[1]) : 0} · ${px ? space(px[1]) : 0}`)
   const bg = tw(root, /^bg-\[var\(--([\w-]+)\)\]$/)
-  row('Fill', 'bg', '', bg ? varSw(bg[1]) : null)
+  row('Fill', 'bg', '', bg ? varSw(bg[1]) : '<span class="sw"></span>no fill')
   const fills = [...new Set([...all.matchAll(/bg-\[var\(--([\w-]+)\)\]/g)].map(m => m[1]))].filter(f => f !== bg?.[1]).slice(0, 3)
   fills.forEach((f, i) => row('Fill', `f${i}`, '', varSw(f)))
   const stroke = all.match(/border-\[var\(--([\w-]+)\)\]/)
@@ -1531,6 +1560,7 @@ function sectionProps(l) {
 }
 
 function pickSelection(now) {
+  if (S.sel && S.layers.has(S.sel)) { design.layer = S.sel; return { a: null, l: S.layers.get(S.sel) } }
   const has = id => { const a = S.agents.get(id); return a?.layer ? a : null }
   let a = has(design.pinned)
   if (!a && has(design.agent) && now - design.at < 3500) a = has(design.agent)
@@ -1546,7 +1576,7 @@ function renderDesign(now) {
   const { a, l } = pickSelection(now)
   let html
   if (!l) {
-    html = `<div class="dempty">${S.layers.size ? 'Select an agent in the Agents panel to inspect its section.' : 'Start a build. While the swarm works, this shows the properties of the section an agent is designing: auto layout, fills, type and effects.'}</div>`
+    html = `<div class="dempty">${S.layers.size ? 'Click a section on the canvas to edit it, or an agent in the Agents panel to follow its work.' : 'Start a build. While the swarm works, this shows the properties of the section an agent is designing: auto layout, fills, type and effects.'}</div>`
   } else {
     const owner = S.agents.get(l.agent) || a
     const rows = sectionProps(l)
@@ -1561,17 +1591,20 @@ function renderDesign(now) {
         sec = r.sec
         body += `<div class="dsec"><h4>${sec}</h4><div class="drow${['Fill', 'Effects', 'Typography'].includes(sec) ? ' one' : ''}">`
       }
-      body += `<div class="dval${(design.chg.get(id) || 0) > now ? ' chg' : ''}">${r.label ? `<i>${r.label}</i>` : ''}${r.val}</div>`
+      const editable = r.edit && l.status === 'done'
+      body += `<div class="dval${(design.chg.get(id) || 0) > now ? ' chg' : ''}${editable ? ' edit' : ''}"${editable ? ` data-edit="${r.edit}" title="Change ${r.edit}"` : ''}>${r.label ? `<i>${r.label}</i>` : ''}${r.val}</div>`
     }
     if (sec) body += '</div></div>'
     const where = `${l.page === '*' ? 'shared' : l.page} · ${l.status === 'done' ? 'done' : 'building'}`
-    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${design.pinned ? 'pinned' : 'following'}</span></div>${body}`
+    const mode = S.sel ? 'selected ✕' : design.pinned ? 'pinned' : 'following'
+    const hint = l.status === 'done' ? '<div class="dhint">Click a value to change this section. Variables change every page.</div>' : `<div class="dhint">Editable when ${esc(owner?.name || 'its agent')} finishes. Click any finished section on the canvas to edit it.</div>`
+    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${body}`
   }
   if (html !== design.last) {
     design.last = html
     els.dDesign.innerHTML = html
     const pin = els.dDesign.querySelector('.pin')
-    if (pin) pin.onclick = () => { design.pinned = design.pinned ? null : design.agent; design.last = '' }
+    if (pin) pin.onclick = () => { if (S.sel) S.sel = null; else design.pinned = design.pinned ? null : design.agent; design.last = '' }
   }
 }
 
@@ -1589,21 +1622,273 @@ function renderVars(now) {
   const fresh = S.themeAt && now - S.themeAt < 3000
   let i = 0
   const anim = () => (fresh ? ` reveal" style="animation-delay:${i++ * 110}ms` : '')
-  const colors = Object.entries(t.vars || {}).map(([k, v]) => `<div class="dvar${anim()}"><span class="sw" style="background:${esc(v)}"></span><div><code>${esc(k.slice(2))}</code><br><small>${esc(v)}</small></div><small>${uses(k.slice(2))}×</small></div>`).join('')
-  const fontRow = (role, name) => `<div class="dvar${anim()}" style="grid-template-columns:44px 1fr auto"><span class="ag" style="font:600 24px/1 '${esc(name)}',serif">Ag</span><div><code>${role}</code><br><small>${esc(name)}</small></div><small>${uses(`font-${role}`)}×</small></div>`
+  const colors = Object.entries(t.vars || {}).map(([k, v]) => `<div class="dvar edit${anim()}" data-var="${esc(k)}" title="Change ${esc(k.slice(2))} on every page"><span class="sw" style="background:${esc(v)}"></span><div><code>${esc(k.slice(2))}</code><br><small>${esc(v)}</small></div><small>${uses(k.slice(2))}×</small></div>`).join('')
+  const fontRow = (role, name) => `<div class="dvar edit${anim()}" data-font="${role}" title="Change the ${role} font" style="grid-template-columns:44px 1fr auto"><span class="ag" style="font:600 24px/1 '${esc(name)}',serif">Ag</span><div><code>${role}</code><br><small>${esc(name)}</small></div><small>${uses(`font-${role}`)}×</small></div>`
   const sizes = {}
   for (const m of texts.matchAll(/(?:^|\s)(?:(?:sm|md|lg|xl):)?text-(xs|sm|base|lg|xl|[2-9]xl)\b/g)) sizes[m[1]] = (sizes[m[1]] || 0) + 1
   const scale = Object.entries(sizes).sort((a, b) => TW_SIZE[b[0]] - TW_SIZE[a[0]]).slice(0, 7).map(([k, n]) => {
     const px = TW_SIZE[k], heading = px >= 24
-    return `<div class="dscale"><code>${k} · ${px}</code><span style="font:${heading ? 600 : 400} ${Math.min(px, 22)}px '${esc(heading ? t.fonts?.heading : t.fonts?.body)}',sans-serif">${heading ? 'Heading' : 'Body text'}</span><small>${n}×</small></div>`
+    return `<div class="dscale edit" data-size="${k}" title="Change every text-${k}"><code>${k} · ${px}</code><span style="font:${heading ? 600 : 400} ${Math.min(px, 22)}px '${esc(heading ? t.fonts?.heading : t.fonts?.body)}',sans-serif">${heading ? 'Heading' : 'Body text'}</span><small>${n}×</small></div>`
   }).join('')
   const html = `${fresh ? '<div class="dsetup">Setting up the design system</div>' : ''}
 <div class="dsec"><h4>${esc(t.name || 'Theme')}<small>${esc(t.direction || '').slice(0, 40)}</small></h4></div>
 <div class="dsec"><h4>Colors<small>${Object.keys(t.vars || {}).length} tokens</small></h4>${colors}</div>
 <div class="dsec"><h4>Typography</h4>${fontRow('heading', t.fonts?.heading || 'Georgia')}${fontRow('body', t.fonts?.body || 'Inter')}</div>
-${scale ? `<div class="dsec"><h4>Type scale<small>used across sections</small></h4>${scale}</div>` : ''}
-<div class="dsec"><h4>Radius</h4><div class="dvar${anim()}" style="grid-template-columns:18px 1fr auto"><span class="sw" style="border-radius:${esc(t.radius || '12px')};border:2px solid var(--accent);background:none"></span><code>radius</code><small>${esc(t.radius || '')} · ${uses('radius')}×</small></div></div>`
+<div class="dsec"><h4>Scale<small>whole site</small></h4><div class="dsteps"><span>Type</span><button data-scale="type:-1" title="Every heading one step smaller">−</button><button data-scale="type:1" title="Every heading one step bigger">+</button><span>Spacing</span><button data-scale="space:-1" title="Tighter spacing everywhere">−</button><button data-scale="space:1" title="Looser spacing everywhere">+</button></div></div>
+${scale ? `<div class="dsec"><h4>Type scale<small>click to remap</small></h4>${scale}</div>` : ''}
+<div class="dsec"><h4>Radius</h4><div class="dvar edit${anim()}" data-radius="" title="Change the radius everywhere" style="grid-template-columns:18px 1fr auto"><span class="sw" style="border-radius:${esc(t.radius || '12px')};border:2px solid var(--accent);background:none"></span><code>radius</code><small>${esc(t.radius || '')} · ${uses('radius')}×</small></div></div>`
   if (html !== design.lastVars) els.dVars.innerHTML = design.lastVars = html
+}
+
+// ---------- editing: people change the design next to the agents
+// Two kinds of edit. Group edits change the design system and so every page at
+// once: a colour token, a font, the radius, one step of the type scale, or the
+// whole type or spacing scale up or down. Section edits change one finished
+// section: padding, gap, direction, alignment, fill, heading size, corners.
+// Each edit is an event saved with the run, so a reopened file replays it.
+
+const CLIENT = Math.random().toString(36).slice(2, 8)
+const SIZES = Object.keys(TW_SIZE)
+const SPACE = ['0', '0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '16', '20', '24', '28', '32', '36', '40', '44', '48', '52', '56', '60', '64', '72', '80', '96']
+const FONTS = ['Inter', 'DM Sans', 'Karla', 'Manrope', 'Space Grotesk', 'IBM Plex Sans', 'Work Sans', 'Syne', 'Fraunces', 'Playfair Display', 'DM Serif Display', 'Instrument Serif', 'Libre Baskerville', 'JetBrains Mono']
+const SIZE_RE = /^text-(xs|sm|base|lg|xl|[2-9]xl)$/
+const SPACE_RE = /^(-?)(p|px|py|pt|pb|pl|pr|gap|gap-x|gap-y|space-y|space-x|mt|mb|my)-([\d.]+)$/
+
+// Rewrite the class tokens of every class attribute in some HTML. `fn` gets the
+// token without its breakpoint prefix and returns a replacement (or the same).
+function mapClasses(html, fn) {
+  return html.replace(/class="([^"]*)"/g, (m, c) => `class="${c.split(/\s+/).map(tok => {
+    const i = tok.lastIndexOf(':')
+    const bp = i < 0 ? '' : tok.slice(0, i)
+    if (!(bp in BP)) return tok
+    const out = fn(tok.slice(i + 1))
+    return out === tok.slice(i + 1) ? tok : out && (bp ? `${bp}:${out}` : out)
+  }).filter(Boolean).join(' ')}"`)
+}
+
+const stepIn = (list, v, d) => list[Math.max(0, Math.min(list.length - 1, list.indexOf(v) + d))]
+
+// Class-level group edits, applied to a layer's HTML.
+function restyle(l, e) {
+  if (!l.text || l.status !== 'done') return
+  let out = l.text
+  if (e.kind === 'size') out = mapClasses(out, t => (t === `text-${e.from}` ? `text-${e.value}` : t))
+  if (e.kind === 'scale' && e.axis === 'type') out = mapClasses(out, t => {
+    const m = t.match(SIZE_RE)
+    return m && TW_SIZE[m[1]] >= 18 ? `text-${stepIn(SIZES, m[1], Number(e.value))}` : t
+  })
+  if (e.kind === 'scale' && e.axis === 'space') out = mapClasses(out, t => {
+    const m = t.match(SPACE_RE)
+    return m && SPACE.includes(m[3]) && m[3] !== '0' ? `${m[1]}${m[2]}-${stepIn(SPACE, m[3], Number(e.value) * 2)}` : t
+  })
+  if (out !== l.text) { l.text = out; l.ver++ }
+}
+
+function setCls(el, drop, add) {
+  if (!el) return
+  const toks = (el.getAttribute('class') || '').split(/\s+/).filter(Boolean).filter(tok => {
+    const i = tok.lastIndexOf(':')
+    return !((i < 0 ? '' : tok.slice(0, i)) in BP && drop.test(tok.slice(i + 1)))
+  })
+  if (add) toks.push(...add.split(' '))
+  el.setAttribute('class', toks.join(' '))
+}
+
+function layoutEl(root) {
+  return [root, ...root.querySelectorAll('*')].slice(0, 8).find(el => /(^|\s)((sm|md|lg|xl):)?(flex|grid|inline-flex)(\s|$)/.test(el.getAttribute('class') || ''))
+}
+
+function editSection(l, prop, v) {
+  const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
+  const root = doc.body.firstElementChild
+  if (!root) return
+  const lay = layoutEl(root)
+  if (prop === 'pad') {
+    // p-N becomes px-N so only the vertical padding changes
+    setCls(root, /^p-/, '')
+    const p = (root.getAttribute('class') || '').match(/(?:^|\s)p-(\S+)/)
+    setCls(root, /^(py|pt|pb)-/, `py-${v}${p ? ` px-${p[1]}` : ''}`)
+  }
+  if (prop === 'gap') setCls(lay, /^gap-/, `gap-${v}`)
+  if (prop === 'dir') {
+    const grid = v.startsWith('grid')
+    setCls(lay, /^(flex|inline-flex|grid|flex-row|flex-col|flex-row-reverse|flex-col-reverse|grid-cols-\S+)$/, grid ? `grid grid-cols-${v.slice(5)}` : `flex flex-${v}`)
+  }
+  if (prop === 'align') setCls(lay, /^items-/, `items-${v}`)
+  if (prop === 'bg') setCls(root, /^bg-(\[(var|#)|white|black|transparent|[a-z]+-\d{2,3})/, v === 'none' ? '' : `bg-[var(--${v})]`)
+  if (prop === 'hsize') {
+    const h = root.querySelector('h1, h2, h3') || [...root.querySelectorAll('[class*="text-"]')].sort((a, b) => sizeOf(b) - sizeOf(a))[0]
+    setCls(h, SIZE_RE, `text-${v}`)
+  }
+  if (prop === 'radius') {
+    for (const el of [root, ...root.querySelectorAll('[class*="rounded"]')]) {
+      if (!/rounded/.test(el.getAttribute('class') || '')) continue
+      setCls(el, /^rounded(-.*)?$/, v === 'theme' ? 'rounded-[var(--radius)]' : v === '' ? 'rounded' : `rounded-${v}`)
+    }
+  }
+  l.text = doc.body.innerHTML
+  l.ver++
+}
+const sizeOf = el => Math.max(0, ...(el.getAttribute('class') || '').split(/\s+/).map(t => TW_SIZE[(t.split(':').pop().match(SIZE_RE) || [])[1]] || 0))
+
+function applyEdit(e) {
+  if (!e.id || S.edits.has(e.id)) return
+  S.edits.add(e.id)
+  const t = S.theme
+  if (e.kind === 'var' && t) t.vars = { ...t.vars, [e.name]: e.value }
+  if (e.kind === 'font' && t) { t.fonts = { ...t.fonts, [e.role]: e.value }; loadThemeFonts(t) }
+  if (e.kind === 'radius' && t) t.radius = e.value
+  if (['var', 'font', 'radius'].includes(e.kind)) { S.frames.forEach(applyTheme); if (t) renderTheme() }
+  if (e.kind === 'size' || e.kind === 'scale') {
+    S.classEdits.push(e)
+    for (const l of S.layers.values()) restyle(l, e)
+  }
+  if (e.kind === 'section') { const l = S.layers.get(e.layer); if (l?.status === 'done') editSection(l, e.prop, e.value) }
+  design.last = design.lastVars = ''
+  design.varsAt = 0
+  if (e.by && e.by !== CLIENT && live(e)) feed(null, `Someone else edited the design: ${describeEdit(e)}`, 'sys')
+}
+
+function describeEdit(e) {
+  return {
+    var: () => `${e.name.slice(2)} → ${e.value}`,
+    font: () => `${e.role} font → ${e.value}`,
+    radius: () => `radius → ${e.value}`,
+    size: () => `every text-${e.from} → text-${e.value}`,
+    scale: () => `${e.axis === 'type' ? 'type scale' : 'spacing'} ${Number(e.value) > 0 ? 'up' : 'down'} a step`,
+    section: () => `${S.layers.get(e.layer)?.role || e.layer}: ${e.prop} → ${e.value}`
+  }[e.kind]?.() || e.kind
+}
+
+const REACT = {
+  var: e => [`ooh, new ${e.name.slice(2)}. matching it`, `${e.value}? bold. I like it`, 'colour change! repainting my bit', 'ok that token just got better'],
+  font: e => [`${e.value}, nice pick`, `switching to ${e.value} 👌`, 'new font, who dis'],
+  radius: () => ['softer corners, noted', 'rounding everything off', 'corner police approve'],
+  size: () => ['type scale changed, adjusting', 'bigger text, love it', 'noted, using the new size'],
+  scale: e => [e.axis === 'type' ? 'headings got louder 📣' : 'more breathing room, nice', 'whole system shifted, on it', 'scale change! everyone re-check your sections'],
+  section: () => ['hey, that\'s my section 👀', 'oh nice tweak', 'ok fine, that does look better']
+}
+
+// A person's edit: apply it here, save it, and let an agent react.
+async function commitEdit(edit) {
+  const run = viewing && viewing !== 'new' ? viewing : S.run
+  if (!run) return
+  const e = { ...edit, id: `${CLIENT}${Date.now().toString(36)}`, by: CLIENT, t: Date.now() }
+  applyEdit(e)
+  feed(null, `You edited the design: ${describeEdit(e)}`, 'sys')
+  const owner = e.kind === 'section' && S.agents.get(S.layers.get(e.layer)?.agent)
+  const a = owner || pick([...S.agents.values()].filter(x => x.layer) .concat([...S.agents.values()]))
+  if (a) setTimeout(() => say(a, pick(REACT[e.kind](e))), 500)
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/edit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(e) }).catch(() => null)
+  if (!res?.ok) feed(null, 'That edit is shown here but could not be saved with the file.', 'err')
+}
+
+// One small menu for every editable value, Figma style.
+const picker = { el: null }
+function openPicker(anchor, options, current, onPick) {
+  closePicker()
+  const el = document.createElement('div')
+  el.className = 'dpick'
+  for (const o of options) {
+    const b = document.createElement('button')
+    b.className = o.value === current ? 'on' : ''
+    b.innerHTML = `${o.swatch ? `<span class="sw" style="background:${esc(o.swatch)}"></span>` : ''}<span style="${o.style || ''}">${esc(o.label)}</span>${o.note ? `<small>${esc(o.note)}</small>` : ''}`
+    b.onclick = ev => { ev.stopPropagation(); closePicker(); if (o.value !== current) onPick(o.value) }
+    el.append(b)
+  }
+  document.body.append(el)
+  const r = anchor.getBoundingClientRect()
+  el.style.left = `${Math.max(8, Math.min(innerWidth - 228, r.left))}px`
+  el.style.top = `${Math.min(r.bottom + 4, innerHeight - el.offsetHeight - 8)}px`
+  picker.el = el
+}
+function closePicker() { picker.el?.remove(); picker.el = null }
+document.addEventListener('mousedown', e => { if (picker.el && !picker.el.contains(e.target)) closePicker() })
+window.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker() })
+
+const px = v => `${space(v)}px`
+const SECTION_OPTIONS = {
+  pad: () => ['0', '4', '8', '12', '16', '20', '24', '32'].map(v => ({ value: v, label: `${px(v)} top & bottom` })),
+  gap: () => ['0', '2', '4', '6', '8', '10', '12', '16'].map(v => ({ value: v, label: px(v) })),
+  dir: () => [['col', '↓ Vertical'], ['row', '→ Horizontal'], ['grid-2', '▦ Grid · 2 cols'], ['grid-3', '▦ Grid · 3 cols'], ['grid-4', '▦ Grid · 4 cols']].map(([value, label]) => ({ value, label })),
+  align: () => ['start', 'center', 'end', 'stretch'].map(v => ({ value: v, label: v })),
+  bg: () => [{ value: 'none', label: 'no fill' }, ...Object.entries(S.theme?.vars || {}).map(([k, v]) => ({ value: k.slice(2), label: k.slice(2), swatch: v }))],
+  hsize: () => ['2xl', '3xl', '4xl', '5xl', '6xl', '7xl'].map(v => ({ value: v, label: `${TW_SIZE[v]}px`, note: `text-${v}` })),
+  radius: () => [['none', 'square'], ['md', '6px'], ['xl', '12px'], ['2xl', '16px'], ['3xl', '24px'], ['full', 'pill'], ['theme', `theme radius · ${S.theme?.radius || ''}`]].map(([value, label]) => ({ value, label }))
+}
+
+els.dDesign.addEventListener('click', e => {
+  const v = e.target.closest('[data-edit]')
+  const l = design.layer && S.layers.get(design.layer)
+  if (!v || !l || l.status !== 'done') return
+  const prop = v.dataset.edit
+  openPicker(v, SECTION_OPTIONS[prop](), null, value => commitEdit({ kind: 'section', layer: l.key, prop, value }))
+})
+
+const colorInput = Object.assign(document.createElement('input'), { type: 'color', className: 'dcolor' })
+document.body.append(colorInput)
+let colorEdit = null
+colorInput.addEventListener('input', () => {
+  // preview while dragging in the colour picker, save when it settles
+  if (!colorEdit || !S.theme) return
+  S.theme.vars = { ...S.theme.vars, [colorEdit]: colorInput.value }
+  S.frames.forEach(applyTheme)
+  clearTimeout(colorInput.timer)
+  colorInput.timer = setTimeout(() => commitEdit({ kind: 'var', name: colorEdit, value: colorInput.value }), 450)
+})
+
+els.dVars.addEventListener('click', e => {
+  const t = S.theme
+  if (!t || !S.run) return
+  const el = e.target.closest('[data-var], [data-font], [data-radius], [data-size], [data-scale]')
+  if (!el) return
+  if (el.dataset.var) {
+    colorEdit = el.dataset.var
+    const v = t.vars[colorEdit] || '#000000'
+    colorInput.value = /^#[0-9a-f]{6}$/i.test(v) ? v : '#000000'
+    const r = el.getBoundingClientRect()
+    colorInput.style.left = `${r.left}px`
+    colorInput.style.top = `${r.bottom}px`
+    colorInput.showPicker ? colorInput.showPicker() : colorInput.click()
+  } else if (el.dataset.font) {
+    const role = el.dataset.font
+    loadPickerFonts()
+    openPicker(el, FONTS.map(f => ({ value: f, label: f, style: `font-family:'${f}';font-size:14px` })), t.fonts?.[role], value => commitEdit({ kind: 'font', role, value }))
+  } else if (el.dataset.radius !== undefined) {
+    openPicker(el, ['0px', '4px', '8px', '12px', '16px', '24px', '999px'].map(v => ({ value: v, label: v === '999px' ? 'pill' : v })), t.radius, value => commitEdit({ kind: 'radius', value }))
+  } else if (el.dataset.size) {
+    const from = el.dataset.size
+    openPicker(el, SIZES.filter(k => k !== from).map(k => ({ value: k, label: `${TW_SIZE[k]}px`, note: `text-${k}` })), null, value => commitEdit({ kind: 'size', from, value }))
+  } else if (el.dataset.scale) {
+    const [axis, value] = el.dataset.scale.split(':')
+    commitEdit({ kind: 'scale', axis, value })
+  }
+})
+
+function loadPickerFonts() {
+  if ($('#picker-fonts')) return
+  const link = Object.assign(document.createElement('link'), { id: 'picker-fonts', rel: 'stylesheet' })
+  link.href = `https://fonts.googleapis.com/css2?${FONTS.map(f => `family=${encodeURIComponent(f).replace(/%20/g, '+')}`).join('&')}&display=swap`
+  document.head.append(link)
+}
+
+// Click a section on the canvas to select it; click empty canvas to let go.
+function selectAt(f, x, y) {
+  const hit = Object.entries(f.geo.slots).find(([, g]) => { const [l, t, w, h] = g.box; return x >= l && x <= l + w && y >= t && y <= t + h })
+  S.sel = hit ? hit[0] : null
+  design.pinned = null
+  if (S.sel && design.tab !== 'design') { design.tabPinned = true; showDtab('design') }
+  design.last = ''
+}
+
+function drawSelBox() {
+  let box = $('#selbox')
+  const l = S.sel && S.layers.get(S.sel)
+  const s = l && slotFor(l)
+  if (!s) { if (box && !box.hidden) box.hidden = true; return }
+  if (!box) { box = Object.assign(document.createElement('div'), { id: 'selbox', className: 'selbox' }); $('#ghosts').append(box) }
+  if (box.hidden) box.hidden = false
+  Object.assign(box.style, { left: `${s.f.x + s.box.left}px`, top: `${s.box.top}px`, width: `${s.box.width}px`, height: `${s.box.height}px`, borderWidth: `${2 / cam.s}px` })
 }
 
 // ---------- side tabs and floating panels

@@ -116,6 +116,15 @@ function readEvents(id) {
   })
 }
 
+const EDIT_KINDS = new Set(['var', 'font', 'radius', 'size', 'scale', 'section'])
+const safe = (v, n) => typeof v === 'string' && v.length <= n && !/[<>{};"\\]/.test(v)
+function checkEdit(e) {
+  if (!EDIT_KINDS.has(e.kind) || !safe(e.id, 24) || !safe(e.value, 60)) return null
+  for (const k of ['name', 'role', 'from', 'axis', 'layer', 'prop', 'by']) if (e[k] !== undefined && !safe(e[k], 120)) return null
+  const keep = ['kind', 'id', 'value', 'name', 'role', 'from', 'axis', 'layer', 'prop', 'by']
+  return Object.fromEntries(keep.filter(k => e[k] !== undefined).map(k => [k, e[k]]))
+}
+
 function listRuns() {
   if (!existsSync(runsDir)) return []
   return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 60).flatMap(id => {
@@ -260,6 +269,32 @@ const server = createServer((req, res) => {
       return
     }
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(events))
+    return
+  }
+
+  // A person's edit in the Design panel: saved with the run so it replays when the
+  // file is reopened, and broadcast so every open canvas applies it.
+  const runEdit = url.pathname.match(/^\/api\/runs\/([^/]+)\/edit$/)
+  if (runEdit && req.method === 'POST' && RUN_ID.test(runEdit[1])) {
+    let body = ''
+    req.on('data', c => (body += c))
+    req.on('end', () => {
+      let input = {}
+      try {
+        input = JSON.parse(body || '{}')
+      } catch {}
+      const edit = checkEdit(input)
+      const file = join(runsDir, runEdit[1], 'events.jsonl')
+      if (!edit || !existsSync(file)) {
+        res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: edit ? 'no such run' : 'bad edit' }))
+        return
+      }
+      const event = { type: 'edit', t: Date.now(), run: runEdit[1], ...edit }
+      appendFileSync(file, JSON.stringify(event) + '\n')
+      if (current?.id === runEdit[1]) current.events.push(event)
+      broadcast(event)
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }))
+    })
     return
   }
 
