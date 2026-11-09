@@ -174,10 +174,18 @@ export async function publishVercel({ dir, name, creds, dataDir, onStage = () =>
     d = (await api(`/v13/deployments/${dep.body.id}`)).body || d
   }
   if (d.readyState !== 'READY') throw new Error(`Vercel deployment ${String(d.readyState || 'timed out').toLowerCase()}`)
-  // the production domain is public; the per-deployment URL may sit behind Vercel's login
-  const prod = (d.alias || []).filter(a => a.endsWith('.vercel.app')).sort((a, b) => a.length - b.length)[0]
-  const url = `https://${prod || d.url}/`
-  return { url, repo: `vercel:${project}`, pending: !(await live(url, 60000)) }
+  // The project's own <name>.vercel.app is public. Team and per-deployment
+  // addresses may sit behind Vercel's login, and the project alias can be
+  // assigned a moment after the deployment is ready, so wait for it briefly.
+  const pub = `${project}.vercel.app`
+  for (let i = 0; i < 6 && !(d.alias || []).includes(pub); i++) {
+    await wait(2500)
+    d = (await api(`/v13/deployments/${dep.body.id}`)).body || d
+  }
+  const names = [...new Set([pub, ...(d.alias || []).filter(a => a.endsWith('.vercel.app')).sort((a, b) => a.length - b.length), d.url].filter(Boolean))]
+  let url = null
+  for (const n of names) if (await live(`https://${n}/`, 15000)) { url = `https://${n}/`; break }
+  return { url: url || `https://${pub}/`, repo: `vercel:${project}`, pending: !url }
 }
 
 // ---------- Cloudflare Pages: direct upload, the way wrangler does it, without wrangler.
