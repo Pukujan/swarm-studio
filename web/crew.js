@@ -7,10 +7,10 @@
 // mouth that moves while it talks (.talking), a hop when done (.hop).
 ;(function () {
   // Star-like crew names, original and easy to say. The colour slot is a name's place in
-  // this list, so the engine's list (engine/run.mjs AGENT_NAMES) should use the same order;
+  // this list, and it is the engine's list (engine/run.mjs AGENT_NAMES) in the same order;
   // any other name still gets a stable colour from its hash.
-  const NAMES = ['Mochi', 'Lumi', 'Zuzu', 'Tofu', 'Pebble', 'Comet', 'Miso', 'Orbi', 'Puff', 'Tiko', 'Wisp', 'Yuzu',
-    'Nib', 'Quark', 'Sprout', 'Bixi', 'Fizz', 'Glim', 'Hoku', 'Jelli', 'Nubi', 'Pim', 'Ripple', 'Sola']
+  const NAMES = ['Pip', 'Mochi', 'Lumi', 'Nova', 'Zuzu', 'Bean', 'Kiki', 'Tofu', 'Pebble', 'Juno', 'Comet', 'Dot',
+    'Orbi', 'Twinkle', 'Bloop', 'Sprout', 'Nim', 'Puff', 'Gizmo', 'Luma', 'Taro', 'Echo', 'Bix', 'Vela']
   // the F2 palette (spec 08); the tenth is the off-white minion with a Hermes-blue visor
   const F2 = ['#F20000', '#F27900', '#F2F200', '#79F200', '#00F279', '#00F2F2', '#7900F2', '#F200F2', '#F20079', '#F2F2F2']
   const INK = '#05051a', WHITE = '#F2F2F2', BLUE = '#0000F2'

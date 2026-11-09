@@ -80,7 +80,7 @@ A small "Built for Hermes Agent" line in the footer and the README is fine.
 ## The crew (the agents)
 
 - **Who they are:** cute alien minion workers who came with Hermia from beyond the galaxy. Each is a round blob body in a soft tint of the agent's colour, with antennae, one or two big goggle eyes on a visor strap in the agent's colour, and tiny ankle wings (Hermes' winged sandals).
-- **Names:** short, original, star-like and easy to say (Mochi, Lumi, Zuzu, Tofu, Pebble, Comet, Miso, Orbi, …), never characters from existing shows. The list lives in `web/crew.js`; a name's place in it picks its F2 colour, so the engine's list (`engine/run.mjs`) should use the same order.
+- **Names:** short, original, star-like and easy to say (Pip, Mochi, Lumi, Nova, Zuzu, Tofu, Pebble, Comet, …), never characters from existing shows. The list lives in `engine/run.mjs` (`AGENT_NAMES`) and, in the same order, in `web/crew.js`; a name's place in it picks its F2 colour.
 - **Avatars:** SVG, generated in code from the agent's name, so they stay consistent at any size:
   - the body colour is from the F2 palette;
   - the goggles (two eyes or one big one), antenna style and one accessory (none, a tool belt, a scarf, overall straps) are picked by a seed;

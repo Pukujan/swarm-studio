@@ -4309,7 +4309,7 @@ $('#dock-hide')?.addEventListener('click', () => setBreakroom(false))
 
 // ---------- crews: while an app or game builds, a game spec is written or a video
 // renders, a few agents work over that screen, each on one real step at a time.
-const CREW_NAMES = (Crew.NAMES || ['Mochi', 'Lumi', 'Zuzu', 'Tofu']).slice(0, 4).map(n => [n, Crew.color(n)])
+const CREW_NAMES = (Crew.NAMES || ['Pip', 'Mochi', 'Lumi', 'Nova']).slice(0, 4).map(n => [n, Crew.color(n)])
 const crewLayer = document.createElement('div')
 crewLayer.className = 'crew-layer'
 document.body.append(crewLayer)
@@ -4758,7 +4758,7 @@ function codeWall() {
   planEl.hidden = !plan
   if (plan) {
     const acts = radioOn() ? [...radio.acts.entries()].filter(([, x]) => heardIn(x, 60000)).sort((x, y) => y[1].t - x[1].t) : []
-    const name = acts[0]?.[0] || names[0]?.[0] || 'Mochi', age = clock(Date.now() - plan.since)
+    const name = acts[0]?.[0] || names[0]?.[0] || 'Pip', age = clock(Date.now() - plan.since)
     const key = `${name}|${plan.turn}|${plan.tokens}|${plan.files.join()}`
     if (cw.planKey !== key) {
       cw.planKey = key
