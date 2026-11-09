@@ -1,0 +1,106 @@
+# UI and UX rules
+
+Every screen, dialog, menu and control in Swarm Studio and Swarm Feed follows these rules. They exist because
+the owner found the same mistakes again and again (2026-11-09, see [REQUIREMENTS.md](REQUIREMENTS.md)): text
+everywhere, too many buttons, duplicate ways to do one thing, controls that don't look clickable, checkboxes far
+from their labels, panels that won't close, no way back home.
+
+Read this file, [AUDIENCE.md](AUDIENCE.md) and [INVENTORY.md](INVENTORY.md) before changing any UI. Run the
+checklist at the end before opening a PR.
+
+## Where the rules come from
+
+We don't invent UX from scratch. These rules apply well-known guides to our app:
+
+- **Apple Human Interface Guidelines**: *deference* (the content leads, the controls step back), *clarity*,
+  *depth*, and progressive disclosure.
+- **Nielsen Norman Group's 10 usability heuristics**: visibility of state, match with the real world, user
+  control (undo, exit), consistency, recognition over recall, minimalist design, and helping people recover
+  from errors.
+- **Laws of UX**: Hick (more choices, slower decisions), Fitts (big, near targets), Jakob (people expect your
+  app to work like the ones they know), Tesler (complexity has to live somewhere, so put it in the app, not on
+  the user), Doherty (answer in under 400 ms).
+- **Refactoring UI**: create hierarchy by turning down what is secondary, not by turning up everything else.
+- **WCAG 2.2**: contrast, target size, visible focus, keyboard access.
+- **shadcn/ui**: the component anatomy we build on (see rule 13).
+- **How Google Maps and Apple Maps handle a complex app**: the map is the whole screen, there's one search box,
+  modes only appear once you ask (driving, walking, transit), labels appear as you zoom in, and a sheet peeks,
+  then expands, when you pick a place. Controls appear only when they're needed (the compass shows once you
+  rotate). Figma, Linear and Stripe add two more patterns: an inspector that only shows the selected thing, and
+  ⌘K for everything else.
+
+## A. Structure
+
+1. **One front door.** One input starts every kind of build. Inside a build, the same input is the chat. No
+   second form, wizard or chat box that also starts or steers a build.
+2. **Layers.** 0 Galaxy → 1 Start → 2 Orbit → 3 Room → 4 Details. Each layer shows only what that layer needs.
+   You go deeper by clicking the thing itself, not through a menu.
+3. **A budget per layer.** At rest a screen shows at most 1 primary action, 3 secondary actions and 4 small
+   edge icons. Everything else comes from expanding, selecting or ⌘K.
+4. **Every control lives in exactly one place.** One chat, one sound control, one way to start a game, one
+   publish menu. Before adding a control, look it up in INVENTORY.md.
+5. **Places, actions and settings never share a menu.** Places are stations and rooms (you go there). Actions
+   live inside the place they act on (Export in the Design deck, Cut in the Film studio). Settings live in one
+   ⚙ menu.
+6. **The lens decides what exists.** A station or tool the current lens doesn't use is not shown at all, rather
+   than disabled or greyed out (see AUDIENCE.md).
+7. **Always a way home.** A breadcrumb (`Galaxy › build › room`), the logo goes to the galaxy, and Esc goes up
+   one level. You can always tell where you are.
+
+## B. Text
+
+8. **At rest, names only.** No sentences on screen by default. Input placeholders are 6 words at most.
+9. **Explanations wait to be asked for.** Put them in a hover tooltip (about 500 ms delay, one short sentence)
+   or in an expanded sheet. Tooltips are for icon-only buttons and names that need a gloss, not for everything.
+10. **Errors are a marker first.** A ⚠ on the thing that failed; the message once you open it; raw errors, JSON
+    and stacks only behind "Details".
+11. **One big heading per screen at most.** Use the display font only there. No paragraphs in capitals.
+12. **States, not prose.** "3/8", a ring or a coloured dot. Every dot, count and badge explains itself on hover.
+    An indicator nobody can read is a bug.
+
+## C. Controls
+
+13. **Build from the kit.** Use the shadcn-style components only: Button, Card, Dialog, Sheet, Popover,
+    Tooltip, Tabs, Toggle group, Checkbox, Switch, Label, Input, Textarea, Select, Slider, Progress, Badge,
+    Separator, Command (⌘K). No one-off form controls.
+14. **Checkboxes and switches sit beside their label** in one row (`[☐] Label`), and clicking the label toggles
+    them.
+15. **Clickable things look clickable, and other things don't.** One style per role: primary, secondary, ghost,
+    icon. In a menu, every item has an icon or none do. Menu headings look like headings and don't react to
+    hover.
+16. **Targets are at least 40 × 40 px** on desktop and 44 × 44 px on touch.
+17. **One primary action per view**, always in the same place. Text on yellow is dark.
+18. **Every panel closes three ways:** ×, Esc, and a click outside it. Only one panel is open at a time.
+19. **Progress is a pill or ring that expands.** A step list is never shown by default.
+
+## D. Space and motion
+
+20. **The canvas is the content.** Controls float at the edges, small and translucent. At rest, no more than
+    about a quarter of the space view is covered.
+21. **Nothing overlaps.** Bars, pills, panels and stations each keep their own zone at every width.
+22. **Direct manipulation.** Drag turns the view, the wheel or a pinch zooms, a click selects, and a double-click
+    or Enter goes in. A recentre button appears only after you've moved.
+23. **Motion explains change.** Zoom in when you enter, out when you leave. UI motion takes 300 ms at most and
+    respects reduced-motion settings.
+24. **The crew is alive but quiet.** Hermia and the minions fly and work. Their speech bubbles are off until
+    you open the crew radio.
+
+## E. Sizes and access
+
+25. **Desktop first.** Design for 1440, 1280 and 1024 wide. At 768 and 390 it still works: things stack and
+    nothing scrolls sideways.
+26. **Contrast** is at least 4.5:1 for text and 3:1 for UI parts. A visible focus ring, everything reachable by
+    keyboard, and every action reachable from ⌘K.
+
+## Checklist before any UI PR
+
+- [ ] Each screen you touched fits rule 3's budget (count the visible actions at rest).
+- [ ] No helper sentence is visible by default (rule 8).
+- [ ] No new duplicate control; INVENTORY.md is updated with each new or moved control's layer and lens.
+- [ ] Only kit components; checkboxes sit beside their labels.
+- [ ] Every new panel closes with ×, Esc and an outside click; the logo and Esc take you home from every view.
+- [ ] `node scripts/ui-check.mjs` passes (overlaps, clickability, closing, way home, no sideways scroll).
+- [ ] `node scripts/ui-review.mjs` passes: the studio's own design review (`engine/review.mjs`) finds no real
+      issue on the screens you touched.
+- [ ] You looked at the 1280 and 768 screenshots yourself, and the PR shows before and after.
+- [ ] You walked the main flow of each lens your change touches, end to end.
