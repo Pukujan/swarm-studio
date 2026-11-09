@@ -3822,7 +3822,7 @@ commandOps.view = c => setView(c.view)
 // fills the rest), then the spec card, then the build in the App view.
 const game = { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false }
 async function openGame(idea = '', answers = null, build = false) {
-  if (!game.questions) game.questions = (await api('/api/game').then(r => r.json()).catch(() => ({}))).questions || []
+  if (!game.questions?.length) game.questions = (await api('/api/game').then(r => r.ok ? r.json() : {}).catch(() => ({}))).questions || []
   Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false })
   game.el?.remove()
   game.el = document.createElement('div')
@@ -3839,7 +3839,9 @@ function renderGame() {
   const qs = game.questions, q = qs[game.i]
   const dots = qs.map((_, i) => `<i class="${i < game.i ? 'done' : i === game.i ? 'on' : ''}"></i>`).join('')
   const head = `<div class="ghead"><b>🎮 New game</b><button class="gclose" title="Close">×</button></div>`
-  if (game.busy) {
+  if (!qs.length) {
+    el.innerHTML = `${head}<div class="gbody"><p>Game mode isn't loaded on this server yet. Restart Swarm Studio (<code>hermes swarm</code>) and try again.</p></div>`
+  } else if (game.busy) {
     el.innerHTML = `${head}<div class="gbody"><div class="spin"></div><p>${esc(game.busy)}</p></div>`
   } else if (game.spec) {
     const s = game.spec, list = v => (Array.isArray(v) ? v.join(', ') : v || '')
@@ -3906,6 +3908,7 @@ async function gameBuild() {
 }
 
 $('#game-btn').onclick = () => openGame()
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && game.el && !game.busy) closeGame() })
 commandOps.game = c => openGame(c.idea || '', c.answers || null, !!c.build)
 
 // ---------- start
