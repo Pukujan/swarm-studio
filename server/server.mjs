@@ -8,7 +8,7 @@
 
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync } from 'node:fs'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { providerFromEnv } from '../engine/llm.mjs'
@@ -76,6 +76,38 @@ function startRun({ brief, agents }) {
   return run
 }
 
+// Saved runs are the studio's files: each one reopens as its own canvas.
+const RUN_ID = /^[\w-]{1,64}$/
+function readEvents(id) {
+  const file = join(runsDir, id, 'events.jsonl')
+  if (!RUN_ID.test(id) || !existsSync(file)) return null
+  return readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap(line => {
+    try { return [JSON.parse(line)] } catch { return [] }
+  })
+}
+
+function listRuns() {
+  if (!existsSync(runsDir)) return []
+  return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 60).flatMap(id => {
+    const events = readEvents(id)
+    const start = events?.find(e => e.type === 'run:start')
+    if (!start) return []
+    const pages = events.filter(e => e.type === 'page')
+    const done = events.find(e => e.type === 'run:done')
+    return [{
+      id,
+      title: pages[0]?.title || start.brief.slice(0, 60),
+      brief: start.brief,
+      t: start.t,
+      pages: pages.length,
+      layers: done?.done ?? events.filter(e => e.type === 'layer:done').length,
+      ms: done?.ms ?? null,
+      live: current?.id === id && !current.done,
+      preview: events.some(e => e.type === 'layer:done' && e.html)
+    }]
+  })
+}
+
 function tokenOk(given) {
   const a = Buffer.from(String(given || ''))
   const b = Buffer.from(token)
@@ -135,7 +167,11 @@ const server = createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
     res.write(': hello\n\n')
     // Late joiners replay the current run so the canvas can always rebuild itself.
-    for (const e of current?.events || []) res.write(`data: ${JSON.stringify(e)}\n\n`)
+    // A finished run skips the streaming deltas: each layer:done carries its final HTML.
+    for (const e of current?.events || []) {
+      if (current.done && e.type.endsWith(':delta')) continue
+      res.write(`data: ${JSON.stringify(e)}\n\n`)
+    }
     clients.add(res)
     req.on('close', () => clients.delete(res))
     return
@@ -157,6 +193,22 @@ const server = createServer((req, res) => {
       broadcast({ type: 'reset', run: run.id })
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id }))
     })
+    return
+  }
+
+  if (url.pathname === '/api/runs') {
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(listRuns()))
+    return
+  }
+
+  const runEvents = url.pathname.match(/^\/api\/runs\/([^/]+)\/events$/)
+  if (runEvents) {
+    const events = readEvents(runEvents[1])
+    if (!events) {
+      res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no such run' }))
+      return
+    }
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(events))
     return
   }
 

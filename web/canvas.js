@@ -13,7 +13,14 @@ const els = {
   viewport: $('#viewport'), world: $('#world'), wires: $('#wires'), cursors: $('#cursors'), toolbar: $('#toolbar'),
   status: $('#status'), camHint: $('#camera-hint'), timer: $('#timer'), plan: $('#plan-stream'), planState: $('#plan-state'),
   theme: $('#theme'), tree: $('#tree'), agents: $('#agents-list'), agentCount: $('#agent-count'), feed: $('#feed'),
-  form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents')
+  form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
+  newFile: $('#new-file'), fileName: $('#file-name')
+}
+const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
+// Per-viewer UI memory. Storage throws inside the Desktop pane's opaque origin, so it is optional.
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(`swarm.${k}`)) ?? d } catch { return d } },
+  set(k, v) { try { localStorage.setItem(`swarm.${k}`, JSON.stringify(v)) } catch {} }
 }
 
 const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
@@ -33,13 +40,24 @@ let S
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
 function fresh(run = null) {
-  S = { run, t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null }
+  S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0 }
+  banter.queue = []
   els.world.innerHTML = ''
   els.cursors.innerHTML = ''
   els.wires.innerHTML = ''
   els.feed.innerHTML = ''
   els.theme.innerHTML = ''
+  els.plan.textContent = ''
+  els.timer.textContent = '00.0s'
   els.planState.textContent = run ? 'planning' : 'idle'
+  els.dock.hidden = true
+  setTitle('')
+}
+
+function setTitle(t) {
+  S.title = t
+  els.fileName.textContent = t || 'Untitled'
+  document.title = t ? `${t} · Swarm Studio` : 'Swarm Studio'
 }
 
 // ---------- events
@@ -52,10 +70,11 @@ function on(e) {
     case 'run:start':
       fresh(e.run)
       S.t0 = e.t
-      els.brief.value = e.brief
-      els.agentsSel.value = String(e.agents.length)
+      if (!viewing) els.agentsSel.value = String(e.agents.length)
       for (const a of e.agents) addAgent(a)
-      feed(null, `Brief: ${e.brief}`, 'sys')
+      setTitle(e.brief.slice(0, 60))
+      feed(null, e.brief, 'you')
+      if (!viewing) loadFiles()
       break
     case 'plan:delta': {
       const k = e.page || 'sitemap'
@@ -82,6 +101,7 @@ function on(e) {
       break
     case 'page':
       addFrame(e)
+      if (e.index === 0) setTitle(e.title)
       break
     case 'layer:plan':
       addLayer(e)
@@ -112,10 +132,8 @@ function on(e) {
     case 'agent:say': {
       const a = S.agents.get(e.agent)
       if (!a) break
-      a.say = e.text
-      a.sayUntil = performance.now() + 2800
-      a.bubble.innerHTML = `<span></span>`
-      a.bubble.firstChild.textContent = e.text
+      // replays (a reopened file, a late join) go to the feed without a burst of bubbles
+      if (Date.now() - e.t < 5000) say(a, e.text)
       setTool(a, 'comment', 450)
       feed(a, e.text, '', e.layer)
       break
@@ -125,6 +143,8 @@ function on(e) {
       if (!l) break
       l.status = 'done'
       l.ms = e.ms
+      // saved runs carry the finished HTML, so a file can be reopened without the stream
+      if (e.html) { l.text = e.html; l.ver++ }
       S.done = e.done
       S.treeDirty = true
       const a = S.agents.get(e.agent)
@@ -148,6 +168,7 @@ function on(e) {
       S.tEnd = e.t
       feed(null, `Done: ${e.done}/${e.planned} layers across ${e.pages} pages in ${(e.ms / 1000).toFixed(1)}s${e.failed ? `, ${e.failed} failed` : ''}`, 'sys')
       els.planState.textContent = 'done'
+      if (!viewing) { S.cheerUntil = performance.now() + 9000; banter.next = 0; loadFiles() }
       break
     case 'error':
       feed(null, `${e.where}: ${e.message}`, 'err')
@@ -164,13 +185,23 @@ function addAgent(a) {
   el.className = 'cursor idle'
   el.innerHTML = `${ARROW(a.color)}<div class="tag" style="background:${a.color}">${TOOL.move.svg}<span>${a.name}</span></div><div class="bubble" style="color:${a.color}"></div>`
   els.cursors.append(el)
-  const vw = els.viewport.clientWidth
+  const seat = S.agents.size
+  const c = dockCell(seat)
   const agent = {
     ...a, el, tagIcon: el.querySelector('.tag svg'), bubble: el.querySelector('.bubble'),
     layer: null, idle: true, tool: 'move', toolUntil: 0, sayUntil: 0, assignedAt: 0,
-    wx: (vw / 2 - cam.x) / cam.s + (Math.random() - 0.5) * 2000, wy: (300 - cam.y) / cam.s + (Math.random() - 0.5) * 800
+    seat, docked: true, sx: c.x + (Math.random() - 0.5) * 80, sy: c.y - 40 - Math.random() * 60, wx: 0, wy: 0
   }
   S.agents.set(a.id, agent)
+  const rows = Math.ceil(S.agents.size / DOCK.cols)
+  els.dock.style.height = `${DOCK.top + rows * DOCK.ch + 22}px`
+  els.dock.hidden = false
+}
+
+function say(a, text, ms = 2800) {
+  a.bubble.innerHTML = `<span></span>`
+  a.bubble.firstChild.textContent = text
+  a.sayUntil = performance.now() + ms
 }
 
 function setTool(a, tool, holdMs = 0) {
@@ -212,7 +243,7 @@ function addFrame(p) {
   const x = p.index * (FRAME_W + GAP)
   el.style.left = `${x}px`
   el.innerHTML = `<div class="frame-label"></div><iframe title=""></iframe>`
-  el.querySelector('.frame-label').textContent = p.title
+  el.querySelector('.frame-label').textContent = `Page ${p.index + 1} · ${p.title}`
   el.querySelector('.frame-label').insertAdjacentHTML('beforeend', `<small>/${p.id}</small>`)
   const iframe = el.querySelector('iframe')
   iframe.title = p.title
@@ -335,13 +366,62 @@ function agentTarget(a, now) {
   return { x: s.f.x + s.last[0], y: s.last[1] - 6 }
 }
 
-// Idle agents wait on a bench left of the first page instead of floating around.
-function benchSpot(a) {
-  if (a.layer || now() < a.toolUntil || !S.frames.length) return null
-  const i = [...S.agents.keys()].indexOf(a.id)
-  return { x: -520 + (i % 2) * 260, y: 120 + Math.floor(i / 2) * 150 }
+// ---------- the break room
+// Idle cursors leave the canvas for a dock in screen space, each in its own seat,
+// and pass the time with canned banter. None of this goes to the chat feed.
+
+const DOCK = { cols: 4, cw: 58, ch: 26, top: 32, left: 14 }
+const dockCell = i => ({
+  x: els.dock.offsetLeft + DOCK.left + (i % DOCK.cols) * DOCK.cw,
+  y: els.dock.offsetTop + DOCK.top + Math.floor(i / DOCK.cols) * DOCK.ch
+})
+
+const QUIPS = [
+  '☕ third coffee. still not a designer.', 'who keeps putting Comic Sans in the drafts', 'I could have done that hero in 4 tokens',
+  '😴', 'is it lunch? it feels like lunch', 'pixel-perfect. emotionally, not literally', '🫠 the padding haunts me',
+  'rate my last section 1–10. wrong, it\'s 11', 'did someone say "make the logo bigger"?', 'my gradients have gradients',
+  '🤖 beep. boop. kerning.', 'if you need me I\'ll be in the margins', '😤 someone renamed my div "div2"',
+  'manifesting a client who says "ship it"', '🧘 centering a div. spiritually.', 'I\'m not idle, I\'m load-balancing'
+]
+const FIGHTS = [
+  [[0, '{b}, your footer is 40% links'], [1, 'and 100% load-bearing']],
+  [[0, 'who put the CTA below the fold'], [1, 'it\'s called suspense, {a}']],
+  [[0, 'dibs on the next hero section'], [1, 'you can\'t dibs a queue, {a}'], [0, 'watch me']],
+  [[0, '{b}, I saw you use #000000'], [1, 'it\'s "near black"'], [0, 'it\'s literally black']],
+  [[0, 'rock paper scissors for the pricing page?'], [1, '✊'], [0, '✋ ha'], [1, 'best of three 😠']],
+  [[0, 'nice gradient, {b}'], [1, 'thanks, it\'s sarcasm-proof'], [0, 'it isn\'t']],
+  [[0, '{b} stop stealing my padding'], [1, 'it was 1rem, it\'s anyone\'s']],
+  [[0, 'the planner gave me SIX testimonials'], [1, 'cry me a footer, {a}']],
+  [[0, '⚔️ tabs vs spaces, {b}. now.'], [1, 'Tailwind. there are no spaces.'], [0, '...fair']],
+  [[0, 'who tells the planner the brief said "minimal"'], [1, 'not it'], [0, 'not it'], [1, '😶']]
+]
+const CHEERS = ['🎉 shipped!', 'ship it ship it ship it', '🥳 all green', 'that\'s a wrap, folks', '📸 screenshot it before anyone changes it']
+const HIGH_FIVES = [[[0, 'high five, {b}'], [1, '✋ (missed)'], [0, 'we don\'t talk about that']]]
+
+const banter = { next: 0, queue: [] }
+const pick = list => list[Math.floor(Math.random() * list.length)]
+
+function runBanter(now) {
+  for (const b of banter.queue) {
+    if (b.at > now || b.said) continue
+    b.said = true
+    if (!b.agent.docked) continue
+    for (const a of S.agents.values()) if (a.docked) a.sayUntil = 0
+    say(b.agent, b.text, 1500 + b.text.length * 35)
+  }
+  banter.queue = banter.queue.filter(b => !b.said)
+  if (banter.queue.length || now < banter.next) return
+  const cheering = now < S.cheerUntil
+  banter.next = now + (cheering ? 900 : 2500) + Math.random() * 2500
+  const idle = [...S.agents.values()].filter(a => a.docked && now > a.sayUntil)
+  if (!idle.length) return
+  const a = pick(idle), b = pick(idle.filter(x => x !== a))
+  const script = b && Math.random() < (cheering ? 0.25 : 0.45) ? pick(cheering ? HIGH_FIVES : FIGHTS) : [[0, pick(cheering ? CHEERS : QUIPS)]]
+  const who = [a, b || a]
+  script.forEach(([i, text], n) => banter.queue.push({
+    at: now + n * 1700, agent: who[i], text: text.replace('{a}', a.name).replace('{b}', (b || a).name)
+  }))
 }
-const now = () => performance.now()
 
 const toScreen = (x, y) => ({ x: x * cam.s + cam.x, y: y * cam.s + cam.y })
 
@@ -447,18 +527,27 @@ function renderTheme() {
 }
 
 function renderTree() {
-  const groups = [{ id: '*', title: 'Shared (every page)' }, ...S.frames.map(f => ({ id: f.id, title: f.title }))]
-  els.tree.innerHTML = ''
+  const groups = [{ id: '*', num: 'All', title: 'Shared nav and footer' }, ...S.frames.map(f => ({ id: f.id, num: `Page ${f.index + 1}`, title: f.title }))]
+  els.tree.innerHTML = S.frames.length ? '' : '<div class="empty">Pages appear here once the planner names them.</div>'
   for (const g of groups) {
     const layers = S.order.map(k => S.layers.get(k)).filter(l => l.page === g.id)
     if (!layers.length && g.id === '*') continue
     const div = document.createElement('div')
-    div.className = 'pg'
+    div.className = `pg${S.closed.has(g.id) ? '' : ' open'}`
     const title = document.createElement('div')
     title.className = 'pg-title'
-    title.textContent = g.title
-    if (g.id !== '*') title.onclick = () => focusPage(g.id)
+    title.innerHTML = `<span class="num"></span><span class="ttl"></span><span class="caret">▶</span>`
+    title.children[0].textContent = g.num
+    title.children[1].textContent = g.title
+    title.onclick = e => {
+      if (e.target.classList.contains('caret') || g.id === '*') S.closed.has(g.id) ? S.closed.delete(g.id) : S.closed.add(g.id)
+      else { S.closed.delete(g.id); focusPage(g.id) }
+      renderTree()
+    }
     div.append(title)
+    const lys = document.createElement('div')
+    lys.className = 'lys'
+    div.append(lys)
     for (const l of layers) {
       const a = l.agent && S.agents.get(l.agent)
       const row = document.createElement('div')
@@ -470,7 +559,7 @@ function renderTree() {
         if (l.status !== 'done' && l.status !== 'failed') row.firstChild.style.background = a.color
         row.children[2].style.color = a.color
       }
-      div.append(row)
+      lys.append(row)
     }
     els.tree.append(div)
   }
@@ -489,7 +578,7 @@ function renderAgents() {
     row.querySelector('.task').textContent = l ? `${l.page === '*' ? 'shared' : l.page} · ${l.role}` : a.idle ? 'idle' : 'waiting'
     els.agents.append(row)
   }
-  els.agentCount.textContent = `${working}/${S.agents.size} working`
+  els.agentCount.textContent = S.agents.size ? `${working}/${S.agents.size}` : '0'
   return working
 }
 
@@ -518,8 +607,11 @@ function feed(a, text, kind = '', where = '') {
     w.textContent = where
     item.append(w)
   }
-  els.feed.prepend(item)
-  while (els.feed.children.length > 80) els.feed.lastChild.remove()
+  const f = els.feed
+  const stick = f.scrollHeight - f.scrollTop - f.clientHeight < 60
+  f.append(item)
+  while (f.children.length > 200) f.firstChild.remove()
+  if (stick) f.scrollTop = f.scrollHeight
 }
 
 // ---------- loop
@@ -543,16 +635,30 @@ function frameLoop(now) {
   els.viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`
 
   for (const a of S.agents.values()) {
-    const t = agentTarget(a, now) || benchSpot(a)
-    if (t) {
-      a.wx += (t.x - a.wx) * 0.22
-      a.wy += (t.y - a.wy) * 0.22
+    // Switching between screen space (dock) and world space (canvas) converts the
+    // current position, so a cursor glides out of the break room instead of jumping.
+    if (!a.layer && now > a.toolUntil) {
+      if (!a.docked) { const p = toScreen(a.wx, a.wy); a.sx = p.x; a.sy = p.y; a.docked = true }
+      const c = dockCell(a.seat)
+      a.sx += (c.x - a.sx) * 0.12
+      a.sy += (c.y - a.sy) * 0.12
+    } else {
+      if (a.docked) { a.wx = (a.sx - cam.x) / cam.s; a.wy = (a.sy - cam.y) / cam.s; a.docked = false }
+      const t = agentTarget(a, now)
+      if (t) {
+        a.wx += (t.x - a.wx) * 0.22
+        a.wy += (t.y - a.wy) * 0.22
+      }
+      const p = toScreen(a.wx, a.wy)
+      a.sx = p.x
+      a.sy = p.y
     }
-    const p = toScreen(a.wx, a.wy)
-    a.el.style.transform = `translate(${p.x}px, ${p.y}px)`
-    a.el.classList.toggle('idle', !a.layer && now > a.toolUntil)
+    a.el.style.transform = `translate(${a.sx}px, ${a.sy}px)`
+    a.el.classList.toggle('docked', a.docked)
+    a.el.classList.toggle('flip', a.docked && a.seat % DOCK.cols >= 2)
     a.el.classList.toggle('talking', now < a.sayUntil)
   }
+  runBanter(now)
   drawWires()
 
   if (now - lastPanels > 150) {
@@ -567,7 +673,7 @@ function frameLoop(now) {
     }
     const done = [...S.layers.values()].filter(l => l.status === 'done').length
     els.status.textContent = `${working} agents working · ${done}/${S.layers.size} layers · ${S.frames.length} pages`
-    if (S.t0) els.timer.textContent = `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`
+    if (S.t0 && !(viewing && !S.tEnd)) els.timer.textContent = `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`
   }
   requestAnimationFrame(frameLoop)
 }
@@ -576,7 +682,7 @@ function frameLoop(now) {
 
 let drag = null
 els.viewport.addEventListener('mousedown', e => {
-  if (e.target.closest('.toolbar, .camera-hint')) return
+  if (e.target.closest('.toolbar, .camera-hint, .float')) return
   drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false }
   els.viewport.classList.add('dragging')
 })
@@ -611,6 +717,7 @@ function prototypeClick(e) {
 els.viewport.addEventListener('dblclick', () => setAuto(true))
 els.camHint.addEventListener('click', () => setAuto(!cam.auto))
 els.viewport.addEventListener('wheel', e => {
+  if (e.target.closest('.float')) return
   e.preventDefault()
   setAuto(false)
   const vr = els.viewport.getBoundingClientRect()
@@ -626,7 +733,7 @@ els.viewport.addEventListener('wheel', e => {
   }
 }, { passive: false })
 window.addEventListener('keydown', e => {
-  if (e.target.closest('input, select')) return
+  if (e.target.closest('input, select, textarea')) return
   if (e.key === 'a') setAuto(true)
   if (e.key === '0') { setAuto(false); const b = bboxActive(); S.frames.length && fit({ x0: S.frames[0].x - 560, y0: -140, x1: S.frames.at(-1).x + FRAME_W, y1: Math.max(...S.frames.map(f => f.h)) }) }
 })
@@ -636,16 +743,132 @@ els.form.addEventListener('submit', async e => {
   const brief = els.brief.value.trim()
   if (!brief) return
   setAuto(true)
-  await fetch('/api/run', { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': BOOT.token || '' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) })
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) }).catch(() => null)
+  if (res?.ok) els.brief.value = ''
+  else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
+})
+els.brief.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); els.form.requestSubmit() }
 })
 
+// ---------- side tabs and floating panels
+
+function showTab(name) {
+  for (const el of document.querySelectorAll('[data-tab]')) el.classList.toggle('on', el.dataset.tab === name)
+  store.set('tab', name)
+  if (name === 'files') loadFiles()
+}
+for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => showTab(b.dataset.tab)
+
+const panels = new Set(store.get('panels', []))
+function renderPanels() {
+  for (const el of document.querySelectorAll('[data-panel]')) el.classList.toggle('on', panels.has(el.dataset.panel))
+  $('.float.agents-card').classList.toggle('below', panels.has('planner'))
+}
+for (const b of document.querySelectorAll('.toggle[data-panel]')) b.onclick = () => {
+  const p = b.dataset.panel
+  panels.has(p) ? panels.delete(p) : panels.add(p)
+  store.set('panels', [...panels])
+  renderPanels()
+}
+
+// ---------- files: every saved run is a file with its own canvas
+// `viewing` is null while following the live stream, or the id of a saved run
+// (or 'new' for an empty canvas). The live stream is ignored while viewing one,
+// until a new run starts.
+
+let viewing = null
+let liveId = null
+let files = []
+
+async function loadFiles() {
+  try {
+    files = await (await api('/api/runs')).json()
+  } catch {
+    files = []
+  }
+  renderFiles()
+}
+
+function renderFiles() {
+  const shown = viewing && viewing !== 'new' ? viewing : S.run
+  els.files.innerHTML = files.length ? '' : '<div class="empty">No files yet. Describe a product in Chat to make one.</div>'
+  for (const f of files) {
+    const item = document.createElement('div')
+    item.className = `file${f.id === shown ? ' on' : ''}`
+    item.innerHTML = `<div class="ttl"></div><div class="meta"></div>`
+    item.firstChild.textContent = f.title
+    item.title = f.brief
+    const when = new Date(f.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const meta = item.lastChild
+    if (f.live) meta.innerHTML = '<span class="live">● building</span> · '
+    meta.append(`${when} · ${f.pages} pages · ${f.layers} layers${f.ms ? ` · ${(f.ms / 1000).toFixed(0)}s` : ''}`)
+    item.onclick = () => openRun(f.id)
+    els.files.append(item)
+  }
+}
+
+async function openRun(id) {
+  if (id === liveId && files.find(f => f.id === id)?.live) {
+    viewing = null
+    connect()
+  } else {
+    const res = await api(`/api/runs/${encodeURIComponent(id)}/events`).catch(() => null)
+    if (!res?.ok) return
+    const events = await res.json()
+    viewing = id
+    fresh(id)
+    for (const e of events) {
+      try { on(e) } catch (err) { console.error(err) }
+    }
+    if (!S.tEnd && events.length) S.tEnd = events.at(-1).t
+    if (S.t0) els.timer.textContent = `${((S.tEnd - S.t0) / 1000).toFixed(1)}s`
+    if (!events.some(e => e.type === 'layer:done' && e.html)) feed(null, 'This file was saved before Swarm Studio kept finished sections, so only its plan is shown.', 'sys')
+  }
+  setAuto(true)
+  renderFiles()
+}
+
+els.newFile.onclick = () => {
+  viewing = 'new'
+  fresh()
+  renderFiles()
+  showTab('chat')
+  els.brief.focus()
+}
+
 // ---------- start
+
+let es = null
+function connect() {
+  es?.close()
+  fresh()
+  es = new EventSource(`/events?k=${encodeURIComponent(BOOT.token || '')}`)
+  es.onmessage = m => {
+    try {
+      const e = JSON.parse(m.data)
+      if (e.type === 'reset' || e.type === 'run:start') {
+        liveId = e.run
+        if (viewing) { viewing = null; fresh(e.run) }
+      }
+      if (!viewing) on(e)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+}
 
 fresh()
 setAuto(true)
 renderToolbar()
-const es = new EventSource(`/events?k=${encodeURIComponent(BOOT.token || '')}`)
-es.onmessage = m => {
-  try { on(JSON.parse(m.data)) } catch (err) { console.error(err) }
-}
+renderPanels()
+showTab(store.get('tab', 'chat'))
+connect()
+// Nothing live to replay: open the latest saved file rather than an empty canvas.
+setTimeout(async () => {
+  if (S.run || viewing) return
+  await loadFiles()
+  const latest = files.find(f => f.preview)
+  if (latest && !S.run && !viewing) openRun(latest.id)
+}, 700)
 requestAnimationFrame(frameLoop)
