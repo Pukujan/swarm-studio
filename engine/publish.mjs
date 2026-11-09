@@ -141,7 +141,7 @@ async function rest(base, token, path, init = {}) {
 // the files are the finished static site.
 const SKIP = /(^|\/)(node_modules|\.git|dist|\.output|\.vercel|\.engine)(\/|$)|\.DS_Store$/
 
-export async function publishVercel({ dir, name, creds, dataDir, build = false, onStage = () => {} }) {
+export async function publishVercel({ dir, name, creds, dataDir, build = false, env = null, onStage = () => {} }) {
   const api = (path, init) => rest(creds.base || 'https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
   onStage('project')
   const own = ownProjects(dataDir, 'vercel')
@@ -165,7 +165,7 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
   }
   const dep = await api('/v13/deployments?skipAutoDetectionConfirmation=1', {
     method: 'POST',
-    body: JSON.stringify({ name: project, target: 'production', files: list.map(f => ({ file: f.file, sha: f.sha, size: f.size })), projectSettings: build ? { framework: 'vite', installCommand: 'pnpm install', buildCommand: 'pnpm run build', outputDirectory: null } : { framework: null, buildCommand: null, installCommand: null, outputDirectory: null } }),
+    body: JSON.stringify({ name: project, target: 'production', ...(env ? { env, build: { env } } : {}), files: list.map(f => ({ file: f.file, sha: f.sha, size: f.size })), projectSettings: build ? { framework: 'vite', installCommand: 'pnpm install', buildCommand: 'pnpm run build', outputDirectory: null } : { framework: null, buildCommand: null, installCommand: null, outputDirectory: null } }),
   })
   if (!dep.ok) throw new Error(`Vercel: ${dep.body.error?.message || dep.status}`)
   rememberProject(dataDir, 'vercel', project)

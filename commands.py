@@ -43,6 +43,9 @@ HELP = """Swarm Studio commands
   /swarm game [idea]              🎮 a game: a few questions on the canvas, a spec, then a playable build
   /swarm game build [idea]        skip the questions: a spec from your idea, then the build
   /swarm deploy [n]               put the app (with its server routes) on Vercel
+  /swarm auto <prompt>            ⚡ everything from one prompt: design, review, video, app, mini games,
+                                  a $2 credit pack (demo checkout), Supabase data, deploy to Vercel
+  /swarm auto status|stop         where auto mode is, or stop it after the current step
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
@@ -51,7 +54,7 @@ HELP = """Swarm Studio commands
 
 TARGETS = ("github", "vercel", "cloudflare", "local")
 
-SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy"}
+SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -194,7 +197,7 @@ def is_command(text: str) -> bool:
     # a video with an idea runs long; it starts with a style or a build number, which a brief wouldn't
     if words[0].lower() == "video" and len(words) > 1 and (words[1].lower() in VIDEO_STYLES or words[1].isdigit()):
         return True
-    return words[0].lower() in ("fix", "files", "folder", "trace", "app", "game") or len(words) <= 4
+    return words[0].lower() in ("fix", "files", "folder", "trace", "app", "game", "auto") or len(words) <= 4
 
 
 def run(text: str) -> str:
@@ -297,6 +300,9 @@ def _dispatch(cmd: str, args: list[str]) -> str:
 
     if cmd == "deploy":
         return _deploy(args[0] if args else "")
+
+    if cmd == "auto":
+        return _auto(" ".join(args).strip().strip('"“”'))
 
     if cmd == "models":
         if not args:
@@ -412,6 +418,22 @@ def _game_build(idea: str, answers: dict) -> str:
     _canvas("open", run=out["run"])
     return (f"🎮 {spec['title']}: {spec.get('pitch', '')}\nEngine: {spec.get('engine')}. Original: {spec.get('original', '')}\n"
             f"Building it now in the App tab (build {out['run']}); it is playable there when it's done.")
+
+
+def _auto(prompt: str) -> str:
+    if prompt.lower() in ("", "status"):
+        st = _api("/api/auto")
+        if not st.get("steps"):
+            return "Auto mode hasn't run yet. /swarm auto <prompt> runs the whole flow from one prompt."
+        icon = {"done": "✓", "working": "…", "failed": "✕", "skipped": "–"}
+        lines = [f"{icon.get(s['state'], '○')} {s['label']}" + (f": {s['note']}" if s.get("note") else "") for s in st["steps"]]
+        return f"⚡ Auto ({st['state']}): {st['prompt']}\n" + "\n".join(lines)
+    if prompt.lower() == "stop":
+        _api("/api/auto/stop", {})
+        return "⚡ Auto mode stops after the current step; what was built still deploys."
+    st = _api("/api/auto", {"prompt": prompt}, timeout=30)
+    return ("⚡ Auto mode is running on the canvas: design → review → video → app → mini games → $2 credit pack (demo checkout) "
+            "→ Supabase → Vercel. Keep the canvas open (the review photographs it). /swarm auto status shows where it is.")
 
 
 def _deploy(ref: str) -> str:

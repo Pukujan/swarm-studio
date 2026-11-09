@@ -284,6 +284,9 @@ function on(e) {
     case 'trace':
       traceLive(e)
       break
+    case 'auto':
+      autoEvent(e)
+      break
     case 'game:spec':
       S.spec = e.spec
       botMsg(`🎮 ${e.spec.title}: ${e.spec.pitch || ''} (${e.spec.engine})`)
@@ -2869,7 +2872,7 @@ function videoEvent(e) {
     Object.assign(video, { busy: false, message: e.message, stage: 'failed' })
     if (fresh) feed(null, `🎬 video: ${e.message}`, 'err')
   }
-  if (fresh && !video.el && e.type !== 'video:progress') toggleVideo(true)
+  if (fresh && !video.el && e.type !== 'video:progress' && !(autoM.last?.state === 'working' && view !== 'video')) toggleVideo(true)
   renderVideo()
 }
 
@@ -4173,6 +4176,9 @@ const crew = { members: [], key: '', last: 0 }
 // Which screen is busy, where the agents may point, and what they are each doing.
 function crewJob() {
   if (game.el && game.busy) return { key: 'game', host: game.el, spots: '.gbody, .spin, h3, .gspec', n: 3, lines: ['inventing the world', 'naming the hero', 'drafting enemies', 'picking the engine', 'tuning game feel', 'writing win and lose'], tool: ['text', 'comment', 'frame'] }
+  if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
+    return { key: 'app-code', host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['writing code'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+  }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
     return { key: 'app', host: appEls.view, spots: '#app-steps .st:nth-last-child(-n+5), #app-preview, #app-stage', n: 4, lines: done.length ? done : ['setting up the project', 'reading the design', 'planning routes'], tool: ['text', 'frame', 'connect', 'rect'] }
@@ -4226,8 +4232,14 @@ function crewTick(now) {
     }
   }
   if (!job) return
-  for (const m of crew.members) {
-    if (now > m.next) {
+  for (const [i, m] of crew.members.entries()) {
+    // pinned: the cursor rides its file's caret while the code types out
+    const pin = job.pin?.(i)
+    if (pin) {
+      m.tx = pin.x; m.ty = pin.y
+      setText(m.doing, pin.text)
+      if (pin.typing && now > m.pressAt + 160 && Math.random() < 0.12) m.pressAt = now
+    } else if (now > m.next) {
       const p = crewSpot(job, m)
       m.tx = p.x; m.ty = p.y
       m.next = now + 1400 + Math.random() * 2200
@@ -4311,3 +4323,186 @@ function fitLive() {
   }
 }
 setInterval(fitLive, 1000)
+
+// ---------- ⚡ Auto mode
+// One prompt, then a timeline of the whole flow pinned over the studio. The
+// studio follows along: the canvas while it designs, Video while it cuts, App
+// while it builds, so a recording shows each part working.
+const autoM = { pop: null, panel: null, last: null, step: '', min: false }
+const AUTO_VIEW = { design: 'canvas', review: 'canvas', video: 'video', app: 'app', games: 'app', shop: 'app', data: 'app', deploy: 'app' }
+const AUTO_ICON = { wait: '○', working: '◌', done: '✓', skipped: '–', failed: '✕' }
+
+function openAuto() {
+  if (autoM.last?.state === 'working') return renderAutoPanel()
+  autoM.pop?.remove()
+  const el = autoM.pop = document.createElement('div')
+  el.className = 'game-pop auto-pop'
+  el.innerHTML = `<div class="ghead"><b>⚡ Auto mode</b><button class="gclose" title="Close">×</button></div>
+    <h3>One prompt. The whole thing.</h3>
+    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>🎬 Cut a promo video from your idea</li><li>⚙️ Build the working app</li><li>🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase, when its keys are set</li><li>🚀 Deploy to Vercel</li></ol>
+    <textarea class="auto-prompt" rows="4" placeholder="A night market in Taipei: street food, a festival weekend in March, tickets and a vendor map"></textarea>
+    <div class="auto-go"><button class="primary auto-start">⚡ Run it all</button><small>Takes a while: the app and the games are real builds. Keep this window open; the review needs it.</small></div>`
+  document.body.append(el)
+  $('#auto-btn').classList.add('on')
+  const close = () => { el.remove(); autoM.pop = null; if (autoM.last?.state !== 'working') $('#auto-btn').classList.remove('on') }
+  el.querySelector('.gclose').onclick = close
+  const ta = el.querySelector('.auto-prompt')
+  ta.value = els.brief.value.trim()
+  ta.focus()
+  const go = async () => {
+    const prompt = ta.value.trim()
+    if (!prompt) return ta.focus()
+    const res = await api('/api/auto', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt }) }).catch(() => null)
+    const out = await res?.json().catch(() => ({}))
+    if (!res?.ok) return feed(null, `auto mode: ${out?.error || 'the canvas server is not answering'}`, 'err')
+    close()
+    autoEvent(out, true)
+  }
+  el.querySelector('.auto-start').onclick = go
+  ta.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go() }
+}
+$('#auto-btn').onclick = openAuto
+
+function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
+  if (!e?.steps) return
+  // a saved run replays its timeline; only a live one moves the studio around
+  if (!live && e.run !== shownRun()) return
+  autoM.last = e
+  const now = e.steps.find(s => s.state === 'working')
+  if (live && e.state === 'working' && now && now.id !== autoM.step) {
+    autoM.step = now.id
+    if (!e.run || e.run === shownRun() || !viewing) {
+      const v = AUTO_VIEW[now.id]
+      if (v && v !== view) setView(v)
+      if (v !== 'video' && video.el) toggleVideo(false)
+    }
+  }
+  $('#auto-btn').classList.toggle('on', e.state === 'working')
+  renderAutoPanel()
+}
+
+function renderAutoPanel() {
+  const e = autoM.last
+  if (!e) return
+  if (!autoM.panel) {
+    autoM.panel = document.createElement('div')
+    autoM.panel.className = 'auto-panel'
+    document.body.append(autoM.panel)
+  }
+  const p = autoM.panel
+  p.hidden = false
+  const secs = ms => { const t = Math.round(ms / 1000); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s` }
+  // the working step says what its tab is doing right now
+  const live = s => s.state !== 'working' || e.run !== shownRun() ? s.note : s.id === 'video' && video.busy && video.stage ? video.stage : AUTO_VIEW[s.id] === 'app' && appv.run === e.run && appv.state === 'working' && appv.stage ? appv.stage : s.note
+  const total = e.state === 'working' ? Date.now() - e.t0 : e.ms
+  p.className = `auto-panel ${e.state}${autoM.min ? ' min' : ''}`
+  const cur = e.steps.find(s => s.state === 'working')
+  p.innerHTML = `<div class="ap-head" title="Fold or unfold"><b>⚡ Auto</b>${autoM.min && cur ? `<span class="ap-now">${esc(cur.label)}</span>` : ''}<span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop" title="Stop after the current step">Stop</button>' : '<button class="ap-close" title="Hide">×</button>'}</div>
+    <div class="ap-prompt">${esc(e.prompt || '')}</div>
+    <ol>${e.steps.map(s => `<li class="${s.state}"><i>${AUTO_ICON[s.state] || '○'}</i><span>${esc(s.label)}${live(s) ? `<small>${linkify(live(s))}</small>` : ''}</span><em>${s.state === 'working' && s.t0 ? secs(Date.now() - s.t0) : s.ms ? secs(s.ms) : ''}</em></li>`).join('')}</ol>
+    ${e.url ? `<a class="ap-live" href="${esc(e.url)}" target="_blank" rel="noopener">🌐 Open the live app</a>` : e.state === 'failed' && e.message ? `<div class="ap-msg">${esc(e.message)}</div>` : ''}`
+  p.querySelector('.ap-stop')?.addEventListener('click', ev => { ev.stopPropagation(); api('/api/auto/stop', { method: 'POST' }) })
+  // the header folds it to one line, out of the way of what it is showing
+  p.querySelector('.ap-head').onclick = ev => { if (ev.target.closest('button')) return; autoM.min = !autoM.min; renderAutoPanel() }
+  p.querySelector('.ap-close')?.addEventListener('click', () => { p.hidden = true })
+}
+const linkify = t => esc(t).replace(/https?:\/\/[^\s<"]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
+// the clocks tick between events
+setInterval(() => { if (autoM.last?.state === 'working' && autoM.panel && !autoM.panel.hidden) renderAutoPanel() }, 1000)
+api('/api/auto').then(r => r.ok ? r.json() : null).then(e => { if (e?.steps && (e.state === 'working' || Date.now() - e.t0 < 3600000)) autoEvent(e, e.state === 'working') }).catch(() => {})
+
+// ---------- the code wall: while the engine builds an app or a game, the files it
+// writes type out in tiles, one agent per tile with its cursor on the caret.
+const CW_TILES = 4
+const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false }
+function cwHighlight(text) {
+  // comments, strings, keywords and tags; everything escaped piece by piece
+  const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('(?:[^'\\\n]|\\.)*'?|"(?:[^"\\\n]|\\.)*"?|`(?:[^`\\]|\\.)*`?)|(<\/?[A-Za-z][\w.]*)|\b(import|from|export|default|const|let|var|function|return|async|await|if|else|for|while|new|class|extends|type|interface|true|false|null|undefined)\b/g
+  let out = '', last = 0, m
+  while ((m = re.exec(text))) {
+    out += esc(text.slice(last, m.index))
+    const cls = m[1] ? 'c' : m[2] ? 's' : m[3] ? 't' : 'k'
+    out += `<i class="cw-${cls}">${esc(m[0])}</i>`
+    last = re.lastIndex
+  }
+  return out + esc(text.slice(last))
+}
+
+function codeWall() {
+  const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
+  if (!on) {
+    if (cw.el) cw.el.hidden = true
+    if (appv.state !== 'working') Object.assign(cw, { run: null, seen: 0, queue: [], tiles: [] })
+    return
+  }
+  if (!cw.el) {
+    cw.el = document.createElement('div')
+    cw.el.className = 'codewall'
+    cw.el.innerHTML = `<div class="cw-head"><b>${appv.kind === 'game' ? '🎮 Writing the game' : '🧩 Writing the app'}</b><span class="cw-count"></span><button class="cw-peek" title="Hide the code and look at the app">👁 Preview</button></div><div class="cw-grid"></div>`
+    cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
+    appEls.preview.append(cw.el)
+  }
+  if (cw.run !== appv.run) Object.assign(cw, { run: appv.run, seen: Math.max(0, appv.steps.length - 30), queue: [], tiles: [], hide: false })
+  cw.el.hidden = cw.hide
+  // newly written files join the queue (newest wins; a file already up is retyped)
+  const steps = appv.steps
+  for (; cw.seen < steps.length; cw.seen++) {
+    const s = steps[cw.seen]
+    if (s.kind !== 'write' || s.file === false || !/\.(tsx?|jsx?|css|json|md|html)$/.test(s.text) || /lock|tsbuildinfo/.test(s.text)) continue
+    cw.queue = [...cw.queue.filter(f => f !== s.text), s.text].slice(-12)
+  }
+  // a free tile (empty, or done typing for a moment) takes the next file
+  const now = performance.now()
+  for (let i = 0; i < CW_TILES && cw.queue.length; i++) {
+    const t = cw.tiles[i]
+    if (t && (t.loading || t.shown < t.text.length || now - t.doneAt < 1500)) continue
+    const path = cw.queue.shift()
+    cw.tiles[i] = { path, text: '', shown: 0, loading: true, doneAt: 0 }
+    const tile = cw.tiles[i]
+    appApi(`/files?path=${encodeURIComponent(path)}`).then(r => { tile.text = String(r.text || '').slice(0, 6000) }).catch(() => { tile.text = '' }).finally(() => { tile.loading = false; if (!tile.text) tile.doneAt = 0 })
+  }
+  const grid = cw.el.querySelector('.cw-grid')
+  const names = crewMembers(CW_TILES)
+  while (grid.children.length < CW_TILES) {
+    const d = document.createElement('div')
+    d.className = 'cw-tile'
+    d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
+    grid.append(d)
+  }
+  let writing = 0
+  cw.tiles.forEach((t, i) => {
+    const d = grid.children[i]
+    if (!t) return
+    if (!t.loading && t.shown < t.text.length) {
+      t.shown = Math.min(t.text.length, t.shown + Math.max(3, Math.ceil(t.text.length / 260)))
+      if (t.shown >= t.text.length) t.doneAt = now
+      writing++
+    }
+    d.classList.toggle('typing', !t.loading && t.shown < t.text.length)
+    setText(d.querySelector('.cw-path'), t.path)
+    const [name, color] = names[i] || ['', '#888']
+    const who = d.querySelector('.cw-who')
+    setText(who, name); who.style.background = color
+    if (d.dataset.shown !== String(t.shown) || d.dataset.path !== t.path) {
+      d.dataset.shown = t.shown; d.dataset.path = t.path
+      // the last lines, so the caret stays in view
+      const typed = t.text.slice(0, t.shown), lines = typed.split('\n')
+      const from = Math.max(0, lines.length - 26)
+      const pre = d.querySelector('.cw-code')
+      pre.innerHTML = cwHighlight(lines.slice(from).join('\n')) + '<b class="cw-caret"></b>'
+      pre.scrollTop = pre.scrollHeight
+    }
+  })
+  setText(cw.el.querySelector('.cw-count'), `${new Set(steps.filter(s => s.kind === 'write').map(s => s.text)).size} files · ${writing} typing · ${esc(appv.stage || '')}`)
+}
+
+// the crew's cursor for tile i sits on that tile's caret
+function cwPin(i) {
+  const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
+  const caret = d?.querySelector('.cw-caret')
+  if (!t || !caret) return null
+  const r = caret.getBoundingClientRect()
+  if (!r.width && !r.height) return null
+  return { x: r.left + 2, y: r.top + 4, text: t.path.split('/').pop(), typing: t.shown < t.text.length }
+}
+;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } requestAnimationFrame(cwLoop) })()

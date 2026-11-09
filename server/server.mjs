@@ -23,6 +23,7 @@ import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.
 import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
+import { autoJob } from '../engine/auto.mjs'
 import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS, fxFor } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -632,6 +633,9 @@ async function videoNow(id, input = {}) {
 let appsP = null
 const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor })))
 
+// ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
+const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel })
+
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
@@ -1098,6 +1102,21 @@ const server = createServer((req, res) => {
       connect(dataDir, input.provider, typeof input.token === 'string' ? input.token : null, typeof input.octo === 'string' && /^https:\/\/[\w.-]+$/.test(input.octo) ? input.octo : undefined)
         .then(who => reply(200, { provider: input.provider, connected: who ? { user: who.user } : null }))
         .catch(err => reply(400, { error: String(err.message || err) }))
+    })
+    return
+  }
+
+  // ⚡ Auto mode: GET its timeline, POST { prompt } to start, /stop to stop
+  if (url.pathname === '/api/auto' || url.pathname === '/api/auto/stop') {
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    if (req.method === 'GET') return reply(200, auto.state() || { state: 'idle' })
+    if (url.pathname === '/api/auto/stop') return reply(200, auto.stop() || { state: 'idle' })
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      try { reply(200, auto.start(input)) } catch (err) { reply(400, { error: String(err.message || err) }) }
     })
     return
   }
