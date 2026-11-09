@@ -305,9 +305,18 @@ function shadcnVars(theme) {
 }
 const toHsl = html => html.replace(new RegExp(`(?<!hsl\\()var\\(--(${SHADCN.join('|')})\\)`, 'g'), 'hsl(var(--$1))')
 
-export function dyadApp(snap, dir, { runId, runDir, scaffold }) {
+// pnpm 10+ skips build scripts unless a project allows them, and Vite needs
+// esbuild's: without this the app never starts and dyad can't screenshot it.
+export function seedProject(scaffold, dir, name) {
   rmSync(dir, { recursive: true, force: true })
   cpSync(scaffold, dir, { recursive: true, filter: f => !/[\\/](node_modules|\.git)([\\/]|$)/.test(f) })
+  writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - "@swc/core"\n  - esbuild\nallowBuilds:\n  "@swc/core": true\n  esbuild: true\n')
+  const pkg = join(dir, 'package.json'), json = JSON.parse(readFileSync(pkg, 'utf8'))
+  writeFileSync(pkg, JSON.stringify({ ...json, name: slug(name) || json.name, pnpm: { ...json.pnpm, onlyBuiltDependencies: ['@swc/core', 'esbuild'] } }, null, 2) + '\n')
+}
+
+export function dyadApp(snap, dir, { runId, runDir, scaffold }) {
+  seedProject(scaffold, dir, snap.brand)
   const src = join(dir, 'src'), secDir = join(src, 'components', 'swarm'), pageDir = join(src, 'pages')
   mkdirSync(secDir, { recursive: true })
   rmSync(join(src, 'pages', 'Index.tsx'), { force: true })

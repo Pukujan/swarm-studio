@@ -4,3 +4,5 @@ bench/pages/
 runs/
 __pycache__/
 *.pyc
+dyad/.vite/
+.DS_Store
