@@ -2765,6 +2765,7 @@ async function saveModel(body) {
   if (!res?.ok) feed(null, 'could not save that model pick', 'err')
   await loadModels()
   if (models.el) renderModels()
+  if (body.role === 'worker' && typeof fillBuildModel === 'function') fillBuildModel()
 }
 
 function renderModels() {
@@ -2803,7 +2804,7 @@ function toggleModels(open = !models.el) {
   models.el = document.createElement('div')
   models.el.className = 'models-pop'
   document.body.append(models.el)
-  const r = els.modelsBtn.getBoundingClientRect()
+  const r = (els.modelsBtn.offsetParent ? els.modelsBtn : moreBtn).getBoundingClientRect()
   models.el.style.top = `${r.bottom + 6}px`
   models.el.style.right = `${Math.max(8, innerWidth - r.right)}px`
   els.modelsBtn.classList.add('on')
@@ -2811,7 +2812,11 @@ function toggleModels(open = !models.el) {
   loadModels().then(() => models.el && !models.el.contains(document.activeElement) && renderModels())
   models.el.addEventListener('change', e => {
     const t = e.target
-    if (t.dataset.role) saveModel({ role: t.dataset.role, model: t.value.trim() || null })
+    if (t.dataset.role) {
+      const m = t.value.trim()
+      if (m) store.set('recentModels', [m, ...(store.get('recentModels') || []).filter(x => x !== m)].slice(0, 6))
+      saveModel({ role: t.dataset.role, model: m || null })
+    }
     if (t.dataset.lite !== undefined) saveModel({ role: 'lite', on: t.value === '' ? null : t.value === 'on' })
     if (t.dataset.image !== undefined) {
       const [provider, model] = t.value.split('|')
@@ -2839,7 +2844,8 @@ function showTab(name) {
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => showTab(b.dataset.tab)
 
-const panels = new Set(store.get('panels', ['design']))
+// Design opens by itself when a section (or an agent to follow) is picked, so it isn't kept from before
+const panels = new Set(store.get('panels', []).filter(p => p !== 'design'))
 function renderPanels() {
   for (const el of document.querySelectorAll('[data-panel]')) el.classList.toggle('on', panels.has(el.dataset.panel))
   document.body.classList.toggle('design-on', panels.has('design'))
@@ -2847,10 +2853,56 @@ function renderPanels() {
 }
 function togglePanel(p) {
   panels.has(p) ? panels.delete(p) : panels.add(p)
+  if (p === 'design') { design.autoOpen = false; design.closedFor = panels.has(p) ? null : S.sel || design.pinned || null }
   store.set('panels', [...panels])
   renderPanels()
 }
 for (const b of document.querySelectorAll('.toggle[data-panel]')) b.onclick = () => togglePanel(b.dataset.panel)
+
+// The Design panel follows the selection: open while a section or agent is
+// picked, closed again after, unless the person opened or closed it themself.
+setInterval(() => {
+  const want = S.sel || design.pinned || null
+  if (want && !panels.has('design') && design.closedFor !== want) { panels.add('design'); design.autoOpen = true; renderPanels() }
+  else if (!want && panels.has('design') && design.autoOpen) { panels.delete('design'); design.autoOpen = false; renderPanels() }
+  if (!want) design.closedFor = null
+}, 250)
+$('#design-close').onclick = () => { if (panels.has('design')) togglePanel('design') }
+
+// ☰ More: the toolbar's less-used buttons
+const moreMenu = $('#more-menu'), moreBtn = $('#more-btn')
+moreBtn.onclick = e => { e.stopPropagation(); moreMenu.hidden = !moreMenu.hidden; moreBtn.classList.toggle('on', !moreMenu.hidden) }
+moreMenu.addEventListener('click', () => setTimeout(() => { moreMenu.hidden = true; moreBtn.classList.remove('on') }))
+document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.closest('.more')) { moreMenu.hidden = true; moreBtn.classList.remove('on') } })
+
+// The side panel can shrink to a small chat over the canvas; the chat stays.
+function sideMin(on = !document.body.classList.contains('side-min')) {
+  document.body.classList.toggle('side-min', on)
+  store.set('sideMin', on)
+  if (on) showTab('chat')
+  $('#side-min').textContent = on ? '⇥' : '⇤'
+  $('#side-min').title = on ? 'Back to the full side panel' : 'Make the side panel a small chat over the canvas'
+}
+$('#side-min').onclick = () => sideMin()
+if (store.get('sideMin')) sideMin(true)
+
+// The builders' model, right where a build starts (the rest live in Models)
+const buildModel = $('#build-model')
+// a short list: the pick, the ones picked lately and the planner's; "Other…" opens the full search in Models
+async function fillBuildModel() {
+  const info = await loadModels()
+  const s = info.roles?.worker || {}
+  const recent = store.get('recentModels') || []
+  const list = [...new Set([s.picked, ...recent, info.roles?.planner?.picked, info.roles?.planner?.hermes].filter(m => m && m !== 'off' && m !== s.hermes))].slice(0, 8)
+  buildModel.innerHTML = `<option value="">${esc(s.hermes ? `Hermes · ${s.hermes}` : 'Hermes default')}</option>${list.map(m => `<option value="${esc(m)}" ${m === s.picked ? 'selected' : ''}>${esc(m)}</option>`).join('')}<option value="__other">Other… (${(info.text || []).length} models)</option>`
+  buildModel.title = s.picked ? `builders use ${s.picked}` : `builders use Hermes's model${s.hermes ? ` (${s.hermes})` : ''}`
+}
+buildModel.onchange = async () => {
+  if (buildModel.value === '__other') { fillBuildModel(); return toggleModels(true) }
+  if (buildModel.value) store.set('recentModels', [buildModel.value, ...(store.get('recentModels') || []).filter(m => m !== buildModel.value)].slice(0, 6))
+  await saveModel({ role: 'worker', model: buildModel.value || null })
+}
+fillBuildModel()
 for (const b of document.querySelectorAll('.dtabs button')) b.onclick = () => { design.tabPinned = true; showDtab(b.dataset.dtab) }
 
 // ---------- files: every saved run is a file with its own canvas

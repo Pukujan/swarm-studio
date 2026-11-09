@@ -12,14 +12,19 @@
     <div class="file-name" id="file-name">Untitled</div>
     <div class="spacer"></div>
     <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled>▶ Play</button>
-    <button class="toggle" id="review-btn" title="Have the reviewer model look at every page and fix what it finds" disabled>🔎 Review</button>
-    <button class="toggle" id="video-btn" title="Cut a 20-second promo video of this build (HyperFrames)" disabled>🎬 Video</button>
-    <button class="toggle" id="export-btn" title="Export: static HTML, a React + Tailwind project, and a handoff for an app builder (ABA)" disabled>⬇ Export</button>
     <button class="toggle" id="publish-btn" title="Publish the site: a live link on GitHub Pages, or hosted on this computer" disabled>🌐 Publish</button>
-    <button class="toggle" id="models-btn" title="Pick the models for planning, building, reviewing and images">Models</button>
-    <button class="toggle" data-panel="design" title="Design properties and variables (D)">Design</button>
-    <button class="toggle" data-panel="planner" title="Planner: theme and plan stream">Planner</button>
-    <button class="toggle" data-panel="agents" title="Agents and what each is doing">Agents <span id="agent-count" class="count">0</span></button>
+    <div class="more">
+      <button class="toggle" id="more-btn" title="Review, video, export, models and panels" aria-haspopup="true">☰ More <span id="agent-count" class="count">0</span></button>
+      <div class="more-menu" id="more-menu" hidden>
+        <button class="toggle" id="review-btn" title="Have the reviewer model look at every page and fix what it finds" disabled>🔎 Review</button>
+        <button class="toggle" id="video-btn" title="Cut a promo video of this build, with a voiceover and music" disabled>🎬 Video</button>
+        <button class="toggle" id="export-btn" title="Export: static HTML, a React + Tailwind project, and a handoff for an app builder (ABA)" disabled>⬇ Export</button>
+        <button class="toggle" id="models-btn" title="Pick the models for planning, building, reviewing and images">Models</button>
+        <button class="toggle" data-panel="design" title="Design properties and variables (D)">Design</button>
+        <button class="toggle" data-panel="planner" title="Planner: theme and plan stream">Planner</button>
+        <button class="toggle" data-panel="agents" title="Agents and what each is doing">Agents</button>
+      </div>
+    </div>
     <div class="clock"><span id="timer">00.0s</span></div>
   </header>
 
@@ -29,6 +34,7 @@
       <button data-tab="log" title="What each agent is doing">Log</button>
       <button data-tab="pages">Pages</button>
       <button data-tab="files">Files</button>
+      <button class="side-min-btn" id="side-min" title="Make the side panel a small chat over the canvas">⇤</button>
     </nav>
 
     <section class="tab chat on" data-tab="chat">
@@ -40,6 +46,9 @@
             <select id="agents">
               <option>4</option><option>5</option><option>6</option><option>8</option><option>12</option><option selected>16</option><option>20</option><option>24</option>
             </select>
+          </label>
+          <label class="size model-pick" title="The model every builder agent uses. Planner and reviewer: ☰ More → Models">Model
+            <select id="build-model"><option value="">Hermes default</option></select>
           </label>
           <button type="submit">Build</button>
         </div>
@@ -84,6 +93,7 @@
     <nav class="dtabs">
       <button data-dtab="design" class="on">Design</button>
       <button data-dtab="vars">Variables</button>
+      <button class="dclose" id="design-close" title="Close (opens again when you select a section)">×</button>
     </nav>
     <section class="dtab on" data-dtab="design" id="d-design"></section>
     <section class="dtab" data-dtab="vars" id="d-vars"></section>
