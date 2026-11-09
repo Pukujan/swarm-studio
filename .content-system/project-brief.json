@@ -1,0 +1,58 @@
+{
+  "schema_version": "content-generation.project-brief.v2",
+  "project": "Swarm Studio",
+  "audience": [
+    "Hermes Agent users who want a multi-page website prototype from a one-line brief",
+    "people who want to watch, steer and edit the build as it happens rather than wait for a finished file"
+  ],
+  "problem": "Asking a single chat model for a website means waiting on one long answer and then reading code to see whether it worked. There is nothing to watch, steer or click until it is done.",
+  "solution": "Swarm Studio splits the site into pages and sections and gives them to a pool of agents that build at the same time on a live canvas, then turns the result into a clickable prototype that can be published or grown into an app.",
+  "mechanism": [
+    "one streamed call plans the theme, shared nav and footer, and the pages",
+    "a planner per page breaks it into layers and queues each one as soon as it is ready",
+    "a fixed pool of agents takes layers off the queue and streams HTML onto the canvas"
+  ],
+  "evidence": [
+    {
+      "claim": "A planner, per-page planners and a pool of agents build the pages in parallel on a canvas.",
+      "source": "README.md, How it works",
+      "supports": "The README describes the sitemap call, the page planners, the shared queue and the agent pool.",
+      "limits": "It describes the design; it does not measure build time or output quality.",
+      "status": "shipped",
+      "recorded_at": "2026-11-09T19:55:00Z",
+      "cite_in_readme": false,
+      "source_revision": {
+        "kind": "repository_artifact",
+        "reference": "README.md at 26d952e",
+        "repository": "Pukujan/swarm-studio",
+        "commit": "26d952e1969a075f59a65e870203719fc2807c41",
+        "path": "README.md",
+        "locator": "## How it works",
+        "uri": "https://github.com/Pukujan/swarm-studio/blob/26d952e1969a075f59a65e870203719fc2807c41/README.md"
+      }
+    },
+    {
+      "claim": "The canvas server listens on 127.0.0.1 only and the API needs a per-install token.",
+      "source": "README.md, What it does on your machine",
+      "supports": "The README states the bind address, the Host check and the token stored with mode 0600.",
+      "limits": "It is the documented behaviour; the CI check covers the token refusal but not the Host check.",
+      "status": "shipped",
+      "recorded_at": "2026-11-09T19:55:00Z",
+      "cite_in_readme": false,
+      "source_revision": {
+        "kind": "repository_artifact",
+        "reference": "README.md at 26d952e",
+        "repository": "Pukujan/swarm-studio",
+        "commit": "26d952e1969a075f59a65e870203719fc2807c41",
+        "path": "README.md",
+        "locator": "## What it does on your machine",
+        "uri": "https://github.com/Pukujan/swarm-studio/blob/26d952e1969a075f59a65e870203719fc2807c41/README.md"
+      }
+    }
+  ],
+  "boundaries": [
+    "Generated sites are prototypes until the App tab builds them into an app.",
+    "The canvas runs on the computer's 127.0.0.1, so the Hermes phone webapp cannot reach it.",
+    "Builder models must speak the OpenAI chat completions API."
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "content-generation.visual-style.v1",
+  "reference_asset": ".content-system/assets/adapter-placeholder.txt",
+  "generation_workflow": "built-in image_gen",
+  "narrative_roles": [
+    "hero",
+    "problem",
+    "supporting",
+    "evidence",
+    "story",
+    "social"
+  ],
+  "palette": [
+    "the canvas's own dark and light themes"
+  ],
+  "subjects": [
+    "agents' cursors and short notes building pages side by side on the canvas"
+  ],
+  "composition": "real canvas captures first; any illustration keeps the canvas and its pages as the main subject",
+  "text_policy": "exact title and subtitle only, spelled correctly; no invented metrics or interface text",
+  "roles": {
+    "documentation": "non-narrative helper records and placeholders"
+  },
+  "reject_when": [
+    "secrets, tokens or private paths visible",
+    "an SVG used where a narrative raster is required",
+    "garbled or extra lettering"
+  ],
+  "status_note": "Starting point only. No narrative image is registered yet."
+}

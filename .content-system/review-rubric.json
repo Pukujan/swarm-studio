@@ -1,0 +1,22 @@
+{
+  "schema_version": "content-generation.review-rubric.v1",
+  "dimensions": [
+    {
+      "id": "product_first",
+      "question": "Does the copy explain what Swarm Studio does for the person before how it works?"
+    },
+    {
+      "id": "grounded_claims",
+      "question": "Is every claim about speed, size or behaviour backed by the code or a recorded run?"
+    },
+    {
+      "id": "local_and_network",
+      "question": "Is it clear what runs on the user's machine and what is sent to other services?"
+    },
+    {
+      "id": "no_private_material",
+      "question": "Is the copy free of secrets, tokens, internal hostnames and private paths?"
+    }
+  ],
+  "status_note": "Review questions for README, feature and launch copy."
+}

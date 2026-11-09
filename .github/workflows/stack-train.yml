@@ -1,0 +1,41 @@
+name: stack-train
+# Checks that stack-manifest.json still follows the agent stack's release
+# train (see .coord/ and stack-manifest.json). It runs only when the stack
+# files change, so it never shows up on ordinary pull requests.
+on:
+  pull_request:
+    paths:
+      - stack-manifest.json
+      - .coord/**
+      - .oio/**
+      - .content-system/**
+  push:
+    branches: [main]
+    paths:
+      - stack-manifest.json
+      - .coord/**
+      - .oio/**
+      - .content-system/**
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: Pukujan/agent-stack-train
+          ref: main
+          path: .stack-train
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Manifest agrees with the release train
+        run: |
+          python .stack-train/scripts/check_manifest.py \
+            --manifest stack-manifest.json \
+            --train .stack-train/stack-releases.json \
+            --installed .oio/install-manifest.json
