@@ -28,6 +28,7 @@ HELP = """Swarm Studio commands
   /swarm review [n|id]            a vision model checks every page; agents fix what it finds
   /swarm fix <what to change>     an agent reworks the selected section (or the planner finds which)
   /swarm export [n|id]            files: static HTML, a React + Tailwind project, an ABA handoff
+  /swarm publish [n|id] [local]   a live link on GitHub Pages (your gh login), or hosted on this computer
   /swarm video [n|id]             cut a 20-second promo video of a build (HyperFrames, MP4)
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
@@ -35,7 +36,7 @@ HELP = """Swarm Studio commands
   /swarm motion [on|off]          scroll-in reveals and hover lifts in the prototype
   /swarm lite [on|off|auto]       lite mode for machines short on memory"""
 
-SUBCOMMANDS = {"help", "files", "open", "play", "review", "fix", "export", "video", "motion", "models", "images", "lite"}
+SUBCOMMANDS = {"help", "files", "open", "play", "review", "fix", "export", "publish", "video", "motion", "models", "images", "lite"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -128,6 +129,11 @@ def _dispatch(cmd: str, args: list[str]) -> str:
                 f"  react/  {out['sections']} section components, Vite + Tailwind (npm i && npm run dev)\n"
                 f"  aba/    spec.md + blueprint.json, to hand to an app builder" + (f"\nZip: {out['zip']}" if out.get("zip") else ""))
 
+    if cmd == "publish":
+        local = any(a.lower() == "local" for a in args)
+        rest = [a for a in args if a.lower() not in ("local", "github")]
+        return _publish(rest[0] if rest else "", "local" if local else "github")
+
     if cmd == "fix":
         return _fix(" ".join(args).strip().strip('"“”'), "")
 
@@ -198,6 +204,25 @@ def _fix(text: str, ref: str) -> str:
     return f"On it in “{r['title']}”: reworking {where}." + (f" ({got['reply']})" if got.get("reply") else "")
 
 
+def _publish(ref: str, target: str) -> str:
+    r = _pick_run(ref)
+    if not r:
+        return "No such build. See /swarm files."
+    path = f"/api/runs/{r['id']}/publish"
+    job = _api(path, {"target": target}, timeout=60)
+    deadline = time.time() + 300
+    while job.get("state") == "working" and time.time() < deadline:
+        time.sleep(3)
+        job = _api(path)
+    if job.get("state") != "done":
+        return f"Publish: {job.get('message') or job.get('state')}"
+    if job.get("target") == "github" and job.get("url", "").startswith("https://"):
+        return (f"“{r['title']}” is live: {job['url']}" + (" (GitHub is still switching it on; give it a minute)" if job.get("pending") else "")
+                + f"\nRepo: https://github.com/{job.get('repo')}. Publish again to update it.")
+    note = f" (GitHub didn't work: {job['message']})" if job.get("message") else ""
+    return f"“{r['title']}” is hosted on this computer: {job.get('url')}{note}"
+
+
 def _video(ref: str, wait: bool) -> str:
     r = _pick_run(ref)
     if not r:
@@ -220,17 +245,18 @@ def _video(ref: str, wait: bool) -> str:
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), cut a promo video of a build (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, and set the models, image generation and lite mode.",
+    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, waits and returns the URL), cut a promo video of a build (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, and set the models, image generation and lite mode.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "open", "play", "review", "fix", "export", "video", "motion", "models", "images", "lite", "help"]},
-            "build": {"type": "string", "description": "for open/review/fix/export/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
+            "action": {"type": "string", "enum": ["files", "open", "play", "review", "fix", "export", "publish", "video", "motion", "models", "images", "lite", "help"]},
+            "build": {"type": "string", "description": "for open/review/fix/export/publish/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
             "text": {"type": "string", "description": "for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
             "provider": {"type": "string", "description": "for images: a Hermes image provider (openai-codex, xai, …), 'auto' or 'off'; omit to show"},
             "value": {"type": "string", "enum": ["on", "off", "auto"], "description": "for lite (on/off/auto) and motion (on/off)"},
+            "target": {"type": "string", "enum": ["github", "local"], "description": "for publish: github (a public GitHub Pages link through the gh login, the default) or local (hosted on this computer)"},
         },
         "required": ["action"],
         "additionalProperties": False,
@@ -241,8 +267,10 @@ TOOL_SCHEMA = {
 def tool(args: dict | None = None, **_: object) -> str:
     a = args or {}
     action = str(a.get("action") or "help")
-    if action in ("video", "fix"):
+    if action in ("video", "fix", "publish"):
         try:
+            if action == "publish":
+                return _publish(str(a.get("build") or ""), "local" if a.get("target") == "local" else "github")
             if action == "fix":
                 return _fix(str(a.get("text") or "").strip(), str(a.get("build") or ""))
             return _video(str(a.get("build") or ""), wait=True)

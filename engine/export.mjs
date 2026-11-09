@@ -328,6 +328,6 @@ Designed in Swarm Studio from the brief: ${snap.brief}
 - \`aba/\`: a handoff for an app builder: \`spec.md\` (what to build, page by page) and \`blueprint.json\` (the design in ABA's blueprint format).
 `)
   const archive = await zip(base, name)
-  return { dir: root, zip: archive, name, pages: snap.pages.length, sections: react.sections, html: htmlFiles }
+  return { dir: root, zip: archive, name, brand: snap.brand, pages: snap.pages.length, sections: react.sections, html: htmlFiles }
 }
 
