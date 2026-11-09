@@ -875,6 +875,10 @@ function canvasPage() {
     .replace('<script src="chatter.js"></script>', () => `<script>${read('chatter.js')}</script>`)
     .replace('<script src="show.js"></script>', () => `<script>${read('show.js')}</script>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
+    // the galaxy home and the orbit view (docs/specs/08-identity.md, "Galaxy and orbit"); three.js loads from web/vendor on demand
+    .replace('<link rel="stylesheet" href="galaxy.css">', () => `<style>${read('galaxy.css')}</style>`)
+    .replace('<script type="module" src="galaxy.js"></script>', () => `<script type="module">${read('galaxy.js')}</script>`)
+    .replace('<script type="module" src="orbit.js"></script>', () => `<script type="module">${read('orbit.js')}</script>`)
 }
 
 function sendFile(res, file) {
@@ -883,7 +887,8 @@ function sendFile(res, file) {
     return
   }
   // fonts are fetched in CORS mode, and the Desktop pane's frame has an opaque origin
-  const cors = extname(file) === '.woff2' ? { 'access-control-allow-origin': '*', 'cache-control': 'max-age=86400' } : { 'cache-control': 'no-store' }
+  // fonts and the vendored three.js (a module import) are fetched in CORS mode
+  const cors = extname(file) === '.woff2' || file.startsWith(join(webDir, 'vendor')) ? { 'access-control-allow-origin': '*', 'cache-control': 'max-age=86400' } : { 'cache-control': 'no-store' }
   res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', ...cors })
   res.end(readFileSync(file))
 }

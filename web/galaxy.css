@@ -1,0 +1,230 @@
+/* ---------- Galaxy and orbit (docs/specs/08-identity.md, "Galaxy and orbit").
+   The galaxy home (web/galaxy.js) and a build's orbit view (web/orbit.js). Off in classic view
+   (☰ → Classic view) and on wall tiles: everything here hangs off body.cosmos.
+   Colours only from tokens: the WebGL scenes read these same custom properties. */
+:root {
+  /* two more F2 colours (spec 08) for the nebula clouds and the galaxy's outer arms */
+  --nebula: #7900F2;
+  --nebula-2: #F20079;
+  --cosmos-ease: cubic-bezier(.65, 0, .35, 1);
+}
+
+/* ---------- lean chrome: galaxy-back, build name, Auto, Play, Publish, ☰ */
+body.cosmos .starmap, body.cosmos #game-btn, body.cosmos .undo-redo, body.cosmos .clock,
+body.cosmos #more-btn .t, body.cosmos #more-btn .count { display: none !important; }
+body.cosmos #more-btn { padding: 4px 9px; }
+.cosmos-back { display: none; align-items: center; gap: 6px; }
+.cosmos-back .ico { width: 15px; height: 15px; }
+body.cosmos-orbit .cosmos-back, body.cosmos-station .cosmos-back { display: inline-flex; }
+body.cosmos-orbit .brand, body.cosmos-station .brand { display: none; }
+body.cosmos-galaxy .file-name, body.cosmos-galaxy #play-btn, body.cosmos-galaxy .pubwrap { display: none; }
+body.cosmos-galaxy .topbar { background: transparent; border-bottom-color: transparent; backdrop-filter: none; }
+body.cosmos .file-name { color: var(--text); font: 600 14px var(--label); letter-spacing: .06em; text-transform: uppercase; }
+body.cosmos .file-name::before { display: none; }
+.more-menu .cosmos-only { display: none; }
+body.cosmos .more-menu .cosmos-only { display: flex; }
+.more-menu .cosmos-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+
+/* ---------- the side column folds into the comm-link; the expand control brings it back */
+body.cosmos, body.cosmos.side-min { grid-template-columns: 0 1fr; }
+body.cosmos.design-on, body.cosmos.side-min.design-on { grid-template-columns: 0 1fr var(--design-w, 264px); }
+body.cosmos .side { display: none; }
+body.cosmos .viewport, body.cosmos .appview, body.cosmos.view-video .video-pop { grid-area: 2 / 2 / 3 / 3; }
+body.cosmos.design-on .design { grid-column: 3; }
+body.cosmos.cosmos-chat { grid-template-columns: var(--side-w, 300px) 1fr; }
+body.cosmos.cosmos-chat.design-on { grid-template-columns: var(--side-w, 300px) 1fr var(--design-w, 264px); }
+body.cosmos.cosmos-chat .side { display: flex; grid-area: 2 / 1 / 3 / 2; }
+body.cosmos-galaxy.cosmos-chat .side { display: none; }
+body.cosmos-galaxy .viewport, body.cosmos-orbit .viewport { visibility: hidden; }
+body.cosmos-galaxy .crew-layer, body.cosmos-orbit .crew-layer { display: none; }
+body.cosmos-galaxy .appview, body.cosmos-orbit .appview { visibility: hidden; }
+
+/* in a station (Canvas, Video, App) a round button brings the chat column back */
+.cosmos-chatbtn { position: fixed; left: 14px; bottom: 14px; z-index: 64; display: none; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+  background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--panel-edge); border-radius: 999px; color: var(--text); cursor: pointer;
+  font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
+.cosmos-chatbtn img { width: 24px; height: 24px; border-radius: 50%; }
+.cosmos-chatbtn:hover { border-color: var(--line-2); }
+body.cosmos-station:not(.cosmos-chat) .cosmos-chatbtn { display: inline-flex; }
+body.cosmos .side-min-btn { display: none; }
+
+/* ---------- the galaxy home */
+.galaxy { position: fixed; inset: 0; z-index: 25; background: var(--void); overflow: hidden; opacity: 1; transition: opacity .45s var(--ease); }
+.galaxy[hidden] { display: none; }
+.galaxy.out { opacity: 0; pointer-events: none; }
+.galaxy canvas, .orbit canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+.galaxy.hot canvas { cursor: pointer; }
+.galaxy canvas { opacity: 0; transition: opacity 1.2s var(--ease); }
+.galaxy.ready canvas { opacity: 1; }
+.gx-labels, .ob-labels, .ob-crew { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.gx-label { position: absolute; left: 0; top: 0; pointer-events: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 2px 6px 3px 12px;
+  background: none; border: 0; color: var(--text); cursor: pointer; text-align: left; white-space: nowrap; will-change: transform; transition: opacity .25s;
+  font: 600 12px/1.1 var(--label); letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 1px 8px rgb(var(--void-rgb) / .95), 0 0 2px rgb(var(--void-rgb)); }
+.gx-label::before { content: ''; position: absolute; left: 0; top: 7px; width: 7px; border-top: 1px solid rgb(var(--glass-rgb) / .5); }
+.gx-label > span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.gx-label small { font: 400 10px/1.2 var(--mono); letter-spacing: 0; text-transform: none; color: var(--muted); display: none; }
+.gx-label.hot small, .gx-label:focus-visible small { display: block; }
+.gx-label.hot, .gx-label:focus-visible { color: var(--accent); z-index: 2; }
+.gx-label.live { color: var(--accent); }
+.gx-label.live::after { content: 'live'; position: absolute; left: 100%; top: 2px; padding: 1px 5px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font: 700 9px/1.3 var(--mono); }
+.gx-label.off { opacity: 0; pointer-events: none; }
+.gx-label:focus-visible { outline: 1px solid var(--frame-hi); outline-offset: 2px; border-radius: 4px; }
+
+.galaxy.flying .gx-dock, .galaxy.flying .gx-chart-btn, .galaxy.flying .gx-chart { opacity: 0; pointer-events: none; transition: opacity .3s; }
+.gx-dock { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(640px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 3; }
+.gx-title { margin: 0; font: 800 clamp(34px, 6vw, 64px)/.9 var(--display); letter-spacing: .01em; text-transform: uppercase; color: var(--text); text-align: center; text-shadow: 0 2px 30px rgb(var(--void-rgb) / .9); }
+.gx-title em { font: italic 500 1.02em var(--serif); text-transform: none; color: var(--accent); letter-spacing: 0; }
+.gx-sub { margin: -4px 0 0; color: var(--muted); font: 12px var(--mono); text-align: center; text-shadow: 0 1px 8px rgb(var(--void-rgb)); }
+.gx-form { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 7px 7px 18px; background: rgb(var(--deep-rgb) / .78); backdrop-filter: blur(16px);
+  border: 1px solid var(--panel-edge); border-radius: 999px; box-shadow: 0 0 0 1px rgb(var(--frame-rgb) / .35), 0 20px 60px rgb(var(--shade-rgb) / .7), 0 0 80px var(--glow); }
+.gx-form:focus-within { border-color: var(--line-2); box-shadow: 0 0 0 1px var(--frame-hi), 0 20px 60px rgb(var(--shade-rgb) / .7), 0 0 90px var(--glow); }
+.gx-form input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: 14px var(--mono); padding: 8px 0; }
+.gx-form input::placeholder { color: var(--muted); }
+.gx-form button { flex: none; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 9px 16px; cursor: pointer; font: 700 13px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
+.gx-form .gx-go { background: var(--accent); color: var(--accent-ink); border: 0; }
+.gx-form .gx-auto { background: none; color: var(--text); border: 1px solid var(--line-2); }
+.gx-form .gx-auto:hover { border-color: var(--accent); }
+.gx-form .ico { width: 15px; height: 15px; }
+.gx-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.gx-chips button { background: rgb(var(--deep-rgb) / .7); backdrop-filter: blur(8px); border: 1px solid var(--panel-edge); border-radius: 99px; padding: 5px 12px; color: var(--text); cursor: pointer; font: 11.5px var(--mono); }
+.gx-chips button:hover { border-color: var(--line-2); }
+.gx-chips .gx-live { border-color: rgb(var(--accent-rgb) / .6); color: var(--accent); }
+.gx-chips .gx-live::before { content: '● '; animation: blink 1.2s infinite; }
+
+.gx-chart-btn { position: absolute; left: 16px; top: 60px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; background: rgb(var(--deep-rgb) / .7); backdrop-filter: blur(8px);
+  border: 1px solid var(--panel-edge); border-radius: 99px; color: var(--text); cursor: pointer; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
+.gx-chart-btn .ico { width: 14px; height: 14px; }
+.gx-chart-btn em { font: 600 11px var(--mono); color: var(--accent); font-style: normal; }
+.gx-chart { position: absolute; left: 16px; top: 98px; z-index: 4; width: min(320px, calc(100% - 32px)); max-height: calc(100% - 300px); min-height: 120px; overflow: auto; padding: 6px;
+  background: var(--glass); backdrop-filter: blur(16px); border: 1px solid var(--panel-edge); border-radius: 14px; box-shadow: 0 18px 50px rgb(var(--shade-rgb) / .6); animation: in .2s var(--ease); }
+.gx-chart[hidden] { display: none; }
+.gx-chart button { width: 100%; display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 9px; padding: 7px 8px; background: none; border: 0; border-radius: 8px; color: var(--text); cursor: pointer; text-align: left; }
+.gx-chart button:hover, .gx-chart button:focus-visible { background: var(--panel-2); outline: none; }
+.gx-chart i { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.gx-chart span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13px var(--label); letter-spacing: .05em; text-transform: uppercase; }
+.gx-chart small { color: var(--muted); font: 10.5px var(--mono); }
+.gx-fps { position: absolute; right: 12px; top: 56px; z-index: 5; font: 11px var(--mono); color: var(--ok); background: rgb(var(--void-rgb) / .7); padding: 2px 6px; border-radius: 4px; }
+.gx-fail { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font: 12px var(--mono); }
+
+/* ---------- the orbit view */
+.orbit { grid-area: 2 / 2 / 3 / 3; position: relative; z-index: 35; min-width: 0; min-height: 0; overflow: hidden; background: var(--void); transition: opacity .4s var(--ease); }
+.orbit[hidden] { display: none; }
+.orbit.in { animation: ob-in .6s var(--ease); }
+@keyframes ob-in { from { opacity: 0; transform: scale(1.04); } }
+.ob-label { position: absolute; left: 0; top: 0; pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 3px; transform-origin: 50% 0; will-change: transform;
+  background: none; border: 0; padding: 0; color: var(--text); cursor: pointer; white-space: nowrap; font: 600 12px/1.1 var(--label); letter-spacing: .08em; text-transform: uppercase;
+  text-shadow: 0 1px 8px rgb(var(--void-rgb) / .95); }
+.ob-label small { font: 10px var(--mono); letter-spacing: 0; text-transform: none; color: var(--muted); }
+.ob-label .bar { width: 54px; height: 3px; border-radius: 2px; background: rgb(var(--glass-rgb) / .14); overflow: hidden; }
+.ob-label .bar i { display: block; height: 100%; background: var(--ok); transition: width .5s var(--ease); }
+.ob-label.busy .bar i { background: var(--accent); }
+.ob-label:hover, .ob-label:focus-visible { color: var(--accent); outline: none; }
+.ob-label.sun { font: 800 22px/1 var(--display); letter-spacing: .02em; pointer-events: none; }
+.ob-label.sun small { font-size: 11px; }
+.ob-label.station { flex-direction: row; gap: 7px; padding: 5px 11px 5px 8px; border-radius: 99px; background: rgb(var(--deep-rgb) / .85); border: 1px solid var(--panel-edge); }
+.ob-label.station i.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--st); box-shadow: 0 0 8px var(--st); }
+.ob-label.station small { margin-left: 2px; }
+.ob-label.station.working small { color: var(--accent); }
+.ob-label.station:hover { border-color: var(--st); color: var(--text); }
+.ob-label.off { opacity: 0; pointer-events: none; }
+
+.ob-minion { position: absolute; left: 0; top: 0; width: 28px; height: 28px; margin: -14px 0 0 -14px; will-change: transform; filter: drop-shadow(0 3px 6px rgb(var(--shade-rgb) / .6)); }
+.ob-minion .crew-av { display: block; width: 100%; height: 100%; }
+.ob-minion .nm { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); padding: 0 5px; border-radius: 99px; font: 700 9px/1.5 var(--mono); white-space: nowrap; opacity: .9; }
+.ob-minion.far .nm { display: none; }
+.ob-bubble { position: absolute; left: 22px; bottom: 22px; max-width: 190px; width: max-content; padding: 5px 9px; border-radius: 12px 12px 12px 3px; background: var(--glass);
+  border: 1px solid var(--panel-edge); border-left: 2px solid var(--who, var(--text)); color: var(--text); font: 11px/1.35 var(--mono); opacity: 0; transform: translateY(4px); transition: opacity .2s, transform .2s var(--ease); pointer-events: none; }
+.ob-minion.talking .ob-bubble { opacity: 1; transform: none; }
+.ob-minion.talking { z-index: 3; }
+
+.ob-empty { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); color: var(--muted); font: 12px var(--mono); text-align: center; pointer-events: none; }
+
+/* the comm-link: Hermia's orders in one strip at the bottom, her thinking in a cloud above it */
+.comm { position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 6; display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 8px;
+  background: var(--glass); backdrop-filter: blur(16px); border: 1px solid var(--panel-edge); border-radius: 999px; box-shadow: 0 16px 44px rgb(var(--shade-rgb) / .6); }
+.comm > img { flex: none; width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 0 0 1px var(--frame), 0 0 14px var(--glow); }
+.comm-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 9px; background: none; border: 0; padding: 4px 0; color: var(--text); cursor: pointer; text-align: left; }
+.comm-text b { flex: none; font: 700 12px/1 var(--label); letter-spacing: .12em; color: var(--accent); }
+.comm-text span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px/1.3 var(--mono); }
+.comm-text span.new { animation: in .3s var(--ease); }
+.comm-text:hover span { color: var(--accent); }
+.comm button.comm-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 99px; background: none; border: 1px solid var(--line-2); color: var(--text); cursor: pointer;
+  font: 600 11.5px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
+.comm button.comm-btn:hover { border-color: var(--accent); }
+.comm .ico { width: 14px; height: 14px; }
+.comm-btn em { font: 600 10.5px var(--mono); color: var(--accent); font-style: normal; }
+/* her reasoning: a dim, italic thought cloud, apart from her orders */
+.comm-thought { position: absolute; left: 30px; bottom: calc(100% + 18px); max-width: min(560px, calc(100% - 60px)); padding: 10px 16px; border-radius: 26px; cursor: pointer;
+  background: rgb(var(--deep-rgb) / .82); backdrop-filter: blur(10px); border: 1px dashed rgb(var(--glass-rgb) / .28); color: var(--muted);
+  font: italic 500 14px/1.4 var(--serif); opacity: .92; transition: opacity .6s, transform .3s var(--ease); }
+.comm-thought::before, .comm-thought::after { content: ''; position: absolute; border-radius: 50%; background: rgb(var(--deep-rgb) / .82); border: 1px dashed rgb(var(--glass-rgb) / .28); }
+.comm-thought::before { width: 12px; height: 12px; left: 6px; bottom: -14px; }
+.comm-thought::after { width: 7px; height: 7px; left: -2px; bottom: -24px; }
+.comm-thought.stale { opacity: .72; }
+.comm-thought.new { animation: think-in .5s var(--ease); }
+.comm-thought[hidden] { display: none; }
+@keyframes think-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
+
+.think-log { position: absolute; left: 14px; bottom: 70px; z-index: 8; width: min(620px, calc(100% - 28px)); max-height: min(60%, 520px); display: flex; flex-direction: column;
+  background: var(--glass); backdrop-filter: blur(18px); border: 1px solid var(--panel-edge); border-radius: 16px; box-shadow: 0 20px 60px rgb(var(--shade-rgb) / .7); animation: in .2s var(--ease); }
+.think-log[hidden] { display: none; }
+.think-log header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+.think-log header b { font: 800 20px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; }
+.think-log header b em { font: italic 500 1em var(--serif); text-transform: none; color: var(--accent); }
+.think-log header .x { margin-left: auto; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px; }
+.think-log header .x:hover { color: var(--text); }
+.think-log ol { list-style: none; margin: 0; padding: 8px 14px 14px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.think-log li { border-left: 2px solid rgb(var(--glass-rgb) / .2); padding-left: 10px; }
+.think-log li.order { border-left-color: var(--accent); }
+.think-log li time { display: block; color: var(--muted); font: 10.5px var(--mono); margin-bottom: 3px; }
+.think-log li p { margin: 0; white-space: pre-wrap; color: var(--text); font: 12px/1.5 var(--mono); }
+.think-log li.reason p { color: var(--code); font: italic 14px/1.45 var(--serif); }
+.think-log .none { color: var(--muted); font: 12px var(--mono); padding: 6px 0; }
+
+/* phones: the orbit becomes a list of planets */
+.ob-list { position: absolute; inset: 0 0 64px; overflow: auto; padding: 14px 14px 20px; display: none; flex-direction: column; gap: 10px; }
+.ob-list .ol-sun { display: flex; align-items: center; gap: 12px; padding: 4px 2px 8px; }
+.ob-list .ol-sun i { width: 34px; height: 34px; border-radius: 50%; flex: none; background: radial-gradient(circle at 40% 35%, var(--text), var(--sun, var(--accent)) 45%, transparent 72%); box-shadow: 0 0 24px var(--sun, var(--accent)); }
+.ob-list .ol-sun b { display: block; font: 800 24px/1 var(--display); text-transform: uppercase; }
+.ob-list .ol-sun small { color: var(--muted); font: 11px var(--mono); }
+.ob-list .ol-stations { display: flex; gap: 6px; flex-wrap: wrap; }
+.ob-list .ol-stations button { flex: 1; min-width: 96px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-edge); color: var(--text); cursor: pointer; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
+.ob-list .ol-stations button small { font: 10px var(--mono); color: var(--muted); letter-spacing: 0; text-transform: none; }
+.ob-list .ol-stations button::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--st); box-shadow: 0 0 8px var(--st); }
+.ob-list .ol-planet { display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: center; padding: 8px; border-radius: 14px; background: var(--panel); border: 1px solid var(--panel-edge); color: var(--text); cursor: pointer; text-align: left; width: 100%; }
+.ob-list .ol-planet .pl { width: 52px; height: 52px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgb(var(--glass-rgb) / .5), var(--pc) 55%, rgb(var(--void-rgb)) 100%); background-size: cover; background-position: top center; box-shadow: inset -8px -6px 14px rgb(var(--void-rgb) / .7), 0 0 14px rgb(var(--frame-rgb) / .3); }
+.ob-list .ol-planet b { display: block; font: 600 15px/1.1 var(--label); letter-spacing: .06em; text-transform: uppercase; }
+.ob-list .ol-planet small { color: var(--muted); font: 10.5px var(--mono); }
+.ob-list .ol-planet .bar { height: 3px; margin: 6px 0 4px; border-radius: 2px; background: rgb(var(--glass-rgb) / .14); overflow: hidden; }
+.ob-list .ol-planet .bar i { display: block; height: 100%; background: var(--ok); }
+.ob-list .ol-planet .crew { display: flex; gap: 2px; margin-top: 4px; min-height: 0; }
+.ob-list .ol-planet .crew .crew-av { width: 20px; height: 20px; }
+
+/* ---------- narrow windows and phones */
+@media (max-width: 700px) {
+  body.cosmos { grid-template-rows: 52px 1fr; }
+  body.cosmos.cosmos-chat { grid-template-columns: 0 1fr; }
+  body.cosmos.cosmos-chat .side { position: fixed; left: 0; right: 0; bottom: 0; height: 62vh; z-index: 140; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; background: var(--deep); }
+  .gx-dock { bottom: 16px; gap: 10px; }
+  .gx-form { padding-left: 14px; }
+  .gx-form .gx-auto .t { display: none; }
+  .gx-chart { max-height: calc(100% - 330px); }
+  .comm { left: 8px; right: 8px; bottom: 8px; }
+  .comm .comm-btn .t { display: none; }
+  .comm-thought { left: 12px; font-size: 13px; }
+  .think-log { left: 8px; width: calc(100% - 16px); bottom: 62px; max-height: 70%; }
+}
+@media (max-width: 600px) {
+  .orbit canvas, .orbit .ob-labels, .orbit .ob-crew { display: none; }
+  .orbit .ob-list { display: flex; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .galaxy, .orbit { transition: opacity .3s linear; }
+  .orbit.in { animation: none; }
+}
+
+/* the wall tiles never show any of it */
+html.wall .galaxy, html.wall .orbit, html.wall .cosmos-chatbtn { display: none !important; }
+
+/* spec 07's chatter dock: sit above the comm-link strip instead of on Hermia, right side so it clears her thought cloud */
+body.cosmos-orbit .sound-dock, body.cosmos-station .sound-dock { left: auto !important; right: 14px !important; top: auto !important; bottom: 76px !important; }
