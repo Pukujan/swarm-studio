@@ -811,3 +811,9 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .auto-conn .ac-wait { opacity: .8 }
 .auto-conn .ac-go { padding: 5px 12px; border: 0; border-radius: 6px; cursor: pointer; background: #8b9cff; color: #0b0d12; font-weight: 600 }
 .auto-conn a { color: inherit; text-decoration: underline }
+
+/* Auto: the Games toggle (3 mini / 1 big) */
+.auto-games { display: flex; align-items: center; gap: 4px; margin: 8px 0 4px; font: 600 11px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: .06em }
+.auto-games span { opacity: .6; margin-right: 6px }
+.auto-games button { padding: 5px 10px; border-radius: 999px; border: 1px solid rgb(255 255 255 / .16); background: transparent; color: inherit; font: inherit; cursor: pointer }
+.auto-games button.on { background: #8b9cff; border-color: #8b9cff; color: #0b0b14 }

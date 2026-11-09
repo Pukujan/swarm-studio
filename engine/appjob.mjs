@@ -77,7 +77,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const dir = dirOf(id)
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
     const fresh = !existsSync(join(dir, 'package.json')) || input.fresh
-    const ask = String(input.ask || '').trim().slice(0, 4000)
+    const ask = String(input.ask || '').trim().slice(0, 16000)
     let prompt
     if (fresh) {
       // a new app starts a new engine chat: the old one's history (and its

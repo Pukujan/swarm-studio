@@ -52,7 +52,7 @@ Auto's games step (`GAMES_ASK` in `engine/auto.mjs`) always builds three small m
 
 ## Done when
 
-- [ ] Auto with the Tidebreak prompt picks `big`, and the "Games" toggle in the Auto window can change it.
+- [x] Auto with the Tidebreak prompt picks `big`, and the "Games" toggle in the Auto window can change it. Built in `engine/auto.mjs` (`gameMode`, `bigGameAsk`); the toggle is "Auto / 3 mini / 1 big". The game-making notes from `gameskills/` (roguelike, game feel, procedural generation, input) are added to the prompt, and the app engine's ask limit went from 4,000 to 16,000 characters to fit them.
 - [ ] `/play` loads one game, playable with keyboard and with touch. A run goes room, blessing, rooms, shop, boss, and ends in death or victory.
 - [ ] The leaderboard and the 1-credit cost work in the deployed build.
 - [ ] Mini mode is unchanged for prompts that aren't games, checked with one regression run.

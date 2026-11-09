@@ -4365,7 +4365,8 @@ function openAuto() {
   el.className = 'game-pop auto-pop'
   el.innerHTML = `<div class="ghead"><b>⚡ Auto mode</b><button class="gclose" title="Close">×</button></div>
     <h3>One prompt. The whole thing.</h3>
-    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>🎬 Cut a promo video from your idea</li><li>⚙️ Build the working app</li><li>🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🚀 Deploy to Vercel</li></ol>
+    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>🎬 Cut a promo video from your idea</li><li>⚙️ Build the working app</li><li class="auto-games-li">🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🚀 Deploy to Vercel</li></ol>
+    <div class="auto-games" role="radiogroup" aria-label="Games"><span>Games</span><button data-g="auto" class="on" role="radio" aria-checked="true">Auto</button><button data-g="mini" role="radio" aria-checked="false">3 mini</button><button data-g="big" role="radio" aria-checked="false">1 big</button></div>
     <div class="auto-conn"></div>
     <textarea class="auto-prompt" rows="4" placeholder="A night market in Taipei: street food, a festival weekend in March, tickets and a vendor map"></textarea>
     <div class="auto-go"><button class="primary auto-start">⚡ Run it all</button><small>Takes a while: the app and the games are real builds. Keep this window open; the review needs it.</small></div>`
@@ -4376,15 +4377,30 @@ function openAuto() {
   const ta = el.querySelector('.auto-prompt')
   ta.value = els.brief.value.trim()
   ta.focus()
+  // Games: Auto picks one big game when the prompt is a game (the same rule as the server)
+  let gamesChoice = 'auto'
+  const genre = /\b(rogue-?like|rogue-?lite|platformer|metroidvania|shoot[' ]?em[ -]?up|shmup|bullet[ -]hell|tower[ -]defen[cs]e|deck-?builder|card game|survivors?-like|twin-stick|top-down action|action rpg|arpg|fighting game|racing game|puzzle game|rhythm game)\b/i
+  const guess = p => genre.test(p) || (/\b(game|trial|demo)\b/i.test(p) && /\b(playable|play it|trial|demo|indie)\b/i.test(p) && !/\bmini[ -]?games?\b/i.test(p)) ? 'big' : 'mini'
+  const showGames = () => {
+    const mode = gamesChoice === 'auto' ? guess(ta.value) : gamesChoice
+    el.querySelector('.auto-games-li').textContent = mode === 'big' ? `🎮 Build one big game on /play${gamesChoice === 'auto' ? ' (your prompt is a game)' : ''}` : '🎮 Add three mini games on /play'
+  }
+  el.querySelectorAll('.auto-games button').forEach(b => b.onclick = () => {
+    gamesChoice = b.dataset.g
+    el.querySelectorAll('.auto-games button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)) })
+    showGames()
+  })
+  ta.addEventListener('input', showGames)
   const go = async () => {
     const prompt = ta.value.trim()
     if (!prompt) return ta.focus()
-    const res = await api('/api/auto', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt }) }).catch(() => null)
+    const res = await api('/api/auto', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, games: gamesChoice }) }).catch(() => null)
     const out = await res?.json().catch(() => ({}))
     if (!res?.ok) return feed(null, `auto mode: ${out?.error || 'the canvas server is not answering'}`, 'err')
     close()
     autoEvent(out, true)
   }
+  showGames()
   el.querySelector('.auto-start').onclick = go
   renderConnectors()
   ta.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go() }

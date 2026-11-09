@@ -76,3 +76,13 @@ The look work from specs 05 and 08 is shared: we make one token set and use it i
 
 - The README says the Feed is built on the owner's earlier Kresilo project.
 - Any part that isn't live is labelled "next".
+
+## Hosting the studio itself on the VPS
+
+The whole plugin can also run on the VPS, as a hosted Swarm Studio for people who don't have Hermes yet. The VPS already runs ABA's headless build engine, so the build side works there.
+- **For the hackathon:** one private instance for the demo and the judges, behind a login, kept awake with `warm hold`. A new hostname and service is a production change that the owner approves once.
+- **Later, public and multi-user:**
+  - each person gets their own workspace (today it's one token, one runs folder and one app build at a time);
+  - each build runs in its own container, because builds run code the model writes;
+  - sign-in plus credits or limits, because every visitor would spend our model key.
+- That hosted studio is the paid "remix in the browser" path mentioned in spec 10.
