@@ -11,7 +11,6 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync } from 'node:fs'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { providerFromEnv } from '../engine/llm.mjs'
 import { runSwarm } from '../engine/run.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -20,8 +19,32 @@ const runsDir = process.env.SWARM_RUNS_DIR || join(root, 'runs')
 const argPort = process.argv.indexOf('--port')
 const port = Number(argPort >= 0 ? process.argv[argPort + 1] : process.env.SWARM_PORT || 4319)
 
-const plannerModel = process.env.SWARM_PLANNER_MODEL || 'cb/deepseek-v4.1-flash'
-const workerModel = process.env.SWARM_WORKER_MODEL || 'cb/deepseek-v4.1-flash'
+// Endpoint and model per role. Hermes resolves them from its own model slots and
+// sends them with each run (see launcher.py); the environment gives the defaults
+// that the canvas's own Build button uses before the first such run. Keys stay in
+// memory: they are never written to a run's files or sent back out.
+const DEFAULT_BASE = 'https://api.inferhub.dev/v1'
+const DEFAULT_MODEL = 'cb/deepseek-v4.1-flash'
+const envRole = role => ({
+  baseUrl: process.env[`SWARM_${role}_BASE_URL`] || process.env.SWARM_BASE_URL || DEFAULT_BASE,
+  apiKey: process.env[`SWARM_${role}_API_KEY`] || process.env.SWARM_API_KEY || process.env.HERMES_CUSTOM_INFERHUB_API_KEY || '',
+  model: process.env[`SWARM_${role}_MODEL`] || DEFAULT_MODEL
+})
+let models = { planner: envRole('PLANNER'), worker: envRole('WORKER') }
+
+function setModels(given) {
+  const next = { ...models }
+  for (const role of ['planner', 'worker']) {
+    const m = given?.[role]
+    if (!m || typeof m !== 'object') continue
+    const baseUrl = String(m.base_url || '').replace(/\/$/, '')
+    if (!/^https?:\/\//.test(baseUrl) || !m.api_key || !m.model) continue
+    next[role] = { baseUrl, apiKey: String(m.api_key), model: String(m.model) }
+  }
+  models = next
+}
+const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), apiKey: models[role].apiKey })
+const host = url => { try { return new URL(url).host } catch { return '' } }
 const defaultAgents = Number(process.env.SWARM_AGENTS || 16)
 
 // Runs spend the user's API credits, so starting one (and watching one) needs
@@ -40,7 +63,8 @@ function broadcast(event) {
   for (const res of clients) res.write(line)
 }
 
-function startRun({ brief, agents }) {
+function startRun({ brief, agents, models: given }) {
+  setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
@@ -59,12 +83,17 @@ function startRun({ brief, agents }) {
     if (type !== 'layer:delta' && type !== 'plan:delta') appendFileSync(join(dir, 'events.jsonl'), JSON.stringify(event) + '\n')
   }
 
+  if (!models.planner.apiKey || !models.worker.apiKey) {
+    queueMicrotask(() => emit('error', { where: 'models', message: 'No model key yet. Start a build from Hermes once (/swarm, the chat tool or `hermes swarm`) so it can pass its model settings, or set SWARM_STUDIO_API_KEY.' }))
+    return run
+  }
   runSwarm({
-    provider: providerFromEnv(),
+    provider: provider('planner'),
+    workerProvider: provider('worker'),
     brief,
     agents: agents || defaultAgents,
-    plannerModel,
-    workerModel,
+    plannerModel: models.planner.model,
+    workerModel: models.worker.model,
     emit,
     signal: run.controller.signal
   })
@@ -220,8 +249,10 @@ const server = createServer((req, res) => {
       done: current?.done ?? null,
       working: current?.working.size || 0,
       result: current?.result || null,
-      plannerModel,
-      workerModel
+      plannerModel: models.planner.model,
+      workerModel: models.worker.model,
+      plannerHost: host(models.planner.baseUrl),
+      workerHost: host(models.worker.baseUrl)
     }))
     return
   }
@@ -231,5 +262,5 @@ const server = createServer((req, res) => {
 })
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${plannerModel}, workers ${workerModel})`)
+  console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
 })
