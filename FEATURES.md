@@ -29,6 +29,7 @@ Every feature works in three places: on the canvas, as a `/swarm …` command, a
 | **Clickable prototype** | Every page, with working links, on desktop or mobile. A layout guard moves any text panel that a builder floated over a map or picture beside it if it would cover other text at that width (exports and published sites get it too). | **▶ Play** (P) | `/swarm play` |
 | **Motion** | Sections rise in as they scroll into view and buttons lift on hover. Bold or playful themes move faster and springier. | **✨ Motion** (M) | `/swarm motion [on\|off]` |
 | **Watch a visitor** | 3–4 people with different goals use the site. A cursor acts each one out, with a thought bubble. | **👀 Watch a visitor** (V) | — |
+| **Files** | Every build is a file: search, sort (newest, oldest, name, most pages), group by day or by your own folders; unfinished runs fold away. 🎬 and 🌐 mark builds with a video or a live site; ⋯ moves a file to a folder or shows it (or its video) in Finder. | **Files** tab | `/swarm files` |
 | **Promo video** | The planner writes a storyboard from the site's own copy and photos. HyperFrames renders an MP4 in the site's theme; Kokoro (local, no account) reads a voiceover over a music bed written for the theme, ducked under the voice. Pick the voice or turn voice/music off in the panel; ⛶ Big screen fills the pane. Any OpenAI-compatible TTS (`SWARM_TTS_URL`, e.g. ElevenLabs via a proxy) can replace Kokoro. | **🎬 Video** | `/swarm video [n] [voice\|off] [nomusic]` |
 
 ## Ship
