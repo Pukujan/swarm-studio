@@ -19,6 +19,8 @@ const els = {
   dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), modelsBtn: $('#models-btn'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
+// what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
+const commandOps = {}
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
 // Per-viewer UI memory. Storage throws inside the Desktop pane's opaque origin, so it is optional.
 const store = {
@@ -241,6 +243,19 @@ function on(e) {
       if (l) { l.text = ''; l.ver++; l.status = 'assigned'; S.treeDirty = true }
       break
     }
+    case 'comment':
+      feed(null, `💬 ${e.text}`, 'you')
+      break
+    case 'comment:take': {
+      const a = S.agents.get(e.agent)
+      const what = e.reply || `On it, reworking the ${e.role || e.layer}.`
+      if (a && Date.now() - e.t < 8000) say(a, what)
+      chatAgent(a, what, e.layer)
+      break
+    }
+    case 'comment:none':
+      chatAgent(null, 'Not sure which section that is about. Select one on the canvas and comment there.')
+      break
     case 'video:start': case 'video:story': case 'video:progress': case 'video:done': case 'video:failed':
       videoEvent(e)
       break
@@ -924,7 +939,7 @@ function renderToolbar() {
     const list = by[t.id]
     const f = toolFlash.get(t.id)
     const lit = f && performance.now() < f.until ? ` style="background:${f.color};color:#0b0d12"` : ''
-    return `<div class="tool${list.length ? ' active' : ''}"${lit} title="${t.label}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
+    return `<div class="tool${list.length ? ' active' : ''}${t.id === 'comment' && cmt.mode ? ' armed' : ''}"${lit} data-tool="${t.id}" title="${t.id === 'comment' ? 'Comment: click a section and tell an agent what to change' : t.label}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
   }).join('')
   if (html !== toolbarKey) els.toolbar.innerHTML = toolbarKey = html
 }
@@ -949,6 +964,15 @@ function feed(a, text, kind = '', where = '') {
     item.append(w)
   }
   push(box, item)
+}
+
+// An agent answering in the Chat tab (a comment it picked up).
+function chatAgent(a, text, where = '') {
+  const item = document.createElement('div')
+  item.className = 'item reply'
+  item.style.setProperty('--c', a?.color || 'var(--accent)')
+  item.innerHTML = `<b>${esc(a?.name || 'SWARM')}</b>${esc(text)}${where ? `<span class="where">${esc(where)}</span>` : ''}`
+  push(els.feed, item)
 }
 
 function push(f, item) {
@@ -1062,6 +1086,7 @@ function frameLoop(now) {
     renderToolbar()
     renderDesign(now)
     drawSelBox()
+    drawComment()
     if (S.treeDirty) { S.treeDirty = false; renderTree() }
     if (S.planDirty) {
       S.planDirty = false
@@ -1120,7 +1145,7 @@ function prototypeClick(e) {
   if (!f) { if (S.sel) { S.sel = null; design.last = '' } return }
   const x = wx - f.x
   const hit = f.geo.gotos.find(({ box: [l, t, w, h] }) => x >= l && x <= l + w && wy >= t && wy <= t + h)
-  if (hit) focusPage(hit.target)
+  if (hit && !cmt.mode) focusPage(hit.target)
   else selectAt(f, x, wy)
 }
 
@@ -1970,6 +1995,8 @@ function loadPickerFonts() {
 function selectAt(f, x, y) {
   const hit = Object.entries(f.geo.slots).find(([, g]) => { const [l, t, w, h] = g.box; return x >= l && x <= l + w && y >= t && y <= t + h })
   S.sel = hit ? hit[0] : null
+  if (cmt.mode && S.sel) { cmt.mode = false; cmt.open = S.sel; toolbarKey = ''; els.viewport.classList.remove('commenting') }
+  else if (cmt.open !== S.sel) cmt.open = null
   design.pinned = null
   if (S.sel && design.tab !== 'design') { design.tabPinned = true; showDtab('design') }
   design.last = ''
@@ -1984,6 +2011,73 @@ function drawSelBox() {
   if (box.hidden) box.hidden = false
   Object.assign(box.style, { left: `${s.f.x + s.box.left}px`, top: `${s.box.top}px`, width: `${s.box.width}px`, height: `${s.box.height}px`, borderWidth: `${2 / cam.s}px` })
 }
+
+// ---------- comments: tell an agent what to change
+// A 💬 pin sits on the selected section; open, it is a little composer. The
+// Comment tool in the toolbar arms it: the next section clicked opens it. A
+// comment with no section (from /swarm fix) is routed by the planner.
+const cmt = { mode: false, open: null, el: null, key: '' }
+
+function drawComment() {
+  const l = S.sel && S.layers.get(S.sel)
+  const box = $('#selbox')
+  if (!l || l.status !== 'done' || !box || box.hidden) {
+    if (cmt.el) { cmt.el.remove(); cmt.el = null; cmt.key = '' }
+    return
+  }
+  const open = cmt.open === S.sel
+  const want = `${S.sel}|${open}`
+  if (cmt.key !== want) {
+    cmt.el?.remove()
+    cmt.key = want
+    cmt.el = document.createElement('div')
+    cmt.el.className = `cbox${open ? ' open' : ''}`
+    cmt.el.innerHTML = open
+      ? `<textarea rows="2" placeholder="Tell an agent what to change in ${esc(l.role || l.id)}…"></textarea><div class="crow"><small>Enter to send · Esc to close</small><button>Send</button></div>`
+      : '<button class="cpin" title="Comment: tell an agent what to change here">💬</button>'
+    document.body.append(cmt.el)
+    if (open) {
+      const ta = cmt.el.querySelector('textarea')
+      const send = () => { const t = ta.value.trim(); if (t) { sendComment(t, S.sel); cmt.open = null } }
+      ta.onkeydown = e => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send() }
+        if (e.key === 'Escape') { e.stopPropagation(); cmt.open = null }
+      }
+      cmt.el.querySelector('button').onclick = send
+      setTimeout(() => ta.focus(), 0)
+    } else cmt.el.querySelector('.cpin').onclick = () => { cmt.open = S.sel }
+  }
+  const r = box.getBoundingClientRect(), vr = els.viewport.getBoundingClientRect()
+  const w = open ? 320 : 34
+  const x = Math.min(vr.right - w - 8, Math.max(vr.left + 8, r.right - w))
+  const y = Math.min(vr.bottom - 110, Math.max(vr.top + 8, r.top + 8))
+  cmt.el.style.transform = `translate(${x | 0}px, ${y | 0}px)`
+}
+
+async function sendComment(text, target = null) {
+  const run = viewing && viewing !== 'new' ? viewing : S.run
+  if (!run) return feed(null, 'Open a build first.', 'err')
+  const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, role: l.role, html: l.text }))
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/comment`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, target, sections }) }).catch(() => null)
+  if (!res?.ok) {
+    const out = await res?.json().catch(() => ({}))
+    if (!/which section/.test(out?.error || '')) feed(null, `comment: ${out?.error || 'the canvas server is not answering'}`, 'err')
+  }
+}
+
+commandOps.fix = c => {
+  const l = S.sel && S.layers.get(S.sel)
+  sendComment(c.text || '', l?.status === 'done' ? S.sel : null)
+}
+
+els.toolbar.addEventListener('click', e => {
+  if (e.target.closest('[data-tool]')?.dataset.tool !== 'comment') return
+  if (S.sel && S.layers.get(S.sel)?.status === 'done') { cmt.open = S.sel; return }
+  cmt.mode = !cmt.mode
+  toolbarKey = ''
+  els.viewport.classList.toggle('commenting', cmt.mode)
+  if (cmt.mode) feed(null, '💬 Click a section to comment on it.', 'sys')
+})
 
 // ---------- generated images
 // Builders leave <img data-gen="…"> without a src; the server paints each one with
@@ -2100,9 +2194,6 @@ function autoReview() {
 }
 
 els.reviewBtn.onclick = () => reviewRun()
-
-// later features (video, fix, export) add themselves here
-const commandOps = {}
 
 // ---------- promo video
 // The planner storyboards the build into a few scenes, each handed to an agent,
