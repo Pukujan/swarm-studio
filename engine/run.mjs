@@ -149,7 +149,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       .catch(err => emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }))
   }
 
-  const sitemapParser = lineParser(obj => {
+  const onSitemap = obj => {
     if (obj.type === 'theme') {
       plan.theme = obj
       emit('theme', obj)
@@ -160,25 +160,49 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     } else {
       addLayer(obj)
     }
-  })
+  }
 
-  const planning = streamChat(provider, {
-    model: plannerModel,
-    messages: [
-      { role: 'system', content: SITEMAP_SYSTEM },
-      { role: 'user', content: `Brief: ${brief}` }
-    ],
-    maxTokens: 2000,
-    temperature: 0.8,
-    extra: NO_THINKING,
-    signal,
-    onDelta: d => {
-      emit('plan:delta', { text: d })
-      sitemapParser.push(d)
+  // The sitemap is the one call everything waits on. A provider that stalls (no
+  // text for 20s) or returns nothing usable gets one more try.
+  async function sitemap(attempt = 0) {
+    const parser = lineParser(onSitemap)
+    const stall = new AbortController()
+    const onAbort = () => stall.abort()
+    signal?.addEventListener('abort', onAbort)
+    let timer = setTimeout(() => stall.abort(), 20000)
+    try {
+      await streamChat(provider, {
+        model: plannerModel,
+        messages: [
+          { role: 'system', content: SITEMAP_SYSTEM },
+          { role: 'user', content: `Brief: ${brief}` }
+        ],
+        maxTokens: 2000,
+        temperature: 0.8,
+        extra: NO_THINKING,
+        signal: stall.signal,
+        onDelta: d => {
+          clearTimeout(timer)
+          timer = setTimeout(() => stall.abort(), 20000)
+          emit('plan:delta', { text: d })
+          parser.push(d)
+        }
+      })
+      parser.end()
+    } catch (err) {
+      if (signal?.aborted || attempt) throw err
+    } finally {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
     }
-  })
+    if (!plan.pages.length && !attempt && !signal?.aborted) {
+      emit('error', { where: 'planner', message: 'the site plan came back empty, trying once more' })
+      return sitemap(1)
+    }
+  }
+
+  const planning = sitemap()
     .then(() => {
-      sitemapParser.end()
       emit('sitemap:done', { ms: elapsed(), pages: plan.pages.length })
       // page planners need the whole page list (for links), so they start here
       for (const page of plan.pages) pagePlanners.push(planPage(page))
