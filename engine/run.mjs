@@ -8,8 +8,9 @@ import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.m
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
 
 export const AGENT_NAMES = [
-  'Ada', 'Basil', 'Cleo', 'Dax', 'Esme', 'Finn', 'Gia', 'Hugo', 'Iris', 'Jude', 'Kai', 'Luna',
-  'Milo', 'Nova', 'Otis', 'Pia', 'Quin', 'Remy', 'Sage', 'Tess', 'Uma', 'Vito', 'Wren', 'Xan'
+  // the crew: little alien workers with short, easy star-ish names
+  'Pip', 'Mochi', 'Lumi', 'Nova', 'Zuzu', 'Bean', 'Kiki', 'Tofu', 'Pebble', 'Juno', 'Comet', 'Dot',
+  'Orbi', 'Twinkle', 'Bloop', 'Sprout', 'Nim', 'Puff', 'Gizmo', 'Luma', 'Taro', 'Echo', 'Bix', 'Vela'
 ]
 const AGENT_COLORS = [
   '#FF6B6B', '#4ECDC4', '#FFD93D', '#6BCB77', '#4D96FF', '#FF8FAB', '#C77DFF', '#FF9F1C',
