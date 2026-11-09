@@ -2076,8 +2076,12 @@ els.exportBtn.onclick = () => exportRunNow()
 commandOps.export = () => exportRunNow()
 
 // ---------- publish: a live link on GitHub Pages (the person's gh login), or this computer
-const pub = { run: null, state: 'none', stage: '', el: null, github: undefined }
-const PUB_STAGES = { export: 'Exporting the pages', repo: 'Making the GitHub repo', push: 'Pushing the site', pages: 'Turning on GitHub Pages', building: 'GitHub is building it' }
+const pub = { run: null, state: 'none', stage: '', target: 'github', el: null, hosts: undefined }
+const PUB_STAGES = {
+  github: { export: 'Exporting the pages', repo: 'Making the GitHub repo', push: 'Pushing the site', pages: 'Turning on GitHub Pages', building: 'GitHub is building it' },
+  vercel: { export: 'Exporting the pages', project: 'Setting up the Vercel project', upload: 'Uploading the files', building: 'Vercel is deploying it' },
+  cloudflare: { export: 'Exporting the pages', project: 'Setting up the Pages project', upload: 'Uploading with wrangler', building: 'Cloudflare is going live' },
+}
 
 function pubPop(html) {
   pub.el?.remove()
@@ -2089,23 +2093,57 @@ function pubPop(html) {
   return pub.el
 }
 
-async function publishMenu() {
-  if (pub.github === undefined) {
-    pubPop('<div class="pstage">Checking GitHub…</div>')
+const HOSTS = {
+  github: { label: 'GitHub Pages', how: who => `A public link anyone can open: ${esc(who)}.github.io/… · about a minute`, off: 'Sign in with <code>gh auth login</code> to get a public link' },
+  vercel: { label: 'Vercel', how: who => `Your Vercel (${esc(who)}): a …vercel.app link · under a minute`, token: 'Create a token at vercel.com/account/tokens, then paste it here' },
+  cloudflare: { label: 'Cloudflare Pages', how: who => `Your Cloudflare (${esc(who)}): a …pages.dev link · the first one fetches wrangler`, token: 'Create a token with Account → Cloudflare Pages → Edit, then paste it here' },
+}
+
+async function publishMenu(force) {
+  if (pub.hosts === undefined || force) {
+    if (!pub.el) pubPop('<div class="pstage">Checking where you are signed in…</div>')
     const res = await api('/api/publish').catch(() => null)
-    pub.github = (await res?.json().catch(() => ({})))?.github || null
+    pub.hosts = (await res?.json().catch(() => null)) || {}
   }
-  const el = pubPop(`
-    <button class="popt" data-target="github"${pub.github ? '' : ' disabled'}><b>GitHub Pages</b><span>${pub.github ? `A public link anyone can open: ${esc(pub.github)}.github.io/… · about a minute` : 'Sign in with <code>gh auth login</code> to get a public link'}</span></button>
-    <button class="popt" data-target="local"><b>This computer</b><span>Hosted by Swarm Studio at 127.0.0.1 · instant, only you can open it</span></button>`)
+  const h = pub.hosts
+  const who = id => (id === 'github' ? h.github : h[id]?.user)
+  const row = id => {
+    const x = HOSTS[id], u = who(id)
+    if (u || id === 'github') return `<div class="prow"><button class="popt" data-target="${id}"${u ? '' : ' disabled'}><b>${x.label}</b><span>${u ? x.how(u) : x.off}</span></button>${u && id !== 'github' && !h[id]?.env ? `<button class="pdisc" data-disc="${id}" title="Disconnect ${x.label}">×</button>` : ''}</div>`
+    const url = h.providers?.[id]?.tokenUrl || '#'
+    return `<details class="pconn"><summary><b>Connect ${x.label}</b><span>${x.token.replace(/vercel\.com\/account\/tokens|a token/, m => `<a href="${esc(url)}" target="_blank" rel="noopener">${m}</a>`)}</span></summary>
+      <form data-conn="${id}"><input type="password" autocomplete="off" spellcheck="false" placeholder="${x.label} token"><button>Connect</button></form><div class="perr"></div></details>`
+  }
+  const el = pubPop(`${['github', 'vercel', 'cloudflare'].map(row).join('')}
+    <div class="prow"><button class="popt" data-target="local"><b>This computer</b><span>Hosted by Swarm Studio at 127.0.0.1 · instant, only you can open it</span></button></div>`)
   el.querySelectorAll('.popt').forEach(b => { b.onclick = () => publishNow(b.dataset.target) })
+  el.querySelectorAll('[data-disc]').forEach(b => {
+    b.onclick = async () => {
+      await api('/api/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: b.dataset.disc }) }).catch(() => null)
+      publishMenu(true)
+    }
+  })
+  el.querySelectorAll('form[data-conn]').forEach(f => {
+    f.onsubmit = async ev => {
+      ev.preventDefault()
+      const input = f.querySelector('input'), err = f.parentElement.querySelector('.perr')
+      if (!input.value.trim()) return
+      f.querySelector('button').textContent = 'Checking…'
+      const res = await api('/api/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: f.dataset.conn, token: input.value.trim() }) }).catch(() => null)
+      input.value = ''
+      const out = await res?.json().catch(() => ({}))
+      if (res?.ok) return publishMenu(true)
+      f.querySelector('button').textContent = 'Connect'
+      err.textContent = out?.error || 'the canvas server is not answering'
+    }
+  })
 }
 
 async function publishNow(target = 'github') {
   const run = shownRun()
   if (!run) return
-  Object.assign(pub, { run, state: 'working', stage: 'export' })
-  pubPop(`<div class="pstage">${PUB_STAGES.export}…</div>`)
+  Object.assign(pub, { run, state: 'working', stage: 'export', target })
+  pubPop('<div class="pstage">Exporting the pages…</div>')
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, html: l.text }))
   const res = await api(`/api/runs/${encodeURIComponent(run)}/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target, sections }) }).catch(() => null)
   if (!res?.ok) {
@@ -2121,24 +2159,26 @@ function publishEvent(e) {
   pub.run = e.run
   if (e.type === 'publish:start' || e.type === 'publish:stage') {
     if (!fresh) return
-    Object.assign(pub, { state: 'working', stage: e.stage || 'export' })
-    const steps = Object.keys(PUB_STAGES), at = steps.indexOf(pub.stage)
-    pubPop(`<div class="psteps">${steps.map((k, i) => `<div class="${i < at ? 'did' : i === at ? 'now' : ''}">${i < at ? '✓' : i === at ? '◌' : '·'} ${PUB_STAGES[k]}</div>`).join('')}</div>`)
+    Object.assign(pub, { state: 'working', stage: e.stage || 'export', target: e.target || pub.target })
+    const names = PUB_STAGES[pub.target]
+    if (!names) return
+    const steps = Object.keys(names), at = steps.indexOf(pub.stage)
+    pubPop(`<div class="psteps">${steps.map((k, i) => `<div class="${i < at ? 'did' : i === at ? 'now' : ''}">${i < at ? '✓' : i === at ? '◌' : '·'} ${names[k]}</div>`).join('')}</div>`)
     return
   }
   Object.assign(pub, { state: 'done', url: e.url })
   if (!fresh) return
   const el = pubPop(`
     <div class="plink"><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url.replace(/^https?:\/\//, ''))}</a></div>
-    <div class="xrow"><b>${e.target === 'github' ? 'GitHub' : 'Local'}</b><span>${e.target === 'github' ? `${e.pages} pages live on GitHub Pages · repo ${esc(e.repo || '')}${e.pending ? ' · still going live, give it a minute' : ''}` : `${e.pages} pages hosted by Swarm Studio on this computer`}</span></div>
-    ${e.fallback ? `<div class="pstage err">GitHub didn't work: ${esc(e.fallback)}</div>` : ''}
+    <div class="xrow"><b>${e.target === 'local' ? 'Local' : HOSTS[e.target]?.label.split(' ')[0]}</b><span>${e.target === 'local' ? `${e.pages} pages hosted by Swarm Studio on this computer` : `${e.pages} pages live on ${HOSTS[e.target]?.label} · ${esc(String(e.repo || '').replace(/^\w+:/, ''))}${e.pending ? ' · still going live, give it a minute' : ''}`}</span></div>
+    ${e.fallback ? `<div class="pstage err">${HOSTS[e.tried]?.label || 'Publishing'} didn't work: ${esc(e.fallback)}</div>` : ''}
     <div class="vfoot"><button class="vagain pcopy">Copy link</button><a class="vagain" href="${esc(e.url)}" target="_blank" rel="noopener">Open ↗</a></div>`)
   el.querySelector('.pcopy').onclick = ev => { navigator.clipboard?.writeText(e.url).catch(() => {}); ev.target.textContent = 'Copied' }
   feed(null, `🌐 published ${e.pages} pages: ${e.url}`, 'sys')
 }
 
 els.publishBtn.onclick = () => publishMenu()
-commandOps.publish = c => publishNow(c.target === 'local' ? 'local' : 'github')
+commandOps.publish = c => publishNow(['local', 'vercel', 'cloudflare'].includes(c.target) ? c.target : 'github')
 
 // ---------- comments: tell an agent what to change
 // A 💬 pin sits on the selected section; open, it is a little composer. The

@@ -75,10 +75,10 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
   - The server calls the chat endpoint you configure (InferHub by default) with your brief and the plan.
   - The canvas and page frames load Tailwind from `cdn.tailwindcss.com` and fonts from Google Fonts.
   - Generated images go through the Hermes image provider you pick (your Codex login by default); the visual review sends page screenshots to your vision model.
-  - **Publish** to GitHub Pages runs your `gh` CLI: it creates a public repo under your account (its description says it was made with Swarm Studio, and it only ever updates repos marked that way) and pushes the static site. Publishing locally serves the site from the canvas server at `127.0.0.1:4319/site/<run>/`.
+  - **Publish** to GitHub Pages runs your `gh` CLI: it creates a public repo under your account (its description says it was made with Swarm Studio, and it only ever updates repos marked that way) and pushes the static site. **Vercel** and **Cloudflare Pages** use an access token you connect once in the Publish menu (or `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`); it is checked with the provider and stored in `$HERMES_HOME/swarm-studio/connections.json` with mode `0600`, and never sent back to the canvas. Vercel deploys through its REST API; Cloudflare through `wrangler`, installed from npm into `$HERMES_HOME/swarm-studio/deploy-tools/` the first time. Publishing locally serves the site from the canvas server at `127.0.0.1:4319/site/<run>/`.
   - The first promo video installs `hyperframes` and ffmpeg from npm into `$HERMES_HOME/swarm-studio/video-tools/`. Rendering runs locally in headless Chrome.
   - Nothing else leaves the machine.
-- **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log` and the runs.
+- **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log`, the runs, and `connections.json` if you connect a host.
 - **Secrets.** Keys come from Hermes (the model slots or its secret store). It is passed to the server process through its environment and is never written to disk or logs.
 
 ## Known issues

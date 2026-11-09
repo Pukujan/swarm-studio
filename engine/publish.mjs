@@ -1,18 +1,21 @@
 // Publish an exported site. GitHub Pages through the person's own `gh` login:
 // one public repo per site, pushed and served at <login>.github.io/<repo>/.
-// Without gh, the canvas server hosts it on this computer (see /site/ in the server).
+// Vercel and Cloudflare Pages through a token the person connected (connect.mjs).
+// Without any of them, the canvas server hosts it on this computer (see /site/ in the server).
 
 import { execFile } from 'node:child_process'
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
+import { ownProjects, rememberProject } from './connect.mjs'
 
 // Repos this makes say so in their description; a repo without it is never touched.
 const MARK = 'made with Swarm Studio'
 
-function run(cmd, args, { cwd, timeout = 60000 } = {}) {
+function run(cmd, args, { cwd, timeout = 60000, env = {} } = {}) {
   return new Promise((ok, fail) => {
-    execFile(cmd, args, { cwd, timeout, maxBuffer: 4e6, env: { ...process.env, GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' } }, (err, stdout, stderr) => {
+    execFile(cmd, args, { cwd, timeout, maxBuffer: 4e6, env: { ...process.env, GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0', ...env } }, (err, stdout, stderr) => {
       if (err) {
         const why = String(stderr || err.message).trim().split('\n').filter(Boolean).pop() || 'failed'
         return fail(Object.assign(new Error(`${cmd} ${args[0]}: ${why}`), { stderr: String(stderr || '') }))
@@ -99,4 +102,128 @@ export async function publishGitHub({ dir, name, title, onStage = () => {} }) {
   }
   // slow, not broken: the link will work shortly
   return { url, repo: full, fresh, pending: true }
+}
+
+// ---------- shared
+
+function files(dir) {
+  const out = []
+  const walk = d => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.isFile()) out.push({ path: p, rel: relative(dir, p).split('\\').join('/') })
+    }
+  }
+  walk(dir)
+  return out
+}
+
+// Waits until a URL answers 200: hosts take a few seconds to start serving a new deploy.
+async function live(url, ms = 120000) {
+  const start = Date.now()
+  while (Date.now() - start < ms) {
+    if (await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(10000) }).then(r => r.ok).catch(() => false)) return true
+    await wait(2500)
+  }
+  return false
+}
+
+async function rest(base, token, path, init = {}) {
+  const res = await fetch(base + path, { ...init, headers: { authorization: `Bearer ${token}`, ...(init.body && !(init.body instanceof Buffer) ? { 'content-type': 'application/json' } : {}), ...init.headers }, signal: AbortSignal.timeout(init.timeout || 60000) })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+// ---------- Vercel: upload each file by its SHA-1, then one production deployment
+
+export async function publishVercel({ dir, name, creds, dataDir, onStage = () => {} }) {
+  const api = (path, init) => rest('https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
+  onStage('project')
+  const own = ownProjects(dataDir, 'vercel')
+  let project = null
+  for (const cand of [name, `${name}-swarm`, ...[2, 3, 4].map(n => `${name}-swarm-${n}`)].map(n => n.slice(0, 90))) {
+    if (own.includes(cand)) { project = cand; break }
+    const r = await api(`/v9/projects/${cand}`)
+    if (r.status === 404) { project = cand; break }
+    if (!r.ok && r.status !== 200) throw new Error(`Vercel: ${r.body.error?.message || r.status}`)
+  }
+  if (!project) throw new Error(`every Vercel project name for ${name} is taken`)
+
+  onStage('upload')
+  const list = files(dir).map(f => {
+    const data = readFileSync(f.path)
+    return { file: f.rel, data, sha: createHash('sha1').update(data).digest('hex'), size: data.length }
+  })
+  for (const f of list) {
+    const r = await api('/v2/files', { method: 'POST', body: f.data, headers: { 'content-type': 'application/octet-stream', 'x-vercel-digest': f.sha, 'content-length': String(f.size) } })
+    if (!r.ok) throw new Error(`Vercel upload: ${r.body.error?.message || r.status}`)
+  }
+  const dep = await api('/v13/deployments?skipAutoDetectionConfirmation=1', {
+    method: 'POST',
+    body: JSON.stringify({ name: project, target: 'production', files: list.map(f => ({ file: f.file, sha: f.sha, size: f.size })), projectSettings: { framework: null, buildCommand: null, installCommand: null, outputDirectory: null } }),
+  })
+  if (!dep.ok) throw new Error(`Vercel: ${dep.body.error?.message || dep.status}`)
+  rememberProject(dataDir, 'vercel', project)
+
+  onStage('building')
+  let d = dep.body
+  const start = Date.now()
+  while (!['READY', 'ERROR', 'CANCELED'].includes(d.readyState) && Date.now() - start < 240000) {
+    await wait(2500)
+    d = (await api(`/v13/deployments/${dep.body.id}`)).body || d
+  }
+  if (d.readyState !== 'READY') throw new Error(`Vercel deployment ${String(d.readyState || 'timed out').toLowerCase()}`)
+  // the production domain is public; the per-deployment URL may sit behind Vercel's login
+  const prod = (d.alias || []).filter(a => a.endsWith('.vercel.app')).sort((a, b) => a.length - b.length)[0]
+  const url = `https://${prod || d.url}/`
+  return { url, repo: `vercel:${project}`, pending: !(await live(url, 60000)) }
+}
+
+// ---------- Cloudflare Pages: the project through the API, the upload through wrangler
+
+const WRANGLER = 'wrangler@4.152.0'
+let wranglerBin = null
+function wrangler(dataDir) {
+  return (wranglerBin ||= (async () => {
+    const dir = join(dataDir, 'deploy-tools'), bin = join(dir, 'node_modules', '.bin', 'wrangler')
+    if (!existsSync(bin)) {
+      mkdirSync(dir, { recursive: true })
+      if (!existsSync(join(dir, 'package.json'))) writeFileSync(join(dir, 'package.json'), '{"private":true}\n')
+      const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
+      await run(npm, ['install', '--no-audit', '--no-fund', WRANGLER], { cwd: dir, timeout: 600000 })
+    }
+    return bin
+  })().catch(err => { wranglerBin = null; throw err }))
+}
+
+export async function publishCloudflare({ dir, name, creds, dataDir, onStage = () => {} }) {
+  const base = `/client/v4/accounts/${creds.accountId}/pages/projects`
+  const api = (path, init) => rest('https://api.cloudflare.com', creds.token, base + path, init)
+  const tools = wrangler(dataDir) // fetched while the project is set up
+  onStage('project')
+  const own = ownProjects(dataDir, 'cloudflare')
+  let project = null, sub = null
+  for (const cand of [name, `${name}-swarm`, ...[2, 3, 4].map(n => `${name}-swarm-${n}`)].map(n => n.slice(0, 58))) {
+    const r = await api(`/${cand}`)
+    if (r.ok && own.includes(cand)) { project = cand; sub = r.body.result?.subdomain; break }
+    if (r.ok) continue
+    const made = await api('', { method: 'POST', body: JSON.stringify({ name: cand, production_branch: 'main' }) })
+    if (!made.ok) throw new Error(`Cloudflare: ${made.body.errors?.[0]?.message || made.status}`)
+    project = cand
+    sub = made.body.result?.subdomain
+    rememberProject(dataDir, 'cloudflare', cand)
+    break
+  }
+  if (!project) throw new Error(`every Cloudflare Pages name for ${name} is taken`)
+
+  onStage('upload')
+  const bin = await tools
+  await run(bin, ['pages', 'deploy', dir, '--project-name', project, '--branch', 'main', '--commit-dirty=true'], {
+    timeout: 300000, cwd: dir,
+    env: { CLOUDFLARE_API_TOKEN: creds.token, CLOUDFLARE_ACCOUNT_ID: creds.accountId, WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' },
+  })
+  onStage('building')
+  const url = `https://${sub || `${project}.pages.dev`}/`
+  return { url, repo: `cloudflare:${project}`, pending: !(await live(url)) }
 }
