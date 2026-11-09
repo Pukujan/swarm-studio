@@ -36,6 +36,15 @@ button { font: inherit; color: inherit; }
 .feed .item.sys { color: var(--muted); font-size: 12px; }
 .feed .item.err { color: #ff8a8d; }
 .feed .item.you { align-self: flex-end; max-width: 88%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px 12px 4px 12px; padding: 8px 11px; color: var(--text); }
+.feed .item.bot { border-left: 2px solid var(--accent); padding: 2px 0 2px 10px; color: var(--text); }
+.feed .item.bot > b { display: block; color: var(--accent); font-size: 11px; letter-spacing: .04em; margin-bottom: 2px; }
+.feed .item.bot.working .txt::after { content: ' ●'; color: var(--accent); animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.chips button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px; cursor: pointer; font-size: 11.5px; color: var(--text); }
+.chips button:hover { border-color: var(--accent); }
+.chips button.primary { background: var(--accent); color: #0b0d12; border-color: var(--accent); font-weight: 600; }
+.empty-chat { color: var(--muted); font-size: 12.5px; margin: auto 0; text-align: center; padding: 20px; }
 @keyframes in { from { opacity: 0; transform: translateY(4px); } }
 
 .composer { margin: 0 10px 10px; padding: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
@@ -148,6 +157,25 @@ button { font: inherit; color: inherit; }
 .agent .task { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
 .agent svg { width: 12px; height: 12px; flex: none; color: var(--muted); margin-left: auto; }
 .agent.idle { opacity: .45; }
+
+/* ---------- Play mode: the prototype, one page at a time, at real size */
+.toggle.play { color: var(--text); border-color: #3a4a7a; }
+.toggle.play:disabled { opacity: .4; cursor: default; }
+.player { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: #08090b; }
+.player[hidden] { display: none; }
+.player-bar { height: 48px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.player-bar select { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 5px 8px; font: inherit; max-width: 40vw; }
+.pl-btn { background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.pl-btn:hover:not(:disabled) { color: var(--text); }
+.pl-btn:disabled { opacity: .35; cursor: default; }
+.seg { display: flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
+.seg button { background: none; border: 0; border-radius: 6px; padding: 4px 12px; color: var(--muted); cursor: pointer; }
+.seg button.on { background: var(--accent); color: #0b0d12; font-weight: 600; }
+.player-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.device { position: absolute; left: 0; top: 20px; background: #fff; box-shadow: 0 30px 80px #000c; overflow: hidden; }
+.device iframe { display: block; border: 0; width: 100%; height: 100%; transition: opacity .18s; }
+.device.mobile { border-radius: 38px; border: 12px solid #1b1d22; box-shadow: 0 30px 80px #000c, 0 0 0 1px #33363f; }
+.pl-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); color: var(--muted); font-size: 11.5px; pointer-events: none; white-space: nowrap; }
 
 /* The toolbar moves aside so it never sits under the break room. */
 @media (max-width: 1180px) {

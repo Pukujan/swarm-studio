@@ -14,7 +14,8 @@ const els = {
   status: $('#status'), camHint: $('#camera-hint'), timer: $('#timer'), plan: $('#plan-stream'), planState: $('#plan-state'),
   theme: $('#theme'), tree: $('#tree'), agents: $('#agents-list'), agentCount: $('#agent-count'), feed: $('#feed'),
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
-  newFile: $('#new-file'), fileName: $('#file-name')
+  newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
+  plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back')
 }
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
 // Per-viewer UI memory. Storage throws inside the Desktop pane's opaque origin, so it is optional.
@@ -45,7 +46,9 @@ function fresh(run = null) {
   els.world.innerHTML = ''
   els.cursors.innerHTML = ''
   els.wires.innerHTML = ''
-  els.feed.innerHTML = ''
+  els.feed.innerHTML = '<div class="empty-chat">Describe a product below. A planner picks the pages, then a swarm of agents builds them on the canvas.</div>'
+  els.log.innerHTML = ''
+  S.progress = null
   els.theme.innerHTML = ''
   els.plan.textContent = ''
   els.timer.textContent = '00.0s'
@@ -74,6 +77,7 @@ function on(e) {
       for (const a of e.agents) addAgent(a)
       setTitle(e.brief.slice(0, 60))
       feed(null, e.brief, 'you')
+      S.progress = botMsg('Planning the pages…', true)
       if (!viewing) loadFiles()
       break
     case 'plan:delta': {
@@ -93,6 +97,7 @@ function on(e) {
     case 'plan:done':
       els.planState.textContent = `${e.pages} pages · ${e.layers} layers`
       feed(null, `Plan finished: ${e.pages} pages, ${e.layers} layers in ${(e.ms / 1000).toFixed(1)}s`, 'sys')
+      S.planText = `Planned ${e.pages} pages and ${e.layers} sections in ${(e.ms / 1000).toFixed(1)}s.`
       break
     case 'theme':
       S.theme = e
@@ -167,6 +172,7 @@ function on(e) {
     case 'run:done':
       S.tEnd = e.t
       feed(null, `Done: ${e.done}/${e.planned} layers across ${e.pages} pages in ${(e.ms / 1000).toFixed(1)}s${e.failed ? `, ${e.failed} failed` : ''}`, 'sys')
+      summarize(e)
       els.planState.textContent = 'done'
       if (!viewing) { S.cheerUntil = performance.now() + 9000; banter.next = 0; loadFiles() }
       break
@@ -260,6 +266,7 @@ function post(f, msg) {
 }
 
 window.addEventListener('message', e => {
+  if (e.source && e.source === els.plFrame.contentWindow) return playerMessage(e.data || {})
   const f = S.frames.find(fr => fr.iframe.contentWindow === e.source)
   if (!f) return
   const m = e.data || {}
@@ -591,7 +598,10 @@ function renderToolbar() {
   }).join('')
 }
 
+// The Chat tab is the conversation: your briefs and the swarm's progress and
+// summaries. Everything the agents and the planner say goes to the Log tab.
 function feed(a, text, kind = '', where = '') {
+  const box = a || kind === 'sys' ? els.log : els.feed
   const item = document.createElement('div')
   item.className = `item ${kind}`
   if (a) {
@@ -607,11 +617,45 @@ function feed(a, text, kind = '', where = '') {
     w.textContent = where
     item.append(w)
   }
-  const f = els.feed
+  push(box, item)
+}
+
+function push(f, item) {
+  f.querySelector('.empty-chat')?.remove()
   const stick = f.scrollHeight - f.scrollTop - f.clientHeight < 60
   f.append(item)
   while (f.children.length > 200) f.firstChild.remove()
   if (stick) f.scrollTop = f.scrollHeight
+}
+
+function botMsg(text, working = false) {
+  const item = document.createElement('div')
+  item.className = `item bot${working ? ' working' : ''}`
+  item.innerHTML = '<b>SWARM</b><span class="txt"></span>'
+  item.querySelector('.txt').textContent = text
+  push(els.feed, item)
+  return item
+}
+
+function summarize(e) {
+  S.progress?.remove()
+  S.progress = null
+  const secs = (e.ms / 1000).toFixed(1)
+  const item = botMsg(`Built ${e.pages} pages and ${e.done} sections in ${secs}s with ${S.agents.size} agents${e.failed ? ` (${e.failed} failed)` : ''}. Open a page, or play the prototype.`)
+  const chips = document.createElement('div')
+  chips.className = 'chips'
+  const play = document.createElement('button')
+  play.className = 'primary'
+  play.textContent = '▶ Play prototype'
+  play.onclick = () => openPlayer()
+  chips.append(play)
+  for (const f of S.frames) {
+    const b = document.createElement('button')
+    b.textContent = `Page ${f.index + 1} · ${f.title}`
+    b.onclick = () => focusPage(f.id)
+    chips.append(b)
+  }
+  item.append(chips)
 }
 
 // ---------- loop
@@ -673,6 +717,13 @@ function frameLoop(now) {
     }
     const done = [...S.layers.values()].filter(l => l.status === 'done').length
     els.status.textContent = `${working} agents working · ${done}/${S.layers.size} layers · ${S.frames.length} pages`
+    els.play.disabled = !S.frames.length
+    if (S.progress) {
+      const done = [...S.layers.values()].filter(l => l.status === 'done').length
+      S.progress.querySelector('.txt').textContent = S.layers.size
+        ? `${S.planText ? `${S.planText} ` : ''}${working} agents building · ${done}/${S.layers.size} sections across ${S.frames.length} pages`
+        : 'Planning the pages…'
+    }
     if (S.t0 && !(viewing && !S.tEnd)) els.timer.textContent = `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`
   }
   requestAnimationFrame(frameLoop)
@@ -733,7 +784,10 @@ els.viewport.addEventListener('wheel', e => {
   }
 }, { passive: false })
 window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !els.player.hidden) return closePlayer()
   if (e.target.closest('input, select, textarea')) return
+  if (e.key === 'p' && S.frames.length) return els.player.hidden ? openPlayer() : closePlayer()
+  if (!els.player.hidden) return
   if (e.key === 'a') setAuto(true)
   if (e.key === '0') { setAuto(false); const b = bboxActive(); S.frames.length && fit({ x0: S.frames[0].x - 560, y0: -140, x1: S.frames.at(-1).x + FRAME_W, y1: Math.max(...S.frames.map(f => f.h)) }) }
 })
@@ -750,6 +804,108 @@ els.form.addEventListener('submit', async e => {
 els.brief.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); els.form.requestSubmit() }
 })
+
+// ---------- Play mode
+// Each page becomes one real document (theme, shared nav and footer, its own
+// sections) in a sandboxed frame at true size, so Tailwind's breakpoints apply:
+// the Mobile view is the site at 390px, not a scaled-down desktop. Links built
+// with data-goto move between pages; nothing else navigates.
+
+const DEVICES = { desktop: { w: 1280, h: 800 }, mobile: { w: 390, h: 844 } }
+const player = { page: null, device: store.get('device', 'desktop'), history: [] }
+
+const PLAYER_SCRIPT = `<script>
+addEventListener('click', e => {
+  const g = e.target.closest('[data-goto]')
+  e.preventDefault()
+  if (g) return parent.postMessage({ type: 'goto', target: g.dataset.goto }, '*')
+  document.body.classList.add('hint')
+  setTimeout(() => document.body.classList.remove('hint'), 700)
+}, true)
+addEventListener('submit', e => e.preventDefault(), true)
+<\/script>`
+
+function pageDoc(id) {
+  const t = S.theme || {}
+  const heading = t.fonts?.heading || 'Georgia', body = t.fonts?.body || 'Inter'
+  const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`
+  const vars = Object.entries(t.vars || {}).map(([k, v]) => `${k}:${v};`).join('')
+  const layers = S.order.map(k => S.layers.get(k)).filter(l => l.page === id || l.page === '*')
+  const shared = name => layers.filter(l => l.page === '*' && l.id === name)
+  const mid = layers.filter(l => l.page === id || (l.page === '*' && l.id !== 'nav' && l.id !== 'footer'))
+  const html = [...shared('nav'), ...mid, ...shared('footer')].map(l => `<div data-layer="${l.id}">${clean(l.text)}</div>`).join('\n')
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.tailwindcss.com/3.4.17"><\/script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fam(heading)}&${fam(body)}&display=swap">
+<style>:root{--radius:${t.radius || '12px'};--font-heading:'${heading}',Georgia,serif;--font-body:'${body}',system-ui,sans-serif;${vars}}
+html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111);font-family:var(--font-body)}
+[data-goto]{cursor:pointer}
+body.hint [data-goto]{outline:3px solid #7c9cffcc;outline-offset:2px}</style>
+${PLAYER_SCRIPT}</head><body>${html}</body></html>`
+}
+
+function fitDevice() {
+  const d = DEVICES[player.device]
+  const sw = els.plStage.clientWidth - 40, sh = els.plStage.clientHeight - 56
+  const mobile = player.device === 'mobile'
+  const border = mobile ? 24 : 0
+  const scale = Math.min(1, sw / (d.w + border), mobile ? sh / (d.h + border) : 1)
+  els.plShell.classList.toggle('mobile', mobile)
+  els.plShell.style.width = `${d.w + border}px`
+  els.plShell.style.height = `${(mobile ? d.h : sh / scale) + border}px`
+  // zoom, not a transform: clicks inside a transformed frame can miss their target
+  els.plShell.style.zoom = scale
+  els.plShell.style.left = `${(els.plStage.clientWidth / scale - d.w - border) / 2}px`
+  els.plShell.style.top = `${20 / scale}px`
+}
+
+function showPage(id, push = true) {
+  if (!S.frames.some(f => f.id === id)) return
+  if (push && player.page && player.page !== id) player.history.push(player.page)
+  player.page = id
+  els.plPage.value = id
+  els.plBack.disabled = !player.history.length
+  els.plFrame.style.opacity = 0
+  setTimeout(() => {
+    els.plFrame.srcdoc = pageDoc(id)
+    els.plFrame.onload = () => (els.plFrame.style.opacity = 1)
+  }, 120)
+}
+
+function playerMessage(m) {
+  if (m.type === 'goto') showPage(m.target)
+}
+
+function openPlayer(page) {
+  if (!S.frames.length) return
+  els.plPage.innerHTML = ''
+  for (const f of S.frames) els.plPage.add(new Option(`Page ${f.index + 1} · ${f.title}`, f.id))
+  player.history = []
+  els.player.hidden = false
+  setDevice(player.device, false)
+  showPage(page || S.frames[0].id, false)
+}
+
+function closePlayer() {
+  els.player.hidden = true
+  els.plFrame.srcdoc = ''
+}
+
+function setDevice(name, reload = true) {
+  player.device = name
+  store.set('device', name)
+  for (const b of document.querySelectorAll('#pl-device button')) b.classList.toggle('on', b.dataset.device === name)
+  fitDevice()
+  if (reload && player.page) showPage(player.page, false)
+}
+
+els.play.onclick = () => openPlayer()
+$('#pl-close').onclick = closePlayer
+els.plBack.onclick = () => player.history.length && showPage(player.history.pop(), false)
+$('#pl-restart').onclick = () => { player.history = []; showPage(S.frames[0].id, false) }
+els.plPage.onchange = () => showPage(els.plPage.value)
+for (const b of document.querySelectorAll('#pl-device button')) b.onclick = () => setDevice(b.dataset.device)
+window.addEventListener('resize', () => !els.player.hidden && fitDevice())
 
 // ---------- side tabs and floating panels
 
@@ -823,7 +979,8 @@ async function openRun(id) {
     }
     if (!S.tEnd && events.length) S.tEnd = events.at(-1).t
     if (S.t0) els.timer.textContent = `${((S.tEnd - S.t0) / 1000).toFixed(1)}s`
-    if (!events.some(e => e.type === 'layer:done' && e.html)) feed(null, 'This file was saved before Swarm Studio kept finished sections, so only its plan is shown.', 'sys')
+    if (S.progress) { S.progress.classList.remove('working'); S.progress.querySelector('.txt').textContent = 'This run stopped before it finished.' }
+    if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
   }
   setAuto(true)
   renderFiles()
