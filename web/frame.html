@@ -26,6 +26,9 @@
   /* an image being painted: a soft shimmer until its src arrives */
   img[data-gen]:not([src]) { color: transparent; background: linear-gradient(100deg, color-mix(in srgb, var(--muted) 80%, transparent) 30%, color-mix(in srgb, var(--card) 90%, transparent) 50%, color-mix(in srgb, var(--muted) 80%, transparent) 70%) 0 0 / 300% 100%; animation: paint 1.6s linear infinite; min-height: 120px; }
   img[data-gen][data-failed] { animation: none; background: var(--muted); }
+  /* a sketch stands in for the photo; the real one fades in over it */
+  img[data-gen]:not([data-sketch]) { animation: develop .9s ease-out; }
+  @keyframes develop { from { filter: blur(14px) saturate(.3); opacity: .4; } to { filter: none; opacity: 1; } }
   @keyframes paint { from { background-position: 100% 0; } to { background-position: -50% 0; } }
   /* the reviewer looking at the page */
   #scan { position: absolute; inset: 0; pointer-events: none; z-index: 99; overflow: hidden; }
