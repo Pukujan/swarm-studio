@@ -4130,3 +4130,91 @@ for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['
   })
   grip.addEventListener('dblclick', () => { document.body.style.removeProperty(name); try { localStorage.removeItem(`swarm${name}`) } catch {} })
 }
+
+// ---------- the break room can be put away (☰ More → Break room); idle cursors hide with it
+const breakBtn = $('#breakroom-btn')
+const setBreakroom = on => { document.body.classList.toggle('no-breakroom', !on); breakBtn?.classList.toggle('on', on); store.set('breakroom', on) }
+setBreakroom(store.get('breakroom', true))
+if (breakBtn) breakBtn.onclick = () => setBreakroom(document.body.classList.contains('no-breakroom'))
+$('#dock-hide')?.addEventListener('click', () => setBreakroom(false))
+
+// ---------- crews: while an app or game builds, a game spec is written or a video
+// renders, a few agents work over that screen, each on one real step at a time.
+const CREW_NAMES = [['Ada', '#7c9cff'], ['Basil', '#4ade80'], ['Cleo', '#f472b6'], ['Dev', '#fbbf24']]
+const crewLayer = document.createElement('div')
+crewLayer.className = 'crew-layer'
+document.body.append(crewLayer)
+const crew = { members: [], key: '', last: 0 }
+
+// Which screen is busy, where the agents may point, and what they are each doing.
+function crewJob() {
+  if (game.el && game.busy) return { key: 'game', host: game.el, spots: '.gbody, .spin, h3, .gspec', n: 3, lines: ['inventing the world', 'naming the hero', 'drafting enemies', 'picking the engine', 'tuning game feel', 'writing win and lose'], tool: ['text', 'comment', 'frame'] }
+  if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
+    const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
+    return { key: 'app', host: appEls.view, spots: '#app-steps .st:nth-last-child(-n+5), #app-preview, #app-stage', n: 4, lines: done.length ? done : ['setting up the project', 'reading the design', 'planning routes'], tool: ['text', 'frame', 'connect', 'rect'] }
+  }
+  if (view === 'video' && video.busy && video.el) {
+    const scenes = video.story.map((sc, i) => `scene ${i + 1}: ${sc.headline}`.slice(0, 34))
+    const stage = { storyboard: ['writing the storyboard', 'picking shots'], rendering: ['rendering frames', 'timing the cuts'], assembling: ['encoding the MP4'], 'recording the voiceover': ['reading the voiceover'], 'mixing the sound': ['mixing music and voice'] }[video.stage] || [video.stage || 'cutting']
+    return { key: 'video', host: video.el, spots: '.vscene, .vbar, .vstage', n: 3, lines: [...stage, ...scenes], tool: ['image', 'frame', 'connect'] }
+  }
+  return null
+}
+
+function crewMembers(n) {
+  // the build's own agents when there are some, so the names match the canvas
+  const real = [...S.agents.values()].slice(0, n).map(a => [a.name, a.color])
+  return (real.length >= n ? real : [...real, ...CREW_NAMES.filter(([nm]) => !real.some(r => r[0] === nm))]).slice(0, n)
+}
+
+// A point on one of the screen's busy parts (or anywhere on it), kept apart from the others.
+function crewSpot(job, me) {
+  const r = job.host.getBoundingClientRect()
+  const spots = [...job.host.querySelectorAll(job.spots)].filter(e => e.offsetParent)
+  let p
+  for (let i = 0; i < 6; i++) {
+    const t = spots.length && Math.random() < 0.6 ? pick(spots).getBoundingClientRect() : r
+    if (!t.width || !t.height) return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    p = { x: t.left + t.width * (0.1 + Math.random() * 0.8), y: t.top + t.height * (0.15 + Math.random() * 0.7) }
+    if (crew.members.every(m => m === me || Math.hypot(m.tx - p.x, m.ty - p.y) > 160)) break
+  }
+  return p
+}
+
+function crewTick(now) {
+  requestAnimationFrame(crewTick)
+  const job = document.body.classList.contains('lite') ? null : crewJob()
+  const key = job ? job.key : ''
+  if (key !== crew.key) {
+    crew.key = key
+    for (const m of crew.members) { m.el.classList.add('leaving'); setTimeout(() => m.el.remove(), 500) }
+    crew.members = []
+    if (job) {
+      const r = job.host.getBoundingClientRect()
+      crew.members = crewMembers(job.n).map(([name, color], i) => {
+        const el = document.createElement('div')
+        el.className = 'cursor crew'
+        el.innerHTML = `${ARROW(color)}<div class="tag" style="background:${color}">${TOOL[job.tool[i % job.tool.length]].svg}<span>${esc(name)}</span><em class="doing"></em></div>`
+        crewLayer.append(el)
+        const x = r.left + r.width / 2 + (i - 1) * 40, y = r.bottom - 20
+        return { el, doing: el.querySelector('.doing'), x, y, tx: x, ty: y, next: now + i * 450, line: i, pressAt: 0 }
+      })
+    }
+  }
+  if (!job) return
+  for (const m of crew.members) {
+    if (now > m.next) {
+      const p = crewSpot(job, m)
+      m.tx = p.x; m.ty = p.y
+      m.next = now + 1400 + Math.random() * 2200
+      m.pressAt = now + 650
+      m.line = (m.line + 1 + Math.floor(Math.random() * 2)) % job.lines.length
+      setText(m.doing, job.lines[m.line] || '')
+    }
+    m.x += (m.tx - m.x) * 0.08
+    m.y += (m.ty - m.y) * 0.08
+    m.el.style.transform = `translate(${m.x.toFixed(1)}px, ${m.y.toFixed(1)}px)`
+    m.el.classList.toggle('press', now > m.pressAt && now < m.pressAt + 160)
+  }
+}
+requestAnimationFrame(crewTick)

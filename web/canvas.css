@@ -710,3 +710,13 @@ body.side-min .side > .resizer { display: none; }
 .combo-list div { padding: 5px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .combo-list div:hover, .combo-list div.on { background: var(--panel-2); }
 .combo-list small { display: block; padding: 6px 8px; color: var(--muted); }
+
+body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !important; }
+.dock-hide { position: absolute; right: 6px; top: 4px; pointer-events: auto; background: none; border: 0; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 4px; }
+.dock-hide:hover { color: var(--text); background: #ffffff14; }
+
+/* crews: agents working over the App, Game and Video screens */
+.crew-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.cursor.crew { animation: crew-in .4s ease-out; }
+.cursor.crew.leaving { opacity: 0; }
+@keyframes crew-in { from { opacity: 0; } }

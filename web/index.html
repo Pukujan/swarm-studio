@@ -30,6 +30,7 @@
         <button class="toggle" data-panel="design" title="Design properties and variables (D)">Design</button>
         <button class="toggle" data-panel="planner" title="Planner: theme and plan stream">Planner</button>
         <button class="toggle" data-panel="agents" title="Agents and what each is doing">Agents</button>
+        <button class="toggle" id="breakroom-btn" title="Show or hide the break room, where idle agents wait">☕ Break room</button>
       </div>
     </div>
     <div class="clock"><span id="timer">00.0s</span></div>
@@ -75,7 +76,7 @@
   <main id="viewport" class="viewport">
     <div id="world" class="world"></div>
     <svg id="wires" class="wires"></svg>
-    <div class="dock" id="dock"><span class="dock-title">☕ break room</span></div>
+    <div class="dock" id="dock"><span class="dock-title">☕ break room</span><button class="dock-hide" id="dock-hide" title="Hide the break room (bring it back in ☰ More)">×</button></div>
     <div id="cursors" class="cursors"></div>
     <div class="toolbar" id="toolbar"></div>
     <div class="status" id="status">Ready</div>
