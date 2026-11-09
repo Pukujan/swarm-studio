@@ -145,6 +145,7 @@ function on(e) {
       if (a) {
         setTool(a, detectTool(l.text))
         if (live(e) && !a.act && performance.now() > a.restUntil) a.queued = gestureFor(l.text) || a.queued
+        if (live(e)) spark(a, e.text)
       }
       break
     }
@@ -208,9 +209,13 @@ function on(e) {
     case 'edit':
       applyEdit(e)
       break
-    case 'image:queued':
+    case 'image:queued': {
+      const l = S.layers.get(key(e.page, e.layer))
+      const a = l && S.agents.get(l.agent)
+      if (a && live(e)) { a.painting = { gen: e.gen, until: performance.now() + 9000 }; say(a, `🖼 asking ${e.provider === 'openai-codex' ? 'Codex' : e.provider} for “${e.gen.slice(0, 40)}…”`) }
       if (!S.imgQueued++) feed(null, `🎨 Painting images with ${e.provider}${e.model ? ` · ${e.model}` : ''}`, 'sys')
       break
+    }
     case 'image':
     case 'image:failed': {
       S.imgSettled++
@@ -246,12 +251,12 @@ const key = (page, id) => `${page}/${id}`
 function addAgent(a) {
   const el = document.createElement('div')
   el.className = 'cursor idle'
-  el.innerHTML = `${ARROW(a.color)}<div class="tag" style="background:${a.color}">${TOOL.move.svg}<span>${a.name}</span></div><div class="bubble" style="color:${a.color}"></div>`
+  el.innerHTML = `${ARROW(a.color)}<div class="tag" style="background:${a.color}">${TOOL.move.svg}<span>${a.name}</span><em class="doing"></em></div><div class="bubble" style="color:${a.color}"></div>`
   els.cursors.append(el)
   const seat = S.agents.size
   const c = dockCell(seat)
   const agent = {
-    ...a, el, tagIcon: el.querySelector('.tag svg'), bubble: el.querySelector('.bubble'),
+    ...a, el, tagIcon: el.querySelector('.tag svg'), bubble: el.querySelector('.bubble'), doingEl: el.querySelector('.tag .doing'), sparkAt: 0,
     layer: null, idle: true, tool: 'move', toolUntil: 0, sayUntil: 0, assignedAt: 0, act: null, queued: null, restUntil: 0,
     seat, docked: true, sx: c.x + (Math.random() - 0.5) * 80, sy: c.y - 40 - Math.random() * 60, wx: 0, wy: 0
   }
@@ -276,6 +281,47 @@ function setTool(a, tool, holdMs = 0) {
     a.tagIcon.outerHTML = TOOL[tool].svg
     a.tagIcon = a.el.querySelector('.tag svg')
   }
+}
+
+// The action line on an agent's tag, readable at any zoom: what it is doing now.
+const ACT_LABEL = { marquee: 'drawing a frame', shape: 'drawing a shape', component: 'placing a button', swatch: 'picking a colour', pen: 'sketching', wire: 'linking pages', menu: 'setting properties', resize: 'resizing' }
+function doing(a, now) {
+  if (a.painting && now < a.painting.until) return `· painting “${a.painting.gen.slice(0, 22)}…”`
+  if (a.docked || !a.layer) return ''
+  const l = S.layers.get(a.layer)
+  if (!l) return ''
+  if (a.act?.kind === 'type') return `· typing “${a.act.words.slice(0, 22)}”`
+  if (a.act?.kind === 'wire') { const to = (l.text.slice(-400).match(/data-goto="([^"]+)"[^<]*$/) || [])[1]; return `· linking → /${to || '…'}` }
+  if (a.act) return `· ${ACT_LABEL[a.act.kind] || 'working'}`
+  if (l.status === 'assigned') return `· planning ${l.role}`
+  const tail = l.text.slice(-500)
+  const tool = detectTool(l.text)
+  if (tool === 'text') {
+    const words = tail.replace(/<[^>]*>?/g, ' ').replace(/\s+/g, ' ').trim().slice(-24)
+    return words ? `· typing “${words}”` : `· writing ${l.role}`
+  }
+  if (tool === 'image') return '· drawing an icon'
+  if (tool === 'connect') return '· adding a link'
+  if (tool === 'rect') return `· styling ${(tail.match(/\b(bg-\[var\(--[\w-]+\)\]|rounded-[\w[\]()-]+|shadow-\w+|border-\w+)/g) || ['a box']).pop().replace(/bg-\[var\(--([\w-]+)\)\]/, '$1 fill')}`
+  const name = (tail.slice(tail.lastIndexOf('<')).match(/^<([a-z0-9]+)/i) || [])[1]
+  return `· laying out ${name === 'section' || !name ? l.role : `<${name}>`}`
+}
+
+// Letters that fly off the cursor as an agent types: a small, cheap flourish.
+function spark(a, text) {
+  const now = performance.now()
+  if (now < a.sparkAt || document.body.classList.contains('lite') || a.docked || cam.s < 0.12) return
+  const ch = (text.replace(/<[^>]*>?/g, '').match(/[A-Za-z0-9&?!€$]/) || [])[0]
+  if (!ch) return
+  a.sparkAt = now + 140
+  const el = document.createElement('i')
+  el.className = 'spark'
+  el.textContent = ch
+  el.style.color = a.color
+  el.style.transform = `translate(${a.sx.toFixed(0)}px, ${a.sy.toFixed(0)}px)`
+  el.style.setProperty('--dx', `${(Math.random() * 50 - 25).toFixed(0)}px`)
+  els.cursors.append(el)
+  setTimeout(() => el.remove(), 800)
 }
 
 // What a stream is "doing" right now, read off its tail.
@@ -1009,6 +1055,7 @@ function frameLoop(now) {
   if (now - lastPanels > 150) {
     lastPanels = now
     const working = renderAgents()
+    for (const a of S.agents.values()) setText(a.doingEl, doing(a, now))
     renderToolbar()
     renderDesign(now)
     drawSelBox()
