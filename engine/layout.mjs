@@ -6,7 +6,9 @@
 // One source for Play mode, the HTML export and the React export.
 
 // Runs in the page. Idempotent: call it again after a resize or a new page.
-export function swarmLayout(root) {
+// With report set it moves nothing and only says what covers what, so the
+// reviewer can hand the agents measured problems instead of guesses.
+export function swarmLayout(root, report) {
   const doc = root.ownerDocument || root
   const view = doc.defaultView
   // a real sentence or name, not a pin number or a one-word label
@@ -29,7 +31,8 @@ export function swarmLayout(root) {
     return out
   }
 
-  let moved = 0
+  const clip = t => t.replace(/\s+/g, ' ').trim().slice(0, 48)
+  const found = []
   for (const section of [...root.children]) {
     // menus and dropdowns in the nav are meant to sit over the page
     if (/^(SCRIPT|STYLE|LINK|TEMPLATE|NAV|HEADER)$/.test(section.tagName) || section.dataset.layer === 'nav') continue
@@ -42,11 +45,13 @@ export function swarmLayout(root) {
     for (const el of outer) {
       const box = el.getBoundingClientRect()
       // a badge poking out of its card is fine; a panel on top of other text is not
-      if (!runs.some(t => !el.contains(t.node) && meet(box, t.box) > 0.25 * area(t.box))) continue
+      const hit = runs.find(t => !el.contains(t.node) && meet(box, t.box) > 0.25 * area(t.box))
+      if (!hit) continue
+      found.push({ layer: section.dataset.layer || null, index: [...root.children].indexOf(section), panel: clip(el.textContent), covers: clip(hit.node.textContent) })
+      if (report) continue
       const host = el.offsetParent, hb = host?.getBoundingClientRect()
       el.dataset.swarmFlow = '1'
       Object.assign(el.style, { position: 'relative', inset: 'auto', transform: 'none', width: 'auto', maxWidth: '100%', zIndex: 'auto' })
-      moved++
       // inside the section, the panel leaves the box and sits just above or below it
       if (!host || host === section || !section.contains(host) || host.contains(section)) continue
       if (box.top + box.height / 2 < hb.top + hb.height / 2 && !after.has(host)) {
@@ -59,7 +64,7 @@ export function swarmLayout(root) {
       }
     }
   }
-  return moved
+  return found
 }
 
 // As text, for pages that get the guard inline: once the page and its fonts are

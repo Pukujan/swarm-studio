@@ -235,7 +235,8 @@ function on(e) {
       break
     case 'review:done':
       scanFrame(e.page, false)
-      feed(null, `🔎 ${frameTitle(e.page)}: ${e.verdict || 'reviewed'}${e.issues.length ? ` · ${e.issues.length} to fix` : ' · nothing to fix'}`, 'sys')
+      feed(null, `🔎 ${frameTitle(e.page)}${e.phone ? ' (desktop + phone)' : ''}: ${e.verdict || 'reviewed'}${e.issues.length ? ` · ${e.issues.length} to fix` : ' · nothing to fix'}${e.dropped ? ` · ignored ${e.dropped} “blank” note${e.dropped > 1 ? 's' : ''} the page's text disproves` : ''}`, 'sys')
+      if (e.phoneError) feed(null, `📱 phone review of ${frameTitle(e.page)} failed: ${e.phoneError}`, 'err')
       break
     case 'review:issue':
       feed(S.agents.get(e.agent), `on it: ${e.problem}`, '', e.layer)
@@ -396,6 +397,8 @@ function post(f, msg) {
 
 window.addEventListener('message', e => {
   if (e.source && e.source === els.plFrame.contentWindow) return playerMessage(e.data || {})
+  const c = checks.get(e.data?.seq)
+  if (c && e.data?.type === 'check' && e.source === c.iframe.contentWindow) return c.done(e.data)
   const f = S.frames.find(fr => fr.iframe.contentWindow === e.source)
   if (!f) return
   const m = e.data || {}
@@ -1290,7 +1293,7 @@ function pageParts(id, html) {
   return parts
 }
 
-function pageDoc(id) {
+function pageDoc(id, scripts) {
   const t = S.theme || {}
   const heading = t.fonts?.heading || 'Georgia', body = t.fonts?.body || 'Inter'
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`
@@ -1305,7 +1308,7 @@ html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111
 body.hint [data-goto]{outline:3px solid #7c9cffcc;outline-offset:2px}
 .tour-hover{outline:2px solid #7c9cffaa;outline-offset:3px;filter:brightness(1.06)}
 .tour-press{transform:scale(.96);transition:transform .1s}</style>
-${PLAYER_SCRIPT}${layoutTag()}${motionTags()}</head><body>${html}</body></html>`
+${scripts ?? PLAYER_SCRIPT + layoutTag() + motionTags()}</head><body>${html}</body></html>`
 }
 
 // The layout guard in Play mode, as in the exports: floated text panels that
@@ -2317,13 +2320,59 @@ function snapFrame(f, scale) {
   })
 }
 
+// A page measured the way a visitor sees it, at a given width: a hidden copy of
+// it reports which floated text panels cover other text and, if asked, a
+// screenshot. The reviewer only ever saw the 1280px canvas frame before.
+const checks = new Map()
+function checkPage(id, width, snap) {
+  const seq = `c${++review.seq}`
+  const script = `<script>addEventListener('load', async () => {
+  if (document.fonts) await document.fonts.ready
+  await new Promise(r => setTimeout(r, 900))
+  const guard = ${BOOT.guard || '() => []'}
+  const out = { type: 'check', seq: ${JSON.stringify(seq)}, overlaps: guard(document.body, true), broken: [] }
+  // a tag a builder left half-written: its stray words end up as attribute names
+  for (const el of document.body.querySelectorAll('*')) for (const a of [...el.attributes]) if (!/^[A-Za-z_:][\\w.:-]*$/.test(a.name)) {
+    const layer = el.closest('[data-layer]')?.dataset.layer
+    if (layer && !out.broken.some(b => b.layer === layer)) out.broken.push({ layer, tag: el.tagName.toLowerCase(), junk: a.name.slice(0, 40) })
+    el.removeAttribute(a.name)
+  }
+  // a phone page is long and narrow: shot at full size, the top 4200px, so the text stays readable
+  const full = document.body.scrollHeight, h = Math.min(full, 4200), r = 1
+  out.r = r
+  out.sections = [...document.body.children].filter(e => e.dataset.layer).map(e => { const b = e.getBoundingClientRect(); return { layer: e.dataset.layer, top: Math.round(b.top + scrollY), height: Math.round(b.height) } }).filter(x => x.top < h)
+  if (${!!snap}) try {
+    await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js'; s.onload = ok; s.onerror = fail; document.head.append(s) })
+    const opts = { width: ${width}, height: h, pixelRatio: r, quality: 0.72, backgroundColor: getComputedStyle(document.body).backgroundColor }
+    out.image = await htmlToImage.toJpeg(document.body, opts).catch(() => htmlToImage.toJpeg(document.body, { ...opts, skipFonts: true }))
+  } catch (err) { out.snapError = String(err && err.message || err) }
+  parent.postMessage(out, '*')
+})<\/script>`
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText = `position:fixed;left:-20000px;top:0;width:${width}px;height:900px;border:0;pointer-events:none`
+  return new Promise(resolve => {
+    const done = data => { clearTimeout(timer); checks.delete(seq); iframe.remove(); resolve(data) }
+    const timer = setTimeout(() => done(null), 30000)
+    checks.set(seq, { iframe, done })
+    iframe.srcdoc = pageDoc(id, script)
+    document.body.append(iframe)
+  })
+}
+
+// A section's layer id in a page, as its key: the page's own, else the shared one.
+const layerKey = (page, id) => S.layers.has(key(page, id)) ? key(page, id) : key('*', id)
+
 async function reviewRun() {
   const run = viewing && viewing !== 'new' ? viewing : S.run
   if (!run || review.busy) return
   review.busy = true
   try {
     for (const [i, f] of S.frames.entries()) {
-      if (f.frozen) { thaw(f); await new Promise(r => setTimeout(r, 2500)) }
+      if (f.frozen) thaw(f)
+      // a page waking from rest needs its sections drawn before the photo, or the reviewer sees a blank page
+      for (let t = 0; t < 60 && !(f.ready && f.slots.size && f.geo.height > 400); t++) await new Promise(r => setTimeout(r, 200))
+      await new Promise(r => setTimeout(r, 1200))
       if (!f.ready) continue
       const shot = await snapFrame(f)
       // the shared nav and footer are reviewed once, on the first page
@@ -2335,10 +2384,23 @@ async function reviewRun() {
         })
         .sort((a, b) => a.top - b.top)
       if (!sections.length) continue
+      // measured, at desktop and phone width, one after the other to spare memory
+      const desk = await checkPage(f.id, 1280, false)
+      const phone = await checkPage(f.id, 390, true)
+      const measured = []
+      for (const [w, c] of [[1280, desk], [390, phone]]) for (const o of c?.overlaps || []) {
+        if (!o.layer) continue
+        measured.push({ section: layerKey(f.id, o.layer), problem: `At ${w}px wide, the floated panel “${o.panel}” sits on top of “${o.covers}”`, fix: 'Take that panel out of absolute positioning: put it beside or below the map or picture in the normal flow. Keep absolute only for small pins, badges and decoration.' })
+      }
+      for (const b of desk?.broken || []) measured.push({ section: layerKey(f.id, b.layer), problem: `Broken markup: a <${b.tag}> tag is half-written (stray “${b.junk}” inside it), and stray text may show on the page`, fix: 'Rewrite the section as clean, complete HTML: every tag closed, no notes or instructions as visible text.' })
+      if (!phone?.image) feed(null, `📱 couldn't photograph ${f.title} at phone width${phone?.snapError ? `: ${phone.snapError}` : ''}; reviewing desktop only`, 'err')
+      if (measured.length) feed(null, `📐 measured ${measured.length} layout problem${measured.length > 1 ? 's' : ''} on ${f.title} (desktop and phone)`, 'sys')
+      const byKey = new Map(sections.map(x => [x.key, x]))
+      const mobile = phone?.image ? { image: phone.image, sections: phone.sections.map(x => ({ ...byKey.get(layerKey(f.id, x.layer)), top: x.top, height: x.height })).filter(x => x.key) } : null
       const res = await api(`/api/runs/${encodeURIComponent(run)}/review`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ page: f.id, title: f.title, image: shot.image, sections })
+        body: JSON.stringify({ page: f.id, title: f.title, image: shot.image, sections, measured, mobile })
       })
       if (!res.ok) {
         const out = await res.json().catch(() => ({}))
@@ -2497,6 +2559,8 @@ function thaw(f) {
   setTimeout(() => img.remove(), 1200)
   f.iframe = iframe
   f.slots.clear()
+  // the old page's geometry is gone with it; the new one reports its own
+  f.geo = { ...f.geo, height: 0 }
   f.frozen = null
 }
 

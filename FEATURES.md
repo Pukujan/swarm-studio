@@ -20,7 +20,7 @@ Every feature works in three places: on the canvas, as a `/swarm …` command, a
 |---|---|---|---|
 | **Design panel** | Click any section and change its layout, padding, gap, fill, stroke, radius and type. Variables change every page. Edits are saved with the build. | **Design** (D) | — |
 | **Comments to agents** | Pin a comment on a section ("make the hero darker"). An agent picks it up and rewrites that section live. Without a section selected, the planner works out which sections you mean. | 💬 tool | `/swarm fix <what to change>` |
-| **Visual review** | A vision model photographs every page and names up to 3 problems per page. Agents then fix them live. | **🔎 Review** | `/swarm review [n]` |
+| **Visual review** | Every page is checked at desktop and phone width. Measured problems come first: a panel sitting on top of other text, or a half-written tag, found by measuring the page, not guessed. Then a vision model looks at both screenshots and names what a visitor would notice. Agents fix it all live, one agent per section. | **🔎 Review** | `/swarm review [n]` |
 
 ## Show
 
