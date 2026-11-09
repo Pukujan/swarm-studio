@@ -214,7 +214,7 @@ function on(e) {
     case 'image:queued': {
       const l = S.layers.get(key(e.page, e.layer))
       const a = l && S.agents.get(l.agent)
-      if (a && live(e)) { a.painting = { gen: e.gen, until: performance.now() + 9000 }; say(a, `🖼 asking ${e.provider === 'openai-codex' ? 'Codex' : e.provider} for “${e.gen.slice(0, 40)}…”`) }
+      if (a && live(e)) { a.painting = { gen: e.gen, key: `${key(e.page, e.layer)}|${e.gen}`, from: performance.now(), until: performance.now() + 180000 }; say(a, `🖼 asking ${e.provider === 'openai-codex' ? 'Codex' : e.provider} for “${e.gen.slice(0, 40)}…”`) }
       if (!S.imgQueued++) feed(null, `🎨 Painting images with ${e.provider}${e.model ? ` · ${e.model}` : ''}`, 'sys')
       break
     }
@@ -224,6 +224,8 @@ function on(e) {
       S.images.set(`${key(e.page, e.layer)}|${e.gen}`, e.type === 'image' ? e.src : '')
       const l = S.layers.get(key(e.page, e.layer))
       if (l) fillImages(l)
+      // the agent who asked for it stops painting
+      for (const a of S.agents.values()) if (a.painting?.key === `${key(e.page, e.layer)}|${e.gen}`) { a.painting = null; if (live(e) && e.type === 'image') say(a, '🖼 photo’s in') }
       if (e.type === 'image:failed') feed(null, `image for ${e.layer} failed: ${e.message}`, 'err')
       break
     }
@@ -310,7 +312,7 @@ function setTool(a, tool, holdMs = 0) {
 // The action line on an agent's tag, readable at any zoom: what it is doing now.
 const ACT_LABEL = { marquee: 'drawing a frame', shape: 'drawing a shape', component: 'placing a button', swatch: 'picking a colour', pen: 'sketching', wire: 'linking pages', menu: 'setting properties', resize: 'resizing' }
 function doing(a, now) {
-  if (a.painting && now < a.painting.until) return `· painting “${a.painting.gen.slice(0, 22)}…”`
+  if (a.painting && now < a.painting.until) return `· waiting on the photo “${a.painting.gen.slice(0, 18)}…” ${Math.round((now - a.painting.from) / 1000)}s`
   if (a.docked || !a.layer) return ''
   const l = S.layers.get(a.layer)
   if (!l) return ''
@@ -1303,8 +1305,12 @@ html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111
 body.hint [data-goto]{outline:3px solid #7c9cffcc;outline-offset:2px}
 .tour-hover{outline:2px solid #7c9cffaa;outline-offset:3px;filter:brightness(1.06)}
 .tour-press{transform:scale(.96);transition:transform .1s}</style>
-${PLAYER_SCRIPT}${motionTags()}</head><body>${html}</body></html>`
+${PLAYER_SCRIPT}${layoutTag()}${motionTags()}</head><body>${html}</body></html>`
 }
+
+// The layout guard in Play mode, as in the exports: floated text panels that
+// would cover other text at this width move beside the box they sat on.
+const layoutTag = () => BOOT.layout ? `<script>addEventListener('load', () => ${BOOT.layout})<\/script>` : ''
 
 // Motion in Play mode: the same reveal the exports get, in the feel the theme asks for.
 function motionTags() {
@@ -2458,8 +2464,10 @@ commandOps.video = () => makeVideo()
 // frame. Every other finished page becomes a flat snapshot and its iframe is
 // unloaded; it comes back live as soon as you zoom into it or an agent works on it.
 
-const lite = { last: 0, busy: false }
-const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4))
+const lite = { last: 0, busy: false, quiet: 0 }
+// Auto: on for small machines, and for everyone once the agents have been done
+// for half a minute (a finished build doesn't need every page live).
+const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 30000)))
 
 const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
 const frameBusy = f => S.order.some(k => { const l = S.layers.get(k); return belongs(f, l) && l.status !== 'done' && l.status !== 'failed' })
@@ -2493,14 +2501,18 @@ function thaw(f) {
 }
 
 async function litePass() {
-  const on = liteOn() && els.player.hidden
+  if (S.frames.some(frameBusy) || !S.frames.length) lite.quiet = performance.now()
+  // Play covers the canvas, so its pages can all rest while you click through
+  const playing = !els.player.hidden
+  const on = modelsInfo.lite !== false && (playing || liteOn())
   document.body.classList.toggle('lite', on)
   if (!on) { S.frames.forEach(thaw); return }
-  if (lite.busy) return
+  // the reviewer needs its pages live
+  if (lite.busy || review.busy) return
   // the page you are reading: the most visible one, once zoomed in enough to read
   const vw = els.viewport.clientWidth
   let keep = null, best = 0
-  if (cam.s >= 0.2) for (const f of S.frames) {
+  if (cam.s >= 0.2 && !playing) for (const f of S.frames) {
     const x0 = f.x * cam.s + cam.x, x1 = x0 + FRAME_W * cam.s
     const seen = Math.min(vw, x1) - Math.max(0, x0)
     if (seen > best) { best = seen; keep = f }

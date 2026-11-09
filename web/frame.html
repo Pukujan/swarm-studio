@@ -35,7 +35,7 @@
   /* the reviewer looking at the page */
   #scan { position: absolute; inset: 0; pointer-events: none; z-index: 99; overflow: hidden; }
   #scan::before { content: ''; position: absolute; left: 0; right: 0; height: 240px; top: -240px; background: linear-gradient(180deg, transparent, #7c9cff38 85%, #7c9cffcc); animation: scan 2.4s cubic-bezier(.45,0,.55,1) infinite; }
-  #scan::after { content: '🔎 reviewing'; position: absolute; right: 18px; top: 18px; font: 700 15px/1 ui-monospace, monospace; color: #fff; background: #4a5fd0; padding: 8px 12px; border-radius: 99px; }
+  #scan::after { content: attr(data-t); position: absolute; right: 18px; top: 18px; font: 700 15px/1 ui-monospace, monospace; color: #fff; background: #4a5fd0; padding: 8px 12px; border-radius: 99px; }
   @keyframes scan { to { top: 100%; } }
 </style>
 <script>
@@ -160,8 +160,16 @@
 
   function scan(on) {
     let el = document.getElementById('scan')
-    if (on && !el) { el = document.createElement('div'); el.id = 'scan'; document.body.append(el) }
-    if (!on) el?.remove()
+    if (on && !el) {
+      el = document.createElement('div')
+      el.id = 'scan'
+      document.body.append(el)
+      // the pill counts the seconds: a vision model can take a while
+      const from = Date.now(), tick = () => { el.dataset.t = `🔎 reviewing · ${Math.round((Date.now() - from) / 1000)}s` }
+      tick()
+      el.timer = setInterval(tick, 1000)
+    }
+    if (!on && el) { clearInterval(el.timer); el.remove() }
   }
 
   addEventListener('message', e => {

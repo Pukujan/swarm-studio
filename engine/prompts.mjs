@@ -82,6 +82,7 @@ Rules:
 - Use the content you are given word for word. Never invent extra headings, names, numbers or claims; never repeat what other layers on the page cover.
 - Complete, finished markup. No placeholders, no lorem ipsum, no TODOs. For imagery use simple inline SVG shapes or CSS shapes, never external image URLs.
 - Responsive: works at 390px and 1440px wide. No horizontal overflow. Content width max-w-6xl mx-auto with px-6.
+- Never float text over a fixed-size box (a map, a picture, an aspect-[16/9] or h-96 panel) with absolute positioning: at another width it lands on top of other text. Put legends, cards and captions beside or below the box, in the normal flow. Absolute is fine for small pins, badges and decoration.
 - Considered design: clear hierarchy, generous whitespace, one coherent rhythm. No gradient text, no glassmorphism, no purple glow.
 - Buttons or links that go to another page get data-goto="<page id>".
 - As you work, every 3 to 6 elements write a short note about what you are doing as an HTML comment: <!-- say: ... --> (under 12 words, first person, specific).`
