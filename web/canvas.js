@@ -44,7 +44,7 @@ const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nex
 function fresh(run = null) {
   S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0 }
   banter.queue = []
-  els.world.innerHTML = ''
+  els.world.innerHTML = '<div class="ghosts" id="ghosts"></div>'
   els.cursors.innerHTML = ''
   els.wires.innerHTML = ''
   els.feed.innerHTML = '<div class="empty-chat">Describe a product below. A planner picks the pages, then a swarm of agents builds them on the canvas.</div>'
@@ -120,6 +120,7 @@ function on(e) {
       a.idle = false
       a.assignedAt = performance.now()
       setTool(a, 'frame', 750)
+      if (live(e)) a.queued = 'marquee'
       l.status = 'assigned'
       l.agent = a.id
       S.treeDirty = true
@@ -132,7 +133,10 @@ function on(e) {
       l.text += e.text
       l.ver++
       if (l.status === 'assigned') { l.status = 'streaming'; S.treeDirty = true }
-      if (a) setTool(a, detectTool(l.text))
+      if (a) {
+        setTool(a, detectTool(l.text))
+        if (live(e) && !a.act && performance.now() > a.restUntil) a.queued = gestureFor(l.text) || a.queued
+      }
       break
     }
     case 'agent:say': {
@@ -154,7 +158,11 @@ function on(e) {
       S.done = e.done
       S.treeDirty = true
       const a = S.agents.get(e.agent)
-      if (a) { a.layer = null; setTool(a, 'move', 400) }
+      if (a) {
+        if (live(e) && !a.act) startGesture(a, 'resize', l)
+        a.layer = null
+        setTool(a, 'move', 400)
+      }
       break
     }
     case 'layer:failed': {
@@ -196,7 +204,7 @@ function addAgent(a) {
   const c = dockCell(seat)
   const agent = {
     ...a, el, tagIcon: el.querySelector('.tag svg'), bubble: el.querySelector('.bubble'),
-    layer: null, idle: true, tool: 'move', toolUntil: 0, sayUntil: 0, assignedAt: 0,
+    layer: null, idle: true, tool: 'move', toolUntil: 0, sayUntil: 0, assignedAt: 0, act: null, queued: null, restUntil: 0,
     seat, docked: true, sx: c.x + (Math.random() - 0.5) * 80, sy: c.y - 40 - Math.random() * 60, wx: 0, wy: 0
   }
   S.agents.set(a.id, agent)
@@ -257,7 +265,7 @@ function addFrame(p) {
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
   else iframe.src = 'frame.html'
   const frame = { id: p.id, title: p.title, index: p.index, x, h: 700, el, iframe, ready: false, slots: new Map(), geo: { slots: {}, gotos: [] } }
-  els.world.append(el)
+  els.world.insertBefore(el, els.world.querySelector('#ghosts'))
   S.frames.push(frame)
   S.treeDirty = true
 }
@@ -364,14 +372,219 @@ function agentTarget(a, now) {
   const s = slotFor(l)
   if (!s) return null
   const box = s.box
-  if (!l.text.trim() || l.status === 'assigned') {
-    // dragging out the frame for its layer: top-left to bottom-right
-    const p = Math.min(1, (now - a.assignedAt) / 650)
-    const e = 1 - Math.pow(1 - p, 3)
-    return { x: s.f.x + box.left + 30 + e * (box.width - 60), y: box.top + 30 + e * (Math.max(box.height, l.height) - 60) }
-  }
+  if (!l.text.trim() || l.status === 'assigned') return { x: s.f.x + box.right - 40, y: box.top + Math.max(box.height, l.height) - 30 }
   if (!s.last) return { x: s.f.x + box.left + 40, y: box.top + 40 }
   return { x: s.f.x + s.last[0], y: s.last[1] - 6 }
+}
+
+// ---------- design gestures
+// What the agent is writing decides what its cursor visibly does on the canvas:
+// drag out a frame, draw a shape, drop in a button, pick a colour, sketch an
+// illustration, pull a wire to another page, nudge the finished section. Each is
+// drawn in world space in the agent's colour, then it goes back to the caret.
+
+const live = e => !viewing && (!e.t || Date.now() - e.t < 5000)
+const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+const lerp = (a, b, t) => a + (b - a) * t
+const rand = (a, b) => a + Math.random() * (b - a)
+
+function gestureFor(text) {
+  const tail = text.slice(-400)
+  const lt = tail.lastIndexOf('<')
+  const tag = lt >= 0 ? tail.slice(lt) : ''
+  const name = (tag.match(/^<([a-z0-9]+)/i) || [])[1]?.toLowerCase() || ''
+  if (tail.lastIndexOf('<svg') > tail.lastIndexOf('</svg>')) return Math.random() < 0.5 ? 'pen' : null
+  if (/data-goto="[^"]+"/.test(tag)) return 'wire'
+  if (name === 'button' || (name === 'a' && /\b(bg-|rounded|px-)/.test(tag))) return 'component'
+  if (/var\(--(primary|accent|muted|card|border)/.test(tag) && Math.random() < 0.4) return 'swatch'
+  if (/^(div|section|article|aside|header|footer|ul|nav|form)$/.test(name) && /\b(bg-|border|rounded|shadow|grid|gap-)/.test(tag)) {
+    const r = Math.random()
+    return r < 0.4 ? 'shape' : r < 0.75 ? 'menu' : null
+  }
+  // writing the words of a heading or paragraph: sometimes type them in a text box
+  const open = tail.match(/<(h[1-4]|p|blockquote)\b[^>]*>([^<]{6,})$/i)
+  if (open && Math.random() < 0.35) return 'type'
+  return null
+}
+
+// Where the agent is writing now, in world coordinates.
+function caretOf(l) {
+  const s = slotFor(l)
+  if (!s) return null
+  const b = s.box
+  const x = s.last ? s.last[0] : b.left + 60, y = s.last ? s.last[1] : b.top + 60
+  return { s, x: s.f.x + Math.max(b.left + 30, Math.min(b.right - 30, x)), y: Math.max(b.top + 20, Math.min(b.top + Math.max(b.height, l.height) - 20, y)) }
+}
+
+function ghostFor(a) {
+  if (!a.ghost?.isConnected) {
+    a.ghost = document.createElement('div')
+    a.ghost.className = 'ghost'
+    a.ghost.style.setProperty('--c', a.color)
+    $('#ghosts')?.append(a.ghost)
+  }
+  return a.ghost
+}
+
+function startGesture(a, kind, l) {
+  a.queued = null
+  const c = l && caretOf(l)
+  if (!c) return
+  const { s } = c, b = s.box, fx = s.f.x
+  const from = a.docked ? { x: (a.sx - cam.x) / cam.s, y: (a.sy - cam.y) / cam.s } : { x: a.wx, y: a.wy }
+  const g = { kind, t0: performance.now(), from, pressed: false }
+  if (kind === 'marquee') {
+    const h = Math.max(b.height, l.height)
+    Object.assign(g, { dur: 900, p0: { x: fx + b.left + 28, y: b.top + 24 }, p1: { x: fx + b.right - 28, y: b.top + h - 24 }, approach: 0.15 })
+  } else if (kind === 'shape') {
+    const w = rand(260, 520), h = rand(120, 260)
+    const x0 = Math.min(c.x, fx + b.right - w - 30)
+    Object.assign(g, { dur: 1100, p0: { x: x0, y: c.y + 20 }, p1: { x: x0 + w, y: c.y + 20 + h } })
+  } else if (kind === 'component') {
+    Object.assign(g, { dur: 1300, p0: { x: fx - 220, y: c.y - 30 }, p1: { x: Math.min(c.x + 40, fx + b.right - 160), y: c.y + 10 }, approach: 0.3 })
+  } else if (kind === 'swatch') {
+    const vars = S.theme?.vars || {}
+    g.colors = ['--primary', '--accent', '--background', '--muted', '--foreground'].map(k => vars[k]).filter(Boolean)
+    if (!g.colors.length) return
+    g.pick = Math.floor(Math.random() * g.colors.length)
+    Object.assign(g, { dur: 1300, p0: { x: c.x, y: c.y }, p1: { x: c.x + 40 + g.pick * 70, y: c.y + 95 } })
+  } else if (kind === 'pen') {
+    Object.assign(g, { dur: 1500, p0: { x: c.x, y: c.y + 60 }, cx: c.x + rand(40, 120), cy: c.y + 120, r: rand(60, 110), trail: [] })
+  } else if (kind === 'wire') {
+    const to = (l.text.slice(-400).match(/data-goto="([^"]+)"[^<]*$/) || [])[1]
+    const tf = S.frames.find(f => f.id === to)
+    if (!tf || tf === s.f) return
+    Object.assign(g, { dur: 1400, p0: { x: c.x, y: c.y }, p1: { x: tf.x + 40, y: 80 }, approach: 0.15 })
+  } else if (kind === 'type') {
+    const words = (l.text.slice(-300).match(/>([^<]{6,})$/) || [])[1]?.trim() || ''
+    if (!words) return
+    g.words = words.length > 34 ? `${words.slice(0, 34)}…` : words
+    Object.assign(g, { dur: 900 + g.words.length * 55, p0: { x: c.x - 20, y: c.y + 40 }, p1: { x: c.x - 20, y: c.y + 40 } })
+  } else if (kind === 'menu') {
+    const tag = l.text.slice(l.text.lastIndexOf('<'))
+    g.items = ['Fill', 'Stroke', 'Corner radius', 'Auto layout', 'Effects']
+    g.pick = /rounded/.test(tag) ? 2 : /shadow/.test(tag) ? 4 : /\b(gap-|grid|flex)/.test(tag) ? 3 : /border/.test(tag) ? 1 : 0
+    const gap = (tag.match(/\bgap-(\d+)/) || [])[1], rad = (tag.match(/\brounded-(\w+)/) || [])[1]
+    g.value = ['fill', 'stroke · 1px', `radius · ${rad || 'md'}`, `${/flex-col|grid/.test(tag) ? '↓' : '→'} gap ${gap ? gap * 4 : 16}`, 'shadow'][g.pick]
+    Object.assign(g, { dur: 1700, p0: { x: c.x, y: c.y }, p1: { x: c.x + 60, y: c.y + 72 + g.pick * 62 }, approach: 0.2 })
+  } else if (kind === 'resize') {
+    const h = b.height
+    Object.assign(g, { dur: 1000, box: { x: fx + b.left, y: b.top, w: b.width, h }, p0: { x: fx + b.left + b.width / 2, y: b.top + h }, p1: { x: fx + b.left + b.width / 2, y: b.top + h + 40 }, approach: 0.3 })
+  } else return
+  g.approach ??= 0.25
+  const tool = { marquee: 'frame', shape: 'rect', component: 'rect', swatch: 'rect', pen: 'image', wire: 'connect', type: 'text', menu: 'move', resize: 'move' }[kind]
+  // sometimes walk down to the toolbar first and pick the tool
+  const btn = tool !== 'move' && Math.random() < 0.4 && els.toolbar.children[TOOLS.findIndex(t => t.id === tool)]
+  if (btn) {
+    const r = btn.getBoundingClientRect(), v = els.viewport.getBoundingClientRect()
+    g.via = { x: (r.left + r.width / 2 - v.left - cam.x) / cam.s, y: (r.top + r.height / 2 - v.top - cam.y) / cam.s }
+    g.viaTool = tool
+    const extra = 700
+    g.approach = (g.approach * g.dur + extra) / (g.dur + extra)
+    g.dur += extra
+  }
+  a.act = g
+  a.toolUntil = Math.max(a.toolUntil, g.t0 + g.dur)
+  setTool(a, tool, g.dur)
+}
+
+// Tool buttons an agent has just clicked, lit in its colour.
+const toolFlash = new Map()
+
+// Advance a gesture; returns the cursor's world position, or null when it ends.
+function gestureStep(a, now) {
+  const g = a.act
+  const t = Math.min(1, (now - g.t0) / g.dur)
+  const gh = ghostFor(a)
+  if (t >= 1) {
+    a.act = null
+    a.restUntil = now + rand(700, 1800)
+    gh.classList.add('fade')
+    setTimeout(() => gh.isConnected && gh.classList.contains('fade') && (gh.innerHTML = ''), 400)
+    return null
+  }
+  gh.classList.remove('fade')
+  const ap = g.approach
+  if (t < ap) {
+    const v = t / ap
+    g.pressed = false
+    if (g.kind === 'resize') drawSelection(gh, g.box, 0)
+    else gh.innerHTML = ''
+    if (g.via) {
+      if (v < 0.5) {
+        const k = ease(v / 0.5)
+        if (v > 0.42 && !g.clicked) { g.clicked = true; toolFlash.set(g.viaTool, { color: a.color, until: now + 600 }) }
+        g.pressed = v > 0.42
+        return { x: lerp(g.from.x, g.via.x, k), y: lerp(g.from.y, g.via.y, k) }
+      }
+      const k = ease((v - 0.5) / 0.5)
+      return { x: lerp(g.via.x, g.p0.x, k), y: lerp(g.via.y, g.p0.y, k) }
+    }
+    const k = ease(v)
+    return { x: lerp(g.from.x, g.p0.x, k), y: lerp(g.from.y, g.p0.y, k) }
+  }
+  const u = (t - ap) / (1 - ap), k = ease(Math.min(1, u / 0.8))
+  g.pressed = u < 0.85
+  if (g.kind === 'pen') {
+    const ang = u * Math.PI * 3.2
+    const p = { x: g.cx + Math.cos(ang) * g.r * (0.6 + 0.4 * Math.sin(ang * 1.7)), y: g.cy + Math.sin(ang) * g.r * 0.7 }
+    g.trail.push(`${Math.round(p.x)},${Math.round(p.y)}`)
+    gh.innerHTML = `<svg class="pen"><polyline points="${g.trail.join(' ')}"/></svg>`
+    return p
+  }
+  const p = { x: lerp(g.p0.x, g.p1.x, k), y: lerp(g.p0.y, g.p1.y, k) }
+  if (g.kind === 'marquee' || g.kind === 'shape') {
+    const x = Math.min(g.p0.x, p.x), y = Math.min(g.p0.y, p.y), w = Math.abs(p.x - g.p0.x), h = Math.abs(p.y - g.p0.y)
+    gh.innerHTML = `<div class="${g.kind}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"><span>${Math.round(w)} × ${Math.round(h)}</span></div>`
+  } else if (g.kind === 'component') {
+    // drag it in, then try a few fills from the theme before settling
+    const colors = themeColors().slice(0, 5)
+    const dk = ease(Math.min(1, u / 0.45))
+    const at = { x: lerp(g.p0.x, g.p1.x, dk), y: lerp(g.p0.y, g.p1.y, dk) }
+    g.pressed = u < 0.45 || (u > 0.9 && u < 0.97)
+    if (u > 0.5 && colors.length) {
+      const i = Math.min(colors.length - 1, Math.floor(((u - 0.5) / 0.4) * colors.length))
+      const pal = `<div class="palette" style="left:${g.p1.x + 260}px;top:${g.p1.y - 40}px">${colors.map((c, j) => `<i style="background:${c}" class="${j === i ? 'on' : ''}"></i>`).join('')}</div>`
+      gh.innerHTML = `<div class="chip" style="left:${g.p1.x - 20}px;top:${g.p1.y - 34}px;background:${colors[i]}">Button</div>${pal}`
+      return { x: g.p1.x + 288 + i * 70, y: g.p1.y - 12 }
+    }
+    gh.innerHTML = `<div class="chip" style="left:${at.x - 20}px;top:${at.y - 34}px">Button</div>`
+    return at
+  } else if (g.kind === 'type') {
+    g.pressed = u < 0.08
+    const n = Math.min(g.words.length, Math.floor(Math.max(0, u - 0.1) / 0.85 * g.words.length))
+    const shown = g.words.slice(0, n).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    gh.innerHTML = `<div class="textbox" style="left:${g.p0.x}px;top:${g.p0.y}px">${shown}<i class="caret"></i></div>`
+    return { x: g.p0.x + 18 + Math.min(n, 34) * 21, y: g.p0.y + 50 }
+  } else if (g.kind === 'menu') {
+    const hover = Math.min(g.pick, Math.floor((u / 0.75) * (g.pick + 1)))
+    const chosen = u > 0.8
+    g.pressed = u > 0.78 && u < 0.88
+    const rows = g.items.map((it, i) => `<div class="${i === hover ? 'hov' : ''}${chosen && i === g.pick ? ' pick' : ''}">${it}${chosen && i === g.pick ? `<small>${g.value}</small>` : ''}</div>`).join('')
+    gh.innerHTML = `<div class="menu" style="left:${g.p0.x + 20}px;top:${g.p0.y + 20}px">${rows}</div>`
+    return { x: g.p0.x + 80, y: g.p0.y + 72 + hover * 62 }
+  } else if (g.kind === 'wire') {
+    gh.innerHTML = `<svg class="wire"><path d="M${g.p0.x},${g.p0.y} C${g.p0.x + 200},${g.p0.y} ${p.x - 200},${p.y} ${p.x},${p.y}"/><circle cx="${g.p0.x}" cy="${g.p0.y}" r="12"/><circle cx="${p.x}" cy="${p.y}" r="12"/></svg>`
+  } else if (g.kind === 'swatch') {
+    g.pressed = u > 0.75 && u < 0.9
+    const sw = g.colors.map((c, i) => `<i style="background:${c}" class="${u > 0.8 && i === g.pick ? 'on' : ''}"></i>`).join('')
+    gh.innerHTML = `<div class="palette" style="left:${g.p0.x}px;top:${g.p0.y + 50}px">${sw}</div>`
+  } else if (g.kind === 'resize') {
+    const bounce = Math.sin(Math.min(1, u / 0.85) * Math.PI) * 40
+    drawSelection(gh, { ...g.box, h: g.box.h + bounce }, 1)
+    return { x: g.p0.x, y: g.p0.y + bounce }
+  }
+  return p
+}
+
+function themeColors() {
+  const v = S.theme?.vars || {}
+  return ['--primary', '--accent', '--foreground', '--muted', '--card', '--background'].map(k => v[k]).filter(Boolean)
+}
+
+function drawSelection(gh, b, on) {
+  const hs = [[0, 0], [0.5, 0], [1, 0], [0, 0.5], [1, 0.5], [0, 1], [0.5, 1], [1, 1]]
+  gh.innerHTML = `<div class="select${on ? ' on' : ''}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px">${hs.map(([x, y]) => `<b style="left:${x * 100}%;top:${y * 100}%"></b>`).join('')}<span>${Math.round(b.w)} × ${Math.round(b.h)}</span></div>`
 }
 
 // ---------- the break room
@@ -595,7 +808,9 @@ function renderToolbar() {
   for (const a of S.agents.values()) if (a.layer || performance.now() < a.toolUntil) by[a.tool].push(a)
   els.toolbar.innerHTML = TOOLS.map(t => {
     const list = by[t.id]
-    return `<div class="tool${list.length ? ' active' : ''}" title="${t.label}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
+    const f = toolFlash.get(t.id)
+    const lit = f && performance.now() < f.until ? ` style="background:${f.color};color:#0b0d12"` : ''
+    return `<div class="tool${list.length ? ' active' : ''}"${lit} title="${t.label}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
   }).join('')
 }
 
@@ -685,7 +900,15 @@ function frameLoop(now) {
   for (const a of S.agents.values()) {
     // Switching between screen space (dock) and world space (canvas) converts the
     // current position, so a cursor glides out of the break room instead of jumping.
-    if (!a.layer && now > a.toolUntil) {
+    if (a.queued && a.layer && !a.act) startGesture(a, a.queued, S.layers.get(a.layer))
+    if (a.act) {
+      if (a.docked) { a.wx = (a.sx - cam.x) / cam.s; a.wy = (a.sy - cam.y) / cam.s; a.docked = false }
+      const t = gestureStep(a, now)
+      if (t) { a.wx = t.x; a.wy = t.y }
+      const p = toScreen(a.wx, a.wy)
+      a.sx = p.x
+      a.sy = p.y
+    } else if (!a.layer && now > a.toolUntil) {
       if (!a.docked) { const p = toScreen(a.wx, a.wy); a.sx = p.x; a.sy = p.y; a.docked = true }
       const c = dockCell(a.seat)
       a.sx += (c.x - a.sx) * 0.12
@@ -705,6 +928,7 @@ function frameLoop(now) {
     a.el.classList.toggle('docked', a.docked)
     a.el.classList.toggle('flip', a.docked && a.seat % DOCK.cols >= 2)
     a.el.classList.toggle('talking', now < a.sayUntil)
+    a.el.classList.toggle('press', !!a.act?.pressed)
   }
   runBanter(now)
   drawWires()
