@@ -21,6 +21,11 @@ const els = {
 }
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
 const commandOps = {}
+// ?run=<id> opens a file, ?replay=<id>&speed=N replays it on a timer (no live stream),
+// and wall=1 is the compact tile the Swarm Wall (web/wall.html) shows
+const Q = new URLSearchParams(location.search)
+const WALL = Q.get('wall') === '1'
+if (WALL) document.documentElement.classList.add('wall')
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
 // undo and redo steps (see undo() below)
 const history = { undo: [], redo: [] }
@@ -357,7 +362,8 @@ function on(e) {
       traceLive(e)
       break
     case 'auto':
-      autoEvent(e)
+      // a replay moves between views as the live run did
+      autoEvent(e, Q.get('replay') ? true : undefined)
       break
     case 'game:spec':
       S.spec = e.spec
@@ -3867,6 +3873,28 @@ async function openRun(id) {
   renderFiles()
 }
 
+// Replay a saved run on its own clock, sped up: the Swarm Wall plays four of these side by side.
+// Long quiet gaps (a model thinking) are cut to 1.5 s of real time so the tile never looks stuck.
+async function replayRun(id, speed = 8) {
+  const res = await api(`/api/runs/${encodeURIComponent(id)}/events`).catch(() => null)
+  if (!res?.ok) return botMsg('That run could not be loaded.')
+  const events = (await res.json()).filter(e => e.type !== 'cmd')
+  viewing = id
+  fresh(id)
+  let clock = 0, prev = events[0]?.t || 0
+  const start = performance.now()
+  parent.postMessage?.({ wall: 'start', run: id, events: events.length }, '*')
+  for (const [i, e] of events.entries()) {
+    clock += Math.min(Math.max(0, (e.t || prev) - prev) / speed, 1500)
+    prev = e.t || prev
+    const wait = clock - (performance.now() - start)
+    if (wait > 4) await new Promise(r => setTimeout(r, wait))
+    try { on(e) } catch (err) { console.error(err) }
+    if (i % 25 === 0) parent.postMessage?.({ wall: 'tick', run: id, i, of: events.length, t: e.t - events[0].t }, '*')
+  }
+  parent.postMessage?.({ wall: 'done', run: id, ms: (events.at(-1)?.t || 0) - (events[0]?.t || 0) }, '*')
+}
+
 els.newFile.onclick = () => {
   viewing = 'new'
   fresh()
@@ -4224,7 +4252,8 @@ function connect() {
   es.onmessage = m => {
     try {
       const e = JSON.parse(m.data)
-      if (e.type === 'cmd') return command(e)
+      // a wall tile only watches: the main canvas answers Hermes' commands
+      if (e.type === 'cmd') return WALL ? null : command(e)
       // a sign-in belongs to no file
       if (e.type === 'connector') return connectorEvent(e)
       if (e.type === 'reset' || e.type === 'run:start') {
@@ -4251,7 +4280,7 @@ async function command(c) {
 // A newer canvas on disk: reload once nothing is building and nobody is mid-edit.
 setInterval(async () => {
   const st = await fetch('/api/state').then(r => r.json()).catch(() => null)
-  if (!st?.version || !BOOT.version || st.version === BOOT.version) return
+  if (WALL || !st?.version || !BOOT.version || st.version === BOOT.version) return
   const busy = (st.working && !viewing) || !els.player.hidden || picker.el || models.el || review.busy || video.busy || video.el || document.activeElement?.closest?.('input, textarea, select')
   if (!busy) location.reload()
 }, 8000)
@@ -4261,10 +4290,12 @@ setAuto(true)
 renderToolbar()
 renderPanels()
 showTab(store.get('tab', 'chat'))
-connect()
+if (Q.get('replay')) replayRun(Q.get('replay'), Number(Q.get('speed')) || 8)
+else connect()
+if (Q.get('run') && !Q.get('replay')) setTimeout(() => openRun(Q.get('run')), 300)
 // Nothing live to replay: open the latest saved file rather than an empty canvas.
 setTimeout(async () => {
-  if (S.run || viewing) return
+  if (S.run || viewing || Q.get('run') || Q.get('replay')) return
   await loadFiles()
   const latest = files.find(f => f.preview)
   if (latest && !S.run && !viewing) openRun(latest.id)
@@ -4520,7 +4551,10 @@ function openAuto() {
   const el = autoM.pop = document.createElement('div')
   el.className = 'game-pop auto-pop'
   el.innerHTML = `<div class="ghead"><b class="kicker">${ico('zap')}Auto mode</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div>
+    <div class="auto-mode" role="radiogroup" aria-label="Mode"><button data-m="make" class="on" role="radio" aria-checked="true">✨ Make<small>one prompt, a fun result</small></button><button data-m="pro" role="radio" aria-checked="false">💼 Pro<small>a pack for your market</small></button></div>
     <h3>One prompt. The <em>whole</em> thing.</h3>
+    <div class="auto-chips"></div>
+    <div class="pro-box" hidden><div class="pro-packs"><small>loading packs…</small></div><div class="pro-intake"></div><div class="pro-deliv"></div></div>
     <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>⚙️ Build the working app</li><li class="auto-games-li">🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🎬 Film the game and cut a promo in its own look</li><li>🚀 Deploy to Vercel</li></ol>
     <div class="auto-games" role="radiogroup" aria-label="Games"><span>Games</span><button data-g="auto" class="on" role="radio" aria-checked="true">Auto</button><button data-g="mini" role="radio" aria-checked="false">3 mini</button><button data-g="big" role="radio" aria-checked="false">1 big</button></div>
     <div class="auto-conn"></div>
@@ -4547,10 +4581,45 @@ function openAuto() {
     showGames()
   })
   ta.addEventListener('input', showGames)
+  // Make: starter chips fill the box. Pro: pick a pack, answer its short intake (every answer has a default).
+  const CHIPS = [['🎮 a game trial page', 'A trial page for my indie game: a neon rooftop runner where a courier dodges drones, with a playable demo'], ['🎸 my band\'s tour site', 'A tour site for my band, a loud garage-surf trio: tour dates, merch, a mailing list'], ['🛍 a pop-up shop', 'A pop-up shop for hand-dyed tote bags, one weekend only, with a stock counter'], ['🎂 a birthday quest', 'A birthday quest site for my friend Sam: clues, a tiny game, and an RSVP']]
+  el.querySelector('.auto-chips').innerHTML = CHIPS.map(([l], i) => `<button data-i="${i}">${esc(l)}</button>`).join('')
+  el.querySelectorAll('.auto-chips button').forEach(b => b.onclick = () => { ta.value = CHIPS[b.dataset.i][1]; showGames(); ta.focus() })
+  const pro = { on: false, packs: null, pack: null }
+  const box = el.querySelector('.pro-box')
+  const plan = el.querySelector('.auto-plan'), planMake = plan.innerHTML
+  const showPack = () => {
+    const p = pro.pack
+    el.querySelectorAll('.pro-pack').forEach(b => b.classList.toggle('on', b.dataset.id === p?.id))
+    el.querySelector('.pro-intake').innerHTML = !p ? '' : (p.intake || []).map(q => `<label>${esc(q.q)}${q.type === 'choice'
+      ? `<select data-q="${esc(q.id)}">${q.choices.map(c => `<option${c === q.default ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>`
+      : `<input data-q="${esc(q.id)}" type="${q.type === 'number' ? 'number' : 'text'}" placeholder="${esc(String(q.default ?? ''))}"${q.min != null ? ` min="${q.min}"` : ''}${q.max != null ? ` max="${q.max}"` : ''}>`}</label>`).join('')
+    el.querySelector('.pro-deliv').textContent = p ? `You get: ${(p.deliverables || []).join(', ')}` : ''
+    plan.innerHTML = !p ? planMake : `<li>🎨 Design the site</li><li>🔎 Review every page</li><li>⚙️ Build the working app</li><li>${esc(p.icon)} ${esc(p.name)} tools: ${(p.tools || []).map(t => esc(t.label.replace(/^\S+\s/, ''))).join(', ')}</li>${p.games !== 'none' ? '<li>🎮 Games on /play</li>' : ''}<li>🗄️ Keep the data in Supabase</li><li>✅ Check it works</li><li>🎬 Film it and cut the promo</li><li>🚀 Deploy to Vercel</li>`
+    if (p && !ta.value.trim()) ta.placeholder = p.pitch
+  }
+  el.querySelectorAll('.auto-mode button').forEach(b => b.onclick = async () => {
+    pro.on = b.dataset.m === 'pro'
+    el.querySelectorAll('.auto-mode button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)) })
+    box.hidden = !pro.on
+    el.querySelector('.auto-chips').hidden = pro.on
+    el.querySelector('.auto-games').hidden = pro.on
+    if (!pro.on) { pro.pack = null; showPack(); return showGames() }
+    if (!pro.packs) {
+      pro.packs = (await api('/api/packs').then(r => r.json()).catch(() => ({}))).packs || []
+      el.querySelector('.pro-packs').innerHTML = pro.packs.map(p => `<button class="pro-pack" data-id="${esc(p.id)}"><b>${esc(p.icon)} ${esc(p.name)}</b><small>${esc(p.pitch)}</small></button>`).join('') || '<small>No packs found.</small>'
+      el.querySelectorAll('.pro-pack').forEach(x => x.onclick = () => { pro.pack = pro.packs.find(p => p.id === x.dataset.id); showPack() })
+    }
+    pro.pack ||= pro.packs[0] || null
+    showPack()
+  })
   const go = async () => {
-    const prompt = ta.value.trim()
+    const prompt = ta.value.trim() || (pro.on && pro.pack ? pro.pack.pitch : '')
     if (!prompt) return ta.focus()
-    const res = await api('/api/auto', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, games: gamesChoice }) }).catch(() => null)
+    const intake = {}
+    el.querySelectorAll('.pro-intake [data-q]').forEach(i => { if (i.value.trim()) intake[i.dataset.q] = i.value.trim() })
+    const body = pro.on && pro.pack ? { prompt, pack: pro.pack.id, intake } : { prompt, games: gamesChoice }
+    const res = await api('/api/auto', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
     const out = await res?.json().catch(() => ({}))
     if (!res?.ok) return feed(null, `auto mode: ${out?.error || 'the canvas server is not answering'}`, 'err')
     close()
@@ -4618,7 +4687,7 @@ function renderAutoPanel() {
 const linkify = t => esc(t).replace(/https?:\/\/[^\s<"]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
 // the clocks tick between events
 setInterval(() => { if (autoM.last?.state === 'working' && autoM.panel && !autoM.panel.hidden) renderAutoPanel() }, 1000)
-api('/api/auto').then(r => r.ok ? r.json() : null).then(e => { if (e?.steps && (e.state === 'working' || Date.now() - e.t0 < 3600000)) autoEvent(e, e.state === 'working') }).catch(() => {})
+if (!Q.get('replay')) api('/api/auto').then(r => r.ok ? r.json() : null).then(e => { if (e?.steps && (e.state === 'working' || Date.now() - e.t0 < 3600000)) autoEvent(e, e.state === 'working') }).catch(() => {})
 
 // ---------- the code wall: while the engine builds an app or a game, the files it
 // writes type out in tiles, one agent per tile with its cursor on the caret.

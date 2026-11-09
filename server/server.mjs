@@ -858,6 +858,13 @@ const server = createServer((req, res) => {
     return
   }
 
+  // the Swarm Wall: 2–4 runs side by side (docs/specs/09-demo-modes.md)
+  if (url.pathname === '/wall') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(readFileSync(join(webDir, 'wall.html'), 'utf8').replace('__SWARM_TOKEN__', () => JSON.stringify(token).replace(/</g, '\\u003c')))
+    return
+  }
+
   if (url.pathname === '/events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
     res.write(': hello\n\n')
@@ -1148,6 +1155,13 @@ const server = createServer((req, res) => {
     })
     return
   }
+  // Pro packs (docs/specs/09-demo-modes.md): what the Auto window's Pro side lists
+  if (url.pathname === '/api/packs' && req.method === 'GET') {
+    import('../engine/packs.mjs').then(m => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ packs: m.listPacks().map(m.packSummary) })))
+      .catch(err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    return
+  }
+
   if (url.pathname === '/api/auto' || url.pathname === '/api/auto/stop') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method === 'GET') return reply(200, auto.state() || { state: 'idle' })

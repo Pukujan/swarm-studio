@@ -1,0 +1,99 @@
+{
+  "order": 3,
+  "name": "Brand Campaign",
+  "market": "Agencies and marketing",
+  "icon": "📣",
+  "pitch": "Agencies and marketers: one brief becomes a campaign site with three visual directions to choose from, tracked launch links and a promo.",
+  "intake": [
+    {
+      "id": "brand",
+      "q": "Brand",
+      "label": "Brand",
+      "type": "text",
+      "default": "a new product launch"
+    },
+    {
+      "id": "audience",
+      "q": "Who is it for?",
+      "label": "Audience",
+      "type": "text",
+      "default": "design-minded people aged 22–35"
+    },
+    {
+      "id": "colour",
+      "q": "Main brand colour (hex)",
+      "label": "Brand colour",
+      "type": "text",
+      "default": "#0000F2"
+    },
+    {
+      "id": "goal",
+      "q": "Campaign goal",
+      "label": "Goal",
+      "type": "choice",
+      "choices": [
+        "Sign-ups",
+        "Pre-orders",
+        "Event attendance",
+        "Awareness"
+      ],
+      "default": "Sign-ups"
+    },
+    {
+      "id": "channels",
+      "q": "Channels",
+      "label": "Channels",
+      "type": "text",
+      "default": "X, LinkedIn, Instagram, TikTok, Email, Discord"
+    }
+  ],
+  "brief": "This is a launch campaign for {{brand}}, aimed at {{audience}}. The goal is {{goal}}. Pages: a campaign landing page with one bold idea, a story or manifesto page, a product or offer page, and a launch page. The brand colour is {{colour}}.",
+  "asks": {
+    "app": "The campaign goal is {{goal}}: one sign-up form, stored, with GET /api/signups returning the count. Show the count as social proof on the landing page."
+  },
+  "tools": [
+    {
+      "id": "directions",
+      "label": "🎨 Making three visual directions",
+      "short": "3 visual directions"
+    },
+    {
+      "id": "utm",
+      "label": "🔗 Tagging the launch links",
+      "short": "tracked links"
+    }
+  ],
+  "connectors": {
+    "required": [],
+    "optional": [
+      "supabase",
+      "vercel",
+      "gateway"
+    ]
+  },
+  "games": "none",
+  "checks": [
+    {
+      "label": "Three directions",
+      "path": "/pack/directions.json",
+      "contains": "\"directions\""
+    },
+    {
+      "label": "Tracked links",
+      "path": "/pack/utm-links.csv",
+      "contains": "utm_source"
+    },
+    {
+      "label": "Visits by source",
+      "path": "/api/visits"
+    }
+  ],
+  "deliverables": [
+    "Campaign site",
+    "Three visual directions with a live switcher",
+    "Tracked launch links per channel",
+    "Visits by source on /admin",
+    "Promo video",
+    "Launch kit"
+  ]
+}

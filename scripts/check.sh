@@ -28,6 +28,8 @@ curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<title>Swarm Studio'
 get /api/state; has '"working"'
 get /api/runs
 get /api/game; has '"questions"'
+get /api/packs; has '"events"'
+curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; grep -q '__SWARM_TOKEN__' "$tmp/reply" && { echo 'the wall has no token'; exit 1; }
 get /api/auto; has '"state"'
 # without the token the API refuses
 [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/api/runs)" != 200 ] || { echo 'the API answered without a token'; exit 1; }
