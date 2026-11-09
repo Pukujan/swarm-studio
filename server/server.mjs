@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
+import { exportRun } from '../engine/export.mjs'
 import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -600,6 +601,38 @@ const server = createServer((req, res) => {
       comment(runComment[1], input)
         .then(result => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result)))
         .catch(err => res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    })
+    return
+  }
+
+  // Export: static HTML, a React + Vite + Tailwind project and an ABA handoff,
+  // written to runs/<id>/export/ and zipped.
+  const runExport = url.pathname.match(/^\/api\/runs\/([^/]+)\/export(\.zip)?$/)
+  if (runExport && RUN_ID.test(runExport[1])) {
+    const id = runExport[1]
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    if (runExport[2]) {
+      const dir = join(runsDir, id, 'export')
+      const zip = existsSync(dir) && readdirSync(dir).find(f => f.endsWith('.zip'))
+      if (!zip) return reply(404, { error: 'not exported yet' })
+      res.writeHead(200, { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="${zip}"` })
+      createReadStream(join(dir, zip)).pipe(res)
+      return
+    }
+    if (req.method !== 'POST') return reply(405, { error: 'POST to export' })
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 8e6) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const events = readEvents(id)
+      if (!events) return reply(404, { error: 'no such build' })
+      exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [] })
+        .then(out => {
+          record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, pages: out.pages, sections: out.sections })
+          reply(200, out)
+        })
+        .catch(err => reply(400, { error: String(err.message || err) }))
     })
     return
   }

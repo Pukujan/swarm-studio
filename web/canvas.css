@@ -384,3 +384,16 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .toolbar .tool[data-tool="comment"] { cursor: pointer; }
 .toolbar .tool.armed { background: #7c9cff; color: #0b0d12; }
 .viewport.commenting { cursor: crosshair; }
+
+/* ---------- export */
+#export-btn:disabled { opacity: .45; cursor: default; }
+.export-pop { position: fixed; right: 14px; top: 56px; z-index: 66; width: 420px; max-width: calc(100vw - 28px); padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 18px 50px #000b; }
+.export-pop .vhead { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 8px; }
+.export-pop .vclose { background: none; border: 0; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+.export-pop .xrow { display: grid; grid-template-columns: 64px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.export-pop .xrow b { font-family: var(--mono); }
+.export-pop .xrow span { color: var(--muted); }
+.export-pop code { font: 11px var(--mono); color: var(--text); }
+.export-pop .xpath { margin-top: 8px; font: 10.5px var(--mono); color: var(--muted); word-break: break-all; }
+.export-pop .vfoot { display: flex; justify-content: space-between; margin-top: 10px; }
+.export-pop .vagain { background: var(--accent); color: #fff; border-radius: 6px; padding: 6px 12px; font-weight: 600; text-decoration: none; font-size: 12.5px; }
