@@ -128,7 +128,7 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
       say('creating a free Supabase project (about two minutes)')
       // the Supabase MCP needs a region; SWARM_SUPABASE_REGION picks another one (us-west-1, eu-west-2, ap-southeast-1…)
       const region = /^[a-z]{2}-[a-z]+-\d$/.test(process.env.SWARM_SUPABASE_REGION || '') ? process.env.SWARM_SUPABASE_REGION : 'us-east-1'
-      project = await call('supabase', 'create_project', { name: 'swarm-studio', region, organization_id: org.id, confirm_cost_id: confirm?.id || confirm?.confirm_cost_id || confirm })
+      project = await call('supabase', 'create_project', { name: 'swarm-studio', region, organization_id: org.id, confirm_cost_id: String(confirm?.confirmation_id || confirm?.confirm_cost_id || confirm?.id || confirm) })
     }
     const id = project.id || project.ref
     for (let i = 0; i < 60 && !/ACTIVE_HEALTHY/.test(String(project.status || '')); i++) {
