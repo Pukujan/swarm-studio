@@ -1193,8 +1193,9 @@ function frameLoop(now) {
     setText(els.reviewBtn, review.busy ? '🔎 Reviewing…' : '🔎 Review')
     els.exportBtn.disabled = !S.done || exp.busy
     const pubbing = pub.run === shownRun() && pub.state === 'working'
-    els.publishBtn.disabled = !S.done || pubbing
-    setText(els.publishBtn, pubbing ? '🌐 Publishing…' : '🌐 Publish site')
+    const deploying = appv.deploying && appv.run === shownRun()
+    els.publishBtn.disabled = !S.done || pubbing || deploying
+    setText(els.publishBtn, pubbing || deploying ? '🚀 Publishing…' : '🚀 Publish ▾')
     const mine = video.run === shownRun()
     els.videoBtn.disabled = !S.done && !(mine && video.src)
     setText(els.videoBtn, mine && video.busy ? `🎬 ${video.pct ? `${video.pct | 0}%` : 'Writing…'}` : '🎬 Video')
@@ -2431,7 +2432,7 @@ function pubPop(html) {
   pub.el?.remove()
   pub.el = document.createElement('div')
   pub.el.className = 'export-pop publish-pop'
-  pub.el.innerHTML = `<div class="vhead">🌐 Publish the site <small>static pages; the working app goes out with 🚀 Deploy app</small><button class="vclose" title="Close">×</button></div>${html}`
+  pub.el.innerHTML = `<div class="vhead">🌐 Publish the website <small>the designed pages, no server</small><button class="vclose" title="Close">×</button></div>${html}`
   document.body.append(pub.el)
   pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
   return pub.el
@@ -2521,7 +2522,6 @@ function publishEvent(e) {
   feed(null, `🌐 published ${e.pages} pages: ${e.url}`, 'sys')
 }
 
-els.publishBtn.onclick = () => publishMenu()
 commandOps.publish = c => publishNow(['local', 'vercel', 'cloudflare'].includes(c.target) ? c.target : 'github')
 
 // ---------- comments: tell an agent what to change
@@ -3314,7 +3314,7 @@ function renderFiles() {
   if (!els.files.previousElementSibling?.classList.contains('file-tools')) {
     const bar = document.createElement('div')
     bar.className = 'file-tools'
-    bar.innerHTML = `<input type="search" placeholder="Search names, briefs, themes, tags…  (tag:, has:video, on:vercel)" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option><option value="manual">My order</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="none">No groups</option></select><button class="fnewf" title="New folder">＋📁</button>`
+    bar.innerHTML = `<input type="search" placeholder="Search names, briefs, themes, tags…  (tag:, has:video, on:vercel)" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="recent">Last changed</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option><option value="manual">My order</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="folderday">By folder, then day</option><option value="none">No groups</option></select><button class="fnewf" title="New folder">＋📁</button>`
     els.files.before(bar)
     bar.querySelector('.fq').oninput = e => { fileView.q = e.target.value.toLowerCase(); renderFiles() }
     bar.querySelector('.fsort').value = fileView.sort
@@ -3325,14 +3325,23 @@ function renderFiles() {
   }
   els.files.innerHTML = files.length ? '' : '<div class="empty">No files yet. Describe a product in Chat to make one.</div>'
   const list = files.filter(f => fileMatch(f, fileView.q))
-  const by = { new: (a, b) => b.t - a.t, old: (a, b) => a.t - b.t, name: (a, b) => a.title.localeCompare(b.title), size: (a, b) => b.pages - a.pages || b.t - a.t,
+  const changed = f => f.updated || f.t
+  const by = { new: (a, b) => b.t - a.t, recent: (a, b) => changed(b) - changed(a), old: (a, b) => a.t - b.t, name: (a, b) => a.title.localeCompare(b.title), size: (a, b) => b.pages - a.pages || b.t - a.t,
     manual: (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || b.t - a.t }[fileView.sort]
   list.sort(by)
   // runs that never got a page go in their own group, out of the way
-  const groupOf = f => (!f.pages && !f.live ? '⚠ Unfinished' : fileView.group === 'day' ? dayLabel(f.t) : fileView.group === 'folder' ? (f.folder ? `📁 ${f.folder}` : 'Not in a folder') : '')
+  // days follow the sort: when it was made, or when it last changed
+  const dayOf = f => dayLabel(fileView.sort === 'recent' ? changed(f) : f.t)
+  const byFolder = fileView.group === 'folder' || fileView.group === 'folderday'
+  const groupOf = f => (!f.pages && !f.live ? '⚠ Unfinished' : fileView.group === 'day' ? dayOf(f) : byFolder ? (f.folder ? `📁 ${f.folder}` : 'Not in a folder') : '')
   const groups = new Map()
-  // every folder shows, in the person's order, even an empty one (not while searching)
-  if (fileView.group === 'folder' && !fileView.q) for (const n of folders) groups.set(`📁 ${n}`, [])
+  // folder + day: the folder changed most recently comes first
+  const last = new Map()
+  for (const f of files) if (f.folder) last.set(f.folder, Math.max(last.get(f.folder) || 0, changed(f)))
+  const order = fileView.group === 'folderday' ? [...folders].sort((a, b) => (last.get(b) || 0) - (last.get(a) || 0)) : folders
+  // every folder shows, in order, even an empty one (not while searching)
+  if (byFolder && !fileView.q) for (const n of order) groups.set(`📁 ${n}`, [])
+  else if (fileView.group === 'folderday') for (const n of order) if (list.some(f => f.folder === n)) groups.set(`📁 ${n}`, [])
   for (const f of list) { const g = groupOf(f); groups.has(g) || groups.set(g, []); groups.get(g).push(f) }
   // loose files, then unfinished ones, at the bottom
   for (const g of ['Not in a folder', '⚠ Unfinished']) if (groups.has(g)) { const u = groups.get(g); groups.delete(g); groups.set(g, u) }
@@ -3345,9 +3354,10 @@ function renderFiles() {
       det.open = !fileView.closed.has(name) && !(name === '⚠ Unfinished' && !fileView.closed.has('!' + name))
       det.innerHTML = `<summary><span></span><em>${items.length}</em></summary>`
       det.querySelector('span').textContent = name
-      const folder = fileView.group === 'folder' && name.startsWith('📁 ') ? name.slice(3) : name === 'Not in a folder' ? '' : null
+      const folder = byFolder && name.startsWith('📁 ') ? name.slice(3) : name === 'Not in a folder' ? '' : null
       if (folder !== null) groupDrop(det, folder)
       if (folder) folderHead(det.querySelector('summary'), folder)
+      if (folder && last.get(folder)) { const w = document.createElement('small'); w.className = 'fchanged'; w.textContent = `changed ${dayLabel(last.get(folder)).toLowerCase().replace(/^(mon|tue|wed|thu|fri|sat|sun), /i, '')}`; det.querySelector('summary em').before(w) }
       if (!items.length) det.insertAdjacentHTML('beforeend', '<div class="fempty">Empty. Drag builds here.</div>')
       det.ontoggle = () => {
         fileView.closed.delete(name); fileView.closed.delete('!' + name)
@@ -3358,7 +3368,12 @@ function renderFiles() {
       els.files.append(det)
       box = det
     }
-    for (const f of items) box.append(fileItem(f, shown))
+    // folder + day: a small day line inside each folder
+    let day = null
+    for (const f of items) {
+      if (fileView.group === 'folderday' && dayOf(f) !== day) { day = dayOf(f); const d = document.createElement('div'); d.className = 'fday'; d.textContent = day; box.append(d) }
+      box.append(fileItem(f, shown))
+    }
   }
 }
 
@@ -3371,8 +3386,9 @@ function fileItem(f, shown) {
   const when = new Date(f.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const meta = item.lastChild
   if (f.live) meta.innerHTML = '<span class="live">● building</span> · '
-  meta.append(`${when} · ${f.pages} pages · ${f.layers} layers${f.ms ? ` · ${(f.ms / 1000).toFixed(0)}s` : ''}`)
-  const badges = [f.video && '🎬', f.published?.length && `🌐 ${f.published.length}`, fileView.group !== 'folder' && f.folder && `📁 ${f.folder}`, ...(f.tags || []).map(t => `#${t}`)].filter(Boolean)
+  const edited = f.updated && f.updated - f.t > 60e3 ? ` · edited ${new Date(f.updated).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''
+  meta.append(`${when}${edited} · ${f.pages} pages · ${f.layers} layers${f.ms ? ` · ${(f.ms / 1000).toFixed(0)}s` : ''}`)
+  const badges = [f.video && '🎬', f.published?.length && `🌐 ${f.published.length}`, !/^folder/.test(fileView.group) && f.folder && `📁 ${f.folder}`, ...(f.tags || []).map(t => `#${t}`)].filter(Boolean)
   if (f.theme?.colors?.length) { const sw = document.createElement('span'); sw.className = 'fswatch'; sw.innerHTML = f.theme.colors.slice(0, 3).map(c => `<i style="background:${esc(c)}"></i>`).join(''); sw.title = `${f.theme.name} · ${f.theme.fonts?.heading || ''}`; item.querySelector('.ttl').prepend(sw) }
   if (badges.length) { const b = document.createElement('span'); b.className = 'fbadges'; b.textContent = badges.join('  '); meta.append(b) }
   item.onclick = () => openRun(f.id)
@@ -3732,7 +3748,7 @@ els.newFile.onclick = () => {
 // change; on Video, an idea for a new cut.
 let view = 'canvas'
 const appv = { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false }
-const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), stop: $('#app-stop'), deploy: $('#app-deploy') }
+const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), stop: $('#app-stop') }
 const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
 
 function setView(v) {
@@ -3822,7 +3838,6 @@ function renderApp() {
   appEls.steps.innerHTML = stepsHtml()
   if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
   appEls.stop.hidden = !working
-  appEls.deploy.disabled = !appv.hasApp || working
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
   // the preview, or what to do first
   if (appv.url && appEls.frame.dataset.src !== appv.url) { appEls.frame.dataset.src = appv.url; appEls.frame.src = appv.url }
@@ -3883,7 +3898,6 @@ for (const b of document.querySelectorAll('#app-device button')) b.onclick = () 
 }
 $('#app-reload').onclick = () => { if (appv.url) appEls.frame.src = appv.url }
 appEls.stop.onclick = () => appApi('/stop', {}).catch(() => {})
-appEls.deploy.onclick = () => deployApp()
 
 // The first build of the app, or one more change to it.
 async function appAsk(ask, extra = {}) {
@@ -3907,13 +3921,14 @@ async function appAsk(ask, extra = {}) {
 
 async function deployApp() {
   if (!appv.run) return
-  appEls.deploy.disabled = true
+  appv.deploying = true
   botMsg('🚀 Deploying the app to Vercel…', true)
   try {
     const out = await appApi('/deploy', {})
     appv.deployed = out.url
     botMsg(`🚀 The app is live: ${out.url}`)
   } catch (err) { botMsg(`Deploy: ${err.message}`) }
+  appv.deploying = false
   renderApp()
 }
 
@@ -4218,3 +4233,30 @@ function crewTick(now) {
   }
 }
 requestAnimationFrame(crewTick)
+
+// ---------- one Publish button: the website (static pages) or the working app (with its server)
+const pubMenu = $('#pub-menu')
+const closePub = () => { pubMenu.hidden = true; els.publishBtn.classList.remove('on') }
+els.publishBtn.onclick = async e => {
+  e.stopPropagation()
+  if (!pubMenu.hidden) return closePub()
+  pubMenu.hidden = false
+  els.publishBtn.classList.add('on')
+  const opt = pubMenu.querySelector('[data-pub="app"]'), why = opt.querySelector('.pub-why')
+  const run = shownRun()
+  opt.disabled = true
+  setText(why, 'checking…')
+  const st = run ? await api(`/api/runs/${encodeURIComponent(run)}/app`).then(r => r.ok ? r.json() : {}).catch(() => ({})) : {}
+  if (run !== shownRun()) return
+  opt.disabled = !st.hasApp || st.state === 'working'
+  setText(why, st.state === 'working' ? 'The app is still building.' : !st.hasApp ? 'Build the app first (App tab).' : st.deployed ? `Live at ${st.deployed}; this sends the latest.` : '')
+  opt.dataset.has = st.hasApp ? '1' : ''
+}
+for (const b of pubMenu.querySelectorAll('[data-pub]')) b.onclick = () => {
+  closePub()
+  if (b.dataset.pub === 'site') return publishMenu()
+  if (view !== 'app') setView('app')
+  if (appv.run !== shownRun()) resetApp(shownRun())
+  deployApp()
+}
+document.addEventListener('mousedown', e => { if (!pubMenu.hidden && !e.target.closest('.pubwrap')) closePub() })
