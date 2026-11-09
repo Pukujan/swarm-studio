@@ -47,14 +47,16 @@
     root.style.setProperty('--font-heading', `'${heading}', Georgia, serif`)
     root.style.setProperty('--font-body', `'${body}', system-ui, sans-serif`)
     if (t.radius) root.style.setProperty('--radius', t.radius)
-    if (!document.getElementById('fonts')) {
-      const link = document.createElement('link')
+    let link = document.getElementById('fonts')
+    if (!link) {
+      link = document.createElement('link')
       link.id = 'fonts'
       link.rel = 'stylesheet'
-      const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`
-      link.href = `https://fonts.googleapis.com/css2?${fam(heading)}&${fam(body)}&display=swap`
       document.head.append(link)
     }
+    const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`
+    const href = `https://fonts.googleapis.com/css2?${fam(heading)}&${fam(body)}&display=swap`
+    if (link.href !== href) link.href = href
   }
 
   function slot(m) {
