@@ -86,7 +86,7 @@ ${html}`
   ]
   // room for the whole section again plus what is added: a big section (a map, a
   // table) cut off at a fixed limit loses its end and breaks
-  const maxTokens = Math.min(16000, Math.max(4000, Math.ceil(html.length / 1.6)))
+  const maxTokens = Math.min(16000, Math.max(8000, Math.ceil(html.length / 1.2)))
   const res = await streamChat(provider, { trace: { kind: comment ? 'fix' : 'review-fix' }, model, messages, maxTokens, temperature: 0.4, extra: NO_THINKING, signal, onDelta })
   const out = res.text.replace(/^\s*```(?:html)?\s*/i, '').replace(/\s*```\s*$/, '')
   if (!/<\/(section|nav|footer|header|div)>\s*(<!--[\s\S]*?-->\s*)*$/i.test(out)) throw new Error('the rewrite was cut off before the end, so the section was kept as it was')
