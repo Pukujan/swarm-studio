@@ -23,6 +23,15 @@
   [data-slot].flash { animation: flash 1.1s ease-out; }
   @keyframes flash { from { box-shadow: inset 0 0 0 6px var(--agent); } to { box-shadow: inset 0 0 0 0 transparent; } }
   [data-slot].failed { outline: 3px dashed #e5484d; outline-offset: -8px; }
+  /* an image being painted: a soft shimmer until its src arrives */
+  img[data-gen]:not([src]) { color: transparent; background: linear-gradient(100deg, color-mix(in srgb, var(--muted) 80%, transparent) 30%, color-mix(in srgb, var(--card) 90%, transparent) 50%, color-mix(in srgb, var(--muted) 80%, transparent) 70%) 0 0 / 300% 100%; animation: paint 1.6s linear infinite; min-height: 120px; }
+  img[data-gen][data-failed] { animation: none; background: var(--muted); }
+  @keyframes paint { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+  /* the reviewer looking at the page */
+  #scan { position: absolute; inset: 0; pointer-events: none; z-index: 99; overflow: hidden; }
+  #scan::before { content: ''; position: absolute; left: 0; right: 0; height: 240px; top: -240px; background: linear-gradient(180deg, transparent, #7c9cff38 85%, #7c9cffcc); animation: scan 2.4s cubic-bezier(.45,0,.55,1) infinite; }
+  #scan::after { content: '🔎 reviewing'; position: absolute; right: 18px; top: 18px; font: 700 15px/1 ui-monospace, monospace; color: #fff; background: #4a5fd0; padding: 8px 12px; border-radius: 99px; }
+  @keyframes scan { to { top: 100%; } }
 </style>
 <script>
 // A page frame. The canvas can't reach into it (inside the Desktop pane every
@@ -114,11 +123,37 @@
     return true
   }
 
+  // A screenshot of the page for the visual reviewer, scaled to at most 800 x 3000.
+  let lib = null
+  function snap(m) {
+    lib ||= new Promise((ok, fail) => {
+      const s = document.createElement('script')
+      s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js'
+      s.onload = () => ok(window.htmlToImage)
+      s.onerror = () => { lib = null; fail(new Error('could not load the screenshot library')) }
+      document.head.append(s)
+    })
+    const h = document.body.scrollHeight, r = Math.min(0.625, 3000 / h)
+    const bg = getComputedStyle(document.body).backgroundColor
+    const opts = { width: 1280, height: h, pixelRatio: r, quality: 0.72, backgroundColor: bg, filter: n => n.id !== 'scan' }
+    lib.then(h2i => h2i.toJpeg(document.body, opts).catch(() => h2i.toJpeg(document.body, { ...opts, skipFonts: true })))
+      .then(image => parent.postMessage({ type: 'snap', seq: m.seq, ok: true, image, r }, '*'))
+      .catch(err => parent.postMessage({ type: 'snap', seq: m.seq, ok: false, error: String(err.message || err) }, '*'))
+  }
+
+  function scan(on) {
+    let el = document.getElementById('scan')
+    if (on && !el) { el = document.createElement('div'); el.id = 'scan'; document.body.append(el) }
+    if (!on) el?.remove()
+  }
+
   addEventListener('message', e => {
     if (e.source !== parent) return
     const m = e.data || {}
     if (m.type === 'theme') theme(m.theme)
     else if (m.type === 'slot') slot(m)
+    else if (m.type === 'snap') snap(m)
+    else if (m.type === 'scan') scan(m.on)
   })
   addEventListener('DOMContentLoaded', () => {
     parent.postMessage({ type: 'ready' }, '*')

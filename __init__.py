@@ -69,7 +69,7 @@ def _setup_cli(parser: argparse.ArgumentParser) -> None:
 def _run_cli(args: argparse.Namespace) -> int:
     if args.models:
         for role, m in launcher.describe_models().items():
-            name = "planner " if role == "planner" else "builders"
+            name = {"planner": "planner ", "worker": "builders", "reviewer": "reviewer"}[role]
             print(f"{name}  {m['model']}  at {m['base_url']}  ({m['source']})" if "error" not in m else f"{name}  unavailable: {m['error']}")
         print("Change them with `hermes model` (Swarm Studio planner / builders) or SWARM_STUDIO_* variables.")
         return 0
@@ -97,6 +97,12 @@ def register(ctx) -> None:
         display_name="Swarm Studio builders",
         description="the parallel agents that write each section (most calls; pick a fast model)",
         inherit_from="compression",
+    )
+    ctx.register_auxiliary_task(
+        "swarm_studio_reviewer",
+        display_name="Swarm Studio reviewer",
+        description="looks at screenshots of the finished pages and sends fixes (needs a vision model)",
+        inherit_from="vision",
     )
     ctx.register_tool(
         name="swarm_design",

@@ -16,7 +16,7 @@ const els = {
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
   newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
   plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'),
-  dDesign: $('#d-design'), dVars: $('#d-vars'),
+  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), modelsBtn: $('#models-btn'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
@@ -43,7 +43,7 @@ let S
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
 function fresh(run = null) {
-  S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null }
+  S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null, images: new Map(), imgQueued: 0, imgSettled: 0 }
   banter.queue = []
   els.world.innerHTML = '<div class="ghosts" id="ghosts"></div>'
   els.cursors.innerHTML = ''
@@ -164,9 +164,12 @@ function on(e) {
       l.ms = e.ms
       // saved runs carry the finished HTML, so a file can be reopened without the stream
       if (e.html) { l.text = e.html; l.ver++ }
-      // whole-site edits made earlier (bigger headings, more spacing) apply to late sections too
-      for (const ce of S.classEdits) restyle(l, ce)
-      S.done = e.done
+      // whole-site edits made earlier (bigger headings, more spacing) apply to late sections too;
+      // a reviewer's fix was written from the edited section, so it has them already
+      if (!e.fixed) for (const ce of S.classEdits) restyle(l, ce)
+      fillImages(l)
+      if (e.fixed) feed(S.agents.get(e.agent), `fixed ${e.layer}`, 'sys', e.layer)
+      if (e.done != null) S.done = e.done
       S.treeDirty = true
       const a = S.agents.get(e.agent)
       if (a) {
@@ -179,6 +182,8 @@ function on(e) {
     case 'layer:failed': {
       const l = S.layers.get(key(e.page, e.layer))
       if (l) { l.status = 'failed'; S.treeDirty = true }
+      // a failed fix puts the section back as it was
+      if (l && e.keep) { l.text = e.keep; l.ver++; l.status = 'done' }
       const a = S.agents.get(e.agent)
       if (a) a.layer = null
       feed(a, `failed ${e.layer}: ${e.message}`, 'err')
@@ -195,6 +200,7 @@ function on(e) {
       summarize(e)
       els.planState.textContent = 'done'
       if (!viewing) { S.cheerUntil = performance.now() + 9000; banter.next = 0; loadFiles() }
+      if (live(e)) autoReview()
       break
     case 'error':
       feed(null, `${e.where}: ${e.message}`, 'err')
@@ -202,6 +208,34 @@ function on(e) {
     case 'edit':
       applyEdit(e)
       break
+    case 'image:queued':
+      if (!S.imgQueued++) feed(null, `🎨 Painting images with ${e.provider}${e.model ? ` · ${e.model}` : ''}`, 'sys')
+      break
+    case 'image':
+    case 'image:failed': {
+      S.imgSettled++
+      S.images.set(`${key(e.page, e.layer)}|${e.gen}`, e.type === 'image' ? e.src : '')
+      const l = S.layers.get(key(e.page, e.layer))
+      if (l) fillImages(l)
+      if (e.type === 'image:failed') feed(null, `image for ${e.layer} failed: ${e.message}`, 'err')
+      break
+    }
+    case 'review:start':
+      scanFrame(e.page, true)
+      feed(null, `🔎 ${e.model} is looking at ${frameTitle(e.page)}`, 'sys')
+      break
+    case 'review:done':
+      scanFrame(e.page, false)
+      feed(null, `🔎 ${frameTitle(e.page)}: ${e.verdict || 'reviewed'}${e.issues.length ? ` · ${e.issues.length} to fix` : ' · nothing to fix'}`, 'sys')
+      break
+    case 'review:issue':
+      feed(S.agents.get(e.agent), `on it: ${e.problem}`, '', e.layer)
+      break
+    case 'layer:reset': {
+      const l = S.layers.get(key(e.page, e.layer))
+      if (l) { l.text = ''; l.ver++; l.status = 'assigned'; S.treeDirty = true }
+      break
+    }
   }
 }
 
@@ -301,6 +335,10 @@ window.addEventListener('message', e => {
   } else if (m.type === 'geo') {
     f.geo = m
     linkWires(f)
+  } else if (m.type === 'snap') {
+    const w = review.waits.get(m.seq)
+    review.waits.delete(m.seq)
+    if (w) m.ok ? w.resolve(m) : w.reject(new Error(m.error))
   }
 })
 
@@ -982,6 +1020,8 @@ function frameLoop(now) {
     const done = [...S.layers.values()].filter(l => l.status === 'done').length
     setText(els.status, `${working} agents working · ${done}/${S.layers.size} layers · ${S.frames.length} pages`)
     els.play.disabled = !S.frames.length
+    els.reviewBtn.disabled = review.busy || !reviewerOn() || !S.done
+    setText(els.reviewBtn, review.busy ? '🔎 Reviewing…' : '🔎 Review')
     if (S.progress) {
       const done = [...S.layers.values()].filter(l => l.status === 'done').length
       setText(S.progress.querySelector('.txt'), S.layers.size
@@ -1891,6 +1931,178 @@ function drawSelBox() {
   Object.assign(box.style, { left: `${s.f.x + s.box.left}px`, top: `${s.box.top}px`, width: `${s.box.width}px`, height: `${s.box.height}px`, borderWidth: `${2 / cam.s}px` })
 }
 
+// ---------- generated images
+// Builders leave <img data-gen="…"> without a src; the server paints each one with
+// a Hermes image provider and sends its file, which goes into the section here.
+
+function fillImages(l) {
+  if (l.status !== 'done' || !/data-gen=/.test(l.text)) return
+  const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
+  let changed = false
+  for (const img of doc.body.querySelectorAll('img[data-gen]')) {
+    const src = S.images.get(`${l.key}|${img.getAttribute('data-gen')}`)
+    if (src === undefined) continue
+    if (src && img.getAttribute('src') !== src) { img.setAttribute('src', src); changed = true }
+    if (!src && !img.hasAttribute('data-failed')) { img.setAttribute('data-failed', ''); changed = true }
+  }
+  if (changed) { l.text = doc.body.innerHTML; l.ver++ }
+}
+
+// ---------- visual review
+// After a build, each page is photographed in its own frame and sent to the
+// reviewer (a vision model). Its notes go to builders, who rewrite those sections live.
+
+const review = { busy: false, seq: 0, waits: new Map(), auto: null }
+const frameTitle = id => S.frames.find(f => f.id === id)?.title || id
+const reviewerOn = () => !!modelsInfo.roles?.reviewer?.model
+
+function scanFrame(page, on) {
+  const f = S.frames.find(fr => fr.id === page)
+  if (f?.ready) post(f, { type: 'scan', on })
+}
+
+function snapFrame(f) {
+  return new Promise((resolve, reject) => {
+    const seq = ++review.seq
+    review.waits.set(seq, { resolve, reject })
+    post(f, { type: 'snap', seq })
+    setTimeout(() => { if (review.waits.delete(seq)) reject(new Error('the screenshot timed out')) }, 30000)
+  })
+}
+
+async function reviewRun() {
+  const run = viewing && viewing !== 'new' ? viewing : S.run
+  if (!run || review.busy) return
+  review.busy = true
+  try {
+    for (const [i, f] of S.frames.entries()) {
+      if (!f.ready) continue
+      const shot = await snapFrame(f)
+      // the shared nav and footer are reviewed once, on the first page
+      const sections = [...f.slots.keys()].map(k => S.layers.get(k))
+        .filter(l => l && l.status === 'done' && l.text.trim() && (l.page !== '*' || i === 0) && f.geo.slots[l.key])
+        .map(l => {
+          const b = f.geo.slots[l.key].box
+          return { key: l.key, role: l.role, top: Math.round(b[1] * shot.r), height: Math.round(b[3] * shot.r), html: l.text }
+        })
+        .sort((a, b) => a.top - b.top)
+      if (!sections.length) continue
+      const res = await api(`/api/runs/${encodeURIComponent(run)}/review`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ page: f.id, title: f.title, image: shot.image, sections })
+      })
+      if (!res.ok) {
+        const out = await res.json().catch(() => ({}))
+        scanFrame(f.id, false)
+        feed(null, `review: ${out.error || `HTTP ${res.status}`}`, 'err')
+        if (/no reviewer|no such run/.test(out.error || '')) break
+      }
+    }
+  } catch (err) {
+    feed(null, `review: ${err.message || err}`, 'err')
+  }
+  review.busy = false
+}
+
+// A live build is reviewed once it is finished and its images have arrived.
+function autoReview() {
+  if (!reviewerOn() || review.auto === S.run) return
+  const run = review.auto = S.run
+  const t0 = performance.now()
+  const tick = () => {
+    if (S.run !== run || viewing) return
+    if (S.imgSettled < S.imgQueued && performance.now() - t0 < 150000) return setTimeout(tick, 1500)
+    // let the last images load and the frames settle before the photo
+    setTimeout(() => S.run === run && !viewing && reviewRun(), 2500)
+  }
+  tick()
+}
+
+els.reviewBtn.onclick = () => reviewRun()
+
+// ---------- models menu
+// Planner, builders, reviewer and images. A pick is saved by the server in the
+// plugin's own data dir; an empty one goes back to what Hermes is set to.
+
+let modelsInfo = {}
+async function loadModels() {
+  const res = await api('/api/models').catch(() => null)
+  if (res?.ok) modelsInfo = await res.json()
+  return modelsInfo
+}
+loadModels()
+
+const ROLE_ROWS = [
+  { role: 'planner', label: 'Planner', note: 'plans the pages and the design system', list: 'text' },
+  { role: 'worker', label: 'Builders', note: 'every agent that writes a section', list: 'text' },
+  { role: 'reviewer', label: 'Reviewer', note: 'looks at screenshots after a build (needs vision)', list: 'vision', off: true }
+]
+const models = { el: null }
+
+async function saveModel(body) {
+  const res = await api('/api/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
+  if (!res?.ok) feed(null, 'could not save that model pick', 'err')
+  await loadModels()
+  if (models.el) renderModels()
+}
+
+function renderModels() {
+  const info = modelsInfo
+  const lists = ['text', 'vision'].map(n => `<datalist id="ml-${n}">${(info[n] || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>`).join('')
+  const rows = ROLE_ROWS.map(r => {
+    const s = info.roles?.[r.role] || {}
+    const off = s.picked === 'off'
+    return `<label class="mrow"><span class="mlabel">${r.label}<small>${r.note}</small></span>
+      <span class="mfield"><input data-role="${r.role}" list="ml-${r.list}" spellcheck="false" placeholder="${esc(s.hermes || (r.off ? 'off' : 'model id'))}" value="${off ? '' : esc(s.picked || '')}" ${off ? 'disabled' : ''}>
+      ${r.off ? `<button data-off="${r.role}" class="${off ? 'on' : ''}">${off ? 'Turn on' : 'Turn off'}</button>` : ''}</span>
+      <small class="mnow">${off ? 'off' : s.picked ? `picked · Hermes has ${esc(s.hermes || 'none')}` : s.hermes ? `from Hermes · ${esc(s.host || '')}` : 'not set in Hermes'}</small></label>`
+  }).join('')
+  const pick = info.image?.pick
+  const cur = pick === 'off' ? 'off' : pick ? `${pick.provider}|${pick.model}` : ''
+  const opts = (info.image?.providers || []).flatMap(p => (p.models.length ? p.models : [p.default || '']).map(m =>
+    `<option value="${esc(`${p.provider}|${m}`)}" ${p.available ? '' : 'disabled'} ${cur === `${p.provider}|${m}` ? 'selected' : ''}>${esc(p.provider)}${m ? ` · ${esc(m)}` : ''}${p.available ? '' : ' (not signed in)'}</option>`)).join('')
+  models.el.innerHTML = `${lists}<div class="mhead">Models <small>picks stay in Swarm Studio; Hermes's config is untouched</small></div>${rows}
+    <label class="mrow"><span class="mlabel">Images<small>paints photos and illustrations into the pages, with your Hermes image login</small></span>
+      <span class="mfield"><select data-image>
+        <option value="" ${cur === '' ? 'selected' : ''}>Auto (Codex login, gpt-image-2-low)</option>
+        <option value="off" ${cur === 'off' ? 'selected' : ''}>Off: shapes and SVG only</option>${opts}
+      </select></span>
+      <small class="mnow">${info.image?.providers ? `${info.image.providers.filter(p => p.available).length} providers signed in` : 'looking for Hermes image providers…'}</small></label>
+    <div class="mfoot">Each image is one call to that provider and uses its quota. Changes apply to the next build.</div>`
+}
+
+function toggleModels(open = !models.el) {
+  if (!open) { models.el?.remove(); models.el = null; els.modelsBtn.classList.remove('on'); return }
+  models.el = document.createElement('div')
+  models.el.className = 'models-pop'
+  document.body.append(models.el)
+  const r = els.modelsBtn.getBoundingClientRect()
+  models.el.style.top = `${r.bottom + 6}px`
+  models.el.style.right = `${Math.max(8, innerWidth - r.right)}px`
+  els.modelsBtn.classList.add('on')
+  renderModels()
+  loadModels().then(() => models.el && !models.el.contains(document.activeElement) && renderModels())
+  models.el.addEventListener('change', e => {
+    const t = e.target
+    if (t.dataset.role) saveModel({ role: t.dataset.role, model: t.value.trim() || null })
+    if (t.dataset.image !== undefined) {
+      const [provider, model] = t.value.split('|')
+      saveModel({ role: 'image', provider: t.value === 'off' ? 'off' : provider || null, model: model || '' })
+    }
+  })
+  models.el.addEventListener('click', e => {
+    const b = e.target.closest('[data-off]')
+    if (!b) return
+    e.preventDefault()
+    const role = b.dataset.off
+    saveModel({ role, model: modelsInfo.roles?.[role]?.picked === 'off' ? null : 'off' })
+  })
+}
+els.modelsBtn.onclick = e => { e.stopPropagation(); toggleModels() }
+document.addEventListener('mousedown', e => { if (models.el && !models.el.contains(e.target) && e.target !== els.modelsBtn) toggleModels(false) })
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && models.el) toggleModels(false) })
+
 // ---------- side tabs and floating panels
 
 function showTab(name) {
@@ -1994,7 +2206,8 @@ function connect() {
         liveId = e.run
         if (viewing) { viewing = null; fresh(e.run) }
       }
-      if (!viewing) on(e)
+      // events for the open file (a review or edit while viewing it) apply too
+      if (!viewing || (e.run === viewing && e.type !== 'run:start')) on(e)
     } catch (err) {
       console.error(err)
     }
@@ -2005,7 +2218,7 @@ function connect() {
 setInterval(async () => {
   const st = await fetch('/api/state').then(r => r.json()).catch(() => null)
   if (!st?.version || !BOOT.version || st.version === BOOT.version) return
-  const busy = (st.working && !viewing) || !els.player.hidden || picker.el || document.activeElement?.closest?.('input, textarea, select')
+  const busy = (st.working && !viewing) || !els.player.hidden || picker.el || models.el || review.busy || document.activeElement?.closest?.('input, textarea, select')
   if (!busy) location.reload()
 }, 8000)
 
