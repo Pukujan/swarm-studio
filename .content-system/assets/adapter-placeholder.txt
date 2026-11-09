@@ -1,0 +1,2 @@
+Placeholder asset for the content adapter. It is not shown anywhere.
+Register real images in ../asset-manifest.json when the README or launch pages use them.

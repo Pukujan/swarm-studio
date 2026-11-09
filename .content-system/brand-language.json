@@ -1,0 +1,28 @@
+{
+  "schema_version": "content-generation.brand-language.v1",
+  "name": "Swarm Studio",
+  "personality": [
+    "lively but calm",
+    "shows the work as it happens",
+    "plain about what runs locally and what leaves the machine"
+  ],
+  "audience_feeling": "I typed one line and watched a team of agents build my site in front of me.",
+  "promise": "A swarm of agents designs and builds a multi-page website live on a canvas, inside Hermes Agent.",
+  "preferred_terms": {
+    "swarm": "the pool of section agents working at the same time",
+    "canvas": "the live board where pages and sections appear",
+    "brief": "the one-line description of the site the user wants"
+  },
+  "avoid": [
+    "claims about speed or quality the runs do not show",
+    "calling generated sites finished apps before the App tab builds them",
+    "secrets, tokens or private paths in any copy or image"
+  ],
+  "good_examples": [
+    "Give it a one-line brief and a dozen agents build the pages while you watch."
+  ],
+  "bad_examples": [
+    "Revolutionary AI that builds perfect production websites instantly."
+  ],
+  "status_note": "Drawn from the README at install time; owner review pending."
+}
