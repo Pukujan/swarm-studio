@@ -13,6 +13,7 @@ for f in engine/*.mjs; do node --input-type=module -e "await import('./$f')"; do
 
 echo "· python"
 python3 -m py_compile $(git ls-files '*.py' | grep -v '^dyad/')
+python3 -m unittest discover -s tests -q
 
 echo "· server starts"
 tmp=$(mktemp -d)
