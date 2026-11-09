@@ -52,6 +52,14 @@ def port() -> int:
         return DEFAULT_PORT
 
 
+def canvas_url() -> str:
+    """The canvas address, with a version that changes whenever the canvas files do,
+    so Hermes Desktop's pane loads the new canvas instead of keeping the old one."""
+    web = ROOT / "web"
+    version = int(max((f.stat().st_mtime for f in web.iterdir() if f.is_file()), default=0))
+    return f"{base_url()}/?v={version}"
+
+
 def base_url() -> str:
     return f"http://127.0.0.1:{port()}"
 
@@ -146,7 +154,7 @@ def state() -> dict | None:
 def ensure_server() -> dict:
     """Start the canvas server if it is not already up. Returns {url} or {error}."""
     if state():
-        return {"running": True, "started": False, "url": base_url() + "/"}
+        return {"running": True, "started": False, "url": canvas_url()}
 
     models = resolve_models()
     problems = [f"{role}: {m['error']}" for role, m in models.items() if "error" in m]
@@ -184,7 +192,7 @@ def ensure_server() -> dict:
 
     for _ in range(60):  # ~6s
         if state():
-            return {"running": True, "started": True, "url": base_url() + "/"}
+            return {"running": True, "started": True, "url": canvas_url()}
         time.sleep(0.1)
     return {"running": False, "error": f"server did not answer on {base_url()}; see {data_dir() / 'server.log'}"}
 
