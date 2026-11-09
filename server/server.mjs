@@ -313,29 +313,49 @@ function runCard(id) {
 // folder: videos to ~/Movies/Swarm Studio/<build>/, exports to ~/Documents/Swarm Studio/<build>/
 // (~/Videos on Linux and Windows). SWARM_OUTPUT_DIR puts both under one folder instead.
 const titleOf = id => runMeta(id).title || (cards.get(id) || (runCard(id), cards.get(id)))?.info.title || 'build'
-const shelfName = id => {
-  const title = String(titleOf(id)).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'build'
-  return `${title} · ${id.slice(0, 10)} ${id.slice(11, 16)}`
-}
 const fileSlug = id => String(titleOf(id)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'build'
+// One folder per build, named for it and the day it was made. A hidden .swarm-build
+// file says whose it is, so a second build with the same name that day gets "(2)".
 function shelf(id, kind) {
   const base = process.env.SWARM_OUTPUT_DIR || join(homedir(), kind === 'video' ? (process.platform === 'darwin' ? 'Movies' : 'Videos') : 'Documents')
-  return join(base, 'Swarm Studio', shelfName(id))
+  const title = String(titleOf(id)).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'build'
+  for (let n = 1; ; n++) {
+    const dir = join(base, 'Swarm Studio', `${title} · ${id.slice(0, 10)}${n > 1 ? ` (${n})` : ''}`), mark = join(dir, '.swarm-build')
+    let owner = null
+    try { owner = readFileSync(mark, 'utf8').trim() } catch {}
+    if (owner === id || (!owner && !existsSync(dir))) return { dir, claim: () => { mkdirSync(dir, { recursive: true }); if (!owner) writeFileSync(mark, id) } }
+    if (n >= 50) return { dir: join(base, 'Swarm Studio', `${title} · ${id}`), claim() { mkdirSync(this.dir, { recursive: true }) } }
+  }
 }
-// The build's video, copied to the visible folder (made now if it is missing).
+// Every cut and every export is kept: <name>-promo-v1.mp4, -v2… and <name>-v1.zip, -v2…
+function versions(dir, stem, ext) {
+  let names = []
+  try { names = readdirSync(dir) } catch {}
+  const nums = names.map(n => n.startsWith(`${stem}-v`) && n.endsWith(ext) ? Number(n.slice(stem.length + 2, -ext.length)) : NaN).filter(Number.isInteger)
+  const last = nums.length ? Math.max(...nums) : 0
+  return { last: last ? join(dir, `${stem}-v${last}${ext}`) : null, next: join(dir, `${stem}-v${last + 1}${ext}`) }
+}
+// The build's video in the visible folder: the newest version, or a new one when
+// the build has a cut that is newer than every copy (made now if none exists yet).
 function shelveVideo(id) {
   const src = join(runsDir, id, 'video', 'promo.mp4')
   if (!existsSync(src)) return null
-  const dir = shelf(id, 'video'), file = join(dir, `${fileSlug(id)}-promo.mp4`)
   try {
-    if (!existsSync(file) || statSync(file).mtimeMs < statSync(src).mtimeMs) { mkdirSync(dir, { recursive: true }); copyFileSync(src, file) }
-    return file
+    const { dir, claim } = shelf(id, 'video'), v = versions(dir, `${fileSlug(id)}-promo`, '.mp4')
+    if (v.last && statSync(v.last).mtimeMs >= statSync(src).mtimeMs) return v.last
+    claim()
+    copyFileSync(src, v.next)
+    return v.next
   } catch { return null }
 }
 function shelveExport(id, zip) {
   if (!zip || !existsSync(zip)) return null
-  const dir = shelf(id, 'export'), file = join(dir, basename(zip))
-  try { mkdirSync(dir, { recursive: true }); copyFileSync(zip, file); return file } catch { return null }
+  try {
+    const { dir, claim } = shelf(id, 'export'), v = versions(dir, fileSlug(id), '.zip')
+    claim()
+    copyFileSync(zip, v.next)
+    return v.next
+  } catch { return null }
 }
 
 // Folders the person made, in their order. A folder can be empty; one named on a
