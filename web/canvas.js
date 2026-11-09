@@ -16,6 +16,7 @@ const els = {
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
   newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
   plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'),
+  dDesign: $('#d-design'), dVars: $('#d-vars'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
@@ -102,6 +103,9 @@ function on(e) {
       break
     case 'theme':
       S.theme = e
+      S.themeAt = live(e) ? performance.now() : 0
+      loadThemeFonts(e)
+      if (S.themeAt && !design.tabPinned) showDtab('vars')
       renderTheme()
       S.frames.forEach(applyTheme)
       break
@@ -120,7 +124,11 @@ function on(e) {
       a.idle = false
       a.assignedAt = performance.now()
       setTool(a, 'frame', 750)
-      if (live(e)) a.queued = 'marquee'
+      if (live(e)) {
+        a.queued = 'marquee'
+        // the design system is set: back to the selection's properties
+        if (!design.tabPinned && design.tab === 'vars' && performance.now() - (S.themeAt || 0) > 5000) showDtab('design')
+      }
       l.status = 'assigned'
       l.agent = a.id
       S.treeDirty = true
@@ -133,6 +141,7 @@ function on(e) {
       l.text += e.text
       l.ver++
       if (l.status === 'assigned') { l.status = 'streaming'; S.treeDirty = true }
+      S.lastActive = e.agent
       if (a) {
         setTool(a, detectTool(l.text))
         if (live(e) && !a.act && performance.now() > a.restUntil) a.queued = gestureFor(l.text) || a.queued
@@ -793,7 +802,8 @@ function renderAgents() {
     const l = a.layer && S.layers.get(a.layer)
     if (l) working++
     const row = document.createElement('div')
-    row.className = `agent${l ? '' : ' idle'}`
+    row.className = `agent${l ? '' : ' idle'}${design.pinned === a.id ? ' sel' : ''}`
+    row.onclick = () => { design.pinned = design.pinned === a.id ? null : a.id; design.at = 0 }
     row.innerHTML = `<span class="dot" style="background:${a.color}"></span><div style="min-width:0"><div class="nm"></div><div class="task"></div></div>${TOOL[a.tool].svg}`
     row.querySelector('.nm').textContent = a.name
     row.querySelector('.task').textContent = l ? `${l.page === '*' ? 'shared' : l.page} · ${l.role}` : a.idle ? 'idle' : 'waiting'
@@ -858,6 +868,7 @@ function summarize(e) {
   S.progress = null
   const secs = (e.ms / 1000).toFixed(1)
   const item = botMsg(`Built ${e.pages} pages and ${e.done} sections in ${secs}s with ${S.agents.size} agents${e.failed ? ` (${e.failed} failed)` : ''}. Open a page, or play the prototype.`)
+  if (!S.frames.length) return
   const chips = document.createElement('div')
   chips.className = 'chips'
   const play = document.createElement('button')
@@ -937,6 +948,7 @@ function frameLoop(now) {
     lastPanels = now
     const working = renderAgents()
     renderToolbar()
+    renderDesign(now)
     if (S.treeDirty) { S.treeDirty = false; renderTree() }
     if (S.planDirty) {
       S.planDirty = false
@@ -1015,6 +1027,7 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !els.player.hidden) return tour.on ? stopTour() : closePlayer()
   if (e.key === 'v' && !els.player.hidden) return toggleTourMenu()
   if (e.target.closest('input, select, textarea')) return
+  if (e.key === 'd') return togglePanel('design')
   if (e.key === 'p' && S.frames.length) return els.player.hidden ? openPlayer() : closePlayer()
   if (!els.player.hidden) return
   if (e.key === 'a') setAuto(true)
@@ -1421,6 +1434,178 @@ els.plPage.onchange = () => showPage(els.plPage.value)
 for (const b of document.querySelectorAll('#pl-device button')) b.onclick = () => setDevice(b.dataset.device)
 window.addEventListener('resize', () => !els.player.hidden && fitDevice())
 
+// ---------- Design panel
+// Figma's right sidebar for the swarm: the Design tab shows the properties of the
+// section an agent is building (auto layout, fill, stroke, radius, type, effects),
+// read live from the Tailwind classes it is writing; the Variables tab shows the
+// design system the planner set up (colour tokens, type families and scale,
+// radius) and how often the agents use each token.
+
+const design = { tab: 'design', tabPinned: false, pinned: null, agent: null, layer: null, at: 0, last: '', lastVars: '', varsAt: 0, prev: new Map(), chg: new Map() }
+
+function showDtab(name) {
+  design.tab = name
+  for (const el of document.querySelectorAll('[data-dtab]')) el.classList.toggle('on', el.dataset.dtab === name)
+  design.last = design.lastVars = ''
+}
+
+function loadThemeFonts(t) {
+  const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700`
+  const names = [t.fonts?.heading, t.fonts?.body].filter(Boolean)
+  if (!names.length) return
+  let link = $('#theme-fonts')
+  if (!link) { link = document.createElement('link'); link.id = 'theme-fonts'; link.rel = 'stylesheet'; document.head.append(link) }
+  link.href = `https://fonts.googleapis.com/css2?${names.map(fam).join('&')}&display=swap`
+}
+
+const TW_SIZE = { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl': 30, '4xl': 36, '5xl': 48, '6xl': 60, '7xl': 72, '8xl': 96, '9xl': 128 }
+const TW_WEIGHT = { thin: 100, extralight: 200, light: 300, normal: 400, medium: 500, semibold: 600, bold: 700, extrabold: 800, black: 900 }
+const TW_RADIUS = { none: '0', sm: '2', '': '4', md: '6', lg: '8', xl: '12', '2xl': '16', '3xl': '24', full: '∞' }
+const BP = { '': 0, sm: 1, md: 2, lg: 3, xl: 4 }
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+const space = v => (v === 'px' ? 1 : /^\[(.+)\]$/.test(v) ? v.slice(1, -1) : Number(v) * 4)
+
+// The token of a family that applies at desktop width (the widest breakpoint up to xl wins).
+function tw(classes, re) {
+  let best = null, rank = -1
+  for (const tok of classes.split(/\s+/)) {
+    const i = tok.lastIndexOf(':')
+    const bp = i < 0 ? '' : tok.slice(0, i)
+    if (!(bp in BP)) continue
+    const m = tok.slice(i + 1).match(re)
+    if (m && BP[bp] >= rank) { best = m; rank = BP[bp] }
+  }
+  return best
+}
+
+function sectionProps(l) {
+  const classes = [...l.text.matchAll(/class="([^"]*)"?/g)].map(m => m[1])
+  const root = classes[0] || ''
+  const all = classes.join(' ')
+  const vars = S.theme?.vars || {}
+  const varSw = name => `<span class="sw" style="background:${esc(vars[`--${name}`] || 'transparent')}"></span>${esc(name)}`
+  const rows = []
+  const row = (sec, k, label, val) => val != null && val !== '' && rows.push({ sec, k, label, val })
+  const s = slotFor(l)
+  row('Frame', 'w', 'W', s ? Math.round(s.box.width) : 1280)
+  row('Frame', 'h', 'H', s ? Math.round(s.box.height) : l.height)
+  const lay = classes.slice(0, 5).find(c => tw(c, /^(flex|grid|inline-flex)$/)) || ''
+  if (lay) {
+    const isGrid = !!tw(lay, /^grid$/)
+    const cols = tw(lay, /^grid-cols-(\d+)$/)
+    row('Auto layout', 'dir', '', isGrid ? `▦ Grid${cols ? ` · ${cols[1]} cols` : ''}` : tw(lay, /^flex-col$/) && !tw(lay, /^flex-row$/) ? '↓ Vertical' : '→ Horizontal')
+    const gap = tw(lay, /^gap-(\S+)$/)
+    row('Auto layout', 'gap', 'gap', gap ? space(gap[1]) : 0)
+    const al = tw(lay, /^(items|justify)-(\S+)$/)
+    row('Auto layout', 'align', 'align', al ? al[2] : 'start')
+  }
+  const px = tw(root, /^px-(\S+)$/) || tw(root, /^p-(\S+)$/), py = tw(root, /^py-(\S+)$/) || tw(root, /^p-(\S+)$/)
+  if (px || py) row('Auto layout', 'pad', 'padding', `${py ? space(py[1]) : 0} · ${px ? space(px[1]) : 0}`)
+  const bg = tw(root, /^bg-\[var\(--([\w-]+)\)\]$/)
+  row('Fill', 'bg', '', bg ? varSw(bg[1]) : null)
+  const fills = [...new Set([...all.matchAll(/bg-\[var\(--([\w-]+)\)\]/g)].map(m => m[1]))].filter(f => f !== bg?.[1]).slice(0, 3)
+  fills.forEach((f, i) => row('Fill', `f${i}`, '', varSw(f)))
+  const stroke = all.match(/border-\[var\(--([\w-]+)\)\]/)
+  if (stroke) row('Stroke', 'stroke', '', `${varSw(stroke[1])} · ${(all.match(/\bborder-(\d)\b/) || [])[1] || 1}px`)
+  const rad = all.match(/\brounded(?:-(none|sm|md|lg|xl|2xl|3xl|full|\[var\(--radius\)\]))?\b/)
+  if (rad) row('Stroke', 'radius', 'radius', rad[1]?.startsWith('[') ? S.theme?.radius || 'var' : TW_RADIUS[rad[1] || ''])
+  const sizes = [...all.matchAll(/(?:^|\s)(?:(?:sm|md|lg|xl):)?text-(xs|sm|base|lg|xl|[2-9]xl)\b/g)].map(m => TW_SIZE[m[1]])
+  if (sizes.length) {
+    const big = Math.max(...sizes)
+    const count = {}
+    sizes.forEach(z => (count[z] = (count[z] || 0) + 1))
+    const body = +Object.entries(count).sort((a, b) => b[1] - a[1])[0][0]
+    const weights = [...all.matchAll(/\bfont-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b/g)].map(m => TW_WEIGHT[m[1]])
+    const heading = /font-\[var\(--font-heading\)\]|<h[1-3]/.test(l.text) ? S.theme?.fonts?.heading : null
+    row('Typography', 'hfont', '', heading ? `<i>Aa</i>${esc(heading)}` : null)
+    row('Typography', 'hsize', 'heading', `${big}${weights.length ? ` · ${Math.max(...weights)}` : ''}`)
+    row('Typography', 'bsize', 'body', `${body} · ${S.theme?.fonts?.body ? esc(S.theme.fonts.body) : 'sans'}`)
+    const lead = all.match(/\bleading-(\w+)/), track = all.match(/\btracking-(\w+)/)
+    if (lead || track) row('Typography', 'lt', '', `${lead ? `leading ${lead[1]}` : ''}${lead && track ? ' · ' : ''}${track ? `tracking ${track[1]}` : ''}`)
+  }
+  const fx = [...new Set([...all.matchAll(/\b(shadow(?:-\w+)?|backdrop-blur(?:-\w+)?|opacity-\d+|blur(?:-\w+)?)\b/g)].map(m => m[1]))].slice(0, 3)
+  fx.forEach((f, i) => row('Effects', `fx${i}`, '', esc(f)))
+  row('Layers', 'els', 'elements', (l.text.match(/<[a-z][a-z0-9]*\b/gi) || []).length)
+  row('Layers', 'links', 'links', (l.text.match(/data-goto=/g) || []).length)
+  return rows
+}
+
+function pickSelection(now) {
+  const has = id => { const a = S.agents.get(id); return a?.layer ? a : null }
+  let a = has(design.pinned)
+  if (!a && has(design.agent) && now - design.at < 3500) a = has(design.agent)
+  if (!a) a = has(S.lastActive) || [...S.agents.values()].find(x => x.layer)
+  if (a && a.id !== design.agent) { design.agent = a.id; design.at = now }
+  if (a) design.layer = a.layer
+  return { a, l: design.layer && S.layers.get(design.layer) }
+}
+
+function renderDesign(now) {
+  if (!panels.has('design')) return
+  if (design.tab === 'vars') return renderVars(now)
+  const { a, l } = pickSelection(now)
+  let html
+  if (!l) {
+    html = `<div class="dempty">${S.layers.size ? 'Select an agent in the Agents panel to inspect its section.' : 'Start a build. While the swarm works, this shows the properties of the section an agent is designing: auto layout, fills, type and effects.'}</div>`
+  } else {
+    const owner = S.agents.get(l.agent) || a
+    const rows = sectionProps(l)
+    let body = '', sec = ''
+    for (const r of rows) {
+      const id = `${l.key}/${r.k}`
+      const before = design.prev.get(id)
+      if (before !== undefined && before !== r.val) design.chg.set(id, now + 700)
+      design.prev.set(id, r.val)
+      if (r.sec !== sec) {
+        if (sec) body += '</div></div>'
+        sec = r.sec
+        body += `<div class="dsec"><h4>${sec}</h4><div class="drow${['Fill', 'Effects', 'Typography'].includes(sec) ? ' one' : ''}">`
+      }
+      body += `<div class="dval${(design.chg.get(id) || 0) > now ? ' chg' : ''}">${r.label ? `<i>${r.label}</i>` : ''}${r.val}</div>`
+    }
+    if (sec) body += '</div></div>'
+    const where = `${l.page === '*' ? 'shared' : l.page} · ${l.status === 'done' ? 'done' : 'building'}`
+    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${design.pinned ? 'pinned' : 'following'}</span></div>${body}`
+  }
+  if (html !== design.last) {
+    design.last = html
+    els.dDesign.innerHTML = html
+    const pin = els.dDesign.querySelector('.pin')
+    if (pin) pin.onclick = () => { design.pinned = design.pinned ? null : design.agent; design.last = '' }
+  }
+}
+
+function renderVars(now) {
+  if (now - design.varsAt < 900 && !(S.themeAt && now - S.themeAt < 3000)) return
+  design.varsAt = now
+  const t = S.theme
+  if (!t) {
+    const html = S.run ? '<div class="dsetup">Setting up the design system</div><div class="dempty">The planner picks colour tokens, type and radius first; the agents build everything from them.</div>' : '<div class="dempty">The design system appears here when a build starts.</div>'
+    if (html !== design.lastVars) els.dVars.innerHTML = design.lastVars = html
+    return
+  }
+  const texts = [...S.layers.values()].map(l => l.text).join('\n')
+  const uses = name => (texts.match(new RegExp(`var\\(--${name}\\)`, 'g')) || []).length
+  const fresh = S.themeAt && now - S.themeAt < 3000
+  let i = 0
+  const anim = () => (fresh ? ` reveal" style="animation-delay:${i++ * 110}ms` : '')
+  const colors = Object.entries(t.vars || {}).map(([k, v]) => `<div class="dvar${anim()}"><span class="sw" style="background:${esc(v)}"></span><div><code>${esc(k.slice(2))}</code><br><small>${esc(v)}</small></div><small>${uses(k.slice(2))}×</small></div>`).join('')
+  const fontRow = (role, name) => `<div class="dvar${anim()}" style="grid-template-columns:44px 1fr auto"><span class="ag" style="font:600 24px/1 '${esc(name)}',serif">Ag</span><div><code>${role}</code><br><small>${esc(name)}</small></div><small>${uses(`font-${role}`)}×</small></div>`
+  const sizes = {}
+  for (const m of texts.matchAll(/(?:^|\s)(?:(?:sm|md|lg|xl):)?text-(xs|sm|base|lg|xl|[2-9]xl)\b/g)) sizes[m[1]] = (sizes[m[1]] || 0) + 1
+  const scale = Object.entries(sizes).sort((a, b) => TW_SIZE[b[0]] - TW_SIZE[a[0]]).slice(0, 7).map(([k, n]) => {
+    const px = TW_SIZE[k], heading = px >= 24
+    return `<div class="dscale"><code>${k} · ${px}</code><span style="font:${heading ? 600 : 400} ${Math.min(px, 22)}px '${esc(heading ? t.fonts?.heading : t.fonts?.body)}',sans-serif">${heading ? 'Heading' : 'Body text'}</span><small>${n}×</small></div>`
+  }).join('')
+  const html = `${fresh ? '<div class="dsetup">Setting up the design system</div>' : ''}
+<div class="dsec"><h4>${esc(t.name || 'Theme')}<small>${esc(t.direction || '').slice(0, 40)}</small></h4></div>
+<div class="dsec"><h4>Colors<small>${Object.keys(t.vars || {}).length} tokens</small></h4>${colors}</div>
+<div class="dsec"><h4>Typography</h4>${fontRow('heading', t.fonts?.heading || 'Georgia')}${fontRow('body', t.fonts?.body || 'Inter')}</div>
+${scale ? `<div class="dsec"><h4>Type scale<small>used across sections</small></h4>${scale}</div>` : ''}
+<div class="dsec"><h4>Radius</h4><div class="dvar${anim()}" style="grid-template-columns:18px 1fr auto"><span class="sw" style="border-radius:${esc(t.radius || '12px')};border:2px solid var(--accent);background:none"></span><code>radius</code><small>${esc(t.radius || '')} · ${uses('radius')}×</small></div></div>`
+  if (html !== design.lastVars) els.dVars.innerHTML = design.lastVars = html
+}
+
 // ---------- side tabs and floating panels
 
 function showTab(name) {
@@ -1430,17 +1615,19 @@ function showTab(name) {
 }
 for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => showTab(b.dataset.tab)
 
-const panels = new Set(store.get('panels', []))
+const panels = new Set(store.get('panels', ['design']))
 function renderPanels() {
   for (const el of document.querySelectorAll('[data-panel]')) el.classList.toggle('on', panels.has(el.dataset.panel))
+  document.body.classList.toggle('design-on', panels.has('design'))
   $('.float.agents-card').classList.toggle('below', panels.has('planner'))
 }
-for (const b of document.querySelectorAll('.toggle[data-panel]')) b.onclick = () => {
-  const p = b.dataset.panel
+function togglePanel(p) {
   panels.has(p) ? panels.delete(p) : panels.add(p)
   store.set('panels', [...panels])
   renderPanels()
 }
+for (const b of document.querySelectorAll('.toggle[data-panel]')) b.onclick = () => togglePanel(b.dataset.panel)
+for (const b of document.querySelectorAll('.dtabs button')) b.onclick = () => { design.tabPinned = true; showDtab(b.dataset.dtab) }
 
 // ---------- files: every saved run is a file with its own canvas
 // `viewing` is null while following the live stream, or the id of a saved run

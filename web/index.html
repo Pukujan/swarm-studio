@@ -12,6 +12,7 @@
     <div class="file-name" id="file-name">Untitled</div>
     <div class="spacer"></div>
     <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled>▶ Play</button>
+    <button class="toggle" data-panel="design" title="Design properties and variables (D)">Design</button>
     <button class="toggle" data-panel="planner" title="Planner: theme and plan stream">Planner</button>
     <button class="toggle" data-panel="agents" title="Agents and what each is doing">Agents <span id="agent-count" class="count">0</span></button>
     <div class="clock"><span id="timer">00.0s</span></div>
@@ -73,6 +74,15 @@
       <div id="agents-list" class="agents"></div>
     </div>
   </main>
+
+  <aside class="design" data-panel="design">
+    <nav class="dtabs">
+      <button data-dtab="design" class="on">Design</button>
+      <button data-dtab="vars">Variables</button>
+    </nav>
+    <section class="dtab on" data-dtab="design" id="d-design"></section>
+    <section class="dtab" data-dtab="vars" id="d-vars"></section>
+  </aside>
 
   <div class="player" id="player" hidden>
     <div class="player-bar">
