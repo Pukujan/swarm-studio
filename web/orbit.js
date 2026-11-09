@@ -19,7 +19,7 @@ function makeOrbit() {
   const root = document.createElement('div')
   root.className = 'orbit'
   root.hidden = true
-  root.innerHTML = `<canvas aria-hidden="true"></canvas><div class="ob-labels"></div><div class="ob-crew"></div><div class="ob-empty" hidden></div><div class="ob-list"></div>
+  root.innerHTML = `<canvas aria-hidden="true"></canvas><div class="ob-labels"></div><div class="ob-crew"></div><div class="ob-talk"></div><div class="ob-empty" hidden></div><div class="ob-list"></div>
     <div class="think-log" hidden role="dialog" aria-label="Hermia's thinking"><header><b>Hermia’s <em>thinking</em></b><button class="x" title="Close (Esc)" aria-label="Close">${ico('x')}</button></header><ol></ol></div>
     <div class="comm" role="status" aria-live="polite">
       <div class="comm-thought" hidden title="Hermia's reasoning: click for the full log"></div>
@@ -29,7 +29,7 @@ function makeOrbit() {
       <button class="comm-btn comm-chat" title="Open the chat column">${ico('chat')}<span class="t">Chat</span></button>
     </div>`
   document.body.append(root)
-  const canvas = root.querySelector('canvas'), labelsEl = root.querySelector('.ob-labels'), crewEl = root.querySelector('.ob-crew')
+  const canvas = root.querySelector('canvas'), labelsEl = root.querySelector('.ob-labels'), crewEl = root.querySelector('.ob-crew'), talkEl = root.querySelector('.ob-talk')
   const emptyEl = root.querySelector('.ob-empty'), listEl = root.querySelector('.ob-list')
   const commText = root.querySelector('.comm-text span'), thoughtEl = root.querySelector('.comm-thought')
   const logEl = root.querySelector('.think-log'), logList = logEl.querySelector('ol'), logCount = root.querySelector('.comm-log em')
@@ -244,11 +244,16 @@ function makeOrbit() {
       uniforms: { uMap: { value: null }, uHas: { value: 0 }, uColor: { value: new T.Color(color) }, uGlow: { value: 0 }, uRim: { value: new T.Color(C.palette().frameHi) } },
       vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vW; void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
       fragmentShader: `uniform sampler2D uMap; uniform float uHas; uniform vec3 uColor; uniform float uGlow; uniform vec3 uRim; varying vec2 vUv; varying vec3 vN; varying vec3 vW;
-        void main(){ vec3 L = normalize(-vW); float lit = .5 + .75 * max(dot(vN, L), 0.0);
+        void main(){ vec3 L = normalize(-vW); vec3 V = normalize(cameraPosition - vW);
+          // the sun lights one side; a soft fill from the camera keeps the far side readable
+          float lit = .55 + .65 * max(dot(vN, L), 0.0) + .3 * max(dot(vN, V), 0.0);
           float band = .5 + .5 * sin(vUv.y * 22.0 + sin(vUv.x * 12.0) * 1.2);
-          vec3 base = mix(uColor * (.75 + band * .35), texture2D(uMap, vUv).rgb * 1.35 + uColor * .18, uHas);
-          vec3 V = normalize(cameraPosition - vW); float rim = pow(1.0 - max(dot(vN, V), 0.0), 2.5);
-          gl_FragColor = vec4(base * lit + uColor * .12 + uRim * rim * .9 + vec3(1.0, 1.0, .6) * uGlow * .35, 1.0); }`
+          // dark sites (near-black pages) are lifted so the page still reads on the planet
+          vec3 t = texture2D(uMap, vUv).rgb; float lum = dot(t, vec3(.299, .587, .114));
+          t = mix(t, t * 1.9 + .1, smoothstep(.32, .06, lum));
+          vec3 base = mix(uColor * (.75 + band * .35), t * 1.35 + uColor * .18, uHas);
+          float rim = pow(1.0 - max(dot(vN, V), 0.0), 2.2);
+          gl_FragColor = vec4(base * lit + uColor * .12 + uRim * rim * 1.25 + uColor * rim * .35 + vec3(1.0, 1.0, .6) * uGlow * .35, 1.0); }`
     })
   }
   function ringLine(r, P) {
@@ -295,7 +300,7 @@ function makeOrbit() {
       if (ready && Math.abs(p.r - R(f.index)) > 0.01) { p.r = R(f.index); scene.remove(p.ring); p.ring = ringLine(p.r, P); scene.add(p.ring) }
       p.title = f.title
       p.done = d; p.total = n; p.busy = pageBusy(s, f.id)
-      p.el.firstChild.textContent = f.title
+      if (p.el.firstChild.textContent !== f.title) { p.el.firstChild.textContent = f.title; p.lw = 0 }
       p.el.querySelector('.bar i').style.width = `${n ? (d / n * 100).toFixed(0) : 0}%`
       p.el.querySelector('small').textContent = n ? `${d}/${n} sections` : 'planned'
       p.el.classList.toggle('busy', p.busy)
@@ -329,15 +334,17 @@ function makeOrbit() {
       if (!m) {
         m = { name, el: document.createElement('div'), pos: ready ? v() : null, prev: null, bubbleUntil: 0 }
         m.el.className = 'ob-minion'
-        m.el.innerHTML = `${Crew.avatar(name, 28)}<span class="nm" style="background:${w.color};color:${Crew.ink(w.color)}">${esc(name)}</span><div class="ob-bubble" style="--who:${w.color}"></div>`
-        m.bubble = m.el.querySelector('.ob-bubble')
+        m.el.innerHTML = `${Crew.avatar(name, 28)}<span class="nm" style="background:${w.color};color:${Crew.ink(w.color)}">${esc(name)}</span>`
+        // bubbles live in their own unscaled layer so they can be placed without overlapping
+        m.bubble = document.createElement('div'); m.bubble.className = 'ob-bubble'; m.bubble.style.setProperty('--who', w.color)
+        talkEl.append(m.bubble)
         crewEl.append(m.el)
         minions.set(name, m)
         if (ready) m.pos.set(0, 1.8, 0)
       }
       Object.assign(m, w)
     }
-    for (const [name, m] of minions) if (!want.has(name)) { m.el.remove(); minions.delete(name) }
+    for (const [name, m] of minions) if (!want.has(name)) { m.el.remove(); m.bubble.remove(); minions.delete(name) }
 
     // the sun's label and the empty state
     O.sunTitle = s.title || (s.run ? 'New build' : 'No build open')
@@ -403,15 +410,55 @@ function makeOrbit() {
     })
   }
 
-  function bubble(name, text, ms) {
+  // Calm crew talk: at most SAY_MAX bubbles, one per minion, newest wins, each fades after SAY_MS,
+  // short text, and placed each frame so they never overlap each other, the sun or its title (placeBubbles).
+  const SAY_MAX = 3, SAY_MS = 3500, SAY_LEN = 60
+  const short = t => { t = String(t).replace(/\s+/g, ' ').trim(); return t.length > SAY_LEN ? t.slice(0, SAY_LEN - 1).trimEnd() + '…' : t }
+  // a bubble that is fading out still holds its spot for the fade, so a new one never lands on it
+  function fade(m) { if (m.bubble.classList.contains('on')) { m.fadeBox = m.box; m.fadeUntil = performance.now() + 400 } m.bubble.classList.remove('on'); m.el.classList.remove('talking') }
+  function quiet(m) { m.bubbleUntil = 0; m.spot = -1; fade(m) }
+  function bubble(name, text) {
     const m = minions.get(name)
     if (!m || !text) return
-    m.bubble.textContent = String(text).slice(0, 110)
-    m.bubbleUntil = performance.now() + ms
-    m.el.classList.add('talking')
-    // at most three talk at once: the oldest bubble gives way
-    const talking = [...minions.values()].filter(x => x.bubbleUntil).sort((a, b) => a.bubbleUntil - b.bubbleUntil)
-    for (const x of talking.slice(0, Math.max(0, talking.length - 3))) { x.bubbleUntil = 0; x.el.classList.remove('talking') }
+    const t = short(text)
+    if (m.bubble.textContent !== t) { m.bubble.textContent = t; m.bw = 0 }
+    m.bubbleAt = performance.now(); m.bubbleUntil = m.bubbleAt + SAY_MS
+    const talking = [...minions.values()].filter(x => x.bubbleUntil).sort((a, b) => b.bubbleAt - a.bubbleAt)
+    for (const x of talking.slice(SAY_MAX)) quiet(x)
+  }
+  const hit = (a, b, pad = 0) => a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad
+  function placeBubbles(w, h, keepOut) {
+    const talking = [...minions.values()].filter(m => m.bubbleUntil).sort((a, b) => b.bubbleAt - a.bubbleAt)
+    if (!talking.length) return
+    const now = performance.now()
+    const placed = [...minions.values()].filter(m => m.fadeUntil > now && m.fadeBox).map(m => m.fadeBox)
+    for (const m of talking) {
+      if (!m.bw) { m.bw = m.bubble.offsetWidth; m.bh = m.bubble.offsetHeight }
+      const { bw, bh } = m, x = m.sx, y = m.sy, r = 12 * (m.sc || 1)
+      const spots = [[x + r, y - r - bh], [x - r - bw, y - r - bh], [x - bw / 2, y - r - 8 - bh], [x + r, y + r + 2], [x - r - bw, y + r + 2]]
+      // first try to also leave the bubbles already showing where they are; only if that fails does the newest push one out
+      const soft = talking.filter(o => o !== m && o.spot >= 0 && o.box && o.bubble.classList.contains('on')).map(o => o.box)
+      const ok = (i, avoid = soft) => {
+        const b = { x: spots[i][0], y: spots[i][1], w: bw, h: bh }
+        for (const k of avoid) if (hit(b, k, 6)) return null
+        if (b.x < 6 || b.y < 6 || b.x + bw > w - 6 || b.y + bh > h - 6) return null
+        for (const k of keepOut) if (hit(b, k, 4)) return null
+        for (const k of placed) if (hit(b, k, 6)) return null
+        return b
+      }
+      let spot = -1, box = null
+      if (m.hidden) spot = -1
+      else if (m.spot >= 0 && (box = ok(m.spot))) spot = m.spot   // keep its place while it still fits: no jitter
+      else {
+        for (let i = 0; i < spots.length && spot < 0; i++) if ((box = ok(i))) spot = i
+        for (let i = 0; i < spots.length && spot < 0; i++) if ((box = ok(i, []))) spot = i
+      }
+      if (spot < 0) { m.spot = -1; fade(m); continue }   // no room: drop it for now
+      m.spot = spot; m.box = box; m.fadeUntil = 0; placed.push(box)
+      m.bubble.dataset.at = spot
+      m.bubble.style.transform = `translate(${box.x.toFixed(1)}px, ${box.y.toFixed(1)}px)`
+      m.bubble.classList.add('on'); m.el.classList.add('talking')
+    }
   }
   function hop(name) {
     const m = minions.get(name)
@@ -505,14 +552,24 @@ function makeOrbit() {
     if (O.sunEl.firstChild.textContent !== O.sunTitle) O.sunEl.firstChild.textContent = O.sunTitle
     if (O.sunEl.lastChild.textContent !== O.sunStatus) O.sunEl.lastChild.textContent = O.sunStatus
     const sunPx = sunPixels(sp.d, h)
+    if (O.sunMeasured !== O.sunTitle + O.sunStatus) { O.sunMeasured = O.sunTitle + O.sunStatus; O.sunW = O.sunEl.offsetWidth; O.sunH = O.sunEl.offsetHeight }
+    const sunBox = { x: sp.x - O.sunW / 2, y: sp.y + sunPx + 10, w: O.sunW, h: O.sunH }
+    const sunDisc = { x: sp.x - sunPx * .8, y: sp.y - sunPx * .8, w: sunPx * 1.6, h: sunPx * 1.6 }
+    const labelBoxes = [sunBox]
     O.sunEl.style.transform = `translate(-50%, 0) translate(${sp.x.toFixed(1)}px, ${(sp.y + sunPx + 10).toFixed(1)}px)`
     for (const p of planets.values()) {
       if (!p.mesh) continue
       const q = project(p.mesh.position, w, h)
       const rpx = sunPixels(q.d, h) * p.size / 1.5
-      p.el.style.transform = `translate(-50%, 0) translate(${q.x.toFixed(1)}px, ${(q.y + rpx + 4).toFixed(1)}px)`
+      // the label sits under its planet; if that would cover the sun's title (or another label), it moves above the planet, else it hides
+      if (!p.lw) { p.lw = p.el.offsetWidth; p.lh = p.el.offsetHeight }
+      let ly = q.y + rpx + 4, box = { x: q.x - p.lw / 2, y: ly, w: p.lw, h: p.lh }
+      let clash = labelBoxes.some(b => hit(box, b, 4))
+      if (clash) { ly = q.y - rpx - 4 - p.lh; box = { ...box, y: ly }; clash = labelBoxes.some(b => hit(box, b, 4)) }
+      if (!clash && q.z <= 1) labelBoxes.push(box)
+      p.el.style.transform = `translate(-50%, 0) translate(${q.x.toFixed(1)}px, ${ly.toFixed(1)}px)`
       p.sx = q.x; p.sy = q.y; p.spx = rpx
-      p.el.classList.toggle('off', q.z > 1)
+      p.el.classList.toggle('off', q.z > 1 || clash)
     }
     for (const st of stations) {
       const q = project(st.pos, w, h)
@@ -535,13 +592,16 @@ function makeOrbit() {
       m.pos.lerp(tmpV, k)
       const moving = !still && before.distanceTo(m.pos) / Math.max(dt, 1e-3) > 0.8
       m.el.classList.toggle('moving', moving)
-      if (m.bubbleUntil && now > m.bubbleUntil) { m.bubbleUntil = 0; m.el.classList.remove('talking') }
+      if (m.bubbleUntil && now > m.bubbleUntil) quiet(m)
       const q = project(m.pos, w, h)
       const sc = Math.max(0.55, Math.min(1.25, 18 / q.d))
       m.el.style.transform = `translate(${q.x.toFixed(1)}px, ${q.y.toFixed(1)}px) scale(${sc.toFixed(3)})`
       m.el.classList.toggle('far', sc < 0.75)
       m.el.style.display = q.z > 1 ? 'none' : ''
+      m.sx = q.x; m.sy = q.y; m.sc = sc; m.hidden = q.z > 1
     }
+    const thought = thoughtEl && !thoughtEl.hidden ? thoughtEl.getBoundingClientRect() : null, rr = thought && root.getBoundingClientRect()
+    placeBubbles(w, h - 64, [sunBox, sunDisc, ...labelBoxes.slice(1), ...(thought ? [{ x: thought.left - rr.left, y: thought.top - rr.top, w: thought.width, h: thought.height }] : [])])
 
     frames++
     if (now - fpsAt > 1000) { O.fps = Math.round(frames * 1000 / (now - fpsAt || 1)); frames = 0; fpsAt = now }
