@@ -1140,7 +1140,7 @@ function renderToolbar() {
     // Move, Text and Comment are yours; the rest light up while an agent uses them
     const mine = USER_TOOLS[t.id]
     const armed = (t.id === 'comment' && cmt.mode) || (t.id === 'text' && txt.mode) || (t.id === 'move' && !cmt.mode && !txt.mode)
-    return `${t.id === 'frame' ? '<span class="tsep"></span>' : ''}<div class="tool${mine ? ' mine' : ' agent-only'}${list.length ? ' active' : ''}${armed ? ' armed' : ''}"${lit} data-tool="${t.id}" title="${mine || `${t.label}: lights up while an agent uses it. To change something, use 💬 Comment or ✏️ Text.`}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
+    return `${t.id === 'frame' ? '<span class="tsep"></span>' : ''}<div class="tool${mine ? ' mine' : ' agent-only'}${list.length ? ' active' : ''}${armed ? ' armed' : ''}"${lit} data-tool="${t.id}">${t.svg}${list.length ? `<span class="n">${list.length}</span>` : ''}<div class="who">${list.map(a => `<i style="background:${a.color}"></i>`).join('')}</div><span class="lbl">${t.label}</span></div>`
   }).join('')
   if (html !== toolbarKey) els.toolbar.innerHTML = toolbarKey = html
 }
@@ -2532,6 +2532,7 @@ function showExport(e) {
     <div class="vfoot"><span></span>${e.zip ? `<a class="vagain" href="${zip}" download>Download .zip</a>` : ''}</div>`
   document.body.append(exp.el)
   exp.el.querySelector('.vclose').onclick = () => { exp.el.remove(); exp.el = null }
+  closeable(exp.el, () => { exp.el?.remove(); exp.el = null })
   feed(null, `⬇ exported ${e.pages} pages to ${e.dir}`, 'sys')
 }
 
@@ -2553,6 +2554,7 @@ function pubPop(html) {
   pub.el.innerHTML = `<div class="vhead pop-title"><span>Publish the <em>website</em><small>the designed pages, no server</small></span><button class="vclose" title="Close" aria-label="Close">${ico('x')}</button></div>${html}`
   document.body.append(pub.el)
   pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
+  closeable(pub.el, () => { pub.el?.remove(); pub.el = null }, { extra: ['#pub-menu', '.pubwrap'] })
   return pub.el
 }
 
@@ -2648,11 +2650,7 @@ commandOps.publish = c => publishNow(['local', 'vercel', 'cloudflare'].includes(
 // comment with no section (from /swarm fix) is routed by the planner.
 const cmt = { mode: false, open: null, el: null, key: '' }
 const txt = { mode: false }
-const USER_TOOLS = {
-  move: 'Move (V): drag to pan, click a section to select it',
-  text: 'Text (T): click a section and edit its words yourself',
-  comment: 'Comment (C): click a section and tell an agent what to change'
-}
+const USER_TOOLS = { move: true, text: true, comment: true }
 
 // ✏️ Text: every piece of text in a section as a field. Saved as the section's new
 // version, so ⌘Z undoes it and it stays when the file reopens.
@@ -3051,7 +3049,7 @@ function renderVideo() {
   const src = latest ? video.src : `/video/${video.run}/cut/${cut.name}`, file = cut?.file || video.file
   const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" title="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
   const body = video.src && !video.busy
-    ? `${cuts}<video src="${esc(src)}" controls playsinline></video><div class="vfoot"><span title="${esc(file)}">Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
+    ? `${cuts}<video src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
       ? `${liveOn ? `<div class="vlive"><iframe src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" title="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
@@ -3324,6 +3322,7 @@ function toggleModels(open = !models.el) {
   models.el.style.top = `${r.bottom + 6}px`
   models.el.style.right = `${Math.max(8, innerWidth - r.right)}px`
   els.modelsBtn.classList.add('on')
+  closeable(models.el, () => toggleModels(false), { extra: [els.modelsBtn, moreBtn, '.combo-list', '#more-menu'] })
   renderModels()
   loadModels().then(() => models.el && !models.el.contains(document.activeElement) && renderModels())
   models.ac = new AbortController()
@@ -3389,7 +3388,7 @@ $('#design-close').onclick = () => { if (panels.has('design')) togglePanel('desi
 
 // ☰ More: the toolbar's less-used buttons
 const moreMenu = $('#more-menu'), moreBtn = $('#more-btn')
-moreBtn.onclick = e => { e.stopPropagation(); moreMenu.hidden = !moreMenu.hidden; moreBtn.classList.toggle('on', !moreMenu.hidden) }
+moreBtn.onclick = e => { e.stopPropagation(); moreMenu.hidden = !moreMenu.hidden; moreBtn.classList.toggle('on', !moreMenu.hidden); if (!moreMenu.hidden) closeable(moreMenu, () => { moreMenu.hidden = true; moreBtn.classList.remove('on') }, { extra: [moreBtn] }) }
 moreMenu.addEventListener('click', () => setTimeout(() => { moreMenu.hidden = true; moreBtn.classList.remove('on') }))
 document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.closest('.more')) { moreMenu.hidden = true; moreBtn.classList.remove('on') } })
 
@@ -3414,7 +3413,6 @@ async function fillBuildModel() {
   const list = [...new Set([s.picked, ...recent, info.roles?.planner?.picked, info.roles?.planner?.hermes].filter(m => m && m !== 'off' && m !== s.hermes))].slice(0, 8)
   const short = m => m.split('/').pop()
   buildModel.innerHTML = `<option value="">${esc(s.hermes ? short(s.hermes) : 'Hermes default')}</option>${list.map(m => `<option value="${esc(m)}" ${m === s.picked ? 'selected' : ''}>${esc(short(m))}</option>`).join('')}<option value="__other">Other… (${(info.text || []).length} models)</option>`
-  buildModel.title = s.picked ? `builders use ${s.picked}` : `builders use Hermes's model${s.hermes ? ` (${s.hermes})` : ''}`
 }
 buildModel.onchange = async () => {
   if (buildModel.value === '__other') { fillBuildModel(); return toggleModels(true) }
@@ -4168,10 +4166,13 @@ async function openGame(idea = '', answers = null, build = false) {
   game.el.className = 'game-pop'
   document.body.append(game.el)
   $('#game-btn').classList.add('on')
+  // closes with ×, Esc and a click outside it, except while the spec is being written
+  game.off?.()
+  game.off = window.SwarmUI?.layer(game.el, closeGame, { extra: [$('#game-btn')], canClose: () => !game.busy })
   if (answers || build) return gameSpec(build)
   renderGame()
 }
-const closeGame = () => { game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
+const closeGame = () => { game.off?.(); game.off = null; game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
 
 function renderGame() {
   const el = game.el
@@ -4473,6 +4474,7 @@ els.publishBtn.onclick = async e => {
   if (!pubMenu.hidden) return closePub()
   pubMenu.hidden = false
   els.publishBtn.classList.add('on')
+  closeable(pubMenu, closePub, { extra: [els.publishBtn] })
   const opt = pubMenu.querySelector('[data-pub="app"]'), why = opt.querySelector('.pub-why')
   const run = shownRun()
   opt.disabled = true
@@ -4534,13 +4536,18 @@ function fitLive() {
 }
 setInterval(fitLive, 1000)
 
+// every panel closes three ways: its ×, Esc and a click outside it (spec 12, rule 10; web/ui.js)
+function closeable(el, close, opt) { return window.SwarmUI?.layer(el, close, opt) || (() => {}) }
+
 // ---------- ⚡ Auto mode
 // One prompt, then a timeline of the whole flow pinned over the studio. The
 // studio follows along: the canvas while it designs, Video while it cuts, App
 // while it builds, so a recording shows each part working.
 const autoM = { pop: null, panel: null, last: null, step: '', min: false }
 // minimised or not is remembered per browser (storage may be blocked: then it just starts open)
-try { autoM.min = localStorage.getItem('swarm.autoMin') === '1' } catch {}
+// folded to its one-line pill unless the person opened it before (spec 12, rule 7)
+autoM.min = true
+try { autoM.min = localStorage.getItem('swarm.autoMin') !== '0' } catch {}
 function setAutoMin(on, remember = true) {
   autoM.min = on
   if (remember) try { localStorage.setItem('swarm.autoMin', on ? '1' : '0') } catch {}
@@ -4574,7 +4581,10 @@ function openAuto() {
     <div class="auto-go"><button class="primary auto-start">${ico('zap')}Run it all</button><small>Takes a while: the app and the games are real builds. Keep this window open; the review needs it.</small></div>`
   document.body.append(el)
   $('#auto-btn').classList.add('on')
-  const close = () => { el.remove(); autoM.pop = null; if (autoM.last?.state !== 'working') $('#auto-btn').classList.remove('on') }
+  let offLayer = null
+  const close = () => { offLayer?.(); el.remove(); autoM.pop = null; if (autoM.last?.state !== 'working') $('#auto-btn').classList.remove('on') }
+  // closes with ×, Esc and a click outside it (spec 12, rule 10)
+  offLayer = window.SwarmUI?.layer(el, close, { extra: [$('#auto-btn'), document.querySelector('.gx-dock')] })
   el.querySelector('.gclose').onclick = close
   const ta = el.querySelector('.auto-prompt')
   ta.value = els.brief.value.trim()
@@ -4696,8 +4706,8 @@ function renderAutoPanel() {
   autoM.open ||= new Set()
   const nowLabel = cur ? cur.label : e.state === 'done' ? 'done' : e.state === 'failed' ? 'stopped on a step' : e.state
   p.innerHTML = autoM.min
-    ? `<div class="ap-head" role="button" tabindex="0" title="Expand the Auto panel" aria-label="Expand the Auto panel"><b>${ico('zap')}Auto</b><span class="ap-dot">·</span><span class="ap-now">${esc(nowLabel)}</span><span class="ap-dot">·</span><span class="ap-time">${secs(total || 0)}</span></div><div class="ap-meter"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>`
-    : `<div class="ap-head" title="Minimise"><b>${ico('zap')}Auto</b><span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop" title="Stop after the current step">Stop</button>' : `<button class="ap-close" title="Hide" aria-label="Hide">${ico('x')}</button>`}<button class="ap-min" title="Minimise" aria-label="Minimise">${ico('minus')}</button></div>
+    ? `<div class="ap-head" role="button" tabindex="0" aria-label="Expand the Auto panel"><b>${ico('zap')}Auto</b><span class="ap-dot">·</span><span class="ap-now">${esc(nowLabel)}</span><span class="ap-dot">·</span><span class="ap-time">${secs(total || 0)}</span></div><div class="ap-meter"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>`
+    : `<div class="ap-head"><b>${ico('zap')}Auto</b><span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop">Stop</button>' : `<button class="ap-close" title="Hide" aria-label="Hide">${ico('x')}</button>`}<button class="ap-min" title="Minimise" aria-label="Minimise">${ico('minus')}</button></div>
     <div class="ap-meter" title="${doneN} of ${e.steps.length} steps"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>
     <div class="ap-prompt">${esc(e.prompt || '')}</div>
     <ol>${e.steps.map(s => { const note = live(s), long = note && note.length > 90; return `<li class="${s.state}${autoM.open.has(s.id) ? ' open' : ''}" data-step="${esc(s.id)}"><i>${AUTO_ICON[s.state] || AUTO_ICON.wait}</i><span>${esc(s.label)}${note ? `<small>${linkify(note)}</small>${long ? `<button class="ap-more">${autoM.open.has(s.id) ? 'Less' : 'More'}</button>` : ''}` : ''}</span><em>${s.state === 'working' && s.t0 ? secs(Date.now() - s.t0) : s.ms ? secs(s.ms) : ''}</em></li>` }).join('')}</ol>
@@ -4710,6 +4720,8 @@ function renderAutoPanel() {
   head.onclick = ev => { if (ev.target.closest('button:not(.ap-min)')) return; setAutoMin(!autoM.min) }
   head.onkeydown = ev => { if (autoM.min && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); setAutoMin(false) } }
   p.querySelector('.ap-close')?.addEventListener('click', () => { p.hidden = true })
+  // open, it closes with Esc or a click elsewhere: folded while it works, hidden once it is over
+  if (!autoM.min) closeable(p, () => (autoM.last?.state === 'working' ? setAutoMin(true) : (p.hidden = true)), { isOpen: () => !autoM.min && !p.hidden, extra: ['#auto-btn'] })
   p.querySelector('.ap-sum')?.addEventListener('click', ev => { ev.stopPropagation(); showSummary(e) })
   p.querySelector('.ap-kit')?.addEventListener('click', ev => { ev.stopPropagation(); openLaunch(e.run) })
 }
@@ -5010,6 +5022,7 @@ async function showSummary(e) {
   document.body.append(el)
   const close = () => el.remove()
   el.querySelector('.ss-x').onclick = close
+  closeable(el.querySelector('.ss-card'), close)
   el.onclick = ev => { if (ev.target === el) close() }
   el.querySelector('.ss-copy')?.addEventListener('click', ev => navigator.clipboard?.writeText(url).then(() => { ev.target.textContent = 'Copied' }, () => {}))
   el.querySelector('.ss-launch').onclick = () => { close(); openLaunch(e.run) }
@@ -5028,6 +5041,7 @@ async function openLaunch(run) {
   el.innerHTML = `<div class="ghead"><b class="kicker">${ico('message-square')}Launch kit</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div><p class="lk-wait">Writing the posts…</p>`
   document.body.append(el)
   el.querySelector('.gclose').onclick = () => el.remove()
+  closeable(el, () => el.remove(), { extra: ['.ui-overlay'] })
   let res = await api(`/api/runs/${encodeURIComponent(run)}/launch`).catch(() => null)
   if (res?.status === 404) res = await api(`/api/runs/${encodeURIComponent(run)}/launch`, { method: 'POST' }).catch(() => null)
   const kit = res?.ok ? await res.json() : null
@@ -5169,38 +5183,27 @@ if (Chatter) {
     for (const el of els_) { el.classList.add('babble'); clearTimeout(el._babble); el._babble = setTimeout(() => el.classList.remove('babble'), Math.min(4000, ms + 80)) }
   })
 }
-// the sound dock: one toggle and a volume slider, over the corner of whichever view is open
-const soundDock = document.createElement('div')
-soundDock.className = 'sound-dock'
-soundDock.innerHTML = `<button class="sd-toggle" aria-pressed="false" title="Crew chatter: the agents babble as they work (off)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path class="sd-on" d="M16 9a5 5 0 0 1 0 6"/><path class="sd-on" d="M19.4 18.4a9 9 0 0 0 0-12.8"/><path class="sd-off" d="m22 9-6 6M16 9l6 6"/></svg><span>Chatter</span></button><input class="sd-vol" type="range" min="0" max="100" step="5" aria-label="Chatter volume">`
-document.body.append(soundDock)
+// when the crew is on, ask the studio's voice for its few real lines ahead of time
 if (Chatter && !WALL) {
-  const btn = soundDock.querySelector('.sd-toggle'), vol = soundDock.querySelector('.sd-vol')
   let primed = false
   Chatter.watch(s => {
-    btn.setAttribute('aria-pressed', String(s.on))
-    btn.title = `Crew chatter: the agents babble as they work (${s.on ? 'on' : 'off'})`
-    soundDock.classList.toggle('on', s.on)
-    vol.value = String(Math.round(s.volume * 100))
-    vol.title = `Volume ${Math.round(s.volume * 100)}%`
-    // when it is on, ask the studio's voice for the crew's few real lines ahead of time
     if (s.on && !primed) { primed = true; for (const [w, t] of [['Pip', 'ship it!'], ['Pip', 'looks good!'], ['Pip', 'boss fight!'], ['Hermia', 'Launch!']]) api(`/api/chatter/say?text=${encodeURIComponent(t)}&who=${w}`).catch(() => {}) }
   })
-  btn.onclick = () => { Chatter.setOn(!Chatter.on); if (Chatter.on) Chatter.babble('Hermia', 'hello crew') }
-  vol.oninput = () => Chatter.setVolume(Number(vol.value) / 100)
   // the audio may only start after a click or key: a saved "on" waits for the first one
   addEventListener('pointerdown', () => { if (Chatter.on) Chatter.setOn(true) }, { once: true })
-} else soundDock.hidden = true
+}
 
-// The crew button in the top bar (and the M key): one obvious way to hush the crew.
-// Three states, in turn: on (voices and sounds) → sounds off → quiet (no sounds, no bubbles).
-// "On" is the chatter dock's switch; quiet also hides the speech bubbles on the canvas and
-// Hermia's strip and the helpers' bubbles on the code wall. Remembered in this browser.
+// The crew button in the top bar is the one sound control (spec 12, rule 11). A click opens its
+// popover: the three crew states and the volume. The M key steps through the states:
+// on (voices and sounds) → sounds off → quiet (no sounds, no bubbles). Quiet also hides the speech
+// bubbles on the canvas and Hermia's strip and the helpers' bubbles on the code wall. Remembered in
+// this browser. The button keeps its width whichever word it shows.
 const CREW_KEY = 'swarm.crew'
 const CREW_MODES = ['on', 'muted', 'quiet']
-const CREW_TITLE = { on: 'Crew: voices and sounds on. Click to turn sounds off (M)', muted: 'Crew: sounds off, bubbles shown. Click for quiet (M)', quiet: 'Crew: quiet, no sounds or bubbles. Click to turn sounds on (M)' }
+const CREW_WORD = { on: 'Crew', muted: 'Muted', quiet: 'Quiet' }
 const crewBtn = document.getElementById('crew-mute')
 let crewMode = 'muted'
+let soundPop = null // the crew button's popover, while it is open
 function setCrewMode(m, { save = true, chatter = true } = {}) {
   if (!CREW_MODES.includes(m)) m = 'muted'
   crewMode = m
@@ -5210,11 +5213,10 @@ function setCrewMode(m, { save = true, chatter = true } = {}) {
   if (chatter && Chatter && Chatter.on !== (m === 'on')) Chatter.setOn(m === 'on')
   if (crewBtn) {
     crewBtn.dataset.mode = m
-    crewBtn.title = CREW_TITLE[m]
-    crewBtn.setAttribute('aria-label', CREW_TITLE[m])
-    crewBtn.setAttribute('aria-pressed', String(m !== 'on'))
-    const t = crewBtn.querySelector('.t'); if (t) t.textContent = { on: 'Crew', muted: 'Muted', quiet: 'Quiet' }[m]
+    crewBtn.setAttribute('aria-label', `Crew sound: ${CREW_WORD[m].toLowerCase()}`)
+    const t = crewBtn.querySelector('.t'); if (t) t.textContent = CREW_WORD[m]
   }
+  renderSoundPop()
 }
 const cycleCrew = () => {
   setCrewMode(CREW_MODES[(CREW_MODES.indexOf(crewMode) + 1) % CREW_MODES.length])
@@ -5225,8 +5227,8 @@ if (WALL) { if (crewBtn) crewBtn.hidden = true } else {
   try { saved = localStorage.getItem(CREW_KEY) } catch {}
   // a saved quiet stays quiet; otherwise the chatter's own switch says on or sounds off
   setCrewMode(saved === 'quiet' && Q.get('chatter') !== '1' ? 'quiet' : Chatter?.on ? 'on' : 'muted', { save: false })
-  if (crewBtn) crewBtn.onclick = cycleCrew
-  // the dock's switch moves the button too: on is on, off is sounds off (quiet stays quiet)
+  if (crewBtn) crewBtn.onclick = openSoundPop
+  // the chatter's own switch moves the button too: on is on, off is sounds off (quiet stays quiet)
   Chatter?.watch(s => {
     if (s.on && crewMode !== 'on') setCrewMode('on', { chatter: false })
     else if (!s.on && crewMode === 'on') setCrewMode('muted', { chatter: false })
@@ -5238,18 +5240,25 @@ if (WALL) { if (crewBtn) crewBtn.hidden = true } else {
     cycleCrew()
   })
 }
-// keep the dock in the bottom-left corner of the main area, whatever is open
-function placeDock() {
-  // the open view: the canvas, the App view or the Video view, whichever is showing
-  const b = document.body.classList
-  const vp = document.querySelector('.video-pop')
-  const main = b.contains('view-app') && appEls.view.offsetWidth ? appEls.view : b.contains('view-video') && vp?.offsetWidth ? vp : els.viewport
-  const r = main.getBoundingClientRect()
-  soundDock.style.left = `${Math.round(r.left + 14)}px`
-  soundDock.style.bottom = `${Math.round(innerHeight - r.bottom + 14)}px`
+// the crew button's popover: the three states and the volume, nothing else
+function renderSoundPop() {
+  if (!soundPop || soundPop.closed) return
+  for (const b of soundPop.el.querySelectorAll('[data-mode]')) b.setAttribute('aria-checked', String(b.dataset.mode === crewMode))
+  const vol = soundPop.el.querySelector('.ui-slider')
+  if (vol && Chatter) { vol.value = String(Math.round((Chatter.volume ?? 0.6) * 100)); window.SwarmUI?.slider(vol) }
 }
-{ const ro = new ResizeObserver(placeDock); for (const el of [els.viewport, appEls.view]) ro.observe(el); new MutationObserver(() => requestAnimationFrame(placeDock)).observe(document.body, { attributes: true, attributeFilter: ['class'] }) }
-addEventListener('resize', placeDock)
+function openSoundPop(e) {
+  e?.stopPropagation()
+  if (soundPop && !soundPop.closed) return soundPop.close('toggle')
+  if (!window.SwarmUI) return cycleCrew()
+  soundPop = window.SwarmUI.popover(crewBtn, `<div class="ui-toggle-group ui-block" role="radiogroup" aria-label="Crew sound">${CREW_MODES.map(m => `<button class="ui-toggle" role="radio" data-mode="${m}">${{ on: 'On', muted: 'Muted', quiet: 'Quiet' }[m]}</button>`).join('')}</div>
+    ${Chatter ? '<label class="ui-field sound-vol"><span class="ui-label">Volume</span><input class="ui-slider" type="range" min="0" max="100" step="5"></label>' : ''}`, { className: 'sound-pop' })
+  for (const b of soundPop.el.querySelectorAll('[data-mode]')) b.onclick = () => { setCrewMode(b.dataset.mode); if (crewMode === 'on') Chatter?.babble('Hermia', 'hello crew') }
+  const vol = soundPop.el.querySelector('.ui-slider')
+  if (vol) vol.oninput = () => Chatter.setVolume(Number(vol.value) / 100)
+  renderSoundPop()
+}
+Chatter?.watch?.(() => renderSoundPop())
 
 // ---------- the code wall: while the engine builds an app or a game, the files it
 // writes type out in tiles, one agent per tile with its cursor on the caret.

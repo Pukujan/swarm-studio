@@ -29,6 +29,22 @@ The worst cases:
   badges and file rows, all at the same time.
 - **Classic view** is a trap: once it's on, the only control that turns it off is hidden.
 
+## Changed since the inventory
+
+Controls added, moved or removed after the 2026-11-09 snapshot. The raw inventory stays as it was taken.
+
+| When | Control | Change | Layer, lens |
+|---|---|---|---|
+| PR flow-calm | Sound: crew sound button (#crew-mute) | **Changed**: a click opens its popover, Crew sound (On / Muted / Quiet) and Volume; M still steps the modes. It keeps one width in every mode, and quiet swaps its icon instead of adding one. No second sound button | edge icon on every layer, all lenses |
+| PR flow-calm | Chatter dock (.sd-toggle, .sd-vol, bottom-left) | **Removed**: its on/off is the crew sound mode, its volume is in the crew button's popover | — |
+| PR flow-calm | Recentre (.gx-recentre on the galaxy, .ob-recentre in orbit) | **Added**, not at rest: appears only after you drag or zoom (rule 22), away from the nav and the primary button | 0 Galaxy, 2 Orbit, all lenses |
+| PR flow-calm | Logo (.topbar .brand) | **Moved** from decoration to a control: goes to the galaxy from every view, Classic view included (rule 7). In orbit and rooms only its mark shows, beside Back | edge, every layer |
+| PR flow-calm | Esc | **Added** a level: room → orbit → galaxy when no panel is open | keyboard, every layer |
+| PR flow-calm | Auto panel (.auto-panel) | Starts folded as the pill (remembered); on a galaxy under 1140 px wide it waits under the top bar; an open sheet slides over it | 2 Orbit (and 0 Galaxy while a run is on) |
+| PR flow-calm | Classic top bar: Game, Play, Publish, More | Under 1180 px wide they show icons only (names as aria-labels), so ☰ and its Classic view switch stay on screen | Classic view |
+| PR flow-calm | Tooltips | **Removed** from everything that shows text (the top bar, ☰ menu, stations, planets, comm bar, canvas tools, Classic tabs and selects); their explanations are deleted. Icon-only buttons keep a 1–3 word name. 106 → 71 in `web/` | every layer |
+| PR flow-calm | Auto mode sheet, game wizard, Launch kit | **Unchanged** apart from closing with ×, Esc and an outside click, the checkbox fix and never squeezing their own contents; the new site map replaces them | Start, game wizard |
+
 ## Landmarks, with only what is visible at rest
 
 The full tree, every branch down to 14 layers, is in [SITEMAP.md](SITEMAP.md). This table covers only the landmark screens

@@ -874,6 +874,9 @@ function canvasPage() {
     .replace('<script src="crew.js"></script>', () => `<script>${read('crew.js')}</script>`)
     .replace('<script src="chatter.js"></script>', () => `<script>${read('chatter.js')}</script>`)
     .replace('<script src="show.js"></script>', () => `<script>${read('show.js')}</script>`)
+    // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
+    .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
+    .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
     // the galaxy home and the orbit view (docs/specs/08-identity.md, "Galaxy and orbit"); three.js loads from web/vendor on demand
     .replace('<link rel="stylesheet" href="galaxy.css">', () => `<style>${read('galaxy.css')}</style>`)

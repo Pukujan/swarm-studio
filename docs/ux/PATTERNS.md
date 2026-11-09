@@ -126,13 +126,13 @@ We never commit screenshots of other products (TikTok, Figma and so on). The pro
 
 | Check | Where | Status |
 |---|---|---|
-| A tooltip only on an icon-only control | `scripts/ui-check.mjs` | Being added in the groundwork PR (`feat/flow-calm`) |
-| The number of tooltips can't go up (106 in `web/` on 2026-11-09) | `scripts/ui-check.mjs` | Being added in the groundwork PR |
+| A tooltip only on an icon-only control | `scripts/ui-check.mjs` | Landed with the groundwork PR (`feat/flow-calm`) |
+| The number of tooltips can't go up (106 in `web/` on 2026-11-09, 71 after the groundwork PR) | `scripts/ui-check.mjs` | Landed with the groundwork PR |
 | At most 15 words of interface text at rest | `scripts/ui-check.mjs` | Next |
 | At most two sidebars (the nav and the inspector; Figma's two panels in the deck) | `scripts/ui-check.mjs` | Next |
 | The nav and the primary button keep their place and size while idle, working, hovered and with a panel open, at 1280 and 390 | `scripts/ui-check.mjs` | Next |
 | Layout shift below 0.01 | `scripts/ui-check.mjs` | Next |
 | The screen matches its approved frame | `scripts/ui-review.mjs` | Next |
-| The studio's own design review finds no real issue | `scripts/ui-review.mjs` | Being added in the groundwork PR |
+| The studio's own design review finds no real issue | `scripts/ui-review.mjs` | Landed with the groundwork PR |
 
 A check that is still "Next" is a rule people follow by hand until it lands. Update this table when one ships.
