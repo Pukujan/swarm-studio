@@ -2482,7 +2482,7 @@ function renderVideo() {
   }).join('')
   const opts = `<div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const body = video.src && !video.busy
-    ? `<video src="${esc(video.src)}" controls autoplay playsinline></video><div class="vfoot"><span title="${esc(video.file)}">Saved with the build: video/promo.mp4</span><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
+    ? `<video src="${esc(video.src)}" controls autoplay playsinline></video><div class="vfoot"><span title="${esc(video.file)}">Saved with the build: video/promo.mp4</span><span class="vacts"><a class="vdl" href="${esc(video.src)}" download="promo.mp4">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
       ? `<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
@@ -2496,6 +2496,7 @@ function renderVideo() {
   // with sound now: play it out loud when the browser allows, muted when it doesn't
   if (vid) vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) })
   el.querySelector('.vbig')?.addEventListener('click', () => bigScreen(true))
+  el.querySelector('.vreveal')?.addEventListener('click', () => api(`/api/runs/${encodeURIComponent(video.run || viewing || S.run)}/reveal?what=video`, { method: 'POST' }))
   el.querySelector('.vvoice')?.addEventListener('change', e => { videoOpts.voice = e.target.value; store.set('videoVoice', videoOpts.voice) })
   el.querySelector('.vmusic')?.addEventListener('change', e => { videoOpts.music = e.target.checked; store.set('videoMusic', videoOpts.music) })
 }
@@ -2758,21 +2759,104 @@ async function loadFiles() {
   renderFiles()
 }
 
+// Sorted, searchable, and grouped: by day, or by folders the person makes.
+const fileView = { q: '', sort: store.get('fileSort') || 'new', group: store.get('fileGroup') || 'day', closed: new Set(store.get('fileClosed') || []) }
+
+function dayLabel(t) {
+  const d = new Date(t), today = new Date(), y = new Date(Date.now() - 864e5)
+  const same = (a, b) => a.toDateString() === b.toDateString()
+  return same(d, today) ? 'Today' : same(d, y) ? 'Yesterday' : d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' })
+}
+
 function renderFiles() {
   const shown = viewing && viewing !== 'new' ? viewing : S.run
+  if (!els.files.previousElementSibling?.classList.contains('file-tools')) {
+    const bar = document.createElement('div')
+    bar.className = 'file-tools'
+    bar.innerHTML = `<input type="search" placeholder="Search files" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="none">No groups</option></select>`
+    els.files.before(bar)
+    bar.querySelector('.fq').oninput = e => { fileView.q = e.target.value.toLowerCase(); renderFiles() }
+    bar.querySelector('.fsort').value = fileView.sort
+    bar.querySelector('.fgroup').value = fileView.group
+    bar.querySelector('.fsort').onchange = e => { fileView.sort = e.target.value; store.set('fileSort', fileView.sort); renderFiles() }
+    bar.querySelector('.fgroup').onchange = e => { fileView.group = e.target.value; store.set('fileGroup', fileView.group); renderFiles() }
+  }
   els.files.innerHTML = files.length ? '' : '<div class="empty">No files yet. Describe a product in Chat to make one.</div>'
-  for (const f of files) {
-    const item = document.createElement('div')
-    item.className = `file${f.id === shown ? ' on' : ''}`
-    item.innerHTML = `<div class="ttl"></div><div class="meta"></div>`
-    item.firstChild.textContent = f.title
-    item.title = f.brief
-    const when = new Date(f.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-    const meta = item.lastChild
-    if (f.live) meta.innerHTML = '<span class="live">● building</span> · '
-    meta.append(`${when} · ${f.pages} pages · ${f.layers} layers${f.ms ? ` · ${(f.ms / 1000).toFixed(0)}s` : ''}`)
-    item.onclick = () => openRun(f.id)
-    els.files.append(item)
+  const list = files.filter(f => !fileView.q || `${f.title} ${f.brief} ${f.folder || ''}`.toLowerCase().includes(fileView.q))
+  const by = { new: (a, b) => b.t - a.t, old: (a, b) => a.t - b.t, name: (a, b) => a.title.localeCompare(b.title), size: (a, b) => b.pages - a.pages || b.t - a.t }[fileView.sort]
+  list.sort(by)
+  // runs that never got a page go in their own group, out of the way
+  const groupOf = f => (!f.pages && !f.live ? '⚠ Unfinished' : fileView.group === 'day' ? dayLabel(f.t) : fileView.group === 'folder' ? (f.folder ? `📁 ${f.folder}` : 'Not in a folder') : '')
+  const groups = new Map()
+  for (const f of list) { const g = groupOf(f); groups.has(g) || groups.set(g, []); groups.get(g).push(f) }
+  // loose files, then unfinished ones, at the bottom
+  for (const g of ['Not in a folder', '⚠ Unfinished']) if (groups.has(g)) { const u = groups.get(g); groups.delete(g); groups.set(g, u) }
+  if (!list.length && files.length) els.files.innerHTML = '<div class="empty">Nothing matches.</div>'
+  for (const [name, items] of groups) {
+    let box = els.files
+    if (name) {
+      const det = document.createElement('details')
+      det.className = 'fgroup'
+      det.open = !fileView.closed.has(name) && !(name === '⚠ Unfinished' && !fileView.closed.has('!' + name))
+      det.innerHTML = `<summary><span></span><em>${items.length}</em></summary>`
+      det.querySelector('span').textContent = name
+      det.ontoggle = () => {
+        fileView.closed.delete(name); fileView.closed.delete('!' + name)
+        if (!det.open) fileView.closed.add(name)
+        else if (name === '⚠ Unfinished') fileView.closed.add('!' + name)
+        store.set('fileClosed', [...fileView.closed])
+      }
+      els.files.append(det)
+      box = det
+    }
+    for (const f of items) box.append(fileItem(f, shown))
+  }
+}
+
+function fileItem(f, shown) {
+  const item = document.createElement('div')
+  item.className = `file${f.id === shown ? ' on' : ''}`
+  item.innerHTML = `<div class="ttl"><span></span><button class="fmore" title="Folder, show in Finder">⋯</button></div><div class="meta"></div>`
+  item.querySelector('.ttl span').textContent = f.title
+  item.title = f.brief
+  const when = new Date(f.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const meta = item.lastChild
+  if (f.live) meta.innerHTML = '<span class="live">● building</span> · '
+  meta.append(`${when} · ${f.pages} pages · ${f.layers} layers${f.ms ? ` · ${(f.ms / 1000).toFixed(0)}s` : ''}`)
+  const badges = [f.video && '🎬', f.published?.length && `🌐 ${f.published.length}`, fileView.group !== 'folder' && f.folder && `📁 ${f.folder}`].filter(Boolean)
+  if (badges.length) { const b = document.createElement('span'); b.className = 'fbadges'; b.textContent = badges.join('  '); meta.append(b) }
+  item.onclick = () => openRun(f.id)
+  item.querySelector('.fmore').onclick = e => { e.stopPropagation(); fileMenu(f, e.target) }
+  return item
+}
+
+function fileMenu(f, at) {
+  document.querySelector('.fmenu')?.remove()
+  const m = document.createElement('div')
+  m.className = 'fmenu'
+  const folders = [...new Set(files.map(x => x.folder).filter(Boolean))].sort()
+  m.innerHTML = `<div class="fmh">Move to folder</div>${folders.map(n => `<button data-f="${esc(n)}">📁 ${esc(n)}${n === f.folder ? ' ✓' : ''}</button>`).join('')}<button data-new>＋ New folder…</button>${f.folder ? '<button data-f="">Take out of folder</button>' : ''}<hr><button data-reveal>Show in Finder</button>${f.video ? '<button data-reveal="video">Show the video in Finder</button>' : ''}`
+  document.body.append(m)
+  const r = at.getBoundingClientRect()
+  Object.assign(m.style, { top: `${Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 8)}px`, left: `${Math.max(8, r.right - m.offsetWidth)}px` })
+  const close = () => { m.remove(); removeEventListener('mousedown', away) }
+  const away = e => { if (!m.contains(e.target)) close() }
+  setTimeout(() => addEventListener('mousedown', away))
+  m.onclick = async e => {
+    const b = e.target.closest('button')
+    if (!b) return
+    let folder = b.dataset.f
+    if (b.hasAttribute('data-new')) folder = prompt('Folder name')?.trim()
+    if (b.hasAttribute('data-reveal')) {
+      close()
+      return api(`/api/runs/${encodeURIComponent(f.id)}/reveal${b.dataset.reveal ? '?what=video' : ''}`, { method: 'POST' })
+    }
+    close()
+    if (folder === undefined || folder === null) return
+    await api(`/api/runs/${encodeURIComponent(f.id)}/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder }) })
+    f.folder = folder || null
+    if (folder && fileView.group !== 'folder') { fileView.group = 'folder'; store.set('fileGroup', 'folder'); const g = document.querySelector('.file-tools .fgroup'); if (g) g.value = 'folder' }
+    renderFiles()
   }
 }
 

@@ -233,9 +233,12 @@ function checkEdit(e) {
   return Object.fromEntries(keep.filter(k => e[k] !== undefined).map(k => [k, e[k]]))
 }
 
+// What the person files a run under, kept beside its events.
+const runMeta = id => { try { return JSON.parse(readFileSync(join(runsDir, id, 'meta.json'), 'utf8')) } catch { return {} } }
+
 function listRuns() {
   if (!existsSync(runsDir)) return []
-  return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 60).flatMap(id => {
+  return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 300).flatMap(id => {
     const events = readEvents(id)
     const start = events?.find(e => e.type === 'run:start')
     if (!start) return []
@@ -250,7 +253,10 @@ function listRuns() {
       layers: done?.done ?? events.filter(e => e.type === 'layer:done').length,
       ms: done?.ms ?? null,
       live: current?.id === id && !current.done,
-      preview: events.some(e => e.type === 'layer:done' && e.html)
+      preview: events.some(e => e.type === 'layer:done' && e.html),
+      video: existsSync(join(runsDir, id, 'video', 'promo.mp4')),
+      published: [...new Set(events.filter(e => e.type === 'publish:done' && e.url).map(e => e.target))],
+      folder: runMeta(id).folder || null
     }]
   })
 }
@@ -625,6 +631,33 @@ const server = createServer((req, res) => {
 
   if (url.pathname === '/api/runs') {
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(listRuns()))
+    return
+  }
+
+  // Put a run in a folder (or take it out with an empty name).
+  const runMetaPost = url.pathname.match(/^\/api\/runs\/([^/]+)\/meta$/)
+  if (runMetaPost && req.method === 'POST' && RUN_ID.test(runMetaPost[1]) && existsSync(join(runsDir, runMetaPost[1]))) {
+    let body = ''
+    req.on('data', c => (body += c))
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const meta = { ...runMeta(runMetaPost[1]), folder: String(input.folder || '').trim().slice(0, 40) || null }
+      writeFileSync(join(runsDir, runMetaPost[1], 'meta.json'), JSON.stringify(meta))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(meta))
+    })
+    return
+  }
+
+  // Show a run's folder (or its video) in Finder / the file manager.
+  const runReveal = url.pathname.match(/^\/api\/runs\/([^/]+)\/reveal$/)
+  if (runReveal && req.method === 'POST' && RUN_ID.test(runReveal[1])) {
+    const dir = join(runsDir, runReveal[1]), vid = join(dir, 'video', 'promo.mp4')
+    const what = url.searchParams.get('what') === 'video' && existsSync(vid) ? vid : dir
+    if (!existsSync(what)) { res.writeHead(404).end(); return }
+    const [cmd, args] = process.platform === 'darwin' ? ['open', ['-R', what]] : process.platform === 'win32' ? ['explorer', [`/select,${what}`]] : ['xdg-open', [dirname(what)]]
+    execFile(cmd, args, () => {})
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ path: what }))
     return
   }
 
