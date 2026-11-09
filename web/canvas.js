@@ -4109,6 +4109,8 @@ function connect() {
     try {
       const e = JSON.parse(m.data)
       if (e.type === 'cmd') return command(e)
+      // a sign-in belongs to no file
+      if (e.type === 'connector') return connectorEvent(e)
       if (e.type === 'reset' || e.type === 'run:start') {
         liveId = e.run
         if (viewing) { viewing = null; fresh(e.run) }
@@ -4363,7 +4365,8 @@ function openAuto() {
   el.className = 'game-pop auto-pop'
   el.innerHTML = `<div class="ghead"><b>⚡ Auto mode</b><button class="gclose" title="Close">×</button></div>
     <h3>One prompt. The whole thing.</h3>
-    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>🎬 Cut a promo video from your idea</li><li>⚙️ Build the working app</li><li>🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase, when its keys are set</li><li>🚀 Deploy to Vercel</li></ol>
+    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>🎬 Cut a promo video from your idea</li><li>⚙️ Build the working app</li><li>🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🚀 Deploy to Vercel</li></ol>
+    <div class="auto-conn"></div>
     <textarea class="auto-prompt" rows="4" placeholder="A night market in Taipei: street food, a festival weekend in March, tickets and a vendor map"></textarea>
     <div class="auto-go"><button class="primary auto-start">⚡ Run it all</button><small>Takes a while: the app and the games are real builds. Keep this window open; the review needs it.</small></div>`
   document.body.append(el)
@@ -4383,6 +4386,7 @@ function openAuto() {
     autoEvent(out, true)
   }
   el.querySelector('.auto-start').onclick = go
+  renderConnectors()
   ta.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go() }
 }
 $('#auto-btn').onclick = openAuto
@@ -4530,3 +4534,40 @@ function cwPin(i) {
   return { x: r.left + 2, y: r.top + 4, text: t.path.split('/').pop(), typing: t.shown < t.text.length }
 }
 ;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } requestAnimationFrame(cwLoop) })()
+
+// ---------- 🔌 sign-in connectors (Supabase), through Hermes: Connect opens the provider's
+// sign-in page; Hermes keeps the token, the canvas only learns who is connected.
+const conn = { all: null, busy: new Set() }
+async function renderConnectors() {
+  const box = autoM.pop?.querySelector('.auto-conn')
+  if (!box) return
+  if (!conn.all) {
+    box.innerHTML = '<small>checking your sign-ins…</small>'
+    conn.all = await api('/api/connectors').then(r => r.json()).catch(() => ({}))
+    if (!autoM.pop?.contains(box)) return
+  }
+  box.innerHTML = Object.entries(conn.all).filter(([, c]) => c && !c.error).map(([name, c]) => {
+    const state = c.signed_in && c.allowed ? `<span class="ac-ok">✓ connected</span>`
+      : c.signingIn || conn.busy.has(name) ? `<span class="ac-wait">waiting for you to approve in the browser…</span>${c.authUrl ? ` <a href="${esc(c.authUrl)}" target="_blank" rel="noopener">open sign-in</a>` : ''}`
+      : `<button class="ac-go" data-name="${esc(name)}">🔌 Connect ${esc(c.label)}</button>`
+    return `<div class="ac-row"><b>${esc(c.label)}</b>${state}<small>${c.signed_in && c.allowed ? 'Auto makes a free project and its table for you' : 'sign in once; no keys to copy'}</small></div>`
+  }).join('')
+  for (const b of box.querySelectorAll('.ac-go')) b.onclick = async () => {
+    const name = b.dataset.name
+    conn.busy.add(name); renderConnectors()
+    const res = await api('/api/connectors/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) }).catch(() => null)
+    const out = await res?.json().catch(() => ({}))
+    conn.busy.delete(name)
+    if (!res?.ok) { feed(null, `connect: ${out?.error || 'the canvas server is not answering'}`, 'err') }
+    else conn.all = { ...conn.all, [name]: { ...conn.all[name], ...out } }
+    renderConnectors()
+  }
+}
+function connectorEvent(e) {
+  if (!conn.all) return
+  const c = conn.all[e.name] || {}
+  conn.all[e.name] = { ...c, signingIn: e.state === 'signing-in', authUrl: e.authUrl || c.authUrl, ...(e.state === 'connected' ? { signed_in: true, allowed: true } : {}) }
+  if (e.state === 'connected') feed(null, `🔌 ${c.label || e.name} connected through Hermes`)
+  if (e.state === 'failed') feed(null, `🔌 ${c.label || e.name} sign-in did not finish`, 'err')
+  renderConnectors()
+}

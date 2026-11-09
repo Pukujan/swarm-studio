@@ -173,7 +173,7 @@ def ensure_server() -> dict:
     env.update(SWARM_TOKEN=token(), SWARM_RUNS_DIR=str(data_dir() / "runs"), SWARM_DATA_DIR=str(data_dir()))
     # Images come from Hermes's own image providers (your Codex login, for one):
     # the server runs imagegen.py with this Python and these import paths.
-    env.update(SWARM_HERMES_PY=sys.executable, SWARM_HERMES_PYTHONPATH=os.pathsep.join(p for p in sys.path if p and os.path.isdir(p)))
+    env.update(SWARM_HERMES_BIN=shutil.which("hermes") or "", SWARM_HERMES_PY=sys.executable, SWARM_HERMES_PYTHONPATH=os.pathsep.join(p for p in sys.path if p and os.path.isdir(p)))
     # Defaults for builds started from the canvas itself; Hermes sends fresh ones with each run.
     for role, m in models.items():
         if "error" in m:
