@@ -23,7 +23,7 @@ import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.
 import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
-import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS } from '../engine/video.mjs'
+import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS, fxFor } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -534,8 +534,9 @@ async function videoNow(id, input = {}) {
     } catch {
       scenes = fallbackStory(c)
     }
+    scenes.fx = fxFor(scenes.fx, idea)
     const agents = c.agents
-    send('video:story', { cast: scenes.cast, music: scenes.music, scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: s.image ? `/img/${id}/${basename(c.images.find(x => x.n === s.image).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
+    send('video:story', { fx: scenes.fx, cast: scenes.cast, music: scenes.music, scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: s.image ? `/img/${id}/${basename(c.images.find(x => x.n === s.image).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
     mkdirSync(dir, { recursive: true })
     stagePictures(c, dir)
     const t = await tools
@@ -555,7 +556,7 @@ async function videoNow(id, input = {}) {
     const lengths = scenes.map((s, i) => sceneLength(s, voices[i]?.seconds, plan.pace))
     const comp = composition(scenes, c, lengths, transition)
     writeFileSync(join(dir, 'index.html'), comp.html)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ cast: scenes.cast, music: scenes.music, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ cast: scenes.cast, music: scenes.music, fx: scenes.fx, scenes }, null, 2))
     progress(2, 'rendering')
     const silent = join(dir, 'promo-silent.mp4'), out = join(dir, 'promo.mp4')
     await render({ tools: t, dir, out: silent, quality: ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft', onProgress: (pct, code) => progress(Math.max(2, Math.min(96, pct)), code === 'assemble' ? 'assembling' : 'rendering') })
@@ -847,6 +848,18 @@ const server = createServer((req, res) => {
     const [cmd, args] = process.platform === 'darwin' ? ['open', ['-R', what]] : process.platform === 'win32' ? ['explorer', [`/select,${what}`]] : ['xdg-open', [dirname(what)]]
     execFile(cmd, args, () => {})
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ path: what }))
+    return
+  }
+
+  // Every saved cut of a run's video, oldest first.
+  const runCuts = url.pathname.match(/^\/api\/runs\/([^/]+)\/cuts$/)
+  if (runCuts && RUN_ID.test(runCuts[1])) {
+    const dir = shelf(runCuts[1], 'video').dir
+    let names = []
+    try { names = readdirSync(dir).filter(n => /^[a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4$/.test(n)) } catch {}
+    const v = n => Number(n.match(/-v(\d+)\.mp4$/)[1])
+    const cuts = names.sort((a, b) => v(a) - v(b)).map(name => ({ name, file: join(dir, name) }))
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ cuts }))
     return
   }
 
@@ -1205,10 +1218,11 @@ const server = createServer((req, res) => {
     return
   }
 
-  // A run's promo video, with range requests so the player can seek.
-  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/promo\.mp4$/)
+  // A run's promo video, with range requests so the player can seek; an earlier
+  // cut by its file name in the build's video folder (…-promo-v2.mp4).
+  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
   if (vid) {
-    const file = join(runsDir, vid[1], 'video', 'promo.mp4')
+    const file = vid[3] ? join(shelf(vid[1], 'video').dir, vid[3]) : join(runsDir, vid[1], 'video', 'promo.mp4')
     if (!existsSync(file)) return res.writeHead(404).end('not found')
     const size = statSync(file).size
     const range = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '')

@@ -68,7 +68,7 @@ function storyPrompt(c, { style = 'promo', idea = '' } = {}) {
       content: `You are a motion designer cutting a short promo video for a website a team of AI agents just built. You write the storyboard; fixed animation templates in the site's own theme play it.
 
 Return JSON only:
-{"cast":{"narrator":"<voice id>","second":"<voice id, or null>"},"music":"gentle|snappy","scenes":[{"kind":"open|image|split|list|quote|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,"items":["...","...","..."],"say":"what is said over this scene","who":"narrator|second"}]}
+{"cast":{"narrator":"<voice id>","second":"<voice id, or null>"},"music":"gentle|snappy","scenes":[{"kind":"open|image|split|list|quote|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,"items":["...","...","..."],"say":"what is said over this scene","who":"narrator|second"}],"fx":["sparkle|stars|fireworks|breeze|confetti|snow"]}
 
 Scene kinds:
 - open: the brand reveal. headline = the brand name; sub = what it is, under 9 words. No image.
@@ -84,7 +84,8 @@ Rules:
 - "say" is the voiceover, read aloud by a warm narrator: one natural spoken sentence per scene, 5 to 14 words, that adds to the words on screen rather than repeating them. Write numbers and dates the way they are spoken ("March twentieth"). The last scene's line is the invitation.
 - Cast the voices to fit the brand, the art direction and the audience: "narrator" reads most lines. A "second" voice is optional: use it for one or two lines that sound like a different person (a customer, a vendor, a host), never for the invitation. Voices:
 ${Object.entries(CAST).map(([id, d]) => `  ${id}: ${d}`).join('\n')}
-- "music": snappy for loud, fast, nightlife, sport or tech brands; gentle for calm, warm, crafted or premium ones.`
+- "music": snappy for loud, fast, nightlife, sport or tech brands; gentle for calm, warm, crafted or premium ones.
+- "fx": effects drawn over the whole video: sparkle (twinkling glints), stars (a starfield), fireworks (bursts), breeze (drifting streaks of light), confetti, snow. Use the ones the person's idea asks for (up to 4); with no idea, pick at most one that fits the brand, or none.`
     },
     {
       role: 'user',
@@ -119,6 +120,7 @@ export function checkStory(raw, c) {
   const second = CAST[raw.cast?.second] && raw.cast.second !== narrator ? raw.cast.second : null
   out.cast = { narrator, second }
   out.music = MOODS.includes(raw.music) ? raw.music : null
+  out.fx = (Array.isArray(raw.fx) ? raw.fx : []).filter(f => FX[f])
   return out
 }
 
@@ -141,6 +143,67 @@ export async function writeStory({ provider, model, c, signal, style, idea }) {
   const scenes = checkStory(JSON.parse(res.text.slice(s, e + 1)), c)
   if (scenes.length < 3) throw new Error('the storyboard was too thin')
   return scenes
+}
+
+// ---------- effects over the whole video
+// The person's words turn effects on directly, so "sparkly with fireworks"
+// always shows sparkles and fireworks, whatever the storyboard writer chose.
+const FX = {
+  sparkle: /sparkl|glitter|shimmer|shin|glint|magic/i,
+  stars: /\bstar|night sky|galax|cosmic|twinkl/i,
+  fireworks: /firework|celebrat|explo|burst/i,
+  breeze: /breez|wind|drift|float|petal|airy/i,
+  confetti: /confetti|party/i,
+  snow: /snow|winter|frost/i
+}
+export const fxFor = (picked = [], idea = '') => [...new Set([...Object.keys(FX).filter(f => FX[f].test(idea)), ...picked.filter(f => FX[f])])].slice(0, 4)
+
+function fxLayer(fx, total, v) {
+  if (!fx?.length) return { html: '', tl: [] }
+  let seed = 7
+  const r = (a = 0, b = 1) => { seed = (seed * 16807) % 2147483647; return a + (b - a) * (seed / 2147483647) }
+  const colors = [v['--primary'], v['--accent'], '#ffffff', '#ffd76a'].filter(Boolean)
+  const pick = () => colors[Math.floor(r(0, colors.length))]
+  const html = [], tl = []
+  let n = 0
+  const el = (cls, style) => { const id = `fx${n++}`; html.push(`<i id="${id}" class="${cls}" style="${style}"></i>`); return `#${id}` }
+  // never a negative position: GSAP would shift the whole timeline (and every scene) later
+  const reps = d => Math.max(0, Math.ceil(total / d) - 1)
+  if (fx.includes('stars')) for (let i = 0; i < 90; i++) {
+    const z = r(2, 6), d = r(0.7, 2.2)
+    const id = el('fx-dot', `left:${r(0, W)}px;top:${r(0, H)}px;width:${z}px;height:${z}px;background:#fff;box-shadow:0 0 ${z * 3}px #fff`)
+    tl.push(`tl.fromTo('${id}', {opacity:.15}, {opacity:${r(0.6, 1).toFixed(2)}, duration:${d.toFixed(2)}, ease:'sine.inOut', yoyo:true, repeat:${reps(d)}}, ${r(0, 1).toFixed(2)})`)
+    tl.push(`tl.fromTo('${id}', {y:0}, {y:${-r(20, 90) | 0}, duration:${total}, ease:'none'}, 0)`)
+  }
+  if (fx.includes('sparkle')) for (let i = 0; i < 26; i++) {
+    const z = r(26, 70), d = r(1.4, 2.6), c = pick()
+    const id = el('fx-glint', `left:${r(60, W - 60)}px;top:${r(60, H - 60)}px;width:${z}px;height:${z}px;background:${c};filter:drop-shadow(0 0 ${z / 3 | 0}px ${c})`)
+    tl.push(`tl.fromTo('${id}', {scale:0, rotation:0, opacity:1}, {scale:1, rotation:90, duration:${(d / 2).toFixed(2)}, ease:'sine.inOut', yoyo:true, repeat:${reps(d / 2)}, repeatDelay:${r(0, 0.8).toFixed(2)}}, ${r(0, 2.5).toFixed(2)})`)
+  }
+  if (fx.includes('fireworks')) for (let t = 0.8; t < total - 0.5; t += r(2.2, 3.6)) {
+    const cx = r(W * 0.15, W * 0.85), cy = r(H * 0.12, H * 0.5), c = pick(), rad = r(180, 320)
+    for (let k = 0; k < 26; k++) {
+      const a = (k / 26) * Math.PI * 2 + r(0, 0.2), z = r(9, 15)
+      const id = el('fx-dot', `left:${cx}px;top:${cy}px;width:${z}px;height:${z}px;background:${c};box-shadow:0 0 ${z * 2}px ${z / 2 | 0}px ${c};opacity:0`)
+      // fly out fast, stay bright, fade at the end
+      tl.push(`tl.set('${id}', {opacity:1}, ${t.toFixed(2)})`)
+      tl.push(`tl.fromTo('${id}', {x:0, y:0, scale:1}, {x:${(Math.cos(a) * rad) | 0}, y:${(Math.sin(a) * rad + 90) | 0}, scale:.4, duration:1.7, ease:'power3.out', immediateRender:false}, ${t.toFixed(2)})`)
+      tl.push(`tl.fromTo('${id}', {opacity:1}, {opacity:0, duration:.7, ease:'power1.in', immediateRender:false}, ${(t + 1).toFixed(2)})`)
+    }
+    const id = el('fx-dot', `left:${cx}px;top:${cy}px;width:40px;height:40px;margin:-20px 0 0 -20px;background:#fff;box-shadow:0 0 80px 30px ${c};opacity:0`)
+    tl.push(`tl.fromTo('${id}', {opacity:1, scale:.4}, {opacity:0, scale:1.6, duration:.5, ease:'power2.out', immediateRender:false}, ${t.toFixed(2)})`)
+  }
+  if (fx.includes('breeze')) for (let i = 0; i < 16; i++) {
+    const w = r(160, 420), d = r(3.5, 6.5), y = r(0, H)
+    const id = el('fx-streak', `left:-${w | 0}px;top:${y}px;width:${w}px;opacity:${r(0.25, 0.6).toFixed(2)}`)
+    tl.push(`tl.fromTo('${id}', {x:0, y:0}, {x:${W + w + 200 | 0}, y:${-r(30, 140) | 0}, duration:${d.toFixed(2)}, ease:'sine.inOut', repeat:${reps(d)}}, ${r(0, Math.min(d, 2)).toFixed(2)})`)
+  }
+  for (const [name, count, fall] of [['confetti', 70, 1], ['snow', 80, 0]]) if (fx.includes(name)) for (let i = 0; i < count; i++) {
+    const d = r(3, 7), z = fall ? r(10, 18) : r(5, 12)
+    const id = el(fall ? 'fx-bit' : 'fx-dot', `left:${r(0, W)}px;top:-40px;width:${z}px;height:${fall ? z * 0.5 : z}px;background:${fall ? pick() : '#fff'}${fall ? '' : ';opacity:.8'}`)
+    tl.push(`tl.fromTo('${id}', {y:0, x:0, rotation:0}, {y:${H + 80}, x:${r(-160, 160) | 0}, rotation:${fall ? r(-540, 540) | 0 : 0}, duration:${d.toFixed(2)}, ease:'none', repeat:${reps(d)}}, ${r(0, Math.min(d, 2)).toFixed(2)})`)
+  }
+  return { html: `<div id="fx" class="clip" data-start="0" data-duration="${total}">${html.join('')}</div>`, tl }
 }
 
 // ---------- the composition: one HTML file HyperFrames can render
@@ -210,6 +273,8 @@ export function composition(scenes, c, lengths = [], transition = 'wipe') {
     t += d
   })
   const total = Number(t.toFixed(2))
+  const fx = fxLayer(scenes.fx, total, v)
+  tl.push(...fx.tl)
   return {
     seconds: total,
     html: `<!doctype html>
@@ -244,10 +309,14 @@ html,body{width:${W}px;height:${H}px;overflow:hidden;background:var(--background
 .quote{font-style:italic}
 .cta{background:var(--primary)}.cta .head{color:var(--primary-foreground)}.cta .kicker{color:var(--primary-foreground);opacity:.8}
 .btn{margin-top:60px;background:var(--primary-foreground);color:var(--primary);font:700 40px/1 var(--fb);padding:34px 64px;border-radius:999px}
+#fx{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden}#fx i{position:absolute;display:block}
+.fx-dot{border-radius:50%}.fx-glint{margin:-35px 0 0 -35px;clip-path:polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%)}
+.fx-streak{height:3px;border-radius:3px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);filter:blur(1px)}.fx-bit{border-radius:2px}
 #wipe{position:absolute;top:0;left:0;width:${W}px;height:${H}px;background:var(--primary);z-index:10;transform:translateX(-${W}px)${transition === 'flash' ? ';opacity:0' : ''}}
 </style></head><body>
 <div id="root" data-composition-id="promo" data-start="0" data-duration="${total}" data-width="${W}" data-height="${H}" data-fps="${FPS}">
 ${html.join('\n')}
+${fx.html}
 <div id="wipe" class="clip" data-start="0" data-duration="${total}"></div>
 </div>
 <script>

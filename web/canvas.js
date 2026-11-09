@@ -2777,14 +2777,14 @@ els.reviewBtn.onclick = () => reviewRun()
 // The planner storyboards the build into a few scenes, each handed to an agent,
 // and HyperFrames renders them in the site's theme. The panel shows the
 // storyboard, the render, then the video.
-const video = { run: null, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '', el: null }
+const video = { run: null, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '', el: null, cuts: [], pick: -1, next: null }
 const shownRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
 
 function videoEvent(e) {
-  if (video.run !== e.run) Object.assign(video, { run: e.run, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '' })
+  if (video.run !== e.run) Object.assign(video, { run: e.run, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '', cuts: [], pick: -1, next: null })
   const fresh = !e.t || Date.now() - e.t < 8000 // a replayed file shows its video quietly
   if (e.type === 'video:start') {
-    Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], src: '', message: '', heard: fresh ? Date.now() : 0 })
+    Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], src: '', message: '', heard: fresh ? Date.now() : 0, next: { style: e.style, idea: e.idea } })
     if (fresh) feed(null, `🎬 ${e.model || 'the planner'} is storyboarding a ${VIDEO_STYLES.find(([k]) => k === e.style)?.[1].toLowerCase() || 'promo'} video${e.transition ? ` (${e.transition} cuts)` : ''}${e.idea ? `: “${e.idea}”` : ''}`, 'sys')
   } else if (e.type === 'video:story') {
     video.story = e.scenes
@@ -2794,6 +2794,11 @@ function videoEvent(e) {
     Object.assign(video, { busy: true, pct: e.pct, stage: e.stage, heard: Date.now() })
   } else if (e.type === 'video:done') {
     Object.assign(video, { busy: false, pct: 100, src: e.src, file: e.file, stage: 'done' })
+    // every cut is kept in the build's video folder; the newest plays, the rest are a click away
+    const name = String(e.file || '').split('/').pop()
+    if (/-promo-v\d+\.mp4$/.test(name) && !video.cuts.some(c => c.name === name)) video.cuts.push({ name, file: e.file, seconds: e.seconds, ...(video.next || {}) })
+    video.next = null
+    video.pick = video.cuts.length - 1
     if (fresh) feed(null, `🎬 promo video ready (${Math.round(e.seconds)}s${e.voice ? ', with voiceover' : ''}${e.music ? ', with music' : ''}, made in ${Math.round(e.ms / 1000)}s)`, 'sys')
   } else if (e.type === 'video:note') {
     if (fresh) feed(null, `🎬 ${e.message}`, 'err')
@@ -2808,9 +2813,22 @@ function videoEvent(e) {
 function renderVideo() {
   const el = video.el
   if (!el) return
+  // cuts made before this page was open come from the build's video folder
+  if (video.run && video.listed !== video.run) {
+    video.listed = video.run
+    const run = video.run
+    api(`/api/runs/${encodeURIComponent(run)}/cuts`).then(r => r.json()).then(({ cuts = [] }) => {
+      if (video.run !== run) return
+      const v = n => Number(n.match(/-v(\d+)\.mp4$/)[1])
+      const known = new Map(video.cuts.map(c => [c.name, c]))
+      video.cuts = [...new Map([...cuts.map(c => [c.name, c]), ...known]).values()].sort((a, b) => v(a.name) - v(b.name))
+      video.pick = video.cuts.length - 1
+      renderVideo()
+    }).catch(() => {})
+  }
   const stage = { storyboard: 'Writing the storyboard…', rendering: 'Rendering frames in headless Chrome…', assembling: 'Encoding the MP4…', 'recording the voiceover': 'Kokoro is reading the voiceover…', 'mixing the sound': 'Mixing the music and the voice…' }[video.stage] || video.stage
   // progress only moves the bar, so the storyboard cards don't replay their entrance
-  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message])
+  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message, video.pick, video.cuts.length])
   if (el.dataset.sig === sig) {
     const bar = el.querySelector('.vbar i'), txt = el.querySelector('.vstage')
     if (bar) bar.style.width = `${Math.max(3, video.pct)}%`
@@ -2823,8 +2841,11 @@ function renderVideo() {
     return `<div class="vscene" style="--c:${a?.color || '#888'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
   }).join('')
   const opts = `<div class="vopts"><label>Style <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Cut <select class="vcut">${VIDEO_CUTS.map(([v, l]) => `<option value="${v}" ${videoOpts.transition === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><input class="videa" placeholder="Your idea for the video (optional): “end on the night market crowd”, “for Instagram, upbeat”" value="${esc(videoOpts.idea || '')}"><div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
+  const cut = video.cuts[video.pick], latest = video.pick < 0 || video.pick === video.cuts.length - 1
+  const src = latest ? video.src : `/video/${video.run}/cut/${cut.name}`, file = cut?.file || video.file
+  const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" title="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
   const body = video.src && !video.busy
-    ? `<video src="${esc(video.src)}" controls autoplay playsinline></video><div class="vfoot"><span title="${esc(video.file)}">Saved to ${esc(String(video.file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(video.src)}" download="promo.mp4">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
+    ? `${cuts}<video src="${esc(src)}" controls autoplay playsinline></video><div class="vfoot"><span title="${esc(file)}">Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
       ? `<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
@@ -2838,6 +2859,7 @@ function renderVideo() {
   // with sound now: play it out loud when the browser allows, muted when it doesn't
   if (vid) vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) })
   el.querySelector('.vbig')?.addEventListener('click', () => bigScreen(true))
+  for (const b of el.querySelectorAll('[data-cut]')) b.onclick = () => { video.pick = Number(b.dataset.cut); renderVideo() }
   el.querySelector('.vreveal')?.addEventListener('click', () => api(`/api/runs/${encodeURIComponent(video.run || viewing || S.run)}/reveal?what=video`, { method: 'POST' }))
   el.querySelector('.vstyle')?.addEventListener('change', e => { videoOpts.style = e.target.value; store.set('videoStyle', videoOpts.style) })
   el.querySelector('.vcut')?.addEventListener('change', e => { videoOpts.transition = e.target.value; store.set('videoCut', videoOpts.transition) })
@@ -3615,6 +3637,7 @@ const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds 
 
 function setView(v) {
   if (!['canvas', 'video', 'app'].includes(v)) return
+  if (game.el) closeGame()
   const was = view
   view = v
   document.body.classList.toggle('view-video', v === 'video')
@@ -3828,10 +3851,11 @@ async function openGame(idea = '', answers = null, build = false) {
   game.el = document.createElement('div')
   game.el.className = 'game-pop'
   document.body.append(game.el)
+  $('#game-btn').classList.add('on')
   if (answers || build) return gameSpec(build)
   renderGame()
 }
-const closeGame = () => { game.el?.remove(); game.el = null }
+const closeGame = () => { game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
 
 function renderGame() {
   const el = game.el
