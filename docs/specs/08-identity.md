@@ -98,6 +98,70 @@ The studio is a little universe. Hermia came from beyond the galaxy with her cre
 - **The crew talk on the radio.** On the App code wall, the engine's lead agent speaks as Hermia: her newest line sits in a strip at the top of the wall, and when she gives an order a dotted line runs from her to that helper's cursor. Helpers answer in bubbles on their cursors, and their name pill shows what they are doing right now ("reading SharedNav.tsx", "writing store.ts"). Between batches, a planning tile says who is planning, for how long, with how much context.
 - All of it stays inside the palette above; no new colours.
 
+## Galaxy and orbit
+
+The owner found the studio too "terminal and code based", with too much on screen at once. So the default now starts with visuals, and the old layout stays one click away.
+
+Screens: `docs/specs/screens/galaxy/`. Start with `galaxy-1280.png`, then `orbit-1280-building.png`, `orbit-1280-thinking-log.png`, `galaxy-390.png` and `orbit-390.png`.
+
+### Galaxy home
+
+The first thing you see is a slowly turning spiral galaxy, drawn with three.js. Hermia's ship sits at the core.
+
+- **Builds are star systems.** Each saved build (`GET /api/runs`) is a star. Its place in the arms comes from a hash of the run id, so it is the same on every visit. Its colour comes from the build's theme, lifted so it shows on the dark. Its label is the build's title. The live build pulses.
+- **Labels stay readable.** At most 9 labels (5 on a phone) are shown. They skip the core and the prompt area and don't overlap each other. The "Star chart" button lists every build.
+- **Starting a build.** A floating "Where to *next*?" prompt starts one, either with Launch (the normal brief submit) or with Auto. Chips under it reopen the last build.
+- **Opening a build.** Clicking a star flies the camera in (about 900 ms) and opens that build in orbit. Under `prefers-reduced-motion` the galaxy does not turn and the flight is a short cross-fade.
+- **Rendering.**
+  - About 46k instanced points (22k on a phone) with additive glow, nebula sprites and mouse parallax.
+  - The pixel ratio is capped at 2, and rendering pauses when the tab is hidden or the galaxy is closed.
+  - three.js r170 is vendored in `web/vendor/three/` with its MIT licence; nothing loads from a CDN.
+
+### Orbit view (the default inside a build)
+
+- **The bodies.**
+  - The build is the sun, in its theme colour.
+  - Each page is a planet, textured with a thumbnail of that page, and a ring under its label fills as its sections finish.
+  - Sections are moons while they are being built. A moon sinks into its planet when its section is done.
+- **The crew.** Crew minions fly to the moon or planet they are working on. They say what they are doing in speech bubbles, with at most 3 talking at once. The engine crew fly to the Engine room.
+- **Hermia's comm-link.** Hermia's orders show in one comm-link strip at the bottom.
+- **Hermia's reasoning.**
+  - Her reasoning (`crew:lead` events with `kind: 'reason'`) shows separately, as a dimmer, italic, cloud-style thought bubble above the strip.
+  - Clicking the strip or the **Thinking** button opens a scrollable "Hermia's thinking" log. It lists every thought, with the full text, and her orders. Esc closes it.
+- **Stations.** The three views are stations on the outer ring:
+  - **Design deck** (the canvas);
+  - **Film studio** (video);
+  - **Engine room** (the app; the code wall is only in here).
+- **Moving around.**
+  - Clicking a planet opens the Design deck at that page.
+  - The back button in the top bar goes Station → Orbit → Galaxy.
+- **Chat.** It is folded into the comm-link strip. The Chat button opens the full side column, and its ✕ folds it again.
+- **On a phone.** At 600 px and below, orbit becomes a list: a sun header, the three stations as cards, and a row per planet with its thumbnail and progress.
+
+### Lean chrome and the Classic view
+
+- **The top bar.** In galaxy, orbit and station modes it shows only back, the build name, Auto, Play, Publish and ☰.
+- **Classic view.** Classic view in ☰ restores the old layout exactly. It is stored in `localStorage` (`swarm.classic`, read and written inside try/catch), and switching it does not reload the page. Game also moved into ☰ in the new layout.
+- **What keeps working.**
+  - `?wall=1` and `/wall` are untouched; no galaxy or orbit appears there.
+  - `?replay=<id>` and `?run=<id>` open straight into orbit.
+
+### Code layout
+
+- **New files.** `web/galaxy.js` (the galaxy and the `window.swarmCosmos` mode controller), `web/orbit.js` (the orbit view, comm-link and thinking log) and `web/galaxy.css`. The server inlines them into the canvas page like the other files.
+- **Changes to `canvas.js`.** Only small hooks, marked "galaxy/orbit hook":
+  - an event hook at the top of `on(e)`;
+  - a check so auto-open-latest waits when the galaxy is home;
+  - a small `window.swarm` object: `S`, `view`, `openRun`, `setView`, `focusPage`, `openPlayer`, `thumb(id)`, `submit(text, auto)` and `on(fn)`.
+- **How orbit updates.** Orbit reads the build state from `swarm.S` 4 times a second. It uses events only for bubbles and the comm-link. Events from a reloaded history are not replayed as bubbles.
+- **Colours.** All colours come from `:root` tokens; WebGL reads them with `getComputedStyle`. There are two new tokens for the nebula, both from the F2 set: `--nebula` `#7900F2` and `--nebula-2` `#F20079`.
+
+### Performance (MacBook Air M1, Chrome with Metal, DPR 2)
+
+- **Galaxy:** a steady 60 fps.
+- **Orbit:** about 60 fps once a build has settled.
+- **During a fast replay:** frames drop in both orbit and Classic view. The time goes to the canvas's own page iframes, not to the WebGL.
+
 ## The Commander's artwork
 
 - A small set of reference illustrations: a portrait, a pointing pose, a cheering pose and a thinking pose.
@@ -114,3 +178,4 @@ The studio is a little universe. Hermia came from beyond the galaxy with her cre
 - [ ] Each agent cursor has its SVG avatar: it blinks, its mouth moves with chatter, its wings flap while it moves, and it hops when done. Two runs with the same agent names look the same.
 - [ ] The app icon, favicon and README hero use Hermia's logo. The footer says "Built for Hermes Agent", with no Nous logo anywhere.
 - [ ] Contrast passes WCAG AA, and everything works at 390 px wide.
+- [x] Galaxy home, orbit view with stations, comm-link, thought cloud and thinking log, lean chrome and the Classic view toggle (see "Galaxy and orbit").

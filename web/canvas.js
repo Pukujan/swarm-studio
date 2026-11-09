@@ -108,6 +108,8 @@ const ARROW = (color, name) => `<svg class="nib" viewBox="0 0 10 10" aria-hidden
 const HERMIA = '<img class="hermia" src="brand/hermia-mark.svg" alt="" width="18" height="18">'
 
 let S
+// galaxy/orbit hook: web/galaxy.js and web/orbit.js listen to every event through window.swarm.on
+const cosmosHooks = new Set()
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
 function fresh(run = null) {
@@ -137,6 +139,7 @@ function setTitle(t) {
 // ---------- events
 
 function on(e) {
+  for (const fn of cosmosHooks) try { fn(e) } catch (err) { console.error(err) } // galaxy/orbit hook (web/orbit.js)
   switch (e.type) {
     case 'reset':
       if (S.run !== e.run) fresh(e.run)
@@ -4303,6 +4306,7 @@ if (Q.get('run') && !Q.get('replay')) setTimeout(() => openRun(Q.get('run')), 30
 // Nothing live to replay: open the latest saved file rather than an empty canvas.
 setTimeout(async () => {
   if (S.run || viewing || Q.get('run') || Q.get('replay')) return
+  if (window.swarmCosmos?.home?.()) return // galaxy/orbit hook: the galaxy home opens nothing behind it
   await loadFiles()
   const latest = files.find(f => f.preview)
   if (latest && !S.run && !viewing) openRun(latest.id)
@@ -5455,4 +5459,28 @@ function connectorEvent(e) {
   if (e.state === 'connected') feed(null, `🔌 ${c.label || e.name} connected through Hermes`)
   if (e.state === 'failed') feed(null, `🔌 ${c.label || e.name} sign-in did not finish`, 'err')
   renderConnectors()
+}
+
+// ---------- galaxy/orbit hook: what web/galaxy.js and web/orbit.js may read and call.
+// Kept to this one block so the canvas and the galaxy views merge cleanly.
+window.swarm = {
+  get S() { return S }, get view() { return view }, get viewing() { return viewing }, get liveId() { return liveId }, get files() { return files },
+  replay: !!Q.get('replay'), wall: WALL, store, api, esc,
+  on: fn => cosmosHooks.add(fn),
+  openRun, setView, loadFiles, focusPage, openPlayer,
+  // a page's picture for its planet: the resting snapshot, or a small fresh one
+  async thumb(id) {
+    const f = S.frames.find(x => x.id === id)
+    if (!f) return null
+    if (f.frozen) return f.frozen.img.src
+    if (!f.ready || !f.slots.size) return null
+    return (await snapFrame(f, 0.25)).image
+  },
+  // start a build (or open Auto with the words in it) from the galaxy's prompt
+  submit(text, auto = false) {
+    els.brief.value = text
+    if (auto) return openAuto()
+    if (view !== 'canvas') setView('canvas')
+    els.form.requestSubmit()
+  }
 }
