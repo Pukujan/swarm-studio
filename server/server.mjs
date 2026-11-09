@@ -233,32 +233,70 @@ function checkEdit(e) {
   return Object.fromEntries(keep.filter(k => e[k] !== undefined).map(k => [k, e[k]]))
 }
 
-// What the person files a run under, kept beside its events.
+// What the person adds to a run: a folder, their own name for it, tags, a note.
 const runMeta = id => { try { return JSON.parse(readFileSync(join(runsDir, id, 'meta.json'), 'utf8')) } catch { return {} } }
 
-function listRuns() {
-  if (!existsSync(runsDir)) return []
-  return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 300).flatMap(id => {
+// A run's file card, from its events plus the person's meta. Cached by the
+// events file's size and time, so listing many runs stays quick.
+const cards = new Map()
+function runCard(id) {
+  const file = join(runsDir, id, 'events.jsonl')
+  let st
+  try { st = statSync(file) } catch { return null }
+  const key = `${st.size}:${st.mtimeMs}`
+  let card = cards.get(id)
+  if (card?.key !== key) {
     const events = readEvents(id)
     const start = events?.find(e => e.type === 'run:start')
-    if (!start) return []
+    if (!start) return null
     const pages = events.filter(e => e.type === 'page')
     const done = events.find(e => e.type === 'run:done')
-    return [{
+    const theme = events.findLast(e => e.type === 'theme') || {}
+    const sites = {}
+    for (const e of events) if (e.type === 'publish:done' && e.url) sites[e.target] = e.url
+    const video = events.findLast(e => e.type === 'video:done')
+    card = { key, info: {
       id,
       title: pages[0]?.title || start.brief.slice(0, 60),
       brief: start.brief,
       t: start.t,
+      updated: events.at(-1)?.t || start.t,
       pages: pages.length,
+      pageTitles: pages.map(p => p.title),
       layers: done?.done ?? events.filter(e => e.type === 'layer:done').length,
+      failed: done?.failed || 0,
       ms: done?.ms ?? null,
-      live: current?.id === id && !current.done,
+      agents: start.agents?.length || 0,
+      models: { planner: start.plannerModel || null, builders: start.workerModel || null },
+      theme: theme.name ? { name: theme.name, direction: theme.direction || '', colors: ['--background', '--primary', '--accent', '--foreground'].map(k => theme.vars?.[k]).filter(Boolean), fonts: theme.fonts || {} } : null,
+      images: events.filter(e => e.type === 'image').length,
+      reviews: events.filter(e => e.type === 'review:done').length,
+      fixes: events.filter(e => e.type === 'review:issue').length,
+      edits: events.filter(e => e.type === 'edit').length,
+      exports: events.filter(e => e.type === 'export').length,
+      sites,
+      published: Object.keys(sites),
+      videoSeconds: video?.seconds ?? null,
       preview: events.some(e => e.type === 'layer:done' && e.html),
-      video: existsSync(join(runsDir, id, 'video', 'promo.mp4')),
-      published: [...new Set(events.filter(e => e.type === 'publish:done' && e.url).map(e => e.target))],
-      folder: runMeta(id).folder || null
-    }]
-  })
+    } }
+    cards.set(id, card)
+  }
+  const meta = runMeta(id)
+  return {
+    ...card.info,
+    autoTitle: card.info.title,
+    title: meta.title || card.info.title,
+    folder: meta.folder || null,
+    tags: meta.tags || [],
+    note: meta.note || '',
+    video: existsSync(join(runsDir, id, 'video', 'promo.mp4')),
+    live: current?.id === id && !current.done,
+  }
+}
+
+function listRuns() {
+  if (!existsSync(runsDir)) return []
+  return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 300).flatMap(id => runCard(id) || [])
 }
 
 // Visitor tours for a finished run, written once and kept with the run. The
@@ -642,7 +680,12 @@ const server = createServer((req, res) => {
     req.on('end', () => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
-      const meta = { ...runMeta(runMetaPost[1]), folder: String(input.folder || '').trim().slice(0, 40) || null }
+      // only the fields sent change; an empty value clears one
+      const meta = runMeta(runMetaPost[1]), str = (v, n) => String(v || '').trim().slice(0, n) || null
+      if ('folder' in input) meta.folder = str(input.folder, 40)
+      if ('title' in input) meta.title = str(input.title, 80)
+      if ('note' in input) meta.note = str(input.note, 2000)
+      if ('tags' in input) meta.tags = [...new Set((Array.isArray(input.tags) ? input.tags : String(input.tags || '').split(',')).map(x => String(x).trim().toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 12)
       writeFileSync(join(runsDir, runMetaPost[1], 'meta.json'), JSON.stringify(meta))
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(meta))
     })

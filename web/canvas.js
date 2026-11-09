@@ -2773,7 +2773,7 @@ function renderFiles() {
   if (!els.files.previousElementSibling?.classList.contains('file-tools')) {
     const bar = document.createElement('div')
     bar.className = 'file-tools'
-    bar.innerHTML = `<input type="search" placeholder="Search files" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="none">No groups</option></select>`
+    bar.innerHTML = `<input type="search" placeholder="Search names, briefs, themes, tags…  (tag:, has:video, on:vercel)" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="none">No groups</option></select>`
     els.files.before(bar)
     bar.querySelector('.fq').oninput = e => { fileView.q = e.target.value.toLowerCase(); renderFiles() }
     bar.querySelector('.fsort').value = fileView.sort
@@ -2782,7 +2782,7 @@ function renderFiles() {
     bar.querySelector('.fgroup').onchange = e => { fileView.group = e.target.value; store.set('fileGroup', fileView.group); renderFiles() }
   }
   els.files.innerHTML = files.length ? '' : '<div class="empty">No files yet. Describe a product in Chat to make one.</div>'
-  const list = files.filter(f => !fileView.q || `${f.title} ${f.brief} ${f.folder || ''}`.toLowerCase().includes(fileView.q))
+  const list = files.filter(f => fileMatch(f, fileView.q))
   const by = { new: (a, b) => b.t - a.t, old: (a, b) => a.t - b.t, name: (a, b) => a.title.localeCompare(b.title), size: (a, b) => b.pages - a.pages || b.t - a.t }[fileView.sort]
   list.sort(by)
   // runs that never got a page go in their own group, out of the way
@@ -2823,11 +2823,75 @@ function fileItem(f, shown) {
   const meta = item.lastChild
   if (f.live) meta.innerHTML = '<span class="live">● building</span> · '
   meta.append(`${when} · ${f.pages} pages · ${f.layers} layers${f.ms ? ` · ${(f.ms / 1000).toFixed(0)}s` : ''}`)
-  const badges = [f.video && '🎬', f.published?.length && `🌐 ${f.published.length}`, fileView.group !== 'folder' && f.folder && `📁 ${f.folder}`].filter(Boolean)
+  const badges = [f.video && '🎬', f.published?.length && `🌐 ${f.published.length}`, fileView.group !== 'folder' && f.folder && `📁 ${f.folder}`, ...(f.tags || []).map(t => `#${t}`)].filter(Boolean)
+  if (f.theme?.colors?.length) { const sw = document.createElement('span'); sw.className = 'fswatch'; sw.innerHTML = f.theme.colors.slice(0, 3).map(c => `<i style="background:${esc(c)}"></i>`).join(''); sw.title = `${f.theme.name} · ${f.theme.fonts?.heading || ''}`; item.querySelector('.ttl').prepend(sw) }
   if (badges.length) { const b = document.createElement('span'); b.className = 'fbadges'; b.textContent = badges.join('  '); meta.append(b) }
   item.onclick = () => openRun(f.id)
   item.querySelector('.fmore').onclick = e => { e.stopPropagation(); fileMenu(f, e.target) }
+  item.oncontextmenu = e => { e.preventDefault(); fileMenu(f, item.querySelector('.fmore')) }
   return item
+}
+
+// Search every field a file has; tag:x, folder:x, on:<host>, has:video|site|images narrow it.
+function fileMatch(f, q) {
+  if (!q) return true
+  const hay = [f.title, f.autoTitle, f.brief, f.folder, f.note, f.id, ...(f.tags || []), ...(f.pageTitles || []), f.theme?.name, f.theme?.direction, f.theme?.fonts?.heading, f.theme?.fonts?.body, f.models?.planner, f.models?.builders, ...Object.values(f.sites || {}), new Date(f.t).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })].filter(Boolean).join(' ').toLowerCase()
+  return q.split(/\s+/).filter(Boolean).every(w => {
+    const [k, v] = w.includes(':') ? w.split(/:(.*)/) : [null, w]
+    if (k === 'tag') return (f.tags || []).some(t => t.includes(v))
+    if (k === 'folder') return (f.folder || '').toLowerCase().includes(v)
+    if (k === 'on') return (f.published || []).some(p => p.includes(v))
+    if (k === 'has') return v === 'video' ? f.video : v === 'site' ? f.published?.length : v === 'images' ? f.images > 0 : v === 'note' ? !!f.note : true
+    return hay.includes(w)
+  })
+}
+
+// A file's card: everything it records, and the person's own name, tags and note.
+function fileInfo(f) {
+  document.querySelector('.finfo-wrap')?.remove()
+  const wrap = document.createElement('div')
+  wrap.className = 'finfo-wrap'
+  const when = t => new Date(t).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const row = (k, v) => (v || v === 0 ? `<dt>${k}</dt><dd>${v}</dd>` : '')
+  const sites = Object.entries(f.sites || {}).map(([k, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(k)}</a>`).join(' · ')
+  wrap.innerHTML = `<div class="finfo">
+    <button class="fix" title="Close">×</button>
+    <label>Name<input class="fi-title" value="${esc(f.title)}" placeholder="${esc(f.autoTitle)}"></label>
+    <label>Tags<input class="fi-tags" value="${esc((f.tags || []).join(', '))}" placeholder="client, food, draft"></label>
+    <label>Folder<input class="fi-folder" value="${esc(f.folder || '')}" placeholder="none"></label>
+    <label>Note<textarea class="fi-note" rows="3" placeholder="Anything to remember about this build">${esc(f.note || '')}</textarea></label>
+    <dl>
+      ${row('Brief', esc(f.brief))}
+      ${row('Made', when(f.t))}
+      ${row('Last change', when(f.updated))}
+      ${row('Built', `${f.pages} pages · ${f.layers} sections${f.failed ? ` (${f.failed} failed)` : ''} · ${f.agents} agents${f.ms ? ` · ${(f.ms / 1000).toFixed(1)}s` : ''}`)}
+      ${row('Pages', esc((f.pageTitles || []).join(', ')))}
+      ${row('Theme', f.theme ? `${f.theme.colors.map(c => `<i class="fsw" style="background:${esc(c)}"></i>`).join('')} ${esc(f.theme.name)} · ${esc(f.theme.fonts?.heading || '')} / ${esc(f.theme.fonts?.body || '')}<br><span class="dim">${esc(f.theme.direction)}</span>` : '')}
+      ${row('Models', [f.models?.planner && `planner ${esc(f.models.planner)}`, f.models?.builders && `builders ${esc(f.models.builders)}`].filter(Boolean).join(' · '))}
+      ${row('Work since', [f.images && `${f.images} pictures`, f.reviews && `${f.reviews} reviews`, f.fixes && `${f.fixes} issues found`, f.edits && `${f.edits} edits`, f.exports && `${f.exports} exports`].filter(Boolean).join(' · ') || 'none')}
+      ${row('Live at', sites)}
+      ${row('Video', f.video ? `video/promo.mp4${f.videoSeconds ? ` · ${Math.round(f.videoSeconds)}s` : ''}` : '')}
+      ${row('ID', `<code>${esc(f.id)}</code>`)}
+    </dl>
+    <div class="fi-foot"><button class="fi-reveal">Show in Finder</button><button class="fi-save">Save</button></div>
+  </div>`
+  document.body.append(wrap)
+  const $q = c => wrap.querySelector(c)
+  const close = () => { wrap.remove(); removeEventListener('keydown', key) }
+  const key = e => { if (e.key === 'Escape') close() }
+  addEventListener('keydown', key)
+  wrap.onclick = e => { if (e.target === wrap) close() }
+  $q('.fix').onclick = close
+  $q('.fi-reveal').onclick = () => api(`/api/runs/${encodeURIComponent(f.id)}/reveal`, { method: 'POST' })
+  $q('.fi-save').onclick = async () => {
+    const body = { title: $q('.fi-title').value, tags: $q('.fi-tags').value, folder: $q('.fi-folder').value, note: $q('.fi-note').value }
+    const res = await api(`/api/runs/${encodeURIComponent(f.id)}/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    const m = await res.json()
+    Object.assign(f, { title: m.title || f.autoTitle, tags: m.tags || [], folder: m.folder || null, note: m.note || '' })
+    close()
+    renderFiles()
+  }
+  $q('.fi-title').focus()
 }
 
 function fileMenu(f, at) {
@@ -2835,7 +2899,7 @@ function fileMenu(f, at) {
   const m = document.createElement('div')
   m.className = 'fmenu'
   const folders = [...new Set(files.map(x => x.folder).filter(Boolean))].sort()
-  m.innerHTML = `<div class="fmh">Move to folder</div>${folders.map(n => `<button data-f="${esc(n)}">📁 ${esc(n)}${n === f.folder ? ' ✓' : ''}</button>`).join('')}<button data-new>＋ New folder…</button>${f.folder ? '<button data-f="">Take out of folder</button>' : ''}<hr><button data-reveal>Show in Finder</button>${f.video ? '<button data-reveal="video">Show the video in Finder</button>' : ''}`
+  m.innerHTML = `<div class="fmh">Move to folder</div>${folders.map(n => `<button data-f="${esc(n)}">📁 ${esc(n)}${n === f.folder ? ' ✓' : ''}</button>`).join('')}<button data-new>＋ New folder…</button>${f.folder ? '<button data-f="">Take out of folder</button>' : ''}<hr><button data-info>Details, tags and note…</button><button data-reveal>Show in Finder</button>${f.video ? '<button data-reveal="video">Show the video in Finder</button>' : ''}`
   document.body.append(m)
   const r = at.getBoundingClientRect()
   Object.assign(m.style, { top: `${Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 8)}px`, left: `${Math.max(8, r.right - m.offsetWidth)}px` })
@@ -2847,6 +2911,7 @@ function fileMenu(f, at) {
     if (!b) return
     let folder = b.dataset.f
     if (b.hasAttribute('data-new')) folder = prompt('Folder name')?.trim()
+    if (b.hasAttribute('data-info')) { close(); return fileInfo(f) }
     if (b.hasAttribute('data-reveal')) {
       close()
       return api(`/api/runs/${encodeURIComponent(f.id)}/reveal${b.dataset.reveal ? '?what=video' : ''}`, { method: 'POST' })

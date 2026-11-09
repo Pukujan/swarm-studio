@@ -79,7 +79,7 @@ button { font: inherit; color: inherit; }
 .file:hover { background: var(--panel-2); }
 .file.on { background: var(--panel-2); border-color: #3a4a7a; }
 .file .ttl { font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.file .ttl span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file .ttl > span:not(.fswatch) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .file .fmore { visibility: hidden; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 4px; border-radius: 4px; }
 .file:hover .fmore, .file.on .fmore { visibility: visible; }
 .file .fmore:hover { background: var(--line); color: inherit; }
@@ -454,3 +454,21 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .video-big { position: fixed; inset: 0; z-index: 200; background: #000; display: flex; align-items: center; justify-content: center; }
 .video-big video { width: 100%; height: 100%; object-fit: contain; }
 .video-big .vbclose { position: absolute; top: 14px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #ffffff22; color: #fff; font-size: 24px; cursor: pointer; }
+
+/* file metadata: swatches, and the details card */
+.file .fswatch { display: inline-flex; flex: none; gap: 0; }
+.file .fswatch i, .finfo .fsw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: -2px; border: 1px solid #0006; vertical-align: middle; }
+.finfo .fsw { width: 12px; height: 12px; margin-right: 2px; }
+.finfo-wrap { position: fixed; inset: 0; z-index: 250; background: #0009; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.finfo { position: relative; width: min(560px, 100%); max-height: 90vh; overflow: auto; background: var(--panel, #16181d); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.finfo label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.finfo input, .finfo textarea { background: var(--panel-2); color: var(--text, inherit); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0; resize: vertical; }
+.finfo dl { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; margin: 6px 0 0; font-size: 13px; }
+.finfo dt { color: var(--muted); }
+.finfo dd { margin: 0; overflow-wrap: anywhere; }
+.finfo .dim { color: var(--muted); font-size: 12px; }
+.finfo a { color: #8fb0ff; }
+.finfo .fix { position: absolute; top: 10px; right: 12px; background: none; border: 0; color: var(--muted); font-size: 22px; cursor: pointer; }
+.finfo .fi-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.finfo .fi-foot button { border: 1px solid var(--line); background: none; color: inherit; border-radius: 8px; padding: 7px 14px; cursor: pointer; font: inherit; }
+.finfo .fi-save { background: #5b7cfa !important; border-color: #5b7cfa !important; color: #fff !important; }
