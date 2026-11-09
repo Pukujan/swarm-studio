@@ -59,3 +59,5 @@ Each build lives on the machine of the person who made it, plus its own Vercel l
 ## Out of scope for the hackathon
 
 - Comments, follows, payments to authors, a full moderation queue.
+
+> **Extended by [10-swarm-feed.md](10-swarm-feed.md):** the swipe Feed becomes the home page, and this grid stays as "Browse".
