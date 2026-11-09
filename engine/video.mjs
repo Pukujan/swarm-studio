@@ -18,6 +18,17 @@ const W = 1920, H = 1080, FPS = 30
 const KINDS = new Set(['open', 'image', 'split', 'list', 'quote', 'cta'])
 const LENGTH = { open: 3.2, image: 3.4, split: 3.6, list: 4.2, quote: 3.4, cta: 3.6 }
 
+// Video plans: each one changes what the storyboard writer is asked for, the
+// pace, the cut between scenes and the music. A person's own idea rides on top.
+export const STYLES = {
+  promo: { label: 'Promo', transition: 'wipe', pace: 1, rule: 'A classic promo: brand, best pictures, what is on offer, the invitation.' },
+  kinetic: { label: 'Kinetic type', transition: 'flash', pace: 0.8, music: 'snappy', rule: 'Kinetic typography: mostly words, no more than one picture. Use open, quote, list and cta scenes with very short, punchy headlines (2 to 5 words) that hit like a beat. Short voice lines, 4 to 9 words.' },
+  slideshow: { label: 'Slideshow', transition: 'fade', pace: 1.2, music: 'gentle', rule: 'A calm photo slideshow: show every picture, each as an image or split scene, with short captions. Unhurried, warm voice lines.' },
+  teaser: { label: 'Teaser', transition: 'zoom', pace: 0.9, rule: 'A teaser: only 4 scenes, open first and cta last. Hint, do not explain; build curiosity and hold back details.' },
+  story: { label: 'Customer story', transition: 'slide', pace: 1.05, rule: 'A short story told from one customer\'s point of view: their moment before, what they found here, how it felt. Use the second voice for the customer\'s own lines (two or three), the narrator for the rest.' },
+}
+export const TRANSITIONS = ['wipe', 'fade', 'zoom', 'slide', 'flash']
+
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const text = html => String(html || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()
@@ -50,7 +61,7 @@ export function collect(events, runDir) {
 }
 
 // ---------- the storyboard
-function storyPrompt(c) {
+function storyPrompt(c, { style = 'promo', idea = '' } = {}) {
   return [
     {
       role: 'system',
@@ -77,7 +88,7 @@ ${Object.entries(CAST).map(([id, d]) => `  ${id}: ${d}`).join('\n')}
     },
     {
       role: 'user',
-      content: `Brand: ${c.brand}\nBrief: ${c.brief}\nArt direction: ${c.theme.direction || ''}\n\nPictures:\n${c.images.map(i => `${i.n}. (${i.page}) ${i.gen}`).join('\n') || 'none'}\n\nThe site:\n${c.copy}`
+      content: `Video plan: ${(STYLES[style] || STYLES.promo).rule}${idea ? `\nThe person's own idea for this video (follow it): ${idea}` : ''}\n\nBrand: ${c.brand}\nBrief: ${c.brief}\nArt direction: ${c.theme.direction || ''}\n\nPictures:\n${c.images.map(i => `${i.n}. (${i.page}) ${i.gen}`).join('\n') || 'none'}\n\nThe site:\n${c.copy}`
     }
   ]
 }
@@ -123,8 +134,8 @@ export function fallbackStory(c) {
   return scenes
 }
 
-export async function writeStory({ provider, model, c, signal }) {
-  const res = await streamChat(provider, { model, messages: storyPrompt(c), maxTokens: 1500, temperature: 0.7, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
+export async function writeStory({ provider, model, c, signal, style, idea }) {
+  const res = await streamChat(provider, { model, messages: storyPrompt(c, { style, idea }), maxTokens: 1500, temperature: 0.7, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
   const s = res.text.indexOf('{'), e = res.text.lastIndexOf('}')
   if (s < 0 || e <= s) throw new Error('no JSON in the storyboard')
   const scenes = checkStory(JSON.parse(res.text.slice(s, e + 1)), c)
@@ -137,10 +148,10 @@ const words = (s, cls = 'w') => esc(s).split(' ').map(w => `<span class="${cls}"
 const size = (s, big) => { const n = s.length; return big ? (n <= 14 ? 190 : n <= 24 ? 150 : 118) : (n <= 20 ? 128 : n <= 36 ? 104 : 84) }
 
 // Scene lengths: the template's own, stretched to fit a voiceover line when there is one.
-export const sceneLength = (s, voice) => Math.max(LENGTH[s.kind], voice ? Number((voice + 0.9).toFixed(2)) : 0)
+export const sceneLength = (s, voice, pace = 1) => Math.max(Number((LENGTH[s.kind] * pace).toFixed(2)), voice ? Number((voice + 0.9).toFixed(2)) : 0)
 export const VOICE_LEAD = 0.35
 
-export function composition(scenes, c, lengths = []) {
+export function composition(scenes, c, lengths = [], transition = 'wipe') {
   const v = { '--background': '#f7f3ec', '--foreground': '#1b1714', '--primary': '#b4472a', '--primary-foreground': '#fff', '--muted': '#ece4d8', '--muted-foreground': '#6e5b4c', '--accent': '#1f5871', '--card': '#fffbf3', ...(c.theme.vars || {}) }
   const heading = c.theme.fonts?.heading || 'Fraunces', body = c.theme.fonts?.body || 'Inter'
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700`
@@ -188,8 +199,14 @@ export function composition(scenes, c, lengths = []) {
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.2)
       if (s.sub) enter(`#${id}b`, '{opacity:0, scale:.6}', 1.1, ", ease:'back.out(1.8)'")
     }
-    // a wipe in the brand colour covers each cut
-    if (i > 0) tl.push(`tl.fromTo('#wipe', {x:-${W}}, {x:${W}, duration:.7, ease:'power2.inOut'}, ${(t - 0.35).toFixed(2)})`)
+    // the cut into this scene
+    if (i > 0) {
+      if (transition === 'wipe') tl.push(`tl.fromTo('#wipe', {x:-${W}}, {x:${W}, duration:.7, ease:'power2.inOut'}, ${(t - 0.35).toFixed(2)})`)
+      else if (transition === 'fade') tl.push(`tl.fromTo('#${id}', {opacity:0}, {opacity:1, duration:.7, ease:'power1.inOut'}, ${t.toFixed(2)})`)
+      else if (transition === 'zoom') tl.push(`tl.fromTo('#${id}', {opacity:0, scale:1.22}, {opacity:1, scale:1, duration:.6, ease:'power3.out'}, ${t.toFixed(2)})`)
+      else if (transition === 'slide') tl.push(`tl.fromTo('#${id}', {x:${W}}, {x:0, duration:.7, ease:'power3.inOut'}, ${t.toFixed(2)})`)
+      else if (transition === 'flash') tl.push(`tl.fromTo('#wipe', {x:0, opacity:.95}, {x:0, opacity:0, duration:.35, ease:'power2.out', immediateRender:false}, ${t.toFixed(2)})`)
+    }
     t += d
   })
   const total = Number(t.toFixed(2))
@@ -227,7 +244,7 @@ html,body{width:${W}px;height:${H}px;overflow:hidden;background:var(--background
 .quote{font-style:italic}
 .cta{background:var(--primary)}.cta .head{color:var(--primary-foreground)}.cta .kicker{color:var(--primary-foreground);opacity:.8}
 .btn{margin-top:60px;background:var(--primary-foreground);color:var(--primary);font:700 40px/1 var(--fb);padding:34px 64px;border-radius:999px}
-#wipe{position:absolute;top:0;left:0;width:${W}px;height:${H}px;background:var(--primary);z-index:10;transform:translateX(-${W}px)}
+#wipe{position:absolute;top:0;left:0;width:${W}px;height:${H}px;background:var(--primary);z-index:10;transform:translateX(-${W}px)${transition === 'flash' ? ';opacity:0' : ''}}
 </style></head><body>
 <div id="root" data-composition-id="promo" data-start="0" data-duration="${total}" data-width="${W}" data-height="${H}" data-fps="${FPS}">
 ${html.join('\n')}

@@ -31,7 +31,8 @@ HELP = """Swarm Studio commands
   /swarm export [n|id]            files: static HTML, a React + Tailwind project, an ABA handoff
   /swarm publish [n|id] [github|vercel|cloudflare|local]   a live link (GitHub Pages by default)
   /swarm hosts                    where you can publish, and how to connect Vercel or Cloudflare
-  /swarm video [n|id] [voice|off] [nomusic]  cut a promo video with a Kokoro voiceover and music (MP4)
+  /swarm video [n] [style] [cut] [voice|off] [nomusic] [idea]  cut a video with a Kokoro voiceover and music
+                                  styles: promo kinetic slideshow teaser story · cuts: wipe fade zoom slide flash
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
@@ -138,6 +139,9 @@ def is_command(text: str) -> bool:
     if not words or words[0].lower() not in SUBCOMMANDS:
         return False
     # a comment is free text; a brief that happens to start with another of these words is still a brief
+    # a video with an idea runs long; it starts with a style or a build number, which a brief wouldn't
+    if words[0].lower() == "video" and len(words) > 1 and (words[1].lower() in VIDEO_STYLES or words[1].isdigit()):
+        return True
     return words[0].lower() in ("fix", "files") or len(words) <= 4
 
 
@@ -178,10 +182,13 @@ def _dispatch(cmd: str, args: list[str]) -> str:
             f"Reviewing “{r['title']}”" if r else "Reviewing the open build") + ": watch the canvas, fixes stream in live."
 
     if cmd == "video":
-        # /swarm video [n] [voice|off] [nomusic]
+        # /swarm video [n] [style] [voice|off] [nomusic] [your idea…]
         ref = next((x for x in args if x.isdigit() or x.startswith("20")), "")
         voice = next((x for x in args if x == "off" or ("_" in x and not x.startswith("20"))), "")
-        return _video(ref, wait=False, voice=voice, music="nomusic" not in args)
+        style = next((x.lower() for x in args if x.lower() in VIDEO_STYLES), "")
+        cut = next((x.lower() for x in args if x.lower() in VIDEO_CUTS), "")
+        idea = " ".join(x for x in args if x not in (ref, voice, "nomusic") and x.lower() not in (style, cut))
+        return _video(ref, wait=False, voice=voice, music="nomusic" not in args, style=style, idea=idea, transition=cut)
 
     if cmd == "export":
         r = _pick_run(args[0] if args else "")
@@ -298,12 +305,16 @@ def _publish(ref: str, target: str) -> str:
     return f"“{r['title']}” is hosted on this computer: {job.get('url')}{note}"
 
 
-def _video(ref: str, wait: bool, voice: str = "", music: bool = True) -> str:
+VIDEO_STYLES = ("promo", "kinetic", "slideshow", "teaser", "story")
+VIDEO_CUTS = ("wipe", "fade", "zoom", "slide", "flash")
+
+
+def _video(ref: str, wait: bool, voice: str = "", music: bool = True, style: str = "", idea: str = "", transition: str = "") -> str:
     r = _pick_run(ref)
     if not r:
         return "No such build. See /swarm files."
     path = f"/api/runs/{r['id']}/video"
-    job = _api(path, {**({"voice": voice} if voice else {}), "music": music})
+    job = _api(path, {**({"voice": voice} if voice else {}), "music": music, **({"style": style} if style else {}), **({"idea": idea} if idea else {}), **({"transition": transition} if transition else {})})
     if not wait:
         return (f"Cutting a promo video of “{r['title']}”: the planner writes the storyboard and voiceover, HyperFrames renders it, Kokoro reads it over music "
                 "(about a minute; the first one also fetches the renderer). Watch it on the canvas; "
@@ -326,12 +337,14 @@ TOOL_SCHEMA = {
         "properties": {
             "action": {"type": "string", "enum": ["files", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "help"]},
             "build": {"type": "string", "description": "for open/info/review/fix/export/publish/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
-            "text": {"type": "string", "description": "for files: search words (tag:x, folder:x, on:vercel, has:video work too); for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
+            "text": {"type": "string", "description": "for files: search words (tag:x, folder:x, on:vercel, has:video work too); for video: the person's idea for it; for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
             "provider": {"type": "string", "description": "for images: a Hermes image provider (openai-codex, xai, …), 'auto' or 'off'; omit to show"},
             "value": {"type": "string", "enum": ["on", "off", "auto"], "description": "for lite (on/off/auto) and motion (on/off)"},
             "voice": {"type": "string", "description": "for video: a Kokoro voice (af_heart, af_bella, am_michael, bf_emma, bm_george), 'off' for none; default picks one for the theme"},
+            "style": {"type": "string", "enum": ["promo", "kinetic", "slideshow", "teaser", "story"], "description": "for video: the plan: promo (default), kinetic type, photo slideshow, short teaser, or a customer story"},
+            "transition": {"type": "string", "enum": ["wipe", "fade", "zoom", "slide", "flash"], "description": "for video: the cut between scenes; default fits the style"},
             "music": {"type": "boolean", "description": "for video: false for no music bed (default true)"},
             "target": {"type": "string", "enum": ["github", "vercel", "cloudflare", "local"], "description": "for publish: github (a public GitHub Pages link through the gh login, the default), vercel or cloudflare (the person's own account, once connected on the canvas), or local (hosted on this computer)"},
         },
@@ -350,7 +363,8 @@ def tool(args: dict | None = None, **_: object) -> str:
                 return _publish(str(a.get("build") or ""), a.get("target") if a.get("target") in TARGETS else "github")
             if action == "fix":
                 return _fix(str(a.get("text") or "").strip(), str(a.get("build") or ""))
-            return _video(str(a.get("build") or ""), wait=True, voice=str(a.get("voice") or ""), music=a.get("music") is not False)
+            return _video(str(a.get("build") or ""), wait=True, voice=str(a.get("voice") or ""), music=a.get("music") is not False,
+                          style=str(a.get("style") or ""), idea=str(a.get("text") or ""), transition=str(a.get("transition") or ""))
         except RuntimeError as exc:
             return f"Swarm Studio: {exc}"
     parts = {

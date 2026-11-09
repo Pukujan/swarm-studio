@@ -1195,16 +1195,122 @@ window.addEventListener('keydown', e => {
   if (e.key === '0') { setAuto(false); const b = bboxActive(); S.frames.length && fit({ x0: S.frames[0].x - 560, y0: -140, x1: S.frames.at(-1).x + FRAME_W, y1: Math.max(...S.frames.map(f => f.h)) }) }
 })
 
+// Slash commands in the chat box, the same ones as /swarm in Hermes. Anything
+// else is a brief for a new build.
+const SLASH = [
+  ['help', '', 'what you can type here'],
+  ['play', '', 'click through the prototype'],
+  ['review', '', 'a vision model checks every page; agents fix what it finds'],
+  ['fix', '<what to change>', 'an agent rewrites the selected section, or the page'],
+  ['video', '[style] [idea]', 'cut a promo video; styles: promo, kinetic, slideshow, teaser, story'],
+  ['export', '', 'save as static HTML, React + Tailwind and an ABA handoff'],
+  ['publish', '[github|vercel|cloudflare|local]', 'put it live and get the link'],
+  ['motion', '[on|off]', 'scroll animations in the prototype'],
+  ['files', '[words]', 'search your builds'],
+  ['open', '<n|words>', 'open a build (n from /files)'],
+  ['info', '', 'this build\'s details, tags and note'],
+  ['models', '', 'pick the planner, builder and reviewer models'],
+  ['new', '', 'an empty canvas for a new build'],
+]
+
+function slashHelp() {
+  botMsg(`Commands: ${SLASH.map(([c, a]) => `/${c}${a ? ' ' + a : ''}`).join(' · ')}. Anything else starts a new build.`)
+}
+
+async function runSlash(text) {
+  const [head, ...rest] = text.slice(1).split(/\s+/)
+  const cmd = head.toLowerCase(), arg = rest.join(' ').trim()
+  const needRun = () => { if (shownRun()) return true; botMsg(`/${cmd} needs a build open: make one, or /open one.`); return false }
+  switch (cmd) {
+    case 'help': case '?': return slashHelp()
+    case 'play': return needRun() && openPlayer()
+    case 'review': return needRun() && reviewRun()
+    case 'fix': if (!arg) return botMsg('Say what to change: /fix make the hero darker'); return needRun() && commandOps.fix({ text: arg })
+    case 'video': {
+      if (!needRun()) return
+      const [first, ...more] = arg.split(/\s+/)
+      const style = VIDEO_STYLES.some(([k]) => k === first?.toLowerCase()) ? first.toLowerCase() : null
+      return makeVideo({ style, idea: (style ? more.join(' ') : arg).trim() || null })
+    }
+    case 'export': return needRun() && exportRunNow()
+    case 'publish': return needRun() && publishNow(['local', 'vercel', 'cloudflare', 'github'].includes(arg.toLowerCase()) ? arg.toLowerCase() : 'github')
+    case 'motion': return commandOps.motion({ on: arg ? arg.toLowerCase() !== 'off' : undefined })
+    case 'files': case 'search': {
+      showTab('files')
+      const q = $('.file-tools .fq')
+      if (q) { q.value = arg; fileView.q = arg.toLowerCase(); renderFiles() }
+      return
+    }
+    case 'open': {
+      if (!files.length) await loadFiles()
+      const f = /^\d+$/.test(arg) ? files[Number(arg) - 1] : files.find(x => fileMatch(x, arg.toLowerCase()))
+      if (!f) return botMsg(`No build matches “${arg}”. Try /files.`)
+      return openRun(f.id)
+    }
+    case 'info': {
+      if (!files.length) await loadFiles()
+      const f = files.find(x => x.id === shownRun())
+      return f ? fileInfo(f) : botMsg('Open a saved build first.')
+    }
+    case 'models': return toggleModels()
+    case 'new': return els.newFile.click()
+    default: botMsg(`No /${cmd} command.`); return slashHelp()
+  }
+}
+
+// The command list that pops up while typing /
+const slashPop = document.createElement('div')
+slashPop.className = 'slash-pop'
+slashPop.hidden = true
+els.form.append(slashPop)
+let slashAt = 0
+function slashMatches() {
+  const v = els.brief.value
+  if (!v.startsWith('/') || /\s/.test(v)) return []
+  const q = v.slice(1).toLowerCase()
+  return SLASH.filter(([c]) => c.startsWith(q))
+}
+function renderSlash() {
+  const m = slashMatches()
+  slashPop.hidden = !m.length
+  if (!m.length) return
+  slashAt = Math.min(slashAt, m.length - 1)
+  slashPop.innerHTML = m.map(([c, a, d], i) => `<div class="sl${i === slashAt ? ' on' : ''}" data-c="${c}"><b>/${c}</b> <span class="sa">${esc(a)}</span><span class="sd">${esc(d)}</span></div>`).join('')
+}
+function pickSlash(c) {
+  const takes = SLASH.find(x => x[0] === c)?.[1]
+  els.brief.value = `/${c}${takes ? ' ' : ''}`
+  slashPop.hidden = true
+  els.brief.focus()
+  if (!takes) els.form.requestSubmit()
+}
+slashPop.addEventListener('mousedown', e => { const d = e.target.closest('[data-c]'); if (d) { e.preventDefault(); pickSlash(d.dataset.c) } })
+els.brief.addEventListener('input', () => { slashAt = 0; renderSlash() })
+els.brief.addEventListener('blur', () => setTimeout(() => (slashPop.hidden = true), 150))
+
 els.form.addEventListener('submit', async e => {
   e.preventDefault()
   const brief = els.brief.value.trim()
   if (!brief) return
+  if (/^\/[a-z?]/i.test(brief)) {
+    els.brief.value = ''
+    slashPop.hidden = true
+    feed(null, `› ${brief}`, '')
+    try { await runSlash(brief) } catch (err) { botMsg(`/${brief.slice(1).split(' ')[0]} failed: ${err.message}`) }
+    return
+  }
   setAuto(true)
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) }).catch(() => null)
   if (res?.ok) els.brief.value = ''
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
 })
 els.brief.addEventListener('keydown', e => {
+  if (!slashPop.hidden) {
+    const m = slashMatches()
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); slashAt = (slashAt + (e.key === 'ArrowDown' ? 1 : m.length - 1)) % m.length; return renderSlash() }
+    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && m[slashAt] && els.brief.value.trim() !== `/${m[slashAt][0]}`)) { e.preventDefault(); return pickSlash(m[slashAt][0]) }
+    if (e.key === 'Escape') { slashPop.hidden = true; return }
+  }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); els.form.requestSubmit() }
 })
 
@@ -2443,7 +2549,7 @@ function videoEvent(e) {
   const fresh = !e.t || Date.now() - e.t < 8000 // a replayed file shows its video quietly
   if (e.type === 'video:start') {
     Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], src: '', message: '' })
-    if (fresh) feed(null, `🎬 ${e.model || 'the planner'} is storyboarding a promo video`, 'sys')
+    if (fresh) feed(null, `🎬 ${e.model || 'the planner'} is storyboarding a ${VIDEO_STYLES.find(([k]) => k === e.style)?.[1].toLowerCase() || 'promo'} video${e.transition ? ` (${e.transition} cuts)` : ''}${e.idea ? `: “${e.idea}”` : ''}`, 'sys')
   } else if (e.type === 'video:story') {
     video.story = e.scenes
     if (fresh) e.scenes.forEach((sc, i) => setTimeout(() => feed(S.agents.get(sc.agent), `scene ${i + 1} · ${sc.kind}: “${sc.headline}”`, ''), i * 350))
@@ -2480,7 +2586,7 @@ function renderVideo() {
     const a = S.agents.get(sc.agent)
     return `<div class="vscene" style="--c:${a?.color || '#888'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
   }).join('')
-  const opts = `<div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
+  const opts = `<div class="vopts"><label>Style <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Cut <select class="vcut">${VIDEO_CUTS.map(([v, l]) => `<option value="${v}" ${videoOpts.transition === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><input class="videa" placeholder="Your idea for the video (optional): “end on the night market crowd”, “for Instagram, upbeat”" value="${esc(videoOpts.idea || '')}"><div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const body = video.src && !video.busy
     ? `<video src="${esc(video.src)}" controls autoplay playsinline></video><div class="vfoot"><span title="${esc(video.file)}">Saved with the build: video/promo.mp4</span><span class="vacts"><a class="vdl" href="${esc(video.src)}" download="promo.mp4">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
@@ -2497,13 +2603,19 @@ function renderVideo() {
   if (vid) vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) })
   el.querySelector('.vbig')?.addEventListener('click', () => bigScreen(true))
   el.querySelector('.vreveal')?.addEventListener('click', () => api(`/api/runs/${encodeURIComponent(video.run || viewing || S.run)}/reveal?what=video`, { method: 'POST' }))
+  el.querySelector('.vstyle')?.addEventListener('change', e => { videoOpts.style = e.target.value; store.set('videoStyle', videoOpts.style) })
+  el.querySelector('.vcut')?.addEventListener('change', e => { videoOpts.transition = e.target.value; store.set('videoCut', videoOpts.transition) })
+  el.querySelector('.videa')?.addEventListener('input', e => { videoOpts.idea = e.target.value })
   el.querySelector('.vvoice')?.addEventListener('change', e => { videoOpts.voice = e.target.value; store.set('videoVoice', videoOpts.voice) })
   el.querySelector('.vmusic')?.addEventListener('change', e => { videoOpts.music = e.target.checked; store.set('videoMusic', videoOpts.music) })
 }
 
 // The voiceover: Kokoro, on this machine, in one of its voices; or none.
 const VOICE_OPTS = [['', 'Kokoro · fits the theme'], ['af_heart', 'Kokoro · Heart'], ['af_bella', 'Kokoro · Bella'], ['am_michael', 'Kokoro · Michael'], ['bf_emma', 'Kokoro · Emma (UK)'], ['bm_george', 'Kokoro · George (UK)'], ['off', 'No voice']]
-const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true }
+const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true, style: store.get('videoStyle') || 'promo', transition: store.get('videoCut') || '', idea: '' }
+// video plans and cuts (the server has the same lists, in engine/video.mjs)
+const VIDEO_STYLES = [['promo', 'Promo'], ['kinetic', 'Kinetic type'], ['slideshow', 'Slideshow'], ['teaser', 'Teaser'], ['story', 'Customer story']]
+const VIDEO_CUTS = [['', 'Fits the style'], ['wipe', 'Colour wipe'], ['fade', 'Fade'], ['zoom', 'Zoom'], ['slide', 'Slide'], ['flash', 'Flash']]
 
 // The video filling the whole pane (and the screen, where the app allows it).
 function bigScreen(on) {
@@ -2523,11 +2635,11 @@ function bigScreen(on) {
   addEventListener('keydown', esc_)
 }
 
-async function makeVideo() {
+async function makeVideo({ idea = null, style = null } = {}) {
   const run = shownRun()
   if (!run || video.busy) return
   toggleVideo(true)
-  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music }) })
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music, style: style || videoOpts.style || undefined, idea: idea || videoOpts.idea || undefined, transition: videoOpts.transition || undefined }) })
   if (!res.ok) {
     const out = await res.json().catch(() => ({}))
     Object.assign(video, { run, message: out.error || `HTTP ${res.status}`, busy: false })
@@ -2552,7 +2664,7 @@ async function toggleVideo(open = !video.el) {
 }
 
 els.videoBtn.onclick = () => (video.el ? toggleVideo(false) : video.src || video.busy ? toggleVideo(true) : makeVideo())
-commandOps.video = () => makeVideo()
+commandOps.video = c => makeVideo({ idea: c.idea, style: c.style })
 
 // ---------- lite mode
 // For machines short on memory: only the page in front of you stays a live

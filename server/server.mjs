@@ -21,7 +21,7 @@ import { connect, connections, credentials, PROVIDERS } from '../engine/connect.
 import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.mjs'
 import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
-import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures } from '../engine/video.mjs'
+import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -421,12 +421,16 @@ async function makeVideo(id, input = {}) {
   ;(async () => {
     const c = collect(events, join(runsDir, id))
     const model = modelFor('planner')
-    send('video:start', { model, images: c.images.length })
+    // the plan: a style (its own prompt, pace, cut and music), an optional idea, an optional cut
+    const style = STYLES[input.style] ? input.style : 'promo', plan = STYLES[style]
+    const idea = String(input.idea || '').trim().slice(0, 400)
+    const transition = TRANSITIONS.includes(input.transition) ? input.transition : plan.transition
+    send('video:start', { model, images: c.images.length, style, idea, transition })
     const tools = videoTools(dataDir, stage => progress(0, stage)) // fetches the renderer while the story is written
     let scenes
     try {
       if (!model || !models.planner.apiKey) throw new Error('no planner model')
-      scenes = await writeStory({ provider: provider('planner'), model, c, signal: AbortSignal.timeout(90000) })
+      scenes = await writeStory({ provider: provider('planner'), model, c, style, idea, signal: AbortSignal.timeout(90000) })
     } catch {
       scenes = fallbackStory(c)
     }
@@ -448,8 +452,8 @@ async function makeVideo(id, input = {}) {
         send('video:note', { message: `no voiceover this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
-    const lengths = scenes.map((s, i) => sceneLength(s, voices[i]?.seconds))
-    const comp = composition(scenes, c, lengths)
+    const lengths = scenes.map((s, i) => sceneLength(s, voices[i]?.seconds, plan.pace))
+    const comp = composition(scenes, c, lengths, transition)
     writeFileSync(join(dir, 'index.html'), comp.html)
     writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ cast: scenes.cast, music: scenes.music, scenes }, null, 2))
     progress(2, 'rendering')
@@ -461,7 +465,7 @@ async function makeVideo(id, input = {}) {
     let sound = false
     try {
       const musicFile = input.music === false ? null : join(dir, 'music.wav')
-      if (musicFile) music({ seconds: comp.seconds, preset: scenes.music || preset, cuts: starts.slice(1), file: musicFile })
+      if (musicFile) music({ seconds: comp.seconds, preset: plan.music || scenes.music || preset, cuts: starts.slice(1), file: musicFile })
       sound = await mix({ ffmpeg: t.ffmpeg, env: { ...process.env, PATH: t.path }, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: starts[i] + VOICE_LEAD }), out })
     } catch (err) {
       send('video:note', { message: `sound failed, the video is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
