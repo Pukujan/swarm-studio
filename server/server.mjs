@@ -268,7 +268,8 @@ function runCard(id) {
     const video = events.findLast(e => e.type === 'video:done')
     card = { key, info: {
       id,
-      title: pages[0]?.title || start.brief.slice(0, 60),
+      title: start.title || pages[0]?.title || start.brief.slice(0, 60),
+      kind: start.kind || 'site',
       brief: start.brief,
       t: start.t,
       updated: events.at(-1)?.t || start.t,
@@ -578,6 +579,31 @@ async function videoNow(id, input = {}) {
     send('video:failed', { message: job.message })
   })
   return job
+}
+
+// ---------- the App tab's jobs, loaded the first time someone uses it
+let appsP = null
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor })))
+
+// ---------- game mode: answers → a spec → a new build whose app is the game
+let gameP = null
+const gameMod = () => (gameP ||= import('../engine/game.mjs'))
+async function startGame(spec) {
+  const g = await gameMod()
+  if (!spec?.title || !spec?.loop) throw new Error('no game spec')
+  const id = new Date().toISOString().replace(/[:.]/g, '-')
+  const dir = join(runsDir, id)
+  mkdirSync(dir, { recursive: true })
+  const t = Date.now()
+  const brief = `${spec.title}: ${spec.pitch || ''}`.slice(0, 400)
+  writeFileSync(join(dir, 'events.jsonl'), [
+    { type: 'run:start', t, run: id, brief, kind: 'game', title: String(spec.title).slice(0, 80), workerModel: modelFor('worker') },
+    { type: 'game:spec', t, run: id, spec }
+  ].map(e => JSON.stringify(e)).join('\n') + '\n')
+  const a = await apps()
+  await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) } })
+  broadcast({ type: 'files:changed', t, run: id })
+  return { run: id }
 }
 
 // ---------- publish: the static export, on GitHub Pages or hosted by this server
@@ -981,6 +1007,55 @@ const server = createServer((req, res) => {
     return
   }
 
+  // Game mode: GET the questions, POST /spec { idea, answers } for the spec card,
+  // POST { spec } to build it (a new build, opened in the App view).
+  if (url.pathname === '/api/game' || url.pathname === '/api/game/spec') {
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    if (req.method === 'GET') { gameMod().then(g => reply(200, { questions: g.QUESTIONS })).catch(err => reply(500, { error: String(err.message || err) })); return }
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 2e5) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const go = url.pathname === '/api/game/spec'
+        ? gameMod().then(g => g.writeSpec({ provider: provider('planner'), model: modelFor('planner'), idea: String(input.idea || '').slice(0, 600), answers: typeof input.answers === 'object' && input.answers ? input.answers : {}, signal: AbortSignal.timeout(90000) })).then(spec => ({ spec }))
+        : startGame(input.spec)
+      go.then(out => reply(200, out)).catch(err => reply(400, { error: String(err.message || err) }))
+    })
+    return
+  }
+
+  // The App tab: the design (or a game spec) as a working app, built by dyad's
+  // engine. GET the state, POST { ask } for the first build or one more change,
+  // /files for the code, /open to start its dev server again, /stop.
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy))?$/)
+  if (runApp && RUN_ID.test(runApp[1])) {
+    const [, id, sub] = runApp
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    const fail = err => reply(400, { error: String(err.message || err) })
+    if (req.method === 'GET') {
+      apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : a.state(id))).catch(fail)
+      return
+    }
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 8e6) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      apps().then(async a => {
+        if (sub === 'stop') return a.stop(id)
+        if (sub === 'open') return a.open(id)
+        if (sub === 'deploy') {
+          const creds = await credentials(dataDir, 'vercel')
+          if (!creds) throw new Error(`connect Vercel first: 🌐 Publish on the canvas → Connect, or set ${PROVIDERS.vercel.env}`)
+          return a.deploy(id, { creds, dataDir, publishVercel })
+        }
+        return a.start(id, input)
+      }).then(s => reply(200, s)).catch(fail)
+    })
+    return
+  }
+
   // Export: static HTML, a React + Vite + Tailwind project and an ABA handoff,
   // written to runs/<id>/export/ and zipped.
   const runExport = url.pathname.match(/^\/api\/runs\/([^/]+)\/export(\.zip)?$/)
@@ -1171,3 +1246,6 @@ closeStoppedVideos()
 server.listen(port, '127.0.0.1', () => {
   console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
 })
+
+// app dev servers and engine runs stop with the studio
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { appsP?.then(a => a.close()).finally(() => process.exit(0)); setTimeout(() => process.exit(0), 1500).unref() })

@@ -7,7 +7,7 @@
 // reused after that. Its log lines become steps the App tab shows as it works.
 
 import { spawn, execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, watch } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, statSync, watch } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -73,10 +73,12 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
   await setupEngine(t => onStep({ kind: 'setup', text: t }))
   const meta = join(dirname(workspace), '.engine')
   mkdirSync(meta, { recursive: true })
-  const promptFile = join(meta, `prompt-${Date.now()}.md`)
+  // dyad's saved chat keeps the model it began with, so each model gets its own data dir
+  const promptFile = join(meta, `prompt-${Date.now()}.md`), logFile = join(meta, 'engine.log')
+  try { appendFileSync(logFile, `\n===== ${new Date().toISOString()} ${model}\n`) } catch {}
   writeFileSync(promptFile, prompt)
   const args = [bundle, '--prompt', promptFile, '--workspace', workspace, '--model', model, '--gateway', provider.baseUrl,
-    '--turns', String(turns), '--user-data-dir', join(meta, 'data'), '--json']
+    '--turns', String(turns), '--user-data-dir', join(meta, `data-${model.replace(/[^\w.-]+/g, '_')}`), '--json']
   if (viewRender) args.push('--view-render')
   // a new workspace has no git yet; the engine's iterate mode wants one commit
   if (!existsSync(join(workspace, '.git'))) {
@@ -84,8 +86,10 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
     g('init', '-q'); g('add', '-A'); g('-c', 'user.name=Swarm Studio', '-c', 'user.email=swarm@localhost', 'commit', '-qm', 'init')
   }
   let last = null
+  // run from the run's own folder: inside dyad/ its packageManager pin makes the
+  // engine's pnpm probe fail, and it then falls back to npm on a pnpm project
   const p = spawn(process.execPath, args, {
-    cwd: dyadDir,
+    cwd: meta,
     env: { ...process.env, ...gitEnv(), ABA_API_KEY: provider.apiKey || '', ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -108,6 +112,7 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
     buf = lines.pop()
     for (const l of lines) {
       if (!l.trim()) continue
+      try { appendFileSync(logFile, l + '\n') } catch {}
       onLog(l)
       if (l.startsWith('{"ok"')) try { last = JSON.parse(l) } catch {}
       const s = stepOf(l)
@@ -118,7 +123,10 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
   const code = await new Promise(ok => p.on('close', ok))
   watcher?.close()
   if (buf.startsWith('{"ok"')) try { last = JSON.parse(buf) } catch {}
-  if (!last) throw new Error(signal?.aborted ? 'stopped' : `the app engine exited (${code}) without a result`)
+  if (!last) {
+    const tail = (() => { try { return readFileSync(logFile, 'utf8').split('\n===== ').pop().split('\n').filter(l => /^aba-headless: |Last error|Error: (?!bad port)/.test(l) && !/makeNetworkError|catalog/.test(l)).slice(-2).join(' · ').replace(/^aba-headless: /, '').slice(0, 400) } catch { return '' } })()
+    throw new Error(signal?.aborted ? 'stopped' : `the app engine exited (${code}) without a result${tail ? `: ${tail}` : ''}`)
+  }
   return last
 }
 

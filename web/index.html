@@ -10,6 +10,12 @@
   <header class="topbar">
     <div class="brand"><span class="logo">◆</span> Swarm Studio</div>
     <div class="file-name" id="file-name">Untitled</div>
+    <div class="seg views" id="views" title="Switch views; builds keep running in the others">
+      <button data-view="canvas" class="on">Canvas</button>
+      <button data-view="video">Video<i class="vbadge"></i></button>
+      <button data-view="app">App<i class="vbadge"></i></button>
+    </div>
+    <button class="toggle game-btn" id="game-btn" title="Make an original browser game: a few questions, then the swarm builds it">🎮 Game</button>
     <div class="spacer"></div>
     <div class="undo-redo"><button class="toggle" id="undo-btn" title="Undo (⌘Z / Ctrl+Z)" disabled>↶</button><button class="toggle" id="redo-btn" title="Redo (⇧⌘Z / Ctrl+Y)" disabled>↷</button></div>
     <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled>▶ Play</button>
@@ -85,6 +91,27 @@
       <div id="agents-list" class="agents"></div>
     </div>
   </main>
+
+  <section class="appview" id="appview" hidden>
+    <div class="app-bar">
+      <span class="app-state pill" id="app-state">no app yet</span>
+      <span class="app-stage" id="app-stage"></span>
+      <div class="spacer"></div>
+      <div class="seg" id="app-mode"><button data-mode="preview" class="on">Preview</button><button data-mode="code">Code</button></div>
+      <div class="seg" id="app-device"><button data-w="390">Phone</button><button data-w="820">Tablet</button><button data-w="0" class="on">Desktop</button></div>
+      <button class="toggle" id="app-reload" title="Reload the app">⟳</button>
+      <a class="toggle" id="app-open" target="_blank" rel="noopener" title="Open the app in its own tab">↗</a>
+      <button class="toggle" id="app-stop" hidden>■ Stop</button>
+      <button class="toggle" id="app-deploy" title="Put the app live on Vercel" disabled>🚀 Deploy</button>
+    </div>
+    <div class="app-body">
+      <div class="app-steps" id="app-steps"></div>
+      <div class="app-main">
+        <div class="app-stagearea" id="app-preview"><div class="app-shell" id="app-shell"><iframe id="app-frame" title="The app"></iframe></div><div class="app-empty" id="app-empty"></div></div>
+        <div class="app-code" id="app-code" hidden><div class="app-tree" id="app-tree"></div><pre class="app-file" id="app-file"></pre></div>
+      </div>
+    </div>
+  </section>
 
   <aside class="design" data-panel="design">
     <nav class="dtabs">

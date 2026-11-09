@@ -583,3 +583,91 @@ body.side-min .dock { left: auto; }
 .finfo.textedit h3 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
 .te-list { overflow: auto; flex: 1; }
 .te-list label span { text-transform: none; }
+
+/* ---------- views: Canvas | Video | App */
+.views button { position: relative; padding: 4px 14px; }
+.views .vbadge { position: absolute; top: 3px; right: 4px; width: 6px; height: 6px; border-radius: 50%; display: none; }
+.views .vbadge.working { display: block; background: #ffcc66; animation: pulse 1.2s ease-in-out infinite; }
+.views .vbadge.done { display: block; background: #5fd38d; }
+.views .vbadge.failed { display: block; background: #ff6b6e; }
+.views button.on .vbadge.done { display: none; }
+@keyframes pulse { 50% { opacity: .35 } }
+.game-btn { border-color: #3a4152; color: var(--text); }
+body.view-video .video-pop { position: static; grid-area: 2 / 2 / 3 / 3; width: auto; max-width: none; max-height: none; border-radius: 0; border: 0; box-shadow: none; padding: 20px 28px; z-index: 30; }
+body.view-video .video-pop video { max-height: calc(100vh - 260px); width: 100%; background: #000; border-radius: 10px; }
+body.view-video .video-pop .vclose { display: none; }
+body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
+
+/* ---------- the App view */
+.appview { grid-area: 2 / 2 / 3 / 3; z-index: 30; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+.appview[hidden] { display: none; }
+.app-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+.app-bar a.toggle { text-decoration: none; }
+.app-state.working { background: #3a3016; border-color: #6b5520; color: #ffd27a; }
+.app-state.done { background: #15301f; border-color: #25573a; color: #7ee2a5; }
+.app-state.failed { background: #3a1719; border-color: #6b2a2d; color: #ff9a9c; }
+.app-stage { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
+.app-body { flex: 1; display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
+.app-steps { border-right: 1px solid var(--line); overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; background: var(--panel); }
+.app-steps .st { display: flex; gap: 7px; align-items: baseline; color: var(--muted); animation: in .25s ease-out; }
+.app-steps .st b { flex: 0 0 auto; width: 16px; text-align: center; }
+.app-steps .st span { min-width: 0; overflow-wrap: anywhere; }
+.app-steps .st.write span { font-family: var(--mono); font-size: 11px; color: var(--text); }
+.app-steps .st.turn { color: var(--text); font-weight: 600; margin-top: 8px; }
+.app-steps .st.bad { color: #ff9a9c; }
+.app-steps .st.ok { color: #7ee2a5; }
+.app-steps .st.earlier { font-size: 11px; opacity: .7; padding-bottom: 6px; border-bottom: 1px solid var(--line, rgba(255,255,255,.08)); }
+.app-steps .st.ask { color: var(--text); font-weight: 600; margin-top: 4px; }
+.app-steps .asks { margin-bottom: 6px; }
+.app-steps .ask { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 4px; color: var(--text); }
+.app-main { position: relative; min-width: 0; min-height: 0; display: flex; }
+.app-stagearea { flex: 1; display: flex; justify-content: center; align-items: stretch; padding: 14px; background: #111318; min-width: 0; position: relative; }
+.app-shell { width: 100%; max-width: 100%; transition: width .3s ease; display: flex; }
+.app-shell.dev { border-radius: 22px; border: 8px solid #2a2e38; overflow: hidden; }
+.app-shell iframe { flex: 1; border: 0; background: #fff; border-radius: 6px; }
+.app-shell.dev iframe { border-radius: 0; }
+.app-empty { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; text-align: center; padding: 40px; color: var(--muted); background: #111318; }
+.app-empty[hidden] { display: none; }
+.app-empty h2 { margin: 0; color: var(--text); font-size: 20px; }
+.app-empty p { margin: 0; max-width: 520px; line-height: 1.5; }
+.app-empty .big { background: var(--accent); color: #0b0d12; border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 700; cursor: pointer; }
+.app-empty .spin { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } }
+.app-code { flex: 1; display: grid; grid-template-columns: 260px 1fr; min-height: 0; }
+.app-code[hidden] { display: none; }
+.app-tree { overflow: auto; border-right: 1px solid var(--line); padding: 8px; font: 11.5px var(--mono); }
+.app-tree div { padding: 2px 6px; border-radius: 4px; cursor: pointer; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-tree div:hover, .app-tree div.on { background: var(--panel-2); color: var(--text); }
+.app-tree h4 { margin: 10px 0 4px; font: 600 11px var(--font); color: var(--text); }
+.app-file { margin: 0; overflow: auto; padding: 14px; font: 12px/1.5 var(--mono); color: var(--text); white-space: pre; tab-size: 2; }
+@media (max-width: 900px) { .app-body { grid-template-columns: 1fr; grid-template-rows: 160px 1fr; } .app-steps { border-right: 0; border-bottom: 1px solid var(--line); } }
+body.side-min .appview, body.side-min.view-video .video-pop { grid-area: 2 / 1 / 3 / 2; }
+
+/* ---------- 🎮 game interview */
+.game-pop { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 90; width: 560px; max-width: calc(100vw - 32px); max-height: calc(100vh - 60px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 30px 80px #000c; padding: 18px 20px; animation: in .25s ease-out; }
+.game-pop .ghead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.game-pop .gclose { background: none; border: 0; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; }
+.game-pop .gdots { display: flex; gap: 5px; margin-bottom: 14px; }
+.game-pop .gdots i { flex: 1; height: 3px; border-radius: 2px; background: var(--line); }
+.game-pop .gdots i.done { background: var(--accent); opacity: .5; } .game-pop .gdots i.on { background: var(--accent); }
+.game-pop h3 { margin: 6px 0 12px; font-size: 18px; }
+.game-pop .gchips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.game-pop .gchips button { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 99px; padding: 7px 14px; cursor: pointer; }
+.game-pop .gchips button:hover, .game-pop .gchips button.on { border-color: var(--accent); color: var(--accent); }
+.game-pop input { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; color: var(--text); padding: 9px 11px; font: inherit; margin-bottom: 10px; }
+.game-pop .gfoot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; }
+.game-pop .gfoot span { display: flex; gap: 10px; align-items: center; }
+.game-pop .glink { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px; }
+.game-pop .glink:hover { color: var(--text); }
+.game-pop .big { background: var(--accent); color: #0b0d12; border: 0; border-radius: 10px; padding: 9px 16px; font-weight: 700; cursor: pointer; }
+.game-pop .gbody { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 10px; text-align: center; color: var(--muted); }
+.game-pop .spin { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+.game-pop .gspec h2 { margin: 0 0 4px; font-size: 22px; }
+.game-pop .gpitch { margin: 0 0 8px; color: var(--muted); }
+.game-pop .gorig { margin: 0 0 10px; font-size: 12px; color: #7ee2a5; }
+.game-pop dl { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; margin: 10px 0; }
+.game-pop dt { color: var(--muted); font-size: 12px; padding-top: 2px; }
+.game-pop dd { margin: 0; }
+.game-pop [contenteditable]:hover { outline: 1px dashed var(--line); outline-offset: 3px; border-radius: 4px; }
+.game-pop [contenteditable]:focus { outline: 1px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.game-pop small { color: var(--muted); }

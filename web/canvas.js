@@ -80,6 +80,8 @@ function on(e) {
     case 'run:start':
       fresh(e.run)
       S.t0 = e.t
+      // a game has no canvas build: its spec and the App view are the whole file
+      if (e.kind === 'game') { S.kind = 'game'; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
       if (!viewing) els.agentsSel.value = String(e.agents.length)
       for (const a of e.agents) addAgent(a)
       setTitle(e.brief.slice(0, 60))
@@ -276,6 +278,13 @@ function on(e) {
       break
     case 'trace':
       traceLive(e)
+      break
+    case 'game:spec':
+      S.spec = e.spec
+      botMsg(`🎮 ${e.spec.title}: ${e.spec.pitch || ''} (${e.spec.engine})`)
+      break
+    case 'app:start': case 'app:step': case 'app:ready': case 'app:done': case 'app:failed': case 'app:deployed':
+      appEvent(e)
       break
   }
 }
@@ -1217,6 +1226,9 @@ const SLASH = [
   ['review', '', 'a vision model checks every page; agents fix what it finds'],
   ['fix', '<what to change>', 'an agent rewrites the selected section, or the page'],
   ['video', '[style] [idea]', 'cut a promo video; styles: promo, kinetic, slideshow, teaser, story'],
+  ['app', '[change]', 'the App view: make this design a working app, or change it'],
+  ['game', '[idea]', 'make an original browser game: a few questions, then it builds'],
+  ['canvas', '', 'back to the canvas view'],
   ['export', '', 'save as static HTML, React + Tailwind and an ABA handoff'],
   ['publish', '[github|vercel|cloudflare|local]', 'put it live and get the link'],
   ['motion', '[on|off]', 'scroll animations in the prototype'],
@@ -1250,6 +1262,9 @@ async function runSlash(text) {
       const style = VIDEO_STYLES.some(([k]) => k === first?.toLowerCase()) ? first.toLowerCase() : null
       return makeVideo({ style, idea: (style ? more.join(' ') : arg).trim() || null })
     }
+    case 'app': if (!needRun()) return; return arg ? appAsk(arg) : appv.hasApp || appv.state === 'working' ? setView('app') : appAsk('')
+    case 'game': return openGame(arg)
+    case 'canvas': return setView('canvas')
     case 'export': return needRun() && exportRunNow()
     case 'publish': return needRun() && publishNow(['local', 'vercel', 'cloudflare', 'github'].includes(arg.toLowerCase()) ? arg.toLowerCase() : 'github')
     case 'motion': return commandOps.motion({ on: arg ? arg.toLowerCase() !== 'off' : undefined })
@@ -1332,6 +1347,9 @@ els.form.addEventListener('submit', async e => {
     try { await runSlash(brief) } catch (err) { botMsg(`/${brief.slice(1).split(' ')[0]} failed: ${err.message}`) }
     return
   }
+  // the chat follows the view: the app's next change, or an idea for the video
+  if (view === 'app' && shownRun()) { els.brief.value = ''; return appAsk(brief) }
+  if (view === 'video' && shownRun()) { els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
   setAuto(true)
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) }).catch(() => null)
   if (res?.ok) els.brief.value = ''
@@ -3571,7 +3589,8 @@ async function openRun(id) {
     if (!S.tEnd && events.length) S.tEnd = events.at(-1).t
     if (S.t0) els.timer.textContent = `${((S.tEnd - S.t0) / 1000).toFixed(1)}s`
     if (S.progress) { S.progress.classList.remove('working'); S.progress.querySelector('.txt').textContent = 'This run stopped before it finished.' }
-    if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
+    if (S.kind === 'game') setView('app')
+    else if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
   }
   setAuto(true)
   renderFiles()
@@ -3584,6 +3603,310 @@ els.newFile.onclick = () => {
   showTab('chat')
   els.brief.focus()
 }
+
+// ---------- views: Canvas | Video | App
+// Each view keeps working while you look at another; a dot on its tab says how
+// it is doing. The chat follows the view: on App, a message is the app's next
+// change; on Video, an idea for a new cut.
+let view = 'canvas'
+const appv = { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false }
+const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), stop: $('#app-stop'), deploy: $('#app-deploy') }
+const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
+
+function setView(v) {
+  if (!['canvas', 'video', 'app'].includes(v)) return
+  const was = view
+  view = v
+  document.body.classList.toggle('view-video', v === 'video')
+  document.body.classList.toggle('view-app', v === 'app')
+  for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === v)
+  appEls.view.hidden = v !== 'app'
+  if (v === 'video') toggleVideo(true)
+  else if (was === 'video') toggleVideo(false)
+  if (v === 'app') loadApp()
+  els.brief.placeholder = PLACEHOLDER[v]
+  renderBadges()
+}
+for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.view)
+
+function renderBadges() {
+  const [, vb, ab] = document.querySelectorAll('#views .vbadge')
+  if (vb) vb.className = `vbadge ${video.busy ? 'working' : video.message ? 'failed' : video.src ? 'done' : ''}`
+  if (ab) ab.className = `vbadge ${appv.run === shownRun() ? { working: 'working', done: 'done', failed: 'failed' }[appv.state] || '' : ''}`
+}
+setInterval(renderBadges, 1000)
+
+const appApi = (path = '', body) => api(`/api/runs/${encodeURIComponent(appv.run)}/app${path}`, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
+
+function resetApp(run) {
+  Object.assign(appv, { run, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, files: null, file: '', hasApp: false, opening: false, loaded: false })
+  appEls.frame.removeAttribute('src')
+}
+
+async function loadApp() {
+  const run = shownRun()
+  if (!run) { resetApp(null); return renderApp() }
+  if (appv.run !== run) resetApp(run)
+  try {
+    const st = await appApi()
+    if (appv.run !== run) return
+    Object.assign(appv, { state: st.state, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
+    if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
+    if (st.asks?.length) appv.asks = st.asks
+    if (st.url) appv.url = st.url
+    // an app made before: start its dev server again
+    if (!appv.url && appv.hasApp && appv.state !== 'working' && !appv.opening) {
+      appv.opening = true
+      renderApp()
+      appApi('/open', {}).then(o => { if (appv.run === run && o.url) appv.url = o.url }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
+    }
+  } catch (err) { appv.message = err.message }
+  renderApp()
+}
+
+const STEP_ICON = { setup: '⚙︎', turn: '▸', write: '✎', render: '👁', think: '·', tokens: 'Σ', serve: '▶', gate: '✓', ask: '💬' }
+function stepsHtml() {
+  // the current round in full; earlier rounds fold into one line each
+  const all = appv.steps.slice(-300)
+  const cut = all.findLastIndex(s => s.kind === 'ask')
+  const before = cut > 0 ? all.slice(0, cut).filter(s => s.kind === 'ask') : []
+  const rows = before.length ? [`<div class="st earlier"><b>↺</b><span>${before.length} earlier round${before.length === 1 ? '' : 's'}: ${esc(before.slice(-3).map(s => s.text).join(' · '))}</span></div>`] : []
+  for (const s of all.slice(Math.max(0, cut))) {
+    if (s.kind === 'think') continue
+    const bad = s.ok === false || /fail|not start/i.test(s.text)
+    rows.push(`<div class="st ${s.kind}${bad ? ' bad' : s.ok ? ' ok' : ''}"><b>${STEP_ICON[s.kind] || '·'}</b><span>${esc(s.kind === 'ask' ? `💬 ${s.text}` : s.text)}</span></div>`)
+  }
+  return rows.join('') || '<div class="st"><span>Steps show here while the app builds: every file the engine writes, each check, each fix.</span></div>'
+}
+
+function renderApp() {
+  renderBadges()
+  if (view !== 'app') return
+  const st = appv.state, working = st === 'working'
+  appEls.state.className = `app-state pill ${st}`
+  appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : appv.hasApp ? 'built' : 'no app yet'
+  setText(appEls.stage, working ? appv.stage : appv.result ? `${appv.result.turns} turn${appv.result.turns === 1 ? '' : 's'} · ${appv.result.files} files · checks ${appv.result.gatesPassed ? 'passed' : 'not passed'}${appv.deployed ? ` · live at ${appv.deployed}` : ''}` : '')
+  const stick = appEls.steps.scrollHeight - appEls.steps.scrollTop - appEls.steps.clientHeight < 60
+  appEls.steps.innerHTML = stepsHtml()
+  if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
+  appEls.stop.hidden = !working
+  appEls.deploy.disabled = !appv.hasApp || working
+  if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
+  // the preview, or what to do first
+  if (appv.url && appEls.frame.dataset.src !== appv.url) { appEls.frame.dataset.src = appv.url; appEls.frame.src = appv.url }
+  const empty = !appv.url
+  appEls.empty.hidden = !empty
+  if (empty) {
+    const run = shownRun()
+    appEls.empty.innerHTML = !run
+      ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
+      : working || appv.opening
+        ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+        : st === 'failed'
+          ? `<h2>The app didn't finish</h2><p>${esc(appv.message)}</p><button class="big" data-build>Try again</button>`
+          : appv.kind === 'game' && !appv.hasApp
+            ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
+            : `<h2>Turn this design into a working app</h2><p>React + TypeScript + shadcn/ui, with the design kept exactly. The engine adds what the pages imply: forms that save, data from server routes, an admin page. Then change anything by chatting.</p><button class="big" data-build>Build the app</button>`
+    appEls.empty.querySelector('[data-build]')?.addEventListener('click', () => appAsk(''))
+    appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
+  }
+  appEls.preview.hidden = appv.mode !== 'preview'
+  appEls.code.hidden = appv.mode !== 'code'
+  appEls.shell.classList.toggle('dev', !!appv.w)
+  appEls.shell.style.width = appv.w ? `${appv.w}px` : '100%'
+  if (appv.mode === 'code') renderCode()
+}
+
+async function renderCode() {
+  if (!appv.files) {
+    appv.files = []
+    try { appv.files = (await appApi('/files')).files } catch { appv.files = [] }
+  }
+  const groups = new Map()
+  for (const f of appv.files) {
+    const top = f.path.includes('/') ? f.path.split('/').slice(0, -1).join('/') : '.'
+    if (!groups.has(top)) groups.set(top, [])
+    groups.get(top).push(f)
+  }
+  appEls.tree.innerHTML = [...groups].map(([g, list]) => `<h4>${esc(g)}</h4>${list.map(f => `<div data-path="${esc(f.path)}" class="${f.path === appv.file ? 'on' : ''}" title="${esc(f.path)}">${esc(f.path.split('/').pop())}</div>`).join('')}`).join('') || '<h4>no files yet</h4>'
+  for (const d of appEls.tree.querySelectorAll('[data-path]')) d.onclick = () => showFile(d.dataset.path)
+  if (!appv.file && appv.files.length) showFile((appv.files.find(f => f.path === 'src/App.tsx') || appv.files[0]).path)
+}
+async function showFile(path) {
+  appv.file = path
+  for (const d of appEls.tree.querySelectorAll('[data-path]')) d.classList.toggle('on', d.dataset.path === path)
+  try { appEls.file.textContent = (await appApi(`/files?path=${encodeURIComponent(path)}`)).text } catch (err) { appEls.file.textContent = err.message }
+}
+
+for (const b of document.querySelectorAll('#app-mode button')) b.onclick = () => {
+  appv.mode = b.dataset.mode
+  for (const x of document.querySelectorAll('#app-mode button')) x.classList.toggle('on', x === b)
+  if (appv.mode === 'code') appv.files = null
+  renderApp()
+}
+for (const b of document.querySelectorAll('#app-device button')) b.onclick = () => {
+  appv.w = Number(b.dataset.w)
+  for (const x of document.querySelectorAll('#app-device button')) x.classList.toggle('on', x === b)
+  renderApp()
+}
+$('#app-reload').onclick = () => { if (appv.url) appEls.frame.src = appv.url }
+appEls.stop.onclick = () => appApi('/stop', {}).catch(() => {})
+appEls.deploy.onclick = () => deployApp()
+
+// The first build of the app, or one more change to it.
+async function appAsk(ask, extra = {}) {
+  const run = shownRun()
+  if (!run) return botMsg('Open a build first: the app is made from its design.')
+  if (appv.run !== run) resetApp(run)
+  if (view !== 'app') setView('app')
+  if (appv.state === 'working') return botMsg('The app is still building; your change can go in when this turn is done.')
+  if (ask && !appv.hasApp) return botMsg('Build the app first (the button in the App view), then change it by chatting.')
+  const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
+  try {
+    const st = await appApi('', { ask, sections, ...extra })
+    Object.assign(appv, { state: st.state, kind: st.kind, stage: st.stage, asks: st.asks || appv.asks, message: '' })
+    if (ask) feed(null, `💬 to the app: ${ask}`, 'you')
+  } catch (err) {
+    appv.message = err.message
+    botMsg(`App: ${err.message}`)
+  }
+  renderApp()
+}
+
+async function deployApp() {
+  if (!appv.run) return
+  appEls.deploy.disabled = true
+  botMsg('🚀 Deploying the app to Vercel…', true)
+  try {
+    const out = await appApi('/deploy', {})
+    appv.deployed = out.url
+    botMsg(`🚀 The app is live: ${out.url}`)
+  } catch (err) { botMsg(`Deploy: ${err.message}`) }
+  renderApp()
+}
+
+function appEvent(e) {
+  if (e.run !== shownRun()) return
+  if (appv.run !== e.run) resetApp(e.run)
+  const fresh_ = !e.t || Date.now() - e.t < 8000
+  if (e.type === 'app:start') {
+    Object.assign(appv, { state: 'working', kind: e.kind || appv.kind, stage: 'starting', message: '' })
+    if (e.ask && appv.asks.at(-1) !== e.ask) appv.asks.push(e.ask)
+    appv.steps.push({ kind: 'ask', text: e.ask || 'build', t: e.t })
+    if (fresh_) feed(null, `🧩 ${e.model || 'the engine'} is ${e.fresh ? `building the ${e.kind === 'game' ? 'game' : 'app'}` : 'changing the app'}${e.ask ? `: “${e.ask}”` : ''}`, 'sys')
+  } else if (e.type === 'app:step') {
+    appv.steps.push(e.step)
+    if (e.step.kind !== 'write' && e.step.kind !== 'think') appv.stage = e.step.text
+    if (e.step.kind === 'write') appv.files = null
+  } else if (e.type === 'app:ready') {
+    appv.url = e.url
+  } else if (e.type === 'app:done') {
+    Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
+    if (e.url) appv.url = e.url
+    appEls.frame.dataset.src = '' // reload to the new build
+    if (fresh_) feed(null, `🧩 the ${appv.kind === 'game' ? 'game' : 'app'} is ready (${e.result?.turns || 1} turn${e.result?.turns === 1 ? '' : 's'}, checks ${e.result?.gatesPassed ? 'passed' : 'not passed'}, ${Math.round((e.ms || 0) / 1000)}s). Open the App view to try it, or chat to change it.`, 'sys')
+  } else if (e.type === 'app:failed') {
+    Object.assign(appv, { state: 'failed', message: e.message })
+    if (fresh_) feed(null, `🧩 app: ${e.message}`, 'err')
+  } else if (e.type === 'app:deployed') {
+    appv.deployed = e.url
+  }
+  if (e.type !== 'app:step' || view === 'app') renderApp()
+}
+
+commandOps.app = c => (c.view ? setView('app') : appAsk(c.ask || ''))
+commandOps.view = c => setView(c.view)
+
+// ---------- 🎮 game mode
+// A few questions, one at a time (chips or your own words; "Just build it"
+// fills the rest), then the spec card, then the build in the App view.
+const game = { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false }
+async function openGame(idea = '', answers = null, build = false) {
+  if (!game.questions) game.questions = (await api('/api/game').then(r => r.json()).catch(() => ({}))).questions || []
+  Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false })
+  game.el?.remove()
+  game.el = document.createElement('div')
+  game.el.className = 'game-pop'
+  document.body.append(game.el)
+  if (answers || build) return gameSpec(build)
+  renderGame()
+}
+const closeGame = () => { game.el?.remove(); game.el = null }
+
+function renderGame() {
+  const el = game.el
+  if (!el) return
+  const qs = game.questions, q = qs[game.i]
+  const dots = qs.map((_, i) => `<i class="${i < game.i ? 'done' : i === game.i ? 'on' : ''}"></i>`).join('')
+  const head = `<div class="ghead"><b>🎮 New game</b><button class="gclose" title="Close">×</button></div>`
+  if (game.busy) {
+    el.innerHTML = `${head}<div class="gbody"><div class="spin"></div><p>${esc(game.busy)}</p></div>`
+  } else if (game.spec) {
+    const s = game.spec, list = v => (Array.isArray(v) ? v.join(', ') : v || '')
+    const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
+    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
+    el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
+    el.querySelector('[data-build]').onclick = () => gameBuild()
+  } else {
+    const val = game.answers[q.id] || ''
+    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
+    const free = el.querySelector('.gfree')
+    const take = v => { if (v) game.answers[q.id] = v; else delete game.answers[q.id] }
+    const next = () => { take(free.value.trim() || game.answers[q.id]); if (game.i < qs.length - 1) { game.i++; renderGame() } else gameSpec() }
+    for (const b of el.querySelectorAll('[data-c]')) b.onclick = () => { take(b.dataset.c); free.value = ''; next() }
+    free.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); next() } }
+    el.querySelector('.gidea')?.addEventListener('input', e => { game.idea = e.target.value })
+    el.querySelector('[data-next]').onclick = next
+    el.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || game.answers[q.id]); gameSpec() }
+    el.querySelector('[data-back]')?.addEventListener('click', () => { game.i--; renderGame() })
+    ;(game.i === 0 ? el.querySelector('.gidea') : free)?.focus()
+  }
+  el.querySelector('.gclose').onclick = closeGame
+}
+
+async function gameSpec(build = false) {
+  game.busy = 'The planner is writing the game spec: an original world, hero and enemies…'
+  renderGame()
+  try {
+    const out = await api('/api/game/spec', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: game.idea, answers: game.answers }) }).then(r => r.json())
+    if (!out.spec) throw new Error(out.error || 'no spec')
+    game.spec = out.spec
+  } catch (err) {
+    game.busy = false
+    botMsg(`Game: ${err.message}`)
+    return renderGame()
+  }
+  game.busy = false
+  if (build) return gameBuild()
+  renderGame()
+}
+
+async function gameBuild() {
+  // the card's edits go into the spec
+  for (const x of game.el?.querySelectorAll('[data-k]') || []) {
+    const k = x.dataset.k, v = x.textContent.trim()
+    if (k === 'enemies') game.spec.enemies = v.split(/\s*,\s*/).filter(Boolean)
+    else if (v) game.spec[k] = v
+  }
+  game.busy = 'Starting the build…'
+  renderGame()
+  try {
+    const out = await api('/api/game', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ spec: game.spec }) }).then(r => r.json())
+    if (!out.run) throw new Error(out.error || 'could not start')
+    closeGame()
+    await loadFiles()
+    await openRun(out.run)
+    setView('app')
+    botMsg(`🎮 Building “${game.spec.title}” (${game.spec.engine}). The App view shows every file as it is written; the game opens there when it builds. Chat here to change it after.`)
+  } catch (err) {
+    game.busy = false
+    botMsg(`Game: ${err.message}`)
+    renderGame()
+  }
+}
+
+$('#game-btn').onclick = () => openGame()
+commandOps.game = c => openGame(c.idea || '', c.answers || null, !!c.build)
 
 // ---------- start
 
