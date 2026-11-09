@@ -47,8 +47,10 @@ function run(cmd, args, opts, onLine) {
 let nodeFor = null
 export function engineNode() {
   if (nodeFor) return nodeFor
-  const which = n => { try { return execFileSync('/bin/sh', ['-lc', `command -v ${n}`], { encoding: 'utf8' }).trim() } catch { return '' } }
-  const candidates = [process.execPath, which('node'), '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
+  // every node on PATH, not only the first: Hermes puts its own Node in front
+  const onPath = (process.env.PATH || '').split(':').filter(Boolean).map(d => join(d, 'node'))
+  const login = (() => { try { return execFileSync('/bin/sh', ['-lc', 'command -v node'], { encoding: 'utf8' }).trim() } catch { return '' } })()
+  const candidates = [process.execPath, ...onPath, login, '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
   for (const n of candidates) {
     try {
       execFileSync(n, ['-e', "new (require('better-sqlite3'))(':memory:')"], { cwd: dyadDir, stdio: 'ignore', timeout: 20000 })

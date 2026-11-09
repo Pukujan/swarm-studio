@@ -3,6 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1280">
+<script>
+// The frame grows to fit its page, so the page's own viewport (vh, innerHeight)
+// would grow with it: a 100vh hero makes the frame taller, which makes the hero
+// taller, for ever. Pin the viewport to a laptop screen, 1280×900, before any
+// of the page's styles or scripts run.
+;(() => {
+  const VH = 900, VW = 1280
+  try {
+    Object.defineProperty(window, 'innerHeight', { get: () => VH, configurable: true })
+    Object.defineProperty(window, 'outerHeight', { get: () => VH, configurable: true })
+    Object.defineProperty(document.documentElement, 'clientHeight', { get: () => VH, configurable: true })
+  } catch {}
+  const unit = /(-?\d*\.?\d+)(s|d|l)?(vh|vmin|vmax)\b/g
+  const val = text => text.replace(unit, (_, n, __, u) => `${+(Number(n) * (u === 'vmax' ? VW : VH) / 100).toFixed(2)}px`)
+  // in a stylesheet only the declarations change, never a selector such as .h-\[50vh\]
+  const px = css => css.replace(/\{([^{}]*)\}/g, (_, body) => `{${val(body)}}`)
+  // rewrite only when something changes, so our own edit doesn't wake the observer again
+  const fix = el => {
+    if (el.tagName === 'STYLE') { const t = el.textContent, n = px(t); if (n !== t) el.textContent = n }
+    const st = el.getAttribute?.('style')
+    if (st) { const n = val(st); if (n !== st) el.setAttribute('style', n) }
+  }
+  const sweep = root => { fix(root); root.querySelectorAll?.('style, [style]').forEach(fix) }
+  window.__swarmVh = { px, val, sweep }
+  new MutationObserver(list => {
+    for (const m of list) {
+      if (m.type === 'attributes') fix(m.target)
+      else if (m.type === 'characterData') { const p = m.target.parentElement; if (p?.tagName === 'STYLE') fix(p) }
+      else for (const n of m.addedNodes) if (n.nodeType === 1) sweep(n); else if (n.parentElement?.tagName === 'STYLE') fix(n.parentElement)
+    }
+  }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style'] })
+})()
+</script>
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <style>
   :root { --font-heading: Georgia, serif; --font-body: system-ui, sans-serif; --radius: 12px;

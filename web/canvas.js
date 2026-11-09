@@ -500,7 +500,8 @@ function syncSlots(now) {
       }
       if (Object.keys(msg).length > 2) post(f, msg)
     }
-    const h = Math.max(700, f.geo.height || 0)
+    // a cap as well, in case a page still finds a way to grow itself (40 screens)
+    const h = Math.min(36000, Math.max(700, f.geo.height || 0))
     if (h !== f.h) {
       f.h = h
       f.iframe.style.height = `${h}px`
