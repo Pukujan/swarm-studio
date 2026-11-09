@@ -472,3 +472,10 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .finfo .fi-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .finfo .fi-foot button { border: 1px solid var(--line); background: none; color: inherit; border-radius: 8px; padding: 7px 14px; cursor: pointer; font: inherit; }
 .finfo .fi-save { background: #5b7cfa !important; border-color: #5b7cfa !important; color: #fff !important; }
+.video-pop .videa { width: 100%; margin-top: 10px; background: var(--panel-2); color: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: inherit; font-size: 13px; }
+.slash-pop { position: absolute; left: 8px; right: 8px; bottom: calc(100% + 6px); z-index: 50; background: var(--panel, #16181d); border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: 0 10px 30px #0008; max-height: 320px; overflow: auto; }
+.slash-pop .sl { padding: 7px 10px; border-radius: 6px; cursor: pointer; display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.slash-pop .sl.on, .slash-pop .sl:hover { background: var(--panel-2); }
+.slash-pop .sa { color: var(--muted); font-size: 12px; }
+.slash-pop .sd { margin-left: auto; color: var(--muted); font-size: 11px; text-align: right; }
+.composer { position: relative; }
