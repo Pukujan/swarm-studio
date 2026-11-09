@@ -77,6 +77,8 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
   - Generated images go through the Hermes image provider you pick (your Codex login by default); the visual review sends page screenshots to your vision model.
   - **Publish** to GitHub Pages runs your `gh` CLI: it creates a public repo under your account (its description says it was made with Swarm Studio, and it only ever updates repos marked that way) and pushes the static site. **Vercel** and **Cloudflare Pages** use an access token you connect once in the Publish menu (or `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`); it is checked with the provider and stored in `$HERMES_HOME/swarm-studio/connections.json` with mode `0600`, and never sent back to the canvas. You can paste an **Octo vault** grant (`octo_vault_…`) instead of a token: Swarm Studio finds the provider's item in your vault, keeps only a 30-day working key for that one item (renewed automatically, the grant itself is not stored), and every call goes through Octo's relay, so the provider token never leaves the vault. Both deploy through the provider's REST API (Cloudflare's direct upload, the same calls wrangler makes), with no extra tools to install. Publishing locally serves the site from the canvas server at `127.0.0.1:4319/site/<run>/`.
   - The first promo video installs `hyperframes` and ffmpeg from npm into `$HERMES_HOME/swarm-studio/video-tools/`. Rendering runs locally in headless Chrome.
+  - The first **app** build installs the app engine (dyad's headless engine, vendored in `dyad/`, Apache-2.0 with `src/pro` under FSL) from npm into the plugin's `dyad/node_modules` (about 1.5 GB, once), and each app installs its own packages with `pnpm`. Apps run on a local Vite server on `127.0.0.1`. **App deploy** uploads the app's source to your Vercel account, which builds it.
+  - **Game mode** reads its game-dev notes from the plugin (`gameskills/`); games make their art and sound in code, so nothing is downloaded for them.
   - Nothing else leaves the machine.
 - **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log`, the runs, and `connections.json` if you connect a host.
 - **Secrets.** Keys come from Hermes (the model slots or its secret store). It is passed to the server process through its environment and is never written to disk or logs.
@@ -84,7 +86,8 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
 ## Known issues
 
 - **Hermes mobile.** The canvas runs on the computer's `127.0.0.1`, so the phone webapp can't reach it.
-- **Generated sites are prototypes.** They are static HTML and Tailwind, with no backend. Publish puts them online as they are; for a real app, hand `aba/spec.md` from the export to an app builder.
+- **Generated sites are prototypes** until you open the **App** tab: Publish puts the static pages online as they are; the App tab makes them a working app with a backend.
+- **The app engine is heavy**: about 1.5 GB on first use, and a build takes several minutes on a fast coding model.
 - **Promo videos** need Node's `npm` on the machine the first time (to fetch HyperFrames and ffmpeg), and Chrome for headless rendering.
 
 ## License

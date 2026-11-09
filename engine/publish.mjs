@@ -137,7 +137,11 @@ async function rest(base, token, path, init = {}) {
 
 // ---------- Vercel: upload each file by its SHA-1, then one production deployment
 
-export async function publishVercel({ dir, name, creds, dataDir, onStage = () => {} }) {
+// build: send the source and let Vercel install and build it (an app); otherwise
+// the files are the finished static site.
+const SKIP = /(^|\/)(node_modules|\.git|dist|\.output|\.vercel|\.engine)(\/|$)|\.DS_Store$/
+
+export async function publishVercel({ dir, name, creds, dataDir, build = false, onStage = () => {} }) {
   const api = (path, init) => rest(creds.base || 'https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
   onStage('project')
   const own = ownProjects(dataDir, 'vercel')
@@ -151,7 +155,7 @@ export async function publishVercel({ dir, name, creds, dataDir, onStage = () =>
   if (!project) throw new Error(`every Vercel project name for ${name} is taken`)
 
   onStage('upload')
-  const list = files(dir).map(f => {
+  const list = files(dir).filter(f => !build || !SKIP.test(f.rel)).map(f => {
     const data = readFileSync(f.path)
     return { file: f.rel, data, sha: createHash('sha1').update(data).digest('hex'), size: data.length }
   })
@@ -161,7 +165,7 @@ export async function publishVercel({ dir, name, creds, dataDir, onStage = () =>
   }
   const dep = await api('/v13/deployments?skipAutoDetectionConfirmation=1', {
     method: 'POST',
-    body: JSON.stringify({ name: project, target: 'production', files: list.map(f => ({ file: f.file, sha: f.sha, size: f.size })), projectSettings: { framework: null, buildCommand: null, installCommand: null, outputDirectory: null } }),
+    body: JSON.stringify({ name: project, target: 'production', files: list.map(f => ({ file: f.file, sha: f.sha, size: f.size })), projectSettings: build ? { framework: 'vite', installCommand: 'pnpm install', buildCommand: 'pnpm run build', outputDirectory: null } : { framework: null, buildCommand: null, installCommand: null, outputDirectory: null } }),
   })
   if (!dep.ok) throw new Error(`Vercel: ${dep.body.error?.message || dep.status}`)
   rememberProject(dataDir, 'vercel', project)
@@ -169,7 +173,7 @@ export async function publishVercel({ dir, name, creds, dataDir, onStage = () =>
   onStage('building')
   let d = dep.body
   const start = Date.now()
-  while (!['READY', 'ERROR', 'CANCELED'].includes(d.readyState) && Date.now() - start < 240000) {
+  while (!['READY', 'ERROR', 'CANCELED'].includes(d.readyState) && Date.now() - start < (build ? 600000 : 240000)) {
     await wait(2500)
     d = (await api(`/v13/deployments/${dep.body.id}`)).body || d
   }
@@ -220,7 +224,7 @@ export async function publishCloudflare({ dir, name, creds, dataDir, onStage = (
   const jwt = tok.body.result?.jwt
   if (!jwt) throw new Error(`Cloudflare upload token: ${why(tok)}`)
   const up = (path, body) => rest(CF, jwt, path, { method: 'POST', body: JSON.stringify(body) })
-  const list = files(dir).map(f => {
+  const list = files(dir).filter(f => !build || !SKIP.test(f.rel)).map(f => {
     const value = readFileSync(f.path).toString('base64'), ext = f.rel.split('.').pop().toLowerCase()
     return { rel: f.rel, value, contentType: TYPES[ext] || 'application/octet-stream', hash: createHash('sha256').update(value + ext).digest('hex').slice(0, 32) }
   })

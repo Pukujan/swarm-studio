@@ -2,7 +2,7 @@
 // Vite + Tailwind project with one component per section, and a handoff for an
 // app builder (ABA: a blueprint in its own format and a spec to build from).
 
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { MOTION_CSS, motionPreset, motionSource, swarmMotion } from './motion.mjs'
@@ -266,6 +266,153 @@ export default function App() {
   writeFileSync(join(dir, 'tailwind.config.js'), `/** @type {import('tailwindcss').Config} */\nexport default { content: ['./index.html', './src/**/*.{js,jsx}'], theme: { extend: {} }, plugins: [] }\n`)
   writeFileSync(join(dir, 'postcss.config.js'), `export default { plugins: { tailwindcss: {}, autoprefixer: {} } }\n`)
   return { sections: names.size, pages: pageNames.length }
+}
+
+// ---------- the design inside dyad's starter (React + TypeScript + shadcn), for the
+// full-stack engine to build on. shadcn reads colours as "H S% L%" triplets through
+// hsl(var(--x)); the sections were written against plain var(--x) colours, so their
+// colour references are rewritten to hsl(...) and both share one set of variables.
+const SHADCN = ['background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground', 'primary', 'primary-foreground', 'secondary', 'secondary-foreground', 'muted', 'muted-foreground', 'accent', 'accent-foreground', 'destructive', 'destructive-foreground', 'border', 'input', 'ring']
+function hsl(hex) {
+  const m = String(hex || '').trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (!m) return null
+  const h6 = m[1].length === 3 ? [...m[1]].map(c => c + c).join('') : m[1]
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(h6.slice(i, i + 2), 16) / 255)
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min
+  let h = 0, sat = 0
+  if (d) {
+    sat = d / (1 - Math.abs(2 * l - 1))
+    h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    h = (h * 60 + 360) % 360
+  }
+  return `${h.toFixed(1)} ${(sat * 100).toFixed(1)}% ${(l * 100).toFixed(1)}%`
+}
+function shadcnVars(theme) {
+  const v = theme.vars || {}, get = k => hsl(v[`--${k}`])
+  const fg = get('foreground') || '0 0% 98%', bg = get('background') || '0 0% 4%'
+  const vals = {
+    background: bg, foreground: fg,
+    card: get('card') || bg, 'card-foreground': fg,
+    popover: get('card') || bg, 'popover-foreground': fg,
+    primary: get('primary') || fg, 'primary-foreground': get('primary-foreground') || bg,
+    secondary: get('muted') || bg, 'secondary-foreground': fg,
+    muted: get('muted') || bg, 'muted-foreground': get('muted-foreground') || fg,
+    accent: get('accent') || get('primary') || fg, 'accent-foreground': get('primary-foreground') || bg,
+    destructive: '0 72% 51%', 'destructive-foreground': '0 0% 98%',
+    border: get('border') || get('muted') || bg, input: get('border') || get('muted') || bg, ring: get('primary') || fg,
+  }
+  return SHADCN.map(k => `    --${k}: ${vals[k]};`).join('\n')
+}
+const toHsl = html => html.replace(new RegExp(`(?<!hsl\\()var\\(--(${SHADCN.join('|')})\\)`, 'g'), 'hsl(var(--$1))')
+
+// pnpm 10+ skips build scripts unless a project allows them, and Vite needs
+// esbuild's: without this the app never starts and dyad can't screenshot it.
+export function seedProject(scaffold, dir, name) {
+  rmSync(dir, { recursive: true, force: true })
+  cpSync(scaffold, dir, { recursive: true, filter: f => !/[\\/](node_modules|\.git)([\\/]|$)/.test(f) })
+  writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - "@swc/core"\n  - esbuild\nallowBuilds:\n  "@swc/core": true\n  esbuild: true\n')
+  const pkg = join(dir, 'package.json'), json = JSON.parse(readFileSync(pkg, 'utf8'))
+  writeFileSync(pkg, JSON.stringify({ ...json, name: slug(name) || json.name, pnpm: { ...json.pnpm, onlyBuiltDependencies: ['@swc/core', 'esbuild'] } }, null, 2) + '\n')
+}
+
+export function dyadApp(snap, dir, { runId, runDir, scaffold }) {
+  seedProject(scaffold, dir, snap.brand)
+  const src = join(dir, 'src'), secDir = join(src, 'components', 'swarm'), pageDir = join(src, 'pages')
+  mkdirSync(secDir, { recursive: true })
+  rmSync(join(src, 'pages', 'Index.tsx'), { force: true })
+  rmSync(join(src, 'components', 'made-with-dyad.tsx'), { force: true })
+  const names = new Map(), used = new Set(['Index', 'NotFound'])
+  const comp = s => {
+    if (names.has(s.key)) return names.get(s.key)
+    let n = pascal(s.page === '*' ? `shared-${s.id}` : s.id.startsWith(`${s.page}-`) ? s.id : `${s.page}-${s.id}`)
+    while (used.has(n)) n += 'X'
+    used.add(n)
+    names.set(s.key, n)
+    const html = toHsl(localImages(s.html, runId, runDir, [join(dir, 'public', 'img')], '/img/'))
+    writeFileSync(join(secDir, `${n}.tsx`), `// @ts-nocheck: markup converted from the Swarm Studio canvas\n// ${s.role} (${s.page === '*' ? 'on every page' : `page ${s.page}`})\nexport default function ${n}() {\n  return (\n    <>\n${htmlToJsx(html).split('\n').map(l => `      ${l}`).join('\n')}\n    </>\n  )\n}\n`)
+    return n
+  }
+  const routes = snap.pages.map((p, i) => {
+    const n = i === 0 ? 'Index' : `${pascal(p.id)}Page`
+    const list = p.sections.map(comp)
+    writeFileSync(join(pageDir, `${n}.tsx`), `${[...new Set(list)].map(c => `import ${c} from "@/components/swarm/${c}";`).join('\n')}\n\n// ${clip(p.title, 100)}${p.purpose ? `: ${clip(p.purpose, 140)}` : ''}\nconst ${n} = () => (\n  <>\n${list.map(c => `    <${c} />`).join('\n')}\n  </>\n);\n\nexport default ${n};\n`)
+    return { id: p.id, path: i === 0 ? '/' : `/${p.id}`, n }
+  })
+  writeFileSync(join(src, 'lib', 'swarm-motion.ts'), `// @ts-nocheck: from Swarm Studio\n// Sections reveal as they scroll in; clickable things lift under the pointer.\nexport const preset = ${JSON.stringify(motionPreset(snap.theme))};\n\nexport ${swarmMotion.toString()}\n\n// A text panel floated over a map or picture moves beside it when it would cover other text.\nexport ${swarmLayout.toString()}\n`)
+  writeFileSync(join(src, 'App.tsx'), `import { useEffect } from "react";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { swarmLayout, swarmMotion, preset } from "@/lib/swarm-motion";
+${routes.map(r => `import ${r.n} from "./pages/${r.n}";`).join('\n')}
+import NotFound from "./pages/NotFound";
+
+const queryClient = new QueryClient();
+
+// The design's buttons and links name the page they open in data-goto.
+const PAGES: Record<string, string> = ${JSON.stringify(Object.fromEntries(routes.map(r => [r.id, r.path])))};
+
+const SwarmDesign = () => {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>("[data-goto]");
+      const to = go && PAGES[go.dataset.goto || ""];
+      if (to) { e.preventDefault(); navigate(to); window.scrollTo(0, 0); }
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, [navigate]);
+  useEffect(() => {
+    const root = document.getElementById("root")!;
+    swarmLayout(root, false);
+    document.fonts?.ready.then(() => swarmLayout(root, false));
+    swarmMotion(root, preset);
+  }, [pathname]);
+  return null;
+};
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <SwarmDesign />
+        <Routes>
+${routes.map(r => `          <Route path="${r.path}" element={<${r.n} />} />`).join('\n')}
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
+
+export default App;
+`)
+  const css = join(src, 'globals.css')
+  const heading = snap.theme.fonts?.heading || 'Georgia', body = snap.theme.fonts?.body || 'Inter'
+  writeFileSync(css, `${readFileSync(css, 'utf8')}
+/* The Swarm Studio design: its colours, fonts and corners, for shadcn and the sections alike. */
+@layer base {
+  :root {
+${shadcnVars(snap.theme)}
+    --radius: ${snap.theme.radius || '12px'};
+    --font-heading: '${heading}', Georgia, serif;
+    --font-body: '${body}', system-ui, sans-serif;
+  }
+  body { font-family: var(--font-body); }
+}
+${MOTION_CSS}`)
+  const index = join(dir, 'index.html')
+  writeFileSync(index, readFileSync(index, 'utf8')
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>${clip(snap.brand, 80).replace(/</g, '&lt;')}</title>`)
+    .replace('</head>', `  <link rel="stylesheet" href="${fontsHref(snap.theme)}" />\n  </head>`))
+  return { sections: names.size, pages: routes.map(r => ({ id: r.id, path: r.path })) }
 }
 
 function abaHandoff(snap, dir) {

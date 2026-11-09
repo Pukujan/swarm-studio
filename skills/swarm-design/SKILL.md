@@ -1,6 +1,6 @@
 ---
 name: swarm-design
-description: Design and build a multi-page website fast with a swarm of agents on a live canvas (Swarm Studio). Use when someone asks for a website, landing page, marketing site or page mockups, or wants to watch a design come together live.
+description: Design and build a multi-page website fast with a swarm of agents on a live canvas (Swarm Studio), then turn it into a working full-stack app, a promo video, a live deploy, or build an original browser game from a short interview. Use when someone asks for a website, landing page, web app, page mockups, a game, or wants to watch a design come together live.
 ---
 
 # Swarm Design
@@ -11,7 +11,8 @@ Swarm Studio plans a 4-page website from one brief and builds every section in p
 
 - A request for a website, landing page, product site, or several pages of mockups.
 - Someone wants to see options quickly, or watch the build happen (a demo, a pitch).
-- Not for editing an existing codebase's components: it produces standalone pages, not changes to a repo.
+- A working app from a design (forms that save, server routes, an admin page), or a playable browser game.
+- Not for editing an existing codebase's components: it produces its own projects, not changes to your repo.
 
 ## Write a good brief
 
@@ -51,6 +52,12 @@ Call `swarm_studio` with an `action` (the person can type the same as `/swarm <a
 - `images`: generated photos come from Hermes's image providers, by default the person's Codex login (`gpt-image-2-low`). `provider: "off"` for shapes and SVG only. Each image uses that provider's quota.
 - `motion` with `value` `on`/`off`: the prototype's scroll-in reveals and hover lifts.
 - `lite`: `on` for machines short on memory (one live page at a time).
+
+## Apps and games
+
+- `app`: turns a build into a working app (React + shadcn/ui, Vite, Nitro server routes): forms save through server routes, lists come from them, an `/admin` page shows what was saved. With `text`, one more change to the app ("add a waitlist", "make checkout ask for a date"). It waits until the app runs and returns its local URL; the App tab shows each step, a live preview and the code. Each change is a git commit in `runs/<id>/app/`. The first app build installs the engine once (a few minutes, about 1.5 GB).
+- `deploy`: puts the app on the person's Vercel account (connected in 🌐 Publish), server routes included.
+- Games: run the interview in chat. Call `game_questions`, then ask the person one question at a time, offering the chips as choices and keeping their own words; stop early if they say "just build it" (the rest get defaults). Then call `game` with `answers` (by question id) and `text` (their idea). It writes a spec and builds the game in the App tab. If they name a game they like, it only takes the genre and feel: the world, hero, enemies and names are always new. Never promise a copy of an existing game. On the canvas, 🎮 Game runs the same interview.
 
 ## After the run
 
