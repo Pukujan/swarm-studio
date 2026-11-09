@@ -23,6 +23,8 @@
   [data-slot].flash { animation: flash 1.1s ease-out; }
   @keyframes flash { from { box-shadow: inset 0 0 0 6px var(--agent); } to { box-shadow: inset 0 0 0 0 transparent; } }
   [data-slot].failed { outline: 3px dashed #e5484d; outline-offset: -8px; }
+  .swarm-caret { position: absolute; left: 0; top: 0; width: 3px; z-index: 50; pointer-events: none; border-radius: 2px; box-shadow: 0 0 10px currentColor; animation: caret 1s steps(2) infinite; }
+  @keyframes caret { 50% { opacity: 0; } }
   /* an image being painted: a soft shimmer until its src arrives */
   img[data-gen]:not([src]) { color: transparent; background: linear-gradient(100deg, color-mix(in srgb, var(--muted) 80%, transparent) 30%, color-mix(in srgb, var(--card) 90%, transparent) 50%, color-mix(in srgb, var(--muted) 80%, transparent) 70%) 0 0 / 300% 100%; animation: paint 1.6s linear infinite; min-height: 120px; }
   img[data-gen][data-failed] { animation: none; background: var(--muted); }
@@ -109,12 +111,24 @@
 
   const round = r => [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]
 
+  // a caret in the agent's colour where the text is being written
+  const carets = new Map()
+  function caret(key, el, t) {
+    let c = carets.get(key)
+    if (!el.classList.contains('streaming') || !t) { if (c) { c.remove(); carets.delete(key) } return }
+    if (!c) { c = document.createElement('i'); c.className = 'swarm-caret'; document.body.append(c); carets.set(key, c) }
+    c.style.background = getComputedStyle(el).getPropertyValue('--agent') || '#7c9cff'
+    c.style.transform = `translate(${Math.round(t.right + scrollX)}px, ${Math.round(t.top + scrollY)}px)`
+    c.style.height = `${Math.max(14, Math.round(t.height))}px`
+  }
+
   function report() {
     const geo = { type: 'geo', height: document.body.scrollHeight, slots: {}, gotos: [] }
     for (const [key, el] of slots) {
       const r = el.getBoundingClientRect()
       const t = lastText(el)
       geo.slots[key] = { box: round(r), last: t ? [Math.round(Math.min(t.right, r.right - 10)), Math.round(t.bottom)] : null }
+      caret(key, el, t)
       for (const g of el.querySelectorAll('[data-goto]')) {
         geo.gotos.push({ key, target: g.dataset.goto, box: round(g.getBoundingClientRect()) })
       }
