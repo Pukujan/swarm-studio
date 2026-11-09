@@ -680,7 +680,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
       if (!PROVIDERS[input.provider]) return reply(400, { error: 'unknown provider' })
-      connect(dataDir, input.provider, typeof input.token === 'string' ? input.token : null)
+      connect(dataDir, input.provider, typeof input.token === 'string' ? input.token : null, typeof input.octo === 'string' && /^https:\/\/[\w.-]+$/.test(input.octo) ? input.octo : undefined)
         .then(who => reply(200, { provider: input.provider, connected: who ? { user: who.user } : null }))
         .catch(err => reply(400, { error: String(err.message || err) }))
     })

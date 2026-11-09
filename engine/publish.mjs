@@ -138,7 +138,7 @@ async function rest(base, token, path, init = {}) {
 // ---------- Vercel: upload each file by its SHA-1, then one production deployment
 
 export async function publishVercel({ dir, name, creds, dataDir, onStage = () => {} }) {
-  const api = (path, init) => rest('https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
+  const api = (path, init) => rest(creds.base || 'https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
   onStage('project')
   const own = ownProjects(dataDir, 'vercel')
   let project = null

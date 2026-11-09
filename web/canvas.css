@@ -424,3 +424,4 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .publish-pop .pconn form button { border: 0; border-radius: 6px; padding: 6px 12px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
 .publish-pop .perr { color: #ff8a8a; font-size: 12px; margin-top: 6px; }
 .publish-pop .perr:empty { display: none; }
+.publish-pop .phint { color: var(--muted); font-size: 11.5px; margin-top: 6px; line-height: 1.4; }
