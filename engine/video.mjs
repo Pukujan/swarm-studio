@@ -61,24 +61,26 @@ export function collect(events, runDir) {
 }
 
 // ---------- the storyboard
-function storyPrompt(c, { style = 'promo', idea = '' } = {}) {
+function storyPrompt(c, { style = 'promo', idea = '', shots = false } = {}) {
   return [
     {
       role: 'system',
       content: `You are a motion designer cutting a short promo video for a website a team of AI agents just built. You write the storyboard; fixed animation templates in the site's own theme play it.
 
 Return JSON only:
-{"cast":{"narrator":"<voice id>","second":"<voice id, or null>"},"music":"gentle|snappy","scenes":[{"kind":"open|image|split|list|quote|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,"items":["...","...","..."],"say":"what is said over this scene","who":"narrator|second"}],"fx":["sparkle|stars|fireworks|breeze|confetti|snow"]}
+{"cast":{"narrator":"<voice id>","second":"<voice id, or null>"},"music":"gentle|snappy","scenes":[{"kind":"open|image|split|list|quote|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,${shots ? '"shot":"a new picture to make for this scene",' : ''}"items":["...","...","..."],"say":"what is said over this scene","who":"narrator|second"}],"fx":["sparkle|stars|fireworks|breeze|confetti|snow"]}
 
 Scene kinds:
 - open: the brand reveal. headline = the brand name; sub = what it is, under 9 words. No image.
-- image: a full-screen picture with a short headline over it. Needs "image".
-- split: picture on one side, headline and sub on the other. Needs "image".
+- image: a full-screen picture with a short headline over it. Needs "image"${shots ? ' or "shot"' : ''}.
+- split: picture on one side, headline and sub on the other. Needs "image"${shots ? ' or "shot"' : ''}.
 - list: headline plus exactly 3 short items (2-4 words each): features, steps, or offers from the site.
 - quote: one short, punchy line in quotes (a promise or a customer-style line from the site's copy). headline = the quote, under 12 words.
 - cta: the closing call to action. headline under 6 words; sub = the action, like "Subscribe at lumeroasters.pt" or "Book your first visit"; kicker can be the brand.
 
 Rules:
+- If the person gives an idea, it leads: its places, people, moments and mood come first and replace the site's own examples where they differ (if they say Hawaii, the video is about Hawaii, not other routes from the site). The site still gives the brand name, the offer and the call to action.${shots ? `
+- "shot": a new picture made for this video, for an image or split scene, instead of "image". Use shots for what the idea asks to see that no listed picture shows (a plane in flight, a person on a beach), and to give a site with few pictures some: 2 to 4 shots, each a concrete photo description under 30 words (subject, place, light, mood, camera) with the brand's colours in the light or setting. A real scene, never a website, app, screen, sign or logo, and no brand names in it.` : ''}
 - 5 to 7 scenes. First is open, last is cta. Vary the kinds; use each picture at most once and only numbers from the list.
 - Use the site's real names, offers and voice. Headlines under 7 words except quotes. No exclamation marks, no emoji, no hashtags.
 - "say" is the voiceover, read aloud by a warm narrator: one natural spoken sentence per scene, 5 to 14 words, that adds to the words on screen rather than repeating them. Write numbers and dates the way they are spoken ("March twentieth"). The last scene's line is the invitation.
@@ -89,23 +91,27 @@ ${Object.entries(CAST).map(([id, d]) => `  ${id}: ${d}`).join('\n')}
     },
     {
       role: 'user',
-      content: `Video plan: ${(STYLES[style] || STYLES.promo).rule}${idea ? `\nThe person's own idea for this video (follow it): ${idea}` : ''}\n\nBrand: ${c.brand}\nBrief: ${c.brief}\nArt direction: ${c.theme.direction || ''}\n\nPictures:\n${c.images.map(i => `${i.n}. (${i.page}) ${i.gen}`).join('\n') || 'none'}\n\nThe site:\n${c.copy}`
+      content: `${idea ? `The person's idea for this video (it leads; follow it closely): ${idea}\n\n` : ''}Video plan: ${(STYLES[style] || STYLES.promo).rule}\n\nBrand: ${c.brand}\nBrief: ${c.brief}\nArt direction: ${c.theme.direction || ''}\n\nPictures:\n${c.images.map(i => `${i.n}. (${i.page}) ${i.gen}`).join('\n') || 'none'}\n\nThe site:\n${c.copy}`
     }
   ]
 }
 
-export function checkStory(raw, c) {
+export function checkStory(raw, c, { shots = false } = {}) {
   const used = new Set()
+  let shot = 0
   const scenes = []
   for (const s of raw.scenes || []) {
     let kind = KINDS.has(s.kind) ? s.kind : 'quote'
     let image = Number(s.image)
     if (kind === 'image' || kind === 'split') {
-      if (!c.images.some(i => i.n === image) || used.has(image)) kind = 'quote'
+      const fresh = shots && !c.images.some(i => i.n === image) && clip(s.shot, 220)
+      if (fresh && shot < 4) shot++
+      else if (!c.images.some(i => i.n === image) || used.has(image)) kind = 'quote'
       else used.add(image)
+      if (fresh && kind !== 'quote') image = 0
     }
     const scene = { kind, kicker: clip(s.kicker, 28), headline: clip(s.headline, kind === 'quote' ? 90 : 56), sub: clip(s.sub, 90), say: clip(s.say, 140), who: s.who === 'second' ? 'second' : 'narrator' }
-    if (kind === 'image' || kind === 'split') scene.image = image
+    if (kind === 'image' || kind === 'split') { if (image) scene.image = image; else scene.shot = clip(s.shot, 220) }
     if (kind === 'list') {
       scene.items = (Array.isArray(s.items) ? s.items : []).map(x => clip(x, 32)).filter(Boolean).slice(0, 3)
       if (scene.items.length < 2) scene.kind = 'quote'
@@ -136,11 +142,11 @@ export function fallbackStory(c) {
   return scenes
 }
 
-export async function writeStory({ provider, model, c, signal, style, idea }) {
-  const res = await streamChat(provider, { trace: { kind: 'video' }, model, messages: storyPrompt(c, { style, idea }), maxTokens: 1500, temperature: 0.7, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
+export async function writeStory({ provider, model, c, signal, style, idea, shots = false }) {
+  const res = await streamChat(provider, { trace: { kind: 'video' }, model, messages: storyPrompt(c, { style, idea, shots }), maxTokens: 1500, temperature: 0.7, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
   const s = res.text.indexOf('{'), e = res.text.lastIndexOf('}')
   if (s < 0 || e <= s) throw new Error('no JSON in the storyboard')
-  const scenes = checkStory(JSON.parse(res.text.slice(s, e + 1)), c)
+  const scenes = checkStory(JSON.parse(res.text.slice(s, e + 1)), c, { shots })
   if (scenes.length < 3) throw new Error('the storyboard was too thin')
   return scenes
 }
