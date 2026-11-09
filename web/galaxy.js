@@ -39,9 +39,9 @@ function token(name, fallback) {
   return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback
 }
 const palette = () => ({
-  void: token('--void', '#05051a'), deep: token('--deep', '#0a0a2e'), frame: token('--frame', '#0000F2'), frameHi: token('--frame-hi', '#4646ff'),
-  text: token('--text', '#F2F2F2'), muted: token('--muted', '#8b8bb8'), accent: token('--accent', '#F2F200'), ok: token('--ok', '#00F279'),
-  info: token('--info', '#00F2F2'), hot: token('--hot', '#F20000'), nebula: token('--nebula', '#7900F2'), nebula2: token('--nebula-2', '#F20079')
+  void: token('--void', '#160a2b'), deep: token('--deep', '#22123e'), frame: token('--frame', '#8b3dff'), frameHi: token('--frame-hi', '#a970ff'),
+  text: token('--text', '#f6eeff'), muted: token('--muted', '#b9a6d9'), accent: token('--accent', '#7cffc4'), pink: token('--pink', '#ff4fd8'), ok: token('--ok', '#00F279'),
+  info: token('--info', '#00F2F2'), hot: token('--hot', '#F20000'), nebula: token('--nebula', '#8b3dff'), nebula2: token('--nebula-2', '#ff4fd8')
 })
 
 // ---------- three.js, loaded once for both scenes
@@ -69,8 +69,8 @@ function rng(seed) {
 }
 const gauss = r => (r() + r() + r() + r() - 2) / 2
 
-// Hermia's ship, drawn in code: an off-white hull with a Hermes-blue stripe, little winged fins
-// (the winged sandals again) and a yellow cockpit glow. Original art, no assets.
+// Hermia's ship, drawn in code: an off-white hull with a violet stripe, little winged fins
+// (the winged sandals again) and a pink cockpit glow. Original art, no assets.
 function shipTexture(THREE, P) {
   const c = document.createElement('canvas')
   c.width = 256; c.height = 160
@@ -78,7 +78,7 @@ function shipTexture(THREE, P) {
   g.translate(128, 84)
   // engine glow
   const eg = g.createRadialGradient(-86, 6, 0, -86, 6, 40)
-  eg.addColorStop(0, P.info); eg.addColorStop(1, 'rgba(0,0,0,0)')
+  eg.addColorStop(0, P.pink); eg.addColorStop(1, 'rgba(0,0,0,0)')
   g.fillStyle = eg; g.fillRect(-130, -40, 90, 90)
   // wings: three feathers each side
   const wing = flip => {
@@ -105,12 +105,12 @@ function shipTexture(THREE, P) {
   g.bezierCurveTo(30, 32, -74, 26, -78, 0)
   g.fillStyle = P.text; g.fill()
   g.lineWidth = 3; g.strokeStyle = P.void; g.stroke()
-  // the blue stripe and the yellow trim (her cape colours)
+  // the violet stripe and the pink trim (her cape colours)
   g.beginPath(); g.moveTo(-70, 8); g.bezierCurveTo(-20, 18, 40, 14, 80, 3); g.lineWidth = 7; g.strokeStyle = P.frame; g.stroke()
-  g.beginPath(); g.moveTo(-66, 14); g.bezierCurveTo(-20, 22, 30, 19, 70, 8); g.lineWidth = 2; g.strokeStyle = P.accent; g.stroke()
+  g.beginPath(); g.moveTo(-66, 14); g.bezierCurveTo(-20, 22, 30, 19, 70, 8); g.lineWidth = 2; g.strokeStyle = P.pink; g.stroke()
   // cockpit
   const cg = g.createRadialGradient(28, -10, 2, 28, -8, 22)
-  cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.35, P.accent); cg.addColorStop(1, P.frame)
+  cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.35, P.pink); cg.addColorStop(1, P.frame)
   g.beginPath(); g.ellipse(26, -9, 22, 13, -0.08, 0, Math.PI * 2); g.fillStyle = cg; g.fill()
   g.lineWidth = 2.4; g.strokeStyle = P.void; g.stroke()
   // a portholes row
@@ -118,6 +118,48 @@ function shipTexture(THREE, P) {
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.SRGBColorSpace
   return t
+}
+
+// ---------- Commander Hermia, alive on the home view (the same art and motion as the Feed's
+// studio page): she breathes, blinks, flutters her helmet wings, looks toward the pointer, leans
+// in while you type, and raises her baton on Launch. All motion is CSS (galaxy.css, .hermia-live);
+// reduced motion leaves her still and skips the pointer tracking.
+function live(box, input, go) {
+  fetch(new URL('brand/hermia-live.svg', document.baseURI)).then(r => r.ok ? r.text() : '').then(svg => { if (svg) box.innerHTML = svg }).catch(() => {})
+  const mood = m => { box.classList.remove('is-idle', 'is-listen', 'is-ready', 'is-cheer'); box.classList.add('is-' + m) }
+  mood('idle')
+  let quiet = 0
+  input.addEventListener('input', () => {
+    clearTimeout(quiet)
+    if (box.classList.contains('is-cheer')) return
+    mood(input.value.trim() ? 'listen' : 'idle')
+    quiet = setTimeout(() => { if (box.classList.contains('is-listen')) mood('idle') }, 1600)
+  })
+  input.addEventListener('blur', () => { if (box.classList.contains('is-listen')) mood('idle') })
+  const ready = on => { if (!box.classList.contains('is-cheer')) mood(on ? 'ready' : (input.value.trim() && document.activeElement === input ? 'listen' : 'idle')) }
+  go.addEventListener('pointerenter', () => ready(true)); go.addEventListener('pointerleave', () => ready(false))
+  go.addEventListener('focus', () => ready(true)); go.addEventListener('blur', () => ready(false))
+  if (!reduced()) {
+    let frame = 0
+    addEventListener('pointermove', e => {
+      if (!box.offsetParent) return
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const r = box.getBoundingClientRect()
+        const dx = (e.clientX - (r.left + r.width / 2)) / innerWidth, dy = (e.clientY - (r.top + r.height * 0.4)) / innerHeight
+        box.style.setProperty('--look-x', `${Math.max(-1, Math.min(1, dx * 2)) * 4}px`)
+        box.style.setProperty('--look-y', `${Math.max(-1, Math.min(1, dy * 2)) * 3}px`)
+      })
+    }, { passive: true })
+  }
+  return {
+    cheer(then) {
+      if (reduced()) return then()
+      mood('cheer')
+      setTimeout(then, 300)
+      setTimeout(() => mood('idle'), 900)
+    }
+  }
 }
 
 // ---------- where a build sits in the galaxy: from its id, so it never moves
@@ -153,6 +195,7 @@ function makeGalaxy(root) {
     <div class="gx-chart" hidden role="list"></div>
     <button class="ui-btn ui-btn-outline ui-btn-sm gx-recentre" hidden>${ico('target')}Recentre</button>
     <div class="gx-dock">
+      <div class="gx-hermia hermia-box" role="img" aria-label="Commander Hermia"></div>
       <h1 class="gx-title">Where to <em>next</em>?</h1>
       <div class="gx-chips"></div>
       <form class="gx-form" autocomplete="off"><input name="q" placeholder="What should the crew build?" aria-label="Where to next? Describe what to build">
@@ -165,13 +208,15 @@ function makeGalaxy(root) {
   const fpsEl = Q.get('fps') ? Object.assign(document.createElement('div'), { className: 'gx-fps' }) : null
   if (fpsEl) root.append(fpsEl)
 
+  const hermia = live(root.querySelector('.gx-hermia'), input, form.querySelector('.gx-go'))
   form.onsubmit = e => {
     e.preventDefault()
     const text = input.value.trim()
     if (!text) return input.focus()
     input.value = ''
     sw.submit(text)
-    C.go('orbit')
+    // she raises her baton, then the camera flies (300 ms at most, rule 23)
+    hermia.cheer(() => C.go('orbit'))
   }
   form.querySelector('.gx-auto').onclick = () => { sw.submit(input.value.trim(), true); input.value = '' }
   chartBtn.onclick = () => {
@@ -206,7 +251,7 @@ function makeGalaxy(root) {
     const N = narrow ? 22000 : 46000
     const pos = new Float32Array(N * 3), col = new Float32Array(N * 3), size = new Float32Array(N), seed = new Float32Array(N)
     const r = rng(0x5eed)
-    const cCore = new T.Color(P.accent).lerp(new T.Color(P.text), 0.55), cMid = new T.Color(P.frameHi), cOut = new T.Color(P.nebula), cPink = new T.Color(P.nebula2), cWhite = new T.Color(P.text)
+    const cCore = new T.Color(P.pink).lerp(new T.Color(P.text), 0.55), cMid = new T.Color(P.frameHi), cOut = new T.Color(P.nebula), cPink = new T.Color(P.nebula2), cWhite = new T.Color(P.text)
     const tmp = new T.Color()
     for (let i = 0; i < N; i++) {
       const arm = i % ARMS
@@ -252,10 +297,10 @@ function makeGalaxy(root) {
       s.scale.setScalar(4 + rn() * 6)
       group.add(s)
     }
-    core = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.accent).lerp(new T.Color(P.text), 0.5), transparent: true, opacity: 0.6, depthWrite: false, blending: T.AdditiveBlending }))
+    core = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.pink).lerp(new T.Color(P.text), 0.5), transparent: true, opacity: 0.5, depthWrite: false, blending: T.AdditiveBlending }))
     core.scale.setScalar(6)
     scene.add(core)
-    const halo = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.frame), transparent: true, opacity: 0.5, depthWrite: false, blending: T.AdditiveBlending }))
+    const halo = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.frame), transparent: true, opacity: 0.16, depthWrite: false, blending: T.AdditiveBlending }))
     halo.scale.setScalar(24)
     scene.add(halo)
 
@@ -273,7 +318,7 @@ function makeGalaxy(root) {
       const u = rf() * 2 - 1, th = rf() * Math.PI * 2, R = 90 + rf() * 60, s = Math.sqrt(1 - u * u)
       far[i * 3] = Math.cos(th) * s * R; far[i * 3 + 1] = u * R; far[i * 3 + 2] = Math.sin(th) * s * R
       fsize[i] = 2 + rf() * 4
-      tmp.set(rf() < 0.1 ? P.info : P.text); fcol[i * 3] = tmp.r * 0.8; fcol[i * 3 + 1] = tmp.g * 0.8; fcol[i * 3 + 2] = tmp.b * 0.8
+      tmp.set(rf() < 0.12 ? P.pink : rf() < 0.3 ? P.frameHi : P.text); fcol[i * 3] = tmp.r * 0.8; fcol[i * 3 + 1] = tmp.g * 0.8; fcol[i * 3 + 2] = tmp.b * 0.8
       fseed[i] = rf() * 6.283
     }
     const fgeo = new T.BufferGeometry()
