@@ -44,9 +44,24 @@ const act = (tool, input) => {
   return (TOOLS[tool] || (() => tool.replace(/_/g, ' ')))(p || 'a file')
 }
 
+// The lead's reasoning: <think> blocks in its message (written live) and the model's
+// reasoning parts in ai_messages_json (kept per turn). Short form for the bubble, full for the log.
+export function reasoning(content, aiJson) {
+  const out = []
+  for (const m of String(content || '').matchAll(/<think>([\s\S]*?)(?:<\/think>|$)/g)) out.push(m[1])
+  try {
+    const d = JSON.parse(aiJson || 'null')
+    for (const msg of (Array.isArray(d) ? d : d?.messages || [])) for (const part of Array.isArray(msg?.content) ? msg.content : []) if (part?.type === 'reasoning' && part.text) out.push(part.text)
+  } catch {}
+  const clean = t => String(t).replace(/<[^>]+>/g, ' ').replace(/[#*`|]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const seen = new Set()
+  return out.map(clean).filter(t => t.length > 20 && !seen.has(t.slice(0, 80)) && seen.add(t.slice(0, 80)))
+    .map(t => ({ short: t.split(/(?<=[.!?])\s/).slice(0, 2).join(' ').slice(0, 280), full: t.slice(0, 1600) }))
+}
+
 export function crewRadio({ runDir, crew = [], say, every = 2500 }) {
   // crew: [{ id, name }] from the run; the lead is Hermia, helpers take crew members in order
-  const seen = { threads: new Map(), acts: 0, reports: 0, lead: '', leadLines: 0 }
+  const seen = { threads: new Map(), acts: 0, reports: 0, lead: '', leadLines: 0, reasons: 0 }
   let timer = null, busy = false
   const helper = id => {
     if (!seen.threads.has(id)) seen.threads.set(id, crew[seen.threads.size % Math.max(1, crew.length)] || { id: null, name: `Helper ${seen.threads.size + 1}` })
@@ -59,9 +74,13 @@ export function crewRadio({ runDir, crew = [], say, every = 2500 }) {
       const db = dbOf(runDir)
       if (!db) return
       // the lead's newest message: new lines of thinking since the last look
-      const [m] = await query(db, "select id, content from messages where role='assistant' order by id desc limit 1")
+      const [m] = await query(db, "select id, content, ai_messages_json from messages where role='assistant' order by id desc limit 1")
       if (m) {
-        if (m.id !== seen.lead) { seen.lead = m.id; seen.leadLines = 0 }
+        if (m.id !== seen.lead) { seen.lead = m.id; seen.leadLines = 0; seen.reasons = 0 }
+        // what the lead is reasoning about, newest first-seen, at most two per look
+        const r = reasoning(m.content, m.ai_messages_json)
+        for (const x of r.slice(seen.reasons, seen.reasons + 2)) say({ kind: 'reason', who: 'lead', text: `💭 ${x.short}`, full: x.full })
+        seen.reasons = Math.max(seen.reasons, Math.min(r.length, seen.reasons + 2))
         const lines = prose(m.content)
         for (const l of lines.slice(seen.leadLines, seen.leadLines + 3)) say({ kind: 'think', who: 'lead', text: l.slice(0, 260) })
         seen.leadLines = Math.max(seen.leadLines, Math.min(lines.length, seen.leadLines + 3))
@@ -104,8 +123,8 @@ export function crewRadio({ runDir, crew = [], say, every = 2500 }) {
   async function prime() {
     const db = dbOf(runDir)
     if (!db) return
-    const [m] = await query(db, "select id, content from messages where role='assistant' order by id desc limit 1")
-    if (m) { seen.lead = m.id; seen.leadLines = prose(m.content).length }
+    const [m] = await query(db, "select id, content, ai_messages_json from messages where role='assistant' order by id desc limit 1")
+    if (m) { seen.lead = m.id; seen.leadLines = prose(m.content).length; seen.reasons = reasoning(m.content, m.ai_messages_json).length }
     for (const t of await query(db, 'select id, status from agent_threads order by created_at')) helper(t.id).status = t.status
     const [a] = await query(db, 'select max(id) as n from agent_activities'), [r] = await query(db, 'select max(id) as n from agent_messages')
     seen.acts = a?.n || 0

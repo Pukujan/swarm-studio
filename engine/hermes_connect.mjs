@@ -126,7 +126,9 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
       if (amount !== 0) throw new Error(`a new Supabase project would cost ${Number.isFinite(amount) ? `$${amount}` : 'money'} on ${org.name || 'your organization'}; make one called "swarm-studio" yourself and run Auto again`)
       const confirm = await call('supabase', 'confirm_cost', { type: 'project', recurrence: cost?.recurrence || 'monthly', amount: 0 })
       say('creating a free Supabase project (about two minutes)')
-      project = await call('supabase', 'create_project', { name: 'swarm-studio', organization_id: org.id, confirm_cost_id: confirm?.id || confirm?.confirm_cost_id || confirm })
+      // the Supabase MCP needs a region; SWARM_SUPABASE_REGION picks another one (us-west-1, eu-west-2, ap-southeast-1…)
+      const region = /^[a-z]{2}-[a-z]+-\d$/.test(process.env.SWARM_SUPABASE_REGION || '') ? process.env.SWARM_SUPABASE_REGION : 'us-east-1'
+      project = await call('supabase', 'create_project', { name: 'swarm-studio', region, organization_id: org.id, confirm_cost_id: confirm?.id || confirm?.confirm_cost_id || confirm })
     }
     const id = project.id || project.ref
     for (let i = 0; i < 60 && !/ACTIVE_HEALTHY/.test(String(project.status || '')); i++) {
