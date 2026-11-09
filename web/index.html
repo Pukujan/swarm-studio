@@ -19,7 +19,7 @@
     <div class="spacer"></div>
     <div class="undo-redo"><button class="toggle" id="undo-btn" title="Undo (⌘Z / Ctrl+Z)" disabled>↶</button><button class="toggle" id="redo-btn" title="Redo (⇧⌘Z / Ctrl+Y)" disabled>↷</button></div>
     <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled>▶ Play</button>
-    <button class="toggle" id="publish-btn" title="Publish the site: a live link on GitHub Pages, or hosted on this computer" disabled>🌐 Publish</button>
+    <button class="toggle" id="publish-btn" title="The designed pages as a static website (no server): GitHub Pages, Vercel, Cloudflare or this computer. For the working app with its server routes, use 🚀 Deploy app in the App view" disabled>🌐 Publish site</button>
     <div class="more">
       <button class="toggle" id="more-btn" title="Review, video, export, models and panels" aria-haspopup="true">☰ More <span id="agent-count" class="count">0</span></button>
       <div class="more-menu" id="more-menu" hidden>
@@ -96,13 +96,14 @@
     <div class="app-bar">
       <span class="app-state pill" id="app-state">no app yet</span>
       <span class="app-stage" id="app-stage"></span>
+      <button class="toggle" id="app-link" hidden title="Open the linked build"></button>
       <div class="spacer"></div>
       <div class="seg" id="app-mode"><button data-mode="preview" class="on">Preview</button><button data-mode="code">Code</button></div>
       <div class="seg" id="app-device"><button data-w="390">Phone</button><button data-w="820">Tablet</button><button data-w="0" class="on">Desktop</button></div>
       <button class="toggle" id="app-reload" title="Reload the app">⟳</button>
       <a class="toggle" id="app-open" target="_blank" rel="noopener" title="Open the app in its own tab">↗</a>
       <button class="toggle" id="app-stop" hidden>■ Stop</button>
-      <button class="toggle" id="app-deploy" title="Put the app live on Vercel" disabled>🚀 Deploy</button>
+      <button class="toggle" id="app-deploy" title="The working app on Vercel, server routes included: orders save, /admin works. 🌐 Publish site only puts up the static pages" disabled>🚀 Deploy app</button>
     </div>
     <div class="app-body">
       <div class="app-steps" id="app-steps"></div>

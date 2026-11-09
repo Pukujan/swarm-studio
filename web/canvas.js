@@ -81,7 +81,7 @@ function on(e) {
       fresh(e.run)
       S.t0 = e.t
       // a game has no canvas build: its spec and the App view are the whole file
-      if (e.kind === 'game') { S.kind = 'game'; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
+      if (e.kind === 'game') { S.kind = 'game'; if (e.from) S.link = { run: e.from, label: `↔ ${e.fromName || 'the site'}` }; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
       if (!viewing) els.agentsSel.value = String(e.agents.length)
       for (const a of e.agents) addAgent(a)
       setTitle(e.brief.slice(0, 60))
@@ -95,6 +95,10 @@ function on(e) {
       S.planDirty = true
       break
     }
+    case 'game:linked':
+      S.link = { run: e.game, label: `🎮 ${e.title}` }
+      renderAppLink()
+      break
     case 'sitemap:done':
       els.planState.textContent = `sitemap ${(e.ms / 1000).toFixed(1)}s`
       break
@@ -1133,7 +1137,7 @@ function frameLoop(now) {
     els.exportBtn.disabled = !S.done || exp.busy
     const pubbing = pub.run === shownRun() && pub.state === 'working'
     els.publishBtn.disabled = !S.done || pubbing
-    setText(els.publishBtn, pubbing ? '🌐 Publishing…' : '🌐 Publish')
+    setText(els.publishBtn, pubbing ? '🌐 Publishing…' : '🌐 Publish site')
     const mine = video.run === shownRun()
     els.videoBtn.disabled = !S.done && !(mine && video.src)
     setText(els.videoBtn, mine && video.busy ? `🎬 ${video.pct ? `${video.pct | 0}%` : 'Writing…'}` : '🎬 Video')
@@ -2370,7 +2374,7 @@ function pubPop(html) {
   pub.el?.remove()
   pub.el = document.createElement('div')
   pub.el.className = 'export-pop publish-pop'
-  pub.el.innerHTML = `<div class="vhead">🌐 Publish<button class="vclose" title="Close">×</button></div>${html}`
+  pub.el.innerHTML = `<div class="vhead">🌐 Publish the site <small>static pages; the working app goes out with 🚀 Deploy app</small><button class="vclose" title="Close">×</button></div>${html}`
   document.body.append(pub.el)
   pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
   return pub.el
@@ -3702,7 +3706,16 @@ function stepsHtml() {
   return rows.join('') || '<div class="st"><span>Steps show here while the app builds: every file the engine writes, each check, each fix.</span></div>'
 }
 
+// The site and its promo game open each other from the App bar.
+function renderAppLink() {
+  const b = $('#app-link')
+  if (!b) return
+  b.hidden = !S.link
+  if (S.link) { b.textContent = S.link.label; b.onclick = () => openRun(S.link.run) }
+}
+
 function renderApp() {
+  renderAppLink()
   renderBadges()
   if (view !== 'app') return
   const st = appv.state, working = st === 'working'
@@ -3846,7 +3859,9 @@ commandOps.view = c => setView(c.view)
 const game = { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false }
 async function openGame(idea = '', answers = null, build = false) {
   if (!game.questions?.length) game.questions = (await api('/api/game').then(r => r.ok ? r.json() : {}).catch(() => ({}))).questions || []
-  Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false })
+  // a site build is open: the game can be its promo game, in its world and colours
+  const site = S.kind !== 'game' && S.layers.size ? shownRun() : null
+  Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false, from: site, brand: site ? (S.title || 'this site') : '', promo: !!site })
   game.el?.remove()
   game.el = document.createElement('div')
   game.el.className = 'game-pop'
@@ -3870,18 +3885,19 @@ function renderGame() {
   } else if (game.spec) {
     const s = game.spec, list = v => (Array.isArray(v) ? v.join(', ') : v || '')
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
-    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
+    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
     el.querySelector('[data-build]').onclick = () => gameBuild()
   } else {
     const val = game.answers[q.id] || ''
-    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
+    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
     const free = el.querySelector('.gfree')
     const take = v => { if (v) game.answers[q.id] = v; else delete game.answers[q.id] }
     const next = () => { take(free.value.trim() || game.answers[q.id]); if (game.i < qs.length - 1) { game.i++; renderGame() } else gameSpec() }
     for (const b of el.querySelectorAll('[data-c]')) b.onclick = () => { take(b.dataset.c); free.value = ''; next() }
     free.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); next() } }
     el.querySelector('.gidea')?.addEventListener('input', e => { game.idea = e.target.value })
+    el.querySelector('.gpromo input')?.addEventListener('change', e => { game.promo = e.target.checked })
     el.querySelector('[data-next]').onclick = next
     el.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || game.answers[q.id]); gameSpec() }
     el.querySelector('[data-back]')?.addEventListener('click', () => { game.i--; renderGame() })
@@ -3894,7 +3910,7 @@ async function gameSpec(build = false) {
   game.busy = 'The planner is writing the game spec: an original world, hero and enemies…'
   renderGame()
   try {
-    const out = await api('/api/game/spec', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: game.idea, answers: game.answers }) }).then(r => r.json())
+    const out = await api('/api/game/spec', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: game.idea, answers: game.answers, from: game.promo ? game.from : null }) }).then(r => r.json())
     if (!out.spec) throw new Error(out.error || 'no spec')
     game.spec = out.spec
   } catch (err) {

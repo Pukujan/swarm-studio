@@ -64,9 +64,10 @@ Answer with JSON only:
 // Busy or failing models: the next one in the list (InferHub's other fast routes).
 const SPEC_FALLBACKS = ['deepseek-v4.1-flash', 'claude-haiku-5.5', 'gemini-3.8-flash']
 
-export async function writeSpec({ provider, model, idea, answers, signal }) {
+export async function writeSpec({ provider, model, idea, answers, brand, signal }) {
   const p = plan(answers)
-  const ask = `Idea: ${idea || '(none)'}\n${QUESTIONS.map(q => `${q.q} ${p.answers[q.id] || '(no answer)'}`).join('\n')}\nEngine: ${p.engine}.`
+  const promo = brand ? `\n\nThis is a promo game for ${brand.name}: ${brand.brief}\nSet it in the brand's own world: its place, its people, its products and its goal (for an event, getting there and enjoying it; for a shop, its products). Use its real names. The "look" uses the brand's colours and mood: ${brand.direction}\nThe win screen invites the player to the real thing (one short line, like the site's own call to action).\nThe site's copy:\n${brand.copy}` : ''
+  const ask = `Idea: ${idea || '(none)'}\n${QUESTIONS.map(q => `${q.q} ${p.answers[q.id] || '(no answer)'}`).join('\n')}\nEngine: ${p.engine}.${promo}`
   const models = [model, ...(/inferhub/.test(provider?.baseUrl || '') ? SPEC_FALLBACKS.filter(m => m !== model) : [])].filter(Boolean)
   for (const m of models) {
     try {
@@ -74,14 +75,17 @@ export async function writeSpec({ provider, model, idea, answers, signal }) {
       const s = res.text.indexOf('{'), e = res.text.lastIndexOf('}')
       const spec = JSON.parse(res.text.slice(s, e + 1))
       if (!spec.title || !spec.loop) throw new Error('incomplete spec')
-      return { ...spec, engine: p.engine, skills: p.skills, answers: p.answers, model: m }
+      return { ...spec, engine: p.engine, skills: p.skills, answers: p.answers, model: m, ...(brand ? { brand: brandCard(brand) } : {}) }
     } catch (err) {
       if (signal?.aborted) break
       console.error(`game spec: ${m} failed: ${String(err.message || err).slice(0, 200)}`)
     }
   }
-  return { ...fallbackSpec(p.answers, idea), engine: p.engine, skills: p.skills, answers: p.answers }
+  return { ...fallbackSpec(p.answers, idea), engine: p.engine, skills: p.skills, answers: p.answers, ...(brand ? { brand: brandCard(brand) } : {}) }
 }
+
+// What the build needs from the brand (not its copy): colours, fonts, the link back.
+const brandCard = b => ({ from: b.from, name: b.name, url: b.url, fonts: b.fonts, vars: Object.fromEntries(Object.entries(b.vars || {}).filter(([k]) => /^--(background|foreground|primary|primary-foreground|accent|muted|card|border|radius)$/.test(k))) })
 
 function fallbackSpec(a, idea) {
   return {
@@ -91,6 +95,12 @@ function fallbackSpec(a, idea) {
     controls: a.controls, win: a.goal, lose: 'your flame goes out', look: a.look, sound: 'soft chimes, a low drone, sharp hits',
     screens: ['title', 'play', 'pause', 'win', 'lose'], original: 'all new world, hero and enemies'
   }
+}
+
+function brandRules(b) {
+  const vars = Object.entries(b.vars || {}).map(([k, v]) => `${k}: ${v}`).join('; ')
+  return `- This is a promo game for ${b.name}. Use its theme for the whole UI and the scene's key colours: ${vars || 'its brand colours'}${b.fonts?.heading ? `; headings in ${b.fonts.heading}, text in ${b.fonts.body || b.fonts.heading} (Google Fonts)` : ''}. The title screen says "A ${b.name} game". The win and lose screens have a button back to ${b.name}${b.url ? ` (${b.url}, opens in a new tab)` : ''} with the site's call to action, next to Play again.
+`
 }
 
 export function specMarkdown(spec) {
@@ -112,7 +122,7 @@ ${spec.pitch}
 - **Sound:** ${spec.sound}
 - **Screens:** ${list(spec.screens)}
 - **Original:** ${spec.original}
-`
+${spec.brand ? `- **Promo for:** ${spec.brand.name}${spec.brand.url ? ` (${spec.brand.url})` : ''}\n` : ''}`
 }
 
 // The app engine's first prompt for a game.
@@ -133,6 +143,7 @@ How to build it:
 - Game feel: hit-stop, screen shake, knockback, particles, easing, juicy feedback on every action.
 - Fixed timestep update loop; works at 60 fps on a laptop; resizes with the window; no console errors.
 - Original content only: the names, characters, world and art in the spec are new. Never use names, characters or assets from existing games.
+${spec.brand ? brandRules(spec.brand) : ''}
 ${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
 Finish with a working build: the typecheck and build must pass, and the game must start and be playable to a win and a loss.
 
