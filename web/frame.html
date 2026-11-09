@@ -133,7 +133,7 @@
       s.onerror = () => { lib = null; fail(new Error('could not load the screenshot library')) }
       document.head.append(s)
     })
-    const h = document.body.scrollHeight, r = Math.min(0.625, 3000 / h)
+    const h = document.body.scrollHeight, r = Math.min(m.scale || 0.625, (m.scale ? 5000 : 3000) / h)
     const bg = getComputedStyle(document.body).backgroundColor
     const opts = { width: 1280, height: h, pixelRatio: r, quality: 0.72, backgroundColor: bg, filter: n => n.id !== 'scan' }
     lib.then(h2i => h2i.toJpeg(document.body, opts).catch(() => h2i.toJpeg(document.body, { ...opts, skipFonts: true })))

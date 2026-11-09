@@ -52,6 +52,24 @@ def providers() -> dict:
     return found
 
 
+def shrink(path: str, width: int = 1024) -> str:
+    """A web-sized WebP next to the original (a 2.7 MB PNG becomes ~100 KB), so
+    pages with several images stay light on weaker machines. Falls back to the original."""
+    try:
+        from PIL import Image
+
+        src = Path(path)
+        out = src.with_name(src.stem + f"-{width}.webp")
+        with Image.open(src) as im:
+            im = im.convert("RGB")
+            if im.width > width:
+                im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
+            im.save(out, "WEBP", quality=80, method=4)
+        return str(out)
+    except Exception:
+        return path
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("prompt", nargs="?", default="")
@@ -88,7 +106,8 @@ def main() -> int:
     if not res.get("success"):
         print(json.dumps({"ok": False, "error": str(res.get("error") or "image generation failed")[:300]}))
         return 1
-    print(json.dumps({"ok": True, "path": res.get("image"), "model": res.get("model")}))
+    path = res.get("image")
+    print(json.dumps({"ok": True, "path": shrink(path) if path and os.path.isfile(path) else path, "model": res.get("model")}))
     return 0
 
 

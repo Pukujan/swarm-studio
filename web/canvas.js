@@ -1005,6 +1005,7 @@ function frameLoop(now) {
   runBanter(now)
   drawWires()
 
+  if (now - lite.last > 1000) { lite.last = now; litePass() }
   if (now - lastPanels > 150) {
     lastPanels = now
     const working = renderAgents()
@@ -1961,11 +1962,11 @@ function scanFrame(page, on) {
   if (f?.ready) post(f, { type: 'scan', on })
 }
 
-function snapFrame(f) {
+function snapFrame(f, scale) {
   return new Promise((resolve, reject) => {
     const seq = ++review.seq
     review.waits.set(seq, { resolve, reject })
-    post(f, { type: 'snap', seq })
+    post(f, { type: 'snap', seq, scale })
     setTimeout(() => { if (review.waits.delete(seq)) reject(new Error('the screenshot timed out')) }, 30000)
   })
 }
@@ -1976,6 +1977,7 @@ async function reviewRun() {
   review.busy = true
   try {
     for (const [i, f] of S.frames.entries()) {
+      if (f.frozen) { thaw(f); await new Promise(r => setTimeout(r, 2500)) }
       if (!f.ready) continue
       const shot = await snapFrame(f)
       // the shared nav and footer are reviewed once, on the first page
@@ -2020,6 +2022,73 @@ function autoReview() {
 }
 
 els.reviewBtn.onclick = () => reviewRun()
+
+// ---------- lite mode
+// For machines short on memory: only the page in front of you stays a live
+// frame. Every other finished page becomes a flat snapshot and its iframe is
+// unloaded; it comes back live as soon as you zoom into it or an agent works on it.
+
+const lite = { last: 0, busy: false }
+const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4))
+
+const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
+const frameBusy = f => S.order.some(k => { const l = S.layers.get(k); return belongs(f, l) && l.status !== 'done' && l.status !== 'failed' })
+
+function freeze(f, image) {
+  if (f.frozen) return
+  const img = document.createElement('img')
+  img.className = 'snap'
+  img.src = image
+  img.style.height = `${f.h}px`
+  f.el.append(img)
+  f.iframe.remove()
+  f.frozen = { img, sig: frameSig(f) }
+  f.ready = false
+}
+
+function thaw(f) {
+  if (!f.frozen) return
+  const iframe = document.createElement('iframe')
+  iframe.title = f.title
+  iframe.style.height = `${f.h}px`
+  if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
+  else iframe.src = 'frame.html'
+  f.el.insertBefore(iframe, f.frozen.img)
+  // the snapshot stays on top until the live page has been drawn again
+  const img = f.frozen.img
+  setTimeout(() => img.remove(), 1200)
+  f.iframe = iframe
+  f.slots.clear()
+  f.frozen = null
+}
+
+async function litePass() {
+  const on = liteOn() && els.player.hidden
+  document.body.classList.toggle('lite', on)
+  if (!on) { S.frames.forEach(thaw); return }
+  if (lite.busy) return
+  // the page you are reading: the most visible one, once zoomed in enough to read
+  const vw = els.viewport.clientWidth
+  let keep = null, best = 0
+  if (cam.s >= 0.2) for (const f of S.frames) {
+    const x0 = f.x * cam.s + cam.x, x1 = x0 + FRAME_W * cam.s
+    const seen = Math.min(vw, x1) - Math.max(0, x0)
+    if (seen > best) { best = seen; keep = f }
+  }
+  for (const f of S.frames) {
+    const wanted = f === keep || frameBusy(f) || (S.sel && S.sel.startsWith(`${f.id}/`))
+    if (f.frozen && (wanted || f.frozen.sig !== frameSig(f))) thaw(f)
+    else if (!f.frozen && !wanted && f.ready && f.slots.size) {
+      lite.busy = true
+      try {
+        const shot = await snapFrame(f, 0.5)
+        if (!frameBusy(f) && f !== keep) freeze(f, shot.image)
+      } catch {}
+      lite.busy = false
+      return // one page per pass keeps it smooth
+    }
+  }
+}
 
 // ---------- models menu
 // Planner, builders, reviewer and images. A pick is saved by the server in the
@@ -2069,6 +2138,12 @@ function renderModels() {
         <option value="off" ${cur === 'off' ? 'selected' : ''}>Off: shapes and SVG only</option>${opts}
       </select></span>
       <small class="mnow">${info.image?.providers ? `${info.image.providers.filter(p => p.available).length} providers signed in` : 'looking for Hermes image providers…'}</small></label>
+    <label class="mrow"><span class="mlabel">Lite mode<small>for machines short on memory: one live page at a time, the rest become snapshots</small></span>
+      <span class="mfield"><select data-lite>
+        <option value="" ${info.lite == null ? 'selected' : ''}>Auto (${(navigator.deviceMemory || 8) <= 4 ? 'on' : 'off'} on this device)</option>
+        <option value="on" ${info.lite === true ? 'selected' : ''}>On</option>
+        <option value="off" ${info.lite === false ? 'selected' : ''}>Off</option>
+      </select></span></label>
     <div class="mfoot">Each image is one call to that provider and uses its quota. Changes apply to the next build.</div>`
 }
 
@@ -2086,6 +2161,7 @@ function toggleModels(open = !models.el) {
   models.el.addEventListener('change', e => {
     const t = e.target
     if (t.dataset.role) saveModel({ role: t.dataset.role, model: t.value.trim() || null })
+    if (t.dataset.lite !== undefined) saveModel({ role: 'lite', on: t.value === '' ? null : t.value === 'on' })
     if (t.dataset.image !== undefined) {
       const [provider, model] = t.value.split('|')
       saveModel({ role: 'image', provider: t.value === 'off' ? 'off' : provider || null, model: model || '' })
