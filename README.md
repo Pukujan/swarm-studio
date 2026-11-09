@@ -89,4 +89,10 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
 
 ## License
 
-Apache-2.0
+[FSL-1.1-ALv2](LICENSE) (Functional Source License, Apache 2.0 future license). It is source-available ("fair source"), not OSI open source.
+
+- You can install, read, change and use Swarm Studio for anything, including your own commercial sites and apps built with it.
+- You can't offer Swarm Studio itself, or something substantially like it, as a commercial product or service.
+- Each version becomes Apache-2.0 two years after it is released.
+
+Versions up to commit `9283694` were released under Apache-2.0 and stay under it.

@@ -11,4 +11,4 @@ requires_env:
   - name: SWARM_STUDIO_API_KEY
     description: "API key for an OpenAI-compatible chat endpoint (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"
     secret: true
-license: Apache-2.0
+license: FSL-1.1-ALv2
