@@ -1936,15 +1936,40 @@ function drawSelBox() {
 // Builders leave <img data-gen="…"> without a src; the server paints each one with
 // a Hermes image provider and sends its file, which goes into the section here.
 
+// Until a photo arrives, its spot shows a pencil sketch in the theme's colours,
+// different for every description, so a page looks finished from the start.
+function sketch(desc) {
+  const v = S.theme?.vars || {}
+  const c = n => esc(v[`--${n}`] || { muted: '#e9e4dc', card: '#faf8f4', accent: '#c96', primary: '#333', 'muted-foreground': '#888' }[n])
+  let h = 0
+  for (const ch of desc) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  const r = n => ((h = (h * 1103515245 + 12345) >>> 0) % 1000) / 1000 * n
+  const kind = h % 3
+  const pen = `fill="none" stroke="${c('primary')}" stroke-opacity=".35" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="7 4"`
+  const sun = `<circle cx="${290 + r(60)}" cy="${70 + r(30)}" r="${22 + r(14)}" fill="${c('accent')}" fill-opacity=".35"/>`
+  const shapes = kind === 0
+    ? `${sun}<path d="M0 ${210 + r(20)} L${80 + r(40)} ${130 + r(30)} L${170 + r(30)} ${200} L${250 + r(30)} ${120 + r(30)} L400 ${215}" ${pen}/><path d="M0 250 Q100 ${225 + r(15)} 200 245 T400 240" ${pen}/>`
+    : kind === 1
+      ? `${sun}<rect x="${70 + r(30)}" y="${110 + r(20)}" width="${110 + r(40)}" height="${90 + r(30)}" rx="10" ${pen}/><circle cx="${270 + r(30)}" cy="${170 + r(20)}" r="${40 + r(15)}" ${pen}/>`
+      : `<path d="M${40 + r(30)} 230 C${90 + r(30)} ${90 + r(40)}, ${230 + r(30)} ${90 + r(40)}, ${330 + r(30)} 230" ${pen}/><circle cx="${200 + r(30)}" cy="${120 + r(20)}" r="${30 + r(12)}" fill="${c('accent')}" fill-opacity=".3"/>`
+  const label = esc(desc.length > 26 ? `${desc.slice(0, 25)}…` : desc)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="g" x2="0" y2="1"><stop offset="0" stop-color="${c('muted')}"/><stop offset="1" stop-color="${c('card')}"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/>${shapes}<text x="200" y="282" text-anchor="middle" font-family="ui-monospace,monospace" font-size="10" fill="${c('muted-foreground')}">painting · ${label}</text></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
+
 function fillImages(l) {
   if (l.status !== 'done' || !/data-gen=/.test(l.text)) return
   const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
   let changed = false
   for (const img of doc.body.querySelectorAll('img[data-gen]')) {
-    const src = S.images.get(`${l.key}|${img.getAttribute('data-gen')}`)
-    if (src === undefined) continue
-    if (src && img.getAttribute('src') !== src) { img.setAttribute('src', src); changed = true }
-    if (!src && !img.hasAttribute('data-failed')) { img.setAttribute('data-failed', ''); changed = true }
+    const gen = img.getAttribute('data-gen')
+    const src = S.images.get(`${l.key}|${gen}`)
+    if (src === undefined || src === '') {
+      // waiting, or the photo failed: the sketch stays
+      if (!img.getAttribute('src')) { img.setAttribute('src', sketch(gen)); img.setAttribute('data-sketch', ''); changed = true }
+      continue
+    }
+    if (img.getAttribute('src') !== src) { img.setAttribute('src', src); img.removeAttribute('data-sketch'); changed = true }
   }
   if (changed) { l.text = doc.body.innerHTML; l.ver++ }
 }
