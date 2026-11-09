@@ -564,12 +564,30 @@ async function videoNow(id, input = {}) {
   }
   const dir = join(runsDir, id, 'video')
   ;(async () => {
-    const c = collect(events, join(runsDir, id))
+    // film the running app first (gameplay on /play, a scroll through the site), so the cut can use it
+    if (input.film === 'auto') input.film = (await apps()).state(id).hasApp
+    if (input.film) {
+      try {
+        progress(0, 'opening the app to film it')
+        const t = await videoTools(dataDir, stage => progress(0, stage))
+        const a = await apps()
+        const view = await a.open(id)
+        const { filmBuild } = await import('../engine/footage.mjs')
+        const shot = await filmBuild({ url: view?.url, runDir: join(runsDir, id), dataDir, ffmpeg: t.ffmpeg, game: input.film !== 'site', onStage: stage => progress(0, stage) })
+        send('video:footage', { clips: shot.clips.map(x => x.label), note: shot.note })
+      } catch (err) {
+        send('video:note', { message: `no footage this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
+      }
+    }
+    const c = collect(readEvents(id) || events, join(runsDir, id))
     const model = modelFor('planner')
     // the plan: a style (its own prompt, pace, cut and music), an optional idea, an optional cut
-    const style = STYLES[input.style] ? input.style : 'promo', plan = STYLES[style]
+    // 'auto' lets the storyboard writer pick the plan; every video gets its own seed and look
+    let style = STYLES[input.style] || input.style === 'auto' ? input.style : 'promo', plan = STYLES[style] || STYLES.promo
     const idea = String(input.idea || '').trim().slice(0, 400)
-    const transition = TRANSITIONS.includes(input.transition) ? input.transition : plan.transition
+    const seed = (Date.now() ^ (Math.random() * 2 ** 31)) >>> 0
+    const pinned = TRANSITIONS.includes(input.transition)
+    let transition = pinned ? input.transition : plan.transition
     send('video:start', { model, images: c.images.length, style, idea, transition })
     const tools = videoTools(dataDir, stage => progress(0, stage)) // fetches the renderer while the story is written
     let scenes
@@ -577,14 +595,16 @@ async function videoNow(id, input = {}) {
       if (!model || !models.planner.apiKey) throw new Error('no planner model')
       // with an image model, the storyboard may ask for new pictures (what the idea wants to see)
       const shooter = await imageChoice().catch(() => null)
-      scenes = await writeStory({ provider: provider('planner'), model, c, style, idea, shots: !!shooter, signal: AbortSignal.timeout(90000) })
+      scenes = await writeStory({ provider: provider('planner'), model, c, style, idea, shots: !!shooter, seed, signal: AbortSignal.timeout(90000) })
       if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress)
     } catch {
-      scenes = fallbackStory(c)
+      scenes = fallbackStory(c, seed)
     }
+    if (style === 'auto') { style = scenes.plan || 'promo'; plan = STYLES[style]; if (!pinned) transition = plan.transition }
+    if (pinned) scenes.look.pinned = true
     scenes.fx = fxFor(scenes.fx, idea)
     const agents = c.agents
-    send('video:story', { fx: scenes.fx, cast: scenes.cast, music: scenes.music, scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: s.image ? `/img/${id}/${basename(c.images.find(x => x.n === s.image).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
+    send('video:story', { look: scenes.look, plan: style, clips: c.clips.length, fx: scenes.fx, cast: scenes.cast, music: scenes.music, scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: (s.image || s.images?.[0]) ? `/img/${id}/${basename(c.images.find(x => x.n === (s.image || s.images[0])).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
     mkdirSync(dir, { recursive: true })
     stagePictures(c, dir)
     const t = await tools
@@ -604,7 +624,7 @@ async function videoNow(id, input = {}) {
     const lengths = scenes.map((s, i) => sceneLength(s, voices[i]?.seconds, plan.pace))
     const comp = composition(scenes, c, lengths, transition)
     writeFileSync(join(dir, 'index.html'), comp.html)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ cast: scenes.cast, music: scenes.music, fx: scenes.fx, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ plan: style, look: comp.look, cast: scenes.cast, music: scenes.music, fx: scenes.fx, scenes }, null, 2))
     progress(2, 'rendering')
     const silent = join(dir, 'promo-silent.mp4'), out = join(dir, 'promo.mp4')
     await render({ tools: t, dir, out: silent, quality: ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft', onProgress: (pct, code) => progress(Math.max(2, Math.min(96, pct)), code === 'assemble' ? 'assembling' : 'rendering') })

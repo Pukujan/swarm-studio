@@ -94,11 +94,11 @@ Keep the rest of the app as it is.`
 const STEPS = [
   ['design', '🎨 Design the site'],
   ['review', '🔎 Review every page'],
-  ['video', '🎬 Cut the promo video'],
   ['app', '⚙️ Build the working app'],
   ['games', '🎮 Add the games'],
   ['shop', '💳 Sell a $2 credit pack (demo checkout)'],
   ['data', '🗄️ Keep the data in Supabase'],
+  ['video', '🎬 Film it and cut the promo'],
   ['deploy', '🚀 Deploy to Vercel']
 ]
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -177,11 +177,15 @@ export function autoJob(d) {
   }
 
   async function video() {
-    set('video', 'working', 'writing the storyboard from your prompt')
-    await d.makeVideo(job.run, { idea: job.prompt })
+    // after the app and the games, so the promo can show real gameplay and the live site
+    const hasApp = (await d.apps()).state(job.run).hasApp
+    set('video', 'working', hasApp ? 'filming the game and the site, then the storyboard' : 'writing the storyboard from your prompt')
+    await d.makeVideo(job.run, { idea: job.prompt, style: 'auto', film: hasApp ? (job.games === 'none' ? 'site' : true) : false })
     const v = await until(() => { const j = d.videos.get(job.run); return j && j.state !== 'working' && j }, { ms: 20 * 60000 })
     if (v.state !== 'done') throw new Error(v.message || 'the video failed')
-    set('video', 'done', `${Math.round(v.seconds || 0)} s promo`)
+    let look = ''
+    try { const sb = JSON.parse(readFileSync(join(d.runsDir, job.run, 'video', 'storyboard.json'), 'utf8')); look = ` · ${sb.plan}, ${sb.look?.layout} look${sb.scenes?.some(x => x.kind === 'clip') ? ', with gameplay footage' : ''}` } catch {}
+    set('video', 'done', `${Math.round(v.seconds || 0)} s promo${look}`)
   }
 
   async function appTurn(id, input, note, turns) {
@@ -240,11 +244,12 @@ export function autoJob(d) {
 
   async function go() {
     const plan = [
-      ['design', design, true], ['review', review, false], ['video', video, false],
+      ['design', design, true], ['review', review, false],
       ['app', () => appTurn('app', {}, 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
       ['games', games, false],
       ['shop', shop, false],
-      ['data', data, false]
+      ['data', data, false],
+      ['video', video, false]
     ]
     for (const [id, fn, needed] of plan) {
       if (job.stopped) { set(id, 'skipped', 'stopped'); continue }
