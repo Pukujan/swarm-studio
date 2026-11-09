@@ -38,11 +38,16 @@ async function verify(provider, token) {
     return { user: u.username || u.email || 'connected', teamId: u.defaultTeamId || null }
   }
   if (provider === 'cloudflare') {
-    const v = await call('https://api.cloudflare.com/client/v4/user/tokens/verify', token)
-    if (!v.ok || v.body.result?.status !== 'active') throw new Error('Cloudflare did not accept that token')
-    const a = await call('https://api.cloudflare.com/client/v4/accounts?per_page=5', token)
+    const CF = 'https://api.cloudflare.com/client/v4'
+    const a = await call(`${CF}/accounts?per_page=5`, token)
     const acct = a.body.result?.[0]
-    if (!acct) throw new Error('that token cannot see any Cloudflare account: give it Account → Cloudflare Pages → Edit')
+    if (!acct) throw new Error(a.ok ? 'that token cannot see any Cloudflare account: give it Account → Cloudflare Pages → Edit' : 'Cloudflare did not accept that token')
+    // user tokens verify under /user, account-owned tokens under their account
+    const user = await call(`${CF}/user/tokens/verify`, token)
+    const ok = user.body.result?.status === 'active' || (await call(`${CF}/accounts/${acct.id}/tokens/verify`, token)).body.result?.status === 'active'
+    if (!ok) throw new Error('Cloudflare did not accept that token')
+    const pages = await call(`${CF}/accounts/${acct.id}/pages/projects`, token)
+    if (!pages.ok) throw new Error('that token cannot use Cloudflare Pages: give it Account → Cloudflare Pages → Edit')
     return { user: acct.name, accountId: acct.id }
   }
   throw new Error('unknown provider')

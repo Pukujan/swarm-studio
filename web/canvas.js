@@ -2080,7 +2080,7 @@ const pub = { run: null, state: 'none', stage: '', target: 'github', el: null, h
 const PUB_STAGES = {
   github: { export: 'Exporting the pages', repo: 'Making the GitHub repo', push: 'Pushing the site', pages: 'Turning on GitHub Pages', building: 'GitHub is building it' },
   vercel: { export: 'Exporting the pages', project: 'Setting up the Vercel project', upload: 'Uploading the files', building: 'Vercel is deploying it' },
-  cloudflare: { export: 'Exporting the pages', project: 'Setting up the Pages project', upload: 'Uploading with wrangler', building: 'Cloudflare is going live' },
+  cloudflare: { export: 'Exporting the pages', project: 'Setting up the Pages project', upload: 'Uploading the files', building: 'Cloudflare is going live' },
 }
 
 function pubPop(html) {
@@ -2096,7 +2096,7 @@ function pubPop(html) {
 const HOSTS = {
   github: { label: 'GitHub Pages', how: who => `A public link anyone can open: ${esc(who)}.github.io/… · about a minute`, off: 'Sign in with <code>gh auth login</code> to get a public link' },
   vercel: { label: 'Vercel', how: who => `Your Vercel (${esc(who)}): a …vercel.app link · under a minute`, token: 'Create a token at vercel.com/account/tokens, then paste it here' },
-  cloudflare: { label: 'Cloudflare Pages', how: who => `Your Cloudflare (${esc(who)}): a …pages.dev link · the first one fetches wrangler`, token: 'Create a token with Account → Cloudflare Pages → Edit, then paste it here' },
+  cloudflare: { label: 'Cloudflare Pages', how: who => `Your Cloudflare (${esc(who)}): a …pages.dev link · under a minute`, token: 'Create a token with Account → Cloudflare Pages → Edit, then paste it here' },
 }
 
 async function publishMenu(force) {
