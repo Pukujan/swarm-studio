@@ -102,7 +102,7 @@ The studio is a little universe. Hermia came from beyond the galaxy with her cre
 
 The owner found the studio too "terminal and code based", with too much on screen at once. So the default now starts with visuals, and the old layout stays one click away.
 
-Screens: `docs/specs/screens/galaxy/`. Start with `galaxy-1280.png`, then `orbit-1280-building.png`, `orbit-1280-thinking-log.png`, `galaxy-390.png` and `orbit-390.png`.
+Screens: `docs/specs/screens/galaxy/`. For the calmer crew talk, compare `calm-before-bubbles-1280.png` with `calm-after-bubbles-1280.png`. Otherwise start with `galaxy-1280.png`, then `orbit-1280-building.png`, `orbit-1280-thinking-log.png`, `galaxy-390.png` and `orbit-390.png`.
 
 ### Galaxy home
 
@@ -123,7 +123,15 @@ The first thing you see is a slowly turning spiral galaxy, drawn with three.js. 
   - The build is the sun, in its theme colour.
   - Each page is a planet, textured with a thumbnail of that page, and a ring under its label fills as its sections finish.
   - Sections are moons while they are being built. A moon sinks into its planet when its section is done.
-- **The crew.** Crew minions fly to the moon or planet they are working on. They say what they are doing in speech bubbles, with at most 3 talking at once. The engine crew fly to the Engine room.
+- **The crew.** Crew minions fly to the moon or planet they are working on, and the engine crew fly to the Engine room.
+- **Crew talk stays calm.**
+  - At most 3 speech bubbles show at once, one per minion. The newest wins, and each fades out after about 3.5 s.
+  - Text is cut to 60 characters with an ellipsis, on at most 2 lines.
+  - Each frame, every bubble takes the first free spot around its minion: above-right, above-left, above, below-right or below-left. A bubble keeps its spot while it still fits.
+  - Bubbles never overlap each other, the sun, its title, planet labels, Hermia's thought cloud or the comm strip. A bubble with no room is dropped until there is room. A fading bubble still holds its spot until it is gone.
+  - The bubbles sit in their own layer (`.ob-talk`), so they are not scaled with the minions.
+- **Page labels.** A page label that would cover the sun's title (or another label) moves above its planet. If that doesn't fit either, it hides.
+- **Thumbnails.** Planet thumbnails of dark sites are lifted in the shader, and every planet gets a camera-side fill light and a stronger rim, so near-black pages still read.
 - **Hermia's comm-link.** Hermia's orders show in one comm-link strip at the bottom.
 - **Hermia's reasoning.**
   - Her reasoning (`crew:lead` events with `kind: 'reason'`) shows separately, as a dimmer, italic, cloud-style thought bubble above the strip.
