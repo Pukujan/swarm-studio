@@ -1,5 +1,7 @@
 # Next specs
 
+> **The overall plan is in [11-platform-plan.md](11-platform-plan.md):** Swarm Feed (forked from Kresilo) is the community home page, Swarm Studio is the studio, and MCP connects the two. It also has the schedule to the deadline.
+
 These are the specs for what comes after Auto mode and the Supabase connector. Each spec says what we are building and what "done" looks like. Build them in this order:
 
 | # | Spec | Why it comes here | Size |
