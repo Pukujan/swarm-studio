@@ -1334,3 +1334,27 @@ em { font-style: italic; }
 
 /* the hidden attribute always wins over a display set by a theme rule (Stop on a finished app, empty panels) */
 [hidden] { display: none !important; }
+
+/* ---------- Swarm Wall tile (?wall=1): just the work, no chrome (web/wall.html) */
+html.wall body, html.wall body.design-on { grid-template-columns: 1fr !important; grid-template-rows: 1fr !important; }
+html.wall .topbar, html.wall .side, html.wall .design, html.wall .game-pop, html.wall .side-min-btn { display: none !important; }
+html.wall .auto-panel { transform: scale(.72); transform-origin: top right; pointer-events: none; }
+
+/* ---------- Make / Pro switch in the Auto window (docs/specs/09-demo-modes.md) */
+.auto-mode { display: flex; gap: 4px; margin: 2px 0 10px; }
+.auto-mode button { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.auto-mode button.on { background: var(--accent, #3b5bff); border-color: transparent; color: #fff; }
+.auto-mode button small { display: block; opacity: .7; font-size: 11px; }
+.pro-packs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.pro-pack { text-align: left; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
+.pro-pack.on { outline: 2px solid var(--accent, #3b5bff); }
+.pro-pack b { display: block; font-size: 13px; }
+.pro-pack small { display: block; opacity: .75; font-size: 11px; line-height: 1.35; margin-top: 2px; }
+.pro-intake { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.pro-intake label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; opacity: .9; }
+.pro-intake input, .pro-intake select { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg, transparent); color: var(--text); font: inherit; font-size: 12px; }
+.pro-deliv { font-size: 11.5px; opacity: .8; margin: -4px 0 10px; }
+.auto-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: -4px 0 10px; }
+.auto-chips button { padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 11.5px; cursor: pointer; }
+.auto-pop [hidden] { display: none !important; }
+.auto-pop { max-height: calc(100vh - 60px); overflow-y: auto; }

@@ -858,6 +858,13 @@ const server = createServer((req, res) => {
     return
   }
 
+  // the Swarm Wall: 2–4 runs side by side (docs/specs/09-demo-modes.md)
+  if (url.pathname === '/wall') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(readFileSync(join(webDir, 'wall.html'), 'utf8').replace('__SWARM_TOKEN__', () => JSON.stringify(token).replace(/</g, '\\u003c')))
+    return
+  }
+
   if (url.pathname === '/events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
     res.write(': hello\n\n')

@@ -46,6 +46,9 @@ HELP = """Swarm Studio commands
   /swarm auto <prompt>            ⚡ everything from one prompt: design, review, video, app, mini games,
                                   a $2 credit pack (demo checkout), Supabase data, deploy to Vercel
   /swarm auto status|stop         where auto mode is, or stop it after the current step
+  /swarm pro                      the Pro packs: Events, Game Studio, Brand Campaign, Commerce Drop
+  /swarm pro <pack> <prompt>      ⚡ Auto with a pack: its intake defaults, its tools and its checks
+  /swarm wall [n n n n]           the Swarm Wall: up to four builds replayed side by side
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
@@ -54,7 +57,7 @@ HELP = """Swarm Studio commands
 
 TARGETS = ("github", "vercel", "cloudflare", "local")
 
-SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto"}
+SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -304,6 +307,12 @@ def _dispatch(cmd: str, args: list[str]) -> str:
     if cmd == "auto":
         return _auto(" ".join(args).strip().strip('"“”'))
 
+    if cmd == "pro":
+        return _pro(args)
+
+    if cmd == "wall":
+        return _wall(args)
+
     if cmd == "models":
         if not args:
             info = _api("/api/models")
@@ -434,6 +443,38 @@ def _auto(prompt: str) -> str:
     st = _api("/api/auto", {"prompt": prompt}, timeout=30)
     return ("⚡ Auto mode is running on the canvas: design → review → video → app → mini games → $2 credit pack (demo checkout) "
             "→ Supabase → Vercel. Keep the canvas open (the review photographs it). /swarm auto status shows where it is.")
+
+
+def _pro(args: list[str]) -> str:
+    packs = _api("/api/packs").get("packs", [])
+    if not args:
+        lines = [f"{p['icon']} {p['id']}: {p['name']}. {p['pitch']}" for p in packs]
+        return "💼 Pro packs (/swarm pro <pack> <prompt>):\n" + "\n".join(lines)
+    want = args[0].lower()
+    pack = next((p for p in packs if p["id"] == want or p["id"].startswith(want) or want in p["name"].lower()), None)
+    if not pack:
+        return f"No pack called {args[0]}. Packs: {', '.join(p['id'] for p in packs)}."
+    prompt = " ".join(args[1:]).strip().strip('"“”') or pack["pitch"]
+    _api("/api/auto", {"prompt": prompt, "pack": pack["id"]}, timeout=30)
+    tools = ", ".join(t["label"] for t in pack.get("tools", []))
+    return (f"{pack['icon']} {pack['name']} is running on the canvas with its intake defaults. Its tools: {tools}. "
+            f"It ends with the pack's checks and delivers: {', '.join(pack.get('deliverables', []))}. /swarm auto status shows where it is.")
+
+
+def _wall(args: list[str]) -> str:
+    ids = []
+    for a in args[:4]:
+        r = _pick_run(a)
+        if not r:
+            return f"No build {a}. See /swarm files."
+        ids.append(r["id"])
+    up = launcher.ensure_server()
+    if not up.get("running"):
+        return up.get("error") or "the canvas server is not running"
+    url = f"{launcher.base_url().rstrip('/')}/wall" + (f"?runs={','.join(ids)}" if ids else "")
+    import webbrowser
+    webbrowser.open(url)
+    return f"🧱 The Swarm Wall is open at {url}: {len(ids) or 'the four newest'} builds replayed side by side. Add &speed=16 to go faster."
 
 
 def _deploy(ref: str) -> str:

@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 // The press kit: a fact sheet as JSON and Markdown, from the intake and the brief.
-export async function run({ intake, prompt, write }) {
-  const title = (String(prompt).match(/^\s*([A-Z][\w' -]{1,40}?)\s*[—:-]/) || [])[1] || 'Untitled game'
+export async function run({ intake, prompt, runDir, write }) {
+  // the name the prompt opens with ("Tidebreak — …"), else the planner's site title, else the first capitalised word
+  let planTitle = ''
+  try { planTitle = JSON.parse(readFileSync(join(runDir, 'plan.json'), 'utf8')).pages?.[0]?.title || '' } catch {}
+  const title = (String(prompt).match(/^\s*([A-Z][\w' -]{1,40}?)\s*[—:-]/) || [])[1] || planTitle.split(/\s[—:-]\s/)[0] || (String(prompt).match(/\b([A-Z][a-z]{3,})\b/) || [])[1] || 'Untitled game'
   const fact = {
     title, developer: intake.studio, genre: intake.genre, platforms: intake.platforms, release: intake.release, price: intake.price,
     pitch: String(prompt).replace(/^[^—:-]+[—:-]\s*/, '').split(/(?<=\.)\s/)[0].slice(0, 280),

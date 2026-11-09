@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swarm Wall</title>
+<style>
+  :root { --bg: #05060d; --line: #1c2140; --text: #eef0ff; --muted: #8b91b8; --accent: #ffe14d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; overflow: hidden; }
+  .wall { display: grid; gap: 6px; padding: 6px; height: calc(100% - 64px); }
+  .wall.n1 { grid-template: 1fr / 1fr; }
+  .wall.n2 { grid-template: 1fr / 1fr 1fr; }
+  .wall.n3, .wall.n4 { grid-template: 1fr 1fr / 1fr 1fr; }
+  .tile { position: relative; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #000; }
+  .tile iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .tile .tag { position: absolute; left: 10px; top: 10px; z-index: 2; display: flex; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 99px; background: rgba(5, 6, 13, .82); font-size: 12px; pointer-events: none; }
+  .tile .tag b { font-weight: 700; }
+  .tile .tag .t { font-variant-numeric: tabular-nums; color: var(--accent); }
+  .tile .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); width: 0; z-index: 2; transition: width .4s linear; }
+  .tile .open { position: absolute; inset: 0; z-index: 3; cursor: zoom-in; }
+  .tile.done { border-color: var(--accent); }
+  footer { height: 64px; display: flex; align-items: center; justify-content: center; gap: 18px; font-size: 26px; font-weight: 800; letter-spacing: .01em; }
+  footer small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .empty { padding: 40px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wall" id="wall"></div>
+<footer><span id="cap">Swarm Wall</span><small id="note"></small></footer>
+<script>
+// /wall?runs=a,b,c,d&speed=8   replays up to four saved runs side by side, sped up
+// /wall?live=1                  follows the live run in every tile instead (only one runs at a time)
+// With no runs given it takes the four newest Auto runs. Click a tile to open its full canvas.
+const TOKEN = __SWARM_TOKEN__
+const Q = new URLSearchParams(location.search)
+const speed = Math.max(1, Math.min(60, Number(Q.get('speed')) || 8))
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+const clock = ms => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
+
+async function main() {
+  const runs = await fetch('/api/runs', { headers: { 'x-swarm-token': TOKEN } }).then(r => r.json()).catch(() => [])
+  let ids = (Q.get('runs') || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 4)
+  if (!ids.length) ids = runs.filter(r => r.kind !== 'game').slice(0, 4).map(r => r.id)
+  const wall = document.getElementById('wall')
+  if (!ids.length) { wall.innerHTML = '<div class="empty">No saved runs yet. Run Auto first, then open the wall.</div>'; return }
+  wall.className = `wall n${ids.length}`
+  const tiles = {}
+  for (const id of ids) {
+    const r = runs.find(x => x.id === id) || { id, title: id }
+    const live = Q.get('live') === '1'
+    const src = live ? `/?run=${encodeURIComponent(id)}&wall=1` : `/?replay=${encodeURIComponent(id)}&speed=${speed}&wall=1`
+    const el = document.createElement('div')
+    el.className = 'tile'
+    el.innerHTML = `<div class="tag"><b>${esc(r.title || id)}</b><span class="t">0:00</span></div><div class="bar"></div><iframe src="${src}" title="${esc(r.title || id)}"></iframe><div class="open" title="Open this canvas"></div>`
+    el.querySelector('.open').onclick = () => window.open(`/?run=${encodeURIComponent(id)}`, '_blank')
+    wall.append(el)
+    tiles[id] = { el, frame: el.querySelector('iframe'), ms: 0, done: false }
+  }
+  const real = { total: 0 }
+  addEventListener('message', m => {
+    const d = m.data || {}
+    const t = tiles[d.run]
+    if (!t || !d.wall || m.source !== t.frame.contentWindow) return
+    if (d.wall === 'tick') {
+      t.el.querySelector('.t').textContent = clock(d.t)
+      t.el.querySelector('.bar').style.width = `${Math.round(100 * d.i / Math.max(1, d.of))}%`
+    }
+    if (d.wall === 'done') {
+      t.done = true; t.ms = d.ms
+      t.el.classList.add('done')
+      t.el.querySelector('.t').textContent = `✓ ${clock(d.ms)}`
+      t.el.querySelector('.bar').style.width = '100%'
+      const all = Object.values(tiles)
+      if (all.every(x => x.done)) {
+        const longest = Math.max(...all.map(x => x.ms))
+        // the real time: the slowest build's own clock, not the sped-up replay
+        document.getElementById('cap').textContent = `${all.length} build${all.length > 1 ? 's' : ''}. One Hermes. ${Math.max(1, Math.round(longest / 60000))} min.`
+      }
+    }
+  })
+  document.getElementById('note').textContent = Q.get('live') === '1' ? 'live' : `replayed at ${speed}× · each build recorded separately · times are real`
+}
+main()
+</script>
+</body>
+</html>
