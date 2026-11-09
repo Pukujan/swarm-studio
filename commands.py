@@ -26,13 +26,14 @@ HELP = """Swarm Studio commands
   /swarm open <n|id>              open a build on the canvas (n from /swarm files)
   /swarm play                     play the open build as a clickable prototype
   /swarm review [n|id]            a vision model checks every page; agents fix what it finds
+  /swarm fix <what to change>     an agent reworks the selected section (or the planner finds which)
   /swarm video [n|id]             cut a 20-second promo video of a build (HyperFrames, MP4)
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
   /swarm lite [on|off|auto]       lite mode for machines short on memory"""
 
-SUBCOMMANDS = {"help", "files", "open", "play", "review", "video", "models", "images", "lite"}
+SUBCOMMANDS = {"help", "files", "open", "play", "review", "fix", "video", "models", "images", "lite"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -72,8 +73,8 @@ def is_command(text: str) -> bool:
     words = text.strip().split()
     if not words or words[0].lower() not in SUBCOMMANDS:
         return False
-    # a brief that happens to start with one of these words is still a brief
-    return len(words) <= 4
+    # a comment is free text; a brief that happens to start with another of these words is still a brief
+    return words[0].lower() == "fix" or len(words) <= 4
 
 
 def run(text: str) -> str:
@@ -114,6 +115,9 @@ def _dispatch(cmd: str, args: list[str]) -> str:
 
     if cmd == "video":
         return _video(args[0] if args else "", wait=False)
+
+    if cmd == "fix":
+        return _fix(" ".join(args).strip().strip('"“”'), "")
 
     if cmd == "models":
         if not args:
@@ -162,6 +166,20 @@ def _dispatch(cmd: str, args: list[str]) -> str:
     return HELP
 
 
+def _fix(text: str, ref: str) -> str:
+    if not text:
+        return 'Usage: /swarm fix <what to change>, e.g. /swarm fix make the hero darker and the headline shorter'
+    # on the open canvas, so a selected section is the one changed and the person sees it happen
+    if not ref and _api("/api/cmd", {"op": "fix", "text": text}).get("clients"):
+        return f"Sent to the canvas: “{text}”. An agent picks it up and rewrites the section live."
+    r = _pick_run(ref)
+    if not r:
+        return "No such build. See /swarm files."
+    got = _api(f"/api/runs/{r['id']}/comment", {"text": text}, timeout=60)
+    where = ", ".join(got.get("sections") or []) or "the right section"
+    return f"On it in “{r['title']}”: reworking {where}." + (f" ({got['reply']})" if got.get("reply") else "")
+
+
 def _video(ref: str, wait: bool) -> str:
     r = _pick_run(ref)
     if not r:
@@ -184,12 +202,13 @@ def _video(ref: str, wait: bool) -> str:
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), cut a promo video of a build (MP4, waits until it is rendered and returns the file path), and set the models, image generation and lite mode.",
+    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, cut a promo video of a build (MP4, waits until it is rendered and returns the file path), and set the models, image generation and lite mode.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "open", "play", "review", "video", "models", "images", "lite", "help"]},
-            "build": {"type": "string", "description": "for open/review/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
+            "action": {"type": "string", "enum": ["files", "open", "play", "review", "fix", "video", "models", "images", "lite", "help"]},
+            "build": {"type": "string", "description": "for open/review/fix/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
+            "text": {"type": "string", "description": "for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
             "provider": {"type": "string", "description": "for images: a Hermes image provider (openai-codex, xai, …), 'auto' or 'off'; omit to show"},
@@ -204,8 +223,10 @@ TOOL_SCHEMA = {
 def tool(args: dict | None = None, **_: object) -> str:
     a = args or {}
     action = str(a.get("action") or "help")
-    if action == "video":
+    if action in ("video", "fix"):
         try:
+            if action == "fix":
+                return _fix(str(a.get("text") or "").strip(), str(a.get("build") or ""))
             return _video(str(a.get("build") or ""), wait=True)
         except RuntimeError as exc:
             return f"Swarm Studio: {exc}"

@@ -47,8 +47,27 @@ export async function reviewPage({ provider, model, brief, page, sections, image
   return { verdict: clip(raw.verdict, 160), issues, ms: Math.round(res.totalMs) }
 }
 
-// Rewrite one section with the reviewer's note. Streams like a build.
-export async function fixSection({ provider, model, theme, html, role, problem, fix, onDelta, signal }) {
+// A person's comment ("make the hero darker"): which sections it is about, and a
+// one-line reply from the agent who takes it. A comment made on a selected
+// section skips this.
+export async function routeComment({ provider, model, text, sections, signal }) {
+  const list = sections.map(s => `${s.key} "${s.role}"${s.head ? `: ${s.head}` : ''}`).join('\n')
+  const res = await streamChat(provider, {
+    model,
+    messages: [
+      { role: 'system', content: 'A person left a comment on a website a team of agents built. Pick the section or sections it is about (at most 3; a change to something that appears on every page, like the nav or footer, is the shared "*/" section). Return JSON only: {"sections":["section key"],"reply":"what the agent taking it says back, first person, casual, under 12 words"}' },
+      { role: 'user', content: `Sections:\n${list}\n\nComment: ${text}` }
+    ],
+    maxTokens: 300, temperature: 0.3, extra: NO_THINKING, signal
+  })
+  const raw = parse(res.text)
+  const keys = new Set(sections.map(s => s.key))
+  return { sections: (raw.sections || []).filter(k => keys.has(k)).slice(0, 3), reply: String(raw.reply || '').replace(/\s+/g, ' ').trim().slice(0, 90) }
+}
+
+// Rewrite one section with the reviewer's note, or with a person's comment.
+// Streams like a build.
+export async function fixSection({ provider, model, theme, html, role, problem, fix, comment, onDelta, signal }) {
   const messages = [
     {
       role: 'system',
@@ -56,11 +75,9 @@ export async function fixSection({ provider, model, theme, html, role, problem, 
     },
     {
       role: 'user',
-      content: `A design reviewer looked at this ${role} section on the live page and found a problem.
-Problem: ${problem}
-Fix: ${fix}
-
-Rewrite the section so the problem is gone. Keep its content, links (data-goto), images (keep every <img> with its data-gen and src exactly) and everything that already works. Output the full corrected section only.
+      content: `${comment
+        ? `The person designing this site left a comment on this ${role} section: "${comment}"\n\nRewrite the section to do what they ask, and nothing else. Keep everything else as it is: links`
+        : `A design reviewer looked at this ${role} section on the live page and found a problem.\nProblem: ${problem}\nFix: ${fix}\n\nRewrite the section so the problem is gone. Keep its content, links`} (data-goto), images (keep every <img> with its data-gen and src exactly) and everything that already works. Output the full corrected section only.
 
 Current section:
 ${html}`

@@ -14,7 +14,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
-import { reviewPage, fixSection } from '../engine/review.mjs'
+import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -311,14 +311,8 @@ async function review(id, input) {
       const s = sections.find(x => x.key === issue.section)
       const layer = s.key.split('/').pop(), pageId = s.key.split('/')[0]
       const agent = agents[(i * 5 + 3) % Math.max(1, agents.length)]?.id
-      const t0 = Date.now()
       send('review:issue', { page: pageId, layer, agent, problem: issue.problem, fix: issue.fix })
-      send('agent:assign', { agent, page: pageId, layer, role: s.role, fixing: true })
-      send('layer:reset', { page: pageId, layer, agent })
-      fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, problem: issue.problem, fix: issue.fix,
-        onDelta: d => send('layer:delta', { page: pageId, layer, agent, text: d }) })
-        .then(html => send('layer:done', { page: pageId, layer, agent, ms: Date.now() - t0, html, fixed: true }))
-        .catch(err => send('layer:failed', { page: pageId, layer, agent, message: String(err.message || err), keep: s.html }))
+      rework(send, s, agent, theme, { problem: issue.problem, fix: issue.fix })
     })
     return result
   } finally {
@@ -370,6 +364,67 @@ async function makeVideo(id, input = {}) {
     send('video:failed', { message: job.message })
   })
   return job
+}
+
+// A builder rewrites one finished section live: it is cleared on every canvas,
+// streams back in, and on failure the old section returns.
+function rework(send, s, agent, theme, args) {
+  const layer = s.key.split('/').pop(), page = s.key.split('/')[0], t0 = Date.now()
+  send('agent:assign', { agent, page, layer, role: s.role, fixing: true })
+  send('layer:reset', { page, layer, agent })
+  return fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, ...args,
+    onDelta: d => send('layer:delta', { page, layer, agent, text: d }) })
+    .then(html => send('layer:done', { page, layer, agent, ms: Date.now() - t0, html, fixed: true }))
+    .catch(err => send('layer:failed', { page, layer, agent, message: String(err.message || err), keep: s.html }))
+}
+
+// The finished sections of a saved run, as the last event left each one.
+function runSections(events) {
+  const roles = new Map(events.filter(e => e.type === 'layer:plan').map(e => [`${e.page}/${e.id}`, e.role]))
+  const out = new Map()
+  for (const e of events) if (e.type === 'layer:done' && e.html) out.set(`${e.page}/${e.layer}`, { key: `${e.page}/${e.layer}`, role: roles.get(`${e.page}/${e.layer}`) || e.layer, html: e.html })
+  return [...out.values()]
+}
+
+// ---------- comments: a person tells the agents what to change. On a selected
+// section it goes straight to a builder; otherwise the planner works out which
+// sections it is about.
+let commentTurn = 0
+const recentComments = new Map()
+async function comment(id, input) {
+  const events = readEvents(id)
+  const start = events?.find(e => e.type === 'run:start')
+  if (!start) throw new Error('no such build')
+  if (!models.worker.apiKey) throw new Error('no model key yet: start a build from Hermes once')
+  const text = String(input.text || '').replace(/\s+/g, ' ').trim().slice(0, 600)
+  if (!text) throw new Error('say what to change')
+  // the same comment from two open canvases (a /swarm fix reaches every one) is taken once
+  const seen = `${id}|${text}`
+  if (recentComments.get(seen) > Date.now() - 8000) return { sections: [], reply: '', duplicate: true }
+  recentComments.set(seen, Date.now())
+  const theme = events.findLast(e => e.type === 'theme')
+  // the canvas sends its own copy of the sections (with any edits); otherwise the saved ones
+  const given = Array.isArray(input.sections) ? input.sections.filter(s => s && typeof s.key === 'string' && typeof s.html === 'string').slice(0, 60) : []
+  const sections = given.length ? given.map(s => ({ key: s.key, role: String(s.role || s.key).slice(0, 80), html: s.html })) : runSections(events)
+  const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  let keys = typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
+  let reply = ''
+  send('comment', { text, target: keys?.[0] || null })
+  if (!keys) {
+    const heads = sections.map(s => ({ key: s.key, role: s.role, head: (/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(s.html)?.[1] || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) }))
+    const routed = await routeComment({ provider: provider('planner'), model: modelFor('planner'), text, sections: heads, signal: AbortSignal.timeout(45000) })
+    keys = routed.sections
+    reply = routed.reply
+    if (!keys.length) { send('comment:none', { text }); throw new Error('could not tell which section that is about: select one on the canvas and comment there') }
+  }
+  const agents = start.agents || []
+  keys.forEach((k, i) => {
+    const s = sections.find(x => x.key === k)
+    const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
+    send('comment:take', { text, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply : '' })
+    rework(send, s, agent, theme, { comment: text })
+  })
+  return { sections: keys, reply }
 }
 
 function tokenOk(given) {
@@ -531,6 +586,20 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       makeVideo(id, input).then(job => reply(200, job)).catch(err => reply(400, { error: String(err.message || err) }))
+    })
+    return
+  }
+
+  const runComment = url.pathname.match(/^\/api\/runs\/([^/]+)\/comment$/)
+  if (runComment && req.method === 'POST' && RUN_ID.test(runComment[1])) {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 4e6) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      comment(runComment[1], input)
+        .then(result => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result)))
+        .catch(err => res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
     })
     return
   }
