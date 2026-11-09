@@ -472,7 +472,7 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/models' && req.method === 'GET') {
     Promise.all([listModels('planner'), listModels('reviewer'), loadImageProviders()]).then(([text, vision, image]) => {
       const roles = Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), hermes: models[r].model, host: host(models[r].baseUrl), picked: picks[r] || null }]))
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, image: { pick: picks.image || null, providers: image } }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image } }))
     })
     return
   }
@@ -487,6 +487,9 @@ const server = createServer((req, res) => {
       if (ROLES.includes(input.role) && (input.model === null || input.model === '' || name(input.model))) {
         if (input.model) picks[input.role] = input.model
         else delete picks[input.role]
+      } else if (input.role === 'lite' && (input.on === null || typeof input.on === 'boolean')) {
+        if (input.on === null) delete picks.lite
+        else picks.lite = input.on
       } else if (input.role === 'image' && (input.provider === 'off' || input.provider === null || (name(input.provider) && (!input.model || name(input.model))))) {
         if (input.provider === 'off') picks.image = 'off'
         else if (input.provider) picks.image = { provider: input.provider, model: input.model || '' }

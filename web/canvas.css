@@ -92,7 +92,7 @@ button { font: inherit; color: inherit; }
 .viewport.behind .world, .viewport.behind .wires, .viewport.behind .cursors { visibility: hidden; }
 .frame { position: absolute; top: 0; width: 1280px; background: #fff; box-shadow: 0 0 0 2px #ffffff10, 0 12px 0 #0004; }
 .frame.focus { box-shadow: 0 30px 80px #0008, 0 0 0 10px var(--accent); }
-.frame-label { position: absolute; left: 0; bottom: 100%; padding-bottom: 24px; font: 600 64px/1 var(--font); color: #c9cfdb; white-space: nowrap; }
+.frame-label { position: absolute; left: 0; bottom: 100%; max-width: 1280px; overflow: hidden; text-overflow: ellipsis; padding-bottom: 24px; font: 600 64px/1 var(--font); color: #c9cfdb; white-space: nowrap; }
 .frame-label small { font: 500 40px var(--mono); color: var(--muted); margin-left: 24px; }
 .frame iframe { display: block; width: 1280px; height: 700px; border: 0; pointer-events: none; }
 
@@ -334,3 +334,9 @@ button { font: inherit; color: inherit; }
 .models-pop .mnow { display: block; color: var(--muted); font: 10.5px var(--mono); margin-top: 4px; }
 .models-pop .mfoot { color: var(--muted); font-size: 11px; border-top: 1px solid var(--line); padding-top: 9px; }
 #review-btn:disabled { opacity: .45; cursor: default; }
+
+/* ---------- lite mode: frozen pages are one image, and idle motion stops */
+.frame img.snap { display: block; width: 1280px; position: relative; z-index: 1; }
+.frame iframe + img.snap { position: absolute; left: 0; top: 0; }
+body.lite .viewport { background-image: none; }
+body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
