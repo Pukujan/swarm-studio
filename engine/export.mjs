@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
+import { MOTION_CSS, motionPreset, motionSource, swarmMotion } from './motion.mjs'
 
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const text = html => String(html || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()
@@ -165,11 +166,14 @@ function staticSite(snap, dir, runId, runDir) {
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <link rel="stylesheet" href="${fontsHref(snap.theme)}">
 <style>
-${rootCss(snap.theme)}</style>
+${rootCss(snap.theme)}${MOTION_CSS}</style>
 </head>
 <body>
 ${body}
 <script>
+// motion: sections reveal as they scroll in
+addEventListener('load', () => ${motionSource(motionPreset(snap.theme))})
+
 // buttons and links made on the canvas name the page they go to
 const pages = ${JSON.stringify(routes)}
 document.addEventListener('click', e => {
@@ -206,7 +210,9 @@ function reactApp(snap, dir, runId, runDir, name) {
     return [p.id, n]
   })
   const first = snap.pages[0]?.id || 'home'
+  writeFileSync(join(src, 'motion.js'), `// Sections reveal as they scroll in; clickable things lift under the pointer.\n// Idempotent: run it again whenever a page renders.\nexport const preset = ${JSON.stringify(motionPreset(snap.theme))}\n\nexport ${swarmMotion.toString()}\n`)
   writeFileSync(join(src, 'App.jsx'), `import { useEffect, useState } from 'react'
+import { swarmMotion, preset } from './motion.js'
 ${pageNames.map(([, n]) => `import ${n} from './pages/${n}.jsx'`).join('\n')}
 
 const pages = { ${pageNames.map(([id, n]) => `${JSON.stringify(id)}: ${n}`).join(', ')} }
@@ -231,12 +237,13 @@ export default function App() {
       document.removeEventListener('submit', onSubmit)
     }
   }, [])
+  useEffect(() => swarmMotion(document.getElementById('root'), preset), [page])
   const Page = pages[page] || pages[${JSON.stringify(first)}]
   return <Page />
 }
 `)
   writeFileSync(join(src, 'main.jsx'), `import { StrictMode } from 'react'\nimport { createRoot } from 'react-dom/client'\nimport App from './App.jsx'\nimport './index.css'\n\ncreateRoot(document.getElementById('root')).render(<StrictMode><App /></StrictMode>)\n`)
-  writeFileSync(join(src, 'index.css'), `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n${rootCss(snap.theme)}`)
+  writeFileSync(join(src, 'index.css'), `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n${rootCss(snap.theme)}${MOTION_CSS}`)
   writeFileSync(join(dir, 'index.html'), `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>${clip(snap.brand, 80).replace(/</g, '&lt;')}</title>\n<link rel="stylesheet" href="${fontsHref(snap.theme)}">\n</head>\n<body>\n<div id="root"></div>\n<script type="module" src="/src/main.jsx"></script>\n</body>\n</html>\n`)
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name, private: true, version: '0.1.0', type: 'module',

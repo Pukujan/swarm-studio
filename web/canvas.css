@@ -199,6 +199,7 @@ button { font: inherit; color: inherit; }
 .pl-btn { background: transparent; border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .pl-btn:hover:not(:disabled) { color: var(--text); }
 .pl-btn:disabled { opacity: .35; cursor: default; }
+.pl-btn#pl-motion.on { color: var(--text); border-color: var(--accent); }
 .seg { display: flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 2px; }
 .seg button { background: none; border: 0; border-radius: 6px; padding: 4px 12px; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--accent); color: #0b0d12; font-weight: 600; }
