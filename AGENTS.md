@@ -6,7 +6,9 @@ Before changing anything a person sees (anything in `web/`, the Feed's screens, 
 2. [docs/ux/AUDIENCE.md](docs/ux/AUDIENCE.md): the two homes, the six lenses and who each is for.
 3. [docs/ux/INVENTORY.md](docs/ux/INVENTORY.md): every control, its layer and its lens. Update it when you add,
    move or remove one.
-4. [docs/ux/REQUIREMENTS.md](docs/ux/REQUIREMENTS.md): the owner's own words. They win over any spec that
+4. [docs/ux/SITEMAP.md](docs/ux/SITEMAP.md): the full tree of screens and the flow for each audience. Update it
+   when you add a layer or move a branch.
+5. [docs/ux/REQUIREMENTS.md](docs/ux/REQUIREMENTS.md): the owner's own words. They win over any spec that
    disagrees.
 
 Specs for individual features live in [docs/specs/](docs/specs/README.md).

@@ -33,10 +33,13 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 
 1. **One front door.** One input starts every kind of build. Inside a build, the same input is the chat. No
    second form, wizard or chat box that also starts or steers a build.
-2. **Layers.** 0 Galaxy → 1 Start → 2 Orbit → 3 Room → 4 Details. Each layer shows only what that layer needs.
-   You go deeper by clicking the thing itself, not through a menu.
-3. **A budget per layer.** At rest a screen shows at most 1 primary action, 3 secondary actions and 4 small
-   edge icons. Everything else comes from expanding, selecting or ⌘K.
+2. **Depth, not width.** Each layer shows 2–4 choices, and there is no limit on depth. One flow opens into 2–3
+   flows, those open into more, then into details, then into more details. The deepest paths in
+   [SITEMAP.md](SITEMAP.md) are 13 layers. Galaxy, Orbit and Room are landmarks on the way down, not the whole
+   stack. You go deeper by clicking the thing itself, not through a menu.
+3. **A budget per layer.** At rest a layer shows at most 4 choices, 1 primary action and 4 small edge icons.
+   If a layer needs more, add a layer: group the choices, and show the groups first. Everything else comes from
+   expanding, selecting or ⌘K.
 4. **Every control lives in exactly one place.** One chat, one sound control, one way to start a game, one
    publish menu. Before adding a control, look it up in INVENTORY.md.
 5. **Places, actions and settings never share a menu.** Places are stations and rooms (you go there). Actions
@@ -82,7 +85,8 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
     or Enter goes in. A recentre button appears only after you've moved.
 23. **Motion explains change.** Zoom in when you enter, out when you leave. UI motion takes 300 ms at most and
     respects reduced-motion settings.
-24. **The crew is alive but quiet.** Hermia and the minions fly and work. Their speech bubbles are off until
+24. **The crew is alive but quiet.** Hermia, the commander, and the minions fly and work. Hermia gives short
+    spoken orders at each phase, under the one Sound control. Speech bubbles and reasoning stay hidden until
     you open the crew radio.
 
 ## E. Sizes and access
@@ -97,6 +101,7 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 - [ ] Each screen you touched fits rule 3's budget (count the visible actions at rest).
 - [ ] No helper sentence is visible by default (rule 8).
 - [ ] No new duplicate control; INVENTORY.md is updated with each new or moved control's layer and lens.
+- [ ] SITEMAP.md is updated if you added a layer or moved a branch.
 - [ ] Only kit components; checkboxes sit beside their labels.
 - [ ] Every new panel closes with ×, Esc and an outside click; the logo and Esc take you home from every view.
 - [ ] `node scripts/ui-check.mjs` passes (overlaps, clickability, closing, way home, no sideways scroll).

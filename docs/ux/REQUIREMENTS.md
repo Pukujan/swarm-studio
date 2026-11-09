@@ -53,3 +53,18 @@ entries at the bottom with the date; don't rewrite old ones.
 > do you want to write UI/UX rules for yourself so you stop making such mistakes … all our buttons and chips,
 > write them all in one place first so we can talk and reason about how we can layer them … what about our
 > target audience … durably, as my requirements.
+
+## 2026-11-09, later
+
+**Depth**
+> that's just 3 layers, I thought I said I want more and much more layers?
+
+**Diagrams**
+> I said I want full tree diagram flows and site maps
+
+**The social side**
+> what about the social aspects I talked about, where does that go?
+
+**The commander**
+> what about the Nous Portal girl's cyber version, or a moving PNG image or something that sounds like she is
+> the commander?

@@ -2,7 +2,7 @@
 
 The full fact sheet, with every control and its file:line, is
 [inventory-raw-2026-11-09.md](inventory-raw-2026-11-09.md). This file is the reasoning layer on top of it: where
-each control should live in the five layers of [RULES.md](RULES.md) and the lenses of [AUDIENCE.md](AUDIENCE.md).
+each control should live in the tree of [SITEMAP.md](SITEMAP.md) and the lenses of [AUDIENCE.md](AUDIENCE.md).
 Update both when you add, move or remove a control.
 
 Status: **proposal for the owner to discuss** (2026-11-09).
@@ -29,15 +29,18 @@ The worst cases:
   badges and file rows, all at the same time.
 - **Classic view** is a trap: once it's on, the only control that turns it off is hidden.
 
-## The layers, with only what is visible at rest
+## Landmarks, with only what is visible at rest
 
-| Layer | Visible at rest (the whole list) | One click or hover away | ⌘K or ⚙ only |
+The full tree, every branch down to 13 layers, is in [SITEMAP.md](SITEMAP.md). This table covers only the landmark screens
+on the way down.
+
+| Landmark | Visible at rest (the whole list) | One click or hover away | ⌘K or ⚙ only |
 |---|---|---|---|
-| **0 Galaxy** | the galaxy (stars = builds), the one input, Build, 4 edge icons: Search, Feed, Sound, ⚙ | star name and one fact on hover; Search opens the build list with sort, group, folders and tags behind a filter icon | everything else |
-| **1 Start** (typing) | the input, the lens chip, Build | lens options (below); "what happens" as a row of step icons | Pro packs list, models |
-| **2 Orbit** | the build (sun), its pages (planets, for lenses with pages), the lens's stations (1-3), one progress ring on the sun, the breadcrumb, the input (now the chat), Share, Sound, ⚙ | ring → steps sheet (with Stop); Hermia's avatar → crew radio (reasoning, agents, chatter); station hover → one line | think log, planner stream, break room |
-| **3 Room** | the room's content, its one primary action, a ⋯ room menu, the breadcrumb, the input | an inspector panel on the right for whatever is selected | the room's power tools |
-| **4 Details** | — | logs, reasoning, layers tree, files and code wall, traces, raw errors, per-role models | — |
+| **Galaxy** | the galaxy (stars = builds), Hermia beside the one input, Build, 4 edge icons: Search, Feed, Sound, ⚙ | star name and one fact on hover; Search opens the build list with sort, group, folders and tags behind a filter icon | everything else |
+| **Start** (typing) | the input, the lens chip, Build | lens options (below); "what happens" as a row of step icons | Pro packs list, models |
+| **Orbit** | the build (sun), its pages (planets, for lenses with pages), the lens's stations (1-3), one progress ring on the sun, the breadcrumb, the input (now the chat), Share, Sound, ⚙ | ring → steps sheet (with Stop); Hermia's avatar → crew radio (reasoning, agents, chatter); station hover → one line | think log, planner stream, break room |
+| **Room** | the room's content, its one primary action, a ⋯ room menu, the breadcrumb, the input | an inspector panel on the right for whatever is selected | the room's power tools |
+| **Details** | — | logs, reasoning, layers tree, files and code wall, traces, raw errors, per-role models | — |
 
 ## One home for each duplicate
 
