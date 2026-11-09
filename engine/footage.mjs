@@ -127,17 +127,24 @@ export async function filmBuild({ url, runDir, dataDir, ffmpeg, game = true, onS
     const page = await browser.newPage()
     try {
       await page.setViewport({ width: 1280, height: 720 })
-      const res = await page.goto(base + path, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => null)
-      if (!res || !res.ok()) return
-      await sleep(1500)
-      if (await broken(page)) return
+      // a dev server that is still warming up (Vite optimising deps) gets one more load
+      let res = await page.goto(base + path, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => null)
+      if (!res || !res.ok()) { await sleep(4000); res = await page.goto(base + path, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => null) }
+      if (!res || !res.ok()) return onStage(`skipped ${path}: the page answered ${res ? res.status() : 'nothing'}`)
+      // give it up to 10 s to render before calling it broken
+      let bad = true
+      for (let i = 0; i < 10 && (bad = await broken(page)); i++) await sleep(1000)
+      if (bad) return onStage(`skipped ${path}: the page did not render`)
+      await sleep(1000)
       const before = await page.screenshot({ type: 'jpeg', quality: 40 })
       const stop = await record(page, join(dir, file), ffmpeg)
       await act(page, ms)
       await stop()
       const after = await page.screenshot({ type: 'jpeg', quality: 40 })
       // a still screen (the game never started, an empty page) is not footage
-      if (before.equals(after) || !existsSync(join(dir, file)) || statSync(join(dir, file)).size < 30000) return rmSync(join(dir, file), { force: true })
+      const size = existsSync(join(dir, file)) ? statSync(join(dir, file)).size : 0
+      const why = before.equals(after) ? 'nothing moved' : !size ? 'no video was written' : size < 30000 ? `the clip is too small (${size} bytes)` : ''
+      if (why) { onStage(`skipped ${path}: ${why}`); return rmSync(join(dir, file), { force: true }) }
       clips.push({ file, what, label, seconds: ms / 1000, from })
     } catch (err) {
       onStage(`could not film ${path}: ${String(err.message || err).slice(0, 120)}`)
