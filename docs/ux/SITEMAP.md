@@ -68,6 +68,9 @@ flowchart LR
   RL --> R2[Like]
   RL --> R3[Talk]
   RL --> R4[Share]
+  R3 --> TK1["Pin a note to a spot or a moment"]
+  R4 --> SH1["Save to a mood board"]
+  R4 --> SH2["Copy link, send"]
   AS --> A1[Pages and screens]
   AS --> A2[Sprites and art]
   AS --> A3[Clips]
@@ -78,37 +81,57 @@ flowchart LR
   C1 --> C2["Before and after"]
   C2 --> C3["The prompt (tap)"]
   SY --> C4["Time-lapse of the crew building"]
+  SY --> C5["Credits: people and agents, and how each part was made"]
+  SY --> C6["Remix chain: what it came from, what came from it"]
   RX --> RX1["+ Create, starting from this build"]
+  RX --> RX2["Or suggest it back to the maker"]
+  RX2 --> RX3["The maker accepts: you're credited"]
   LV --> LV1["A crew building right now"]
   LV1 --> LV2["Its orbit, read only"]
 ```
 
 ## 4. Discover
 
+The social side (open boards, jams, events, makers) is mostly Kresilo's code, already in Swarm Feed, moved into
+this tree. What each piece borrows, and from where, is in [PATTERNS.md](PATTERNS.md).
+
 ```mermaid
 flowchart LR
   DISC[Discover] --> SR[Search]
   DISC --> MK[Makers]
-  DISC --> JM[Jams]
-  DISC --> PK[Packs]
+  DISC --> OBS[Open boards]
+  DISC --> JE[Jams and events]
+  SR --> SR1[Builds]
+  SR --> SR2[Assets]
+  SR --> PK[Packs]
+  PK --> PK1["Sites, apps, games"]
+  PK1 --> PA[A pack]
+  PA --> PA1[Preview]
+  PA --> PA2["Use it → + Create"]
   MK --> PF[A profile]
   PF --> PF1["Showcase: a grid of their builds"]
-  PF --> PF2["Their story, as clips"]
-  PF --> PF3[Follow]
-  PF --> PF4[Badges]
+  PF --> PF2["Credits: builds they helped on"]
+  PF --> PF3["Their story, as clips"]
+  PF --> PF4[Follow]
+  OBS --> OB[An open board]
+  OB --> OB1[Wanted roles]
+  OB --> OB2[Ask to join]
+  OB2 --> OB3["The host accepts → Projects › Boards"]
+  JE --> JM[Jams]
+  JE --> EV[Events]
   JM --> JW["This week's jam"]
   JM --> JP["Past jams → winners"]
   JM --> JH[Host a jam]
-  JW --> JW1[Theme]
+  JW --> JW1[Theme and rules]
   JW --> JW2[Entries]
-  JW --> JW3[Vote]
+  JW --> JW3["Vote: one per entry, not your own"]
   JW --> JW4["Join → + Create, lens set by the jam"]
-  PK --> PK1[Sites]
-  PK --> PK2[Apps]
-  PK --> PK3[Games]
-  PK3 --> PA[A pack]
-  PA --> PA1[Preview]
-  PA --> PA2["Use it → + Create"]
+  JH --> JH1["Theme, up to 6 rules, open and close dates"]
+  EV --> EV1[Live build sessions]
+  EV --> EV2[Meetups]
+  EV --> EV3[Host an event]
+  EV1 --> EV4["Going → a reminder"]
+  EV1 --> EV5["Watch a crew build, live"]
 ```
 
 ## 5. + Create
@@ -121,7 +144,7 @@ flowchart LR
   CR --> SRC["Start from (optional)"]
   SRC --> S1["A build: remix it"]
   SRC --> S2[A file]
-  SRC --> S3[A pack]
+  SRC --> S3["A pack or a mood board"]
   IDEA --> LENS["Lens chip, guessed from the idea"]
   LENS --> L0[Just make it]
   LENS --> L1[Design]
@@ -145,18 +168,33 @@ flowchart LR
 ```mermaid
 flowchart LR
   PROJ[Projects] --> MB["My builds: the galaxy"]
-  PROJ --> CB[Collab boards]
+  PROJ --> BD[Boards]
+  PROJ --> MO[Mood boards]
   PROJ --> SW[Shared with me]
   MB --> ST[A star: one build]
   MB --> MS["Search, sort, folders"]
   ST --> ORB["Open → its orbit"]
   ST --> RM["Row menu: rename, move, delete"]
-  CB --> BO[A board]
-  BO --> BC["Cards: ideas, assets, tasks"]
-  BO --> BM["Members → invite"]
-  BC --> CA[A card]
-  CA --> CA1[Comments]
-  CA --> CA2["Build it → + Create"]
+  BD --> BO[A board]
+  BD --> BN[Host a board]
+  BN --> BN1["Cover and wanted roles"]
+  BN --> BN2["Private, Public or Open"]
+  BO --> BW["Its builds and assets"]
+  BO --> BP[People]
+  BO --> BI[Idea pins]
+  BO --> BA[Activity]
+  BP --> BP1["Requests to join → accept"]
+  BP --> BP2["Invite link: edit or comment"]
+  BP --> BP3["Credits, confirmed by each person"]
+  BI --> PIN[A pin on a spot]
+  PIN --> PIN1[Reply]
+  PIN --> PIN2[Accept or decline]
+  PIN --> PIN3["Build it → + Create"]
+  MO --> MOB[A mood board]
+  MOB --> MOI["Builds, assets, clips, palettes"]
+  MOB --> MOS["Start from it → + Create"]
+  MOB --> MOV["Private or Public"]
+  SW --> SWB["Builds and boards you were invited to"]
 ```
 
 ## 7. Me
@@ -168,8 +206,12 @@ flowchart LR
   ME --> NO[Notifications]
   ME --> SE[Settings]
   PR --> PR1["Showcase (pinned builds)"]
-  PR --> PR2["My story, as clips"]
-  PR --> PR3[Followers]
+  PR --> PR2["Credits: builds I helped on"]
+  PR --> PR3["My story, as clips"]
+  PR --> PR4[Followers]
+  NO --> NO1["Requests to join my boards"]
+  NO --> NO2["Credits to confirm"]
+  NO --> NO3["Changes suggested to my builds"]
   LA --> LA1[A build]
   LA1 --> LA2[Posts]
   LA1 --> LA3[Promo video]
@@ -259,31 +301,51 @@ flowchart LR
 
 ### Design deck
 
+The one room with a full toolset. It follows Figma's layout and tools almost one to one (see
+[PATTERNS.md](PATTERNS.md)): two panels, the canvas and one toolbar. The panels are zones, not layers.
+
 ```mermaid
 flowchart LR
-  DD[Design deck] --> PG[Pages]
-  DD --> RV[Review]
-  DD --> PY[Play]
-  DD --> DM["⋯ Export, Versions, Trace"]
+  DD[Design deck] --> LP[Left panel]
+  DD --> CV[Canvas]
+  DD --> TB[Toolbar]
+  DD --> RP[Right panel]
+  LP --> LM[Logo menu]
+  LP --> PG[Pages]
+  LP --> LY[Layers]
+  LM --> LM1["Home, Discover, + Create, Projects, Me"]
+  LM --> LM2[Versions]
+  LM --> LM3[Export all]
   PG --> PA[A page]
-  PA --> SC[A section]
+  LY --> SC[A section]
   SC --> EL[An element]
-  EL --> C1[Content]
-  EL --> C2[Style]
-  EL --> C3[Behaviour]
-  EL --> CM[Comments pinned here]
-  C2 --> ST1[Colour]
-  C2 --> ST2[Type]
-  C2 --> ST3[Spacing]
-  ST1 --> TK[Token]
+  EL -.->|selects| DT
+  CV --> CU[Crew cursors]
+  CV --> PIN[Comment pins]
+  CU --> FO[Follow one agent]
+  FO --> TR[What it did]
+  PIN --> YT["Yours: the crew replies"]
+  PIN --> CI["The Critic's issues (3 at most)"]
+  CI --> FX[Fix it]
+  TB --> T1["Move, Frame, Shape, Pen, Text"]
+  TB --> T2[Comment]
+  TB --> T3["Hermia (⌘K)"]
+  TB --> T4[Code]
+  T2 -.-> PIN
+  RP --> TOP["Crew, progress, Play, Share"]
+  RP --> NS["Nothing selected: page and variables"]
+  RP --> DT[Design tab]
+  RP --> PT[Prototype tab]
+  DT --> LA["Layout: position, auto layout"]
+  DT --> AP["Appearance: fill, stroke, effects"]
+  DT --> TY[Type]
+  DT --> EX[Export]
+  AP --> FI[Fill]
+  FI --> TK["Token (a variable)"]
+  NS --> TK
   TK --> TU[Where else it is used]
-  C3 --> B1[On click]
-  C3 --> B2[Animation]
-  RV --> IS["Issues (3 at most)"]
-  IS --> I1[An issue]
-  I1 --> I2[Marker on the page]
-  I1 --> I3[Why it matters]
-  I1 --> I4[Fix it]
+  PT --> OC[On click]
+  PT --> AN[Animation]
 ```
 
 ### Engine room
@@ -413,7 +475,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  b0[Home] --> b1["+ Create"] --> b2["Idea, lens: Design"] --> b3[Design deck] --> b4[Pick an element] --> b5[Style it] --> b6[Review] --> b7[Export or post]
+  b0[Home] --> b1["+ Create"] --> b2["Idea, lens: Design"] --> b3[Design deck] --> b4[Pick a layer] --> b5["Design tab: style it"] --> b6["Fix the Critic's pins"] --> b7[Share or post]
 ```
 
 **Develop**
@@ -444,6 +506,20 @@ flowchart LR
   f0[Home] --> f1["+ Create"] --> f2["Idea, lens: Launch"] --> f3[Site] --> f4[Promo video] --> f5[Posts] --> f6[Post to Feed]
 ```
 
+**Collaborator**
+
+```mermaid
+flowchart LR
+  h0[Discover] --> h1[Open boards] --> h2[A board] --> h3[Ask to join] --> h4[The host accepts] --> h5[Pin an idea] --> h6["Build it → + Create"] --> h7["Credited on the build"]
+```
+
+**Jam entrant**
+
+```mermaid
+flowchart LR
+  i0[Discover] --> i1[Jams] --> i2["This week's jam"] --> i3["Join → + Create"] --> i4[Build] --> i5[Post as an entry] --> i6[Votes] --> i7[Winners on Home]
+```
+
 **Feed visitor**
 
 ```mermaid
@@ -455,7 +531,7 @@ flowchart LR
 
 | Path | Layers |
 |---|---|
-| Swarm › + Create › The idea › Lens chip › Design › Orbit › Design deck › Pages › A page › A section › An element › Style › Colour › Token › Where else it is used | 14 |
+| Swarm › + Create › The idea › Lens chip › Design › Orbit › Design deck › Layers › A section › An element › Design tab › Appearance › Fill › Token › Where else it is used | 14 |
 | Swarm › Projects › My builds › A star › Its orbit › Sun › Progress › Make › Pages › Designer › Decided › Why › Prompt and model › Raw log | 13 |
 | Swarm › + Create › The idea › Lens chip › Game › Orbit › Game room › Tweak › Feel › Gravity › Slider › Value in the code › Who set it and why | 12 |
 | Swarm › Home › For you › A build › Its story › Chapters › Before and after › The prompt | 7 |
