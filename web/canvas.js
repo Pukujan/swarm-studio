@@ -2894,7 +2894,8 @@ async function fillBuildModel() {
   const s = info.roles?.worker || {}
   const recent = store.get('recentModels') || []
   const list = [...new Set([s.picked, ...recent, info.roles?.planner?.picked, info.roles?.planner?.hermes].filter(m => m && m !== 'off' && m !== s.hermes))].slice(0, 8)
-  buildModel.innerHTML = `<option value="">${esc(s.hermes ? `Hermes · ${s.hermes}` : 'Hermes default')}</option>${list.map(m => `<option value="${esc(m)}" ${m === s.picked ? 'selected' : ''}>${esc(m)}</option>`).join('')}<option value="__other">Other… (${(info.text || []).length} models)</option>`
+  const short = m => m.split('/').pop()
+  buildModel.innerHTML = `<option value="">${esc(s.hermes ? short(s.hermes) : 'Hermes default')}</option>${list.map(m => `<option value="${esc(m)}" ${m === s.picked ? 'selected' : ''}>${esc(short(m))}</option>`).join('')}<option value="__other">Other… (${(info.text || []).length} models)</option>`
   buildModel.title = s.picked ? `builders use ${s.picked}` : `builders use Hermes's model${s.hermes ? ` (${s.hermes})` : ''}`
 }
 buildModel.onchange = async () => {

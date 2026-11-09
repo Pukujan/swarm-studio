@@ -42,14 +42,10 @@
       <form id="brief-form" class="composer">
         <textarea id="brief" rows="3" autocomplete="off" placeholder="Describe a product. The swarm designs and builds its site."></textarea>
         <div class="row">
-          <label class="size">Agents
-            <select id="agents">
-              <option>4</option><option>5</option><option>6</option><option>8</option><option>12</option><option selected>16</option><option>20</option><option>24</option>
-            </select>
-          </label>
-          <label class="size model-pick" title="The model every builder agent uses. Planner and reviewer: ☰ More → Models">Model
-            <select id="build-model"><option value="">Hermes default</option></select>
-          </label>
+          <select id="agents" class="chip" title="How many agents build at once">
+            <option value="4">👥 4</option><option value="5">👥 5</option><option value="6">👥 6</option><option value="8">👥 8</option><option value="12">👥 12</option><option value="16" selected>👥 16</option><option value="20">👥 20</option><option value="24">👥 24</option>
+          </select>
+          <select id="build-model" class="chip model" title="The model every builder agent uses. Planner and reviewer: ☰ More → Models"><option value="">Hermes default</option></select>
           <button type="submit">Build</button>
         </div>
       </form>

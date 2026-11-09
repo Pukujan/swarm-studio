@@ -506,6 +506,13 @@ body.side-min .tab:not(.chat) { display: none !important; }
 body.side-min .feed { max-height: 26vh; }
 body.side-min .dock { left: auto; }
 
-/* the model picker in the composer */
-.composer .model-pick { margin-right: 0; min-width: 0; }
-.composer .model-pick select { max-width: 120px; text-overflow: ellipsis; }
+/* Agents and Model as chips in the composer */
+.composer .row .grow { flex: 1; }
+.composer .row { gap: 6px; }
+.composer button[type=submit] { padding: 6px 13px; }
+.composer select.chip { appearance: none; -webkit-appearance: none; background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b93a7' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 7px center; border: 1px solid var(--line); border-radius: 999px; padding: 5px 20px 5px 9px; font-size: 12px; color: var(--text); cursor: pointer; min-width: 0; }
+.composer select.chip:hover { border-color: #3a4a7a; }
+.composer select.chip:focus { outline: none; border-color: var(--accent); }
+#agents.chip { flex: none; }
+.composer select.chip.model { flex: 1 1 0; width: 0; max-width: 220px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.composer .row .grow { min-width: 0; }
