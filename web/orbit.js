@@ -176,7 +176,7 @@ function makeOrbit() {
 
     // the sun: a slowly boiling surface in the build's colours, and its corona
     sunMat = new T.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uA: { value: new T.Color(P.accent) }, uB: { value: new T.Color(P.frame) }, uHot: { value: 0 } },
+      uniforms: { uTime: { value: 0 }, uA: { value: new T.Color(P.pink) }, uB: { value: new T.Color(P.frame) }, uHot: { value: 0 } },
       vertexShader: 'varying vec3 vN; varying vec3 vP; void main(){ vN = normalize(normalMatrix * normal); vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: `uniform float uTime; uniform vec3 uA; uniform vec3 uB; uniform float uHot; varying vec3 vN; varying vec3 vP;
         float n3(vec3 p){ return sin(p.x*2.1+uTime*.7)*sin(p.y*2.7-uTime*.5)*sin(p.z*2.3+uTime*.6); }
@@ -187,10 +187,10 @@ function makeOrbit() {
     })
     sun = new T.Mesh(new T.SphereGeometry(1.5, 48, 32), sunMat)
     scene.add(sun)
-    sunGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.accent), transparent: true, opacity: 0.7, depthWrite: false, blending: T.AdditiveBlending }))
+    sunGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.pink), transparent: true, opacity: 0.55, depthWrite: false, blending: T.AdditiveBlending }))
     sunGlow.scale.setScalar(8)
     scene.add(sunGlow)
-    const halo = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.frame), transparent: true, opacity: 0.55, depthWrite: false, blending: T.AdditiveBlending }))
+    const halo = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.frame), transparent: true, opacity: 0.18, depthWrite: false, blending: T.AdditiveBlending }))
     halo.scale.setScalar(20)
     scene.add(halo)
 

@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 300" class="hermia-live" aria-hidden="true" focusable="false">
+  
+  <!-- Commander Hermia, the planner who runs every Swarm Studio build. Original art,
+       after the public-domain Hermes myth: a winged helmet and a caduceus baton.
+       Engraved line art with a few pixel accents. Not derived from any Nous artwork. -->
+  <defs>
+    <radialGradient id="hl-orb" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="var(--h-glow)" stop-opacity=".9"/>
+      <stop offset="1" stop-color="var(--h-glow)" stop-opacity="0"/>
+    </radialGradient>
+    <!-- one feather pointing left from its root at 0,0; the tip is the cape colour -->
+    <g id="hl-feather">
+      <path d="M0 0C-12-9-30-12-44-6C-30 2-12 4 0 0Z" fill="#f6eeff" stroke="#05051a" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M-31-9.6C-36.5-9.2-40.5-8-43.2-6.2C-40-3.4-35.6-1.6-31-.8C-32.6-3.6-32.6-6.8-31-9.6Z" fill="var(--h-main)"/>
+      <path d="M-4-1.2C-14-4-24-5-34-4.6" fill="none" stroke="#05051a" stroke-width="1" opacity=".5"/>
+    </g>
+    <g id="hl-wing">
+      <use href="#hl-feather" transform="rotate(8)"/>
+      <use href="#hl-feather" transform="rotate(30) scale(.86)"/>
+      <use href="#hl-feather" transform="rotate(52) scale(.7)"/>
+    </g>
+    <g id="hl-ankle">
+      <use href="#hl-feather" transform="rotate(14) scale(.36)"/>
+      <use href="#hl-feather" transform="rotate(40) scale(.3)"/>
+    </g>
+  </defs>
+
+  <!-- cape, behind everything -->
+  <path d="M90 166C68 190 60 222 56 248Q120 266 184 248C180 222 172 190 150 166Z" fill="var(--h-main)" stroke="#05051a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M76 196L68 240M86 190L80 246M160 196L170 240M152 190L160 246" stroke="#05051a" stroke-width="1.2" opacity=".45"/>
+  <path d="M59 241Q120 258 181 241" fill="none" stroke="var(--h-accent)" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- legs, boots and the little ankle wings -->
+  <path d="M104 228h13v26h-13zM123 228h13v26h-13z" fill="#F6E3D3" stroke="#05051a" stroke-width="2.2"/>
+  <path d="M98 262Q98 250 110 250Q120 250 119 262ZM121 262Q120 250 130 250Q142 250 142 262Z" fill="#f6eeff" stroke="#05051a" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M99 258H118M122 258H141" stroke="var(--h-main)" stroke-width="2.4"/>
+  <use href="#hl-ankle" transform="translate(100 254)"/>
+  <use href="#hl-ankle" transform="translate(140 254) scale(-1 1)"/>
+
+  <!-- tunic and belt -->
+  <path d="M96 166H144L154 232H86Z" fill="#f6eeff" stroke="#05051a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M90 204H150V212H90Z" fill="var(--h-main)" stroke="#05051a" stroke-width="2"/>
+  <rect x="114" y="202" width="12" height="12" fill="var(--h-accent)" stroke="#05051a" stroke-width="2"/>
+  <path d="M102 176L98 200M140 176L144 200M110 216L106 230M132 216L136 230" stroke="#05051a" stroke-width="1" opacity=".4"/>
+
+  <!-- the arm on her hip -->
+  <path d="M146 174C162 184 166 200 152 210" fill="none" stroke="#05051a" stroke-width="15" stroke-linecap="round"/>
+  <path d="M146 174C162 184 166 200 152 210" fill="none" stroke="#f6eeff" stroke-width="10" stroke-linecap="round"/>
+
+  <g class="h-baton">
+  <!-- the caduceus baton, glowing at the top -->
+  <circle class="h-orb" cx="58" cy="78" r="30" fill="url(#hl-orb)"/>
+  <path d="M58 82L70 236" stroke="#05051a" stroke-width="7" stroke-linecap="round"/>
+  <path d="M58 82L70 236" stroke="#f6eeff" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M60 98C71 104 72 112 62 118C52 124 53 132 64 138M60 98C49 104 50 112 61 118C71 124 72 132 64 138" fill="none" stroke="var(--h-main)" stroke-width="3" stroke-linecap="round"/>
+  <use href="#hl-feather" transform="translate(56 86) rotate(20) scale(.36)"/>
+  <use href="#hl-feather" transform="translate(60 86) scale(-1 1) rotate(20) scale(.36)"/>
+  <circle cx="58" cy="78" r="7" fill="var(--h-accent)" stroke="#05051a" stroke-width="2.2"/>
+
+  <!-- the arm holding it up -->
+  <path d="M96 178C80 182 70 170 66 156" fill="none" stroke="#05051a" stroke-width="15" stroke-linecap="round"/>
+  <path d="M96 178C80 182 70 170 66 156" fill="none" stroke="#f6eeff" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="64" cy="150" r="8" fill="#F6E3D3" stroke="#05051a" stroke-width="2.2"/>
+
+  </g>
+  <!-- the cape's clasp -->
+  <circle cx="120" cy="170" r="7" fill="var(--h-accent)" stroke="#05051a" stroke-width="2.2"/>
+
+  <g class="h-head">
+  <!-- hair behind the head -->
+  <path d="M64 116C58 150 70 170 86 174H154C170 170 182 150 176 116Z" fill="var(--h-hair)" stroke="#05051a" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- head -->
+  <circle cx="120" cy="114" r="58" fill="#F6E3D3" stroke="#05051a" stroke-width="2.5"/>
+
+  <!-- the helmet's wings -->
+  <g class="h-wing h-wing-l"><use href="#hl-wing" transform="translate(68 86) scale(1.35)"/></g>
+  <g class="h-wing h-wing-r"><use href="#hl-wing" transform="translate(172 86) scale(-1.35 1.35)"/></g>
+
+  <!-- helmet -->
+  <path d="M62 100C62 58 88 40 120 40S178 58 178 100Z" fill="#f6eeff" stroke="#05051a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M120 41C123 56 123 74 120 90" fill="none" stroke="#05051a" stroke-width="2"/>
+  <path d="M146 52C158 62 166 76 168 92M154 50C164 60 171 72 174 86M138 50C148 60 154 74 156 92" fill="none" stroke="#05051a" stroke-width="1" opacity=".4"/>
+  <path d="M60 96Q120 84 180 96L180 106Q120 94 60 106Z" fill="var(--h-accent)" stroke="#05051a" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="120" cy="96" r="5.5" fill="var(--h-main)" stroke="#05051a" stroke-width="1.8"/>
+
+  <!-- fringe -->
+  <path d="M62 104Q120 92 178 104C176 113 169 119 162 112C156 122 146 121 140 111C132 122 118 121 112 109C106 121 94 122 88 112C80 120 67 116 62 104Z" fill="var(--h-hair)" stroke="#05051a" stroke-width="2.2" stroke-linejoin="round"/>
+
+  <!-- face -->
+  <g class="h-eyes"><ellipse cx="98" cy="128" rx="11" ry="14" fill="#05051a"/>
+  <ellipse cx="142" cy="128" rx="11" ry="14" fill="#05051a"/>
+  <ellipse cx="98" cy="131" rx="7.6" ry="9.6" fill="var(--h-main)"/>
+  <ellipse cx="142" cy="131" rx="7.6" ry="9.6" fill="var(--h-main)"/>
+  <circle cx="94" cy="122" r="4" fill="#f6eeff"/>
+  <circle cx="138" cy="122" r="4" fill="#f6eeff"/>
+  <circle cx="102" cy="135" r="1.8" fill="#f6eeff"/>
+  <circle cx="146" cy="135" r="1.8" fill="#f6eeff"/>
+  </g>
+  <path d="M86 112L106 116M154 112L134 116" stroke="#05051a" stroke-width="2.6" stroke-linecap="round"/>
+  <ellipse cx="82" cy="148" rx="8" ry="4.5" fill="#F2A0A8" opacity=".6"/>
+  <ellipse cx="158" cy="148" rx="8" ry="4.5" fill="#F2A0A8" opacity=".6"/>
+  <path class="h-mouth" d="M112 152Q120 159 128 152" fill="none" stroke="#05051a" stroke-width="2.6" stroke-linecap="round"/>
+
+  </g>
+  <g class="h-pixels">
+  <!-- pixel and glitch accents -->
+  <rect x="190" y="50" width="7" height="7" fill="var(--h-main)"/>
+  <rect x="199" y="42" width="4" height="4" fill="var(--h-accent)"/>
+  <rect x="204" y="56" width="3" height="3" fill="var(--h-main)"/>
+  <rect x="34" y="196" width="6" height="6" fill="var(--h-main)"/>
+  <rect x="26" y="206" width="3" height="3" fill="var(--h-accent)"/>
+  <rect x="180" y="214" width="16" height="3" fill="var(--h-main)"/>
+  <rect x="44" y="226" width="11" height="3" fill="var(--h-accent)"/>
+</g>
+  </svg>
