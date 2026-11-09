@@ -8,13 +8,14 @@
 
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { dirname, extname, join, normalize } from 'node:path'
+import { basename, dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection } from '../engine/review.mjs'
+import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -325,6 +326,52 @@ async function review(id, input) {
   }
 }
 
+// ---------- promo video: the planner storyboards the build, HyperFrames renders it
+const videos = new Map() // run id -> { state, pct, stage, src, file, seconds, message }
+async function makeVideo(id, input = {}) {
+  const events = readEvents(id)
+  if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
+  if (videos.get(id)?.state === 'working') return videos.get(id)
+  const job = { state: 'working', pct: 0, stage: 'storyboard', t: Date.now() }
+  videos.set(id, job)
+  const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  const progress = (pct, stage) => {
+    Object.assign(job, { pct, stage })
+    broadcast({ type: 'video:progress', t: Date.now(), run: id, pct, stage })
+  }
+  const dir = join(runsDir, id, 'video')
+  ;(async () => {
+    const c = collect(events, join(runsDir, id))
+    const model = modelFor('planner')
+    send('video:start', { model, images: c.images.length })
+    const tools = videoTools(dataDir, stage => progress(0, stage)) // fetches the renderer while the story is written
+    let scenes
+    try {
+      if (!model || !models.planner.apiKey) throw new Error('no planner model')
+      scenes = await writeStory({ provider: provider('planner'), model, c, signal: AbortSignal.timeout(90000) })
+    } catch {
+      scenes = fallbackStory(c)
+    }
+    const agents = c.agents
+    send('video:story', { scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: s.image ? `/img/${id}/${basename(c.images.find(x => x.n === s.image).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
+    mkdirSync(dir, { recursive: true })
+    stagePictures(c, dir)
+    const comp = composition(scenes, c)
+    writeFileSync(join(dir, 'index.html'), comp.html)
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify(scenes, null, 2))
+    const t = await tools
+    progress(1, 'rendering')
+    const out = join(dir, 'promo.mp4')
+    await render({ tools: t, dir, out, quality: ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft', onProgress: (pct, code) => progress(Math.max(1, pct), code === 'assemble' ? 'assembling' : 'rendering') })
+    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${Date.now()}`, file: out, seconds: comp.seconds })
+    send('video:done', { src: job.src, file: out, seconds: comp.seconds, ms: Date.now() - job.t })
+  })().catch(err => {
+    Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
+    send('video:failed', { message: job.message })
+  })
+  return job
+}
+
 function tokenOk(given) {
   const a = Buffer.from(String(given || ''))
   const b = Buffer.from(token)
@@ -470,6 +517,24 @@ const server = createServer((req, res) => {
     return
   }
 
+  const runVideo = url.pathname.match(/^\/api\/runs\/([^/]+)\/video$/)
+  if (runVideo && RUN_ID.test(runVideo[1])) {
+    const id = runVideo[1]
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    if (req.method !== 'POST') {
+      const file = join(runsDir, id, 'video', 'promo.mp4')
+      return reply(200, videos.get(id) || (existsSync(file) ? { state: 'done', pct: 100, file, src: `/video/${id}/promo.mp4?v=${statSync(file).mtimeMs | 0}` } : { state: 'none' }))
+    }
+    let body = ''
+    req.on('data', c => (body += c))
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      makeVideo(id, input).then(job => reply(200, job)).catch(err => reply(400, { error: String(err.message || err) }))
+    })
+    return
+  }
+
   // Commands from Hermes (/swarm review, the swarm_studio tool) that the open
   // canvas carries out, because it owns the frames.
   if (url.pathname === '/api/cmd' && req.method === 'POST') {
@@ -566,6 +631,27 @@ const server = createServer((req, res) => {
     if (!existsSync(file)) return res.writeHead(404).end('not found')
     res.writeHead(200, { 'content-type': `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
     res.end(readFileSync(file))
+    return
+  }
+
+  // A run's promo video, with range requests so the player can seek.
+  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/promo\.mp4$/)
+  if (vid) {
+    const file = join(runsDir, vid[1], 'video', 'promo.mp4')
+    if (!existsSync(file)) return res.writeHead(404).end('not found')
+    const size = statSync(file).size
+    const range = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '')
+    const head = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'cache-control': 'no-cache', 'access-control-allow-origin': '*' }
+    if (!range) {
+      res.writeHead(200, { ...head, 'content-length': size })
+      createReadStream(file).pipe(res)
+      return
+    }
+    const from = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]))
+    const to = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1
+    if (from >= size || from > to) return res.writeHead(416, { 'content-range': `bytes */${size}` }).end()
+    res.writeHead(206, { ...head, 'content-length': to - from + 1, 'content-range': `bytes ${from}-${to}/${size}` })
+    createReadStream(file, { start: from, end: to }).pipe(res)
     return
   }
 

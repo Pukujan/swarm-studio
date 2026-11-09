@@ -10,6 +10,7 @@ canvas, which runs them on screen.
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 
 try:
@@ -25,12 +26,13 @@ HELP = """Swarm Studio commands
   /swarm open <n|id>              open a build on the canvas (n from /swarm files)
   /swarm play                     play the open build as a clickable prototype
   /swarm review [n|id]            a vision model checks every page; agents fix what it finds
+  /swarm video [n|id]             cut a 20-second promo video of a build (HyperFrames, MP4)
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
   /swarm lite [on|off|auto]       lite mode for machines short on memory"""
 
-SUBCOMMANDS = {"help", "files", "open", "play", "review", "models", "images", "lite"}
+SUBCOMMANDS = {"help", "files", "open", "play", "review", "video", "models", "images", "lite"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -110,6 +112,9 @@ def _dispatch(cmd: str, args: list[str]) -> str:
         return _canvas("review", **({"run": r["id"]} if r else {})) or (
             f"Reviewing “{r['title']}”" if r else "Reviewing the open build") + ": watch the canvas, fixes stream in live."
 
+    if cmd == "video":
+        return _video(args[0] if args else "", wait=False)
+
     if cmd == "models":
         if not args:
             info = _api("/api/models")
@@ -157,15 +162,34 @@ def _dispatch(cmd: str, args: list[str]) -> str:
     return HELP
 
 
+def _video(ref: str, wait: bool) -> str:
+    r = _pick_run(ref)
+    if not r:
+        return "No such build. See /swarm files."
+    path = f"/api/runs/{r['id']}/video"
+    job = _api(path, {})
+    if not wait:
+        return (f"Cutting a promo video of “{r['title']}”: the planner writes the storyboard, HyperFrames renders it "
+                "(about a minute; the first one also fetches the renderer). Watch it on the canvas; "
+                f"it is saved as runs/{r['id']}/video/promo.mp4.")
+    deadline = time.time() + 600
+    while job.get("state") == "working" and time.time() < deadline:
+        time.sleep(3)
+        job = _api(path)
+    if job.get("state") == "done":
+        return f"Promo video of “{r['title']}” is ready ({round(job.get('seconds') or 0)}s): {job.get('file')}"
+    return f"Video: {job.get('message') or job.get('state')}"
+
+
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), and set the models, image generation and lite mode.",
+    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), cut a promo video of a build (MP4, waits until it is rendered and returns the file path), and set the models, image generation and lite mode.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "open", "play", "review", "models", "images", "lite", "help"]},
-            "build": {"type": "string", "description": "for open/review: a number from `files` (1 = latest) or a build id; default the open or latest build"},
+            "action": {"type": "string", "enum": ["files", "open", "play", "review", "video", "models", "images", "lite", "help"]},
+            "build": {"type": "string", "description": "for open/review/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
             "provider": {"type": "string", "description": "for images: a Hermes image provider (openai-codex, xai, …), 'auto' or 'off'; omit to show"},
@@ -180,6 +204,11 @@ TOOL_SCHEMA = {
 def tool(args: dict | None = None, **_: object) -> str:
     a = args or {}
     action = str(a.get("action") or "help")
+    if action == "video":
+        try:
+            return _video(str(a.get("build") or ""), wait=True)
+        except RuntimeError as exc:
+            return f"Swarm Studio: {exc}"
     parts = {
         "open": [a.get("build") or "1"],
         "review": [a["build"]] if a.get("build") else [],

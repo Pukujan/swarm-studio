@@ -40,6 +40,7 @@ Call `swarm_studio` with an `action` (the person can type the same as `/swarm <a
 
 - `files`: recent builds, numbered (1 = latest). `open` with `build` shows one on the canvas; `play` opens it as a clickable prototype.
 - `review`: a vision model photographs every page, names up to 3 problems per page, and agents rewrite those sections live. Use it when the person asks to check, polish or fix a design. It runs on the open canvas, so the canvas must be open.
+- `video`: cuts a ~20-second promo video of a build (default the latest; `build` picks another). The planner writes a storyboard from the site's own copy and generated photos, and HyperFrames renders it in the site's theme to `runs/<id>/video/promo.mp4` (about a minute; the first video also fetches HyperFrames and ffmpeg from npm). The tool waits and returns the file path; the canvas shows the storyboard, the render and the player.
 - `models`: show which model plans, builds and reviews; with `role` and `model` change one (`reset` goes back to Hermes's setting, `off` turns the reviewer off).
 - `images`: generated photos come from Hermes's image providers, by default the person's Codex login (`gpt-image-2-low`). `provider: "off"` for shapes and SVG only. Each image uses that provider's quota.
 - `lite`: `on` for machines short on memory (one live page at a time).

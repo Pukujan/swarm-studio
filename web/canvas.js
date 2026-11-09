@@ -16,7 +16,7 @@ const els = {
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
   newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
   plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'),
-  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), modelsBtn: $('#models-btn'),
+  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), modelsBtn: $('#models-btn'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
@@ -241,6 +241,9 @@ function on(e) {
       if (l) { l.text = ''; l.ver++; l.status = 'assigned'; S.treeDirty = true }
       break
     }
+    case 'video:start': case 'video:story': case 'video:progress': case 'video:done': case 'video:failed':
+      videoEvent(e)
+      break
   }
 }
 
@@ -1070,6 +1073,9 @@ function frameLoop(now) {
     els.play.disabled = !S.frames.length
     els.reviewBtn.disabled = review.busy || !reviewerOn() || !S.done
     setText(els.reviewBtn, review.busy ? '🔎 Reviewing…' : '🔎 Review')
+    const mine = video.run === shownRun()
+    els.videoBtn.disabled = !S.done && !(mine && video.src)
+    setText(els.videoBtn, mine && video.busy ? `🎬 ${video.pct ? `${video.pct | 0}%` : 'Writing…'}` : '🎬 Video')
     if (S.progress) {
       const done = [...S.layers.values()].filter(l => l.status === 'done').length
       setText(S.progress.querySelector('.txt'), S.layers.size
@@ -2095,6 +2101,99 @@ function autoReview() {
 
 els.reviewBtn.onclick = () => reviewRun()
 
+// later features (video, fix, export) add themselves here
+const commandOps = {}
+
+// ---------- promo video
+// The planner storyboards the build into a few scenes, each handed to an agent,
+// and HyperFrames renders them in the site's theme. The panel shows the
+// storyboard, the render, then the video.
+const video = { run: null, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '', el: null }
+const shownRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
+
+function videoEvent(e) {
+  if (video.run !== e.run) Object.assign(video, { run: e.run, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '' })
+  const fresh = !e.t || Date.now() - e.t < 8000 // a replayed file shows its video quietly
+  if (e.type === 'video:start') {
+    Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], src: '', message: '' })
+    if (fresh) feed(null, `🎬 ${e.model || 'the planner'} is storyboarding a promo video`, 'sys')
+  } else if (e.type === 'video:story') {
+    video.story = e.scenes
+    if (fresh) e.scenes.forEach((sc, i) => setTimeout(() => feed(S.agents.get(sc.agent), `scene ${i + 1} · ${sc.kind}: “${sc.headline}”`, ''), i * 350))
+  } else if (e.type === 'video:progress') {
+    Object.assign(video, { busy: true, pct: e.pct, stage: e.stage })
+  } else if (e.type === 'video:done') {
+    Object.assign(video, { busy: false, pct: 100, src: e.src, file: e.file, stage: 'done' })
+    if (fresh) feed(null, `🎬 promo video ready (${Math.round(e.seconds)}s, rendered in ${Math.round(e.ms / 1000)}s)`, 'sys')
+  } else if (e.type === 'video:failed') {
+    Object.assign(video, { busy: false, message: e.message, stage: 'failed' })
+    if (fresh) feed(null, `🎬 video: ${e.message}`, 'err')
+  }
+  if (fresh && !video.el && e.type !== 'video:progress') toggleVideo(true)
+  renderVideo()
+}
+
+function renderVideo() {
+  const el = video.el
+  if (!el) return
+  const stage = { storyboard: 'Writing the storyboard…', rendering: 'Rendering frames in headless Chrome…', assembling: 'Encoding the MP4…' }[video.stage] || video.stage
+  // progress only moves the bar, so the storyboard cards don't replay their entrance
+  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message])
+  if (el.dataset.sig === sig) {
+    const bar = el.querySelector('.vbar i'), txt = el.querySelector('.vstage')
+    if (bar) bar.style.width = `${Math.max(3, video.pct)}%`
+    if (txt && video.busy) setText(txt, `${stage}${video.pct ? ` ${video.pct | 0}%` : ''}`)
+    return
+  }
+  el.dataset.sig = sig
+  const story = video.story.map((sc, i) => {
+    const a = S.agents.get(sc.agent)
+    return `<div class="vscene" style="--c:${a?.color || '#888'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
+  }).join('')
+  const body = video.src && !video.busy
+    ? `<video src="${esc(video.src)}" controls autoplay muted playsinline></video><div class="vfoot"><span title="${esc(video.file)}">Saved with the build: video/promo.mp4</span><button class="vagain">Make a new cut</button></div>`
+    : video.busy
+      ? `<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
+      : video.message
+        ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
+        : `<div class="vstage">A 20-second promo of this build: the planner writes the storyboard from your pages and pictures, HyperFrames renders it in your theme.</div><div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
+  el.innerHTML = `<div class="vhead">🎬 Promo video<button class="vclose" title="Close">×</button></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
+  el.querySelector('.vclose').onclick = () => toggleVideo(false)
+  const again = el.querySelector('.vagain')
+  if (again) again.onclick = () => makeVideo()
+}
+
+async function makeVideo() {
+  const run = shownRun()
+  if (!run || video.busy) return
+  toggleVideo(true)
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+  if (!res.ok) {
+    const out = await res.json().catch(() => ({}))
+    Object.assign(video, { run, message: out.error || `HTTP ${res.status}`, busy: false })
+    renderVideo()
+  }
+}
+
+async function toggleVideo(open = !video.el) {
+  if (!open) { video.el?.remove(); video.el = null; return }
+  if (!video.el) {
+    video.el = document.createElement('div')
+    video.el.className = 'video-pop'
+    document.body.append(video.el)
+  }
+  const run = shownRun()
+  if (run && video.run !== run) {
+    // a file opened from disk: ask whether it already has a video
+    const st = await api(`/api/runs/${encodeURIComponent(run)}/video`).then(r => r.json()).catch(() => ({}))
+    Object.assign(video, { run, busy: st.state === 'working', pct: st.pct || 0, stage: st.stage || '', story: [], src: st.src || '', file: st.file || '', message: st.state === 'failed' ? st.message : '' })
+  }
+  renderVideo()
+}
+
+els.videoBtn.onclick = () => (video.el ? toggleVideo(false) : video.src || video.busy ? toggleVideo(true) : makeVideo())
+commandOps.video = () => makeVideo()
+
 // ---------- lite mode
 // For machines short on memory: only the page in front of you stays a live
 // frame. Every other finished page becomes a flat snapshot and its iframe is
@@ -2371,14 +2470,12 @@ async function command(c) {
   if (c.op === 'review') reviewRun()
   if (c.op in commandOps) commandOps[c.op](c)
 }
-// later features (video, fix, export) add themselves here
-const commandOps = {}
 
 // A newer canvas on disk: reload once nothing is building and nobody is mid-edit.
 setInterval(async () => {
   const st = await fetch('/api/state').then(r => r.json()).catch(() => null)
   if (!st?.version || !BOOT.version || st.version === BOOT.version) return
-  const busy = (st.working && !viewing) || !els.player.hidden || picker.el || models.el || review.busy || document.activeElement?.closest?.('input, textarea, select')
+  const busy = (st.working && !viewing) || !els.player.hidden || picker.el || models.el || review.busy || video.busy || video.el || document.activeElement?.closest?.('input, textarea, select')
   if (!busy) location.reload()
 }, 8000)
 
