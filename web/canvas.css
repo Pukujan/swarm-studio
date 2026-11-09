@@ -746,3 +746,9 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .dpic-empty { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
 .dpic-addrow { display: flex; gap: 6px; }
 .dpic-what { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); font: 11.5px var(--font); padding: 5px 7px; }
+
+/* the video, playing live while headless Chrome renders it */
+.vlive { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px; background: #000; margin: 8px 0; }
+.vlive iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; pointer-events: none; }
+.vlive-tag { position: absolute; left: 10px; top: 8px; font: 600 11px var(--font); color: #fff; background: #0009; padding: 3px 8px; border-radius: 99px; }
+.vlive-tag::first-letter { color: #ff5470; }

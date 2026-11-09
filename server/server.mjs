@@ -1300,6 +1300,20 @@ const server = createServer((req, res) => {
     return
   }
 
+  // The video's own composition, playing in a loop: the canvas shows it while
+  // headless Chrome renders the same page frame by frame.
+  const live = url.pathname.match(/^\/video\/([\w-]{1,64})\/live\/(index\.html|p\d{1,3}\.(?:webp|png|jpe?g))$/)
+  if (live) {
+    const file = join(runsDir, live[1], 'video', live[2])
+    if (!existsSync(file)) return res.writeHead(404).end('not found')
+    if (live[2] !== 'index.html') return sendFile(res, file)
+    // HyperFrames shows each clip only between its data-start and its end; here a
+    // tiny stand-in does the same on every frame of the looping timeline
+    const loop = `<script>addEventListener('load',()=>{const tl=window.__timelines&&window.__timelines.promo;if(!tl)return;const clips=[...document.querySelectorAll('.clip[data-start]')].map(el=>({el,a:+el.dataset.start,b:+el.dataset.start+ +el.dataset.duration}));const show=()=>{const t=tl.time();for(const c of clips)c.el.style.visibility=t>=c.a&&t<c.b?'visible':'hidden'};tl.eventCallback('onUpdate',show);tl.repeat(-1);tl.play(0);show()})</script>`
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    return res.end(readFileSync(file, 'utf8').replace(/<\/body>/i, () => `${loop}</body>`))
+  }
+
   // A run's promo video, with range requests so the player can seek; an earlier
   // cut by its file name in the build's video folder (…-promo-v2.mp4).
   const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
