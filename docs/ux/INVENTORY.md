@@ -31,7 +31,7 @@ The worst cases:
 
 ## Landmarks, with only what is visible at rest
 
-The full tree, every branch down to 13 layers, is in [SITEMAP.md](SITEMAP.md). This table covers only the landmark screens
+The full tree, every branch down to 14 layers, is in [SITEMAP.md](SITEMAP.md). This table covers only the landmark screens
 on the way down.
 
 | Landmark | Visible at rest (the whole list) | One click or hover away | ⌘K or ⚙ only |
@@ -41,6 +41,7 @@ on the way down.
 | **Start** (typing) | the input, the lens chip, Build | lens options (below); "what happens" as a row of step icons | Pro packs list, models |
 | **Orbit** | the build (sun), its pages (planets, for lenses with pages), the lens's stations (1-3), one progress ring on the sun, the breadcrumb, the input (now the chat), Share, Sound, ⚙ | ring → steps sheet (with Stop); Hermia's avatar → crew radio (reasoning, agents, chatter); station hover → one line | think log, planner stream, break room |
 | **Room** | the room's content, its one primary action, a ⋯ room menu, the breadcrumb, the input | an inspector panel on the right for whatever is selected | the room's power tools |
+| **Design deck** (follows Figma, see PATTERNS.md) | the left panel (logo menu, pages, layers), the canvas with the crew's cursors, the bottom toolbar (Move, Frame, Shape, Pen, Text, Comment, Hermia, Code), the right panel (crew, progress, Play, Share; page and variables) | the Design and Prototype tabs for a selection; comment threads; follow one agent | Figma's shortcut keys, ⌘K, ⌘\\ hides the panels |
 | **Details** | — | logs, reasoning, layers tree, files and code wall, traces, raw errors, per-role models | — |
 
 ## One home for each duplicate
@@ -65,14 +66,14 @@ on the way down.
 | Hermia's reasoning | thought bubble, comm text, Thinking count, Log tab | Hermia's avatar → crew radio |
 | Stop | 3 meanings, one label | Stop lives in the sheet of the thing it stops, labelled by that thing ("Stop the build", "Stop the tour") |
 | Back home | a back button that's hidden in Classic view | breadcrumb, logo (to Home), Esc |
-| Classic view | a separate layout you can get trapped in | removed: its canvas + chat layout is the Design deck room |
+| Classic view | a separate layout you can get trapped in | removed: its canvas becomes the Design deck, in Figma's layout; its chat becomes Hermia on the toolbar |
 
 ## Stations and rooms per lens
 
 | Lens | Stations in orbit | Room primary action | In the room's ⋯ menu |
 |---|---|---|---|
 | Just make it | none while building; the result card when done | Open / Share | — |
-| Design | Design deck | Review | Export, Versions, Trace |
+| Design | Design deck | Share | the logo menu: Versions, Export all (the Critic's review arrives as comment pins) |
 | Develop | Engine room (Design deck read-only) | Open app | Files, Checks, Deploy, Data |
 | Game | Game room, Film studio | Play | Tune, Publish to Arcade |
 | Mix | Design deck, Engine room | per room, as above | per room |
@@ -80,13 +81,16 @@ on the way down.
 
 ## Removed outright
 
-- The 75 helper sentences: moved into tooltips or sheets, or deleted (RULES.md rule 8).
+- The 75 helper sentences: deleted, or moved one layer down into a sheet; never into a tooltip (RULES.md rules 8
+  and 9).
 - The top-bar Auto and Game buttons, and the More menu (places become stations, actions move into rooms,
   settings go to ⚙).
 - The Make / Pro tabs and the "ONE PROMPT. THE whole THING." headline inside the Auto box.
 - The Star chart button (replaced by Search), and the Live now / Back to chips (the live star pulses).
 - The Hermia text strip ("Standing by.") and the sun and station status sentences (replaced by the ring and
   dots).
+- In the Design deck, everything Figma doesn't have: the chat feed and log, the dock, the status bar, the
+  camera hint, the separate agents list and the view tabs. Where each one goes is in PATTERNS.md.
 
 ## Questions for the owner
 

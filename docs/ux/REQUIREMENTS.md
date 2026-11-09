@@ -73,3 +73,19 @@ entries at the bottom with the date; don't rewrite old ones.
 > the flow is wrong, I want the plugin to open the feed directly, like how Kresilo works
 >
 > yup, and it's a TikTok-style navigation, it doesn't need project descriptions, just more visuals and assets
+
+**Borrowing from mature products**
+> how are we going to arrange and borrow ideas from mature frameworks and their UI/UX, also how are we going to
+> avoid text and tooltips everywhere, a proper navigation and only a few sidebars, non-moving buttons, etc.
+
+> are we about to have UI everywhere in the studio again?
+
+**The canvas follows Figma**
+> I think our canvas is the one with the most tools, right, and it's supposed to follow Figma's UI and tools
+> almost 1 to 1, right?
+
+**The social side, borrowed**
+> what about Kresilo's collaboration board, annotation, contribution, public boards, events, mood boards, etc.?
+> Can we borrow some of those ideas from Kresilo, Behance and more?
+
+These are answered in [PATTERNS.md](PATTERNS.md) and RULES.md rules 9 and 27–32.
