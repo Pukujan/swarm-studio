@@ -193,7 +193,14 @@ export function autoJob(d) {
     const a = await d.apps()
     set(id, 'working', note)
     await a.start(job.run, { ...input, ...(turns ? { turns } : {}) })
-    const s = await until(() => { const st = a.state(job.run); return st.state !== 'working' && st }, { ms: 50 * 60000, stop: () => a.stop(job.run) })
+    const wait = () => until(() => { const st = a.state(job.run); return st.state !== 'working' && st }, { ms: 50 * 60000, stop: () => a.stop(job.run) })
+    let s = await wait()
+    // a flaky engine turn (a helper ended without its report, a dropped connection) gets one more go
+    if (s.state !== 'done' && !job.stopped && /sub-agent|without a report|fetch failed|ECONNRESET|socket hang up|timed? ?out/i.test(String(s.message || ''))) {
+      set(id, 'working', `${note} (trying once more: ${String(s.message).replace(/\s+/g, ' ').slice(0, 80)})`)
+      await a.start(job.run, { ...input, ask: `${input.ask || ''}\n\nThe last attempt stopped part way (${String(s.message).replace(/\s+/g, ' ').slice(0, 200)}). Keep what is already done and finish the rest.`.trim(), ...(turns ? { turns } : {}) })
+      s = await wait()
+    }
     if (s.state !== 'done') throw new Error(s.message || 'the build failed')
     return s
   }
