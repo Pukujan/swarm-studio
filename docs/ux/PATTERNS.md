@@ -113,7 +113,8 @@ what's missing from the products below.
 We use Kresilo's design QA method (`swarm-feed/docs/design-qa.md`):
 
 1. For each landmark screen, we draw our own reference frame at 1280 × 800 and 390 × 844, in our look, following
-   the pattern sheet. Frames go in `docs/ux/frames/<screen>-desktop.png` and `-phone.png`.
+   the pattern sheet. Frames go in `docs/ux/frames/<screen>-desktop.jpg` and `-phone.jpg`, drawn from
+   `docs/ux/frames/src/` (see [frames/README.md](frames/README.md)).
 2. The owner approves each frame, and the approval is dated in REQUIREMENTS.md. An approved frame is the source
    of visual truth for that screen.
 3. We build to the frame. `scripts/ui-review.mjs` puts the screenshot beside the frame at the same sizes and

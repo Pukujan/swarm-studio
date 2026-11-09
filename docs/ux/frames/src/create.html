@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Swarm · Create</title><link rel="stylesheet" href="kit.css">
+<style>
+.centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 0 16px 40px }
+.cmd { position: relative; width: 220px; height: 250px; display: grid; place-items: end center }
+.cmd::before { content: ''; position: absolute; left: 50%; top: 54%; width: 250px; height: 250px; transform: translate(-50%, -50%); border-radius: 50%;
+  background: radial-gradient(circle, rgb(242 242 0 / .16), transparent 62%); border: 1px dashed rgb(242 242 0 / .35) }
+.cmd img { position: relative; width: 210px; height: 262px }
+.ask { width: min(700px, 100%); min-height: 112px; border-radius: 24px; background: rgb(10 10 46 / .92); border: 1px solid var(--frame-hi);
+  box-shadow: 0 0 0 4px rgb(0 0 242 / .25), 0 20px 60px rgb(0 0 0 / .5); padding: 20px 22px 16px; display: flex; flex-direction: column; gap: 14px }
+.ask p { font: 17px/1.5 var(--mono); color: var(--text) }
+.ask p i { display: inline-block; width: 2px; height: 20px; background: var(--accent); vertical-align: -4px; margin-left: 2px }
+.ask .row { display: flex; align-items: center; gap: 8px }
+.ask .row .btn.primary { margin-left: auto; height: 40px; min-width: 104px; font-size: 18px }
+.chip.lens { background: transparent; border-color: rgb(242 242 0 / .5); color: var(--accent) }
+@media (max-width: 600px) {
+  .centre { gap: 16px; padding-bottom: 20px }
+  .cmd { width: 170px; height: 196px } .cmd img { width: 160px; height: 200px }
+  .cmd::before { width: 196px; height: 196px }
+  .ask { border-radius: 20px; padding: 16px; min-height: 0 }
+  .ask p { font-size: 15px }
+  .ask .row { flex-wrap: wrap }
+}
+</style></head>
+<body data-nav="create"><div class="app"><nav class="nav"></nav><main class="main"><div class="stage">
+  <div class="stars"></div>
+  <div class="centre">
+    <div class="cmd"><img data-brand="hermia.svg" alt=""></div>
+    <div class="ask">
+      <p>a lantern festival site for Taipei, with a little boat game<i></i></p>
+      <div class="row">
+        <span class="chip"><i data-i="paperclip"></i>Start from</span>
+        <span class="chip lens"><i data-i="sparkles"></i>Design + Game<i data-i="chevron-down"></i></span>
+        <span class="btn primary"><i data-i="arrow-up"></i>Build</span>
+      </div>
+    </div>
+  </div>
+</div></main></div>
+<script src="../../../../web/crew.js"></script><script src="frame.js"></script><script src="icons.js"></script></body></html>

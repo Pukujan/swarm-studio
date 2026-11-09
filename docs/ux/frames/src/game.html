@@ -1,0 +1,25 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Swarm · Game room</title><link rel="stylesheet" href="kit.css">
+<style>
+.crumb .c1 {}
+.col { position: absolute; left: 0; right: 0; top: 32px; display: flex; flex-direction: column; align-items: center; gap: 16px }
+.play { position: relative; width: min(860px, calc(100% - 64px)); aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden;
+  border: 1px solid var(--edge); box-shadow: 0 0 0 1px rgb(0 0 242 / .6), 0 30px 80px rgb(0 0 0 / .6), 0 0 90px rgb(0 0 242 / .3) }
+.play img { width: 100%; height: 100%; object-fit: cover; display: block }
+.play .ttl { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(ellipse at center, rgb(5 5 26 / .15), rgb(5 5 26 / .6)) }
+.play h2 { font: 800 76px/0.9 var(--display); letter-spacing: .04em; color: #fff; text-shadow: 0 0 30px rgb(0 242 242 / .55) }
+.play p { font: 500 15px var(--mono); letter-spacing: .3em; color: var(--accent) }
+.under { display: flex; gap: 10px }
+@media (max-width: 600px) {
+  .crumb .c1, .crumb .c1 + .ic { display: none }
+  .col { top: 16px; gap: 14px } .play { width: calc(100% - 28px); border-radius: 12px }
+  .play h2 { font-size: 40px } .play p { font-size: 11px }
+}
+</style></head>
+<body data-nav="projects"><div class="app"><nav class="nav"></nav><main class="main">
+  <header class="top"><div class="crumb"><span class="c1">Projects</span><i data-i="chevron-right"></i>Deep Lantern<i data-i="chevron-right"></i><b>Game room</b></div><div class="spacer"></div><span class="btn icon ghost"><i data-i="ellipsis"></i></span><span class="btn primary"><i data-i="play"></i>Play</span></header>
+  <div class="stage"><div class="stars"></div>
+    <div class="col"><div class="play"><img src="img/deep-1.jpg" alt=""><div class="ttl"><h2>DEEP LANTERN</h2><p>PRESS SPACE</p></div></div>
+    <div class="under"><span class="btn ghost"><i data-i="sliders-horizontal"></i>Tweak</span><span class="btn ghost"><i data-i="code"></i>Details</span></div></div>
+<div class="input"><img class="hermia" data-brand="hermia-mark.svg" alt=""><span class="ph">Tell Hermia</span><span class="chip to"><i data-i="chevron-right"></i>Game</span><span class="send"><i data-i="arrow-up"></i></span></div>
+</div></main></div>
+<script src="../../../../web/crew.js"></script><script src="frame.js"></script><script src="icons.js"></script></body></html>

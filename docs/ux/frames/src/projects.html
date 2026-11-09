@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Swarm · Projects</title><link rel="stylesheet" href="kit.css">
+<style>
+.top .seg { overflow-x: auto; scrollbar-width: none; flex: 0 1 auto; min-width: 0 }
+.sky { position: absolute; inset: 0 }
+.sky svg.orbits { position: absolute; inset: 0; width: 100%; height: 100% }
+.pl { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; box-shadow: 0 0 28px rgb(70 70 255 / .45), 0 0 0 1px rgb(242 242 242 / .25) }
+.pl img { width: 100%; height: 100%; object-fit: cover; display: block }
+.pl.far { opacity: .55; box-shadow: 0 0 14px rgb(70 70 255 / .3) }
+.pl.hot { overflow: visible; box-shadow: none }
+.pl.hot img { border-radius: 50%; box-shadow: 0 0 0 3px var(--accent), 0 0 46px rgb(242 242 0 / .35) }
+.pl.hot .lab { position: absolute; left: 50%; top: calc(100% + 14px); transform: translateX(-50%); white-space: nowrap; font: 600 17px var(--label); letter-spacing: .04em;
+  background: rgb(10 10 46 / .9); border: 1px solid var(--edge); border-radius: 999px; padding: 4px 12px }
+.pl.hot .lab em { font-style: normal; color: var(--muted); font-weight: 500 }
+@media (max-width: 600px) {
+  .pl.hot .lab { font-size: 15px }
+  .pl.n1 { left: 74% !important; top: 22% !important; width: 80px !important; height: 80px !important }
+  .pl.hot { left: 40% !important; top: 40% !important }
+}
+</style></head>
+<body data-nav="projects"><div class="app"><nav class="nav"></nav><main class="main">
+  <header class="top"><div class="seg"><span class="on">My builds</span><span>Boards</span><span>Mood boards</span><span>Shared with me</span></div><div class="spacer"></div><span class="btn icon ghost"><i data-i="search"></i></span></header>
+  <div class="stage"><div class="stars"></div><div class="sky">
+    <svg class="orbits" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <ellipse cx="50" cy="52" rx="22" ry="20" fill="none" stroke="rgb(242 242 242 / .08)" stroke-width=".25" vector-effect="non-scaling-stroke"/>
+      <ellipse cx="50" cy="52" rx="38" ry="34" fill="none" stroke="rgb(242 242 242 / .07)" stroke-width=".25" vector-effect="non-scaling-stroke" stroke-dasharray="4 6"/>
+      <ellipse cx="50" cy="52" rx="52" ry="47" fill="none" stroke="rgb(242 242 242 / .05)" stroke-width=".25" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <div class="pl hot" style="left:43%;top:38%;width:128px;height:128px"><img src="img/lantern-1.jpg" alt=""><span class="lab">Lantern Drift <em>· 8 pages</em></span></div>
+    <div class="pl n1" style="left:70%;top:30%;width:96px;height:96px"><img src="img/neon-1.jpg" alt=""></div>
+    <div class="pl" style="left:62%;top:74%;width:84px;height:84px"><img src="img/deep-1.jpg" alt=""></div>
+    <div class="pl" style="left:24%;top:66%;width:72px;height:72px"><img src="img/roast-1.jpg" alt=""></div>
+    <div class="pl far" style="left:16%;top:24%;width:52px;height:52px"><img src="img/neon-4.jpg" alt=""></div>
+    <div class="pl far" style="left:86%;top:62%;width:56px;height:56px"><img src="img/deep-keeper.jpg" alt=""></div>
+    <div class="pl far" style="left:40%;top:88%;width:46px;height:46px"><img src="img/roast-4.jpg" alt=""></div>
+    <div class="pl far" style="left:88%;top:14%;width:44px;height:44px"><img src="img/lantern-friends.jpg" alt=""></div>
+  </div></div>
+</main></div>
+<script src="../../../../web/crew.js"></script><script src="frame.js"></script><script src="icons.js"></script></body></html>

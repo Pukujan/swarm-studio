@@ -1,0 +1,141 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Swarm · Design deck</title><link rel="stylesheet" href="kit.css">
+<style>
+body { font-size: 12px }
+.fig { height: 100vh; display: grid; grid-template-columns: 240px 1fr 260px }
+.lp, .rp { background: var(--deep); display: flex; flex-direction: column; overflow: hidden; z-index: 3 }
+.lp { border-right: 1px solid var(--edge) } .rp { border-left: 1px solid var(--edge) }
+.file { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--edge); font: 600 16px var(--label); letter-spacing: .03em; flex: none }
+.file img { width: 24px; height: 24px } .file .ic { width: 14px; height: 14px; color: var(--muted) }
+.sec { padding: 12px 12px 8px; border-bottom: 1px solid var(--edge) }
+.sec h4 { display: flex; align-items: center; justify-content: space-between; font: 600 14px var(--label); letter-spacing: .05em; color: var(--text); margin-bottom: 6px }
+.sec h4 .ic { width: 15px; height: 15px; color: var(--muted) }
+.row { height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 6px; color: var(--muted); font: 12px var(--mono); white-space: nowrap }
+.row .ic { width: 14px; height: 14px }
+.row.on { color: var(--text); background: var(--panel-2) }
+.row.sel { color: var(--text); background: rgb(0 0 242 / .55) }
+.row.kid { padding-left: 30px }
+.row .dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--accent) }
+.layers { flex: 1; border-bottom: 0 }
+.cv { position: relative; overflow: hidden; background: #0d0d33; background-image: radial-gradient(rgb(242 242 242 / .07) 1px, transparent 1px); background-size: 24px 24px }
+.flab { position: absolute; font: 11px var(--mono); color: var(--muted) }
+.frm { position: absolute; background: #10102c; box-shadow: 0 8px 40px rgb(0 0 0 / .5); overflow: hidden }
+.frm .hdr { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px; background: #070720 }
+.frm .hdr i { display: block; height: 4px; border-radius: 2px; background: rgb(242 242 242 / .35) }
+.hero { position: relative; height: 172px }
+.hero img { width: 100%; height: 100%; object-fit: cover; display: block }
+.hero h2 { position: absolute; left: 16px; bottom: 14px; font: 800 34px/0.9 var(--display); text-shadow: 0 3px 16px rgb(0 0 0 / .6) }
+.blk { padding: 14px 12px; display: grid; gap: 8px }
+.blk.three { grid-template-columns: repeat(3, 1fr) }
+.blk.two { grid-template-columns: 1fr 1fr }
+.blk span { height: 54px; border-radius: 6px; background: rgb(242 242 242 / .07) }
+.blk img { width: 100%; height: 86px; object-fit: cover; border-radius: 6px; display: block }
+.bar { height: 8px; border-radius: 4px; background: rgb(242 242 242 / .16); margin: 0 12px 6px }
+.bar.s { width: 40% } .bar.m { width: 64% }
+.selbox { position: absolute; outline: 2px solid var(--frame-hi); pointer-events: none }
+.selbox i { position: absolute; width: 8px; height: 8px; background: #fff; border: 1.5px solid var(--frame-hi) }
+.selbox i:nth-child(1) { left: -5px; top: -5px } .selbox i:nth-child(2) { right: -5px; top: -5px }
+.selbox i:nth-child(3) { left: -5px; bottom: -5px } .selbox i:nth-child(4) { right: -5px; bottom: -5px }
+.selbox b { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); background: var(--frame-hi); color: #fff; font: 600 11px var(--mono); padding: 2px 7px; border-radius: 4px; white-space: nowrap }
+.cur { position: absolute; display: flex; align-items: flex-start; gap: 2px; z-index: 2 }
+.cur svg.nib { width: 16px; height: 16px }
+.cur .tag { margin-top: 12px; display: flex; align-items: center; gap: 4px; padding: 2px 8px 2px 3px; border-radius: 999px; font: 600 13px var(--label); letter-spacing: .04em; color: var(--ink) }
+.pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 4px; background: var(--accent); color: var(--ink); display: grid; place-items: center; font: 700 14px var(--label); box-shadow: 0 4px 14px rgb(0 0 0 / .45) }
+.tools { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); height: 48px; display: flex; align-items: center; gap: 2px; padding: 0 6px; border-radius: 14px; background: var(--deep); border: 1px solid var(--edge); box-shadow: 0 12px 34px rgb(0 0 0 / .5); z-index: 4 }
+.tools span { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; color: var(--text) }
+.tools span.on { background: var(--frame) }
+.tools .sep { width: 1px; height: 24px; background: var(--edge); margin: 0 4px }
+.tools img { width: 26px; height: 26px; border-radius: 50% }
+.rtop { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--edge); flex: none }
+.stack { display: flex } .stack .crew-av { margin-right: -7px; background: var(--deep); border-radius: 50%; box-shadow: 0 0 0 2px var(--deep) }
+.pill { height: 24px; padding: 0 8px; border-radius: 999px; background: var(--panel-2); font: 600 13px var(--label); display: inline-flex; align-items: center; gap: 4px }
+.rtop .btn.primary { height: 30px; min-width: 0; padding: 0 14px; font-size: 15px; margin-left: auto }
+.rtabs { height: 40px; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-bottom: 1px solid var(--edge); font: 600 14px var(--label); letter-spacing: .04em; color: var(--muted); flex: none }
+.rtabs .on { color: var(--text) } .rtabs .z { margin-left: auto; font: 12px var(--mono) }
+.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px }
+.fld { height: 28px; border-radius: 6px; background: var(--panel-2); display: flex; align-items: center; gap: 8px; padding: 0 8px; font: 12px var(--mono) }
+.fld em { font-style: normal; color: var(--muted); width: 12px }
+.fld .ic { width: 14px; height: 14px; color: var(--muted) }
+.sw { width: 14px; height: 14px; border-radius: 3px; background: #0b0b3a; box-shadow: 0 0 0 1px var(--edge) }
+.tok { padding: 1px 6px; border-radius: 4px; background: rgb(0 0 242 / .4); font-size: 11px }
+.dirs { display: flex; gap: 2px; background: var(--panel-2); border-radius: 6px; padding: 2px }
+.dirs span { width: 28px; height: 24px; border-radius: 4px; display: grid; place-items: center; color: var(--muted) }
+.dirs span.on { background: var(--panel-2); color: var(--text) }
+.rp .sec h4 .ic { width: 15px; height: 15px }
+.ph-top { display: none }
+@media (max-width: 600px) {
+  .fig { grid-template-columns: 1fr; grid-template-rows: 52px 1fr }
+  .lp, .rp { display: none }
+  .ph-top { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--deep); border-bottom: 1px solid var(--edge); font: 600 16px var(--label); letter-spacing: .03em }
+  .ph-top img { width: 24px; height: 24px } .ph-top .ic { width: 14px; height: 14px; color: var(--muted) }
+  .ph-top .btn.primary { margin-left: auto; height: 32px; min-width: 0; padding: 0 14px; font-size: 15px }
+  .cv .festival, .cv .flab.f2l { display: none }
+  .cv .home { left: 24px !important; width: 342px !important }
+  .cv .flab.h { left: 24px !important }
+  .cv .selbox { left: 24px !important; width: 342px !important }
+  .tools { bottom: 14px; gap: 0; padding: 0 4px }
+  .tools span { width: 32px }
+}
+</style></head>
+<body><div class="fig">
+  <div class="ph-top"><img data-brand="hermia-mark.svg" alt=""><i data-i="chevron-down"></i>Lantern Drift<span class="btn primary">Share</span></div>
+  <aside class="lp">
+    <div class="file"><img data-brand="hermia-mark.svg" alt=""><i data-i="chevron-down"></i>Lantern Drift</div>
+    <div class="sec"><h4>Pages<i data-i="plus"></i></h4>
+      <div class="row on"><i data-i="check"></i>Home</div><div class="row"><span style="width:14px"></span>Festival</div><div class="row"><span style="width:14px"></span>Stage</div><div class="row"><span style="width:14px"></span>Map</div></div>
+    <div class="sec layers"><h4>Layers</h4>
+      <div class="row on"><i data-i="chevron-down"></i><i data-i="frame"></i>Home</div>
+      <div class="row kid"><i data-i="square"></i>Header</div>
+      <div class="row kid sel"><i data-i="image"></i>Hero<span class="dot"></span></div>
+      <div class="row kid"><i data-i="layout-grid"></i>Schedule</div>
+      <div class="row kid"><i data-i="layout-grid"></i>Lanterns</div>
+      <div class="row kid"><i data-i="map-pin"></i>Visit</div>
+      <div class="row kid"><i data-i="square"></i>Footer</div></div>
+  </aside>
+  <section class="cv">
+    <div class="flab h" style="left:56px;top:34px">Home</div>
+    <div class="frm home" style="left:56px;top:52px;width:400px;height:720px">
+      <div class="hdr"><img data-brand="hermia-mark.svg" alt="" style="width:14px;height:14px"><i style="width:30px"></i><span style="flex:1"></span><i style="width:22px"></i><i style="width:22px"></i><i style="width:22px"></i></div>
+      <div class="hero"><img src="img/lantern-site.jpg" alt=""></div>
+      <div class="blk three" style="padding-top:18px"><span></span><span></span><span></span></div>
+      <div class="bar m"></div><div class="bar s"></div>
+      <div class="blk two"><img src="img/lantern-stage.jpg" alt=""><img src="img/lantern-walk.jpg" alt=""></div>
+      <div class="bar m"></div>
+      <div class="blk two"><img src="img/lantern-friends.jpg" alt=""><span style="height:86px"></span></div>
+    </div>
+    <div class="selbox" style="left:56px;top:78px;width:400px;height:172px"><i></i><i></i><i></i><i></i><b>1440 × 640</b></div>
+    <div class="flab f2l" style="left:516px;top:34px">Festival</div>
+    <div class="frm festival" style="left:516px;top:52px;width:400px;height:720px">
+      <div class="hdr"><img data-brand="hermia-mark.svg" alt="" style="width:14px;height:14px"><i style="width:30px"></i><span style="flex:1"></span><i style="width:22px"></i><i style="width:22px"></i></div>
+      <div class="hero"><img src="img/lantern-2.jpg" alt=""></div>
+      <div class="bar m" style="margin-top:16px"></div><div class="bar s"></div>
+      <div class="blk two"><span style="height:86px"></span><img src="img/lantern-1.jpg" alt=""></div>
+    </div>
+    <div class="pin" style="left:690px;top:300px">1</div>
+    <div class="cur" id="c1" style="left:300px;top:150px" data-name="Lumi"></div>
+    <div class="cur" id="c2" style="left:190px;top:296px" data-name="Bean"></div>
+    <div class="tools">
+      <span class="on"><i data-i="mouse-pointer-2"></i></span><span><i data-i="frame"></i></span><span><i data-i="square"></i></span><span><i data-i="pen-tool"></i></span><span><i data-i="type"></i></span><span><i data-i="message-square"></i></span>
+      <span class="sep"></span><span><img data-brand="hermia-mark.svg" alt=""></span><span class="sep"></span><span><i data-i="code"></i></span>
+    </div>
+  </section>
+  <aside class="rp">
+    <div class="rtop"><span class="stack"><i data-crew="Lumi" data-s="26"></i><i data-crew="Bean" data-s="26"></i><i data-crew="Nova" data-s="26"></i></span><span class="pill" style="margin-left:10px">6/8</span><span class="btn primary">Share</span><i data-i="play"></i></div>
+    <div class="rtabs"><span class="on">Design</span><span>Prototype</span><span class="z">100%</span></div>
+    <div class="sec"><h4>Position</h4><div class="f2"><span class="fld"><em>X</em>0</span><span class="fld"><em>Y</em>96</span><span class="fld"><em>W</em>1440</span><span class="fld"><em>H</em>640</span></div></div>
+    <div class="sec"><h4>Auto layout<i data-i="minus"></i></h4><div class="f2"><span class="dirs"><span class="on"><i data-i="chevron-down"></i></span><span><i data-i="chevron-right"></i></span><span><i data-i="layout-grid"></i></span></span><span class="fld"><i data-i="move"></i>24</span><span class="fld"><i data-i="frame"></i>64</span><span class="fld"><i data-i="sliders-horizontal"></i>Fill</span></div></div>
+    <div class="sec"><h4>Appearance<i data-i="eye"></i></h4><div class="f2"><span class="fld"><i data-i="circle-dot"></i>100%</span><span class="fld"><i data-i="square"></i>0</span></div></div>
+    <div class="sec"><h4>Fill<i data-i="plus"></i></h4><div class="fld"><span class="sw"></span><span class="tok">lantern-night</span><span style="margin-left:auto">100%</span></div></div>
+    <div class="sec"><h4>Stroke<i data-i="plus"></i></h4></div>
+    <div class="sec"><h4>Effects<i data-i="plus"></i></h4></div>
+    <div class="sec" style="border:0"><h4>Export<i data-i="plus"></i></h4></div>
+  </aside>
+</div>
+<script src="../../../../web/crew.js"></script>
+<script>
+// crew cursors, as web/canvas.js draws them: the arrow in the agent's colour and a name tag
+for (const el of document.querySelectorAll('.cur')) {
+  const n = el.dataset.name, c = SwarmCrew.color(n)
+  el.innerHTML = `<svg class="nib" viewBox="0 0 10 10"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill="${c}" stroke="#05051a" stroke-width="1" stroke-linejoin="round"/></svg><span class="tag" style="background:${c};color:${SwarmCrew.ink(c)}">${SwarmCrew.avatar(n, 22)}${n}</span>`
+}
+</script>
+<script src="frame.js"></script><script src="icons.js"></script></body></html>
