@@ -98,7 +98,7 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
   const seen = new Map()
   const watcher = (() => { try {
     return watch(workspace, { recursive: true }, (_, f) => {
-      if (!f || /(^|[\\/])(node_modules|\.git|dist|\.vite)([\\/]|$)/.test(f) || !/\.[a-z]{1,5}$/.test(f)) return
+      if (!f || /(^|[\\/])(node_modules|\.git|dist|\.vite|\.output|\.nitro|\.dyad|\.vercel)([\\/]|$)/.test(f) || /(^|[\\/])RUN_META\.json$/.test(f) || !/\.[a-z]{1,5}$/.test(f)) return
       const now = Date.now()
       if (now - (seen.get(f) || 0) < 3000) return
       seen.set(f, now)
@@ -135,7 +135,7 @@ export function appFiles(dir) {
   const out = []
   const walk = d => {
     for (const n of readdirSync(d)) {
-      if (/^(node_modules|\.git|dist|\.engine)$/.test(n) || n === 'pnpm-lock.yaml') continue
+      if (/^(node_modules|\.git|dist|\.engine|\.output|\.nitro|\.dyad|\.vercel)$/.test(n) || n === 'pnpm-lock.yaml') continue
       const f = join(d, n), st = statSync(f)
       if (st.isDirectory()) walk(f)
       else if (/\.(tsx?|jsx?|css|json|md|html|ya?ml)$/.test(n) && st.size < 200000) out.push({ path: relative(dir, f), size: st.size })

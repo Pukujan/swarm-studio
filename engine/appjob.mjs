@@ -4,7 +4,7 @@
 // App tab, so a studio that never builds an app never loads it.
 
 import { spawn, execFile, execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
@@ -80,6 +80,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const ask = String(input.ask || '').trim().slice(0, 4000)
     let prompt
     if (fresh) {
+      // a new app starts a new engine chat: the old one's history (and its
+      // failures) would steer the model
+      const meta = join(runsDir, id, '.engine')
+      if (existsSync(meta)) for (const d of readdirSync(meta)) if (d.startsWith('data-')) rmSync(join(meta, d), { recursive: true, force: true })
       if (kind === 'game') {
         if (!input.prompt) throw new Error('a game needs its spec')
         seedProject(scaffoldDir, dir, input.title || 'game')
