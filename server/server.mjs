@@ -106,6 +106,27 @@ async function imageChoice() {
 }
 
 const IMG_MAX = 8
+
+// One picture for a finished section: a new one asked for in an edit, or a
+// replacement. It keeps the <img>'s data-gen as its key, so every canvas, the
+// export and the video pick up the newest one.
+function paintOne(send, runId, { page, layer, gen, prompt }, choice) {
+  send('image:queued', { page, layer, gen, provider: choice.provider, model: choice.model })
+  const theme = readEvents(runId)?.findLast(e => e.type === 'theme')
+  return imagegen(['--provider', choice.provider, ...(choice.model ? ['--model', choice.model] : []), '--aspect', 'landscape', `${prompt || gen}. Art direction: ${theme?.direction || ''}`.slice(0, 600)], 150000).then(r => {
+    if (!r.ok || !r.path || !existsSync(r.path)) return send('image:failed', { page, layer, gen, message: r.error || 'no image' })
+    const file = `edit-${Date.now().toString(36)}${extname(r.path) || '.png'}`
+    mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
+    copyFileSync(r.path, join(runsDir, runId, 'img', file))
+    send('image', { page, layer, gen, src: `/img/${runId}/${file}`, model: r.model || choice.model, prompt: prompt || undefined })
+  })
+}
+// After a rewrite: paint the <img data-gen> it added (ones painted before keep their picture).
+function paintNew(runId, send, page, layer, html, choice) {
+  const had = new Set((readEvents(runId) || []).filter(e => e.type === 'image' && e.page === page && e.layer === layer).map(e => e.gen))
+  const gens = [...new Set([...String(html).matchAll(/<img\b[^>]*\bdata-gen="([^"]{3,300})"/g)].map(m => m[1]))].filter(g => !had.has(g)).slice(0, 2)
+  for (const gen of gens) paintOne(send, runId, { page, layer, gen }, choice)
+}
 function imageQueue(run, emit, choice) {
   const jobs = []
   let active = 0, n = 0
@@ -495,7 +516,7 @@ async function reviewNow(id, input) {
       const layer = s.key.split('/').pop(), pageId = s.key.split('/')[0]
       const agent = agents[(i * 5 + 3) % Math.max(1, agents.length)]?.id
       send('review:issue', { page: pageId, layer, agent, problem: issue.problem, fix: issue.fix })
-      rework(send, s, agent, theme, { problem: issue.problem, fix: issue.fix })
+      rework(id, send, s, agent, theme, { problem: issue.problem, fix: issue.fix })
     })
     return { ...result, verdict, issues }
   } finally {
@@ -506,6 +527,28 @@ async function reviewNow(id, input) {
 // ---------- promo video: the planner storyboards the build, HyperFrames renders it
 const videos = new Map() // run id -> { state, pct, stage, src, file, seconds, message }
 const makeVideo = (id, input) => withTrace(id, () => videoNow(id, input))
+// New pictures for the video: two at a time; a scene whose picture fails becomes a quote.
+async function shootScenes(id, c, scenes, choice, progress) {
+  const todo = scenes.filter(sc => sc.shot)
+  const img = join(runsDir, id, 'img')
+  mkdirSync(img, { recursive: true })
+  let done = 0
+  progress(0, `making ${todo.length} pictures`)
+  const one = async sc => {
+    const r = await imagegen(['--provider', choice.provider, ...(choice.model ? ['--model', choice.model] : []), '--aspect', 'landscape', `${sc.shot}. A cinematic photograph that fills the frame. No text, words, letters, logos, brand names, screens, phones or website interfaces anywhere in the picture.`.slice(0, 600)], 150000)
+    if (r.ok && r.path && existsSync(r.path)) {
+      const file = join(img, `video-${Date.now().toString(36)}-${done}${extname(r.path) || '.png'}`)
+      copyFileSync(r.path, file)
+      const n = c.images.length + 1
+      c.images.push({ n, gen: sc.shot.slice(0, 160), page: 'video', file })
+      sc.image = n
+    } else sc.kind = 'quote'
+    delete sc.shot
+    progress(0, `making pictures (${++done}/${todo.length})`)
+  }
+  for (let i = 0; i < todo.length; i += 2) await Promise.all(todo.slice(i, i + 2).map(one))
+}
+
 async function videoNow(id, input = {}) {
   const events = readEvents(id)
   if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
@@ -530,7 +573,10 @@ async function videoNow(id, input = {}) {
     let scenes
     try {
       if (!model || !models.planner.apiKey) throw new Error('no planner model')
-      scenes = await writeStory({ provider: provider('planner'), model, c, style, idea, signal: AbortSignal.timeout(90000) })
+      // with an image model, the storyboard may ask for new pictures (what the idea wants to see)
+      const shooter = await imageChoice().catch(() => null)
+      scenes = await writeStory({ provider: provider('planner'), model, c, style, idea, shots: !!shooter, signal: AbortSignal.timeout(90000) })
+      if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress)
     } catch {
       scenes = fallbackStory(c)
     }
@@ -661,13 +707,15 @@ async function publish(id, input = {}) {
 
 // A builder rewrites one finished section live: it is cleared on every canvas,
 // streams back in, and on failure the old section returns.
-function rework(send, s, agent, theme, args) {
+async function rework(runId, send, s, agent, theme, args) {
   const layer = s.key.split('/').pop(), page = s.key.split('/')[0], t0 = Date.now()
   send('agent:assign', { agent, page, layer, role: s.role, fixing: true })
   send('layer:reset', { page, layer, agent })
-  return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, ...args,
+  // with an image model, a rewrite may add a photo ("add a picture of…"), painted once it is done
+  const choice = await imageChoice().catch(() => null)
+  return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, images: !!choice, ...args,
     onDelta: d => send('layer:delta', { page, layer, agent, text: d }) }))
-    .then(html => send('layer:done', { page, layer, agent, ms: Date.now() - t0, html, fixed: true }))
+    .then(html => { send('layer:done', { page, layer, agent, ms: Date.now() - t0, html, fixed: true }); if (choice) paintNew(runId, send, page, layer, html, choice) })
     .catch(err => send('layer:failed', { page, layer, agent, message: String(err.message || err), keep: s.html }))
 }
 
@@ -716,7 +764,7 @@ async function commentNow(id, input) {
     const s = sections.find(x => x.key === k)
     const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
     send('comment:take', { text, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply : '' })
-    rework(send, s, agent, theme, { comment: text })
+    rework(id, send, s, agent, theme, { comment: text })
   })
   return { sections: keys, reply }
 }
@@ -979,6 +1027,26 @@ const server = createServer((req, res) => {
     return
   }
 
+  // a new picture for one <img data-gen> in a finished section
+  const runImage = url.pathname.match(/^\/api\/runs\/([^/]+)\/image$/)
+  if (runImage && req.method === 'POST' && RUN_ID.test(runImage[1])) {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
+    req.on('end', async () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const id = runImage[1], str = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n)
+      const job = { page: str(input.page, 80), layer: str(input.layer, 120), gen: str(input.gen, 300), prompt: str(input.prompt, 400) }
+      const choice = await imageChoice().catch(() => null)
+      const fail = (code, error) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify({ error }))
+      if (!readEvents(id)) return fail(404, 'no such build')
+      if (!job.page || !job.layer || !job.gen) return fail(400, 'which picture?')
+      if (!choice) return fail(400, 'no image model: pick one in ☰ More → Models (your Codex login works)')
+      paintOne((type, data) => record(id, { type, t: Date.now(), run: id, ...data }), id, job, choice)
+      res.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, provider: choice.provider }))
+    })
+    return
+  }
   const runComment = url.pathname.match(/^\/api\/runs\/([^/]+)\/comment$/)
   if (runComment && req.method === 'POST' && RUN_ID.test(runComment[1])) {
     let body = ''
@@ -1206,7 +1274,7 @@ const server = createServer((req, res) => {
 
   // Generated images. Open like the page files: an image is no secret, and the
   // frames load them as plain <img> tags, which can't send the token.
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/(\d{1,3}\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')

@@ -41,6 +41,23 @@ function run(cmd, args, opts, onLine) {
   })
 }
 
+// The engine's native modules (better-sqlite3) are built for one Node version.
+// Hermes may start this server on its own, newer Node, so the engine runs on the
+// first Node that can load them: this one, then the one on PATH, then common installs.
+let nodeFor = null
+export function engineNode() {
+  if (nodeFor) return nodeFor
+  const which = n => { try { return execFileSync('/bin/sh', ['-lc', `command -v ${n}`], { encoding: 'utf8' }).trim() } catch { return '' } }
+  const candidates = [process.execPath, which('node'), '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
+  for (const n of candidates) {
+    try {
+      execFileSync(n, ['-e', "new (require('better-sqlite3'))(':memory:')"], { cwd: dyadDir, stdio: 'ignore', timeout: 20000 })
+      return (nodeFor = n)
+    } catch {}
+  }
+  return (nodeFor = process.execPath)
+}
+
 let setting = null
 // Install and bundle the engine once. The install exits non-zero when dugite's
 // git download fails; the modules are still there, so only the bundle decides.
@@ -88,7 +105,7 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
   let last = null
   // run from the run's own folder: inside dyad/ its packageManager pin makes the
   // engine's pnpm probe fail, and it then falls back to npm on a pnpm project
-  const p = spawn(process.execPath, args, {
+  const p = spawn(engineNode(), args, {
     cwd: meta,
     env: { ...process.env, ...gitEnv(), ABA_API_KEY: provider.apiKey || '', ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe']

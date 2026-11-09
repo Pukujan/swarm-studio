@@ -89,8 +89,14 @@ Rules:
 
 // With an image model picked, a section may ask for one real photo or illustration;
 // the server generates it after the section is done and fills in the src.
-const SVG_ONLY = ' For imagery use simple inline SVG shapes or CSS shapes, never external image URLs.'
-const IMAGE_RULE = `- Imagery: if a real photo or illustration would clearly help this section (a hero, a product, a place, people), add at most ONE <img data-gen="what the image shows, its style and mood, under 25 words" alt="..." class="w-full h-full object-cover rounded-[var(--radius)]"> inside a sized box (for example aspect-[4/3] or h-80). Leave out src: it is filled in for you. Otherwise use simple inline SVG or CSS shapes. Never external image URLs.`
+export const SVG_ONLY = ' For imagery use simple inline SVG shapes or CSS shapes, never external image URLs.'
+export const IMAGE_RULE = `- Imagery: if a real photo or illustration would clearly help this section (a hero, a product, a place, people), add at most ONE <img data-gen="what the image shows, its style and mood, under 25 words" alt="..." class="w-full h-full object-cover rounded-[var(--radius)]"> inside a sized box (for example aspect-[4/3] or h-80). Leave out src: it is filled in for you. Otherwise use simple inline SVG or CSS shapes. Never external image URLs.`
+
+// Sections that look bare without a photo: heroes, places, products, people. Left
+// to choose, the workers tend to draw SVG icons instead, so a build ends with none.
+const PICTURE_ROLE = /hero|gallery|product|destination|stall|vendor|menu|dish|collection|story|about|team|host|place|room|experience|showcase|lookbook|featured|trip|venue/i
+const NO_PICTURE = /cta|form|faq|footer|nav|legal|ticker|sparkline|chart|calendar|heatmap|map|table|accordion|rules|pricing|tiers|wallet|panel|timeline/i
+const wantsPicture = layer => layer.page !== '*' && PICTURE_ROLE.test(`${layer.role} ${layer.id}`) && !NO_PICTURE.test(layer.role || '')
 
 export function workerMessages({ theme, plan, page, layer, images = false }) {
   const shared = [
@@ -111,6 +117,7 @@ export function workerMessages({ theme, plan, page, layer, images = false }) {
     `Your layer id: ${layer.id} (role: ${layer.role})`,
     siblings,
     layer.links?.length ? `Buttons in this layer link to: ${layer.links.join(', ')} (use data-goto).` : '',
+    images && wantsPicture(layer) ? 'This section needs a real picture: include exactly one <img data-gen="..."> (see Imagery) showing what this section is about, not an inline SVG.' : '',
     `Content (use word for word):\n${layer.content}`
   ]
     .filter(Boolean)

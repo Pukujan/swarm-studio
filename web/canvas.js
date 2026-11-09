@@ -234,6 +234,7 @@ function on(e) {
     case 'image:failed': {
       S.imgSettled++
       S.images.set(`${key(e.page, e.layer)}|${e.gen}`, e.type === 'image' ? e.src : '')
+      pics.pending.delete(`${key(e.page, e.layer)}|${e.gen}`); design.last = ''
       const l = S.layers.get(key(e.page, e.layer))
       if (l) fillImages(l)
       // the agent who asked for it stops painting
@@ -1975,7 +1976,7 @@ function renderDesign(now) {
     const where = `${l.page === '*' ? 'shared' : l.page} · ${l.status === 'done' ? 'done' : 'building'}`
     const mode = S.sel ? 'selected ✕' : design.pinned ? 'pinned' : 'following'
     const hint = l.status === 'done' ? '<div class="dhint">Click a value to change this section. Variables change every page.</div>' : `<div class="dhint">Editable when ${esc(owner?.name || 'its agent')} finishes. Click any finished section on the canvas to edit it.</div>`
-    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${l.status === 'done' && S.run ? `<div class="drow2"><button class="dtrace" title="Every model call for this section: the prompt and what came back">🔍 Trace</button><button class="dversions" title="Every version this section has had; put any one back">🕘 Versions</button></div>` : ''}${body}`
+    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${l.status === 'done' && S.run ? `<div class="drow2"><button class="dtrace" title="Every model call for this section: the prompt and what came back">🔍 Trace</button><button class="dversions" title="Every version this section has had; put any one back">🕘 Versions</button></div>` : ''}${l.status === 'done' ? picturesHtml(l) : ''}${body}`
   }
   if (html !== design.last) {
     design.last = html
@@ -1985,6 +1986,7 @@ function renderDesign(now) {
     const tr = els.dDesign.querySelector('.dtrace')
     const vs = els.dDesign.querySelector('.dversions')
     if (vs) vs.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) sectionVersions(l, vs) }
+    wirePictures(S.layers.get(S.sel || design.layer))
     if (tr) tr.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) traceView(S.run, { layer: l.id, title: l.role || l.id }) }
   }
 }
@@ -2906,7 +2908,7 @@ function renderVideo() {
   const src = latest ? video.src : `/video/${video.run}/cut/${cut.name}`, file = cut?.file || video.file
   const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" title="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
   const body = video.src && !video.busy
-    ? `${cuts}<video src="${esc(src)}" controls autoplay playsinline></video><div class="vfoot"><span title="${esc(file)}">Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
+    ? `${cuts}<video src="${esc(src)}" controls playsinline></video><div class="vfoot"><span title="${esc(file)}">Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
       ? `<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
@@ -2917,8 +2919,9 @@ function renderVideo() {
   const again = el.querySelector('.vagain')
   if (again) again.onclick = () => makeVideo()
   const vid = el.querySelector('video')
-  // with sound now: play it out loud when the browser allows, muted when it doesn't
-  if (vid) vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) })
+  // a new cut plays once, out loud, only in the window that asked for it (other
+  // open windows of Swarm Studio would play the same sound over it)
+  if (vid && (video.mine || document.hasFocus()) && video.played !== src) { video.played = src; vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) }) }
   el.querySelector('.vbig')?.addEventListener('click', () => bigScreen(true))
   for (const b of el.querySelectorAll('[data-cut]')) b.onclick = () => { video.pick = Number(b.dataset.cut); renderVideo() }
   el.querySelector('.vreveal')?.addEventListener('click', () => api(`/api/runs/${encodeURIComponent(video.run || viewing || S.run)}/reveal?what=video`, { method: 'POST' }))
@@ -2968,6 +2971,7 @@ function bigScreen(on) {
 async function makeVideo({ idea = null, style = null } = {}) {
   const run = shownRun()
   if (!run || video.busy) return
+  video.mine = true
   toggleVideo(true)
   const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music, style: style || videoOpts.style || undefined, idea: idea || videoOpts.idea || undefined, transition: videoOpts.transition || undefined }) })
   if (!res.ok) {
@@ -4260,3 +4264,35 @@ for (const b of pubMenu.querySelectorAll('[data-pub]')) b.onclick = () => {
   deployApp()
 }
 document.addEventListener('mousedown', e => { if (!pubMenu.hidden && !e.target.closest('.pubwrap')) closePub() })
+
+// ---------- pictures in the Design panel: swap any generated photo, or ask for one
+const pics = { pending: new Set() }
+const gensOf = l => [...new Set([...String(l.text || '').matchAll(/<img\b[^>]*\bdata-gen="([^"]{3,300})"/g)].map(m => m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&')))]
+function picturesHtml(l) {
+  const gens = gensOf(l)
+  const rows = gens.map((g, i) => {
+    const k = `${l.key}|${g}`, src = S.images.get(k), busy = pics.pending.has(k) || [...S.agents.values()].some(a => a.painting?.key === k)
+    return `<div class="dpic" data-i="${i}">${src ? `<img src="${esc(src)}" alt="">` : `<span class="dpic-none">${busy ? '…' : 'no picture yet'}</span>`}<textarea rows="2" title="Describe the picture you want">${esc(g)}</textarea><button class="dpic-go"${busy ? ' disabled' : ''}>${busy ? '🎨 Painting…' : src ? '🎨 New picture' : '🎨 Make it'}</button></div>`
+  }).join('')
+  return `<div class="dsec dpics"><h4>Pictures<small>${gens.length ? 'edit the words to change it' : ''}</small></h4>${rows || '<div class="dpic-empty">No photo in this section.</div>'}<div class="dpic-addrow"><input class="dpic-what" placeholder="Add a picture of… (optional)"><button class="dpic-add" title="The section's builder adds one photo; it is painted when the rewrite is done">➕ Add</button></div></div>`
+}
+function wirePictures(l) {
+  const box = els.dDesign.querySelector('.dpics')
+  if (!box || !l) return
+  const gens = gensOf(l)
+  for (const row of box.querySelectorAll('.dpic')) {
+    const gen = gens[Number(row.dataset.i)], k = `${l.key}|${gen}`
+    row.querySelector('.dpic-go').onclick = async () => {
+      const run = shownRun()
+      if (!run) return
+      pics.pending.add(k); design.last = ''
+      const prompt = row.querySelector('textarea').value.trim()
+      const res = await api(`/api/runs/${encodeURIComponent(run)}/image`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page: l.page, layer: l.id, gen, prompt: prompt !== gen ? prompt : '' }) }).catch(() => null)
+      if (!res?.ok) { pics.pending.delete(k); design.last = ''; feed(null, `picture: ${(await res?.json().catch(() => ({})))?.error || 'the canvas server is not answering'}`, 'err') }
+    }
+  }
+  const what = box.querySelector('.dpic-what')
+  const add = () => { const w = what.value.trim(); what.value = ''; sendComment(`Add one real photo to this section${w ? `: ${w}` : ', of what it is about'}. Keep everything else.`, l.key) }
+  box.querySelector('.dpic-add').onclick = add
+  what.onkeydown = e => { if (e.key === 'Enter') add() }
+}

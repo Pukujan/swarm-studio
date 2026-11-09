@@ -3,7 +3,7 @@
 // A builder then rewrites that section with the note, streamed like any build.
 
 import { streamChat } from './llm.mjs'
-import { WORKER_SYSTEM } from './prompts.mjs'
+import { WORKER_SYSTEM, SVG_ONLY, IMAGE_RULE } from './prompts.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
 
@@ -68,11 +68,11 @@ export async function routeComment({ provider, model, text, sections, signal }) 
 
 // Rewrite one section with the reviewer's note, or with a person's comment.
 // Streams like a build.
-export async function fixSection({ provider, model, theme, html, role, problem, fix, comment, onDelta, signal }) {
+export async function fixSection({ provider, model, theme, html, role, problem, fix, comment, images = false, onDelta, signal }) {
   const messages = [
     {
       role: 'system',
-      content: `${WORKER_SYSTEM}\n\nTheme "${theme?.name || ''}": ${theme?.direction || ''}\nFonts: headings ${theme?.fonts?.heading}, body ${theme?.fonts?.body}. Radius ${theme?.radius}.`
+      content: `${images ? `${WORKER_SYSTEM.replace(SVG_ONLY, '')}\n${IMAGE_RULE}` : WORKER_SYSTEM}\n\nTheme "${theme?.name || ''}": ${theme?.direction || ''}\nFonts: headings ${theme?.fonts?.heading}, body ${theme?.fonts?.body}. Radius ${theme?.radius}.`
     },
     {
       role: 'user',
