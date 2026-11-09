@@ -14,8 +14,9 @@ import time
 import urllib.error
 
 try:
-    from . import launcher
+    from . import feed, launcher
 except ImportError:  # loaded by path
+    import feed  # type: ignore
     import launcher  # type: ignore
 
 ROLES = {"planner": "planner", "builders": "worker", "builder": "worker", "worker": "worker", "reviewer": "reviewer"}
@@ -49,6 +50,10 @@ HELP = """Swarm Studio commands
   /swarm pro                      the Pro packs: Events, Game Studio, Brand Campaign, Commerce Drop
   /swarm pro <pack> <prompt>      ⚡ Auto with a pack: its intake defaults, its tools and its checks
   /swarm wall [n n n n]           the Swarm Wall: up to four builds replayed side by side
+  /swarm connect [status|forget]  connect Hermes to the Swarm Feed (approve a code in your browser)
+  /swarm post [n] [--jam <id>] [caption]   share a published build in the Swarm Feed, with its files
+  /swarm remix <b_id> [change]    build your take on a feed build (posting it links the original)
+  /swarm login                    sign your browser in to the Swarm Feed as you
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
@@ -57,7 +62,7 @@ HELP = """Swarm Studio commands
 
 TARGETS = ("github", "vercel", "cloudflare", "local")
 
-SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall"}
+SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall", "connect", "post", "remix", "login"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -200,7 +205,10 @@ def is_command(text: str) -> bool:
     # a video with an idea runs long; it starts with a style or a build number, which a brief wouldn't
     if words[0].lower() == "video" and len(words) > 1 and (words[1].lower() in VIDEO_STYLES or words[1].isdigit()):
         return True
-    return words[0].lower() in ("fix", "files", "folder", "trace", "app", "game", "auto") or len(words) <= 4
+    # a post carries a caption and a remix a change, both free text; a brief never starts with a b_ id
+    if words[0].lower() == "remix" and len(words) > 1 and words[1].startswith("b_"):
+        return True
+    return words[0].lower() in ("fix", "files", "folder", "trace", "app", "game", "auto", "post") or len(words) <= 4
 
 
 def run(text: str) -> str:
@@ -208,6 +216,8 @@ def run(text: str) -> str:
     cmd, args = words[0].lower(), words[1:]
     try:
         return _dispatch(cmd, args)
+    except feed.FeedError as exc:
+        return f"Swarm Feed: {exc}"
     except RuntimeError as exc:
         return f"Swarm Studio: {exc}"
 
@@ -313,6 +323,22 @@ def _dispatch(cmd: str, args: list[str]) -> str:
     if cmd == "wall":
         return _wall(args)
 
+    if cmd == "connect":
+        return feed.connect(args)
+
+    if cmd == "post":
+        ref = feed.parse_post_args(args)[0]
+        r = _pick_run(ref)
+        if not r:
+            return "No such build. See /swarm files."
+        return feed.post(r, args, _export_zip)
+
+    if cmd == "remix":
+        return feed.remix(args, lambda brief: launcher.start_run(brief))
+
+    if cmd == "login":
+        return feed.login()
+
     if cmd == "models":
         if not args:
             info = _api("/api/models")
@@ -364,6 +390,12 @@ def _dispatch(cmd: str, args: list[str]) -> str:
         return f"Lite mode {value}. The canvas picks it up within a second."
 
     return HELP
+
+
+def _export_zip(run_id: str) -> str | None:
+    """The build's export zip (static HTML, React project, ABA spec), made now so it matches the build."""
+    out = _api(f"/api/runs/{run_id}/export", {}, timeout=120)
+    return out.get("zip")
 
 
 def _fix(text: str, ref: str) -> str:
@@ -511,11 +543,11 @@ def _video(ref: str, wait: bool, voice: str = "", music: bool = True, style: str
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, file builds in folders, read the trace of every model call an agent made (the prompt and raw answer, to see why a section came out as it did), show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, set the models, image generation and lite mode. `app` turns a build into a working full-stack app (React + shadcn, server routes, an admin page) or, with text, changes the app; it waits until the app runs and returns its local URL. For a game: call `game_questions`, ask the person those questions one at a time in chat (offer the chips, keep their words), then `game` with `answers` and `text` (their idea); it writes an original spec and builds a playable game. `deploy` puts the app on Vercel.",
+    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, file builds in folders, read the trace of every model call an agent made (the prompt and raw answer, to see why a section came out as it did), show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, set the models, image generation and lite mode. `app` turns a build into a working full-stack app (React + shadcn, server routes, an admin page) or, with text, changes the app; it waits until the app runs and returns its local URL. For a game: call `game_questions`, ask the person those questions one at a time in chat (offer the chips, keep their words), then `game` with `answers` and `text` (their idea); it writes an original spec and builds a playable game. `deploy` puts the app on Vercel. The Swarm Feed (the community site): `connect` links this Hermes to the person's feed account (it returns a code and a link they approve in their browser; call it again, or with text 'status', to see if they did), `post` shares a published build in the feed with its files (text: a caption; jam: a jam id to enter), `remix` starts a new build from a feed build (build: its b_… id; text: what to change), `login` opens a one-time link that signs their browser in.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game_questions", "game", "deploy", "help"]},
+            "action": {"type": "string", "enum": ["files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game_questions", "game", "deploy", "connect", "post", "remix", "login", "help"]},
             "build": {"type": "string", "description": "for open/info/review/fix/export/publish/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
             "text": {"type": "string", "description": "for app: what to change in the app (omit for the first build); for game: the person's game idea; for folder: the folder name ('none' to take it out); for trace: words to filter calls (a layer, page, agent or kind like build/fix/review), or 'call <id>' for one call in full, or on/off; for files: search words (tag:x, folder:x, on:vercel, has:video work too); for video: the person's idea for it; for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
@@ -527,6 +559,7 @@ TOOL_SCHEMA = {
             "transition": {"type": "string", "enum": ["wipe", "fade", "zoom", "slide", "flash"], "description": "for video: the cut between scenes; default fits the style"},
             "music": {"type": "boolean", "description": "for video: false for no music bed (default true)"},
             "answers": {"type": "object", "description": "for game: the person's answers by question id (type, like, goal, controls, look, length, world); missing ones get defaults", "additionalProperties": {"type": "string"}},
+            "jam": {"type": "string", "description": "for post: the id of a jam to enter the build in (from the jam's page on the feed)"},
             "target": {"type": "string", "enum": ["github", "vercel", "cloudflare", "local"], "description": "for publish: github (a public GitHub Pages link through the gh login, the default), vercel or cloudflare (the person's own account, once connected on the canvas), or local (hosted on this computer)"},
         },
         "required": ["action"],
@@ -577,8 +610,13 @@ def tool(args: dict | None = None, **_: object) -> str:
         "images": [a["provider"], *([a["model"]] if a.get("model") else [])] if a.get("provider") else [],
         "lite": [a.get("value") or "on"],
         "motion": [a.get("value") or "on"],
+        "connect": str(a.get("text") or "").split()[:1],
+        "post": [*([a["build"]] if a.get("build") else []), *(["--jam", str(a["jam"])] if a.get("jam") else []), *str(a.get("text") or "").split()],
+        "remix": [*([a["build"]] if a.get("build") else []), *str(a.get("text") or "").split()],
     }.get(action, [])
     try:
         return _dispatch(action, [str(p) for p in parts])
+    except feed.FeedError as exc:
+        return f"Swarm Feed: {exc}"
     except RuntimeError as exc:
         return f"Swarm Studio: {exc}"

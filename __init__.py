@@ -6,7 +6,8 @@ Agent half. Registers:
 - ``swarm_canvas``: start the canvas server if needed and return its URL
 - ``swarm_studio``: everything after a build (files, open, play, review, models,
   images, lite mode), the same commands as ``/swarm <subcommand>`` (see commands.py)
-- ``/swarm <brief>`` / ``/swarm <subcommand>``: from any chat without going through the model
+- ``/swarm <brief>`` / ``/swarm <subcommand>``: from any chat without going through the model;
+  ``connect``, ``post``, ``remix`` and ``login`` reach the Swarm Feed (``feed.py``)
 - ``hermes swarm``: the same from the command line
 - the ``swarm-studio:swarm-design`` skill: when and how to use the swarm
 - two model slots in Hermes's model picker: ``swarm_studio_planner`` (follows the
@@ -149,7 +150,7 @@ def register(ctx) -> None:
         "swarm",
         handler=_slash_swarm,
         description="Start a Swarm Studio build from a brief",
-        args_hint="<brief> | help | files | open | play | review | fix | export | publish | hosts | video | motion | models | images | lite",
+        args_hint="<brief> | help | files | open | play | review | fix | export | publish | hosts | video | motion | models | images | lite | connect | post | remix | login",
     )
     skills = Path(__file__).resolve().parent / "skills"
     for child in sorted(skills.iterdir()) if skills.is_dir() else []:
