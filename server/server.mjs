@@ -16,7 +16,8 @@ import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun } from '../engine/export.mjs'
-import { githubLogin, publishGitHub } from '../engine/publish.mjs'
+import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
+import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion } from '../engine/motion.mjs'
 import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
@@ -375,7 +376,9 @@ async function publish(id, input = {}) {
   const events = readEvents(id)
   if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
   if (publishes.get(id)?.state === 'working') return publishes.get(id)
-  const target = input.target === 'local' ? 'local' : 'github'
+  const target = ['local', 'vercel', 'cloudflare'].includes(input.target) ? input.target : 'github'
+  const creds = PROVIDERS[target] ? await credentials(dataDir, target) : null
+  if (PROVIDERS[target] && !creds) throw new Error(`connect ${PROVIDERS[target].label} first: 🌐 Publish on the canvas, or set ${PROVIDERS[target].env}`)
   const out = await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [] })
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const local = `http://127.0.0.1:${port}/site/${id}/`
@@ -391,14 +394,16 @@ async function publish(id, input = {}) {
     return job
   }
   const title = String(out.brand || out.name)
-  publishGitHub({
-    dir: join(out.dir, 'html'), name: out.name, title,
-    onStage: stage => { job.stage = stage; broadcast({ type: 'publish:stage', t: Date.now(), run: id, stage }) }
-  }).then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
+  const onStage = stage => { job.stage = stage; broadcast({ type: 'publish:stage', t: Date.now(), run: id, target, stage }) }
+  const dir = join(out.dir, 'html')
+  const go = target === 'vercel' ? publishVercel({ dir, name: out.name, creds, dataDir, onStage })
+    : target === 'cloudflare' ? publishCloudflare({ dir, name: out.name, creds, dataDir, onStage })
+    : publishGitHub({ dir, name: out.name, title, onStage })
+  go.then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
     .catch(err => {
-      // GitHub didn't work out: the site is still hosted here
+      // the host didn't work out: the site is still hosted here
       Object.assign(job, { target: 'local', message: String(err.message || err).slice(0, 300) })
-      finish(local, { fallback: job.message })
+      finish(local, { fallback: job.message, tried: target })
     })
   return job
 }
@@ -659,8 +664,26 @@ const server = createServer((req, res) => {
     return
   }
 
+  // Where a site can be published, and who is signed in there (never a token).
   if (url.pathname === '/api/publish' && req.method === 'GET') {
-    githubLogin().then(login => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ github: login })))
+    Promise.all([githubLogin(), connections(dataDir)])
+      .then(([login, conn]) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ github: login, ...conn, providers: PROVIDERS })))
+    return
+  }
+
+  // Connect (or, with no token, disconnect) a host by its access token.
+  if (url.pathname === '/api/connect' && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 1e4) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+      if (!PROVIDERS[input.provider]) return reply(400, { error: 'unknown provider' })
+      connect(dataDir, input.provider, typeof input.token === 'string' ? input.token : null)
+        .then(who => reply(200, { provider: input.provider, connected: who ? { user: who.user } : null }))
+        .catch(err => reply(400, { error: String(err.message || err) }))
+    })
     return
   }
 

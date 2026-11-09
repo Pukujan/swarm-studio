@@ -411,3 +411,16 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .publish-pop .plink a { color: var(--text); text-decoration: none; }
 .publish-pop .vfoot { gap: 8px; justify-content: flex-end; }
 .publish-pop .pcopy { border: 0; cursor: pointer; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.publish-pop .prow { display: flex; gap: 6px; align-items: stretch; }
+.publish-pop .prow .popt { flex: 1; }
+.publish-pop .pdisc { margin-top: 6px; width: 30px; background: none; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); cursor: pointer; font-size: 16px; }
+.publish-pop .pconn { margin-top: 6px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 9px; }
+.publish-pop .pconn summary { display: grid; gap: 3px; cursor: pointer; list-style: none; }
+.publish-pop .pconn summary::-webkit-details-marker { display: none; }
+.publish-pop .pconn summary span { color: var(--muted); font-size: 12px; }
+.publish-pop .pconn a { color: var(--accent); }
+.publish-pop .pconn form { display: flex; gap: 6px; margin-top: 8px; }
+.publish-pop .pconn input { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: #0004; color: var(--text); font: 12px var(--mono); }
+.publish-pop .pconn form button { border: 0; border-radius: 6px; padding: 6px 12px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+.publish-pop .perr { color: #ff8a8a; font-size: 12px; margin-top: 6px; }
+.publish-pop .perr:empty { display: none; }

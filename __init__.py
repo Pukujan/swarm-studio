@@ -149,7 +149,7 @@ def register(ctx) -> None:
         "swarm",
         handler=_slash_swarm,
         description="Start a Swarm Studio build from a brief",
-        args_hint="<brief> | help | files | open | play | review | fix | export | publish | video | motion | models | images | lite",
+        args_hint="<brief> | help | files | open | play | review | fix | export | publish | hosts | video | motion | models | images | lite",
     )
     skills = Path(__file__).resolve().parent / "skills"
     for child in sorted(skills.iterdir()) if skills.is_dir() else []:
