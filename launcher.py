@@ -4,9 +4,14 @@ Self-contained on purpose: the agent half (``__init__.py``) imports it as a
 package module, and the dashboard route (``dashboard/plugin_api.py``) loads it
 by path, because the dashboard loader imports that file standalone.
 
-The server is a Node process bound to 127.0.0.1. It holds the model API key in
-its environment only (never on disk) and accepts runs only with a per-install
-token kept in ``$HERMES_HOME/swarm-studio/token``.
+The server is a Node process bound to 127.0.0.1. It holds model API keys in
+memory only (never on disk) and accepts runs only with a per-install token kept
+in ``$HERMES_HOME/swarm-studio/token``.
+
+Models come from Hermes: the plugin registers two auxiliary model slots
+(``swarm_studio_planner`` and ``swarm_studio_builder``), so they show up in
+Hermes's model picker, and each run resolves them through Hermes's own provider
+routing. ``SWARM_STUDIO_*`` environment variables override that.
 """
 
 from __future__ import annotations
@@ -24,6 +29,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DEFAULT_PORT = 4319
 KEY_ENV = "SWARM_STUDIO_API_KEY"
+DEFAULT_ENDPOINT = "https://api.inferhub.dev/v1"
+DEFAULT_MODEL = "cb/deepseek-v4.1-flash"
+# role -> (Hermes auxiliary slot, model override variable)
+SLOTS = {
+    "planner": ("swarm_studio_planner", "SWARM_STUDIO_PLANNER_MODEL"),
+    "worker": ("swarm_studio_builder", "SWARM_STUDIO_WORKER_MODEL"),
+}
 
 
 def data_dir() -> Path:
@@ -50,6 +62,52 @@ def _secret(name: str) -> str | None:
     except ImportError:  # running outside Hermes (tests, plain python)
         return os.environ.get(name)
     return get_secret(name)
+
+
+def _from_hermes(slot: str) -> dict:
+    """Resolve one auxiliary slot through Hermes's provider routing.
+
+    The swarm streams chat completions from its own process, so only providers
+    with an OpenAI-compatible endpoint work; others report why instead."""
+    try:
+        from agent.auxiliary_client import get_text_auxiliary_client
+    except ImportError:
+        return {"error": "not running inside Hermes"}
+    try:
+        client, model = get_text_auxiliary_client(slot)
+    except Exception as exc:  # provider setup errors come back as messages, not crashes
+        return {"error": f"Hermes could not resolve a model: {exc}"}
+    if client is None or not model:
+        return {"error": "no model is configured in Hermes"}
+    endpoint = str(getattr(client, "base_url", "") or "").rstrip("/")
+    key = getattr(client, "api_key", None)
+    if not endpoint.startswith("http") or not isinstance(key, str) or not key or type(client).__module__.split(".")[0] != "openai":
+        return {"error": f"{type(client).__name__} has no OpenAI-compatible endpoint; pick a chat-completions provider for {slot}"}
+    return {"base_url": endpoint, "api_key": key, "model": model, "source": f"Hermes auxiliary.{slot}"}
+
+
+def resolve_models() -> dict:
+    """{role: {base_url, api_key, model, source} | {error}} for the planner and the builders.
+
+    Precedence: SWARM_STUDIO_API_KEY (with its base URL and models) when set, then
+    the Hermes slot, with SWARM_STUDIO_*_MODEL overriding the model either way."""
+    key = _secret(KEY_ENV)
+    out = {}
+    for role, (slot, model_env) in SLOTS.items():
+        if key:
+            got = {"base_url": (os.environ.get("SWARM_STUDIO_BASE_URL") or DEFAULT_ENDPOINT).rstrip("/"),
+                   "api_key": key, "model": DEFAULT_MODEL, "source": KEY_ENV}
+        else:
+            got = _from_hermes(slot)
+        if "error" not in got and os.environ.get(model_env):
+            got["model"] = os.environ[model_env]
+        out[role] = got
+    return out
+
+
+def describe_models() -> dict:
+    """resolve_models() without keys, for people and logs."""
+    return {role: {k: v for k, v in m.items() if k != "api_key"} for role, m in resolve_models().items()}
 
 
 def token() -> str:
@@ -90,28 +148,23 @@ def ensure_server() -> dict:
     if state():
         return {"running": True, "started": False, "url": base_url() + "/"}
 
-    key = _secret(KEY_ENV)
-    if not key:
-        return {"running": False, "error": f"{KEY_ENV} is not set. Add an OpenAI-compatible API key with `hermes config set` or your .env."}
+    models = resolve_models()
+    problems = [f"{role}: {m['error']}" for role, m in models.items() if "error" in m]
+    if problems:
+        return {"running": False, "error": "Swarm Studio has no usable model. " + "; ".join(problems)}
     node = os.environ.get("SWARM_STUDIO_NODE") or shutil.which("node")
     if not node:
         return {"running": False, "error": "Node.js 20+ is required (no `node` on PATH)."}
 
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
     env = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG") if k in os.environ}
-    env.update(
-        SWARM_API_KEY=key,
-        SWARM_TOKEN=token(),
-        SWARM_RUNS_DIR=str(data_dir() / "runs"),
-    )
-    for src, dst in (
-        ("SWARM_STUDIO_BASE_URL", "SWARM_BASE_URL"),
-        ("SWARM_STUDIO_PLANNER_MODEL", "SWARM_PLANNER_MODEL"),
-        ("SWARM_STUDIO_WORKER_MODEL", "SWARM_WORKER_MODEL"),
-        ("SWARM_STUDIO_AGENTS", "SWARM_AGENTS"),
-    ):
-        if os.environ.get(src):
-            env[dst] = os.environ[src]
+    env.update(SWARM_TOKEN=token(), SWARM_RUNS_DIR=str(data_dir() / "runs"))
+    # Defaults for builds started from the canvas itself; Hermes sends fresh ones with each run.
+    for role, m in models.items():
+        prefix = f"SWARM_{role.upper()}_"
+        env.update({prefix + "BASE_URL": m["base_url"], prefix + "API_KEY": m["api_key"], prefix + "MODEL": m["model"]})
+    if os.environ.get("SWARM_STUDIO_AGENTS"):
+        env["SWARM_AGENTS"] = os.environ["SWARM_STUDIO_AGENTS"]
 
     log = open(data_dir() / "server.log", "ab")
     try:
@@ -140,7 +193,8 @@ def start_run(brief: str, agents: int | None = None) -> dict:
     up = ensure_server()
     if not up.get("running"):
         return up
-    body: dict = {"brief": brief}
+    models = resolve_models()
+    body: dict = {"brief": brief, "models": {r: m for r, m in models.items() if "error" not in m}}
     if agents:
         body["agents"] = max(2, min(24, int(agents)))
     try:

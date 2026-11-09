@@ -7,6 +7,9 @@ Agent half. Registers:
 - ``/swarm <brief>``: start a build from any chat without going through the model
 - ``hermes swarm``: the same from the command line
 - the ``swarm-studio:swarm-design`` skill: when and how to use the swarm
+- two model slots in Hermes's model picker: ``swarm_studio_planner`` (follows the
+  main model) and ``swarm_studio_builder`` (follows the compression model, which is
+  usually a fast, cheap one: the builders make most of the calls)
 
 The build itself runs in a local Node server (``server/server.mjs``) that this
 package starts on 127.0.0.1; the Desktop pane (``desktop/plugin.js``) shows it.
@@ -60,9 +63,16 @@ def _setup_cli(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--agents", type=int, default=None, help="swarm size, 2-24 (default 16)")
     parser.add_argument("--no-open", action="store_true", help="don't open the canvas in a browser")
     parser.add_argument("--wait", action="store_true", help="wait for the build and print its summary")
+    parser.add_argument("--models", action="store_true", help="show which models the swarm will use, then exit")
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.models:
+        for role, m in launcher.describe_models().items():
+            name = "planner " if role == "planner" else "builders"
+            print(f"{name}  {m['model']}  at {m['base_url']}  ({m['source']})" if "error" not in m else f"{name}  unavailable: {m['error']}")
+        print("Change them with `hermes model` (Swarm Studio planner / builders) or SWARM_STUDIO_* variables.")
+        return 0
     brief = " ".join(args.brief).strip()
     result = launcher.start_run(brief, args.agents) if brief else launcher.ensure_server()
     if result.get("error"):
@@ -77,6 +87,17 @@ def _run_cli(args: argparse.Namespace) -> int:
 
 
 def register(ctx) -> None:
+    ctx.register_auxiliary_task(
+        "swarm_studio_planner",
+        display_name="Swarm Studio planner",
+        description="site plan and page layouts (a few calls per build)",
+    )
+    ctx.register_auxiliary_task(
+        "swarm_studio_builder",
+        display_name="Swarm Studio builders",
+        description="the parallel agents that write each section (most calls; pick a fast model)",
+        inherit_from="compression",
+    )
     ctx.register_tool(
         name="swarm_design",
         toolset=TOOLSET,

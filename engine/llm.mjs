@@ -15,7 +15,7 @@ export function providerFromEnv(env = process.env) {
  */
 export async function streamChat(provider, { model, messages, maxTokens = 2048, temperature = 0.7, extra = {}, signal, onDelta }) {
   const started = performance.now()
-  const res = await fetch(`${provider.baseUrl}/chat/completions`, {
+  const send = withExtra => fetch(`${provider.baseUrl}/chat/completions`, {
     method: 'POST',
     signal,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${provider.apiKey}` },
@@ -26,9 +26,17 @@ export async function streamChat(provider, { model, messages, maxTokens = 2048, 
       temperature,
       stream: true,
       stream_options: { include_usage: true },
-      ...extra
+      ...(withExtra ? extra : {})
     })
   })
+  // Hints like "no reasoning" are not part of every provider's API. A provider
+  // that rejects them gets plain requests from then on.
+  let res = await send(Object.keys(extra).length > 0 && !provider.plain)
+  if ((res.status === 400 || res.status === 422) && Object.keys(extra).length && !provider.plain) {
+    await res.text().catch(() => '')
+    provider.plain = true
+    res = await send(false)
+  }
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => '')
     throw new Error(`${model}: HTTP ${res.status} ${body.slice(0, 300)}`)

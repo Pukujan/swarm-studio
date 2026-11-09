@@ -21,24 +21,37 @@ hermes plugins install https://github.com/Pukujan/swarm-studio
 hermes plugins enable swarm-studio
 ```
 
-Then set the key (any OpenAI-compatible chat endpoint works):
+That's it: the swarm uses the models you already set up in Hermes. Check with:
 
 ```bash
-echo 'SWARM_STUDIO_API_KEY=...' >> ~/.hermes/.env
+hermes swarm --models
 ```
 
 In Hermes Desktop, turn on **Swarm Studio** under Capabilities → Plugins.
 
 Requires Node.js 18 or newer on `PATH` (or set `SWARM_STUDIO_NODE`). There are no npm dependencies.
 
+## Models
+
+The plugin adds two slots to Hermes's model picker (`hermes model`, or Desktop's model settings), stored as `auxiliary.<slot>` in your Hermes config:
+
+| Slot | Used for | Until you pick one |
+|---|---|---|
+| **Swarm Studio planner** (`swarm_studio_planner`) | the sitemap and page planners, a few calls per build | your main model |
+| **Swarm Studio builders** (`swarm_studio_builder`) | the parallel section agents, most of the calls | your compression model, which is usually a fast, cheap one |
+
+When a build starts, Hermes resolves each slot to an endpoint, key and model and hands them to the swarm process. The slot's provider must speak the OpenAI `/chat/completions` API, since the builders stream. If it doesn't (Anthropic, Bedrock or Codex clients), `hermes swarm --models` says so; pick an OpenAI-compatible provider for that slot or set `SWARM_STUDIO_API_KEY`.
+
 ## Settings
+
+Optional. Setting `SWARM_STUDIO_API_KEY` bypasses the Hermes slots and uses that key with `SWARM_STUDIO_BASE_URL`. The model variables override the model in either case.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `SWARM_STUDIO_API_KEY` | required | Key for the chat endpoint. Read through Hermes's secret store. |
+| `SWARM_STUDIO_API_KEY` | unset | Use this key instead of the Hermes slots. Read through Hermes's secret store. |
 | `SWARM_STUDIO_BASE_URL` | `https://api.inferhub.dev/v1` | Any OpenAI-compatible `/chat/completions` endpoint. |
-| `SWARM_STUDIO_PLANNER_MODEL` | `cb/deepseek-v4.1-flash` | Model for the sitemap and page planners. |
-| `SWARM_STUDIO_WORKER_MODEL` | `cb/deepseek-v4.1-flash` | Model for the section agents. A fast model matters more than a big one. |
+| `SWARM_STUDIO_PLANNER_MODEL` | the slot's model | Model for the sitemap and page planners. |
+| `SWARM_STUDIO_WORKER_MODEL` | the slot's model | Model for the section agents. A fast model matters more than a big one. |
 | `SWARM_STUDIO_AGENTS` | `16` | Swarm size, 2–24. |
 | `SWARM_STUDIO_PORT` | `4319` | Port of the local canvas server. |
 
@@ -59,12 +72,13 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
   - The canvas and page frames load Tailwind from `cdn.tailwindcss.com` and fonts from Google Fonts.
   - Nothing else leaves the machine.
 - **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log` and the runs.
-- **Secrets.** The key comes from Hermes's secret store (`get_secret`). It is passed to the server process through its environment and is never written to disk or logs.
+- **Secrets.** Keys come from Hermes (the model slots or its secret store). It is passed to the server process through its environment and is never written to disk or logs.
 
 ## Known issues
 
 - **Hermes mobile.** The canvas runs on the computer's `127.0.0.1`, so the phone webapp can't reach it.
 - **Generated sites are prototypes.** They are static HTML and Tailwind, with no backend.
+- **Not yet used:** Hermes's vision and image-generation models. Pictures are inline SVG and nobody reviews the result visually. A vision "reviewer" slot is planned alongside a look-and-fix pass.
 
 ## License
 
