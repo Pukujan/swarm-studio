@@ -32,7 +32,7 @@
         <div class="row">
           <label class="size">Agents
             <select id="agents">
-              <option>8</option><option>12</option><option selected>16</option><option>20</option><option>24</option>
+              <option>4</option><option>5</option><option>6</option><option>8</option><option>12</option><option selected>16</option><option>20</option><option>24</option>
             </select>
           </label>
           <button type="submit">Build</button>
@@ -80,6 +80,10 @@
       <select id="pl-page" title="Page"></select>
       <button class="pl-btn" id="pl-back" title="Back">← Back</button>
       <button class="pl-btn" id="pl-restart" title="Back to page 1">Restart</button>
+      <div class="tour-pick">
+        <button class="pl-btn tours" id="pl-tours" title="Watch someone use the site (V)">👀 Watch a visitor</button>
+        <div class="tour-menu" id="pl-tour-menu" hidden></div>
+      </div>
       <div class="spacer"></div>
       <div class="seg" id="pl-device">
         <button data-device="desktop" class="on">Desktop</button>
@@ -88,7 +92,9 @@
     </div>
     <div class="player-stage" id="pl-stage">
       <div class="device" id="pl-shell"><iframe id="pl-frame" title="Prototype" sandbox="allow-scripts"></iframe></div>
+      <div class="persona" id="pl-persona" hidden></div>
     </div>
+    <div class="tour-cursor" id="pl-cursor" hidden><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l15 9.5-6.6 1.2 3.9 7.6-3 1.5-3.9-7.7L4 18.6z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg><div class="think" id="pl-think"></div></div>
     <div class="pl-hint">Click links to move between pages · clicking anywhere else shows where the links are</div>
   </div>
 
