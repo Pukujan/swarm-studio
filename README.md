@@ -14,6 +14,8 @@ You give it a one-line brief. A planner picks the theme and the pages. Then a do
 | Terminal | `hermes swarm "a climbing gym in Cornwall" --wait` |
 | Skill | `swarm-studio:swarm-design` tells the agent when to use the swarm and how to write a good brief. |
 
+See [FEATURES.md](FEATURES.md) for everything it does, with the canvas button and `/swarm` command for each.
+
 ## Install
 
 ```bash
@@ -73,6 +75,7 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
   - The server calls the chat endpoint you configure (InferHub by default) with your brief and the plan.
   - The canvas and page frames load Tailwind from `cdn.tailwindcss.com` and fonts from Google Fonts.
   - Generated images go through the Hermes image provider you pick (your Codex login by default); the visual review sends page screenshots to your vision model.
+  - **Publish** to GitHub Pages runs your `gh` CLI: it creates a public repo under your account (its description says it was made with Swarm Studio, and it only ever updates repos marked that way) and pushes the static site. Publishing locally serves the site from the canvas server at `127.0.0.1:4319/site/<run>/`.
   - The first promo video installs `hyperframes` and ffmpeg from npm into `$HERMES_HOME/swarm-studio/video-tools/`. Rendering runs locally in headless Chrome.
   - Nothing else leaves the machine.
 - **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log` and the runs.
@@ -81,7 +84,7 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
 ## Known issues
 
 - **Hermes mobile.** The canvas runs on the computer's `127.0.0.1`, so the phone webapp can't reach it.
-- **Generated sites are prototypes.** They are static HTML and Tailwind, with no backend.
+- **Generated sites are prototypes.** They are static HTML and Tailwind, with no backend. Publish puts them online as they are; for a real app, hand `aba/spec.md` from the export to an app builder.
 - **Promo videos** need Node's `npm` on the machine the first time (to fetch HyperFrames and ffmpeg), and Chrome for headless rendering.
 
 ## License

@@ -16,7 +16,7 @@ const els = {
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
   newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
   plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'), plMotion: $('#pl-motion'),
-  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), exportBtn: $('#export-btn'), modelsBtn: $('#models-btn'),
+  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), exportBtn: $('#export-btn'), publishBtn: $('#publish-btn'), modelsBtn: $('#models-btn'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
@@ -245,6 +245,9 @@ function on(e) {
     }
     case 'export':
       if (Date.now() - e.t < 8000) showExport(e)
+      break
+    case 'publish:start': case 'publish:stage': case 'publish:done':
+      publishEvent(e)
       break
     case 'comment':
       feed(null, `💬 ${e.text}`, 'you')
@@ -1102,6 +1105,9 @@ function frameLoop(now) {
     els.reviewBtn.disabled = review.busy || !reviewerOn() || !S.done
     setText(els.reviewBtn, review.busy ? '🔎 Reviewing…' : '🔎 Review')
     els.exportBtn.disabled = !S.done || exp.busy
+    const pubbing = pub.run === shownRun() && pub.state === 'working'
+    els.publishBtn.disabled = !S.done || pubbing
+    setText(els.publishBtn, pubbing ? '🌐 Publishing…' : '🌐 Publish')
     const mine = video.run === shownRun()
     els.videoBtn.disabled = !S.done && !(mine && video.src)
     setText(els.videoBtn, mine && video.busy ? `🎬 ${video.pct ? `${video.pct | 0}%` : 'Writing…'}` : '🎬 Video')
@@ -2068,6 +2074,71 @@ function showExport(e) {
 
 els.exportBtn.onclick = () => exportRunNow()
 commandOps.export = () => exportRunNow()
+
+// ---------- publish: a live link on GitHub Pages (the person's gh login), or this computer
+const pub = { run: null, state: 'none', stage: '', el: null, github: undefined }
+const PUB_STAGES = { export: 'Exporting the pages', repo: 'Making the GitHub repo', push: 'Pushing the site', pages: 'Turning on GitHub Pages', building: 'GitHub is building it' }
+
+function pubPop(html) {
+  pub.el?.remove()
+  pub.el = document.createElement('div')
+  pub.el.className = 'export-pop publish-pop'
+  pub.el.innerHTML = `<div class="vhead">🌐 Publish<button class="vclose" title="Close">×</button></div>${html}`
+  document.body.append(pub.el)
+  pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
+  return pub.el
+}
+
+async function publishMenu() {
+  if (pub.github === undefined) {
+    pubPop('<div class="pstage">Checking GitHub…</div>')
+    const res = await api('/api/publish').catch(() => null)
+    pub.github = (await res?.json().catch(() => ({})))?.github || null
+  }
+  const el = pubPop(`
+    <button class="popt" data-target="github"${pub.github ? '' : ' disabled'}><b>GitHub Pages</b><span>${pub.github ? `A public link anyone can open: ${esc(pub.github)}.github.io/… · about a minute` : 'Sign in with <code>gh auth login</code> to get a public link'}</span></button>
+    <button class="popt" data-target="local"><b>This computer</b><span>Hosted by Swarm Studio at 127.0.0.1 · instant, only you can open it</span></button>`)
+  el.querySelectorAll('.popt').forEach(b => { b.onclick = () => publishNow(b.dataset.target) })
+}
+
+async function publishNow(target = 'github') {
+  const run = shownRun()
+  if (!run) return
+  Object.assign(pub, { run, state: 'working', stage: 'export' })
+  pubPop(`<div class="pstage">${PUB_STAGES.export}…</div>`)
+  const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, html: l.text }))
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target, sections }) }).catch(() => null)
+  if (!res?.ok) {
+    pub.state = 'none'
+    const out = await res?.json().catch(() => ({}))
+    pubPop(`<div class="pstage err">${esc(out?.error || 'the canvas server is not answering')}</div>`)
+  }
+}
+
+function publishEvent(e) {
+  if (e.run !== shownRun()) return
+  const fresh = !e.t || Date.now() - e.t < 8000
+  pub.run = e.run
+  if (e.type === 'publish:start' || e.type === 'publish:stage') {
+    if (!fresh) return
+    Object.assign(pub, { state: 'working', stage: e.stage || 'export' })
+    const steps = Object.keys(PUB_STAGES), at = steps.indexOf(pub.stage)
+    pubPop(`<div class="psteps">${steps.map((k, i) => `<div class="${i < at ? 'did' : i === at ? 'now' : ''}">${i < at ? '✓' : i === at ? '◌' : '·'} ${PUB_STAGES[k]}</div>`).join('')}</div>`)
+    return
+  }
+  Object.assign(pub, { state: 'done', url: e.url })
+  if (!fresh) return
+  const el = pubPop(`
+    <div class="plink"><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.url.replace(/^https?:\/\//, ''))}</a></div>
+    <div class="xrow"><b>${e.target === 'github' ? 'GitHub' : 'Local'}</b><span>${e.target === 'github' ? `${e.pages} pages live on GitHub Pages · repo ${esc(e.repo || '')}${e.pending ? ' · still going live, give it a minute' : ''}` : `${e.pages} pages hosted by Swarm Studio on this computer`}</span></div>
+    ${e.fallback ? `<div class="pstage err">GitHub didn't work: ${esc(e.fallback)}</div>` : ''}
+    <div class="vfoot"><button class="vagain pcopy">Copy link</button><a class="vagain" href="${esc(e.url)}" target="_blank" rel="noopener">Open ↗</a></div>`)
+  el.querySelector('.pcopy').onclick = ev => { navigator.clipboard?.writeText(e.url).catch(() => {}); ev.target.textContent = 'Copied' }
+  feed(null, `🌐 published ${e.pages} pages: ${e.url}`, 'sys')
+}
+
+els.publishBtn.onclick = () => publishMenu()
+commandOps.publish = c => publishNow(c.target === 'local' ? 'local' : 'github')
 
 // ---------- comments: tell an agent what to change
 // A 💬 pin sits on the selected section; open, it is a little composer. The

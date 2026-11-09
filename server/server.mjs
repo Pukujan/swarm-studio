@@ -16,6 +16,7 @@ import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun } from '../engine/export.mjs'
+import { githubLogin, publishGitHub } from '../engine/publish.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion } from '../engine/motion.mjs'
 import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
@@ -274,7 +275,7 @@ function tours(id, input) {
 
 // ---------- visual review: the reviewer model looks at a screenshot of a finished
 // page (taken by the canvas, which owns the frames) and builders fix what it finds.
-const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion'])
+const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion', 'publish'])
 const reviewing = new Set()
 const REVIEW_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
 async function review(id, input) {
@@ -365,6 +366,40 @@ async function makeVideo(id, input = {}) {
     Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })
   })
+  return job
+}
+
+// ---------- publish: the static export, on GitHub Pages or hosted by this server
+const publishes = new Map() // run id -> { state, target, stage, url, repo, message }
+async function publish(id, input = {}) {
+  const events = readEvents(id)
+  if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
+  if (publishes.get(id)?.state === 'working') return publishes.get(id)
+  const target = input.target === 'local' ? 'local' : 'github'
+  const out = await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [] })
+  const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  const local = `http://127.0.0.1:${port}/site/${id}/`
+  const job = { state: 'working', target, stage: 'export', t: Date.now(), local, pages: out.pages }
+  publishes.set(id, job)
+  send('publish:start', { target })
+  const finish = (url, extra = {}) => {
+    Object.assign(job, { state: 'done', url, ...extra })
+    send('publish:done', { target: job.target, url, local, pages: out.pages, ms: Date.now() - job.t, ...extra })
+  }
+  if (target === 'local') {
+    finish(local)
+    return job
+  }
+  const title = String(out.brand || out.name)
+  publishGitHub({
+    dir: join(out.dir, 'html'), name: out.name, title,
+    onStage: stage => { job.stage = stage; broadcast({ type: 'publish:stage', t: Date.now(), run: id, stage }) }
+  }).then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
+    .catch(err => {
+      // GitHub didn't work out: the site is still hosted here
+      Object.assign(job, { target: 'local', message: String(err.message || err).slice(0, 300) })
+      finish(local, { fallback: job.message })
+    })
   return job
 }
 
@@ -606,6 +641,29 @@ const server = createServer((req, res) => {
     return
   }
 
+  const runPublish = url.pathname.match(/^\/api\/runs\/([^/]+)\/publish$/)
+  if (runPublish && RUN_ID.test(runPublish[1])) {
+    const id = runPublish[1]
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    if (req.method !== 'POST') {
+      const last = (readEvents(id) || []).filter(e => e.type === 'publish:done').pop()
+      return reply(200, publishes.get(id) || (last ? { state: 'done', ...last } : { state: 'none' }))
+    }
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 8e6) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      publish(id, input).then(job => reply(200, job)).catch(err => reply(400, { error: String(err.message || err) }))
+    })
+    return
+  }
+
+  if (url.pathname === '/api/publish' && req.method === 'GET') {
+    githubLogin().then(login => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ github: login })))
+    return
+  }
+
   // Export: static HTML, a React + Vite + Tailwind project and an ABA handoff,
   // written to runs/<id>/export/ and zipped.
   const runExport = url.pathname.match(/^\/api\/runs\/([^/]+)\/export(\.zip)?$/)
@@ -734,6 +792,23 @@ const server = createServer((req, res) => {
     if (!existsSync(file)) return res.writeHead(404).end('not found')
     res.writeHead(200, { 'content-type': `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
     res.end(readFileSync(file))
+    return
+  }
+
+  // Published sites hosted on this computer: the run's static export, open like the images.
+  const site = url.pathname.match(/^\/site\/([\w-]{1,64})(\/[\w./-]*)?$/)
+  if (site) {
+    if (!site[2]) return res.writeHead(301, { location: `/site/${site[1]}/` }).end()
+    const base = join(runsDir, site[1], 'export')
+    const name = existsSync(base) && readdirSync(base, { withFileTypes: true }).filter(d => d.isDirectory() && existsSync(join(base, d.name, 'html')))
+      .sort((a, b) => statSync(join(base, b.name)).mtimeMs - statSync(join(base, a.name)).mtimeMs)[0]?.name
+    const rel = site[2] === '/' ? 'index.html' : site[2].slice(1)
+    if (!name || rel.split('/').includes('..')) return res.writeHead(404).end('not found')
+    const file = join(base, name, 'html', rel)
+    if (!existsSync(file) || !statSync(file).isFile()) return res.writeHead(404).end('not found')
+    const types = { html: 'text/html; charset=utf-8', css: 'text/css', js: 'text/javascript', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', json: 'application/json' }
+    res.writeHead(200, { 'content-type': types[rel.split('.').pop()] || 'application/octet-stream', 'cache-control': 'no-cache' })
+    createReadStream(file).pipe(res)
     return
   }
 
