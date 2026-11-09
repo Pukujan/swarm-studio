@@ -5,9 +5,9 @@
 
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { join, relative } from 'node:path'
 import { ownProjects, rememberProject } from './connect.mjs'
 
 // Repos this makes say so in their description; a repo without it is never touched.
@@ -130,7 +130,7 @@ async function live(url, ms = 120000) {
 }
 
 async function rest(base, token, path, init = {}) {
-  const res = await fetch(base + path, { ...init, headers: { authorization: `Bearer ${token}`, ...(init.body && !(init.body instanceof Buffer) ? { 'content-type': 'application/json' } : {}), ...init.headers }, signal: AbortSignal.timeout(init.timeout || 60000) })
+  const res = await fetch(base + path, { ...init, headers: { authorization: `Bearer ${token}`, ...(typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}), ...init.headers }, signal: AbortSignal.timeout(init.timeout || 60000) })
   const body = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, body }
 }
@@ -180,27 +180,17 @@ export async function publishVercel({ dir, name, creds, dataDir, onStage = () =>
   return { url, repo: `vercel:${project}`, pending: !(await live(url, 60000)) }
 }
 
-// ---------- Cloudflare Pages: the project through the API, the upload through wrangler
+// ---------- Cloudflare Pages: direct upload, the way wrangler does it, without wrangler.
+// Only the project, upload-token and deployment calls carry the account token
+// (creds.base can point them at a relay that injects it); the files go up with
+// the short-lived upload JWT straight to Cloudflare.
 
-const WRANGLER = 'wrangler@4.152.0'
-let wranglerBin = null
-function wrangler(dataDir) {
-  return (wranglerBin ||= (async () => {
-    const dir = join(dataDir, 'deploy-tools'), bin = join(dir, 'node_modules', '.bin', 'wrangler')
-    if (!existsSync(bin)) {
-      mkdirSync(dir, { recursive: true })
-      if (!existsSync(join(dir, 'package.json'))) writeFileSync(join(dir, 'package.json'), '{"private":true}\n')
-      const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
-      await run(npm, ['install', '--no-audit', '--no-fund', WRANGLER], { cwd: dir, timeout: 600000 })
-    }
-    return bin
-  })().catch(err => { wranglerBin = null; throw err }))
-}
+const CF = 'https://api.cloudflare.com/client/v4'
+const TYPES = { html: 'text/html', css: 'text/css', js: 'application/javascript', mjs: 'application/javascript', json: 'application/json', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', ico: 'image/x-icon', txt: 'text/plain', woff2: 'font/woff2' }
 
 export async function publishCloudflare({ dir, name, creds, dataDir, onStage = () => {} }) {
-  const base = `/client/v4/accounts/${creds.accountId}/pages/projects`
-  const api = (path, init) => rest('https://api.cloudflare.com', creds.token, base + path, init)
-  const tools = wrangler(dataDir) // fetched while the project is set up
+  const api = (path, init) => rest(creds.base || CF, creds.token, `/accounts/${creds.accountId}/pages/projects${path}`, init)
+  const why = r => r.body.errors?.[0]?.message || r.status
   onStage('project')
   const own = ownProjects(dataDir, 'cloudflare')
   let project = null, sub = null
@@ -209,7 +199,7 @@ export async function publishCloudflare({ dir, name, creds, dataDir, onStage = (
     if (r.ok && own.includes(cand)) { project = cand; sub = r.body.result?.subdomain; break }
     if (r.ok) continue
     const made = await api('', { method: 'POST', body: JSON.stringify({ name: cand, production_branch: 'main' }) })
-    if (!made.ok) throw new Error(`Cloudflare: ${made.body.errors?.[0]?.message || made.status}`)
+    if (!made.ok) throw new Error(`Cloudflare: ${why(made)}`)
     project = cand
     sub = made.body.result?.subdomain
     rememberProject(dataDir, 'cloudflare', cand)
@@ -218,11 +208,29 @@ export async function publishCloudflare({ dir, name, creds, dataDir, onStage = (
   if (!project) throw new Error(`every Cloudflare Pages name for ${name} is taken`)
 
   onStage('upload')
-  const bin = await tools
-  await run(bin, ['pages', 'deploy', dir, '--project-name', project, '--branch', 'main', '--commit-dirty=true'], {
-    timeout: 300000, cwd: dir,
-    env: { CLOUDFLARE_API_TOKEN: creds.token, CLOUDFLARE_ACCOUNT_ID: creds.accountId, WRANGLER_SEND_METRICS: 'false', CI: '1', NO_COLOR: '1' },
+  const tok = await api(`/${project}/upload-token`)
+  const jwt = tok.body.result?.jwt
+  if (!jwt) throw new Error(`Cloudflare upload token: ${why(tok)}`)
+  const up = (path, body) => rest(CF, jwt, path, { method: 'POST', body: JSON.stringify(body) })
+  const list = files(dir).map(f => {
+    const value = readFileSync(f.path).toString('base64'), ext = f.rel.split('.').pop().toLowerCase()
+    return { rel: f.rel, value, contentType: TYPES[ext] || 'application/octet-stream', hash: createHash('sha256').update(value + ext).digest('hex').slice(0, 32) }
   })
+  const hashes = list.map(f => f.hash)
+  const miss = await up('/pages/assets/check-missing', { hashes })
+  if (!miss.ok) throw new Error(`Cloudflare upload: ${why(miss)}`)
+  const todo = list.filter(f => (miss.body.result || hashes).includes(f.hash))
+  for (let i = 0; i < todo.length; i += 20) {
+    const r = await up('/pages/assets/upload', todo.slice(i, i + 20).map(f => ({ key: f.hash, value: f.value, metadata: { contentType: f.contentType }, base64: true })))
+    if (!r.ok) throw new Error(`Cloudflare upload: ${why(r)}`)
+  }
+  await up('/pages/assets/upsert-hashes', { hashes })
+  const form = new FormData()
+  form.append('manifest', JSON.stringify(Object.fromEntries(list.map(f => [`/${f.rel}`, f.hash]))))
+  form.append('branch', 'main')
+  const dep = await api(`/${project}/deployments`, { method: 'POST', body: form })
+  if (!dep.ok) throw new Error(`Cloudflare deployment: ${why(dep)}`)
+
   onStage('building')
   const url = `https://${sub || `${project}.pages.dev`}/`
   return { url, repo: `cloudflare:${project}`, pending: !(await live(url)) }
