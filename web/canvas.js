@@ -2109,10 +2109,10 @@ async function publishMenu(force) {
   const who = id => (id === 'github' ? h.github : h[id]?.user)
   const row = id => {
     const x = HOSTS[id], u = who(id)
-    if (u || id === 'github') return `<div class="prow"><button class="popt" data-target="${id}"${u ? '' : ' disabled'}><b>${x.label}</b><span>${u ? x.how(u) : x.off}</span></button>${u && id !== 'github' && !h[id]?.env ? `<button class="pdisc" data-disc="${id}" title="Disconnect ${x.label}">×</button>` : ''}</div>`
+    if (u || id === 'github') return `<div class="prow"><button class="popt" data-target="${id}"${u ? '' : ' disabled'}><b>${x.label}</b><span>${u ? x.how(u) : x.off}${h[id]?.via === 'octo' ? ` · through your Octo vault${h[id].item ? ` (${esc(h[id].item)})` : ''}` : ''}</span></button>${u && id !== 'github' && !h[id]?.env ? `<button class="pdisc" data-disc="${id}" title="Disconnect ${x.label}">×</button>` : ''}</div>`
     const url = h.providers?.[id]?.tokenUrl || '#'
     return `<details class="pconn"><summary><b>Connect ${x.label}</b><span>${x.token.replace(/vercel\.com\/account\/tokens|a token/, m => `<a href="${esc(url)}" target="_blank" rel="noopener">${m}</a>`)}</span></summary>
-      <form data-conn="${id}"><input type="password" autocomplete="off" spellcheck="false" placeholder="${x.label} token"><button>Connect</button></form><div class="perr"></div></details>`
+      <form data-conn="${id}"><input type="password" autocomplete="off" spellcheck="false" placeholder="${x.label} token, or an Octo vault grant"><button>Connect</button></form><div class="phint">An Octo vault grant (octo_vault_…) keeps the token in your vault: Swarm Studio stores only a working key that can reach ${x.label} through Octo's relay.</div><div class="perr"></div></details>`
   }
   const el = pubPop(`${['github', 'vercel', 'cloudflare'].map(row).join('')}
     <div class="prow"><button class="popt" data-target="local"><b>This computer</b><span>Hosted by Swarm Studio at 127.0.0.1 · instant, only you can open it</span></button></div>`)
