@@ -516,3 +516,6 @@ body.side-min .dock { left: auto; }
 #agents.chip { flex: none; }
 .composer select.chip.model { flex: 1 1 0; width: 0; max-width: 220px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .composer .row .grow { min-width: 0; }
+.fmenu .fnew { display: flex; gap: 6px; padding: 4px 6px; }
+.fmenu .fnew input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; }
+.fmenu .fnew button { width: auto; background: var(--accent); color: #0b0d12; font-weight: 600; padding: 5px 10px; }

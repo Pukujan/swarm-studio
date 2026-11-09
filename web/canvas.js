@@ -2548,14 +2548,14 @@ function videoEvent(e) {
   if (video.run !== e.run) Object.assign(video, { run: e.run, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '' })
   const fresh = !e.t || Date.now() - e.t < 8000 // a replayed file shows its video quietly
   if (e.type === 'video:start') {
-    Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], src: '', message: '' })
+    Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], src: '', message: '', heard: fresh ? Date.now() : 0 })
     if (fresh) feed(null, `🎬 ${e.model || 'the planner'} is storyboarding a ${VIDEO_STYLES.find(([k]) => k === e.style)?.[1].toLowerCase() || 'promo'} video${e.transition ? ` (${e.transition} cuts)` : ''}${e.idea ? `: “${e.idea}”` : ''}`, 'sys')
   } else if (e.type === 'video:story') {
     video.story = e.scenes
     if (fresh) e.scenes.forEach((sc, i) => setTimeout(() => feed(S.agents.get(sc.agent), `scene ${i + 1} · ${sc.kind}: “${sc.headline}”`, ''), i * 350))
     if (fresh && e.cast?.narrator) feed(null, `🎙 cast for the theme: ${e.cast.narrator}${e.cast.second ? ` with ${e.cast.second}` : ''} reading, ${e.music || 'matching'} music`, 'sys')
   } else if (e.type === 'video:progress') {
-    Object.assign(video, { busy: true, pct: e.pct, stage: e.stage })
+    Object.assign(video, { busy: true, pct: e.pct, stage: e.stage, heard: Date.now() })
   } else if (e.type === 'video:done') {
     Object.assign(video, { busy: false, pct: 100, src: e.src, file: e.file, stage: 'done' })
     if (fresh) feed(null, `🎬 promo video ready (${Math.round(e.seconds)}s${e.voice ? ', with voiceover' : ''}${e.music ? ', with music' : ''}, made in ${Math.round(e.ms / 1000)}s)`, 'sys')
@@ -2609,6 +2609,17 @@ function renderVideo() {
   el.querySelector('.vvoice')?.addEventListener('change', e => { videoOpts.voice = e.target.value; store.set('videoVoice', videoOpts.voice) })
   el.querySelector('.vmusic')?.addEventListener('change', e => { videoOpts.music = e.target.checked; store.set('videoMusic', videoOpts.music) })
 }
+
+// A render the canvas thinks is running but the server no longer has (it
+// restarted, or the job died): ask now and then, and stop waiting if so.
+setInterval(async () => {
+  if (!video.busy || !video.run || Date.now() - (video.heard || 0) < 20000) return
+  video.heard = Date.now()
+  const job = await api(`/api/runs/${encodeURIComponent(video.run)}/video`).then(r => r.json()).catch(() => null)
+  if (!job || job.state === 'working') return
+  Object.assign(video, { busy: false, stage: 'failed', message: 'The video stopped before it finished (Swarm Studio restarted). Make it again.' })
+  if (video.el) renderVideo()
+}, 5000)
 
 // The voiceover: Kokoro, on this machine, in one of its voices; or none.
 const VOICE_OPTS = [['', 'Kokoro · fits the theme'], ['af_heart', 'Kokoro · Heart'], ['af_bella', 'Kokoro · Bella'], ['am_michael', 'Kokoro · Michael'], ['bf_emma', 'Kokoro · Emma (UK)'], ['bm_george', 'Kokoro · George (UK)'], ['off', 'No voice']]
@@ -3073,20 +3084,31 @@ function fileMenu(f, at) {
   setTimeout(() => addEventListener('mousedown', away))
   m.onclick = async e => {
     const b = e.target.closest('button')
-    if (!b) return
+    if (!b || b.closest('.fnew')) return
     let folder = b.dataset.f
-    if (b.hasAttribute('data-new')) folder = prompt('Folder name')?.trim()
+    // a name field right in the menu (app panes block the browser's prompt box)
+    if (b.hasAttribute('data-new')) {
+      b.outerHTML = `<form class="fnew"><input placeholder="Folder name" maxlength="40"><button>Add</button></form>`
+      const form = m.querySelector('.fnew'), input = form.querySelector('input')
+      input.focus()
+      input.onkeydown = ev => { if (ev.key === 'Escape') close() }
+      form.onsubmit = ev => { ev.preventDefault(); const n = input.value.trim(); if (n) move(n) }
+      return
+    }
     if (b.hasAttribute('data-info')) { close(); return fileInfo(f) }
     if (b.hasAttribute('data-reveal')) {
       close()
       return api(`/api/runs/${encodeURIComponent(f.id)}/reveal${b.dataset.reveal ? '?what=video' : ''}`, { method: 'POST' })
     }
+    if (folder !== undefined) move(folder)
+  }
+  async function move(folder) {
     close()
-    if (folder === undefined || folder === null) return
     await api(`/api/runs/${encodeURIComponent(f.id)}/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder }) })
     f.folder = folder || null
     if (folder && fileView.group !== 'folder') { fileView.group = 'folder'; store.set('fileGroup', 'folder'); const g = document.querySelector('.file-tools .fgroup'); if (g) g.value = 'folder' }
     renderFiles()
+    if (folder) feed(null, `📁 moved “${f.title}” to ${folder}`, 'sys')
   }
 }
 
