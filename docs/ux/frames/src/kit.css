@@ -1,0 +1,85 @@
+/* Reference-frame kit: Swarm's own look (the studio and Feed tokens), not any product we borrow a pattern from. */
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Barlow+Condensed:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --void: #05051a; --deep: #0a0a2e; --panel: rgb(242 242 242 / .04); --panel-2: rgb(242 242 242 / .08);
+  --edge: rgb(242 242 242 / .12); --frame: #0000f2; --frame-hi: #4646ff; --text: #f2f2f2; --muted: #8b8bb8;
+  --accent: #f2f200; --ink: #05051a; --ok: #00f279; --hot: #f20000; --info: #00f2f2;
+  --display: 'Big Shoulders Display', Impact, sans-serif;
+  --label: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0 }
+html, body { height: 100%; background: var(--void); color: var(--text); font: 13px/1.4 var(--mono); overflow: hidden }
+.ic { width: 20px; height: 20px; flex: none }
+
+/* The frame: nav + main */
+.app { position: relative; height: 100vh; display: grid; grid-template-columns: 76px 1fr }
+.main { position: relative; min-width: 0; display: flex; flex-direction: column; overflow: hidden }
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden }
+
+/* Nav: five fixed slots */
+.nav { background: var(--deep); border-right: 1px solid var(--edge); display: flex; flex-direction: column;
+  align-items: center; padding: 14px 0; gap: 6px; z-index: 6 }
+.logo { width: 36px; height: 36px; margin-bottom: 22px; display: grid; place-items: center }
+.nav a { width: 62px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0;
+  border-radius: 12px; color: var(--muted); font: 500 12px var(--label); letter-spacing: .05em; text-decoration: none }
+.nav a.on { color: var(--text); background: var(--panel-2) }
+.nav a.create { color: var(--text) }
+.nav a.create .bub { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--ink);
+  display: grid; place-items: center; margin: -4px 0 -2px }
+
+/* Top bar: breadcrumb left, one primary right */
+.top { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--edge);
+  flex: none; z-index: 5; background: rgb(5 5 26 / .82) }
+.crumb { display: flex; align-items: center; gap: 6px; font: 500 16px var(--label); letter-spacing: .03em; color: var(--muted); white-space: nowrap; min-width: 0 }
+.crumb b { color: var(--text); font-weight: 600 }
+.crumb .ic { width: 14px; height: 14px; opacity: .55 }
+.spacer { flex: 1 }
+.btn { height: 36px; padding: 0 16px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px;
+  font: 600 16px var(--label); letter-spacing: .04em; border: 1px solid var(--edge); background: var(--panel); color: var(--text); white-space: nowrap; flex: none }
+.btn .ic { width: 18px; height: 18px }
+.btn.primary { background: var(--accent); color: var(--ink); border-color: transparent; min-width: 92px; justify-content: center }
+.btn.icon { width: 36px; padding: 0; justify-content: center }
+.btn.ghost { background: transparent }
+
+/* Chips and segmented control */
+.chip { height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--edge); background: var(--panel-2);
+  display: inline-flex; align-items: center; gap: 6px; font: 500 15px var(--label); letter-spacing: .04em; color: var(--text); white-space: nowrap }
+.chip .ic { width: 15px; height: 15px }
+.chip.on { background: var(--text); color: var(--ink); border-color: transparent }
+.seg { display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--panel); border: 1px solid var(--edge) }
+.seg span { padding: 5px 14px; border-radius: 999px; font: 500 15px var(--label); letter-spacing: .04em; color: var(--muted); white-space: nowrap }
+.seg span.on { background: var(--panel-2); color: var(--text) }
+
+/* The one input, with Hermia */
+.input { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(620px, calc(100% - 32px));
+  height: 54px; border-radius: 999px; background: rgb(10 10 46 / .94); border: 1px solid var(--edge); display: flex;
+  align-items: center; gap: 10px; padding: 0 8px; z-index: 5; box-shadow: 0 12px 40px rgb(0 0 0 / .45) }
+.input .ph { flex: 1; color: var(--muted); font: 14px var(--mono); white-space: nowrap; overflow: hidden }
+.send { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: var(--ink); display: grid; place-items: center; flex: none }
+.hermia { width: 38px; height: 38px; border-radius: 50%; flex: none; display: block; box-shadow: 0 0 0 2px var(--accent) }
+
+/* Space */
+.stars { position: absolute; inset: 0;
+  background:
+    radial-gradient(1.4px 1.4px at 30px 40px, rgb(242 242 242 / .8), transparent 70%) 0 0 / 233px 233px,
+    radial-gradient(1px 1px at 120px 160px, rgb(242 242 242 / .55), transparent 70%) 0 0 / 311px 311px,
+    radial-gradient(1.6px 1.6px at 200px 80px, rgb(242 242 242 / .6), transparent 70%) 0 0 / 419px 419px,
+    radial-gradient(1px 1px at 60px 120px, rgb(242 242 242 / .45), transparent 70%) 0 0 / 173px 173px,
+    radial-gradient(1.2px 1.2px at 300px 260px, rgb(242 242 242 / .5), transparent 70%) 0 0 / 587px 587px,
+    radial-gradient(ellipse at 55% 42%, rgb(0 0 242 / .22), transparent 62%),
+    var(--void) }
+
+/* Phone: the nav becomes a bottom bar */
+@media (max-width: 600px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 1fr 64px }
+  .main { grid-row: 1 }
+  .nav { grid-row: 2; flex-direction: row; justify-content: space-around; border-right: 0; border-top: 1px solid var(--edge); padding: 6px 4px; gap: 0 }
+  .nav .logo { display: none }
+  .nav a { width: auto; flex: 1; height: 52px; padding: 0 0 4px; justify-content: flex-end }
+  .nav a.create .bub { width: 44px; height: 30px; border-radius: 10px; margin: 0 }
+  .top { height: 52px; padding: 0 14px }
+  .crumb { font-size: 15px }
+  .input { bottom: 14px; height: 50px }
+}

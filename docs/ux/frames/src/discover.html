@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Swarm · Discover</title><link rel="stylesheet" href="kit.css">
+<style>
+.search { flex: 1; max-width: 560px; height: 40px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--edge); display: flex; align-items: center; gap: 10px; padding: 0 16px; color: var(--muted); font: 14px var(--mono) }
+.chips { display: flex; gap: 8px; padding: 14px 20px 6px; overflow: hidden; flex: none }
+.chips .chip { height: 32px; padding: 0 14px; font-size: 16px }
+.grid { columns: 4; column-gap: 12px; padding: 10px 20px 0 }
+.grid img { width: 100%; display: block; border-radius: 14px; margin-bottom: 12px; break-inside: avoid; object-fit: cover }
+.grid .t { aspect-ratio: 3 / 4 } .grid .s { aspect-ratio: 1 }
+@media (max-width: 600px) {
+  .chips { padding: 12px 14px 4px }
+  .grid { columns: 2; column-gap: 8px; padding: 8px 14px 0 }
+  .grid img { margin-bottom: 8px; border-radius: 12px }
+}
+</style></head>
+<body data-nav="discover"><div class="app"><nav class="nav"></nav><main class="main">
+  <header class="top"><div class="search"><i data-i="search"></i>Search</div></header>
+  <div class="chips"><span class="chip on">Builds</span><span class="chip">Makers</span><span class="chip">Open boards</span><span class="chip">Jams &amp; events</span></div>
+  <div class="stage"><div class="grid">
+    <img src="img/lantern-1.jpg" alt=""><img class="t" src="img/roast-1.jpg" alt=""><img src="img/deep-diver.jpg" alt="">
+    <img class="s" src="img/neon-4.jpg" alt=""><img src="img/lantern-stage.jpg" alt=""><img class="t" src="img/deep-keeper.jpg" alt="">
+    <img src="img/neon-1.jpg" alt=""><img class="s" src="img/lantern-friends.jpg" alt=""><img src="img/roast-4.jpg" alt="">
+    <img class="t" src="img/neon-3.jpg" alt=""><img src="img/deep-2.jpg" alt=""><img class="s" src="img/lantern-walk.jpg" alt="">
+    <img src="img/neon-2.jpg" alt=""><img class="t" src="img/roast-3.jpg" alt=""><img src="img/deep-1.jpg" alt=""><img src="img/lantern-2.jpg" alt="">
+  </div></div>
+</main></div>
+<script src="../../../../web/crew.js"></script><script src="frame.js"></script><script src="icons.js"></script></body></html>

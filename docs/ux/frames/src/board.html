@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Swarm · Night Market</title><link rel="stylesheet" href="kit.css">
+<style>
+.ppl { display: flex; align-items: center }
+.ppl > * { margin-left: -5px; box-shadow: 0 0 0 2px var(--void); border-radius: 50% }
+.ppl .p { width: 30px; height: 30px; display: grid; place-items: center; font: 600 14px var(--label); color: var(--ink) }
+.ppl .crew-av { background: var(--deep) }
+.ppl .more { width: 30px; height: 30px; display: grid; place-items: center; font: 600 13px var(--label); background: var(--panel-2); color: var(--text) }
+.open { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; color: var(--ok); border: 1px solid rgb(0 242 121 / .4); font: 600 15px var(--label); letter-spacing: .04em }
+.open .ic { width: 15px; height: 15px }
+.grid { columns: 4; column-gap: 14px; padding: 18px 20px 0 }
+.it { position: relative; break-inside: avoid; margin-bottom: 14px }
+.it img { width: 100%; display: block; border-radius: 14px }
+.it .by { position: absolute; left: 10px; bottom: 10px; border-radius: 50%; box-shadow: 0 0 0 2px rgb(5 5 26 / .7) }
+.it .by.p { width: 24px; height: 24px; display: grid; place-items: center; font: 600 12px var(--label); color: var(--ink) }
+.ipin { position: absolute; width: 30px; height: 30px; border-radius: 50% 50% 50% 4px; background: var(--accent); color: var(--ink); display: grid; place-items: center; font: 700 15px var(--label); box-shadow: 0 4px 14px rgb(0 0 0 / .5) }
+@media (max-width: 600px) {
+  .top { gap: 8px }
+  .crumb .c1, .crumb .c1 + .ic { display: none }
+  .ppl { display: none }
+  .open { font-size: 0; gap: 0; width: 28px; padding: 0; justify-content: center }
+  .top .btn.primary { min-width: 0 }
+  .grid { columns: 2; column-gap: 8px; padding: 10px 14px 0 }
+  .it { margin-bottom: 8px }
+}
+</style></head>
+<body data-nav="projects"><div class="app"><nav class="nav"></nav><main class="main">
+  <header class="top"><div class="crumb"><span class="c1">Projects</span><i data-i="chevron-right"></i>Boards<i data-i="chevron-right"></i><b>Night Market</b></div><div class="spacer"></div>
+    <span class="ppl"><span class="p" style="background:#00f2f2">M</span><span class="p" style="background:#f27900">J</span><i data-crew="Lumi" data-s="30"></i><span class="more">+3</span></span>
+    <span class="open"><i data-i="globe"></i>Open</span>
+    <span class="btn primary"><i data-i="user-plus"></i>Invite</span></header>
+  <div class="stage"><div class="grid">
+    <div class="it"><img src="img/neon-1.jpg" alt=""><span class="by p" style="background:#00f2f2">M</span></div>
+    <div class="it"><img src="img/roast-1.jpg" alt=""><span class="ipin" style="left:46%;top:30%">1</span></div>
+    <div class="it"><img src="img/neon-4.jpg" alt=""><i data-crew="Lumi" data-s="24" class="by"></i></div>
+    <div class="it"><img src="img/lantern-walk.jpg" alt=""></div>
+    <div class="it"><img src="img/neon-2.jpg" alt=""><span class="ipin" style="left:62%;top:22%">2</span></div>
+    <div class="it"><img src="img/deep-keeper.jpg" alt=""><span class="by p" style="background:#f27900">J</span></div>
+    <div class="it"><img src="img/roast-4.jpg" alt=""></div>
+    <div class="it"><img src="img/neon-3.jpg" alt=""></div>
+    <div class="it"><img src="img/roast-3.jpg" alt=""></div>
+    <div class="it"><img src="img/lantern-stage.jpg" alt=""><span class="by p" style="background:#00f2f2">M</span></div>
+    <div class="it"><img src="img/deep-2.jpg" alt=""></div>
+  </div></div>
+</main></div>
+<script src="../../../../web/crew.js"></script><script src="frame.js"></script><script src="icons.js"></script></body></html>
