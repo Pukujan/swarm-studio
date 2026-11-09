@@ -230,7 +230,8 @@ export async function runSwarm({ provider, brief, agents = 16, plannerModel, wor
         agent: agent.id,
         ms: Math.round(performance.now() - started),
         done: stats.done,
-        planned: stats.planned
+        planned: stats.planned,
+        html: text
       })
     } catch (err) {
       stats.failed++

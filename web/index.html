@@ -9,48 +9,64 @@
 <body>
   <header class="topbar">
     <div class="brand"><span class="logo">◆</span> Swarm Studio</div>
-    <form id="brief-form" class="brief">
-      <input id="brief" autocomplete="off" placeholder="Describe a product — the swarm designs and builds its site"
-        value="Driftwood — a booking app for surf schools: lessons, board rentals, instructor schedules, tide-aware session times.">
-      <select id="agents" title="Agents">
-        <option>8</option><option>12</option><option selected>16</option><option>20</option><option>24</option>
-      </select>
-      <button type="submit">Build</button>
-    </form>
+    <div class="file-name" id="file-name">Untitled</div>
+    <div class="spacer"></div>
+    <button class="toggle" data-panel="planner" title="Planner: theme and plan stream">Planner</button>
+    <button class="toggle" data-panel="agents" title="Agents and what each is doing">Agents <span id="agent-count" class="count">0</span></button>
     <div class="clock"><span id="timer">00.0s</span></div>
   </header>
 
-  <aside class="panel left">
-    <section>
-      <h3>Planner <span id="plan-state" class="pill">idle</span></h3>
-      <div id="theme" class="theme"></div>
-      <pre id="plan-stream" class="stream"></pre>
+  <aside class="side">
+    <nav class="tabs">
+      <button data-tab="chat" class="on">Chat</button>
+      <button data-tab="pages">Pages</button>
+      <button data-tab="files">Files</button>
+    </nav>
+
+    <section class="tab chat on" data-tab="chat">
+      <div id="feed" class="feed"></div>
+      <form id="brief-form" class="composer">
+        <textarea id="brief" rows="3" autocomplete="off" placeholder="Describe a product. The swarm designs and builds its site."></textarea>
+        <div class="row">
+          <label class="size">Agents
+            <select id="agents">
+              <option>8</option><option>12</option><option selected>16</option><option>20</option><option>24</option>
+            </select>
+          </label>
+          <button type="submit">Build</button>
+        </div>
+      </form>
     </section>
-    <section class="grow">
-      <h3>Layers</h3>
+
+    <section class="tab pages" data-tab="pages">
       <div id="tree" class="tree"></div>
+    </section>
+
+    <section class="tab files" data-tab="files">
+      <button id="new-file" class="new-file">+ New file</button>
+      <div id="files" class="file-list"></div>
     </section>
   </aside>
 
   <main id="viewport" class="viewport">
     <div id="world" class="world"></div>
     <svg id="wires" class="wires"></svg>
+    <div class="dock" id="dock"><span class="dock-title">☕ break room</span></div>
     <div id="cursors" class="cursors"></div>
     <div class="toolbar" id="toolbar"></div>
     <div class="status" id="status">Ready</div>
     <div class="camera-hint" id="camera-hint">camera: auto</div>
-  </main>
 
-  <aside class="panel right">
-    <section>
-      <h3>Agents <span id="agent-count" class="pill">0</span></h3>
+    <div class="float planner" data-panel="planner">
+      <h3>Planner <span id="plan-state" class="pill">idle</span></h3>
+      <div id="theme" class="theme"></div>
+      <pre id="plan-stream" class="stream"></pre>
+    </div>
+    <div class="float agents-card" data-panel="agents">
+      <h3>Agents</h3>
       <div id="agents-list" class="agents"></div>
-    </section>
-    <section class="grow">
-      <h3>Feed</h3>
-      <div id="feed" class="feed"></div>
-    </section>
-  </aside>
+    </div>
+  </main>
 
   <script type="module" src="canvas.js"></script>
 </body>
