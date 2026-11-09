@@ -4,7 +4,9 @@ Agent half. Registers:
 
 - ``swarm_design``: start a swarm build from a brief and (by default) wait for it
 - ``swarm_canvas``: start the canvas server if needed and return its URL
-- ``/swarm <brief>``: start a build from any chat without going through the model
+- ``swarm_studio``: everything after a build (files, open, play, review, models,
+  images, lite mode), the same commands as ``/swarm <subcommand>`` (see commands.py)
+- ``/swarm <brief>`` / ``/swarm <subcommand>``: from any chat without going through the model
 - ``hermes swarm``: the same from the command line
 - the ``swarm-studio:swarm-design`` skill: when and how to use the swarm
 - two model slots in Hermes's model picker: ``swarm_studio_planner`` (follows the
@@ -22,7 +24,7 @@ import json
 import webbrowser
 from pathlib import Path
 
-from . import launcher
+from . import commands, launcher
 
 TOOLSET = "swarm-studio"
 
@@ -50,11 +52,13 @@ def swarm_canvas(args: dict | None = None, **_: object) -> str:
 def _slash_swarm(raw_args: str = "", **_: object) -> str:
     """``/swarm <brief>``: start a build without waiting; the canvas shows it live."""
     brief = (raw_args or "").strip()
+    if commands.is_command(brief):
+        return commands.run(brief)
     result = launcher.start_run(brief) if brief else launcher.ensure_server()
     if result.get("error"):
         return f"Swarm Studio: {result['error']}"
     if not brief:
-        return f"Swarm Studio canvas is up: {result['url']}  (usage: /swarm <what the site is for>)"
+        return f"Swarm Studio canvas is up: {result['url']}\n\n{commands.HELP}"
     return f"🐝 Swarm started. Watch it in the swarm pane, or open {result['url']}"
 
 
@@ -74,6 +78,9 @@ def _run_cli(args: argparse.Namespace) -> int:
         print("Change them with `hermes model` (Swarm Studio planner / builders) or SWARM_STUDIO_* variables.")
         return 0
     brief = " ".join(args.brief).strip()
+    if commands.is_command(brief):
+        print(commands.run(brief))
+        return 0
     result = launcher.start_run(brief, args.agents) if brief else launcher.ensure_server()
     if result.get("error"):
         print(f"swarm: {result['error']}")
@@ -130,11 +137,19 @@ def register(ctx) -> None:
         description="Open the Swarm Studio canvas.",
         emoji="🧭",
     )
+    ctx.register_tool(
+        name="swarm_studio",
+        toolset=TOOLSET,
+        schema=commands.TOOL_SCHEMA,
+        handler=commands.tool,
+        description="Review, open, play and configure Swarm Studio builds.",
+        emoji="🎛️",
+    )
     ctx.register_command(
         "swarm",
         handler=_slash_swarm,
         description="Start a Swarm Studio build from a brief",
-        args_hint="<brief>",
+        args_hint="<brief> | help | files | open | play | review | models | images | lite",
     )
     skills = Path(__file__).resolve().parent / "skills"
     for child in sorted(skills.iterdir()) if skills.is_dir() else []:
