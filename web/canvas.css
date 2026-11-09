@@ -175,6 +175,38 @@ button { font: inherit; color: inherit; }
 .device { position: absolute; left: 0; top: 20px; background: #fff; box-shadow: 0 30px 80px #000c; overflow: hidden; }
 .device iframe { display: block; border: 0; width: 100%; height: 100%; transition: opacity .18s; }
 .device.mobile { border-radius: 38px; border: 12px solid #1b1d22; box-shadow: 0 30px 80px #000c, 0 0 0 1px #33363f; }
+.tour-pick { position: relative; }
+.pl-btn.tours { color: var(--text); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.tour-menu { position: absolute; top: 38px; left: 0; z-index: 3; width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 16px 40px #000a; }
+.tour-menu[hidden] { display: none; }
+.tour-menu button { display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; background: none; border: 0; border-radius: 7px; padding: 8px; color: var(--text); cursor: pointer; font: inherit; }
+.tour-menu button:hover { background: var(--panel-2); }
+.tour-menu .em { font-size: 20px; line-height: 1; }
+.tour-menu small { display: block; color: var(--muted); margin-top: 2px; }
+.tour-menu .note { padding: 10px; color: var(--muted); font-size: 12.5px; }
+.tour-menu .note.working::after { content: '…'; animation: blink 1s steps(2) infinite; }
+.persona { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px);
+  background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: 999px; padding: 6px 8px 6px 14px; box-shadow: 0 10px 30px #0008; font-size: 13px; white-space: nowrap; }
+.persona[hidden] { display: none; }
+.player:has(.persona:not([hidden])) .pl-hint { display: none; }
+.persona .who { overflow: hidden; text-overflow: ellipsis; }
+.persona .who small { color: var(--muted); }
+.persona .dots { display: flex; gap: 3px; }
+.persona .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.persona .dots i.on { background: var(--accent); }
+.persona button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
+.tour-cursor { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; will-change: transform; filter: drop-shadow(0 2px 3px #0008); }
+.tour-cursor[hidden] { display: none; }
+.tour-cursor svg { display: block; transition: transform .12s; transform-origin: 4px 2px; }
+.tour-cursor.press svg { transform: scale(.82); }
+.tour-cursor .ring { position: absolute; left: -14px; top: -16px; width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--accent); animation: ring .5s ease-out forwards; }
+@keyframes ring { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+.think { position: absolute; left: 22px; top: 18px; width: max-content; max-width: 260px; background: #fff; color: #15171c; border-radius: 14px 14px 14px 4px; padding: 7px 12px;
+  font: 500 13.5px/1.35 system-ui, sans-serif; box-shadow: 0 8px 24px #0007; transition: opacity .25s, transform .25s; }
+.think:empty { display: none; }
+.think.swap { opacity: 0; transform: translateY(3px); }
+.think.left { left: auto; right: 6px; border-radius: 14px 14px 4px 14px; }
+.think .em { margin-right: 6px; }
 .pl-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); color: var(--muted); font-size: 11.5px; pointer-events: none; white-space: nowrap; }
 
 /* The toolbar moves aside so it never sits under the break room. */

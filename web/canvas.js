@@ -15,7 +15,8 @@ const els = {
   theme: $('#theme'), tree: $('#tree'), agents: $('#agents-list'), agentCount: $('#agent-count'), feed: $('#feed'),
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
   newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
-  plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back')
+  plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'),
+  plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
 // Per-viewer UI memory. Storage throws inside the Desktop pane's opaque origin, so it is optional.
@@ -648,7 +649,10 @@ function summarize(e) {
   play.className = 'primary'
   play.textContent = '▶ Play prototype'
   play.onclick = () => openPlayer()
-  chips.append(play)
+  const watch = document.createElement('button')
+  watch.textContent = '👀 Watch a visitor'
+  watch.onclick = e => { e.stopPropagation(); openPlayer(); toggleTourMenu(true) }
+  chips.append(play, watch)
   for (const f of S.frames) {
     const b = document.createElement('button')
     b.textContent = `Page ${f.index + 1} · ${f.title}`
@@ -784,7 +788,8 @@ els.viewport.addEventListener('wheel', e => {
   }
 }, { passive: false })
 window.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !els.player.hidden) return closePlayer()
+  if (e.key === 'Escape' && !els.player.hidden) return tour.on ? stopTour() : closePlayer()
+  if (e.key === 'v' && !els.player.hidden) return toggleTourMenu()
   if (e.target.closest('input, select, textarea')) return
   if (e.key === 'p' && S.frames.length) return els.player.hidden ? openPlayer() : closePlayer()
   if (!els.player.hidden) return
@@ -823,24 +828,88 @@ addEventListener('click', e => {
   setTimeout(() => document.body.classList.remove('hint'), 700)
 }, true)
 addEventListener('submit', e => e.preventDefault(), true)
+// Tour agent: the canvas can't reach into this frame, so a visitor tour asks it
+// to find, scroll to, hover, press and type into elements by their data-tour id.
+const wait = ms => new Promise(r => setTimeout(r, ms))
+const shown = el => { const r = el.getBoundingClientRect(); return r.width > 2 && r.height > 2 && getComputedStyle(el).visibility !== 'hidden' }
+const find = id => {
+  const el = document.querySelector('[data-tour="' + id + '"]')
+  if (!el || shown(el)) return el
+  // a nav link folded away on a phone: another visible link to the same page will do
+  const to = el.closest('[data-goto]')?.dataset.goto
+  return (to && [...document.querySelectorAll('[data-goto="' + to + '"]')].find(shown)) || null
+}
+addEventListener('message', async e => {
+  const m = e.data || {}
+  if (e.source !== parent || m.type !== 'tour') return
+  const el = m.el ? find(m.el) : null
+  const done = x => parent.postMessage({ type: 'tour:ok', seq: m.seq, ...x }, '*')
+  document.querySelectorAll('.tour-hover').forEach(x => x !== el && x.classList.remove('tour-hover'))
+  if (m.op === 'locate') {
+    if (!el) return done({ box: null })
+    const before = scrollY
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    await wait(Math.abs(el.getBoundingClientRect().top - innerHeight / 2) > 40 || scrollY !== before ? 750 : 60)
+    const r = el.getBoundingClientRect()
+    return done({ box: [r.left, r.top, r.width, r.height] })
+  }
+  if (m.op === 'hover') el?.classList.add('tour-hover')
+  if (m.op === 'press' && el) { el.classList.add('tour-press'); await wait(180); el.classList.remove('tour-press', 'tour-hover') }
+  if (m.op === 'type' && el) {
+    el.focus()
+    const kind = el.tagName === 'SELECT' ? 'select' : el.type
+    const set = { date: () => new Date().toISOString().slice(0, 10), time: () => '23:15', 'datetime-local': () => new Date().toISOString().slice(0, 11) + '23:15',
+      number: () => (m.text || '').replace(/\D/g, '') || '2', select: () => ([...el.options].find(o => o.text.toLowerCase().includes((m.text || '').toLowerCase())) || el.options[1] || el.options[0])?.value,
+      checkbox: () => (el.checked = true, el.value), radio: () => (el.checked = true, el.value) }[kind]
+    if (set) { await wait(300); el.value = set() }
+    else {
+      el.value = ''
+      for (const ch of m.text || '') { el.value += ch; await wait(45 + Math.random() * 70) }
+    }
+  }
+  done({})
+})
 <\/script>`
+
+// Each element a visitor could use or read gets a data-tour id, the same one in
+// the inventory the tour writer sees and in the document the player shows.
+const TOURABLE = 'a, button, [data-goto], input, textarea, select, h1, h2, h3'
+function pageParts(id, html) {
+  const cached = S.parts?.get(id)
+  if (cached && cached.source === html) return cached
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+  const items = []
+  let n = 0
+  for (const el of doc.body.querySelectorAll(TOURABLE)) {
+    const tag = el.tagName.toLowerCase()
+    const input = tag === 'input' || tag === 'textarea' || tag === 'select'
+    const text = (input ? el.getAttribute('placeholder') || el.getAttribute('aria-label') || el.getAttribute('name') || el.type : el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 60)
+    if (!text || (el.closest('[data-goto]') && el.closest('[data-goto]') !== el && !input)) continue
+    const tid = `e${++n}`
+    el.setAttribute('data-tour', tid)
+    const goto = el.closest('[data-goto]')?.dataset.goto
+    if (items.length < 60) items.push({ id: tid, kind: input ? 'input' : /^h\d$/.test(tag) ? 'heading' : goto || tag === 'a' ? 'link' : 'button', text, ...(goto ? { goto } : {}) })
+  }
+  const parts = { source: html, html: doc.body.innerHTML, items }
+  ;(S.parts ||= new Map()).set(id, parts)
+  return parts
+}
 
 function pageDoc(id) {
   const t = S.theme || {}
   const heading = t.fonts?.heading || 'Georgia', body = t.fonts?.body || 'Inter'
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`
   const vars = Object.entries(t.vars || {}).map(([k, v]) => `${k}:${v};`).join('')
-  const layers = S.order.map(k => S.layers.get(k)).filter(l => l.page === id || l.page === '*')
-  const shared = name => layers.filter(l => l.page === '*' && l.id === name)
-  const mid = layers.filter(l => l.page === id || (l.page === '*' && l.id !== 'nav' && l.id !== 'footer'))
-  const html = [...shared('nav'), ...mid, ...shared('footer')].map(l => `<div data-layer="${l.id}">${clean(l.text)}</div>`).join('\n')
+  const html = pageParts(id, pageBody(id)).html
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com/3.4.17"><\/script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fam(heading)}&${fam(body)}&display=swap">
 <style>:root{--radius:${t.radius || '12px'};--font-heading:'${heading}',Georgia,serif;--font-body:'${body}',system-ui,sans-serif;${vars}}
 html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111);font-family:var(--font-body)}
 [data-goto]{cursor:pointer}
-body.hint [data-goto]{outline:3px solid #7c9cffcc;outline-offset:2px}</style>
+body.hint [data-goto]{outline:3px solid #7c9cffcc;outline-offset:2px}
+.tour-hover{outline:2px solid #7c9cffaa;outline-offset:3px;filter:brightness(1.06)}
+.tour-press{transform:scale(.96);transition:transform .1s}</style>
 ${PLAYER_SCRIPT}</head><body>${html}</body></html>`
 }
 
@@ -855,6 +924,7 @@ function fitDevice() {
   els.plShell.style.height = `${(mobile ? d.h : sh / scale) + border}px`
   // zoom, not a transform: clicks inside a transformed frame can miss their target
   els.plShell.style.zoom = scale
+  player.scale = scale
   els.plShell.style.left = `${(els.plStage.clientWidth / scale - d.w - border) / 2}px`
   els.plShell.style.top = `${20 / scale}px`
 }
@@ -866,14 +936,15 @@ function showPage(id, push = true) {
   els.plPage.value = id
   els.plBack.disabled = !player.history.length
   els.plFrame.style.opacity = 0
-  setTimeout(() => {
+  player.loaded = new Promise(resolve => setTimeout(() => {
     els.plFrame.srcdoc = pageDoc(id)
-    els.plFrame.onload = () => (els.plFrame.style.opacity = 1)
-  }, 120)
+    els.plFrame.onload = () => { els.plFrame.style.opacity = 1; resolve() }
+  }, 120))
 }
 
 function playerMessage(m) {
-  if (m.type === 'goto') showPage(m.target)
+  if (m.type === 'goto' && !tour.on) showPage(m.target)
+  if (m.type === 'tour:ok') tour.waiting.get(m.seq)?.(m)
 }
 
 function openPlayer(page) {
@@ -884,20 +955,239 @@ function openPlayer(page) {
   els.player.hidden = false
   setDevice(player.device, false)
   showPage(page || S.frames[0].id, false)
+  if (S.tEnd) loadTours()
 }
 
 function closePlayer() {
+  stopTour()
+  toggleTourMenu(false)
   els.player.hidden = true
   els.plFrame.srcdoc = ''
 }
 
 function setDevice(name, reload = true) {
+  if (reload) stopTour()
   player.device = name
   store.set('device', name)
   for (const b of document.querySelectorAll('#pl-device button')) b.classList.toggle('on', b.dataset.device === name)
   fitDevice()
   if (reload && player.page) showPage(player.page, false)
 }
+
+// ---------- Visitor tours
+// One model call (on the server) writes 3-4 people who use the finished site;
+// each step names an element on the page they're on, plus 2-3 ways of thinking
+// the same thought. Played back, a cursor glides to each element, the page
+// scrolls it into view, and the thought bubble cycles through the phrasings
+// while they decide, so it reads like someone muttering while they browse.
+
+const tour = { list: null, loading: null, error: '', on: false, id: 0, seq: 0, waiting: new Map(), x: 0, y: 0 }
+
+function loadTours(fresh = false) {
+  if (tour.run !== S.run) Object.assign(tour, { run: S.run, list: null, error: '' })
+  if (!S.run || (tour.list && !fresh) || tour.loading) return tour.loading
+  const run = S.run
+  const pages = S.frames.map(f => ({ id: f.id, title: f.title, items: pageParts(f.id, pageBody(f.id)).items }))
+  tour.error = ''
+  tour.loading = api(`/api/runs/${encodeURIComponent(run)}/tours`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pages, fresh }) })
+    .then(async res => {
+      const body = await res.json().catch(() => ({}))
+      if (S.run !== run) return
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
+      tour.list = body.tours
+    })
+    .catch(err => (tour.error = String(err.message || err)))
+    .finally(() => { tour.loading = null; renderTourMenu() })
+  renderTourMenu()
+  return tour.loading
+}
+
+function pageBody(id) {
+  const layers = S.order.map(k => S.layers.get(k)).filter(l => l.page === id || l.page === '*')
+  const shared = name => layers.filter(l => l.page === '*' && l.id === name)
+  const mid = layers.filter(l => l.page === id || (l.page === '*' && l.id !== 'nav' && l.id !== 'footer'))
+  return [...shared('nav'), ...mid, ...shared('footer')].map(l => `<div data-layer="${l.id}">${clean(l.text)}</div>`).join('\n')
+}
+
+function renderTourMenu() {
+  const m = els.plTourMenu
+  m.innerHTML = ''
+  const note = (text, cls = '') => { const d = document.createElement('div'); d.className = `note ${cls}`; d.textContent = text; m.append(d) }
+  if (tour.loading) return note('Writing a few visitors for this site', 'working')
+  if (tour.error) {
+    note(`Couldn't write visitors: ${tour.error}`)
+    const b = document.createElement('button'); b.textContent = 'Try again'; b.onclick = () => loadTours(true); m.append(b)
+    return
+  }
+  if (!tour.list) return note(S.tEnd ? 'Open again in a moment' : 'Visitors come once the build is done')
+  tour.list.forEach((t, i) => {
+    const b = document.createElement('button')
+    b.innerHTML = '<span class="em"></span><span><b></b><small></small></span>'
+    b.querySelector('.em').textContent = t.emoji
+    b.querySelector('b').textContent = `${t.name}${t.who ? `, ${t.who}` : ''}`
+    b.querySelector('small').textContent = t.goal
+    b.onclick = () => { toggleTourMenu(false); playTour(i) }
+    m.append(b)
+  })
+  const again = document.createElement('button')
+  again.innerHTML = '<span class="em">↻</span><span><small>Write new visitors</small></span>'
+  again.onclick = () => { tour.list = null; loadTours(true) }
+  m.append(again)
+}
+
+function toggleTourMenu(open = els.plTourMenu.hidden) {
+  els.plTourMenu.hidden = !open
+  if (open) { loadTours(); renderTourMenu() }
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// Ask the page frame to do something; resolves with its reply.
+function ask(op, extra = {}) {
+  const seq = ++tour.seq
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { tour.waiting.delete(seq); resolve({ box: null }) }, 3000)
+    tour.waiting.set(seq, m => { clearTimeout(timer); tour.waiting.delete(seq); resolve(m) })
+    els.plFrame.contentWindow?.postMessage({ type: 'tour', op, seq, ...extra }, '*')
+  })
+}
+
+// A point inside the frame, in window coordinates (the device is zoomed).
+function frameToScreen(x, y) {
+  const r = els.plFrame.getBoundingClientRect()
+  const k = r.width / els.plFrame.clientWidth || player.scale || 1
+  return [r.left + x * k, r.top + y * k]
+}
+
+function placeCursor(x, y) {
+  tour.x = x
+  tour.y = y
+  els.plCursor.style.transform = `translate(${x}px, ${y}px)`
+  els.plThink.classList.toggle('left', x > innerWidth - 300)
+}
+
+// Glide along a slight arc and ease out, the way a hand moves a mouse.
+function glide(x, y, live) {
+  const x0 = tour.x, y0 = tour.y, d = Math.hypot(x - x0, y - y0)
+  if (d < 2) return Promise.resolve()
+  const ms = Math.min(1100, 380 + d * 0.9), bend = (Math.random() < 0.5 ? -1 : 1) * Math.min(60, d * 0.12)
+  const nx = -(y - y0) / d, ny = (x - x0) / d
+  const t0 = performance.now()
+  return new Promise(resolve => {
+    const step = now => {
+      if (!live()) return resolve()
+      const t = Math.min(1, (now - t0) / ms), e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
+      const arc = Math.sin(Math.PI * e) * bend
+      placeCursor(x0 + (x - x0) * e + nx * arc, y0 + (y - y0) * e + ny * arc)
+      t < 1 ? requestAnimationFrame(step) : resolve()
+    }
+    requestAnimationFrame(step)
+  })
+}
+
+// Cycle a step's phrasings of one thought until the step is over.
+function think(lines, emoji, live) {
+  let i = 0, stop = false
+  const show = () => {
+    els.plThink.classList.add('swap')
+    setTimeout(() => {
+      els.plThink.innerHTML = '<span class="em"></span><span></span>'
+      els.plThink.firstChild.textContent = emoji
+      els.plThink.lastChild.textContent = lines[i % lines.length]
+      els.plThink.classList.remove('swap')
+    }, 160)
+  }
+  show()
+  const timer = setInterval(() => { if (stop || !live()) return clearInterval(timer); if (lines.length > 1) { i++; show() } }, 1500)
+  return { end: () => { stop = true; clearInterval(timer) }, min: lines.length * 1500 }
+}
+
+function press() {
+  els.plCursor.classList.add('press')
+  const ring = document.createElement('div')
+  ring.className = 'ring'
+  els.plCursor.append(ring)
+  setTimeout(() => { els.plCursor.classList.remove('press'); ring.remove() }, 500)
+}
+
+function personaBar(t, at, text) {
+  const p = els.plPersona
+  p.hidden = false
+  p.innerHTML = '<span></span><span class="who"><b></b> <small></small></span><span class="dots"></span><button>Stop</button>'
+  p.firstChild.textContent = t.emoji
+  p.querySelector('b').textContent = t.name
+  p.querySelector('small').textContent = text
+  p.querySelector('.dots').innerHTML = t.steps.map((_, i) => `<i class="${i < at ? 'on' : ''}"></i>`).join('')
+  p.querySelector('button').onclick = stopTour
+}
+
+async function playTour(index) {
+  const t = tour.list?.[index]
+  if (!t) return
+  stopTour()
+  const id = ++tour.id
+  const live = () => tour.on && tour.id === id
+  tour.on = true
+  player.history = []
+  showPage(t.steps[0].page, false)
+  await player.loaded
+  await sleep(500)
+  const st = els.plStage.getBoundingClientRect()
+  placeCursor(st.left + st.width / 2, st.bottom - 60)
+  els.plCursor.hidden = false
+  for (let i = 0; i < t.steps.length && live(); i++) {
+    const s = t.steps[i]
+    personaBar(t, i + 1, t.goal)
+    if (s.page !== player.page) { showPage(s.page); await player.loaded; await sleep(450) }
+    const thought = think(s.think.length ? s.think : ['hm…'], t.emoji, live)
+    const began = performance.now()
+    await sleep(500)
+    const { box } = live() ? await ask('locate', { el: s.el }) : {}
+    if (!live()) break
+    if (box) {
+      const [x, y] = frameToScreen(box[0] + Math.min(box[2] * 0.5, 40 + Math.random() * 30), box[1] + box[3] * 0.55)
+      await glide(x, y, live)
+    } else {
+      // folded away (a phone nav, say): look where a menu would be
+      const r = els.plFrame.getBoundingClientRect()
+      await glide(r.right - 36, r.top + 30, live)
+    }
+    if (!live()) break
+    if (s.do === 'hover' || s.do === 'click') await ask('hover', { el: s.el })
+    if (s.do === 'type') { press(); await sleep(250); await ask('type', { el: s.el, text: s.text }) }
+    await sleep(Math.max(0, thought.min - (performance.now() - began) - (s.do === 'click' ? 300 : 0)))
+    if (s.do === 'click' && live()) {
+      press()
+      await ask('press', { el: s.el })
+      await sleep(350)
+    }
+    thought.end()
+  }
+  if (!live()) return
+  personaBar(t, t.steps.length, t.end || 'done')
+  els.plThink.innerHTML = '<span class="em"></span><span></span>'
+  els.plThink.firstChild.textContent = t.emoji
+  els.plThink.lastChild.textContent = t.end || 'okay, done'
+  await sleep(3200)
+  if (!live()) return
+  const next = tour.list[(index + 1) % tour.list.length]
+  els.plCursor.hidden = true
+  const bar = els.plPersona
+  bar.querySelector('button').textContent = `Next: ${next.emoji} ${next.name} →`
+  bar.querySelector('button').onclick = () => playTour((index + 1) % tour.list.length)
+  tour.on = false
+}
+
+function stopTour() {
+  tour.on = false
+  tour.id++
+  els.plCursor.hidden = true
+  els.plThink.innerHTML = ''
+  els.plPersona.hidden = true
+}
+
+els.plTours.onclick = e => { e.stopPropagation(); toggleTourMenu() }
+document.addEventListener('click', e => { if (!els.plTourMenu.hidden && !e.target.closest('.tour-pick')) toggleTourMenu(false) })
 
 els.play.onclick = () => openPlayer()
 $('#pl-close').onclick = closePlayer

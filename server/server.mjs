@@ -12,6 +12,7 @@ import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, rea
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
+import { writeTours } from '../engine/tours.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -137,6 +138,27 @@ function listRuns() {
   })
 }
 
+// Visitor tours for a finished run, written once and kept with the run. The
+// canvas sends the inventory of each page, since it builds the pages.
+const touring = new Map()
+function tours(id, input) {
+  const file = join(runsDir, id, 'tours.json')
+  if (existsSync(file) && !input.fresh) return Promise.resolve(JSON.parse(readFileSync(file, 'utf8')))
+  if (touring.has(id)) return touring.get(id)
+  const start = readEvents(id)?.find(e => e.type === 'run:start')
+  const pages = Array.isArray(input.pages) ? input.pages.filter(p => p && p.id && Array.isArray(p.items)).slice(0, 8) : []
+  if (!start || !pages.length) return Promise.reject(new Error('no such run, or no pages sent'))
+  if (!models.planner.apiKey) return Promise.reject(new Error('no model key yet: start a build from Hermes once'))
+  const job = writeTours({ provider: provider('planner'), model: models.planner.model, brief: start.brief, pages })
+    .then(result => {
+      writeFileSync(file, JSON.stringify(result, null, 2))
+      return result
+    })
+    .finally(() => touring.delete(id))
+  touring.set(id, job)
+  return job
+}
+
 function tokenOk(given) {
   const a = Buffer.from(String(given || ''))
   const b = Buffer.from(token)
@@ -238,6 +260,22 @@ const server = createServer((req, res) => {
       return
     }
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(events))
+    return
+  }
+
+  const runTours = url.pathname.match(/^\/api\/runs\/([^/]+)\/tours$/)
+  if (runTours && req.method === 'POST' && RUN_ID.test(runTours[1])) {
+    let body = ''
+    req.on('data', c => (body += c))
+    req.on('end', () => {
+      let input = {}
+      try {
+        input = JSON.parse(body || '{}')
+      } catch {}
+      tours(runTours[1], input)
+        .then(result => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(result)))
+        .catch(err => res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    })
     return
   }
 

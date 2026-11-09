@@ -61,6 +61,7 @@ Optional. Setting `SWARM_STUDIO_API_KEY` bypasses the Hermes slots and uses that
 2. **Page planners.** One planner per page runs in parallel and breaks its page into layers. Each layer is queued the moment its JSON is complete, so agents start before planning finishes.
 3. **Agents.** A fixed pool of agents takes layers off the queue. Each streams HTML and Tailwind using the theme's CSS variables, plus a one-line note about what it is doing. Links between pages use `data-goto`, which becomes a wire on the canvas and a working link in the prototype.
 4. **Canvas.** Each page is a sandboxed frame. The canvas talks to the frames only by `postMessage`, so it works inside Hermes Desktop's opaque-origin `SandboxedFrame`.
+5. **Visitors.** In Play mode, **Watch a visitor** asks the planner model for 3–4 people with different goals (one wants to buy or book, one is unsure and ends up calling, one reads about the company). Their scripts can only use links, buttons, inputs and headings that exist on each page, and are checked against them. A cursor then acts each one out on Desktop or Mobile, with a thought bubble that cycles through two or three ways of saying the same thought. Scripts are saved with the run.
 
 Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus each layer's HTML).
 

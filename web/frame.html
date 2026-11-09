@@ -106,10 +106,10 @@
       }
     }
     const text = JSON.stringify(geo)
-    if (text !== last) {
-      last = text
-      parent.postMessage(geo, '*')
-    }
+    if (text === last) return false
+    last = text
+    parent.postMessage(geo, '*')
+    return true
   }
 
   addEventListener('message', e => {
@@ -120,7 +120,12 @@
   })
   addEventListener('DOMContentLoaded', () => {
     parent.postMessage({ type: 'ready' }, '*')
-    setInterval(report, 80)
+    // every 80ms while the page changes; once it has been still for 2s, every 0.5s
+    let still = 0
+    setInterval(() => {
+      if (still > 25 && still++ % 6) return
+      still = report() ? 0 : still + 1
+    }, 80)
   })
 })()
 </script>
