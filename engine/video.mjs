@@ -9,14 +9,15 @@
 import { spawn, execFile } from 'node:child_process'
 import { CAST, MOODS } from './sound.mjs'
 import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
-import { dirname, join, extname } from 'node:path'
+import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
+import { dirname, join, extname, basename } from 'node:path'
 import { streamChat } from './llm.mjs'
+import { checkLook, lookPrompt, lookCss, paletteVars, paletteCss, textureLayer, revealTween, cutTween, cutLayer, cutCss, rng, hash, MOTIONS, CUTS } from './look.mjs'
 
 const HYPERFRAMES = 'hyperframes@0.9.26'
 const W = 1920, H = 1080, FPS = 30
-const KINDS = new Set(['open', 'image', 'split', 'list', 'quote', 'cta'])
-const LENGTH = { open: 3.2, image: 3.4, split: 3.6, list: 4.2, quote: 3.4, cta: 3.6 }
+const KINDS = new Set(['open', 'image', 'split', 'list', 'quote', 'cta', 'stat', 'mosaic', 'clip'])
+const LENGTH = { open: 3.2, image: 3.4, split: 3.6, list: 4.2, quote: 3.4, cta: 3.6, stat: 3.2, mosaic: 3.8, clip: 4.4 }
 
 // Video plans: each one changes what the storyboard writer is asked for, the
 // pace, the cut between scenes and the music. A person's own idea rides on top.
@@ -27,7 +28,7 @@ export const STYLES = {
   teaser: { label: 'Teaser', transition: 'zoom', pace: 0.9, rule: 'A teaser: only 4 scenes, open first and cta last. Hint, do not explain; build curiosity and hold back details.' },
   story: { label: 'Customer story', transition: 'slide', pace: 1.05, rule: 'A short story told from one customer\'s point of view: their moment before, what they found here, how it felt. Use the second voice for the customer\'s own lines (two or three), the narrator for the rest.' },
 }
-export const TRANSITIONS = ['wipe', 'fade', 'zoom', 'slide', 'flash']
+export const TRANSITIONS = CUTS
 
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
@@ -57,23 +58,37 @@ export function collect(events, runDir) {
     if (existsSync(file) && !images.some(i => i.file === file)) images.push({ n: images.length + 1, gen: clip(e.gen, 160), page: e.page, file })
   }
   const brand = clip((pages[0]?.title || start.brief || 'Our site').split(/\s[—–|:-]\s/)[0], 40)
-  return { brief: start.brief || '', agents: start.agents || [], theme, brand, copy: copy.slice(0, 5000), images }
+  // footage recorded from the running app (gameplay, a scroll through the site), when there is some
+  const clips = []
+  try {
+    for (const f of JSON.parse(readFileSync(join(runDir, 'footage', 'footage.json'), 'utf8')).clips || []) {
+      const file = join(runDir, 'footage', basename(String(f.file || '')))
+      if (f.file && existsSync(file)) clips.push({ n: clips.length + 1, what: clip(f.what, 160), label: clip(f.label, 20), seconds: Number(f.seconds) || 0, from: Number(f.from) || 0, file })
+    }
+  } catch {}
+  return { brief: start.brief || '', agents: start.agents || [], theme, brand, copy: copy.slice(0, 5000), images, clips }
 }
 
 // ---------- the storyboard
-function storyPrompt(c, { style = 'promo', idea = '', shots = false } = {}) {
+function storyPrompt(c, { style = 'promo', idea = '', shots = false, seed = 0 } = {}) {
+  const clips = c.clips || []
   return [
     {
       role: 'system',
-      content: `You are a motion designer cutting a short promo video for a website a team of AI agents just built. You write the storyboard; fixed animation templates in the site's own theme play it.
+      content: `You are a motion designer cutting a short promo video for a website a team of AI agents just built. You write the storyboard and its art direction; animation templates in the site's own colours play it. Every video you make should feel designed for this one build: pick a look, a rhythm and a scene order that fit it, and never fall back on the same safe layout every time.
 
 Return JSON only:
-{"cast":{"narrator":"<voice id>","second":"<voice id, or null>"},"music":"gentle|snappy","scenes":[{"kind":"open|image|split|list|quote|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,${shots ? '"shot":"a new picture to make for this scene",' : ''}"items":["...","...","..."],"say":"what is said over this scene","who":"narrator|second"}],"fx":["sparkle|stars|fireworks|breeze|confetti|snow"]}
+{"look":{...},"cast":{"narrator":"<voice id>","second":"<voice id, or null>"},"music":"gentle|snappy","scenes":[{"kind":"open|image|split|mosaic|list|stat|quote${clips.length ? '|clip' : ''}|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,"images":[1,2,3],${shots ? '"shot":"a new picture to make for this scene",' : ''}${clips.length ? '"clip":1,"from":0,' : ''}"items":["...","...","..."],"say":"what is said over this scene","who":"narrator|second"}],"fx":["sparkle|stars|fireworks|breeze|confetti|snow"]}
+
+${lookPrompt()}
 
 Scene kinds:
 - open: the brand reveal. headline = the brand name; sub = what it is, under 9 words. No image.
 - image: a full-screen picture with a short headline over it. Needs "image"${shots ? ' or "shot"' : ''}.
 - split: picture on one side, headline and sub on the other. Needs "image"${shots ? ' or "shot"' : ''}.
+- mosaic: 2 or 3 pictures side by side with one short headline. Needs "images" (numbers from the list).
+- stat: one big number that is really on the site (a price, a count, a year, a distance), as the headline ("26", "$12", "4.9"); sub says what it counts. Skip it if the site has no real number.${clips.length ? `
+- clip: real footage recorded from the running build (see Footage), with a short headline over it. Needs "clip" (a number from the Footage list) and optional "from" (seconds into the footage). Use every clip once; gameplay footage is the strongest proof the thing is real, so give it a scene of its own after the open.` : ''}
 - list: headline plus exactly 3 short items (2-4 words each): features, steps, or offers from the site.
 - quote: one short, punchy line in quotes (a promise or a customer-style line from the site's copy). headline = the quote, under 12 words.
 - cta: the closing call to action. headline under 6 words; sub = the action, like "Subscribe at lumeroasters.pt" or "Book your first visit"; kicker can be the brand.
@@ -81,7 +96,7 @@ Scene kinds:
 Rules:
 - If the person gives an idea, it leads: its places, people, moments and mood come first and replace the site's own examples where they differ (if they say Hawaii, the video is about Hawaii, not other routes from the site). The site still gives the brand name, the offer and the call to action.${shots ? `
 - "shot": a new picture made for this video, for an image or split scene, instead of "image". Use shots for what the idea asks to see that no listed picture shows (a plane in flight, a person on a beach), and to give a site with few pictures some: 2 to 4 shots, each a concrete photo description under 30 words (subject, place, light, mood, camera) with the brand's colours in the light or setting. A real scene, never a website, app, screen, sign or logo, and no brand names in it.` : ''}
-- 5 to 7 scenes. First is open, last is cta. Vary the kinds; use each picture at most once and only numbers from the list.
+- 5 to 8 scenes. First is open, last is cta. Vary the kinds; use each picture at most once and only numbers from the list.
 - Use the site's real names, offers and voice. Headlines under 7 words except quotes. No exclamation marks, no emoji, no hashtags.
 - "say" is the voiceover, read aloud by a warm narrator: one natural spoken sentence per scene, 5 to 14 words, that adds to the words on screen rather than repeating them. Write numbers and dates the way they are spoken ("March twentieth"). The last scene's line is the invitation.
 - Cast the voices to fit the brand, the art direction and the audience: "narrator" reads most lines. A "second" voice is optional: use it for one or two lines that sound like a different person (a customer, a vendor, a host), never for the invitation. Voices:
@@ -91,13 +106,13 @@ ${Object.entries(CAST).map(([id, d]) => `  ${id}: ${d}`).join('\n')}
     },
     {
       role: 'user',
-      content: `${idea ? `The person's idea for this video (it leads; follow it closely): ${idea}\n\n` : ''}Video plan: ${(STYLES[style] || STYLES.promo).rule}\n\nBrand: ${c.brand}\nBrief: ${c.brief}\nArt direction: ${c.theme.direction || ''}\n\nPictures:\n${c.images.map(i => `${i.n}. (${i.page}) ${i.gen}`).join('\n') || 'none'}\n\nThe site:\n${c.copy}`
+      content: `${idea ? `The person's idea for this video (it leads; follow it closely): ${idea}\n\n` : ''}${style === 'auto' ? 'Video plan: your choice. Pick the shape that suits this build best (a promo, kinetic type, a teaser, a story, a slideshow) and say which in "plan".' : `Video plan: ${(STYLES[style] || STYLES.promo).rule}`}\nVariation seed ${seed}: let it push you off the first idea that comes to mind (a different layout family, opening or rhythm than the obvious one).\n\nBrand: ${c.brand}\nBrief: ${c.brief}\nArt direction: ${c.theme.direction || ''}\n\nPictures:\n${c.images.map(i => `${i.n}. (${i.page}) ${i.gen}`).join('\n') || 'none'}${clips.length ? `\n\nFootage:\n${clips.map(x => `${x.n}. ${x.what} (${x.seconds.toFixed(0)} s)`).join('\n')}` : ''}\n\nThe site:\n${c.copy}`
     }
   ]
 }
 
-export function checkStory(raw, c, { shots = false } = {}) {
-  const used = new Set()
+export function checkStory(raw, c, { shots = false, seed = Date.now() } = {}) {
+  const used = new Set(), usedClips = new Set()
   let shot = 0
   const scenes = []
   for (const s of raw.scenes || []) {
@@ -112,6 +127,17 @@ export function checkStory(raw, c, { shots = false } = {}) {
     }
     const scene = { kind, kicker: clip(s.kicker, 28), headline: clip(s.headline, kind === 'quote' ? 90 : 56), sub: clip(s.sub, 90), say: clip(s.say, 140), who: s.who === 'second' ? 'second' : 'narrator' }
     if (kind === 'image' || kind === 'split') { if (image) scene.image = image; else scene.shot = clip(s.shot, 220) }
+    if (kind === 'mosaic') {
+      scene.images = [...new Set((Array.isArray(s.images) ? s.images : []).map(Number))].filter(n => c.images.some(i => i.n === n) && !used.has(n)).slice(0, 3)
+      if (scene.images.length < 2) scene.kind = 'quote'
+      else scene.images.forEach(n => used.add(n))
+    }
+    if (kind === 'stat' && !/\d/.test(scene.headline)) scene.kind = 'quote'
+    if (kind === 'clip') {
+      const n = Number(s.clip)
+      if ((c.clips || []).some(x => x.n === n) && !usedClips.has(n)) { usedClips.add(n); scene.clip = n; scene.from = Math.max(0, Number(s.from) || 0) }
+      else scene.kind = 'quote'
+    }
     if (kind === 'list') {
       scene.items = (Array.isArray(s.items) ? s.items : []).map(x => clip(x, 32)).filter(Boolean).slice(0, 3)
       if (scene.items.length < 2) scene.kind = 'quote'
@@ -127,26 +153,32 @@ export function checkStory(raw, c, { shots = false } = {}) {
   out.cast = { narrator, second }
   out.music = MOODS.includes(raw.music) ? raw.music : null
   out.fx = (Array.isArray(raw.fx) ? raw.fx : []).filter(f => FX[f])
+  out.look = checkLook(raw.look || {}, seed)
+  if (STYLES[raw.plan]) out.plan = raw.plan
+  // footage the writer forgot still makes the cut, right after the open
+  for (const x of c.clips || []) if (!usedClips.has(x.n) && out.length < 9) out.splice(1, 0, { kind: 'clip', clip: x.n, from: x.from || 0, kicker: x.label || 'Live', headline: clip(x.what.split(/[.,;]/)[0], 40) || 'See it live', sub: '', say: '', who: 'narrator' })
   return out
 }
 
 // Without a model: brand, each picture with its page title, a closing card.
-export function fallbackStory(c) {
+export function fallbackStory(c, seed = Date.now()) {
   const titles = c.copy.match(/^PAGE \S+ "([^"]+)"/gm)?.map(l => l.replace(/^PAGE \S+ "|"$/g, '').split(/\s[—–|:-]\s/).pop()) || []
   const scenes = [{ kind: 'open', kicker: '', headline: c.brand, sub: clip(c.brief, 60) }]
   c.images.slice(0, 3).forEach((img, i) => scenes.push({ kind: i % 2 ? 'split' : 'image', kicker: c.brand, headline: clip(titles[i + 1] || titles[0] || c.brand, 40), sub: '', image: img.n }))
   if (titles.length > 2) scenes.push({ kind: 'list', kicker: 'Inside', headline: c.brand, sub: '', items: titles.slice(1, 4).map(t => clip(t, 30)) })
+  for (const x of c.clips || []) scenes.splice(1, 0, { kind: 'clip', clip: x.n, from: x.from || 0, kicker: x.label || 'Live', headline: clip(x.what.split(/[.,;]/)[0], 40) || 'See it live', sub: '' })
   scenes.push({ kind: 'cta', kicker: c.brand, headline: 'Come and see', sub: 'Visit the site' })
+  scenes.look = checkLook({}, seed)
   // without a writer, the narrator reads what is on screen
   for (const x of scenes) x.say = clip([x.headline, x.sub].filter(Boolean).join('. '), 140)
   return scenes
 }
 
-export async function writeStory({ provider, model, c, signal, style, idea, shots = false }) {
-  const res = await streamChat(provider, { trace: { kind: 'video' }, model, messages: storyPrompt(c, { style, idea, shots }), maxTokens: 1500, temperature: 0.7, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
+export async function writeStory({ provider, model, c, signal, style, idea, shots = false, seed = Date.now() }) {
+  const res = await streamChat(provider, { trace: { kind: 'video' }, model, messages: storyPrompt(c, { style, idea, shots, seed: seed % 1000 }), maxTokens: 2200, temperature: 0.95, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal })
   const s = res.text.indexOf('{'), e = res.text.lastIndexOf('}')
   if (s < 0 || e <= s) throw new Error('no JSON in the storyboard')
-  const scenes = checkStory(JSON.parse(res.text.slice(s, e + 1)), c, { shots })
+  const scenes = checkStory(JSON.parse(res.text.slice(s, e + 1)), c, { shots, seed })
   if (scenes.length < 3) throw new Error('the storyboard was too thin')
   return scenes
 }
@@ -217,72 +249,120 @@ const words = (s, cls = 'w') => esc(s).split(' ').map(w => `<span class="${cls}"
 const size = (s, big) => { const n = s.length; return big ? (n <= 14 ? 190 : n <= 24 ? 150 : 118) : (n <= 20 ? 128 : n <= 36 ? 104 : 84) }
 
 // Scene lengths: the template's own, stretched to fit a voiceover line when there is one.
-export const sceneLength = (s, voice, pace = 1) => Math.max(Number((LENGTH[s.kind] * pace).toFixed(2)), voice ? Number((voice + 0.9).toFixed(2)) : 0)
+export const sceneLength = (s, voice, pace = 1) => Math.max(Number(((LENGTH[s.kind] || 3.4) * pace).toFixed(2)), voice ? Number((voice + 0.9).toFixed(2)) : 0)
 export const VOICE_LEAD = 0.35
 
-export function composition(scenes, c, lengths = [], transition = 'wipe') {
-  const v = { '--background': '#f7f3ec', '--foreground': '#1b1714', '--primary': '#b4472a', '--primary-foreground': '#fff', '--muted': '#ece4d8', '--muted-foreground': '#6e5b4c', '--accent': '#1f5871', '--card': '#fffbf3', ...(c.theme.vars || {}) }
-  const heading = c.theme.fonts?.heading || 'Fraunces', body = c.theme.fonts?.body || 'Inter'
-  const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700`
+export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn = scenes.look) {
+  // a plan's cut, when the person picked one, leads; otherwise the look's own cuts
+  const look = lookIn || checkLook({ layout: 'classic', cuts: [transition] }, 1)
+  const cuts = lookIn && !look.pinned ? look.cuts : [transition]
+  const r = rng(look.seed || 1)
+  const base = { '--background': '#f7f3ec', '--foreground': '#1b1714', '--primary': '#b4472a', '--primary-foreground': '#fff', '--muted': '#ece4d8', '--muted-foreground': '#6e5b4c', '--accent': '#1f5871', '--card': '#fffbf3', ...(c.theme.vars || {}) }
+  const v = paletteVars(look, base)
+  const heading = look.font && look.font !== 'theme' ? look.font : (c.theme.fonts?.heading || 'Fraunces'), body = c.theme.fonts?.body || 'Inter'
+  const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700;800`
   const img = n => c.images.find(i => i.n === n)
+  const clipOf = n => (c.clips || []).find(x => x.n === n)
+  const sz = (s, big) => size(s, big) * look.scale | 0
   let t = 0, splits = 0
   const html = [], tl = []
   scenes.forEach((s, i) => {
-    const d = lengths[i] || LENGTH[s.kind], id = `s${i}`, at = x => (t + x).toFixed(2)
+    const d = lengths[i] || LENGTH[s.kind] || 3.4, id = `s${i}`, at = x => (t + x).toFixed(2)
     const kicker = s.kicker ? `<div class="kicker" id="${id}k">${esc(s.kicker)}</div>` : ''
-    const enter = (sel, from, x, extra = '') => tl.push(`tl.fromTo('${sel}', ${from}, {opacity:1, x:0, y:0, scale:1, duration:.8, ease:'power3.out'${extra}}, ${at(x)})`)
-    const rise = (x) => tl.push(`tl.fromTo('#${id} .w > span', {y:'110%'}, {y:'0%', duration:.75, ease:'power4.out', stagger:.07}, ${at(x)})`)
+    const ease = MOTIONS[look.motion] || 'power3.out'
+    const enter = (sel, from, x, extra = '') => tl.push(`tl.fromTo('${sel}', ${from}, {opacity:1, x:0, y:0, scale:1, duration:.8, ease:'${look.motion === 'glitch' ? 'power3.out' : ease}'${extra}}, ${at(x)})`)
+    const rise = (x, sel = `#${id} .head .w > span`) => tl.push(revealTween(look, sel, at(x), s.headline.split(' ').length))
+    const push = (r0 = 1.18) => `{scale:${r0}}, {scale:1, duration:${(d + 0.4).toFixed(2)}, ease:'none'}`
     if (s.kind === 'open') {
-      html.push(`<div id="${id}" class="clip scene center" data-start="${t}" data-duration="${d}">${kicker}<h1 class="head" style="font-size:${size(s.headline, true)}px">${words(s.headline)}</h1><div class="rule" id="${id}r"></div><p class="sub" id="${id}s">${esc(s.sub)}</p></div>`)
+      html.push(`<div id="${id}" class="clip scene center" data-start="${t}" data-duration="${d}">${kicker}<h1 class="head" style="font-size:${sz(s.headline, true)}px">${words(s.headline)}</h1><div class="rule" id="${id}r"></div><p class="sub" id="${id}s">${esc(s.sub)}</p></div>`)
       rise(0.25)
       tl.push(`tl.fromTo('#${id}r', {scaleX:0}, {scaleX:1, duration:.9, ease:'power2.inOut'}, ${at(0.9)})`)
       enter(`#${id}s`, '{opacity:0, y:30}', 1.2)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.1)
     } else if (s.kind === 'image') {
-      html.push(`<div id="${id}" class="clip scene" data-start="${t}" data-duration="${d}"><img id="${id}i" class="full" src="${img(s.image).name}"><div class="shade"></div><div class="over">${kicker}<h2 class="head light" style="font-size:${size(s.headline)}px">${words(s.headline)}</h2>${s.sub ? `<p class="sub light" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>`)
-      tl.push(`tl.fromTo('#${id}i', {scale:1.18}, {scale:1, duration:${d + 0.4}, ease:'none'}, ${at(0)})`)
+      html.push(`<div id="${id}" class="clip scene" data-start="${t}" data-duration="${d}"><div class="frame" id="${id}f"><img id="${id}i" class="full" src="${img(s.image).name}"></div><div class="shade"></div><div class="over">${kicker}<div><h2 class="head light" style="font-size:${sz(s.headline)}px">${words(s.headline)}</h2>${s.sub ? `<p class="sub light" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div></div>`)
+      tl.push(`tl.fromTo('#${id}i', ${push(look.motion === 'drift' ? 1.28 : 1.18)}, ${at(0)})`)
+      if (look.layout === 'collage' || look.layout === 'brutalist') enter(`#${id}f`, `{opacity:0, y:${r(-60, 60) | 0}, scale:.85}`, 0.05)
       rise(0.45)
       if (kicker) enter(`#${id}k`, '{opacity:0, x:-30}', 0.3)
       if (s.sub) enter(`#${id}s`, '{opacity:0, y:24}', 1.1)
     } else if (s.kind === 'split') {
       const left = splits++ % 2 === 1
-      html.push(`<div id="${id}" class="clip scene split${left ? ' flip' : ''}" data-start="${t}" data-duration="${d}"><div class="pic" id="${id}p"><img id="${id}i" src="${img(s.image).name}"></div><div class="copy">${kicker}<h2 class="head" style="font-size:${size(s.headline) * 0.82 | 0}px">${words(s.headline)}</h2>${s.sub ? `<p class="sub" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>`)
-      tl.push(`tl.fromTo('#${id}p', {width:0}, {width:${W / 2}, duration:1, ease:'power3.inOut'}, ${at(0.05)})`)
+      html.push(`<div id="${id}" class="clip scene split${left ? ' flip' : ''}" data-start="${t}" data-duration="${d}"><div class="pic" id="${id}p"><img id="${id}i" src="${img(s.image).name}"></div><div class="copy">${kicker}<h2 class="head" style="font-size:${sz(s.headline) * 0.82 | 0}px">${words(s.headline)}</h2>${s.sub ? `<p class="sub" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>`)
+      if (look.layout === 'collage') enter(`#${id}p`, '{opacity:0, y:120, scale:.8}', 0.05, ", ease:'back.out(1.6)'")
+      else tl.push(`tl.fromTo('#${id}p', {width:0}, {width:${look.layout === 'collage' ? W / 2 - 120 : W / 2}, duration:1, ease:'power3.inOut'}, ${at(0.05)})`)
       tl.push(`tl.fromTo('#${id}i', {scale:1.25}, {scale:1.02, duration:${d}, ease:'power1.out'}, ${at(0)})`)
       rise(0.6)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.5)
       if (s.sub) enter(`#${id}s`, '{opacity:0, y:24}', 1.3)
     } else if (s.kind === 'list') {
-      html.push(`<div id="${id}" class="clip scene list" data-start="${t}" data-duration="${d}"><div class="copy">${kicker}<h2 class="head" style="font-size:${size(s.headline)}px">${words(s.headline)}</h2></div><ol>${s.items.map((x, j) => `<li id="${id}l${j}"><b>0${j + 1}</b>${esc(x)}</li>`).join('')}</ol></div>`)
+      html.push(`<div id="${id}" class="clip scene list" data-start="${t}" data-duration="${d}"><div class="copy">${kicker}<h2 class="head" style="font-size:${sz(s.headline)}px">${words(s.headline)}</h2></div><ol>${s.items.map((x, j) => `<li id="${id}l${j}" style="--tilt:${r(-4, 4).toFixed(1)}deg"><b>0${j + 1}</b>${esc(x)}</li>`).join('')}</ol></div>`)
       rise(0.2)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.1)
-      s.items.forEach((_, j) => enter(`#${id}l${j}`, '{opacity:0, x:80}', 0.9 + j * 0.35))
+      const from = look.layout === 'swiss' ? '{opacity:0, y:120}' : look.layout === 'collage' ? '{opacity:0, scale:.5}' : '{opacity:0, x:80}'
+      s.items.forEach((_, j) => enter(`#${id}l${j}`, from, 0.9 + j * 0.35, look.layout === 'collage' ? ", ease:'back.out(2)'" : ''))
     } else if (s.kind === 'quote') {
-      html.push(`<div id="${id}" class="clip scene center tint" data-start="${t}" data-duration="${d}"><div class="mark" id="${id}m">“</div><h2 class="head quote" style="font-size:${size(s.headline) * 0.85 | 0}px">${words(s.headline)}</h2>${kicker ? `<div class="kicker" id="${id}k">— ${esc(s.kicker)}</div>` : ''}</div>`)
+      html.push(`<div id="${id}" class="clip scene center tint" data-start="${t}" data-duration="${d}"><div class="mark" id="${id}m">“</div><h2 class="head quote" style="font-size:${sz(s.headline) * 0.85 | 0}px">${words(s.headline)}</h2>${kicker ? `<div class="kicker" id="${id}k">— ${esc(s.kicker)}</div>` : ''}</div>`)
       enter(`#${id}m`, '{opacity:0, scale:.4}', 0.1, ", ease:'back.out(2)'")
-      tl.push(`tl.fromTo('#${id} .w > span', {y:'110%'}, {y:'0%', duration:.6, ease:'power3.out', stagger:.05}, ${at(0.35)})`)
+      rise(0.35)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:20}', 1.4)
+    } else if (s.kind === 'stat') {
+      const m = s.headline.match(/^(\D*)(\d[\d,.]*)(.*)$/)
+      const num = m ? Number(m[2].replace(/,/g, '')) : NaN
+      html.push(`<div id="${id}" class="clip scene center stat" data-start="${t}" data-duration="${d}">${kicker}<div class="num head" id="${id}n">${Number.isFinite(num) ? esc(`${m[1]}0${m[3]}`) : words(s.headline)}</div>${s.sub ? `<p class="sub" id="${id}s">${esc(s.sub)}</p>` : ''}</div>`)
+      if (Number.isFinite(num)) {
+        const dec = (m[2].split('.')[1] || '').length
+        tl.push(`tl.fromTo({v:0}, {v:0}, {v:${num}, duration:1.3, ease:'power2.out', onUpdate(){ document.getElementById('${id}n').textContent = ${JSON.stringify(m[1])} + this.targets()[0].v.toFixed(${dec}) + ${JSON.stringify(m[3])} }}, ${at(0.3)})`)
+        enter(`#${id}n`, '{opacity:0, scale:.7}', 0.2)
+      } else rise(0.3, `#${id} .w > span`)
+      if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.1)
+      if (s.sub) enter(`#${id}s`, '{opacity:0, y:24}', 1.2)
+    } else if (s.kind === 'mosaic') {
+      const pics = s.images.map(img)
+      const n = pics.length
+      // tile boxes for 2 or 3 pictures, a little different every run
+      const g = 28, top = look.layout === 'cinematic' ? 160 : 70, h = H - (look.layout === 'cinematic' ? 480 : 330)
+      const boxes = n === 2
+        ? (r() < 0.5 ? [[70, top, W * 0.58, h], [70 + W * 0.58 + g, top, W - 140 - W * 0.58 - g, h]] : [[70, top, W * 0.4, h], [70 + W * 0.4 + g, top, W - 140 - W * 0.4 - g, h]])
+        : (r() < 0.5 ? [[70, top, W * 0.5, h], [70 + W * 0.5 + g, top, W - 140 - W * 0.5 - g, (h - g) / 2], [70 + W * 0.5 + g, top + (h + g) / 2, W - 140 - W * 0.5 - g, (h - g) / 2]]
+          : [[70, top, (W - 140 - 2 * g) / 3, h], [70 + (W - 140 - 2 * g) / 3 + g, top, (W - 140 - 2 * g) / 3, h], [70 + 2 * ((W - 140 - 2 * g) / 3 + g), top, (W - 140 - 2 * g) / 3, h]])
+      html.push(`<div id="${id}" class="clip scene mosaic" data-start="${t}" data-duration="${d}">${pics.map((p, j) => `<div class="tile" id="${id}t${j}" style="left:${boxes[j][0] | 0}px;top:${boxes[j][1] | 0}px;width:${boxes[j][2] | 0}px;height:${boxes[j][3] | 0}px;--tilt:${r(-3, 3).toFixed(1)}deg"><img id="${id}i${j}" src="${p.name}"></div>`).join('')}<div class="mcopy">${kicker}<h2 class="head" style="font-size:${sz(s.headline) * 0.7 | 0}px">${words(s.headline)}</h2></div></div>`)
+      pics.forEach((_, j) => {
+        enter(`#${id}t${j}`, look.layout === 'swiss' ? '{opacity:0, y:140}' : '{opacity:0, scale:.82}', 0.1 + j * 0.22, look.layout === 'collage' ? ", ease:'back.out(1.7)'" : '')
+        tl.push(`tl.fromTo('#${id}i${j}', {scale:1.2}, {scale:1.02, duration:${d}, ease:'none'}, ${at(0)})`)
+      })
+      rise(0.7)
+      if (kicker) enter(`#${id}k`, '{opacity:0, x:-30}', 0.6)
+    } else if (s.kind === 'clip') {
+      const f = clipOf(s.clip)
+      const from = Math.max(0, Math.min(Number(s.from) || f.from || 0, Math.max(0, (f.seconds || d) - d)))
+      // footage is timed by itself (HyperFrames times the <video>, never its wrapper); the scene's words sit over it
+      html.push(`<video id="${id}v" class="clip footage" src="${f.name}" data-start="${t}" data-duration="${d}" data-media-start="${from.toFixed(2)}" muted playsinline></video>`)
+      html.push(`<div id="${id}" class="clip scene clipscene" data-start="${t}" data-duration="${d}"><div class="shade"></div><div class="over">${kicker}<div><h2 class="head light" style="font-size:${sz(s.headline) * 0.9 | 0}px">${words(s.headline)}</h2>${s.sub ? `<p class="sub light" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div><div class="rec">● ${esc(f.label || 'LIVE')}</div></div>`)
+      tl.push(`tl.fromTo('#${id}v', {scale:1.08}, {scale:1, duration:${(d + 0.4).toFixed(2)}, ease:'none'}, ${at(0)})`)
+      rise(0.5)
+      if (kicker) enter(`#${id}k`, '{opacity:0, x:-30}', 0.35)
+      if (s.sub) enter(`#${id}s`, '{opacity:0, y:24}', 1.1)
     } else {
-      html.push(`<div id="${id}" class="clip scene center cta" data-start="${t}" data-duration="${d}">${kicker}<h2 class="head" style="font-size:${size(s.headline, true) * 0.8 | 0}px">${words(s.headline)}</h2>${s.sub ? `<div class="btn" id="${id}b">${esc(s.sub)}</div>` : ''}</div>`)
+      html.push(`<div id="${id}" class="clip scene center cta" data-start="${t}" data-duration="${d}">${kicker}<h2 class="head" style="font-size:${sz(s.headline, true) * 0.8 | 0}px">${words(s.headline)}</h2>${s.sub ? `<div class="btn" id="${id}b">${esc(s.sub)}</div>` : ''}</div>`)
       rise(0.3)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.2)
       if (s.sub) enter(`#${id}b`, '{opacity:0, scale:.6}', 1.1, ", ease:'back.out(1.8)'")
     }
-    // the cut into this scene
+    // the cut into this scene: the look's cuts take turns, picked by the seed
     if (i > 0) {
-      if (transition === 'wipe') tl.push(`tl.fromTo('#wipe', {x:-${W}}, {x:${W}, duration:.7, ease:'power2.inOut'}, ${(t - 0.35).toFixed(2)})`)
-      else if (transition === 'fade') tl.push(`tl.fromTo('#${id}', {opacity:0}, {opacity:1, duration:.7, ease:'power1.inOut'}, ${t.toFixed(2)})`)
-      else if (transition === 'zoom') tl.push(`tl.fromTo('#${id}', {opacity:0, scale:1.22}, {opacity:1, scale:1, duration:.6, ease:'power3.out'}, ${t.toFixed(2)})`)
-      else if (transition === 'slide') tl.push(`tl.fromTo('#${id}', {x:${W}}, {x:0, duration:.7, ease:'power3.inOut'}, ${t.toFixed(2)})`)
-      else if (transition === 'flash') tl.push(`tl.fromTo('#wipe', {x:0, opacity:.95}, {x:0, opacity:0, duration:.35, ease:'power2.out', immediateRender:false}, ${t.toFixed(2)})`)
+      const cut = cuts.length === 1 ? cuts[0] : cuts[(i + (look.seed % cuts.length)) % cuts.length]
+      tl.push(...cutTween(cut, s.kind === 'clip' ? `${id}, #${id}v` : id, t, W, H))
     }
     t += d
   })
   const total = Number(t.toFixed(2))
   const fx = fxLayer(scenes.fx, total, v)
-  tl.push(...fx.tl)
+  const tex = textureLayer(look, total)
+  tl.push(...fx.tl, ...tex.tl)
   return {
     seconds: total,
+    look,
     html: `<!doctype html>
 <html><head><meta charset="utf-8">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
@@ -295,15 +375,17 @@ html,body{width:${W}px;height:${H}px;overflow:hidden;background:var(--background
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 160px}
 .head{font-family:var(--fh);font-weight:600;line-height:1.02;letter-spacing:-.02em;max-width:1500px}
 .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.08em}.w>span{display:inline-block}
+.R-blur .w,.R-pop .w,.R-glitch .w,.R-slide .w{overflow:visible}
 .kicker{font:700 26px/1 var(--fb);letter-spacing:.22em;text-transform:uppercase;color:var(--primary);margin-bottom:36px}
 .sub{font-size:40px;line-height:1.35;color:var(--muted-foreground);margin-top:34px;max-width:1100px}
 .rule{width:220px;height:6px;background:var(--primary);margin-top:44px;transform-origin:left center;border-radius:3px}
+.frame{position:absolute;inset:0;overflow:hidden}
 .full{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .shade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,rgba(0,0,0,.72))}
-.over{position:absolute;left:140px;right:140px;bottom:130px}
+.over{position:absolute;left:140px;right:140px;bottom:130px;z-index:3}
 .light{color:#fff}.over .kicker{color:#fff;opacity:.9}.sub.light{color:rgba(255,255,255,.88)}
 .split .pic{position:absolute;top:0;bottom:0;right:0;width:${W / 2}px;overflow:hidden}.split.flip .pic{right:auto;left:0}
-.split .pic img{width:${W / 2}px;height:100%;object-fit:cover}
+.split .pic img{width:100%;min-width:${W / 2 - 240}px;height:100%;object-fit:cover}
 .split .copy{position:absolute;top:0;bottom:0;left:130px;width:${W / 2 - 230}px;display:flex;flex-direction:column;justify-content:center}
 .split.flip .copy{left:auto;right:130px}
 .list .copy{position:absolute;left:140px;top:150px;right:140px}
@@ -313,16 +395,31 @@ html,body{width:${W}px;height:${H}px;overflow:hidden;background:var(--background
 .tint{background:var(--muted)}
 .mark{font:700 260px/0.7 var(--fh);color:var(--primary);height:150px}
 .quote{font-style:italic}
+.stat .num{font-size:${300 * look.scale | 0}px;line-height:.9;color:var(--primary);font-weight:800;letter-spacing:-.05em}
+.mosaic .tile{position:absolute;overflow:hidden;border-radius:var(--radius,12px)}.mosaic .tile img{width:100%;height:100%;object-fit:cover}
+.mosaic .mcopy{position:absolute;left:90px;right:90px;bottom:60px;display:flex;align-items:flex-end;gap:40px}.mosaic .mcopy .kicker{margin:0 0 14px}
+.footage{position:absolute;left:0;top:0;width:${W}px;height:${H}px;object-fit:cover}
+.clipscene{background:transparent}
+.rec{position:absolute;top:70px;right:80px;font:700 24px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#fff;background:rgba(0,0,0,.45);padding:12px 18px;border-radius:6px}
 .cta{background:var(--primary)}.cta .head{color:var(--primary-foreground)}.cta .kicker{color:var(--primary-foreground);opacity:.8}
 .btn{margin-top:60px;background:var(--primary-foreground);color:var(--primary);font:700 40px/1 var(--fb);padding:34px 64px;border-radius:999px}
 #fx{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden}#fx i{position:absolute;display:block}
 .fx-dot{border-radius:50%}.fx-glint{margin:-35px 0 0 -35px;clip-path:polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%)}
 .fx-streak{height:3px;border-radius:3px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent);filter:blur(1px)}.fx-bit{border-radius:2px}
-#wipe{position:absolute;top:0;left:0;width:${W}px;height:${H}px;background:var(--primary);z-index:10;transform:translateX(-${W}px)${transition === 'flash' ? ';opacity:0' : ''}}
-</style></head><body>
+.tex{position:absolute;inset:0;z-index:9;pointer-events:none}
+#wipe{position:absolute;top:0;left:0;width:${W}px;height:${H}px;background:var(--primary);z-index:10;transform:translateX(-${W}px)${cuts.some(x => x === 'flash' || x === 'glitch') && !cuts.includes('wipe') ? ';opacity:0' : ''}}
+${cutCss(W, H)}
+${lookCss(look, W, H)}
+${paletteCss(look)}
+.clipscene .over{top:auto !important;bottom:90px !important;left:90px !important;right:auto !important;display:block;max-width:1200px}
+.clipscene .over .head{font-size:92px !important;line-height:1 !important;color:#fff;-webkit-text-stroke:0}
+.clipscene .w{padding-bottom:.16em}.clipscene .shade{display:block !important;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.65))}
+</style></head><body class="L-${look.layout} R-${look.reveal} M-${look.motion}">
 <div id="root" data-composition-id="promo" data-start="0" data-duration="${total}" data-width="${W}" data-height="${H}" data-fps="${FPS}">
 ${html.join('\n')}
 ${fx.html}
+${tex.html}
+${cutLayer(cuts, total, W, H)}
 <div id="wipe" class="clip" data-start="0" data-duration="${total}"></div>
 </div>
 <script>
@@ -390,5 +487,9 @@ export function stagePictures(c, dir) {
   for (const i of c.images) {
     i.name = `p${i.n}${extname(i.file)}`
     copyFileSync(i.file, join(dir, i.name))
+  }
+  for (const x of c.clips || []) {
+    x.name = `c${x.n}${extname(x.file)}`
+    copyFileSync(x.file, join(dir, x.name))
   }
 }

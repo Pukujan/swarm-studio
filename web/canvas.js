@@ -1292,7 +1292,7 @@ const SLASH = [
   ['play', '', 'click through the prototype'],
   ['review', '', 'a vision model checks every page; agents fix what it finds'],
   ['fix', '<what to change>', 'an agent rewrites the selected section, or the page'],
-  ['video', '[style] [idea]', 'cut a promo video; styles: promo, kinetic, slideshow, teaser, story'],
+  ['video', '[style] [idea]', 'cut a promo video; styles: auto (AI director), promo, kinetic, slideshow, teaser, story'],
   ['app', '[change]', 'the App view: make this design a working app, or change it'],
   ['game', '[idea]', 'make an original browser game: a few questions, then it builds'],
   ['canvas', '', 'back to the canvas view'],
@@ -2977,10 +2977,10 @@ setInterval(async () => {
 
 // The voiceover: Kokoro, on this machine, in one of its voices; or none.
 const VOICE_OPTS = [['', 'Kokoro · fits the theme'], ['af_heart', 'Kokoro · Heart'], ['af_bella', 'Kokoro · Bella'], ['am_michael', 'Kokoro · Michael'], ['bf_emma', 'Kokoro · Emma (UK)'], ['bm_george', 'Kokoro · George (UK)'], ['off', 'No voice']]
-const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true, style: store.get('videoStyle') || 'promo', transition: store.get('videoCut') || '', idea: '' }
+const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true, style: store.get('videoStyle') || 'auto', transition: store.get('videoCut') || '', idea: '' }
 // video plans and cuts (the server has the same lists, in engine/video.mjs)
-const VIDEO_STYLES = [['promo', 'Promo'], ['kinetic', 'Kinetic type'], ['slideshow', 'Slideshow'], ['teaser', 'Teaser'], ['story', 'Customer story']]
-const VIDEO_CUTS = [['', 'Fits the style'], ['wipe', 'Colour wipe'], ['fade', 'Fade'], ['zoom', 'Zoom'], ['slide', 'Slide'], ['flash', 'Flash']]
+const VIDEO_STYLES = [['auto', 'AI director (a new look every time)'], ['promo', 'Promo'], ['kinetic', 'Kinetic type'], ['slideshow', 'Slideshow'], ['teaser', 'Teaser'], ['story', 'Customer story']]
+const VIDEO_CUTS = [['', 'Fits the look'], ['wipe', 'Colour wipe'], ['fade', 'Fade'], ['zoom', 'Zoom'], ['slide', 'Slide'], ['flash', 'Flash'], ['iris', 'Iris'], ['blinds', 'Blinds'], ['split', 'Split'], ['push', 'Push'], ['glitch', 'Glitch'], ['whip', 'Whip pan']]
 
 // The video filling the whole pane (and the screen, where the app allows it).
 function bigScreen(on) {
@@ -3005,7 +3005,7 @@ async function makeVideo({ idea = null, style = null } = {}) {
   if (!run || video.busy) return
   video.mine = true
   toggleVideo(true)
-  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music, style: style || videoOpts.style || undefined, idea: idea || videoOpts.idea || undefined, transition: videoOpts.transition || undefined }) })
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music, style: style || videoOpts.style || undefined, idea: idea || videoOpts.idea || undefined, transition: videoOpts.transition || undefined, film: 'auto' }) })
   if (!res.ok) {
     const out = await res.json().catch(() => ({}))
     Object.assign(video, { run, message: out.error || `HTTP ${res.status}`, busy: false })
@@ -4366,7 +4366,7 @@ function openAuto() {
   el.className = 'game-pop auto-pop'
   el.innerHTML = `<div class="ghead"><b>⚡ Auto mode</b><button class="gclose" title="Close">×</button></div>
     <h3>One prompt. The whole thing.</h3>
-    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>🎬 Cut a promo video from your idea</li><li>⚙️ Build the working app</li><li class="auto-games-li">🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🚀 Deploy to Vercel</li></ol>
+    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>⚙️ Build the working app</li><li class="auto-games-li">🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🎬 Film the game and cut a promo in its own look</li><li>🚀 Deploy to Vercel</li></ol>
     <div class="auto-games" role="radiogroup" aria-label="Games"><span>Games</span><button data-g="auto" class="on" role="radio" aria-checked="true">Auto</button><button data-g="mini" role="radio" aria-checked="false">3 mini</button><button data-g="big" role="radio" aria-checked="false">1 big</button></div>
     <div class="auto-conn"></div>
     <textarea class="auto-prompt" rows="4" placeholder="A night market in Taipei: street food, a festival weekend in March, tickets and a vendor map"></textarea>
