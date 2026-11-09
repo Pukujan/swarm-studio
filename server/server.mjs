@@ -11,6 +11,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { basename, dirname, extname, join, normalize } from 'node:path'
+import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
@@ -303,8 +304,38 @@ function runCard(id) {
     order: typeof meta.order === 'number' ? meta.order : null,
     traces: existsSync(join(runsDir, id, 'trace.jsonl')),
     video: existsSync(join(runsDir, id, 'video', 'promo.mp4')),
+    videoFile: shelveVideo(id),
     live: current?.id === id && !current.done,
   }
+}
+
+// What people make goes where they can see it, not only inside the hidden data
+// folder: videos to ~/Movies/Swarm Studio/<build>/, exports to ~/Documents/Swarm Studio/<build>/
+// (~/Videos on Linux and Windows). SWARM_OUTPUT_DIR puts both under one folder instead.
+const titleOf = id => runMeta(id).title || (cards.get(id) || (runCard(id), cards.get(id)))?.info.title || 'build'
+const shelfName = id => {
+  const title = String(titleOf(id)).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'build'
+  return `${title} · ${id.slice(0, 10)} ${id.slice(11, 16)}`
+}
+const fileSlug = id => String(titleOf(id)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'build'
+function shelf(id, kind) {
+  const base = process.env.SWARM_OUTPUT_DIR || join(homedir(), kind === 'video' ? (process.platform === 'darwin' ? 'Movies' : 'Videos') : 'Documents')
+  return join(base, 'Swarm Studio', shelfName(id))
+}
+// The build's video, copied to the visible folder (made now if it is missing).
+function shelveVideo(id) {
+  const src = join(runsDir, id, 'video', 'promo.mp4')
+  if (!existsSync(src)) return null
+  const dir = shelf(id, 'video'), file = join(dir, `${fileSlug(id)}-promo.mp4`)
+  try {
+    if (!existsSync(file) || statSync(file).mtimeMs < statSync(src).mtimeMs) { mkdirSync(dir, { recursive: true }); copyFileSync(src, file) }
+    return file
+  } catch { return null }
+}
+function shelveExport(id, zip) {
+  if (!zip || !existsSync(zip)) return null
+  const dir = shelf(id, 'export'), file = join(dir, basename(zip))
+  try { mkdirSync(dir, { recursive: true }); copyFileSync(zip, file); return file } catch { return null }
 }
 
 // Folders the person made, in their order. A folder can be empty; one named on a
@@ -519,8 +550,9 @@ async function videoNow(id, input = {}) {
       send('video:note', { message: `sound failed, the video is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
     if (!sound) copyFileSync(silent, out)
-    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${Date.now()}`, file: out, seconds: comp.seconds })
-    send('video:done', { src: job.src, file: out, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound })
+    const copy = shelveVideo(id)
+    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${Date.now()}`, file: copy || out, seconds: comp.seconds })
+    send('video:done', { src: job.src, file: copy || out, saved: out, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound })
   })().catch(err => {
     Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })
@@ -764,7 +796,7 @@ const server = createServer((req, res) => {
   const runReveal = url.pathname.match(/^\/api\/runs\/([^/]+)\/reveal$/)
   if (runReveal && req.method === 'POST' && RUN_ID.test(runReveal[1])) {
     const dir = join(runsDir, runReveal[1]), vid = join(dir, 'video', 'promo.mp4')
-    const what = url.searchParams.get('what') === 'video' && existsSync(vid) ? vid : dir
+    const what = url.searchParams.get('what') === 'video' && existsSync(vid) ? shelveVideo(runReveal[1]) || vid : dir
     if (!existsSync(what)) { res.writeHead(404).end(); return }
     const [cmd, args] = process.platform === 'darwin' ? ['open', ['-R', what]] : process.platform === 'win32' ? ['explorer', [`/select,${what}`]] : ['xdg-open', [dirname(what)]]
     execFile(cmd, args, () => {})
@@ -862,7 +894,7 @@ const server = createServer((req, res) => {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method !== 'POST') {
       const file = join(runsDir, id, 'video', 'promo.mp4')
-      return reply(200, videos.get(id) || (existsSync(file) ? { state: 'done', pct: 100, file, src: `/video/${id}/promo.mp4?v=${statSync(file).mtimeMs | 0}` } : { state: 'none' }))
+      return reply(200, videos.get(id) || (existsSync(file) ? { state: 'done', pct: 100, file: shelveVideo(id) || file, src: `/video/${id}/promo.mp4?v=${statSync(file).mtimeMs | 0}` } : { state: 'none' }))
     }
     let body = ''
     req.on('data', c => (body += c))
@@ -953,8 +985,9 @@ const server = createServer((req, res) => {
       if (!events) return reply(404, { error: 'no such build' })
       exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [] })
         .then(out => {
-          record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, pages: out.pages, sections: out.sections })
-          reply(200, out)
+          const copy = shelveExport(id, out.zip)
+          record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections })
+          reply(200, { ...out, copy })
         })
         .catch(err => reply(400, { error: String(err.message || err) }))
     })
