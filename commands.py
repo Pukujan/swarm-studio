@@ -27,13 +27,14 @@ HELP = """Swarm Studio commands
   /swarm play                     play the open build as a clickable prototype
   /swarm review [n|id]            a vision model checks every page; agents fix what it finds
   /swarm fix <what to change>     an agent reworks the selected section (or the planner finds which)
+  /swarm export [n|id]            files: static HTML, a React + Tailwind project, an ABA handoff
   /swarm video [n|id]             cut a 20-second promo video of a build (HyperFrames, MP4)
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
   /swarm lite [on|off|auto]       lite mode for machines short on memory"""
 
-SUBCOMMANDS = {"help", "files", "open", "play", "review", "fix", "video", "models", "images", "lite"}
+SUBCOMMANDS = {"help", "files", "open", "play", "review", "fix", "export", "video", "models", "images", "lite"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -115,6 +116,16 @@ def _dispatch(cmd: str, args: list[str]) -> str:
 
     if cmd == "video":
         return _video(args[0] if args else "", wait=False)
+
+    if cmd == "export":
+        r = _pick_run(args[0] if args else "")
+        if not r:
+            return "No such build. See /swarm files."
+        out = _api(f"/api/runs/{r['id']}/export", {}, timeout=60)
+        return (f"Exported “{r['title']}” to {out['dir']}:\n"
+                f"  html/   {out['pages']} static pages (open html/index.html)\n"
+                f"  react/  {out['sections']} section components, Vite + Tailwind (npm i && npm run dev)\n"
+                f"  aba/    spec.md + blueprint.json, to hand to an app builder" + (f"\nZip: {out['zip']}" if out.get("zip") else ""))
 
     if cmd == "fix":
         return _fix(" ".join(args).strip().strip('"“”'), "")
@@ -202,12 +213,12 @@ def _video(ref: str, wait: bool) -> str:
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, cut a promo video of a build (MP4, waits until it is rendered and returns the file path), and set the models, image generation and lite mode.",
+    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), cut a promo video of a build (MP4, waits until it is rendered and returns the file path), and set the models, image generation and lite mode.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "open", "play", "review", "fix", "video", "models", "images", "lite", "help"]},
-            "build": {"type": "string", "description": "for open/review/fix/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
+            "action": {"type": "string", "enum": ["files", "open", "play", "review", "fix", "export", "video", "models", "images", "lite", "help"]},
+            "build": {"type": "string", "description": "for open/review/fix/export/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
             "text": {"type": "string", "description": "for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
@@ -233,6 +244,7 @@ def tool(args: dict | None = None, **_: object) -> str:
     parts = {
         "open": [a.get("build") or "1"],
         "review": [a["build"]] if a.get("build") else [],
+        "export": [a["build"]] if a.get("build") else [],
         "models": [a["role"], a.get("model") or "reset"] if a.get("role") else [],
         "images": [a["provider"], *([a["model"]] if a.get("model") else [])] if a.get("provider") else [],
         "lite": [a.get("value") or "on"],

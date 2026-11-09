@@ -16,7 +16,7 @@ const els = {
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'), files: $('#files'),
   newFile: $('#new-file'), fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
   plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'),
-  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), modelsBtn: $('#models-btn'),
+  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), exportBtn: $('#export-btn'), modelsBtn: $('#models-btn'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
@@ -243,6 +243,9 @@ function on(e) {
       if (l) { l.text = ''; l.ver++; l.status = 'assigned'; S.treeDirty = true }
       break
     }
+    case 'export':
+      if (Date.now() - e.t < 8000) showExport(e)
+      break
     case 'comment':
       feed(null, `💬 ${e.text}`, 'you')
       break
@@ -1098,6 +1101,7 @@ function frameLoop(now) {
     els.play.disabled = !S.frames.length
     els.reviewBtn.disabled = review.busy || !reviewerOn() || !S.done
     setText(els.reviewBtn, review.busy ? '🔎 Reviewing…' : '🔎 Review')
+    els.exportBtn.disabled = !S.done || exp.busy
     const mine = video.run === shownRun()
     els.videoBtn.disabled = !S.done && !(mine && video.src)
     setText(els.videoBtn, mine && video.busy ? `🎬 ${video.pct ? `${video.pct | 0}%` : 'Writing…'}` : '🎬 Video')
@@ -2011,6 +2015,39 @@ function drawSelBox() {
   if (box.hidden) box.hidden = false
   Object.assign(box.style, { left: `${s.f.x + s.box.left}px`, top: `${s.box.top}px`, width: `${s.box.width}px`, height: `${s.box.height}px`, borderWidth: `${2 / cam.s}px` })
 }
+
+// ---------- export: HTML, React + Tailwind, and the ABA handoff
+const exp = { busy: false, el: null }
+
+async function exportRunNow() {
+  const run = shownRun()
+  if (!run || exp.busy) return
+  exp.busy = true
+  const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, html: l.text }))
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/export`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sections }) }).catch(() => null)
+  exp.busy = false
+  const out = await res?.json().catch(() => ({}))
+  if (!res?.ok) feed(null, `export: ${out?.error || 'the canvas server is not answering'}`, 'err')
+}
+
+function showExport(e) {
+  exp.el?.remove()
+  exp.el = document.createElement('div')
+  exp.el.className = 'export-pop'
+  const zip = `/api/runs/${encodeURIComponent(e.run)}/export.zip?k=${encodeURIComponent(BOOT.token || '')}`
+  exp.el.innerHTML = `<div class="vhead">⬇ Exported<button class="vclose" title="Close">×</button></div>
+    <div class="xrow"><b>html/</b><span>${e.pages} pages, open index.html</span></div>
+    <div class="xrow"><b>react/</b><span>${e.sections} section components · Vite + Tailwind · <code>npm i && npm run dev</code></span></div>
+    <div class="xrow"><b>aba/</b><span>spec.md + blueprint.json for an app builder</span></div>
+    <div class="xpath" title="${esc(e.dir)}">${esc(e.dir)}</div>
+    <div class="vfoot"><span></span>${e.zip ? `<a class="vagain" href="${zip}" download>Download .zip</a>` : ''}</div>`
+  document.body.append(exp.el)
+  exp.el.querySelector('.vclose').onclick = () => { exp.el.remove(); exp.el = null }
+  feed(null, `⬇ exported ${e.pages} pages to ${e.dir}`, 'sys')
+}
+
+els.exportBtn.onclick = () => exportRunNow()
+commandOps.export = () => exportRunNow()
 
 // ---------- comments: tell an agent what to change
 // A 💬 pin sits on the selected section; open, it is a little composer. The
