@@ -204,6 +204,13 @@ function on(e) {
       feed(a, `failed ${e.layer}: ${e.message}`, 'err')
       break
     }
+    case 'crew:lead': {
+      // the app engine's lead agent, speaking as Hermia: thinking out loud and giving orders
+      feed(null, `🛰️ Hermia${e.to ? ` → ${e.to}` : ''}: ${e.text}`, 'sys')
+      const to = e.to && [...S.agents.values()].find(x => x.name === e.to)
+      if (to && Date.now() - e.t < 5000) say(to, `Hermia: ${e.text.slice(0, 120)}`, 3200)
+      break
+    }
     case 'agent:idle': {
       const a = S.agents.get(e.agent)
       if (a) { a.idle = true; a.layer = null; a.tool = 'move' }

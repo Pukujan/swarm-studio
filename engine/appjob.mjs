@@ -9,6 +9,7 @@ import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady } from './appbuild.mjs'
+import { crewRadio } from './radio.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
@@ -105,6 +106,25 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     jobs.set(id, j)
     const m = modelFor('worker')
     send(id, 'app:start', { kind, ask: j.asks.at(-1), model: m, fresh })
+    // the crew radio: the engine's lead and helpers, said out loud as Hermia and the crew
+    const crew = ((readEvents(id) || []).find(e => e.type === 'run:start')?.agents || []).map(a => ({ id: a.id, name: a.name }))
+    const queue = []
+    let talking = null
+    const speak = () => {
+      const x = queue.shift()
+      if (!x) { talking = null; return }
+      const lead = x.who === 'lead'
+      const to = x.to === 'lead' ? 'Hermia' : x.to?.name
+      const data = { kind: x.kind, text: x.text, ...(to ? { to } : {}), ...(lead ? {} : { agent: x.who.id, name: x.who.name }), app: true }
+      // orders, reports and thinking are kept with the run; moment-to-moment work is live only
+      if (x.quiet) broadcast({ type: 'crew:act', t: Date.now(), run: id, ...data })
+      else if (lead) send(id, 'crew:lead', data)
+      else send(id, 'agent:say', data)
+      talking = setTimeout(speak, x.quiet ? 250 : 1400)
+    }
+    j.radio?.stop()
+    j.radio = crewRadio({ runDir: join(runsDir, id), crew, say: x => { if (queue.length < 30 || !x.quiet) queue.push(x); if (!talking) speak() } })
+    j.radio.start()
     const step = s => {
       const item = { ...s, t: Date.now() }
       j.steps.push(item)
@@ -133,9 +153,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
       await serve(id, j, step)
       Object.assign(j, { state: 'done', stage: 'ready' })
+      await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
     })().catch(err => {
       Object.assign(j, { state: 'failed', message: String(err.message || err).slice(0, 400) })
+      j.radio?.stop()
       send(id, 'app:failed', { message: j.message, result: j.result })
     })
     return view(j)
