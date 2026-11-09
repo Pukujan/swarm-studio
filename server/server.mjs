@@ -168,7 +168,7 @@ const defaultAgents = Number(process.env.SWARM_AGENTS || 16)
 const token = process.env.SWARM_TOKEN || randomBytes(24).toString('base64url')
 const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
 
 let current = null // { id, events: [], controller, done, result, working }
 const clients = new Set()
@@ -813,6 +813,7 @@ function canvasPage() {
   const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource(), guard: swarmLayout.toString() }).replace(/</g, '\\u003c')
   return read('index.html')
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
+    .replace('<script src="crew.js"></script>', () => `<script>${read('crew.js')}</script>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
 }
 
@@ -821,7 +822,9 @@ function sendFile(res, file) {
     res.writeHead(404).end('not found')
     return
   }
-  res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' })
+  // fonts are fetched in CORS mode, and the Desktop pane's frame has an opaque origin
+  const cors = extname(file) === '.woff2' ? { 'access-control-allow-origin': '*', 'cache-control': 'max-age=86400' } : { 'cache-control': 'no-store' }
+  res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', ...cors })
   res.end(readFileSync(file))
 }
 

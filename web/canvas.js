@@ -30,18 +30,77 @@ const store = {
   set(k, v) { try { localStorage.setItem(`swarm.${k}`, JSON.stringify(v)) } catch {} }
 }
 
-const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
+// Lucide line icons (ISC, lucide.dev; licence in web/brand/LICENSE-lucide.txt), only the ones the studio uses.
+// Emoji stay in chat and agent messages; the chrome uses these.
+const LUCIDE = {
+  "minus":"<path d=\"M5 12h14\" />",
+  "brain-circuit":"<path d=\"M12 13h4\" /><path d=\"M12 18h6a2 2 0 012 2v1\" /><path d=\"M12 8h8\" /><path d=\"M12 9a4.17 4.17 0 01-3 4\" /><path d=\"M16 8V5a2 2 0 012-2\" /><path d=\"M6 18a4 4 0 01-2-7.465\" /><path d=\"M6.004 5.125a4 4 0 00-2.526 5.77\" /><path d=\"M6.294 6.294A3 3 0 1112 5v13a4 4 0 11-7.967-.518\" /><circle cx=\"16\" cy=\"13\" r=\"0.5\" fill=\"currentColor\" /><circle cx=\"18\" cy=\"3\" r=\"0.5\" fill=\"currentColor\" /><circle cx=\"20\" cy=\"21\" r=\"0.5\" fill=\"currentColor\" /><circle cx=\"20\" cy=\"8\" r=\"0.5\" fill=\"currentColor\" />",
+  "mouse-pointer-2":"<path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\"/>",
+  "frame":"<line x1=\"22\" x2=\"2\" y1=\"6\" y2=\"6\"/><line x1=\"22\" x2=\"2\" y1=\"18\" y2=\"18\"/><line x1=\"6\" x2=\"6\" y1=\"2\" y2=\"22\"/><line x1=\"18\" x2=\"18\" y1=\"2\" y2=\"22\"/>",
+  "square":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/>",
+  "type":"<path d=\"M12 4v16\"/><path d=\"M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2\"/><path d=\"M9 20h6\"/>",
+  "image":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\"/><circle cx=\"9\" cy=\"9\" r=\"2\"/><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\"/>",
+  "spline":"<circle cx=\"19\" cy=\"5\" r=\"2\"/><circle cx=\"5\" cy=\"19\" r=\"2\"/><path d=\"M5 17A12 12 0 0 1 17 5\"/>",
+  "message-square":"<path d=\"M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z\"/>",
+  "zap":"<path d=\"M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z\"/>",
+  "gamepad-2":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\"/><line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\"/><line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\"/><line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\"/><path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\"/>",
+  "undo-2":"<path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\"/>",
+  "redo-2":"<path d=\"m15 14 5-5-5-5\"/><path d=\"M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13\"/>",
+  "play":"<path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\"/>",
+  "rocket":"<path d=\"M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5\"/><path d=\"M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09\"/><path d=\"M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z\"/><path d=\"M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05\"/>",
+  "chevron-down":"<path d=\"m6 9 6 6 6-6\"/>",
+  "menu":"<path d=\"M4 5h16\"/><path d=\"M4 12h16\"/><path d=\"M4 19h16\"/>",
+  "globe":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20\"/><path d=\"M2 12h20\"/>",
+  "server":"<rect width=\"20\" height=\"8\" x=\"2\" y=\"2\" rx=\"2\" ry=\"2\"/><rect width=\"20\" height=\"8\" x=\"2\" y=\"14\" rx=\"2\" ry=\"2\"/><line x1=\"6\" x2=\"6.01\" y1=\"6\" y2=\"6\"/><line x1=\"6\" x2=\"6.01\" y1=\"18\" y2=\"18\"/>",
+  "search-check":"<path d=\"m8 11 2 2 4-4\"/><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/>",
+  "clapperboard":"<path d=\"m12.296 3.464 3.02 3.956\"/><path d=\"M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z\"/><path d=\"M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/><path d=\"m6.18 5.276 3.1 3.899\"/>",
+  "download":"<path d=\"M12 15V3\"/><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><path d=\"m7 10 5 5 5-5\"/>",
+  "sliders-horizontal":"<path d=\"M10 5H3\"/><path d=\"M12 19H3\"/><path d=\"M14 3v4\"/><path d=\"M16 17v4\"/><path d=\"M21 12h-9\"/><path d=\"M21 19h-5\"/><path d=\"M21 5h-7\"/><path d=\"M8 10v4\"/><path d=\"M8 12H3\"/>",
+  "palette":"<path d=\"M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z\"/><circle cx=\"13.5\" cy=\"6.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"17.5\" cy=\"10.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"6.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"8.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/>",
+  "map":"<path d=\"M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z\"/><path d=\"M15 5.764v15\"/><path d=\"M9 3.236v15\"/>",
+  "users":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><path d=\"M16 3.128a4 4 0 0 1 0 7.744\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/>",
+  "coffee":"<path d=\"M10 2v2\"/><path d=\"M14 2v2\"/><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\"/><path d=\"M6 2v2\"/>",
+  "message-circle":"<path d=\"M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719\"/>",
+  "scroll-text":"<path d=\"M15 12h-5\"/><path d=\"M15 8h-5\"/><path d=\"M19 17V5a2 2 0 0 0-2-2H4\"/><path d=\"M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3\"/>",
+  "layers":"<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\"/><path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\"/><path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\"/>",
+  "folder":"<path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\"/>",
+  "panel-left-close":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M9 3v18\"/><path d=\"m16 15-3-3 3-3\"/>",
+  "rotate-cw":"<path d=\"M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8\"/><path d=\"M21 3v5h-5\"/>",
+  "external-link":"<path d=\"M15 3h6v6\"/><path d=\"M10 14 21 3\"/><path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\"/>",
+  "x":"<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>",
+  "arrow-left":"<path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/>",
+  "rotate-ccw":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\"/><path d=\"M3 3v5h5\"/>",
+  "eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
+  "sparkles":"<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\"/><path d=\"M20 2v4\"/><path d=\"M22 4h-4\"/><circle cx=\"4\" cy=\"20\" r=\"2\"/>",
+  "plus":"<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>",
+  "check":"<path d=\"M20 6 9 17l-5-5\"/>",
+  "monitor":"<rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\"/><line x1=\"8\" x2=\"16\" y1=\"21\" y2=\"21\"/><line x1=\"12\" x2=\"12\" y1=\"17\" y2=\"21\"/>",
+  "smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"/><path d=\"M12 18h.01\"/>",
+  "tablet":"<rect width=\"16\" height=\"20\" x=\"4\" y=\"2\" rx=\"2\" ry=\"2\"/><line x1=\"12\" x2=\"12.01\" y1=\"18\" y2=\"18\"/>",
+  "square-stop":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\" rx=\"1\"/>"
+}
+const icon = d => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`
+const ico = name => icon(LUCIDE[name] || '')
+// the static chrome in index.html marks its icons <i data-i="name">
+for (const el of document.querySelectorAll('i[data-i]')) { const cls = el.className; el.outerHTML = ico(el.dataset.i).replace('class="ico"', `class="ico${cls ? ` ${cls}` : ''}"`) }
+// a button's label lives in its .t span, so changing it keeps the icon
+const setLabel = (btn, v) => { const t = btn.querySelector('.t'); if (t) { if (t.textContent !== v) t.textContent = v } else if (btn.textContent !== v) btn.textContent = v }
 const TOOLS = [
-  { id: 'move', label: 'Move', svg: icon('<path d="M5 3l14 8-6 1.5L10 19z" fill="currentColor"/>') },
-  { id: 'frame', label: 'Frame', svg: icon('<path d="M7 3v18M17 3v18M3 7h18M3 17h18"/>') },
-  { id: 'rect', label: 'Shape', svg: icon('<rect x="4" y="5" width="16" height="14" rx="2"/>') },
-  { id: 'text', label: 'Text', svg: icon('<path d="M5 6V4h14v2M12 4v16M9 20h6"/>') },
-  { id: 'image', label: 'Image', svg: icon('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 8"/>') },
-  { id: 'connect', label: 'Connect', svg: icon('<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18c6 0 4-12 10-12"/>') },
-  { id: 'comment', label: 'Comment', svg: icon('<path d="M4 5h16v11H9l-5 4z"/>') }
+  { id: 'move', label: 'Move', svg: ico('mouse-pointer-2') },
+  { id: 'frame', label: 'Frame', svg: ico('frame') },
+  { id: 'rect', label: 'Shape', svg: ico('square') },
+  { id: 'text', label: 'Text', svg: ico('type') },
+  { id: 'image', label: 'Image', svg: ico('image') },
+  { id: 'connect', label: 'Connect', svg: ico('spline') },
+  { id: 'comment', label: 'Comment', svg: ico('message-square') }
 ]
 const TOOL = Object.fromEntries(TOOLS.map(t => [t.id, t]))
-const ARROW = color => `<svg class="arrow" viewBox="0 0 20 20"><path d="M2 1l15 8.2-6.6 1.6L7.4 18z" fill="${color}" stroke="#0b0d12" stroke-width="1.4" stroke-linejoin="round"/></svg>`
+// The crew (web/crew.js): each agent is a little courier sprite, the same for the same name.
+const Crew = window.SwarmCrew || { color: () => '#F2F2F2', ink: () => '#05051a', avatar: () => '' }
+// A cursor's head: a small pointer nib in the agent's colour, with its avatar riding beside it.
+const ARROW = (color, name) => `<svg class="nib" viewBox="0 0 10 10" aria-hidden="true"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill="${color}" stroke="#05051a" stroke-width="1" stroke-linejoin="round"/></svg><span class="arrow">${Crew.avatar(name, 30)}</span>`
+// The planner's mark (Commander Hermia), for her messages in Chat
+const HERMIA = '<img class="hermia" src="brand/hermia-mark.svg" alt="" width="18" height="18">'
 
 let S
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
@@ -161,6 +220,7 @@ function on(e) {
       break
     }
     case 'agent:say': {
+      if (e.app) radioEvent(e)
       const a = S.agents.get(e.agent)
       if (!a) break
       // replays (a reopened file, a late join) go to the feed without a burst of bubbles
@@ -189,6 +249,7 @@ function on(e) {
       const a = S.agents.get(e.agent)
       if (a) {
         if (live(e) && !a.act) startGesture(a, 'resize', l)
+        if (live(e)) { a.el.classList.remove('hop'); void a.el.offsetWidth; a.el.classList.add('hop'); setTimeout(() => a.el.classList.remove('hop'), 600) }
         a.layer = null
         setTool(a, 'move', 400)
       }
@@ -204,8 +265,12 @@ function on(e) {
       feed(a, `failed ${e.layer}: ${e.message}`, 'err')
       break
     }
+    case 'crew:act':
+      radioEvent(e)
+      break
     case 'crew:lead': {
       // the app engine's lead agent, speaking as Hermia: thinking out loud and giving orders
+      radioEvent(e)
       feed(null, `🛰️ Hermia${e.to ? ` → ${e.to}` : ''}: ${e.text}`, 'sys')
       const to = e.to && [...S.agents.values()].find(x => x.name === e.to)
       if (to && Date.now() - e.t < 5000) say(to, `Hermia: ${e.text.slice(0, 120)}`, 3200)
@@ -309,9 +374,10 @@ const key = (page, id) => `${page}/${id}`
 // ---------- agents
 
 function addAgent(a) {
+  a = { ...a, color: Crew.color(a.name) }
   const el = document.createElement('div')
   el.className = 'cursor idle'
-  el.innerHTML = `${ARROW(a.color)}<div class="tag" style="background:${a.color}">${TOOL.move.svg}<span>${a.name}</span><em class="doing"></em></div><div class="bubble" style="color:${a.color}"></div>`
+  el.innerHTML = `${ARROW(a.color, a.name)}<div class="tag" style="background:${a.color};color:${Crew.ink(a.color)}">${TOOL.move.svg}<span>${a.name}</span><em class="doing"></em></div><div class="bubble" style="color:${a.color}"></div>`
   els.cursors.append(el)
   const seat = S.agents.size
   const c = dockCell(seat)
@@ -414,6 +480,8 @@ function addFrame(p) {
   el.innerHTML = `<div class="frame-label"></div><iframe title=""></iframe>`
   el.querySelector('.frame-label').textContent = `Page ${p.index + 1} · ${p.title}`
   el.querySelector('.frame-label').insertAdjacentHTML('beforeend', `<small>/${p.id}</small>`)
+  // each page is a star node: it glows, and an orbit ring turns while an agent works on it
+  el.querySelector('.frame-label').insertAdjacentHTML('afterbegin', '<i class="node" aria-hidden="true"></i>')
   const iframe = el.querySelector('iframe')
   iframe.title = p.title
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
@@ -1034,13 +1102,25 @@ function renderAgents() {
   return working
 }
 
+// The strip at the top left of the canvas: what is happening, and how far along it is.
+function renderStatus(working, done) {
+  if (!els.status.firstElementChild) els.status.innerHTML = '<span class="st-dot"></span><span class="st-txt"></span><span class="st-num"></span><span class="st-bar"><i></i></span>'
+  const total = S.layers.size, pct = total ? done / total : 0
+  const state = !total ? (S.run && !S.tEnd ? 'planning' : 'idle') : done >= total ? 'done' : working ? 'working' : 'paused'
+  if (els.status.dataset.state !== state) els.status.dataset.state = state
+  setText(els.status.children[1], { idle: 'Ready', planning: 'Planning the pages', done: `${S.frames.length} pages built`, working: `${working} agent${working === 1 ? '' : 's'} building`, paused: 'Stopped' }[state])
+  setText(els.status.children[2], total ? `${done}/${total}` : '')
+  const w = `${(pct * 100).toFixed(1)}%`
+  if (els.status.children[3].firstChild.style.width !== w) els.status.children[3].firstChild.style.width = w
+}
+
 function renderToolbar() {
   const by = Object.fromEntries(TOOLS.map(t => [t.id, []]))
   for (const a of S.agents.values()) if (a.layer || performance.now() < a.toolUntil) by[a.tool].push(a)
   const html = TOOLS.map(t => {
     const list = by[t.id]
     const f = toolFlash.get(t.id)
-    const lit = f && performance.now() < f.until ? ` style="background:${f.color};color:#0b0d12"` : ''
+    const lit = f && performance.now() < f.until ? ` style="background:${f.color};color:${Crew.ink(f.color)}"` : ''
     // Move, Text and Comment are yours; the rest light up while an agent uses them
     const mine = USER_TOOLS[t.id]
     const armed = (t.id === 'comment' && cmt.mode) || (t.id === 'text' && txt.mode) || (t.id === 'move' && !cmt.mode && !txt.mode)
@@ -1056,6 +1136,7 @@ function feed(a, text, kind = '', where = '') {
   const item = document.createElement('div')
   item.className = `item ${kind}`
   if (a) {
+    item.insertAdjacentHTML('beforeend', `<span class="av">${Crew.avatar(a.name, 16)}</span>`)
     const b = document.createElement('b')
     b.style.color = a.color
     b.textContent = `${a.name} `
@@ -1076,7 +1157,7 @@ function chatAgent(a, text, where = '') {
   const item = document.createElement('div')
   item.className = 'item reply'
   item.style.setProperty('--c', a?.color || 'var(--accent)')
-  item.innerHTML = `<b>${esc(a?.name || 'SWARM')}</b>${esc(text)}${where ? `<span class="where">${esc(where)}</span>` : ''}`
+  item.innerHTML = `<b>${a ? `<span class="av">${Crew.avatar(a.name, 18)}</span>` : HERMIA}${esc(a?.name || 'SWARM')}</b>${esc(text)}${where ? `<span class="where">${esc(where)}</span>` : ''}`
   push(els.feed, item)
 }
 
@@ -1091,7 +1172,7 @@ function push(f, item) {
 function botMsg(text, working = false) {
   const item = document.createElement('div')
   item.className = `item bot${working ? ' working' : ''}`
-  item.innerHTML = '<b>SWARM</b><span class="txt"></span>'
+  item.innerHTML = `<b>${HERMIA}Hermia<small>planner</small></b><span class="txt"></span>`
   item.querySelector('.txt').textContent = text
   push(els.feed, item)
   return item
@@ -1174,6 +1255,10 @@ function frameLoop(now) {
       a.sy = p.y
     }
     const pos = `translate(${a.sx.toFixed(1)}px, ${a.sy.toFixed(1)}px)`
+    const step = Math.abs(a.sx - (a.lx ?? a.sx)) + Math.abs(a.sy - (a.ly ?? a.sy))
+    a.lx = a.sx; a.ly = a.sy
+    a.moving = step > 0.8 ? now + 220 : a.moving || 0
+    a.el.classList.toggle('moving', now < a.moving)
     if (pos !== a.pos) { a.pos = pos; a.el.style.transform = pos }
     a.el.classList.toggle('docked', a.docked)
     a.el.classList.toggle('flip', a.docked && a.seat % DOCK.cols >= 2)
@@ -1199,23 +1284,27 @@ function frameLoop(now) {
       els.plan.scrollTop = els.plan.scrollHeight
     }
     const done = [...S.layers.values()].filter(l => l.status === 'done').length
-    setText(els.status, `${working} agents working · ${done}/${S.layers.size} layers · ${S.frames.length} pages`)
+    renderStatus(working, done)
+    const busyPages = new Set([...S.agents.values()].map(a => a.layer && S.layers.get(a.layer)?.page).filter(Boolean))
+    for (const f of S.frames) f.el.classList.toggle('active', busyPages.has(f.id))
     els.play.disabled = !S.frames.length
     els.reviewBtn.disabled = review.busy || !reviewerOn() || !S.done
-    setText(els.reviewBtn, review.busy ? '🔎 Reviewing…' : '🔎 Review')
+    setLabel(els.reviewBtn, review.busy ? 'Reviewing…' : 'Review')
     els.exportBtn.disabled = !S.done || exp.busy
     const pubbing = pub.run === shownRun() && pub.state === 'working'
     const deploying = appv.deploying && appv.run === shownRun()
     els.publishBtn.disabled = !S.done || pubbing || deploying
-    setText(els.publishBtn, pubbing || deploying ? '🚀 Publishing…' : '🚀 Publish ▾')
+    setLabel(els.publishBtn, pubbing || deploying ? 'Publishing…' : 'Publish')
     const mine = video.run === shownRun()
     els.videoBtn.disabled = !S.done && !(mine && video.src)
-    setText(els.videoBtn, mine && video.busy ? `🎬 ${video.pct ? `${video.pct | 0}%` : 'Writing…'}` : '🎬 Video')
+    setLabel(els.videoBtn, mine && video.busy ? `Video ${video.pct ? `${video.pct | 0}%` : 'writing…'}` : 'Video')
     if (S.progress) {
       const done = [...S.layers.values()].filter(l => l.status === 'done').length
       setText(S.progress.querySelector('.txt'), S.layers.size
         ? `${S.planText ? `${S.planText} ` : ''}${working} agents building · ${done}/${S.layers.size} sections across ${S.frames.length} pages`
         : 'Planning the pages…')
+      if (!S.progress.querySelector('.pbar')) S.progress.insertAdjacentHTML('beforeend', '<span class="pbar"><i></i></span>')
+      S.progress.querySelector('.pbar i').style.width = `${S.layers.size ? (done / S.layers.size * 100).toFixed(1) : 4}%`
     }
     if (S.t0 && !(viewing && !S.tEnd)) setText(els.timer, `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`)
   }
@@ -2419,7 +2508,7 @@ function showExport(e) {
   exp.el = document.createElement('div')
   exp.el.className = 'export-pop'
   const zip = `/api/runs/${encodeURIComponent(e.run)}/export.zip?k=${encodeURIComponent(BOOT.token || '')}`
-  exp.el.innerHTML = `<div class="vhead">⬇ Exported<button class="vclose" title="Close">×</button></div>
+  exp.el.innerHTML = `<div class="vhead pop-title"><span>Exported, <em>ready</em></span><button class="vclose" title="Close" aria-label="Close">${ico('x')}</button></div>
     <div class="xrow"><b>html/</b><span>${e.pages} pages, open index.html</span></div>
     <div class="xrow"><b>react/</b><span>${e.sections} section components · Vite + Tailwind · <code>npm i && npm run dev</code></span></div>
     <div class="xrow"><b>aba/</b><span>spec.md + blueprint.json for an app builder</span></div>
@@ -2445,7 +2534,7 @@ function pubPop(html) {
   pub.el?.remove()
   pub.el = document.createElement('div')
   pub.el.className = 'export-pop publish-pop'
-  pub.el.innerHTML = `<div class="vhead">🌐 Publish the website <small>the designed pages, no server</small><button class="vclose" title="Close">×</button></div>${html}`
+  pub.el.innerHTML = `<div class="vhead pop-title"><span>Publish the <em>website</em><small>the designed pages, no server</small></span><button class="vclose" title="Close" aria-label="Close">${ico('x')}</button></div>${html}`
   document.body.append(pub.el)
   pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
   return pub.el
@@ -2939,7 +3028,7 @@ function renderVideo() {
   el.dataset.sig = sig
   const story = video.story.map((sc, i) => {
     const a = S.agents.get(sc.agent)
-    return `<div class="vscene" style="--c:${a?.color || '#888'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
+    return `<div class="vscene" style="--c:${a?.color || 'var(--muted)'}"><i class="node" aria-hidden="true"></i>${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
   }).join('')
   const opts = `<div class="vopts"><label>Style <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Cut <select class="vcut">${VIDEO_CUTS.map(([v, l]) => `<option value="${v}" ${videoOpts.transition === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><input class="videa" placeholder="Your idea for the video (optional): “end on the night market crowd”, “for Instagram, upbeat”" value="${esc(videoOpts.idea || '')}"><div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const cut = video.cuts[video.pick], latest = video.pick < 0 || video.pick === video.cuts.length - 1
@@ -2952,7 +3041,7 @@ function renderVideo() {
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
         : `<div class="vstage">A short promo of this build: the planner writes the storyboard and a voiceover from your pages and pictures, HyperFrames renders it in your theme, and Kokoro reads it over music made for it, all on this machine.</div>${opts}<div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
-  el.innerHTML = `<div class="vhead">🎬 Promo video<button class="vclose" title="Close">×</button></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
+  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><button class="vclose" title="Close" aria-label="Close">${ico('x')}</button></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
   el.querySelector('.vclose').onclick = () => toggleVideo(false)
   const again = el.querySelector('.vagain')
   if (again) again.onclick = () => makeVideo()
@@ -3156,7 +3245,7 @@ function renderModels() {
   const cur = pick === 'off' ? 'off' : pick ? `${pick.provider}|${pick.model}` : ''
   const opts = (info.image?.providers || []).flatMap(p => (p.models.length ? p.models : [p.default || '']).map(m =>
     `<option value="${esc(`${p.provider}|${m}`)}" ${p.available ? '' : 'disabled'} ${cur === `${p.provider}|${m}` ? 'selected' : ''}>${esc(p.provider)}${m ? ` · ${esc(m)}` : ''}${p.available ? '' : ' (not signed in)'}</option>`)).join('')
-  models.el.innerHTML = `<div class="mhead">Models <small>picks stay in Swarm Studio; Hermes's config is untouched</small></div>${rows}
+  models.el.innerHTML = `<div class="mhead pop-title">Pick the <em>models</em> <small>picks stay in Swarm Studio; Hermes's config is untouched</small></div>${rows}
     <label class="mrow"><span class="mlabel">Images<small>paints photos and illustrations into the pages, with your Hermes image login</small></span>
       <span class="mfield"><select data-image>
         <option value="" ${cur === '' ? 'selected' : ''}>Auto (Codex login, gpt-image-2-low)</option>
@@ -3800,6 +3889,7 @@ function setView(v) {
   if (game.el) closeGame()
   const was = view
   view = v
+  if (was !== v) warp(v)
   document.body.classList.toggle('view-video', v === 'video')
   document.body.classList.toggle('view-app', v === 'app')
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === v)
@@ -3812,8 +3902,26 @@ function setView(v) {
 }
 for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.view)
 
+// Each view is a star system; switching is a short warp: stars streak past for about 400 ms.
+// Off under prefers-reduced-motion (the CSS hides it too).
+const warpEl = document.createElement('div')
+warpEl.className = 'warp'
+warpEl.setAttribute('aria-hidden', 'true')
+warpEl.innerHTML = Array.from({ length: 56 }, (_, i) => {
+  const a = (i * 137.5) % 360, r0 = 4 + (i * 7) % 18, len = 8 + (i * 11) % 22
+  return `<i style="--a:${a.toFixed(1)}deg;--r0:${r0}vmax;--len:${len}vmax;--d:${(i % 7) * 18}ms"></i>`
+}).join('')
+document.body.append(warpEl)
+function warp(to) {
+  const el = document.querySelector('body > .warp')
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  el.dataset.to = to
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go')
+  clearTimeout(warp.t); warp.t = setTimeout(() => el.classList.remove('go'), 520)
+}
+
 function renderBadges() {
-  const [, vb, ab] = document.querySelectorAll('#views .vbadge')
+  const vb = document.querySelector('#views [data-view="video"] .vbadge'), ab = document.querySelector('#views [data-view="app"] .vbadge')
   if (vb) vb.className = `vbadge ${video.busy ? 'working' : video.message ? 'failed' : video.src ? 'done' : ''}`
   if (ab) ab.className = `vbadge ${appv.run === shownRun() ? { working: 'working', done: 'done', failed: 'failed' }[appv.state] || '' : ''}`
 }
@@ -3894,7 +4002,7 @@ function renderApp() {
       : working || appv.opening
         ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
         : st === 'failed'
-          ? `<h2>The app didn't finish</h2><p>${esc(appv.message)}</p><button class="big" data-build>Try again</button>`
+          ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The app didn't <em>finish</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
           : appv.kind === 'game' && !appv.hasApp
             ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
             : `<h2>Turn this design into a working app</h2><p>React + TypeScript + shadcn/ui, with the design kept exactly. The engine adds what the pages imply: forms that save, data from server routes, an admin page. Then change anything by chatting.</p><button class="big" data-build>Build the app</button>`
@@ -4032,7 +4140,7 @@ function renderGame() {
   if (!el) return
   const qs = game.questions, q = qs[game.i]
   const dots = qs.map((_, i) => `<i class="${i < game.i ? 'done' : i === game.i ? 'on' : ''}"></i>`).join('')
-  const head = `<div class="ghead"><b>🎮 New game</b><button class="gclose" title="Close">×</button></div>`
+  const head = `<div class="ghead"><b class="kicker">${ico('gamepad-2')}New game</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div>`
   if (!qs.length) {
     el.innerHTML = `${head}<div class="gbody"><p>Game mode isn't loaded on this server yet. Restart Swarm Studio (<code>hermes swarm</code>) and try again.</p></div>`
   } else if (game.busy) {
@@ -4201,17 +4309,24 @@ $('#dock-hide')?.addEventListener('click', () => setBreakroom(false))
 
 // ---------- crews: while an app or game builds, a game spec is written or a video
 // renders, a few agents work over that screen, each on one real step at a time.
-const CREW_NAMES = [['Ada', '#7c9cff'], ['Basil', '#4ade80'], ['Cleo', '#f472b6'], ['Dev', '#fbbf24']]
+const CREW_NAMES = (Crew.NAMES || ['Pip', 'Mochi', 'Lumi', 'Nova']).slice(0, 4).map(n => [n, Crew.color(n)])
 const crewLayer = document.createElement('div')
 crewLayer.className = 'crew-layer'
 document.body.append(crewLayer)
 const crew = { members: [], key: '', last: 0 }
+const radioLine = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+radioLine.setAttribute('class', 'radio-line')
+radioLine.setAttribute('aria-hidden', 'true')
+radioLine.innerHTML = '<path/>'
+crewLayer.append(radioLine)
 
 // Which screen is busy, where the agents may point, and what they are each doing.
 function crewJob() {
   if (game.el && game.busy) return { key: 'game', host: game.el, spots: '.gbody, .spin, h3, .gspec', n: 3, lines: ['inventing the world', 'naming the hero', 'drafting enemies', 'picking the engine', 'tuning game feel', 'writing win and lose'], tool: ['text', 'comment', 'frame'] }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
-    return { key: 'app-code', host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['writing code'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+    return cw.thinking
+      ? { key: `app-plan|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+      : { key: `app-code|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['writing code'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
   }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
@@ -4255,17 +4370,18 @@ function crewTick(now) {
     crew.members = []
     if (job) {
       const r = job.host.getBoundingClientRect()
-      crew.members = crewMembers(job.n).map(([name, color], i) => {
+      crew.members = (job.names || crewMembers(job.n)).map(([name, color], i) => {
         const el = document.createElement('div')
         el.className = 'cursor crew'
-        el.innerHTML = `${ARROW(color)}<div class="tag" style="background:${color}">${TOOL[job.tool[i % job.tool.length]].svg}<span>${esc(name)}</span><em class="doing"></em></div>`
+        el.innerHTML = `${ARROW(color, name)}<div class="tag" style="background:${color};color:${Crew.ink(color)}">${TOOL[job.tool[i % job.tool.length]].svg}<span>${esc(name)}</span><em class="doing"></em></div><div class="bubble"></div>`
         crewLayer.append(el)
         const x = r.left + r.width / 2 + (i - 1) * 40, y = r.bottom - 20
-        return { el, doing: el.querySelector('.doing'), x, y, tx: x, ty: y, next: now + i * 450, line: i, pressAt: 0 }
+        return { el, name, doing: el.querySelector('.doing'), bubble: el.querySelector('.bubble'), said: 0, x, y, tx: x, ty: y, next: now + i * 450, line: i, pressAt: 0 }
       })
     }
   }
-  if (!job) return
+  if (!job) { radioLine.hidden = true; return }
+  let lineTo = null
   for (const [i, m] of crew.members.entries()) {
     // pinned: the cursor rides its file's caret while the code types out
     const pin = job.pin?.(i)
@@ -4281,10 +4397,28 @@ function crewTick(now) {
       m.line = (m.line + 1 + Math.floor(Math.random() * 2)) % job.lines.length
       setText(m.doing, job.lines[m.line] || '')
     }
+    if (job.radio && radioOn()) {
+      // the radio wins: what this helper is really doing, and what it just said
+      const act = radio.acts.get(m.name), said = radio.says.get(m.name)
+      if (heardIn(act, 15000)) setText(m.doing, act.text)
+      const talking = heardIn(said, 5500)
+      if (talking && m.said !== said.t) { m.said = said.t; m.bubble.innerHTML = '<span></span>'; m.bubble.firstChild.textContent = said.text.slice(0, 160) }
+      m.el.classList.toggle('talking', !!talking)
+      if (radio.lead?.to === m.name && heardIn(radio.lead, 7000)) lineTo = m
+    }
     m.x += (m.tx - m.x) * 0.08
     m.y += (m.ty - m.y) * 0.08
+    m.el.classList.toggle('moving', Math.abs(m.tx - m.x) + Math.abs(m.ty - m.y) > 6)
     m.el.style.transform = `translate(${m.x.toFixed(1)}px, ${m.y.toFixed(1)}px)`
     m.el.classList.toggle('press', now > m.pressAt && now < m.pressAt + 160)
+  }
+  // Hermia's dotted line, from her strip to the helper she is giving an order to
+  const from = lineTo && cw.el?.querySelector('.cw-radio:not([hidden]) .cw-radio-av')?.getBoundingClientRect()
+  radioLine.hidden = !from?.width
+  if (!radioLine.hidden) {
+    const x1 = from.left + from.width / 2, y1 = from.bottom, x2 = lineTo.x + 6, y2 = lineTo.y + 4
+    radioLine.firstChild.setAttribute('d', `M${x1.toFixed(1)} ${y1.toFixed(1)}C${x1.toFixed(1)} ${(y1 + 80).toFixed(1)} ${x2.toFixed(1)} ${(y2 - 80).toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`)
+    radioLine.style.setProperty('--c', Crew.color(lineTo.name))
   }
 }
 requestAnimationFrame(crewTick)
@@ -4363,21 +4497,35 @@ setInterval(fitLive, 1000)
 // studio follows along: the canvas while it designs, Video while it cuts, App
 // while it builds, so a recording shows each part working.
 const autoM = { pop: null, panel: null, last: null, step: '', min: false }
+// minimised or not is remembered per browser (storage may be blocked: then it just starts open)
+try { autoM.min = localStorage.getItem('swarm.autoMin') === '1' } catch {}
+function setAutoMin(on, remember = true) {
+  autoM.min = on
+  if (remember) try { localStorage.setItem('swarm.autoMin', on ? '1' : '0') } catch {}
+  renderAutoPanel()
+}
 const AUTO_VIEW = { design: 'canvas', review: 'canvas', video: 'video', app: 'app', games: 'app', shop: 'app', data: 'app', deploy: 'app' }
-const AUTO_ICON = { wait: '○', working: '◌', done: '✓', skipped: '–', failed: '✕' }
+// step states as drawn icons: a ring, a spinning arc, a check, a dash, a cross
+const AUTO_ICON = {
+  wait: icon('<circle cx="12" cy="12" r="8" stroke-dasharray="2 3"/>'),
+  working: icon('<circle cx="12" cy="12" r="8" opacity=".25"/><path d="M12 4a8 8 0 0 1 8 8"/>'),
+  done: icon('<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16.2 9.6"/>'),
+  skipped: icon('<path d="M7 12h10"/>'),
+  failed: icon('<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>')
+}
 
 function openAuto() {
   if (autoM.last?.state === 'working') return renderAutoPanel()
   autoM.pop?.remove()
   const el = autoM.pop = document.createElement('div')
   el.className = 'game-pop auto-pop'
-  el.innerHTML = `<div class="ghead"><b>⚡ Auto mode</b><button class="gclose" title="Close">×</button></div>
-    <h3>One prompt. The whole thing.</h3>
+  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('zap')}Auto mode</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div>
+    <h3>One prompt. The <em>whole</em> thing.</h3>
     <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>⚙️ Build the working app</li><li class="auto-games-li">🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🎬 Film the game and cut a promo in its own look</li><li>🚀 Deploy to Vercel</li></ol>
     <div class="auto-games" role="radiogroup" aria-label="Games"><span>Games</span><button data-g="auto" class="on" role="radio" aria-checked="true">Auto</button><button data-g="mini" role="radio" aria-checked="false">3 mini</button><button data-g="big" role="radio" aria-checked="false">1 big</button></div>
     <div class="auto-conn"></div>
     <textarea class="auto-prompt" rows="4" placeholder="A night market in Taipei: street food, a festival weekend in March, tickets and a vendor map"></textarea>
-    <div class="auto-go"><button class="primary auto-start">⚡ Run it all</button><small>Takes a while: the app and the games are real builds. Keep this window open; the review needs it.</small></div>`
+    <div class="auto-go"><button class="primary auto-start">${ico('zap')}Run it all</button><small>Takes a while: the app and the games are real builds. Keep this window open; the review needs it.</small></div>`
   document.body.append(el)
   $('#auto-btn').classList.add('on')
   const close = () => { el.remove(); autoM.pop = null; if (autoM.last?.state !== 'working') $('#auto-btn').classList.remove('on') }
@@ -4449,13 +4597,22 @@ function renderAutoPanel() {
   const total = e.state === 'working' ? Date.now() - e.t0 : e.ms
   p.className = `auto-panel ${e.state}${autoM.min ? ' min' : ''}`
   const cur = e.steps.find(s => s.state === 'working')
-  p.innerHTML = `<div class="ap-head" title="Fold or unfold"><b>⚡ Auto</b>${autoM.min && cur ? `<span class="ap-now">${esc(cur.label)}</span>` : ''}<span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop" title="Stop after the current step">Stop</button>' : '<button class="ap-close" title="Hide">×</button>'}</div>
+  const doneN = e.steps.filter(s => s.state === 'done' || s.state === 'skipped').length
+  autoM.open ||= new Set()
+  const nowLabel = cur ? cur.label : e.state === 'done' ? 'done' : e.state === 'failed' ? 'stopped on a step' : e.state
+  p.innerHTML = autoM.min
+    ? `<div class="ap-head" role="button" tabindex="0" title="Expand the Auto panel" aria-label="Expand the Auto panel"><b>${ico('zap')}Auto</b><span class="ap-dot">·</span><span class="ap-now">${esc(nowLabel)}</span><span class="ap-dot">·</span><span class="ap-time">${secs(total || 0)}</span></div><div class="ap-meter"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>`
+    : `<div class="ap-head" title="Minimise"><b>${ico('zap')}Auto</b><span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop" title="Stop after the current step">Stop</button>' : `<button class="ap-close" title="Hide" aria-label="Hide">${ico('x')}</button>`}<button class="ap-min" title="Minimise" aria-label="Minimise">${ico('minus')}</button></div>
+    <div class="ap-meter" title="${doneN} of ${e.steps.length} steps"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>
     <div class="ap-prompt">${esc(e.prompt || '')}</div>
-    <ol>${e.steps.map(s => `<li class="${s.state}"><i>${AUTO_ICON[s.state] || '○'}</i><span>${esc(s.label)}${live(s) ? `<small>${linkify(live(s))}</small>` : ''}</span><em>${s.state === 'working' && s.t0 ? secs(Date.now() - s.t0) : s.ms ? secs(s.ms) : ''}</em></li>`).join('')}</ol>
-    ${e.url ? `<a class="ap-live" href="${esc(e.url)}" target="_blank" rel="noopener">🌐 Open the live app</a>` : e.state === 'failed' && e.message ? `<div class="ap-msg">${esc(e.message)}</div>` : ''}`
+    <ol>${e.steps.map(s => { const note = live(s), long = note && note.length > 90; return `<li class="${s.state}${autoM.open.has(s.id) ? ' open' : ''}" data-step="${esc(s.id)}"><i>${AUTO_ICON[s.state] || AUTO_ICON.wait}</i><span>${esc(s.label)}${note ? `<small>${linkify(note)}</small>${long ? `<button class="ap-more">${autoM.open.has(s.id) ? 'Less' : 'More'}</button>` : ''}` : ''}</span><em>${s.state === 'working' && s.t0 ? secs(Date.now() - s.t0) : s.ms ? secs(s.ms) : ''}</em></li>` }).join('')}</ol>
+    ${e.url ? `<a class="ap-live" href="${esc(e.url)}" target="_blank" rel="noopener">${ico('globe')}Open the live app</a>` : e.state === 'failed' && e.message ? `<div class="ap-msg">${esc(e.message)}</div>` : ''}`
+  for (const b of p.querySelectorAll('.ap-more')) b.onclick = ev => { ev.stopPropagation(); const id = b.closest('li').dataset.step; autoM.open.has(id) ? autoM.open.delete(id) : autoM.open.add(id); renderAutoPanel() }
   p.querySelector('.ap-stop')?.addEventListener('click', ev => { ev.stopPropagation(); api('/api/auto/stop', { method: 'POST' }) })
   // the header folds it to one line, out of the way of what it is showing
-  p.querySelector('.ap-head').onclick = ev => { if (ev.target.closest('button')) return; autoM.min = !autoM.min; renderAutoPanel() }
+  const head = p.querySelector('.ap-head')
+  head.onclick = ev => { if (ev.target.closest('button:not(.ap-min)')) return; setAutoMin(!autoM.min) }
+  head.onkeydown = ev => { if (autoM.min && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); setAutoMin(false) } }
   p.querySelector('.ap-close')?.addEventListener('click', () => { p.hidden = true })
 }
 const linkify = t => esc(t).replace(/https?:\/\/[^\s<"]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
@@ -4466,7 +4623,41 @@ api('/api/auto').then(r => r.ok ? r.json() : null).then(e => { if (e?.steps && (
 // ---------- the code wall: while the engine builds an app or a game, the files it
 // writes type out in tiles, one agent per tile with its cursor on the caret.
 const CW_TILES = 4
-const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false }
+// ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
+// and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
+// talking to, each helper's reply as a bubble on its cursor, and what it is doing right now
+// (crew:act, live only) as its name-pill status.
+const radio = { run: null, lead: null, acts: new Map(), says: new Map(), order: [] }
+function radioEvent(e) {
+  const run = e.run || appv.run || shownRun()
+  if (radio.run !== run) Object.assign(radio, { run, lead: null, acts: new Map(), says: new Map(), order: [] })
+  const t = e.t || Date.now()
+  const meet = n => { if (n && n !== 'Hermia' && !radio.order.includes(n)) radio.order.push(n) }
+  if (e.type === 'crew:lead') { radio.lead = { text: e.text, to: e.to, kind: e.kind || 'think', t }; meet(e.to) }
+  else if (e.type === 'crew:act') { radio.acts.set(e.name, { text: e.text, t }); meet(e.name) }
+  else if (e.type === 'agent:say') { radio.says.set(e.name, { text: e.text, kind: e.kind, t }); meet(e.name) }
+}
+const radioOn = () => radio.run && radio.run === appv.run
+// the wall's crew: the helpers the radio has heard from first, then the build's agents
+function wallNames() {
+  const heard = radioOn() ? radio.order.slice(0, CW_TILES).map(n => [n, Crew.color(n)]) : []
+  return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
+}
+const heardIn = (x, ms) => x && Date.now() - x.t < ms
+const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false, shown: false, thinking: false, planKey: '' }
+const clock = ms => { const t = Math.max(0, Math.round(ms / 1000)); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s` }
+const kTokens = n => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+// Between batches the engine is thinking (its "next step" line): nothing is written for a
+// minute or more, so the wall says who is planning, for how long, and with how much context.
+function cwPlan(steps) {
+  const last = steps.findLast(s => s.kind !== 'tokens' && s.kind !== 'ask')
+  if (!(last ? last.kind === 'think' : appv.stage === 'next step')) return null
+  const think = steps.findLast(s => s.kind === 'think')
+  const write = steps.findLast(s => s.kind === 'write')
+  const turn = steps.findLast(s => s.kind === 'turn')?.turn || 1
+  const files = [...new Set(steps.filter(s => s.kind === 'write').map(s => s.text).reverse())].slice(0, 4)
+  return { since: write?.t || think?.t || cw.planSince || Date.now(), tokens: think?.tokens || 0, turn, files }
+}
 function cwHighlight(text) {
   // comments, strings, keywords and tags; everything escaped piece by piece
   const re = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|('(?:[^'\\\n]|\\.)*'?|"(?:[^"\\\n]|\\.)*"?|`(?:[^`\\]|\\.)*`?)|(<\/?[A-Za-z][\w.]*)|\b(import|from|export|default|const|let|var|function|return|async|await|if|else|for|while|new|class|extends|type|interface|true|false|null|undefined)\b/g
@@ -4483,6 +4674,7 @@ function cwHighlight(text) {
 function codeWall() {
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
+    cw.shown = false
     if (cw.el) cw.el.hidden = true
     if (appv.state !== 'working') Object.assign(cw, { run: null, seen: 0, queue: [], tiles: [] })
     return
@@ -4490,12 +4682,17 @@ function codeWall() {
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    cw.el.innerHTML = `<div class="cw-head"><b>${appv.kind === 'game' ? '🎮 Writing the game' : '🧩 Writing the app'}</b><span class="cw-count"></span><button class="cw-peek" title="Hide the code and look at the app">👁 Preview</button></div><div class="cw-grid"></div>`
+    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" title="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-radio" hidden></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
     appEls.preview.append(cw.el)
   }
   if (cw.run !== appv.run) Object.assign(cw, { run: appv.run, seen: Math.max(0, appv.steps.length - 30), queue: [], tiles: [], hide: false })
   cw.el.hidden = cw.hide
+  // the wall just came up while Auto is running: fold the Auto panel to its pill so it does not cover the code
+  if (!cw.hide && !cw.shown) {
+    cw.shown = true
+    if (autoM.last?.state === 'working' && !autoM.min) setAutoMin(true, false)
+  }
   // newly written files join the queue (newest wins; a file already up is retyped)
   const steps = appv.steps
   for (; cw.seen < steps.length; cw.seen++) {
@@ -4514,11 +4711,20 @@ function codeWall() {
     appApi(`/files?path=${encodeURIComponent(path)}`).then(r => { tile.text = String(r.text || '').slice(0, 6000) }).catch(() => { tile.text = '' }).finally(() => { tile.loading = false; if (!tile.text) tile.doneAt = 0 })
   }
   const grid = cw.el.querySelector('.cw-grid')
-  const names = crewMembers(CW_TILES)
+  const names = wallNames()
+  // Hermia's strip: her newest line, and who it is for
+  const strip = cw.el.querySelector('.cw-radio'), lead = radioOn() ? radio.lead : null
+  strip.hidden = !lead
+  if (lead && strip.dataset.t !== String(lead.t)) {
+    strip.dataset.t = lead.t
+    const kind = { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind
+    strip.className = `cw-radio ${lead.kind}`
+    strip.innerHTML = `<span class="cw-radio-av">${HERMIA}</span><div class="cw-radio-main"><div class="cw-radio-who"><b>Hermia</b>${lead.to ? `<span class="to">→</span><b style="color:${Crew.color(lead.to)}">${esc(lead.to)}</b>` : ''}<em>${esc(kind)}</em></div><p>${esc(lead.text)}</p></div>`
+  }
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
     d.className = 'cw-tile'
-    d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
+    d.innerHTML = '<div class="cw-file"><i class="node" aria-hidden="true"></i><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
     grid.append(d)
   }
   let writing = 0
@@ -4534,7 +4740,7 @@ function codeWall() {
     setText(d.querySelector('.cw-path'), t.path)
     const [name, color] = names[i] || ['', '#888']
     const who = d.querySelector('.cw-who')
-    setText(who, name); who.style.background = color
+    if (who.dataset.name !== name) { who.dataset.name = name; who.innerHTML = name ? `${Crew.avatar(name, 16)}<span>${esc(name)}</span>` : ''; who.style.background = color; who.style.color = Crew.ink(color) }
     if (d.dataset.shown !== String(t.shown) || d.dataset.path !== t.path) {
       d.dataset.shown = t.shown; d.dataset.path = t.path
       // the last lines, so the caret stays in view
@@ -4545,14 +4751,37 @@ function codeWall() {
       pre.scrollTop = pre.scrollHeight
     }
   })
-  setText(cw.el.querySelector('.cw-count'), `${new Set(steps.filter(s => s.kind === 'write').map(s => s.text)).size} files · ${writing} typing · ${esc(appv.stage || '')}`)
+  const nFiles = new Set(steps.filter(s => s.kind === 'write').map(s => s.text)).size
+  const plan = cwPlan(steps), planEl = cw.el.querySelector('.cw-plan')
+  if (plan && !cw.thinking) cw.planSince = Date.now()
+  cw.thinking = !!plan
+  planEl.hidden = !plan
+  if (plan) {
+    const acts = radioOn() ? [...radio.acts.entries()].filter(([, x]) => heardIn(x, 60000)).sort((x, y) => y[1].t - x[1].t) : []
+    const name = acts[0]?.[0] || names[0]?.[0] || 'Pip', age = clock(Date.now() - plan.since)
+    const key = `${name}|${plan.turn}|${plan.tokens}|${plan.files.join()}`
+    if (cw.planKey !== key) {
+      cw.planKey = key
+      planEl.innerHTML = `<span class="cw-plan-av">${Crew.avatar(name, 40)}</span>`
+        + `<div class="cw-plan-main"><b class="pop-title"><span>${esc(name)}</span> is planning the next <em>files</em></b>`
+        + `<div class="cw-plan-meta"><span>${ico('brain-circuit')}turn ${plan.turn}</span>${plan.tokens ? `<span>${kTokens(plan.tokens)} tokens of context</span>` : ''}<span class="cw-plan-age"></span></div>`
+        + `<div class="cw-plan-act"></div><div class="cw-plan-bar"><i></i></div></div>`
+        + (plan.files.length ? `<div class="cw-plan-files"><small>Last written</small>${plan.files.map(f => `<code title="${esc(f)}">${esc(f.split('/').slice(-2).join('/'))}</code>`).join('')}</div>` : '')
+    }
+    setText(planEl.querySelector('.cw-plan-age'), `${age} since the last file`)
+    setText(planEl.querySelector('.cw-plan-act'), acts[0] ? `${acts[0][0]}: ${acts[0][1].text}` : '')
+    setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · planning turn ${plan.turn} (${age})`)
+  } else {
+    cw.planKey = ''
+    setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · ${writing} typing · ${appv.stage || ''}`)
+  }
 }
 
 // the crew's cursor for tile i sits on that tile's caret
 function cwPin(i) {
   const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
   const caret = d?.querySelector('.cw-caret')
-  if (!t || !caret) return null
+  if (!t || !caret || (cw.thinking && t.shown >= t.text.length)) return null
   const r = caret.getBoundingClientRect()
   if (!r.width && !r.height) return null
   return { x: r.left + 2, y: r.top + 4, text: t.path.split('/').pop(), typing: t.shown < t.text.length }
