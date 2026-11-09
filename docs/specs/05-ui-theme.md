@@ -4,6 +4,8 @@
 
 The studio looks generic and "AI-generated": Inter everywhere, a periwinkle accent, flat grey panels, emoji in place of icons, and the same rounded boxes for everything. It should look like it comes from [design-bakery.com](https://www.design-bakery.com/): a dark lab, a bold display type, mono labels and one electric accent.
 
+> **Updated by [08-identity.md](08-identity.md):** the colours and fonts are now the "Hermes space" palette (Hermes blue `#0000F2`, the F2 accent colours, free stand-ins for the Hermes fonts) over the design-bakery.com space look. The layout, components and screen-by-screen changes below still apply. The token table below is kept for reference only.
+
 ## The theme (taken from design-bakery.com)
 
 **Tokens.** These replace the `:root` block in `web/canvas.css`:

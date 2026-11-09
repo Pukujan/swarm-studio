@@ -7,12 +7,13 @@ These are the specs for what comes after Auto mode and the Supabase connector. E
 | 1 | [Big game mode](01-big-game-mode.md) | Auto can build one real action roguelike, not only three mini games | ½ day |
 | 2 | [Tidebreak demo run](02-tidebreak-demo.md) | One prompt that shows off the studio, and tests everything end to end | 1 run + fixes |
 | 3 | [UI polish: Design Bakery theme](05-ui-theme.md) | The studio stops looking AI-generated before we record the video | 1 day |
+| 3a | [Identity: Commander Hermia, her crew, Hermes space theme](08-identity.md) | A planner mascot, avatars for the agents and the logo, in Hermes's own colours over a space look. It updates the theme in spec 3. | 1 day |
 | 3b | [The Auto show: visuals, chatter, launch kit](07-auto-show.md) | Every step is fun to watch and hear, and a launch kit posts only when you click | 1½ days |
 | 4 | [Onboarding and Connections](06-onboarding.md) | New people connect Supabase, Vercel and Stripe by signing in, or skip and add them later | ½–1 day |
 | 5 | [Swarm Arcade](03-arcade.md) | Publish, browse, play and remix other people's builds | 1–1½ days |
 | 6 | [3D models](04-3d.md) | Free CC0 models plus one generated hero model, on pages, the canvas and in games | 1 day |
 
-Deadline: the hackathon closes on **2026-11-11 at 17:00 EST**. Specs 1–3b come first, because the demo video needs them. Onboarding (4) comes next, because judges will open the studio fresh. The Arcade (5) and 3D (6) are stretch goals. Files are numbered in the order they were written, not the build order.
+Deadline: the hackathon closes on **2026-11-11 at 17:00 EST**. Specs 1–3b come first (build 3 and 3a together), because the demo video needs them. Onboarding (4) comes next, because judges will open the studio fresh. The Arcade (5) and 3D (6) are stretch goals. Files are numbered in the order they were written, not the build order.
 
 ## Already done
 

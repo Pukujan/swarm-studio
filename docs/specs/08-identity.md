@@ -1,0 +1,105 @@
+# 8. Identity: the Commander, her crew, and the Hermes space theme
+
+The studio should feel like part of the Hermes world, not a generic AI tool. A cute commander runs the build (she's the planner), a crew of little agents does the work, and the studio is set in a deep-space theme. The colours come from Hermes and Nous Research, and the space look comes from design-bakery.com.
+
+This spec **updates [05-ui-theme.md](05-ui-theme.md)**. That spec's layout, components and screen-by-screen changes still apply, but its tokens are replaced by the palette below.
+
+## What Hermes and Nous look like
+
+Taken from nousresearch.com and hermes-agent.nousresearch.com on 2026-11-09:
+- **Colour:**
+  - **Hermes blue `#0000F2`** is the brand colour. It's used for buttons and frames, and as a full-bleed background.
+  - **Off-white `#F2F2F2`.**
+  - A bright "F2" palette: red `#F20000`, orange `#F27900`, yellow `#F2F200` (the accent), neon `#79F200`, green `#00F279`, cyan `#00F2F2`, indigo `#7900F2`, magenta `#F200F2`, pink `#F20079`, neutral `#616191`.
+  - The dark pages are a deep blue-black.
+- **Type:**
+  - Display is very tall and compressed (Rules Gothic Compressed), used for huge titles like "NOUS RESEARCH".
+  - Labels are condensed uppercase (Rules Condensed). Body text is monospaced-looking (Aeonik Fono). EB Garamond (classical serif) is used for accents.
+- **Imagery:** the Nous logo is an engraved classical portrait. The site mixes classical engraving with pixel and glitch touches (the small pixel-wing mark in the search bar). There's a thin blue frame around the whole page.
+- **Plugins:** official dashboard plugins (for example `plugins/kanban`) don't bring their own palette. They use the dashboard's theme variables (`--color-foreground`, `--color-card`, `--color-border`, `--color-ring`, `--color-primary`, `--font-mono`, `--radius`). Themes are YAML files in `~/.hermes/dashboard-themes/`.
+
+**What we may not use:**
+- the Nous logo or wordmark as our mark;
+- their commercial fonts (Rules and Aeonik are licensed);
+- anything that suggests Nous made Swarm Studio.
+
+A small "Built for Hermes Agent" line in the footer and the README is fine.
+
+## The theme: "Hermes space"
+
+**Base:** deep-space blue-black with a starfield, a faint grid and one glow, the design-bakery.com look recoloured to Hermes blue. There's a 1 px Hermes-blue frame around the whole app, as on their sites.
+
+| Token | Value | Use |
+|---|---|---|
+| `--void` | `#05051a` | app background, deep space |
+| `--deep` | `#0a0a2e` | panels (glass over the void) |
+| `--panel` | `rgb(242 242 242 / .04)` | glass fill |
+| `--panel-edge` | `rgb(242 242 242 / .12)` | 1 px borders |
+| `--frame` | `#0000F2` | the app frame, the primary button, the selection ring |
+| `--text` | `#F2F2F2` | body |
+| `--muted` | `#8b8bb8` (neutral, lifted for contrast) | secondary text |
+| `--accent` | `#F2F200` (yellow) | the one "do this / live" accent |
+| `--accent-ink` | `#05051a` | text on yellow |
+| `--ok` | `#00F279` | done |
+| `--hot` | `#F20000` | failed, recording |
+| `--info` | `#00F2F2` | links, info |
+| `--glow` | `#0000F2` at 35%, blurred 120 px | the orb behind the active area |
+
+**Crew colours:** each agent gets one of the 10 F2 colours (red, orange, yellow, neon, green, cyan, indigo, magenta, pink, plus blue on white). Agents beyond 10 reuse a colour with a lighter tint. These colours are used for the cursors, the name pills, the 2 px message rules and the avatar.
+
+**Type** (all free, OFL, self-hosted in `web/fonts/`):
+
+| Role | Font | Stands in for |
+|---|---|---|
+| Display: huge compressed titles | **Big Shoulders Display** 800, or **Antonio** 700 | Rules Gothic Compressed |
+| Labels, nav, tabs, timers | **Barlow Condensed** 600, uppercase, letter spacing 0.06em | Rules Condensed |
+| Body and data | **JetBrains Mono** 400 | Aeonik Fono (mono feel) |
+| Accent word | **EB Garamond** italic (which Nous uses too) | — |
+
+**The rule from design-bakery.com still holds:** one accent word in the serif, in yellow. For example "One prompt. The *whole* thing." and "SWARM *Studio*".
+
+**Inside the Hermes dashboard:** when the canvas is embedded as a dashboard tab, it reads the host's `--color-*` and `--font-*` variables first and falls back to the tokens above, so it fits whatever Hermes theme the person uses. We also ship an optional `swarm-space.yaml` dashboard theme with these tokens, the starfield `bg` asset and the fonts (`fontUrl`). People can switch their whole dashboard to it.
+
+## The Commander (the planner)
+
+- **Who she is:** a cute chibi commander who runs every build. She's original, inspired by the Hermes myth, which is public domain: the messenger with a winged helmet and a caduceus staff.
+- **Look:**
+  - a round face and big eyes, with a small winged helmet in off-white, and the wing tips in Hermes blue;
+  - a short blue cape with a yellow trim line;
+  - she carries a caduceus-style baton that glows yellow when she gives orders;
+  - drawn in an engraved, line-art style with a few pixel and glitch accents, a nod to the Nous style without copying their logo.
+- **Name:** she's called "Hermia". The name and look are final unless we change them before launch.
+- **Where she appears:**
+  1. **The planner's seat:** at the top of the canvas when a build starts. She "draws" the sitemap, and the page frames fly out from her baton.
+  2. **Orders:** each `agent:assign` is a speech bubble from her ("Ada, hero section, go!"), and a dotted line runs from her to the agent's cursor.
+  3. **Auto narrator:** the step transition cards from [07-auto-show.md](07-auto-show.md) show her pointing to the next view.
+  4. **Onboarding host:** she greets people in [06-onboarding.md](06-onboarding.md), one line per step.
+  5. **Logo and avatar:** her helmeted face in a circle is the app icon, the favicon, the README hero, the catalog listing and the Arcade avatar.
+- **Voice:** in the chatter system she has a warmer, lower voice than the crew, and her TTS lines are rarer and sound like commands ("Launch!", "Good work, crew.").
+
+## The crew (the agents)
+
+- **Who they are:** little round "courier" sprites. Each is a soft blob body with tiny ankle wings (Hermes' winged sandals), one antenna, and a visor in the agent's colour.
+- **Avatars:** SVG, generated in code from the agent's name, so they stay consistent at any size:
+  - the body colour is from the F2 palette;
+  - the visor shape, antenna style and one accessory (headset, goggles, a tool belt, a scarf) are picked by a seed;
+  - each one is a single `<svg>` that animates cheaply: a 4 s blink, a mouth that opens in sync with its chatter syllables, wings that flap while it moves, and a hop when it finishes a task.
+- **Where they appear:** on each cursor (the avatar replaces the plain arrow head, with the name pill beside it), in agent messages in Chat, the break room, the code wall tiles ("Ada is writing `routes.ts`"), and the final summary card's crew line.
+- **Images:** the generator never draws them. Generated sprite sheets don't stay consistent, so the crew is code only.
+
+## The Commander's artwork
+
+- A small set of reference illustrations: a portrait, a pointing pose, a cheering pose and a thinking pose.
+  - They're made with the image generator from one fixed prompt and seed.
+  - Then we hand-pick and clean them into transparent PNGs and SVG line art.
+  - The kept versions go in `web/brand/`, recorded with their prompt and seed in `web/brand/credits.json`.
+- The logo is a clean vector redraw of the portrait: 3 colours (blue, off-white, yellow) that still read at 16 px.
+- Nothing is copied from Nous artwork. A reviewer compares the final art against the Nous logo, to make sure it doesn't look like a variant of it.
+
+## Done when
+
+- [ ] Tokens, fonts and the frame are in `web/canvas.css`. The canvas uses the Hermes dashboard's `--color-*` variables when embedded, and `swarm-space.yaml` installs and works as a dashboard theme.
+- [ ] Hermia appears at the start of a build and gives orders in bubbles with dotted lines to cursors. She's also in the Auto transitions and the onboarding.
+- [ ] Each agent cursor has its SVG avatar: it blinks, its mouth moves with chatter, its wings flap while it moves, and it hops when done. Two runs with the same agent names look the same.
+- [ ] The app icon, favicon and README hero use Hermia's logo. The footer says "Built for Hermes Agent", with no Nous logo anywhere.
+- [ ] Contrast passes WCAG AA, and everything works at 390 px wide.
