@@ -12,7 +12,7 @@ Every feature works in three places: on the canvas, as a `/swarm …` command, a
 | **Wires** | Buttons that link pages become wires between frames. | always on | — |
 | **Generated images** | Photos from your Hermes image provider (your Codex login by default). A sketch holds each spot, then the photo fades in. | **Models** | `/swarm images [auto\|off\|<provider> [model]]` |
 | **Models** | Choose the models for planning, building, reviewing and images. | **Models** | `/swarm models [<role> <model\|off\|reset>]` |
-| **Lite mode** | For machines short on memory: one live page at a time, smaller images. | **Models** | `/swarm lite [on\|off\|auto]` |
+| **Lite mode** | One live page at a time; the others rest as snapshots and wake when you zoom in or an agent works on them. Auto turns it on for machines short on memory, for everyone half a minute after a build finishes, and while you're in Play. | **Models** | `/swarm lite [on\|off\|auto]` |
 
 ## Edit
 
@@ -26,7 +26,7 @@ Every feature works in three places: on the canvas, as a `/swarm …` command, a
 
 | Feature | What you see | Canvas | Command |
 |---|---|---|---|
-| **Clickable prototype** | Every page, with working links, on desktop or mobile. | **▶ Play** (P) | `/swarm play` |
+| **Clickable prototype** | Every page, with working links, on desktop or mobile. A layout guard moves any text panel that a builder floated over a map or picture beside it if it would cover other text at that width (exports and published sites get it too). | **▶ Play** (P) | `/swarm play` |
 | **Motion** | Sections rise in as they scroll into view and buttons lift on hover. Bold or playful themes move faster and springier. | **✨ Motion** (M) | `/swarm motion [on\|off]` |
 | **Watch a visitor** | 3–4 people with different goals use the site. A cursor acts each one out, with a thought bubble. | **👀 Watch a visitor** (V) | — |
 | **Promo video** | The planner writes a storyboard from the site's own copy and photos. HyperFrames renders a ~20 s MP4 in the site's theme. | **🎬 Video** | `/swarm video [n]` |

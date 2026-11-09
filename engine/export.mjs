@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from 'node
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { MOTION_CSS, motionPreset, motionSource, swarmMotion } from './motion.mjs'
+import { layoutSource, swarmLayout } from './layout.mjs'
 
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const text = html => String(html || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()
@@ -171,6 +172,9 @@ ${rootCss(snap.theme)}${MOTION_CSS}</style>
 <body>
 ${body}
 <script>
+// layout: a text panel floated over a map or picture moves beside it when it would cover other text
+${layoutSource()}
+
 // motion: sections reveal as they scroll in
 addEventListener('load', () => ${motionSource(motionPreset(snap.theme))})
 
@@ -211,7 +215,9 @@ function reactApp(snap, dir, runId, runDir, name) {
   })
   const first = snap.pages[0]?.id || 'home'
   writeFileSync(join(src, 'motion.js'), `// Sections reveal as they scroll in; clickable things lift under the pointer.\n// Idempotent: run it again whenever a page renders.\nexport const preset = ${JSON.stringify(motionPreset(snap.theme))}\n\nexport ${swarmMotion.toString()}\n`)
+  writeFileSync(join(src, 'layout.js'), `// A text panel floated over a map or picture moves beside it when it would cover\n// other text at this width. Idempotent: run it again whenever a page renders.\nexport ${swarmLayout.toString()}\n`)
   writeFileSync(join(src, 'App.jsx'), `import { useEffect, useState } from 'react'
+import { swarmLayout } from './layout.js'
 import { swarmMotion, preset } from './motion.js'
 ${pageNames.map(([, n]) => `import ${n} from './pages/${n}.jsx'`).join('\n')}
 
@@ -237,7 +243,12 @@ export default function App() {
       document.removeEventListener('submit', onSubmit)
     }
   }, [])
-  useEffect(() => swarmMotion(document.getElementById('root'), preset), [page])
+  useEffect(() => {
+    const root = document.getElementById('root')
+    swarmLayout(root)
+    document.fonts?.ready.then(() => swarmLayout(root))
+    swarmMotion(root, preset)
+  }, [page])
   const Page = pages[page] || pages[${JSON.stringify(first)}]
   return <Page />
 }

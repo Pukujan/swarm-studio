@@ -19,6 +19,7 @@ import { exportRun } from '../engine/export.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion } from '../engine/motion.mjs'
+import { layoutSource } from '../engine/layout.mjs'
 import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -483,7 +484,7 @@ const webVersion = () => String(Math.max(...readdirSync(webDir).map(f => statSyn
 
 function canvasPage() {
   const read = f => readFileSync(join(webDir, f), 'utf8')
-  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source } }).replace(/</g, '\\u003c')
+  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource() }).replace(/</g, '\\u003c')
   return read('index.html')
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
