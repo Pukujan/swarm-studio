@@ -317,3 +317,20 @@ button { font: inherit; color: inherit; }
 .dpick .sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #ffffff2a; flex: none; }
 .dcolor { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
 .selbox { position: absolute; border: 2px solid #7c9cff; box-shadow: 0 0 0 9999px #0000; pointer-events: none; border-radius: 2px; }
+
+/* ---------- models menu */
+.models-pop { position: fixed; z-index: 70; width: 400px; max-width: calc(100vw - 16px); max-height: calc(100vh - 70px); overflow: auto; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 16px 40px #000a; }
+.models-pop .mhead { font-weight: 700; margin-bottom: 10px; }
+.models-pop .mhead small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.models-pop .mrow { display: block; padding: 9px 0; border-top: 1px solid var(--line); }
+.models-pop .mlabel { display: block; font-weight: 600; font-size: 12.5px; }
+.models-pop .mlabel small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.models-pop .mfield { display: flex; gap: 6px; margin-top: 6px; }
+.models-pop input, .models-pop select { flex: 1; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--text); font: 12px var(--mono); }
+.models-pop input:focus, .models-pop select:focus { outline: 0; border-color: var(--accent); }
+.models-pop input:disabled { opacity: .45; }
+.models-pop .mfield button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; color: var(--text); cursor: pointer; font-weight: 600; }
+.models-pop .mfield button.on { color: var(--muted); }
+.models-pop .mnow { display: block; color: var(--muted); font: 10.5px var(--mono); margin-top: 4px; }
+.models-pop .mfoot { color: var(--muted); font-size: 11px; border-top: 1px solid var(--line); padding-top: 9px; }
+#review-btn:disabled { opacity: .45; cursor: default; }

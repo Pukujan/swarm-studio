@@ -82,7 +82,7 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   const plan = { theme: null, pages: [], shared: [] }
@@ -233,7 +233,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     try {
       await streamChat(workerProvider, {
         model: workerModel,
-        messages: workerMessages({ theme: plan.theme || {}, plan, page, layer }),
+        messages: workerMessages({ theme: plan.theme || {}, plan, page, layer, images }),
         maxTokens: 3000,
         extra: NO_THINKING,
         signal,

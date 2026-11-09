@@ -86,7 +86,12 @@ Rules:
 - Buttons or links that go to another page get data-goto="<page id>".
 - As you work, every 3 to 6 elements write a short note about what you are doing as an HTML comment: <!-- say: ... --> (under 12 words, first person, specific).`
 
-export function workerMessages({ theme, plan, page, layer }) {
+// With an image model picked, a section may ask for one real photo or illustration;
+// the server generates it after the section is done and fills in the src.
+const SVG_ONLY = ' For imagery use simple inline SVG shapes or CSS shapes, never external image URLs.'
+const IMAGE_RULE = `- Imagery: if a real photo or illustration would clearly help this section (a hero, a product, a place, people), add at most ONE <img data-gen="what the image shows, its style and mood, under 25 words" alt="..." class="w-full h-full object-cover rounded-[var(--radius)]"> inside a sized box (for example aspect-[4/3] or h-80). Leave out src: it is filled in for you. Otherwise use simple inline SVG or CSS shapes. Never external image URLs.`
+
+export function workerMessages({ theme, plan, page, layer, images = false }) {
   const shared = [
     `Theme "${theme.name}": ${theme.direction}`,
     `Fonts: headings ${theme.fonts?.heading}, body ${theme.fonts?.body}. Radius ${theme.radius}.`,
@@ -111,7 +116,7 @@ export function workerMessages({ theme, plan, page, layer }) {
     .join('\n')
 
   return [
-    { role: 'system', content: `${WORKER_SYSTEM}\n\n${shared}` },
+    { role: 'system', content: `${images ? `${WORKER_SYSTEM.replace(SVG_ONLY, '')}\n${IMAGE_RULE}` : WORKER_SYSTEM}\n\n${shared}` },
     { role: 'user', content: task }
   ]
 }

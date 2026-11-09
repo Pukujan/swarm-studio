@@ -21,6 +21,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -35,7 +36,10 @@ DEFAULT_MODEL = "cb/deepseek-v4.1-flash"
 SLOTS = {
     "planner": ("swarm_studio_planner", "SWARM_STUDIO_PLANNER_MODEL"),
     "worker": ("swarm_studio_builder", "SWARM_STUDIO_WORKER_MODEL"),
+    # looks at screenshots of the finished pages; follows Hermes's vision model
+    "reviewer": ("swarm_studio_reviewer", "SWARM_STUDIO_REVIEWER_MODEL"),
 }
+OPTIONAL = {"reviewer"}
 
 
 def data_dir() -> Path:
@@ -157,7 +161,7 @@ def ensure_server() -> dict:
         return {"running": True, "started": False, "url": canvas_url()}
 
     models = resolve_models()
-    problems = [f"{role}: {m['error']}" for role, m in models.items() if "error" in m]
+    problems = [f"{role}: {m['error']}" for role, m in models.items() if "error" in m and role not in OPTIONAL]
     if problems:
         return {"running": False, "error": "Swarm Studio has no usable model. " + "; ".join(problems)}
     node = os.environ.get("SWARM_STUDIO_NODE") or shutil.which("node")
@@ -165,10 +169,15 @@ def ensure_server() -> dict:
         return {"running": False, "error": "Node.js 20+ is required (no `node` on PATH)."}
 
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
-    env = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG") if k in os.environ}
-    env.update(SWARM_TOKEN=token(), SWARM_RUNS_DIR=str(data_dir() / "runs"))
+    env = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME") if k in os.environ}
+    env.update(SWARM_TOKEN=token(), SWARM_RUNS_DIR=str(data_dir() / "runs"), SWARM_DATA_DIR=str(data_dir()))
+    # Images come from Hermes's own image providers (your Codex login, for one):
+    # the server runs imagegen.py with this Python and these import paths.
+    env.update(SWARM_HERMES_PY=sys.executable, SWARM_HERMES_PYTHONPATH=os.pathsep.join(p for p in sys.path if p and os.path.isdir(p)))
     # Defaults for builds started from the canvas itself; Hermes sends fresh ones with each run.
     for role, m in models.items():
+        if "error" in m:
+            continue
         prefix = f"SWARM_{role.upper()}_"
         env.update({prefix + "BASE_URL": m["base_url"], prefix + "API_KEY": m["api_key"], prefix + "MODEL": m["model"]})
     if os.environ.get("SWARM_STUDIO_AGENTS"):
