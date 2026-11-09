@@ -30,7 +30,7 @@ HELP = """Swarm Studio commands
   /swarm export [n|id]            files: static HTML, a React + Tailwind project, an ABA handoff
   /swarm publish [n|id] [github|vercel|cloudflare|local]   a live link (GitHub Pages by default)
   /swarm hosts                    where you can publish, and how to connect Vercel or Cloudflare
-  /swarm video [n|id]             cut a 20-second promo video of a build (HyperFrames, MP4)
+  /swarm video [n|id] [voice|off] [nomusic]  cut a promo video with a Kokoro voiceover and music (MP4)
   /swarm models                   which model does what
   /swarm models <planner|builders|reviewer> <model id|off|reset>
   /swarm images [auto|off|<provider> [model]]   generated images (default: your Codex login)
@@ -120,7 +120,10 @@ def _dispatch(cmd: str, args: list[str]) -> str:
             f"Reviewing “{r['title']}”" if r else "Reviewing the open build") + ": watch the canvas, fixes stream in live."
 
     if cmd == "video":
-        return _video(args[0] if args else "", wait=False)
+        # /swarm video [n] [voice|off] [nomusic]
+        ref = next((x for x in args if x.isdigit() or x.startswith("20")), "")
+        voice = next((x for x in args if x == "off" or ("_" in x and not x.startswith("20"))), "")
+        return _video(ref, wait=False, voice=voice, music="nomusic" not in args)
 
     if cmd == "export":
         r = _pick_run(args[0] if args else "")
@@ -237,14 +240,14 @@ def _publish(ref: str, target: str) -> str:
     return f"“{r['title']}” is hosted on this computer: {job.get('url')}{note}"
 
 
-def _video(ref: str, wait: bool) -> str:
+def _video(ref: str, wait: bool, voice: str = "", music: bool = True) -> str:
     r = _pick_run(ref)
     if not r:
         return "No such build. See /swarm files."
     path = f"/api/runs/{r['id']}/video"
-    job = _api(path, {})
+    job = _api(path, {**({"voice": voice} if voice else {}), "music": music})
     if not wait:
-        return (f"Cutting a promo video of “{r['title']}”: the planner writes the storyboard, HyperFrames renders it "
+        return (f"Cutting a promo video of “{r['title']}”: the planner writes the storyboard and voiceover, HyperFrames renders it, Kokoro reads it over music "
                 "(about a minute; the first one also fetches the renderer). Watch it on the canvas; "
                 f"it is saved as runs/{r['id']}/video/promo.mp4.")
     deadline = time.time() + 600
@@ -259,7 +262,7 @@ def _video(ref: str, wait: bool) -> str:
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, and set the models, image generation and lite mode.",
+    "description": "Control Swarm Studio after a build: list or open builds, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, and set the models, image generation and lite mode.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -270,6 +273,8 @@ TOOL_SCHEMA = {
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
             "provider": {"type": "string", "description": "for images: a Hermes image provider (openai-codex, xai, …), 'auto' or 'off'; omit to show"},
             "value": {"type": "string", "enum": ["on", "off", "auto"], "description": "for lite (on/off/auto) and motion (on/off)"},
+            "voice": {"type": "string", "description": "for video: a Kokoro voice (af_heart, af_bella, am_michael, bf_emma, bm_george), 'off' for none; default picks one for the theme"},
+            "music": {"type": "boolean", "description": "for video: false for no music bed (default true)"},
             "target": {"type": "string", "enum": ["github", "vercel", "cloudflare", "local"], "description": "for publish: github (a public GitHub Pages link through the gh login, the default), vercel or cloudflare (the person's own account, once connected on the canvas), or local (hosted on this computer)"},
         },
         "required": ["action"],
@@ -287,7 +292,7 @@ def tool(args: dict | None = None, **_: object) -> str:
                 return _publish(str(a.get("build") or ""), a.get("target") if a.get("target") in TARGETS else "github")
             if action == "fix":
                 return _fix(str(a.get("text") or "").strip(), str(a.get("build") or ""))
-            return _video(str(a.get("build") or ""), wait=True)
+            return _video(str(a.get("build") or ""), wait=True, voice=str(a.get("voice") or ""), music=a.get("music") is not False)
         except RuntimeError as exc:
             return f"Swarm Studio: {exc}"
     parts = {

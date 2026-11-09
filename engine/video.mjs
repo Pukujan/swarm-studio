@@ -7,6 +7,7 @@
 // first time a video is made, unless they are already on PATH.
 
 import { spawn, execFile } from 'node:child_process'
+import { CAST, MOODS } from './sound.mjs'
 import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, writeFileSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
 import { dirname, join, extname } from 'node:path'
@@ -53,10 +54,10 @@ function storyPrompt(c) {
   return [
     {
       role: 'system',
-      content: `You are a motion designer cutting a 20-second promo video for a website a team of AI agents just built. You write the storyboard; fixed animation templates in the site's own theme play it.
+      content: `You are a motion designer cutting a short promo video for a website a team of AI agents just built. You write the storyboard; fixed animation templates in the site's own theme play it.
 
 Return JSON only:
-{"scenes":[{"kind":"open|image|split|list|quote|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,"items":["...","...","..."]}]}
+{"cast":{"narrator":"<voice id>","second":"<voice id, or null>"},"music":"gentle|snappy","scenes":[{"kind":"open|image|split|list|quote|cta","kicker":"tiny label above, 1-3 words","headline":"the big line","sub":"one supporting line","image":1,"items":["...","...","..."],"say":"what is said over this scene","who":"narrator|second"}]}
 
 Scene kinds:
 - open: the brand reveal. headline = the brand name; sub = what it is, under 9 words. No image.
@@ -68,7 +69,11 @@ Scene kinds:
 
 Rules:
 - 5 to 7 scenes. First is open, last is cta. Vary the kinds; use each picture at most once and only numbers from the list.
-- Use the site's real names, offers and voice. Headlines under 7 words except quotes. No exclamation marks, no emoji, no hashtags.`
+- Use the site's real names, offers and voice. Headlines under 7 words except quotes. No exclamation marks, no emoji, no hashtags.
+- "say" is the voiceover, read aloud by a warm narrator: one natural spoken sentence per scene, 5 to 14 words, that adds to the words on screen rather than repeating them. Write numbers and dates the way they are spoken ("March twentieth"). The last scene's line is the invitation.
+- Cast the voices to fit the brand, the art direction and the audience: "narrator" reads most lines. A "second" voice is optional: use it for one or two lines that sound like a different person (a customer, a vendor, a host), never for the invitation. Voices:
+${Object.entries(CAST).map(([id, d]) => `  ${id}: ${d}`).join('\n')}
+- "music": snappy for loud, fast, nightlife, sport or tech brands; gentle for calm, warm, crafted or premium ones.`
     },
     {
       role: 'user',
@@ -87,7 +92,7 @@ export function checkStory(raw, c) {
       if (!c.images.some(i => i.n === image) || used.has(image)) kind = 'quote'
       else used.add(image)
     }
-    const scene = { kind, kicker: clip(s.kicker, 28), headline: clip(s.headline, kind === 'quote' ? 90 : 56), sub: clip(s.sub, 90) }
+    const scene = { kind, kicker: clip(s.kicker, 28), headline: clip(s.headline, kind === 'quote' ? 90 : 56), sub: clip(s.sub, 90), say: clip(s.say, 140), who: s.who === 'second' ? 'second' : 'narrator' }
     if (kind === 'image' || kind === 'split') scene.image = image
     if (kind === 'list') {
       scene.items = (Array.isArray(s.items) ? s.items : []).map(x => clip(x, 32)).filter(Boolean).slice(0, 3)
@@ -97,7 +102,13 @@ export function checkStory(raw, c) {
   }
   if (scenes[0]?.kind !== 'open') scenes.unshift({ kind: 'open', kicker: '', headline: c.brand, sub: clip(c.brief, 60) })
   if (scenes.at(-1)?.kind !== 'cta') scenes.push({ kind: 'cta', kicker: c.brand, headline: 'Come and see', sub: 'Visit the site' })
-  return scenes.slice(0, 8)
+  const out = scenes.slice(0, 8)
+  // who reads what: voice ids the model picked, kept only if they exist
+  const narrator = CAST[raw.cast?.narrator] ? raw.cast.narrator : null
+  const second = CAST[raw.cast?.second] && raw.cast.second !== narrator ? raw.cast.second : null
+  out.cast = { narrator, second }
+  out.music = MOODS.includes(raw.music) ? raw.music : null
+  return out
 }
 
 // Without a model: brand, each picture with its page title, a closing card.
@@ -107,6 +118,8 @@ export function fallbackStory(c) {
   c.images.slice(0, 3).forEach((img, i) => scenes.push({ kind: i % 2 ? 'split' : 'image', kicker: c.brand, headline: clip(titles[i + 1] || titles[0] || c.brand, 40), sub: '', image: img.n }))
   if (titles.length > 2) scenes.push({ kind: 'list', kicker: 'Inside', headline: c.brand, sub: '', items: titles.slice(1, 4).map(t => clip(t, 30)) })
   scenes.push({ kind: 'cta', kicker: c.brand, headline: 'Come and see', sub: 'Visit the site' })
+  // without a writer, the narrator reads what is on screen
+  for (const x of scenes) x.say = clip([x.headline, x.sub].filter(Boolean).join('. '), 140)
   return scenes
 }
 
@@ -123,7 +136,11 @@ export async function writeStory({ provider, model, c, signal }) {
 const words = (s, cls = 'w') => esc(s).split(' ').map(w => `<span class="${cls}"><span>${w}</span></span>`).join(' ')
 const size = (s, big) => { const n = s.length; return big ? (n <= 14 ? 190 : n <= 24 ? 150 : 118) : (n <= 20 ? 128 : n <= 36 ? 104 : 84) }
 
-export function composition(scenes, c) {
+// Scene lengths: the template's own, stretched to fit a voiceover line when there is one.
+export const sceneLength = (s, voice) => Math.max(LENGTH[s.kind], voice ? Number((voice + 0.9).toFixed(2)) : 0)
+export const VOICE_LEAD = 0.35
+
+export function composition(scenes, c, lengths = []) {
   const v = { '--background': '#f7f3ec', '--foreground': '#1b1714', '--primary': '#b4472a', '--primary-foreground': '#fff', '--muted': '#ece4d8', '--muted-foreground': '#6e5b4c', '--accent': '#1f5871', '--card': '#fffbf3', ...(c.theme.vars || {}) }
   const heading = c.theme.fonts?.heading || 'Fraunces', body = c.theme.fonts?.body || 'Inter'
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700`
@@ -131,7 +148,7 @@ export function composition(scenes, c) {
   let t = 0, splits = 0
   const html = [], tl = []
   scenes.forEach((s, i) => {
-    const d = LENGTH[s.kind], id = `s${i}`, at = x => (t + x).toFixed(2)
+    const d = lengths[i] || LENGTH[s.kind], id = `s${i}`, at = x => (t + x).toFixed(2)
     const kicker = s.kicker ? `<div class="kicker" id="${id}k">${esc(s.kicker)}</div>` : ''
     const enter = (sel, from, x, extra = '') => tl.push(`tl.fromTo('${sel}', ${from}, {opacity:1, x:0, y:0, scale:1, duration:.8, ease:'power3.out'${extra}}, ${at(x)})`)
     const rise = (x) => tl.push(`tl.fromTo('#${id} .w > span', {y:'110%'}, {y:'0%', duration:.75, ease:'power4.out', stagger:.07}, ${at(x)})`)
@@ -254,7 +271,7 @@ export function videoTools(dataDir, onStage = () => {}) {
         symlinkSync(target, link)
       }
     }
-    return { hf, path: `${bin}:${process.env.PATH || '/usr/bin:/bin'}` }
+    return { hf, path: `${bin}:${process.env.PATH || '/usr/bin:/bin'}`, ffmpeg: ffmpeg || join(bin, 'ffmpeg') }
   })().catch(err => { tools = null; throw err }))
 }
 
