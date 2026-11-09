@@ -19,7 +19,7 @@ import { exportRun } from '../engine/export.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion } from '../engine/motion.mjs'
-import { layoutSource } from '../engine/layout.mjs'
+import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { collect, writeStory, fallbackStory, composition, videoTools, render, stagePictures } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -290,6 +290,15 @@ async function review(id, input) {
   const image = String(input.image || '')
   const sections = (Array.isArray(input.sections) ? input.sections : []).filter(s => s && typeof s.key === 'string' && typeof s.html === 'string').slice(0, 24)
   if (!/^data:image\/(jpeg|png|webp);base64,/.test(image) || !sections.length || typeof input.page !== 'string') throw new Error('send a page, its sections and a screenshot')
+  const keys = new Set(sections.map(s => s.key))
+  const clip = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n)
+  // overlaps the canvas measured at desktop and phone width: no model needed to see them
+  const measured = (Array.isArray(input.measured) ? input.measured : []).filter(m => m && keys.has(m.section) && m.problem).slice(0, 6)
+    .map(m => ({ section: m.section, problem: clip(m.problem, 160), fix: clip(m.fix, 220), measured: true }))
+  // the same page at phone width, for a second look
+  const phone = input.mobile && /^data:image\/(jpeg|png|webp);base64,/.test(String(input.mobile.image || '')) && Array.isArray(input.mobile.sections)
+    ? { image: String(input.mobile.image), sections: input.mobile.sections.filter(s => s && keys.has(s.key)).map(s => ({ key: s.key, role: String(s.role || s.key), top: Math.round(s.top) || 0, height: Math.round(s.height) || 0 })) }
+    : null
   const tag = `${id}/${input.page}`
   if (reviewing.has(tag)) throw new Error('this page is already being reviewed')
   reviewing.add(tag)
@@ -299,27 +308,52 @@ async function review(id, input) {
     send('review:start', { page: input.page, model })
     // a busy or image-blind reviewer hands over to the next vision model on the same endpoint
     const chain = [model, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? REVIEW_FALLBACKS.filter(m => m !== model) : [])]
-    let result, used
-    for (const m of chain) {
-      try {
-        result = await reviewPage({ provider: provider('reviewer'), model: m, brief: start.brief, page: input.title || input.page, sections: page, image, signal: AbortSignal.timeout(60000) })
-        used = m
-        break
-      } catch (err) {
-        if (m === chain.at(-1)) { send('review:done', { page: input.page, model: m, verdict: `review failed: ${String(err.message || err).slice(0, 120)}`, issues: [] }); throw err }
+    const look = async (img, secs, label) => {
+      for (const m of chain) {
+        try {
+          return { ...(await reviewPage({ provider: provider('reviewer'), model: m, brief: start.brief, page: label, sections: secs, image: img, signal: AbortSignal.timeout(60000) })), model: m }
+        } catch (err) {
+          if (m === chain.at(-1)) throw err
+        }
       }
     }
-    send('review:done', { page: input.page, model: used, verdict: result.verdict, issues: result.issues, ms: result.ms })
+    const title = input.title || input.page
+    let result
+    try {
+      ;[result] = await Promise.all([look(image, page, title), phone?.sections.length ? look(phone.image, phone.sections, `${title} (on a phone, 390px wide)`).then(r => { phone.result = r }, err => { phone.error = String(err.message || err).slice(0, 160) }) : null])
+    } catch (err) {
+      if (!measured.length) { send('review:done', { page: input.page, model, verdict: `review failed: ${String(err.message || err).slice(0, 120)}`, issues: [] }); throw err }
+      result = { verdict: 'the reviewer model failed; fixing the measured overlaps', issues: [], ms: 0, model }
+    }
+    // measured overlaps first, then what the reviewer saw on desktop and on the phone;
+    // one builder per section, with every note for it
+    // a vision model squinting at a long screenshot sometimes calls a full page blank;
+    // a section with real text in it isn't, so that note is dropped
+    const BLANK = /\b(blank|empty|no (visible )?(text|content)|nothing (is )?(visible|rendered)|missing from the page|not rendered|solid (dark )?(fill|colou?r))\b/i
+    const words = key => (sections.find(x => x.key === key)?.html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length
+    const real = i => !(BLANK.test(i.problem) && words(i.section) > 80)
+    const seen = [...result.issues, ...(phone?.result?.issues || []).map(i => ({ ...i, problem: `On phones: ${i.problem}` }))]
+    const dropped = seen.filter(i => !real(i)).length
+    const all = [...measured, ...seen.filter(real)]
+    const bySection = new Map()
+    for (const i of all) {
+      const had = bySection.get(i.section)
+      if (!had) bySection.set(i.section, { ...i })
+      else if (!had.problem.includes(i.problem)) { had.problem += `; ${i.problem}`; had.fix += `; ${i.fix}` }
+    }
+    const issues = [...bySection.values()].slice(0, 4)
+    const verdict = phone?.result ? `${result.verdict} On phones: ${phone.result.verdict}` : result.verdict
+    send('review:done', { page: input.page, model: result.model, verdict, issues, ms: result.ms, measured: measured.length, phone: !!phone?.result, phoneError: phone?.error, dropped })
     // each issue goes to a builder, in parallel; the agents are the run's own
     const agents = start.agents || []
-    result.issues.forEach((issue, i) => {
+    issues.forEach((issue, i) => {
       const s = sections.find(x => x.key === issue.section)
       const layer = s.key.split('/').pop(), pageId = s.key.split('/')[0]
       const agent = agents[(i * 5 + 3) % Math.max(1, agents.length)]?.id
       send('review:issue', { page: pageId, layer, agent, problem: issue.problem, fix: issue.fix })
       rework(send, s, agent, theme, { problem: issue.problem, fix: issue.fix })
     })
-    return result
+    return { ...result, verdict, issues }
   } finally {
     reviewing.delete(tag)
   }
@@ -484,7 +518,7 @@ const webVersion = () => String(Math.max(...readdirSync(webDir).map(f => statSyn
 
 function canvasPage() {
   const read = f => readFileSync(join(webDir, f), 'utf8')
-  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource() }).replace(/</g, '\\u003c')
+  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource(), guard: swarmLayout.toString() }).replace(/</g, '\\u003c')
   return read('index.html')
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
