@@ -802,3 +802,12 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .codewall .cw-c { color: #6b7488; font-style: italic; } .codewall .cw-s { color: #a5d6a7; font-style: normal; } .codewall .cw-k { color: #c792ea; font-style: normal; } .codewall .cw-t { color: #82aaff; font-style: normal; }
 .codewall .cw-caret { display: inline-block; width: 7px; height: 1.1em; vertical-align: -2px; background: var(--accent); margin-left: 1px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+
+/* 🔌 sign-in connectors in the Auto window */
+.auto-conn { display: grid; gap: 6px; margin: 4px 0 10px }
+.auto-conn .ac-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid var(--line, #2a2f3a); border-radius: 8px }
+.auto-conn .ac-row small { flex-basis: 100%; opacity: .65 }
+.auto-conn .ac-ok { color: #4ade80 }
+.auto-conn .ac-wait { opacity: .8 }
+.auto-conn .ac-go { padding: 5px 12px; border: 0; border-radius: 6px; cursor: pointer; background: #8b9cff; color: #0b0d12; font-weight: 600 }
+.auto-conn a { color: inherit; text-decoration: underline }

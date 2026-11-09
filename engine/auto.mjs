@@ -18,7 +18,7 @@ export const GAMES_ASK = `Add a 🎮 Play page at /play, linked in the nav, with
 3. A quick memory or puzzle game with the brand's things.
 Each game shows its score, keeps a best score in localStorage, and has win and lose screens with Play again. After a round the player can save a score with a name: POST /api/scores { game, name, score }; the page shows the top 10 per game from GET /api/scores. Sounds are synthesised with the Web Audio API after the first click or key. Draw everything in code; original names only, nothing from existing games. Keep the rest of the app as it is.`
 
-export const supabaseAsk = app => `Keep the app's data in Supabase. Add @supabase/supabase-js with add_dependency. In the server store module, create one client from process.env.SUPABASE_URL and process.env.SUPABASE_SERVICE_ROLE_KEY (server code only, never in client code). Every record goes in the existing table swarm_records (columns: id uuid default, app text, kind text, data jsonb, created_at timestamptz default now()) with app = '${app}' and kind = the collection (orders, signups, scores…); data holds the record. Reads filter by app and kind, newest first. Keep every API route, type and response shape the same. When those two variables are missing, fall back to the in-memory store so local development still works.`
+export const supabaseAsk = app => `Keep the app's data in Supabase. Add @supabase/supabase-js with add_dependency. In the server store module, create one client from process.env.SUPABASE_URL and the key process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY (server code only, never in client code). Every record goes in the existing table swarm_records (columns: id uuid default, app text, kind text, data jsonb, created_at timestamptz default now()) with app = '${app}' and kind = the collection (orders, signups, scores…); data holds the record. Reads filter by app and kind, newest first. Keep every API route, type and response shape the same. When the address or both keys are missing, fall back to the in-memory store so local development still works.`
 
 // The table Supabase needs once, shown to the person when it is missing.
 export const SUPABASE_SQL = `create table swarm_records (id uuid primary key default gen_random_uuid(), app text not null, kind text not null, data jsonb not null, created_at timestamptz not null default now()); create index on swarm_records (app, kind, created_at desc);`
@@ -37,6 +37,9 @@ function keys(want) {
   return want.every(k => out[k]) ? out : null
 }
 export const supabaseEnv = () => keys(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
+// Made through the person's Supabase sign-in, the app holds a publishable key, so the table lets
+// that role in. The key lives only in the app's server environment, never in the browser.
+export const SUPABASE_CONNECTOR_SQL = `${SUPABASE_SQL} alter table swarm_records enable row level security; create policy swarm_app on swarm_records for all to anon using (true) with check (true);`
 // Test mode only: a live key takes real money, and that is the person's call.
 export function stripeEnv() {
   const k = keys(['STRIPE_SECRET_KEY'])
@@ -155,9 +158,12 @@ export function autoJob(d) {
   }
 
   async function data() {
-    const env = supabaseEnv()
-    if (!env) return set('data', 'skipped', 'add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to ~/.hermes/.env to keep the data in Supabase')
-    const probe = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/swarm_records?select=id&limit=1`, { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` }, signal: AbortSignal.timeout(15000) }).catch(err => ({ ok: false, status: String(err.message || err) }))
+    let env = supabaseEnv()
+    // no keys: the person's Supabase sign-in through Hermes (🔌 Connect on the canvas)
+    if (!env && d.connectors) env = await d.connectors.supabaseProject({ sql: SUPABASE_CONNECTOR_SQL, say: note => set('data', 'working', note) })
+    if (!env) return set('data', 'skipped', 'connect Supabase (🔌 in the Auto window) or add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to ~/.hermes/.env to keep the data in Supabase')
+    const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY
+    const probe = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/swarm_records?select=id&limit=1`, { headers: { apikey: key, authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) }).catch(err => ({ ok: false, status: String(err.message || err) }))
     if (!probe.ok) return set('data', 'skipped', `Supabase has no swarm_records table yet (${probe.status}); run this once in its SQL editor: ${SUPABASE_SQL}`)
     // the app's own dev server reads them, and so does the deploy
     Object.assign(process.env, env)
