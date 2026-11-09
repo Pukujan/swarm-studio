@@ -8,7 +8,7 @@
 
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
@@ -176,9 +176,13 @@ function tokenOk(given) {
 
 // The canvas as one document (styles, script, frame template and token inline), so it
 // also works inside the Desktop pane's sandboxed frame, whose origin is opaque.
+// Changes whenever a canvas file does. An open canvas compares it with its own and
+// reloads itself when idle, because Hermes's pane keeps a page open indefinitely.
+const webVersion = () => String(Math.max(...readdirSync(webDir).map(f => statSync(join(webDir, f)).mtimeMs)) | 0)
+
 function canvasPage() {
   const read = f => readFileSync(join(webDir, f), 'utf8')
-  const boot = JSON.stringify({ token, frameHtml: read('frame.html') }).replace(/</g, '\\u003c')
+  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html') }).replace(/</g, '\\u003c')
   return read('index.html')
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
@@ -318,6 +322,7 @@ const server = createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify({
       app: 'swarm-studio',
+      version: webVersion(),
       run: current?.id || null,
       done: current?.done ?? null,
       working: current?.working.size || 0,

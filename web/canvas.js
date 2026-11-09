@@ -2001,6 +2001,14 @@ function connect() {
   }
 }
 
+// A newer canvas on disk: reload once nothing is building and nobody is mid-edit.
+setInterval(async () => {
+  const st = await fetch('/api/state').then(r => r.json()).catch(() => null)
+  if (!st?.version || !BOOT.version || st.version === BOOT.version) return
+  const busy = (st.working && !viewing) || !els.player.hidden || picker.el || document.activeElement?.closest?.('input, textarea, select')
+  if (!busy) location.reload()
+}, 8000)
+
 fresh()
 setAuto(true)
 renderToolbar()
