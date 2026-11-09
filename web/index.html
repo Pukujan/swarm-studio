@@ -7,6 +7,8 @@
 <link rel="icon" type="image/svg+xml" href="brand/hermia-mark.svg">
 <link rel="stylesheet" href="canvas.css">
 <script src="crew.js"></script>
+<script src="chatter.js"></script>
+<script src="show.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -20,6 +22,7 @@
     <button class="toggle auto-btn" id="auto-btn" title="Auto mode: one prompt, and the swarm designs the site, reviews it, cuts the video, builds the app with mini games and a credit shop, and deploys it"><i data-i="zap"></i><span class="t">Auto</span></button>
     <button class="toggle game-btn" id="game-btn" title="Make an original browser game: a few questions, then the swarm builds it"><i data-i="gamepad-2"></i><span class="t">Game</span></button>
     <div class="spacer"></div>
+    <button class="toggle crew-mute" id="crew-mute" data-mode="muted" aria-pressed="true" title="Crew sounds and bubbles (M)"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><g class="cm-on"><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/></g><path class="cm-off" d="m22 9-6 6M16 9l6 6"/></svg><svg class="ico cm-quiet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12.5a7.5 6 0 0 1-10.7 5.4L4 19.5l1.4-3.6A6 6 0 0 1 4.5 12.5 7.8 6 0 0 1 12.3 6.5"/><path d="M3 3l18 18"/></svg><span class="t">Muted</span></button>
     <div class="undo-redo"><button class="toggle" id="undo-btn" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" disabled><i data-i="undo-2"></i></button><button class="toggle" id="redo-btn" title="Redo (⇧⌘Z / Ctrl+Y)" aria-label="Redo" disabled><i data-i="redo-2"></i></button></div>
     <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled><i data-i="play"></i><span class="t">Play</span></button>
     <div class="more pubwrap">

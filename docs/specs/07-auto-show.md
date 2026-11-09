@@ -106,12 +106,12 @@ A last, optional Auto step, `launch`. It writes:
 
 ## Done when
 
-- [ ] Step transitions play between every Auto view change, and fade only under reduced motion.
-- [ ] Review shows the reviewer cursor and flag boxes. Deploy shows the build log tile and then the live site in a device frame with the cursors clicking around it.
-- [ ] The final summary card shows the real numbers and the live link with a QR code.
-- [ ] Chatter: every agent has its own recognisable voice, the event sounds play, the dock toggle and volume work, and it mutes when the tab is hidden. With no TTS, nothing breaks.
-- [ ] The launch kit writes posts for every network. Post opens the prefilled share page (tested for X and LinkedIn), a Discord send needs the confirm, and nothing is ever sent without a click.
-- [ ] `scripts/check.sh` passes, and builds are unchanged with chatter and the launch step off.
+- [x] Step transitions play between every Auto view change, and fade only under reduced motion.
+- [x] Review shows the reviewer cursor and flag boxes. Deploy shows the build log tile and then the live site in a device frame with the cursors clicking around it.
+- [x] The final summary card shows the real numbers and the live link with a QR code.
+- [ ] Chatter: every agent has its own recognisable voice, the event sounds play, the dock toggle and volume work, and it mutes when the tab is hidden. With no TTS, nothing breaks. *(Built and wired, default off; the voices were not listened to yet: needs an ear test.)*
+- [ ] The launch kit writes posts for every network. Post opens the prefilled share page (tested for X and LinkedIn), a Discord send needs the confirm, and nothing is ever sent without a click. *(Built; the share URLs are built from the run, but opening them on x.com and LinkedIn while signed in is still to test. No gateway is connected here, so a Discord send was only checked up to the confirm box and the server's 409.)*
+- [x] `scripts/check.sh` passes, and builds are unchanged with chatter and the launch step off.
 
 ## Size
 

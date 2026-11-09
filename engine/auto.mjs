@@ -105,10 +105,10 @@ const STEPS = [
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 export function autoJob(d) {
-  // d: { runsDir, startRun, current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel }
+  // d: { runsDir, startRun, current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, writeLaunch }
   let job = null
 
-  const view = () => job && { state: job.state, run: job.run, prompt: job.prompt, games: job.games, pack: job.pack ? { id: job.pack.id, name: job.pack.name, icon: job.pack.icon, deliverables: job.pack.deliverables } : null, checks: job.checks || null, t0: job.t0, ms: (job.end || Date.now()) - job.t0, url: job.url, message: job.message, steps: job.steps.map(s => ({ ...s })) }
+  const view = () => job && { state: job.state, run: job.run, prompt: job.prompt, games: job.games, launch: !!job.launch, pack: job.pack ? { id: job.pack.id, name: job.pack.name, icon: job.pack.icon, deliverables: job.pack.deliverables } : null, checks: job.checks || null, t0: job.t0, ms: (job.end || Date.now()) - job.t0, url: job.url, message: job.message, steps: job.steps.map(s => ({ ...s })) }
   const push = (save = true) => {
     const v = view()
     if (save && job.run) d.record(job.run, { type: 'auto', t: Date.now(), run: job.run, ...v })
@@ -294,17 +294,28 @@ export function autoJob(d) {
         if (needed) { job.fatal = true; break }
       }
     }
-    for (const s of job.steps) if (s.state === 'wait' && s.id !== 'deploy') set(s.id, 'skipped', job.fatal ? 'an earlier step failed' : 'skipped')
+    for (const s of job.steps) if (s.state === 'wait' && s.id !== 'deploy' && s.id !== 'launch') set(s.id, 'skipped', job.fatal ? 'an earlier step failed' : 'skipped')
     // what was built goes live, even when a later step failed
     if (!job.stopped) await deploy().catch(err => set('deploy', 'failed', String(err.message || err)))
     else set('deploy', 'skipped', 'stopped')
+    // the optional launch kit: posts written from the run's facts, never posted from here
+    if (step('launch')) {
+      if (job.stopped || !d.writeLaunch) set('launch', 'skipped', job.stopped ? 'stopped' : 'no launch kit writer')
+      else {
+        try {
+          set('launch', 'working', 'writing the posts from what was built')
+          const kit = d.writeLaunch(job.run)
+          set('launch', 'done', `${kit.posts.length} posts ready in the launch kit. Nothing is posted until you press Post on each one.`)
+        } catch (err) { set('launch', 'failed', String(err.message || err)) }
+      }
+    }
     job.end = Date.now()
     job.state = job.url ? 'done' : 'failed'
     job.message = job.url ? `live at ${job.url}` : (job.steps.find(s => s.state === 'failed')?.note || 'nothing deployed')
     push()
   }
 
-  function start({ prompt, games, pack, intake }) {
+  function start({ prompt, games, pack, intake, launch }) {
     prompt = String(prompt || '').trim().slice(0, 1200)
     if (!prompt) throw new Error('say what to make')
     if (job?.state === 'working') throw new Error('auto mode is already running')
@@ -318,7 +329,8 @@ export function autoJob(d) {
       steps.splice(steps.findIndex(([id]) => id === 'app') + 1, 0, ['tools', `${p.icon} ${p.name} tools: ${(p.tools || []).map(t => t.short || t.id).join(', ')}`])
       steps.splice(steps.findIndex(([id]) => id === 'video'), 0, ['checks', `✅ Check it works: ${(p.checks || []).map(c => c.label.toLowerCase()).join(', ')}`])
     }
-    job = { state: 'working', prompt, brief: p ? packBrief(p, prompt, iv) : prompt, pack: p, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
+    if (launch) steps.push(['launch', '📣 Write the launch kit'])
+    job = { state: 'working', launch: !!launch, prompt, brief: p ? packBrief(p, prompt, iv) : prompt, pack: p, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
       steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none')).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
     go().catch(err => { Object.assign(job, { state: 'failed', message: String(err.message || err), end: Date.now() }); push() })
