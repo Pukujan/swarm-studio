@@ -11,6 +11,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { loadPack, intakeValues, packBrief, packAsk, runTools, runChecks } from './packs.mjs'
 
 export const GAMES_ASK = `Add a 🎮 Play page at /play, linked in the nav, with three small original mini games set in this brand's world and wearing the site's theme (its CSS variables and fonts). Each game is a canvas game in its own module under src/games/, works with keyboard and touch, and one round takes under a minute:
 1. A tiny roguelike: one room at a time, move, dodge and hit; between rooms pick one of two upgrades; three rooms, then a boss.
@@ -107,7 +108,7 @@ export function autoJob(d) {
   // d: { runsDir, startRun, current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel }
   let job = null
 
-  const view = () => job && { state: job.state, run: job.run, prompt: job.prompt, games: job.games, t0: job.t0, ms: (job.end || Date.now()) - job.t0, url: job.url, message: job.message, steps: job.steps.map(s => ({ ...s })) }
+  const view = () => job && { state: job.state, run: job.run, prompt: job.prompt, games: job.games, pack: job.pack ? { id: job.pack.id, name: job.pack.name, icon: job.pack.icon, deliverables: job.pack.deliverables } : null, checks: job.checks || null, t0: job.t0, ms: (job.end || Date.now()) - job.t0, url: job.url, message: job.message, steps: job.steps.map(s => ({ ...s })) }
   const push = (save = true) => {
     const v = view()
     if (save && job.run) d.record(job.run, { type: 'auto', t: Date.now(), run: job.run, ...v })
@@ -136,7 +137,7 @@ export function autoJob(d) {
 
   async function design() {
     set('design', 'working', 'the planner is writing the sitemap')
-    const run = d.startRun({ brief: job.prompt })
+    const run = d.startRun({ brief: job.brief || job.prompt })
     job.run = run.id
     push()
     await until(() => {
@@ -208,6 +209,32 @@ export function autoJob(d) {
     set('games', 'done', '/play: roguelike, reflex and puzzle')
   }
 
+  // a pack's own tools write their files into the app, then one engine turn wires them in
+  async function tools() {
+    const a = await d.apps()
+    if (!a.state(job.run).hasApp) return set('tools', 'skipped', 'no app to add the tools to')
+    set('tools', 'working', 'running the pack tools')
+    const out = await runTools(job.pack, { appDir: join(d.runsDir, job.run, 'app'), runDir: join(d.runsDir, job.run), prompt: job.prompt, intake: job.intake, say: note => set('tools', 'working', note) })
+    job.toolsDone = out
+    d.record(job.run, { type: 'pack:tools', t: Date.now(), pack: job.pack.id, tools: out.map(t => ({ id: t.id, label: t.label, note: t.note, files: t.files })) })
+    const ask = out.map(t => t.ask).filter(Boolean).join('\n\n')
+    if (ask) await appTurn('tools', { ask: `The pack's tools wrote these files: ${out.flatMap(t => t.files).join(', ')}.\n\n${ask}` }, `wiring in the ${out.map(t => job.pack.tools.find(x => x.id === t.id)?.short || t.id).join(', ')}`)
+    set('tools', 'done', out.map(t => `${job.pack.tools.find(x => x.id === t.id)?.short || t.id}: ${t.note}`).join('; '))
+  }
+
+  // the pack's definition of done, checked on the running app
+  async function checks() {
+    const a = await d.apps()
+    const url = a.state(job.run).url
+    if (!url) return set('checks', 'skipped', 'the app preview is not running')
+    set('checks', 'working', `checking ${job.pack.checks.length} things on the app`)
+    const r = await runChecks(job.pack, url)
+    job.checks = r
+    d.record(job.run, { type: 'pack:checks', t: Date.now(), pack: job.pack.id, checks: r })
+    const bad = r.filter(c => !c.ok)
+    set('checks', bad.length ? 'failed' : 'done', bad.length ? `${r.length - bad.length}/${r.length} passed; failing: ${bad.map(c => `${c.label} (${c.path} → ${c.status})`).join(', ')}` : `${r.length}/${r.length} passed: ${r.map(c => c.label).join(', ')}`)
+  }
+
   async function data() {
     let env = supabaseEnv()
     // no keys: the person's Supabase sign-in through Hermes (🔌 Connect on the canvas)
@@ -245,10 +272,12 @@ export function autoJob(d) {
   async function go() {
     const plan = [
       ['design', design, true], ['review', review, false],
-      ['app', () => appTurn('app', {}, 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
-      ['games', games, false],
-      ['shop', shop, false],
+      ['app', () => appTurn('app', job.pack ? { ask: packAsk(job.pack, 'app', job.intake) } : {}, 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
+      ...(job.pack ? [['tools', tools, false]] : []),
+      ...(job.games !== 'none' ? [['games', games, false]] : []),
+      ...(job.games !== 'none' ? [['shop', shop, false]] : []),
       ['data', data, false],
+      ...(job.pack ? [['checks', checks, false]] : []),
       ['video', video, false]
     ]
     for (const [id, fn, needed] of plan) {
@@ -268,12 +297,22 @@ export function autoJob(d) {
     push()
   }
 
-  function start({ prompt, games }) {
+  function start({ prompt, games, pack, intake }) {
     prompt = String(prompt || '').trim().slice(0, 1200)
     if (!prompt) throw new Error('say what to make')
     if (job?.state === 'working') throw new Error('auto mode is already running')
-    const mode = gameMode(prompt, games)
-    job = { state: 'working', prompt, games: mode, t0: Date.now(), run: null, url: null, steps: STEPS.map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
+    const p = pack ? loadPack(pack) : null
+    if (pack && !p) throw new Error(`no pack called ${pack}`)
+    const iv = p ? intakeValues(p, intake || {}) : null
+    // a pack decides the games (none, mini or big) unless the person picked
+    const mode = p && (!games || games === 'auto') ? (p.games === 'none' ? 'none' : p.games || gameMode(prompt)) : gameMode(prompt, games)
+    const steps = [...STEPS]
+    if (p) {
+      steps.splice(steps.findIndex(([id]) => id === 'app') + 1, 0, ['tools', `${p.icon} ${p.name} tools: ${(p.tools || []).map(t => t.short || t.id).join(', ')}`])
+      steps.splice(steps.findIndex(([id]) => id === 'video'), 0, ['checks', `✅ Check it works: ${(p.checks || []).map(c => c.label.toLowerCase()).join(', ')}`])
+    }
+    job = { state: 'working', prompt, brief: p ? packBrief(p, prompt, iv) : prompt, pack: p, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
+      steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none')).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
     go().catch(err => { Object.assign(job, { state: 'failed', message: String(err.message || err), end: Date.now() }); push() })
     return view()

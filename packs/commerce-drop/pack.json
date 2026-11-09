@@ -1,0 +1,90 @@
+{
+  "order": 4,
+  "name": "Commerce Drop",
+  "market": "Shops and creators",
+  "icon": "🛍",
+  "pitch": "Shops and creators: a limited drop with a countdown, live stock, a demo checkout, an orders admin and a restock list.",
+  "intake": [
+    {
+      "id": "products",
+      "q": "What's dropping? (comma separated)",
+      "label": "Products",
+      "type": "text",
+      "default": "Night Runner sneaker, Night Runner hoodie, Reflective cap"
+    },
+    {
+      "id": "stock",
+      "q": "Units per product",
+      "label": "Stock per product",
+      "type": "number",
+      "default": 50,
+      "min": 1,
+      "max": 10000
+    },
+    {
+      "id": "price",
+      "q": "Starting price",
+      "label": "Price",
+      "type": "number",
+      "default": 120,
+      "min": 1,
+      "max": 100000
+    },
+    {
+      "id": "drop",
+      "q": "Drop time",
+      "label": "Drop time",
+      "type": "text",
+      "default": "Friday 10:00 local time"
+    },
+    {
+      "id": "sizes",
+      "q": "Sizes",
+      "label": "Sizes",
+      "type": "text",
+      "default": "S, M, L, XL"
+    }
+  ],
+  "brief": "This is a limited product drop ({{products}}) at {{drop}}. Pages: the drop page with a big countdown and the hero product, a product page per item with sizes and live stock, a lookbook, and an FAQ about shipping and returns. Make scarcity visible.",
+  "asks": {
+    "app": "Store: the products, sizes, prices and stock come from src/data/inventory.json. GET /api/stock returns the units left per product and size. Buying (POST /api/orders) checks and lowers the stock in one step and refuses when it's gone. Sold-out items show a Sold out badge and a 'Tell me when it's back' form: POST /api/restock { product, size, email }, listed on /admin. Checkout is a clearly labelled demo with a fake card (no real payment), or Stripe test mode when STRIPE_SECRET_KEY starts with sk_test_."
+  },
+  "tools": [
+    {
+      "id": "inventory",
+      "label": "📦 Building the SKU sheet",
+      "short": "SKU sheet"
+    }
+  ],
+  "connectors": {
+    "required": [],
+    "optional": [
+      "supabase",
+      "vercel",
+      "stripe"
+    ]
+  },
+  "games": "none",
+  "checks": [
+    {
+      "label": "SKU sheet",
+      "path": "/pack/skus.csv",
+      "contains": "sku"
+    },
+    {
+      "label": "Live stock",
+      "path": "/api/stock"
+    },
+    {
+      "label": "Restock list",
+      "path": "/api/restock"
+    }
+  ],
+  "deliverables": [
+    "Drop page with a countdown",
+    "Live stock per size",
+    "Demo checkout",
+    "Orders and restock list on /admin",
+    "Promo video"
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "order": 2,
+  "name": "Game Studio",
+  "market": "Indie games",
+  "icon": "🎮",
+  "pitch": "Indie developers: a trial page with a parallax hero, one real playable game, a wishlist, a leaderboard and a press kit.",
+  "intake": [
+    {
+      "id": "studio",
+      "q": "Studio name",
+      "label": "Studio",
+      "type": "text",
+      "default": "a two-person indie studio"
+    },
+    {
+      "id": "genre",
+      "q": "Genre",
+      "label": "Genre",
+      "type": "text",
+      "default": "top-down action roguelike"
+    },
+    {
+      "id": "platforms",
+      "q": "Platforms",
+      "label": "Platforms",
+      "type": "text",
+      "default": "PC and Mac, Steam Deck verified"
+    },
+    {
+      "id": "release",
+      "q": "Release window",
+      "label": "Release",
+      "type": "text",
+      "default": "Early access, spring 2027"
+    },
+    {
+      "id": "price",
+      "q": "Price",
+      "label": "Price",
+      "type": "text",
+      "default": "$19.99, founder's edition $29.99"
+    }
+  ],
+  "brief": "This is an indie game's trial page for a {{genre}} by {{studio}}. Pages: Home (the trial) with a deep parallax hero built from 5–6 separately generated layers (sky, far, mid, near, foreground drift) that move with scroll and the pointer, a trailer block, a features or blessings showcase, a Founder's Edition page, and Press. Big wishlist call to action.",
+  "asks": {
+    "app": "Wishlist: POST /api/wishlist { email, platform } stores sign-ups, and GET /api/wishlist returns the count, shown on the home page as a live counter. Founder's Edition orders are stored like any order. Keep /api/scores for the game's leaderboard."
+  },
+  "tools": [
+    {
+      "id": "presskit",
+      "label": "📰 Writing the press kit",
+      "short": "press kit"
+    }
+  ],
+  "connectors": {
+    "required": [],
+    "optional": [
+      "supabase",
+      "vercel"
+    ]
+  },
+  "games": "big",
+  "checks": [
+    {
+      "label": "Press fact sheet",
+      "path": "/press/factsheet.json",
+      "contains": "\"title\""
+    },
+    {
+      "label": "Wishlist counter",
+      "path": "/api/wishlist"
+    },
+    {
+      "label": "Leaderboard",
+      "path": "/api/scores"
+    }
+  ],
+  "deliverables": [
+    "Trial page with parallax hero",
+    "One playable game on /play",
+    "Wishlist with a live counter",
+    "Leaderboard",
+    "Press kit",
+    "Trailer"
+  ]
+}

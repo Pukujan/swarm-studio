@@ -1148,6 +1148,13 @@ const server = createServer((req, res) => {
     })
     return
   }
+  // Pro packs (docs/specs/09-demo-modes.md): what the Auto window's Pro side lists
+  if (url.pathname === '/api/packs' && req.method === 'GET') {
+    import('../engine/packs.mjs').then(m => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ packs: m.listPacks().map(m.packSummary) })))
+      .catch(err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    return
+  }
+
   if (url.pathname === '/api/auto' || url.pathname === '/api/auto/stop') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method === 'GET') return reply(200, auto.state() || { state: 'idle' })

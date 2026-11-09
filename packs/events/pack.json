@@ -1,0 +1,101 @@
+{
+  "order": 1,
+  "name": "Events & Ticketing",
+  "market": "Live events",
+  "icon": "🎟",
+  "pitch": "Promoters, venues, festivals and meetups: a site that sells tiered tickets with a seat map, and a check-in page for the door.",
+  "intake": [
+    {
+      "id": "date",
+      "q": "When is it?",
+      "label": "Date",
+      "type": "text",
+      "default": "Saturday 14 March 2027, doors 18:00"
+    },
+    {
+      "id": "venue",
+      "q": "Where?",
+      "label": "Venue",
+      "type": "text",
+      "default": "an open-air venue downtown"
+    },
+    {
+      "id": "capacity",
+      "q": "How many people fit?",
+      "label": "Capacity",
+      "type": "number",
+      "default": 600,
+      "min": 20,
+      "max": 5000
+    },
+    {
+      "id": "tiers",
+      "q": "Ticket tiers and prices",
+      "label": "Tiers",
+      "type": "text",
+      "default": "General $25, VIP $80, Backstage $150"
+    },
+    {
+      "id": "currency",
+      "q": "Currency",
+      "label": "Currency",
+      "type": "choice",
+      "choices": [
+        "USD",
+        "EUR",
+        "GBP",
+        "JPY",
+        "TWD"
+      ],
+      "default": "USD"
+    }
+  ],
+  "brief": "This is a live event. The site sells tickets in tiers ({{tiers}}) for {{date}} at {{venue}}. Pages: the event home with a countdown and the line-up or programme, Tickets with the seat map, a Venue and map page, and an FAQ. Make the ticket call to action impossible to miss.",
+  "asks": {
+    "app": "Ticketing: the tiers are {{tiers}} ({{currency}}), total capacity {{capacity}}. Each order stores the tier, the quantity, the buyer's name and email and a short unique order code. Selling stops when a tier is full. GET /api/availability returns the seats left per tier. The Tickets page shows the remaining seats per tier live. Checkout is a clearly labelled demo with a fake card (no real payment), or Stripe test mode when STRIPE_SECRET_KEY starts with sk_test_."
+  },
+  "tools": [
+    {
+      "id": "seatmap",
+      "label": "🗺 Drawing the seat map",
+      "short": "seat map"
+    },
+    {
+      "id": "checkin",
+      "label": "🔳 Setting up QR check-in",
+      "short": "QR check-in"
+    }
+  ],
+  "connectors": {
+    "required": [],
+    "optional": [
+      "supabase",
+      "vercel",
+      "stripe",
+      "gateway"
+    ]
+  },
+  "games": "none",
+  "checks": [
+    {
+      "label": "Seat map file",
+      "path": "/pack/seatmap.svg",
+      "contains": "<svg"
+    },
+    {
+      "label": "Seats left per tier",
+      "path": "/api/availability"
+    },
+    {
+      "label": "Check-in list",
+      "path": "/api/checkin"
+    }
+  ],
+  "deliverables": [
+    "Event site",
+    "Tiered ticketing with a seat map",
+    "QR check-in page for the door",
+    "Promo video",
+    "Admin with orders"
+  ]
+}
