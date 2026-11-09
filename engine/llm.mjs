@@ -17,16 +17,34 @@ export function providerFromEnv(env = process.env) {
  * Resolves with { text, ttftMs, totalMs, outputTokens, tokPerSec, usage }.
  */
 export async function streamChat(provider, opts) {
-  const started = performance.now()
-  const { model, messages, maxTokens = 2048, temperature = 0.7, trace } = opts
-  try {
-    const res = await chat(provider, opts, started)
-    traceCall({ label: trace, provider, model, messages, maxTokens, temperature, started, res })
-    return res
-  } catch (error) {
-    traceCall({ label: trace, provider, model, messages, maxTokens, temperature, started, error })
-    throw error
+  const { messages, maxTokens = 2048, temperature = 0.7, trace } = opts
+  // a route with no capacity hands over to the same model on another route
+  const routes = routesFor(provider, opts.model)
+  for (let i = 0; i < routes.length; i++) {
+    const model = routes[i], started = performance.now()
+    try {
+      const res = await chat(provider, { ...opts, model }, started)
+      traceCall({ label: trace, provider, model, messages, maxTokens, temperature, started, res })
+      if (model !== opts.model) busy.set(opts.model, { route: model, until: Date.now() + 5 * 60e3 })
+      return res
+    } catch (error) {
+      traceCall({ label: trace, provider, model, messages, maxTokens, temperature, started, error })
+      const full = /HTTP (503|429|502)|no_capacity|exhausted|cooldown|upstream/i.test(String(error.message)), missing = /HTTP 404/.test(String(error.message))
+      if (opts.signal?.aborted || i === routes.length - 1 || !(full || (missing && i > 0))) throw error
+    }
   }
+}
+
+// InferHub serves one model on several routes (cb/x, ali/x, x…). When the asked
+// route is full, the others are tried in turn; one that worked is used first for a while.
+const busy = new Map()
+function routesFor(provider, model) {
+  if (!/inferhub/.test(provider?.baseUrl || '') || !model) return [model]
+  const bare = model.replace(/^[a-z]+\//, '')
+  const list = [model, bare, `ali/${bare}`, `alitp/${bare}`, `ocg/${bare}`, `cb/${bare}`]
+  const hot = busy.get(model)
+  if (hot && hot.until > Date.now()) list.unshift(hot.route)
+  return [...new Set(list)].slice(0, 5)
 }
 
 async function chat(provider, { model, messages, maxTokens = 2048, temperature = 0.7, extra = {}, signal, onDelta }, started) {

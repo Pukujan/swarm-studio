@@ -589,6 +589,18 @@ const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => m.appJobs
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
+// A promo game for a build: the site's name, brief, theme, copy and links, so the
+// game is set in the brand's world, wears its colours and points back to it.
+function brandOf(id) {
+  if (!id || !RUN_ID.test(String(id))) return null
+  const events = readEvents(id)
+  if (!events?.some(e => e.type === 'layer:done')) return null
+  const c = collect(events, join(runsDir, id))
+  const sites = events.filter(e => e.type === 'publish:done' && e.url && e.target !== 'local').map(e => e.url)
+  const app = events.findLast(e => e.type === 'app:deployed')?.url
+  return { from: id, name: c.brand, brief: c.brief, vars: c.theme.vars || {}, fonts: c.theme.fonts || {}, direction: c.theme.direction || '', copy: c.copy.slice(0, 1800), url: app || sites.at(-1) || null }
+}
+
 async function startGame(spec) {
   const g = await gameMod()
   if (!spec?.title || !spec?.loop) throw new Error('no game spec')
@@ -598,11 +610,13 @@ async function startGame(spec) {
   const t = Date.now()
   const brief = `${spec.title}: ${spec.pitch || ''}`.slice(0, 400)
   writeFileSync(join(dir, 'events.jsonl'), [
-    { type: 'run:start', t, run: id, brief, kind: 'game', title: String(spec.title).slice(0, 80), workerModel: modelFor('worker') },
+    { type: 'run:start', t, run: id, brief, kind: 'game', title: String(spec.title).slice(0, 80), workerModel: modelFor('worker'), ...(spec.brand?.from ? { from: spec.brand.from, fromName: spec.brand.name } : {}) },
     { type: 'game:spec', t, run: id, spec }
   ].map(e => JSON.stringify(e)).join('\n') + '\n')
   const a = await apps()
   await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) } })
+  // the site remembers its game, so each can open the other
+  if (spec.brand?.from && existsSync(join(runsDir, spec.brand.from))) record(spec.brand.from, { type: 'game:linked', t, run: spec.brand.from, game: id, title: String(spec.title).slice(0, 80) })
   broadcast({ type: 'files:changed', t, run: id })
   return { run: id }
 }
@@ -1031,7 +1045,7 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       const go = url.pathname === '/api/game/spec'
-        ? gameMod().then(g => g.writeSpec({ provider: provider('planner'), model: modelFor('planner'), idea: String(input.idea || '').slice(0, 600), answers: typeof input.answers === 'object' && input.answers ? input.answers : {}, signal: AbortSignal.timeout(90000) })).then(spec => ({ spec }))
+        ? gameMod().then(g => g.writeSpec({ provider: provider('planner'), model: modelFor('planner'), idea: String(input.idea || '').slice(0, 600), answers: typeof input.answers === 'object' && input.answers ? input.answers : {}, brand: brandOf(input.from), signal: AbortSignal.timeout(90000) })).then(spec => ({ spec }))
         : startGame(input.spec)
       go.then(out => reply(200, out)).catch(err => reply(400, { error: String(err.message || err) }))
     })

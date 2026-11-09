@@ -4,8 +4,8 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 var(--font); overflow: hidden; }
-body { display: grid; grid-template: 44px 1fr / 300px 1fr; }
-body.design-on { grid-template-columns: 300px 1fr 264px; }
+body { display: grid; grid-template: 44px 1fr / var(--side-w, 300px) 1fr; }
+body.design-on { grid-template-columns: var(--side-w, 300px) 1fr var(--design-w, 264px); }
 button { font: inherit; color: inherit; }
 
 /* ---------- top bar */
@@ -22,7 +22,7 @@ button { font: inherit; color: inherit; }
 .clock { font: 600 15px var(--mono); min-width: 64px; text-align: right; color: var(--accent); }
 
 /* ---------- left side: chat, pages, files */
-.side { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.side { position: relative; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); }
 .tabs button { background: none; border: 0; padding: 7px 10px 9px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600; }
 .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
@@ -264,7 +264,7 @@ button { font: inherit; color: inherit; }
 
 /* The toolbar moves aside so it never sits under the break room. */
 /* Design panel: the selected section's properties and the design system, Figma style */
-.design { display: none; grid-row: 2; grid-column: 3; background: var(--panel); border-left: 1px solid var(--line); min-height: 0; min-width: 0; flex-direction: column; font-size: 12px; }
+.design { position: relative; display: none; grid-row: 2; grid-column: 3; background: var(--panel); border-left: 1px solid var(--line); min-height: 0; min-width: 0; flex-direction: column; font-size: 12px; }
 .design.on { display: flex; }
 .dtabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); }
 .dtabs button { background: none; border: 0; padding: 7px 10px 9px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600; }
@@ -498,7 +498,7 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .side-min-btn { margin-left: auto; background: none !important; border: 0 !important; color: var(--muted) !important; font-size: 15px; padding: 4px 8px !important; }
 .side-min-btn:hover { color: var(--text) !important; }
 body.side-min { grid-template-columns: 1fr; }
-body.side-min.design-on { grid-template-columns: 1fr 264px; }
+body.side-min.design-on { grid-template-columns: 1fr var(--design-w, 264px); }
 body.side-min .design { grid-column: 2; }
 body.side-min .side { position: fixed; left: 14px; bottom: 14px; width: 340px; max-height: 48vh; z-index: 60; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 14px 40px #000a; overflow: hidden; }
 body.side-min .tabs button:not(.side-min-btn):not([data-tab="chat"]) { display: none; }
@@ -668,6 +668,7 @@ body.side-min .game-pop { grid-area: 2 / 1 / 3 / -1; }
 .game-pop .spin { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
 .game-pop .gspec h2 { margin: 0 0 4px; font-size: 30px; }
 .game-pop .gpitch { margin: 0 0 8px; color: var(--muted); }
+.game-pop .gpromo { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: 13px; cursor: pointer; }
 .game-pop .gorig { margin: 0 0 10px; font-size: 12px; color: #7ee2a5; }
 .game-pop dl { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; margin: 10px 0; }
 .game-pop dt { color: var(--muted); font-size: 12px; padding-top: 2px; }
@@ -682,3 +683,30 @@ body.side-min .game-pop { grid-area: 2 / 1 / 3 / -1; }
 .vcuts button b { color: var(--text); }
 .vcuts button.on { border-color: var(--accent); color: var(--text); }
 .vcuts small { opacity: .7; }
+
+/* drag the edge of a side panel to resize it; double-click puts it back */
+.resizer { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 20; cursor: col-resize; }
+.side > .resizer { right: -4px; } .design > .resizer { left: -4px; }
+.resizer:hover, .resizer.drag { background: linear-gradient(90deg, transparent 2px, var(--accent) 2px, var(--accent) 4px, transparent 4px); }
+body.resizing, body.resizing * { cursor: col-resize !important; user-select: none; }
+body.resizing iframe { pointer-events: none; }
+body.side-min .side > .resizer { display: none; }
+
+/* Layers: pages, their sections, and what is inside each section */
+.tree .ly { cursor: pointer; border-radius: 6px; }
+.tree .ly:hover { background: var(--panel-2); }
+.tree .ly.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
+.tree .ly .tw { width: 12px; flex: 0 0 12px; color: var(--muted); font-size: 9px; text-align: center; }
+.tree .ly .eye { margin-left: auto; opacity: 0; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 4px; }
+.tree .ly:hover .eye, .tree .ly.hid .eye { opacity: 1; }
+.tree .ly.hid > span:not(.eye):not(.tw) { opacity: .4; text-decoration: line-through; }
+.tree .kids { margin: 0 0 4px 26px; border-left: 1px solid var(--line); padding-left: 6px; }
+.tree .kid { display: flex; gap: 6px; align-items: baseline; padding: 2px 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; border-radius: 4px; }
+.tree .kid:hover { background: var(--panel-2); color: var(--text); }
+.tree .kid i { font-style: normal; font: 10px var(--mono); color: var(--accent); flex: 0 0 auto; }
+
+/* the model fields' own suggestion list (scrolls everywhere, unlike a datalist) */
+.combo-list { position: fixed; z-index: 95; overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 14px 34px #000b; padding: 4px; font: 12px var(--mono); }
+.combo-list div { padding: 5px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.combo-list div:hover, .combo-list div.on { background: var(--panel-2); }
+.combo-list small { display: block; padding: 6px 8px; color: var(--muted); }

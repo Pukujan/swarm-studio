@@ -89,6 +89,7 @@
       setTimeout(() => el.classList.remove(m.anim), m.anim === 'flash' ? 1100 : 650)
     }
     if (m.html !== undefined) el.innerHTML = m.html
+    if (m.hidden !== undefined) el.style.display = m.hidden ? 'none' : ''
   }
 
   // The end of the last visible text in a node: where a writing cursor sits.

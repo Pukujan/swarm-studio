@@ -81,7 +81,7 @@ function on(e) {
       fresh(e.run)
       S.t0 = e.t
       // a game has no canvas build: its spec and the App view are the whole file
-      if (e.kind === 'game') { S.kind = 'game'; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
+      if (e.kind === 'game') { S.kind = 'game'; if (e.from) S.link = { run: e.from, label: `↔ ${e.fromName || 'the site'}` }; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
       if (!viewing) els.agentsSel.value = String(e.agents.length)
       for (const a of e.agents) addAgent(a)
       setTitle(e.brief.slice(0, 60))
@@ -95,6 +95,10 @@ function on(e) {
       S.planDirty = true
       break
     }
+    case 'game:linked':
+      S.link = { run: e.game, label: `🎮 ${e.title}` }
+      renderAppLink()
+      break
     case 'sitemap:done':
       els.planState.textContent = `sitemap ${(e.ms / 1000).toFixed(1)}s`
       break
@@ -895,7 +899,44 @@ function renderTheme() {
   }
 }
 
+// Layers: which sections are expanded or hidden (hidden only on the canvas, not in exports).
+const layersOpen = new Set(), layersHidden = new Set()
+let treeSel = null, treeRun = null
+
+// What is inside a section, as a designer's layer list: headings, text, images, buttons, links, forms.
+function layerKids(html = '') {
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+  const out = []
+  for (const el of doc.body.querySelectorAll('h1,h2,h3,h4,p,img,button,a,input,select,textarea,ul,ol,table,form,svg,iframe')) {
+    if (el.closest('a,button,svg,table,form') && el.closest('a,button,svg,table,form') !== el) continue
+    const tag = el.tagName.toLowerCase()
+    const label = tag === 'img' ? (el.getAttribute('alt') || 'image') : tag === 'svg' ? 'icon' : tag === 'input' || tag === 'textarea' ? (el.getAttribute('placeholder') || el.getAttribute('name') || tag) : (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 48)
+    out.push({ tag: { h1: 'H1', h2: 'H2', h3: 'H3', h4: 'H4', p: 'Text', img: 'Image', button: 'Button', a: 'Link', ul: 'List', ol: 'List', table: 'Table', form: 'Form', svg: 'Icon', iframe: 'Embed' }[tag] || 'Field', label: label || tag })
+    if (out.length >= 14) break
+  }
+  return out
+}
+
+function selectLayer(l) {
+  const s = slotFor(l)
+  S.sel = l.key
+  design.pinned = null
+  if (design.tab !== 'design') { design.tabPinned = true; showDtab('design') }
+  design.last = ''
+  if (s) { setAuto(false); fit({ x0: s.f.x + s.box.left - 60, y0: s.box.top - 80, x1: s.f.x + s.box.right + 60, y1: s.box.top + s.box.height + 80 }, 0.9) }
+  renderTree()
+}
+
+function hideLayer(l, hide) {
+  hide ? layersHidden.add(l.key) : layersHidden.delete(l.key)
+  for (const f of l.page === '*' ? S.frames : S.frames.filter(fr => fr.id === l.page)) post(f, { type: 'slot', key: l.key, hidden: hide })
+  if (hide && S.sel === l.key) S.sel = null
+  renderTree()
+}
+
 function renderTree() {
+  if (treeRun !== S.run) { treeRun = S.run; layersOpen.clear(); layersHidden.clear() }
+  treeSel = S.sel
   const groups = [{ id: '*', num: 'All', title: 'Shared nav and footer' }, ...S.frames.map(f => ({ id: f.id, num: `Page ${f.index + 1}`, title: f.title }))]
   els.tree.innerHTML = S.frames.length ? '' : '<div class="empty">Pages appear here once the planner names them.</div>'
   for (const g of groups) {
@@ -919,16 +960,36 @@ function renderTree() {
     div.append(lys)
     for (const l of layers) {
       const a = l.agent && S.agents.get(l.agent)
+      const open = layersOpen.has(l.key), hid = layersHidden.has(l.key)
       const row = document.createElement('div')
-      row.className = `ly ${l.status}`
-      row.innerHTML = `<span class="dot"></span><span></span><span class="who"></span>`
-      row.children[1].textContent = l.role
+      row.className = `ly ${l.status}${S.sel === l.key ? ' sel' : ''}${hid ? ' hid' : ''}`
+      row.innerHTML = `<span class="tw">${l.status === 'done' ? (open ? '▼' : '▶') : ''}</span><span class="dot"></span><span></span><span class="who"></span><button class="eye" title="${hid ? 'Show' : 'Hide'} on the canvas">${hid ? '◌' : '👁'}</button>`
+      row.children[2].textContent = l.role
       if (a) {
-        row.children[2].textContent = l.status === 'done' ? `${a.name} ${(l.ms / 1000).toFixed(1)}s` : a.name
-        if (l.status !== 'done' && l.status !== 'failed') row.firstChild.style.background = a.color
-        row.children[2].style.color = a.color
+        row.children[3].textContent = l.status === 'done' ? `${a.name} ${(l.ms / 1000).toFixed(1)}s` : a.name
+        if (l.status !== 'done' && l.status !== 'failed') row.children[1].style.background = a.color
+        row.children[3].style.color = a.color
+      }
+      row.onclick = e => {
+        if (e.target.classList.contains('eye')) return hideLayer(l, !hid)
+        if (e.target.classList.contains('tw')) { open ? layersOpen.delete(l.key) : layersOpen.add(l.key); return renderTree() }
+        selectLayer(l)
       }
       lys.append(row)
+      if (open && l.status === 'done') {
+        const kids = document.createElement('div')
+        kids.className = 'kids'
+        for (const k of layerKids(l.text)) {
+          const d = document.createElement('div')
+          d.className = 'kid'
+          d.innerHTML = '<i></i><span></span>'
+          d.firstChild.textContent = k.tag
+          d.lastChild.textContent = k.label
+          d.onclick = () => selectLayer(l)
+          kids.append(d)
+        }
+        lys.append(kids)
+      }
     }
     els.tree.append(div)
   }
@@ -1119,7 +1180,7 @@ function frameLoop(now) {
     renderDesign(now)
     drawSelBox()
     drawComment()
-    if (S.treeDirty) { S.treeDirty = false; renderTree() }
+    if (S.treeDirty || treeSel !== S.sel) { S.treeDirty = false; renderTree() }
     if (S.planDirty) {
       S.planDirty = false
       els.plan.textContent = [...S.plans].map(([k, v]) => (k === 'sitemap' ? v.slice(-1200) : `\n# ${k}\n${v.slice(-700)}`)).join('\n')
@@ -1133,7 +1194,7 @@ function frameLoop(now) {
     els.exportBtn.disabled = !S.done || exp.busy
     const pubbing = pub.run === shownRun() && pub.state === 'working'
     els.publishBtn.disabled = !S.done || pubbing
-    setText(els.publishBtn, pubbing ? '🌐 Publishing…' : '🌐 Publish')
+    setText(els.publishBtn, pubbing ? '🌐 Publishing…' : '🌐 Publish site')
     const mine = video.run === shownRun()
     els.videoBtn.disabled = !S.done && !(mine && video.src)
     setText(els.videoBtn, mine && video.busy ? `🎬 ${video.pct ? `${video.pct | 0}%` : 'Writing…'}` : '🎬 Video')
@@ -2370,7 +2431,7 @@ function pubPop(html) {
   pub.el?.remove()
   pub.el = document.createElement('div')
   pub.el.className = 'export-pop publish-pop'
-  pub.el.innerHTML = `<div class="vhead">🌐 Publish<button class="vclose" title="Close">×</button></div>${html}`
+  pub.el.innerHTML = `<div class="vhead">🌐 Publish the site <small>static pages; the working app goes out with 🚀 Deploy app</small><button class="vclose" title="Close">×</button></div>${html}`
   document.body.append(pub.el)
   pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
   return pub.el
@@ -3039,12 +3100,11 @@ async function saveModel(body) {
 
 function renderModels() {
   const info = modelsInfo
-  const lists = ['text', 'vision'].map(n => `<datalist id="ml-${n}">${(info[n] || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>`).join('')
   const rows = ROLE_ROWS.map(r => {
     const s = info.roles?.[r.role] || {}
     const off = s.picked === 'off'
     return `<label class="mrow"><span class="mlabel">${r.label}<small>${r.note}</small></span>
-      <span class="mfield"><input data-role="${r.role}" list="ml-${r.list}" spellcheck="false" placeholder="${esc(s.hermes || (r.off ? 'off' : 'model id'))}" value="${off ? '' : esc(s.picked || '')}" ${off ? 'disabled' : ''}>
+      <span class="mfield"><input data-role="${r.role}" data-list="${r.list}" autocomplete="off" spellcheck="false" placeholder="${esc(s.hermes || (r.off ? 'off' : 'model id'))}" value="${off ? '' : esc(s.picked || '')}" ${off ? 'disabled' : ''}>
       ${r.off ? `<button data-off="${r.role}" class="${off ? 'on' : ''}">${off ? 'Turn on' : 'Turn off'}</button>` : ''}</span>
       <small class="mnow">${off ? 'off' : s.picked ? `picked · Hermes has ${esc(s.hermes || 'none')}` : s.hermes ? `from Hermes · ${esc(s.host || '')}` : 'not set in Hermes'}</small></label>`
   }).join('')
@@ -3052,7 +3112,7 @@ function renderModels() {
   const cur = pick === 'off' ? 'off' : pick ? `${pick.provider}|${pick.model}` : ''
   const opts = (info.image?.providers || []).flatMap(p => (p.models.length ? p.models : [p.default || '']).map(m =>
     `<option value="${esc(`${p.provider}|${m}`)}" ${p.available ? '' : 'disabled'} ${cur === `${p.provider}|${m}` ? 'selected' : ''}>${esc(p.provider)}${m ? ` · ${esc(m)}` : ''}${p.available ? '' : ' (not signed in)'}</option>`)).join('')
-  models.el.innerHTML = `${lists}<div class="mhead">Models <small>picks stay in Swarm Studio; Hermes's config is untouched</small></div>${rows}
+  models.el.innerHTML = `<div class="mhead">Models <small>picks stay in Swarm Studio; Hermes's config is untouched</small></div>${rows}
     <label class="mrow"><span class="mlabel">Images<small>paints photos and illustrations into the pages, with your Hermes image login</small></span>
       <span class="mfield"><select data-image>
         <option value="" ${cur === '' ? 'selected' : ''}>Auto (Codex login, gpt-image-2-low)</option>
@@ -3068,8 +3128,46 @@ function renderModels() {
     <div class="mfoot">Each image is one call to that provider and uses its quota. Changes apply to the next build.</div>`
 }
 
+// The model fields' suggestions: our own scrolling list (a <datalist> popup can't
+// scroll in some embedded browsers, Hermes Desktop's among them). Type to filter.
+function modelCombo(root, signal) {
+  let box = null, input = null, at = -1
+  const close = () => { box?.remove(); box = null; input = null; at = -1 }
+  const show = el => {
+    const all = modelsInfo[el.dataset.list] || [], q = el.value.trim().toLowerCase()
+    const hits = (q && all.includes(el.value.trim()) ? all : all.filter(m => m.toLowerCase().includes(q))).slice(0, 400)
+    if (!box) { box = Object.assign(document.createElement('div'), { className: 'combo-list' }); document.body.append(box) }
+    input = el
+    const r = el.getBoundingClientRect()
+    const below = innerHeight - r.bottom - 12
+    Object.assign(box.style, { left: `${r.left}px`, width: `${r.width}px`, ...(below > 180 ? { top: `${r.bottom + 4}px`, bottom: '', maxHeight: `${Math.min(320, below)}px` } : { top: '', bottom: `${innerHeight - r.top + 4}px`, maxHeight: `${Math.min(320, r.top - 12)}px` }) })
+    box.innerHTML = hits.length ? hits.map((m, i) => `<div data-m="${esc(m)}" class="${i === at ? 'on' : ''}">${esc(m)}</div>`).join('') : '<small>No match: press Enter to use it as typed</small>'
+  }
+  const choose = m => { const el = input; close(); el.value = m; el.dispatchEvent(new Event('change', { bubbles: true })) }
+  root.addEventListener('focusin', e => { if (e.target.dataset.list) { at = -1; show(e.target) } })
+  root.addEventListener('input', e => { if (e.target.dataset.list) { at = -1; show(e.target) } })
+  root.addEventListener('focusout', e => { if (e.target === input) setTimeout(() => { if (document.activeElement !== input) close() }, 120) })
+  root.addEventListener('keydown', e => {
+    if (!box || e.target !== input) return
+    const rows = box.querySelectorAll('[data-m]')
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      at = Math.max(0, Math.min(rows.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))
+      rows.forEach((r, i) => r.classList.toggle('on', i === at))
+      rows[at]?.scrollIntoView({ block: 'nearest' })
+    } else if (e.key === 'Enter' && rows[at]) { e.preventDefault(); choose(rows[at].dataset.m) }
+    else if (e.key === 'Escape') { e.stopPropagation(); close() }
+  })
+  document.addEventListener('mousedown', e => {
+    const row = box && e.target.closest?.('.combo-list [data-m]')
+    if (row) { e.preventDefault(); choose(row.dataset.m) }
+    else if (box && !box.contains(e.target) && e.target !== input) close()
+  }, { signal })
+  root.addEventListener('scroll', close)
+}
+
 function toggleModels(open = !models.el) {
-  if (!open) { models.el?.remove(); models.el = null; els.modelsBtn.classList.remove('on'); return }
+  if (!open) { models.ac?.abort(); document.querySelector('.combo-list')?.remove(); models.el?.remove(); models.el = null; els.modelsBtn.classList.remove('on'); return }
   models.el = document.createElement('div')
   models.el.className = 'models-pop'
   document.body.append(models.el)
@@ -3079,6 +3177,8 @@ function toggleModels(open = !models.el) {
   els.modelsBtn.classList.add('on')
   renderModels()
   loadModels().then(() => models.el && !models.el.contains(document.activeElement) && renderModels())
+  models.ac = new AbortController()
+  modelCombo(models.el, models.ac.signal)
   models.el.addEventListener('change', e => {
     const t = e.target
     if (t.dataset.role) {
@@ -3702,7 +3802,16 @@ function stepsHtml() {
   return rows.join('') || '<div class="st"><span>Steps show here while the app builds: every file the engine writes, each check, each fix.</span></div>'
 }
 
+// The site and its promo game open each other from the App bar.
+function renderAppLink() {
+  const b = $('#app-link')
+  if (!b) return
+  b.hidden = !S.link
+  if (S.link) { b.textContent = S.link.label; b.onclick = () => openRun(S.link.run) }
+}
+
 function renderApp() {
+  renderAppLink()
   renderBadges()
   if (view !== 'app') return
   const st = appv.state, working = st === 'working'
@@ -3846,7 +3955,9 @@ commandOps.view = c => setView(c.view)
 const game = { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false }
 async function openGame(idea = '', answers = null, build = false) {
   if (!game.questions?.length) game.questions = (await api('/api/game').then(r => r.ok ? r.json() : {}).catch(() => ({}))).questions || []
-  Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false })
+  // a site build is open: the game can be its promo game, in its world and colours
+  const site = S.kind !== 'game' && S.layers.size ? shownRun() : null
+  Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false, from: site, brand: site ? (S.title || 'this site') : '', promo: !!site })
   game.el?.remove()
   game.el = document.createElement('div')
   game.el.className = 'game-pop'
@@ -3870,18 +3981,19 @@ function renderGame() {
   } else if (game.spec) {
     const s = game.spec, list = v => (Array.isArray(v) ? v.join(', ') : v || '')
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
-    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
+    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
     el.querySelector('[data-build]').onclick = () => gameBuild()
   } else {
     const val = game.answers[q.id] || ''
-    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
+    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
     const free = el.querySelector('.gfree')
     const take = v => { if (v) game.answers[q.id] = v; else delete game.answers[q.id] }
     const next = () => { take(free.value.trim() || game.answers[q.id]); if (game.i < qs.length - 1) { game.i++; renderGame() } else gameSpec() }
     for (const b of el.querySelectorAll('[data-c]')) b.onclick = () => { take(b.dataset.c); free.value = ''; next() }
     free.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); next() } }
     el.querySelector('.gidea')?.addEventListener('input', e => { game.idea = e.target.value })
+    el.querySelector('.gpromo input')?.addEventListener('change', e => { game.promo = e.target.checked })
     el.querySelector('[data-next]').onclick = next
     el.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || game.answers[q.id]); gameSpec() }
     el.querySelector('[data-back]')?.addEventListener('click', () => { game.i--; renderGame() })
@@ -3894,7 +4006,7 @@ async function gameSpec(build = false) {
   game.busy = 'The planner is writing the game spec: an original world, hero and enemies…'
   renderGame()
   try {
-    const out = await api('/api/game/spec', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: game.idea, answers: game.answers }) }).then(r => r.json())
+    const out = await api('/api/game/spec', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: game.idea, answers: game.answers, from: game.promo ? game.from : null }) }).then(r => r.json())
     if (!out.spec) throw new Error(out.error || 'no spec')
     game.spec = out.spec
   } catch (err) {
@@ -3989,3 +4101,32 @@ setTimeout(async () => {
   if (latest && !S.run && !viewing) openRun(latest.id)
 }, 700)
 requestAnimationFrame(frameLoop)
+
+// ---------- resizable side panels: drag the inner edge, double-click to reset
+for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['.design', '--design-w', 220, 480, -1]]) {
+  const panel = $(sel)
+  if (!panel) continue
+  let saved = null
+  try { saved = localStorage.getItem(`swarm${name}`) } catch {}
+  if (saved) document.body.style.setProperty(name, `${saved}px`)
+  const grip = Object.assign(document.createElement('div'), { className: 'resizer', title: 'Drag to resize · double-click to reset' })
+  panel.append(grip)
+  grip.addEventListener('pointerdown', e => {
+    e.preventDefault()
+    grip.setPointerCapture(e.pointerId)
+    const x0 = e.clientX, w0 = panel.getBoundingClientRect().width
+    grip.classList.add('drag'); document.body.classList.add('resizing')
+    const move = ev => {
+      const w = Math.round(Math.max(min, Math.min(max, w0 + (ev.clientX - x0) * dir)))
+      document.body.style.setProperty(name, `${w}px`)
+    }
+    const up = () => {
+      grip.removeEventListener('pointermove', move)
+      grip.classList.remove('drag'); document.body.classList.remove('resizing')
+      try { localStorage.setItem(`swarm${name}`, String(Math.round(panel.getBoundingClientRect().width))) } catch {}
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', up, { once: true })
+  })
+  grip.addEventListener('dblclick', () => { document.body.style.removeProperty(name); try { localStorage.removeItem(`swarm${name}`) } catch {} })
+}
