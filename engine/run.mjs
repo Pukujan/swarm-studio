@@ -126,6 +126,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       .then(() => {
         emit('page:planning', { page: page.id })
         return streamChat(provider, {
+          trace: { kind: 'plan', page: page.id },
           model: plannerModel,
           messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page }),
           maxTokens: 3000,
@@ -172,6 +173,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     let timer = setTimeout(() => stall.abort(), 20000)
     try {
       await streamChat(provider, {
+        trace: { kind: 'sitemap' },
         model: plannerModel,
         messages: [
           { role: 'system', content: SITEMAP_SYSTEM },
@@ -232,6 +234,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     let saidCount = 0
     try {
       await streamChat(workerProvider, {
+        trace: { kind: 'build', agent: agent.id, page: layer.page, layer: layer.id },
         model: workerModel,
         messages: workerMessages({ theme: plan.theme || {}, plan, page, layer, images }),
         maxTokens: 3000,

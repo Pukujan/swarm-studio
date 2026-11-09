@@ -519,3 +519,44 @@ body.side-min .dock { left: auto; }
 .fmenu .fnew { display: flex; gap: 6px; padding: 4px 6px; }
 .fmenu .fnew input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; }
 .fmenu .fnew button { width: auto; background: var(--accent); color: #0b0d12; font-weight: 600; padding: 5px 10px; }
+
+/* drag builds into folders, and into your own order */
+.file.dragging { opacity: .4; }
+.file.drop-before { box-shadow: 0 -2px 0 #6f8cff; }
+.file.drop-after { box-shadow: 0 2px 0 #6f8cff; }
+.fgroup.drop-in > summary { color: #9fb3ff; background: #6f8cff22; border-radius: 6px; }
+.fgroup > summary.drop-before { box-shadow: 0 -2px 0 #6f8cff; }
+.fgroup > summary .fmore { visibility: hidden; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 6px; }
+.fgroup > summary:hover .fmore { visibility: visible; }
+.fempty { color: var(--muted); font-size: 12px; padding: 6px 10px 10px; border: 1px dashed var(--line); border-radius: 8px; margin: 0 4px 6px; }
+.file-tools .fnewf { background: none; border: 1px solid var(--line); color: inherit; border-radius: 6px; cursor: pointer; padding: 0 6px; }
+.fname-pop { position: fixed; z-index: 320; display: flex; gap: 6px; background: var(--panel, #16181d); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px #0008; }
+.fname-pop input { background: var(--panel-2); border: 1px solid var(--line); color: inherit; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; width: 170px; }
+.fname-pop button { background: #6f8cff; color: #fff; border: 0; border-radius: 6px; padding: 0 10px; cursor: pointer; }
+
+/* traces */
+.dtrace { display: block; width: calc(100% - 24px); margin: 6px 12px 4px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12px; text-align: left; }
+.dtrace:hover { border-color: #6f8cff; }
+.finfo.trace { width: min(880px, 100%); max-height: 86vh; display: flex; flex-direction: column; }
+.finfo.trace h3 { margin: 0 0 10px; font-size: 15px; }
+.finfo.trace h3 small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.tr-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.tr-q { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: inherit; border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 13px; }
+.tr-on { color: var(--muted); font-size: 12px; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.tr-list { overflow: auto; flex: 1; min-height: 120px; }
+.tr-call { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; }
+.tr-call.bad { border-color: #8a3a3a; }
+.tr-head { display: flex; gap: 10px; align-items: baseline; padding: 8px 10px 2px; cursor: pointer; font-size: 13px; }
+.tr-head b { white-space: nowrap; }
+.tr-where { flex: 1; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.tr-num, .tr-when { color: var(--muted); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tr-prev { color: var(--muted); font-size: 11px; padding: 0 10px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, monospace; cursor: pointer; }
+.tr-body { display: none; padding: 0 10px 10px; }
+.tr-call.open .tr-body { display: block; }
+.tr-call.open .tr-prev { display: none; }
+.tr-meta { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+.tr-body details { margin: 6px 0; }
+.tr-body summary { cursor: pointer; font-size: 12px; color: #9fb3ff; }
+.tr-body pre { white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; background: #0b0c10; border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 11.5px; margin: 4px 0 0; }
+.tr-copy { background: none; border: 1px solid var(--line); color: inherit; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; margin-top: 4px; }
+.finfo .tr-on { text-transform: none; letter-spacing: 0; display: flex; margin: 0; font-size: 12px; }

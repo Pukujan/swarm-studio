@@ -21,6 +21,7 @@ import { connect, connections, credentials, PROVIDERS } from '../engine/connect.
 import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.mjs'
 import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
+import { traced, readTrace } from '../engine/trace.mjs'
 import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -183,7 +184,7 @@ function startRun({ brief, agents, models: given }) {
   imageChoice().then(choice => {
     if (current !== run) return
     if (choice) images = imageQueue(run, emit, choice)
-    return runSwarm({
+    return withTrace(id, () => runSwarm({
     images: !!choice,
     provider: provider('planner'),
     workerProvider: provider('worker'),
@@ -193,7 +194,7 @@ function startRun({ brief, agents, models: given }) {
     workerModel: modelFor('worker'),
     emit,
     signal: run.controller.signal
-  })
+  }))
     .then(({ plan }) => {
       run.done = true
       writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan, null, 2))
@@ -235,6 +236,15 @@ function checkEdit(e) {
 
 // What the person adds to a run: a folder, their own name for it, tags, a note.
 const runMeta = id => { try { return JSON.parse(readFileSync(join(runsDir, id, 'meta.json'), 'utf8')) } catch { return {} } }
+
+// Model calls made for a run are traced into its folder (engine/trace.mjs), unless
+// the person turned that off for the project; open canvases hear of each call.
+const traceScope = id => ({
+  run: id,
+  dir: runMeta(id).trace === false ? null : join(runsDir, id),
+  sink: rec => broadcast({ type: 'trace', t: rec.t, run: id, call: { id: rec.id, kind: rec.kind, agent: rec.agent, page: rec.page, layer: rec.layer, model: rec.model, ok: rec.ok, ms: rec.ms } })
+})
+const withTrace = (id, fn) => traced(traceScope(id), fn)
 
 // A run's file card, from its events plus the person's meta. Cached by the
 // events file's size and time, so listing many runs stays quick.
@@ -289,9 +299,45 @@ function runCard(id) {
     folder: meta.folder || null,
     tags: meta.tags || [],
     note: meta.note || '',
+    trace: meta.trace !== false,
+    order: typeof meta.order === 'number' ? meta.order : null,
+    traces: existsSync(join(runsDir, id, 'trace.jsonl')),
     video: existsSync(join(runsDir, id, 'video', 'promo.mp4')),
     live: current?.id === id && !current.done,
   }
+}
+
+// Folders the person made, in their order. A folder can be empty; one named on a
+// run but missing here is added at the end.
+const foldersFile = () => join(runsDir, 'folders.json')
+function folderList() {
+  let saved = []
+  try { saved = JSON.parse(readFileSync(foldersFile(), 'utf8')).folders || [] } catch {}
+  const used = existsSync(runsDir) ? readdirSync(runsDir).filter(id => RUN_ID.test(id)).map(id => runMeta(id).folder).filter(Boolean) : []
+  return [...new Set([...saved, ...used])]
+}
+const saveFolders = list => writeFileSync(foldersFile(), JSON.stringify({ folders: [...new Set(list)] }))
+function eachMeta(fn) {
+  for (const id of readdirSync(runsDir).filter(id => RUN_ID.test(id))) {
+    const meta = runMeta(id)
+    if (fn(meta) === true) writeFileSync(join(runsDir, id, 'meta.json'), JSON.stringify(meta))
+  }
+}
+// add, rename, delete (its builds stay, out of any folder) or reorder folders
+function folderOp(input) {
+  const name = v => String(v || '').trim().slice(0, 40)
+  const list = folderList()
+  if (input.op === 'add' && name(input.name)) saveFolders([...list, name(input.name)])
+  if (input.op === 'order' && Array.isArray(input.folders)) saveFolders([...input.folders.map(name).filter(n => list.includes(n)), ...list])
+  if (input.op === 'rename' && name(input.from) && name(input.to)) {
+    saveFolders(list.map(n => (n === name(input.from) ? name(input.to) : n)))
+    eachMeta(m => { if (m.folder === name(input.from)) { m.folder = name(input.to); return true } })
+  }
+  if (input.op === 'delete' && name(input.name)) {
+    saveFolders(list.filter(n => n !== name(input.name)))
+    eachMeta(m => { if (m.folder === name(input.name)) { m.folder = null; return true } })
+  }
+  return { folders: folderList() }
 }
 
 function listRuns() {
@@ -310,7 +356,7 @@ function tours(id, input) {
   const pages = Array.isArray(input.pages) ? input.pages.filter(p => p && p.id && Array.isArray(p.items)).slice(0, 8) : []
   if (!start || !pages.length) return Promise.reject(new Error('no such run, or no pages sent'))
   if (!models.planner.apiKey) return Promise.reject(new Error('no model key yet: start a build from Hermes once'))
-  const job = writeTours({ provider: provider('planner'), model: modelFor('planner'), brief: start.brief, pages })
+  const job = withTrace(id, () => writeTours({ provider: provider('planner'), model: modelFor('planner'), brief: start.brief, pages }))
     .then(result => {
       writeFileSync(file, JSON.stringify(result, null, 2))
       return result
@@ -325,7 +371,8 @@ function tours(id, input) {
 const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion', 'publish'])
 const reviewing = new Set()
 const REVIEW_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
-async function review(id, input) {
+const review = (id, input) => withTrace(id, () => reviewNow(id, input))
+async function reviewNow(id, input) {
   const events = readEvents(id)
   const start = events?.find(e => e.type === 'run:start')
   const theme = events?.findLast(e => e.type === 'theme')
@@ -406,7 +453,8 @@ async function review(id, input) {
 
 // ---------- promo video: the planner storyboards the build, HyperFrames renders it
 const videos = new Map() // run id -> { state, pct, stage, src, file, seconds, message }
-async function makeVideo(id, input = {}) {
+const makeVideo = (id, input) => withTrace(id, () => videoNow(id, input))
+async function videoNow(id, input = {}) {
   const events = readEvents(id)
   if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
   if (videos.get(id)?.state === 'working') return videos.get(id)
@@ -524,8 +572,8 @@ function rework(send, s, agent, theme, args) {
   const layer = s.key.split('/').pop(), page = s.key.split('/')[0], t0 = Date.now()
   send('agent:assign', { agent, page, layer, role: s.role, fixing: true })
   send('layer:reset', { page, layer, agent })
-  return fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, ...args,
-    onDelta: d => send('layer:delta', { page, layer, agent, text: d }) })
+  return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, ...args,
+    onDelta: d => send('layer:delta', { page, layer, agent, text: d }) }))
     .then(html => send('layer:done', { page, layer, agent, ms: Date.now() - t0, html, fixed: true }))
     .catch(err => send('layer:failed', { page, layer, agent, message: String(err.message || err), keep: s.html }))
 }
@@ -543,7 +591,8 @@ function runSections(events) {
 // sections it is about.
 let commentTurn = 0
 const recentComments = new Map()
-async function comment(id, input) {
+const comment = (id, input) => withTrace(id, () => commentNow(id, input))
+async function commentNow(id, input) {
   const events = readEvents(id)
   const start = events?.find(e => e.type === 'run:start')
   if (!start) throw new Error('no such build')
@@ -676,6 +725,18 @@ const server = createServer((req, res) => {
     return
   }
 
+  if (url.pathname === '/api/folders') {
+    if (req.method !== 'POST') { res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ folders: folderList() })); return }
+    let body = ''
+    req.on('data', c => (body += c))
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(folderOp(input)))
+    })
+    return
+  }
+
   // Put a run in a folder (or take it out with an empty name).
   const runMetaPost = url.pathname.match(/^\/api\/runs\/([^/]+)\/meta$/)
   if (runMetaPost && req.method === 'POST' && RUN_ID.test(runMetaPost[1]) && existsSync(join(runsDir, runMetaPost[1]))) {
@@ -689,6 +750,9 @@ const server = createServer((req, res) => {
       if ('folder' in input) meta.folder = str(input.folder, 40)
       if ('title' in input) meta.title = str(input.title, 80)
       if ('note' in input) meta.note = str(input.note, 2000)
+      if ('trace' in input) meta.trace = input.trace !== false
+      if ('order' in input) meta.order = Number.isFinite(input.order) ? input.order : null
+      if (meta.folder && !folderList().includes(meta.folder)) saveFolders([...folderList(), meta.folder])
       if ('tags' in input) meta.tags = [...new Set((Array.isArray(input.tags) ? input.tags : String(input.tags || '').split(',')).map(x => String(x).trim().toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 12)
       writeFileSync(join(runsDir, runMetaPost[1], 'meta.json'), JSON.stringify(meta))
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(meta))
@@ -705,6 +769,24 @@ const server = createServer((req, res) => {
     const [cmd, args] = process.platform === 'darwin' ? ['open', ['-R', what]] : process.platform === 'win32' ? ['explorer', [`/select,${what}`]] : ['xdg-open', [dirname(what)]]
     execFile(cmd, args, () => {})
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ path: what }))
+    return
+  }
+
+  // The model calls of a run: a light list, filtered by page, layer, agent or kind,
+  // or one call in full (?call=<id>) with the messages sent and the raw answer.
+  const runTrace = url.pathname.match(/^\/api\/runs\/([^/]+)\/trace$/)
+  if (runTrace && RUN_ID.test(runTrace[1])) {
+    const dir = join(runsDir, runTrace[1]), q = url.searchParams
+    if (!existsSync(dir)) { res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no such run' })); return }
+    const one = q.get('call')
+    let calls = readTrace(dir, { full: !!one })
+    if (one) {
+      const c = calls.find(x => x.id === one)
+      res.writeHead(c ? 200 : 404, { 'content-type': 'application/json' }).end(JSON.stringify(c || { error: 'no such call' }))
+      return
+    }
+    for (const k of ['page', 'layer', 'agent', 'kind']) if (q.get(k)) calls = calls.filter(c => c[k] === q.get(k))
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ on: runMeta(runTrace[1]).trace !== false, calls }))
     return
   }
 

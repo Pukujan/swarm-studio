@@ -171,7 +171,7 @@ function on(e) {
       // a reviewer's fix was written from the edited section, so it has them already
       if (!e.fixed) for (const ce of S.classEdits) restyle(l, ce)
       fillImages(l)
-      if (e.fixed) feed(S.agents.get(e.agent), `fixed ${e.layer}`, 'sys', e.layer)
+      if (e.fixed) { feed(S.agents.get(e.agent), `fixed ${e.layer}`, 'sys', e.layer); chatAgent(S.agents.get(e.agent), `Done: the ${l.role || e.layer} is updated (${((e.ms || 0) / 1000).toFixed(0)}s). /trace shows what I was asked and wrote.`, e.layer) }
       if (e.done != null) S.done = e.done
       S.treeDirty = true
       const a = S.agents.get(e.agent)
@@ -186,7 +186,7 @@ function on(e) {
       const l = S.layers.get(key(e.page, e.layer))
       if (l) { l.status = 'failed'; S.treeDirty = true }
       // a failed fix puts the section back as it was
-      if (l && e.keep) { l.text = e.keep; l.ver++; l.status = 'done' }
+      if (l && e.keep) { l.text = e.keep; l.ver++; l.status = 'done'; chatAgent(S.agents.get(e.agent), `Couldn't make that change: ${e.message}. Try again, or ask for less at once.`, e.layer) }
       const a = S.agents.get(e.agent)
       if (a) a.layer = null
       feed(a, `failed ${e.layer}: ${e.message}`, 'err')
@@ -267,6 +267,9 @@ function on(e) {
       break
     case 'video:start': case 'video:story': case 'video:progress': case 'video:done': case 'video:failed':
       videoEvent(e)
+      break
+    case 'trace':
+      traceLive(e)
       break
   }
 }
@@ -1209,6 +1212,8 @@ const SLASH = [
   ['files', '[words]', 'search your builds'],
   ['open', '<n|words>', 'open a build (n from /files)'],
   ['info', '', 'this build\'s details, tags and note'],
+  ['trace', '[section|on|off]', 'every model call: what each agent was asked and what it answered'],
+  ['folder', '<name|none>', 'file this build in a folder'],
   ['models', '', 'pick the planner, builder and reviewer models'],
   ['new', '', 'an empty canvas for a new build'],
 ]
@@ -1251,6 +1256,19 @@ async function runSlash(text) {
       if (!files.length) await loadFiles()
       const f = files.find(x => x.id === shownRun())
       return f ? fileInfo(f) : botMsg('Open a saved build first.')
+    }
+    case 'trace': {
+      if (!needRun()) return
+      if (/^(on|off)$/i.test(arg)) { await saveMeta(shownRun(), { trace: arg.toLowerCase() === 'on' }); return botMsg(`Traces for this build are ${arg.toLowerCase()}.`) }
+      const l = !arg && S.sel && S.layers.get(S.sel)
+      return traceView(shownRun(), l ? { layer: l.id, title: l.role || l.id } : arg ? { layer: arg, title: arg } : {})
+    }
+    case 'folder': {
+      if (!needRun()) return
+      if (!arg) return botMsg('Say which folder: /folder Clients, or /folder none.')
+      if (!files.length) await loadFiles()
+      await fileInto(shownRun(), /^none$/i.test(arg) ? '' : arg.slice(0, 40))
+      return botMsg(/^none$/i.test(arg) ? 'Took this build out of its folder.' : `Filed in 📁 ${arg}.`)
     }
     case 'models': return toggleModels()
     case 'new': return els.newFile.click()
@@ -1862,13 +1880,15 @@ function renderDesign(now) {
     const where = `${l.page === '*' ? 'shared' : l.page} · ${l.status === 'done' ? 'done' : 'building'}`
     const mode = S.sel ? 'selected ✕' : design.pinned ? 'pinned' : 'following'
     const hint = l.status === 'done' ? '<div class="dhint">Click a value to change this section. Variables change every page.</div>' : `<div class="dhint">Editable when ${esc(owner?.name || 'its agent')} finishes. Click any finished section on the canvas to edit it.</div>`
-    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${body}`
+    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${l.status === 'done' && S.run ? `<button class="dtrace" title="Every model call for this section: the prompt and what came back">🔍 Trace of this section</button>` : ''}${body}`
   }
   if (html !== design.last) {
     design.last = html
     els.dDesign.innerHTML = html
     const pin = els.dDesign.querySelector('.pin')
     if (pin) pin.onclick = () => { if (S.sel) S.sel = null; else design.pinned = design.pinned ? null : design.agent; design.last = '' }
+    const tr = els.dDesign.querySelector('.dtrace')
+    if (tr) tr.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) traceView(S.run, { layer: l.id, title: l.role || l.id }) }
   }
 }
 
@@ -2926,13 +2946,20 @@ let viewing = null
 let liveId = null
 let files = []
 
+let folders = []
 async function loadFiles() {
   try {
     files = await (await api('/api/runs')).json()
+    folders = (await (await api('/api/folders')).json()).folders || []
   } catch {
     files = []
   }
   renderFiles()
+}
+const saveMeta = (id, body) => api(`/api/runs/${encodeURIComponent(id)}/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
+async function folderOp(body) {
+  const res = await api('/api/folders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  folders = (await res.json()).folders || folders
 }
 
 // Sorted, searchable, and grouped: by day, or by folders the person makes.
@@ -2949,21 +2976,25 @@ function renderFiles() {
   if (!els.files.previousElementSibling?.classList.contains('file-tools')) {
     const bar = document.createElement('div')
     bar.className = 'file-tools'
-    bar.innerHTML = `<input type="search" placeholder="Search names, briefs, themes, tags…  (tag:, has:video, on:vercel)" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="none">No groups</option></select>`
+    bar.innerHTML = `<input type="search" placeholder="Search names, briefs, themes, tags…  (tag:, has:video, on:vercel)" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option><option value="manual">My order</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="none">No groups</option></select><button class="fnewf" title="New folder">＋📁</button>`
     els.files.before(bar)
     bar.querySelector('.fq').oninput = e => { fileView.q = e.target.value.toLowerCase(); renderFiles() }
     bar.querySelector('.fsort').value = fileView.sort
     bar.querySelector('.fgroup').value = fileView.group
     bar.querySelector('.fsort').onchange = e => { fileView.sort = e.target.value; store.set('fileSort', fileView.sort); renderFiles() }
     bar.querySelector('.fgroup').onchange = e => { fileView.group = e.target.value; store.set('fileGroup', fileView.group); renderFiles() }
+    bar.querySelector('.fnewf').onclick = e => nameField(e.target, '', async n => { await folderOp({ op: 'add', name: n }); setGroup('folder') })
   }
   els.files.innerHTML = files.length ? '' : '<div class="empty">No files yet. Describe a product in Chat to make one.</div>'
   const list = files.filter(f => fileMatch(f, fileView.q))
-  const by = { new: (a, b) => b.t - a.t, old: (a, b) => a.t - b.t, name: (a, b) => a.title.localeCompare(b.title), size: (a, b) => b.pages - a.pages || b.t - a.t }[fileView.sort]
+  const by = { new: (a, b) => b.t - a.t, old: (a, b) => a.t - b.t, name: (a, b) => a.title.localeCompare(b.title), size: (a, b) => b.pages - a.pages || b.t - a.t,
+    manual: (a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || b.t - a.t }[fileView.sort]
   list.sort(by)
   // runs that never got a page go in their own group, out of the way
   const groupOf = f => (!f.pages && !f.live ? '⚠ Unfinished' : fileView.group === 'day' ? dayLabel(f.t) : fileView.group === 'folder' ? (f.folder ? `📁 ${f.folder}` : 'Not in a folder') : '')
   const groups = new Map()
+  // every folder shows, in the person's order, even an empty one (not while searching)
+  if (fileView.group === 'folder' && !fileView.q) for (const n of folders) groups.set(`📁 ${n}`, [])
   for (const f of list) { const g = groupOf(f); groups.has(g) || groups.set(g, []); groups.get(g).push(f) }
   // loose files, then unfinished ones, at the bottom
   for (const g of ['Not in a folder', '⚠ Unfinished']) if (groups.has(g)) { const u = groups.get(g); groups.delete(g); groups.set(g, u) }
@@ -2976,6 +3007,10 @@ function renderFiles() {
       det.open = !fileView.closed.has(name) && !(name === '⚠ Unfinished' && !fileView.closed.has('!' + name))
       det.innerHTML = `<summary><span></span><em>${items.length}</em></summary>`
       det.querySelector('span').textContent = name
+      const folder = fileView.group === 'folder' && name.startsWith('📁 ') ? name.slice(3) : name === 'Not in a folder' ? '' : null
+      if (folder !== null) groupDrop(det, folder)
+      if (folder) folderHead(det.querySelector('summary'), folder)
+      if (!items.length) det.insertAdjacentHTML('beforeend', '<div class="fempty">Empty. Drag builds here.</div>')
       det.ontoggle = () => {
         fileView.closed.delete(name); fileView.closed.delete('!' + name)
         if (!det.open) fileView.closed.add(name)
@@ -3003,9 +3038,217 @@ function fileItem(f, shown) {
   if (f.theme?.colors?.length) { const sw = document.createElement('span'); sw.className = 'fswatch'; sw.innerHTML = f.theme.colors.slice(0, 3).map(c => `<i style="background:${esc(c)}"></i>`).join(''); sw.title = `${f.theme.name} · ${f.theme.fonts?.heading || ''}`; item.querySelector('.ttl').prepend(sw) }
   if (badges.length) { const b = document.createElement('span'); b.className = 'fbadges'; b.textContent = badges.join('  '); meta.append(b) }
   item.onclick = () => openRun(f.id)
+  item.draggable = true
+  item.dataset.id = f.id
+  item.ondragstart = e => { e.dataTransfer.setData('text/x-swarm-run', f.id); e.dataTransfer.effectAllowed = 'move'; item.classList.add('dragging') }
+  item.ondragend = () => item.classList.remove('dragging')
+  // drop a build on another: it goes just before it, in your own order
+  item.ondragover = e => { if (!e.dataTransfer.types.includes('text/x-swarm-run')) return; e.preventDefault(); e.stopPropagation(); const r = item.getBoundingClientRect(); item.classList.toggle('drop-before', e.clientY < r.top + r.height / 2); item.classList.toggle('drop-after', e.clientY >= r.top + r.height / 2) }
+  item.ondragleave = () => item.classList.remove('drop-before', 'drop-after')
+  item.ondrop = e => {
+    const id = e.dataTransfer.getData('text/x-swarm-run'), after = item.classList.contains('drop-after')
+    item.classList.remove('drop-before', 'drop-after')
+    if (!id || id === f.id) return
+    e.preventDefault(); e.stopPropagation()
+    placeRun(id, f, after)
+  }
   item.querySelector('.fmore').onclick = e => { e.stopPropagation(); fileMenu(f, e.target) }
   item.oncontextmenu = e => { e.preventDefault(); fileMenu(f, item.querySelector('.fmore')) }
   return item
+}
+
+function setGroup(g) {
+  fileView.group = g
+  store.set('fileGroup', g)
+  const sel = document.querySelector('.file-tools .fgroup')
+  if (sel) sel.value = g
+  renderFiles()
+}
+
+// A name field right where it's needed (app panes block the browser's prompt box).
+function nameField(at, value, done) {
+  document.querySelector('.fname-pop')?.remove()
+  const f = document.createElement('form')
+  f.className = 'fname-pop'
+  f.innerHTML = `<input placeholder="Folder name" maxlength="40"><button>OK</button>`
+  const input = f.querySelector('input')
+  input.value = value
+  document.body.append(f)
+  const r = at.getBoundingClientRect()
+  Object.assign(f.style, { top: `${Math.min(r.bottom + 4, innerHeight - 50)}px`, left: `${Math.max(8, Math.min(r.left, innerWidth - 240))}px` })
+  input.focus(); input.select()
+  const close = () => { f.remove(); removeEventListener('mousedown', away) }
+  const away = e => { if (!f.contains(e.target)) close() }
+  setTimeout(() => addEventListener('mousedown', away))
+  input.onkeydown = e => { if (e.key === 'Escape') close() }
+  f.onsubmit = e => { e.preventDefault(); const n = input.value.trim(); close(); if (n) done(n) }
+}
+
+// Drop a build on a folder (or on "Not in a folder") to file it there.
+function groupDrop(det, folder) {
+  const sum = det.querySelector('summary')
+  det.ondragover = e => { if (e.dataTransfer.types.includes('text/x-swarm-run')) { e.preventDefault(); det.classList.add('drop-in') } }
+  det.ondragleave = e => { if (!det.contains(e.relatedTarget)) det.classList.remove('drop-in') }
+  det.ondrop = async e => {
+    det.classList.remove('drop-in')
+    const id = e.dataTransfer.getData('text/x-swarm-run')
+    if (!id) return
+    e.preventDefault()
+    await fileInto(id, folder)
+  }
+  // folders themselves are dragged by their heading to reorder them
+  if (!folder) return
+  sum.draggable = true
+  sum.ondragstart = e => { e.dataTransfer.setData('text/x-swarm-folder', folder); e.dataTransfer.effectAllowed = 'move' }
+  sum.ondragover = e => { if (e.dataTransfer.types.includes('text/x-swarm-folder')) { e.preventDefault(); sum.classList.add('drop-before') } }
+  sum.ondragleave = () => sum.classList.remove('drop-before')
+  sum.ondrop = async e => {
+    sum.classList.remove('drop-before')
+    const moved = e.dataTransfer.getData('text/x-swarm-folder')
+    if (!moved || moved === folder) return
+    e.preventDefault(); e.stopPropagation()
+    const list = folders.filter(n => n !== moved)
+    list.splice(list.indexOf(folder), 0, moved)
+    folders = list
+    renderFiles()
+    await folderOp({ op: 'order', folders: list })
+  }
+}
+
+async function fileInto(id, folder) {
+  const f = files.find(x => x.id === id)
+  if (!f || (f.folder || '') === folder) return
+  f.folder = folder || null
+  renderFiles()
+  await saveMeta(id, { folder })
+  if (folder && !folders.includes(folder)) folders.push(folder)
+  feed(null, folder ? `📁 moved “${f.title}” to ${folder}` : `took “${f.title}” out of its folder`, 'sys')
+}
+
+// Put a build just before (or after) another, in your own order and in that one's folder.
+async function placeRun(id, target, after) {
+  const f = files.find(x => x.id === id)
+  if (!f) return
+  if (fileView.sort !== 'manual') {
+    // the order you see now becomes your order, then the move applies to it
+    const seen = [...els.files.querySelectorAll('.file')].map(el => files.find(x => x.id === el.dataset.id)).filter(Boolean)
+    seen.forEach((x, i) => (x.order = i * 10))
+    fileView.sort = 'manual'; store.set('fileSort', 'manual')
+    const sel = document.querySelector('.file-tools .fsort'); if (sel) sel.value = 'manual'
+    await Promise.all(seen.map(x => saveMeta(x.id, { order: x.order })))
+  }
+  const list = files.filter(x => x.id !== id).sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || b.t - a.t)
+  list.splice(list.indexOf(target) + (after ? 1 : 0), 0, f)
+  const changed = []
+  list.forEach((x, i) => { if (x.order !== i * 10) { x.order = i * 10; changed.push(x) } })
+  const folder = fileView.group === 'folder' ? (target.folder || '') : null
+  if (folder !== null && (f.folder || '') !== folder) f.folder = folder || null
+  renderFiles()
+  await Promise.all(changed.map(x => saveMeta(x.id, { order: x.order, ...(x === f && folder !== null ? { folder } : {}) })))
+}
+
+// A folder heading's ⋯: rename it or delete it (its builds stay, out of any folder).
+function folderHead(sum, folder) {
+  const b = document.createElement('button')
+  b.className = 'fmore'
+  b.textContent = '⋯'
+  b.title = 'Rename or delete this folder'
+  sum.querySelector('em').before(b)
+  b.onclick = e => {
+    e.preventDefault(); e.stopPropagation()
+    document.querySelector('.fmenu')?.remove()
+    const m = document.createElement('div')
+    m.className = 'fmenu'
+    m.innerHTML = `<div class="fmh">📁 ${esc(folder)}</div><button data-rename>Rename…</button><button data-del>Delete folder (keeps its builds)</button>`
+    document.body.append(m)
+    const r = b.getBoundingClientRect()
+    Object.assign(m.style, { top: `${r.bottom + 4}px`, left: `${Math.max(8, r.right - m.offsetWidth)}px` })
+    const close = () => { m.remove(); removeEventListener('mousedown', away) }
+    const away = ev => { if (!m.contains(ev.target)) close() }
+    setTimeout(() => addEventListener('mousedown', away))
+    m.querySelector('[data-rename]').onclick = () => { close(); nameField(b, folder, async to => { if (to === folder) return; await folderOp({ op: 'rename', from: folder, to }); fileView.closed.delete(`📁 ${folder}`); loadFiles() }) }
+    m.querySelector('[data-del]').onclick = async () => { close(); await folderOp({ op: 'delete', name: folder }); loadFiles() }
+  }
+}
+
+// ---------- traces: every model call an agent made for a build, with the prompt
+// it was sent and the raw answer, so you can see why a section came out as it did.
+const trace = { run: null, filter: {}, timer: null }
+const KIND_LABEL = { sitemap: 'Plan the site', plan: 'Plan a page', build: 'Build', review: 'Review', 'review-fix': 'Fix (review)', fix: 'Fix (your comment)', route: 'Route a comment', tours: 'Visitor tours', video: 'Video storyboard' }
+
+async function traceView(run, filter = {}) {
+  document.querySelector('.trace-wrap')?.remove()
+  if (!run) return
+  trace.run = run
+  trace.filter = filter
+  const f = files.find(x => x.id === run)
+  const wrap = document.createElement('div')
+  wrap.className = 'finfo-wrap trace-wrap'
+  wrap.innerHTML = `<div class="finfo trace">
+    <button class="fix" title="Close">×</button>
+    <h3>🔍 Traces <small></small></h3>
+    <div class="tr-bar"><input type="search" class="tr-q" placeholder="Filter: a section, page, agent, or build / fix / review"><label class="tr-on"><input type="checkbox"> Record traces</label></div>
+    <div class="tr-list"></div>
+  </div>`
+  document.body.append(wrap)
+  const $q = c => wrap.querySelector(c)
+  $q('h3 small').textContent = [f?.title, filter.title && `· ${filter.title}`].filter(Boolean).join(' ')
+  if (filter.layer) $q('.tr-q').value = filter.layer
+  const close = () => { wrap.remove(); trace.run = null; removeEventListener('keydown', key) }
+  const key = e => { if (e.key === 'Escape') close() }
+  addEventListener('keydown', key)
+  wrap.onclick = e => { if (e.target === wrap) close() }
+  $q('.fix').onclick = close
+  $q('.tr-q').oninput = () => traceList()
+  $q('.tr-on input').onchange = async e => { const m = await saveMeta(run, { trace: e.target.checked }); if (f) f.trace = m.trace !== false; traceList() }
+  await traceList()
+}
+
+async function traceList() {
+  const wrap = document.querySelector('.trace-wrap')
+  if (!wrap || !trace.run) return
+  const got = await (await api(`/api/runs/${encodeURIComponent(trace.run)}/trace`)).json().catch(() => ({ calls: [] }))
+  wrap.querySelector('.tr-on input').checked = got.on !== false
+  const q = wrap.querySelector('.tr-q').value.trim().toLowerCase()
+  const calls = (got.calls || []).filter(c => !q || q.split(/\s+/).every(w => [c.kind, KIND_LABEL[c.kind], c.agent, c.page, c.layer, c.model].join(' ').toLowerCase().includes(w)))
+  const list = wrap.querySelector('.tr-list')
+  const open = new Set([...list.querySelectorAll('.tr-call.open')].map(el => el.dataset.id))
+  const name = id => S.agents?.get?.(id)?.name || id || ''
+  list.innerHTML = calls.length ? '' : `<div class="empty">${got.calls?.length ? 'No calls match.' : got.on === false ? 'Traces are off for this build. Tick “Record traces” to keep them from now on.' : 'No model calls traced yet. Builds, fixes, reviews and videos made from now on are traced.'}</div>`
+  for (const c of calls.slice().reverse()) {
+    const row = document.createElement('div')
+    row.className = `tr-call${c.ok ? '' : ' bad'}`
+    row.dataset.id = c.id
+    const when = new Date(c.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    row.innerHTML = `<div class="tr-head"><b></b><span class="tr-where"></span><span class="tr-num">${(c.ms / 1000).toFixed(1)}s${c.tokens?.out ? ` · ${c.tokens.out} tok` : ''}</span><span class="tr-when">${when}</span></div><div class="tr-prev"></div><div class="tr-body"></div>`
+    row.querySelector('b').textContent = `${c.ok ? '' : '⚠ '}${KIND_LABEL[c.kind] || c.kind || 'call'}`
+    row.querySelector('.tr-where').textContent = [name(c.agent), c.layer || (c.page && `page ${c.page}`), c.model].filter(Boolean).join(' · ')
+    row.querySelector('.tr-prev').textContent = c.ok ? c.preview : c.error
+    row.querySelector('.tr-head').onclick = () => traceOpen(row, c.id)
+    list.append(row)
+    if (open.has(c.id)) traceOpen(row, c.id)
+  }
+}
+
+async function traceOpen(row, id) {
+  if (row.classList.toggle('open') === false) return
+  const body = row.querySelector('.tr-body')
+  body.textContent = 'Loading…'
+  const c = await (await api(`/api/runs/${encodeURIComponent(trace.run)}/trace?call=${encodeURIComponent(id)}`)).json().catch(() => null)
+  if (!c?.messages) { body.textContent = 'Could not load this call.'; return }
+  const text = v => typeof v === 'string' ? v : (v || []).map(p => p.type === 'image' ? `[picture, ${p.kb} KB]` : p.text || '').join('\n')
+  body.innerHTML = `<div class="tr-meta"></div>${c.messages.map((m, i) => `<details${m.role === 'user' ? ' open' : ''}><summary>${esc(m.role === 'system' ? 'Instructions (system)' : m.role === 'user' ? 'Asked (user)' : m.role)} · ${text(m.content).length} chars</summary><pre data-m="${i}"></pre></details>`).join('')}<details open><summary>${c.ok ? 'Answer' : 'Error'} · ${(c.output || c.error || '').length} chars</summary><pre class="tr-out"></pre></details><button class="tr-copy">Copy this call</button>`
+  body.querySelector('.tr-meta').textContent = [`model ${c.model}`, c.host, c.ttftMs != null && `first text ${(c.ttftMs / 1000).toFixed(1)}s`, `total ${(c.ms / 1000).toFixed(1)}s`, c.tokens?.in && `${c.tokens.in} tokens in`, c.tokens?.out && `${c.tokens.out} out`, c.reasoningChars && `${c.reasoningChars} chars of hidden reasoning`, `temperature ${c.temperature}`].filter(Boolean).join(' · ')
+  c.messages.forEach((m, i) => (body.querySelector(`pre[data-m="${i}"]`).textContent = text(m.content)))
+  body.querySelector('.tr-out').textContent = c.ok ? c.output : `${c.error}\n\n${c.output || ''}`
+  body.querySelector('.tr-copy').onclick = e => { navigator.clipboard?.writeText(JSON.stringify(c, null, 2)); e.target.textContent = 'Copied' }
+}
+
+// a new call while the viewer is open for that build
+function traceLive(e) {
+  if (e.run !== trace.run) return
+  clearTimeout(trace.timer)
+  trace.timer = setTimeout(traceList, 400)
 }
 
 // Search every field a file has; tag:x, folder:x, on:<host>, has:video|site|images narrow it.
@@ -3074,8 +3317,7 @@ function fileMenu(f, at) {
   document.querySelector('.fmenu')?.remove()
   const m = document.createElement('div')
   m.className = 'fmenu'
-  const folders = [...new Set(files.map(x => x.folder).filter(Boolean))].sort()
-  m.innerHTML = `<div class="fmh">Move to folder</div>${folders.map(n => `<button data-f="${esc(n)}">📁 ${esc(n)}${n === f.folder ? ' ✓' : ''}</button>`).join('')}<button data-new>＋ New folder…</button>${f.folder ? '<button data-f="">Take out of folder</button>' : ''}<hr><button data-info>Details, tags and note…</button><button data-reveal>Show in Finder</button>${f.video ? '<button data-reveal="video">Show the video in Finder</button>' : ''}`
+  m.innerHTML = `<div class="fmh">Move to folder</div>${folders.map(n => `<button data-f="${esc(n)}">📁 ${esc(n)}${n === f.folder ? ' ✓' : ''}</button>`).join('')}<button data-new>＋ New folder…</button>${f.folder ? '<button data-f="">Take out of folder</button>' : ''}<hr><button data-info>Details, tags and note…</button><button data-trace>🔍 Traces: every model call…</button><button data-traceon>${f.trace === false ? '○ Record traces: off' : '● Record traces: on'}</button><button data-reveal>Show in Finder</button>${f.video ? '<button data-reveal="video">Show the video in Finder</button>' : ''}`
   document.body.append(m)
   const r = at.getBoundingClientRect()
   Object.assign(m.style, { top: `${Math.min(r.bottom + 4, innerHeight - m.offsetHeight - 8)}px`, left: `${Math.max(8, r.right - m.offsetWidth)}px` })
@@ -3096,6 +3338,8 @@ function fileMenu(f, at) {
       return
     }
     if (b.hasAttribute('data-info')) { close(); return fileInfo(f) }
+    if (b.hasAttribute('data-trace')) { close(); return traceView(f.id) }
+    if (b.hasAttribute('data-traceon')) { close(); const m2 = await saveMeta(f.id, { trace: f.trace === false }); f.trace = m2.trace !== false; return feed(null, `🔍 traces for “${f.title}” ${f.trace ? 'on' : 'off'}`, 'sys') }
     if (b.hasAttribute('data-reveal')) {
       close()
       return api(`/api/runs/${encodeURIComponent(f.id)}/reveal${b.dataset.reveal ? '?what=video' : ''}`, { method: 'POST' })
@@ -3104,10 +3348,11 @@ function fileMenu(f, at) {
   }
   async function move(folder) {
     close()
-    await api(`/api/runs/${encodeURIComponent(f.id)}/meta`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ folder }) })
+    await saveMeta(f.id, { folder })
     f.folder = folder || null
-    if (folder && fileView.group !== 'folder') { fileView.group = 'folder'; store.set('fileGroup', 'folder'); const g = document.querySelector('.file-tools .fgroup'); if (g) g.value = 'folder' }
-    renderFiles()
+    if (folder && !folders.includes(folder)) folders.push(folder)
+    if (folder && fileView.group !== 'folder') setGroup('folder')
+    else renderFiles()
     if (folder) feed(null, `📁 moved “${f.title}” to ${folder}`, 'sys')
   }
 }
