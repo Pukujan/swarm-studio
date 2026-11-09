@@ -225,3 +225,6 @@ body.cosmos .side-min-btn { display: none; }
 
 /* the wall tiles never show any of it */
 html.wall .galaxy, html.wall .orbit, html.wall .cosmos-chatbtn { display: none !important; }
+
+/* spec 07's chatter dock: sit above the comm-link strip instead of on Hermia, right side so it clears her thought cloud */
+body.cosmos-orbit .sound-dock, body.cosmos-station .sound-dock { left: auto !important; right: 14px !important; top: auto !important; bottom: 76px !important; }
