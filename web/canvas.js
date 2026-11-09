@@ -2891,7 +2891,11 @@ function renderVideo() {
   }
   const stage = { storyboard: 'Writing the storyboard…', rendering: 'Rendering frames in headless Chrome…', assembling: 'Encoding the MP4…', 'recording the voiceover': 'Kokoro is reading the voiceover…', 'mixing the sound': 'Mixing the music and the voice…' }[video.stage] || video.stage
   // progress only moves the bar, so the storyboard cards don't replay their entrance
-  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message, video.pick, video.cuts.length])
+  // once the composition is written (rendering onward), it plays live in the panel
+  const liveOn = video.busy && /render|assembl|mixing/.test(video.stage || '')
+  if (liveOn && !video.liveAt) video.liveAt = Date.now()
+  if (!video.busy) video.liveAt = 0
+  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message, video.pick, video.cuts.length, liveOn])
   if (el.dataset.sig === sig) {
     const bar = el.querySelector('.vbar i'), txt = el.querySelector('.vstage')
     if (bar) bar.style.width = `${Math.max(3, video.pct)}%`
@@ -2910,7 +2914,7 @@ function renderVideo() {
   const body = video.src && !video.busy
     ? `${cuts}<video src="${esc(src)}" controls playsinline></video><div class="vfoot"><span title="${esc(file)}">Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig" title="Fill the whole pane (Esc to leave)">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
-      ? `<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
+      ? `${liveOn ? `<div class="vlive"><iframe src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" title="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
         : `<div class="vstage">A short promo of this build: the planner writes the storyboard and a voiceover from your pages and pictures, HyperFrames renders it in your theme, and Kokoro reads it over music made for it, all on this machine.</div>${opts}<div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
@@ -2923,6 +2927,7 @@ function renderVideo() {
   // open windows of Swarm Studio would play the same sound over it)
   if (vid && (video.mine || document.hasFocus()) && video.played !== src) { video.played = src; vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) }) }
   el.querySelector('.vbig')?.addEventListener('click', () => bigScreen(true))
+  fitLive()
   for (const b of el.querySelectorAll('[data-cut]')) b.onclick = () => { video.pick = Number(b.dataset.cut); renderVideo() }
   el.querySelector('.vreveal')?.addEventListener('click', () => api(`/api/runs/${encodeURIComponent(video.run || viewing || S.run)}/reveal?what=video`, { method: 'POST' }))
   el.querySelector('.vstyle')?.addEventListener('change', e => { videoOpts.style = e.target.value; store.set('videoStyle', videoOpts.style) })
@@ -4172,10 +4177,10 @@ function crewJob() {
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
     return { key: 'app', host: appEls.view, spots: '#app-steps .st:nth-last-child(-n+5), #app-preview, #app-stage', n: 4, lines: done.length ? done : ['setting up the project', 'reading the design', 'planning routes'], tool: ['text', 'frame', 'connect', 'rect'] }
   }
-  if (view === 'video' && video.busy && video.el) {
+  if (video.busy && video.el) {
     const scenes = video.story.map((sc, i) => `scene ${i + 1}: ${sc.headline}`.slice(0, 34))
     const stage = { storyboard: ['writing the storyboard', 'picking shots'], rendering: ['rendering frames', 'timing the cuts'], assembling: ['encoding the MP4'], 'recording the voiceover': ['reading the voiceover'], 'mixing the sound': ['mixing music and voice'] }[video.stage] || [video.stage || 'cutting']
-    return { key: 'video', host: video.el, spots: '.vscene, .vbar, .vstage', n: 3, lines: [...stage, ...scenes], tool: ['image', 'frame', 'connect'] }
+    return { key: 'video', host: video.el, spots: '.vlive, .vlive, .vscene, .vbar', n: 3, lines: [...stage, ...scenes], tool: ['image', 'frame', 'connect'] }
   }
   return null
 }
@@ -4202,7 +4207,7 @@ function crewSpot(job, me) {
 
 function crewTick(now) {
   requestAnimationFrame(crewTick)
-  const job = document.body.classList.contains('lite') ? null : crewJob()
+  const job = crewJob()
   const key = job ? job.key : ''
   if (key !== crew.key) {
     crew.key = key
@@ -4296,3 +4301,13 @@ function wirePictures(l) {
   box.querySelector('.dpic-add').onclick = add
   what.onkeydown = e => { if (e.key === 'Enter') add() }
 }
+
+// the live preview is a 1920×1080 page, scaled to the panel's width
+new ResizeObserver(() => fitLive()).observe(document.body)
+function fitLive() {
+  for (const box of document.querySelectorAll('.vlive')) {
+    const f = box.querySelector('iframe')
+    if (f) f.style.transform = `scale(${box.clientWidth / 1920})`
+  }
+}
+setInterval(fitLive, 1000)
