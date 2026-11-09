@@ -2732,6 +2732,27 @@ function snapFrame(f, scale) {
 // it reports which floated text panels cover other text and, if asked, a
 // screenshot. The reviewer only ever saw the 1280px canvas frame before.
 const checks = new Map()
+const FN_JS = `function fontEmbedCSS() {
+    // html-to-image can't read a stylesheet from another origin (Google Fonts), so a
+    // snapshot fell back to system fonts and a resting page seemed to change font.
+    // Fetch the faces ourselves (latin only, each file once) and hand them over inlined.
+    const href = document.querySelector('link[href*="fonts.googleapis.com"]')?.href || ''
+    if (!href) return Promise.resolve('')
+    if (fontEmbedCSS.href !== href) {
+      fontEmbedCSS.href = href
+      const files = new Map()
+      const inline = u => files.get(u) || files.set(u, fetch(u).then(r => r.blob()).then(b => new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b) }))).get(u)
+      fontEmbedCSS.css = fetch(href).then(r => r.text()).then(async css => {
+        const blocks = css.split(/(?=\\/\\* [\\w-]+ \\*\\/)/).filter(b => !/^\\/\\* /.test(b) || /^\\/\\* latin(-ext)? \\*\\//.test(b))
+        const out = await Promise.all(blocks.map(async b => {
+          for (const u of new Set([...b.matchAll(/url\\((https:[^)]+)\\)/g)].map(m => m[1]))) b = b.split(u).join(await inline(u))
+          return b
+        }))
+        return out.join('\\n')
+      }).catch(() => '')
+    }
+    return fontEmbedCSS.css
+  }`
 function checkPage(id, width, snap) {
   const seq = `c${++review.seq}`
   const script = `<script>addEventListener('load', async () => {
@@ -2752,6 +2773,8 @@ function checkPage(id, width, snap) {
   if (${!!snap}) try {
     await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js'; s.onload = ok; s.onerror = fail; document.head.append(s) })
     const opts = { width: ${width}, height: h, pixelRatio: r, quality: 0.72, backgroundColor: getComputedStyle(document.body).backgroundColor }
+    const css = await (${FN_JS})()
+    if (css) opts.fontEmbedCSS = css
     out.image = await htmlToImage.toJpeg(document.body, opts).catch(() => htmlToImage.toJpeg(document.body, { ...opts, skipFonts: true }))
   } catch (err) { out.snapError = String(err && err.message || err) }
   parent.postMessage(out, '*')
@@ -3074,7 +3097,8 @@ async function litePass() {
     else if (!f.frozen && !wanted && f.ready && f.slots.size) {
       lite.busy = true
       try {
-        const shot = await snapFrame(f, 0.5)
+        // sharp on a Retina screen at the zoom where pages rest
+        const shot = await snapFrame(f, Math.min(1, 0.5 * (devicePixelRatio || 1)))
         if (!frameBusy(f) && f !== keep) freeze(f, shot.image)
       } catch {}
       lite.busy = false

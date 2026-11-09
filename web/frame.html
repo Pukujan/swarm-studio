@@ -141,6 +141,28 @@
     return true
   }
 
+  function fontEmbedCSS() {
+    // html-to-image can't read a stylesheet from another origin (Google Fonts), so a
+    // snapshot fell back to system fonts and a resting page seemed to change font.
+    // Fetch the faces ourselves (latin only, each file once) and hand them over inlined.
+    const href = document.querySelector('link[href*="fonts.googleapis.com"]')?.href || ''
+    if (!href) return Promise.resolve('')
+    if (fontEmbedCSS.href !== href) {
+      fontEmbedCSS.href = href
+      const files = new Map()
+      const inline = u => files.get(u) || files.set(u, fetch(u).then(r => r.blob()).then(b => new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b) }))).get(u)
+      fontEmbedCSS.css = fetch(href).then(r => r.text()).then(async css => {
+        const blocks = css.split(/(?=\/\* [\w-]+ \*\/)/).filter(b => !/^\/\* /.test(b) || /^\/\* latin(-ext)? \*\//.test(b))
+        const out = await Promise.all(blocks.map(async b => {
+          for (const u of new Set([...b.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))) b = b.split(u).join(await inline(u))
+          return b
+        }))
+        return out.join('\n')
+      }).catch(() => '')
+    }
+    return fontEmbedCSS.css
+  }
+
   // A screenshot of the page for the visual reviewer, scaled to at most 800 x 3000.
   let lib = null
   function snap(m) {
@@ -156,7 +178,8 @@
     const h = document.body.scrollHeight, r = Math.min(m.scale || 0.625, (m.scale ? 5000 : 3000) / h)
     const bg = getComputedStyle(document.body).backgroundColor
     const opts = { width: 1280, height: h, pixelRatio: r, quality: 0.72, backgroundColor: bg, filter: n => n.id !== 'scan' }
-    lib.then(h2i => h2i.toJpeg(document.body, opts).catch(() => h2i.toJpeg(document.body, { ...opts, skipFonts: true })))
+    Promise.all([lib, fontEmbedCSS(), document.fonts?.ready])
+      .then(([h2i, css]) => h2i.toJpeg(document.body, css ? { ...opts, fontEmbedCSS: css } : opts).catch(() => h2i.toJpeg(document.body, { ...opts, skipFonts: true })))
       .then(image => parent.postMessage({ type: 'snap', seq: m.seq, ok: true, image, r }, '*'))
       .catch(err => parent.postMessage({ type: 'snap', seq: m.seq, ok: false, error: String(err.message || err) }, '*'))
   }
