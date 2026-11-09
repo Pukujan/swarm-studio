@@ -11,6 +11,7 @@
     <div class="brand"><span class="logo">◆</span> Swarm Studio</div>
     <div class="file-name" id="file-name">Untitled</div>
     <div class="spacer"></div>
+    <button class="toggle play" id="play-btn" title="Play the prototype (P)" disabled>▶ Play</button>
     <button class="toggle" data-panel="planner" title="Planner: theme and plan stream">Planner</button>
     <button class="toggle" data-panel="agents" title="Agents and what each is doing">Agents <span id="agent-count" class="count">0</span></button>
     <div class="clock"><span id="timer">00.0s</span></div>
@@ -19,6 +20,7 @@
   <aside class="side">
     <nav class="tabs">
       <button data-tab="chat" class="on">Chat</button>
+      <button data-tab="log" title="What each agent is doing">Log</button>
       <button data-tab="pages">Pages</button>
       <button data-tab="files">Files</button>
     </nav>
@@ -36,6 +38,10 @@
           <button type="submit">Build</button>
         </div>
       </form>
+    </section>
+
+    <section class="tab log" data-tab="log">
+      <div id="log" class="feed"></div>
     </section>
 
     <section class="tab pages" data-tab="pages">
@@ -67,6 +73,24 @@
       <div id="agents-list" class="agents"></div>
     </div>
   </main>
+
+  <div class="player" id="player" hidden>
+    <div class="player-bar">
+      <button class="pl-btn" id="pl-close" title="Close (Esc)">✕</button>
+      <select id="pl-page" title="Page"></select>
+      <button class="pl-btn" id="pl-back" title="Back">← Back</button>
+      <button class="pl-btn" id="pl-restart" title="Back to page 1">Restart</button>
+      <div class="spacer"></div>
+      <div class="seg" id="pl-device">
+        <button data-device="desktop" class="on">Desktop</button>
+        <button data-device="mobile">Mobile</button>
+      </div>
+    </div>
+    <div class="player-stage" id="pl-stage">
+      <div class="device" id="pl-shell"><iframe id="pl-frame" title="Prototype" sandbox="allow-scripts"></iframe></div>
+    </div>
+    <div class="pl-hint">Click links to move between pages · clicking anywhere else shows where the links are</div>
+  </div>
 
   <script type="module" src="canvas.js"></script>
 </body>
