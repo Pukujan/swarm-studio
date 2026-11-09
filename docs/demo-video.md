@@ -18,21 +18,32 @@ One plugin, a few prompts, five things made: a site, a review pass, a promo vide
 
 ## Shot list
 
-| Time | Beat | On screen | Typed |
-|---|---|---|---|
-| 0–4 | Hook | Black, then the prompt box. Caption: **"One prompt."** | `/swarm Neon Alley Nights: a neon night market in Taipei: street food stalls, a festival weekend in March, tickets and a vendor map` |
-| 4–18 | The swarm | Theme and sitemap land, 16 cursors burst onto four pages, timer counts up. Slow push-in on one agent typing. Caption: **"16 agents. 4 pages. 32 seconds."** | — |
-| 18–26 | Review | 🔎 Review: scan line, two flags, sections rewrite live; before/after wipe. | `/swarm review` |
-| 26–34 | Play + video | ▶ Play, two clicks through pages; cut to the Video tab, the promo plays 3 s with sound. | `/swarm video kinetic` |
-| 34–56 | App | App tab. Steps stream (enable_nitro, routes, admin) at 8×, then the preview: buy a ticket, success state, `/admin` table shows the order. 🚀 Deploy → the `vercel.app` link opens and works. Caption: **"Same design. Real app. Live."** | `/swarm app` then `/swarm deploy` |
-| 56–60 | Change by chat | Type a change; the preview updates. | `/app add a sold-out badge when stock hits zero` |
-| 60–82 | Game | 🎮: three chips (Roguelike → feel → 3D neon), Just build it, spec card (the original world), build at 8×, then 12 s of play: dodge, hit-stop, a room cleared. | `/swarm game a moth-winged courier escaping a drowned clocktower` |
-| 82–88 | End card | Logo, **"Swarm Studio. One Hermes plugin. One Nous subscription."**, the repo URL. | — |
+The video tells the pitch in [brand/PITCH.md](brand/PITCH.md):
+1. the problem (agents are built for developers);
+2. the turn (one prompt, a crew you watch);
+3. the breadth (the whole launch);
+4. the loop (the Feed).
+
+Breadth is the proof, not the point, so each output gets one clear beat and no more. Plan backwards from what can be filmed on Tuesday night. If the app or game beat isn't ready to film, the fallback ending is the Swarm Wall: four packs building at once.
+
+| Time | Beat | On screen | Typed | Caption |
+|---|---|---|---|---|
+| 0–6 | **The problem** | A real terminal agent session scrolling walls of text, one file at a time. Hold on the before line from the hero story ([brand/stories-swarm-studio.md](brand/stories-swarm-studio.md)). | — | the story's before line |
+| 6–10 | **The Feed** | Hermes opens Swarm Feed; two quick swipes through real builds (Lantern Drift, Tidebreak). | — | **"Made with Swarm."** |
+| 10–14 | **+ Create** | Tap + Create; Hermia appears; type the prompt. | `A night market in Taipei: street food, a festival weekend, tickets and a vendor map` | **"One prompt."** |
+| 14–34 | **The crew builds** | Galaxy → orbit → the Design deck. Hermia draws the site map, then the crew cursors spread across four pages; a code check flags a section and a courier fixes it. Push in on one courier working. Then a one-line steer: the hero colour changes across every page. | `make the hero warmer` | **"A crew you can watch. And steer."**, then the real agent count, page count and time from this run |
+| 34–50 | **The real app** | The Engine room's code wall at 8×, then the live app on a phone: buy a ticket, and the order shows in `/admin`. The `vercel.app` link opens. | — | **"Same design. Real app. Live."** |
+| 50–64 | **The game** | Press Play: 10 s of the game from the same build, with a dodge, a hit and a room cleared. | — | **"And the game."** |
+| 64–74 | **Film and posts** | The Film studio's promo plays 3 s with sound, then the launch posts as cards. | — | **"The film. The posts. The whole launch."** |
+| 74–82 | **Post and remix** | Post to Feed; the card appears; someone remixes it into a winter festival, and the remix card says "remix of" with the crew credited. | — | **"Every build credits its crew."** |
+| 82–88 | **End card** | Hermia's mark and the "SWARM *Studio*" lock-up, the Feed URL and the repo URL. | — | **"A whole creative studio, inside Hermes."** |
+
+Captions follow [brand/BRAND.md](brand/BRAND.md): one yellow serif accent word per line, real numbers only, nothing claimed that isn't on screen.
 
 ## Edit
 
 - Cut on action (a click, a section landing); no dissolves except into the end card.
-- Captions: one line each, bold sans, bottom third, in and out in 150 ms.
+- Captions: one line each, Big Shoulders Display with the one accent word in EB Garamond italic yellow, bottom third, in and out in 150 ms.
 - Music: one track, 120–128 BPM, cuts on the beat; duck under the game's own sound for its last 4 s.
 - Zooms: 1.0 → 1.6 on the area that matters, eased, never during typing.
 - Build the edit with HyperFrames (already in the plugin's video tools) or Resolve; export H.264 1080p60, about 12 Mbps, plus a 15 s vertical cut for posts.

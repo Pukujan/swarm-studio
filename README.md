@@ -1,8 +1,10 @@
 # Swarm Studio
 
-A swarm of agents designs and builds a multi-page website live on a canvas, for [Hermes Agent](https://github.com/NousResearch/hermes-agent).
+A whole creative studio, inside [Hermes Agent](https://github.com/NousResearch/hermes-agent). One prompt, and a crew of agents you can watch and steer builds the whole launch: a multi-page site, a live app with a database, a playable game, a promo film and the posts.
 
-You give it a one-line brief. A planner picks the theme and the pages. Then a dozen or more agents take sections off a shared queue and stream them onto the canvas at the same time. You see their cursors, their design tools, short chat bubbles about what they're doing, wires between linked pages, and a clickable prototype at the end. A typical run builds 4 pages and 30–40 sections in 30–60 seconds.
+You give it a one-line brief. Commander Hermia, the planner, picks the theme and the pages. Then a dozen or more agents take sections off a shared queue and stream them onto a Figma-like canvas at the same time. You see their cursors, short chat bubbles about what they're doing, wires between linked pages, and a clickable prototype at the end. A typical run builds 4 pages and 30–40 sections in 30–60 seconds. Builds post to [Swarm Feed](https://swarm.design-bakery.com/studio), where people try them live and remix them with credit.
+
+The pitch, brand, market numbers and stories live in [docs/brand](docs/brand/): [PITCH.md](docs/brand/PITCH.md), [BRAND.md](docs/brand/BRAND.md), [MARKET.md](docs/brand/MARKET.md) and [stories-swarm-studio.md](docs/brand/stories-swarm-studio.md).
 
 ## Ways to use it
 
