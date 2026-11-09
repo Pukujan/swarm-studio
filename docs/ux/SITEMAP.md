@@ -1,74 +1,190 @@
 # Site maps and flows
 
-Every screen of the Studio and the Feed as one tree. Each layer shows 2–4 choices, and the tree goes as deep as
-it needs to: the deepest paths are 13 layers (see [RULES.md](RULES.md) rule 2). A dotted line jumps to another
-branch. Update this file when you add a layer or move a branch.
+Every screen of Swarm as one tree. Hermes opens the **Feed**, the way Kresilo opens on its home feed; the Studio
+is inside it, reached through **+ Create** (a new build) or **Projects** (your builds). The Feed works like
+TikTok: one build per screen, swipe for the next, and the build's own visuals and assets do the talking.
 
-Status: **proposal for the owner to discuss** (2026-11-09). Lens names follow [AUDIENCE.md](AUDIENCE.md).
+Each layer shows 2–4 choices, and the tree goes as deep as it needs to: the deepest paths are 14 layers (see
+[RULES.md](RULES.md) rule 2). A dotted line jumps to another branch. Update this file when you add a layer or
+move a branch.
+
+Status: **agreed direction** (owner, 2026-11-09). Lens names follow [AUDIENCE.md](AUDIENCE.md).
 
 ## 1. The whole product
 
-Two homes: the Studio (private, where you make things) and the Feed (public, where builds are shown off,
-told as stories, remixed and worked on together). Hermes opens either one.
+The same Feed opens from Hermes (with + Create and your Projects) and on the web at swarm.design-bakery.com
+(where Remix and + Create hand off to Hermes).
 
 ```mermaid
 flowchart LR
-  H[Hermes] --> CMD["/swarm commands"]
-  H --> ST[Studio]
-  H --> FD["Feed (public site)"]
-  CMD --> C1["/swarm: open the studio"]
-  CMD --> C2["/swarm feed"]
-  CMD --> C3["/swarm remix"]
-  ST --> G["Galaxy: Hermia and one input"]
-  G --> MK[Make something new]
-  G --> OP[Open something I made]
-  G --> SE[See what others made]
-  G --> SS[Sound and settings]
-  FD --> DI[Discover]
-  FD --> CO[Community]
-  FD --> ME[Me]
-  SE -.-> DI
-  DI -.->|Remix| MK
-  CO -.->|Join a jam| MK
+  HX["Hermes: /swarm"] --> FEED["Swarm Feed"]
+  WEB["swarm.design-bakery.com"] --> FEED
+  FEED --> HOME[Home]
+  FEED --> DISC[Discover]
+  FEED --> PROJ[Projects]
+  FEED --> ME[Me]
+  FEED --> CR["+ Create"]
+  CR --> ORB["Studio: the new build's orbit"]
+  PROJ --> GAL["My builds: the galaxy"]
+  GAL --> ORB2["Studio: that build's orbit"]
+  ORB -.->|Share › Post to Feed| HOME
+  HOME -.->|Remix| CR
 ```
 
-At rest the galaxy shows the stars, Hermia beside the one input, and four edge icons. Typing in the input is
-**Make something new**; the stars and Search are **Open something I made**; the Feed icon is **See what
-others made**; Sound and ⚙ are **Sound and settings**.
+## 2. Navigation
 
-## 2. Make something new
+Five slots, always in the same place: a bottom bar on a phone, a left rail on a desktop. Four places and one
+primary action, + Create, in the middle.
 
 ```mermaid
 flowchart LR
-  MK[Make something new] --> JM[Just make it]
-  MK --> SM[Steer it myself]
-  MK --> PK[Start from a pack]
-  MK --> JJ[Join a jam]
-  JM --> PR["Progress ring (section 4)"]
+  APP["Swarm: opens on Home"] --> N1[Home]
+  APP --> N2[Discover]
+  APP --> N3["+ Create"]
+  APP --> N4[Projects]
+  APP --> N5[Me]
+  N3 --> ST["Studio: the new build's orbit"]
+  N4 --> GA["My builds: the galaxy"]
+```
+
+## 3. Home
+
+One build fills the screen and plays itself (a game demo, a site scrolling, a film clip). The only text is the
+maker and the title. No descriptions: the assets and the story are pictures and clips.
+
+```mermaid
+flowchart LR
+  HOME[Home] --> FY[For you]
+  HOME --> FO[Following]
+  HOME --> LV[Live]
+  FY --> B["A build, full screen"]
+  B --> NX["Swipe up: the next build"]
+  B --> PL["It plays itself: game demo, site scroll, film clip"]
+  B --> RL[Right rail]
+  B --> AS["Swipe left: its assets"]
+  B --> SY["Tap: its story"]
+  B --> RX["Remix (the main button)"]
+  RL --> R1[Maker]
+  RL --> R2[Like]
+  RL --> R3[Talk]
+  RL --> R4[Share]
+  AS --> A1[Pages and screens]
+  AS --> A2[Sprites and art]
+  AS --> A3[Clips]
+  AS --> A4[Palette and type]
+  A2 --> A5[One asset, full size]
+  A5 --> A6["Use it → + Create"]
+  SY --> C1["Chapters as frames"]
+  C1 --> C2["Before and after"]
+  C2 --> C3["The prompt (tap)"]
+  SY --> C4["Time-lapse of the crew building"]
+  RX --> RX1["+ Create, starting from this build"]
+  LV --> LV1["A crew building right now"]
+  LV1 --> LV2["Its orbit, read only"]
+```
+
+## 4. Discover
+
+```mermaid
+flowchart LR
+  DISC[Discover] --> SR[Search]
+  DISC --> MK[Makers]
+  DISC --> JM[Jams]
+  DISC --> PK[Packs]
+  MK --> PF[A profile]
+  PF --> PF1["Showcase: a grid of their builds"]
+  PF --> PF2["Their story, as clips"]
+  PF --> PF3[Follow]
+  PF --> PF4[Badges]
+  JM --> JW["This week's jam"]
+  JM --> JP["Past jams → winners"]
+  JM --> JH[Host a jam]
+  JW --> JW1[Theme]
+  JW --> JW2[Entries]
+  JW --> JW3[Vote]
+  JW --> JW4["Join → + Create, lens set by the jam"]
+  PK --> PK1[Sites]
+  PK --> PK2[Apps]
+  PK --> PK3[Games]
+  PK3 --> PA[A pack]
+  PA --> PA1[Preview]
+  PA --> PA2["Use it → + Create"]
+```
+
+## 5. + Create
+
+The one way to start a build. Hermia sits beside the input; the input becomes the chat inside the build.
+
+```mermaid
+flowchart LR
+  CR["+ Create"] --> IDEA["Hermia and one input: the idea"]
+  CR --> SRC["Start from (optional)"]
+  SRC --> S1["A build: remix it"]
+  SRC --> S2[A file]
+  SRC --> S3[A pack]
+  IDEA --> LENS["Lens chip, guessed from the idea"]
+  LENS --> L0[Just make it]
+  LENS --> L1[Design]
+  LENS --> L2[Develop]
+  LENS --> L3[Game]
+  LENS --> L4[Launch]
+  LENS -.->|Mix: add a second lens| L5[Design + Develop]
+  L0 --> PR[Progress ring]
   PR --> RC[Result card]
-  RC --> RC1["Open → its orbit"]
-  RC --> RC2[Share]
-  RC --> RC3["Tweak → Steer it myself"]
-  SM --> LD[Design]
-  SM --> LV[Develop]
-  SM --> LG[Game]
-  SM --> LL[Launch]
-  LD --> O1["Orbit: Design deck"]
-  LV --> O2["Orbit: Engine room, Design deck to read"]
-  LG --> O3["Orbit: Game room, Film studio"]
-  LL --> O4["Orbit: Design deck, Film studio, Launch pad"]
-  SM -.->|Mix: add a second lens| O5["Orbit: Design deck, Engine room"]
-  PK --> P1[Sites]
-  PK --> P2[Apps]
-  PK --> P3[Games]
-  P3 --> PA[A pack]
-  PA --> PV[Preview]
-  PA --> PU["Use it → Steer it myself"]
-  JJ --> JT["This week's theme"]
-  JT --> JL["Steer it, lens set by the jam"]
+  RC --> RC1[Open its orbit]
+  RC --> RC2[Post to Feed]
+  L1 --> O1["Orbit: Design deck"]
+  L2 --> O2["Orbit: Engine room"]
+  L3 --> O3["Orbit: Game room, Film studio"]
+  L4 --> O4["Orbit: Design deck, Film studio, Launch pad"]
+  L5 --> O5["Orbit: Design deck, Engine room"]
 ```
 
-## 3. The orbit (one build)
+## 6. Projects
+
+```mermaid
+flowchart LR
+  PROJ[Projects] --> MB["My builds: the galaxy"]
+  PROJ --> CB[Collab boards]
+  PROJ --> SW[Shared with me]
+  MB --> ST[A star: one build]
+  MB --> MS["Search, sort, folders"]
+  ST --> ORB["Open → its orbit"]
+  ST --> RM["Row menu: rename, move, delete"]
+  CB --> BO[A board]
+  BO --> BC["Cards: ideas, assets, tasks"]
+  BO --> BM["Members → invite"]
+  BC --> CA[A card]
+  CA --> CA1[Comments]
+  CA --> CA2["Build it → + Create"]
+```
+
+## 7. Me
+
+```mermaid
+flowchart LR
+  ME[Me] --> PR[My profile]
+  ME --> LA[Launch]
+  ME --> NO[Notifications]
+  ME --> SE[Settings]
+  PR --> PR1["Showcase (pinned builds)"]
+  PR --> PR2["My story, as clips"]
+  PR --> PR3[Followers]
+  LA --> LA1[A build]
+  LA1 --> LA2[Posts]
+  LA1 --> LA3[Promo video]
+  LA1 --> LA4["Stats: views, plays, remixes"]
+  SE --> SE1["Sound: mute, volume, voices"]
+  SE --> SE2[Models]
+  SE --> SE3[Connections]
+  SE --> SE4[Keys]
+  SE2 --> SE5[A role]
+  SE5 --> SE6[Pick a model]
+  SE6 --> SE7[Cost and speed]
+  SE3 --> SE8["Supabase, GitHub, Feed account"]
+```
+
+## 8. The orbit (one build)
 
 ```mermaid
 flowchart LR
@@ -89,10 +205,10 @@ flowchart LR
   IN --> TGT["Target chip: → App, → Film"]
 ```
 
-The way home is always there and is not a branch: the breadcrumb (`Galaxy › build › room › …`), the logo and
-Esc.
+The way home is always there and is not a branch: the breadcrumb (`Home › Projects › build › room › …`), the
+logo (back to Home) and Esc.
 
-## 4. The sun: progress, versions, share
+## 9. The sun: progress, versions, share
 
 ```mermaid
 flowchart LR
@@ -135,11 +251,11 @@ flowchart LR
   S3 --> P1[Launch posts]
   S3 --> P2[Promo video]
   S3 --> P3[Post to Feed]
-  P3 --> P4[Story draft]
-  P4 --> P5[Publish to the Feed]
+  P3 --> P4["Pick the cover clip and assets"]
+  P4 --> P5[Post to Home]
 ```
 
-## 5. The rooms
+## 10. The rooms
 
 ### Design deck
 
@@ -253,102 +369,7 @@ flowchart LR
   L2 -.-> FS
 ```
 
-## 6. Open something I made, sound and settings
-
-```mermaid
-flowchart LR
-  OP[Open something I made] --> R[Recent]
-  OP --> LN[Live now]
-  OP --> AB[All builds]
-  AB --> K1[Sites]
-  AB --> K2[Apps]
-  AB --> K3[Games]
-  AB --> K4[Films]
-  K3 --> B[A build]
-  B --> BO["Open → its orbit"]
-  B --> BM[Row menu]
-  BM --> M1[Rename]
-  BM --> M2[Move to a folder]
-  BM --> M3[Delete]
-```
-
-```mermaid
-flowchart LR
-  SS[Sound and settings] --> SO[Sound]
-  SS --> SE[Settings]
-  SO --> S1[Mute]
-  SO --> S2[Volume]
-  SO --> S3[Voices]
-  S3 --> V1["Hermia's orders"]
-  S3 --> V2[Crew chatter]
-  SE --> MO[Models]
-  SE --> CN[Connections]
-  SE --> KY[Keys]
-  MO --> RL[A role]
-  RL --> PM[Pick a model]
-  PM --> CS[Cost and speed]
-  CN --> CN1[Supabase]
-  CN --> CN2[GitHub]
-  CN --> CN3[Feed account]
-```
-
-## 7. The Feed: the social side
-
-The public site at swarm.design-bakery.com: show off builds, tell how they were made, remix, run jams, plan
-together on boards, and market what you made. Its top bar has three choices: Discover, Community, Me.
-
-```mermaid
-flowchart LR
-  FD["Feed"] --> DI[Discover]
-  FD --> CO[Community]
-  FD --> ME[Me]
-  DI --> FY[For you]
-  DI --> FO[Following]
-  DI --> LV["Live now: watch a crew build"]
-  DI --> SR[Search]
-  FY --> BP[A build page]
-  BP --> BP1[Play or view it]
-  BP --> BP2[Its story]
-  BP --> BP3[Remix]
-  BP --> BP4[Talk]
-  BP2 --> CH[Chapters]
-  BP2 --> NA["Hermia narrates (voice)"]
-  CH --> CH1["Idea → plan → build → fixes → launch"]
-  CH1 --> CH2["A chapter: before and after"]
-  CH2 --> CH3[The prompt behind it]
-  BP3 --> RX[Opens the studio with this build]
-  BP4 --> TK1[Comments]
-  BP4 --> TK2[Reactions]
-  BP4 --> TK3["Credits: maker, crew, packs"]
-  CO --> MKR[Makers]
-  CO --> JM[Jams]
-  CO --> CB[Collab boards]
-  MKR --> PF[A profile]
-  PF --> PF1["Showcase (pinned builds)"]
-  PF --> PF2[Their story]
-  PF --> PF3[Follow]
-  PF --> PF4[Badges]
-  JM --> JW["This week's jam"]
-  JM --> JP["Past jams → winners"]
-  JW --> JW1[Theme and rules]
-  JW --> JW2[Entries]
-  JW --> JW3[Vote]
-  JW --> JW4["Join → the studio"]
-  CB --> BO[A board]
-  BO --> BO1["Cards: ideas, assets, tasks"]
-  BO --> BO5[Members]
-  BO1 --> BO2[A card]
-  BO2 --> BO3[Comments]
-  BO2 --> BO4["Build it → the studio"]
-  ME --> MP[My builds]
-  ME --> ML["Launch: posts, promo, stats"]
-  ME --> MN[Notifications]
-  ME --> MS[Settings]
-  ML --> ML1["Stats: views, plays, remixes"]
-  MS --> MS1["Studio token (MCP)"]
-```
-
-## 8. Hermia, the commander
+## 11. Hermia, the commander
 
 Hermia leads the crew. She is our own character: the owner's reference was an ink-style anime portrait, and we
 take the look (bold black ink on white, flat, one accent colour, a cyber headset), not that character, per the
@@ -363,10 +384,10 @@ flowchart LR
   LK --> LK1["Ink-style portrait, cyber headset"]
   LK --> LK2["Moves: blink, hair sway, scan line, lips with voice"]
   LK --> LK3["Moods: standing by, ordering, thinking, cheering, alarm"]
-  WR --> WR1["Galaxy: beside the one input"]
+  WR --> WR1["+ Create: beside the one input"]
   WR --> WR2["Orbit: at the bridge"]
   WR --> WR3["Rooms: a small badge"]
-  WR --> WR4["Feed: narrates build stories"]
+  WR --> WR4["Home: narrates a build's story"]
   VC --> VC1["Short orders at each phase"]
   VC --> VC2["Pre-made voice lines"]
   VC --> VC3["Follows the one Sound control"]
@@ -377,65 +398,65 @@ flowchart LR
   CR1 --> CR4["Raw log (⌘K)"]
 ```
 
-## 9. Flows by audience
+## 12. Flows by audience
 
-The main path for each audience, start to finish.
+The main path for each audience, start to finish. Every builder starts on Home and ends back on Home.
 
 **Just make it**
 
 ```mermaid
 flowchart LR
-  a1[Type the idea] --> a2[Build] --> a3[Watch the ring] --> a4[Result card] --> a5[Share]
+  a0[Home] --> a1["+ Create"] --> a2[Type the idea] --> a3[Watch the ring] --> a4[Result card] --> a5[Post to Feed]
 ```
 
 **Design**
 
 ```mermaid
 flowchart LR
-  b1[Type the idea] --> b2["Lens: Design"] --> b3[Design deck] --> b4[Pick an element] --> b5[Style it] --> b6[Review] --> b7[Export]
+  b0[Home] --> b1["+ Create"] --> b2["Idea, lens: Design"] --> b3[Design deck] --> b4[Pick an element] --> b5[Style it] --> b6[Review] --> b7[Export or post]
 ```
 
 **Develop**
 
 ```mermaid
 flowchart LR
-  c1[Type the idea] --> c2["Lens: Develop"] --> c3[Engine room] --> c4[Checks] --> c5[Fix what fails] --> c6[Deploy]
+  c0[Home] --> c1["+ Create"] --> c2["Idea, lens: Develop"] --> c3[Engine room] --> c4[Checks] --> c5[Fix what fails] --> c6[Deploy]
 ```
 
 **Game**
 
 ```mermaid
 flowchart LR
-  d1[Type the idea] --> d2["Lens: Game"] --> d3[Game room] --> d4[Play] --> d5[Tweak the feel] --> d6[Publish to Arcade]
+  d0[Home] --> d1["+ Create"] --> d2["Idea, lens: Game"] --> d3[Game room] --> d4[Play] --> d5[Tweak the feel] --> d6[Post to Feed]
 ```
 
 **Mix**
 
 ```mermaid
 flowchart LR
-  e1[Type the idea] --> e2["Lenses: Design + Develop"] --> e3[Design deck] --> e4[Engine room] --> e5[Open the app]
+  e0[Home] --> e1["+ Create"] --> e2["Idea, lenses: Design + Develop"] --> e3[Design deck] --> e4[Engine room] --> e5[Open the app]
 ```
 
 **Launch**
 
 ```mermaid
 flowchart LR
-  f1[Type the idea] --> f2["Lens: Launch"] --> f3[Site] --> f4[Promo video] --> f5[Posts] --> f6[Post to Feed]
+  f0[Home] --> f1["+ Create"] --> f2["Idea, lens: Launch"] --> f3[Site] --> f4[Promo video] --> f5[Posts] --> f6[Post to Feed]
 ```
 
 **Feed visitor**
 
 ```mermaid
 flowchart LR
-  g1[For you] --> g2[A build page] --> g3[Its story] --> g4[Remix] --> g5[The studio]
+  g0[Home] --> g1[Swipe] --> g2[A build that grabs you] --> g3[Its assets and story] --> g4[Remix] --> g5["+ Create"]
 ```
 
-## 10. How deep it goes
+## 13. How deep it goes
 
 | Path | Layers |
 |---|---|
-| Galaxy › Make › Steer › Design › Orbit › Design deck › Pages › A page › A section › An element › Style › Colour › Token › Where else it is used | 13 |
-| Galaxy › Make › Steer › Design › Orbit › Sun › Progress › Make › Pages › Designer › Decided › Why › Prompt and model › Raw log | 13 |
-| Galaxy › Make › Steer › Game › Orbit › Game room › Tweak › Feel › Gravity › Slider › Value in the code › Who set it and why | 11 |
-| Galaxy › Make › Steer › Launch › Orbit › Sun › Share › Publish › Website › Address › Custom domain › DNS steps | 11 |
-| Feed › Discover › For you › A build page › Its story › Chapters › Idea to launch › A chapter › The prompt behind it | 8 |
+| Swarm › + Create › The idea › Lens chip › Design › Orbit › Design deck › Pages › A page › A section › An element › Style › Colour › Token › Where else it is used | 14 |
+| Swarm › Projects › My builds › A star › Its orbit › Sun › Progress › Make › Pages › Designer › Decided › Why › Prompt and model › Raw log | 13 |
+| Swarm › + Create › The idea › Lens chip › Game › Orbit › Game room › Tweak › Feel › Gravity › Slider › Value in the code › Who set it and why | 12 |
+| Swarm › Home › For you › A build › Its story › Chapters › Before and after › The prompt | 7 |
+| Swarm › Home › For you › A build › Its assets › Sprites and art › One asset › Use it in + Create | 7 |

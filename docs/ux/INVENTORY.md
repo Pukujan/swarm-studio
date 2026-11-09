@@ -36,7 +36,8 @@ on the way down.
 
 | Landmark | Visible at rest (the whole list) | One click or hover away | ⌘K or ⚙ only |
 |---|---|---|---|
-| **Galaxy** | the galaxy (stars = builds), Hermia beside the one input, Build, 4 edge icons: Search, Feed, Sound, ⚙ | star name and one fact on hover; Search opens the build list with sort, group, folders and tags behind a filter icon | everything else |
+| **Home** (the Feed) | one build full screen, its maker and title, the right rail (Maker, Like, Talk, Share), Remix, the five-slot nav | swipe up for the next build, left for its assets, tap for its story | — |
+| **Projects › My builds** (the galaxy) | the galaxy (stars = builds), Search | star name and one fact on hover; Search opens the build list with sort, group, folders and tags behind a filter icon | everything else |
 | **Start** (typing) | the input, the lens chip, Build | lens options (below); "what happens" as a row of step icons | Pro packs list, models |
 | **Orbit** | the build (sun), its pages (planets, for lenses with pages), the lens's stations (1-3), one progress ring on the sun, the breadcrumb, the input (now the chat), Share, Sound, ⚙ | ring → steps sheet (with Stop); Hermia's avatar → crew radio (reasoning, agents, chatter); station hover → one line | think log, planner stream, break room |
 | **Room** | the room's content, its one primary action, a ⋯ room menu, the breadcrumb, the input | an inspector panel on the right for whatever is selected | the room's power tools |
@@ -63,7 +64,7 @@ on the way down.
 | Publish, copy link, open live, launch kit | Publish menu, `/publish`, 4 copy-link buttons, 6 open-live buttons, 3 launch-kit buttons | one **Share** button: Link, Website, Working app, Post to Feed, Launch posts |
 | Hermia's reasoning | thought bubble, comm text, Thinking count, Log tab | Hermia's avatar → crew radio |
 | Stop | 3 meanings, one label | Stop lives in the sheet of the thing it stops, labelled by that thing ("Stop the build", "Stop the tour") |
-| Back to the galaxy | a back button that's hidden in Classic view | breadcrumb, logo, Esc |
+| Back home | a back button that's hidden in Classic view | breadcrumb, logo (to Home), Esc |
 | Classic view | a separate layout you can get trapped in | removed: its canvas + chat layout is the Design deck room |
 
 ## Stations and rooms per lens
@@ -89,7 +90,8 @@ on the way down.
 
 ## Questions for the owner
 
-1. Is the edge-icon set on the galaxy right: Search, Feed, Sound, ⚙?
+1. ~~Is the edge-icon set on the galaxy right?~~ Answered: the five-slot nav (Home, Discover, + Create, Projects,
+   Me) replaces it; Sound and Settings live under Me.
 2. The Wall (`/wall`) is a demo page, not part of the flow. Keep it separate, with an "Open in studio" link on
    each tile?
 3. After the first game build, should the remaining wizard questions appear as optional tweak chips in the Game

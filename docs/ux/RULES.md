@@ -31,11 +31,11 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 
 ## A. Structure
 
-1. **One front door.** One input starts every kind of build. Inside a build, the same input is the chat. No
-   second form, wizard or chat box that also starts or steers a build.
+1. **One front door.** Hermes opens the Feed (Home). **+ Create** is the one way to start a build, and its input
+   becomes the chat inside the build. No second form, wizard or chat box that also starts or steers a build.
 2. **Depth, not width.** Each layer shows 2–4 choices, and there is no limit on depth. One flow opens into 2–3
    flows, those open into more, then into details, then into more details. The deepest paths in
-   [SITEMAP.md](SITEMAP.md) are 13 layers. Galaxy, Orbit and Room are landmarks on the way down, not the whole
+   [SITEMAP.md](SITEMAP.md) are 14 layers. Home, Orbit and Room are landmarks on the way down, not the whole
    stack. You go deeper by clicking the thing itself, not through a menu.
 3. **A budget per layer.** At rest a layer shows at most 4 choices, 1 primary action and 4 small edge icons.
    If a layer needs more, add a layer: group the choices, and show the groups first. Everything else comes from
@@ -47,12 +47,13 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
    ⚙ menu.
 6. **The lens decides what exists.** A station or tool the current lens doesn't use is not shown at all, rather
    than disabled or greyed out (see AUDIENCE.md).
-7. **Always a way home.** A breadcrumb (`Galaxy › build › room`), the logo goes to the galaxy, and Esc goes up
-   one level. You can always tell where you are.
+7. **Always a way home.** A breadcrumb (`Home › Projects › build › room`), the logo goes to Home, and Esc goes
+   up one level. You can always tell where you are.
 
 ## B. Text
 
-8. **At rest, names only.** No sentences on screen by default. Input placeholders are 6 words at most.
+8. **At rest, names only.** No sentences on screen by default. Input placeholders are 6 words at most. On the
+   Feed a build shows only its maker and title: no descriptions, the build's visuals and assets do the talking.
 9. **Explanations wait to be asked for.** Put them in a hover tooltip (about 500 ms delay, one short sentence)
    or in an expanded sheet. Tooltips are for icon-only buttons and names that need a gloss, not for everything.
 10. **Errors are a marker first.** A ⚠ on the thing that failed; the message once you open it; raw errors, JSON
