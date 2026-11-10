@@ -109,10 +109,10 @@ const Crew = window.SwarmCrew || { color: () => '#F2F2F2', ink: () => '#0b0b0c',
 // A cursor's head: a small pointer nib in the agent's colour, with its avatar riding beside it.
 const ARROW = (color, name) => `<svg class="nib" viewBox="0 0 10 10" aria-hidden="true"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill="${color}" stroke="#0b0b0c" stroke-width="1" stroke-linejoin="round"/></svg><span class="arrow">${Crew.avatar(name, 30)}</span>`
 // The planner's mark (Commander Hermia), for her messages in Chat
-const HERMIA = '<img class="hermia" src="brand/hermia-mark.svg" alt="" width="18" height="18">'
+const HERMIA = `<span class="hermia">${Crew.avatar('Hermia', 18)}</span>`
 
 let S
-// studio hook: web/studio.js and web/orbit.js listen to every event through window.swarm.on
+// studio hook: web/studio.js and web/project.js listen to every event through window.swarm.on
 const cosmosHooks = new Set()
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
@@ -143,7 +143,7 @@ function setTitle(t) {
 // ---------- events
 
 function on(e) {
-  for (const fn of cosmosHooks) try { fn(e) } catch (err) { console.error(err) } // galaxy/orbit hook (web/orbit.js)
+  for (const fn of cosmosHooks) try { fn(e) } catch (err) { console.error(err) } // studio hook (web/studio.js, web/project.js)
   switch (e.type) {
     case 'reset':
       if (S.run !== e.run) fresh(e.run)
@@ -1518,6 +1518,8 @@ slashPop.addEventListener('mousedown', e => { const d = e.target.closest('[data-
 els.brief.addEventListener('input', () => { slashAt = 0; renderSlash() })
 els.brief.addEventListener('blur', () => setTimeout(() => (slashPop.hidden = true), 150))
 
+// "Tell the crew…" in a project makes the build that project's next version (window.swarm.submit)
+let nextProject = null
 els.form.addEventListener('submit', async e => {
   e.preventDefault()
   const brief = els.brief.value.trim()
@@ -1535,7 +1537,8 @@ els.form.addEventListener('submit', async e => {
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
   if (hosted && !(await hosted.ready())) return
   setAuto(true)
-  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) }).catch(() => null)
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(nextProject ? { project: nextProject } : {}) }) }).catch(() => null)
+  nextProject = null
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
   else if (hosted && res) hosted.refuse(await res.json().catch(() => ({})))
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
@@ -4883,7 +4886,7 @@ function showStep(e, step, change) {
   const el = document.createElement('div')
   el.className = 'show-card'
   el.setAttribute('role', 'status')
-  el.innerHTML = `<div class="sc-in"><img class="sc-hermia" src="brand/hermia.svg" alt="" width="96" height="96">
+  el.innerHTML = `<div class="sc-in"><span class="sc-hermia">${Crew.avatar('Hermia', 96)}</span>
     <div class="sc-main"><div class="sc-step">STEP ${i + 1} / ${e.steps.length}</div>
     <div class="sc-title"><span class="sc-ico">${ico(ic)}</span>${esc(verb)}${word ? ` <em>${esc(word)}</em>` : ''}</div>
     <div class="sc-crew">${stepCrew(step.id).map(([n, c]) => pill(n, c)).join('')}</div></div></div>`
@@ -5584,14 +5587,16 @@ function connectorEvent(e) {
   renderConnectors()
 }
 
-// ---------- studio hook: what web/studio.js, web/home.js and web/orbit.js may read and call.
-// Kept to this one block so the canvas and the galaxy views merge cleanly.
+// ---------- studio hook: what web/studio.js, web/home.js and web/project.js may read and call.
+// Kept to this one block so the canvas and the studio views merge cleanly.
 window.swarm = {
   get S() { return S }, get view() { return view }, get viewing() { return viewing }, get liveId() { return liveId }, get files() { return files },
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer,
-  // a page's picture for its planet: the resting snapshot, or a small fresh one
+  // the crew's sound: 'on', 'muted' or 'quiet' (☰ → Sound in the studio)
+  sound(m) { if (m && !WALL) setCrewMode(m); return crewMode },
+  // a page's picture for its artboard: the resting snapshot, or a small fresh one
   async thumb(id) {
     const f = S.frames.find(x => x.id === id)
     if (!f) return null
@@ -5599,10 +5604,11 @@ window.swarm = {
     if (!f.ready || !f.slots.size) return null
     return (await snapFrame(f, 0.25)).image
   },
-  // start a build (or open Auto with the words in it) from the galaxy's prompt
-  submit(text, auto = false) {
+  // start a build (or open Auto with the words in it) from Projects or a project's dock
+  submit(text, auto = false, project = null) {
     els.brief.value = text
     if (auto) return openAuto()
+    nextProject = project
     if (view !== 'canvas') setView('canvas')
     els.form.requestSubmit()
   }

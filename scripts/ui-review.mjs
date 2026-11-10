@@ -3,7 +3,7 @@
 // uses (engine/review.mjs) what a designer would fix first, adapted from "a page of a website" to
 // "a screen of an app".
 //
-//   node scripts/ui-review.mjs [--base http://127.0.0.1:4420] [--run <run id>] [--only galaxy,orbit]
+//   node scripts/ui-review.mjs [--base http://127.0.0.1:4420] [--run <run id>] [--only projects,project]
 //                              [--model <id>] [--out <folder for screenshots and review.json>]
 //
 // The model: --model, else SWARM_REVIEWER_MODEL / SWARM_STUDIO_REVIEWER_MODEL, else the studio's own
@@ -86,21 +86,21 @@ async function fresh(page, url = '/') {
   await page.goto(BASE + url)
   await page.evaluate(() => { try { localStorage.clear() } catch {} })
   await page.goto(BASE + url)
-  await page.waitForFunction(() => window.swarmCosmos?.galaxy && (window.swarmCosmos.mode !== 'galaxy' || document.querySelector('.galaxy.ready')), null, { timeout: 15000 })
+  await page.waitForFunction(() => window.swarmCosmos?.homeView && window.swarmCosmos.projectView, null, { timeout: 15000 })
   await wait(url.includes('run=') ? 4500 : 1800)
 }
-const orbit = () => `/?run=${encodeURIComponent(RUN)}`
-const room = view => async p => { await fresh(p, orbit()); await p.evaluate(v => window.swarmCosmos.go('station', v), view); await wait(1500) }
+const project = () => `/?run=${encodeURIComponent(RUN)}`
+const room = view => async p => { await fresh(p, project()); await p.evaluate(v => window.swarmCosmos.go('station', v), view); await wait(1500) }
 const SCREENS = [
-  ['galaxy', 'Galaxy home: every build is a star; one prompt dock at the bottom', p => fresh(p)],
+  ['projects', 'Projects: a file browser of every project, a sidebar, one input at the top', p => fresh(p)],
   ['start-sheet', 'Start sheet: the Auto box that starts a build from one prompt', async p => { await fresh(p); await p.evaluate(() => window.swarm.submit('', true)); await wait(600) }],
-  ['orbit', 'Orbit of one build: its pages as planets, three stations (Design deck, Film studio, Engine room)', p => fresh(p, orbit())],
-  ['orbit-auto-open', 'Orbit with the Auto progress panel expanded', async p => { await fresh(p, orbit()); await p.click('.auto-panel .ap-head').catch(() => {}); await wait(500) }],
+  ['project', 'A project: one canvas of artboards (Site, App, Film, Art, Uploads), Files on the left, a dock at the bottom', p => fresh(p, project())],
+  ['project-auto-open', 'A project with the Auto progress panel expanded', async p => { await fresh(p, project()); await p.click('.auto-panel .ap-head').catch(() => {}); await wait(500) }],
   ['design-deck', 'Design deck room: the canvas of designed pages', room('canvas')],
   ['film-studio', 'Film studio room: the promo video', room('video')],
   ['engine-room', 'Engine room: the working app', room('app')],
-  ['new-game', 'New game wizard, first step', async p => { await fresh(p, orbit()); await p.evaluate(() => document.querySelector('#game-btn').click()); await wait(1200) }],
-  ['sound', 'Sound popover from the crew button in the top bar: crew sound mode and volume', async p => { await fresh(p, orbit()); await p.click('#crew-mute'); await wait(400) }],
+  ['new-game', 'New game wizard, first step', async p => { await fresh(p, project()); await p.evaluate(() => document.querySelector('#game-btn').click()); await wait(1200) }],
+  ['project-menu', 'A project\'s ☰ menu (Sound, Game, Classic view)', async p => { await fresh(p, project()); await p.click('#more-btn'); await wait(400) }],
 ]
 
 const { chromium } = await loadPlaywright()

@@ -247,14 +247,14 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       return { name: n, size: st.size, t: st.mtimeMs, type: UP_TYPES[ext] || 'application/octet-stream', src: `/up/${pid}/${encodeURIComponent(n)}` }
     }).sort((a, b) => a.t - b.t)
   }
-  function saveUpload(pid, given, buf) {
+  function saveUpload(pid, given, buf, replace = false) {
     if (!RUN_ID.test(pid) || !load().data.projects[pid]) throw new Error('no such project')
     let n = cleanName(given)
     if (!UP_NAME.test(n)) n = `upload-${Date.now()}${extname(n) || '.bin'}`
     const dir = uploadsDir(pid)
     mkdirSync(dir, { recursive: true })
     const stem = n.replace(/\.[^.]+$/, ''), ext = extname(n)
-    for (let i = 2; existsSync(join(dir, n)); i++) n = `${stem} (${i})${ext}`
+    if (!replace) for (let i = 2; existsSync(join(dir, n)); i++) n = `${stem} (${i})${ext}`
     writeFileSync(join(dir, n), buf)
     return uploadsOf(pid).find(u => u.name === n)
   }

@@ -971,6 +971,8 @@ em { font-style: italic; }
 .feed .item.bot, .feed .item.reply { border-left: 2px solid var(--c, var(--frame-hi)); padding: 1px 0 1px 11px; }
 .feed .item.bot > b, .feed .item.reply > b { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font: 600 11px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--c, var(--text)); }
 .feed .item.bot > b small { font: 500 10px var(--mono); color: var(--muted); letter-spacing: .08em; }
+.hermia, .sc-hermia { display: inline-block; }
+.hermia svg, .sc-hermia svg { display: block; width: 100%; height: 100%; }
 .feed .item .hermia { width: 18px; height: 18px; border-radius: 50%; flex: none; }
 .feed .item .av { display: inline-flex; vertical-align: -3px; margin-right: 5px; }
 .feed .item > b .av { margin: 0; }
@@ -1407,7 +1409,7 @@ html.wall .auto-panel { transform: scale(.72); transform-origin: top right; poin
   box-shadow: 0 0 0 1px var(--frame), 0 30px 80px rgb(var(--shade-rgb) / .7); animation: sc-in .38s var(--ease) both; }
 .show-card .sc-in::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgb(var(--glass-rgb) / .07) 50%, transparent 70%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; pointer-events: none; }
 .show-card.out .sc-in { animation: sc-out .42s cubic-bezier(.55, 0, .9, .5) both; }
-.show-card .sc-hermia { flex: none; width: 96px; height: 96px; filter: drop-shadow(0 0 18px rgb(var(--frame-rgb) / .8)); animation: sc-point .9s var(--ease) .2s both; }
+.show-card .sc-hermia { flex: none; width: 96px; height: 96px; animation: sc-point .9s var(--ease) .2s both; }
 .show-card .sc-main { min-width: 0; }
 .show-card .sc-step { font: 600 12px/1 var(--mono); letter-spacing: .22em; color: var(--accent); }
 .show-card .sc-title { display: flex; align-items: center; gap: 12px; margin: 8px 0 12px; font: 800 clamp(30px, 5.2vw, 56px)/.95 var(--display); text-transform: uppercase; letter-spacing: .01em; color: var(--text); }

@@ -514,10 +514,10 @@ export function makeHome({ sw, C, root }) {
   // ---------- you: theme, sound and models live in your menu; the globe opens the Feed
   $('.hm-who').onclick = e => {
     const light = (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')) === 'light'
-    const sound = document.querySelector('#crew-mute')?.dataset.mode || 'muted'
+    const sound = sw.sound?.() || 'muted'
     showMenu([
       { k: 'theme', icon: light ? 'moon' : 'sun', label: light ? 'Dark' : 'Light', run: () => document.querySelector('#theme-btn')?.click() },
-      { k: 'sound', icon: 'sound', label: sound === 'muted' ? 'Sound on' : 'Mute', run: () => document.querySelector('#crew-mute')?.click() },
+      { k: 'sound', icon: 'sound', label: sound === 'on' ? 'Mute' : 'Sound on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
       ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => document.querySelector('#models-btn')?.click() }])
     ], e.currentTarget)
   }

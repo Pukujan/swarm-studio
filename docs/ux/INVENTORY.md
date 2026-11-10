@@ -17,7 +17,7 @@ Status: **proposal for the owner to discuss** (2026-11-09).
 | Groups of duplicate controls | 24 |
 | Helper sentences visible by default | 75 |
 | Separate progress displays | 10 |
-| Views with no way back to the galaxy | 2 (Classic view; the Wall) |
+| Views with no way back to Projects | 2 (Classic view; the Wall) |
 
 The worst cases:
 
@@ -46,6 +46,9 @@ Controls added, moved or removed after the 2026-11-09 snapshot. The raw inventor
 | PR flow-calm | Auto mode sheet, game wizard, Launch kit | **Unchanged** apart from closing with ×, Esc and an outside click, the checkbox fix and never squeezing their own contents; the new site map replaces them | Start, game wizard |
 | PR hosted-studio | Hosted studio guest bar (.guest-bar, only at swarm.design-bakery.com/studio/app) | **Added**: the guest's name, builds left today, Post to Feed, Install the plugin. Video, App, Auto, Game, Publish, Review, Models, the model picker and the Film/Engine stations are hidden there (spec 13) | top bar, hosted only |
 | PR hosted-studio | Guest name dialog | **Added**: asks a name before the first hosted build (prefilled with the Feed's generated guest name) | dialog, hosted only |
+| PR studio-home | Projects (web/home.js) | **Replaced** the galaxy: a file browser with a sidebar (Recent, All projects, Assets, Trash, Folders +), one input with Make, cards (picture, title, kind icons), right-click and ⋯ menus, drag to folders, multi-select, stacked versions | Projects |
+| PR studio-canvas | A project (web/project.js) | **Replaced** the orbit: one canvas with Files and Layers, artboards in sections, the inspector (Export, Replace), the dock (Move, Frame, Text, Image, Comment, Tell the crew…), uploads by drop or + → Upload files. Recentre, planets, stations, the sun, the comm bar and the crew sprites are gone; the crew are named cursors and letter marks | A project |
+| PR studio-canvas | Sound (#crew-mute), Break room | **Moved**: in the studio, Sound is a ☰ item (and in the Projects user menu); the break room shows only in Classic view | ☰ |
 
 ## Landmarks, with only what is visible at rest
 
@@ -55,9 +58,9 @@ on the way down.
 | Landmark | Visible at rest (the whole list) | One click or hover away | ⌘K or ⚙ only |
 |---|---|---|---|
 | **Home** (the Feed) | one build full screen, its maker and title, the right rail (Maker, Like, Talk, Share), Remix, the five-slot nav | swipe up for the next build, left for its assets, tap for its story | — |
-| **Projects › My builds** (the galaxy) | the galaxy (stars = builds), Search | star name and one fact on hover; Search opens the build list with sort, group, folders and tags behind a filter icon | everything else |
+| **Projects** (a file browser) | the sidebar, "What should the crew build?" with Make, the cards | right-click or ⋯ on a card; search, sort, grid or list | everything else |
 | **Start** (typing) | the input, the lens chip, Build | lens options (below); "what happens" as a row of step icons | Pro packs list, models |
-| **Orbit** | the build (sun), its pages (planets, for lenses with pages), the lens's stations (1-3), one progress ring on the sun, the breadcrumb, the input (now the chat), Share, Sound, ⚙ | ring → steps sheet (with Stop); Hermia's avatar → crew radio (reasoning, agents, chatter); station hover → one line | think log, planner stream, break room |
+| **A project** (one canvas) | the breadcrumb (Projects › name ▾), the crew, Play, Publish, Files, the artboards, the dock | the inspector for a selection; right-click menus; ▾ for versions | ☰ |
 | **Room** | the room's content, its one primary action, a ⋯ room menu, the breadcrumb, the input | an inspector panel on the right for whatever is selected | the room's power tools |
 | **Design deck** (follows Figma, see PATTERNS.md) | the left panel (logo menu, pages, layers), the canvas with the crew's cursors, the bottom toolbar (Move, Frame, Shape, Pen, Text, Comment, Hermia, Code), the right panel (crew, progress, Play, Share; page and variables) | the Design and Prototype tabs for a selection; comment threads; follow one agent | Figma's shortcut keys, ⌘K, ⌘\\ hides the panels |
 | **Details** | — | logs, reasoning, layers tree, files and code wall, traces, raw errors, per-role models | — |
