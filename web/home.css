@@ -149,3 +149,19 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .home .tc b { font: 700 clamp(14px, 1.7vw, 26px)/1.05 var(--tc-font, var(--display)), var(--display); letter-spacing: -.01em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .home .tc span { margin-top: auto; height: 22%; border-radius: 8px 8px 0 0; background: color-mix(in srgb, var(--tc-fg) 10%, transparent); }
 .hm-body.list .tc b { font-size: 9px; }
+
+/* a card's own buttons on its cover: shown on hover or focus, always on touch */
+.home .card .acts { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity .12s; }
+.home .card:hover .acts, .home .card:focus-within .acts { opacity: 1; }
+@media (hover: none) { .home .card .acts { opacity: 1; } }
+.home .card .acts .ib { background: rgba(11,11,12,.78); color: #f4f4f5; border-radius: 8px; }
+.home .card .acts .ib.red:hover { color: var(--hot-text, #ff6b6b); }
+.home .card .cv .badge ~ .acts { right: 44px; }
+.hm-body.list .card .acts { top: 50%; right: 4px; transform: translateY(-50%); }
+.hm-typed { width: 100%; margin-top: 4px; padding: 9px 11px; border: 1px solid var(--line-2, #3a3a3f); border-radius: 8px; background: transparent; color: var(--text); font: 14px var(--mono, monospace); }
+.hm-typed:focus { outline: none; border-color: var(--text); }
+/* what to make: one small picker at the front of the input */
+.hm-ask { padding-left: 8px; }
+.hm-kind { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2, transparent); color: var(--text); font: 600 13px var(--label, inherit); letter-spacing: .04em; text-transform: uppercase; cursor: pointer; flex: none; }
+.hm-kind:hover, .hm-kind[aria-expanded="true"] { border-color: var(--line-2); }
+@media (max-width: 520px) { .hm-kind span { display: none; } }

@@ -352,7 +352,9 @@ function runCard(id) {
     if (!start) return null
     const pages = events.filter(e => e.type === 'page')
     const done = events.find(e => e.type === 'run:done')
-    const theme = events.findLast(e => e.type === 'theme') || {}
+    // a game made on its own has no page theme: it wears the brand from its spec
+    const brand = events.find(e => e.type === 'game:spec')?.spec?.brand
+    const theme = events.findLast(e => e.type === 'theme') || (brand?.vars ? { name: brand.name || 'game', vars: brand.vars, fonts: brand.fonts } : {})
     const sites = {}
     for (const e of events) if (e.type === 'publish:done' && e.url) sites[e.target] = e.url
     const video = events.findLast(e => e.type === 'video:done')
@@ -403,8 +405,15 @@ function runCard(id) {
     videoFile: shelveVideo(id),
     live: current?.id === id && !current.done,
     progress: current?.id === id && !current.done ? Math.min(1, (current.events.filter(e => e.type === 'layer:done').length) / Math.max(1, current.events.filter(e => e.type === 'layer:plan').length || 12)) : null,
-    cover: card.info.cover || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
+    // the cover: its hero picture, else a snapshot of its first page (saved by the canvas), else a film frame
+    cover: card.info.cover || snapOf(id) || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
   }
+}
+
+// the saved first-page snapshot, versioned so a newer one is not served from cache
+function snapOf(id) {
+  const f = join(runsDir, id, 'img', 'snap.jpg')
+  try { return `/img/${id}/snap.jpg?v=${Math.round(statSync(f).mtimeMs)}` } catch { return null }
 }
 
 // What people make goes where they can see it, not only inside the hidden data
@@ -1355,6 +1364,26 @@ const server = createServer((req, res) => {
 
   // Game mode: GET the questions, POST /spec { idea, answers } for the spec card,
   // POST { spec } to build it (a new build, opened in the App view).
+  // A snapshot of a build's first page, sent by the canvas, becomes its cover when it has no picture.
+  const snapRoute = req.method === 'POST' && url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/snap$/)
+  if (snapRoute) {
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    const id = snapRoute[1]
+    if (!RUN_ID.test(id) || !existsSync(join(runsDir, id, 'events.jsonl'))) return reply(404, { error: 'no such build' })
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 3e6) req.destroy() })
+    req.on('end', () => {
+      try {
+        const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(JSON.parse(body || '{}').image || '')
+        if (!m) return reply(400, { error: 'send a JPEG data URL' })
+        mkdirSync(join(runsDir, id, 'img'), { recursive: true })
+        writeFileSync(join(runsDir, id, 'img', 'snap.jpg'), Buffer.from(m[1], 'base64'))
+        reply(200, { cover: snapOf(id) })
+      } catch (err) { reply(400, { error: String(err.message || err) }) }
+    })
+    return
+  }
+
   if (url.pathname === '/api/game' || url.pathname === '/api/game/spec') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method === 'GET') { gameMod().then(g => reply(200, { questions: g.QUESTIONS })).catch(err => reply(500, { error: String(err.message || err) })); return }
@@ -1592,7 +1621,7 @@ const server = createServer((req, res) => {
 
   // Generated images. Open like the page files: an image is no secret, and the
   // frames load them as plain <img> tags, which can't send the token.
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')

@@ -5537,12 +5537,12 @@ window.swarm = {
   // the crew's sound: 'on', 'muted' or 'quiet' (☰ → Sound in the studio)
   sound(m) { if (m && !WALL) setCrewMode(m); return crewMode },
   // a page's picture for its artboard: the resting snapshot, or a small fresh one
-  async thumb(id) {
+  async thumb(id, scale = 0.25) {
     const f = S.frames.find(x => x.id === id)
     if (!f) return null
-    if (f.frozen) return f.frozen.img.src
-    if (!f.ready || !f.slots.size) return null
-    return (await snapFrame(f, 0.25)).image
+    if (f.frozen && scale <= 0.25) return f.frozen.img.src
+    if (!f.ready || !f.slots.size) return f.frozen?.img.src || null
+    return (await snapFrame(f, scale)).image
   },
   // start a build from Projects or a project's dock (the second argument, once Auto, is ignored)
   submit(text, auto = false, project = null) {
