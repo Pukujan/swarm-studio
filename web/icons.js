@@ -64,6 +64,10 @@ pencil:'<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.3
 export const ic = (n, s = 18) => `<svg class="i" viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true">${P[n] || ''}</svg>`
 // a crew cursor: a white arrow with its name tag (Hermia, Pip, Mochi, Ren)
 export const CREW = ['Hermia', 'Pip', 'Mochi', 'Ren']
+// who paints a picture slot and who reviews: the same answer in the canvas, its live line and its sounds
+export const PAINTERS = ['Pip', 'Mochi', 'Hermia']
+export const REVIEWER = 'Ren'
+export const painterOf = key => { let h = 0; for (const c of String(key)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PAINTERS[h % PAINTERS.length] }
 export const cursor = name => `<span class="cur" data-n="${name}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 2 L17 9 L10 11 L7 18 Z" fill="#f4f4f5" stroke="#0b0b0c" stroke-width="1.2"/></svg>${name ? `<span>${name}</span>` : ''}</span>`
 // the logo: SWARM inside a selection frame with four corner handles
 export const logo = () => '<span class="sw-logo">SWARM<i></i><i></i><i></i><i></i></span>'

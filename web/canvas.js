@@ -3,6 +3,7 @@
 // cursor move, tool and bubble comes from a real model stream.
 
 import { routeMessage } from './route.js'
+import { painterOf, REVIEWER } from './icons.js'
 
 const $ = s => document.querySelector(s)
 // Inlined by the server: the API token and the page-frame template. Frames are
@@ -5061,7 +5062,14 @@ function chatterHear(e) {
       if (e.fixed) once('fix', () => setTimeout(() => Chatter.line(nameOf(e.agent) || 'Pip', 'looks good!'), 600))
       break
     case 'layer:failed': chat.failed.add(key(e.page, e.layer)); Chatter.play('fail', nameOf(e.agent)); break
-    case 'review:issue': Chatter.play('gasp', 'Reviewer'); break
+    case 'review:issue': Chatter.play('gasp', REVIEWER); break
+    // pictures and the review, as sounds: the painter starts, finishes, tries again or trips; the reviewer checks
+    case 'image:queued': Chatter.play('start', painterOf(`${e.page}/${e.layer}/${e.gen}`)); break
+    case 'image': if (e.layer && e.gen) Chatter.play('done', painterOf(`${e.page}/${e.layer}/${e.gen}`)); break
+    case 'image:sent-back': Chatter.play('retry', painterOf(`${e.page}/${e.layer}/${e.gen}`)); break
+    case 'image:failed': Chatter.play('fail', painterOf(`${e.page}/${e.layer}/${e.gen}`)); break
+    case 'review:start': Chatter.play('start', REVIEWER); break
+    case 'review:done': Chatter.play(e.issues?.length ? 'fail' : 'done', REVIEWER); break
     case 'crew:lead': if (e.kind === 'assign') Chatter.babble('Hermia', e.text); break
     case 'agent:say': if (e.app) Chatter.babble(e.name, e.text); break
     case 'app:step': if (e.step?.kind === 'write') { const n = wallNames(); Chatter.play('start', n[(appv.steps.length) % n.length]?.[0]) } break
