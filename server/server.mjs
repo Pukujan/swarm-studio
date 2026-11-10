@@ -14,6 +14,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
+import { extendBase, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
@@ -239,7 +240,7 @@ function broadcast(event) {
   for (const res of clients) res.write(line)
 }
 
-function startRun({ brief, agents, models: given }) {
+function startRun({ brief, agents, models: given, base = null, ask = '' }) {
   setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
@@ -247,6 +248,9 @@ function startRun({ brief, agents, models: given }) {
   mkdirSync(dir, { recursive: true })
   const run = { id, dir, events: [], controller: new AbortController(), done: false, result: null, working: new Set(), brief }
   current = run
+  // a follow-up keeps the last version's art style, so new pictures match the old ones
+  if (base) rehomeImages(base, runsDir, dir, id, { existsSync, mkdirSync, copyFileSync, join })
+  if (base?.art) { run.art = Object.fromEntries(Object.entries(base.art).filter(([k]) => !['type', 't', 'run'].includes(k))); guides.set(id, run.art) }
   let images = null
 
   const emit = (type, data) => {
@@ -263,7 +267,8 @@ function startRun({ brief, agents, models: given }) {
     }
     broadcast(event)
     if (type !== 'layer:delta' && type !== 'plan:delta') appendFileSync(join(dir, 'events.jsonl'), JSON.stringify(event) + '\n')
-    if (type === 'layer:done' && images) images(event)
+    // a section carried over from the last version keeps its pictures: nothing is painted again
+    if (type === 'layer:done' && images && !data.kept) images(event)
   }
 
   if (!models.planner.apiKey || !models.worker.apiKey) {
@@ -278,6 +283,8 @@ function startRun({ brief, agents, models: given }) {
     provider: provider('planner'),
     workerProvider: provider('worker'),
     brief,
+    base,
+    ask,
     // the last builds' page types and colours, so this one looks different
     recent: recentLooks(runsDir),
     agents: agents || defaultAgents,
@@ -990,21 +997,35 @@ const server = createServer((req, res) => {
       try {
         input = JSON.parse(body || '{}')
       } catch {}
+      delete input.base
+      delete input.ask
       if (!input.brief) {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'brief required' }))
         return
       }
+      // a message inside an open build belongs to that build's project
+      if (typeof input.from === 'string' && typeof input.project !== 'string' && RUN_ID.test(input.from)) input.project = projects.projectOf(input.from) || undefined
       // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
       // and the art director matches the new pictures to them (art.styleGuide reads the brief)
       if (typeof input.project === 'string') {
         const ups = projects.uploadsOf(input.project).filter(u => /^image\//.test(u.type)).slice(0, 12)
         if (ups.length) input.brief = `${String(input.brief).trim()}\n\nThe owner uploaded these pictures. Use them where they fit, as they are (<img src="…">, no data-gen), and make every new picture match their look:\n${ups.map(u => `- ${u.name}: ${u.src}`).join('\n')}`
       }
+      // A message inside an open build (from: its run) is that project's next version: the
+      // last version is kept as it stands and the crew adds only what the message asks for
+      const from = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
+      const base = from ? extendBase(readEvents(from), (() => { try { return JSON.parse(readFileSync(join(runsDir, from, 'plan.json'), 'utf8')) } catch { return null } })()) : null
+      if (base) {
+        input.ask = String(input.brief).trim()
+        input.brief = `${base.brief}\n\nFor this version: ${input.ask}`
+        input.base = base
+      }
+      const pid = typeof input.project === 'string' ? input.project : null
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
-      if (typeof input.project === 'string') projects.claim(run.id, input.project)
+      if (pid) projects.claim(run.id, pid)
       broadcast({ type: 'reset', run: run.id })
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(base ? { extend: true, from } : {}) }))
     })
     return
   }
@@ -1621,7 +1642,7 @@ const server = createServer((req, res) => {
 
   // Generated images. Open like the page files: an image is no secret, and the
   // frames load them as plain <img> tags, which can't send the token.
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')

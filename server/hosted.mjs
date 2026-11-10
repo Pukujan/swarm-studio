@@ -368,7 +368,7 @@ const server = createServer(async (req, res) => {
   }
 
   // a build's pictures, public like its events
-  const img = path.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
+  const img = path.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
   if (img && req.method === 'GET') {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!RUN_ID.test(img[1]) || !existsSync(file)) return res.writeHead(404).end('not found')

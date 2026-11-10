@@ -6,6 +6,8 @@ import { markStalled, streamChat } from './llm.mjs'
 import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
 import { PAGE_TYPES, pickPageType, lookBrief } from './pagetype.mjs'
 import { tidyFragment } from './tidy.mjs'
+import { fixSection } from './review.mjs'
+import { extendPlannerMessages, navAsk } from './extend.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
 
@@ -85,12 +87,17 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   // one page type per build, away from the last builds' types and colours
-  const type = PAGE_TYPES[pageType] ? pageType : pickPageType(brief, recent.map(r => r.type).filter(Boolean))
-  const plan = { theme: null, pages: [], shared: [], pageType: type }
+  // a follow-up (base: the project's last version) keeps that version's page type, theme and pages
+  const type = PAGE_TYPES[base?.pageType] ? base.pageType : PAGE_TYPES[pageType] ? pageType : pickPageType(brief, recent.map(r => r.type).filter(Boolean))
+  const plan = base
+    ? { theme: base.theme, pages: base.pages.map(p => ({ ...p, layers: p.layers.map(l => ({ ...l })) })), shared: base.shared.map(l => ({ ...l })), pageType: type }
+    : { theme: null, pages: [], shared: [], pageType: type }
+  const kept = plan.pages.length
+  const added = [], changed = []
   const queue = new TaskQueue()
   const stats = { planned: 0, done: 0, failed: 0 }
 
@@ -100,8 +107,10 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     color: AGENT_COLORS[i]
   }))
 
-  emit('run:start', { brief, agents: pool, plannerModel, workerModel })
-  emit('pagetype', { key: type, name: PAGE_TYPES[type].name })
+  emit('run:start', { brief, agents: pool, plannerModel, workerModel, ...(base ? { extend: true, ask, kept } : {}) })
+  // the last version as it stands, put back on the canvas as it was: nothing is rebuilt
+  if (base) for (const c of base.carry) emit(c.type, c.data)
+  else emit('pagetype', { key: type, name: PAGE_TYPES[type].name })
 
   // --- planning: a quick sitemap pass, then one planner per page in parallel.
   // Page planners start a beat apart so pages come to life one after another.
@@ -130,7 +139,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
 
   function planPage(page, attempt = 1) {
     const parser = lineParser(obj => addLayer(obj, page.id))
-    return new Promise(r => setTimeout(r, attempt === 1 ? page.index * STAGGER_MS : 0))
+    return new Promise(r => setTimeout(r, attempt === 1 ? (page.index - kept) * STAGGER_MS : 0))
       .then(() => {
         emit('page:planning', { page: page.id })
         return streamChat(provider, {
@@ -213,11 +222,50 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     }
   }
 
-  const planning = sitemap()
+  // A follow-up: the planner sees the existing sitemap and the request, and plans only
+  // new pages (and changes to named sections). The navigation is rewritten to link them.
+  async function extendPlan() {
+    const parser = lineParser(obj => {
+      if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id || p.title === obj.title) && added.length < 6) {
+        const page = { id: String(obj.id), title: obj.title || obj.id, purpose: obj.purpose || '', sections: obj.sections || '', index: plan.pages.length, layers: [] }
+        plan.pages.push(page)
+        added.push(page)
+        emit('page', { id: page.id, title: page.title, purpose: page.purpose, index: page.index, added: true })
+      } else if (obj.type === 'change' && obj.ask) {
+        const page = plan.pages.find(p => p.id === obj.page && p.index < kept)
+        const layer = page?.layers.find(l => l.id === obj.layer) || plan.shared.find(l => l.id === obj.layer)
+        if (!layer?.html || changed.some(c => c.layer === layer)) return
+        changed.push({ layer, ask: String(obj.ask) })
+      }
+    })
+    await streamChat(provider, {
+      trace: { kind: 'sitemap' },
+      model: plannerModel,
+      messages: extendPlannerMessages({ base: { ...base, pages: plan.pages.slice(0, kept) }, ask }),
+      maxTokens: 1500,
+      temperature: 0.7,
+      extra: NO_THINKING,
+      signal,
+      onDelta: d => {
+        emit('plan:delta', { text: d })
+        parser.push(d)
+      }
+    })
+    parser.end()
+    const nav = plan.shared.find(l => l.id === 'nav' || l.role === 'navigation')
+    if (added.length && nav?.html && !changed.some(c => c.layer === nav)) changed.push({ layer: nav, ask: navAsk(plan.pages, added) })
+    if (!added.length && !changed.length) emit('error', { where: 'planner', message: 'nothing to add from that message: name a page or a section' })
+    for (const c of changed) {
+      stats.planned++
+      queue.push({ kind: 'fix', layer: c.layer, ask: c.ask })
+    }
+  }
+
+  const planning = (base ? extendPlan() : sitemap())
     .then(() => {
       emit('sitemap:done', { ms: elapsed(), pages: plan.pages.length })
       // page planners need the whole page list (for links), so they start here
-      for (const page of plan.pages) pagePlanners.push(planPage(page))
+      for (const page of plan.pages.slice(kept)) pagePlanners.push(planPage(page))
       return Promise.all(pagePlanners)
     })
     .then(() => emit('plan:done', { ms: elapsed(), pages: plan.pages.length, layers: stats.planned }))
@@ -231,7 +279,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     for (;;) {
       const task = await queue.next()
       if (!task) break
-      await buildLayer(agent, task.layer)
+      await (task.kind === 'fix' ? fixLayer(agent, task.layer, task.ask) : buildLayer(agent, task.layer))
     }
     emit('agent:idle', { agent: agent.id, reason: 'done' })
   }
@@ -280,8 +328,29 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     }
   }
 
+  // a finished section rewritten for a follow-up (the /fix path): cleared, streamed back,
+  // and on failure the old section returns
+  async function fixLayer(agent, layer, comment) {
+    const page = layer.page
+    const started = performance.now()
+    emit('agent:assign', { agent: agent.id, page, layer: layer.id, role: layer.role, fixing: true })
+    emit('layer:reset', { page, layer: layer.id, agent: agent.id })
+    try {
+      const html = await fixSection({
+        provider: workerProvider, model: workerModel, theme: plan.theme || {}, html: layer.html, role: layer.role || layer.id, comment, images,
+        signal, onDelta: d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d })
+      })
+      stats.done++
+      layer.html = tidyFragment(html)
+      emit('layer:done', { page, layer: layer.id, agent: agent.id, ms: Math.round(performance.now() - started), done: stats.done, planned: stats.planned, html: layer.html, fixed: true })
+    } catch (err) {
+      stats.failed++
+      emit('layer:failed', { page, layer: layer.id, agent: agent.id, message: String(err.message || err), keep: layer.html })
+    }
+  }
+
   await Promise.all([planning, ...pool.map(work)])
-  const result = { ms: elapsed(), ...stats, pages: plan.pages.length }
+  const result = { ms: elapsed(), ...stats, pages: plan.pages.length, ...(base ? { extend: true, kept, added: added.map(p => ({ id: p.id, title: p.title })), changed: changed.map(c => c.layer.id) } : {}) }
   emit('run:done', result)
   return { plan, result }
 }
