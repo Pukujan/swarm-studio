@@ -76,24 +76,28 @@ Use the world as flavour, never as a puzzle. A first-time visitor must always un
 ## Colour
 
 History: Hermes-blue glow (spec 08) → Ultraviolet (trial, 2026-11-09) → Graphite with a colour per room
-(2026-11-09) → **black, graphite and white with one accent** (owner, 2026-11-09). The rule lives in
-[docs/ux/RULES.md](../ux/RULES.md), standing rule 3.
+(2026-11-09) → **black, graphite and white with one accent** (owner, 2026-11-09) → **light and dark** (owner,
+2026-11-09). The rule lives in [docs/ux/RULES.md](../ux/RULES.md), standing rule 3.
 
-| Token | Hex | Job |
-|---|---|---|
-| bg | `#0b0b0c` | the background, flat: no glow, no grid, stars only |
-| surface | `#161618` | panels and cards |
-| surface-2 | `#1f1f22` | raised surfaces, secondary pills |
-| line | `#2a2a2e` | card borders and rules |
-| text | `#f4f4f5` | text |
-| muted | `#8e8e93` | secondary text (5.5:1 on surface) |
-| **accent** | `#f4f4f5` for now | **the one accent** (`--accent`): the main action, the active tab, the serif word. Text on it is `#0b0b0c`. The owner picks the final hue; it is a one-line change. |
-| hot | `#F20000` | errors only |
+The studio follows the system's light or dark setting; ☰ → Light / Dark overrides it and is remembered. The
+tokens are in `web/canvas.css`: dark is `:root`, light is the block after it.
+
+| Token | Dark | Light | Job |
+|---|---|---|---|
+| bg (`--void`) | `#0b0b0c` | `#ffffff` | the page, flat: no glow, no grid, stars only |
+| surface (`--deep`) | `#161618` | `#f4f4f5` | panels and cards |
+| surface-2 | `#1f1f22` | `#ececef` | raised surfaces, secondary pills |
+| line (`--edge`) | `#2a2a2e` | `#e4e4e7` | card borders and rules |
+| text | `#f4f4f5` | `#0b0b0c` | text |
+| muted | `#8e8e93` | `#636369` | secondary text |
+| **accent** | = text | = text | **the one accent** (`--accent: var(--text)`): the main action, the active tab, the serif word. A white button with black text in dark, black with white in light. Text on it is `--accent-ink` (the page colour). Picking a hue later is that one line. |
+| hot | `#F20000` | `#F20000` | errors only |
 
 **Rules:**
 - **One accent, used once per screen.** Everything else is black, graphite or white.
 - **No per-room, per-view or per-agent colours.** The crew is told apart by shade, white to graphite.
-- **No glow, no grid.** The galaxy home is monochrome stars.
+- **No glow, no grid.** The galaxy home is monochrome stars: light stars on black, dark stars on white.
+- **Pictures are the only colour.** Built pages, planets, art and video keep their own colours in both modes.
 - Body text keeps 4.5:1 or better (`node scripts/contrast.mjs` checks the studio's pairs).
 
 ## Type

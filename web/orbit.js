@@ -187,10 +187,10 @@ function makeOrbit() {
     })
     sun = new T.Mesh(new T.SphereGeometry(1.5, 48, 32), sunMat)
     scene.add(sun)
-    sunGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.pink), transparent: true, opacity: 0.55, depthWrite: false, blending: T.AdditiveBlending }))
+    sunGlow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.pink), transparent: true, opacity: 0.55, depthWrite: false, blending: C.blending(T) }))
     sunGlow.scale.setScalar(8)
     scene.add(sunGlow)
-    const halo = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.frame), transparent: true, opacity: 0.18, depthWrite: false, blending: T.AdditiveBlending }))
+    const halo = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(P.frame), transparent: true, opacity: 0.18, depthWrite: false, blending: C.blending(T) }))
     halo.scale.setScalar(20)
     scene.add(halo)
 
@@ -204,7 +204,7 @@ function makeOrbit() {
       // the hosted studio has no video or app (docs/specs/13-hosted-studio.md)
       if (window.SWARM?.hosted && view !== 'canvas') continue
       const obj = make()
-      const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(color), transparent: true, opacity: 0.35, depthWrite: false, blending: T.AdditiveBlending }))
+      const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(color), transparent: true, opacity: 0.35, depthWrite: false, blending: C.blending(T) }))
       glow.scale.setScalar(2.4)
       const g = new T.Group()
       g.add(obj, glow)

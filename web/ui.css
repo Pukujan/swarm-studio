@@ -4,31 +4,32 @@
    Original code; the recipes follow shadcn/ui (MIT). Loaded last, so it wins over older rules. */
 
 :root {
-  --ui-background: #0b0b0c;
-  --ui-foreground: #f4f4f5;
-  --ui-card: #161618;
-  --ui-card-foreground: #f4f4f5;
-  --ui-popover: #1f1f22;
-  --ui-muted: rgb(244 244 245 / .05);
-  --ui-muted-foreground: #8e8e93;       /* 5.6:1 on --ui-card */
+  /* the kit reads the studio's tokens (canvas.css), so it follows light and dark */
+  --ui-background: var(--void, #0b0b0c);
+  --ui-foreground: var(--text, #f4f4f5);
+  --ui-card: var(--deep, #161618);
+  --ui-card-foreground: var(--text, #f4f4f5);
+  --ui-popover: var(--surface-2, #1f1f22);
+  --ui-muted: rgb(var(--glass-rgb, 244 244 245) / .05);
+  --ui-muted-foreground: var(--muted, #8e8e93);
   --ui-primary: var(--accent, #f4f4f5); /* the one "do this": the plugin's one accent */
   --ui-primary-foreground: var(--accent-ink, #0b0b0c);
-  --ui-secondary: #1f1f22;
-  --ui-secondary-foreground: #f4f4f5;
-  --ui-accent: rgb(244 244 245 / .08); /* hover and selected surfaces: graphite */
-  --ui-accent-foreground: #f4f4f5;
-  --ui-blue: #3a3a3f;                   /* graphite: the secondary button */
-  --ui-destructive: #ff6b6b;
-  --ui-warning: #f4f4f5;
+  --ui-secondary: var(--surface-2, #1f1f22);
+  --ui-secondary-foreground: var(--text, #f4f4f5);
+  --ui-accent: rgb(var(--glass-rgb, 244 244 245) / .08);
+  --ui-accent-foreground: var(--text, #f4f4f5);
+  --ui-blue: var(--frame, #3a3a3f);     /* graphite: the secondary button */
+  --ui-destructive: var(--hot-text, #ff6b6b);
+  --ui-warning: var(--text, #f4f4f5);
   --ui-success: var(--accent, #f4f4f5);
-  --ui-border: #2a2a2e;
-  --ui-input: #3a3a3f;
-  --ui-ring: #a1a1a6;
+  --ui-border: var(--edge, #2a2a2e);
+  --ui-input: var(--line-2, #3a3a3f);
+  --ui-ring: var(--frame-hi, #a1a1a6);
   --ui-radius: 12px;
   --ui-font: var(--mono, ui-monospace, Menlo, monospace);
   --ui-head: var(--label, 'Barlow Condensed', 'Arial Narrow', sans-serif);
   --ui-display: var(--display, 'Big Shoulders Display', Impact, sans-serif);
-  --ui-shadow: 0 24px 60px -12px rgb(0 0 0 / .65), 0 0 0 1px rgb(244 244 245 / .06);
+  --ui-shadow: 0 24px 60px -12px rgb(0 0 0 / .65), 0 0 0 1px rgb(var(--glass-rgb, 244 244 245) / .06);
 }
 
 /* ---------- one fix for every checkbox and radio in the app. Older rules such as
@@ -49,14 +50,14 @@ html input:is([type="checkbox"], [type="radio"]) {
   font: 600 14px/1 var(--ui-head); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap;
   cursor: pointer; text-decoration: none; transition: background .16s, border-color .16s, color .16s, box-shadow .16s;
 }
-.ui-btn:hover { background: rgb(244 244 245 / .1); }
+.ui-btn:hover { background: rgb(var(--glass-rgb, 244 244 245) / .1); }
 .ui-btn:focus-visible, .ui-toggle:focus-visible, .ui-tab:focus-visible, .ui-chip:focus-visible, .ui-collapsible > summary:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: 2px; }
 .ui-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ui-btn .ico, .ui-btn svg { width: 16px; height: 16px; flex: none; }
 .ui-btn-default { background: var(--ui-primary); color: var(--ui-primary-foreground); }
 .ui-btn-default:hover { background: color-mix(in srgb, var(--ui-primary) 86%, #000); color: var(--ui-primary-foreground); }
-.ui-btn-blue { background: var(--ui-blue); color: #fff; }
-.ui-btn-blue:hover { background: #4a4a50; }
+.ui-btn-blue { background: var(--ui-blue); color: var(--ui-foreground); }
+.ui-btn-blue:hover { background: var(--line-2, #4a4a50); }
 .ui-btn-outline { background: transparent; border-color: var(--ui-input); color: var(--ui-foreground); }
 .ui-btn-outline:hover { background: var(--ui-accent); border-color: var(--ui-ring); }
 .ui-btn-ghost { background: transparent; color: var(--ui-foreground); }
@@ -84,7 +85,7 @@ html input:is([type="checkbox"], [type="radio"]) {
 }
 .ui-dialog {
   position: relative; display: flex; flex-direction: column; width: min(560px, 100%); max-height: min(calc(100dvh - 88px), 820px);
-  background: linear-gradient(180deg, #1f1f22, var(--ui-card)); color: var(--ui-foreground);
+  background: linear-gradient(180deg, var(--ui-popover), var(--ui-card)); color: var(--ui-foreground);
   border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) + 4px); box-shadow: var(--ui-shadow);
   font: 14px/1.5 var(--ui-font); animation: ui-rise .2s cubic-bezier(.2, .7, .2, 1);
 }
@@ -96,7 +97,7 @@ html input:is([type="checkbox"], [type="radio"]) {
 .ui-dialog-title em { font-family: var(--serif, Georgia, serif); font-style: italic; font-weight: 500; text-transform: none; color: var(--pink, #f4f4f5); }
 .ui-dialog-desc { margin: 0; color: var(--ui-muted-foreground); font: 13px/1.45 var(--ui-font); }
 .ui-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 14px 22px 18px; overflow-y: auto; min-height: 0; }
-.ui-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--ui-border); background: rgb(0 0 0 / .25); border-radius: 0 0 calc(var(--ui-radius) + 4px) calc(var(--ui-radius) + 4px); }
+.ui-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--ui-border); background: rgb(var(--void-rgb, 0 0 0) / .25); border-radius: 0 0 calc(var(--ui-radius) + 4px) calc(var(--ui-radius) + 4px); }
 .ui-dialog-footer .ui-grow { margin-right: auto; }
 .ui-dialog-close { position: absolute; top: 12px; right: 12px; }
 @keyframes ui-fade { from { opacity: 0 } }
@@ -107,11 +108,11 @@ html input:is([type="checkbox"], [type="radio"]) {
 .ui-field { display: flex; flex-direction: column; gap: 6px; }
 .ui-input, .ui-textarea, .ui-select {
   width: 100%; min-height: 40px; padding: 9px 12px; border-radius: calc(var(--ui-radius) - 2px);
-  border: 1px solid var(--ui-input); background: rgb(0 0 0 / .45); color: var(--ui-foreground);
+  border: 1px solid var(--ui-input); background: rgb(var(--void-rgb, 0 0 0) / .45); color: var(--ui-foreground);
   font: 14px/1.5 var(--ui-font); text-transform: none; letter-spacing: 0;
 }
 .ui-textarea { min-height: 96px; resize: vertical; display: block; }
-.ui-input::placeholder, .ui-textarea::placeholder { color: #8e8e93; }
+.ui-input::placeholder, .ui-textarea::placeholder { color: var(--ui-muted-foreground); }
 .ui-input:focus, .ui-textarea:focus, .ui-select:focus { outline: 0; border-color: var(--ui-ring); box-shadow: 0 0 0 3px rgb(161 161 166 / .25); }
 
 /* ---------- Checkbox + Label row: the box sits right next to its own words */
@@ -121,7 +122,7 @@ html input:is([type="checkbox"], [type="radio"]) {
 .ui-check small { display: block; margin-top: 2px; color: var(--ui-muted-foreground); font-size: 12px; }
 html .ui-checkbox {
   appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px;
-  border: 1.5px solid var(--ui-input); background: rgb(0 0 0 / .5); display: grid; place-items: center; cursor: pointer;
+  border: 1.5px solid var(--ui-input); background: rgb(var(--void-rgb, 0 0 0) / .5); display: grid; place-items: center; cursor: pointer;
 }
 html .ui-checkbox:checked { background: var(--ui-primary); border-color: var(--pink, #f4f4f5); }
 html .ui-checkbox:checked::after { content: ''; width: 9px; height: 5px; border: solid var(--ui-primary-foreground); border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg); }
@@ -129,12 +130,12 @@ html .ui-checkbox:focus-visible { outline: 2px solid var(--ui-ring); outline-off
 
 /* ---------- Switch */
 html .ui-switch { appearance: none; -webkit-appearance: none; position: relative; width: 36px; min-width: 36px; height: 20px; border-radius: 99px; background: var(--ui-input); cursor: pointer; transition: background .16s; }
-html .ui-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #f4f4f5; transition: transform .16s; }
+html .ui-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ui-foreground); transition: transform .16s; }
 html .ui-switch:checked { background: var(--ui-primary); }
 html .ui-switch:checked::after { transform: translateX(16px); background: var(--ui-primary-foreground); }
 
 /* ---------- Toggle group (segmented choice) and Tabs */
-.ui-toggle-group, .ui-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: var(--ui-radius); background: rgb(0 0 0 / .5); border: 1px solid var(--ui-border); }
+.ui-toggle-group, .ui-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: var(--ui-radius); background: rgb(var(--void-rgb, 0 0 0) / .5); border: 1px solid var(--ui-border); }
 .ui-toggle-group.ui-block { display: flex; }
 .ui-toggle-group.ui-block > .ui-toggle { flex: 1; }
 .ui-toggle, .ui-tab {
@@ -153,7 +154,7 @@ html .ui-switch:checked::after { transform: translateX(16px); background: var(--
 .ui-chip.on, .ui-chip[aria-pressed="true"] { background: var(--ui-foreground); color: var(--ui-background); border-color: var(--ui-foreground); }
 
 /* ---------- Collapsible / Accordion (native details) */
-.ui-collapsible { border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) - 2px); background: rgb(0 0 0 / .25); }
+.ui-collapsible { border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) - 2px); background: rgb(var(--void-rgb, 0 0 0) / .25); }
 .ui-collapsible > summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; list-style: none; font: 600 13.5px/1 var(--ui-head); letter-spacing: .1em; text-transform: uppercase; color: var(--ui-foreground); }
 .ui-collapsible > summary::-webkit-details-marker { display: none; }
 .ui-collapsible > summary small { margin-left: auto; font: 12px/1.2 var(--ui-font); letter-spacing: 0; text-transform: none; color: var(--ui-muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -164,20 +165,20 @@ html .ui-switch:checked::after { transform: translateX(16px); background: var(--
 /* ---------- Badge */
 .ui-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--ui-border); background: var(--ui-muted); color: var(--ui-foreground); font: 600 11.5px/1.2 var(--ui-head); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
 .ui-badge-ok { color: var(--ui-success); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
-.ui-badge-warn { color: var(--ui-warning); border-color: rgb(244 244 245 / .3); }
+.ui-badge-warn { color: var(--ui-warning); border-color: rgb(var(--glass-rgb, 244 244 245) / .3); }
 .ui-badge-busy { color: var(--ui-primary); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 
 /* ---------- Progress and the step indicator */
-.ui-progress { position: relative; height: 6px; border-radius: 99px; background: rgb(244 244 245 / .1); overflow: hidden; }
+.ui-progress { position: relative; height: 6px; border-radius: 99px; background: rgb(var(--glass-rgb, 244 244 245) / .1); overflow: hidden; }
 .ui-progress > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--ui-primary); transition: width .3s; }
 .ui-steps { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.ui-steps li { flex: 1; height: 6px; border-radius: 99px; background: rgb(244 244 245 / .12); }
+.ui-steps li { flex: 1; height: 6px; border-radius: 99px; background: rgb(var(--glass-rgb, 244 244 245) / .12); }
 .ui-steps li.done { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .ui-steps li.on { background: var(--ui-primary); }
 .ui-steps-label { color: var(--ui-muted-foreground); font: 600 12px/1 var(--ui-head); letter-spacing: .14em; text-transform: uppercase; }
 
 /* ---------- Slider */
-html .ui-slider { appearance: none; -webkit-appearance: none; width: 100%; height: 6px; border-radius: 99px; background: linear-gradient(to right, var(--ui-primary) 0 var(--v, 50%), rgb(244 244 245 / .32) var(--v, 50%)); accent-color: var(--pink, #f4f4f5); }
+html .ui-slider { appearance: none; -webkit-appearance: none; width: 100%; height: 6px; border-radius: 99px; background: linear-gradient(to right, var(--ui-primary) 0 var(--v, 50%), rgb(var(--glass-rgb, 244 244 245) / .32) var(--v, 50%)); accent-color: var(--pink, #f4f4f5); }
 html .ui-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--ui-primary); border: 2px solid var(--ui-background); cursor: pointer; }
 html .ui-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ui-primary); border: 2px solid var(--ui-background); }
 
