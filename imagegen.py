@@ -37,6 +37,13 @@ class _Capture:
 
 def providers() -> dict:
     sys.path.insert(0, str(HERMES))
+    # the keys Hermes keeps for its providers (FAL_KEY, XAI_API_KEY…), through Hermes's own
+    # loader, into this short-lived process only; the canvas server never holds them
+    try:
+        from hermes_cli.env_loader import load_hermes_dotenv
+        load_hermes_dotenv()
+    except Exception:
+        pass
     found = {}
     for init in sorted((HERMES / "plugins" / "image_gen").glob("*/__init__.py")):
         try:

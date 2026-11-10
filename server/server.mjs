@@ -38,6 +38,7 @@ import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TR
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
 import { scoreWav, elevenScore } from '../engine/score.mjs'
 import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
+import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -110,23 +111,33 @@ const pyCommand = (call, timeout) => new Promise(resolve => {
 // imagegen.py runs in Hermes's Python, so the provider tokens never reach this server.
 const PY = process.env.SWARM_HERMES_PY || ''
 const pyEnv = { ...process.env, PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '' }
-const imagegen = (args, timeout) => new Promise(resolve => {
-  if (!PY) return resolve({ ok: false, error: 'start Swarm Studio from Hermes to use its image providers' })
-  execFile(PY, [join(root, 'imagegen.py'), ...args], { env: pyEnv, timeout, maxBuffer: 1 << 20 }, (err, stdout) => {
+// keys pasted in the Film panel (engine/media.mjs): a FAL key switches on Hermes's own FAL providers
+const mediaKeyStore = mediaKeys(dataDir)
+const hermesPy = (script, what) => (args, timeout) => new Promise(resolve => {
+  if (!PY) return resolve({ ok: false, error: `start Swarm Studio from Hermes to use its ${what} providers` })
+  execFile(PY, [join(root, script), ...args], { env: { ...pyEnv, ...mediaKeyStore.env(pyEnv) }, timeout, maxBuffer: 1 << 20 }, (err, stdout) => {
     const line = String(stdout || '').trim().split('\n').pop()
     try { resolve(JSON.parse(line)) } catch { resolve({ ok: false, error: String(err?.message || 'no answer').slice(0, 200) }) }
   })
 })
-let imageProviders = null
+const imagegen = hermesPy('imagegen.py', 'image')
+// moving clips from a still, through Hermes's video providers (FAL's Veo 3.1, xAI…)
+const videogen = hermesPy('videogen.py', 'video')
+let imageProviders = null, videoProviders = null
 const loadImageProviders = () => (imageProviders ||= imagegen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
+const loadVideoProviders = () => (videoProviders ||= videogen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
 loadImageProviders()
+loadVideoProviders()
 // The image model for new builds: the pick, else your Codex login's cheapest tier when it is signed in.
 async function imageChoice() {
   if (picks.image === 'off') return null
   const list = await loadImageProviders()
   const want = picks.image || { provider: 'openai-codex', model: 'gpt-image-2-low' }
   const p = list.find(x => x.provider === want.provider && x.available)
-  return p ? { provider: p.provider, model: want.model || p.default || '' } : null
+  if (p) return { provider: p.provider, model: want.model || p.default || '' }
+  // no pick and no Codex login: any image provider Hermes has signed in (a pasted FAL key, xAI…)
+  const any = !picks.image && list.find(x => x.available)
+  return any ? { provider: any.provider, model: any.default || '' } : null
 }
 
 const IMG_MAX = 8
@@ -759,6 +770,21 @@ async function videoNow(id, input = {}) {
     }
     // a beat whose painted shot failed has no picture: it becomes a type card
     for (const sc of scenes) if ((sc.kind === 'image' || sc.kind === 'split') && !sc.image) { sc.kind = 'title'; sc.layer = 'type'; if (!sc.headline) sc.headline = c.brand }
+    // moving clips: a video model animates a few story stills (Veo through Hermes's FAL, xAI…);
+    // clips already in <run>/flow (made with Flow by hand) are used as they are
+    const media = await mediaNow().catch(() => null)
+    if (media?.clips.on && input.clips !== false) {
+      const jobs = clipJobs(scenes, c.images, join(runsDir, id, 'flow'), 3)
+      if (jobs.length) {
+        progress(1, `${media.clips.by} is animating ${jobs.length} stills`)
+        let made = 0
+        await Promise.all(jobs.map(j => videogen(['--provider', media.clips.provider, '--image', j.still, '--seconds', String(j.seconds), '--out', j.clip, j.prompt], 600000).then(r => {
+          if (r.ok) made++
+          else send('video:note', { message: `a still stayed still: ${String(r.error || 'no clip').slice(0, 120)}` })
+        })))
+        if (made) send('video:clips', { by: media.clips.by, made })
+      }
+    }
     useFlowClips(id, c, scenes)
     if (pinned) scenes.look.pinned = true
     scenes.fx = fxFor(scenes.fx, prompt)
@@ -824,11 +850,15 @@ async function videoNow(id, input = {}) {
     try {
       let musicFile = null, fx = []
       if (input.music !== false) {
-        const key = process.env.SWARM_ELEVENLABS_KEY
-        if (key && input.eleven !== false) {
+        // Hermes's secret, else Hermes's ElevenLabs connector, else a pasted key
+        const key = process.env.SWARM_ELEVENLABS_KEY || mediaKeyStore.get('elevenlabs')
+        const via = media?.music.via
+        if (input.eleven !== false && (key || via === 'hermes-mcp')) {
           try {
             progress(97, 'ElevenLabs is scoring the film')
-            const e = await elevenScore({ key, music: scenes.music, cues, seconds: comp.seconds, dir })
+            const e = via === 'hermes-mcp' && !process.env.SWARM_ELEVENLABS_KEY
+              ? await mcpScore({ call: connectors.call, server: media.music.server, music: scenes.music, cues, seconds: comp.seconds, dir })
+              : await elevenScore({ key, music: scenes.music, cues, seconds: comp.seconds, dir })
             musicFile = e.music; fx = e.sfx; scoredBy = 'elevenlabs'
           } catch (err) { send('video:note', { message: `ElevenLabs did not score it, so the studio did: ${String(err.message || err).slice(0, 100)}` }) }
         }
@@ -870,6 +900,16 @@ const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
 const connectors = hermesConnectors({ py: PY, pyEnv, broadcast })
+
+// The Film studio's outside services (engine/media.mjs): what Hermes already has, else a
+// pasted key, else the built-in path. The canvas learns where each comes from, never a key.
+async function mediaNow() {
+  const [images, videos, mcp] = await Promise.all([
+    loadImageProviders(), loadVideoProviders(),
+    Promise.all(ELEVEN_MCP.map(n => connectors.status(n).then(st => [n, st], () => [n, {}]))).then(Object.fromEntries),
+  ])
+  return mediaSources({ env: process.env, keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
+}
 const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, connectors,
   writeLaunch: id => writeLaunch(join(runsDir, id), readEvents(id), id) })
 
@@ -1595,6 +1635,30 @@ const server = createServer((req, res) => {
   }
 
   // ⚡ Auto mode: GET its timeline, POST { prompt } to start, /stop to stop
+  // The Film studio's services: GET where each comes from; POST /key {service, key|null}
+  // to paste (or forget) a key; POST /allow to let the studio use Hermes's ElevenLabs connector.
+  if (url.pathname === '/api/media' && req.method === 'GET') {
+    mediaNow().then(m => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(m)), err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    return
+  }
+  if ((url.pathname === '/api/media/key' || url.pathname === '/api/media/allow') && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 1e4) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+      const done = () => { imageProviders = null; videoProviders = null; return mediaNow().then(m => reply(200, m)) }
+      if (url.pathname === '/api/media/allow') {
+        const name = ELEVEN_MCP.includes(input.name) ? input.name : null
+        if (!name) return reply(400, { error: 'unknown connector' })
+        return connectors.allow(name).then(done).catch(err => reply(400, { error: String(err.message || err) }))
+      }
+      if (!MEDIA_KEYS[input.service]) return reply(400, { error: 'unknown service' })
+      mediaKeyStore.set(input.service, typeof input.key === 'string' ? input.key : null).then(done).catch(err => reply(400, { error: String(err.message || err) }))
+    })
+    return
+  }
   // Hermes sign-in connectors: GET their state, POST {name} to connect (or to cancel a sign-in)
   if (url.pathname === '/api/connectors' || url.pathname === '/api/connectors/connect' || url.pathname === '/api/connectors/cancel') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
