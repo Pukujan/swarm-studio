@@ -22,10 +22,11 @@ export const QUESTIONS = [
   { id: 'look', q: 'What should it look like?', chips: ['3D neon', '3D low-poly', '2D pixel art', '2D flat and bold', 'Hand-drawn'] },
   { id: 'length', q: 'How long is one run?', chips: ['2 minutes', '5 minutes', '15 minutes', 'Endless'] },
   { id: 'world', q: 'Setting or hero you have in mind? (optional)', chips: ['Surprise me'], free: true },
-  { id: 'scope', q: 'How big?', chips: ['Mini game', 'Big game'] }
+  { id: 'scope', q: 'How big?', chips: ['Mini game', 'Big game'] },
+  { id: 'target', q: 'Make it for?', chips: ['Web (plays here)', 'Godot', 'Unity', 'Unreal'] }
 ]
 
-const DEFAULTS = { type: 'Roguelike', goal: 'Clear rooms, beat a boss', controls: 'Keyboard + mouse', look: '3D neon', length: '5 minutes', world: 'Surprise me', scope: 'Mini game' }
+const DEFAULTS = { type: 'Roguelike', goal: 'Clear rooms, beat a boss', controls: 'Keyboard + mouse', look: '3D neon', length: '5 minutes', world: 'Surprise me', scope: 'Mini game', target: 'Web (plays here)' }
 
 // A big game: a showcase built in stages with painted art, an hour's build instead
 // of minutes. The interview's "How big?" answer, or big: true on the spec or the job.
@@ -134,7 +135,7 @@ const SPEC_FALLBACKS = ['deepseek-v4.1-flash', 'claude-haiku-5.5', 'gemini-3.8-f
 export async function writeSpec({ provider, model, idea, answers, brand, signal, big }) {
   const p = plan(big ? { ...answers, scope: 'Big game' } : answers)
   const promo = brand ? `\n\nThis is a promo game for ${brand.name}: ${brand.brief}\nSet it in the brand's own world: its place, its people, its products and its goal (for an event, getting there and enjoying it; for a shop, its products). Use its real names. The "look" uses the brand's colours and mood: ${brand.direction}\nThe win screen invites the player to the real thing (one short line, like the site's own call to action).\nThe site's copy:\n${brand.copy}` : ''
-  const ask = `Idea: ${idea || '(none)'}\n${QUESTIONS.filter(q => q.id !== 'scope').map(q => `${q.q} ${p.answers[q.id] || '(no answer)'}`).join('\n')}\nEngine: ${p.engine}.${promo}`
+  const ask = `Idea: ${idea || '(none)'}\n${QUESTIONS.filter(q => q.id !== 'scope' && q.id !== 'target').map(q => `${q.q} ${p.answers[q.id] || '(no answer)'}`).join('\n')}\nEngine: ${p.engine}.${promo}`
   const models = [model, ...(/inferhub/.test(provider?.baseUrl || '') ? SPEC_FALLBACKS.filter(m => m !== model) : [])].filter(Boolean)
   for (const m of models) {
     try {

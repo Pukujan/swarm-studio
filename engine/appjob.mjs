@@ -14,6 +14,7 @@ import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, BIG_STAGES, bigStagePrompt } from './game.mjs'
+import { TARGETS, portTarget, portPrompt, checkPort } from './port.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
@@ -186,6 +187,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         await serve(id, j, step)
         if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events))
       }
+      // Godot, Unity or Unreal asked for: the same game written as that engine's project too
+      const target = kind === 'game' ? portTarget(input.target ? input : spec || events.findLast(e => e.type === 'game:spec')?.spec) : null
+      if (target) j.result.port = await buildPort(dir, target, spec || events.findLast(e => e.type === 'game:spec')?.spec || {}, engineCall, step)
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
@@ -195,6 +199,27 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       send(id, 'app:failed', { message: j.message, result: j.result })
     })
     return view(j)
+  }
+
+  // The engine port: one engine call writes ports/<target>/, a second one fills in
+  // what the engine needs to open it. A port that fails never fails the game.
+  async function buildPort(dir, target, spec, engineCall, step) {
+    const t = TARGETS[target]
+    step({ kind: 'setup', text: `writing the game as a ${t.label} project` })
+    try {
+      await engineCall(portPrompt(spec, target), 3)
+      let c = checkPort(dir, target)
+      if (!c.ok) {
+        step({ kind: 'test', text: `the ${t.label} project lacks ${c.missing.join(', ')}`, ok: false })
+        await engineCall(`The ${t.label} port in ports/${target}/ is missing ${c.missing.join(', ')}. Add them so ${t.label} can open the project. Touch nothing outside ports/${target}/.`, 2)
+        c = checkPort(dir, target)
+      }
+      step({ kind: 'test', text: c.ok ? `${t.label} project written: ${c.files} files` : `the ${t.label} project still lacks ${c.missing.join(', ')}`, ok: c.ok })
+      return { target, label: t.label, ...c }
+    } catch (err) {
+      step({ kind: 'test', text: `the ${t.label} port stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
+      return { target, label: t.label, ok: false, files: 0, missing: [], error: String(err.message || err).slice(0, 200) }
+    }
   }
 
   // A big game: its art first (the stages are told which files exist), then one
