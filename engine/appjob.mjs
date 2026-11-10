@@ -13,7 +13,7 @@ import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
-import { gameSlug } from './game.mjs'
+import { gameSlug, isBig, artList, BIG_STAGES, bigStagePrompt } from './game.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
@@ -66,7 +66,10 @@ const freePort = () => new Promise((ok, fail) => {
 
 const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
 
-export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor }) {
+// paint(runId, spec, items, appDir, step) → [{ file, what, kind }]: a big game's art,
+// painted by the server's art pipeline into the app's public/art/ (optional: without
+// it a big game draws everything in code)
+export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null }) {
   const jobs = new Map() // run id -> job
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const dirOf = id => join(runsDir, id, 'app')
@@ -154,26 +157,35 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (s.kind === 'write' || s.kind === 'think') broadcast({ type: 'app:step', t: item.t, run: id, step: item })
       else send(id, 'app:step', { step: item })
     }
+    // a big game builds in stages from its saved spec; everything else is one engine call
+    const spec = kind === 'game' && fresh ? events.findLast(e => e.type === 'game:spec')?.spec : null
+    const big = !!spec && (isBig(spec) || input.big === true)
     ;(async () => {
       // a busy or rate-limited model: on InferHub try the same model's other route,
       // then other fast coders; elsewhere wait a little and go again
       const chain = [m, ...(/inferhub/.test(provider('worker').baseUrl) ? APP_FALLBACKS.filter(x => x !== m) : [m, m])]
-      let result, used = m
-      for (let i = 0; ; i++) {
-        try {
-          used = chain[i]
-          result = await runEngine({ workspace: dir, prompt, provider: provider('worker'), model: chain[i], turns: input.turns || (input.plan ? 6 : 4), onStep: step, signal: j.controller.signal })
-          break
-        } catch (err) {
-          if (i + 1 >= chain.length || j.controller.signal.aborted || !BUSY.test(err.message)) throw err
-          step({ kind: 'setup', text: `${chain[i]} is busy at the provider; going on with ${chain[i + 1]}`, ok: false })
-          if (chain[i + 1] === chain[i]) await new Promise(r => setTimeout(r, 30000))
+      let used = m
+      const engineCall = async (text, turns) => {
+        for (let i = chain.indexOf(used); ; i++) {
+          try {
+            used = chain[i]
+            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal: j.controller.signal })
+          } catch (err) {
+            if (i + 1 >= chain.length || j.controller.signal.aborted || !BUSY.test(err.message)) throw err
+            step({ kind: 'setup', text: `${chain[i]} is busy at the provider; going on with ${chain[i + 1]}`, ok: false })
+            if (chain[i + 1] === chain[i]) await new Promise(r => setTimeout(r, 30000))
+          }
         }
       }
-      j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
-      if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
-      await serve(id, j, step)
-      if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events))
+      if (big) {
+        await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input)
+      } else {
+        const result = await engineCall(prompt, input.turns || (input.plan ? 6 : 4))
+        j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
+        if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
+        await serve(id, j, step)
+        if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events))
+      }
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
@@ -183,6 +195,40 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       send(id, 'app:failed', { message: j.message, result: j.result })
     })
     return view(j)
+  }
+
+  // A big game: its art first (the stages are told which files exist), then one
+  // system group per stage, each with its own turns, the engine's typecheck and
+  // build gates, a play test and a fix turn. A stage whose build fails hands that
+  // to the next stage first; the last one gets a fix turn of its own.
+  async function buildBig(j, id, dir, spec, engineCall, model, step, brand, input) {
+    let art = []
+    const items = artList(spec)
+    if (paint && input.art !== false) {
+      step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
+      try { art = await paint(id, spec, items, dir, step) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+    }
+    j.result = { ok: false, big: true, art: art.length, stages: [], turns: 0, commits: 0, files: 0 }
+    let failed = '', last = null
+    for (let i = 0; i < BIG_STAGES.length; i++) {
+      const st = BIG_STAGES[i], t = Date.now()
+      step({ kind: 'setup', text: `stage ${i + 1} of ${BIG_STAGES.length}: ${st.name}` })
+      last = await engineCall(bigStagePrompt(spec, i, { art, failed }), input.turns || st.turns)
+      failed = last.ok ? '' : `the typecheck or build failed at the end of the last stage${last.error ? ` (${String(last.error).slice(0, 300)})` : ''}. Make it pass before anything else.`
+      j.result.turns += last.turns || 0
+      j.result.commits += last.commits || 0
+      j.result.files = Math.max(j.result.files, last.files?.length || 0)
+      await serve(id, j, step)
+      const play = await playGame(j, dir, model(), step, brand)
+      j.result.stages.push({ id: st.id, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
+      send(id, 'app:stage', { stage: `stage ${i + 1} of ${BIG_STAGES.length} done: ${st.name}`, big: { i, ok: !!last.ok, play: !!play?.ok } })
+    }
+    if (!last?.ok) {
+      step({ kind: 'test', text: 'the last stage did not pass its build: one fix turn', ok: false })
+      last = await engineCall(`This is a big browser game made from GAME_SPEC.md; keep what works. ${failed}\n\nFinish with a working build: the typecheck and build must pass.`, 3)
+    }
+    Object.assign(j.result, { ok: !!last.ok, gatesPassed: last.gatesPassed, playtest: j.result.stages.at(-1)?.playtest })
+    if (!last.ok) throw new Error(last.error || 'the engine could not finish the game')
   }
 
   // The promo game's brand, with the address its site has now: a site put online
