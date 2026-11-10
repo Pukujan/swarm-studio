@@ -1,0 +1,62 @@
+/* ---------- The studio frame (docs/ux/PATTERNS.md): Projects (web/home.css), a project (web/project.css)
+   and the rooms (Design deck, Film studio, Engine room). Off in classic view (☰ → Classic view) and on
+   wall tiles: everything here hangs off body.cosmos. */
+:root { --cosmos-ease: cubic-bezier(.65, 0, .35, 1); }
+
+/* ---------- lean chrome: back, Projects › name, the crew, Play, Publish, ☰ */
+body.cosmos .starmap, body.cosmos #game-btn, body.cosmos .undo-redo, body.cosmos .clock,
+body.cosmos #more-btn .t, body.cosmos #more-btn .count { display: none !important; }
+body.cosmos #more-btn { padding: 4px 9px; }
+.cosmos-back { display: none; align-items: center; gap: 6px; }
+.cosmos-back .ico { width: 15px; height: 15px; }
+body.cosmos-project .cosmos-back, body.cosmos-station .cosmos-back { display: inline-flex; }
+/* the logo stays in every view: it is the way home (spec 12); next to Back it is just the mark */
+body.cosmos-project .brand .word, body.cosmos-station .brand .word { display: none; }
+.topbar .brand[role="button"] { cursor: pointer; border-radius: 10px; min-height: 40px; align-items: center; }
+.topbar .brand[role="button"]:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 2px; }
+body.cosmos-home .file-name, body.cosmos-home #play-btn, body.cosmos-home .pubwrap { display: none; }
+body.cosmos-home .topbar { background: transparent; border-bottom-color: transparent; backdrop-filter: none; }
+body.cosmos .file-name { color: var(--text); font: 600 14px var(--label); letter-spacing: .06em; text-transform: uppercase; }
+body.cosmos .file-name::before { display: none; }
+.more-menu .cosmos-only { display: none; }
+body.cosmos .more-menu .cosmos-only { display: flex; }
+.more-menu .cosmos-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+
+/* ---------- the side column folds away; Chat (☰ in a room, the dock in a project) brings it back */
+body.cosmos, body.cosmos.side-min { grid-template-columns: 0 1fr; }
+body.cosmos.design-on, body.cosmos.side-min.design-on { grid-template-columns: 0 1fr var(--design-w, 264px); }
+body.cosmos .side { display: none; }
+body.cosmos .viewport, body.cosmos .appview, body.cosmos.view-video .video-pop { grid-area: 2 / 2 / 3 / 3; }
+body.cosmos.design-on .design { grid-column: 3; }
+body.cosmos.cosmos-chat { grid-template-columns: var(--side-w, 300px) 1fr; }
+body.cosmos.cosmos-chat.design-on { grid-template-columns: var(--side-w, 300px) 1fr var(--design-w, 264px); }
+body.cosmos.cosmos-chat .side { display: flex; grid-area: 2 / 1 / 3 / 2; }
+body.cosmos-home.cosmos-chat .side { display: none; }
+body.cosmos-home .viewport, body.cosmos-project .viewport { visibility: hidden; }
+body.cosmos-home .crew-layer, body.cosmos-project .crew-layer { display: none; }
+body.cosmos-home .appview, body.cosmos-project .appview { visibility: hidden; }
+
+/* in a station (Canvas, Video, App) a round button brings the chat column back */
+.cosmos-chatbtn { position: fixed; left: 14px; bottom: 14px; z-index: 64; display: none; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+  background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--panel-edge); border-radius: 999px; color: var(--text); cursor: pointer;
+  font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
+.cosmos-chatbtn img { width: 24px; height: 24px; border-radius: 50%; }
+.cosmos-chatbtn:hover { border-color: var(--line-2); }
+body.cosmos-station:not(.cosmos-chat) .cosmos-chatbtn { display: inline-flex; }
+body.cosmos .side-min-btn { display: none; }
+
+/* ---------- narrow windows and phones */
+@media (max-width: 700px) {
+  body.cosmos { grid-template-rows: 52px 1fr; }
+  body.cosmos.cosmos-chat { grid-template-columns: 0 1fr; }
+  body.cosmos.cosmos-chat .side { position: fixed; left: 0; right: 0; bottom: 0; height: 62vh; z-index: 140; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; background: var(--deep); }
+}
+
+/* the wall tiles never show any of it */
+html.wall .home, html.wall .project, html.wall .cosmos-chatbtn { display: none !important; }
+
+/* the break room is a classic-view thing: in the studio the idle crew rest out of sight */
+body.cosmos .dock, body.cosmos .cursor.docked { display: none !important; }
+/* a sheet opened from Projects (the Start sheet, the game wizard) sits above it */
+body.cosmos-home .game-pop { position: fixed; inset: 56px 0 0 248px; z-index: 160; }
+@media (max-width: 760px) { body.cosmos-home .game-pop { inset: 56px 0 0 0; } }

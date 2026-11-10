@@ -17,8 +17,8 @@ Status: **agreed direction** (owner, 2026-11-09).
 | Navigation | TikTok and Instagram on a phone, Linear's rail on desktop | Five fixed slots, + Create in the middle, the same order everywhere | Count badges on every slot, a hamburger menu |
 | + Create | The Midjourney and ChatGPT composers | One input; chips under it (Start from, the lens); Hermia beside it | Model pickers and settings up front |
 | Discover | Dribbble and Pinterest search | One search, then a grid of visuals; filters behind one icon | Walls of category text |
-| Projects › My builds | Apple Photos | A grid (the galaxy) you pinch to zoom; select, then act | Albums and filters on the first screen |
-| Orbit | Apple Maps | The build fills the stage; one input; a sheet that peeks, then grows, when you pick something | Several panels at once |
+| Projects | **Finder and Figma's file browser** | A sidebar (Recent, All projects, Assets, Trash, folders); one input, "What should the crew build?"; cards of a picture and a title; right-click and ⋯ menus, drag onto folders, multi-select, Trash, stacked versions (web/home.js) | Descriptions on cards, empty-state paragraphs |
+| A project | **Figma's canvas** | One canvas: Files and Layers on the left, artboards in sections (Site, App, Game, Film, Art, Uploads) on a dotted stage, the inspector on the right while something is selected, the dock bottom centre (Move, Frame, Text, Image, Comment, "Tell the crew…"). Files dropped from Finder land in the project's uploads and go to the crew (web/project.js) | A 3D scene, planets, sprites |
 | Design deck | **Figma** | Layout, tools and shortcuts, almost one to one (see below) | Figma's look |
 | Engine room | VS Code | A file tree, the editor, checks as ticks | Activity and status bars full of icons |
 | Game room | A game's own pause menu | Play fills the stage; Esc opens the pause menu (Report a bug, Tweak) | An engine editor's panels |
@@ -40,13 +40,13 @@ panel, a dock or a strip (rules 27 and 28).
 |---|---|---|
 | Nav | Five slots: Home, Discover, + Create, Projects, Me. A left rail on desktop, a bottom bar on a phone | Always (in the Design deck it folds into the logo menu, as in Figma) |
 | Top bar | The breadcrumb on the left, the one primary button on the right | Always, except on Home, where the build fills the screen |
-| Stage | The content: a build, the galaxy, a canvas, a game, a clip | Always |
+| Stage | The content: the project grid, a project's canvas, a page, a game, a clip | Always |
 | Inspector | Whatever is selected, on the right | Only while something is selected. It slides over the stage instead of shrinking it, and a phone shows it as a half sheet |
 | Sheet | One sheet: peek, half, full | When you open something. One at a time |
-| Input | Hermia and the one input, bottom centre | In + Create, the orbit and the rooms |
+| Input | The one input: "What should the crew build?" on Projects, "Tell the crew…" in the dock of a project and the rooms | In + Create, Projects, a project and the rooms |
 | Toast | One spot, bottom centre above the input | For 4 s after something finishes. It never pushes content |
 
-At rest, Home and the orbit show four things: the nav, the breadcrumb with its one primary button, the content,
+At rest, Projects and a project show four things: the nav, the breadcrumb with its one primary button, the content,
 and the input. The inspector is a fifth, only while something is selected.
 
 ## The Design deck follows Figma

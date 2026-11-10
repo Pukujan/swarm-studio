@@ -26,7 +26,6 @@ import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
 import { makeProjects } from './projects.mjs'
-import { snapshot } from '../engine/export.mjs'
 import { autoJob } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
 import { streamChat } from '../engine/llm.mjs'
@@ -975,6 +974,12 @@ const server = createServer((req, res) => {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'brief required' }))
         return
       }
+      // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
+      // and the art director matches the new pictures to them (art.styleGuide reads the brief)
+      if (typeof input.project === 'string') {
+        const ups = projects.uploadsOf(input.project).filter(u => /^image\//.test(u.type)).slice(0, 12)
+        if (ups.length) input.brief = `${String(input.brief).trim()}\n\nThe owner uploaded these pictures. Use them where they fit, as they are (<img src="…">, no data-gen), and make every new picture match their look:\n${ups.map(u => `- ${u.name}: ${u.src}`).join('\n')}`
+      }
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (typeof input.project === 'string') projects.claim(run.id, input.project)
@@ -1039,10 +1044,10 @@ const server = createServer((req, res) => {
       const chunks = []
       let n = 0
       req.on('data', c => { n += c.length; if (n > 200e6) { req.destroy(); return } chunks.push(c) })
-      req.on('end', () => { try { json(200, projects.saveUpload(pid, url.searchParams.get('name'), Buffer.concat(chunks))) } catch (err) { json(400, { error: String(err.message || err) }) } })
+      req.on('end', () => { try { json(200, projects.saveUpload(pid, url.searchParams.get('name'), Buffer.concat(chunks), url.searchParams.get('replace') === '1')) } catch (err) { json(400, { error: String(err.message || err) }) } })
       return
     }
-    if (what === 'files' && req.method === 'POST') return readJson(4000, input => json(200, projects.uploadOp(pid, input)))
+    if (what === 'files' && req.method === 'POST') return readJson(4000, input => json(200, { ...projects.uploadOp(pid, input), files: projects.uploadsOf(pid) }))
     if (what === 'files') return json(200, { files: projects.uploadsOf(pid) })
     if (what === 'reveal' && req.method === 'POST') {
       return readJson(4000, input => {
@@ -1058,6 +1063,34 @@ const server = createServer((req, res) => {
   }
 
   // Put a run in a folder (or take it out with an empty name).
+  // A project's canvas: everything one build made, grouped the way the Files panel shows it
+  const runBoard = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/board$/)
+  if (runBoard && req.method === 'GET') {
+    const id = runBoard[1], events = readEvents(id)
+    if (!events) return json(404, { error: 'no such build' })
+    const start = events.find(e => e.type === 'run:start') || {}
+    const pages = events.filter(e => e.type === 'page').map(p => ({ id: p.id, title: p.title }))
+    const titleOf = pid => pages.find(p => p.id === pid)?.title || ''
+    const latest = new Map() // one picture per slot: the newest
+    for (const e of events) if (e.type === 'image' && e.src) latest.set(`${e.page}/${e.layer}/${e.gen}`, e)
+    const style = events.findLast(e => e.type === 'art')?.name || [...latest.values()].find(e => e.style)?.style || null
+    const pics = [...latest.values()].map(e => ({ src: e.src, page: e.page, layer: e.layer, gen: e.gen, name: String(e.layer || 'picture').replace(new RegExp(`^${String(e.page || '').replace(/[^\w-]/g, '')}-`), '').replace(/[-_]+/g, ' '), used: titleOf(e.page), hero: art.isHero({ layer: e.layer }), style: e.style || style }))
+    for (const p of pages) p.cover = pics.find(a => a.page === p.id && a.hero)?.src || pics.find(a => a.page === p.id)?.src || null
+    const video = events.findLast(e => e.type === 'video:done')
+    const films = video ? [{ name: 'Promo', src: `/video/${id}/promo.mp4`, poster: existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null, seconds: Number(video.seconds) || null }] : []
+    const spec = events.findLast(e => e.type === 'game:spec')?.spec
+    const isGame = start.kind === 'game' || !!spec
+    const app = events.some(e => e.type === 'app:ready' || e.type === 'app:done')
+    const th = events.findLast(e => e.type === 'theme')
+    return json(200, {
+      id, title: start.title || pages[0]?.title || '', kind: start.kind || 'site', live: current?.id === id && !current.done,
+      brief: String(start.brief || '').split('\n\nThe owner uploaded these pictures.')[0].split('\n\nFor this version: ')[0].slice(0, 4000),
+      pages, art: pics, films, style,
+      theme: th?.vars ? { colors: ['--background', '--primary', '--accent', '--foreground'].map(k => th.vars[k]).filter(Boolean), fonts: th.fonts || null } : null,
+      game: isGame ? { title: (typeof spec === 'object' && spec?.title) || start.title || 'Game', cover: pics[0]?.src || null } : null,
+      app: app && !isGame, code: existsSync(join(runsDir, id, 'app'))
+    })
+  }
   const runMetaPost = url.pathname.match(/^\/api\/runs\/([^/]+)\/meta$/)
   if (runMetaPost && req.method === 'POST' && RUN_ID.test(runMetaPost[1]) && existsSync(join(runsDir, runMetaPost[1]))) {
     let body = ''
@@ -1580,19 +1613,6 @@ const server = createServer((req, res) => {
 
   // A page as it stands, for covers and artboards: the run's sections composed into one static
   // document. Model-written HTML, so it is sandboxed (no scripts, an opaque origin).
-  const peek = url.pathname.match(/^\/peek\/([\w-]{1,64})\/([\w-]{0,80})$/)
-  if (peek) {
-    const events = readEvents(peek[1])
-    const snap = events && snapshot(events)
-    const page = snap && (snap.pages.find(p => p.id === peek[2]) || snap.pages[0])
-    if (!page) return res.writeHead(404).end('not found')
-    const v = snap.theme.vars || {}, fonts = snap.theme.fonts || {}
-    const fam = [fonts.heading, fonts.body].filter(Boolean).map(f => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;600;700`).join('&')
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1280"><script src="https://cdn.tailwindcss.com/3.4.17"></script>${fam ? `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fam}&display=swap">` : ''}<style>:root{${Object.entries(v).map(([k, x]) => `${k}:${String(x).replace(/[;{}<]/g, '')}`).join(';')}}body{margin:0;background:var(--background,#fff);color:var(--foreground,#111);font-family:${JSON.stringify(fonts.body || 'Inter')},system-ui,sans-serif}h1,h2,h3{font-family:${JSON.stringify(fonts.heading || fonts.body || 'Inter')},serif}*{animation:none!important;transition:none!important}[data-reveal],.reveal{opacity:1!important;transform:none!important}</style></head><body>${page.sections.map(x => x.html).join('\n')}</body></html>`
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': "sandbox allow-scripts; default-src * data: blob: 'unsafe-inline' 'unsafe-eval'" })
-    return res.end(html)
-  }
-
   // Published sites hosted on this computer: the run's static export, open like the images.
   const site = url.pathname.match(/^\/site\/([\w-]{1,64})(\/[\w./-]*)?$/)
   if (site) {

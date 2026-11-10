@@ -25,9 +25,9 @@ flowchart LR
   FEED --> PROJ[Projects]
   FEED --> ME[Me]
   FEED --> CR["+ Create"]
-  CR --> ORB["Studio: the new build's orbit"]
-  PROJ --> GAL["My builds: the galaxy"]
-  GAL --> ORB2["Studio: that build's orbit"]
+  CR --> ORB["Studio: the new project's canvas"]
+  PROJ --> GAL["Projects: a file browser"]
+  GAL --> ORB2["Studio: that project's canvas"]
   ORB -.->|Share › Post to Feed| HOME
   HOME -.->|Remix| CR
   WEB --> TRY["/studio › Try it here"]
@@ -48,8 +48,8 @@ flowchart LR
   APP --> N3["+ Create"]
   APP --> N4[Projects]
   APP --> N5[Me]
-  N3 --> ST["Studio: the new build's orbit"]
-  N4 --> GA["My builds: the galaxy"]
+  N3 --> ST["Studio: the new project's canvas"]
+  N4 --> GA["Projects: a file browser"]
 ```
 
 ## 3. Home
@@ -92,7 +92,7 @@ flowchart LR
   RX --> RX2["Or suggest it back to the maker"]
   RX2 --> RX3["The maker accepts: you're credited"]
   LV --> LV1["A crew building right now"]
-  LV1 --> LV2["Its orbit, read only"]
+  LV1 --> LV2["Its canvas, read only"]
 ```
 
 ## 4. Discover
@@ -159,27 +159,33 @@ flowchart LR
   LENS -.->|Mix: add a second lens| L5[Design + Develop]
   L0 --> PR[Progress ring]
   PR --> RC[Result card]
-  RC --> RC1[Open its orbit]
+  RC --> RC1[Open its canvas]
   RC --> RC2[Post to Feed]
-  L1 --> O1["Orbit: Design deck"]
-  L2 --> O2["Orbit: Engine room"]
-  L3 --> O3["Orbit: Game room, Film studio"]
-  L4 --> O4["Orbit: Design deck, Film studio, Launch pad"]
-  L5 --> O5["Orbit: Design deck, Engine room"]
+  L1 --> O1["Canvas: Site"]
+  L2 --> O2["Canvas: App, Code"]
+  L3 --> O3["Canvas: Game, Film"]
+  L4 --> O4["Canvas: Site, Film, Posts"]
+  L5 --> O5["Canvas: Site, App, Code"]
 ```
 
 ## 6. Projects
 
 ```mermaid
 flowchart LR
-  PROJ[Projects] --> MB["My builds: the galaxy"]
+  PROJ[Projects: a file browser] --> MB["Recent, All projects"]
+  PROJ --> AS[Assets]
+  PROJ --> TR[Trash]
+  PROJ --> FO["Folders +"]
+  PROJ --> ASK["What should the crew build? → Make"]
   PROJ --> BD[Boards]
   PROJ --> MO[Mood boards]
   PROJ --> SW[Shared with me]
-  MB --> ST[A star: one build]
-  MB --> MS["Search, sort, folders"]
-  ST --> ORB["Open → its orbit"]
-  ST --> RM["Row menu: rename, move, delete"]
+  MB --> ST["A card: picture, title, kind icons"]
+  MB --> MS["Search, sort, grid or list, multi-select"]
+  ST --> ORB["Open → its canvas"]
+  ST --> RM["Right-click or ⋯: open, rename, duplicate, move, download, Trash"]
+  ST --> VS["A stack: its versions"]
+  ST -.->|drag| FO
   BD --> BO[A board]
   BD --> BN[Host a board]
   BN --> BN1["Cover and wanted roles"]
@@ -231,31 +237,31 @@ flowchart LR
   SE3 --> SE8["Supabase, GitHub, Feed account"]
 ```
 
-## 8. The orbit (one build)
+## 8. A project: one canvas
 
 ```mermaid
 flowchart LR
-  OR["Orbit (one build)"] --> SUN["Sun: the build"]
-  OR --> STN["Stations (only the lens's 1–3)"]
-  OR --> HB["Hermia at the bridge"]
-  OR --> IN["Input (now the chat)"]
-  SUN --> PRG[Progress ring]
-  SUN --> VER[Versions]
-  SUN --> SHR[Share]
-  STN --> DD[Design deck]
-  STN --> ER[Engine room]
-  STN --> GR[Game room]
-  STN --> FS[Film studio]
-  STN --> LP[Launch pad]
-  HB --> RAD[Crew radio]
-  HB --> ORD["Orders (voice)"]
-  IN --> TGT["Target chip: → App, → Film"]
+  PJ["A project"] --> TOP["Top bar: Projects › name ▾, the crew, Play, Publish"]
+  PJ --> LEFT["Left panel"]
+  PJ --> STG["Stage: artboards in sections"]
+  PJ --> INS["Inspector (while something is selected)"]
+  PJ --> DOCK["Dock: Move, Frame, Text, Image, Comment, Tell the crew…"]
+  TOP --> VER["▾ Rename, Duplicate, Versions"]
+  LEFT --> FIL["Files: Site, App, Game, Film, Art, Uploads, Code"]
+  LEFT --> LAY["Layers: pages and sections"]
+  FIL --> FM["Right-click: Open, Rename, Duplicate, Download, Show in Finder, Delete"]
+  FIL --> UP["+ → New page, Upload files; or drop from Finder"]
+  STG --> DD["Double-click a page → Design deck"]
+  STG --> ER["Double-click the app or game → Engine room"]
+  STG --> FS["Double-click a film → Film studio"]
+  INS --> EXP["Size, Style, Used on; Export, Replace"]
+  DOCK --> CREW["The crew: fix the selected page, repaint the selected picture, or build the next version"]
 ```
 
-The way home is always there and is not a branch: the breadcrumb (`Home › Projects › build › room › …`), the
+The way home is always there and is not a branch: the breadcrumb (`Projects › project ▾`, then Back from a room), the
 logo (back to Home) and Esc.
 
-## 9. The sun: progress, versions, share
+## 9. Progress, versions, share
 
 ```mermaid
 flowchart LR
@@ -452,7 +458,7 @@ flowchart LR
   LK --> LK2["Moves: blink, hair sway, scan line, lips with voice"]
   LK --> LK3["Moods: standing by, ordering, thinking, cheering, alarm"]
   WR --> WR1["+ Create: beside the one input"]
-  WR --> WR2["Orbit: at the bridge"]
+  WR --> WR2["A project: the first of the crew chips"]
   WR --> WR3["Rooms: a small badge"]
   WR --> WR4["Home: narrates a build's story"]
   VC --> VC1["Short orders at each phase"]
@@ -536,8 +542,8 @@ flowchart LR
 
 | Path | Layers |
 |---|---|
-| Swarm › + Create › The idea › Lens chip › Design › Orbit › Design deck › Layers › A section › An element › Design tab › Appearance › Fill › Token › Where else it is used | 14 |
-| Swarm › Projects › My builds › A star › Its orbit › Sun › Progress › Make › Pages › Designer › Decided › Why › Prompt and model › Raw log | 13 |
-| Swarm › + Create › The idea › Lens chip › Game › Orbit › Game room › Tweak › Feel › Gravity › Slider › Value in the code › Who set it and why | 12 |
+| Swarm › + Create › The idea › Lens chip › Design › Its canvas › Design deck › Layers › A section › An element › Design tab › Appearance › Fill › Token › Where else it is used | 14 |
+| Swarm › Projects › A card › Its canvas › Progress › Make › Pages › Designer › Decided › Why › Prompt and model › Raw log | 13 |
+| Swarm › + Create › The idea › Lens chip › Game › Its canvas › Game room › Tweak › Feel › Gravity › Slider › Value in the code › Who set it and why | 12 |
 | Swarm › Home › For you › A build › Its story › Chapters › Before and after › The prompt | 7 |
 | Swarm › Home › For you › A build › Its assets › Sprites and art › One asset › Use it in + Create | 7 |

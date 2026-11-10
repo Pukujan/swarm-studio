@@ -219,12 +219,12 @@ html .ui-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50
 .sound-pop { width: 260px; display: flex; flex-direction: column; gap: 12px; }
 .sound-pop .sound-vol { gap: 8px; }
 
-/* ---------- the Auto progress panel never covers the comm bar or an open sheet (rule 4) */
-body.cosmos-orbit .auto-panel { bottom: 78px; max-height: calc(100% - 150px); }
+/* ---------- the Auto progress panel never covers the project's dock or an open sheet (rule 4) */
+body.cosmos-project .auto-panel { bottom: 78px; max-height: calc(100% - 150px); }
 /* an open sheet slides over the pill like over the rest of the stage: the pill keeps its place (rule 29) */
 body:has(.game-pop) .auto-panel { z-index: 30; }
-@media (max-width: 600px) { body.cosmos-orbit .auto-panel { bottom: 70px; } }
-/* on a galaxy too narrow for the pill beside the prompt dock, it waits under the top bar instead */
+@media (max-width: 600px) { body.cosmos-project .auto-panel { bottom: 70px; } }
+/* on a Projects page too narrow for the pill beside the prompt, it waits under the top bar instead */
 @media (max-width: 1140px) { body.cosmos-home .auto-panel { top: 68px; bottom: auto; max-height: max(180px, calc(100vh - 340px)); } }
 
 /* ---------- phones in Classic view: the grid is one column there, so the App and Video views
@@ -241,16 +241,3 @@ body:has(.game-pop) .auto-panel { z-index: 30; }
   body:not(.cosmos) .topbar :is(#game-btn, #play-btn, #publish-btn, #more-btn) .t,
   body:not(.cosmos) .topbar #publish-btn .caret { display: none; }
 }
-
-/* orbit: page and station names stay readable above the flying crew; a minion's name shows while it talks */
-.orbit .ob-crew { z-index: 1; }
-.orbit .ob-labels { z-index: 2; }
-.orbit .ob-talk { z-index: 3; }
-.ob-minion:not(.talking) .nm { display: none; }
-
-/* Hermia's thought cloud keeps clear of the Auto pill: narrower beside it, and on a phone it waits */
-body:has(.auto-panel:not([hidden])) .orbit .comm-thought { max-width: min(560px, calc(100% - 300px)); }
-@media (max-width: 600px) { body:has(.auto-panel:not([hidden])) .orbit .comm-thought { display: none; } }
-/* the open panel is wider than the pill: the cloud keeps to the space left of it */
-body:has(.auto-panel:not([hidden]):not(.min)) .orbit .comm-thought { max-width: calc(100% - 420px); }
-@media (max-width: 700px) { body:has(.auto-panel:not([hidden]):not(.min)) .orbit .comm-thought { display: none; } }
