@@ -9,7 +9,7 @@ Auto already moves through the studio by itself: canvas → video → app. This 
 | Design | Canvas | Cursors fly to sections, sections stream in, images paint, wires link pages | — |
 | Review | Canvas | The reviewer goes page by page; fixes land | No cursor marks the page being reviewed |
 | Video | Video tab | A live preview of the clip, with cursors on scenes and the bar | — |
-| App, games, shop, data | App tab | The code wall (4 typing tiles, a cursor on each caret) and the steps | — |
+| App, games, shop, data | App tab | The code wall (3 typing tiles, a cursor on each caret, and the asset pane: the build's pictures turning on a card) and the steps | — |
 | Deploy | App tab | Only the Auto panel's text and clock | **Nothing to watch** |
 | Between steps | — | The view switches instantly | **Feels like a jump cut** |
 
