@@ -50,6 +50,8 @@ Controls added, moved or removed after the 2026-11-09 snapshot. The raw inventor
 | PR studio-canvas | A project (web/project.js) | **Replaced** the orbit: one canvas with Files and Layers, artboards in sections, the inspector (Export, Replace), the dock (Move, Frame, Text, Image, Comment, Tell the crew…), uploads by drop or + → Upload files. Recentre, planets, stations, the sun, the comm bar and the crew sprites are gone; the crew are named cursors and letter marks | A project |
 | PR studio-canvas | Sound (#crew-mute), Break room | **Moved**: in the studio, Sound is a ☰ item (and in the Projects user menu); the break room is gone from view | ☰ |
 | PR no-classic | Classic view (☰ → Classic view, `swarm.classic`) | **Removed**, with the old layout's star map, star nodes, warp streaks and sprite motion; a browser's stored choice is cleared. Projects, a project and its rooms are the only layout | — |
+| PR mode-menu | Canvas / Video / App views, Game, Auto | **Merged** Canvas, Video, App and Game into one mode menu button (listbox, arrows/Enter/Esc) in a build's top bar. **Removed** Auto's entry points: the top-bar button, the Auto dialog (Make / Pro, the four packs and their forms) and the Auto pill; the engine, /api/auto and the pack files stay | top bar |
+| PR mode-menu | A project at ≤ 760 px | **Changed**: the canvas stays the page (it was the file list); Files/Layers is a sheet from the dock's Files button; a picked file zooms into view; one-finger pan, pinch to zoom; Frame fits the artboards' own bounds. The Chat pill sits bottom right, above a narrow room's tools | A project |
 
 ## Landmarks, with only what is visible at rest
 

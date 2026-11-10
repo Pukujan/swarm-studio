@@ -4710,97 +4710,8 @@ const AUTO_ICON = {
   failed: icon('<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>')
 }
 
-function openAuto() {
-  if (autoM.last?.state === 'working') return renderAutoPanel()
-  autoM.pop?.remove()
-  const el = autoM.pop = document.createElement('div')
-  el.className = 'game-pop auto-pop'
-  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('zap')}Auto mode</b><button class="gclose" aria-label="Close">${ico('x')}</button></div>
-    <div class="auto-mode" role="radiogroup" aria-label="Mode"><button data-m="make" class="on" role="radio" aria-checked="true">✨ Make<small>one prompt, a fun result</small></button><button data-m="pro" role="radio" aria-checked="false">💼 Pro<small>a pack for your market</small></button></div>
-    <h3>One prompt. The <em>whole</em> thing.</h3>
-    <div class="auto-chips"></div>
-    <div class="pro-box" hidden><div class="pro-packs"><small>loading packs…</small></div><div class="pro-intake"></div><div class="pro-deliv"></div></div>
-    <ol class="auto-plan"><li>🎨 Design the site</li><li>🔎 Review every page</li><li>⚙️ Build the working app</li><li class="auto-games-li">🎮 Add three mini games on /play</li><li>💳 Sell a $2 credit pack (demo checkout, fake card)</li><li>🗄️ Keep the data in Supabase</li><li>🎬 Film the game and cut a promo in its own look</li><li>🚀 Deploy to Vercel</li></ol>
-    <div class="auto-games" role="radiogroup" aria-label="Games"><span>Games</span><button data-g="auto" class="on" role="radio" aria-checked="true">Auto</button><button data-g="mini" role="radio" aria-checked="false">3 mini</button><button data-g="big" role="radio" aria-checked="false">1 big</button></div>
-    <div class="auto-conn"></div>
-    <textarea class="auto-prompt" rows="4" placeholder="A night market in Taipei: street food, a festival weekend in March, tickets and a vendor map"></textarea>
-    <label class="auto-launch"><input type="checkbox"> <span>📣 Also write a launch kit at the end: posts for X, LinkedIn and the rest. <small>Nothing is posted until you press Post on each one.</small></span></label>
-    <div class="auto-go"><button class="primary auto-start">${ico('zap')}Run it all</button><small>Takes a while: the app and the games are real builds. Keep this window open; the review needs it.</small></div>`
-  document.body.append(el)
-  $('#auto-btn').classList.add('on')
-  let offLayer = null
-  const close = () => { offLayer?.(); el.remove(); autoM.pop = null; if (autoM.last?.state !== 'working') $('#auto-btn').classList.remove('on') }
-  // closes with ×, Esc and a click outside it (spec 12, rule 10)
-  offLayer = window.SwarmUI?.layer(el, close, { extra: [$('#auto-btn'), document.querySelector('.hm-ask')] })
-  el.querySelector('.gclose').onclick = close
-  const ta = el.querySelector('.auto-prompt')
-  ta.value = els.brief.value.trim()
-  ta.focus()
-  // Games: Auto picks one big game when the prompt is a game (the same rule as the server)
-  let gamesChoice = 'auto'
-  const genre = /\b(rogue-?like|rogue-?lite|platformer|metroidvania|shoot[' ]?em[ -]?up|shmup|bullet[ -]hell|tower[ -]defen[cs]e|deck-?builder|card game|survivors?-like|twin-stick|top-down action|action rpg|arpg|fighting game|racing game|puzzle game|rhythm game)\b/i
-  const guess = p => genre.test(p) || (/\b(game|trial|demo)\b/i.test(p) && /\b(playable|play it|trial|demo|indie)\b/i.test(p) && !/\bmini[ -]?games?\b/i.test(p)) ? 'big' : 'mini'
-  const showGames = () => {
-    const mode = gamesChoice === 'auto' ? guess(ta.value) : gamesChoice
-    el.querySelector('.auto-games-li').textContent = mode === 'big' ? `🎮 Build one big game on /play${gamesChoice === 'auto' ? ' (your prompt is a game)' : ''}` : '🎮 Add three mini games on /play'
-  }
-  el.querySelectorAll('.auto-games button').forEach(b => b.onclick = () => {
-    gamesChoice = b.dataset.g
-    el.querySelectorAll('.auto-games button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)) })
-    showGames()
-  })
-  ta.addEventListener('input', showGames)
-  // Make: starter chips fill the box. Pro: pick a pack, answer its short intake (every answer has a default).
-  const CHIPS = [['🎮 a game trial page', 'A trial page for my indie game: a neon rooftop runner where a courier dodges drones, with a playable demo'], ['🎸 my band\'s tour site', 'A tour site for my band, a loud garage-surf trio: tour dates, merch, a mailing list'], ['🛍 a pop-up shop', 'A pop-up shop for hand-dyed tote bags, one weekend only, with a stock counter'], ['🎂 a birthday quest', 'A birthday quest site for my friend Sam: clues, a tiny game, and an RSVP']]
-  el.querySelector('.auto-chips').innerHTML = CHIPS.map(([l], i) => `<button data-i="${i}">${esc(l)}</button>`).join('')
-  el.querySelectorAll('.auto-chips button').forEach(b => b.onclick = () => { ta.value = CHIPS[b.dataset.i][1]; showGames(); ta.focus() })
-  const pro = { on: false, packs: null, pack: null }
-  const box = el.querySelector('.pro-box')
-  const plan = el.querySelector('.auto-plan'), planMake = plan.innerHTML
-  const showPack = () => {
-    const p = pro.pack
-    el.querySelectorAll('.pro-pack').forEach(b => b.classList.toggle('on', b.dataset.id === p?.id))
-    el.querySelector('.pro-intake').innerHTML = !p ? '' : (p.intake || []).map(q => `<label>${esc(q.q)}${q.type === 'choice'
-      ? `<select data-q="${esc(q.id)}">${q.choices.map(c => `<option${c === q.default ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>`
-      : `<input data-q="${esc(q.id)}" type="${q.type === 'number' ? 'number' : 'text'}" placeholder="${esc(String(q.default ?? ''))}"${q.min != null ? ` min="${q.min}"` : ''}${q.max != null ? ` max="${q.max}"` : ''}>`}</label>`).join('')
-    el.querySelector('.pro-deliv').textContent = p ? `You get: ${(p.deliverables || []).join(', ')}` : ''
-    plan.innerHTML = !p ? planMake : `<li>🎨 Design the site</li><li>🔎 Review every page</li><li>⚙️ Build the working app</li><li>${esc(p.icon)} ${esc(p.name)} tools: ${(p.tools || []).map(t => esc(t.label.replace(/^\S+\s/, ''))).join(', ')}</li>${p.games !== 'none' ? '<li>🎮 Games on /play</li>' : ''}<li>🗄️ Keep the data in Supabase</li><li>✅ Check it works</li><li>🎬 Film it and cut the promo</li><li>🚀 Deploy to Vercel</li>`
-    if (p && !ta.value.trim()) ta.placeholder = p.pitch
-  }
-  el.querySelectorAll('.auto-mode button').forEach(b => b.onclick = async () => {
-    pro.on = b.dataset.m === 'pro'
-    el.querySelectorAll('.auto-mode button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)) })
-    box.hidden = !pro.on
-    el.querySelector('.auto-chips').hidden = pro.on
-    el.querySelector('.auto-games').hidden = pro.on
-    if (!pro.on) { pro.pack = null; showPack(); return showGames() }
-    if (!pro.packs) {
-      pro.packs = (await api('/api/packs').then(r => r.json()).catch(() => ({}))).packs || []
-      el.querySelector('.pro-packs').innerHTML = pro.packs.map(p => `<button class="pro-pack" data-id="${esc(p.id)}"><b>${esc(p.icon)} ${esc(p.name)}</b><small>${esc(p.pitch)}</small></button>`).join('') || '<small>No packs found.</small>'
-      el.querySelectorAll('.pro-pack').forEach(x => x.onclick = () => { pro.pack = pro.packs.find(p => p.id === x.dataset.id); showPack() })
-    }
-    pro.pack ||= pro.packs[0] || null
-    showPack()
-  })
-  const go = async () => {
-    const prompt = ta.value.trim() || (pro.on && pro.pack ? pro.pack.pitch : '')
-    if (!prompt) return ta.focus()
-    const intake = {}
-    el.querySelectorAll('.pro-intake [data-q]').forEach(i => { if (i.value.trim()) intake[i.dataset.q] = i.value.trim() })
-    const body = pro.on && pro.pack ? { prompt, pack: pro.pack.id, intake } : { prompt, games: gamesChoice }
-    if (el.querySelector('.auto-launch input').checked) body.launch = true
-    const res = await api('/api/auto', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
-    const out = await res?.json().catch(() => ({}))
-    if (!res?.ok) return feed(null, `auto mode: ${out?.error || 'the canvas server is not answering'}`, 'err')
-    close()
-    autoEvent(out, true)
-  }
-  showGames()
-  el.querySelector('.auto-start').onclick = go
-  renderConnectors()
-  ta.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go() }
-}
-$('#auto-btn').onclick = openAuto
+// Auto mode's dialog (Make / Pro and the packs) is gone from the studio; the engine, /api/auto and the
+// pack files stay, and a run started elsewhere still reports here.
 
 function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
   if (!e?.steps) return
@@ -4829,7 +4740,6 @@ function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
     // the run is over: the summary card, after the live site has had a moment on screen
     if (prev?.state === 'working' && e.state !== 'working' && prev.run === e.run) setTimeout(() => showSummary(autoM.last), ds.el && e.url ? 9000 : 1200)
   }
-  $('#auto-btn').classList.toggle('on', e.state === 'working')
   renderAutoPanel()
 }
 
@@ -5634,10 +5544,9 @@ window.swarm = {
     if (!f.ready || !f.slots.size) return null
     return (await snapFrame(f, 0.25)).image
   },
-  // start a build (or open Auto with the words in it) from Projects or a project's dock
+  // start a build from Projects or a project's dock (the second argument, once Auto, is ignored)
   submit(text, auto = false, project = null) {
     els.brief.value = text
-    if (auto) return openAuto()
     nextProject = project
     if (view !== 'canvas') setView('canvas')
     els.form.requestSubmit()
