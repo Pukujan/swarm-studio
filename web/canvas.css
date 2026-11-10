@@ -1237,10 +1237,24 @@ em { font-style: italic; }
 .codewall .cw-c { color: var(--muted); }
 
 /* ---------- Play mode */
-.player { background: var(--void); }
+/* the player opens under the studio's top bar (which stays on top, z 130), never behind it */
+.player { background: var(--void); inset: 52px 0 0; }
+.player-bar { min-width: 0; overflow: hidden; }
+.player-bar select { flex: 0 1 auto; min-width: 0; max-width: min(40vw, 420px); text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.pl-btn.icon { flex: none; width: 34px; height: 34px; padding: 0; justify-content: center; }
+.player-bar .seg, .player-bar #pl-close { flex: none; }
+/* Graphite: lime is for the one primary control, so these stay graphite; Motion on is a raised fill */
+.pl-btn.tours { border-color: rgb(var(--glass-rgb) / .16); }
+.pl-btn#pl-motion.on { border-color: var(--line-2); background: var(--frame); color: var(--text); }
+@media (max-width: 600px) {
+  .player-bar { gap: 6px; padding: 0 8px; }
+  #pl-back, #pl-restart, #pl-motion { display: none; }
+  .player-bar select { min-width: 96px; flex: 1 1 auto; }
+  .player-bar .seg button { padding-left: 9px; padding-right: 9px; }
+}
 .player-bar { background: rgb(var(--deep-rgb) / .7); border-color: var(--panel-edge); }
 .pl-btn { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px/1 var(--label); letter-spacing: .07em; text-transform: uppercase; color: var(--text); border-radius: 999px; border-color: rgb(var(--glass-rgb) / .3); padding: 7px 12px; }
-.pl-btn#pl-motion.on { border-color: var(--accent); }
+.pl-btn#pl-motion.on { border-color: var(--line-2); background: var(--frame); }
 .player-bar select { border-radius: 999px; background: rgb(var(--glass-rgb) / .05); }
 .think { background: var(--text); color: var(--accent-ink); }
 
