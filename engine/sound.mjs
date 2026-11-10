@@ -181,21 +181,30 @@ export function music({ seconds, preset = 'gentle', cuts = [], file }) {
   writeFileSync(file, Buffer.concat([head, pcm]))
 }
 
-// Lays the music and the voice lines (each at its start time) under the silent video.
-export async function mix({ ffmpeg, env, video, musicFile, voices = [], out }) {
-  const lines = voices.filter(v => v?.file)
+// Lays the music, the voice lines (each at its start time) and the sound effects under the
+// silent video. The music ducks under the voice; `silence` windows ([from, to] seconds) are
+// true silence in the music (a trailer's hard stop), whatever made the music.
+export async function mix({ ffmpeg, env, video, musicFile, voices = [], fx = [], silence = [], out }) {
+  const lines = voices.filter(v => v?.file), hits = fx.filter(x => x?.file)
   const args = ['-y', '-i', video]
   if (musicFile) args.push('-i', musicFile)
   for (const v of lines) args.push('-i', v.file)
+  for (const x of hits) args.push('-i', x.file)
   const f = []
-  const m = musicFile ? 1 : null, first = musicFile ? 2 : 1
+  const m = musicFile ? 1 : null, first = musicFile ? 2 : 1, fxFirst = first + lines.length
   lines.forEach((v, i) => f.push(`[${first + i}]aformat=sample_rates=44100:channel_layouts=stereo,adelay=delays=${Math.round(v.at * 1000)}:all=1,volume=1.6[v${i}]`))
   if (lines.length) f.push(`${lines.map((_, i) => `[v${i}]`).join('')}amix=inputs=${lines.length}:normalize=0:duration=longest[vo]`)
+  const gate = silence.length ? `,${silence.map(([a, b]) => `volume=enable='between(t,${a.toFixed(3)},${b.toFixed(3)})':volume=0`).join(',')}` : ''
+  let bed = null
   if (m !== null && lines.length) {
-    f.push('[vo]asplit[vk][vm]', `[${m}]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.8[mu]`, '[mu][vk]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[md]', '[md][vm]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.95[out]')
-  } else if (m !== null) f.push(`[${m}]aformat=sample_rates=44100:channel_layouts=stereo,alimiter=limit=0.95[out]`)
-  else if (lines.length) f.push('[vo]alimiter=limit=0.95[out]')
-  else return false
+    f.push('[vo]asplit[vk][vm]', `[${m}]aformat=sample_rates=44100:channel_layouts=stereo,volume=0.8${gate}[mu]`, '[mu][vk]sidechaincompress=threshold=0.02:ratio=6:attack=30:release=400[md]', '[md][vm]amix=inputs=2:normalize=0:duration=first[bed]')
+    bed = '[bed]'
+  } else if (m !== null) { f.push(`[${m}]aformat=sample_rates=44100:channel_layouts=stereo${gate}[bed]`); bed = '[bed]' }
+  else if (lines.length) bed = '[vo]'
+  hits.forEach((x, i) => f.push(`[${fxFirst + i}]aformat=sample_rates=44100:channel_layouts=stereo,adelay=delays=${Math.round(x.at * 1000)}:all=1,volume=${x.gain ?? 0.9}[x${i}]`))
+  if (!bed && !hits.length) return false
+  const ins = [bed, ...hits.map((_, i) => `[x${i}]`)].filter(Boolean)
+  f.push(ins.length > 1 ? `${ins.join('')}amix=inputs=${ins.length}:normalize=0:duration=${bed ? 'first' : 'longest'},alimiter=limit=0.95[out]` : `${ins[0]}alimiter=limit=0.95[out]`)
   args.push('-filter_complex', f.join(';'), '-map', '0:v', '-map', '[out]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out)
   await run(ffmpeg, args, { env, timeout: 180000 })
   return true

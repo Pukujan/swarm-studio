@@ -16,6 +16,7 @@ These are the specs for what comes after Auto mode and the Supabase connector. E
 | 6 | [Onboarding and Connections](06-onboarding.md) | New people connect Supabase, Vercel and Stripe by signing in, or skip and add them later | ½–1 day |
 | 7 | [Swarm Arcade](03-arcade.md) | Hosting and the public listing behind the Feed | 1–1½ days |
 | 8 | [3D models](04-3d.md) | Free CC0 models plus one generated hero model, on pages, the canvas and in games | 1 day |
+| 9 | [Prompt-driven films](15-prompt-films.md) | The Film studio makes trailers, calm films or ads from one prompt and an optional style reference, so Swarm can make its own trailer | ½ day |
 
 Deadline: the hackathon closes on **2026-11-11 at 17:00 EST**. The demo video needs specs 1–5, so they come first: build 3 and 3a together, and keep 3b to the step transitions and the chatter if time runs short. Onboarding (6) comes next, because judges will open the studio fresh. The Arcade hosting (7) and 3D (8) are stretch goals. That is more than two days of work, so each spec's "Done when" is cut to what the video shows before anything else. Files are numbered in the order they were written, not the build order.
 

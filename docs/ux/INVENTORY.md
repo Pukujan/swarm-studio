@@ -82,7 +82,7 @@ on the way down.
 | Game | 5 entries, then a 7-step wizard | the **Game** lens; genre and size in its options; the remaining wizard questions become optional tweaks after the first build |
 | Pro packs | a Pro tab in the Auto box | "Start from a pack" inside the lens options (Develop, Launch, Just make it) |
 | Chat / instructions | sidebar chat, galaxy input, Auto prompt, game idea, video idea, picture prompt, per-view composer | the one input, which knows its target (a small chip shows "→ App", "→ Film"); comments stay a canvas tool, because they're pinned to a spot |
-| Video | Video tab, More → Video, station, `/video`, composer, auto-open | the **Film studio** room; "New cut" inside it |
+| Video | Video tab, More → Video, station, `/video`, composer, auto-open | the **Film studio** room; "New cut" inside it. The panel: one prompt box, **＋** for a style reference (image, video, sound; links go in the prompt), Start from (templates, optional), Voice, Music; the storyboard's beats and **Style** (the reference's notes, one tap down). The Cut picker is gone: the storyboard sets each cut |
 | App | App tab, station, `/app`, Publish → Working app, Build the game | the **Engine room** |
 | Canvas | Canvas tab, station, planet click, `/canvas` | the **Design deck**; a planet click opens it on that page |
 | Play prototype | Play button, P, `/play`, a chat chip, a Hermes command | Play in the Design deck (P and ⌘K stay) |

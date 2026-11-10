@@ -180,6 +180,13 @@ def ensure_server() -> dict:
             continue
         prefix = f"SWARM_{role.upper()}_"
         env.update({prefix + "BASE_URL": m["base_url"], prefix + "API_KEY": m["api_key"], prefix + "MODEL": m["model"]})
+    # Optional: ElevenLabs music and sound effects for the Film studio, from Hermes's secret scope.
+    try:
+        eleven = _secret("ELEVENLABS_API_KEY")
+    except Exception:  # an unscoped read under multiplexing: the film is scored without it
+        eleven = None
+    if eleven:
+        env["SWARM_ELEVENLABS_KEY"] = eleven
     if os.environ.get("SWARM_STUDIO_AGENTS"):
         env["SWARM_AGENTS"] = os.environ["SWARM_STUDIO_AGENTS"]
 

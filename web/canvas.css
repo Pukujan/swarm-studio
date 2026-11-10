@@ -1583,3 +1583,25 @@ body.view-video .video-pop .vmin { display: none; }
 .app-loading { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; background: var(--void); color: var(--muted); border-radius: 6px; z-index: 1; }
 .app-loading[hidden] { display: none; }
 .app-loading .spin { width: 28px; height: 28px; border: 3px solid rgb(var(--glass-rgb) / .14); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+
+/* Film studio: the prompt, its references, the storyboard's beats and the style notes */
+.video-pop .vprompt-row { display: flex; gap: 8px; align-items: stretch; margin-top: 10px; }
+.video-pop .vprompt { flex: 1; resize: vertical; min-height: 44px; background: var(--panel-2); color: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; }
+.video-pop .vaddref { flex: 0 0 40px; display: grid; place-items: center; background: var(--panel-2); color: inherit; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.video-pop .vaddref:hover { border-color: var(--accent); }
+.video-pop .vrefs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.video-pop .vref { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; padding: 3px 4px 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.video-pop .vref button { display: grid; place-items: center; width: 20px; height: 20px; border: 0; background: none; color: var(--muted); cursor: pointer; border-radius: 50%; }
+.video-pop .vref button svg { width: 12px; height: 12px; }
+.video-pop .vboard { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.video-pop .vboard b { font-size: 14px; }
+.video-pop .vboard small { color: var(--muted); }
+.video-pop .vnotes-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; background: none; color: inherit; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.video-pop .vnotes-btn i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.video-pop .vnotes-btn i:first-of-type { margin-left: 4px; }
+.video-pop .vnotes { flex-basis: 100%; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 4px 0 0; font-size: 12px; }
+.video-pop .vnotes dt { color: var(--muted); }
+.video-pop .vnotes dd { margin: 0; }
+.video-pop .vscene.L-story { border-top-color: var(--accent); }
+.video-pop .vscene.L-proof { border-top-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.video-pop .vscene.L-type { border-top-color: var(--line); }
