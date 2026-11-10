@@ -56,7 +56,7 @@ export function stateOf(card, cards = [card]) {
   // live once any version went out: its newest published address
   const out = [...cards].reverse().map(c => c.deployed || Object.values(c.sites || {})[0]).find(Boolean)
   const status = out ? 'Live'
-    : card.live ? 'Building'
+    : card.live || card.work ? 'Building'
     : card.build === 'failed' ? `${made} failed`
     : card.build === 'built' || (card.app && !card.build) ? `${made} built`
     : card.layers > 0 || card.video ? 'Designed'
@@ -126,30 +126,42 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
   // ---------- cards
   const coverOf = card => card.cover || null
   function project(pid, p) {
-    const cards = p.runs.map(id => runCard(id)).filter(Boolean)
-    if (!cards.length) return null
-    const newest = cards.at(-1)
+    const all = p.runs.map(id => runCard(id)).filter(Boolean)
+    if (!all.length) return null
+    // a game made from a site in this project is part of that site's version, not a version of its own
+    const ids = new Set(all.map(c => c.id))
+    const isPart = c => c.from && c.from !== c.id && ids.has(c.from)
+    const cards = all.filter(c => !isPart(c))
+    const parts = Object.fromEntries(all.filter(isPart).map(c => [c.id, c.from]))
+    // a version is working while it or one of its parts is
+    const workOf = c => c.work || all.find(x => x.from === c.id && x.work)?.work || null
+    const withWork = c => ({ ...c, work: workOf(c), kinds: [...new Set([...kindsOf(c), ...all.filter(x => x.from === c.id).flatMap(kindsOf)])] })
+    const newest = withWork(cards.at(-1))
     const withCover = [...cards].reverse().find(c => c.cover) || null
-    const kinds = [...new Set(cards.flatMap(kindsOf))]
-    const live = cards.some(c => c.live)
+    const kinds = [...new Set(all.flatMap(kindsOf))]
+    const working = all.find(c => c.live || c.work)
+    const live = !!working
+    const pct = working ? (working.work?.pct ?? working.progress ?? null) : null
     return {
       id: pid,
       title: p.title || shortTitle(newest.title),
       folder: p.folder || null,
       trashed: p.trashed || null,
-      made: p.made || cards[0].t,
-      updated: Math.max(...cards.map(c => c.updated || c.t || 0)),
+      made: p.made || all[0].t,
+      updated: Math.max(...all.map(c => c.updated || c.t || 0)),
       cover: coverOf(withCover || {}),
       peek: withCover ? null : ([...cards].reverse().find(c => c.preview) || {}).id || null,
       // no picture yet: the newest theme's colours and fonts make a type cover
       theme: withCover ? null : (([...cards].reverse().find(c => c.theme?.colors?.length) || {}).theme || null),
       head: newest.id,
+      parts,
       kinds,
       state: stateOf(newest, cards),
       live,
-      progress: live ? (cards.find(c => c.live).progress ?? null) : null,
+      progress: pct,
+      work: working ? (working.work || { what: 'site', stage: null, pct }) : null,
       count: cards.length,
-      versions: [...cards].reverse().map(c => ({ id: c.id, title: c.title, t: c.t, updated: c.updated, cover: c.cover || null, theme: c.cover ? null : c.theme || null, kinds: kindsOf(c), state: stateOf(c), live: !!c.live, pages: c.pages })),
+      versions: [...cards].reverse().map(withWork).map(c => ({ id: c.id, title: c.title, t: c.t, updated: c.updated, cover: c.cover || null, theme: c.cover ? null : c.theme || null, kinds: c.kinds, state: stateOf(c), live: !!(c.live || c.work), work: c.work, pages: c.pages })),
       uploads: uploadsOf(pid).length
     }
   }

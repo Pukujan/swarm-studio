@@ -3,6 +3,7 @@
 // It talks to the canvas only through window.swarm (the hook block at the end of canvas.js).
 import { makeHome } from './home.js'
 import { makeProject } from './project.js'
+import { makeWork } from './work.js'
 const sw = window.swarm
 const W = window
 const body = document.body
@@ -208,6 +209,7 @@ function start() {
   body.append(proot)
   C.projectView = makeProject({ sw, C, root: proot })
   chrome()
+  C.work = makeWork({ sw, C })
   sw.on(e => {
     if (e.type === 'run:start' || e.type === 'run:done' || e.type === 'reset') setTimeout(() => C.mode === 'home' && C.homeView.refresh(), 600)
   })
