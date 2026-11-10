@@ -2,6 +2,8 @@
 // slot per layer, one cursor per agent. Nothing here is scripted: every box,
 // cursor move, tool and bubble comes from a real model stream.
 
+import { routeMessage } from './route.js'
+
 const $ = s => document.querySelector(s)
 // Inlined by the server: the API token and the page-frame template. Frames are
 // built from srcdoc so they share this document's origin even when it is opaque
@@ -157,8 +159,9 @@ function on(e) {
       if (!viewing) els.agentsSel.value = String(e.agents.length)
       for (const a of e.agents) addAgent(a)
       setTitle(e.brief.slice(0, 60))
-      feed(null, e.brief, 'you')
-      S.progress = botMsg('Planning the pages…', true)
+      feed(null, e.ask || e.brief, 'you')
+      S.extend = e.extend ? { kept: e.kept } : null
+      S.progress = botMsg(e.extend ? 'Planning what to add…' : 'Planning the pages…', true)
       if (!viewing) loadFiles()
       break
     case 'plan:delta': {
@@ -251,9 +254,10 @@ function on(e) {
       if (e.html) { l.text = e.html; l.ver++ }
       // whole-site edits made earlier (bigger headings, more spacing) apply to late sections too;
       // a reviewer's fix was written from the edited section, so it has them already
-      if (!e.fixed) for (const ce of S.classEdits) restyle(l, ce)
+      if (!e.fixed && !e.kept) for (const ce of S.classEdits) restyle(l, ce)
       l.before = null
       fillImages(l)
+      if (e.kept) { S.treeDirty = true; break } // carried over from the last version as it was
       if (e.fixed && !e.restored && l.before && live(e)) remember({ kind: 'layer', key: l.key, page: e.page, layer: e.layer, before: l.before, after: e.html, label: `${l.role || e.layer} rewrite` })
       if (e.restored && e.by !== CLIENT && live(e)) feed(null, `${l.role || e.layer} was put back to an earlier version`, 'sys')
       if (e.fixed && !e.restored) { feed(S.agents.get(e.agent), `fixed ${e.layer}`, 'sys', e.layer); chatAgent(S.agents.get(e.agent), `Done: the ${l.role || e.layer} is updated (${((e.ms || 0) / 1000).toFixed(0)}s). /trace shows what I was asked and wrote.`, e.layer) }
@@ -1196,11 +1200,21 @@ function botMsg(text, working = false) {
   return item
 }
 
+// a follow-up's reply: what was added or changed, and that the rest is as it was
+function extendSummary(e, secs) {
+  const names = (e.added || []).map(p => p.title)
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]
+  const fixed = (e.changed || []).filter(id => id !== 'nav').length
+  const did = [names.length ? `Added ${list}` : '', fixed ? `${names.length ? 'changed' : 'Changed'} ${fixed} section${fixed > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')
+  const kept = `${e.kept} page${e.kept === 1 ? '' : 's'} already here ${e.kept === 1 ? 'is' : 'are'} kept`
+  return `${did || 'Nothing was added'} in ${secs}s${e.failed ? ` (${e.failed} failed)` : ''}. ${names.length ? `The navigation links the new pages; the ${kept}.` : `The ${kept}.`}`
+}
+
 function summarize(e) {
   S.progress?.remove()
   S.progress = null
   const secs = (e.ms / 1000).toFixed(1)
-  const item = botMsg(`Built ${e.pages} pages and ${e.done} sections in ${secs}s with ${S.agents.size} agents${e.failed ? ` (${e.failed} failed)` : ''}. Open a page, or play the prototype.`)
+  const item = botMsg(e.extend ? extendSummary(e, secs) : `Built ${e.pages} pages and ${e.done} sections in ${secs}s with ${S.agents.size} agents${e.failed ? ` (${e.failed} failed)` : ''}. Open a page, or play the prototype.`)
   if (!S.frames.length) return
   const chips = document.createElement('div')
   chips.className = 'chips'
@@ -1513,8 +1527,10 @@ slashPop.addEventListener('mousedown', e => { const d = e.target.closest('[data-
 els.brief.addEventListener('input', () => { slashAt = 0; renderSlash() })
 els.brief.addEventListener('blur', () => setTimeout(() => (slashPop.hidden = true), 150))
 
-// "Tell the crew…" in a project makes the build that project's next version (window.swarm.submit)
-let nextProject = null
+// A message goes to the open build (web/route.js): an edit of the selected section (/fix), or the
+// project's next version, which keeps every page and adds what was asked. window.swarm.submit
+// says where its words go: Projects home starts a new project, a project's dock extends it.
+let nextRoute = null
 els.form.addEventListener('submit', async e => {
   e.preventDefault()
   const brief = els.brief.value.trim()
@@ -1531,9 +1547,12 @@ els.form.addEventListener('submit', async e => {
   if (view === 'video' && shownRun()) { els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
   if (hosted && !(await hosted.ready())) return
+  const to = nextRoute || { from: shownRun(), selected: !!S.sel }
+  nextRoute = null
+  const route = to.fresh ? 'new' : routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
+  if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); return commandOps.fix({ text: brief }) }
   setAuto(true)
-  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(nextProject ? { project: nextProject } : {}) }) }).catch(() => null)
-  nextProject = null
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}) }) }).catch(() => null)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
   else if (hosted && res) hosted.refuse(await res.json().catch(() => ({})))
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
@@ -5262,10 +5281,11 @@ window.swarm = {
     if (!f.ready || !f.slots.size) return f.frozen?.img.src || null
     return (await snapFrame(f, scale)).image
   },
-  // start a build from Projects or a project's dock (the second argument, once Auto, is ignored)
-  submit(text, auto = false, project = null) {
+  // start a build from Projects or a project's dock (the second argument, once Auto, is ignored).
+  // Without a project (Projects home) it is a new project; with one, `from` is the open version it extends
+  submit(text, auto = false, project = null, from = null) {
     els.brief.value = text
-    nextProject = project
+    nextRoute = project || from ? { project, from, selected: false } : { fresh: true }
     if (view !== 'canvas') setView('canvas')
     els.form.requestSubmit()
   }

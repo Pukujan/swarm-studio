@@ -5,6 +5,7 @@
 // room (Design deck, Film studio, Engine room). Files dropped from Finder land in the project's
 // uploads/ and go to the crew with the next build. The dock: tools and "Tell the crew…".
 import { ic, cursor, CREW } from './icons.js'
+import { routeMessage } from './route.js'
 
 const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['code', 'Code']]
 const fmtTime = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : ''
@@ -569,8 +570,9 @@ export function makeProject({ sw, C, root }) {
     if (t === 'image') return hosted() ? null : fileIn.click()
     if (t === 'comment') return C.chat(!document.body.classList.contains('cosmos-chat'))
   })
-  // "Tell the crew…": about the selected page, its section is rewritten (/fix); about a picture, it is
-  // painted again with those words; otherwise the crew builds the project's next version.
+  // "Tell the crew…": an edit of the selected page rewrites its section (/fix); about a picture, it is
+  // painted again with those words; otherwise the project's next version keeps every page and adds
+  // what was asked (web/route.js).
   ask.onsubmit = e => {
     e.preventDefault()
     const text = input.value.trim()
@@ -578,9 +580,10 @@ export function makeProject({ sw, C, root }) {
     const x = P.sel && find(P.sel)
     if (x?.kind === 'art') return replace(x)
     input.value = ''
-    if (x?.kind === 'page') { sw.focusPage(x.page); sw.submit(`/fix ${text}`); toast(`${ic('msg', 15)}<span>On it</span>`); setTimeout(load, 1500); return }
-    const brief = P.board?.brief ? `${P.board.brief}\n\nFor this version: ${text}` : text
-    sw.submit(brief, false, P.pid)
+    const route = routeMessage({ text, run: P.run, site: !P.board?.game && P.board?.pages?.length > 0, selected: x?.kind === 'page', hosted: hosted() })
+    if (route === 'fix') { sw.focusPage(x.page); sw.submit(`/fix ${text}`); toast(`${ic('msg', 15)}<span>On it</span>`); setTimeout(load, 1500); return }
+    // the project's next version: every page kept, the crew builds what was asked
+    sw.submit(text, false, P.pid, route === 'extend' ? P.run : null)
     P.run = null; P.framed = false
     setTimeout(() => { P.run = sw.S?.run || null; load() }, 1200)
   }
