@@ -69,7 +69,7 @@ export function makeProject({ sw, C, root }) {
     const run = P.run || sw.viewing || sw.S?.run || sw.liveId
     if (!run || run === 'new') { P.board = null; render(); return }
     P.run = run
-    const [board, list] = await Promise.all([api(`/api/runs/${encodeURIComponent(run)}/board`).catch(() => null), api('/api/projects').catch(() => null)])
+    const [board, list] = await Promise.all([api(`/api/runs/${encodeURIComponent(run)}/board`).catch(() => null), hosted() ? null : api('/api/projects').catch(() => null)])
     if (!P.on) return
     P.board = board
     P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run)) || null

@@ -22,6 +22,7 @@ import { runSwarm } from '../engine/run.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { exportRun } from '../engine/export.mjs'
 import { canvasPage, webVersion } from './page.mjs'
+import { runBoard } from './board.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -364,6 +365,24 @@ const server = createServer(async (req, res) => {
     // builds are public, like the Feed: anyone with the link can open one
     const events = readEvents(runEvents[1])
     return events ? json(res, 200, events) : json(res, 404, { error: 'no such run' })
+  }
+
+  // a build's pictures, public like its events
+  const img = path.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
+  if (img && req.method === 'GET') {
+    const file = join(runsDir, img[1], 'img', img[2])
+    if (!RUN_ID.test(img[1]) || !existsSync(file)) return res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`, 'cache-control': 'max-age=31536000, immutable' })
+    return createReadStream(file).pipe(res)
+  }
+
+  // a build's canvas, public like its events
+  const runBoardGet = path.match(/^\/api\/runs\/([^/]+)\/board$/)
+  if (runBoardGet && req.method === 'GET') {
+    const id = runBoardGet[1], events = readEvents(id)
+    if (!events) return json(res, 404, { error: 'no such run' })
+    const live = runs.get(id)
+    return json(res, 200, { ...runBoard(id, events, runsDir, !!live && !live.done), code: false })
   }
 
   const runSite = path.match(/^\/api\/runs\/([^/]+)\/site$/)
