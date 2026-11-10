@@ -11,6 +11,9 @@ for f in $(git ls-files '*.mjs' '*.js' | grep -v '^dyad/\|^gameskills/'); do nod
 echo "· engine modules load"
 for f in engine/*.mjs; do node --input-type=module -e "await import('./$f')"; done
 
+echo "· engine tests"
+node --test tests/*.test.mjs
+
 echo "· python"
 python3 -m py_compile $(git ls-files '*.py' | grep -v '^dyad/')
 python3 -m unittest discover -s tests -q

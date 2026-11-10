@@ -25,6 +25,8 @@ import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
 import { autoJob } from '../engine/auto.mjs'
+import * as art from '../engine/artdirect.mjs'
+import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS, fxFor } from '../engine/video.mjs'
@@ -111,13 +113,57 @@ async function imageChoice() {
 
 const IMG_MAX = 8
 
+// ---------- the art director (engine/artdirect.mjs): one named style per build,
+// the best tier for heroes and posters, and a vision check that sends back a
+// picture that drifts into the generic AI look. Without a reviewer model the
+// check is skipped; the prompt rules still apply.
+const guides = new Map() // run id -> style guide
+function guideFor(runId) {
+  if (guides.has(runId)) return guides.get(runId)
+  const events = readEvents(runId) || []
+  const saved = events.findLast(e => e.type === 'art')
+  const guide = saved?.guide ? { style: saved.style, name: saved.name, guide: saved.guide, avoid: saved.avoid, bans: saved.bans || [] }
+    : art.styleGuide({ brief: events.find(e => e.type === 'run:start')?.brief, theme: events.findLast(e => e.type === 'theme') })
+  guides.set(runId, guide)
+  return guide
+}
+const ART_CHECK_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
+async function checkArt(path, guide) {
+  const model = modelFor('reviewer')
+  if (!model || !models.reviewer.apiKey || !/\.(webp|png|jpe?g)$/i.test(path)) return { ok: true, problems: [], skipped: true }
+  const ext = extname(path).slice(1).toLowerCase().replace('jpg', 'jpeg')
+  const image = `data:image/${ext};base64,${readFileSync(path).toString('base64')}`
+  const chain = [model, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? ART_CHECK_FALLBACKS.filter(m => m !== model) : [])]
+  for (const m of chain) {
+    try {
+      const res = await streamChat(provider('reviewer'), { trace: { kind: 'art-check' }, model: m, messages: art.checkMessages(guide, image), maxTokens: 300, temperature: 0, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(45000) })
+      return { ...art.parseCheck(res.text), model: m }
+    } catch {}
+  }
+  return { ok: true, problems: [], skipped: true }
+}
+// One picture through the art director. A picture sent back is made once more with
+// the reasons in its prompt; the second one stands.
+async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false }, onSentBack) {
+  const pick = art.tierFor(choice, { hero })
+  const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, art.promptFor(gen, guide, { aspect, strict })], hero ? 300000 : 150000)
+  const r = await go('')
+  if (!r.ok || !r.path || !existsSync(r.path)) return r
+  const check = await checkArt(r.path, guide)
+  if (check.ok) return { ...r, model: r.model || pick.model, check }
+  onSentBack?.(check)
+  const again = await go(check.problems.join('; '))
+  if (!again.ok || !again.path || !existsSync(again.path)) return { ...r, model: r.model || pick.model, check }
+  return { ...again, model: again.model || pick.model, check: await checkArt(again.path, guide), retried: true }
+}
+
 // One picture for a finished section: a new one asked for in an edit, or a
 // replacement. It keeps the <img>'s data-gen as its key, so every canvas, the
 // export and the video pick up the newest one.
 function paintOne(send, runId, { page, layer, gen, prompt }, choice) {
   send('image:queued', { page, layer, gen, provider: choice.provider, model: choice.model })
-  const theme = readEvents(runId)?.findLast(e => e.type === 'theme')
-  return imagegen(['--provider', choice.provider, ...(choice.model ? ['--model', choice.model] : []), '--aspect', 'landscape', `${prompt || gen}. Art direction: ${theme?.direction || ''}`.slice(0, 600)], 150000).then(r => {
+  const sentBack = c => send('image:sent-back', { page, layer, gen, problems: c.problems, model: c.model })
+  return paintArt(choice, guideFor(runId), { gen: prompt || gen, hero: art.isHero({ layer }) }, sentBack).then(r => {
     if (!r.ok || !r.path || !existsSync(r.path)) return send('image:failed', { page, layer, gen, message: r.error || 'no image' })
     const file = `edit-${Date.now().toString(36)}${extname(r.path) || '.png'}`
     mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
@@ -138,14 +184,14 @@ function imageQueue(run, emit, choice) {
     while (active < 2 && jobs.length) {
       const job = jobs.shift()
       active++
-      const prompt = `${job.gen}. ${run.style || ''}`.slice(0, 600)
-      imagegen(['--provider', choice.provider, ...(choice.model ? ['--model', choice.model] : []), '--aspect', job.aspect, prompt], 150000)
+      const sentBack = c => emit('image:sent-back', { page: job.page, layer: job.layer, gen: job.gen, problems: c.problems, model: c.model })
+      paintArt(choice, run.art || art.styleGuide({ brief: run.brief }), { gen: job.gen, aspect: job.aspect, hero: art.isHero({ layer: job.layer, n: job.n }) }, sentBack)
         .then(r => {
           if (!r.ok || !r.path || !existsSync(r.path)) return emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message: r.error || 'no image' })
           const file = `${job.n}${extname(r.path) || '.png'}`
           mkdirSync(join(run.dir, 'img'), { recursive: true })
           copyFileSync(r.path, join(run.dir, 'img', file))
-          emit('image', { page: job.page, layer: job.layer, gen: job.gen, src: `/img/${run.id}/${file}`, model: r.model || choice.model })
+          emit('image', { page: job.page, layer: job.layer, gen: job.gen, src: `/img/${run.id}/${file}`, model: r.model || choice.model, style: run.art?.style, checked: r.check && !r.check.skipped ? (r.check.ok ? 'ok' : 'sent back') : undefined })
         })
         .finally(() => { active--; pump() })
     }
@@ -186,7 +232,7 @@ function startRun({ brief, agents, models: given }) {
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
   mkdirSync(dir, { recursive: true })
-  const run = { id, dir, events: [], controller: new AbortController(), done: false, result: null, working: new Set() }
+  const run = { id, dir, events: [], controller: new AbortController(), done: false, result: null, working: new Set(), brief }
   current = run
   let images = null
 
@@ -197,7 +243,11 @@ function startRun({ brief, agents, models: given }) {
     if (type === 'agent:assign') run.working.add(data.agent)
     if (type === 'layer:done' || type === 'layer:failed') run.working.delete(data.agent)
     if (type === 'run:done') run.result = data
-    if (type === 'theme') run.style = `Art direction: ${data.direction || ''}`.slice(0, 300)
+    if (type === 'theme' && !run.art) {
+      run.art = art.styleGuide({ brief: run.brief, theme: data })
+      guides.set(id, run.art)
+      queueMicrotask(() => emit('art', run.art))
+    }
     broadcast(event)
     if (type !== 'layer:delta' && type !== 'plan:delta') appendFileSync(join(dir, 'events.jsonl'), JSON.stringify(event) + '\n')
     if (type === 'layer:done' && images) images(event)
@@ -538,8 +588,10 @@ async function shootScenes(id, c, scenes, choice, progress) {
   mkdirSync(img, { recursive: true })
   let done = 0
   progress(0, `making ${todo.length} pictures`)
+  const guide = guideFor(id)
   const one = async sc => {
-    const r = await imagegen(['--provider', choice.provider, ...(choice.model ? ['--model', choice.model] : []), '--aspect', 'landscape', `${sc.shot}. A cinematic photograph that fills the frame. No text, words, letters, logos, brand names, screens, phones or website interfaces anywhere in the picture.`.slice(0, 600)], 150000)
+    // a video frame is a poster: the best tier, the build's own style, and no phones or interfaces
+    const r = await paintArt(choice, guide, { gen: `${sc.shot}, filling the frame, no screens, phones or website interfaces`, aspect: 'landscape', hero: true })
     if (r.ok && r.path && existsSync(r.path)) {
       const file = join(img, `video-${Date.now().toString(36)}-${done}${extname(r.path) || '.png'}`)
       copyFileSync(r.path, file)
