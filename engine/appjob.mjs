@@ -4,7 +4,7 @@
 // App tab, so a studio that never builds an app never loads it.
 
 import { spawn, execFile, execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
@@ -112,7 +112,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
     // a first build that failed left only the starter: build again from the start
     const fresh = !built(id, events) || input.fresh
-    const resumeAt = kind === 'game' && fresh && input.fresh !== true ? bigResumeAt(events, dir) : 0
+    // the Studio's Try again sends fresh: true, so only restart: true starts a big game over
+    const resumeAt = kind === 'game' && fresh && input.restart !== true ? bigResumeAt(events, dir) : 0
     const ask = String(input.ask || '').trim().slice(0, 16000)
     let prompt
     if (fresh) {
@@ -123,7 +124,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (kind === 'game') {
         if (!input.prompt) throw new Error('a game needs its spec')
         // a big game stopped partway keeps its finished stages: Try again goes on from the next one
-        if (!resumeAt) seedProject(scaffoldDir, dir, input.title || 'game')
+        if (!resumeAt) {
+          // the game made before is moved aside, not deleted: one copy is kept (app-before/) so a wrong start over loses nothing
+          if (existsSync(join(dir, 'package.json'))) { rmSync(`${dir}-before`, { recursive: true, force: true }); renameSync(dir, `${dir}-before`) }
+          seedProject(scaffoldDir, dir, input.title || 'game')
+        }
         for (const [name, text] of Object.entries(input.files || {})) if (/^[\w.-]+$/.test(name)) writeFileSync(join(dir, name), String(text))
         prompt = input.prompt
       } else {
