@@ -5258,8 +5258,11 @@ function openSoundPop(e) {
 Chatter?.watch?.(() => renderSoundPop())
 
 // ---------- the code wall: while the engine builds an app or a game, the files it
-// writes type out in tiles, one agent per tile with its cursor on the caret.
+// writes type out in tiles, one agent per tile with its cursor on the caret. The last
+// tile is the asset pane, always: the build's pictures turning on a card, one after another.
 const CW_TILES = 4
+const CW_ASSET = CW_TILES - 1
+const CW_TURN = 2600 // ms per asset
 // ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
 // and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
 // talking to, each helper's reply as a bubble on its cursor, and what it is doing right now
@@ -5283,7 +5286,8 @@ function wallNames() {
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
 const heardIn = (x, ms) => x && Date.now() - x.t < ms
-const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false, shown: false, thinking: false, planKey: '' }
+const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
+const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
 const clock = ms => { const t = Math.max(0, Math.round(ms / 1000)); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s` }
 const kTokens = n => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
 // Between batches the engine is thinking (its "next step" line): nothing is written for a
@@ -5315,7 +5319,7 @@ function codeWall() {
   if (!on) {
     cw.shown = false
     if (cw.el) cw.el.hidden = true
-    if (appv.state !== 'working') Object.assign(cw, { run: null, seen: 0, queue: [], tiles: [] })
+    if (appv.state !== 'working') Object.assign(cw, { run: null, seen: 0, queue: [], tiles: [], ...CW_FRESH })
     return
   }
   if (!cw.el) {
@@ -5325,7 +5329,10 @@ function codeWall() {
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
     appEls.preview.append(cw.el)
   }
-  if (cw.run !== appv.run) Object.assign(cw, { run: appv.run, seen: Math.max(0, appv.steps.length - 30), queue: [], tiles: [], hide: false })
+  if (cw.run !== appv.run) {
+    Object.assign(cw, { run: appv.run, seen: Math.max(0, appv.steps.length - 30), queue: [], tiles: [], hide: false, ...CW_FRESH })
+    cw.el.querySelector('.cw-grid').replaceChildren()
+  }
   cw.el.hidden = cw.hide
   // the wall just came up while Auto is running: fold the Auto panel to its pill so it does not cover the code
   if (!cw.hide && !cw.shown) {
@@ -5342,6 +5349,7 @@ function codeWall() {
   // a free tile (empty, or done typing for a moment) takes the next file
   const now = performance.now()
   for (let i = 0; i < CW_TILES && cw.queue.length; i++) {
+    if (i === CW_ASSET) continue
     const t = cw.tiles[i]
     if (t && (t.loading || t.shown < t.text.length || now - t.doneAt < 1500)) continue
     const path = cw.queue.shift()
@@ -5365,10 +5373,18 @@ function codeWall() {
   }
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
-    d.className = 'cw-tile'
-    d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
+    if (grid.children.length === CW_ASSET) {
+      d.className = 'cw-tile cw-asset empty'
+      d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div>'
+        + '<div class="cw-stage" aria-hidden="true"><div class="cw-turn"><img class="cw-face" alt=""><img class="cw-face" alt=""></div>'
+        + `<div class="cw-cube">${'<i></i>'.repeat(6)}</div><i class="cw-scan"></i><i class="cw-pin"></i></div>`
+    } else {
+      d.className = 'cw-tile'
+      d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
+    }
     grid.append(d)
   }
+  cwAssetTile(grid.children[CW_ASSET], names[CW_ASSET], now)
   let writing = 0
   cw.tiles.forEach((t, i) => {
     const d = grid.children[i]
@@ -5380,9 +5396,7 @@ function codeWall() {
     }
     d.classList.toggle('typing', !t.loading && t.shown < t.text.length)
     setText(d.querySelector('.cw-path'), t.path)
-    const [name, color] = names[i] || ['', '#888']
-    const who = d.querySelector('.cw-who')
-    if (who.dataset.name !== name) { who.dataset.name = name; who.innerHTML = name ? `${Crew.avatar(name, 16)}<span>${esc(name)}</span>` : ''; who.style.background = color; who.style.color = Crew.ink(color) }
+    cwWho(d, names[i])
     if (d.dataset.shown !== String(t.shown) || d.dataset.path !== t.path) {
       d.dataset.shown = t.shown; d.dataset.path = t.path
       // the last lines, so the caret stays in view
@@ -5419,8 +5433,60 @@ function codeWall() {
   }
 }
 
-// the crew's cursor for tile i sits on that tile's caret
+// a tile's name chip: the courier working on it
+function cwWho(d, member) {
+  const [name, color] = member || ['', '#888']
+  const who = d.querySelector('.cw-who')
+  if (who.dataset.name !== name) { who.dataset.name = name; who.innerHTML = name ? `${Crew.avatar(name, 16)}<span>${esc(name)}</span>` : ''; who.style.background = color; who.style.color = Crew.ink(color) }
+}
+
+// The asset pane: the build's own pictures (GET /api/runs/:id/assets), one every few
+// seconds, cross-fading on a slowly turning card with a scan sweep at each change. Models
+// are listed by the server but not drawn: the Studio does not load three.js. Nothing painted
+// yet: the next picture's name over a turning wireframe cube, never an empty pane.
+function cwAssets() {
+  if (cw.assetsLoading || Date.now() - cw.assetsAt < 12000) return
+  cw.assetsLoading = true
+  const run = cw.run
+  api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && cw.run === run) cw.assets = { pics: (j.assets || []).filter(a => a.kind === 'art' && a.src), next: j.next || [] } })
+    .catch(() => {})
+    .finally(() => { cw.assetsLoading = false; cw.assetsAt = Date.now() })
+}
+function cwAssetTile(d, member, now) {
+  if (!d) return
+  cwAssets()
+  cwWho(d, member)
+  const pics = cw.assets?.pics || []
+  d.classList.toggle('empty', !pics.length)
+  if (!pics.length) {
+    cw.assetName = cw.assets?.next?.[0] || 'Art'
+    setText(d.querySelector('.cw-path'), cw.assetName)
+    return
+  }
+  if (cw.ai >= 0 && now - cw.aiAt < CW_TURN) return
+  const i = (cw.ai + 1) % pics.length, pic = pics[i]
+  cw.ai = i; cw.aiAt = now
+  // the hidden face takes the next picture once it has loaded, then the faces trade places
+  const faces = [...d.querySelectorAll('.cw-face')], next = faces.find(f => !f.classList.contains('on')) || faces[0]
+  const im = new Image()
+  im.onload = () => {
+    if (cw.ai !== i) return
+    next.src = pic.src
+    for (const f of faces) f.classList.toggle('on', f === next)
+    cw.assetName = pic.name
+    setText(d.querySelector('.cw-path'), pic.name)
+    d.classList.remove('scan'); void d.offsetWidth; d.classList.add('scan')
+  }
+  im.src = pic.src
+}
+
+// the crew's cursor for tile i sits on that tile's caret (the asset pane: beside its card)
 function cwPin(i) {
+  if (i === CW_ASSET) {
+    const pin = cw.el?.querySelector('.cw-asset .cw-pin')?.getBoundingClientRect()
+    return pin?.width ? { x: pin.left, y: pin.top, text: cw.assetName, typing: true } : null
+  }
   const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
   const caret = d?.querySelector('.cw-caret')
   if (!t || !caret || (cw.thinking && t.shown >= t.text.length)) return null

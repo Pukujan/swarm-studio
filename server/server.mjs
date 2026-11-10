@@ -31,6 +31,7 @@ import { makeProjects, stateOf } from './projects.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
 import { runBoard as boardOf } from './board.mjs'
+import { listAssets, assetFiles } from '../engine/assets.mjs'
 import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
@@ -1340,6 +1341,15 @@ const server = createServer((req, res) => {
     b.work = workOf(id) || b.game?.work || null
     return json(200, b)
   }
+  // a build's own pictures and models, and the ones still to come (the code wall's asset pane)
+  const runAssets = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/assets$/)
+  if (runAssets && req.method === 'GET') {
+    const id = runAssets[1], events = readEvents(id)
+    if (!events) return json(404, { error: 'no such build' })
+    const spec = events.findLast(e => e.type === 'game:spec')?.spec
+    gameMod().then(g => spec ? g.artList(spec) : []).catch(() => []).then(plan => json(200, listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan, pieceName })))
+    return
+  }
   // what the crew are working on right now, across projects: the Studio's queue
   if (url.pathname === '/api/work' && req.method === 'GET') {
     const jobs = []
@@ -1957,7 +1967,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|game-[a-z0-9-]{1,48})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
