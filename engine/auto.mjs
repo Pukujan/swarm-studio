@@ -73,6 +73,8 @@ function keys(want) {
   }
   return want.every(k => out[k]) ? out : null
 }
+// one key from the environment or ~/.hermes/.env
+export const hermesKey = k => keys([k])?.[k] || ''
 export const supabaseEnv = () => keys(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
 // Made through the person's Supabase sign-in, the app holds a publishable key, so the table lets
 // that role in. The key lives only in the app's server environment, never in the browser.
