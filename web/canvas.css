@@ -1683,3 +1683,12 @@ body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn,
 .publish-pop .pcopy { min-width: 96px; }
 /* the crew's chatter never sits on a dialog: bubbles hide while one is open */
 body:has(.ui-overlay, .export-pop, .publish-pop, .models-pop, .finfo-wrap, #pub-menu:not([hidden]), #more-menu:not([hidden])) .cursor .bubble { display: none !important; }
+
+/* Post to Feed, under the Live link */
+.publish-pop .pfeed { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.publish-pop .pseg { display: flex; padding: 3px; border-radius: 9px; background: rgb(var(--shade-rgb) / .14); }
+.publish-pop .pseg button { flex: 1; padding: 6px; border: 0; border-radius: 7px; background: none; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.publish-pop .pseg button.on { background: var(--accent); color: var(--bg, #0b0b0c); }
+.publish-pop .pfeed .ui-btn { width: 100%; justify-content: center; }
+.publish-pop .pfeed .plink { margin: 0; }
+.publish-pop .vhead + .pfeed { margin-top: 0; padding-top: 0; border-top: 0; }
