@@ -18,7 +18,7 @@ import { extendBase, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
-import { exportRun } from '../engine/export.mjs'
+import { exportRun, snapshot } from '../engine/export.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.mjs'
@@ -1489,6 +1489,28 @@ const server = createServer((req, res) => {
     if (existsSync(file)) return res.writeHead(200, { 'content-type': 'audio/wav', 'cache-control': 'max-age=86400' }).end(readFileSync(file))
     chatterMake(text, voice)
     return res.writeHead(202, { 'content-type': 'application/json' }).end(JSON.stringify({ making: true }))
+  }
+
+  // The app advisor: POST { sections } for its questions (each with a recommended
+  // answer), then { sections, qa: [{ q, a }] } for the app plan the engine builds from.
+  const runAdvise = url.pathname.match(/^\/api\/runs\/([^/]+)\/advise$/)
+  if (runAdvise && RUN_ID.test(runAdvise[1]) && req.method === 'POST') {
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 4e6) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const events = readEvents(runAdvise[1])
+      if (!events) return reply(404, { error: 'no such build' })
+      const snap = snapshot(events, Array.isArray(input.sections) ? input.sections.slice(0, 80) : [])
+      if (!snap.pages.some(p => p.sections.length)) return reply(400, { error: 'nothing designed yet' })
+      const args = { provider: provider('planner'), model: modelFor('planner'), snap, signal: AbortSignal.timeout(90000) }
+      import('../engine/advisor.mjs')
+        .then(a => (Array.isArray(input.qa) ? a.writePlan({ ...args, qa: input.qa }).then(plan => ({ plan })) : a.questions(args)))
+        .then(out => reply(200, out)).catch(err => reply(500, { error: String(err.message || err) }))
+    })
+    return
   }
 
   const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy))?$/)

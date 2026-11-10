@@ -1459,7 +1459,7 @@ async function runSlash(text) {
       const style = VIDEO_STYLES.some(([k]) => k === first?.toLowerCase()) ? first.toLowerCase() : null
       return makeVideo({ style, idea: (style ? more.join(' ') : arg).trim() || null })
     }
-    case 'app': if (!needRun()) return; return arg ? appAsk(arg) : appv.hasApp || appv.state === 'working' ? setView('app') : appAsk('')
+    case 'app': if (!needRun()) return; return arg ? appAsk(arg) : appv.hasApp || appv.state === 'working' ? setView('app') : (setView('app'), buildApp())
     case 'game': return openGame(arg)
     case 'canvas': return setView('canvas')
     case 'export': return needRun() && exportRunNow()
@@ -3849,7 +3849,7 @@ setInterval(renderBadges, 1000)
 const appApi = (path = '', body) => api(`/api/runs/${encodeURIComponent(appv.run)}/app${path}`, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
 
 function resetApp(run) {
-  Object.assign(appv, { run, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, files: null, file: '', hasApp: false, opening: false, loaded: false })
+  Object.assign(appv, { run, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null })
   appEls.frame.removeAttribute('src')
 }
 
@@ -3925,8 +3925,8 @@ function renderApp() {
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
           : appv.kind === 'game' && !appv.hasApp
             ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
-            : `<h2>Turn this design into a working app</h2><p>React + TypeScript + shadcn/ui, with the design kept exactly. The engine adds what the pages imply: forms that save, data from server routes, an admin page. Then change anything by chatting.</p><button class="big" data-build>Build the app</button>`
-    appEls.empty.querySelector('[data-build]')?.addEventListener('click', () => appAsk(''))
+            : `<h2>Turn this design into a working app</h2><p>The design stays exactly as it is. Hermia first asks what runs behind it (dashboards, customers, an admin panel), then the engine builds it all.</p><button class="big" data-build>Build the app</button>`
+    appEls.empty.querySelector('[data-build]')?.addEventListener('click', buildApp)
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
   appEls.preview.hidden = appv.mode !== 'preview'
@@ -3990,6 +3990,105 @@ async function appAsk(ask, extra = {}) {
   }
   renderApp()
 }
+
+// ---------- the app advisor
+// Before a site becomes a working app, Hermia reads its pages and asks, in the
+// chat, what the business needs behind it (users, what gets saved, dashboards,
+// a CRM, an admin panel). Each question comes with her recommended answer; the
+// answers become an app plan to tick through, and the plan becomes dyad's brief.
+const adv = { run: null, qs: [], i: 0, qa: [], busy: false }
+function advMsg(html, cls = '') {
+  const item = document.createElement('div')
+  item.className = `item bot adv ${cls}`
+  item.innerHTML = `<b>${HERMIA}Hermia<small>advisor</small></b><div class="txt">${html}</div>`
+  push(els.feed, item)
+  return item
+}
+function advOpen(on) {
+  document.body.classList.toggle('advising', on)
+  if (on) { document.body.classList.add('cosmos-chat'); document.querySelector('.side .tabs [data-tab="chat"]')?.click() }
+}
+const advSections = () => [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
+const advPost = body => api(`/api/runs/${encodeURIComponent(adv.run)}/advise`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sections: advSections(), ...body }) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
+
+async function openAdvisor() {
+  const run = shownRun()
+  if (!run) return botMsg('Open a build first: the app is made from its design.')
+  if (adv.busy) return advOpen(true)
+  Object.assign(adv, { run, qs: [], i: 0, qa: [], busy: true })
+  advOpen(true)
+  const wait = advMsg('Reading your pages to see what the app needs behind them…', 'working')
+  try {
+    const out = await advPost({})
+    wait.remove()
+    adv.qs = out.questions || []
+    advMsg(`${esc(out.read || '')}<span class="adv-sub">${adv.qs.length} questions. My pick is marked on each; change anything.</span>`)
+    advAsk()
+  } catch (err) { wait.remove(); adv.busy = false; advMsg(`I couldn't read the pages: ${esc(err.message)}`, 'err') }
+}
+
+function advAsk() {
+  const q = adv.qs[adv.i]
+  if (!q) return advPlan()
+  const picks = new Set(q.recommended)
+  const card = advMsg(`<p class="adv-q">${esc(q.q)}</p>${q.why ? `<p class="adv-why">${esc(q.why)}</p>` : ''}
+    <div class="adv-opts">${q.options.map(o => `<button class="adv-opt" aria-pressed="${picks.has(o)}" data-o="${esc(o)}">${esc(o)}${q.recommended.includes(o) ? '<em>Recommended</em>' : ''}</button>`).join('')}</div>
+    <input class="adv-own" placeholder="Or in your own words" aria-label="Your own answer">
+    <div class="adv-go"><span class="adv-n">${adv.i + 1} of ${adv.qs.length}</span>${adv.i === 0 && adv.qs.length > 1 ? '<button class="adv-all">Use all my picks</button>' : ''}<button class="adv-next">${adv.i === adv.qs.length - 1 ? 'Write the plan' : 'Next'}</button></div>`, 'ask')
+  for (const b of card.querySelectorAll('.adv-opt')) b.onclick = () => {
+    const o = b.dataset.o
+    if (q.multi) picks.has(o) ? picks.delete(o) : picks.add(o)
+    else { picks.clear(); picks.add(o) }
+    for (const x of card.querySelectorAll('.adv-opt')) x.setAttribute('aria-pressed', picks.has(x.dataset.o))
+  }
+  const own = card.querySelector('.adv-own')
+  const answer = () => {
+    const a = [...picks]
+    if (own.value.trim()) a.push(own.value.trim())
+    card.classList.add('done')
+    card.querySelector('.adv-go').remove(); own.remove()
+    for (const x of card.querySelectorAll('.adv-opt')) x.disabled = true
+    adv.qa.push({ q: q.q, a })
+    adv.i++
+  }
+  own.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); card.querySelector('.adv-next').click() } }
+  card.querySelector('.adv-next').onclick = () => { answer(); advAsk() }
+  const all = card.querySelector('.adv-all')
+  if (all) all.onclick = () => {
+    answer()
+    for (const r of adv.qs.slice(adv.i)) adv.qa.push({ q: r.q, a: r.recommended })
+    adv.i = adv.qs.length
+    advMsg(`<span class="adv-sub">Going with my picks for the other ${adv.qs.length - 1}.</span>`, 'sys')
+    advPlan()
+  }
+}
+
+async function advPlan() {
+  const wait = advMsg('Writing the app plan…', 'working')
+  let plan
+  try { plan = (await advPost({ qa: adv.qa })).plan } catch (err) { wait.remove(); adv.busy = false; return advMsg(`The plan didn't come back: ${esc(err.message)}`, 'err') }
+  wait.remove()
+  const card = advMsg(`<p class="adv-q">The app plan</p>${plan.summary ? `<p class="adv-why">${esc(plan.summary)}</p>` : ''}
+    <h5>Screens behind the site</h5>
+    <div class="adv-screens">${plan.screens.map((x, i) => `<label class="adv-screen"><input type="checkbox" data-i="${i}" ${x.optional ? '' : 'checked'}><span><b>${esc(x.name)}</b>${x.for ? ` <small>${esc(x.for)}</small>` : ''}<span>${esc(x.what)}</span></span></label>`).join('')}</div>
+    ${plan.data?.length ? `<h5>What it keeps</h5><p class="adv-why">${plan.data.map(d => `<b>${esc(d.name)}</b> ${esc(d.fields.join(', '))}`).join('<br>')}</p>` : ''}
+    ${plan.roles?.length ? `<h5>Who uses it</h5><p class="adv-why">${plan.roles.map(r => `<b>${esc(r.name)}</b> ${esc(r.can)}`).join('<br>')}</p>` : ''}
+    <div class="adv-go"><button class="adv-again">Change answers</button><button class="adv-next">Build the app</button></div>`, 'ask plan')
+  card.querySelector('.adv-again').onclick = () => { card.classList.add('done'); card.querySelector('.adv-go').remove(); adv.busy = false; openAdvisor() }
+  card.querySelector('.adv-next').onclick = () => {
+    const keep = new Set([...card.querySelectorAll('.adv-screen input:checked')].map(x => Number(x.dataset.i)))
+    appv.plan = { ...plan, screens: plan.screens.filter((_, i) => keep.has(i)) }
+    card.classList.add('done'); card.querySelector('.adv-go').remove()
+    for (const x of card.querySelectorAll('input')) x.disabled = true
+    adv.busy = false
+    advMsg(`Building it: the site as designed, plus ${appv.plan.screens.length} screen${appv.plan.screens.length === 1 ? '' : 's'} behind it.`, 'sys')
+    advOpen(false)
+    appAsk('', { plan: appv.plan })
+  }
+}
+
+// a site's first app build goes through the advisor; a game or a retry goes straight on
+const buildApp = () => (appv.kind !== 'game' && !appv.hasApp && !appv.plan ? openAdvisor() : appAsk('', appv.plan ? { plan: appv.plan } : {}))
 
 async function deployApp() {
   if (!appv.run) return
