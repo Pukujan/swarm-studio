@@ -18,7 +18,7 @@ We keep to three beliefs:
 | Name | What it is | How to write it |
 |---|---|---|
 | **Swarm** | the whole thing: studio, feed and crew | "Swarm" in sentences. Never "SWARM" in running text, and never "the Swarm". |
-| **Swarm Studio** | the Hermes plugin where builds are made | the wordmark is "SWARM" in Big Shoulders, then "*Studio*" in EB Garamond italic, lime |
+| **Swarm Studio** | the Hermes plugin where builds are made | the wordmark is "SWARM" in Big Shoulders, then "*Studio*" in EB Garamond italic, in the accent |
 | **Swarm Feed** | the community site: swipe, try, remix | the wordmark is "SWARM *Feed*", the same lock-up |
 | **Commander Hermia** | the planner and the face of Swarm | "Hermia" after the first mention |
 | **the crew** | the agents | lower case. One of them is "a courier", or by name (Pip, Mochi, Lumi…) |
@@ -43,7 +43,7 @@ Use the world as flavour, never as a puzzle. A first-time visitor must always un
 ### Commander Hermia
 
 - **Role:** the planner. She draws the plan, gives the orders and reviews the work. Also the logo, the onboarding host and the narrator of Auto.
-- **Look:** a chibi messenger with a round face, big eyes, and an off-white winged helmet with a lime band and graphite wing tips. She wears a short graphite cape (`#2a2a2e`) with a white trim and carries a caduceus baton that glows lime when she gives orders. The art is engraved line work with a few pixel touches.
+- **Look:** a chibi messenger with a round face, big eyes, and an off-white winged helmet with a grey band and graphite wing tips. She wears a short graphite cape (`#2a2a2e`) with a white trim and carries a caduceus baton that glows in the accent when she gives orders. The art is engraved line work with a few pixel touches.
 - **Files:**
   - [`web/brand/hermia-mark.svg`](../../web/brand/hermia-mark.svg): her face in a graphite circle, in 3 colours. It is the logo, favicon, app icon and avatar.
   - [`web/brand/hermia.svg`](../../web/brand/hermia.svg): her full figure with the baton.
@@ -57,15 +57,15 @@ Use the world as flavour, never as a puzzle. A first-time visitor must always un
 
 - **Who they are:** little alien couriers: round blob bodies, antennae, one or two big goggle eyes on a visor strap, and tiny ankle wings (Hermes' sandals).
 - **Names:** Pip, Mochi, Lumi, Nova, Zuzu, Bean, Kiki, Tofu, Pebble, Juno, Comet, Dot, Orbi, Twinkle, Bloop, Sprout, Nim, Puff, Gizmo, Luma, Taro, Echo, Bix and Vela. The list lives in `engine/run.mjs` `AGENT_NAMES` and `web/crew.js`, in the same order.
-- **Colour:** a courier's place in that list picks its colour from the F2 palette.
+- **Colour:** a courier's place in that list picks its shade, from white to graphite (no per-agent hues, RULES.md standing rule 3).
 - **Drawing:** always drawn in code ([`web/crew.js`](../../web/crew.js)), so the same name always looks the same at any size. **Never drawn by an image generator.**
 - **Motion:** a blink every 4 s, wings that flap while moving, a mouth that moves while talking, a hop when done.
 - **Rule:** the crew appears as a group (cursors, a line-up, a credit row). Only Hermia speaks for the brand.
 
 ## The logo
 
-- **The mark:** Hermia's helmeted face in a graphite circle, in three colours only: graphite `#2a2a2e`, off-white `#F2F2F2` and lime `#c6ff3d`. It still reads at 16 px.
-- **The lock-up:** the mark, then "SWARM" in Big Shoulders Display 800, then "*Studio*" or "*Feed*" in EB Garamond italic, in that room's accent (lime for Studio, coral for Feed).
+- **The mark:** Hermia's helmeted face in a graphite circle, in three colours only: graphite `#2a2a2e`, off-white `#F2F2F2` and grey `#8e8e93`. It still reads at 16 px.
+- **The lock-up:** the mark, then "SWARM" in Big Shoulders Display 800, then "*Studio*" or "*Feed*" in EB Garamond italic, in the accent.
 - **Clear space:** a quarter of the mark's diameter on every side.
 - **Don't:**
   - recolour it, outline it or add a shadow;
@@ -75,11 +75,9 @@ Use the world as flavour, never as a puzzle. A first-time visitor must always un
 
 ## Colour
 
-### Graphite, a colour per room (from 2026-11-09)
-
-History: Hermes-blue glow (spec 08) → Ultraviolet (trial, 2026-11-09) → Graphite (owner's choice, 2026-11-09).
-
-Black and graphite carry the frame; the builds bring the colour. Each part of Swarm owns one accent, used for its tab, its main button and its one highlighted word.
+History: Hermes-blue glow (spec 08) → Ultraviolet (trial, 2026-11-09) → Graphite with a colour per room
+(2026-11-09) → **black, graphite and white with one accent** (owner, 2026-11-09). The rule lives in
+[docs/ux/RULES.md](../ux/RULES.md), standing rule 3.
 
 | Token | Hex | Job |
 |---|---|---|
@@ -89,22 +87,14 @@ Black and graphite carry the frame; the builds bring the colour. Each part of Sw
 | line | `#2a2a2e` | card borders and rules |
 | text | `#f4f4f5` | text |
 | muted | `#8e8e93` | secondary text (5.5:1 on surface) |
-| ok, hot, info | `#00F279`, `#F20000`, `#00F2F2` | states only |
-| crew colours | the 10 F2 colours | only on couriers, their cursors and their name pills |
-
-| Room | Accent |
-|---|---|
-| Feed | coral `#ff3b5c` |
-| **Studio** | **lime `#c6ff3d`** (this plugin's accent) |
-| Jams | orange `#ff8a00` |
-| Board | cyan `#4dd8ff` |
+| **accent** | `#f4f4f5` for now | **the one accent** (`--accent`): the main action, the active tab, the serif word. Text on it is `#0b0b0c`. The owner picks the final hue; it is a one-line change. |
+| hot | `#F20000` | errors only |
 
 **Rules:**
-- **One accent use per screen**, in the room's own colour: the main action, the active tab and the serif italic word. Everything else is graphite.
-- **Text on an accent fill is `#0b0b0c`.** Lime on bg is 16.6:1, black on lime 16.6:1.
-- **No glow, no grid.** The galaxy home is monochrome stars with a breath of lime at the core.
+- **One accent, used once per screen.** Everything else is black, graphite or white.
+- **No per-room, per-view or per-agent colours.** The crew is told apart by shade, white to graphite.
+- **No glow, no grid.** The galaxy home is monochrome stars.
 - Body text keeps 4.5:1 or better (`node scripts/contrast.mjs` checks the studio's pairs).
-- Crew couriers keep their own colours, on cursors and name pills too.
 
 ## Type
 
@@ -115,9 +105,9 @@ All free Google fonts under the OFL; they stand in for Nous's licensed ones.
 | Display (huge, compressed, uppercase) | **Big Shoulders Display** 800 |
 | Labels, nav, tabs | **Barlow Condensed** 600, uppercase, letter spacing 0.06em |
 | Body and data | **JetBrains Mono** 400 |
-| The accent word | **EB Garamond** italic, in the room's accent (lime in the studio) |
+| The accent word | **EB Garamond** italic, in the accent |
 
-**The serif rule:** one accent word per headline, in EB Garamond italic, in the room's accent. For example: "One prompt. The *whole* launch." "Where to *next*?" "SWARM *Studio*". Never two accent words in one line.
+**The serif rule:** one accent word per headline, in EB Garamond italic, in the accent. For example: "One prompt. The *whole* launch." "Where to *next*?" "SWARM *Studio*". Never two accent words in one line.
 
 ## Voice
 

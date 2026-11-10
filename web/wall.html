@@ -52,7 +52,7 @@ async function main() {
     const src = live ? `/?run=${encodeURIComponent(id)}&wall=1` : `/?replay=${encodeURIComponent(id)}&speed=${speed}&wall=1`
     const el = document.createElement('div')
     el.className = 'tile'
-    el.innerHTML = `<div class="tag"><b>${esc(r.title || id)}</b><span class="t">0:00</span></div><div class="bar"></div><iframe src="${src}" title="${esc(r.title || id)}"></iframe><div class="open" title="Open this canvas"></div>`
+    el.innerHTML = `<div class="tag"><b>${esc(r.title || id)}</b><span class="t">0:00</span></div><div class="bar"></div><iframe src="${src}" aria-label="${esc(r.title || id)}"></iframe><div class="open"></div>`
     el.querySelector('.open').onclick = () => window.open(`/?run=${encodeURIComponent(id)}`, '_blank')
     wall.append(el)
     tiles[id] = { el, frame: el.querySelector('iframe'), ms: 0, done: false }

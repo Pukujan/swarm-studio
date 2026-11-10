@@ -14,9 +14,8 @@
 // picks; the logo and Esc lead home from every view (Classic, a room, App, a replay); the crew button
 // is the one sound control and keeps its size in every state. At 390 wide nothing scrolls sideways.
 //
-// Tooltips (docs/ux/RULES.md, spec 12 rule 13): a title or data-tip is only ever the 1 to 3 word name
-// of an icon-only button. So on every screen it visits, nothing that shows text has one; and the
-// number of title= / data-tip in web/ may not go up from origin/main (106 when this check was added).
+// Tooltips (docs/ux/RULES.md, rule 1): there are none. No title= or data-tip anywhere in web/, and no
+// [title] or [data-tip] on any screen it visits. Icon-only controls are named by aria-label.
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs'
@@ -54,7 +53,7 @@ if (SHOTS) mkdirSync(SHOTS, { recursive: true })
     from = 'origin/main'
   } catch {}
   console.log(`tooltips (title= and data-tip in web/): ${from} ${base}, here ${here}`)
-  ok(here <= base, `Tooltips: no more title= / data-tip in web/ than ${from} (${here} > ${base})`)
+  ok(here === 0, `Tooltips: no title= / data-tip in web/ (found ${here})`)
 }
 
 // ---------- in-page helpers
@@ -91,11 +90,11 @@ const OVERLAPS = () => {
 const hscroll = () => document.documentElement.scrollWidth - innerWidth
 // a tooltip on something that already shows words: a hidden explanation, which the rules forbid
 const TIPS = () => [...document.querySelectorAll('[title], [data-tip]')]
-  .filter(el => el.checkVisibility?.({ visibilityProperty: true }) && (el.innerText || '').trim())
+  .filter(el => el.checkVisibility?.({ visibilityProperty: true }))
   .map(el => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}.${[...el.classList].slice(0, 2).join('.')}「${el.innerText.trim().replace(/\s+/g, ' ').slice(0, 20)}」 "${(el.getAttribute('title') ?? el.getAttribute('data-tip')).slice(0, 40)}"`)
 async function tips(page, where) {
   const out = await page.evaluate(TIPS)
-  ok(!out.length, `${where}: no title or data-tip on anything that shows text${out.length ? `\n      ${out.slice(0, 8).join('\n      ')}` : ''}`)
+  ok(!out.length, `${where}: no title or data-tip on anything${out.length ? `\n      ${out.slice(0, 8).join('\n      ')}` : ''}`)
 }
 
 async function shot(page, file) { if (SHOTS) await page.screenshot({ path: join(SHOTS, file) }) }

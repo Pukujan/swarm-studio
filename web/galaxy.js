@@ -40,8 +40,8 @@ function token(name, fallback) {
 }
 const palette = () => ({
   void: token('--void', '#0b0b0c'), deep: token('--deep', '#161618'), frame: token('--frame', '#3a3a3f'), frameHi: token('--frame-hi', '#a1a1a6'),
-  text: token('--text', '#f4f4f5'), muted: token('--muted', '#8e8e93'), accent: token('--accent', '#c6ff3d'), pink: token('--pink', '#c6ff3d'), ok: token('--ok', '#00F279'),
-  info: token('--info', '#00F2F2'), hot: token('--hot', '#F20000'), nebula: token('--nebula', '#3a3a3f'), nebula2: token('--nebula-2', '#8e8e93'), touch: token('--star-touch', '#e2f0c4')
+  text: token('--text', '#f4f4f5'), muted: token('--muted', '#8e8e93'), accent: token('--accent', '#f4f4f5'), pink: token('--pink', '#f4f4f5'), ok: token('--ok', '#00F279'),
+  info: token('--info', '#00F2F2'), hot: token('--hot', '#F20000'), nebula: token('--nebula', '#3a3a3f'), nebula2: token('--nebula-2', '#8e8e93'), touch: token('--star-touch', '#f4f4f5')
 })
 
 // ---------- three.js, loaded once for both scenes
@@ -70,7 +70,7 @@ function rng(seed) {
 const gauss = r => (r() + r() + r() + r() - 2) / 2
 
 // Hermia's ship, drawn in code: an off-white hull with a graphite stripe, little winged fins
-// (the winged sandals again) and a lime cockpit glow. Original art, no assets.
+// (the winged sandals again) and a cockpit glow in the accent. Original art, no assets.
 function shipTexture(THREE, P) {
   const c = document.createElement('canvas')
   c.width = 256; c.height = 160
@@ -105,7 +105,7 @@ function shipTexture(THREE, P) {
   g.bezierCurveTo(30, 32, -74, 26, -78, 0)
   g.fillStyle = P.text; g.fill()
   g.lineWidth = 3; g.strokeStyle = P.void; g.stroke()
-  // the graphite stripe and the lime trim (her cape colours)
+  // the graphite stripe and the accent trim (her cape colours)
   g.beginPath(); g.moveTo(-70, 8); g.bezierCurveTo(-20, 18, 40, 14, 80, 3); g.lineWidth = 7; g.strokeStyle = P.frame; g.stroke()
   g.beginPath(); g.moveTo(-66, 14); g.bezierCurveTo(-20, 22, 30, 19, 70, 8); g.lineWidth = 2; g.strokeStyle = P.pink; g.stroke()
   // cockpit
@@ -197,9 +197,7 @@ function makeGalaxy(root) {
     <div class="gx-dock">
       <div class="gx-hermia hermia-box" role="img" aria-label="Commander Hermia"></div>
       <h1 class="gx-title">Where to <em>next</em>?</h1>
-      <div class="gx-chips"></div>
       <form class="gx-form" autocomplete="off"><input name="q" placeholder="What should the crew build?" aria-label="Where to next? Describe what to build">
-        <button type="button" class="gx-auto" aria-label="Auto">${ico('zap')}<span class="t">Auto</span></button>
         <button type="submit" class="gx-go">${ico('rocket')}Launch</button></form>
     </div>`
   const canvas = root.querySelector('canvas'), labels = root.querySelector('.gx-labels')
@@ -218,7 +216,6 @@ function makeGalaxy(root) {
     // she raises her baton, then the camera flies (300 ms at most, rule 23)
     hermia.cheer(() => C.go('orbit'))
   }
-  form.querySelector('.gx-auto').onclick = () => { sw.submit(input.value.trim(), true); input.value = '' }
   chartBtn.onclick = () => {
     chart.hidden = !chart.hidden
     if (!chart.hidden) { chart.querySelector('button')?.focus(); W.SwarmUI?.layer(chart, () => { chart.hidden = true }, { extra: [chartBtn] }) }
@@ -401,16 +398,11 @@ function makeGalaxy(root) {
       labels.append(b)
       s.el = b
     }
-    // the star chart and the chips
+    // the star chart
     chartBtn.querySelector('em').textContent = n || ''
     chartBtn.hidden = !n
     chart.innerHTML = byNew.map(s => `<button role="listitem" data-id="${esc(s.f.id)}"><i style="color:${s.color};background:${s.color}"></i><span>${esc(s.f.title || 'Untitled')}</span><small>${s.f.live ? 'live' : new Date(s.f.t).toLocaleDateString([], { month: 'short', day: 'numeric' })}</small></button>`).join('') || '<small>No worlds yet.</small>'
     for (const b of chart.querySelectorAll('button')) b.onclick = () => { chart.hidden = true; pick(G.systems.find(s => s.f.id === b.dataset.id)) }
-    const chips = root.querySelector('.gx-chips')
-    const liveS = G.systems.find(s => s.f.live)
-    const last = byNew.find(s => !s.f.live && s.f.pages)
-    chips.innerHTML = (liveS ? `<button class="gx-live" data-id="${esc(liveS.f.id)}">Live now: ${esc(liveS.f.title)}</button>` : '') + (last ? `<button data-id="${esc(last.f.id)}">Back to ${esc(last.f.title)}</button>` : '')
-    for (const b of chips.querySelectorAll('button')) b.onclick = () => pick(G.systems.find(s => s.f.id === b.dataset.id))
   }
 
   async function refresh() {
@@ -749,8 +741,7 @@ function chrome() {
   if (tabs) {
     const x = document.createElement('button')
     x.className = 'cosmos-only cosmos-fold'
-    x.title = 'Fold chat'
-    x.setAttribute('aria-label', x.title)
+    x.setAttribute('aria-label', 'Fold chat')
     x.innerHTML = ico('x')
     x.style.marginLeft = 'auto'
     x.onclick = () => C.chat(false)

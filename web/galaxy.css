@@ -3,10 +3,10 @@
    (☰ → Classic view) and on wall tiles: everything here hangs off body.cosmos.
    Colours only from tokens: the WebGL scenes read these same custom properties. */
 :root {
-  /* Graphite: the nebula clouds and the galaxy's outer arms are monochrome; lime only touches the core */
+  /* the galaxy is monochrome; the one accent only touches the core */
   --nebula: #3a3a3f;
   --nebula-2: #8e8e93;
-  --star-touch: #e2f0c4;                /* the galaxy core: white with a breath of lime */
+  --star-touch: var(--accent);          /* the galaxy core: white with a breath of the accent */
   --cosmos-ease: cubic-bezier(.65, 0, .35, 1);
 }
 
@@ -86,14 +86,7 @@ body.cosmos .side-min-btn { display: none; }
 .gx-form input::placeholder { color: var(--muted); }
 .gx-form button { flex: none; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 9px 16px; cursor: pointer; font: 700 13px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .gx-form .gx-go { background: var(--accent); color: var(--accent-ink); border: 0; }
-.gx-form .gx-auto { background: none; color: var(--text); border: 1px solid var(--line-2); }
-.gx-form .gx-auto:hover { border-color: var(--accent); }
 .gx-form .ico { width: 15px; height: 15px; }
-.gx-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
-.gx-chips button { background: rgb(var(--deep-rgb) / .7); backdrop-filter: blur(8px); border: 1px solid var(--panel-edge); border-radius: 99px; padding: 5px 12px; color: var(--text); cursor: pointer; font: 11.5px var(--mono); }
-.gx-chips button:hover { border-color: var(--line-2); }
-.gx-chips .gx-live { border-color: rgb(var(--accent-rgb) / .6); color: var(--accent); }
-.gx-chips .gx-live::before { content: '● '; animation: blink 1.2s infinite; }
 
 .gx-chart-btn { position: absolute; left: 16px; top: 60px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; background: rgb(var(--deep-rgb) / .7); backdrop-filter: blur(8px);
   border: 1px solid var(--panel-edge); border-radius: 99px; color: var(--text); cursor: pointer; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
@@ -256,8 +249,7 @@ body.cosmos .side-min-btn { display: none; }
   body.cosmos.cosmos-chat .side { position: fixed; left: 0; right: 0; bottom: 0; height: 62vh; z-index: 140; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; background: var(--deep); }
   .gx-dock { bottom: 16px; gap: 10px; }
   .gx-form { padding-left: 14px; }
-  .gx-form .gx-auto .t { display: none; }
-  .gx-chart { max-height: calc(100% - 330px); }
+    .gx-chart { max-height: calc(100% - 330px); }
   .comm { left: 8px; right: 8px; bottom: 8px; }
   .comm .comm-btn .t { display: none; }
   .comm-thought { left: 12px; font-size: 13px; }

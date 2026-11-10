@@ -41,11 +41,12 @@
     d.className = `ui-dialog${opt.size === 'lg' ? ' ui-dialog-lg' : ''}${opt.className ? ` ${opt.className}` : ''}`
     d.setAttribute('role', 'dialog')
     d.setAttribute('aria-modal', 'true')
-    d.innerHTML = `<header class="ui-dialog-header"></header><div class="ui-dialog-body"></div><footer class="ui-dialog-footer" hidden></footer><button class="ui-btn ui-btn-ghost ui-btn-icon ui-dialog-close" aria-label="Close" title="Close">${X}</button>`
+    d.innerHTML = `<header class="ui-dialog-header"></header><div class="ui-dialog-body"></div><footer class="ui-dialog-footer" hidden></footer><button class="ui-btn ui-btn-ghost ui-btn-icon ui-dialog-close" aria-label="Close">${X}</button>`
     ov.append(d)
     const api = { el: d, overlay: ov, header: d.querySelector('.ui-dialog-header'), body: d.querySelector('.ui-dialog-body'), footer: d.querySelector('.ui-dialog-footer'), closed: false }
     api.setHead = (kicker, title, desc) => {
-      api.header.innerHTML = `${kicker ? `<span class="ui-dialog-kicker">${kicker}</span>` : ''}${title ? `<h2 class="ui-dialog-title">${title}</h2>` : ''}${desc ? `<p class="ui-dialog-desc">${desc}</p>` : ''}`
+      // no eyebrows (docs/ux/RULES.md, minimal text): a kicker shows only when there is no title
+      api.header.innerHTML = `${kicker && !title ? `<span class="ui-dialog-kicker">${kicker}</span>` : ''}${title ? `<h2 class="ui-dialog-title">${title}</h2>` : ''}${desc ? `<p class="ui-dialog-desc">${desc}</p>` : ''}`
       if (title) d.setAttribute('aria-label', api.header.querySelector('.ui-dialog-title').textContent)
     }
     api.setHead(opt.kicker, opt.title, opt.desc)
@@ -108,37 +109,7 @@
     off = layer(o)
     return off
   }
-  // Tooltip (rules 9 and 12): the name of an icon-only control, 1 to 3 words, after 500 ms. The name is
-  // the control's own title; while the kit shows it, the browser's own tooltip is held back. A control
-  // that shows words of its own never has one (scripts/ui-check.mjs fails on it).
-  let tip = null
-  const untip = () => {
-    if (!tip) return
-    clearTimeout(tip.t); tip.el?.remove()
-    if (!tip.for.hasAttribute('title')) tip.for.setAttribute('title', tip.name)
-    tip = null
-  }
-  addEventListener('pointerover', e => {
-    const c = e.target.closest?.('button[title], a[title], summary[title], [role="button"][title]')
-    if (c && c === tip?.for) return
-    untip()
-    const name = c?.getAttribute('title')
-    if (!name || e.pointerType === 'touch' || (c.innerText || '').trim()) return
-    c.removeAttribute('title')
-    tip = { for: c, name }
-    tip.t = setTimeout(() => {
-      if (!tip || !c.isConnected) return untip()
-      const el = tip.el = document.createElement('div')
-      el.className = 'ui-tooltip'; el.setAttribute('role', 'tooltip'); el.textContent = name
-      document.body.append(el)
-      const r = c.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight
-      const y = r.bottom + 6 + h > innerHeight - 4 ? r.top - h - 6 : r.bottom + 6
-      el.style.left = `${Math.round(Math.max(4, Math.min(innerWidth - w - 4, r.left + r.width / 2 - w / 2)))}px`
-      el.style.top = `${Math.round(y)}px`
-    }, 500)
-  }, true)
-  addEventListener('pointerout', e => { if (tip && !tip.for.contains(e.relatedTarget)) untip() }, true)
-  for (const ev of ['pointerdown', 'keydown', 'scroll']) addEventListener(ev, untip, true)
+  // No tooltips (docs/ux/RULES.md): icon-only controls carry an aria-label, never a title or a hover hint.
 
   // a slider shows how full it is: the kit's track reads --v
   const slider = el => { const min = Number(el.min || 0), max = Number(el.max || 100); el.style.setProperty('--v', `${((Number(el.value) - min) / (max - min || 1)) * 100}%`) }
