@@ -1513,6 +1513,12 @@ const server = createServer((req, res) => {
           if (!creds) throw new Error(`connect Vercel first: 🌐 Publish on the canvas → Connect, or set ${PROVIDERS.vercel.env}`)
           return a.deploy(id, { creds, dataDir, publishVercel })
         }
+        // Try again on a game that never built: build it again from its saved spec
+        const spec = (readEvents(id) || []).findLast(e => e.type === 'game:spec')?.spec
+        if (spec && !input.prompt && !a.state(id).hasApp) {
+          const g = await gameMod()
+          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) } }
+        }
         return a.start(id, input)
       }).then(s => reply(200, s)).catch(fail)
     })

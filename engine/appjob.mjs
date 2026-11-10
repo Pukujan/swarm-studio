@@ -61,12 +61,15 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (j) return view(j)
     // a finished app from before a restart: rebuild the state from the log
     const events = readEvents(id) || []
-    const last = events.findLast(e => e.type?.startsWith('app:') && e.type !== 'app:step')
+    // the last build's outcome: app:ready and app:deployed only say a server started or a deploy went out
+    const last = events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))
     const steps = events.filter(e => e.type === 'app:step').slice(-200).map(e => e.step)
     if (!last) return { state: 'idle', engineReady: engineReady() }
-    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:start' ? 'stopped' : 'done', kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: existsSync(join(dirOf(id), 'package.json')), engineReady: engineReady() }
+    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:start' ? 'stopped' : 'done', kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
   }
-  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: true, engineReady: engineReady() })
+  // an app counts once a build finished; a failed first build leaves only the empty starter
+  const built = (id, events = readEvents(id) || []) => events.some(e => e.type === 'app:done') && existsSync(join(dirOf(id), 'package.json'))
+  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady() })
 
   // Start the first build, or one more turn on the same app.
   async function start(id, input = {}) {
@@ -77,7 +80,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if ([...jobs.values()].some(x => x.state === 'working')) throw new Error('another app is building; wait for it or stop it')
     const dir = dirOf(id)
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
-    const fresh = !existsSync(join(dir, 'package.json')) || input.fresh
+    // a first build that failed left only the starter: build again from the start
+    const fresh = !built(id, events) || input.fresh
     const ask = String(input.ask || '').trim().slice(0, 16000)
     let prompt
     if (fresh) {
@@ -100,7 +104,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (!ask) throw new Error('say what to change')
       prompt = `${kind === 'game' ? 'This is a browser game made from a spec in GAME_SPEC.md. Keep what works.' : KEEP}\n\nDo this: ${ask}\n\n${kind === 'game' ? '' : `${BACKEND}\n\n`}Finish with a working build: the typecheck and build must pass.`
     }
-    j ||= { kind, steps: [], asks: [], proc: null, url: null, port: null }
+    j ||= { id, kind, steps: [], asks: [], proc: null, url: null, port: null }
     Object.assign(j, { kind, state: 'working', stage: 'starting', result: null, message: null, controller: new AbortController(), t: Date.now() })
     j.asks.push(ask || (kind === 'game' ? 'build the game' : 'make it a working app'))
     jobs.set(id, j)
@@ -192,7 +196,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const j = jobs.get(id)
     if (j?.url && j.proc?.exitCode === null) return view(j)
     if (!existsSync(join(dirOf(id), 'package.json'))) throw new Error('no app yet')
-    const k = j || { kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
+    const k = j || { id, kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
     jobs.set(id, k)
     await serve(id, k)
     k.state = k.state === 'working' ? 'working' : 'done'
