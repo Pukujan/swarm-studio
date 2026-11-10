@@ -77,7 +77,7 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
     icon. In a menu, every item has an icon or none do. Menu headings look like headings and don't react to
     hover.
 16. **Targets are at least 40 × 40 px** on desktop and 44 × 44 px on touch.
-17. **One primary action per view**, always in the same place. Text on yellow is dark.
+17. **One primary action per view**, always in the same place. Text on the accent fill (lime in the studio) is `#0b0b0c`.
 18. **Every panel closes three ways:** ×, Esc, and a click outside it. Only one sheet or popover is open at a
     time.
 19. **Progress is a pill or ring that expands.** A step list is never shown by default.

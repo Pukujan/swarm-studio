@@ -3,9 +3,10 @@
    (☰ → Classic view) and on wall tiles: everything here hangs off body.cosmos.
    Colours only from tokens: the WebGL scenes read these same custom properties. */
 :root {
-  /* the Ultraviolet violet and pink for the nebula clouds and the galaxy's outer arms */
-  --nebula: #8b3dff;
-  --nebula-2: #ff4fd8;
+  /* Graphite: the nebula clouds and the galaxy's outer arms are monochrome; lime only touches the core */
+  --nebula: #3a3a3f;
+  --nebula-2: #8e8e93;
+  --star-touch: #e2f0c4;                /* the galaxy core: white with a breath of lime */
   --cosmos-ease: cubic-bezier(.65, 0, .35, 1);
 }
 
@@ -112,7 +113,7 @@ body.cosmos .side-min-btn { display: none; }
 /* ---------- Commander Hermia on the home view (galaxy.js live()): beside the prompt on a wide
    screen, small above the title on a narrow one. The art is web/brand/hermia-live.svg. */
 .gx-hermia { position: absolute; right: calc(100% + 4px); bottom: 2px; width: 150px; pointer-events: none;
-  --h-main: var(--frame); --h-accent: var(--pink); --h-glow: var(--pink); --h-hair: #2a1050; }
+  --h-main: #2a2a2e; --h-trim: #f4f4f5; --h-iris: #8e8e93; --h-accent: var(--accent); --h-glow: var(--accent); --h-hair: #3a3a3f; }
 @media (max-width: 960px) { .gx-hermia { position: static; width: 84px; margin-bottom: -6px; } }
 @media (max-height: 560px) and (max-width: 960px) { .gx-hermia { display: none; } }
 .hermia-box { --look-x: 0px; --look-y: 0px; line-height: 0; }

@@ -18,7 +18,7 @@ We keep to three beliefs:
 | Name | What it is | How to write it |
 |---|---|---|
 | **Swarm** | the whole thing: studio, feed and crew | "Swarm" in sentences. Never "SWARM" in running text, and never "the Swarm". |
-| **Swarm Studio** | the Hermes plugin where builds are made | the wordmark is "SWARM" in Big Shoulders, then "*Studio*" in EB Garamond italic, yellow |
+| **Swarm Studio** | the Hermes plugin where builds are made | the wordmark is "SWARM" in Big Shoulders, then "*Studio*" in EB Garamond italic, lime |
 | **Swarm Feed** | the community site: swipe, try, remix | the wordmark is "SWARM *Feed*", the same lock-up |
 | **Commander Hermia** | the planner and the face of Swarm | "Hermia" after the first mention |
 | **the crew** | the agents | lower case. One of them is "a courier", or by name (Pip, Mochi, Lumi…) |
@@ -43,9 +43,9 @@ Use the world as flavour, never as a puzzle. A first-time visitor must always un
 ### Commander Hermia
 
 - **Role:** the planner. She draws the plan, gives the orders and reviews the work. Also the logo, the onboarding host and the narrator of Auto.
-- **Look:** a chibi messenger with a round face, big eyes, and an off-white winged helmet with a yellow band and Hermes-blue wing tips. She wears a short blue cape with a yellow trim and carries a caduceus baton that glows yellow when she gives orders. The art is engraved line work with a few pixel touches.
+- **Look:** a chibi messenger with a round face, big eyes, and an off-white winged helmet with a lime band and graphite wing tips. She wears a short graphite cape (`#2a2a2e`) with a white trim and carries a caduceus baton that glows lime when she gives orders. The art is engraved line work with a few pixel touches.
 - **Files:**
-  - [`web/brand/hermia-mark.svg`](../../web/brand/hermia-mark.svg): her face in a Hermes-blue circle, in 3 colours. It is the logo, favicon, app icon and avatar.
+  - [`web/brand/hermia-mark.svg`](../../web/brand/hermia-mark.svg): her face in a graphite circle, in 3 colours. It is the logo, favicon, app icon and avatar.
   - [`web/brand/hermia.svg`](../../web/brand/hermia.svg): her full figure with the baton.
 - **Voice:** short, warm commands. "Course set: 4 pages, 30 sections. Crew, launch!" "Good work, crew." She never explains herself at length. Her reasoning lives one layer down, in the thinking log.
 - **Rules for using her:**
@@ -64,8 +64,8 @@ Use the world as flavour, never as a puzzle. A first-time visitor must always un
 
 ## The logo
 
-- **The mark:** Hermia's helmeted face in a Hermes-blue circle, in three colours only: blue `#0000F2`, off-white `#F2F2F2` and yellow `#F2F200`. It still reads at 16 px.
-- **The lock-up:** the mark, then "SWARM" in Big Shoulders Display 800, then "*Studio*" or "*Feed*" in EB Garamond italic, yellow.
+- **The mark:** Hermia's helmeted face in a graphite circle, in three colours only: graphite `#2a2a2e`, off-white `#F2F2F2` and lime `#c6ff3d`. It still reads at 16 px.
+- **The lock-up:** the mark, then "SWARM" in Big Shoulders Display 800, then "*Studio*" or "*Feed*" in EB Garamond italic, in that room's accent (lime for Studio, coral for Feed).
 - **Clear space:** a quarter of the mark's diameter on every side.
 - **Don't:**
   - recolour it, outline it or add a shadow;
@@ -75,40 +75,36 @@ Use the world as flavour, never as a puzzle. A first-time visitor must always un
 
 ## Colour
 
-From spec 08: the Hermes-space palette.
+### Graphite, a colour per room (from 2026-11-09)
+
+History: Hermes-blue glow (spec 08) → Ultraviolet (trial, 2026-11-09) → Graphite (owner's choice, 2026-11-09).
+
+Black and graphite carry the frame; the builds bring the colour. Each part of Swarm owns one accent, used for its tab, its main button and its one highlighted word.
 
 | Token | Hex | Job |
 |---|---|---|
-| void | `#05051a` | the background, about 80% of every surface |
-| deep | `#0a0a2e` | panels and cards |
-| Hermes blue | `#0000F2` | the frame, the primary button, selection, full-bleed statement slides |
-| off-white | `#F2F2F2` | text |
-| muted | `#8b8bb8` | secondary text |
-| **yellow** | `#F2F200` | **the one accent**: one "do this" or "live" thing per screen, and the serif accent word |
+| bg | `#0b0b0c` | the background, flat: no glow, no grid, stars only |
+| surface | `#161618` | panels and cards |
+| surface-2 | `#1f1f22` | raised surfaces, secondary pills |
+| line | `#2a2a2e` | card borders and rules |
+| text | `#f4f4f5` | text |
+| muted | `#8e8e93` | secondary text (5.5:1 on surface) |
 | ok, hot, info | `#00F279`, `#F20000`, `#00F2F2` | states only |
 | crew colours | the 10 F2 colours | only on couriers, their cursors and their name pills |
 
+| Room | Accent |
+|---|---|
+| Feed | coral `#ff3b5c` |
+| **Studio** | **lime `#c6ff3d`** (this plugin's accent) |
+| Jams | orange `#ff8a00` |
+| Board | cyan `#4dd8ff` |
+
 **Rules:**
-- **One yellow per screen.** If two things are yellow, one of them is wrong.
-- **Blue is never text on void.** It's too dark: use it for fills, frames and glows. Text on blue is off-white.
-- Body text keeps a 4.5:1 contrast or better. Yellow on void, off-white on void and off-white on blue all pass.
-
-### Ultraviolet (home page, from 2026-11-09)
-
-The owner moved the marketing home page (swarm.design-bakery.com/studio) off the blue glow, which read like every other AI site. Ultraviolet is on trial there first. If it holds, the Feed, the Studio and the deck follow.
-
-| Token | Hex | Job |
-|---|---|---|
-| void | `#160a2b` | the background, flat: no glow, no grid, stars only |
-| deep | `#22123e` | panels and cards |
-| edge | `#3d2766` | card borders and rules |
-| violet | `#8b3dff` | frames, the secondary button, Hermia's cape and eyes |
-| text | `#f6eeff` | text |
-| muted | `#b9a6d9` | secondary text |
-| **pink** | `#ff4fd8` | **the one accent**: the serif accent word, Hermia's helmet band and baton glow |
-| **mint** | `#7cffc4` | **the one action**: the main button, with void text |
-
-The same rules apply: one pink word and one mint action per screen. Violet is never body text on void.
+- **One accent use per screen**, in the room's own colour: the main action, the active tab and the serif italic word. Everything else is graphite.
+- **Text on an accent fill is `#0b0b0c`.** Lime on bg is 16.6:1, black on lime 16.6:1.
+- **No glow, no grid.** The galaxy home is monochrome stars with a breath of lime at the core.
+- Body text keeps 4.5:1 or better (`node scripts/contrast.mjs` checks the studio's pairs).
+- Crew couriers keep their own colours, on cursors and name pills too.
 
 ## Type
 
@@ -119,9 +115,9 @@ All free Google fonts under the OFL; they stand in for Nous's licensed ones.
 | Display (huge, compressed, uppercase) | **Big Shoulders Display** 800 |
 | Labels, nav, tabs | **Barlow Condensed** 600, uppercase, letter spacing 0.06em |
 | Body and data | **JetBrains Mono** 400 |
-| The accent word | **EB Garamond** italic, in yellow |
+| The accent word | **EB Garamond** italic, in the room's accent (lime in the studio) |
 
-**The serif rule:** one accent word per headline, in EB Garamond italic yellow. For example: "One prompt. The *whole* launch." "Where to *next*?" "SWARM *Studio*". Never two accent words in one line.
+**The serif rule:** one accent word per headline, in EB Garamond italic, in the room's accent. For example: "One prompt. The *whole* launch." "Where to *next*?" "SWARM *Studio*". Never two accent words in one line.
 
 ## Voice
 
@@ -148,7 +144,7 @@ The app's own interface follows [docs/ux/RULES.md](../ux/RULES.md): names at res
 ## Imagery and motion
 
 - **Real output only.** Show real builds, real screenshots and real footage, never mock-ups or stock photos. A frame we drew is labelled as a design.
-- **The look:** deep space, a faint grid, one blue glow, and a 1 px Hermes-blue frame around the page.
+- **The look:** flat black space with stars, no grid and no glow, a 1 px graphite frame around the page; the builds bring the colour.
 - **Motion:**
   - the 400 ms warp between views;
   - slow galaxy turns;
