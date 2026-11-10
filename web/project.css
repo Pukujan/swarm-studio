@@ -144,3 +144,8 @@ body.pj-live .pj-crew span { background: var(--text); color: var(--void); }
 }
 @media (max-width: 1100px) { .pj-ask { width: 220px; } }
 @media (prefers-reduced-motion: reduce) { .pj-world.ease { transition: none; } }
+/* canvas.css styles ghost cursors as `.ghost svg`; keep button icons in the button */
+.btn.ghost > svg { position: static; width: 15px; height: 15px; overflow: hidden; }
+/* the Auto pill steps aside for the inspector; on a phone the inspector is a sheet, so it waits */
+body.cosmos-project:has(.project.insp-on) .auto-panel { right: 288px; }
+@media (max-width: 760px) { body.cosmos-project:has(.project.insp-on) .auto-panel { display: none; } }
