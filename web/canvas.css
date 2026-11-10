@@ -85,14 +85,13 @@ button { font: inherit; color: inherit; }
 .toggle .count { font: 600 11px var(--mono); color: var(--accent); margin-left: 4px; }
 .clock { font: 600 15px var(--mono); min-width: 64px; text-align: right; color: var(--accent); }
 
-/* ---------- left side: chat, pages, files */
+/* ---------- left side: chat and log */
 .side { position: relative; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); }
 .tabs button { background: none; border: 0; padding: 7px 10px 9px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600; }
 .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
 .tab { display: none; flex: 1; min-height: 0; flex-direction: column; }
 .tab.on { display: flex; }
-.tab.pages, .tab.files { overflow: auto; padding: 12px; }
 
 .feed { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .feed .item { font-size: 12.5px; animation: in .3s ease-out; }
@@ -137,26 +136,6 @@ button { font: inherit; color: inherit; }
 .tree .ly .who { margin-left: auto; font-size: 11px; }
 .empty { color: var(--muted); font-size: 12px; padding: 8px; }
 
-.new-file { width: 100%; background: var(--panel-2); border: 1px dashed var(--line-2); border-radius: 8px; padding: 8px; cursor: pointer; color: var(--text); margin-bottom: 10px; }
-.new-file:hover { border-color: var(--accent); }
-.file { padding: 9px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; }
-.file:hover { background: var(--panel-2); }
-.file.on { background: var(--panel-2); border-color: var(--line-2); }
-.file .ttl { font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.file .ttl > span:not(.fswatch) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.file .fmore { visibility: hidden; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 4px; border-radius: 4px; }
-.file:hover .fmore, .file.on .fmore { visibility: visible; }
-.file .fmore:hover { background: var(--line); color: inherit; }
-.file .fbadges { margin-left: 8px; }
-.file-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
-.file-tools .fq { flex: 1 1 100%; min-width: 0; }
-.file-tools select { flex: 1; }
-.file-tools input, .file-tools select { background: var(--panel-2); color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 12px; }
-.fgroup > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 10px 4px 6px; user-select: none; }
-.fgroup > summary::before { content: '▸'; margin-right: 6px; }
-.fgroup[open] > summary::before { content: '▾'; }
-.fgroup > summary span { flex: 1; }
-.fgroup > summary em { font-style: normal; }
 .fmenu { position: fixed; z-index: 300; min-width: 200px; background: var(--panel, var(--deep)); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px rgb(var(--shade-rgb) / .5); }
 .fmenu button { display: block; width: 100%; text-align: left; background: none; border: 0; color: inherit; padding: 7px 10px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 13px; }
 .fmenu button:hover { background: var(--panel-2); }
@@ -164,8 +143,6 @@ button { font: inherit; color: inherit; }
 .fmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 .video-pop .vacts { display: flex; gap: 8px; align-items: center; }
 .video-pop .vdl, .video-pop .vreveal { background: none; border: 1px solid var(--line); color: inherit; border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 13px; text-decoration: none; }
-.file .meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
-.file .live { color: var(--ok); font-weight: 600; }
 
 /* ---------- canvas */
 .viewport { position: relative; overflow: hidden; cursor: grab; background-color: var(--void); min-width: 0;
@@ -520,8 +497,7 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .video-big .vbclose { position: absolute; top: 14px; right: 16px; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgb(var(--glass-rgb) / .14); color: var(--text); font-size: 24px; cursor: pointer; }
 
 /* file metadata: swatches, and the details card */
-.file .fswatch { display: inline-flex; flex: none; gap: 0; }
-.file .fswatch i, .finfo .fsw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: -2px; border: 1px solid rgb(var(--shade-rgb) / .4); vertical-align: middle; }
+.finfo .fsw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: -2px; border: 1px solid rgb(var(--shade-rgb) / .4); vertical-align: middle; }
 .finfo .fsw { width: 12px; height: 12px; margin-right: 2px; }
 .finfo-wrap { position: fixed; inset: 0; z-index: 250; background: rgb(var(--shade-rgb) / .58); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .finfo { position: relative; width: min(560px, 100%); max-height: 90vh; overflow: auto; background: var(--panel, var(--deep)); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -584,19 +560,6 @@ body.side-min .dock { left: auto; }
 .fmenu .fnew input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; }
 .fmenu .fnew button { width: auto; background: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 5px 10px; }
 
-/* drag builds into folders, and into your own order */
-.file.dragging { opacity: .4; }
-.file.drop-before { box-shadow: 0 -2px 0 var(--frame-hi); }
-.file.drop-after { box-shadow: 0 2px 0 var(--frame-hi); }
-.fgroup.drop-in > summary { color: var(--info); background: rgb(var(--frame-rgb) / .2); border-radius: 6px; }
-.fgroup > summary.drop-before { box-shadow: 0 -2px 0 var(--frame-hi); }
-.fgroup > summary .fmore { visibility: hidden; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 6px; }
-.fgroup > summary:hover .fmore { visibility: visible; }
-.fempty { color: var(--muted); font-size: 12px; padding: 6px 10px 10px; border: 1px dashed var(--line); border-radius: 8px; margin: 0 4px 6px; }
-.file-tools .fnewf { background: none; border: 1px solid var(--line); color: inherit; border-radius: 6px; cursor: pointer; padding: 0 6px; }
-.fname-pop { position: fixed; z-index: 320; display: flex; gap: 6px; background: var(--panel, var(--deep)); border: 1px solid var(--line); border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px rgb(var(--shade-rgb) / .5); }
-.fname-pop input { background: var(--panel-2); border: 1px solid var(--line); color: inherit; border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; width: 170px; }
-.fname-pop button { background: var(--frame-hi); color: var(--text); border: 0; border-radius: 6px; padding: 0 10px; cursor: pointer; }
 
 /* traces */
 .dtrace { display: block; width: calc(100% - 24px); margin: 6px 12px 4px; background: var(--panel-2); border: 1px solid var(--line); color: inherit; border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12px; text-align: left; }
@@ -797,8 +760,6 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .pub-opt .pub-why:empty { display: none; }
 
 /* files: folder, then day */
-.fgroup summary .fchanged { text-transform: none; letter-spacing: 0; margin-right: 6px; font-size: 10.5px; color: var(--muted); font-weight: 400; }
-.fday { margin: 8px 4px 3px; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 
 /* Design panel: pictures */
 .dpics .dpic { display: grid; grid-template-columns: 64px 1fr; gap: 6px 8px; margin-bottom: 8px; }
@@ -915,7 +876,7 @@ em { font-style: italic; }
 .views .vbadge.failed { background: var(--hot); }
 
 /* menus: glass, label type, line icons */
-.more-menu, .fmenu, .tour-menu, .dpick, .combo-list, .slash-pop, .fname-pop {
+.more-menu, .fmenu, .tour-menu, .dpick, .combo-list, .slash-pop {
   background: rgb(var(--deep-rgb) / .97); backdrop-filter: blur(16px); border: 1px solid var(--panel-edge); border-radius: 12px; box-shadow: 0 18px 50px rgb(var(--shade-rgb) / .55); }
 .pub-menu { min-width: 340px; }
 .more-menu { padding: 6px; min-width: 200px; animation: pop .2s var(--ease); }
@@ -973,12 +934,6 @@ em { font-style: italic; }
 .composer button[type=submit]:active { transform: scale(.96); }
 /* the quiet footer line */
 .built-for { padding: 0 16px 10px; font: 500 11px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.new-file { display: flex; align-items: center; justify-content: center; gap: 7px; font: 600 13px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; padding: 10px; border-radius: 999px; background: rgb(var(--glass-rgb) / .05); border-color: rgb(var(--glass-rgb) / .3); }
-.file { border-radius: 10px; }
-.file:hover, .file.on { background: rgb(var(--glass-rgb) / .06); }
-.file.on { border-color: rgb(var(--glass-rgb) / .2); }
-.file .live { color: var(--ok); }
-.fgroup > summary, .fday { font: 600 12px/1 var(--label); letter-spacing: .1em; }
 .tree .pg-title { font-family: var(--label); font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }
 .tree .ly .dot { background: var(--line-2); }
 
@@ -1543,7 +1498,7 @@ body.crew-quiet .cursor .bubble, body.crew-quiet .cw-radio, body.crew-quiet .cw-
 
 /* ---------- the hosted studio (docs/specs/13-hosted-studio.md): what needs the plugin is hidden,
    and a guest bar says who is building and how many builds are left today. Theme tokens only. */
-body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn, #game-btn, .pubwrap, #review-btn, #video-btn, #export-btn, #models-btn, #build-model, .gx-auto, #new-file) { display: none !important; }
+body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn, #game-btn, .pubwrap, #review-btn, #video-btn, #export-btn, #models-btn, #build-model, .gx-auto) { display: none !important; }
 .guest-bar { display: flex; align-items: center; gap: 8px; margin-right: 8px; font: 600 12.5px/1 var(--label, sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .guest-bar .g-name { color: var(--text); max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
 .g-form .g-err { color: var(--ui-destructive, #ff6b6b); margin: 4px 0 0; font-size: 13px; }

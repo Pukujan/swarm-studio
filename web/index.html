@@ -61,8 +61,6 @@
     <nav class="tabs">
       <button data-tab="chat" class="on"><i data-i="message-circle"></i>Chat</button>
       <button data-tab="log"><i data-i="scroll-text"></i>Log</button>
-      <button data-tab="pages"><i data-i="layers"></i>Layers</button>
-      <button data-tab="files"><i data-i="folder"></i>Files</button>
       <button class="side-min-btn" id="side-min" aria-label="Shrink the side panel"><i data-i="panel-left-close"></i></button>
     </nav>
 
@@ -84,14 +82,8 @@
       <div id="log" class="feed"></div>
     </section>
 
-    <section class="tab pages" data-tab="pages">
-      <div id="tree" class="tree"></div>
-    </section>
-
-    <section class="tab files" data-tab="files">
-      <button id="new-file" class="new-file"><i data-i="plus"></i>New file</button>
-      <div id="files" class="file-list"></div>
-    </section>
+    <!-- the page and section tree lives here unseen; the project canvas shows it in its Layers panel -->
+    <div class="tree-home" hidden><div id="tree" class="tree"></div></div>
   </aside>
 
   <main id="viewport" class="viewport">

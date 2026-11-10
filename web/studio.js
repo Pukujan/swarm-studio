@@ -86,7 +86,7 @@ C.open = (run, pid) => {
   C.go('project')
 }
 // anything that answers Esc itself (a panel, a menu, the player, a selection) goes first
-const OPEN = '.game-pop, .models-pop, .export-pop, .show-sum, .fmenu, .fname-pop, .ui-overlay, .ui-popover, .combo-list, .player:not([hidden]), .slash-pop:not([hidden]), .hm-menu, #more-menu:not([hidden]), #pub-menu:not([hidden]), .dpick, .finfo-wrap, .video-big, .cbox.open'
+const OPEN = '.game-pop, .models-pop, .export-pop, .show-sum, .fmenu, .ui-overlay, .ui-popover, .combo-list, .player:not([hidden]), .slash-pop:not([hidden]), .hm-menu, #more-menu:not([hidden]), #pub-menu:not([hidden]), .dpick, .finfo-wrap, .video-big, .cbox.open'
 function escUp(e) {
   if (e.key !== 'Escape' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.fullscreenElement) return
