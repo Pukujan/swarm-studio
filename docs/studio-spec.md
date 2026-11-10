@@ -182,7 +182,7 @@ connector is imported only when its card opens or it is used.
 | **3D packs** | CC0 models | none | now |
 | **Stripe** | checkout in the app; test mode first; a live $2 ticket as proof (done by the user) | secret + publishable key, pasted by the user; set as Vercel env vars, never in code | next |
 | **Social share** | post the promo and links: X, LinkedIn, Facebook, Reddit, Threads, Bluesky intent links that open the user's logged-in browser; the video file next to it to drag in | none | next |
-| **Marketing pack** | the promo as 9:16, 1:1, 16:9, captions file, per-network copy | none | next |
+| **Marketing pack** | the promo as 9:16 and 16:9 (both made with every film), 1:1, captions file, per-network copy | none | next |
 | **Hermes gateways** | post to Discord / Telegram / Slack through Hermes's own gateways, with preview and confirm | the gateway set up in Hermes | later |
 | **Supabase** | database and login for the app (dyad's Supabase support) | personal access token + project | later |
 | **Poly Pizza** | search low-poly models by word | free API key | later |

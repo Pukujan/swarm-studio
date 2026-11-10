@@ -52,6 +52,7 @@ export function runFacts(events, id) {
     minutes: auto?.ms ? Math.max(1, Math.round(auto.ms / 60000)) : start.t && ev.at(-1)?.t ? Math.max(1, Math.round((ev.at(-1).t - start.t) / 60000)) : null,
     games, shop: steps.shop?.state === 'done', data: steps.data?.state === 'done', pack: auto?.pack?.name || null,
     video: video ? `/video/${id}/promo.mp4` : null,
+    videoTall: video?.tall ? `/video/${id}/promo-tall.mp4` : null,
     heroes: images.slice(0, 3).map(e => e.src).filter(s => typeof s === 'string' && s.startsWith('/img/'))
   }
 }
@@ -111,6 +112,7 @@ export function writePosts(f) {
 // The media to attach by hand: the promo clip, 3 hero images, the live link.
 const mediaOf = f => [
   ...(f.video ? [{ kind: 'video', label: 'Promo clip', src: f.video }] : []),
+  ...(f.videoTall ? [{ kind: 'video', label: 'Phone clip', src: f.videoTall, shape: 'tall' }] : []),
   ...f.heroes.map((src, i) => ({ kind: 'image', label: `Hero image ${i + 1}`, src })),
   ...(f.url ? [{ kind: 'link', label: 'Live link', src: f.url }] : [])
 ]

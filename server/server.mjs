@@ -34,7 +34,7 @@ import { runBoard as boardOf } from './board.mjs'
 import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
-import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS, fxFor } from '../engine/video.mjs'
+import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -414,6 +414,8 @@ function runCard(id) {
     traces: existsSync(join(runsDir, id, 'trace.jsonl')),
     video: existsSync(join(runsDir, id, 'video', 'promo.mp4')),
     videoFile: shelveVideo(id),
+    // the 9:16 phone cut beside the wide one, when the run has it
+    videoTall: existsSync(join(runsDir, id, 'video', SHAPES.tall.file)) ? `/video/${id}/${SHAPES.tall.file}` : null,
     live: current?.id === id && !current.done,
     progress: current?.id === id && !current.done ? Math.min(1, (current.events.filter(e => e.type === 'layer:done').length) / Math.max(1, current.events.filter(e => e.type === 'layer:plan').length || 12)) : null,
     // the cover: its hero picture, else a snapshot of its first page (saved by the canvas), else a film frame
@@ -472,11 +474,11 @@ function versions(dir, stem, ext) {
 }
 // The build's video in the visible folder: the newest version, or a new one when
 // the build has a cut that is newer than every copy (made now if none exists yet).
-function shelveVideo(id) {
-  const src = join(runsDir, id, 'video', 'promo.mp4')
+function shelveVideo(id, shape = 'wide') {
+  const src = join(runsDir, id, 'video', (SHAPES[shape] || SHAPES.wide).file)
   if (!existsSync(src)) return null
   try {
-    const { dir, claim } = shelf(id, 'video'), v = versions(dir, `${fileSlug(id)}-promo`, '.mp4')
+    const { dir, claim } = shelf(id, 'video'), v = versions(dir, `${fileSlug(id)}-promo${shape === 'tall' ? '-tall' : ''}`, '.mp4')
     if (v.last && statSync(v.last).mtimeMs >= statSync(src).mtimeMs) return v.last
     claim()
     copyFileSync(src, v.next)
@@ -708,11 +710,28 @@ async function videoNow(id, input = {}) {
     }
     const lengths = scenes.map((s, i) => sceneLength(s, voices[i]?.seconds, plan.pace))
     const comp = composition(scenes, c, lengths, transition)
+    // the tall cut for phones: the same storyboard, look and timing, laid out again for a 9:16 frame
+    const tallComp = composition(scenes, c, lengths, transition, comp.look, { shape: 'tall' })
+    const tallDir = join(dir, 'tall')
+    mkdirSync(tallDir, { recursive: true })
+    stagePictures(c, tallDir)
     writeFileSync(join(dir, 'index.html'), comp.html)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ plan: style, look: comp.look, cast: scenes.cast, music: scenes.music, fx: scenes.fx, scenes }, null, 2))
+    writeFileSync(join(tallDir, 'index.html'), tallComp.html)
+    const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ plan: style, look: comp.look, cast: scenes.cast, music: scenes.music, fx: scenes.fx, files, scenes }, null, 2))
     progress(2, 'rendering')
-    const silent = join(dir, 'promo-silent.mp4'), out = join(dir, 'promo.mp4')
-    await render({ tools: t, dir, out: silent, quality: ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft', onProgress: (pct, code) => progress(Math.max(2, Math.min(96, pct)), code === 'assemble' ? 'assembling' : 'rendering') })
+    const quality = ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft'
+    const silent = join(dir, 'promo-silent.mp4'), out = join(dir, SHAPES.wide.file)
+    const tallSilent = join(dir, 'promo-tall-silent.mp4'), tallOut = join(dir, SHAPES.tall.file)
+    rmSync(tallOut, { force: true }) // an older tall cut never sits beside a newer wide one
+    await render({ tools: t, dir, out: silent, quality, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'assemble' ? 'assembling' : 'rendering') })
+    let tall = true
+    try {
+      await render({ tools: t, dir: tallDir, out: tallSilent, quality, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
+    } catch (err) {
+      tall = false
+      send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
+    }
     // music to the theme's mood with a whoosh into every cut, the voice on top
     progress(97, 'mixing the sound')
     const starts = lengths.map((_, i) => lengths.slice(0, i).reduce((a, b) => a + b, 0))
@@ -725,9 +744,22 @@ async function videoNow(id, input = {}) {
       send('video:note', { message: `sound failed, the video is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
     if (!sound) copyFileSync(silent, out)
+    // the phone cut takes the wide cut's finished sound as it is (same scenes, same timing)
+    if (tall) {
+      try {
+        if (sound) await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-i', tallSilent, '-i', out, '-map', '0:v', '-map', '1:a?', '-c', 'copy', '-shortest', '-movflags', '+faststart', tallOut], { env: { ...process.env, PATH: t.path } }, err => (err ? fail(err) : ok())))
+        else copyFileSync(tallSilent, tallOut)
+      } catch (err) {
+        copyFileSync(tallSilent, tallOut)
+        send('video:note', { message: `the phone cut is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
+      }
+    }
     const copy = shelveVideo(id)
-    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${Date.now()}`, file: copy || out, seconds: comp.seconds })
-    send('video:done', { src: job.src, file: copy || out, saved: out, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound })
+    shelveVideo(id, 'tall')
+    const v = Date.now()
+    const tallSrc = tall ? `/video/${id}/${SHAPES.tall.file}?v=${v}` : null
+    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
+    send('video:done', { src: job.src, tall: tallSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound })
   })().catch(err => {
     Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })
@@ -1288,7 +1320,8 @@ const server = createServer((req, res) => {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method !== 'POST') {
       const file = join(runsDir, id, 'video', 'promo.mp4')
-      return reply(200, videos.get(id) || (existsSync(file) ? { state: 'done', pct: 100, file: shelveVideo(id) || file, src: `/video/${id}/promo.mp4?v=${statSync(file).mtimeMs | 0}` } : { state: 'none' }))
+      const tallFile = join(runsDir, id, 'video', SHAPES.tall.file)
+      return reply(200, videos.get(id) || (existsSync(file) ? { state: 'done', pct: 100, file: shelveVideo(id) || file, src: `/video/${id}/promo.mp4?v=${statSync(file).mtimeMs | 0}`, tall: existsSync(tallFile) ? `/video/${id}/${SHAPES.tall.file}?v=${statSync(tallFile).mtimeMs | 0}` : null } : { state: 'none' }))
     }
     let body = ''
     req.on('data', c => (body += c))
@@ -1772,9 +1805,9 @@ const server = createServer((req, res) => {
 
   // A run's promo video, with range requests so the player can seek; an earlier
   // cut by its file name in the build's video folder (…-promo-v2.mp4).
-  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
+  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo(?:-tall)?\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
   if (vid) {
-    const file = vid[3] ? join(shelf(vid[1], 'video').dir, vid[3]) : join(runsDir, vid[1], 'video', 'promo.mp4')
+    const file = vid[3] ? join(shelf(vid[1], 'video').dir, vid[3]) : join(runsDir, vid[1], 'video', vid[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
     const size = statSync(file).size
     const range = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '')

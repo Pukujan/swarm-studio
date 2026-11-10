@@ -15,7 +15,10 @@ import { streamChat } from './llm.mjs'
 import { checkLook, lookPrompt, lookCss, paletteVars, paletteCss, textureLayer, revealTween, cutTween, cutLayer, cutCss, rng, hash, MOTIONS, CUTS } from './look.mjs'
 
 const HYPERFRAMES = 'hyperframes@0.9.26'
-const W = 1920, H = 1080, FPS = 30
+const FPS = 30
+// The film's shapes: the wide one for desktop and the tall one for phones, from the same storyboard.
+// The tall one is laid out again for its frame (stacked pictures and words), not cropped.
+export const SHAPES = { wide: { W: 1920, H: 1080, file: 'promo.mp4' }, tall: { W: 1080, H: 1920, file: 'promo-tall.mp4' } }
 const KINDS = new Set(['open', 'image', 'split', 'list', 'quote', 'cta', 'stat', 'mosaic', 'clip'])
 const LENGTH = { open: 3.2, image: 3.4, split: 3.6, list: 4.2, quote: 3.4, cta: 3.6, stat: 3.2, mosaic: 3.8, clip: 4.4 }
 
@@ -196,7 +199,7 @@ const FX = {
 }
 export const fxFor = (picked = [], idea = '') => [...new Set([...Object.keys(FX).filter(f => FX[f].test(idea)), ...picked.filter(f => FX[f])])].slice(0, 4)
 
-function fxLayer(fx, total, v) {
+function fxLayer(fx, total, v, W, H) {
   if (!fx?.length) return { html: '', tl: [] }
   let seed = 7
   const r = (a = 0, b = 1) => { seed = (seed * 16807) % 2147483647; return a + (b - a) * (seed / 2147483647) }
@@ -248,11 +251,102 @@ function fxLayer(fx, total, v) {
 const words = (s, cls = 'w') => esc(s).split(' ').map(w => `<span class="${cls}"><span>${w}</span></span>`).join(' ')
 const size = (s, big) => { const n = s.length; return big ? (n <= 14 ? 190 : n <= 24 ? 150 : 118) : (n <= 20 ? 128 : n <= 36 ? 104 : 84) }
 
+// ---------- the tall frame (9:16, for phones): the same scenes stacked instead of side by side.
+// Words stay clear of the bottom 300 px, where a phone feed draws its own title and buttons.
+const PIC_H = H => H * 0.56 | 0
+const SAFE = 300
+
+// mosaic tiles for 2 or 3 pictures stacked in the top of a tall frame
+function tallTiles(n, W, H, look, r) {
+  const g = 24, x = 60, w = W - 120, top = look.layout === 'cinematic' ? 190 : 110, h = H - top - 620
+  if (n === 2) {
+    const a = r() < 0.5 ? 0.55 : 0.45
+    return [[x, top, w, (h - g) * a], [x, top + (h - g) * a + g, w, (h - g) * (1 - a)]]
+  }
+  return r() < 0.5
+    ? [[x, top, w, (h - g) * 0.58], [x, top + (h - g) * 0.58 + g, (w - g) / 2, (h - g) * 0.42], [x + (w - g) / 2 + g, top + (h - g) * 0.58 + g, (w - g) / 2, (h - g) * 0.42]]
+    : [[x, top, w, (h - 2 * g) / 3], [x, top + (h - 2 * g) / 3 + g, w, (h - 2 * g) / 3], [x, top + 2 * ((h - 2 * g) / 3 + g), w, (h - 2 * g) / 3]]
+}
+
+// Rules for the tall frame, laid over the wide ones: generic first, then per layout family.
+export function tallCss(look, W, H) {
+  const P = PIC_H(H), band = W * 9 / 16 | 0, bandTop = 420
+  const L = `.T.L-${look.layout}`
+  const generic = `
+.T .center{padding:0 90px}
+.T .head{max-width:100%}
+.T .sub{font-size:36px;max-width:100%}
+.T .kicker{font-size:24px;margin-bottom:28px}
+.T .over{left:80px;right:80px;bottom:${SAFE}px}
+.T .shade{background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.78))}
+.T .split .pic{top:0;left:0;right:0;bottom:auto;width:${W}px;height:${P}px}
+.T .split.flip .pic{top:auto;bottom:0;left:0;right:0}
+.T .split .pic img{position:absolute;left:0;top:0;width:100%;min-width:0;height:${P}px;object-fit:cover}
+.T .split.flip .pic img{top:auto;bottom:0}
+.T .split .copy{left:90px;right:90px;width:auto;top:${P}px;bottom:${SAFE - 60}px}
+.T .split.flip .copy{left:90px;right:90px;top:150px;bottom:${P + 40}px}
+.T .list{display:flex;flex-direction:column;justify-content:center;padding:120px 90px ${SAFE}px}
+.T .list .copy,.T .list ol{position:static}
+.T .list ol{margin-top:70px;grid-template-columns:1fr;gap:28px}
+.T .list li{padding:36px 44px;font-size:52px}
+.T .list li b{margin-bottom:16px}
+.T .mosaic .mcopy{left:80px;right:80px;bottom:${SAFE}px;flex-direction:column;align-items:flex-start;gap:0}
+.T .footage{top:${bandTop}px;height:${band}px}
+.T .clipscene .over{bottom:${SAFE + 40}px !important;left:80px !important;right:80px !important;max-width:none}
+.T .clipscene .over .head{font-size:${look.layout === 'magazine' ? 96 : 84}px !important;color:var(--foreground)}
+.T .clipscene .over .kicker{color:var(--primary)}
+.T .clipscene .sub.light{color:var(--muted-foreground)}
+.T .clipscene .shade{display:none !important}
+.T .rec{top:${bandTop + 30}px;right:40px}
+.T .btn{font-size:36px;padding:30px 54px;max-width:100%;text-align:center}
+.T .mark{font-size:220px;height:130px}`
+  const own = {
+    editorial: `
+${L} .center{padding:0 90px}
+${L} .rule{width:${W - 180}px}
+${L} .frame{inset:80px 60px 760px 60px}
+${L} .over{flex-direction:column;align-items:flex-start;gap:18px;left:80px;right:80px;bottom:${SAFE}px}`,
+    brutalist: `
+${L} .center{padding:0 80px}
+${L} .kicker{width:fit-content;max-width:100%}
+${L} .rule{width:420px}
+${L} .frame{inset:60px 60px 60px 60px}`,
+    cinematic: `
+${L} .over{text-align:center;bottom:${SAFE}px}
+${L} .mosaic .mcopy{bottom:${SAFE}px;align-items:center;text-align:center}
+${L} .head{letter-spacing:.08em}`,
+    collage: `
+${L} .frame{left:${W * 0.07 | 0}px;top:150px;width:${W * 0.86 | 0}px;height:${H * 0.5 | 0}px}
+${L} .over{left:90px;right:90px;top:${H * 0.66 | 0}px;bottom:auto}
+${L} .over .head{font-size:80px !important}
+${L} .split .pic{inset:110px 90px auto 90px;width:auto;height:${P - 80}px}
+${L} .split.flip .pic{inset:auto 90px ${SAFE}px 90px}
+${L} .split.flip .copy{bottom:${P - 80 + SAFE + 40}px}`,
+    swiss: `
+${L} .center{justify-content:flex-end;padding:0 90px ${SAFE + 40}px}
+${L} .kicker{position:static;margin-bottom:24px}
+${L} .center>.kicker{position:absolute;top:${H * 0.34 + 50 | 0}px;right:90px}
+${L} .rule{width:${W}px;height:${H * 0.34 | 0}px}
+${L} .frame{inset:${H * 0.42 | 0}px 0 0 0}
+${L} .over{left:90px;right:90px;width:auto;top:130px;bottom:auto}
+${L} .list ol{grid-template-columns:1fr;gap:36px}
+${L} .list li{display:flex;align-items:center;gap:36px;padding:0 30px}
+${L} .list li b{font-size:96px;margin:0}`,
+    magazine: `
+${L} .over{top:140px;bottom:auto;left:80px;right:80px}
+${L} .over .head{font-size:150px !important}
+${L} .kicker{width:fit-content;max-width:100%}
+${L} .center{padding:0 90px}`,
+  }
+  return generic + (own[look.layout] || '')
+}
+
 // Scene lengths: the template's own, stretched to fit a voiceover line when there is one.
 export const sceneLength = (s, voice, pace = 1) => Math.max(Number(((LENGTH[s.kind] || 3.4) * pace).toFixed(2)), voice ? Number((voice + 0.9).toFixed(2)) : 0)
 export const VOICE_LEAD = 0.35
 
-export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn = scenes.look) {
+export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn = scenes.look, { shape = 'wide' } = {}) {
+  const { W, H } = SHAPES[shape] || SHAPES.wide, tall = H > W
   // a plan's cut, when the person picked one, leads; otherwise the look's own cuts
   const look = lookIn || checkLook({ layout: 'classic', cuts: [transition] }, 1)
   const cuts = lookIn && !look.pinned ? look.cuts : [transition]
@@ -263,7 +357,7 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700;800`
   const img = n => c.images.find(i => i.n === n)
   const clipOf = n => (c.clips || []).find(x => x.n === n)
-  const sz = (s, big) => size(s, big) * look.scale | 0
+  const sz = (s, big) => size(s, big) * look.scale * (tall ? 0.72 : 1) | 0
   let t = 0, splits = 0
   const html = [], tl = []
   scenes.forEach((s, i) => {
@@ -288,9 +382,10 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
       if (s.sub) enter(`#${id}s`, '{opacity:0, y:24}', 1.1)
     } else if (s.kind === 'split') {
       const left = splits++ % 2 === 1
-      html.push(`<div id="${id}" class="clip scene split${left ? ' flip' : ''}" data-start="${t}" data-duration="${d}"><div class="pic" id="${id}p"><img id="${id}i" src="${img(s.image).name}"></div><div class="copy">${kicker}<h2 class="head" style="font-size:${sz(s.headline) * 0.82 | 0}px">${words(s.headline)}</h2>${s.sub ? `<p class="sub" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>`)
+      html.push(`<div id="${id}" class="clip scene split${left ? ' flip' : ''}" data-start="${t}" data-duration="${d}"><div class="pic" id="${id}p"><img id="${id}i" src="${img(s.image).name}"></div><div class="copy">${kicker}<h2 class="head" style="font-size:${sz(s.headline) * (tall ? 1 : 0.82) | 0}px">${words(s.headline)}</h2>${s.sub ? `<p class="sub" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>`)
       if (look.layout === 'collage') enter(`#${id}p`, '{opacity:0, y:120, scale:.8}', 0.05, ", ease:'back.out(1.6)'")
-      else tl.push(`tl.fromTo('#${id}p', {width:0}, {width:${look.layout === 'collage' ? W / 2 - 120 : W / 2}, duration:1, ease:'power3.inOut'}, ${at(0.05)})`)
+      else if (tall) tl.push(`tl.fromTo('#${id}p', {height:0}, {height:${PIC_H(H)}, duration:1, ease:'power3.inOut'}, ${at(0.05)})`)
+      else tl.push(`tl.fromTo('#${id}p', {width:0}, {width:${W / 2}, duration:1, ease:'power3.inOut'}, ${at(0.05)})`)
       tl.push(`tl.fromTo('#${id}i', {scale:1.25}, {scale:1.02, duration:${d}, ease:'power1.out'}, ${at(0)})`)
       rise(0.6)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.5)
@@ -322,11 +417,11 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
       const n = pics.length
       // tile boxes for 2 or 3 pictures, a little different every run
       const g = 28, top = look.layout === 'cinematic' ? 160 : 70, h = H - (look.layout === 'cinematic' ? 480 : 330)
-      const boxes = n === 2
+      const boxes = tall ? tallTiles(n, W, H, look, r) : n === 2
         ? (r() < 0.5 ? [[70, top, W * 0.58, h], [70 + W * 0.58 + g, top, W - 140 - W * 0.58 - g, h]] : [[70, top, W * 0.4, h], [70 + W * 0.4 + g, top, W - 140 - W * 0.4 - g, h]])
         : (r() < 0.5 ? [[70, top, W * 0.5, h], [70 + W * 0.5 + g, top, W - 140 - W * 0.5 - g, (h - g) / 2], [70 + W * 0.5 + g, top + (h + g) / 2, W - 140 - W * 0.5 - g, (h - g) / 2]]
           : [[70, top, (W - 140 - 2 * g) / 3, h], [70 + (W - 140 - 2 * g) / 3 + g, top, (W - 140 - 2 * g) / 3, h], [70 + 2 * ((W - 140 - 2 * g) / 3 + g), top, (W - 140 - 2 * g) / 3, h]])
-      html.push(`<div id="${id}" class="clip scene mosaic" data-start="${t}" data-duration="${d}">${pics.map((p, j) => `<div class="tile" id="${id}t${j}" style="left:${boxes[j][0] | 0}px;top:${boxes[j][1] | 0}px;width:${boxes[j][2] | 0}px;height:${boxes[j][3] | 0}px;--tilt:${r(-3, 3).toFixed(1)}deg"><img id="${id}i${j}" src="${p.name}"></div>`).join('')}<div class="mcopy">${kicker}<h2 class="head" style="font-size:${sz(s.headline) * 0.7 | 0}px">${words(s.headline)}</h2></div></div>`)
+      html.push(`<div id="${id}" class="clip scene mosaic" data-start="${t}" data-duration="${d}">${pics.map((p, j) => `<div class="tile" id="${id}t${j}" style="left:${boxes[j][0] | 0}px;top:${boxes[j][1] | 0}px;width:${boxes[j][2] | 0}px;height:${boxes[j][3] | 0}px;--tilt:${r(-3, 3).toFixed(1)}deg"><img id="${id}i${j}" src="${p.name}"></div>`).join('')}<div class="mcopy">${kicker}<h2 class="head" style="font-size:${sz(s.headline) * (tall ? 0.95 : 0.7) | 0}px">${words(s.headline)}</h2></div></div>`)
       pics.forEach((_, j) => {
         enter(`#${id}t${j}`, look.layout === 'swiss' ? '{opacity:0, y:140}' : '{opacity:0, scale:.82}', 0.1 + j * 0.22, look.layout === 'collage' ? ", ease:'back.out(1.7)'" : '')
         tl.push(`tl.fromTo('#${id}i${j}', {scale:1.2}, {scale:1.02, duration:${d}, ease:'none'}, ${at(0)})`)
@@ -357,12 +452,13 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
     t += d
   })
   const total = Number(t.toFixed(2))
-  const fx = fxLayer(scenes.fx, total, v)
+  const fx = fxLayer(scenes.fx, total, v, W, H)
   const tex = textureLayer(look, total)
   tl.push(...fx.tl, ...tex.tl)
   return {
     seconds: total,
     look,
+    shape: tall ? 'tall' : 'wide',
     html: `<!doctype html>
 <html><head><meta charset="utf-8">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
@@ -411,10 +507,11 @@ html,body{width:${W}px;height:${H}px;overflow:hidden;background:var(--background
 ${cutCss(W, H)}
 ${lookCss(look, W, H)}
 ${paletteCss(look)}
+${tall ? tallCss(look, W, H) : ''}
 .clipscene .over{top:auto !important;bottom:90px !important;left:90px !important;right:auto !important;display:block;max-width:1200px}
 .clipscene .over .head{font-size:92px !important;line-height:1 !important;color:#fff;-webkit-text-stroke:0}
 .clipscene .w{padding-bottom:.16em}.clipscene .shade{display:block !important;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.65))}
-</style></head><body class="L-${look.layout} R-${look.reveal} M-${look.motion}">
+</style></head><body class="L-${look.layout} R-${look.reveal} M-${look.motion}${tall ? ' T' : ''}">
 <div id="root" data-composition-id="promo" data-start="0" data-duration="${total}" data-width="${W}" data-height="${H}" data-fps="${FPS}">
 ${html.join('\n')}
 ${fx.html}

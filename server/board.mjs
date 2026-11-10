@@ -14,7 +14,9 @@ export function runBoard(id, events, runsDir, live = false) {
   const pics = [...latest.values()].map(e => ({ src: e.src, page: e.page, layer: e.layer, gen: e.gen, name: String(e.layer || 'picture').replace(new RegExp(`^${String(e.page || '').replace(/[^\w-]/g, '')}-`), '').replace(/[-_]+/g, ' '), used: titleOf(e.page), hero: art.isHero({ layer: e.layer }), style: e.style || style }))
   for (const p of pages) p.cover = pics.find(a => a.page === p.id && a.hero)?.src || pics.find(a => a.page === p.id)?.src || null
   const video = events.findLast(e => e.type === 'video:done')
-  const films = video ? [{ name: 'Promo', src: `/video/${id}/promo.mp4`, poster: existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null, seconds: Number(video.seconds) || null }] : []
+  // tall: the 9:16 phone cut of the same film, when the run made one
+  const tall = video && existsSync(join(runsDir, id, 'video', 'promo-tall.mp4')) ? `/video/${id}/promo-tall.mp4` : null
+  const films = video ? [{ name: 'Promo', src: `/video/${id}/promo.mp4`, tall, poster: existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null, seconds: Number(video.seconds) || null }] : []
   const spec = events.findLast(e => e.type === 'game:spec')?.spec
   const isGame = start.kind === 'game' || !!spec
   const app = events.some(e => e.type === 'app:ready' || e.type === 'app:done')
