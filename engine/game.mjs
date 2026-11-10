@@ -99,7 +99,8 @@ function fallbackSpec(a, idea) {
 
 function brandRules(b) {
   const vars = Object.entries(b.vars || {}).map(([k, v]) => `${k}: ${v}`).join('; ')
-  return `- This is a promo game for ${b.name}. Use its theme for the whole UI and the scene's key colours: ${vars || 'its brand colours'}${b.fonts?.heading ? `; headings in ${b.fonts.heading}, text in ${b.fonts.body || b.fonts.heading} (Google Fonts)` : ''}. The title screen says "A ${b.name} game". The win and lose screens have a button back to ${b.name}${b.url ? ` (${b.url}, opens in a new tab)` : ''} with the site's call to action, next to Play again.
+  return `- This is a promo game for ${b.name}. Use its theme for the whole UI and the scene's key colours: ${vars || 'its brand colours'}${b.fonts?.heading ? `; headings in ${b.fonts.heading}, text in ${b.fonts.body || b.fonts.heading} (Google Fonts)` : ''}. The title screen says "A ${b.name} game". ${b.url ? `The win and lose screens have a button back to ${b.name} (${b.url}, opens in a new tab) with the site's call to action, next to Play again.` : `${b.name} is not online yet, so the game links nowhere: no button or link to the site, and the win screen's call to action is words only, next to Play again.`}
+- Never write a web address that is not given here: no made-up domain for ${b.name} or anyone else (a guessed domain belongs to someone else).
 `
 }
 
