@@ -67,6 +67,17 @@ const freePort = () => new Promise((ok, fail) => {
 
 const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
 
+// A big game stopped partway: the stage to go on from (0: start over). Only
+// stages since the last build from scratch count, and only with the app still there.
+export function bigResumeAt(events, dir) {
+  if (!dir || !existsSync(join(dir, 'package.json'))) return 0
+  const startIdx = events.findLastIndex(e => e.type === 'app:start' && e.fresh && !e.resume)
+  if (startIdx < 0) return 0
+  let next = 0
+  for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big && e.big.ok && e.big.i === next) next++
+  return next < BIG_STAGES.length ? next : 0
+}
+
 // paint(runId, spec, items, appDir, step) → [{ file, what, kind }]: a big game's art,
 // painted by the server's art pipeline into the app's public/art/ (optional: without
 // it a big game draws everything in code)
@@ -101,6 +112,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
     // a first build that failed left only the starter: build again from the start
     const fresh = !built(id, events) || input.fresh
+    const resumeAt = kind === 'game' && fresh && input.fresh !== true ? bigResumeAt(events, dir) : 0
     const ask = String(input.ask || '').trim().slice(0, 16000)
     let prompt
     if (fresh) {
@@ -110,7 +122,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (existsSync(meta)) for (const d of readdirSync(meta)) if (d.startsWith('data-')) rmSync(join(meta, d), { recursive: true, force: true })
       if (kind === 'game') {
         if (!input.prompt) throw new Error('a game needs its spec')
-        seedProject(scaffoldDir, dir, input.title || 'game')
+        // a big game stopped partway keeps its finished stages: Try again goes on from the next one
+        if (!resumeAt) seedProject(scaffoldDir, dir, input.title || 'game')
         for (const [name, text] of Object.entries(input.files || {})) if (/^[\w.-]+$/.test(name)) writeFileSync(join(dir, name), String(text))
         prompt = input.prompt
       } else {
@@ -129,7 +142,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     j.asks.push(ask || (kind === 'game' ? 'build the game' : 'make it a working app'))
     jobs.set(id, j)
     const m = modelFor('worker')
-    send(id, 'app:start', { kind, ask: j.asks.at(-1), model: m, fresh })
+    send(id, 'app:start', { kind, ask: j.asks.at(-1), model: m, fresh, ...(resumeAt ? { resume: resumeAt } : {}) })
     // the crew radio: the engine's lead and helpers, said out loud as Hermia and the crew
     const crew = ((readEvents(id) || []).find(e => e.type === 'run:start')?.agents || []).map(a => ({ id: a.id, name: a.name }))
     const queue = []
@@ -179,7 +192,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         }
       }
       if (big) {
-        await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input)
+        await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input, resumeAt)
       } else {
         const result = await engineCall(prompt, input.turns || (input.plan ? 6 : 4))
         j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
@@ -226,19 +239,28 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // system group per stage, each with its own turns, the engine's typecheck and
   // build gates, a play test and a fix turn. A stage whose build fails hands that
   // to the next stage first; the last one gets a fix turn of its own.
-  async function buildBig(j, id, dir, spec, engineCall, model, step, brand, input) {
+  async function buildBig(j, id, dir, spec, engineCall, model, step, brand, input, from = 0) {
     let art = []
     const items = artList(spec)
     if (paint && input.art !== false) {
       step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
       try { art = await paint(id, spec, items, dir, step) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
     }
-    j.result = { ok: false, big: true, art: art.length, stages: [], turns: 0, commits: 0, files: 0 }
-    let failed = '', last = null
-    for (let i = 0; i < BIG_STAGES.length; i++) {
+    j.result = { ok: false, big: true, art: art.length, stages: [], turns: 0, commits: 0, files: 0, ...(from ? { resumedAt: from } : {}) }
+    if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
+    let failed = from ? 'the last build stopped partway through this stage: some of its changes may already be in the code (git status shows them). Finish them or redo them.' : '', last = null
+    for (let i = from; i < BIG_STAGES.length; i++) {
       const st = BIG_STAGES[i], t = Date.now()
       step({ kind: 'setup', text: `stage ${i + 1} of ${BIG_STAGES.length}: ${st.name}` })
-      last = await engineCall(bigStagePrompt(spec, i, { art, failed }), input.turns || st.turns)
+      // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
+      for (let go = 0; ; go++) {
+        try { last = await engineCall(bigStagePrompt(spec, i, { art, failed }), input.turns || st.turns); break } catch (err) {
+          if (j.controller.signal.aborted) throw err
+          step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
+          if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
+          failed = 'the last try at this stage stopped partway: some of its changes may already be in the code (git status shows them). Finish them or redo them.'
+        }
+      }
       failed = last.ok ? '' : `the typecheck or build failed at the end of the last stage${last.error ? ` (${String(last.error).slice(0, 300)})` : ''}. Make it pass before anything else.`
       j.result.turns += last.turns || 0
       j.result.commits += last.commits || 0
