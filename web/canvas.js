@@ -3912,7 +3912,8 @@ function renderApp() {
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
   // the preview, or what to do first
   if (appv.url && appEls.frame.dataset.src !== appv.url) { appEls.frame.dataset.src = appv.url; appEls.frame.src = appv.url }
-  const empty = !appv.url
+  // a build that failed before it ever worked shows the failure, not the empty starter's blank page
+  const empty = !appv.url || (st === 'failed' && !appv.hasApp)
   appEls.empty.hidden = !empty
   if (empty) {
     const run = shownRun()
@@ -3921,7 +3922,7 @@ function renderApp() {
       : working || appv.opening
         ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
         : st === 'failed'
-          ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The app didn't <em>finish</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
+          ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
           : appv.kind === 'game' && !appv.hasApp
             ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
             : `<h2>Turn this design into a working app</h2><p>React + TypeScript + shadcn/ui, with the design kept exactly. The engine adds what the pages imply: forms that save, data from server routes, an admin page. Then change anything by chatting.</p><button class="big" data-build>Build the app</button>`
