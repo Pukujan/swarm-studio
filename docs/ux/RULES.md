@@ -8,6 +8,20 @@ from their labels, panels that won't close, no way back home.
 Read this file, [PATTERNS.md](PATTERNS.md), [AUDIENCE.md](AUDIENCE.md) and [INVENTORY.md](INVENTORY.md) before
 changing any UI. Run the checklist at the end before opening a PR.
 
+## The three standing rules (owner, 2026-11-09)
+
+These win over every rule below that disagrees.
+
+1. **Never tooltips.** No `title=` attribute, no `data-tip`, no hover hint and no tooltip component anywhere in
+   the UI. An icon-only control is named by its `aria-label` and nothing else. `scripts/ui-check.mjs` fails on
+   any `title=` or `data-tip` in `web/`.
+2. **Always minimal text.** A default screen is a headline, one input and one button. No eyebrows (kickers),
+   helper sentences, sub-paragraphs or explanatory captions. Clear empty space beats words.
+3. **Few colours.** Black, graphite and white, plus **one** accent for the whole plugin, in one CSS variable,
+   `--accent` (`web/canvas.css`). No per-room, per-view or per-agent colours: the crew is told apart by shade.
+   The accent is white `#f4f4f5` for now, with `#0b0b0c` text on accent fills; the owner picks the final hue,
+   and changing it is that one line (every tint is a `color-mix` of `--accent`). Red is kept only for errors.
+
 ## Where the rules come from
 
 We don't invent UX from scratch. These rules apply well-known guides to our app:
@@ -57,19 +71,17 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 8. **At rest, names only.** No sentences on screen by default. Input placeholders are 6 words at most. On the
    Feed a build shows only its maker and title: no descriptions, the build's visuals and assets do the talking.
 9. **Explanations are deleted, not hidden.** If a sentence is truly needed to decide, it goes one layer down, in
-   the sheet you open by tapping the thing. It never goes in a tooltip. A tooltip is only the name of an
-   icon-only control: 1–3 words, plus its shortcut key if it has one ("Text T"), from the kit's Tooltip after
-   about 500 ms. Chips, toggles, headings, checkboxes and text buttons never get one.
+   the sheet you open by tapping the thing. It never goes in a tooltip: there are none (standing rule 1).
 10. **Errors are a marker first.** A ⚠ on the thing that failed; the message once you open it; raw errors, JSON
     and stacks only behind "Details".
 11. **One big heading per screen at most.** Use the display font only there. No paragraphs in capitals.
-12. **States, not prose.** "3/8", a ring or a coloured dot. Every dot, count and badge has a name on hover (1–3
-    words, rule 9). An indicator nobody can read is a bug.
+12. **States, not prose.** "3/8", a ring or a dot. Every dot, count and badge has an `aria-label` (1–3 words).
+    An indicator nobody can read is a bug.
 
 ## C. Controls
 
 13. **Build from the kit.** Use the shadcn-style components only: Button, Card, Dialog, Sheet, Popover,
-    Tooltip, Tabs, Toggle group, Checkbox, Switch, Label, Input, Textarea, Select, Slider, Progress, Badge,
+    Tabs, Toggle group, Checkbox, Switch, Label, Input, Textarea, Select, Slider, Progress, Badge,
     Separator, Command (⌘K). No one-off form controls.
 14. **Checkboxes and switches sit beside their label** in one row (`[☐] Label`), and clicking the label toggles
     them.
@@ -77,7 +89,7 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
     icon. In a menu, every item has an icon or none do. Menu headings look like headings and don't react to
     hover.
 16. **Targets are at least 40 × 40 px** on desktop and 44 × 44 px on touch.
-17. **One primary action per view**, always in the same place. Text on the accent fill (lime in the studio) is `#0b0b0c`.
+17. **One primary action per view**, always in the same place. Text on the accent fill is `#0b0b0c`.
 18. **Every panel closes three ways:** ×, Esc, and a click outside it. Only one sheet or popover is open at a
     time.
 19. **Progress is a pill or ring that expands.** A step list is never shown by default.
@@ -147,7 +159,9 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 
 - [ ] Each screen you touched fits rule 3's budget (count the visible actions at rest).
 - [ ] No helper sentence is visible by default (rule 8).
-- [ ] No tooltip on anything with visible text, and the number of tooltips didn't go up (rule 9).
+- [ ] No `title=`, `data-tip` or tooltip anywhere (standing rule 1).
+- [ ] Default screens are a headline, one input and one button (standing rule 2).
+- [ ] No colour but black, graphite, white and `var(--accent)` (standing rule 3).
 - [ ] At most 15 words of interface text at rest (rule 30).
 - [ ] The screen uses only the frame's zones; no new sidebar, dock or strip (rules 27 and 28).
 - [ ] The nav and the primary button keep their place and size in every state (rule 29).

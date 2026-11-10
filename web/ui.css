@@ -11,16 +11,16 @@
   --ui-popover: #1f1f22;
   --ui-muted: rgb(244 244 245 / .05);
   --ui-muted-foreground: #8e8e93;       /* 5.6:1 on --ui-card */
-  --ui-primary: #c6ff3d;                /* the one "do this": lime, the studio's accent (Graphite) */
-  --ui-primary-foreground: #0b0b0c;     /* black text on lime (rule 17) */
+  --ui-primary: var(--accent, #f4f4f5); /* the one "do this": the plugin's one accent */
+  --ui-primary-foreground: var(--accent-ink, #0b0b0c);
   --ui-secondary: #1f1f22;
   --ui-secondary-foreground: #f4f4f5;
   --ui-accent: rgb(244 244 245 / .08); /* hover and selected surfaces: graphite */
   --ui-accent-foreground: #f4f4f5;
   --ui-blue: #3a3a3f;                   /* graphite: the secondary button */
   --ui-destructive: #ff6b6b;
-  --ui-warning: #ffc94d;
-  --ui-success: #00f279;
+  --ui-warning: #f4f4f5;
+  --ui-success: var(--accent, #f4f4f5);
   --ui-border: #2a2a2e;
   --ui-input: #3a3a3f;
   --ui-ring: #a1a1a6;
@@ -54,9 +54,9 @@ html input:is([type="checkbox"], [type="radio"]) {
 .ui-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ui-btn .ico, .ui-btn svg { width: 16px; height: 16px; flex: none; }
 .ui-btn-default { background: var(--ui-primary); color: var(--ui-primary-foreground); }
-.ui-btn-default:hover { background: #d6ff70; color: var(--ui-primary-foreground); }
+.ui-btn-default:hover { background: color-mix(in srgb, var(--ui-primary) 86%, #000); color: var(--ui-primary-foreground); }
 .ui-btn-blue { background: var(--ui-blue); color: #fff; }
-.ui-btn-blue:hover { background: #9d55ff; }
+.ui-btn-blue:hover { background: #4a4a50; }
 .ui-btn-outline { background: transparent; border-color: var(--ui-input); color: var(--ui-foreground); }
 .ui-btn-outline:hover { background: var(--ui-accent); border-color: var(--ui-ring); }
 .ui-btn-ghost { background: transparent; color: var(--ui-foreground); }
@@ -91,9 +91,9 @@ html input:is([type="checkbox"], [type="radio"]) {
 .ui-dialog-lg { width: min(820px, 100%); }
 .ui-dialog-header { display: flex; flex-direction: column; gap: 6px; padding: 20px 64px 4px 22px; }
 .ui-dialog-kicker { display: inline-flex; align-items: center; gap: 7px; color: var(--ui-muted-foreground); font: 600 12px/1 var(--ui-head); letter-spacing: .16em; text-transform: uppercase; }
-.ui-dialog-kicker .ico { width: 14px; height: 14px; color: var(--pink, #c6ff3d); }
+.ui-dialog-kicker .ico { width: 14px; height: 14px; color: var(--pink, #f4f4f5); }
 .ui-dialog-title { margin: 0; font: 800 30px/1.02 var(--ui-display); letter-spacing: .01em; text-transform: uppercase; color: var(--ui-foreground); }
-.ui-dialog-title em { font-family: var(--serif, Georgia, serif); font-style: italic; font-weight: 500; text-transform: none; color: var(--pink, #c6ff3d); }
+.ui-dialog-title em { font-family: var(--serif, Georgia, serif); font-style: italic; font-weight: 500; text-transform: none; color: var(--pink, #f4f4f5); }
 .ui-dialog-desc { margin: 0; color: var(--ui-muted-foreground); font: 13px/1.45 var(--ui-font); }
 .ui-dialog-body { display: flex; flex-direction: column; gap: 14px; padding: 14px 22px 18px; overflow-y: auto; min-height: 0; }
 .ui-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--ui-border); background: rgb(0 0 0 / .25); border-radius: 0 0 calc(var(--ui-radius) + 4px) calc(var(--ui-radius) + 4px); }
@@ -111,7 +111,7 @@ html input:is([type="checkbox"], [type="radio"]) {
   font: 14px/1.5 var(--ui-font); text-transform: none; letter-spacing: 0;
 }
 .ui-textarea { min-height: 96px; resize: vertical; display: block; }
-.ui-input::placeholder, .ui-textarea::placeholder { color: #a593c6; }
+.ui-input::placeholder, .ui-textarea::placeholder { color: #8e8e93; }
 .ui-input:focus, .ui-textarea:focus, .ui-select:focus { outline: 0; border-color: var(--ui-ring); box-shadow: 0 0 0 3px rgb(161 161 166 / .25); }
 
 /* ---------- Checkbox + Label row: the box sits right next to its own words */
@@ -123,7 +123,7 @@ html .ui-checkbox {
   appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px;
   border: 1.5px solid var(--ui-input); background: rgb(0 0 0 / .5); display: grid; place-items: center; cursor: pointer;
 }
-html .ui-checkbox:checked { background: var(--ui-primary); border-color: var(--pink, #c6ff3d); }
+html .ui-checkbox:checked { background: var(--ui-primary); border-color: var(--pink, #f4f4f5); }
 html .ui-checkbox:checked::after { content: ''; width: 9px; height: 5px; border: solid var(--ui-primary-foreground); border-width: 0 0 2px 2px; transform: translateY(-1px) rotate(-45deg); }
 html .ui-checkbox:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: 2px; }
 
@@ -163,30 +163,28 @@ html .ui-switch:checked::after { transform: translateX(16px); background: var(--
 
 /* ---------- Badge */
 .ui-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--ui-border); background: var(--ui-muted); color: var(--ui-foreground); font: 600 11.5px/1.2 var(--ui-head); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
-.ui-badge-ok { color: var(--ui-success); border-color: rgb(0 242 121 / .35); }
-.ui-badge-warn { color: var(--ui-warning); border-color: rgb(255 201 77 / .4); }
-.ui-badge-busy { color: var(--ui-primary); border-color: rgb(198 255 61 / .4); }
+.ui-badge-ok { color: var(--ui-success); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.ui-badge-warn { color: var(--ui-warning); border-color: rgb(244 244 245 / .3); }
+.ui-badge-busy { color: var(--ui-primary); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 
 /* ---------- Progress and the step indicator */
 .ui-progress { position: relative; height: 6px; border-radius: 99px; background: rgb(244 244 245 / .1); overflow: hidden; }
 .ui-progress > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--ui-primary); transition: width .3s; }
 .ui-steps { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .ui-steps li { flex: 1; height: 6px; border-radius: 99px; background: rgb(244 244 245 / .12); }
-.ui-steps li.done { background: rgb(198 255 61 / .55); }
+.ui-steps li.done { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .ui-steps li.on { background: var(--ui-primary); }
 .ui-steps-label { color: var(--ui-muted-foreground); font: 600 12px/1 var(--ui-head); letter-spacing: .14em; text-transform: uppercase; }
 
 /* ---------- Slider */
-html .ui-slider { appearance: none; -webkit-appearance: none; width: 100%; height: 6px; border-radius: 99px; background: linear-gradient(to right, var(--ui-primary) 0 var(--v, 50%), rgb(244 244 245 / .32) var(--v, 50%)); accent-color: var(--pink, #c6ff3d); }
+html .ui-slider { appearance: none; -webkit-appearance: none; width: 100%; height: 6px; border-radius: 99px; background: linear-gradient(to right, var(--ui-primary) 0 var(--v, 50%), rgb(244 244 245 / .32) var(--v, 50%)); accent-color: var(--pink, #f4f4f5); }
 html .ui-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--ui-primary); border: 2px solid var(--ui-background); cursor: pointer; }
 html .ui-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ui-primary); border: 2px solid var(--ui-background); }
 
-/* ---------- Popover and Tooltip. The tooltip is only the name of an icon-only control, 1 to 3 words
-   ("Close", "Zoom in"), taken from its title by ui.js after 500 ms. Explanations are deleted, never
-   hidden in a hover (docs/ux/RULES.md, rule 9). */
+/* ---------- Popover. There are no tooltips: icon-only controls carry an aria-label, and explanations
+   are deleted, never hidden in a hover (docs/ux/RULES.md). */
 .ui-popover { position: fixed; z-index: 420; min-width: 220px; max-width: min(380px, calc(100vw - 24px)); padding: 12px; border-radius: var(--ui-radius); background: var(--ui-popover); color: var(--ui-foreground); border: 1px solid var(--ui-border); box-shadow: var(--ui-shadow); font: 13px/1.45 var(--ui-font); animation: ui-fade .14s ease-out; }
 .ui-popover-title { margin: 0 0 8px; font: 600 13px/1 var(--ui-head); letter-spacing: .12em; text-transform: uppercase; color: var(--ui-muted-foreground); }
-.ui-tooltip { position: fixed; z-index: 450; padding: 5px 9px; border-radius: 7px; background: #f4f4f5; color: #0b0b0c; font: 500 12px/1.2 var(--ui-font); white-space: nowrap; pointer-events: none; animation: ui-fade .12s ease-out; }
 
 /* ---------- Separator */
 .ui-separator { height: 1px; border: 0; margin: 4px 0; background: var(--ui-border); }
@@ -204,7 +202,7 @@ html .ui-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50
   .ui-dialog-body { padding: 12px 16px 16px; }
   .ui-dialog-footer { padding: 12px 16px; }
 }
-@media (prefers-reduced-motion: reduce) { .ui-overlay, .ui-dialog, .ui-popover, .ui-tooltip { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ui-overlay, .ui-dialog, .ui-popover { animation: none; } }
 
 /* ---------- the Start sheet (today's Auto box) and the New game wizard keep their look; their
    children never shrink (a squeezed flex child was the "sliver" prompt box) and a tall sheet scrolls

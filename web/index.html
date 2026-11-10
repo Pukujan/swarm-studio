@@ -26,7 +26,7 @@
     <button class="toggle game-btn" id="game-btn" aria-label="Game"><i data-i="gamepad-2"></i><span class="t">Game</span></button>
     <div class="spacer"></div>
     <button class="toggle crew-mute" id="crew-mute" data-mode="muted" aria-haspopup="dialog" aria-expanded="false" aria-label="Crew sound: muted"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><g class="cm-on"><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/></g><path class="cm-off" d="m22 9-6 6M16 9l6 6"/></svg><svg class="ico cm-quiet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12.5a7.5 6 0 0 1-10.7 5.4L4 19.5l1.4-3.6A6 6 0 0 1 4.5 12.5 7.8 6 0 0 1 12.3 6.5"/><path d="M3 3l18 18"/></svg><span class="t">Muted</span></button>
-    <div class="undo-redo"><button class="toggle" id="undo-btn" title="Undo (⌘Z / Ctrl+Z)" aria-label="Undo" disabled><i data-i="undo-2"></i></button><button class="toggle" id="redo-btn" title="Redo (⇧⌘Z / Ctrl+Y)" aria-label="Redo" disabled><i data-i="redo-2"></i></button></div>
+    <div class="undo-redo"><button class="toggle" id="undo-btn" aria-label="Undo" disabled><i data-i="undo-2"></i></button><button class="toggle" id="redo-btn" aria-label="Redo" disabled><i data-i="redo-2"></i></button></div>
     <button class="toggle play" id="play-btn" aria-label="Play" disabled><i data-i="play"></i><span class="t">Play</span></button>
     <div class="more pubwrap">
       <button class="toggle" id="publish-btn" aria-label="Publish" aria-haspopup="true" disabled><i data-i="rocket"></i><span class="t">Publish</span><i data-i="chevron-down" class="caret"></i></button>
@@ -58,13 +58,13 @@
       <button data-tab="log"><i data-i="scroll-text"></i>Log</button>
       <button data-tab="pages"><i data-i="layers"></i>Layers</button>
       <button data-tab="files"><i data-i="folder"></i>Files</button>
-      <button class="side-min-btn" id="side-min" title="Make the side panel a small chat over the canvas" aria-label="Shrink the side panel"><i data-i="panel-left-close"></i></button>
+      <button class="side-min-btn" id="side-min" aria-label="Shrink the side panel"><i data-i="panel-left-close"></i></button>
     </nav>
 
     <section class="tab chat on" data-tab="chat">
       <div id="feed" class="feed"></div>
       <form id="brief-form" class="composer">
-        <textarea id="brief" rows="3" autocomplete="off" placeholder="Describe a product. The swarm designs and builds its site."></textarea>
+        <textarea id="brief" rows="3" autocomplete="off" placeholder="Describe a product"></textarea>
         <div class="row">
           <select id="agents" class="chip" aria-label="Agents">
             <option value="4">4 agents</option><option value="5">5 agents</option><option value="6">6 agents</option><option value="8">8 agents</option><option value="12">12 agents</option><option value="16" selected>16 agents</option><option value="20">20 agents</option><option value="24">24 agents</option>
@@ -73,7 +73,6 @@
           <button type="submit">Build</button>
         </div>
       </form>
-      <div class="built-for">Built for Hermes Agent</div>
     </section>
 
     <section class="tab log" data-tab="log">
@@ -93,7 +92,7 @@
   <main id="viewport" class="viewport">
     <div id="world" class="world"></div>
     <svg id="wires" class="wires"></svg>
-    <div class="dock" id="dock"><span class="dock-title"><i data-i="coffee"></i>break room</span><button class="dock-hide" id="dock-hide" title="Hide the break room (bring it back in More)" aria-label="Hide the break room"><i data-i="x"></i></button></div>
+    <div class="dock" id="dock"><span class="dock-title"><i data-i="coffee"></i>break room</span><button class="dock-hide" id="dock-hide" aria-label="Hide the break room"><i data-i="x"></i></button></div>
     <div id="cursors" class="cursors"></div>
     <div class="toolbar" id="toolbar"></div>
     <div class="status" id="status">Ready</div>
@@ -114,18 +113,18 @@
     <div class="app-bar">
       <span class="app-state pill" id="app-state">no app yet</span>
       <span class="app-stage" id="app-stage"></span>
-      <button class="toggle" id="app-link" hidden title="Open the linked build"></button>
+      <button class="toggle" id="app-link" hidden></button>
       <div class="spacer"></div>
       <div class="seg" id="app-mode"><button data-mode="preview" class="on">Preview</button><button data-mode="code">Code</button></div>
       <div class="seg" id="app-device"><button data-w="390">Phone</button><button data-w="820">Tablet</button><button data-w="0" class="on">Desktop</button></div>
-      <button class="toggle" id="app-reload" title="Reload the app" aria-label="Reload the app"><i data-i="rotate-cw"></i></button>
-      <a class="toggle" id="app-open" target="_blank" rel="noopener" title="Open the app in its own tab" aria-label="Open the app in its own tab"><i data-i="external-link"></i></a>
+      <button class="toggle" id="app-reload" aria-label="Reload the app"><i data-i="rotate-cw"></i></button>
+      <a class="toggle" id="app-open" target="_blank" rel="noopener" aria-label="Open the app in its own tab"><i data-i="external-link"></i></a>
       <button class="toggle" id="app-stop" hidden><i data-i="square"></i>Stop</button>
     </div>
     <div class="app-body">
       <div class="app-steps" id="app-steps"></div>
       <div class="app-main">
-        <div class="app-stagearea" id="app-preview"><div class="app-shell" id="app-shell"><iframe id="app-frame" title="The app"></iframe></div><div class="app-empty" id="app-empty"></div></div>
+        <div class="app-stagearea" id="app-preview"><div class="app-shell" id="app-shell"><iframe id="app-frame" aria-label="The app"></iframe></div><div class="app-empty" id="app-empty"></div></div>
         <div class="app-code" id="app-code" hidden><div class="app-tree" id="app-tree"></div><pre class="app-file" id="app-file"></pre></div>
       </div>
     </div>
@@ -135,7 +134,7 @@
     <nav class="dtabs">
       <button data-dtab="design" class="on">Design</button>
       <button data-dtab="vars">Variables</button>
-      <button class="dclose" id="design-close" title="Close (opens again when you select a section)" aria-label="Close"><i data-i="x"></i></button>
+      <button class="dclose" id="design-close" aria-label="Close"><i data-i="x"></i></button>
     </nav>
     <section class="dtab on" data-dtab="design" id="d-design"></section>
     <section class="dtab" data-dtab="vars" id="d-vars"></section>
@@ -143,27 +142,26 @@
 
   <div class="player" id="player" hidden>
     <div class="player-bar">
-      <button class="pl-btn" id="pl-close" title="Close (Esc)" aria-label="Close"><i data-i="x"></i></button>
+      <button class="pl-btn" id="pl-close" aria-label="Close"><i data-i="x"></i></button>
       <select id="pl-page" aria-label="Page"></select>
-      <button class="pl-btn icon" id="pl-back" title="Back" aria-label="Back"><i data-i="arrow-left"></i></button>
-      <button class="pl-btn icon" id="pl-restart" title="Restart" aria-label="Restart"><i data-i="rotate-ccw"></i></button>
+      <button class="pl-btn icon" id="pl-back" aria-label="Back"><i data-i="arrow-left"></i></button>
+      <button class="pl-btn icon" id="pl-restart" aria-label="Restart"><i data-i="rotate-ccw"></i></button>
       <div class="tour-pick">
-        <button class="pl-btn tours icon" id="pl-tours" title="Watch a visitor" aria-label="Watch a visitor"><i data-i="eye"></i></button>
+        <button class="pl-btn tours icon" id="pl-tours" aria-label="Watch a visitor"><i data-i="eye"></i></button>
         <div class="tour-menu" id="pl-tour-menu" hidden></div>
       </div>
       <div class="spacer"></div>
-      <button class="pl-btn icon" id="pl-motion" title="Motion" aria-label="Motion"><i data-i="sparkles"></i></button>
+      <button class="pl-btn icon" id="pl-motion" aria-label="Motion"><i data-i="sparkles"></i></button>
       <div class="seg" id="pl-device">
         <button data-device="desktop" class="on">Desktop</button>
         <button data-device="mobile">Mobile</button>
       </div>
     </div>
     <div class="player-stage" id="pl-stage">
-      <div class="device" id="pl-shell"><iframe id="pl-frame" title="Prototype" sandbox="allow-scripts"></iframe></div>
+      <div class="device" id="pl-shell"><iframe id="pl-frame" aria-label="Prototype" sandbox="allow-scripts"></iframe></div>
       <div class="persona" id="pl-persona" hidden></div>
     </div>
     <div class="tour-cursor" id="pl-cursor" hidden><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l15 9.5-6.6 1.2 3.9 7.6-3 1.5-3.9-7.7L4 18.6z" fill="#F2F2F2" stroke="#05051a" stroke-width="1.5" stroke-linejoin="round"/></svg><div class="think" id="pl-think"></div></div>
-    <div class="pl-hint">Click links to move between pages · clicking anywhere else shows where the links are</div>
   </div>
 
   <script type="module" src="canvas.js"></script>

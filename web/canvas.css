@@ -12,11 +12,11 @@
 
 :root {
   /* channels, for the translucent mixes below (Graphite, docs/brand/BRAND.md) */
-  --void-rgb: 11 11 12; --deep-rgb: 22 22 24; --glass-rgb: 244 244 245; --frame-rgb: 58 58 63; --accent-rgb: 198 255 61; --pink-rgb: 198 255 61;
-  --ok-rgb: 0 242 121; --hot-rgb: 242 0 0; --ink-rgb: 11 11 12; --shade-rgb: 0 0 0;
-  /* the palette: Graphite, a colour per room (BRAND.md, "Colour"). Black and graphite carry the frame;
-     the studio's own accent is lime, used once per screen: the main action, the active tab, the serif
-     word. The studio keeps its own colours inside the Hermes dashboard too; only the host's fonts carry over. */
+  --void-rgb: 11 11 12; --deep-rgb: 22 22 24; --glass-rgb: 244 244 245; --frame-rgb: 58 58 63;
+  --hot-rgb: 242 0 0; --ink-rgb: 11 11 12; --shade-rgb: 0 0 0;
+  /* the palette (docs/ux/RULES.md, "Few colours"): black, graphite and white plus ONE accent, --accent.
+     It is white for now; the owner picks the final hue, and changing it is the --accent line below (every
+     tint is a color-mix of it). Text on an accent fill is --accent-ink. No per-room or per-agent colours. */
   --void: #0b0b0c;                                     /* app background: flat, stars only */
   --deep: #161618;                                     /* panels (surface) */
   --surface-2: #1f1f22;                                /* raised surface */
@@ -32,10 +32,10 @@
   --text: #f4f4f5;
   --muted: #8e8e93;
   --code: #c7c7cc;
-  --accent: #c6ff3d;                                   /* lime, the studio's accent: the one "do this / live" action */
-  --accent-ink: #0b0b0c;                               /* black text on lime */
-  --pink: var(--accent);                               /* the one accent word (serif): same lime */
-  --ok: #00F279; --hot: #F20000; --hot-text: #ff5c5c; --info: #00F2F2;
+  --accent: #f4f4f5;                                   /* THE accent: the one main action, the active tab, the serif word */
+  --accent-ink: #0b0b0c;                               /* text on an accent fill */
+  --pink: var(--accent);                               /* the serif accent word: the same accent */
+  --ok: var(--accent); --hot: #F20000; --hot-text: #ff5c5c; --info: var(--text); /* red is for errors only */
   --paper: #FFFFFF;                                    /* the page frames' own background */
   --glow: transparent;                                 /* Graphite is flat: no glow */
   --bg: var(--void);
@@ -51,7 +51,7 @@
     radial-gradient(1px 1px at 64% 46%, rgb(var(--glass-rgb) / .45), transparent 70%),
     radial-gradient(1.5px 1.5px at 36% 74%, rgb(var(--glass-rgb) / .5), transparent 70%),
     radial-gradient(1px 1px at 86% 86%, rgb(var(--glass-rgb) / .3), transparent 70%),
-    radial-gradient(1.5px 1.5px at 52% 8%, rgb(var(--accent-rgb) / .35), transparent 70%);
+    radial-gradient(1.5px 1.5px at 52% 8%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 70%);
   --stars-size: 233px 233px, 311px 311px, 419px 419px, 173px 173px, 587px 587px;
 }
 * { box-sizing: border-box; }
@@ -655,8 +655,8 @@ body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
 .appview[hidden] { display: none; }
 .app-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
 .app-bar a.toggle { text-decoration: none; }
-.app-state.working { background: rgb(var(--accent-rgb) / .12); border-color: rgb(var(--accent-rgb) / .4); color: var(--accent); }
-.app-state.done { background: rgb(var(--ok-rgb) / .12); border-color: rgb(var(--ok-rgb) / .4); color: var(--ok); }
+.app-state.working { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+.app-state.done { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--ok); }
 .app-state.failed { background: rgb(var(--hot-rgb) / .14); border-color: rgb(var(--hot-rgb) / .45); color: var(--hot-text); }
 .app-stage { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
 .app-body { flex: 1; display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
@@ -806,14 +806,14 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .vlive-tag::first-letter { color: var(--hot); }
 
 /* ⚡ Auto mode */
-.auto-btn.on { color: var(--accent); border-color: rgb(var(--accent-rgb) / .45); }
+.auto-btn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .auto-pop .auto-plan { margin: 0 0 16px; padding-left: 20px; color: var(--muted); font-size: 13.5px; line-height: 1.8; }
 .auto-pop .auto-prompt { width: 100%; box-sizing: border-box; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font: inherit; font-size: 15px; resize: vertical; }
 .auto-pop .auto-go { display: flex; align-items: center; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
 .auto-pop .auto-go small { color: var(--muted); flex: 1; min-width: 200px; }
 .auto-pop .auto-start { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer; }
 .auto-panel { position: fixed; right: 16px; bottom: 16px; z-index: 260; width: min(340px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 14px 40px rgb(var(--shade-rgb) / .62); font-size: 12.5px; animation: in .25s ease-out; }
-.auto-panel.working { border-color: rgb(var(--accent-rgb) / .4); }
+.auto-panel.working { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .auto-panel .ap-head { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .auto-panel .ap-now { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; color: var(--muted); }
 .auto-panel.min { width: auto; max-width: min(420px, calc(100vw - 32px)); padding: 8px 12px; }
@@ -903,7 +903,7 @@ em { font-style: italic; }
 .toggle .count { font: 600 11px var(--mono); color: var(--muted); margin-left: 2px; }
 .toggle .caret { width: 12px; height: 12px; margin: 0 -3px 0 -2px; opacity: .7; }
 /* Auto is the top bar's one yellow pill; Game and Publish are outlined */
-/* Graphite: the main action owns the screen's one lime; Auto is a graphite pill, its icon lime while on */
+/* the main action owns the screen's one accent; Auto is a graphite pill, its icon in the accent while on */
 .auto-btn, .auto-btn:hover:not(:disabled), .auto-btn.on { background: var(--surface-2); border-color: var(--line-2); color: var(--text); }
 .auto-btn:hover:not(:disabled) { background: var(--frame); }
 .auto-btn.on [data-i], .auto-btn.on svg { color: var(--accent); }
@@ -975,7 +975,7 @@ em { font-style: italic; }
 .composer select.chip { font: 600 12px/1 var(--label); letter-spacing: .05em; text-transform: uppercase; padding: 7px 22px 7px 11px; border-color: rgb(var(--glass-rgb) / .2); background-color: rgb(var(--glass-rgb) / .04); }
 .composer select.chip option { background: var(--deep); color: var(--text); }
 .composer button[type=submit] { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 8px 16px; font: 600 13px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; transition: transform .16s var(--ease), box-shadow .16s var(--ease); }
-.composer button[type=submit]:hover { box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .2); }
+.composer button[type=submit]:hover { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
 .composer button[type=submit]:active { transform: scale(.96); }
 /* the quiet footer line */
 .built-for { padding: 0 16px 10px; font: 500 11px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
@@ -1001,7 +1001,7 @@ em { font-style: italic; }
 /* the strip at the top left: what is happening, and how far along */
 .status { display: flex; align-items: center; gap: 9px; min-width: 250px; padding: 8px 12px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--panel-edge); border-radius: 999px; color: var(--text); font: 600 12.5px/1 var(--label); letter-spacing: .07em; text-transform: uppercase; }
 .status .st-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
-.status[data-state="working"] .st-dot, .status[data-state="planning"] .st-dot { background: var(--accent); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .2); animation: pulse 1.2s ease-in-out infinite; }
+.status[data-state="working"] .st-dot, .status[data-state="planning"] .st-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); animation: pulse 1.2s ease-in-out infinite; }
 .status[data-state="done"] .st-dot { background: var(--ok); }
 .status .st-txt { white-space: nowrap; }
 .status .st-num { margin-left: auto; font: 500 11px/1 var(--mono); color: var(--muted); letter-spacing: 0; font-variant-numeric: tabular-nums; }
@@ -1126,7 +1126,7 @@ em { font-style: italic; }
 
 /* the Auto panel: a compact mission log */
 .auto-panel { width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; font-size: 12.5px; }
-.auto-panel.working { border-color: rgb(var(--accent-rgb) / .35); }
+.auto-panel.working { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .auto-panel .ap-head b { display: inline-flex; align-items: center; gap: 6px; font: 800 20px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
 .auto-panel .ap-head b .ico { width: 16px; height: 16px; color: var(--accent); }
 .auto-panel .ap-time { font: 500 12px/1 var(--mono); color: var(--text); font-variant-numeric: tabular-nums; }
@@ -1150,7 +1150,7 @@ em { font-style: italic; }
 .auto-panel li.open small { display: block; -webkit-line-clamp: unset; }
 .auto-panel .ap-more { margin-top: 2px; padding: 0; background: none; border: 0; color: var(--info); font: 600 11px/1.4 var(--label); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
 .auto-panel li em { font: 500 11px/1.25 var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.auto-panel li.working { color: var(--text); background: rgb(var(--accent-rgb) / .07); }
+.auto-panel li.working { color: var(--text); background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .auto-panel li.working::after { pointer-events: none; background-size: 40% 100%; opacity: .25; }
 .auto-panel li.working i { color: var(--accent); animation: none; }
 /* minimised: a pill docked bottom-right, ⚡ Auto · step · timer, with the meter as its underline */
@@ -1243,7 +1243,7 @@ em { font-style: italic; }
 .player-bar select { flex: 0 1 auto; min-width: 0; max-width: min(40vw, 420px); text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .pl-btn.icon { flex: none; width: 34px; height: 34px; padding: 0; justify-content: center; }
 .player-bar .seg, .player-bar #pl-close { flex: none; }
-/* Graphite: lime is for the one primary control, so these stay graphite; Motion on is a raised fill */
+/* the accent is for the one primary control, so these stay graphite; Motion on is a raised fill */
 .pl-btn.tours { border-color: rgb(var(--glass-rgb) / .16); }
 .pl-btn#pl-motion.on { border-color: var(--line-2); background: var(--frame); color: var(--text); }
 @media (max-width: 600px) {
@@ -1297,8 +1297,8 @@ em { font-style: italic; }
 .seg.starmap button:hover { color: var(--text); background: rgb(var(--glass-rgb) / .04); }
 .seg.starmap button.on { background: none; color: var(--text); }
 .starmap button[data-sys="canvas"] { --sys: var(--text); --sys-rgb: var(--glass-rgb); }
-.starmap button[data-sys="video"] { --sys: var(--info); --sys-rgb: 0 242 242; }
-.starmap button[data-sys="app"] { --sys: var(--ok); --sys-rgb: var(--ok-rgb); }
+.starmap button[data-sys="video"] { --sys: var(--text); --sys-rgb: var(--glass-rgb); }
+.starmap button[data-sys="app"] { --sys: var(--text); --sys-rgb: var(--glass-rgb); }
 .starmap .star { position: relative; display: block; width: 7px; height: 7px; margin: 2.5px 0; border-radius: 50%; background: var(--sys); box-shadow: 0 0 6px rgb(var(--sys-rgb) / .8); transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
 .starmap .star::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgb(var(--sys-rgb) / .7); opacity: 0; transform: scale(.6); transition: opacity .2s, transform .2s var(--ease); }
 .starmap button.on .star { transform: scale(1.35); box-shadow: 0 0 0 2px rgb(var(--sys-rgb) / .25), 0 0 14px 2px rgb(var(--sys-rgb) / .9); }
@@ -1322,12 +1322,12 @@ em { font-style: italic; }
 @media (prefers-reduced-motion: reduce) { .warp { display: none; } }
 
 .node { position: relative; display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text); vertical-align: middle; box-shadow: 0 0 0 2px rgb(var(--frame-rgb) / .45), 0 0 10px rgb(var(--frame-rgb) / .9); transition: background .3s, box-shadow .3s; }
-.node::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 1px dashed rgb(var(--accent-rgb) / .75); opacity: 0; transition: opacity .3s; }
-.frame.active .node, .cw-tile.typing .node { background: var(--accent); box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / .3), 0 0 14px rgb(var(--accent-rgb) / .9); }
+.node::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 1px dashed color-mix(in srgb, var(--accent) 75%, transparent); opacity: 0; transition: opacity .3s; }
+.frame.active .node, .cw-tile.typing .node { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 90%, transparent); }
 .frame.active .node::after, .cw-tile.typing .node::after { opacity: 1; animation: orbit 4s linear infinite; }
 .frame-label .node { width: 30px; height: 30px; margin-right: 26px; vertical-align: 8px; box-shadow: 0 0 0 6px rgb(var(--frame-rgb) / .45), 0 0 40px rgb(var(--frame-rgb) / .9); }
 .frame-label .node::after { inset: -22px; border-width: 3px; }
-.frame.active .frame-label .node { box-shadow: 0 0 0 6px rgb(var(--accent-rgb) / .3), 0 0 50px rgb(var(--accent-rgb) / .9); }
+.frame.active .frame-label .node { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 50px color-mix(in srgb, var(--accent) 90%, transparent); }
 .codewall .cw-file .node { margin: 0 2px 0 1px; }
 .video-pop .vscene { position: relative; }
 .video-pop .vscene .node { position: absolute; top: 9px; right: 9px; z-index: 1; width: 6px; height: 6px; }
@@ -1342,7 +1342,7 @@ em { font-style: italic; }
 .cw-radio-who { display: flex; align-items: center; gap: 7px; font: 600 13px/1 var(--label); letter-spacing: .1em; text-transform: uppercase; }
 .cw-radio-who .to { color: var(--muted); }
 .cw-radio-who em { margin-left: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-2); font: 500 10.5px/1.3 var(--mono); font-style: normal; letter-spacing: 0; text-transform: none; color: var(--muted); }
-.cw-radio.assign .cw-radio-who em { border-color: rgb(var(--accent-rgb) / .6); color: var(--accent); }
+.cw-radio.assign .cw-radio-who em { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
 .cw-radio p { margin: 5px 0 0; font: 12.5px/1.45 var(--font); color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .radio-line { position: fixed; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .radio-line path { fill: none; stroke: var(--c, var(--accent)); stroke-width: 1.6; stroke-dasharray: 2 6; stroke-linecap: round; animation: radio-dash .8s linear infinite; filter: drop-shadow(0 0 4px var(--c, var(--accent))); }
@@ -1362,11 +1362,11 @@ html.wall .auto-panel { transform: scale(.72); transform-origin: top right; poin
 /* ---------- Make / Pro switch in the Auto window (docs/specs/09-demo-modes.md) */
 .auto-mode { display: flex; gap: 4px; margin: 2px 0 10px; }
 .auto-mode button { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; cursor: pointer; }
-.auto-mode button.on { background: var(--accent, #3b5bff); border-color: transparent; color: #fff; }
+.auto-mode button.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); }
 .auto-mode button small { display: block; opacity: .7; font-size: 11px; }
 .pro-packs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
 .pro-pack { text-align: left; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
-.pro-pack.on { outline: 2px solid var(--accent, #3b5bff); }
+.pro-pack.on { outline: 2px solid var(--accent); }
 .pro-pack b { display: block; font-size: 13px; }
 .pro-pack small { display: block; opacity: .75; font-size: 11px; line-height: 1.35; margin-top: 2px; }
 .pro-intake { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
@@ -1384,7 +1384,7 @@ html.wall .auto-panel { transform: scale(.72); transform-origin: top right; poin
 /* A1. the step card: slides in, holds for 1.2 s, slides away */
 .show-card { position: fixed; left: 0; right: 0; top: 50%; z-index: 300; transform: translateY(-50%); pointer-events: none; display: flex; justify-content: center; padding: 0 16px; }
 .show-card .sc-in { position: relative; display: flex; align-items: center; gap: 22px; width: min(860px, 100%); padding: 22px 28px; border-radius: 20px; overflow: hidden;
-  background: radial-gradient(ellipse 60% 120% at 0% 50%, var(--glow), transparent 70%), rgb(var(--deep-rgb) / .96); border: 1px solid rgb(var(--accent-rgb) / .35);
+  background: radial-gradient(ellipse 60% 120% at 0% 50%, var(--glow), transparent 70%), rgb(var(--deep-rgb) / .96); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   box-shadow: 0 0 0 1px var(--frame), 0 30px 80px rgb(var(--shade-rgb) / .7); animation: sc-in .38s var(--ease) both; }
 .show-card .sc-in::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgb(var(--glass-rgb) / .07) 50%, transparent 70%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; pointer-events: none; }
 .show-card.out .sc-in { animation: sc-out .42s cubic-bezier(.55, 0, .9, .5) both; }
@@ -1408,8 +1408,8 @@ body.show-fade .viewport, body.show-fade .appview, body.show-fade .video-pop { a
 /* the view Auto is working in pulses (live), and the working step shimmers */
 .starmap button.live .star { animation: live-pulse 1.1s ease-in-out infinite; }
 .starmap button.live span { color: var(--accent); }
-@keyframes live-pulse { 50% { box-shadow: 0 0 0 5px rgb(var(--accent-rgb) / .25), 0 0 16px 3px rgb(var(--accent-rgb) / .9); background: var(--accent); } }
-.auto-panel li.working { position: relative; border-radius: 6px; background: linear-gradient(90deg, transparent, rgb(var(--accent-rgb) / .12), transparent) 0 0 / 200% 100%; animation: shimmer 1.6s linear infinite; }
+@keyframes live-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 16px 3px color-mix(in srgb, var(--accent) 90%, transparent); background: var(--accent); } }
+.auto-panel li.working { position: relative; border-radius: 6px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 12%, transparent), transparent) 0 0 / 200% 100%; animation: shimmer 1.6s linear infinite; }
 .auto-panel .ap-show { display: flex; gap: 6px; margin-top: 10px; }
 .auto-panel .ap-show button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font: 600 12px/1 var(--label); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
 .auto-panel .ap-show .ico { width: 14px; height: 14px; }
@@ -1422,12 +1422,12 @@ body.show-fade .viewport, body.show-fade .appview, body.show-fade .video-pop { a
 .rv-cursor .tag { background: var(--info); color: var(--accent-ink); }
 .rv-cursor .tag .ico { width: 13px; height: 13px; }
 .rv-cursor.leaving { opacity: 0; }
-.rv-flag { position: absolute; z-index: 3; pointer-events: none; border: calc(var(--inv, 6) * 2px) dashed var(--accent); border-radius: calc(var(--inv, 6) * 4px); background: rgb(var(--accent-rgb) / .08); animation: rv-in .35s var(--ease) both; }
+.rv-flag { position: absolute; z-index: 3; pointer-events: none; border: calc(var(--inv, 6) * 2px) dashed var(--accent); border-radius: calc(var(--inv, 6) * 4px); background: color-mix(in srgb, var(--accent) 8%, transparent); animation: rv-in .35s var(--ease) both; }
 .rv-flag span { position: absolute; left: -2px; bottom: 100%; max-width: 100%; padding: calc(var(--inv, 6) * 2px) calc(var(--inv, 6) * 6px); background: var(--accent); color: var(--accent-ink); font: 600 calc(var(--inv, 6) * 11px)/1.25 var(--mono); border-radius: calc(var(--inv, 6) * 4px) calc(var(--inv, 6) * 4px) 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rv-flag.fixed { border-color: var(--ok); border-style: solid; background: rgb(var(--ok-rgb) / .22); animation: rv-fixed 1.1s ease-out both; }
+.rv-flag.fixed { border-color: var(--ok); border-style: solid; background: color-mix(in srgb, var(--accent) 22%, transparent); animation: rv-fixed 1.1s ease-out both; }
 .rv-flag.fixed span { background: var(--ok); }
 @keyframes rv-in { from { opacity: 0; transform: scale(1.04); } }
-@keyframes rv-fixed { 0% { opacity: 1; } 35% { opacity: 1; box-shadow: 0 0 0 calc(var(--inv, 6) * 8px) rgb(var(--ok-rgb) / .35); } 100% { opacity: 0; } }
+@keyframes rv-fixed { 0% { opacity: 1; } 35% { opacity: 1; box-shadow: 0 0 0 calc(var(--inv, 6) * 8px) color-mix(in srgb, var(--accent) 35%, transparent); } 100% { opacity: 0; } }
 
 /* A3. the deploy shot */
 .appview:has(> .deployshot) { position: relative; }
@@ -1454,7 +1454,7 @@ body.show-fade .viewport, body.show-fade .appview, body.show-fade .video-pop { a
 .ds-globe[data-stage="upload"] .n0, .ds-globe[data-stage="building"] .n0, .ds-globe[data-stage="building"] .n1, .ds-globe[data-stage="building"] .n2, .ds-globe[data-stage="ready"] .g-node { fill: var(--ok); }
 .ds-globe[data-stage="building"] .g-arc, .ds-globe[data-stage="ready"] .g-arc { opacity: 1; }
 .ds-globe.pulse svg { animation: ds-pulse .7s var(--ease); }
-@keyframes ds-pulse { 40% { transform: scale(1.06); filter: drop-shadow(0 0 22px rgb(var(--accent-rgb) / .6)); } }
+@keyframes ds-pulse { 40% { transform: scale(1.06); filter: drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 60%, transparent)); } }
 .ds-stages { list-style: none; display: flex; gap: 14px; margin: 0; padding: 0; font: 600 12px/1 var(--label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .ds-stages li { display: flex; align-items: center; gap: 6px; }
 .ds-stages i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line-2); }
@@ -1507,7 +1507,7 @@ body.side-min .show-sum { grid-area: 2 / 1 / 3 / -1; }
 .ss-total span { color: var(--muted); font-size: 12px; }
 .ss-bar { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; background: var(--panel); }
 .ss-bar i { min-width: 3px; background: var(--ok); animation: ss-grow .8s var(--ease) both; transform-origin: 0 50%; }
-.ss-bar i:nth-child(odd) { background: rgb(var(--ok-rgb) / .7); }
+.ss-bar i:nth-child(odd) { background: color-mix(in srgb, var(--accent) 70%, transparent); }
 .ss-bar i.failed { background: var(--hot); }
 .ss-bar i.skipped, .ss-bar i.wait { background: var(--line-2); }
 @keyframes ss-grow { from { transform: scaleX(0); } }
@@ -1524,7 +1524,7 @@ body.side-min .show-sum { grid-area: 2 / 1 / 3 / -1; }
 .ss-crew { display: flex; align-items: center; gap: 2px; margin-bottom: 14px; }
 .ss-crew .hermia { width: 26px; height: 26px; margin-right: 4px; }
 .ss-crew span { margin-left: 8px; font-size: 12px; color: var(--muted); }
-.ss-live { display: flex; align-items: center; gap: 16px; padding: 12px; border-radius: 14px; border: 1px solid rgb(var(--accent-rgb) / .35); background: rgb(var(--accent-rgb) / .05); margin-bottom: 14px; }
+.ss-live { display: flex; align-items: center; gap: 16px; padding: 12px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 5%, transparent); margin-bottom: 14px; }
 .ss-qr { flex: none; width: 112px; height: 112px; border-radius: 10px; overflow: hidden; }
 .qr { display: block; width: 100%; height: 100%; }
 .qr .qr-bg { fill: var(--paper); }
@@ -1551,7 +1551,7 @@ body.side-min .show-sum { grid-area: 2 / 1 / 3 / -1; }
 .lk-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; padding-bottom: 20px; }
 .lk-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); }
 .lk-card[data-status="skipped"] { opacity: .5; }
-.lk-card[data-status="opened"], .lk-card[data-status="sent"] { border-color: rgb(var(--ok-rgb) / .5); }
+.lk-card[data-status="opened"], .lk-card[data-status="sent"] { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .lk-head { display: flex; align-items: center; gap: 8px; }
 .lk-net { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--panel-2); font: 700 13px/1 var(--mono); color: var(--text); }
 .lk-head b { font: 600 14px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
@@ -1641,3 +1641,6 @@ body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn,
 .guest-bar .g-name { color: var(--text); max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
 .g-form .g-err { color: var(--ui-destructive, #ff6b6b); margin: 4px 0 0; font-size: 13px; }
 @media (max-width: 760px) { .guest-bar .g-left, .guest-bar .g-name { display: none; } }
+
+/* Always minimal text (docs/ux/RULES.md): no captions on the canvas; double-click still sets the camera to auto */
+.camera-hint { display: none; }

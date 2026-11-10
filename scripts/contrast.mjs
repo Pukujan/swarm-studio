@@ -4,7 +4,11 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 const W = process.argv[2] || join(dirname(fileURLToPath(import.meta.url)), '..')
 const css = readFileSync(`${W}/web/canvas.css`, 'utf8'), root = css.slice(css.indexOf(':root {'), css.indexOf('\n}', css.indexOf(':root {')))
-const tok = n => { const m = new RegExp(`--${n}:\\s*(?:var\\([^,]+,\\s*)?(#[0-9A-Fa-f]{6})`).exec(root); if (!m) throw new Error('no token ' + n); return m[1] }
+const tok = n => {
+  const m = new RegExp(`--${n}:\\s*(?:var\\(--([\\w-]+)\\)|(?:var\\([^,]+,\\s*)?(#[0-9A-Fa-f]{6}))`).exec(root)
+  if (!m) throw new Error('no token ' + n)
+  return m[1] ? tok(m[1]) : m[2]
+}
 globalThis.window = {}; eval(readFileSync(`${W}/web/crew.js`, 'utf8'))
 const { contrast, color, ink, NAMES } = window.SwarmCrew
 const mix = (fg, bg, a) => '#' + [1, 3, 5].map(i => Math.round(parseInt(fg.slice(i, i + 2), 16) * a + parseInt(bg.slice(i, i + 2), 16) * (1 - a)).toString(16).padStart(2, '0')).join('')

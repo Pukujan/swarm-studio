@@ -21,7 +21,7 @@ function makeOrbit() {
   root.hidden = true
   root.innerHTML = `<canvas aria-hidden="true"></canvas><div class="ob-labels"></div><div class="ob-crew"></div><div class="ob-talk"></div><div class="ob-empty" hidden></div><div class="ob-list"></div>
     <button class="ui-btn ui-btn-outline ui-btn-sm ob-recentre" hidden>${ico('target')}Recentre</button>
-    <div class="think-log" hidden role="dialog" aria-label="Hermia's thinking"><header><b>Hermia’s <em>thinking</em></b><button class="x" title="Close (Esc)" aria-label="Close">${ico('x')}</button></header><ol></ol></div>
+    <div class="think-log" hidden role="dialog" aria-label="Hermia's thinking"><header><b>Hermia’s <em>thinking</em></b><button class="x" aria-label="Close">${ico('x')}</button></header><ol></ol></div>
     <div class="comm" role="status" aria-live="polite">
       <div class="comm-thought" hidden></div>
       <img src="brand/hermia-mark.svg" alt="">

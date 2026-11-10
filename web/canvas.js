@@ -103,9 +103,9 @@ const TOOLS = [
 ]
 const TOOL = Object.fromEntries(TOOLS.map(t => [t.id, t]))
 // The crew (web/crew.js): each agent is a little courier sprite, the same for the same name.
-const Crew = window.SwarmCrew || { color: () => '#F2F2F2', ink: () => '#05051a', avatar: () => '' }
+const Crew = window.SwarmCrew || { color: () => '#F2F2F2', ink: () => '#0b0b0c', avatar: () => '' }
 // A cursor's head: a small pointer nib in the agent's colour, with its avatar riding beside it.
-const ARROW = (color, name) => `<svg class="nib" viewBox="0 0 10 10" aria-hidden="true"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill="${color}" stroke="#05051a" stroke-width="1" stroke-linejoin="round"/></svg><span class="arrow">${Crew.avatar(name, 30)}</span>`
+const ARROW = (color, name) => `<svg class="nib" viewBox="0 0 10 10" aria-hidden="true"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill="${color}" stroke="#0b0b0c" stroke-width="1" stroke-linejoin="round"/></svg><span class="arrow">${Crew.avatar(name, 30)}</span>`
 // The planner's mark (Commander Hermia), for her messages in Chat
 const HERMIA = '<img class="hermia" src="brand/hermia-mark.svg" alt="" width="18" height="18">'
 
@@ -494,13 +494,13 @@ function addFrame(p) {
   el.className = 'frame'
   const x = p.index * (FRAME_W + GAP)
   el.style.left = `${x}px`
-  el.innerHTML = `<div class="frame-label"></div><iframe title=""></iframe>`
+  el.innerHTML = `<div class="frame-label"></div><iframe></iframe>`
   el.querySelector('.frame-label').textContent = `Page ${p.index + 1} · ${p.title}`
   el.querySelector('.frame-label').insertAdjacentHTML('beforeend', `<small>/${p.id}</small>`)
   // each page is a star node: it glows, and an orbit ring turns while an agent works on it
   el.querySelector('.frame-label').insertAdjacentHTML('afterbegin', '<i class="node" aria-hidden="true"></i>')
   const iframe = el.querySelector('iframe')
-  iframe.title = p.title
+  iframe.setAttribute('aria-label', p.title || 'Page')
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
   else iframe.src = 'frame.html'
   const frame = { id: p.id, title: p.title, index: p.index, x, h: 700, el, iframe, ready: false, slots: new Map(), geo: { slots: {}, gotos: [] } }
@@ -904,7 +904,7 @@ function linkWires(f) {
     const k = `${f.id}->${g.target}`
     if (S.wires.has(k)) continue
     const a = l.agent && S.agents.get(l.agent)
-    const color = a?.color || '#7c9cff'
+    const color = a?.color || '#a1a1a6'
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
     path.setAttribute('pathLength', '1')
     path.setAttribute('stroke', color)
@@ -991,7 +991,6 @@ function renderTheme() {
   for (const [k, v] of Object.entries(t.vars || {})) {
     const sw = document.createElement('div')
     sw.className = 'sw'
-    sw.title = `${k} ${v}`
     sw.style.background = v
     els.theme.append(sw)
   }
@@ -1061,7 +1060,7 @@ function renderTree() {
       const open = layersOpen.has(l.key), hid = layersHidden.has(l.key)
       const row = document.createElement('div')
       row.className = `ly ${l.status}${S.sel === l.key ? ' sel' : ''}${hid ? ' hid' : ''}`
-      row.innerHTML = `<span class="tw">${l.status === 'done' ? (open ? '▼' : '▶') : ''}</span><span class="dot"></span><span></span><span class="who"></span><button class="eye" title="${hid ? 'Show' : 'Hide'} on the canvas">${hid ? '◌' : '👁'}</button>`
+      row.innerHTML = `<span class="tw">${l.status === 'done' ? (open ? '▼' : '▶') : ''}</span><span class="dot"></span><span></span><span class="who"></span><button class="eye" aria-label="${hid ? 'Show' : 'Hide'} on the canvas">${hid ? '◌' : '👁'}</button>`
       row.children[2].textContent = l.role
       if (a) {
         row.children[3].textContent = l.status === 'done' ? `${a.name} ${(l.ms / 1000).toFixed(1)}s` : a.name
@@ -1646,8 +1645,8 @@ function pageDoc(id, scripts) {
 <style>:root{--radius:${t.radius || '12px'};--font-heading:'${heading}',Georgia,serif;--font-body:'${body}',system-ui,sans-serif;${vars}}
 html,body{margin:0;background:var(--background,#fff);color:var(--foreground,#111);font-family:var(--font-body)}
 [data-goto]{cursor:pointer}
-body.hint [data-goto]{outline:3px solid #7c9cffcc;outline-offset:2px}
-.tour-hover{outline:2px solid #7c9cffaa;outline-offset:3px;filter:brightness(1.06)}
+body.hint [data-goto]{outline:3px solid #8e8e93cc;outline-offset:2px}
+.tour-hover{outline:2px solid #8e8e93aa;outline-offset:3px;filter:brightness(1.06)}
 .tour-press{transform:scale(.96);transition:transform .1s}</style>
 ${scripts ?? PLAYER_SCRIPT + layoutTag() + motionTags()}</head><body>${html}</body></html>`
 }
@@ -2091,13 +2090,13 @@ function renderDesign(now) {
         body += `<div class="dsec"><h4>${sec}</h4><div class="drow${['Fill', 'Effects', 'Typography'].includes(sec) ? ' one' : ''}">`
       }
       const editable = r.edit && l.status === 'done'
-      body += `<div class="dval${(design.chg.get(id) || 0) > now ? ' chg' : ''}${editable ? ' edit' : ''}"${editable ? ` data-edit="${r.edit}" title="Change ${r.edit}"` : ''}>${r.label ? `<i>${r.label}</i>` : ''}${r.val}</div>`
+      body += `<div class="dval${(design.chg.get(id) || 0) > now ? ' chg' : ''}${editable ? ' edit' : ''}"${editable ? ` data-edit="${r.edit}"` : ''}>${r.label ? `<i>${r.label}</i>` : ''}${r.val}</div>`
     }
     if (sec) body += '</div></div>'
     const where = `${l.page === '*' ? 'shared' : l.page} · ${l.status === 'done' ? 'done' : 'building'}`
     const mode = S.sel ? 'selected ✕' : design.pinned ? 'pinned' : 'following'
     const hint = l.status === 'done' ? '<div class="dhint">Click a value to change this section. Variables change every page.</div>' : `<div class="dhint">Editable when ${esc(owner?.name || 'its agent')} finishes. Click any finished section on the canvas to edit it.</div>`
-    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${l.status === 'done' && S.run ? `<div class="drow2"><button class="dtrace" title="Every model call for this section: the prompt and what came back">🔍 Trace</button><button class="dversions" title="Every version this section has had; put any one back">🕘 Versions</button></div>` : ''}${l.status === 'done' ? picturesHtml(l) : ''}${body}`
+    html = `<div class="dsel"><span class="dot" style="background:${owner?.color || '#888'}"></span><div><b>${esc(l.role || l.id)}</b><small>${esc(owner?.name || '')} · ${esc(where)}</small></div><span class="pin">${mode}</span></div>${hint}${l.status === 'done' && S.run ? `<div class="drow2"><button class="dtrace" aria-label="Every model call for this section: the prompt and what came back">🔍 Trace</button><button class="dversions" aria-label="Every version this section has had; put any one back">🕘 Versions</button></div>` : ''}${l.status === 'done' ? picturesHtml(l) : ''}${body}`
   }
   if (html !== design.last) {
     design.last = html
@@ -2126,21 +2125,21 @@ function renderVars(now) {
   const fresh = S.themeAt && now - S.themeAt < 3000
   let i = 0
   const anim = () => (fresh ? ` reveal" style="animation-delay:${i++ * 110}ms` : '')
-  const colors = Object.entries(t.vars || {}).map(([k, v]) => `<div class="dvar edit${anim()}" data-var="${esc(k)}" title="Change ${esc(k.slice(2))} on every page"><span class="sw" style="background:${esc(v)}"></span><div><code>${esc(k.slice(2))}</code><br><small>${esc(v)}</small></div><small>${uses(k.slice(2))}×</small></div>`).join('')
-  const fontRow = (role, name) => `<div class="dvar edit${anim()}" data-font="${role}" title="Change the ${role} font" style="grid-template-columns:44px 1fr auto"><span class="ag" style="font:600 24px/1 '${esc(name)}',serif">Ag</span><div><code>${role}</code><br><small>${esc(name)}</small></div><small>${uses(`font-${role}`)}×</small></div>`
+  const colors = Object.entries(t.vars || {}).map(([k, v]) => `<div class="dvar edit${anim()}" data-var="${esc(k)}"><span class="sw" style="background:${esc(v)}"></span><div><code>${esc(k.slice(2))}</code><br><small>${esc(v)}</small></div><small>${uses(k.slice(2))}×</small></div>`).join('')
+  const fontRow = (role, name) => `<div class="dvar edit${anim()}" data-font="${role}" style="grid-template-columns:44px 1fr auto"><span class="ag" style="font:600 24px/1 '${esc(name)}',serif">Ag</span><div><code>${role}</code><br><small>${esc(name)}</small></div><small>${uses(`font-${role}`)}×</small></div>`
   const sizes = {}
   for (const m of texts.matchAll(/(?:^|\s)(?:(?:sm|md|lg|xl):)?text-(xs|sm|base|lg|xl|[2-9]xl)\b/g)) sizes[m[1]] = (sizes[m[1]] || 0) + 1
   const scale = Object.entries(sizes).sort((a, b) => TW_SIZE[b[0]] - TW_SIZE[a[0]]).slice(0, 7).map(([k, n]) => {
     const px = TW_SIZE[k], heading = px >= 24
-    return `<div class="dscale edit" data-size="${k}" title="Change every text-${k}"><code>${k} · ${px}</code><span style="font:${heading ? 600 : 400} ${Math.min(px, 22)}px '${esc(heading ? t.fonts?.heading : t.fonts?.body)}',sans-serif">${heading ? 'Heading' : 'Body text'}</span><small>${n}×</small></div>`
+    return `<div class="dscale edit" data-size="${k}"><code>${k} · ${px}</code><span style="font:${heading ? 600 : 400} ${Math.min(px, 22)}px '${esc(heading ? t.fonts?.heading : t.fonts?.body)}',sans-serif">${heading ? 'Heading' : 'Body text'}</span><small>${n}×</small></div>`
   }).join('')
   const html = `${fresh ? '<div class="dsetup">Setting up the design system</div>' : ''}
 <div class="dsec"><h4>${esc(t.name || 'Theme')}<small>${esc(t.direction || '').slice(0, 40)}</small></h4></div>
 <div class="dsec"><h4>Colors<small>${Object.keys(t.vars || {}).length} tokens</small></h4>${colors}</div>
 <div class="dsec"><h4>Typography</h4>${fontRow('heading', t.fonts?.heading || 'Georgia')}${fontRow('body', t.fonts?.body || 'Inter')}</div>
-<div class="dsec"><h4>Scale<small>whole site</small></h4><div class="dsteps"><span>Type</span><button data-scale="type:-1" title="Every heading one step smaller">−</button><button data-scale="type:1" title="Every heading one step bigger">+</button><span>Spacing</span><button data-scale="space:-1" title="Tighter spacing everywhere">−</button><button data-scale="space:1" title="Looser spacing everywhere">+</button></div></div>
+<div class="dsec"><h4>Scale<small>whole site</small></h4><div class="dsteps"><span>Type</span><button data-scale="type:-1" aria-label="Every heading one step smaller">−</button><button data-scale="type:1" aria-label="Every heading one step bigger">+</button><span>Spacing</span><button data-scale="space:-1" aria-label="Tighter spacing everywhere">−</button><button data-scale="space:1" aria-label="Looser spacing everywhere">+</button></div></div>
 ${scale ? `<div class="dsec"><h4>Type scale<small>click to remap</small></h4>${scale}</div>` : ''}
-<div class="dsec"><h4>Radius</h4><div class="dvar edit${anim()}" data-radius="" title="Change the radius everywhere" style="grid-template-columns:18px 1fr auto"><span class="sw" style="border-radius:${esc(t.radius || '12px')};border:2px solid var(--accent);background:none"></span><code>radius</code><small>${esc(t.radius || '')} · ${uses('radius')}×</small></div></div>`
+<div class="dsec"><h4>Radius</h4><div class="dvar edit${anim()}" data-radius="" style="grid-template-columns:18px 1fr auto"><span class="sw" style="border-radius:${esc(t.radius || '12px')};border:2px solid var(--accent);background:none"></span><code>radius</code><small>${esc(t.radius || '')} · ${uses('radius')}×</small></div></div>`
   if (html !== design.lastVars) els.dVars.innerHTML = design.lastVars = html
 }
 
@@ -2352,8 +2351,6 @@ function renderUndo() {
   if (!u) return
   u.disabled = !history.undo.length
   r.disabled = !history.redo.length
-  u.title = history.undo.length ? `Undo ${history.undo.at(-1).label} (⌘Z / Ctrl+Z)` : 'Nothing to undo (⌘Z / Ctrl+Z)'
-  r.title = history.redo.length ? `Redo ${history.redo.at(-1).label} (⇧⌘Z / Ctrl+Y)` : 'Nothing to redo (⇧⌘Z / Ctrl+Y)'
 }
 document.getElementById('undo-btn').onclick = () => undo()
 document.getElementById('redo-btn').onclick = () => redo()
@@ -2529,11 +2526,11 @@ function showExport(e) {
   exp.el = document.createElement('div')
   exp.el.className = 'export-pop'
   const zip = `/api/runs/${encodeURIComponent(e.run)}/export.zip?k=${encodeURIComponent(BOOT.token || '')}`
-  exp.el.innerHTML = `<div class="vhead pop-title"><span>Exported, <em>ready</em></span><button class="vclose" title="Close" aria-label="Close">${ico('x')}</button></div>
+  exp.el.innerHTML = `<div class="vhead pop-title"><span>Exported, <em>ready</em></span><button class="vclose" aria-label="Close">${ico('x')}</button></div>
     <div class="xrow"><b>html/</b><span>${e.pages} pages, open index.html</span></div>
     <div class="xrow"><b>react/</b><span>${e.sections} section components · Vite + Tailwind · <code>npm i && npm run dev</code></span></div>
     <div class="xrow"><b>aba/</b><span>spec.md + blueprint.json for an app builder</span></div>
-    <div class="xpath" title="${esc(e.dir)}">${esc(e.dir)}</div>
+    <div class="xpath">${esc(e.dir)}</div>
     <div class="vfoot"><span></span>${e.zip ? `<a class="vagain" href="${zip}" download>Download .zip</a>` : ''}</div>`
   document.body.append(exp.el)
   exp.el.querySelector('.vclose').onclick = () => { exp.el.remove(); exp.el = null }
@@ -2556,7 +2553,7 @@ function pubPop(html) {
   pub.el?.remove()
   pub.el = document.createElement('div')
   pub.el.className = 'export-pop publish-pop'
-  pub.el.innerHTML = `<div class="vhead pop-title"><span>Publish the <em>website</em><small>the designed pages, no server</small></span><button class="vclose" title="Close" aria-label="Close">${ico('x')}</button></div>${html}`
+  pub.el.innerHTML = `<div class="vhead pop-title"><span>Publish the <em>website</em><small>the designed pages, no server</small></span><button class="vclose" aria-label="Close">${ico('x')}</button></div>${html}`
   document.body.append(pub.el)
   pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
   closeable(pub.el, () => { pub.el?.remove(); pub.el = null }, { extra: ['#pub-menu', '.pubwrap'] })
@@ -2579,7 +2576,7 @@ async function publishMenu(force) {
   const who = id => (id === 'github' ? h.github : h[id]?.user)
   const row = id => {
     const x = HOSTS[id], u = who(id)
-    if (u || id === 'github') return `<div class="prow"><button class="popt" data-target="${id}"${u ? '' : ' disabled'}><b>${x.label}</b><span>${u ? x.how(u) : x.off}${h[id]?.via === 'octo' ? ` · through your Octo vault${h[id].item ? ` (${esc(h[id].item)})` : ''}` : ''}</span></button>${u && id !== 'github' && !h[id]?.env ? `<button class="pdisc" data-disc="${id}" title="Disconnect ${x.label}">×</button>` : ''}</div>`
+    if (u || id === 'github') return `<div class="prow"><button class="popt" data-target="${id}"${u ? '' : ' disabled'}><b>${x.label}</b><span>${u ? x.how(u) : x.off}${h[id]?.via === 'octo' ? ` · through your Octo vault${h[id].item ? ` (${esc(h[id].item)})` : ''}` : ''}</span></button>${u && id !== 'github' && !h[id]?.env ? `<button class="pdisc" data-disc="${id}" aria-label="Disconnect ${x.label}">×</button>` : ''}</div>`
     const url = h.providers?.[id]?.tokenUrl || '#'
     return `<details class="pconn"><summary><b>Connect ${x.label}</b><span>${x.token.replace(/vercel\.com\/account\/tokens|a token/, m => `<a href="${esc(url)}" target="_blank" rel="noopener">${m}</a>`)}</span></summary>
       <form data-conn="${id}"><input type="password" autocomplete="off" spellcheck="false" placeholder="${x.label} token, or an Octo vault grant"><button>Connect</button></form><div class="phint">An Octo vault grant (octo_vault_…) keeps the token in your vault: Swarm Studio stores only a working key that can reach ${x.label} through Octo's relay.</div><div class="perr"></div></details>`
@@ -2668,7 +2665,7 @@ function textEdit(l) {
   if (!nodes.length) return botMsg('That section has no text to edit.')
   const wrap = document.createElement('div')
   wrap.className = 'finfo-wrap'
-  wrap.innerHTML = `<div class="finfo textedit"><button class="fix" title="Close">×</button><h3>✏️ Edit text <small></small></h3><div class="te-list"></div><div class="fi-foot"><span class="dim">Tip: ⌘Z undoes it after saving.</span><button class="fi-save">Save</button></div></div>`
+  wrap.innerHTML = `<div class="finfo textedit"><button class="fix" aria-label="Close">×</button><h3>✏️ Edit text <small></small></h3><div class="te-list"></div><div class="fi-foot"><span class="dim">Tip: ⌘Z undoes it after saving.</span><button class="fi-save">Save</button></div></div>`
   wrap.querySelector('h3 small').textContent = l.role || l.id
   const list = wrap.querySelector('.te-list')
   nodes.forEach((n, i) => {
@@ -2723,7 +2720,7 @@ function drawComment() {
     cmt.el.className = `cbox${open ? ' open' : ''}`
     cmt.el.innerHTML = open
       ? `<textarea rows="2" placeholder="Tell an agent what to change in ${esc(l.role || l.id)}…"></textarea><div class="crow"><small>Enter to send · Esc to close</small><button>Send</button></div>`
-      : '<button class="cpin" title="Comment: tell an agent what to change here">💬</button>'
+      : '<button class="cpin" aria-label="Comment: tell an agent what to change here">💬</button>'
     document.body.append(cmt.el)
     if (open) {
       const ta = cmt.el.querySelector('textarea')
@@ -3052,15 +3049,15 @@ function renderVideo() {
   const opts = `<div class="vopts"><label>Style <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Cut <select class="vcut">${VIDEO_CUTS.map(([v, l]) => `<option value="${v}" ${videoOpts.transition === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><input class="videa" placeholder="Your idea for the video (optional): “end on the night market crowd”, “for Instagram, upbeat”" value="${esc(videoOpts.idea || '')}"><div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const cut = video.cuts[video.pick], latest = video.pick < 0 || video.pick === video.cuts.length - 1
   const src = latest ? video.src : `/video/${video.run}/cut/${cut.name}`, file = cut?.file || video.file
-  const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" title="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
+  const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" aria-label="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
   const body = video.src && !video.busy
     ? `${cuts}<video src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
-      ? `${liveOn ? `<div class="vlive"><iframe src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" title="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
+      ? `${liveOn ? `<div class="vlive"><iframe src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
         : `<div class="vstage">A short promo of this build: the planner writes the storyboard and a voiceover from your pages and pictures, HyperFrames renders it in your theme, and Kokoro reads it over music made for it, all on this machine.</div>${opts}<div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
-  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><button class="vclose" title="Close" aria-label="Close">${ico('x')}</button></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
+  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><button class="vclose" aria-label="Close">${ico('x')}</button></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
   el.querySelector('.vclose').onclick = () => toggleVideo(false)
   const again = el.querySelector('.vagain')
   if (again) again.onclick = () => makeVideo()
@@ -3103,7 +3100,7 @@ function bigScreen(on) {
   if (!on || !video.src) return
   const wrap = document.createElement('div')
   wrap.className = 'video-big'
-  wrap.innerHTML = `<video src="${esc(video.src)}" controls autoplay playsinline></video><button class="vbclose" title="Back to the canvas (Esc)">×</button>`
+  wrap.innerHTML = `<video src="${esc(video.src)}" controls autoplay playsinline></video><button class="vbclose" aria-label="Back to the canvas (Esc)">×</button>`
   document.body.append(wrap)
   const v = wrap.querySelector('video')
   const small = video.el?.querySelector('video')
@@ -3175,7 +3172,7 @@ function freeze(f, image) {
 function thaw(f) {
   if (!f.frozen) return
   const iframe = document.createElement('iframe')
-  iframe.title = f.title
+  iframe.setAttribute('aria-label', f.title || 'Page')
   iframe.style.height = `${f.h}px`
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
   else iframe.src = 'frame.html'
@@ -3403,7 +3400,7 @@ function sideMin(on = !document.body.classList.contains('side-min')) {
   store.set('sideMin', on)
   if (on) showTab('chat')
   $('#side-min').textContent = on ? '⇥' : '⇤'
-  $('#side-min').title = on ? 'Back to the full side panel' : 'Make the side panel a small chat over the canvas'
+  $('#side-min').setAttribute('aria-label', on ? 'Full side panel' : 'Shrink the side panel')
 }
 $('#side-min').onclick = () => sideMin()
 if (store.get('sideMin')) sideMin(true)
@@ -3466,7 +3463,7 @@ function renderFiles() {
   if (!els.files.previousElementSibling?.classList.contains('file-tools')) {
     const bar = document.createElement('div')
     bar.className = 'file-tools'
-    bar.innerHTML = `<input type="search" placeholder="Search names, briefs, themes, tags…  (tag:, has:video, on:vercel)" class="fq"><select class="fsort" title="Sort"><option value="new">Newest</option><option value="recent">Last changed</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option><option value="manual">My order</option></select><select class="fgroup" title="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="folderday">By folder, then day</option><option value="none">No groups</option></select><button class="fnewf" title="New folder">＋📁</button>`
+    bar.innerHTML = `<input type="search" placeholder="Search names, briefs, themes, tags…  (tag:, has:video, on:vercel)" class="fq"><select class="fsort" aria-label="Sort"><option value="new">Newest</option><option value="recent">Last changed</option><option value="old">Oldest</option><option value="name">Name</option><option value="size">Most pages</option><option value="manual">My order</option></select><select class="fgroup" aria-label="Group"><option value="day">By day</option><option value="folder">By folder</option><option value="folderday">By folder, then day</option><option value="none">No groups</option></select><button class="fnewf" aria-label="New folder">＋📁</button>`
     els.files.before(bar)
     bar.querySelector('.fq').oninput = e => { fileView.q = e.target.value.toLowerCase(); renderFiles() }
     bar.querySelector('.fsort').value = fileView.sort
@@ -3532,16 +3529,15 @@ function renderFiles() {
 function fileItem(f, shown) {
   const item = document.createElement('div')
   item.className = `file${f.id === shown ? ' on' : ''}`
-  item.innerHTML = `<div class="ttl"><span></span><button class="fmore" title="Folder, show in Finder">⋯</button></div><div class="meta"></div>`
+  item.innerHTML = `<div class="ttl"><span></span><button class="fmore" aria-label="Folder, show in Finder">⋯</button></div><div class="meta"></div>`
   item.querySelector('.ttl span').textContent = f.title
-  item.title = f.brief
   const when = new Date(f.t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const meta = item.lastChild
   if (f.live) meta.innerHTML = '<span class="live">● building</span> · '
   const edited = f.updated && f.updated - f.t > 60e3 ? ` · edited ${new Date(f.updated).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''
   meta.append(`${when}${edited} · ${f.pages} pages · ${f.layers} layers${f.ms ? ` · ${(f.ms / 1000).toFixed(0)}s` : ''}`)
   const badges = [f.video && '🎬', f.published?.length && `🌐 ${f.published.length}`, !/^folder/.test(fileView.group) && f.folder && `📁 ${f.folder}`, ...(f.tags || []).map(t => `#${t}`)].filter(Boolean)
-  if (f.theme?.colors?.length) { const sw = document.createElement('span'); sw.className = 'fswatch'; sw.innerHTML = f.theme.colors.slice(0, 3).map(c => `<i style="background:${esc(c)}"></i>`).join(''); sw.title = `${f.theme.name} · ${f.theme.fonts?.heading || ''}`; item.querySelector('.ttl').prepend(sw) }
+  if (f.theme?.colors?.length) { const sw = document.createElement('span'); sw.className = 'fswatch'; sw.innerHTML = f.theme.colors.slice(0, 3).map(c => `<i style="background:${esc(c)}"></i>`).join(''); item.querySelector('.ttl').prepend(sw) }
   if (badges.length) { const b = document.createElement('span'); b.className = 'fbadges'; b.textContent = badges.join('  '); meta.append(b) }
   item.onclick = () => openRun(f.id)
   item.draggable = true
@@ -3658,7 +3654,7 @@ function folderHead(sum, folder) {
   const b = document.createElement('button')
   b.className = 'fmore'
   b.textContent = '⋯'
-  b.title = 'Rename or delete this folder'
+  b.setAttribute('aria-label', 'Folder options')
   sum.querySelector('em').before(b)
   b.onclick = e => {
     e.preventDefault(); e.stopPropagation()
@@ -3691,7 +3687,7 @@ async function traceView(run, filter = {}) {
   const wrap = document.createElement('div')
   wrap.className = 'finfo-wrap trace-wrap'
   wrap.innerHTML = `<div class="finfo trace">
-    <button class="fix" title="Close">×</button>
+    <button class="fix" aria-label="Close">×</button>
     <h3>🔍 Traces <small></small></h3>
     <div class="tr-bar"><input type="search" class="tr-q" placeholder="Filter: a section, page, agent, or build / fix / review"><label class="tr-on"><input type="checkbox"> Record traces</label></div>
     <div class="tr-list"></div>
@@ -3780,7 +3776,7 @@ function fileInfo(f) {
   const row = (k, v) => (v || v === 0 ? `<dt>${k}</dt><dd>${v}</dd>` : '')
   const sites = Object.entries(f.sites || {}).map(([k, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(k)}</a>`).join(' · ')
   wrap.innerHTML = `<div class="finfo">
-    <button class="fix" title="Close">×</button>
+    <button class="fix" aria-label="Close">×</button>
     <label>Name<input class="fi-title" value="${esc(f.title)}" placeholder="${esc(f.autoTitle)}"></label>
     <label>Tags<input class="fi-tags" value="${esc((f.tags || []).join(', '))}" placeholder="client, food, draft"></label>
     <label>Folder<input class="fi-folder" value="${esc(f.folder || '')}" placeholder="none"></label>
@@ -4068,7 +4064,7 @@ async function renderCode() {
     if (!groups.has(top)) groups.set(top, [])
     groups.get(top).push(f)
   }
-  appEls.tree.innerHTML = [...groups].map(([g, list]) => `<h4>${esc(g)}</h4>${list.map(f => `<div data-path="${esc(f.path)}" class="${f.path === appv.file ? 'on' : ''}" title="${esc(f.path)}">${esc(f.path.split('/').pop())}</div>`).join('')}`).join('') || '<h4>no files yet</h4>'
+  appEls.tree.innerHTML = [...groups].map(([g, list]) => `<h4>${esc(g)}</h4>${list.map(f => `<div data-path="${esc(f.path)}" class="${f.path === appv.file ? 'on' : ''}">${esc(f.path.split('/').pop())}</div>`).join('')}`).join('') || '<h4>no files yet</h4>'
   for (const d of appEls.tree.querySelectorAll('[data-path]')) d.onclick = () => showFile(d.dataset.path)
   if (!appv.file && appv.files.length) showFile((appv.files.find(f => f.path === 'src/App.tsx') || appv.files[0]).path)
 }
@@ -4184,7 +4180,7 @@ function renderGame() {
   if (!el) return
   const qs = game.questions, q = qs[game.i]
   const dots = qs.map((_, i) => `<i class="${i < game.i ? 'done' : i === game.i ? 'on' : ''}"></i>`).join('')
-  const head = `<div class="ghead"><b class="kicker">${ico('gamepad-2')}New game</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div>`
+  const head = `<div class="ghead"><b class="kicker">${ico('gamepad-2')}New game</b><button class="gclose" aria-label="Close">${ico('x')}</button></div>`
   if (!qs.length) {
     el.innerHTML = `${head}<div class="gbody"><p>Game mode isn't loaded on this server yet. Restart Swarm Studio (<code>hermes swarm</code>) and try again.</p></div>`
   } else if (game.busy) {
@@ -4326,7 +4322,7 @@ for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['
   let saved = null
   try { saved = localStorage.getItem(`swarm${name}`) } catch {}
   if (saved) document.body.style.setProperty(name, `${saved}px`)
-  const grip = Object.assign(document.createElement('div'), { className: 'resizer', title: 'Drag to resize · double-click to reset' })
+  const grip = Object.assign(document.createElement('div'), { className: 'resizer' })
   panel.append(grip)
   grip.addEventListener('pointerdown', e => {
     e.preventDefault()
@@ -4506,9 +4502,9 @@ function picturesHtml(l) {
   const gens = gensOf(l)
   const rows = gens.map((g, i) => {
     const k = `${l.key}|${g}`, src = S.images.get(k), busy = pics.pending.has(k) || [...S.agents.values()].some(a => a.painting?.key === k)
-    return `<div class="dpic" data-i="${i}">${src ? `<img src="${esc(src)}" alt="">` : `<span class="dpic-none">${busy ? '…' : 'no picture yet'}</span>`}<textarea rows="2" title="Describe the picture you want">${esc(g)}</textarea><button class="dpic-go"${busy ? ' disabled' : ''}>${busy ? '🎨 Painting…' : src ? '🎨 New picture' : '🎨 Make it'}</button></div>`
+    return `<div class="dpic" data-i="${i}">${src ? `<img src="${esc(src)}" alt="">` : `<span class="dpic-none">${busy ? '…' : 'no picture yet'}</span>`}<textarea rows="2" aria-label="Describe the picture you want">${esc(g)}</textarea><button class="dpic-go"${busy ? ' disabled' : ''}>${busy ? '🎨 Painting…' : src ? '🎨 New picture' : '🎨 Make it'}</button></div>`
   }).join('')
-  return `<div class="dsec dpics"><h4>Pictures<small>${gens.length ? 'edit the words to change it' : ''}</small></h4>${rows || '<div class="dpic-empty">No photo in this section.</div>'}<div class="dpic-addrow"><input class="dpic-what" placeholder="Add a picture of… (optional)"><button class="dpic-add" title="The section's builder adds one photo; it is painted when the rewrite is done">➕ Add</button></div></div>`
+  return `<div class="dsec dpics"><h4>Pictures<small>${gens.length ? 'edit the words to change it' : ''}</small></h4>${rows || '<div class="dpic-empty">No photo in this section.</div>'}<div class="dpic-addrow"><input class="dpic-what" placeholder="Add a picture of… (optional)"><button class="dpic-add" aria-label="The section's builder adds one photo; it is painted when the rewrite is done">➕ Add</button></div></div>`
 }
 function wirePictures(l) {
   const box = els.dDesign.querySelector('.dpics')
@@ -4573,7 +4569,7 @@ function openAuto() {
   autoM.pop?.remove()
   const el = autoM.pop = document.createElement('div')
   el.className = 'game-pop auto-pop'
-  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('zap')}Auto mode</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div>
+  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('zap')}Auto mode</b><button class="gclose" aria-label="Close">${ico('x')}</button></div>
     <div class="auto-mode" role="radiogroup" aria-label="Mode"><button data-m="make" class="on" role="radio" aria-checked="true">✨ Make<small>one prompt, a fun result</small></button><button data-m="pro" role="radio" aria-checked="false">💼 Pro<small>a pack for your market</small></button></div>
     <h3>One prompt. The <em>whole</em> thing.</h3>
     <div class="auto-chips"></div>
@@ -4712,8 +4708,8 @@ function renderAutoPanel() {
   const nowLabel = cur ? cur.label : e.state === 'done' ? 'done' : e.state === 'failed' ? 'stopped on a step' : e.state
   p.innerHTML = autoM.min
     ? `<div class="ap-head" role="button" tabindex="0" aria-label="Expand the Auto panel"><b>${ico('zap')}Auto</b><span class="ap-dot">·</span><span class="ap-now">${esc(nowLabel)}</span><span class="ap-dot">·</span><span class="ap-time">${secs(total || 0)}</span></div><div class="ap-meter"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>`
-    : `<div class="ap-head"><b>${ico('zap')}Auto</b><span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop">Stop</button>' : `<button class="ap-close" title="Hide" aria-label="Hide">${ico('x')}</button>`}<button class="ap-min" title="Minimise" aria-label="Minimise">${ico('minus')}</button></div>
-    <div class="ap-meter" title="${doneN} of ${e.steps.length} steps"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>
+    : `<div class="ap-head"><b>${ico('zap')}Auto</b><span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop">Stop</button>' : `<button class="ap-close" aria-label="Hide">${ico('x')}</button>`}<button class="ap-min" aria-label="Minimise">${ico('minus')}</button></div>
+    <div class="ap-meter"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>
     <div class="ap-prompt">${esc(e.prompt || '')}</div>
     <ol>${e.steps.map(s => { const note = live(s), long = note && note.length > 90; return `<li class="${s.state}${autoM.open.has(s.id) ? ' open' : ''}" data-step="${esc(s.id)}"><i>${AUTO_ICON[s.state] || AUTO_ICON.wait}</i><span>${esc(s.label)}${note ? `<small>${linkify(note)}</small>${long ? `<button class="ap-more">${autoM.open.has(s.id) ? 'Less' : 'More'}</button>` : ''}` : ''}</span><em>${s.state === 'working' && s.t0 ? secs(Date.now() - s.t0) : s.ms ? secs(s.ms) : ''}</em></li>` }).join('')}</ol>
     ${e.url ? `<a class="ap-live" href="${esc(e.url)}" target="_blank" rel="noopener">${ico('globe')}Open the live app</a>` : e.state === 'failed' && e.message ? `<div class="ap-msg">${esc(e.message)}</div>` : ''}
@@ -4888,7 +4884,7 @@ function dsOpen(run) {
 function dsBuild() {
   ds.mode = 'build'
   ds.el.className = 'deployshot build'
-  ds.el.innerHTML = `<div class="ds-head"><b class="pop-title">Going <em>live</em></b><span class="ds-sub">Vercel is building it</span><button class="ds-x" title="Close" aria-label="Close">${ico('x')}</button></div>
+  ds.el.innerHTML = `<div class="ds-head"><b class="pop-title">Going <em>live</em></b><span class="ds-sub">Vercel is building it</span><button class="ds-x" aria-label="Close">${ico('x')}</button></div>
     <div class="ds-grid"><div class="ds-term" role="log" aria-live="polite"><div class="ds-tbar"><i></i><i></i><i></i><span>vercel · build</span></div><pre class="ds-log"></pre></div>
     <div class="ds-globe"><svg viewBox="0 0 200 200" aria-hidden="true"><circle class="g-ring" cx="100" cy="100" r="78"/><ellipse class="g-lat" cx="100" cy="100" rx="78" ry="30"/><ellipse class="g-lat" cx="100" cy="100" rx="30" ry="78"/><ellipse class="g-lat" cx="100" cy="100" rx="58" ry="78"/><line class="g-lat" x1="22" y1="100" x2="178" y2="100"/>
     ${[[60, 64], [138, 70], [150, 128], [84, 146], [100, 100]].map(([x, y], i) => `<circle class="g-node n${i}" cx="${x}" cy="${y}" r="5"/>`).join('')}<path class="g-arc" d="M60 64Q100 30 138 70M138 70Q170 100 150 128M150 128Q120 160 84 146M84 146Q50 110 60 64"/></svg>
@@ -4923,10 +4919,10 @@ function dsLive(url) {
   ds.mode = 'live'; ds.url = url; ds.stage = 'ready'
   const crew3 = crewMembers(3)
   ds.el.className = 'deployshot live'
-  ds.el.innerHTML = `<div class="ds-head"><b class="pop-title">It's <em>live</em></b><span class="ds-sub">the crew is trying it</span><button class="ds-x" title="Close" aria-label="Close">${ico('x')}</button></div>
-    <div class="ds-stage"><div class="ds-laptop"><div class="ds-lid"><div class="ds-bar"><span class="ds-dots"><i></i><i></i><i></i></span><span class="ds-url" title="${esc(url)}">${esc(url)}</span><button class="ds-copy" title="Copy the link">Copy</button><a class="ds-open" href="${esc(url)}" target="_blank" rel="noopener" title="Open it in a new tab" aria-label="Open it in a new tab">${ico('external-link')}</a></div>
-      <div class="ds-screen"><div class="ds-scroll"><iframe title="The live site" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe></div><i class="ds-click"></i></div></div><div class="ds-base"></div></div>
-    <div class="ds-phone"><div class="ds-screen"><div class="ds-scroll"><iframe title="The live site on a phone" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe></div><i class="ds-click"></i></div></div>
+  ds.el.innerHTML = `<div class="ds-head"><b class="pop-title">It's <em>live</em></b><span class="ds-sub">the crew is trying it</span><button class="ds-x" aria-label="Close">${ico('x')}</button></div>
+    <div class="ds-stage"><div class="ds-laptop"><div class="ds-lid"><div class="ds-bar"><span class="ds-dots"><i></i><i></i><i></i></span><span class="ds-url">${esc(url)}</span><button class="ds-copy" aria-label="Copy the link">Copy</button><a class="ds-open" href="${esc(url)}" target="_blank" rel="noopener" aria-label="Open it in a new tab">${ico('external-link')}</a></div>
+      <div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe></div><i class="ds-click"></i></div></div><div class="ds-base"></div></div>
+    <div class="ds-phone"><div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site on a phone" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe></div><i class="ds-click"></i></div></div>
     <div class="ds-curs">${crew3.map(([n, c]) => dsCursor(n, c)).join('')}</div></div>`
   ds.el.querySelector('.ds-x').onclick = dsClose
   ds.el.querySelector('.ds-copy').onclick = ev => { navigator.clipboard?.writeText(url).then(() => { ev.target.textContent = 'Copied' }, () => { ev.target.textContent = 'Copy failed' }) }
@@ -5014,11 +5010,11 @@ async function showSummary(e) {
   try { qr = url && Show ? Show.qrSvg(url, `QR code for ${url}`) : '' } catch {}
   const counts = [['agents', f.agents], ['pages', f.pages], ['sections', f.sections], ['images', f.images], ['files', f.files], ['lines', f.lines]].filter(([, n]) => n != null)
   const crewNames = crewMembers(Math.min(8, f.agents || 6))
-  el.innerHTML = `<div class="ss-card"><button class="ss-x" title="Close" aria-label="Close">${ico('x')}</button>
+  el.innerHTML = `<div class="ss-card"><button class="ss-x" aria-label="Close">${ico('x')}</button>
     <div class="ss-kicker">${ico('zap')}Auto · ${e.state === 'done' ? 'shipped' : 'stopped'}</div>
     <h2 class="ss-title">${e.state === 'done' ? 'One prompt. The <em>whole</em> thing.' : 'Stopped on <em>a step</em>.'}</h2>
     <div class="ss-total"><b>${secs(total)}</b><span>from prompt to ${url ? 'live link' : 'the last step'}</span></div>
-    <div class="ss-bar" role="img" aria-label="Time per step">${e.steps.map(s => `<i class="${s.state}" style="flex:${Math.max(s.ms || 0, total * 0.012)}" title="${esc(s.label)} · ${secs(s.ms)}"></i>`).join('')}</div>
+    <div class="ss-bar" role="img" aria-label="Time per step">${e.steps.map(s => `<i class="${s.state}" style="flex:${Math.max(s.ms || 0, total * 0.012)}"></i>`).join('')}</div>
     <ol class="ss-steps">${e.steps.map(s => `<li class="${s.state}"><span class="ss-ico">${ico((STEP_SHOW[s.id] || [])[2] || 'zap')}</span><span>${esc(s.label.replace(/^\S+\s/, ''))}</span><em>${s.ms ? secs(s.ms) : s.state === 'skipped' ? 'skipped' : '—'}</em></li>`).join('')}</ol>
     <div class="ss-counts">${counts.map(([k, n]) => `<div><b>${Number(n).toLocaleString()}</b><span>${k}</span></div>`).join('')}</div>
     <div class="ss-crew">${HERMIA}${crewNames.map(([n]) => Crew.avatar(n, 24)).join('')}<span>Hermia and ${f.agents || crewNames.length} crew</span></div>
@@ -5043,7 +5039,7 @@ async function openLaunch(run) {
   document.querySelector('.launch-pop')?.remove()
   const el = document.createElement('div')
   el.className = 'game-pop launch-pop'
-  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('message-square')}Launch kit</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div><p class="lk-wait">Writing the posts…</p>`
+  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('message-square')}Launch kit</b><button class="gclose" aria-label="Close">${ico('x')}</button></div><p class="lk-wait">Writing the posts…</p>`
   document.body.append(el)
   el.querySelector('.gclose').onclick = () => el.remove()
   closeable(el, () => el.remove(), { extra: ['.ui-overlay'] })
@@ -5058,7 +5054,7 @@ function renderLaunch(el, run, kit, gw) {
   const mark = (post, action, text) => api(`/api/runs/${encodeURIComponent(run)}/launch/mark`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ post, action, text }) }).then(r => r.ok ? r.json() : null).catch(() => null)
   const url = kit.facts.url
   const media = kit.media.filter(m => m.kind !== 'link')
-  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('message-square')}Launch kit</b><button class="gclose" title="Close" aria-label="Close">${ico('x')}</button></div>
+  el.innerHTML = `<div class="ghead"><b class="kicker">${ico('message-square')}Launch kit</b><button class="gclose" aria-label="Close">${ico('x')}</button></div>
     <h3>Tell people. <em>You</em> press Post.</h3>
     <p class="lk-note">Written from this run's facts${url ? ` and its live link` : ''}. Post opens each network's own page with the text filled in; you post it there. Nothing is sent from here without your click.</p>
     ${media.length ? `<div class="lk-media"><span>Media to attach</span>${media.map(m => `<a href="${esc(m.src)}" download target="_blank" rel="noopener" data-kind="${m.kind}">${m.kind === 'image' ? `<img src="${esc(m.src)}" alt="">` : ico('clapperboard')}<small>${esc(m.label)}</small></a>`).join('')}</div>` : ''}
@@ -5329,7 +5325,7 @@ function codeWall() {
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" title="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-radio" hidden></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
+    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-radio" hidden></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
     appEls.preview.append(cw.el)
   }
@@ -5369,7 +5365,7 @@ function codeWall() {
     strip.dataset.t = stamp
     const kind = lead ? { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind : 'reasoning'
     strip.className = `cw-radio ${lead ? lead.kind : 'reason'}`
-    strip.innerHTML = `<span class="cw-radio-av">${HERMIA}</span><div class="cw-radio-main"><div class="cw-radio-who"><b>Hermia</b>${lead?.to ? `<span class="to">→</span><b style="color:${Crew.color(lead.to)}">${esc(lead.to)}</b>` : ''}<em>${esc(kind)}</em></div>${lead ? `<p>${esc(lead.text)}</p>` : ''}${reason ? `<p class="cw-reason" title="${esc(reason.full || reason.text)}">💭 ${esc(reason.text)}</p>` : ''}</div>`
+    strip.innerHTML = `<span class="cw-radio-av">${HERMIA}</span><div class="cw-radio-main"><div class="cw-radio-who"><b>Hermia</b>${lead?.to ? `<span class="to">→</span><b style="color:${Crew.color(lead.to)}">${esc(lead.to)}</b>` : ''}<em>${esc(kind)}</em></div>${lead ? `<p>${esc(lead.text)}</p>` : ''}${reason ? `<p class="cw-reason">💭 ${esc(reason.text)}</p>` : ''}</div>`
   }
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
@@ -5416,7 +5412,7 @@ function codeWall() {
         + `<div class="cw-plan-main"><b class="pop-title"><span>${esc(name)}</span> is planning the next <em>files</em></b>`
         + `<div class="cw-plan-meta"><span>${ico('brain-circuit')}turn ${plan.turn}</span>${plan.tokens ? `<span>${kTokens(plan.tokens)} tokens of context</span>` : ''}<span class="cw-plan-age"></span></div>`
         + `<div class="cw-plan-act"></div><div class="cw-plan-bar"><i></i></div></div>`
-        + (plan.files.length ? `<div class="cw-plan-files"><small>Last written</small>${plan.files.map(f => `<code title="${esc(f)}">${esc(f.split('/').slice(-2).join('/'))}</code>`).join('')}</div>` : '')
+        + (plan.files.length ? `<div class="cw-plan-files"><small>Last written</small>${plan.files.map(f => `<code>${esc(f.split('/').slice(-2).join('/'))}</code>`).join('')}</div>` : '')
     }
     setText(planEl.querySelector('.cw-plan-age'), `${age} since the last file`)
     setText(planEl.querySelector('.cw-plan-act'), acts[0] ? `${acts[0][0]}: ${acts[0][1].text}` : '')
@@ -5522,9 +5518,9 @@ const hosted = BOOT.hosted && (() => {
   function draw() {
     const left = me ? me.left : H.limits.builds
     const can = finished() && !posted.has(shown()) && !posting
-    bar.innerHTML = `${me?.name ? `<span class="g-name" title="You are building as this guest">${esc(me.name)}</span>` : ''}`
+    bar.innerHTML = `${me?.name ? `<span class="g-name">${esc(me.name)}</span>` : ''}`
       + `<span class="g-left">${open ? `${left} of ${H.limits.builds} builds left today` : 'Done for today'}</span>`
-      + `<button class="ui-btn ${can ? 'ui-btn-default' : 'ui-btn-outline'} ui-btn-sm g-post" ${can ? '' : 'disabled'} title="Post this build to Swarm Feed">${posting ? 'Posting…' : posted.has(shown()) ? 'Posted' : 'Post to Feed'}</button>`
+      + `<button class="ui-btn ${can ? 'ui-btn-default' : 'ui-btn-outline'} ui-btn-sm g-post" ${can ? '' : 'disabled'} aria-label="Post this build to Swarm Feed">${posting ? 'Posting…' : posted.has(shown()) ? 'Posted' : 'Post to Feed'}</button>`
       + plugin
     bar.querySelector('.g-post').onclick = postToFeed
   }
