@@ -818,12 +818,6 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .vlive-tag::first-letter { color: var(--hot); }
 
 /* ⚡ Auto mode */
-.auto-btn.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
-.auto-pop .auto-plan { margin: 0 0 16px; padding-left: 20px; color: var(--muted); font-size: 13.5px; line-height: 1.8; }
-.auto-pop .auto-prompt { width: 100%; box-sizing: border-box; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 12px; font: inherit; font-size: 15px; resize: vertical; }
-.auto-pop .auto-go { display: flex; align-items: center; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
-.auto-pop .auto-go small { color: var(--muted); flex: 1; min-width: 200px; }
-.auto-pop .auto-start { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer; }
 .auto-panel { position: fixed; right: 16px; bottom: 16px; z-index: 260; width: min(340px, calc(100vw - 32px)); max-height: 70vh; overflow: auto; background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 14px 40px rgb(var(--shade-rgb) / .62); font-size: 12.5px; animation: in .25s ease-out; }
 .auto-panel.working { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .auto-panel .ap-head { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
@@ -868,19 +862,8 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 @keyframes blink { 50% { opacity: 0; } }
 
 /* 🔌 sign-in connectors in the Auto window */
-.auto-conn { display: grid; gap: 6px; margin: 4px 0 10px }
-.auto-conn .ac-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid var(--line, var(--line-2)); border-radius: 8px }
-.auto-conn .ac-row small { flex-basis: 100%; opacity: .65 }
-.auto-conn .ac-ok { color: var(--ok) }
-.auto-conn .ac-wait { opacity: .8 }
-.auto-conn .ac-go { padding: 5px 12px; border: 0; border-radius: 6px; cursor: pointer; background: var(--frame); color: var(--accent-ink); font-weight: 600 }
-.auto-conn a { color: inherit; text-decoration: underline }
 
 /* Auto: the Games toggle (3 mini / 1 big) */
-.auto-games { display: flex; align-items: center; gap: 4px; margin: 8px 0 4px; font: 600 11px/1 ui-monospace, monospace; text-transform: uppercase; letter-spacing: .06em }
-.auto-games span { opacity: .6; margin-right: 6px }
-.auto-games button { padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: inherit; font: inherit; cursor: pointer }
-.auto-games button.on { background: var(--frame); border-color: var(--frame); color: var(--accent-ink) }
 
 /* =====================================================================
    Hermes space: surfaces, type and components (specs 05 and 08).
@@ -916,9 +899,6 @@ em { font-style: italic; }
 .toggle .caret { width: 12px; height: 12px; margin: 0 -3px 0 -2px; opacity: .7; }
 /* Auto is the top bar's one yellow pill; Game and Publish are outlined */
 /* the main action owns the screen's one accent; Auto is a graphite pill, its icon in the accent while on */
-.auto-btn, .auto-btn:hover:not(:disabled), .auto-btn.on { background: var(--surface-2); border-color: var(--line-2); color: var(--text); }
-.auto-btn:hover:not(:disabled) { background: var(--frame); }
-.auto-btn.on [data-i], .auto-btn.on svg { color: var(--accent); }
 .game-btn { color: var(--text); border-color: rgb(var(--glass-rgb) / .3); }
 .toggle.play { border-color: rgb(var(--glass-rgb) / .3); }
 .undo-redo .toggle { padding: 6px 8px; font-size: 13px; }
@@ -1106,25 +1086,16 @@ em { font-style: italic; }
 .game-pop .gdots i.on, .game-pop .gdots i.done { background: var(--accent); }
 .game-pop .gchips button { font: 600 14px/1 var(--label); letter-spacing: .06em; text-transform: uppercase; background: rgb(var(--glass-rgb) / .05); border-color: rgb(var(--glass-rgb) / .3); padding: 10px 16px; }
 .game-pop .gchips button:hover, .game-pop .gchips button.on { border-color: var(--accent); color: var(--accent); }
-.game-pop input, .auto-pop .auto-prompt { background: rgb(var(--glass-rgb) / .05); border: 1px solid var(--panel-edge); border-radius: 14px; color: var(--text); font: 14px/1.5 var(--font); }
-.game-pop input:focus, .auto-pop .auto-prompt:focus { outline: 0; border-color: rgb(var(--glass-rgb) / .45); box-shadow: 0 0 0 4px rgb(var(--frame-rgb) / .3); }
-.game-pop .big, .auto-pop .auto-start, .app-empty .big {
+.game-pop input { background: rgb(var(--glass-rgb) / .05); border: 1px solid var(--panel-edge); border-radius: 14px; color: var(--text); font: 14px/1.5 var(--font); }
+.game-pop input:focus:focus { outline: 0; border-color: rgb(var(--glass-rgb) / .45); box-shadow: 0 0 0 4px rgb(var(--frame-rgb) / .3); }
+.game-pop .big, .app-empty .big {
   display: inline-flex; align-items: center; gap: 8px; background: var(--frame); color: var(--text); border: 1px solid var(--frame); border-radius: 999px; padding: 11px 20px;
   font: 600 14px/1 var(--label); letter-spacing: .1em; text-transform: uppercase; transition: transform .16s var(--ease), box-shadow .16s var(--ease); }
-.game-pop .big:hover, .auto-pop .auto-start:hover, .app-empty .big:hover { box-shadow: 0 0 0 5px rgb(var(--frame-rgb) / .35), 0 0 30px var(--glow); }
-.game-pop .big:active, .auto-pop .auto-start:active, .app-empty .big:active { transform: scale(.97); }
+.game-pop .big:hover:hover, .app-empty .big:hover { box-shadow: 0 0 0 5px rgb(var(--frame-rgb) / .35), 0 0 30px var(--glow); }
+.game-pop .big:active:active, .app-empty .big:active { transform: scale(.97); }
 .game-pop .glink { font: 600 13px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .game-pop .spin, .app-empty .spin { border-color: rgb(var(--glass-rgb) / .14); border-top-color: var(--accent); }
 .game-pop .gorig { color: var(--ok); }
-.auto-pop .auto-plan { counter-reset: step; list-style: none; padding: 0; margin: 0 0 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 4px 18px; font: 12.5px/1.9 var(--mono); color: var(--text); }
-.auto-pop .auto-plan li { counter-increment: step; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.auto-pop .auto-plan li::before { content: counter(step, decimal-leading-zero); color: var(--muted); margin-right: 10px; }
-.auto-games { font: 600 12px/1 var(--label); letter-spacing: .1em; }
-.auto-games button { border-color: rgb(var(--glass-rgb) / .3); padding: 6px 12px; }
-.auto-games button.on { background: var(--frame); border-color: var(--frame); color: var(--text); }
-.auto-pop .auto-go small { font: 11.5px/1.5 var(--mono); color: var(--muted); }
-.auto-conn .ac-row { border-color: var(--panel-edge); border-radius: 12px; background: rgb(var(--glass-rgb) / .03); }
-.auto-conn .ac-go { background: var(--frame); color: var(--text); border-radius: 999px; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; padding: 7px 12px; }
 
 /* the Auto panel: a compact mission log */
 .auto-panel { width: min(360px, calc(100vw - 32px)); padding: 14px 16px 12px; font-size: 12.5px; }
@@ -1276,7 +1247,6 @@ em { font-style: italic; }
   .topbar::-webkit-scrollbar { display: none; }
   .topbar > * { flex: none; }
   .topbar .toggle .t, .topbar .toggle .caret { display: none; }
-  .topbar .auto-btn .t { display: inline; }
   .topbar .toggle { padding: 7px 10px; }
   .topbar .spacer { display: none; }
   .clock { min-width: 0; font-size: 17px; }
@@ -1321,23 +1291,6 @@ html.wall .topbar, html.wall .side, html.wall .design, html.wall .game-pop, html
 html.wall .auto-panel { transform: scale(.72); transform-origin: top right; pointer-events: none; }
 
 /* ---------- Make / Pro switch in the Auto window (docs/specs/09-demo-modes.md) */
-.auto-mode { display: flex; gap: 4px; margin: 2px 0 10px; }
-.auto-mode button { flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; cursor: pointer; }
-.auto-mode button.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); }
-.auto-mode button small { display: block; opacity: .7; font-size: 11px; }
-.pro-packs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
-.pro-pack { text-align: left; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; cursor: pointer; }
-.pro-pack.on { outline: 2px solid var(--accent); }
-.pro-pack b { display: block; font-size: 13px; }
-.pro-pack small { display: block; opacity: .75; font-size: 11px; line-height: 1.35; margin-top: 2px; }
-.pro-intake { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
-.pro-intake label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; opacity: .9; }
-.pro-intake input, .pro-intake select { padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg, transparent); color: var(--text); font: inherit; font-size: 12px; }
-.pro-deliv { font-size: 11.5px; opacity: .8; margin: -4px 0 10px; }
-.auto-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: -4px 0 10px; }
-.auto-chips button { padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 11.5px; cursor: pointer; }
-.auto-pop [hidden] { display: none !important; }
-.auto-pop { max-height: calc(100vh - 60px); overflow-y: auto; }
 
 /* ---------- the Auto show (docs/specs/07-auto-show.md): step cards, the reviewer, the deploy
    shot, the summary card, the launch kit and the chatter dock. Tokens only, no new colours. */
@@ -1371,9 +1324,6 @@ body.show-fade .viewport, body.show-fade .appview, body.show-fade .video-pop { a
 .auto-panel .ap-show { display: flex; gap: 6px; margin-top: 10px; }
 .auto-panel .ap-show button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font: 600 12px/1 var(--label); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
 .auto-panel .ap-show .ico { width: 14px; height: 14px; }
-.auto-launch { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; font-size: 12px; color: var(--text); cursor: pointer; }
-.auto-launch input { margin-top: 2px; accent-color: var(--accent); }
-.auto-launch small { display: block; color: var(--muted); }
 
 /* A2. the reviewer: its own colour (info), a dashed accent box per flag, green when fixed */
 .rv-cursor .nib path { fill: var(--info); }

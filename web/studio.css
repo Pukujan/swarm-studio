@@ -37,7 +37,7 @@ body.cosmos-home .crew-layer, body.cosmos-project .crew-layer { display: none; }
 body.cosmos-home .appview, body.cosmos-project .appview { visibility: hidden; }
 
 /* in a station (Canvas, Video, App) a round button brings the chat column back */
-.cosmos-chatbtn { position: fixed; left: 14px; bottom: 14px; z-index: 64; display: none; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+.cosmos-chatbtn { position: fixed; right: 14px; bottom: 14px; z-index: 64; display: none; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
   background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--panel-edge); border-radius: 999px; color: var(--text); cursor: pointer;
   font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .cosmos-chatbtn img { width: 24px; height: 24px; border-radius: 50%; }
@@ -60,3 +60,25 @@ body.cosmos .dock, body.cosmos .cursor.docked { display: none !important; }
 /* a sheet opened from Projects (the Start sheet, the game wizard) sits above it */
 body.cosmos-home .game-pop { position: fixed; inset: 56px 0 0 248px; z-index: 160; }
 @media (max-width: 760px) { body.cosmos-home .game-pop { inset: 56px 0 0 0; } }
+
+/* Auto's entry points are out of the studio (the engine stays): no pill, no button */
+body.cosmos .auto-panel { display: none !important; }
+
+/* the mode: Canvas, Video, App or Game, one menu button in a build's top bar */
+.mode-wrap { position: relative; display: none; }
+body.cosmos-project .mode-wrap, body.cosmos-station .mode-wrap { display: block; }
+.mode-btn { display: inline-flex; align-items: center; gap: 6px; }
+.topbar .mode-btn .t { display: inline !important; }
+.mode-btn .ico { width: 14px; height: 14px; color: var(--muted); transition: transform .15s var(--ease); }
+.mode-btn[aria-expanded="true"] .ico { transform: rotate(180deg); }
+.mode-menu { position: fixed; z-index: 300; min-width: 150px; padding: 4px; display: flex; flex-direction: column;
+  background: var(--deep); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 36px rgb(var(--shade-rgb) / .5); }
+.mode-menu[hidden] { display: none; }
+.mode-menu button { text-align: left; padding: 8px 10px; border: 0; border-radius: 7px; background: none; color: var(--muted); font: 600 12.5px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.mode-menu button:hover, .mode-menu button:focus-visible { background: var(--surface-2); color: var(--text); outline: none; }
+.mode-menu button[aria-selected="true"] { color: var(--text); }
+@media (max-width: 760px) { body.cosmos-project .mode-wrap { display: none; } }
+/* a narrow room: the Chat pill rides above the room's tool dock instead of on it */
+@media (max-width: 520px) { .cosmos-chatbtn { bottom: 84px; } }
+/* the hosted studio has the Canvas only: no mode to pick */
+body.hosted .mode-wrap { display: none !important; }

@@ -6,7 +6,7 @@
 .pj-crumb, .pj-crew { display: none; }
 body.cosmos-project .pj-crumb { display: flex; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
 body.cosmos-project .pj-crew { display: flex; margin-right: 6px; }
-body.cosmos-project .brand, body.cosmos-project .file-name, body.cosmos-project #auto-btn { display: none !important; }
+body.cosmos-project .brand, body.cosmos-project .file-name { display: none !important; }
 body.cosmos .crew-mute, body.cosmos #breakroom-btn { display: none !important; }
 body.cosmos-project .cosmos-back .t { display: none; }
 body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
@@ -126,26 +126,26 @@ body.pj-live .pj-crew span { background: var(--text); color: var(--void); }
 .pj-send { width: 30px; height: 30px; flex: none; border-radius: 8px; border: 0; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; cursor: pointer; }
 .project .hm-toast { position: absolute; bottom: 84px; }
 
-/* ---------- phones: the panel becomes the page; the stage and the dock follow it */
+.pj-files-btn { display: none; }
+/* ---------- narrow panes (phones, Hermes Desktop's side pane): the canvas stays the page; Files and
+   Layers slide in as a sheet from the dock's Files button; the dock keeps Move, Frame, Chat and the input */
 @media (max-width: 760px) {
-  .project { flex-direction: column; overflow-y: auto; }
-  .pj-side { width: auto; border-right: 0; border-bottom: 1px solid var(--line); flex: none; max-height: none; }
-  .pj-list { overflow: visible; }
-  .pj-stage { flex: none; height: 62vh; }
+  .pj-side { position: absolute; left: 0; top: 0; bottom: 0; width: min(320px, 86vw); z-index: 45; box-shadow: 18px 0 40px rgb(var(--shade-rgb) / .45); transform: translateX(-102%); transition: transform .22s var(--ease); visibility: hidden; }
+  .project.files-on .pj-side { transform: none; visibility: visible; }
+  .pj-files-btn { display: grid; }
+  .pj-files-btn[aria-expanded="true"] { background: var(--surface-2); color: var(--text); }
   .pj-insp { position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 70vh; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; z-index: 140; }
-  .pj-dock, .project.insp-on .pj-dock { position: fixed; left: 8px; right: 8px; bottom: 8px; transform: none; }
+  .pj-dock, .project.insp-on .pj-dock { left: 8px; right: 8px; bottom: 8px; transform: none; gap: 2px; padding: 4px; }
   .project.insp-on .pj-dock { display: none; }
-  .pj-dock .ib[data-tool="move"], .pj-dock .ib[data-tool="frame"] { display: none; }
-  .pj-ask { flex: 1; width: auto; }
-  .project { padding-bottom: 70px; }
+  .pj-dock .ib { width: 36px; height: 36px; flex: none; }
+  .pj-dock .ib[data-tool="text"], .pj-dock .ib[data-tool="image"] { display: none; }
+  .pj-ask { flex: 1; width: auto; min-width: 0; margin-left: 2px; }
   body.cosmos-project .pj-crew, body.cosmos-project #play-btn .t, body.cosmos-project #publish-btn .t { display: none; }
   .pj-crumb .pj-up, .pj-crumb > svg { display: none; }
-  .pj-crumb .pj-name b { max-width: 40vw; }
+  .pj-crumb .pj-name b { max-width: 34vw; }
 }
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) { .pj-side { transition: none; } }
 @media (max-width: 1100px) { .pj-ask { width: 220px; } }
 @media (prefers-reduced-motion: reduce) { .pj-world.ease { transition: none; } }
 /* canvas.css styles ghost cursors as `.ghost svg`; keep button icons in the button */
 .btn.ghost > svg { position: static; width: 15px; height: 15px; overflow: hidden; }
-/* the Auto pill steps aside for the inspector; on a phone the inspector is a sheet, so it waits */
-body.cosmos-project:has(.project.insp-on) .auto-panel { right: 288px; }
-@media (max-width: 760px) { body.cosmos-project:has(.project.insp-on) .auto-panel { display: none; } }

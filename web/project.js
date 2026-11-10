@@ -35,11 +35,12 @@ export function makeProject({ sw, C, root }) {
     </div>
     <aside class="pj-insp" hidden aria-label="Inspector"></aside>
     <div class="pj-dock">
+      <button class="ib pj-files-btn" data-tool="files" aria-label="Files" aria-expanded="false">${ic('folder')}</button>
       <button class="ib on" data-tool="move" aria-label="Move">${ic('move')}</button>
       <button class="ib" data-tool="frame" aria-label="Frame all">${ic('frame')}</button>
       <button class="ib" data-tool="text" aria-label="New page">${ic('type')}</button>
       <button class="ib" data-tool="image" aria-label="Upload files">${ic('image')}</button>
-      <button class="ib" data-tool="comment" aria-label="Chat with the crew">${ic('msg')}</button>
+      <button class="ib" data-tool="comment" aria-label="Chat">${ic('msg')}</button>
       <form class="pj-ask" autocomplete="off"><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
     </div>
     <input type="file" class="pj-file" multiple hidden>`
@@ -198,8 +199,47 @@ export function makeProject({ sw, C, root }) {
   }
 
   // ---------- the stage: pan (drag empty space, wheel), zoom (pinch, ⌘ wheel), Frame fits all
+  // narrow panes (a phone, Hermes Desktop's side pane): the canvas stays; Files and Layers are a sheet
+  const narrow = () => matchMedia('(max-width: 760px)').matches
+  let offSheet = null
+  function sheet(on) {
+    root.classList.toggle('files-on', on)
+    root.querySelector('.pj-files-btn')?.setAttribute('aria-expanded', String(on))
+    offSheet?.(); offSheet = null
+    if (on) offSheet = window.SwarmUI?.layer(root.querySelector('.pj-side'), () => sheet(false), { extra: [root.querySelector('.pj-files-btn')] })
+  }
   function applyCam() { world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})` }
+  // the box the artboards and their section names take up, in world units
+  function bounds(els) {
+    const wr = world.getBoundingClientRect(), k = P.cam.k
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    for (const el of els) {
+      const r = el.getBoundingClientRect()
+      if (!r.width) continue
+      x0 = Math.min(x0, (r.left - wr.left) / k); y0 = Math.min(y0, (r.top - wr.top) / k)
+      x1 = Math.max(x1, (r.right - wr.left) / k); y1 = Math.max(y1, (r.bottom - wr.top) / k)
+    }
+    return x1 > x0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null
+  }
+  const dockH = () => (narrow() ? 72 : 90)
+  function fit(b, max, animate) {
+    const pad = narrow() ? 16 : 40
+    const below = narrow() && !insp.hidden ? insp.offsetHeight : dockH()
+    const sw_ = stage.clientWidth - (insp.hidden || narrow() ? 0 : 272) - pad * 2, sh = stage.clientHeight - below - pad * 2
+    if (!b || sw_ <= 0 || sh <= 0) return
+    const k = Math.min(max, Math.max(0.15, Math.min(sw_ / b.w, sh / b.h)))
+    P.cam = { k, x: pad + (sw_ - b.w * k) / 2 - b.x * k, y: pad + Math.max(0, (sh - b.h * k) / 2) - b.y * k }
+    world.classList.toggle('ease', animate)
+    applyCam()
+    setTimeout(() => world.classList.remove('ease'), 300)
+  }
+  function zoomTo(key) {
+    const el = world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)
+    if (el) fit(bounds([el]), 2, true)
+  }
   function frameAll(animate = true) {
+    const b = bounds(world.querySelectorAll('.ab, .pj-sec > .al'))
+    if (b) return fit(b, 1.25, animate)
     const sw_ = stage.clientWidth - (insp.hidden ? 0 : 272), sh = stage.clientHeight - 90
     const w = world.scrollWidth, h = world.scrollHeight
     if (!w || !h || sw_ <= 0) return
@@ -210,20 +250,47 @@ export function makeProject({ sw, C, root }) {
     setTimeout(() => world.classList.remove('ease'), 300)
   }
   let drag = null
+  const touches = new Map()
+  let pinch = null
   stage.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.ab, .pj-dock, .pj-insp')) return
+    if (e.pointerType === 'touch') {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      if (touches.size === 2) {
+        const [a, b] = [...touches.values()]
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, k: P.cam.k, cx: P.cam.x, cy: P.cam.y, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }
+        drag = null
+        return
+      }
+    }
+    if (e.button !== 0 || e.target.closest('.pj-dock, .pj-insp') || (e.pointerType !== 'touch' && e.target.closest('.ab'))) return
     drag = { x: e.clientX, y: e.clientY, cx: P.cam.x, cy: P.cam.y, moved: false }
     stage.setPointerCapture(e.pointerId)
   })
   stage.addEventListener('pointermove', e => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pinch && touches.size === 2) {
+      const [a, b] = [...touches.values()], r = stage.getBoundingClientRect()
+      const k = Math.min(3, Math.max(0.15, pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d))
+      const px = pinch.mx - r.left, py = pinch.my - r.top
+      P.cam = { k, x: px - (px - pinch.cx) * k / pinch.k + ((a.x + b.x) / 2 - pinch.mx), y: py - (py - pinch.cy) * k / pinch.k + ((a.y + b.y) / 2 - pinch.my) }
+      applyCam()
+      return
+    }
     if (!drag) return
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y
     if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true
     if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(); stage.classList.add('panning') }
   })
-  const endDrag = () => { if (drag && !drag.moved && P.sel) select(null); drag = null; stage.classList.remove('panning') }
+  const endDrag = e => {
+    touches.delete(e.pointerId)
+    if (pinch) { if (touches.size < 2) pinch = null; drag = null; return }
+    // a tap on an artboard (touch starts a pan there too) selects it
+    if (drag && !drag.moved && e.pointerType === 'touch') { const a = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ab'); if (a) { drag = null; stage.classList.remove('panning'); return } }
+    if (drag && !drag.moved && P.sel) select(null)
+    drag = null; stage.classList.remove('panning')
+  }
   stage.addEventListener('pointerup', endDrag)
-  stage.addEventListener('pointercancel', () => { drag = null; stage.classList.remove('panning') })
+  stage.addEventListener('pointercancel', e => { touches.delete(e.pointerId); pinch = null; drag = null; stage.classList.remove('panning') })
   stage.addEventListener('wheel', e => {
     e.preventDefault()
     if (e.ctrlKey || e.metaKey) {
@@ -279,7 +346,10 @@ export function makeProject({ sw, C, root }) {
     const h = e.target.closest('.sec-h')
     if (h) { const k = h.parentElement.dataset.sec; const shut = P.open[k] === false || (k === 'code' && !P.open[k]); P.open[k] = shut; store.set('project.open', P.open); renderList(); return }
     const r = e.target.closest('.row')
-    if (r && !e.target.closest('input')) select(r.dataset.key, { pan: true })
+    if (r && !e.target.closest('input')) {
+      if (narrow()) { select(r.dataset.key); sheet(false); requestAnimationFrame(() => zoomTo(r.dataset.key)) }
+      else select(r.dataset.key, { pan: true })
+    }
   })
   listEl.addEventListener('dblclick', e => { const r = e.target.closest('.row'); if (r && !e.target.closest('input')) openItem(find(r.dataset.key)) })
   listEl.addEventListener('keydown', e => {
@@ -479,6 +549,7 @@ export function makeProject({ sw, C, root }) {
     const b = e.target.closest('[data-tool]')
     if (!b) return
     const t = b.dataset.tool
+    if (t === 'files') return sheet(!root.classList.contains('files-on'))
     if (t === 'frame') return frameAll()
     if (t === 'text') return newPage()
     if (t === 'image') return hosted() ? null : fileIn.click()

@@ -20,6 +20,7 @@ const ICON = {
   chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   sound: '<path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/>',
+  caret: '<path d="m6 9 6 6 6-6"/>',
   gamepad: '<line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="2"/>'
 }
 const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ''}</svg>`
@@ -63,6 +64,7 @@ C.go = (m, v) => {
     if (v && sw.view !== v) sw.setView(v)
   }
   renderBack()
+  renderMode()
 }
 
 function renderBack() {
@@ -115,8 +117,7 @@ function chrome() {
   if (menu) {
     menu.insertAdjacentHTML('beforeend', `<div class="cosmos-sep" role="separator"></div>
       <button class="toggle cosmos-only" id="cosmos-sound">${ico('sound')}<span>Sound</span></button>
-      <button class="toggle cosmos-only" id="cosmos-game">${ico('gamepad')}Game</button>`)
-    $('#cosmos-game').onclick = () => $('#game-btn')?.click()
+`)
     // the crew's voices: on or off from the menu
     const sound = $('#cosmos-sound')
     const paint = () => { const on = sw.sound?.() === 'on'; sound.classList.toggle('on', on); sound.querySelector('span').textContent = on ? 'Sound on' : 'Sound off' }
@@ -124,6 +125,7 @@ function chrome() {
     $('#more-btn')?.addEventListener('click', paint)
     paint()
   }
+  modeMenu()
   // in a room, the chat column comes back with one button
   const chat = document.createElement('button')
   chat.className = 'cosmos-chatbtn'
@@ -141,6 +143,59 @@ function chrome() {
     x.onclick = () => C.chat(false)
     tabs.append(x)
   }
+}
+// The mode: one menu button in a build's top bar, Canvas, Video, App or Game. Each option does what
+// its old button did: the first three open that room, Game opens the game wizard.
+const MODES = [['canvas', 'Canvas'], ['video', 'Video'], ['app', 'App'], ['game', 'Game']]
+function renderMode() {
+  const b = $('.mode-btn')
+  if (!b) return
+  const cur = MODES.find(m => m[0] === sw.view) || MODES[0]
+  b.querySelector('.t').textContent = cur[1]
+  b.setAttribute('aria-label', `Mode: ${cur[1]}`)
+}
+function modeMenu() {
+  const spacer = $('.topbar .spacer')
+  if (!spacer) return
+  const wrap = document.createElement('div')
+  wrap.className = 'mode-wrap'
+  wrap.innerHTML = `<button class="toggle mode-btn" aria-haspopup="listbox" aria-expanded="false"><span class="t"></span>${ico('caret')}</button>
+    <div class="mode-menu" role="listbox" aria-label="Mode" hidden>${MODES.map(([id, n]) => `<button role="option" data-mode="${id}" aria-selected="false">${n}</button>`).join('')}</div>`
+  spacer.before(wrap)
+  const btn = wrap.querySelector('.mode-btn'), list = wrap.querySelector('.mode-menu')
+  const opts = () => [...list.querySelectorAll('[role="option"]')]
+  let off = null
+  const close = (focus = false) => { list.hidden = true; btn.setAttribute('aria-expanded', 'false'); off?.(); off = null; if (focus) btn.focus() }
+  const open = () => {
+    // fixed to the button: the top bar clips (and would scroll) anything inside it
+    const r = btn.getBoundingClientRect()
+    list.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 158))}px`
+    list.style.top = `${r.bottom + 6}px`
+    list.hidden = false
+    btn.setAttribute('aria-expanded', 'true')
+    for (const o of opts()) o.setAttribute('aria-selected', String(o.dataset.mode === sw.view))
+    ;(opts().find(o => o.dataset.mode === sw.view) || opts()[0]).focus()
+    off = W.SwarmUI?.layer(list, () => close(), { extra: [btn] })
+  }
+  const pick = id => {
+    close()
+    if (id === 'game') return $('#game-btn')?.click()
+    C.go('station', id)
+    renderMode()
+  }
+  btn.onclick = () => (list.hidden ? open() : close())
+  btn.onkeydown = e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open() } }
+  list.onclick = e => { const o = e.target.closest('[data-mode]'); if (o) pick(o.dataset.mode) }
+  list.onkeydown = e => {
+    const all = opts(), i = all.indexOf(document.activeElement)
+    if (e.key === 'ArrowDown') { e.preventDefault(); all[(i + 1) % all.length].focus() }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); all[(i - 1 + all.length) % all.length].focus() }
+    else if (e.key === 'Home') { e.preventDefault(); all[0].focus() }
+    else if (e.key === 'End') { e.preventDefault(); all.at(-1).focus() }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true) }
+    else if (e.key === 'Tab') close()
+  }
+  renderMode()
 }
 C.chat = on => { body.classList.toggle('cosmos-chat', on); if (on) $('.side .tabs [data-tab="chat"]')?.click() }
 

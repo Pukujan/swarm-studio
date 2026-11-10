@@ -7,10 +7,11 @@
 // It needs Playwright with Chromium: the repo has no node_modules, so it uses `playwright` if it
 // resolves, else the one at $PLAYWRIGHT_DIR (any folder whose node_modules has it).
 //
-// Checks, at 1280, 1024 and 768 wide: no two visible clickable boxes overlap on Projects, the
-// Start sheet and a project's canvas; a click on a card opens its project; a drag on the stage pans
-// it and Frame brings it back; a double-click on an artboard opens its room and Esc comes back; the
-// Start sheet closes with Esc, an outside click and ×; the launch-kit checkbox sits by its label;
+// Checks, at 1280, 1024 and 768 wide: no two visible clickable boxes overlap on Projects and a
+// project's canvas; a click on a card opens its project; a drag on the stage pans it and Frame brings
+// it back; a double-click on an artboard opens its room and Esc comes back; the mode menu (Canvas,
+// Video, App, Game) works from the keyboard and there is no Auto button or pill; at 390 and 700 the
+// canvas stays, Files is a sheet, "Tell the crew…" is on screen and the Chat pill covers nothing;
 // the logo and Esc lead home from every view (a room, App, a replay); there is no Classic view;
 // ☰ → Sound switches the crew's voices. At 390 wide nothing scrolls sideways.
 //
@@ -115,40 +116,49 @@ async function fresh(page, url = '/') {
   await wait(url.includes('run=') ? 4500 : 1800)
 }
 
-async function startSheet(page, w) {
-  const open = async () => { await page.evaluate(() => window.swarm.submit('', true)); await page.waitForSelector('.auto-pop', { timeout: 4000 }); await wait(300) }
-  await open()
-  await overlaps(page, `Start sheet @${w}`)
-  const m = await page.evaluate(() => {
-    const ta = document.querySelector('.auto-pop .auto-prompt'), cb = document.querySelector('.auto-pop .auto-launch input'), tx = document.querySelector('.auto-pop .auto-launch span')
-    ta.scrollIntoView({ block: 'center' })
-    const a = ta.getBoundingClientRect(), c = cb.getBoundingClientRect(), t = tx.getBoundingClientRect()
-    // beside the first line of its words, a few pixels from them
-    return { taH: a.height, taW: a.width, gap: t.left - c.right, dy: c.top - t.top, cbW: c.width }
-  })
-  ok(m.taH >= 80 && m.taW >= 260, `Start sheet @${w}: prompt box fully visible (${Math.round(m.taW)}×${Math.round(m.taH)})`)
-  ok(m.cbW <= 24 && m.gap >= 0 && m.gap <= 16 && m.dy >= -6 && m.dy <= 12, `Start sheet @${w}: launch-kit checkbox sits by its label (gap ${Math.round(m.gap)} px, ${Math.round(m.dy)} px down)`)
-  if (w === 1280 || w === 768) {
-    await page.evaluate(() => document.querySelector('.auto-pop').scrollTop = 0)
-    await shot(page, `start-sheet-${w}.png`)
-    await page.click('.auto-pop .auto-mode [data-m="pro"]'); await wait(900)
-    await shot(page, `start-sheet-pro-${w}.png`)
-    await tips(page, `Start sheet, Pro @${w}`)
-    await page.click('.auto-pop .auto-mode [data-m="make"]'); await wait(200)
+// the mode: one menu button (Canvas, Video, App, Game) in a build's top bar, run from the keyboard
+async function modeMenu(page, w) {
+  await page.evaluate(() => window.swarmCosmos.go('station', 'canvas')); await wait(800)
+  ok(await page.isVisible('.mode-btn') && (await page.textContent('.mode-btn .t')) === 'Canvas', `Mode @${w}: the top bar shows the mode by name`)
+  ok(!(await page.$('#auto-btn')) && !(await page.isVisible('.auto-panel')), `Mode @${w}: no Auto button or pill`)
+  await page.click('.mode-btn'); await wait(250)
+  const names = await page.$$eval('.mode-menu [role="option"]', o => o.map(x => x.textContent))
+  ok(names.join() === 'Canvas,Video,App,Game' && (await page.getAttribute('.mode-btn', 'aria-expanded')) === 'true', `Mode @${w}: the menu lists Canvas, Video, App, Game (${names.join(', ')})`)
+  await tips(page, `Mode menu @${w}`)
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); await wait(900)
+  let m = await mode(page)
+  ok(m.mode === 'station' && m.view === 'app' && (await page.textContent('.mode-btn .t')) === 'App', `Mode @${w}: arrows and Enter pick App (${m.mode}/${m.view})`)
+  await page.click('.mode-btn'); await wait(250); await page.keyboard.press('Escape'); await wait(250)
+  ok(!(await page.isVisible('.mode-menu')) && (await mode(page)).mode === 'station', `Mode @${w}: Esc closes the menu and stays in the room`)
+  await page.click('.mode-btn'); await wait(250); await page.click('.mode-menu [data-mode="game"]'); await wait(1200)
+  ok(!!(await page.$('.game-pop')), `Mode @${w}: Game opens the game wizard`)
+  if (w === 1280 || w === 768) await shot(page, `new-game-${w}.png`)
+  await page.keyboard.press('Escape'); await wait(300)
+  ok(!(await page.$('.game-pop')), `New game @${w}: closes with Esc`)
+  await page.evaluate(() => window.swarmCosmos.go('project')); await wait(600)
+}
+
+// narrow panes (a phone, Hermes Desktop's side pane): the canvas stays, Files is a sheet, nothing covers the dock
+async function narrow(page, w) {
+  const vis = () => page.evaluate(() => [...document.querySelectorAll('.ab')].filter(a => { const b = a.getBoundingClientRect(); return b.width > 4 && b.right > 0 && b.left < innerWidth && b.bottom > 52 && b.top < innerHeight }).length)
+  ok((await vis()) > 0 && !(await page.isVisible('.pj-side')), `${w}: a project shows its artboards, not the file list`)
+  const ask = await page.evaluate(() => { const r = document.querySelector('.pj-ask').getBoundingClientRect(); return { w: r.width, in: r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight } })
+  ok(ask.w >= 120 && ask.in, `${w}: "Tell the crew…" is on screen (${Math.round(ask.w)} px wide)`)
+  ok(await page.isVisible('.pj-dock [data-tool="move"]') && await page.isVisible('.pj-dock [data-tool="frame"]'), `${w}: the dock keeps Move and Frame`)
+  await page.click('.pj-files-btn'); await wait(400)
+  ok(await page.isVisible('.pj-side .pj-list .row'), `${w}: the Files button opens the file sheet`)
+  await page.click('.pj-list .row >> nth=0'); await wait(700)
+  ok(!(await page.evaluate(() => document.querySelector('.project').classList.contains('files-on'))), `${w}: picking a file closes the sheet`)
+  const sel = await page.evaluate(() => { const a = document.querySelector('.ab .sel')?.parentElement.getBoundingClientRect(); return a && a.top >= 40 && a.bottom <= innerHeight && a.width > 60 })
+  ok(!!sel, `${w}: the picked file is zoomed into view`)
+  await page.keyboard.press('Escape'); await wait(300)
+  // in a room, the Chat pill and the room's tools never overlap
+  for (const v of ['canvas', 'video', 'app']) {
+    await page.evaluate(view => window.swarmCosmos.go('station', view), v); await wait(900)
+    const hit = await page.evaluate(() => { const c = document.querySelector('.cosmos-chatbtn'); if (!c || !c.offsetParent) return []; const r = c.getBoundingClientRect(); return [...document.querySelectorAll('button, input, textarea, a')].filter(e => !c.contains(e) && e.offsetParent && getComputedStyle(e).visibility !== 'hidden').filter(e => { const b = e.getBoundingClientRect(); return b.width && b.left < r.right - 1 && b.right > r.left + 1 && b.top < r.bottom - 1 && b.bottom > r.top + 1 && document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) !== null }).map(e => e.getAttribute('aria-label') || e.className || e.tagName) })
+    ok(!hit.length, `${w}: in the ${v} room the Chat pill covers nothing (${hit.join(', ')})`)
   }
-  await page.keyboard.press('Escape'); await wait(200)
-  ok(!(await page.$('.auto-pop')), `Start sheet @${w}: closes with Esc`)
-  await open()
-  // a click outside the sheet: on the empty top bar
-  const sp = await page.evaluate(() => { const r = document.querySelector('.topbar .spacer').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })
-  await page.mouse.click(sp.x, sp.y); await wait(200)
-  ok(!(await page.$('.auto-pop')), `Start sheet @${w}: closes with an outside click`)
-  await open()
-  // no tooltips (docs/ux/RULES.md): the × is named by its aria-label only
-  await page.hover('.auto-pop .gclose'); await wait(800)
-  ok(!(await page.$('.ui-tooltip')), `Start sheet @${w}: the × shows no tooltip`)
-  await page.click('.auto-pop .gclose'); await wait(200)
-  ok(!(await page.$('.auto-pop')), `Start sheet @${w}: closes with ×`)
+  await page.evaluate(() => window.swarmCosmos.go('project')); await wait(600)
 }
 
 async function canvasPan(page, w) {
@@ -245,7 +255,6 @@ try {
     await fresh(page)
     await overlaps(page, `Projects @${w}`)
     if (w === 1280 || w === 768) await shot(page, `projects-${w}.png`)
-    await startSheet(page, w)
     await cardPick(page, w)
 
     await fresh(page, `/?run=${encodeURIComponent(RUN)}`)
@@ -253,14 +262,6 @@ try {
     await overlaps(page, `Project @${w}`)
     if (w === 1280 || w === 768) {
       await shot(page, `project-${w}.png`)
-      if (await page.$('.auto-panel.min .ap-head')) {
-        await page.click('.auto-panel .ap-head'); await wait(400)
-        await overlaps(page, `Project with the Auto panel open @${w}`)
-        await shot(page, `project-auto-open-${w}.png`)
-        if (await page.$('.auto-panel .ap-sum')) { await page.click('.auto-panel .ap-sum'); await wait(1200); await shot(page, `show-card-${w}.png`); await page.keyboard.press('Escape'); await wait(300); ok(!(await page.$('.show-sum')), `Show card @${w}: closes with Esc`) }
-        await page.mouse.click(Math.round(w * 0.3), Math.round(h * 0.3)); await wait(400)
-        ok(await page.evaluate(() => document.querySelector('.auto-panel').classList.contains('min') || document.querySelector('.auto-panel').hidden), `Project @${w}: the open Auto panel folds on an outside click`)
-      }
       // one sound control: ☰ → Sound switches the crew's voices on and off
       const snd = () => page.evaluate(() => window.swarm.sound())
       const s0 = await snd()
@@ -273,14 +274,8 @@ try {
       await page.evaluate(() => document.querySelector('#more-btn').click()); await wait(300)
       await tips(page, `☰ menu @${w}`)
       await page.keyboard.press('Escape'); await wait(200)
-      await page.evaluate(() => document.querySelector('#game-btn').click()); await wait(1200)
-      await shot(page, `new-game-${w}.png`)
-      await tips(page, `New game @${w}`)
-      const g = await page.evaluate(() => { const c = document.querySelector('.game-pop .gpromo input'), t = document.querySelector('.game-pop .gpromo span'); if (!c) return null; const a = c.getBoundingClientRect(), b = t.getBoundingClientRect(); return { gap: b.left - a.right, w: a.width } })
-      if (g) ok(g.w <= 24 && g.gap >= 0 && g.gap <= 16, `New game @${w}: the promo checkbox sits by its label (gap ${Math.round(g.gap)} px)`)
-      await page.keyboard.press('Escape'); await wait(300)
-      ok(!(await page.$('.game-pop')), `New game @${w}: closes with Esc`)
     }
+    await modeMenu(page, w)
     await canvasPan(page, w)
     await artboards(page, w)
     await home(page, w)
@@ -296,15 +291,22 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await fresh(page)
   ok(await page.evaluate(hscroll) <= 0, '390: Projects does not scroll sideways')
-  await page.evaluate(() => window.swarm.submit('', true)); await wait(500)
-  ok(await page.evaluate(hscroll) <= 0, '390: the Start sheet does not scroll sideways')
   await fresh(page, `/?run=${encodeURIComponent(RUN)}`)
   ok(await page.evaluate(hscroll) <= 0, '390: a project does not scroll sideways')
   for (const v of ['canvas', 'video', 'app']) {
     await page.evaluate(view => window.swarmCosmos.go('station', view), v); await wait(900)
     ok(await page.evaluate(hscroll) <= 0, `390: the ${v} room does not scroll sideways`)
   }
+  await page.evaluate(() => window.swarmCosmos.go('project')); await wait(1200)
+  await narrow(page, 390)
   await page.close()
+  // Hermes Desktop's side pane is often 500 to 700 px wide
+  console.log('· 700×800')
+  const pane = await browser.newPage({ viewport: { width: 700, height: 800 } })
+  await fresh(pane, `/?run=${encodeURIComponent(RUN)}`)
+  ok(await pane.evaluate(hscroll) <= 0, '700: a project does not scroll sideways')
+  await narrow(pane, 700)
+  await pane.close()
 } catch (e) {
   if (e !== 'done') throw e
 } finally {
