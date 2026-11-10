@@ -1,3 +1,5 @@
+import { PAGE_TYPES, VOICE_RULES } from './pagetype.mjs'
+
 // Prompts for the planner and the workers. Worker prompts put everything shared
 // first and the layer-specific part last, so providers can cache the opening.
 
@@ -41,8 +43,10 @@ Output JSON Lines ONLY: one JSON object per line, no prose, no markdown fences, 
 
 Rules:
 - Keep it tight: short direction, short purposes. Real, specific copy for the product in the brief; no lorem ipsum, no placeholders.
+- You are given a page type: its layout, voice and kind of sections decide the whole site. Build every page in that type's character; never fall back to the stock landing page (hero, three features, testimonial, call to action).
 - Vary the section roles so pages don't look alike. Give each page one memorable, unusual section.
-- A distinctive, characterful palette and font pairing that fits the product. No purple gradients. Good contrast.`
+- A distinctive, characterful palette and font pairing that fits the product and the page type. Follow what you are told about the last builds' colours. No purple gradients. Good contrast.
+- Theme direction names the page type's layout in a few words, so builders keep to it.`
 
 export const PAGE_PLANNER_SYSTEM = `You are a page planner in a design swarm. You plan the sections ("layers") of ONE page of a website; builder agents then build every layer in parallel from your plan, so each layer must carry all of its own copy.
 
@@ -53,9 +57,12 @@ Rules:
 - Follow the section list you are given, in order. Use each role once.
 - Real, specific, confident copy that fits the product. No lorem ipsum, no placeholders.
 - Don't repeat the navigation or footer; they are shared and already planned.
-- Link onward: the home page links to every other page at least once; other pages link back or onward.`
+- Link onward: the home page links to every other page at least once; other pages link back or onward.
+- Write in the page type's voice (you are given it).
+${VOICE_RULES}`
 
 export function pagePlannerMessages({ brief, theme, plan, page }) {
+  const pageType = PAGE_TYPES[plan.pageType] ? plan.pageType : ''
   return [
     { role: 'system', content: PAGE_PLANNER_SYSTEM },
     {
@@ -63,11 +70,12 @@ export function pagePlannerMessages({ brief, theme, plan, page }) {
       content: [
         `Brief: ${brief}`,
         `Theme "${theme?.name || ''}": ${theme?.direction || ''}`,
+        pageType ? `Page type: ${PAGE_TYPES[pageType].name}. Voice: ${PAGE_TYPES[pageType].voice}` : '',
         `Site pages: ${plan.pages.map(p => `${p.id} ("${p.title}": ${p.purpose})`).join('; ')}.`,
         `Navigation: ${plan.shared.find(l => l.id === 'nav')?.content || ''}`,
         `Plan this page: ${page.id} — "${page.title}": ${page.purpose}`,
-        `Sections, in order: ${page.sections || 'hero, features, testimonial, cta'}`
-      ].join('\n')
+        `Sections, in order: ${page.sections || (pageType ? PAGE_TYPES[pageType].sections : 'hero, features, story, cta')}`
+      ].filter(Boolean).join('\n')
     }
   ]
 }
@@ -81,7 +89,7 @@ Rules:
 - Headings use style="font-family:var(--font-heading)"; body text inherits var(--font-body). Corners use rounded-[var(--radius)].
 - Use the content you are given word for word. Never invent extra headings, names, numbers or claims; never repeat what other layers on the page cover.
 - Complete, finished markup. No placeholders, no lorem ipsum, no TODOs. For imagery use simple inline SVG shapes or CSS shapes, never external image URLs.
-- Responsive: works at 390px and 1440px wide. No horizontal overflow. Content width max-w-6xl mx-auto with px-6.
+- Responsive: works at 390px and 1440px wide. No horizontal overflow. Follow the page type's layout below for widths and grid; with none given, content width max-w-6xl mx-auto with px-6.
 - Never float text over a fixed-size box (a map, a picture, an aspect-[16/9] or h-96 panel) with absolute positioning: at another width it lands on top of other text. Put legends, cards and captions beside or below the box, in the normal flow. Absolute is fine for small pins, badges and decoration.
 - Considered design: clear hierarchy, generous whitespace, one coherent rhythm. No gradient text, no glassmorphism, no purple glow.
 - Buttons or links that go to another page get data-goto="<page id>".
@@ -102,8 +110,9 @@ export function workerMessages({ theme, plan, page, layer, images = false }) {
   const shared = [
     `Theme "${theme.name}": ${theme.direction}`,
     `Fonts: headings ${theme.fonts?.heading}, body ${theme.fonts?.body}. Radius ${theme.radius}.`,
+    PAGE_TYPES[plan.pageType] ? `Page type: ${PAGE_TYPES[plan.pageType].name}. ${PAGE_TYPES[plan.pageType].grid} Build your section in this layout, so the page reads as one ${PAGE_TYPES[plan.pageType].name.toLowerCase()}, not a generic landing page.` : '',
     `Site pages: ${plan.pages.map(p => `${p.id} ("${p.title}")`).join(', ')}.`
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 
   const siblings = layer.page === '*'
     ? 'This layer appears on every page.'
