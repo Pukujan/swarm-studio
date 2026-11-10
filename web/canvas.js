@@ -112,7 +112,7 @@ const ARROW = (color, name) => `<svg class="nib" viewBox="0 0 10 10" aria-hidden
 const HERMIA = '<img class="hermia" src="brand/hermia-mark.svg" alt="" width="18" height="18">'
 
 let S
-// galaxy/orbit hook: web/galaxy.js and web/orbit.js listen to every event through window.swarm.on
+// studio hook: web/studio.js and web/orbit.js listen to every event through window.swarm.on
 const cosmosHooks = new Set()
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
@@ -4418,7 +4418,7 @@ if (Q.get('run') && !Q.get('replay')) setTimeout(() => openRun(Q.get('run')), 30
 // Nothing live to replay: open the latest saved file rather than an empty canvas.
 setTimeout(async () => {
   if (S.run || viewing || Q.get('run') || Q.get('replay')) return
-  if (window.swarmCosmos?.home?.()) return // galaxy/orbit hook: the galaxy home opens nothing behind it
+  if (window.swarmCosmos?.atHome?.()) return // studio hook: Projects opens nothing behind it
   await loadFiles()
   const latest = files.find(f => f.preview)
   if (latest && !S.run && !viewing) openRun(latest.id)
@@ -4698,7 +4698,7 @@ function openAuto() {
   let offLayer = null
   const close = () => { offLayer?.(); el.remove(); autoM.pop = null; if (autoM.last?.state !== 'working') $('#auto-btn').classList.remove('on') }
   // closes with ×, Esc and a click outside it (spec 12, rule 10)
-  offLayer = window.SwarmUI?.layer(el, close, { extra: [$('#auto-btn'), document.querySelector('.gx-dock')] })
+  offLayer = window.SwarmUI?.layer(el, close, { extra: [$('#auto-btn'), document.querySelector('.hm-ask')] })
   el.querySelector('.gclose').onclick = close
   const ta = el.querySelector('.auto-prompt')
   ta.value = els.brief.value.trim()
@@ -5584,11 +5584,11 @@ function connectorEvent(e) {
   renderConnectors()
 }
 
-// ---------- galaxy/orbit hook: what web/galaxy.js and web/orbit.js may read and call.
+// ---------- studio hook: what web/studio.js, web/home.js and web/orbit.js may read and call.
 // Kept to this one block so the canvas and the galaxy views merge cleanly.
 window.swarm = {
   get S() { return S }, get view() { return view }, get viewing() { return viewing }, get liveId() { return liveId }, get files() { return files },
-  replay: !!Q.get('replay'), wall: WALL, store, api, esc,
+  replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer,
   // a page's picture for its planet: the resting snapshot, or a small fresh one
@@ -5749,7 +5749,7 @@ const hosted = BOOT.hosted && (() => {
   const given = (Q.get('prompt') || '').slice(0, H.limits.promptChars)
   if (given) {
     els.brief.value = given
-    const fill = () => { const i = document.querySelector('.gx-form input'); if (i && !i.value) i.value = given; return !!i }
+    const fill = () => { const i = document.querySelector('.hm-ask input'); if (i && !i.value) i.value = given; return !!i }
     if (!fill()) setTimeout(fill, 600)
   }
   cosmosHooks.add(e => { if (e?.type === 'run:done' || e?.type === 'reset' || e?.type === 'run:start') { if (e.type === 'run:done') refresh(); else draw() } })

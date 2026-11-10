@@ -352,7 +352,7 @@ function makeOrbit() {
 
     // the sun's label and the empty state
     O.sunTitle = s.title || (s.run ? 'New build' : 'No build open')
-    const status = !s.run && !sw.viewing ? 'Pick a star in the galaxy, or launch a new one' : s.kind === 'game' ? 'a game: its build lives in the Engine room' : !s.planned ? 'Hermia is plotting the course…' : s.tEnd ? `done · ${s.done}/${s.planned} sections · ${s.frames.length} pages` : `building · ${s.done}/${s.planned} sections`
+    const status = !s.run && !sw.viewing ? '' : s.kind === 'game' ? 'a game: its build lives in the Engine room' : !s.planned ? 'Hermia is plotting the course…' : s.tEnd ? `done · ${s.done}/${s.planned} sections · ${s.frames.length} pages` : `building · ${s.done}/${s.planned} sections`
     O.sunStatus = status
     emptyEl.hidden = !!s.frames.length || narrow()
     emptyEl.textContent = !s.run && !sw.viewing ? '' : s.kind === 'game' ? '' : 'Hermia is plotting the course: planets appear as she names the pages.'

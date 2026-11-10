@@ -225,7 +225,7 @@ body.cosmos-orbit .auto-panel { bottom: 78px; max-height: calc(100% - 150px); }
 body:has(.game-pop) .auto-panel { z-index: 30; }
 @media (max-width: 600px) { body.cosmos-orbit .auto-panel { bottom: 70px; } }
 /* on a galaxy too narrow for the pill beside the prompt dock, it waits under the top bar instead */
-@media (max-width: 1140px) { body.cosmos-galaxy .auto-panel { top: 68px; bottom: auto; max-height: max(180px, calc(100vh - 340px)); } }
+@media (max-width: 1140px) { body.cosmos-home .auto-panel { top: 68px; bottom: auto; max-height: max(180px, calc(100vh - 340px)); } }
 
 /* ---------- phones in Classic view: the grid is one column there, so the App and Video views
    (placed in column 2 on a desktop) made an implicit column that squeezed the top bar to a sliver

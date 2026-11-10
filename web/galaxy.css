@@ -21,8 +21,8 @@ body.cosmos-orbit .cosmos-back, body.cosmos-station .cosmos-back { display: inli
 body.cosmos-orbit .brand .word, body.cosmos-station .brand .word { display: none; }
 .topbar .brand[role="button"] { cursor: pointer; border-radius: 10px; min-height: 40px; align-items: center; }
 .topbar .brand[role="button"]:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 2px; }
-body.cosmos-galaxy .file-name, body.cosmos-galaxy #play-btn, body.cosmos-galaxy .pubwrap { display: none; }
-body.cosmos-galaxy .topbar { background: transparent; border-bottom-color: transparent; backdrop-filter: none; }
+body.cosmos-home .file-name, body.cosmos-home #play-btn, body.cosmos-home .pubwrap { display: none; }
+body.cosmos-home .topbar { background: transparent; border-bottom-color: transparent; backdrop-filter: none; }
 body.cosmos .file-name { color: var(--text); font: 600 14px var(--label); letter-spacing: .06em; text-transform: uppercase; }
 body.cosmos .file-name::before { display: none; }
 .more-menu .cosmos-only { display: none; }
@@ -38,10 +38,10 @@ body.cosmos.design-on .design { grid-column: 3; }
 body.cosmos.cosmos-chat { grid-template-columns: var(--side-w, 300px) 1fr; }
 body.cosmos.cosmos-chat.design-on { grid-template-columns: var(--side-w, 300px) 1fr var(--design-w, 264px); }
 body.cosmos.cosmos-chat .side { display: flex; grid-area: 2 / 1 / 3 / 2; }
-body.cosmos-galaxy.cosmos-chat .side { display: none; }
-body.cosmos-galaxy .viewport, body.cosmos-orbit .viewport { visibility: hidden; }
-body.cosmos-galaxy .crew-layer, body.cosmos-orbit .crew-layer { display: none; }
-body.cosmos-galaxy .appview, body.cosmos-orbit .appview { visibility: hidden; }
+body.cosmos-home.cosmos-chat .side { display: none; }
+body.cosmos-home .viewport, body.cosmos-orbit .viewport { visibility: hidden; }
+body.cosmos-home .crew-layer, body.cosmos-orbit .crew-layer { display: none; }
+body.cosmos-home .appview, body.cosmos-orbit .appview { visibility: hidden; }
 
 /* in a station (Canvas, Video, App) a round button brings the chat column back */
 .cosmos-chatbtn { position: fixed; left: 14px; bottom: 14px; z-index: 64; display: none; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
@@ -52,94 +52,9 @@ body.cosmos-galaxy .appview, body.cosmos-orbit .appview { visibility: hidden; }
 body.cosmos-station:not(.cosmos-chat) .cosmos-chatbtn { display: inline-flex; }
 body.cosmos .side-min-btn { display: none; }
 
-/* ---------- the galaxy home */
-.galaxy { position: fixed; inset: 0; z-index: 25; background: var(--void); overflow: hidden; opacity: 1; transition: opacity .45s var(--ease); }
-.galaxy[hidden] { display: none; }
-.galaxy.out { opacity: 0; pointer-events: none; }
-.galaxy canvas, .orbit canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
-.galaxy.hot canvas { cursor: pointer; }
-.galaxy canvas { opacity: 0; transition: opacity 1.2s var(--ease); }
-.galaxy.ready canvas { opacity: 1; }
-.gx-labels, .ob-labels, .ob-crew { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.gx-label { position: absolute; left: 0; top: 0; pointer-events: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 2px 6px 3px 12px;
-  background: none; border: 0; color: var(--text); cursor: pointer; text-align: left; white-space: nowrap; will-change: transform; transition: opacity .25s;
-  font: 600 12px/1.1 var(--label); letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 1px 8px rgb(var(--void-rgb) / .95), 0 0 2px rgb(var(--void-rgb)); }
-.gx-label::before { content: ''; position: absolute; left: 0; top: 7px; width: 7px; border-top: 1px solid rgb(var(--glass-rgb) / .5); }
-.gx-label > span { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
-.gx-label small { font: 400 10px/1.2 var(--mono); letter-spacing: 0; text-transform: none; color: var(--muted); display: none; }
-.gx-label.hot small, .gx-label:focus-visible small { display: block; }
-.gx-label.hot, .gx-label:focus-visible { color: var(--accent); z-index: 2; }
-.gx-label.live { color: var(--accent); }
-.gx-label.live::after { content: 'live'; position: absolute; left: 100%; top: 2px; padding: 1px 5px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font: 700 9px/1.3 var(--mono); }
-.gx-label.off { opacity: 0; pointer-events: none; }
-.gx-label:focus-visible { outline: 1px solid var(--frame-hi); outline-offset: 2px; border-radius: 4px; }
-
-.galaxy.flying .gx-dock, .galaxy.flying .gx-chart-btn, .galaxy.flying .gx-chart { opacity: 0; pointer-events: none; transition: opacity .3s; }
-.gx-dock { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(640px, calc(100% - 32px)); display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 3; }
-.gx-title { margin: 0; font: 800 clamp(34px, 6vw, 64px)/.9 var(--display); letter-spacing: .01em; text-transform: uppercase; color: var(--text); text-align: center; text-shadow: 0 2px 30px rgb(var(--void-rgb) / .9); }
-.gx-title em { font: italic 500 1.02em var(--serif); text-transform: none; color: var(--pink); letter-spacing: 0; }
-.gx-sub { margin: -4px 0 0; color: var(--muted); font: 12px var(--mono); text-align: center; text-shadow: 0 1px 8px rgb(var(--void-rgb)); }
-.gx-form { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 7px 7px 18px; background: rgb(var(--deep-rgb) / .78); backdrop-filter: blur(16px);
-  border: 1px solid var(--panel-edge); border-radius: 999px; box-shadow: 0 0 0 1px rgb(var(--frame-rgb) / .45), 0 20px 60px rgb(var(--shade-rgb) / .7); }
-.gx-form:focus-within { border-color: var(--line-2); box-shadow: 0 0 0 1px var(--frame-hi), 0 20px 60px rgb(var(--shade-rgb) / .7); }
-.gx-form input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: 14px var(--mono); padding: 8px 0; }
-.gx-form input::placeholder { color: var(--muted); }
-.gx-form button { flex: none; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 9px 16px; cursor: pointer; font: 700 13px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
-.gx-form .gx-go { background: var(--accent); color: var(--accent-ink); border: 0; }
-.gx-form .ico { width: 15px; height: 15px; }
-
-.gx-chart-btn { position: absolute; left: 16px; top: 60px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; background: rgb(var(--deep-rgb) / .7); backdrop-filter: blur(8px);
-  border: 1px solid var(--panel-edge); border-radius: 99px; color: var(--text); cursor: pointer; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
-.gx-chart-btn .ico { width: 14px; height: 14px; }
-.gx-chart-btn em { font: 600 11px var(--mono); color: var(--accent); font-style: normal; }
-.gx-chart { position: absolute; left: 16px; top: 98px; z-index: 4; width: min(320px, calc(100% - 32px)); max-height: calc(100% - 300px); min-height: 120px; overflow: auto; padding: 6px;
-  background: var(--glass); backdrop-filter: blur(16px); border: 1px solid var(--panel-edge); border-radius: 14px; box-shadow: 0 18px 50px rgb(var(--shade-rgb) / .6); animation: in .2s var(--ease); }
-.gx-chart[hidden] { display: none; }
-.gx-chart button { width: 100%; display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 9px; padding: 7px 8px; background: none; border: 0; border-radius: 8px; color: var(--text); cursor: pointer; text-align: left; }
-.gx-chart button:hover, .gx-chart button:focus-visible { background: var(--panel-2); outline: none; }
-.gx-chart i { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
-.gx-chart span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13px var(--label); letter-spacing: .05em; text-transform: uppercase; }
-.gx-chart small { color: var(--muted); font: 10.5px var(--mono); }
-.gx-fps { position: absolute; right: 12px; top: 56px; z-index: 5; font: 11px var(--mono); color: var(--ok); background: rgb(var(--void-rgb) / .7); padding: 2px 6px; border-radius: 4px; }
-.gx-fail { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font: 12px var(--mono); }
-
-/* ---------- Commander Hermia on the home view (galaxy.js live()): beside the prompt on a wide
-   screen, small above the title on a narrow one. The art is web/brand/hermia-live.svg. */
-.gx-hermia { position: absolute; right: calc(100% + 4px); bottom: 2px; width: 150px; pointer-events: none;
-  --h-main: #2a2a2e; --h-trim: #f4f4f5; --h-iris: #8e8e93; --h-accent: var(--accent); --h-glow: var(--accent); --h-hair: #3a3a3f; }
-@media (max-width: 960px) { .gx-hermia { position: static; width: 84px; margin-bottom: -6px; } }
-@media (max-height: 560px) and (max-width: 960px) { .gx-hermia { display: none; } }
-.hermia-box { --look-x: 0px; --look-y: 0px; line-height: 0; }
-.hermia-live { width: 100%; height: auto; overflow: visible; animation: h-breathe 5s ease-in-out infinite; transform-origin: 50% 90%; }
-.hermia-live .h-head { transform-box: view-box; transform-origin: 120px 170px; transition: transform .3s cubic-bezier(.3, 1.4, .5, 1); }
-.hermia-live .h-eyes { transform: translate(var(--look-x), var(--look-y)); transition: transform .25s ease-out; }
-.hermia-live .h-eyes ellipse, .hermia-live .h-eyes circle { transform-box: fill-box; transform-origin: center; animation: h-blink 4.6s infinite; }
-.hermia-live .h-wing { transform-box: view-box; animation: h-flutter 2.4s ease-in-out infinite; }
-.hermia-live .h-wing-l { transform-origin: 68px 86px; }
-.hermia-live .h-wing-r { transform-origin: 172px 86px; animation-name: h-flutter-r; animation-delay: .08s; }
-.hermia-live .h-orb { transform-box: fill-box; transform-origin: center; animation: h-orb 2.8s ease-in-out infinite; }
-.hermia-live .h-baton { transform-box: view-box; transform-origin: 96px 178px; transition: transform .3s cubic-bezier(.3, 1.6, .5, 1); }
-.hermia-live .h-pixels rect { animation: h-twinkle 3s steps(2) infinite; }
-.hermia-live .h-pixels rect:nth-child(2n) { animation-delay: 1.1s; }
-.hermia-live .h-pixels rect:nth-child(3n) { animation-delay: 1.9s; }
-.hermia-live .h-mouth { transition: d .3s; }
-/* listening: she leans in toward the prompt and her wings perk up */
-.is-listen .hermia-live .h-head { transform: rotate(9deg) translate(4px, 4px); }
-.is-listen .hermia-live .h-wing { animation-duration: .9s; }
-/* ready (pointer on Launch) and cheering (Launch): baton up; the cheer adds a hop and a big smile */
-.is-ready .hermia-live .h-baton, .is-cheer .hermia-live .h-baton { transform: rotate(-18deg) translate(-6px, -18px); }
-.is-ready .hermia-live .h-orb { animation-duration: 1s; }
-.is-cheer .hermia-live { animation: h-hop .6s cubic-bezier(.3, 1.6, .5, 1); }
-.is-cheer .hermia-live .h-mouth { d: path("M108 150Q120 166 132 150"); }
-.is-cheer .hermia-live .h-orb { animation-duration: .5s; }
-@keyframes h-breathe { 50% { transform: translateY(-6px) scale(1.01); } }
-@keyframes h-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
-@keyframes h-flutter { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-7deg); } }
-@keyframes h-flutter-r { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(7deg); } }
-@keyframes h-orb { 50% { transform: scale(1.25); opacity: .7; } }
-@keyframes h-twinkle { 50% { opacity: .2; } }
-@keyframes h-hop { 40% { transform: translateY(-16px) rotate(-3deg); } }
-@media (prefers-reduced-motion: reduce) { .hermia-live, .hermia-live * { animation: none !important; transition: none !important; } }
+/* the orbit view and the canvas share these */
+.orbit canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+.ob-labels, .ob-crew { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 
 /* ---------- the orbit view */
 .orbit { grid-area: 2 / 2 / 3 / 3; position: relative; z-index: 35; min-width: 0; min-height: 0; overflow: hidden; background: var(--void); transition: opacity .4s var(--ease); }
@@ -247,9 +162,6 @@ body.cosmos .side-min-btn { display: none; }
   body.cosmos { grid-template-rows: 52px 1fr; }
   body.cosmos.cosmos-chat { grid-template-columns: 0 1fr; }
   body.cosmos.cosmos-chat .side { position: fixed; left: 0; right: 0; bottom: 0; height: 62vh; z-index: 140; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; background: var(--deep); }
-  .gx-dock { bottom: 16px; gap: 10px; }
-  .gx-form { padding-left: 14px; }
-    .gx-chart { max-height: calc(100% - 330px); }
   .comm { left: 8px; right: 8px; bottom: 8px; }
   .comm .comm-btn .t { display: none; }
   .comm-thought { left: 12px; font-size: 13px; }
@@ -260,23 +172,16 @@ body.cosmos .side-min-btn { display: none; }
   .orbit .ob-list { display: flex; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .galaxy, .orbit { transition: opacity .3s linear; }
+  .orbit { transition: opacity .3s linear; }
   .orbit.in { animation: none; }
 }
 
 /* the wall tiles never show any of it */
-html.wall .galaxy, html.wall .orbit, html.wall .cosmos-chatbtn { display: none !important; }
+html.wall .home, html.wall .orbit, html.wall .cosmos-chatbtn { display: none !important; }
 
 /* ---------- moving space (spec 12, rule 5): drag to turn, wheel or pinch to zoom, Recentre */
-.galaxy canvas, .orbit canvas { cursor: grab; touch-action: none; }
-.galaxy.dragging canvas { cursor: grabbing; }
-.galaxy.hot:not(.dragging) canvas { cursor: pointer; }
-.gx-recentre { position: absolute; left: 16px; top: 104px; z-index: 3; }
+.orbit canvas { cursor: grab; touch-action: none; }
 .ob-recentre { position: absolute; left: 14px; top: 14px; z-index: 6; }
-.galaxy.flying .gx-recentre { opacity: 0; pointer-events: none; }
 /* stations are real buttons: a 40 px hit area (rule 3) */
 .ob-label.station { min-height: 40px; padding: 6px 14px 6px 10px; }
-/* near the right edge a star's label hangs to its left */
-.gx-label.flip { align-items: flex-end; padding: 2px 12px 3px 6px; text-align: right; }
-.gx-label.flip::before { left: auto; right: 0; }
-.gx-label.flip.live::after { left: auto; right: 100%; }
+
