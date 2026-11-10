@@ -1322,7 +1322,8 @@ function frameLoop(now) {
     const busyPages = new Set([...S.agents.values()].map(a => a.layer && S.layers.get(a.layer)?.page).filter(Boolean))
     for (const f of S.frames) f.el.classList.toggle('active', busyPages.has(f.id))
     els.play.disabled = !S.frames.length
-    els.reviewBtn.disabled = review.busy || !reviewerOn() || !S.done
+    // with no reviewer model yet, Review opens Models to pick one instead of sitting greyed out
+    els.reviewBtn.disabled = review.busy || !S.done
     setLabel(els.reviewBtn, review.busy ? 'Reviewing…' : 'Review')
     els.exportBtn.disabled = !S.done || exp.busy
     const pubbing = pub.run === shownRun() && pub.state === 'working'
@@ -1407,7 +1408,8 @@ window.addEventListener('keydown', e => {
   if (e.key === 'm' && !els.player.hidden && !e.target.closest('input, select, textarea')) return setMotion()
   if (e.target.closest('input, select, textarea')) return
   if (e.metaKey || e.ctrlKey || e.altKey) return
-  if (e.key === 'd') return togglePanel('design')
+  // the Design panel belongs to the Canvas room; a project has its own Layers inspector
+  if (e.key === 'd') return document.body.classList.contains('cosmos-project') || document.body.classList.contains('cosmos-home') ? undefined : togglePanel('design')
   if (e.key === 'p' && S.frames.length) return els.player.hidden ? openPlayer() : closePlayer()
   if (!els.player.hidden) return
   if (e.key === 'v' || e.key === 't' || e.key === 'c') return els.toolbar.querySelector(`[data-tool="${{ v: 'move', t: 'text', c: 'comment' }[e.key]}"]`)?.click()
@@ -3135,7 +3137,7 @@ function autoReview() {
   tick()
 }
 
-els.reviewBtn.onclick = () => reviewRun()
+els.reviewBtn.onclick = e => { if (!reviewerOn()) { e.stopPropagation(); return toggleModels(true) } reviewRun() }
 
 // ---------- promo video
 // The planner storyboards the build into a few scenes, each handed to an agent,
@@ -3557,7 +3559,8 @@ moreMenu.addEventListener('click', () => setTimeout(() => { moreMenu.hidden = tr
 document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.closest('.more')) { moreMenu.hidden = true; moreBtn.classList.remove('on') } })
 
 // ☰ → Light / Dark. The system's choice by default (prefers-color-scheme); a pick here is kept.
-// The page's colours follow at once; the WebGL scenes are built from the tokens, so they reload.
+// The page's colours follow at once (tokens only now: nothing is drawn from them, so no reload,
+// which used to drop a project back to Projects).
 const themeBtn = $('#theme-btn'), sysLight = matchMedia('(prefers-color-scheme: light)')
 const theme = () => document.documentElement.dataset.theme || (sysLight.matches ? 'light' : 'dark')
 function themeLabel() { const next = theme() === 'light' ? 'dark' : 'light'; themeBtn.innerHTML = `${ico(next === 'light' ? 'sun' : 'moon')}${next === 'light' ? 'Light' : 'Dark'}` }
@@ -3566,10 +3569,10 @@ function setTheme(t) {
   document.documentElement.dataset.theme = t
   try { localStorage.setItem('swarm-theme', t) } catch {}
   themeLabel()
-  if (theme() !== before && document.body.classList.contains('cosmos')) location.reload()
+  if (theme() !== before) dispatchEvent(new CustomEvent('swarm:theme', { detail: theme() }))
 }
 themeBtn.onclick = () => setTheme(theme() === 'light' ? 'dark' : 'light')
-sysLight.addEventListener('change', () => { if (!document.documentElement.dataset.theme) location.reload() })
+sysLight.addEventListener('change', () => { if (!document.documentElement.dataset.theme) themeLabel() })
 themeLabel()
 
 // The side panel can shrink to a small chat over the canvas; the chat stays.
@@ -4467,7 +4470,7 @@ els.publishBtn.onclick = async e => {
   const st = run ? await api(`/api/runs/${encodeURIComponent(run)}/app`).then(r => r.ok ? r.json() : {}).catch(() => ({})) : {}
   if (run !== shownRun()) return
   opt.disabled = !st.hasApp || st.state === 'working'
-  setText(why, st.state === 'working' ? 'The app is still building.' : !st.hasApp ? 'Build the app first (App tab).' : st.deployed ? `Live at ${st.deployed}; this sends the latest.` : '')
+  setText(why, st.state === 'working' ? 'The app is still building.' : !st.hasApp ? 'Build the app first (App mode).' : st.deployed ? `Live at ${st.deployed}; this sends the latest.` : '')
   opt.dataset.has = st.hasApp ? '1' : ''
 }
 pubMenu.querySelector('.pub-copy').onclick = ev => { ev.stopPropagation(); copyText(liveUrl(), ev.currentTarget, pubMenu.querySelector('.pub-live a')) }

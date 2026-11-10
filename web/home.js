@@ -8,6 +8,11 @@ import { ic, cursor, logo, CREW } from './icons.js'
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
 const SORTS = [['edited', 'Last edited'], ['name', 'Name'], ['created', 'Created']]
+// the filter beside sort: what a build is, or how far it got (the server's own words in project.state)
+const KINDS = ['Website', 'App', 'Game', 'Video']
+const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Live']
+const STATUS_ICON = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', Live: 'globe' }
+const KIND_ICON = { Website: 'site', App: 'code', Game: 'game', Video: 'film' }
 
 export function makeHome({ sw, C, root }) {
   const esc = sw.esc
@@ -15,7 +20,7 @@ export function makeHome({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const H = {
     on: false, view: store.get('home.view', 'recent'), folder: store.get('home.folder', null), stack: null,
-    sort: store.get('home.sort', 'edited'), layout: store.get('home.layout', 'grid'), q: '', searching: false,
+    sort: store.get('home.sort', 'edited'), filter: store.get('home.filter', ''), layout: store.get('home.layout', 'grid'), q: '', searching: false,
     sel: new Set(), last: null, data: { folders: [], projects: [] }, assets: null, me: null, loaded: false
   }
   const opened = store.get('home.opened', {})
@@ -52,7 +57,7 @@ export function makeHome({ sw, C, root }) {
     } catch {
       // the hosted studio has no projects store: each of the guest's runs is its own project
       const runs = await api('/api/runs').catch(() => [])
-      H.data = { folders: [], projects: (Array.isArray(runs) ? runs : []).map(r => ({ id: r.id, title: String(r.title || '').split(/\s[—–|:-]\s/)[0], head: r.id, count: 1, made: r.t, updated: r.updated || r.t, cover: r.cover || null, theme: r.cover ? null : r.theme, kinds: [r.pages > 0 && 'site', r.video && 'film'].filter(Boolean), live: !!r.live, versions: [{ id: r.id, title: r.title, t: r.t, updated: r.updated, cover: r.cover || null, theme: r.theme, kinds: [], live: !!r.live }] })) }
+      H.data = { folders: [], projects: (Array.isArray(runs) ? runs : []).map(r => ({ id: r.id, title: String(r.title || '').split(/\s[—–|:-]\s/)[0], head: r.id, count: 1, made: r.t, updated: r.updated || r.t, cover: r.cover || null, theme: r.cover ? null : r.theme, kinds: [r.pages > 0 && 'site', r.video && 'film'].filter(Boolean), state: r.state || null, live: !!r.live, versions: [{ id: r.id, title: r.title, t: r.t, updated: r.updated, cover: r.cover || null, theme: r.theme, kinds: [], live: !!r.live }] })) }
     }
     H.loaded = true
     if (H.view === 'assets') H.assets = await api('/api/assets').then(j => j.assets).catch(() => [])
@@ -79,9 +84,17 @@ export function makeHome({ sw, C, root }) {
     else if (H.view === 'recent') list = [...live()].sort((a, b) => seen(b) - seen(a)).slice(0, 24)
     else list = live()
     if (H.q) { const q = H.q.toLowerCase(); list = list.filter(p => p.title.toLowerCase().includes(q) || p.versions?.some(v => String(v.title || '').toLowerCase().includes(q))) }
+    list = list.filter(passes)
     const by = { edited: (a, b) => seen(b) - seen(a), name: (a, b) => a.title.localeCompare(b.title), created: (a, b) => (b.made || 0) - (a.made || 0) }[H.sort]
     return [...list].sort(by)
   }
+  // the filter: 'k:Website' (kind) or 's:Live' (status); empty shows everything
+  const passes = p => {
+    if (!H.filter) return true
+    const [t, v] = [H.filter.slice(0, 1), H.filter.slice(2)]
+    return t === 'k' ? p.state?.kind === v : p.state?.status === v
+  }
+  const filterName = () => H.filter.slice(2)
   const titleOf = () => H.stack ? (H.data.projects.find(p => p.id === H.stack)?.title || 'Versions') : H.view === 'folder' ? H.folder : { recent: 'Recent', all: 'All projects', assets: 'Assets', trash: 'Trash' }[H.view]
 
   // ---------- render
@@ -105,6 +118,8 @@ export function makeHome({ sw, C, root }) {
       <label class="hm-search${H.searching || H.q ? ' open' : ''}"><input type="search" placeholder="Search" aria-label="Search projects" value="${esc(H.q)}"></label>
       ${trash && shown().length ? `<button class="btn ghost hm-empty">${ic('trash', 15)}Empty</button>` : ''}
       <button class="ib hm-find${H.searching || H.q ? ' on' : ''}" aria-label="Search">${ic('search')}</button>
+      ${H.filter && !H.stack ? `<button class="hm-chip" aria-label="Clear filter ${esc(filterName())}">${esc(filterName())}${ic('x', 13)}</button>` : ''}
+      ${H.stack ? '' : `<button class="ib hm-filter${H.filter ? ' on' : ''}" aria-label="Filter" aria-haspopup="menu">${ic('filter')}</button>`}
       <button class="ib hm-sort" aria-label="Sort" aria-haspopup="menu">${ic('sort')}</button>
       <button class="ib hm-grid${H.layout === 'grid' ? ' on' : ''}" aria-label="Grid view">${ic('grid')}</button>
       <button class="ib hm-list${H.layout === 'list' ? ' on' : ''}" aria-label="List view">${ic('list')}</button>`
@@ -126,6 +141,8 @@ export function makeHome({ sw, C, root }) {
       : `<div class="blank">${ic('box', 28)}</div>`
   const kinds = list => list?.length ? `<span class="kinds" aria-label="${list.map(k => KIND_NAME[k]).join(', ')}">${list.map(k => ic(KIND[k], 14)).join('')}</span>` : ''
   const crew = p => p.live ? `<div class="crew">${CREW.slice(0, 2 + (p.id.length % 3)).map(n => cursor(n)).join('')}</div><div class="prog" role="progressbar" aria-label="Building" aria-valuenow="${Math.round((p.progress ?? 0.1) * 100)}"><i style="width:${Math.max(6, Math.round((p.progress ?? 0.1) * 100))}%"></i></div>` : ''
+  // what it is and how far it got, one quiet line: "App · Live · tidebreak-app.vercel.app"
+  const stateLine = p => p.state ? `<span class="st">${esc(p.state.kind)} · ${esc(p.state.status)}${p.state.host ? `<span class="h"> · ${esc(p.state.host)}</span>` : ''}</span>` : ''
   const ago = t => { const d = (Date.now() - t) / 1000; return d < 90 ? 'now' : d < 3600 ? `${Math.round(d / 60)}m` : d < 86400 ? `${Math.round(d / 3600)}h` : d < 86400 * 30 ? `${Math.round(d / 86400)}d` : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
 
   // a card's own buttons, on its cover: Delete (to Trash) and Open, or in Trash, Restore and Delete forever
@@ -139,11 +156,12 @@ export function makeHome({ sw, C, root }) {
       <div class="cv${stack ? ' stack' : ''}">${cover(p.cover, p.theme, p.title)}${stack ? `<span class="badge" aria-label="${p.count} versions">${p.count}</span>` : ''}${kinds(p.kinds)}${crew(p)}${acts(p)}</div>
       ${sel ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''}
       <div class="nm"><b>${esc(p.title)}</b>${hosted() ? '' : `<button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button>`}</div>
+      ${stateLine(p)}
       ${H.layout === 'list' ? `<span class="meta">${p.count > 1 ? `<span aria-label="${p.count} versions">${ic('layers', 13)}${p.count}</span>` : ''}${p.folder && H.view !== 'folder' ? `<span>${ic('folder', 13)}${esc(p.folder)}</span>` : ''}<span>${ago(seen(p))}</span></span>` : ''}
     </div>`
   }
   // a stack opened: each version is a card of its own
-  const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `${p.title} ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, count: 1, live: v.live, updated: v.updated || v.t, made: v.t }))
+  const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `${p.title} ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, state: v.state || null, count: 1, live: v.live, updated: v.updated || v.t, made: v.t }))
   function renderCards() {
     let list
     if (H.stack) { const p = H.data.projects.find(x => x.id === H.stack); list = p ? versionCards(p) : [] }
@@ -152,18 +170,41 @@ export function makeHome({ sw, C, root }) {
     bodyEl.innerHTML = list.length ? list.map(card).join('') : ''
     bodyEl.querySelectorAll('.card.live .crew').forEach(wander)
   }
+  // Assets: grouped by the project each piece came from, in the same folders as Projects;
+  // a project's heading opens it, and each tile says its own name (its page and section, or the file's name)
   function renderAssets() {
-    const title = id => H.data.projects.find(p => p.id === id)?.title || ''
-    let list = H.assets || []
-    if (H.q) { const q = H.q.toLowerCase(); list = list.filter(a => title(a.project).toLowerCase().includes(q) || String(a.name).toLowerCase().includes(q)) }
-    bodyEl.className = `hm-body ${H.layout} assets`
-    bodyEl.innerHTML = list.map((a, i) => {
+    const byId = new Map(H.data.projects.filter(p => !p.trashed).map(p => [p.id, p]))
+    let list = (H.assets || []).filter(a => byId.has(a.project) && passes(byId.get(a.project)))
+    if (H.q) { const q = H.q.toLowerCase(); list = list.filter(a => byId.get(a.project).title.toLowerCase().includes(q) || `${a.name} ${a.page || ''}`.toLowerCase().includes(q)) }
+    const groups = new Map()
+    for (const a of list) { if (!groups.has(a.project)) groups.set(a.project, []); groups.get(a.project).push(a) }
+    const flat = []
+    const tile = a => {
+      const i = flat.push(a) - 1
       const img = a.kind === 'film' ? a.poster : a.kind === 'upload' && !/^image\//.test(a.type || '') ? null : a.src
-      return `<div class="card asset" data-asset="${i}" data-project="${esc(a.project)}" tabindex="0" role="button" aria-label="${esc(title(a.project))}">
+      return `<div class="card asset" data-asset="${i}" data-project="${esc(a.project)}" tabindex="0" role="button" aria-label="${esc(a.name)}">
         <div class="cv">${img ? `<img class="im" src="${esc((sw.base || '') + img)}" alt="" loading="lazy" decoding="async" draggable="false">` : `<div class="blank">${ic(a.kind === 'film' ? 'film' : 'file', 28)}</div>`}${a.kind === 'film' ? `<span class="kinds" aria-label="Film">${ic('film', 14)}</span>` : a.kind === 'upload' ? `<span class="kinds" aria-label="Upload">${ic('upload', 14)}</span>` : ''}</div>
-        <div class="nm"><b>${esc(title(a.project))}</b></div></div>`
-    }).join('')
-    H.assetList = list
+        <div class="nm"><b>${esc(a.name)}</b></div></div>`
+    }
+    const group = id => {
+      const p = byId.get(id)
+      return `<section class="as-group"><button class="as-head" data-project="${esc(id)}" aria-label="Open ${esc(p.title)}"><b>${esc(p.title)}</b>${ic('chr', 16)}</button>
+        <div class="as-tiles ${H.layout}">${groups.get(id).map(tile).join('')}</div></section>`
+    }
+    // unfiled projects first, then each folder in the sidebar's order
+    // the sort orders the projects too: by name, by when made, else newest piece first (the server's order)
+    if (H.sort === 'name') { const ids = [...groups.keys()].sort((a, b) => byId.get(a).title.localeCompare(byId.get(b).title)); ids.forEach(id => { const g = groups.get(id); groups.delete(id); groups.set(id, g) }) }
+    if (H.sort === 'created') { const ids = [...groups.keys()].sort((a, b) => (byId.get(b).made || 0) - (byId.get(a).made || 0)); ids.forEach(id => { const g = groups.get(id); groups.delete(id); groups.set(id, g) }) }
+    const folders = [null, ...H.data.folders.map(f => f.name)]
+    let html = ''
+    for (const f of folders) {
+      const ids = [...groups.keys()].filter(id => (byId.get(id).folder || null) === f)
+      if (!ids.length) continue
+      html += `${f ? `<h3 class="as-folder">${ic('folder', 15)}<span>${esc(f)}</span></h3>` : ''}${ids.map(group).join('')}`
+    }
+    bodyEl.className = 'hm-body assets'
+    bodyEl.innerHTML = html
+    H.assetList = flat
   }
   // the crew at work on a live build's cover: named cursors that drift between spots
   function wander(box) {
@@ -212,6 +253,8 @@ export function makeHome({ sw, C, root }) {
 
   // ---------- the cards: click opens, Shift/⌘ picks, right-click or … manages
   bodyEl.addEventListener('click', e => {
+    const head = e.target.closest('.as-head')
+    if (head) return openProject(H.data.projects.find(x => x.id === head.dataset.project))
     const a = e.target.closest('.card.asset')
     if (a) { const p = H.data.projects.find(x => x.id === a.dataset.project); return openProject(p) }
     const c = e.target.closest('.card')
@@ -349,6 +392,14 @@ export function makeHome({ sw, C, root }) {
       { k: 'show', icon: 'file', label: 'Show in Finder', run: () => post(`/api/projects/${encodeURIComponent(p.id)}/reveal`, { run }).catch(() => {}) }
     ], anchor, at)
   }
+  // only the kinds and states the projects really have
+  function filterMenu(b) {
+    const ps = live()
+    const pick = f => () => { H.filter = H.filter === f ? '' : f; store.set('home.filter', H.filter); render() }
+    const kinds = KINDS.filter(k => ps.some(p => p.state?.kind === k)).map(k => ({ k: `k:${k}`, icon: KIND_ICON[k], label: k, on: H.filter === `k:${k}`, run: pick(`k:${k}`) }))
+    const states = STATUSES.filter(v => ps.some(p => p.state?.status === v)).map(v => ({ k: `s:${v}`, icon: STATUS_ICON[v], label: v, on: H.filter === `s:${v}`, run: pick(`s:${v}`) }))
+    showMenu([{ k: 'all', icon: 'grid', label: 'Everything', on: !H.filter, run: pick('') }, '-', ...kinds, ...(states.length ? ['-', ...states] : [])], b)
+  }
   bar.addEventListener('click', e => {
     const b = e.target.closest('button')
     if (!b) return
@@ -356,6 +407,8 @@ export function makeHome({ sw, C, root }) {
     if (b.classList.contains('hm-find')) { H.searching = !(H.searching || H.q); if (!H.searching) H.q = ''; render(); return }
     if (b.classList.contains('hm-grid') || b.classList.contains('hm-list')) { H.layout = b.classList.contains('hm-grid') ? 'grid' : 'list'; store.set('home.layout', H.layout); render(); return }
     if (b.classList.contains('hm-sort')) return showMenu(SORTS.map(([k, label]) => ({ k, icon: k === 'name' ? 'type' : k === 'created' ? 'cal' : 'clock', label, on: H.sort === k, run: () => { H.sort = k; store.set('home.sort', k); render() } })), b)
+    if (b.classList.contains('hm-chip')) { H.filter = ''; store.set('home.filter', ''); render(); return }
+    if (b.classList.contains('hm-filter')) return filterMenu(b)
     if (b.classList.contains('hm-empty')) return emptyTrash()
   })
   selbar.addEventListener('click', e => {

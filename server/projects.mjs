@@ -46,6 +46,24 @@ export function kindsOf(card) {
   return k
 }
 
+// what a build is and how far it got, in words, from its real events (never a guess):
+// kind Website, App, Game or Video; status Draft, Building, Designed, App built, App failed or Live with its host
+const hostOf = url => { try { return new URL(url).host } catch { return null } }
+export function stateOf(card, cards = [card]) {
+  const game = card.kind === 'game' || card.game
+  const kind = game ? 'Game' : card.build || card.app ? 'App' : card.pages > 0 || card.planned > 0 ? 'Website' : card.video ? 'Video' : 'Website'
+  const made = game ? 'Game' : 'App'
+  // live once any version went out: its newest published address
+  const out = [...cards].reverse().map(c => c.deployed || Object.values(c.sites || {})[0]).find(Boolean)
+  const status = out ? 'Live'
+    : card.live ? 'Building'
+    : card.build === 'failed' ? `${made} failed`
+    : card.build === 'built' || (card.app && !card.build) ? `${made} built`
+    : card.layers > 0 || card.video ? 'Designed'
+    : 'Draft'
+  return { kind, status, host: out ? hostOf(out) : null }
+}
+
 export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
   const file = () => join(runsDir, 'folders.json')
   const projectsDir = join(dataDir, 'projects')
@@ -127,10 +145,11 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       theme: withCover ? null : (([...cards].reverse().find(c => c.theme?.colors?.length) || {}).theme || null),
       head: newest.id,
       kinds,
+      state: stateOf(newest, cards),
       live,
       progress: live ? (cards.find(c => c.live).progress ?? null) : null,
       count: cards.length,
-      versions: [...cards].reverse().map(c => ({ id: c.id, title: c.title, t: c.t, updated: c.updated, cover: c.cover || null, theme: c.cover ? null : c.theme || null, kinds: kindsOf(c), live: !!c.live, pages: c.pages })),
+      versions: [...cards].reverse().map(c => ({ id: c.id, title: c.title, t: c.t, updated: c.updated, cover: c.cover || null, theme: c.cover ? null : c.theme || null, kinds: kindsOf(c), state: stateOf(c), live: !!c.live, pages: c.pages })),
       uploads: uploadsOf(pid).length
     }
   }

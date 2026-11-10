@@ -84,3 +84,6 @@ body.cosmos-project .mode-wrap, body.cosmos-station .mode-wrap { display: block;
 @media (max-width: 520px) { .cosmos-chatbtn { bottom: 84px; } }
 /* the hosted studio has the Canvas only: no mode to pick */
 body.hosted .mode-wrap { display: none !important; }
+/* ☰ in Projects and in a project: Design, Planner and Agents are the Canvas room's panels and open
+   nothing here (a project has its own Layers inspector), so they show only in a room */
+body.cosmos-home #more-menu [data-panel], body.cosmos-project #more-menu [data-panel] { display: none; }
