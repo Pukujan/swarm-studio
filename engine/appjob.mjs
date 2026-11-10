@@ -11,6 +11,7 @@ import { snapshot, dyadApp, seedProject } from './export.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
+import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
@@ -160,7 +161,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
       if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
       await serve(id, j, step)
-      if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step)
+      if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, events.find(e => e.type === 'game:spec')?.spec?.brand)
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
@@ -172,25 +173,40 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     return view(j)
   }
 
-  // Play the built game for a few seconds. The typecheck and build pass a game
-  // whose run ends the moment it starts; one fix turn goes back to the engine
-  // when that, a crash or a missing canvas shows up. Vite reloads the fix itself.
-  async function playGame(j, dir, model, step) {
-    step({ kind: 'test', text: 'play-testing the game' })
+  // Check the built game before calling it done: no web address nobody gave it
+  // (a model asked for "a button back to the site" with no address invents a
+  // domain, which is someone else's), and a few seconds of play (the typecheck
+  // and build pass a game whose run ends the moment it starts). Problems get one
+  // fix turn with them spelled out, then a second check. Vite reloads the fix.
+  async function playGame(j, dir, model, step, brand) {
+    const allowed = brand?.url ? [brand.url] : []
+    const linkProblem = () => {
+      const bad = strangeLinks(dir, allowed)
+      if (!bad.length) return null
+      const where = bad.slice(0, 6).map(b => `${b.url} (in ${b.file})`).join(', ')
+      return `The code links to web addresses nobody gave it, which belong to someone else: ${where}. Remove them. ${brand?.url ? `The only address for ${brand.name} is ${brand.url}; point those links there.` : `${brand?.name || 'The brand'} is not online yet: take out those buttons and links (keep the words of the call to action, no link).`}`
+    }
+    step({ kind: 'test', text: 'checking the game\'s links and play-testing it' })
+    let links = linkProblem()
+    if (links) step({ kind: 'test', text: 'the game links to a made-up web address', ok: false })
     let t = await playtest(j.url)
-    if (t.skipped) { step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false }); return { skipped: t.skipped } }
-    if (t.ok) { step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s` }); return { ok: true, seconds: t.seconds } }
-    step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false })
+    if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
+    else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s` })
+    else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false })
+    if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : { ok: true, seconds: t.seconds }
+    const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, links || ''].filter(Boolean).join('\n\n')
     try {
-      await runEngine({ workspace: dir, prompt: `A play test of this game failed. ${t.problem}\n\nKeep everything else as it is. Finish with a working build: the typecheck and build must pass.`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. Finish with a working build: the typecheck and build must pass.`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
     } catch (err) {
       step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
-      return { ok: false, problem: t.problem }
+      return { ok: false, problem: problems }
     }
     await new Promise(r => setTimeout(r, 2500))
-    t = await playtest(j.url)
-    step({ kind: 'test', text: t.ok ? 'play test passed after the fix' : `play test still fails: ${(t.problem || '').split('. ')[0]}`, ok: !!t.ok })
-    return t.ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: t.problem }
+    links = linkProblem()
+    if (!t.ok) t = await playtest(j.url)
+    const ok = !links && t.ok
+    step({ kind: 'test', text: ok ? 'the game passes its checks after the fix' : `still wrong after the fix: ${(links || t.problem || '').split('. ')[0]}`, ok })
+    return ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, links || ''].filter(Boolean).join(' ') }
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).
