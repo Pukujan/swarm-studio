@@ -1533,3 +1533,31 @@ body:has(.ui-overlay, .export-pop, .publish-pop, .models-pop, .finfo-wrap, #pub-
 .publish-pop .pfeed .ui-btn { width: 100%; justify-content: center; }
 .publish-pop .pfeed .plink { margin: 0; }
 .publish-pop .vhead + .pfeed { margin-top: 0; padding-top: 0; border-top: 0; }
+
+/* ---------- the app advisor: the chat widens while Hermia asks what the app needs */
+body.advising { --side-w: min(460px, 92vw); }
+.feed .item.adv .txt { display: block; margin-top: 4px; line-height: 1.45; }
+.feed .item.adv .adv-sub { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.feed .item.adv.ask { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 6px 0; background: var(--panel); }
+.feed .item.adv.ask.done { opacity: .62; }
+.adv-q { font: 600 14px/1.35 var(--font); color: var(--text); margin: 2px 0 2px; }
+.adv-why { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+.adv-why b, .adv-screen b { color: var(--text); font-weight: 600; }
+.adv-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.adv-opt { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px; padding: 6px 11px; font: 12.5px var(--font); cursor: pointer; text-align: left; }
+.adv-opt em { font: 600 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; font-style: normal; color: var(--muted); }
+.adv-opt[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.adv-opt[aria-pressed="true"] em { color: var(--accent-ink); opacity: .7; }
+.adv-opt:disabled { cursor: default; }
+.adv-own { width: 100%; margin-top: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 8px; padding: 7px 9px; font: 12.5px var(--font); }
+.adv-go { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.adv-n { color: var(--muted); font: 11px var(--mono); margin-right: auto; }
+.adv-go button { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 8px; padding: 6px 12px; font: 600 12.5px var(--font); cursor: pointer; }
+.adv-go .adv-next { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.adv-go .adv-again { margin-right: auto; }
+.feed .item.adv h5 { font: 600 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 10px 0 6px; }
+.adv-screens { display: grid; gap: 6px; }
+.adv-screen { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; cursor: pointer; }
+.adv-screen input { margin-top: 3px; accent-color: var(--accent); }
+.adv-screen small { color: var(--muted); font: 10.5px var(--mono); }
+.adv-screen > span > span { display: block; color: var(--muted); font-size: 12px; }

@@ -10,13 +10,15 @@ import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
+import { planBrief } from './advisor.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
 const BACKEND = `Server code: call enable_nitro first, then put API routes in server/routes/api/ (Nitro file routes, e.g. server/routes/api/orders.post.ts, served at /api/orders) and keep data in a small typed server-side store module, so the same code runs here and deploys to Vercel. Never put secrets in client code.`
 
 // What the design implies, made real: the default first turn for a website.
-export function sitePrompt(snap, ask) {
+export function sitePrompt(snap, ask, plan = null) {
+  const behind = planBrief(plan)
   const pages = snap.pages.map((p, i) => {
     const roles = p.sections.filter(s => s.page !== '*').map(s => s.role).slice(0, 14).join('; ')
     return `- ${i === 0 ? '/' : `/${p.id}`} ${p.title}${p.purpose ? `: ${p.purpose}` : ''}${roles ? ` (sections: ${roles})` : ''}`
@@ -25,7 +27,7 @@ export function sitePrompt(snap, ask) {
 1. Every form submits to a server route, validates (zod + react-hook-form, shadcn Form), and shows a success state in the theme.
 2. Lists, prices, plans, schedules, menus or stock the design shows come from GET routes over the store, typed, with a loading state.
 3. Anything a visitor buys, books, applies for or signs up to is saved, with an id, and lowers stock where it has any.
-4. An /admin page (not linked from the nav) with a shadcn Table of everything saved and a short summary (counts, revenue where there are prices).
+${behind ? '4. The back office in the app plan below.' : '4. An /admin page (not linked from the nav) with a shadcn Table of everything saved and a short summary (counts, revenue where there are prices).'}
 5. Buttons with data-goto already route between pages; keep them working.`
   return `${KEEP}
 
@@ -35,7 +37,7 @@ Pages:
 ${pages}
 
 ${want}
-
+${behind ? `\n${behind}\n` : ''}
 ${BACKEND}
 
 Finish with a working build: the typecheck and build must pass.`
@@ -98,7 +100,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         const snap = snapshot(events, Array.isArray(input.sections) ? input.sections.slice(0, 80) : [])
         if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
         dyadApp(snap, dir, { runId: id, runDir: join(runsDir, id), scaffold: scaffoldDir })
-        prompt = sitePrompt(snap, ask)
+        prompt = sitePrompt(snap, ask, input.plan && typeof input.plan === 'object' ? input.plan : null)
       }
     } else {
       if (!ask) throw new Error('say what to change')
@@ -145,7 +147,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       let result
       for (let i = 0; ; i++) {
         try {
-          result = await runEngine({ workspace: dir, prompt, provider: provider('worker'), model: chain[i], turns: input.turns || 4, onStep: step, signal: j.controller.signal })
+          result = await runEngine({ workspace: dir, prompt, provider: provider('worker'), model: chain[i], turns: input.turns || (input.plan ? 6 : 4), onStep: step, signal: j.controller.signal })
           break
         } catch (err) {
           if (i + 1 >= chain.length || j.controller.signal.aborted || !BUSY.test(err.message)) throw err
