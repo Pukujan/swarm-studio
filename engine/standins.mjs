@@ -63,7 +63,7 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
     for (const x of [...ownPictures(), ...index]) {
       if (exclude && x.run === exclude) continue // never a build's own picture as its own stand-in
       const hit = x.tags.filter(t => set.has(t)).length
-      if (!hit) continue
+      if (hit < Math.min(2, want.length)) continue
       const s = hit + (aspect && x.aspect === aspect ? 0.5 : 0) + (x.quality || 3) / 10 + (x.src === 'own' ? 0.3 : 0)
       if (!best || s > best.s) best = { ...x, s, hit }
     }
@@ -157,7 +157,7 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
     if (!want.length) return null
     const aspect = aspectOf(Number(w), Number(h))
     let best = rank(want, aspect, run)
-    if (!best || best.hit < 2) {
+    if (!best || best.hit < Math.min(3, want.length)) {
       for (const key of [want.slice(0, 3).join(' '), want.slice(0, 2).join(' ')]) {
       if (!searched.has(key)) {
         searched.add(key)
@@ -165,7 +165,7 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
       }
       if (inflight.has(key)) await inflight.get(key)
       best = rank(want, aspect, run) || best
-      if (best) break
+      if (best && best.src !== 'own') break
       }
     }
     if (!best) return null

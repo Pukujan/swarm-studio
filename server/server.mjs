@@ -28,7 +28,7 @@ import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
 import { makeProjects, stateOf } from './projects.mjs'
-import { autoJob } from '../engine/auto.mjs'
+import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
 import { runBoard as boardOf } from './board.mjs'
 import { streamChat } from '../engine/llm.mjs'
@@ -806,7 +806,13 @@ let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
 // stand-ins load lazily; the vision tagger is the reviewer model; Octo's public lane when the studio has a key
 let standinP = null
-const standinsOf = () => (standinP ||= standinsMake({ dataDir, runsDir, provider: () => provider('reviewer'), model: () => modelFor('reviewer'), octo: process.env.OCTO_SWARM_WS ? { baseUrl: (process.env.OCTO_BASE_URL || 'https://octodb.design-bakery.com').replace(/\/+$/, ''), key: process.env.OCTO_SWARM_WS, workspaceId: process.env.OCTO_SWARM_WORKSPACE_ID || '9aba6ef6-d196-412f-9344-0efb744b9c6c' } : null, pexels: process.env.PEXELS_API_KEY ? { key: process.env.PEXELS_API_KEY } : process.env.PEXELS_OCTO_LEASE ? { key: process.env.PEXELS_OCTO_LEASE, proxy: `${(process.env.OCTO_BASE_URL || 'https://octodb.design-bakery.com').replace(/\/+$/, '')}/api/vault/proxy` } : null }))
+const standinsOf = () => (standinP ||= (() => {
+  const octoBase = (hermesKey('OCTO_BASE_URL') || 'https://octodb.design-bakery.com').replace(/\/+$/, '')
+  const octoKey = hermesKey('OCTO_SWARM_WS'), pexelsKey = hermesKey('PEXELS_API_KEY'), lease = hermesKey('PEXELS_OCTO_LEASE')
+  return standinsMake({ dataDir, runsDir, provider: () => provider('reviewer'), model: () => modelFor('reviewer'),
+    octo: octoKey ? { baseUrl: octoBase, key: octoKey, workspaceId: hermesKey('OCTO_SWARM_WORKSPACE_ID') || '9aba6ef6-d196-412f-9344-0efb744b9c6c' } : null,
+    pexels: pexelsKey ? { key: pexelsKey } : lease ? { key: lease, proxy: `${octoBase}/api/vault/proxy` } : null })
+})())
 // A promo game for a build: the site's name, brief, theme, copy and links, so the
 // game is set in the brand's world, wears its colours and points back to it.
 function brandOf(id) {
