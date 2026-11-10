@@ -247,3 +247,10 @@ body.cosmos-project .pj-now:hover { border-color: var(--text); }
   .ab.art .pt::after, .ab.art .pt-bar > i::after, .pj-now i, .ab.page .rv-scan i { animation: none; }
   .ab.art .pt .sk > * { animation: none; stroke-dashoffset: 0; }
 }
+
+/* a piece still being made: a thin bar along its foot */
+.ab .ab-work { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgb(var(--void-rgb) / .45); overflow: hidden; }
+.ab .ab-work i { display: block; height: 100%; background: var(--text); transition: width .6s ease; }
+.ab .ab-work.ind i { width: 30%; animation: ab-work 1.6s ease-in-out infinite; }
+@keyframes ab-work { from { transform: translateX(-100%) } to { transform: translateX(340%) } }
+@media (prefers-reduced-motion: reduce) { .ab .ab-work.ind i { animation: none; width: 100%; opacity: .5 } }

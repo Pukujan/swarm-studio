@@ -140,7 +140,8 @@ export function makeHome({ sw, C, root }) {
     : th?.colors?.length ? typeCover(title, th)
       : `<div class="blank">${ic('box', 28)}</div>`
   const kinds = list => list?.length ? `<span class="kinds" aria-label="${list.map(k => KIND_NAME[k]).join(', ')}">${list.map(k => ic(KIND[k], 14)).join('')}</span>` : ''
-  const crew = p => p.live ? `<div class="crew">${CREW.slice(0, 2 + (p.id.length % 3)).map(n => cursor(n)).join('')}</div><div class="prog" role="progressbar" aria-label="Building" aria-valuenow="${Math.round((p.progress ?? 0.1) * 100)}"><i style="width:${Math.max(6, Math.round((p.progress ?? 0.1) * 100))}%"></i></div>` : ''
+  const crew = p => p.live ? `<div class="crew">${CREW.slice(0, 2 + (p.id.length % 3)).map(n => cursor(n)).join('')}</div>${p.progress == null && p.work ? `<div class="prog ind" role="progressbar" aria-label="Building ${WHAT[p.work.what] || ''}"><i></i></div>` : `<div class="prog" role="progressbar" aria-label="Building" aria-valuenow="${Math.round((p.progress ?? 0.1) * 100)}"><i style="width:${Math.max(6, Math.round((p.progress ?? 0.1) * 100))}%"></i></div>`}` : ''
+  const WHAT = { site: 'the site', app: 'the app', game: 'the game', film: 'the film' }
   // what it is and how far it got, one quiet line: "App · Live · tidebreak-app.vercel.app"
   const stateLine = p => p.state ? `<span class="st">${esc(p.state.kind)} · ${esc(p.state.status)}${p.state.host ? `<span class="h"> · ${esc(p.state.host)}</span>` : ''}</span>` : ''
   const ago = t => { const d = (Date.now() - t) / 1000; return d < 90 ? 'now' : d < 3600 ? `${Math.round(d / 60)}m` : d < 86400 ? `${Math.round(d / 3600)}h` : d < 86400 * 30 ? `${Math.round(d / 86400)}d` : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
@@ -161,7 +162,7 @@ export function makeHome({ sw, C, root }) {
     </div>`
   }
   // a stack opened: each version is a card of its own
-  const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `${p.title} ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, state: v.state || null, count: 1, live: v.live, updated: v.updated || v.t, made: v.t }))
+  const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `${p.title} ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, state: v.state || null, count: 1, live: v.live, work: v.work || null, progress: v.work?.pct ?? null, updated: v.updated || v.t, made: v.t }))
   function renderCards() {
     let list
     if (H.stack) { const p = H.data.projects.find(x => x.id === H.stack); list = p ? versionCards(p) : [] }

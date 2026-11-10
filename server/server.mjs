@@ -345,6 +345,22 @@ const traceScope = id => ({
 })
 const withTrace = (id, fn) => traced(traceScope(id), fn)
 
+// What a run is working on right now, if anything: the site build, an app or game build, a film.
+// { what: site | app | game | film, stage, pct (0..1, or null when the job cannot say) }
+let appsNow = null // the app jobs, once loaded, so this can stay synchronous
+function workOf(id) {
+  if (current?.id === id && !current.done) {
+    const plan = current.events.filter(e => e.type === 'layer:plan').length
+    return { what: 'site', stage: plan ? 'building pages' : 'planning', pct: Math.min(1, current.events.filter(e => e.type === 'layer:done').length / Math.max(1, plan || 12)) }
+  }
+  const a = appsNow?.jobs?.get(id)
+  if (a?.state === 'working') return { what: a.kind === 'game' ? 'game' : 'app', stage: clipStage(a.stage), pct: null, steps: a.steps?.length || 0 }
+  const v = videos.get(id)
+  if (v?.state === 'working') return { what: 'film', stage: clipStage(v.stage), pct: Math.min(1, (Number(v.pct) || 0) / 100) }
+  return null
+}
+const clipStage = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null
+
 // A run's file card, from its events plus the person's meta. Cached by the
 // events file's size and time, so listing many runs stays quick.
 const cards = new Map()
@@ -370,6 +386,8 @@ function runCard(id) {
       id,
       title: start.title || pages[0]?.title || start.brief.slice(0, 60),
       kind: start.kind || 'site',
+      // a game made from a site: that site's run, so the game joins its version
+      from: start.from || null,
       brief: start.brief,
       t: start.t,
       updated: events.at(-1)?.t || start.t,
@@ -416,6 +434,7 @@ function runCard(id) {
     videoFile: shelveVideo(id),
     live: current?.id === id && !current.done,
     progress: current?.id === id && !current.done ? Math.min(1, (current.events.filter(e => e.type === 'layer:done').length) / Math.max(1, current.events.filter(e => e.type === 'layer:plan').length || 12)) : null,
+    work: workOf(id),
     // the cover: its hero picture, else a snapshot of its first page (saved by the canvas), else a film frame
     cover: card.info.cover || snapOf(id) || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
   }
@@ -494,7 +513,7 @@ function shelveExport(id, zip) {
 }
 
 // Projects and folders (server/projects.mjs): runs/folders.json v2 groups runs into projects.
-const projects = makeProjects({ runsDir, dataDir, runCard, runMeta, isLive: id => current?.id === id && !current.done })
+const projects = makeProjects({ runsDir, dataDir, runCard, runMeta, isLive: id => !!workOf(id) })
 const folderList = () => projects.list().folders.map(f => f.name)
 const folderOp = input => projects.folderOp(input)
 
@@ -737,7 +756,7 @@ async function videoNow(id, input = {}) {
 
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
-const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor })))
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor }))))
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
@@ -1108,7 +1127,7 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/assets') {
     const out = []
     for (const p of projects.list().projects.filter(x => !x.trashed)) {
-      for (const v of p.versions) {
+      for (const v of [...p.versions, ...Object.keys(p.parts || {}).map(id => ({ id, updated: runCard(id)?.updated }))]) {
         const events = readEvents(v.id) || []
         const pageTitle = Object.fromEntries(events.filter(e => e.type === 'page').map(e => [e.id, e.title]))
         for (const e of events.filter(e => e.type === 'image' && e.src)) out.push({ project: p.id, run: v.id, kind: 'art', name: pieceName(e, pageTitle), page: pageTitle[e.page] || null, src: e.src, t: e.t })
@@ -1150,7 +1169,31 @@ const server = createServer((req, res) => {
   if (runBoard && req.method === 'GET') {
     const id = runBoard[1], events = readEvents(id)
     if (!events) return json(404, { error: 'no such build' })
-    return json(200, boardOf(id, events, runsDir, current?.id === id && !current.done))
+    const b = boardOf(id, events, runsDir, current?.id === id && !current.done)
+    // the game made from this site lives in its own run: it shows here, as part of this version
+    const linked = events.findLast(e => e.type === 'game:linked' && e.game)
+    if (!b.game && linked && RUN_ID.test(linked.game)) {
+      const gev = readEvents(linked.game)
+      if (gev) {
+        const g = boardOf(linked.game, gev, runsDir, false)
+        const work = workOf(linked.game)
+        b.game = { ...(g.game || { title: linked.title || 'Game', cover: null }), run: linked.game, work }
+        if (work) b.busy = true
+      }
+    }
+    b.work = workOf(id) || b.game?.work || null
+    return json(200, b)
+  }
+  // what the crew are working on right now, across projects: the Studio's queue
+  if (url.pathname === '/api/work' && req.method === 'GET') {
+    const jobs = []
+    for (const p of projects.list().projects.filter(x => !x.trashed)) {
+      for (const id of [...p.versions.map(v => v.id), ...Object.keys(p.parts || {})]) {
+        const w = workOf(id)
+        if (w) jobs.push({ project: p.id, head: (p.parts || {})[id] || id, run: id, title: p.title, cover: p.cover, ...w })
+      }
+    }
+    return json(200, { jobs })
   }
   const runMetaPost = url.pathname.match(/^\/api\/runs\/([^/]+)\/meta$/)
   if (runMetaPost && req.method === 'POST' && RUN_ID.test(runMetaPost[1]) && existsSync(join(runsDir, runMetaPost[1]))) {

@@ -97,7 +97,10 @@ export function makeProject({ sw, C, root }) {
     for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k.split('/').slice(2).join('/')); if (P.on) renderStage() }, 1600) }
     P.pendingKeys = now
     P.board = board
-    P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run)) || null
+    P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || null
+    // back from a site's game: the project shows the site's version, which holds the game
+    const up = P.proj?.parts?.[run]
+    if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); if (sw.viewing !== up) sw.openRun(up); return load() }
     if (P.proj) P.pid = P.proj.id
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
     render()
@@ -111,7 +114,7 @@ export function makeProject({ sw, C, root }) {
     const g = {}
     if (b.pages?.length) g.site = b.pages.map(p => ({ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id) }))
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
-    if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, src: b.game.cover }]
+    if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
     const arts = (b.art || []).map(a => ({ key: `art:${a.page}/${a.layer}/${a.gen}`, kind: 'art', name: a.name.replace(/^\w/, c => c.toUpperCase()), src: a.src, used: a.used?.split(/\s[—–|:-]\s/)[0], style: a.style, art: a }))
     // pictures still being made: a slot of their own (or over the old picture, when one is painted again)
@@ -159,12 +162,18 @@ export function makeProject({ sw, C, root }) {
     if (x.kind !== 'page' || !th?.colors?.length) return ''
     return `<div class="tc" style="--tc-bg:${esc(th.colors[0])};--tc-pr:${esc(th.colors[1] || th.colors[0])};--tc-fg:${esc(th.colors[3] || th.colors.at(-1))};--tc-font:'${esc(th.fonts?.heading || th.fonts?.display || '')}'"><i></i><b>${esc(x.name)}</b><span></span></div>`
   }
+  // a piece still being made: a thin bar along its foot (it slides when the job cannot say how far)
+  const WORK = { site: 'the site', app: 'the app', game: 'the game', film: 'the film' }
+  function workBar(w) {
+    const pct = w.pct == null ? null : Math.round(w.pct * 100)
+    return `<span class="ab-work${pct == null ? ' ind' : ''}" role="progressbar" aria-label="Building ${WORK[w.what] || ''}"${pct == null ? '' : ` aria-valuenow="${pct}"`}><i${pct == null ? '' : ` style="width:${Math.max(4, pct)}%"`}></i></span>`
+  }
   function board(x) {
     const sel = P.sel === x.key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
     const img = x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="" draggable="false" loading="lazy">`
       : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code' }[x.kind] || 'file', 26)}</span>`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
-      : x.kind === 'game' ? '<span class="play"></span>'
+      : x.kind === 'game' ? (x.work ? workBar(x.work) : '<span class="play"></span>')
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
     const tall = x.kind === 'page' && x.snap && P.aspect.get(x.page)
     const rv = x.kind === 'page' ? reviewOf(x) : null
@@ -628,6 +637,8 @@ export function makeProject({ sw, C, root }) {
     if (!x) return
     if (x.kind === 'page' || x.kind === 'art') { C.go('station', 'canvas'); setTimeout(() => sw.focusPage(x.page || x.art?.page), 60); return }
     if (x.kind === 'film') return C.go('station', 'video')
+    // a game made from this site lives in its own run: open that one's App room
+    if (x.kind === 'game' && x.run && x.run !== P.run) { sw.openRun(x.run); return C.go('station', 'app') }
     if (x.kind === 'game' || x.kind === 'app' || x.kind === 'code') return C.go('station', 'app')
     if (x.kind === 'upload' && x.src) window.open(base() + x.src, '_blank', 'noopener')
   }

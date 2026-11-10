@@ -198,3 +198,7 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
   .hm-chip { height: 28px; padding: 0 6px 0 9px; }
 }
 @media (max-width: 760px) { .home .card .st .h { display: none; } }
+
+.home .prog.ind i { width: 30%; animation: hm-prog 1.6s ease-in-out infinite; }
+@keyframes hm-prog { from { transform: translateX(-100%) } to { transform: translateX(340%) } }
+@media (prefers-reduced-motion: reduce) { .home .prog.ind i { animation: none; width: 100%; opacity: .5 } }
