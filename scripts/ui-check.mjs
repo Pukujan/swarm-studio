@@ -12,7 +12,7 @@
 // it back; a double-click on an artboard opens its room and Esc comes back; the mode menu (Canvas,
 // Video, App, Game) works from the keyboard and there is no Auto button or pill; at 390 and 700 the
 // canvas stays, Files is a sheet, "Tell the crew…" is on screen and the Chat pill covers nothing;
-// the logo and Esc lead home from every view (a room, App, a replay); there is no Classic view;
+// the logo and Esc lead home from every view (a room, App, a replay); there is no Classic view; the side panel is Chat and Log;
 // ☰ → Sound switches the crew's voices. At 390 wide nothing scrolls sideways.
 //
 // Tooltips (docs/ux/RULES.md, rule 1): there are none. No title= or data-tip anywhere in web/, and no
@@ -232,6 +232,12 @@ async function home(page, w) {
   // the old layout is gone: ☰ has no Classic view, and nothing shows the star map
   const gone = await page.evaluate(() => { document.querySelector('#more-btn').click(); const r = !document.querySelector('#cosmos-classic') && !document.querySelector('.starmap, .warp, .node'); document.querySelector('#more-btn').click(); return r })
   ok(gone, `Home @${w}: there is no Classic view and no star map`)
+  // the side panel is Chat and Log only: builds live on Projects, layers on the project canvas
+  const tabs = await page.evaluate(() => [...document.querySelectorAll('.side .tabs [data-tab]')].map(b => b.dataset.tab).join(',') + (document.querySelector('#new-file, #files, .file-tools') ? ',old-files' : ''))
+  ok(tabs === 'chat,log', `Home @${w}: the side panel has Chat and Log only (${tabs})`)
+  // /new goes to Projects
+  const nw = await page.evaluate(async () => { window.swarmCosmos.go('project'); await new Promise(r => setTimeout(r, 400)); const b = document.querySelector('#brief'); b.value = '/new'; document.querySelector('#brief-form').requestSubmit(); await new Promise(r => setTimeout(r, 500)); return document.body.classList.contains('cosmos-home') })
+  ok(nw, `Home @${w}: /new goes to Projects`)
 }
 
 const browser = await chromium.launch()

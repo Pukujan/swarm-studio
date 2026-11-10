@@ -52,6 +52,7 @@ Controls added, moved or removed after the 2026-11-09 snapshot. The raw inventor
 | PR no-classic | Classic view (☰ → Classic view, `swarm.classic`) | **Removed**, with the old layout's star map, star nodes, warp streaks and sprite motion; a browser's stored choice is cleared. Projects, a project and its rooms are the only layout | — |
 | PR mode-menu | Canvas / Video / App views, Game, Auto | **Merged** Canvas, Video, App and Game into one mode menu button (listbox, arrows/Enter/Esc) in a build's top bar. **Removed** Auto's entry points: the top-bar button, the Auto dialog (Make / Pro, the four packs and their forms) and the Auto pill; the engine, /api/auto and the pack files stay | top bar |
 | PR mode-menu | A project at ≤ 760 px | **Changed**: the canvas stays the page (it was the file list); Files/Layers is a sheet from the dock's Files button; a picked file zooms into view; one-finger pan, pinch to zoom; Frame fits the artboards' own bounds. The Chat pill sits bottom right, above a narrow room's tools | A project |
+| PR side-panel | Side panel Files and Layers tabs | **Removed** the Files tab (New file, search, sort, By day / folder groups, the file rows and their menus): builds live on Projects. **Removed** the side Layers tab: the same tree shows in the project canvas's Layers panel. The side panel is Chat and Log. `/new` and `/files` go to Projects; `/open`, `/info`, `/folder` and traces stay |
 
 ## Landmarks, with only what is visible at rest
 
@@ -82,7 +83,7 @@ on the way down.
 | Canvas | Canvas tab, station, planet click, `/canvas` | the **Design deck**; a planet click opens it on that page |
 | Play prototype | Play button, P, `/play`, a chat chip, a Hermes command | Play in the Design deck (P and ⌘K stay) |
 | Progress | 10 displays | one ring on the sun that expands to the steps; a pulse on the station that is working |
-| Open a build | Files tab, stars, star labels, Star chart, Live now / Back to chips, `/files`, `/open`, wall tiles | the galaxy (stars) and Search |
+| Open a build | Projects, `/files` (goes to Projects), `/open`, wall tiles | the galaxy (stars) and Search |
 | Folders, tags, details, Show in Finder | 6 + 2 + 2 + 4 ways | the row menu in Search; ⌘K |
 | Sound | crew mute button + Chatter dock + slider | one Sound button; its popover holds the volume |
 | Models | More → Models, `/models`, a builder-model picker in the chat tab | ⚙ → Models |
