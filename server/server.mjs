@@ -14,6 +14,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
+import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun } from '../engine/export.mjs'
@@ -265,6 +266,8 @@ function startRun({ brief, agents, models: given }) {
     provider: provider('planner'),
     workerProvider: provider('worker'),
     brief,
+    // the last builds' page types and colours, so this one looks different
+    recent: recentLooks(runsDir),
     agents: agents || defaultAgents,
     plannerModel: modelFor('planner'),
     workerModel: modelFor('worker'),

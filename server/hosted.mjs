@@ -19,6 +19,7 @@ import { appendFileSync, createReadStream, existsSync, mkdirSync, readdirSync, r
 import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
+import { recentLooks } from '../engine/pagetype.mjs'
 import { exportRun } from '../engine/export.mjs'
 import { canvasPage, webVersion } from './page.mjs'
 
@@ -186,7 +187,7 @@ function startRun(guest, brief, agents) {
   send(run.owner, { type: 'reset', run: id })
   const provider = { baseUrl: MODEL.baseUrl, apiKey: MODEL.apiKey, onUsage: meter(run) }
   runSwarm({
-    provider, workerProvider: provider, brief, agents,
+    provider, workerProvider: provider, brief, agents, recent: recentLooks(runsDir),
     plannerModel: MODEL.planner, workerModel: MODEL.worker,
     maxPages: LIMITS.pages, maxSections: LIMITS.sections,
     emit: run.emit, signal: run.controller.signal

@@ -4,6 +4,8 @@
 
 import { markStalled, streamChat } from './llm.mjs'
 import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
+import { PAGE_TYPES, pickPageType, lookBrief } from './pagetype.mjs'
+import { tidyFragment } from './tidy.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
 
@@ -83,10 +85,12 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
-  const plan = { theme: null, pages: [], shared: [] }
+  // one page type per build, away from the last builds' types and colours
+  const type = PAGE_TYPES[pageType] ? pageType : pickPageType(brief, recent.map(r => r.type).filter(Boolean))
+  const plan = { theme: null, pages: [], shared: [], pageType: type }
   const queue = new TaskQueue()
   const stats = { planned: 0, done: 0, failed: 0 }
 
@@ -97,6 +101,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
   }))
 
   emit('run:start', { brief, agents: pool, plannerModel, workerModel })
+  emit('pagetype', { key: type, name: PAGE_TYPES[type].name })
 
   // --- planning: a quick sitemap pass, then one planner per page in parallel.
   // Page planners start a beat apart so pages come to life one after another.
@@ -180,7 +185,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         model: plannerModel,
         messages: [
           { role: 'system', content: SITEMAP_SYSTEM },
-          { role: 'user', content: `Brief: ${brief}` }
+          { role: 'user', content: `Brief: ${brief}\n\n${lookBrief(type, recent)}` }
         ],
         maxTokens: 2000,
         temperature: 0.8,
@@ -243,7 +248,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         model: workerModel,
         messages: workerMessages({ theme: plan.theme || {}, plan, page, layer, images }),
         // most sections take under 2000; a map or a big drawing needs more, and cut short it breaks
-        maxTokens: 6000,
+        maxTokens: 8000,
         extra: NO_THINKING,
         signal,
         onDelta: d => {
@@ -256,6 +261,9 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         }
       })
       stats.done++
+      // a builder sometimes writes a sentence before its markup, or runs out of
+      // room mid-grid; an unclosed div pulls every later section into it
+      text = tidyFragment(text)
       layer.html = text
       emit('layer:done', {
         page: layer.page,
