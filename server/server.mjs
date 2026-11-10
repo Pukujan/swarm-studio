@@ -23,6 +23,7 @@ import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.
 import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
+import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
 import { autoJob } from '../engine/auto.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
@@ -860,29 +861,8 @@ function tokenOk(given) {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-// The canvas as one document (styles, script, frame template and token inline), so it
-// also works inside the Desktop pane's sandboxed frame, whose origin is opaque.
-// Changes whenever a canvas file does. An open canvas compares it with its own and
-// reloads itself when idle, because Hermes's pane keeps a page open indefinitely.
-const webVersion = () => String(Math.max(...readdirSync(webDir).map(f => statSync(join(webDir, f)).mtimeMs)) | 0)
-
-function canvasPage() {
-  const read = f => readFileSync(join(webDir, f), 'utf8')
-  const boot = JSON.stringify({ token, version: webVersion(), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource(), guard: swarmLayout.toString() }).replace(/</g, '\\u003c')
-  return read('index.html')
-    .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
-    .replace('<script src="crew.js"></script>', () => `<script>${read('crew.js')}</script>`)
-    .replace('<script src="chatter.js"></script>', () => `<script>${read('chatter.js')}</script>`)
-    .replace('<script src="show.js"></script>', () => `<script>${read('show.js')}</script>`)
-    // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
-    .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
-    .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
-    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
-    // the galaxy home and the orbit view (docs/specs/08-identity.md, "Galaxy and orbit"); three.js loads from web/vendor on demand
-    .replace('<link rel="stylesheet" href="galaxy.css">', () => `<style>${read('galaxy.css')}</style>`)
-    .replace('<script type="module" src="galaxy.js"></script>', () => `<script type="module">${read('galaxy.js')}</script>`)
-    .replace('<script type="module" src="orbit.js"></script>', () => `<script type="module">${read('orbit.js')}</script>`)
-}
+const webVersion = () => pageVersion(webDir)
+const canvasPage = () => sharedCanvasPage(webDir, { token })
 
 function sendFile(res, file) {
   if (!existsSync(file)) {

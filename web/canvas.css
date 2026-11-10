@@ -1617,3 +1617,11 @@ body.crew-quiet .cursor .bubble, body.crew-quiet .cw-radio, body.crew-quiet .cw-
 /* the lead's reasoning (crew:lead kind 'reason'): a dimmer thought line in Hermia's strip */
 .codewall .cw-radio.reason { border-left-style: dashed; border-left-color: var(--line-2); }
 .cw-radio .cw-reason { margin: 4px 0 0; font: italic 12px/1.45 var(--font); color: var(--muted); opacity: .85; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- the hosted studio (docs/specs/13-hosted-studio.md): what needs the plugin is hidden,
+   and a guest bar says who is building and how many builds are left today. Theme tokens only. */
+body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn, #game-btn, .pubwrap, #review-btn, #video-btn, #export-btn, #models-btn, #build-model, .gx-auto, #new-file) { display: none !important; }
+.guest-bar { display: flex; align-items: center; gap: 8px; margin-right: 8px; font: 600 12.5px/1 var(--label, sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.guest-bar .g-name { color: var(--text); max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
+.g-form .g-err { color: var(--ui-destructive, #ff6b6b); margin: 4px 0 0; font-size: 13px; }
+@media (max-width: 760px) { .guest-bar .g-left, .guest-bar .g-name { display: none; } }

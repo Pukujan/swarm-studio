@@ -1,0 +1,49 @@
+# The hosted studio on the VPS: Komodo stack `swarm-studio` (pukujan-lab-2/server-management
+# komodo/resources/swarm-studio.toml) clones main into ~/apps/swarm-studio and runs deploy/vps/autodeploy.sh when main moves.
+# It binds loopback on 127.0.0.1:18096 (18095 is swarm-feed's) and joins study-os_edge, where swarm-feed-web forwards
+# https://swarm.design-bakery.com/studio/app/** to swarm-studio-web:8080. No DNS or tunnel route of its own.
+# The model key (SWARM_API_KEY) comes from /home/ubuntu/apps/swarm-studio.env, never the repo.
+name: swarm-studio
+
+services:
+  web:
+    container_name: swarm-studio-web
+    image: ${SWARM_STUDIO_IMAGE:-swarm-studio:local}
+    build:
+      context: ../..
+      dockerfile: Dockerfile.hosted
+    restart: unless-stopped
+    env_file:
+      - path: /home/ubuntu/apps/swarm-studio.env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      SWARM_DATA_DIR: /data
+      HOSTED_BASE: /studio/app
+      HOSTED_PUBLIC_URL: https://swarm.design-bakery.com
+      SWARM_FEED_INTERNAL_URL: http://swarm-feed-web:8080
+    volumes:
+      - data:/data
+    ports:
+      - 127.0.0.1:18096:8080
+    networks: [default, edge]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  data:
+    name: swarm-studio-data
+
+networks:
+  edge:
+    name: study-os_edge
+    external: true

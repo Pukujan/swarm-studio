@@ -26,7 +26,9 @@ const commandOps = {}
 const Q = new URLSearchParams(location.search)
 const WALL = Q.get('wall') === '1'
 if (WALL) document.documentElement.classList.add('wall')
-const api = (path, opts = {}) => fetch(path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
+// the hosted studio lives under a path (/studio/app); the local one at the root
+const BASE = BOOT.base || ''
+const api = (path, opts = {}) => fetch(BASE + path, { ...opts, headers: { ...opts.headers, 'x-swarm-token': BOOT.token || '' } })
 // undo and redo steps (see undo() below)
 const history = { undo: [], redo: [] }
 // Per-viewer UI memory. Storage throws inside the Desktop pane's opaque origin, so it is optional.
@@ -1529,9 +1531,12 @@ els.form.addEventListener('submit', async e => {
   // the chat follows the view: the app's next change, or an idea for the video
   if (view === 'app' && shownRun()) { els.brief.value = ''; return appAsk(brief) }
   if (view === 'video' && shownRun()) { els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
+  // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
+  if (hosted && !(await hosted.ready())) return
   setAuto(true)
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value) }) }).catch(() => null)
-  if (res?.ok) els.brief.value = ''
+  if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
+  else if (hosted && res) hosted.refuse(await res.json().catch(() => ({})))
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
 })
 els.brief.addEventListener('keydown', e => {
@@ -4259,7 +4264,7 @@ let es = null
 function connect() {
   es?.close()
   fresh()
-  es = new EventSource(`/events?k=${encodeURIComponent(BOOT.token || '')}`)
+  es = new EventSource(`${BASE}/events?k=${encodeURIComponent(BOOT.token || '')}`)
   es.onmessage = m => {
     try {
       const e = JSON.parse(m.data)
@@ -4290,7 +4295,7 @@ async function command(c) {
 
 // A newer canvas on disk: reload once nothing is building and nobody is mid-edit.
 setInterval(async () => {
-  const st = await fetch('/api/state').then(r => r.json()).catch(() => null)
+  const st = await fetch(`${BASE}/api/state`).then(r => r.json()).catch(() => null)
   if (WALL || !st?.version || !BOOT.version || st.version === BOOT.version) return
   const busy = (st.working && !viewing) || !els.player.hidden || picker.el || models.el || review.busy || video.busy || video.el || document.activeElement?.closest?.('input, textarea, select')
   if (!busy) location.reload()
@@ -5493,3 +5498,134 @@ window.swarm = {
     els.form.requestSubmit()
   }
 }
+
+// ---------- the hosted studio (docs/specs/13-hosted-studio.md): anyone can try a build in the
+// browser as a named guest, with a small crew, a few builds a day and a daily spending cap.
+// Everything the hosted server can't do (video, apps, publishing, models) is hidden by body.hosted.
+const hosted = BOOT.hosted && (() => {
+  const H = BOOT.hosted, ui = window.SwarmUI
+  document.body.classList.add('hosted')
+  let me = H.guest || null, open = H.open !== false
+  const plugin = `<a class="ui-btn ui-btn-outline ui-btn-sm" href="${esc(H.install)}" target="_blank" rel="noopener">Install the plugin</a>`
+  // the crew picker offers only what a guest may use
+  for (const o of [...els.agentsSel.options]) if (Number(o.value) > H.limits.agents) o.remove()
+  els.agentsSel.value = String(H.limits.agents)
+  els.brief.maxLength = H.limits.promptChars
+  els.brief.placeholder = `Describe a product (up to ${H.limits.promptChars} characters). A crew of ${H.limits.agents} builds its site.`
+
+  const bar = document.createElement('div')
+  bar.className = 'guest-bar'
+  document.querySelector('.topbar .spacer').after(bar)
+  let posted = new Set(), posting = false
+  const shown = () => (viewing && viewing !== 'new' ? viewing : S?.run)
+  const finished = () => shown() && S?.tEnd && S.frames.length
+  function draw() {
+    const left = me ? me.left : H.limits.builds
+    const can = finished() && !posted.has(shown()) && !posting
+    bar.innerHTML = `${me?.name ? `<span class="g-name" title="You are building as this guest">${esc(me.name)}</span>` : ''}`
+      + `<span class="g-left">${open ? `${left} of ${H.limits.builds} builds left today` : 'Done for today'}</span>`
+      + `<button class="ui-btn ${can ? 'ui-btn-default' : 'ui-btn-outline'} ui-btn-sm g-post" ${can ? '' : 'disabled'} title="Post this build to Swarm Feed">${posting ? 'Posting…' : posted.has(shown()) ? 'Posted' : 'Post to Feed'}</button>`
+      + plugin
+    bar.querySelector('.g-post').onclick = postToFeed
+  }
+  async function refresh() {
+    const st = await api('/api/state').then(r => r.json()).catch(() => null)
+    if (st) { me = st.guest || me; open = st.open !== false }
+    draw()
+  }
+
+  // a name, once: it is the credit on the Feed and on this computer's cookie
+  // With the Feed, a guest is the Feed's guest (one name on both): the Feed makes one on the first
+  // visit with a generated name ("Comet Otter"), and the guest confirms or changes it here, once.
+  const feedApi = (path, opts) => fetch(`/api/feed${path}`, { credentials: 'same-origin', ...opts }).then(r => r.json().then(j => ({ ok: r.ok, ...j }))).catch(() => ({ ok: false }))
+  function ready() {
+    if (me?.name && (!H.feedIdentity || store.get('guestNamed', false))) return Promise.resolve(true)
+    return new Promise(async resolve => {
+      let done = false
+      const d = ui.dialog({
+        kicker: 'Try Swarm Studio', title: 'What should the crew <em>call you</em>?',
+        desc: `Guests get ${H.limits.builds} builds a day with a crew of ${H.limits.agents}. Your name goes on anything you post to the Feed.`,
+        body: `<form class="ui-field g-form"><label class="ui-label" for="g-name">Guest name</label><input id="g-name" class="ui-input" maxlength="24" autocomplete="nickname" placeholder="e.g. Ada" required><p class="g-err" hidden></p></form>`,
+        footer: `<button class="ui-btn ui-btn-default g-go">Start building</button>`,
+        onClose: () => { if (!done) resolve(false) }
+      })
+      const input = d.body.querySelector('input'), err = d.body.querySelector('.g-err')
+      setTimeout(() => input.focus(), 30)
+      const fail = m => { err.textContent = m || 'That did not work. Try again.'; err.hidden = false }
+      if (H.feedIdentity) feedApi('/me').then(j => { if (j.viewer?.name && !input.value) { input.value = j.viewer.name; input.select() } })
+      const go = async e => {
+        e?.preventDefault()
+        const name = input.value.replace(/\s+/g, ' ').trim()
+        if (H.feedIdentity) {
+          if (!/^[\p{L}\p{N}][\p{L}\p{N} _-]{1,23}$/u.test(name)) return fail('Use 2 to 24 letters or digits (spaces, - and _ are fine).')
+          await feedApi('/me')
+          const j = await feedApi('/me', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) })
+          if (!j.ok) return fail(j.message)
+          const st = await api('/api/state?fresh=1').then(r => r.json()).catch(() => null)
+          if (!st?.guest) return fail('The studio could not see your guest name. Reload the page and try again.')
+          me = st.guest
+          store.set('guestNamed', true)
+        } else {
+          const res = await api('/api/guest', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) }).catch(() => null)
+          const j = await res?.json().catch(() => ({}))
+          if (!res?.ok) return fail(j?.message)
+          me = j.guest
+        }
+        done = true; d.close('ok'); draw()
+        // the event stream opened before the cookie existed: open it again as this guest
+        connect()
+        await new Promise(r => { es.addEventListener('open', r, { once: true }); setTimeout(r, 2500) })
+        resolve(true)
+      }
+      d.body.querySelector('form').onsubmit = go
+      d.footer.querySelector('.g-go').onclick = go
+    })
+  }
+
+  // a limit, the cap or a feature that needs the plugin: say which, and the way to more
+  function refuse(j = {}) {
+    if (j.error === 'closed') open = false
+    if (j.guest) me = j.guest
+    draw()
+    ui.dialog({
+      kicker: j.error === 'install' ? 'Needs the plugin' : 'Hosted studio',
+      title: esc(j.title || 'Not right now'),
+      desc: esc(j.message || 'That did not work.'),
+      footer: `${plugin}<a class="ui-btn ui-btn-ghost ui-btn-sm" href="${esc(H.feed)}">See the Feed</a>`
+    })
+  }
+
+  async function postToFeed() {
+    if (!finished() || posting) return
+    posting = true; draw()
+    try {
+      const shot = await snapFrame(S.frames[0], 0.5).catch(() => null)
+      const run = shown()
+      if (!shot?.image) return refuse({ title: 'Could not post', message: 'The canvas could not take a picture of the build. Try again.' })
+      // the studio puts the pages online, then the Feed takes the card from this browser, as this guest
+      const res = await api(`/api/runs/${encodeURIComponent(run)}/site`, { method: 'POST' })
+      const site = await res.json().catch(() => ({}))
+      if (!res.ok) return refuse(site)
+      if (!H.feedIdentity) return refuse({ title: 'No Feed here', message: `The pages are online at ${site.card.liveUrl}, but this studio is not connected to Swarm Feed.` })
+      const j = await feedApi('/builds', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...site.card, poster: shot.image }) })
+      if (!j.ok) return refuse({ title: 'Could not post', message: j.message || 'The Feed did not take it.' })
+      posted.add(run)
+      feed(null, `Posted to Swarm Feed: ${j.url}`, 'sys')
+      window.open(j.url, '_blank', 'noopener')
+    } catch (err) {
+      refuse({ title: 'Could not post', message: String(err.message || err) })
+    } finally { posting = false; draw() }
+  }
+
+  // ?prompt= from the Feed's /studio page fills both prompt boxes
+  const given = (Q.get('prompt') || '').slice(0, H.limits.promptChars)
+  if (given) {
+    els.brief.value = given
+    const fill = () => { const i = document.querySelector('.gx-form input'); if (i && !i.value) i.value = given; return !!i }
+    if (!fill()) setTimeout(fill, 600)
+  }
+  cosmosHooks.add(e => { if (e?.type === 'run:done' || e?.type === 'reset' || e?.type === 'run:start') { if (e.type === 'run:done') refresh(); else draw() } })
+  draw()
+  if (!open) setTimeout(() => refuse({ error: 'closed', title: 'Done for today', message: H.closedMessage }), 400)
+  return { ready, refresh, refuse }
+})()

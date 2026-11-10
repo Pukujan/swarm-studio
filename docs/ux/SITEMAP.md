@@ -13,7 +13,8 @@ Status: **agreed direction** (owner, 2026-11-09). Lens names follow [AUDIENCE.md
 ## 1. The whole product
 
 The same Feed opens from Hermes (with + Create and your Projects) and on the web at swarm.design-bakery.com
-(where Remix and + Create hand off to Hermes).
+(where Remix and + Create hand off to Hermes). The web also has a **hosted studio** at `/studio/app`: a guest
+tries a small build with no install, a few a day, then is pointed to the plugin (spec 13).
 
 ```mermaid
 flowchart LR
@@ -29,6 +30,10 @@ flowchart LR
   GAL --> ORB2["Studio: that build's orbit"]
   ORB -.->|Share › Post to Feed| HOME
   HOME -.->|Remix| CR
+  WEB --> TRY["/studio › Try it here"]
+  TRY --> HOSTED["Hosted studio /studio/app: guest build"]
+  HOSTED -.->|Post to Feed| HOME
+  HOSTED -.->|limit reached| HX
 ```
 
 ## 2. Navigation

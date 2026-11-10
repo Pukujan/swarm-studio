@@ -25,6 +25,8 @@ export async function streamChat(provider, opts) {
     try {
       const res = await chat(provider, { ...opts, model }, started)
       traceCall({ label: trace, provider, model, messages, maxTokens, temperature, started, res })
+      // a metered provider (the hosted studio's spending cap) hears every call's usage
+      provider?.onUsage?.({ model, usage: res.usage, inputChars: JSON.stringify(messages).length, outputChars: res.text.length })
       if (model !== opts.model) busy.set(opts.model, { route: model, until: Date.now() + 5 * 60e3 })
       return res
     } catch (error) {
