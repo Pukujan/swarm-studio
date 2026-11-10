@@ -2,7 +2,7 @@
 // drains in parallel. Layers start the moment the planner finishes writing them.
 // Everything that happens is emitted as an event; the canvas only draws events.
 
-import { streamChat } from './llm.mjs'
+import { markStalled, streamChat } from './llm.mjs'
 import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
@@ -195,6 +195,8 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       })
       parser.end()
     } catch (err) {
+      // a stall sends the retry to another route of the same model
+      if (stall.signal.aborted && !signal?.aborted) markStalled(provider, plannerModel)
       if (signal?.aborted || attempt) throw err
     } finally {
       clearTimeout(timer)
