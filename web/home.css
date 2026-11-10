@@ -202,3 +202,35 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .home .prog.ind i { width: 30%; animation: hm-prog 1.6s ease-in-out infinite; }
 @keyframes hm-prog { from { transform: translateX(-100%) } to { transform: translateX(340%) } }
 @media (prefers-reduced-motion: reduce) { .home .prog.ind i { animation: none; width: 100%; opacity: .5 } }
+
+/* the Make box's pop: the showcases, or the grill-me interview (one at a time, slides over the grid) */
+.hm-ideas.on, .hm-ideas:hover { color: var(--text); background: var(--surface-2); }
+.hm-pop { position: absolute; left: 50%; transform: translateX(-50%); width: min(760px, calc(100% - 80px)); z-index: 300; background: var(--deep); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.35); font: 13.5px var(--body); container-type: inline-size; }
+.hm-pop-x { position: absolute; top: 8px; right: 8px; }
+.hm-show { display: grid; gap: 4px; padding-right: 40px; }
+.hm-sc { display: grid; grid-template-columns: 22px minmax(120px, 180px) 1fr 18px; align-items: center; gap: 12px; min-height: 48px; padding: 6px 12px; border: 0; border-radius: 10px; background: none; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.hm-sc:hover, .hm-sc:focus-visible { background: var(--surface-2); outline: none; }
+.hm-sc > svg:last-child { color: var(--dim); }
+.hm-sc:hover > svg:last-child, .hm-sc:focus-visible > svg:last-child { color: var(--text); }
+.hm-sc .nm { font-weight: 600; }
+.hm-sc .st { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.hm-sc .st i { font: 11.5px var(--mono); font-style: normal; color: var(--muted); padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+.hm-pop.grill h3 { margin: 6px 40px 12px 0; font: 600 17px var(--body); }
+.hm-dots { display: flex; gap: 5px; }
+.hm-dots i { width: 18px; height: 4px; border-radius: 2px; background: var(--line); }
+.hm-dots i.done { background: var(--muted); }
+.hm-dots i.on { background: var(--text); }
+.hm-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.hm-chips button { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--text); font: inherit; cursor: pointer; }
+.hm-chips button:hover, .hm-chips button:focus-visible { border-color: var(--line-2); background: var(--surface-2); outline: none; }
+.hm-chips button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.hm-free { width: 100%; height: 40px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 0 12px; font: 13.5px var(--mono); outline: none; box-sizing: border-box; }
+.hm-free:focus { border-color: var(--line-2); }
+.hm-gfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.hm-gfoot > span { display: flex; gap: 8px; }
+@media (max-width: 760px) { .hm-pop { width: calc(100% - 32px); } }
+/* a narrow pop: the steps go under the name */
+@container (max-width: 580px) {
+  .hm-sc { grid-template-columns: 22px 1fr 18px; row-gap: 6px; padding: 10px 12px; }
+  .hm-sc .st { grid-column: 2 / 3; grid-row: 2; }
+}

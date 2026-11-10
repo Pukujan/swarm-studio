@@ -1548,6 +1548,14 @@ const server = createServer((req, res) => {
     return
   }
 
+  // The Make box's showcases and its "grill me" interview (engine/intake.mjs); a Game gets the game interview
+  if (url.pathname === '/api/intake' && req.method === 'GET') {
+    Promise.all([import('../engine/intake.mjs'), gameMod()])
+      .then(([m, g]) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ...m.intake(), game: g.QUESTIONS })))
+      .catch(err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    return
+  }
+
   if (url.pathname === '/api/game' || url.pathname === '/api/game/spec') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method === 'GET') { gameMod().then(g => reply(200, { questions: g.QUESTIONS })).catch(err => reply(500, { error: String(err.message || err) })); return }
