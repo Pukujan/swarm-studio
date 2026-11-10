@@ -18,7 +18,7 @@
      The accent is the text colour (white buttons with black text in dark, black with white in light); the
      owner may pick a hue later, and that is the --accent line below (every tint is a color-mix of it).
      Dark is this block; light is the block after it, by prefers-color-scheme or the ☰ menu's Theme. */
-  --void: #0b0b0c;                                     /* app background: flat, stars only */
+  --void: #0b0b0c;                                     /* app background: flat */
   --deep: #161618;                                     /* panels (surface) */
   --surface-2: #1f1f22;                                /* raised surface */
   --edge: #2a2a2e;                                     /* card borders and rules (line) */
@@ -47,13 +47,6 @@
   --serif: 'EB Garamond', Garamond, 'Times New Roman', serif;
   --font: var(--font-sans, var(--mono));
   --ease: cubic-bezier(.2, .7, .2, 1);
-  --stars:
-    radial-gradient(1px 1px at 12% 18%, rgb(var(--glass-rgb) / .6), transparent 70%),
-    radial-gradient(1px 1px at 64% 46%, rgb(var(--glass-rgb) / .45), transparent 70%),
-    radial-gradient(1.5px 1.5px at 36% 74%, rgb(var(--glass-rgb) / .5), transparent 70%),
-    radial-gradient(1px 1px at 86% 86%, rgb(var(--glass-rgb) / .3), transparent 70%),
-    radial-gradient(1.5px 1.5px at 52% 8%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 70%);
-  --stars-size: 233px 233px, 311px 311px, 419px 419px, 173px 173px, 587px 587px;
 }
 /* Light: a white page, #f4f4f5 surfaces, #e4e4e7 lines, #0b0b0c text. Pictures are the only colour. */
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
@@ -894,7 +887,7 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
    Later rules here win over the older ones above.
    ===================================================================== */
 html, body { background: var(--void); color: var(--text); font: 12.5px/1.5 var(--font); }
-body { grid-template-rows: 52px 1fr; background-image: var(--stars); background-size: var(--stars-size); -webkit-font-smoothing: antialiased; }
+body { grid-template-rows: 52px 1fr; -webkit-font-smoothing: antialiased; }
 /* the thin Hermes-blue frame around the whole app */
 body::after { content: ''; position: fixed; inset: 0; border: 1px solid var(--frame); pointer-events: none; z-index: 1000; }
 ::selection { background: var(--frame); color: var(--text); }
@@ -1009,10 +1002,10 @@ em { font-style: italic; }
 .tree .pg-title { font-family: var(--label); font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }
 .tree .ly .dot { background: var(--line-2); }
 
-/* ---------- canvas: flat graphite space, stars only (Graphite: no grid, no glow) */
+/* ---------- canvas: flat graphite, the same dot grid as a project's stage (no stars, no glow) */
 .viewport { background-color: transparent; background-image: none; }
 .viewport::before { content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse 46% 42% at 56% 42%, var(--glow), transparent 72%), var(--stars); background-size: auto, var(--stars-size); }
+  background: radial-gradient(circle, rgb(var(--glass-rgb) / .1) 1px, transparent 1.4px) 0 0 / 22px 22px; }
 .frame { background: var(--paper); box-shadow: 0 0 0 2px rgb(var(--glass-rgb) / .18), 0 40px 120px rgb(var(--shade-rgb) / .6); }
 .frame.focus { box-shadow: 0 0 0 10px var(--frame), 0 0 160px 40px var(--glow); }
 .frame-label { font: 600 60px/1 var(--mono); color: var(--text); text-transform: uppercase; letter-spacing: .02em; }
@@ -1052,18 +1045,6 @@ em { font-style: italic; }
 .cursor.docked .tag { left: 15px; top: 7px; padding: 1px 6px; font-size: 9.5px; letter-spacing: .02em; }
 .cursor.docked .nib { display: none; }
 @keyframes bob { 50% { transform: translateY(-2px) rotate(-4deg); } }
-/* the sprite's own motion: blink, flap, talk, hop */
-.crew-av .eyes { transform-box: fill-box; transform-origin: center; animation: crew-blink 4s infinite; animation-delay: var(--blink-delay, 0s); }
-.crew-av .wing { transform-box: fill-box; transform-origin: 100% 100%; }
-.moving .crew-av .wing { animation: crew-flap .16s ease-in-out infinite alternate; }
-.crew-av .mouth { transform-box: fill-box; transform-origin: 50% 0; }
-.talking .crew-av .mouth { animation: crew-talk .18s steps(2) infinite alternate; }
-.hop .crew-av .hopper { animation: crew-hop .55s var(--ease); }
-@keyframes crew-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.12); } }
-@keyframes crew-flap { to { transform: rotate(-26deg); } }
-@keyframes crew-talk { to { transform: scaleY(2.4); } }
-@keyframes crew-hop { 40% { transform: translateY(-6px); } 75% { transform: translateY(0); } }
-
 /* the break room */
 .dock { background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--panel-edge); border-radius: 18px; box-shadow: none; }
 .dock::after { background: rgb(var(--glass-rgb) / .07); }
@@ -1310,48 +1291,7 @@ em { font-style: italic; }
   .auto-panel { left: 16px; right: 16px; width: auto; }
 }
 
-/* ---------- Star systems (spec 08): each view is a star on a small map, switching is a warp,
-   each unit of work is a star node, the crew are alien minions talking on the radio */
-.seg.starmap { position: relative; background: none; border: 0; padding: 0 2px; gap: 2px; align-items: stretch; }
-.starmap::before { content: ''; position: absolute; left: 26px; right: 26px; top: 12px; border-top: 1px dashed rgb(var(--glass-rgb) / .22); }
-.seg.starmap button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px 12px 3px; border-radius: 10px; background: none; color: var(--muted); font: 600 11.5px/1 var(--label); letter-spacing: .1em; }
-.seg.starmap button:hover { color: var(--text); background: rgb(var(--glass-rgb) / .04); }
-.seg.starmap button.on { background: none; color: var(--text); }
-.starmap button[data-sys="canvas"] { --sys: var(--text); --sys-rgb: var(--glass-rgb); }
-.starmap button[data-sys="video"] { --sys: var(--text); --sys-rgb: var(--glass-rgb); }
-.starmap button[data-sys="app"] { --sys: var(--text); --sys-rgb: var(--glass-rgb); }
-.starmap .star { position: relative; display: block; width: 7px; height: 7px; margin: 2.5px 0; border-radius: 50%; background: var(--sys); box-shadow: 0 0 6px rgb(var(--sys-rgb) / .8); transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
-.starmap .star::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 1px dashed rgb(var(--sys-rgb) / .7); opacity: 0; transform: scale(.6); transition: opacity .2s, transform .2s var(--ease); }
-.starmap button.on .star { transform: scale(1.35); box-shadow: 0 0 0 2px rgb(var(--sys-rgb) / .25), 0 0 14px 2px rgb(var(--sys-rgb) / .9); }
-.starmap button.on .star::after { opacity: 1; transform: none; animation: orbit 6s linear infinite; }
-.starmap button.on span { text-shadow: 0 0 12px rgb(var(--sys-rgb) / .6); }
-.starmap .vbadge { top: 3px; right: 6px; }
-.starmap + .auto-btn { position: relative; margin-left: 10px; }
-.starmap + .auto-btn::before { content: ''; position: absolute; right: 100%; top: 50%; width: 12px; border-top: 1px dashed var(--line-2); }
-@keyframes orbit { to { transform: rotate(360deg); } }
-
-.warp { position: fixed; inset: 52px 0 0 0; z-index: 150; pointer-events: none; overflow: hidden; opacity: 0; }
-.warp::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgb(var(--frame-rgb) / .35), transparent 62%); }
-.warp i { position: absolute; left: 50%; top: 50%; width: var(--len); height: 1.5px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgb(var(--glass-rgb) / .95)); transform-origin: 0 50%; opacity: 0; }
-.warp[data-to="video"] i:nth-child(3n) { background: linear-gradient(90deg, transparent, var(--info)); }
-.warp[data-to="app"] i:nth-child(3n) { background: linear-gradient(90deg, transparent, var(--ok)); }
-.warp[data-to="canvas"] i:nth-child(3n) { background: linear-gradient(90deg, transparent, var(--accent)); }
-.warp.go { animation: warp-fade .44s var(--ease) both; }
-.warp.go i { animation: warp-streak .4s cubic-bezier(.55, 0, .9, .5) var(--d) both; }
-@keyframes warp-fade { 0% { opacity: 0; } 12% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes warp-streak { from { opacity: 0; transform: rotate(var(--a)) translateX(var(--r0)) scaleX(.05); } 25% { opacity: 1; } to { opacity: 0; transform: rotate(var(--a)) translateX(calc(var(--r0) + 55vmax)) scaleX(1); } }
-@media (prefers-reduced-motion: reduce) { .warp { display: none; } }
-
-.node { position: relative; display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text); vertical-align: middle; box-shadow: 0 0 0 2px rgb(var(--frame-rgb) / .45), 0 0 10px rgb(var(--frame-rgb) / .9); transition: background .3s, box-shadow .3s; }
-.node::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 1px dashed color-mix(in srgb, var(--accent) 75%, transparent); opacity: 0; transition: opacity .3s; }
-.frame.active .node, .cw-tile.typing .node { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 90%, transparent); }
-.frame.active .node::after, .cw-tile.typing .node::after { opacity: 1; animation: orbit 4s linear infinite; }
-.frame-label .node { width: 30px; height: 30px; margin-right: 26px; vertical-align: 8px; box-shadow: 0 0 0 6px rgb(var(--frame-rgb) / .45), 0 0 40px rgb(var(--frame-rgb) / .9); }
-.frame-label .node::after { inset: -22px; border-width: 3px; }
-.frame.active .frame-label .node { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 50px color-mix(in srgb, var(--accent) 90%, transparent); }
-.codewall .cw-file .node { margin: 0 2px 0 1px; }
 .video-pop .vscene { position: relative; }
-.video-pop .vscene .node { position: absolute; top: 9px; right: 9px; z-index: 1; width: 6px; height: 6px; }
 
 /* the radio: Hermia's strip on the wall, her dotted line to the helper, replies on cursors */
 .codewall .cw-radio { flex: none; display: flex; gap: 12px; align-items: flex-start; padding: 10px 14px; border-radius: 14px; background: rgb(var(--deep-rgb) / .85); border: 1px solid var(--panel-edge); border-left: 3px solid var(--frame-hi); animation: in .3s var(--ease); }
@@ -1427,9 +1367,6 @@ body.show-fade .viewport, body.show-fade .appview, body.show-fade .video-pop { a
 @keyframes show-fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* the view Auto is working in pulses (live), and the working step shimmers */
-.starmap button.live .star { animation: live-pulse 1.1s ease-in-out infinite; }
-.starmap button.live span { color: var(--accent); }
-@keyframes live-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent), 0 0 16px 3px color-mix(in srgb, var(--accent) 90%, transparent); background: var(--accent); } }
 .auto-panel li.working { position: relative; border-radius: 6px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 12%, transparent), transparent) 0 0 / 200% 100%; animation: shimmer 1.6s linear infinite; }
 .auto-panel .ap-show { display: flex; gap: 6px; margin-top: 10px; }
 .auto-panel .ap-show button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font: 600 12px/1 var(--label); letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
@@ -1511,7 +1448,6 @@ body.show-fade .viewport, body.show-fade .appview, body.show-fade .video-pop { a
 .ds-cur .nib { position: absolute; left: 0; top: 0; width: 12px; height: 12px; }
 .ds-cur .arrow { position: absolute; left: 6px; top: 4px; }
 .ds-cur.press .arrow { transform: scale(.84); }
-.babble .crew-av .mouth { animation: crew-talk .14s steps(2) infinite alternate; }
 
 /* A4. the summary card */
 .show-sum { grid-area: 2 / 2 / 3 / -1; z-index: 280; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: rgb(var(--void-rgb) / .72); backdrop-filter: blur(6px); overflow: auto; animation: in .3s ease-out; }

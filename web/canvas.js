@@ -500,8 +500,6 @@ function addFrame(p) {
   el.innerHTML = `<div class="frame-label"></div><iframe></iframe>`
   el.querySelector('.frame-label').textContent = `Page ${p.index + 1} · ${p.title}`
   el.querySelector('.frame-label').insertAdjacentHTML('beforeend', `<small>/${p.id}</small>`)
-  // each page is a star node: it glows, and an orbit ring turns while an agent works on it
-  el.querySelector('.frame-label').insertAdjacentHTML('afterbegin', '<i class="node" aria-hidden="true"></i>')
   const iframe = el.querySelector('iframe')
   iframe.setAttribute('aria-label', p.title || 'Page')
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
@@ -3191,7 +3189,7 @@ function renderVideo() {
   el.dataset.sig = sig
   const story = video.story.map((sc, i) => {
     const a = S.agents.get(sc.agent)
-    return `<div class="vscene" style="--c:${a?.color || 'var(--muted)'}"><i class="node" aria-hidden="true"></i>${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
+    return `<div class="vscene" style="--c:${a?.color || 'var(--muted)'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
   }).join('')
   const opts = `<div class="vopts"><label>Style <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Cut <select class="vcut">${VIDEO_CUTS.map(([v, l]) => `<option value="${v}" ${videoOpts.transition === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><input class="videa" placeholder="Your idea for the video (optional): “end on the night market crowd”, “for Instagram, upbeat”" value="${esc(videoOpts.idea || '')}"><div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const cut = video.cuts[video.pick], latest = video.pick < 0 || video.pick === video.cuts.length - 1
@@ -4089,7 +4087,6 @@ function setView(v) {
   if (game.el) closeGame()
   const was = view
   view = v
-  if (was !== v) warp(v)
   document.body.classList.toggle('view-video', v === 'video')
   document.body.classList.toggle('view-app', v === 'app')
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === v)
@@ -4101,24 +4098,6 @@ function setView(v) {
   renderBadges()
 }
 for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.view)
-
-// Each view is a star system; switching is a short warp: stars streak past for about 400 ms.
-// Off under prefers-reduced-motion (the CSS hides it too).
-const warpEl = document.createElement('div')
-warpEl.className = 'warp'
-warpEl.setAttribute('aria-hidden', 'true')
-warpEl.innerHTML = Array.from({ length: 56 }, (_, i) => {
-  const a = (i * 137.5) % 360, r0 = 4 + (i * 7) % 18, len = 8 + (i * 11) % 22
-  return `<i style="--a:${a.toFixed(1)}deg;--r0:${r0}vmax;--len:${len}vmax;--d:${(i % 7) * 18}ms"></i>`
-}).join('')
-document.body.append(warpEl)
-function warp(to) {
-  const el = document.querySelector('body > .warp')
-  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return
-  el.dataset.to = to
-  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go')
-  clearTimeout(warp.t); warp.t = setTimeout(() => el.classList.remove('go'), 520)
-}
 
 function renderBadges() {
   const vb = document.querySelector('#views [data-view="video"] .vbadge'), ab = document.querySelector('#views [data-view="app"] .vbadge')
@@ -4922,7 +4901,7 @@ function stepCrew(id) {
 }
 
 // A. Step transitions: a full-width card slides in for 1.2 s (step number, the step in display
-// type, its icon and crew, Hermia pointing on), the view changes under it with the warp, then
+// type, its icon and crew, Hermia pointing on), the view changes under it, then
 // the card slides away. Under prefers-reduced-motion: no card, the new view fades in.
 function showStep(e, step, change) {
   const i = e.steps.findIndex(s => s.id === step.id)
@@ -5537,7 +5516,7 @@ function codeWall() {
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
     d.className = 'cw-tile'
-    d.innerHTML = '<div class="cw-file"><i class="node" aria-hidden="true"></i><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
+    d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
     grid.append(d)
   }
   let writing = 0
