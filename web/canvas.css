@@ -744,7 +744,7 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .dock-hide:hover { color: var(--text); background: rgb(var(--glass-rgb) / .08); }
 
 /* crews: agents working over the App, Game and Video screens */
-.crew-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+.crew-layer { position: fixed; inset: 0; pointer-events: none; z-index: 67; overflow: hidden; } /* above the video and export panels the crew work in */
 .cursor.crew { animation: crew-in .4s ease-out; }
 .cursor.crew.leaving { opacity: 0; }
 @keyframes crew-in { from { opacity: 0; } }
@@ -1505,8 +1505,12 @@ body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn,
 .g-form .g-err { color: var(--ui-destructive, #ff6b6b); margin: 4px 0 0; font-size: 13px; }
 @media (max-width: 760px) { .guest-bar .g-left, .guest-bar .g-name { display: none; } }
 
-/* Always minimal text (docs/ux/RULES.md): no captions on the canvas; double-click still sets the camera to auto */
-.camera-hint { display: none; }
+/* Follow: one word and an icon. On, the camera follows the crew as they work; a drag or scroll turns it off,
+   a click, a double-click on the canvas or A turns it back on. On is the accent (the text colour). */
+.camera-hint { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; font: 600 11px/1 var(--label, var(--mono)); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); z-index: 3; }
+.camera-hint i, .camera-hint svg { width: 14px; height: 14px; }
+.camera-hint.auto { background: var(--text); color: var(--bg); border-color: var(--text); }
+.camera-hint:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 
 /* ---------- publish: three states (publishing, live, failed) and the build's live link */
 .publish-pop .pstate { display: grid; gap: 2px; padding: 4px 0 8px; }
@@ -1562,3 +1566,14 @@ body.advising { --side-w: min(460px, 92vw); }
 .adv-screen input { margin-top: 3px; accent-color: var(--accent); }
 .adv-screen small { color: var(--muted); font: 10.5px var(--mono); }
 .adv-screen > span > span { display: block; color: var(--muted); font-size: 12px; }
+
+/* the video panel minimized: its title and progress only, small, in the corner */
+.video-pop .vhead-acts { display: flex; align-items: center; gap: 4px; }
+.video-pop .vmin { background: none; border: 0; color: var(--muted); cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; }
+.video-pop .vmin:hover, .video-pop .vmin:focus-visible { color: var(--text); background: var(--panel-2); }
+.video-pop .vmin svg { width: 16px; height: 16px; }
+.video-pop.min { width: 300px; }
+.video-pop.min > :not(.vhead, .vbar, .vstage) { display: none; }
+.video-pop.min .vhead { margin-bottom: 8px; }
+.video-pop.min .vstage:not(.err) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.view-video .video-pop .vmin { display: none; }
