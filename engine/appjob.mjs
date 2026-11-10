@@ -173,7 +173,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
       if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
       await serve(id, j, step)
-      if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, events.find(e => e.type === 'game:spec')?.spec?.brand)
+      if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events))
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
@@ -183,6 +183,16 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       send(id, 'app:failed', { message: j.message, result: j.result })
     })
     return view(j)
+  }
+
+  // The promo game's brand, with the address its site has now: a site put online
+  // after the game was made still counts as given, not as a made-up link
+  const liveBrand = events => {
+    const brand = events.find(e => e.type === 'game:spec')?.spec?.brand
+    if (!brand?.from) return brand
+    const site = readEvents(brand.from) || []
+    const url = site.findLast(e => e.type === 'app:deployed' && e.url)?.url || site.findLast(e => e.type === 'publish:done' && e.url && e.target !== 'local')?.url
+    return url ? { ...brand, url } : brand
   }
 
   // Check the built game before calling it done: no web address nobody gave it
