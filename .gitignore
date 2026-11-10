@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 dyad/.vite/
 .DS_Store
+hosted-data/
+deploy/vps/.env
+deploy/vps/.deploy-failed

@@ -83,7 +83,7 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   const plan = { theme: null, pages: [], shared: [] }
@@ -113,6 +113,8 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     } else {
       const page = plan.pages.find(p => p.id === (fallbackPage || layer.page))
       if (!page || page.layers.some(l => l.id === layer.id)) return
+      // a capped build (the hosted studio) keeps the first sections of each page
+      if (maxSections && page.layers.length >= maxSections) return
       layer.page = page.id
       page.layers.push(layer)
     }
@@ -155,7 +157,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     if (obj.type === 'theme') {
       plan.theme = obj
       emit('theme', obj)
-    } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id)) {
+    } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id) && !(maxPages && plan.pages.length >= maxPages)) {
       const page = { ...obj, index: plan.pages.length, layers: [] }
       plan.pages.push(page)
       emit('page', { id: page.id, title: page.title, purpose: page.purpose, index: page.index })

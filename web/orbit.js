@@ -201,6 +201,8 @@ function makeOrbit() {
       ['app', P.ok, () => { const g = new T.Group(); g.add(new T.Mesh(new T.IcosahedronGeometry(0.42, 0), new T.MeshBasicMaterial({ color: new T.Color(P.ok), wireframe: true }))); g.add(new T.Mesh(new T.SphereGeometry(0.17, 16, 12), new T.MeshBasicMaterial({ color: new T.Color(P.ok) }))); return g }]
     ]
     for (const [view, color, make] of st) {
+      // the hosted studio has no video or app (docs/specs/13-hosted-studio.md)
+      if (window.SWARM?.hosted && view !== 'canvas') continue
       const obj = make()
       const glow = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: new T.Color(color), transparent: true, opacity: 0.35, depthWrite: false, blending: T.AdditiveBlending }))
       glow.scale.setScalar(2.4)
@@ -691,7 +693,7 @@ function makeOrbit() {
   function renderList() {
     const s = S()
     const tc = themeColors()
-    const stationsHtml = ['canvas', 'video', 'app'].map(view => {
+    const stationsHtml = (window.SWARM?.hosted ? ['canvas'] : ['canvas', 'video', 'app']).map(view => {
       const st = stations.find(x => x.view === view)
       const color = { canvas: 'var(--text)', video: 'var(--info)', app: 'var(--ok)' }[view]
       return `<button data-view="${view}" style="--st:${color}">${C.STATIONS[view]}<small>${st?.el.querySelector('small').textContent || { canvas: 'canvas', video: 'video', app: 'app + code' }[view]}</small></button>`

@@ -44,6 +44,8 @@ Controls added, moved or removed after the 2026-11-09 snapshot. The raw inventor
 | PR flow-calm | Classic top bar: Game, Play, Publish, More | Under 1180 px wide they show icons only (names as aria-labels), so ☰ and its Classic view switch stay on screen | Classic view |
 | PR flow-calm | Tooltips | **Removed** from everything that shows text (the top bar, ☰ menu, stations, planets, comm bar, canvas tools, Classic tabs and selects); their explanations are deleted. Icon-only buttons keep a 1–3 word name. 106 → 71 in `web/` | every layer |
 | PR flow-calm | Auto mode sheet, game wizard, Launch kit | **Unchanged** apart from closing with ×, Esc and an outside click, the checkbox fix and never squeezing their own contents; the new site map replaces them | Start, game wizard |
+| PR hosted-studio | Hosted studio guest bar (.guest-bar, only at swarm.design-bakery.com/studio/app) | **Added**: the guest's name, builds left today, Post to Feed, Install the plugin. Video, App, Auto, Game, Publish, Review, Models, the model picker and the Film/Engine stations are hidden there (spec 13) | top bar, hosted only |
+| PR hosted-studio | Guest name dialog | **Added**: asks a name before the first hosted build (prefilled with the Feed's generated guest name) | dialog, hosted only |
 
 ## Landmarks, with only what is visible at rest
 

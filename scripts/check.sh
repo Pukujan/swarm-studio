@@ -34,4 +34,15 @@ curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; gr
 get /api/auto; has '"state"'
 # without the token the API refuses
 [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/api/runs)" != 200 ] || { echo 'the API answered without a token'; exit 1; }
+
+echo "· hosted studio starts"
+hport=4392
+SWARM_DATA_DIR=$tmp/hosted PORT=$hport HOSTED_BASE=/studio/app node server/hosted.mjs > $tmp/hosted.log 2>&1 &
+hpid=$!
+trap 'kill $pid $hpid 2>/dev/null || true; rm -rf "$tmp"' EXIT
+for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:$hport/healthz && break; sleep 0.5; done
+curl -sf http://127.0.0.1:$hport/healthz > "$tmp/reply" || { cat "$tmp/hosted.log"; echo 'hosted /healthz did not answer'; exit 1; }; has '"ok":true'
+curl -sf http://127.0.0.1:$hport/ > "$tmp/reply"; has '<title>Swarm Studio'; has '"hosted"'
+# a build needs a guest (and a model key): refused, never started
+curl -s -X POST -H 'content-type: application/json' -d '{"brief":"a bakery site with an order form"}' http://127.0.0.1:$hport/api/run > "$tmp/reply"; has '"error"'
 echo "all checks passed"
