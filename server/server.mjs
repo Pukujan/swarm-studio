@@ -19,6 +19,7 @@ import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
+import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.mjs'
@@ -803,6 +804,9 @@ async function chatterMake(text, voice) {
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
+// stand-ins load lazily; the vision tagger is the reviewer model; Octo's public lane when the studio has a key
+let standinP = null
+const standinsOf = () => (standinP ||= standinsMake({ dataDir, runsDir, provider: () => provider('reviewer'), model: () => modelFor('reviewer'), octo: process.env.OCTO_SWARM_WS ? { baseUrl: (process.env.OCTO_BASE_URL || 'https://octodb.design-bakery.com').replace(/\/+$/, ''), key: process.env.OCTO_SWARM_WS, workspaceId: process.env.OCTO_SWARM_WORKSPACE_ID || '9aba6ef6-d196-412f-9344-0efb744b9c6c' } : null, pexels: process.env.PEXELS_API_KEY ? { key: process.env.PEXELS_API_KEY } : process.env.PEXELS_OCTO_LEASE ? { key: process.env.PEXELS_OCTO_LEASE, proxy: `${(process.env.OCTO_BASE_URL || 'https://octodb.design-bakery.com').replace(/\/+$/, '')}/api/vault/proxy` } : null }))
 // A promo game for a build: the site's name, brief, theme, copy and links, so the
 // game is set in the brand's world, wears its colours and points back to it.
 function brandOf(id) {
@@ -1692,6 +1696,23 @@ const server = createServer((req, res) => {
 
   // Generated images. Open like the page files: an image is no secret, and the
   // frames load them as plain <img> tags, which can't send the token.
+  // Stand-in pictures: a matching photo for a slot while its real picture is painted.
+  // GET /api/standin?q=<the picture's prompt>&w=&h=&run= -> { url, publicUrl, credit, tags, source } or null.
+  if (url.pathname === '/api/standin' && req.method === 'GET') {
+    standinsOf().pick({ q: String(url.searchParams.get('q') || '').slice(0, 400), w: url.searchParams.get('w'), h: url.searchParams.get('h'), run: url.searchParams.get('run') })
+      .then(out => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(out)))
+      .catch(err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    return
+  }
+  const sti = url.pathname.match(/^\/standin\/([0-9a-f]{16}\.(jpg|png|webp))$/)
+  if (sti) {
+    const file = standinsOf().file(sti[1])
+    if (!file) return res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': `image/${sti[2] === 'jpg' ? 'jpeg' : sti[2]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
+    res.end(readFileSync(file))
+    return
+  }
+
   const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
