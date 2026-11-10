@@ -166,7 +166,7 @@ export function musicPrompt(music, cues, seconds) {
 }
 const clip = (s, n) => String(s).replace(/\s+/g, ' ').trim().slice(0, n)
 
-const SFX_TEXT = {
+export const SFX_TEXT = {
   hit: 'a deep cinematic trailer hit, short', boom: 'a huge cinematic boom with a long tail', riser: 'a rising tension riser that ends abruptly', whoosh: 'a fast air whoosh', tick: 'a single clock tick', glitch: 'a short digital glitch stutter', sting: 'a short orchestral sting', chime: 'a small bright chime', heartbeat: 'two slow heartbeats',
 }
 

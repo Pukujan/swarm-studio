@@ -102,6 +102,19 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
 
   function cancel(name) { logins.get(name)?.child.kill() }
 
+  // Lets this plugin use a connector Hermes already has (ElevenLabs's MCP holds its own key,
+  // so there is no sign-in): the same grant Connect gives, without installing or logging in.
+  async function allow(name) {
+    const s = await helper(['status', name], 30000)
+    if (s.error) throw new Error(s.error)
+    if (!s.installed) throw new Error(`Hermes has no ${name} connector`)
+    if (s.allowed) return s
+    const list = [...new Set([...(s.allowlist || []), name])]
+    const r = await cli(['config', 'set', `plugins.entries.${PLUGIN}.mcp_allowlist`, JSON.stringify(list)])
+    if (!r.ok) throw new Error(`Hermes would not let Swarm Studio use ${name}`)
+    return helper(['status', name], 30000)
+  }
+
   async function call(server, tool, args = {}) {
     const r = await helper(['call', server, tool, JSON.stringify(args)], 200000)
     if (!r.ok) throw new Error(String(r.error?.message || r.error || 'the connector call failed').slice(0, 300))
@@ -149,5 +162,5 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
     return { SUPABASE_URL, SUPABASE_ANON_KEY: key }
   }
 
-  return { list, status, connect, cancel, call, supabaseProject }
+  return { list, status, connect, cancel, allow, call, supabaseProject }
 }

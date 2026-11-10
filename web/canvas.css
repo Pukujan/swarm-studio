@@ -1642,3 +1642,19 @@ body.view-video .video-pop .vmin { display: none; }
 .video-pop .vscene.L-story { border-top-color: var(--accent); }
 .video-pop .vscene.L-proof { border-top-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .video-pop .vscene.L-type { border-top-color: var(--line); }
+
+/* the film's outside services: three quiet chips; one opens its source, or a key field */
+.video-pop .vsrc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.video-pop .vsrc-b { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px; border: 1px dashed var(--line); border-radius: 999px; background: none; color: var(--muted); font-size: 12px; cursor: pointer; }
+.video-pop .vsrc-b.on { border-style: solid; color: var(--text); }
+.video-pop .vsrc-b b { font-weight: 600; }
+.video-pop .vsrc-b span { color: var(--muted); }
+.video-pop .vsrc-b[aria-expanded="true"] { border-color: var(--accent); }
+.video-pop .vsrc-pop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.video-pop .vsrc-pop a { color: var(--accent); }
+.video-pop .vsrc-form { display: flex; gap: 6px; flex: 1; min-width: 200px; }
+.video-pop .vsrc-form input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: rgb(var(--shade-rgb) / .27); color: var(--text); font: 12px var(--mono); }
+.video-pop .vsrc-form button, .video-pop .vsrc-allow { border: 0; border-radius: 6px; padding: 5px 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.video-pop .vsrc-forget { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; color: inherit; cursor: pointer; }
+.video-pop .vsrc-pop .perr { flex-basis: 100%; color: var(--hot-text); }
+.video-pop .vsrc-pop .perr:empty { display: none; }

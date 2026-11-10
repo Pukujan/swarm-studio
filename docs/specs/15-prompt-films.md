@@ -62,3 +62,26 @@ With an ElevenLabs key, ElevenLabs writes the music (from tempo, mood, instrumen
 ## Done when
 
 One prompt like "a fast-paced movie trailer for our launch, scary but cute", plus an optional reference, makes a varied film in the Studio. The storyboard (beats with length, camera and cue) and the style notes are visible in the panel. `storyboard.json` keeps the prompt, the notes, the fixes the check made and every beat.
+
+## Outside services: Hermes first, a key second, built in last
+
+Music and effects (ElevenLabs), moving clips (Veo and other video models) and pictures
+(image models) are each optional. `engine/media.mjs` decides where each comes from; the
+first match wins:
+
+| Service | 1. Hermes already has it | 2. A key pasted in the Film panel | 3. Built in |
+|---|---|---|---|
+| Music | `ELEVENLABS_API_KEY` in Hermes's secret scope (launcher.py), or Hermes's ElevenLabs MCP connector (`elevenlabs`), granted with one press | ElevenLabs key, checked against the API | the code-written score |
+| Clips | a signed-in Hermes video provider plugin (`videogen.py`: FAL with Veo 3.1, xAI, OpenRouter, DeepInfra) | FAL key, which signs in Hermes's own FAL plugin | painted stills with camera moves |
+| Pictures | a signed-in Hermes image provider (`imagegen.py`: Codex, FAL, xAI…) | FAL key, as above | the build's own art |
+
+- Pasted keys are kept in `media-keys.json` (mode 0600) in the data dir. The canvas only
+  learns where each service comes from (`GET /api/media`), never a key.
+- `POST /api/media/key {service, key|null}` pastes or forgets a key;
+  `POST /api/media/allow {name}` adds Hermes's ElevenLabs connector to the plugin's MCP allowlist.
+- The helpers load Hermes's provider keys with Hermes's own loader, inside their own short-lived process.
+- A cut animates at most 3 story stills (4 s, or 8 s for a long beat) into `<run>/flow/`,
+  so a clip is paid for once and reused by later cuts. Clips made with Flow by hand go
+  in the same folder. The Clips box in the Film panel turns this off.
+- In the Film panel, three chips (Music, Clips, Pictures) say where each comes from. Pressing one
+  shows its source, or a key field and a "Get a key" link.
