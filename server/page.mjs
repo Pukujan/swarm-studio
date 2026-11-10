@@ -22,8 +22,10 @@ export function canvasPage(webDir, extra = {}) {
     .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
     .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
     .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${read('canvas.js')}</script>`)
-    // the galaxy home and the orbit view (docs/specs/08-identity.md, "Galaxy and orbit"); three.js loads from web/vendor on demand
+    // a project's orbit view; three.js loads from web/vendor on demand
     .replace('<link rel="stylesheet" href="galaxy.css">', () => `<style>${read('galaxy.css')}</style>`)
-    .replace('<script type="module" src="galaxy.js"></script>', () => `<script type="module">${read('galaxy.js')}</script>`)
+    .replace('<link rel="stylesheet" href="home.css">', () => `<style>${read('home.css')}</style>`)
+    // the studio controller and Projects: its own modules joined into one, since the pane's frame has no origin to import from
+    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${['icons.js', 'home.js', 'studio.js'].map(f => read(f).replace(/^import .* from '\.\/.*'$/gm, '').replace(/^export /gm, '')).join('\n')}</script>`)
     .replace('<script type="module" src="orbit.js"></script>', () => `<script type="module">${read('orbit.js')}</script>`)
 }

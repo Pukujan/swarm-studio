@@ -11,7 +11,7 @@ import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { basename, dirname, extname, join, normalize } from 'node:path'
-import { homedir, tmpdir } from 'node:os'
+import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
 import { writeTours } from '../engine/tours.mjs'
@@ -24,6 +24,8 @@ import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
+import { makeProjects } from './projects.mjs'
+import { snapshot } from '../engine/export.mjs'
 import { autoJob } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
 import { streamChat } from '../engine/llm.mjs'
@@ -365,6 +367,11 @@ function runCard(id) {
       published: Object.keys(sites),
       videoSeconds: video?.seconds ?? null,
       preview: events.some(e => e.type === 'layer:done' && e.html),
+      // the cover: the hero picture the art director made, else the first picture
+      cover: (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || null,
+      game: events.some(e => e.type === 'game:spec') || pages.some(p => /\b(play|game|arcade|trial)\b/i.test(`${p.id} ${p.title}`)),
+      app: events.some(e => e.type === 'app:ready' || e.type === 'app:done'),
+      planned: events.filter(e => e.type === 'layer:plan').length,
     } }
     cards.set(id, card)
   }
@@ -382,6 +389,8 @@ function runCard(id) {
     video: existsSync(join(runsDir, id, 'video', 'promo.mp4')),
     videoFile: shelveVideo(id),
     live: current?.id === id && !current.done,
+    progress: current?.id === id && !current.done ? Math.min(1, (current.events.filter(e => e.type === 'layer:done').length) / Math.max(1, current.events.filter(e => e.type === 'layer:plan').length || 12)) : null,
+    cover: card.info.cover || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
   }
 }
 
@@ -434,38 +443,10 @@ function shelveExport(id, zip) {
   } catch { return null }
 }
 
-// Folders the person made, in their order. A folder can be empty; one named on a
-// run but missing here is added at the end.
-const foldersFile = () => join(runsDir, 'folders.json')
-function folderList() {
-  let saved = []
-  try { saved = JSON.parse(readFileSync(foldersFile(), 'utf8')).folders || [] } catch {}
-  const used = existsSync(runsDir) ? readdirSync(runsDir).filter(id => RUN_ID.test(id)).map(id => runMeta(id).folder).filter(Boolean) : []
-  return [...new Set([...saved, ...used])]
-}
-const saveFolders = list => writeFileSync(foldersFile(), JSON.stringify({ folders: [...new Set(list)] }))
-function eachMeta(fn) {
-  for (const id of readdirSync(runsDir).filter(id => RUN_ID.test(id))) {
-    const meta = runMeta(id)
-    if (fn(meta) === true) writeFileSync(join(runsDir, id, 'meta.json'), JSON.stringify(meta))
-  }
-}
-// add, rename, delete (its builds stay, out of any folder) or reorder folders
-function folderOp(input) {
-  const name = v => String(v || '').trim().slice(0, 40)
-  const list = folderList()
-  if (input.op === 'add' && name(input.name)) saveFolders([...list, name(input.name)])
-  if (input.op === 'order' && Array.isArray(input.folders)) saveFolders([...input.folders.map(name).filter(n => list.includes(n)), ...list])
-  if (input.op === 'rename' && name(input.from) && name(input.to)) {
-    saveFolders(list.map(n => (n === name(input.from) ? name(input.to) : n)))
-    eachMeta(m => { if (m.folder === name(input.from)) { m.folder = name(input.to); return true } })
-  }
-  if (input.op === 'delete' && name(input.name)) {
-    saveFolders(list.filter(n => n !== name(input.name)))
-    eachMeta(m => { if (m.folder === name(input.name)) { m.folder = null; return true } })
-  }
-  return { folders: folderList() }
-}
+// Projects and folders (server/projects.mjs): runs/folders.json v2 groups runs into projects.
+const projects = makeProjects({ runsDir, dataDir, runCard, runMeta, isLive: id => current?.id === id && !current.done })
+const folderList = () => projects.list().folders.map(f => f.name)
+const folderOp = input => projects.folderOp(input)
 
 function listRuns() {
   if (!existsSync(runsDir)) return []
@@ -992,6 +973,8 @@ const server = createServer((req, res) => {
         return
       }
       const run = startRun(input)
+      // "Tell the crew…" inside a project: the new run is that project's next version
+      if (typeof input.project === 'string') projects.claim(run.id, input.project)
       broadcast({ type: 'reset', run: run.id })
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id }))
     })
@@ -1015,6 +998,62 @@ const server = createServer((req, res) => {
     return
   }
 
+  // ---------- Projects (the file browser): list, and rename / move / trash / restore / duplicate / purge / empty
+  const json = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+  const readJson = (max, fn) => {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > max) req.destroy() })
+    req.on('end', () => { let input = {}; try { input = JSON.parse(body || '{}') } catch {} try { fn(input) } catch (err) { json(400, { error: String(err.message || err) }) } })
+  }
+  if (url.pathname === '/api/projects') {
+    if (req.method !== 'POST') return json(200, projects.list())
+    return readJson(1e5, input => json(200, projects.op(input)))
+  }
+  if (url.pathname === '/api/me') {
+    let feed = {}
+    try { feed = JSON.parse(readFileSync(join(dataDir, 'feed.json'), 'utf8')) } catch {}
+    let name = feed.name || feed.handle || ''
+    if (!name) { try { name = userInfo().username } catch {} }
+    return json(200, { name: String(name).slice(0, 40), handle: feed.handle || null, feed: (process.env.SWARM_FEED_URL || 'https://swarm.design-bakery.com').replace(/\/$/, '') })
+  }
+  // every picture, film and upload across live projects, newest first (Home › Assets)
+  if (url.pathname === '/api/assets') {
+    const out = []
+    for (const p of projects.list().projects.filter(x => !x.trashed)) {
+      for (const v of p.versions) {
+        for (const e of (readEvents(v.id) || []).filter(e => e.type === 'image' && e.src)) out.push({ project: p.id, run: v.id, kind: 'art', name: e.layer || 'picture', src: e.src, t: e.t })
+        if (existsSync(join(runsDir, v.id, 'video', 'promo.mp4'))) out.push({ project: p.id, run: v.id, kind: 'film', name: 'Promo', src: `/video/${v.id}/promo.mp4`, poster: existsSync(join(runsDir, v.id, 'video', 'p1.webp')) ? `/video/${v.id}/live/p1.webp` : null, t: v.updated })
+      }
+      for (const u of projects.uploadsOf(p.id)) out.push({ project: p.id, kind: 'upload', name: u.name, src: u.src, type: u.type, t: u.t })
+    }
+    return json(200, { assets: out.sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 600) })
+  }
+  const projOne = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})(?:\/(upload|files|reveal))?$/)
+  if (projOne) {
+    const pid = projOne[1], what = projOne[2]
+    if (!what) { const p = projects.get(pid); return p ? json(200, { ...p, files: projects.uploadsOf(pid) }) : json(404, { error: 'no such project' }) }
+    if (what === 'upload' && req.method === 'POST') {
+      const chunks = []
+      let n = 0
+      req.on('data', c => { n += c.length; if (n > 200e6) { req.destroy(); return } chunks.push(c) })
+      req.on('end', () => { try { json(200, projects.saveUpload(pid, url.searchParams.get('name'), Buffer.concat(chunks))) } catch (err) { json(400, { error: String(err.message || err) }) } })
+      return
+    }
+    if (what === 'files' && req.method === 'POST') return readJson(4000, input => json(200, projects.uploadOp(pid, input)))
+    if (what === 'files') return json(200, { files: projects.uploadsOf(pid) })
+    if (what === 'reveal' && req.method === 'POST') {
+      return readJson(4000, input => {
+        const f = input.name ? projects.uploadFile(pid, input.name)?.file : null
+        const p = projects.get(pid)
+        const what = f || (input.run && /^[\w-]{1,64}$/.test(input.run) ? join(runsDir, input.run) : p ? join(runsDir, p.head) : null)
+        if (!what || !existsSync(what)) return json(404, { error: 'not found' })
+        const [cmd, args] = process.platform === 'darwin' ? ['open', ['-R', what]] : process.platform === 'win32' ? ['explorer', [`/select,${what}`]] : ['xdg-open', [dirname(what)]]
+        execFile(cmd, args, () => {})
+        json(200, { path: what })
+      })
+    }
+  }
+
   // Put a run in a folder (or take it out with an empty name).
   const runMetaPost = url.pathname.match(/^\/api\/runs\/([^/]+)\/meta$/)
   if (runMetaPost && req.method === 'POST' && RUN_ID.test(runMetaPost[1]) && existsSync(join(runsDir, runMetaPost[1]))) {
@@ -1030,7 +1069,7 @@ const server = createServer((req, res) => {
       if ('note' in input) meta.note = str(input.note, 2000)
       if ('trace' in input) meta.trace = input.trace !== false
       if ('order' in input) meta.order = Number.isFinite(input.order) ? input.order : null
-      if (meta.folder && !folderList().includes(meta.folder)) saveFolders([...folderList(), meta.folder])
+      if ('folder' in input) { const pid = projects.projectOf(runMetaPost[1]); if (pid) projects.op({ op: 'move', id: pid, folder: meta.folder || '' }) }
       if ('tags' in input) meta.tags = [...new Set((Array.isArray(input.tags) ? input.tags : String(input.tags || '').split(',')).map(x => String(x).trim().toLowerCase().slice(0, 24)).filter(Boolean))].slice(0, 12)
       writeFileSync(join(runsDir, runMetaPost[1], 'meta.json'), JSON.stringify(meta))
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(meta))
@@ -1525,6 +1564,30 @@ const server = createServer((req, res) => {
     res.writeHead(200, { 'content-type': `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
     res.end(readFileSync(file))
     return
+  }
+
+  // A project's uploads, open like the images (the crew's pages and the art director use them).
+  const up = url.pathname.match(/^\/up\/([\w-]{1,64})\/([^/]{1,400})$/)
+  if (up) {
+    const f = projects.uploadFile(up[1], up[2])
+    if (!f) return res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': f.type, 'cache-control': 'no-cache', 'access-control-allow-origin': '*', 'content-security-policy': 'sandbox' })
+    return createReadStream(f.file).pipe(res)
+  }
+
+  // A page as it stands, for covers and artboards: the run's sections composed into one static
+  // document. Model-written HTML, so it is sandboxed (no scripts, an opaque origin).
+  const peek = url.pathname.match(/^\/peek\/([\w-]{1,64})\/([\w-]{0,80})$/)
+  if (peek) {
+    const events = readEvents(peek[1])
+    const snap = events && snapshot(events)
+    const page = snap && (snap.pages.find(p => p.id === peek[2]) || snap.pages[0])
+    if (!page) return res.writeHead(404).end('not found')
+    const v = snap.theme.vars || {}, fonts = snap.theme.fonts || {}
+    const fam = [fonts.heading, fonts.body].filter(Boolean).map(f => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;600;700`).join('&')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1280"><script src="https://cdn.tailwindcss.com/3.4.17"></script>${fam ? `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fam}&display=swap">` : ''}<style>:root{${Object.entries(v).map(([k, x]) => `${k}:${String(x).replace(/[;{}<]/g, '')}`).join(';')}}body{margin:0;background:var(--background,#fff);color:var(--foreground,#111);font-family:${JSON.stringify(fonts.body || 'Inter')},system-ui,sans-serif}h1,h2,h3{font-family:${JSON.stringify(fonts.heading || fonts.body || 'Inter')},serif}*{animation:none!important;transition:none!important}[data-reveal],.reveal{opacity:1!important;transform:none!important}</style></head><body>${page.sections.map(x => x.html).join('\n')}</body></html>`
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': "sandbox allow-scripts; default-src * data: blob: 'unsafe-inline' 'unsafe-eval'" })
+    return res.end(html)
   }
 
   // Published sites hosted on this computer: the run's static export, open like the images.
