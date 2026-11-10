@@ -11,31 +11,33 @@
 @font-face { font-family: 'EB Garamond'; src: url(fonts/eb-garamond-latin-500-italic.woff2) format('woff2'); font-weight: 500 700; font-style: italic; font-display: swap; }
 
 :root {
-  /* channels, for the translucent mixes below (Ultraviolet, docs/brand/BRAND.md) */
-  --void-rgb: 22 10 43; --deep-rgb: 34 18 62; --glass-rgb: 246 238 255; --frame-rgb: 134 56 248; --accent-rgb: 124 255 196; --pink-rgb: 255 79 216;
-  --ok-rgb: 0 242 121; --hot-rgb: 242 0 0; --ink-rgb: 22 10 43; --shade-rgb: 10 4 22;
-  /* the palette: Ultraviolet (BRAND.md, "Colour"). The studio keeps its own colours inside the Hermes
-     dashboard too; only the host's fonts carry over. */
-  --void: #160a2b;                                     /* app background: flat, stars only */
-  --deep: #22123e;                                     /* panels */
-  --edge: #3d2766;                                     /* card borders and rules */
-  --panel: rgb(var(--glass-rgb) / .04);                /* glass fill */
-  --panel-2: rgb(var(--glass-rgb) / .08);              /* glass, raised or hovered */
-  --panel-edge: rgb(var(--glass-rgb) / .13);
-  --glass: rgb(var(--deep-rgb) / .9);                  /* floating glass over the canvas */
+  /* channels, for the translucent mixes below (Graphite, docs/brand/BRAND.md) */
+  --void-rgb: 11 11 12; --deep-rgb: 22 22 24; --glass-rgb: 244 244 245; --frame-rgb: 58 58 63; --accent-rgb: 198 255 61; --pink-rgb: 198 255 61;
+  --ok-rgb: 0 242 121; --hot-rgb: 242 0 0; --ink-rgb: 11 11 12; --shade-rgb: 0 0 0;
+  /* the palette: Graphite, a colour per room (BRAND.md, "Colour"). Black and graphite carry the frame;
+     the studio's own accent is lime, used once per screen: the main action, the active tab, the serif
+     word. The studio keeps its own colours inside the Hermes dashboard too; only the host's fonts carry over. */
+  --void: #0b0b0c;                                     /* app background: flat, stars only */
+  --deep: #161618;                                     /* panels (surface) */
+  --surface-2: #1f1f22;                                /* raised surface */
+  --edge: #2a2a2e;                                     /* card borders and rules (line) */
+  --panel: rgb(var(--glass-rgb) / .03);                /* glass fill */
+  --panel-2: rgb(var(--glass-rgb) / .07);              /* glass, raised or hovered */
+  --panel-edge: #2a2a2e;
+  --glass: rgb(var(--deep-rgb) / .92);                 /* floating glass over the canvas */
   --line: var(--panel-edge);
-  --line-2: rgb(var(--glass-rgb) / .24);
-  --frame: #8638f8;                                    /* violet (#8b3dff nudged for 4.7:1 text on it): frames, secondary button */
-  --frame-hi: #a970ff;                                 /* violet lifted, for rings on the void */
-  --text: #f6eeff;
-  --muted: #b9a6d9;
-  --code: #d4c6ee;
-  --accent: #7cffc4;                                   /* mint: the one "do this / live" action */
-  --accent-ink: #160a2b;                               /* void text on mint */
-  --pink: #ff4fd8;                                     /* the one accent word (serif) */
+  --line-2: #3a3a3f;
+  --frame: #3a3a3f;                                    /* graphite: frames, secondary fills (white text 10:1) */
+  --frame-hi: #a1a1a6;                                 /* graphite lifted, for rings on the void */
+  --text: #f4f4f5;
+  --muted: #8e8e93;
+  --code: #c7c7cc;
+  --accent: #c6ff3d;                                   /* lime, the studio's accent: the one "do this / live" action */
+  --accent-ink: #0b0b0c;                               /* black text on lime */
+  --pink: var(--accent);                               /* the one accent word (serif): same lime */
   --ok: #00F279; --hot: #F20000; --hot-text: #ff5c5c; --info: #00F2F2;
   --paper: #FFFFFF;                                    /* the page frames' own background */
-  --glow: transparent;                                 /* Ultraviolet is flat: no glow */
+  --glow: transparent;                                 /* Graphite is flat: no glow */
   --bg: var(--void);
   --r: 14px;
   --display: 'Big Shoulders Display', 'Antonio', Impact, 'Arial Narrow', sans-serif;
@@ -45,11 +47,11 @@
   --font: var(--font-sans, var(--mono));
   --ease: cubic-bezier(.2, .7, .2, 1);
   --stars:
-    radial-gradient(1px 1px at 12% 18%, rgb(var(--glass-rgb) / .75), transparent 70%),
-    radial-gradient(1px 1px at 64% 46%, rgb(169 112 255 / .7), transparent 70%),
-    radial-gradient(1.5px 1.5px at 36% 74%, rgb(var(--glass-rgb) / .6), transparent 70%),
-    radial-gradient(1px 1px at 86% 86%, rgb(var(--glass-rgb) / .4), transparent 70%),
-    radial-gradient(1.5px 1.5px at 52% 8%, rgb(var(--pink-rgb) / .55), transparent 70%);
+    radial-gradient(1px 1px at 12% 18%, rgb(var(--glass-rgb) / .6), transparent 70%),
+    radial-gradient(1px 1px at 64% 46%, rgb(var(--glass-rgb) / .45), transparent 70%),
+    radial-gradient(1.5px 1.5px at 36% 74%, rgb(var(--glass-rgb) / .5), transparent 70%),
+    radial-gradient(1px 1px at 86% 86%, rgb(var(--glass-rgb) / .3), transparent 70%),
+    radial-gradient(1.5px 1.5px at 52% 8%, rgb(var(--accent-rgb) / .35), transparent 70%);
   --stars-size: 233px 233px, 311px 311px, 419px 419px, 173px 173px, 587px 587px;
 }
 * { box-sizing: border-box; }
@@ -454,7 +456,7 @@ body.lite .wires path.fresh, body.lite .cursor .bubble { animation: none; }
 .cbox .crow { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; color: var(--muted); font-size: 11px; }
 .cbox .crow button { background: var(--frame); border: 0; color: var(--text); border-radius: 6px; padding: 5px 14px; font-weight: 600; cursor: pointer; }
 .toolbar .tool[data-tool="comment"] { cursor: pointer; }
-.toolbar .tool.armed { background: var(--frame); color: var(--accent-ink); }
+.toolbar .tool.armed { background: var(--frame); color: var(--text); }
 .viewport.commenting { cursor: crosshair; }
 
 /* ---------- export */
@@ -901,9 +903,10 @@ em { font-style: italic; }
 .toggle .count { font: 600 11px var(--mono); color: var(--muted); margin-left: 2px; }
 .toggle .caret { width: 12px; height: 12px; margin: 0 -3px 0 -2px; opacity: .7; }
 /* Auto is the top bar's one yellow pill; Game and Publish are outlined */
-.auto-btn, .auto-btn:hover:not(:disabled), .auto-btn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.auto-btn:hover:not(:disabled) { box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .18); }
-.auto-btn.on { box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .22), 0 0 24px rgb(var(--accent-rgb) / .35); }
+/* Graphite: the main action owns the screen's one lime; Auto is a graphite pill, its icon lime while on */
+.auto-btn, .auto-btn:hover:not(:disabled), .auto-btn.on { background: var(--surface-2); border-color: var(--line-2); color: var(--text); }
+.auto-btn:hover:not(:disabled) { background: var(--frame); }
+.auto-btn.on [data-i], .auto-btn.on svg { color: var(--accent); }
 .game-btn { color: var(--text); border-color: rgb(var(--glass-rgb) / .3); }
 .toggle.play { border-color: rgb(var(--glass-rgb) / .3); }
 .undo-redo .toggle { padding: 6px 8px; font-size: 13px; }
@@ -985,9 +988,8 @@ em { font-style: italic; }
 .tree .pg-title { font-family: var(--label); font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }
 .tree .ly .dot { background: var(--line-2); }
 
-/* ---------- canvas: deep space, a faint grid, one blue glow */
-.viewport { background-color: transparent;
-  background-image: linear-gradient(rgb(var(--glass-rgb) / .045) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--glass-rgb) / .045) 1px, transparent 1px); }
+/* ---------- canvas: flat graphite space, stars only (Graphite: no grid, no glow) */
+.viewport { background-color: transparent; background-image: none; }
 .viewport::before { content: ''; position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse 46% 42% at 56% 42%, var(--glow), transparent 72%), var(--stars); background-size: auto, var(--stars-size); }
 .frame { background: var(--paper); box-shadow: 0 0 0 2px rgb(var(--glass-rgb) / .18), 0 40px 120px rgb(var(--shade-rgb) / .6); }
@@ -1235,10 +1237,24 @@ em { font-style: italic; }
 .codewall .cw-c { color: var(--muted); }
 
 /* ---------- Play mode */
-.player { background: var(--void); }
+/* the player opens under the studio's top bar (which stays on top, z 130), never behind it */
+.player { background: var(--void); inset: 52px 0 0; }
+.player-bar { min-width: 0; overflow: hidden; }
+.player-bar select { flex: 0 1 auto; min-width: 0; max-width: min(40vw, 420px); text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.pl-btn.icon { flex: none; width: 34px; height: 34px; padding: 0; justify-content: center; }
+.player-bar .seg, .player-bar #pl-close { flex: none; }
+/* Graphite: lime is for the one primary control, so these stay graphite; Motion on is a raised fill */
+.pl-btn.tours { border-color: rgb(var(--glass-rgb) / .16); }
+.pl-btn#pl-motion.on { border-color: var(--line-2); background: var(--frame); color: var(--text); }
+@media (max-width: 600px) {
+  .player-bar { gap: 6px; padding: 0 8px; }
+  #pl-back, #pl-restart, #pl-motion { display: none; }
+  .player-bar select { min-width: 96px; flex: 1 1 auto; }
+  .player-bar .seg button { padding-left: 9px; padding-right: 9px; }
+}
 .player-bar { background: rgb(var(--deep-rgb) / .7); border-color: var(--panel-edge); }
 .pl-btn { display: inline-flex; align-items: center; gap: 6px; font: 600 12.5px/1 var(--label); letter-spacing: .07em; text-transform: uppercase; color: var(--text); border-radius: 999px; border-color: rgb(var(--glass-rgb) / .3); padding: 7px 12px; }
-.pl-btn#pl-motion.on { border-color: var(--accent); }
+.pl-btn#pl-motion.on { border-color: var(--line-2); background: var(--frame); }
 .player-bar select { border-radius: 999px; background: rgb(var(--glass-rgb) / .05); }
 .think { background: var(--text); color: var(--accent-ink); }
 
@@ -1290,7 +1306,7 @@ em { font-style: italic; }
 .starmap button.on span { text-shadow: 0 0 12px rgb(var(--sys-rgb) / .6); }
 .starmap .vbadge { top: 3px; right: 6px; }
 .starmap + .auto-btn { position: relative; margin-left: 10px; }
-.starmap + .auto-btn::before { content: ''; position: absolute; right: 100%; top: 50%; width: 12px; border-top: 1px dashed rgb(var(--accent-rgb) / .5); }
+.starmap + .auto-btn::before { content: ''; position: absolute; right: 100%; top: 50%; width: 12px; border-top: 1px dashed var(--line-2); }
 @keyframes orbit { to { transform: rotate(360deg); } }
 
 .warp { position: fixed; inset: 52px 0 0 0; z-index: 150; pointer-events: none; overflow: hidden; opacity: 0; }

@@ -39,9 +39,9 @@ function token(name, fallback) {
   return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback
 }
 const palette = () => ({
-  void: token('--void', '#160a2b'), deep: token('--deep', '#22123e'), frame: token('--frame', '#8b3dff'), frameHi: token('--frame-hi', '#a970ff'),
-  text: token('--text', '#f6eeff'), muted: token('--muted', '#b9a6d9'), accent: token('--accent', '#7cffc4'), pink: token('--pink', '#ff4fd8'), ok: token('--ok', '#00F279'),
-  info: token('--info', '#00F2F2'), hot: token('--hot', '#F20000'), nebula: token('--nebula', '#8b3dff'), nebula2: token('--nebula-2', '#ff4fd8')
+  void: token('--void', '#0b0b0c'), deep: token('--deep', '#161618'), frame: token('--frame', '#3a3a3f'), frameHi: token('--frame-hi', '#a1a1a6'),
+  text: token('--text', '#f4f4f5'), muted: token('--muted', '#8e8e93'), accent: token('--accent', '#c6ff3d'), pink: token('--pink', '#c6ff3d'), ok: token('--ok', '#00F279'),
+  info: token('--info', '#00F2F2'), hot: token('--hot', '#F20000'), nebula: token('--nebula', '#3a3a3f'), nebula2: token('--nebula-2', '#8e8e93'), touch: token('--star-touch', '#e2f0c4')
 })
 
 // ---------- three.js, loaded once for both scenes
@@ -69,8 +69,8 @@ function rng(seed) {
 }
 const gauss = r => (r() + r() + r() + r() - 2) / 2
 
-// Hermia's ship, drawn in code: an off-white hull with a violet stripe, little winged fins
-// (the winged sandals again) and a pink cockpit glow. Original art, no assets.
+// Hermia's ship, drawn in code: an off-white hull with a graphite stripe, little winged fins
+// (the winged sandals again) and a lime cockpit glow. Original art, no assets.
 function shipTexture(THREE, P) {
   const c = document.createElement('canvas')
   c.width = 256; c.height = 160
@@ -105,7 +105,7 @@ function shipTexture(THREE, P) {
   g.bezierCurveTo(30, 32, -74, 26, -78, 0)
   g.fillStyle = P.text; g.fill()
   g.lineWidth = 3; g.strokeStyle = P.void; g.stroke()
-  // the violet stripe and the pink trim (her cape colours)
+  // the graphite stripe and the lime trim (her cape colours)
   g.beginPath(); g.moveTo(-70, 8); g.bezierCurveTo(-20, 18, 40, 14, 80, 3); g.lineWidth = 7; g.strokeStyle = P.frame; g.stroke()
   g.beginPath(); g.moveTo(-66, 14); g.bezierCurveTo(-20, 22, 30, 19, 70, 8); g.lineWidth = 2; g.strokeStyle = P.pink; g.stroke()
   // cockpit
@@ -251,7 +251,7 @@ function makeGalaxy(root) {
     const N = narrow ? 22000 : 46000
     const pos = new Float32Array(N * 3), col = new Float32Array(N * 3), size = new Float32Array(N), seed = new Float32Array(N)
     const r = rng(0x5eed)
-    const cCore = new T.Color(P.pink).lerp(new T.Color(P.text), 0.55), cMid = new T.Color(P.frameHi), cOut = new T.Color(P.nebula), cPink = new T.Color(P.nebula2), cWhite = new T.Color(P.text)
+    const cCore = new T.Color(P.touch).lerp(new T.Color(P.text), 0.55), cMid = new T.Color(P.frameHi), cOut = new T.Color(P.nebula), cPink = new T.Color(P.nebula2), cWhite = new T.Color(P.text)
     const tmp = new T.Color()
     for (let i = 0; i < N; i++) {
       const arm = i % ARMS
@@ -297,7 +297,7 @@ function makeGalaxy(root) {
       s.scale.setScalar(4 + rn() * 6)
       group.add(s)
     }
-    core = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.pink).lerp(new T.Color(P.text), 0.5), transparent: true, opacity: 0.5, depthWrite: false, blending: T.AdditiveBlending }))
+    core = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.touch).lerp(new T.Color(P.text), 0.5), transparent: true, opacity: 0.5, depthWrite: false, blending: T.AdditiveBlending }))
     core.scale.setScalar(6)
     scene.add(core)
     const halo = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.frame), transparent: true, opacity: 0.16, depthWrite: false, blending: T.AdditiveBlending }))
@@ -318,7 +318,7 @@ function makeGalaxy(root) {
       const u = rf() * 2 - 1, th = rf() * Math.PI * 2, R = 90 + rf() * 60, s = Math.sqrt(1 - u * u)
       far[i * 3] = Math.cos(th) * s * R; far[i * 3 + 1] = u * R; far[i * 3 + 2] = Math.sin(th) * s * R
       fsize[i] = 2 + rf() * 4
-      tmp.set(rf() < 0.12 ? P.pink : rf() < 0.3 ? P.frameHi : P.text); fcol[i * 3] = tmp.r * 0.8; fcol[i * 3 + 1] = tmp.g * 0.8; fcol[i * 3 + 2] = tmp.b * 0.8
+      tmp.set(rf() < 0.04 ? P.accent : rf() < 0.3 ? P.frameHi : P.text); fcol[i * 3] = tmp.r * 0.8; fcol[i * 3 + 1] = tmp.g * 0.8; fcol[i * 3 + 2] = tmp.b * 0.8
       fseed[i] = rf() * 6.283
     }
     const fgeo = new T.BufferGeometry()
