@@ -1,8 +1,10 @@
 // A project's canvas: everything one build made, grouped the way the Files panel shows it.
 // Shared by the local server and the hosted studio.
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import * as art from '../engine/artdirect.mjs'
+
+const snapAt = (runsDir, id) => { try { return `/img/${id}/snap.jpg?v=${Math.round(statSync(join(runsDir, id, 'img', 'snap.jpg')).mtimeMs)}` } catch { return null } }
 
 export function runBoard(id, events, runsDir, live = false) {
   const start = events.find(e => e.type === 'run:start') || {}
@@ -69,7 +71,8 @@ export function runBoard(id, events, runsDir, live = false) {
     brief: String(start.brief || '').split('\n\nThe owner uploaded these pictures.')[0].split('\n\nFor this version: ')[0].slice(0, 4000),
     pages, art: pics, films, style,
     theme: th?.vars ? { colors: ['--background', '--primary', '--accent', '--foreground'].map(k => th.vars[k]).filter(Boolean), fonts: th.fonts || null } : null,
-    game: isGame ? { title: (typeof spec === 'object' && spec?.title) || start.title || 'Game', cover: pics[0]?.src || null } : null,
+    // a game's cover: its own picture, else its title screen from the play test
+    game: isGame ? { title: (typeof spec === 'object' && spec?.title) || start.title || 'Game', pitch: (typeof spec === 'object' && String(spec?.pitch || '').slice(0, 200)) || '', cover: pics[0]?.src || snapAt(runsDir, id) } : null,
     app: app && !isGame, code: existsSync(join(runsDir, id, 'app')),
     painting, paintCount: { done: batch.filter(s => s.state === 'done').length, total: batch.length },
     review,

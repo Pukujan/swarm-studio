@@ -41,7 +41,8 @@ async function launch(chromium) {
 }
 
 // { ok, skipped?, problem?, seconds } — `problem` is one sentence for a fix turn
-export async function playtest(url, { seconds = 4, timeout = 30000 } = {}) {
+// shot: a file to save the title screen to (the game's cover), as a JPEG
+export async function playtest(url, { seconds = 4, timeout = 30000, shot = null } = {}) {
   const pw = await loadPlaywright()
   if (!pw) return { ok: true, skipped: 'no browser for the play test' }
   let browser
@@ -54,6 +55,7 @@ export async function playtest(url, { seconds = 4, timeout = 30000 } = {}) {
     const canvas = await page.waitForSelector('canvas', { timeout: 15000 }).catch(() => null)
     if (!canvas) return { ok: false, problem: `No game canvas appeared within 15 s of opening the page.${errors.length ? ` Errors: ${errors.slice(0, 2).join(' | ')}` : ''}` }
     await page.waitForTimeout(1200)
+    if (shot) await page.screenshot({ path: shot, type: 'jpeg', quality: 72 }).catch(() => {})
     const textOf = () => page.evaluate(() => document.body.innerText || '')
     const before = await textOf()
 

@@ -97,6 +97,8 @@ export function makeProject({ sw, C, root }) {
     for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k.split('/').slice(2).join('/')); if (P.on) renderStage() }, 1600) }
     P.pendingKeys = now
     P.board = board
+    // a site and the game made from it are two runs of one version: the rooms switch between them
+    C.pair = board?.game?.run ? { site: run, game: board.game.run } : board?.kind === 'game' ? { site: null, game: run } : { site: run, game: null }
     P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || null
     // back from a site's game: the project shows the site's version, which holds the game
     const up = P.proj?.parts?.[run]
@@ -114,7 +116,7 @@ export function makeProject({ sw, C, root }) {
     const g = {}
     if (b.pages?.length) g.site = b.pages.map(p => ({ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id) }))
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
-    if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
+    if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, pitch: b.game.pitch || '', src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
     const arts = (b.art || []).map(a => ({ key: `art:${a.page}/${a.layer}/${a.gen}`, kind: 'art', name: a.name.replace(/^\w/, c => c.toUpperCase()), src: a.src, used: a.used?.split(/\s[—–|:-]\s/)[0], style: a.style, art: a }))
     // pictures still being made: a slot of their own (or over the old picture, when one is painted again)
@@ -173,7 +175,7 @@ export function makeProject({ sw, C, root }) {
     const img = x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="" draggable="false" loading="lazy">`
       : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code' }[x.kind] || 'file', 26)}</span>`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
-      : x.kind === 'game' ? (x.work ? workBar(x.work) : '<span class="play"></span>')
+      : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
     const tall = x.kind === 'page' && x.snap && P.aspect.get(x.page)
     const rv = x.kind === 'page' ? reviewOf(x) : null
@@ -342,7 +344,7 @@ export function makeProject({ sw, C, root }) {
     ].filter(Boolean).join('')
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
     const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
-    insp.innerHTML = `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>
+    insp.innerHTML = `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
       ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}<div class="btns">${btns}</div>`
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
@@ -638,7 +640,7 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'page' || x.kind === 'art') { C.go('station', 'canvas'); setTimeout(() => sw.focusPage(x.page || x.art?.page), 60); return }
     if (x.kind === 'film') return C.go('station', 'video')
     // a game made from this site lives in its own run: open that one's App room
-    if (x.kind === 'game' && x.run && x.run !== P.run) { sw.openRun(x.run); return C.go('station', 'app') }
+    if (x.kind === 'game' && x.run && x.run !== P.run) { C.go('station', 'app'); return Promise.resolve(sw.openRun(x.run)).then(() => C.go('station', 'app')) }
     if (x.kind === 'game' || x.kind === 'app' || x.kind === 'code') return C.go('station', 'app')
     if (x.kind === 'upload' && x.src) window.open(base() + x.src, '_blank', 'noopener')
   }

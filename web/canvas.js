@@ -3870,7 +3870,9 @@ async function loadApp() {
     Object.assign(appv, { state: st.state, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
-    if (st.url) appv.url = st.url
+    // the server knows whether the app is running: an address from the log may be a dev server
+    // that stopped with a restart, so it opens again rather than showing a dead page
+    appv.url = st.url || null
     // an app made before: start its dev server again
     if (!appv.url && appv.hasApp && appv.state !== 'working' && !appv.opening) {
       appv.opening = true
@@ -3904,6 +3906,37 @@ function renderAppLink() {
   if (S.link) { b.textContent = S.link.label; b.onclick = () => openRun(S.link.run) }
 }
 
+// The preview loads in the background: a loading screen covers the frame until the app inside
+// has loaded (a dev server compiles a big game on its first visit, which shows as a blank page)
+let frameWait = 0
+function loadFrame() {
+  const el = $('#app-loading')
+  if (el) {
+    el.querySelector('span').textContent = appv.kind === 'game' ? 'Loading the game…' : 'Loading the app…'
+    el.hidden = false
+  }
+  clearTimeout(frameWait)
+  frameWait = setTimeout(frameLoaded, 45000) // never stuck: give up covering it
+  // a fresh frame each time: one that failed to load (a stopped server) can stay blank after
+  const old = appEls.frame, f = old.cloneNode(false)
+  f.dataset.src = old.dataset.src || ''
+  f.addEventListener('load', frameLoad)
+  f.src = frameUrl(appv.url)
+  old.replaceWith(f)
+  appEls.frame = f
+}
+// the app's dev server answers on every loopback name, but a page on localhost will not show
+// 127.0.0.1 in a frame (and the other way round): use the Studio's own name for it
+function frameUrl(u) {
+  try {
+    const x = new URL(u), loop = /^(localhost|127\.0\.0\.1|\[::1\])$/
+    if (loop.test(x.hostname) && loop.test(location.hostname)) x.hostname = location.hostname
+    return x.href
+  } catch { return u }
+}
+function frameLoaded() { clearTimeout(frameWait); const el = $('#app-loading'); if (el) el.hidden = true }
+function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && appEls.frame.src !== 'about:blank') { clearTimeout(frameWait); frameWait = setTimeout(frameLoaded, 700) } }
+
 function renderApp() {
   renderAppLink()
   renderBadges()
@@ -3918,7 +3951,7 @@ function renderApp() {
   appEls.stop.hidden = !working
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
   // the preview, or what to do first
-  if (appv.url && appEls.frame.dataset.src !== appv.url) { appEls.frame.dataset.src = appv.url; appEls.frame.src = appv.url }
+  if (appv.url && appEls.frame.dataset.src !== appv.url) { appEls.frame.dataset.src = appv.url; loadFrame() }
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   const empty = !appv.url || (st === 'failed' && !appv.hasApp)
   appEls.empty.hidden = !empty
@@ -3930,10 +3963,13 @@ function renderApp() {
         ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
         : st === 'failed'
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
+          : appv.hasApp && appv.message
+            ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>start</em></h2><p class="fail-msg">${esc(String(appv.message).split('\n')[0].slice(0, 220))}</p><button class="big" data-reopen>${ico('rotate-ccw')}Try again</button></div>`
           : appv.kind === 'game' && !appv.hasApp
             ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
             : `<h2>Turn this design into a working app</h2><p>The design stays exactly as it is. Hermia first asks what runs behind it (dashboards, customers, an admin panel), then the engine builds it all.</p><button class="big" data-build>Build the app</button>`
     appEls.empty.querySelector('[data-build]')?.addEventListener('click', buildApp)
+    appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { appv.message = ''; loadApp() })
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
   appEls.preview.hidden = appv.mode !== 'preview'
@@ -3975,7 +4011,7 @@ for (const b of document.querySelectorAll('#app-device button')) b.onclick = () 
   for (const x of document.querySelectorAll('#app-device button')) x.classList.toggle('on', x === b)
   renderApp()
 }
-$('#app-reload').onclick = () => { if (appv.url) appEls.frame.src = appv.url }
+$('#app-reload').onclick = () => { if (appv.url) loadFrame() }
 appEls.stop.onclick = () => appApi('/stop', {}).catch(() => {})
 
 // The first build of the app, or one more change to it.
@@ -4124,10 +4160,11 @@ function appEvent(e) {
     if (e.step.kind !== 'write' && e.step.kind !== 'think') appv.stage = e.step.text
     if (e.step.kind === 'write') appv.files = null
   } else if (e.type === 'app:ready') {
-    appv.url = e.url
+    // only a live event: an old one from the log names a dev server that may be gone
+    if (fresh_) appv.url = e.url
   } else if (e.type === 'app:done') {
     Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
-    if (e.url) appv.url = e.url
+    if (e.url && fresh_) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
     if (fresh_) feed(null, `🧩 the ${appv.kind === 'game' ? 'game' : 'app'} is ready (${e.result?.turns || 1} turn${e.result?.turns === 1 ? '' : 's'}, checks ${e.result?.gatesPassed ? 'passed' : 'not passed'}, ${Math.round((e.ms || 0) / 1000)}s). Open the App view to try it, or chat to change it.`, 'sys')
   } else if (e.type === 'app:failed') {
@@ -4903,7 +4940,7 @@ function dsScript(names) {
     at(t0 + 8400, () => { click(a, ph, 0.5, 0.6); scroll(ph, 0.6) })
     at(t0 + 9800, () => { scroll(ph, 0); go(b, pos(lap, 0.8, 0.3), 'looks good') })
     at(t0 + 11200, () => {
-      if (ds.games) { ds.el.querySelector('.ds-url').textContent = ds.url; lap.querySelector('iframe').src = ds.url }
+      if (ds.games) { ds.el.querySelector('.ds-url').textContent = ds.url; lap.querySelector('iframe').src = frameUrl(ds.url) }
       tour(0)
     })
   }

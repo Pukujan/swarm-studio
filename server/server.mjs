@@ -1210,6 +1210,8 @@ const server = createServer((req, res) => {
         const g = boardOf(linked.game, gev, runsDir, false)
         const work = workOf(linked.game)
         b.game = { ...(g.game || { title: linked.title || 'Game', cover: null }), run: linked.game, work }
+        // no title screen yet: the site's key art stands in
+        if (!b.game.cover) b.game.cover = b.pages.find(p => p.cover)?.cover || b.art?.[0]?.src || null
         if (work) b.busy = true
       }
     }
