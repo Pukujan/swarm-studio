@@ -12,7 +12,7 @@
 // inspector then edits that one by hand (words, fill, type, spacing, pictures, its code), and
 // "Tell the crew…" changes just it. Each change is a saved edit event, so it undoes, replays and
 // reaches anyone else on the same build (room for working together later).
-import { ic, cursor, CREW } from './icons.js'
+import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
 
 const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['code', 'Code']]
@@ -24,7 +24,8 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
-    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, tool: 'move', thumbs: new Map()
+    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, tool: 'move', thumbs: new Map(),
+    standin: new Map(), landed: new Map(), pendingKeys: new Set(), tick: 0
   }
 
   root.className = 'project'
@@ -63,6 +64,20 @@ export function makeProject({ sw, C, root }) {
   crumb.innerHTML = `<button class="pj-up">Projects</button>${ic('chr', 14)}<button class="pj-name" aria-haspopup="menu"><b></b>${ic('chd', 14)}</button>`
   const bar = document.querySelector('.topbar')
   bar?.querySelector('.spacer')?.before(crumb)
+  // what the crew are doing right now, said plainly: "Pip, Mochi painting 3 of 8 · Ren reviewing page 2 of 5"
+  // a click on it goes to the work: the pictures being made, or the page being checked
+  const liveEl = document.createElement('button')
+  liveEl.className = 'pj-now'
+  liveEl.setAttribute('aria-live', 'polite')
+  liveEl.hidden = true
+  liveEl.onclick = () => {
+    const b = P.board || {}, w = (b.painting || []).find(x => x.state !== 'failed')
+    if (b.review?.active && b.review.current) return zoomTo(`page:${b.review.current}`)
+    const sec = world.querySelector('.pj-sec.art')
+    if (w && sec) { fit(bounds([sec]), 1, true); return }
+    if (b.review?.active) frameAll()
+  }
+  bar?.querySelector('#play-btn')?.before(liveEl)
   crumb.querySelector('.pj-up').onclick = () => C.go('home')
   crumb.querySelector('.pj-name').onclick = e => projectMenu(e.currentTarget)
 
@@ -76,13 +91,17 @@ export function makeProject({ sw, C, root }) {
     P.run = run
     const [board, list] = await Promise.all([api(`/api/runs/${encodeURIComponent(run)}/board`).catch(() => null), hosted() ? null : api('/api/projects').catch(() => null)])
     if (!P.on) return
+    // a picture that was being made and now is there: it fades in over its stand-in
+    const now = new Set((board?.painting || []).filter(w => w.state !== 'failed').map(w => `art:${w.page}/${w.layer}/${w.gen}`))
+    for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k); if (P.on) renderStage() }, 1600) }
+    P.pendingKeys = now
     P.board = board
     P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run)) || null
     if (P.proj) P.pid = P.proj.id
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
     render()
     clearTimeout(P.timer)
-    P.timer = setTimeout(() => P.on && load(), board?.live ? 3000 : 15000)
+    P.timer = setTimeout(() => P.on && load(), board?.busy ? 2000 : board?.live ? 3000 : 15000)
   }
 
   // every file, grouped the way the panel and the stage show them
@@ -93,7 +112,15 @@ export function makeProject({ sw, C, root }) {
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, src: b.game.cover }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
-    if (b.art?.length) g.art = b.art.map(a => ({ key: `art:${a.page}/${a.layer}/${a.gen}`, kind: 'art', name: a.name.replace(/^\w/, c => c.toUpperCase()), src: a.src, used: a.used?.split(/\s[—–|:-]\s/)[0], style: a.style, art: a }))
+    const arts = (b.art || []).map(a => ({ key: `art:${a.page}/${a.layer}/${a.gen}`, kind: 'art', name: a.name.replace(/^\w/, c => c.toUpperCase()), src: a.src, used: a.used?.split(/\s[—–|:-]\s/)[0], style: a.style, art: a }))
+    // pictures still being made: a slot of their own (or over the old picture, when one is painted again)
+    for (const w of b.painting || []) {
+      const key = `art:${w.page}/${w.layer}/${w.gen}`
+      const had = arts.find(x => x.key === key)
+      if (had) had.pending = w
+      else arts.push({ key, kind: 'art', name: w.name.replace(/^\w/, c => c.toUpperCase()), used: w.used?.split(/\s[—–|:-]\s/)[0], pending: w, art: { page: w.page, layer: w.layer, gen: w.gen, name: w.name } })
+    }
+    if (arts.length) g.art = arts
     const ups = [...P.uploads.map(u => ({ key: `up:${u.name}`, kind: 'upload', name: u.name, src: /^image\//.test(u.type) ? u.src : null, type: u.type, size: u.size })),
       ...[...P.sending.values()].map(s => ({ key: `up:${s.name}`, kind: 'upload', name: s.name, sending: s.pct, src: s.preview }))]
     if (ups.length) g.uploads = ups
@@ -108,6 +135,7 @@ export function makeProject({ sw, C, root }) {
     const name = P.proj?.title || P.board?.title?.split(/\s[—–|:-]\s/)[0] || 'New project'
     crumb.querySelector('.pj-name b').textContent = name
     document.body.classList.toggle('pj-live', !!P.board?.live)
+    liveLine()
     renderList()
     renderStage()
     renderInsp()
@@ -138,8 +166,100 @@ export function makeProject({ sw, C, root }) {
       : x.kind === 'game' ? '<span class="play"></span>'
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
     const tall = x.kind === 'page' && x.snap && P.aspect.get(x.page)
-    return `<div class="ab ${x.kind}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${img}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>` : ''}${sel}</div>`
+    const rv = x.kind === 'page' ? reviewOf(x) : null
+    const work = x.kind === 'art' && (x.pending || P.landed.has(x.key)) ? painting(x) : ''
+    return `<div class="ab ${x.kind}${x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}` : ''}${sel}</div>`
   }
+  // ---------- pictures being made: a stand-in (a found picture, tinted toward the theme) or a drawn
+  // sketch, the painter's name and "real picture coming", a slim bar; the real one fades in over it.
+  // The stand-in is only ever shown here: it is never saved into the build, its cover, export or publish.
+  const since = t => Math.max(0, (Date.now() - (t || Date.now())) / 1000)
+  function painting(x) {
+    const w = x.pending, landed = P.landed.get(x.key)
+    const who = painterOf(x.key.slice(4))
+    // painted again: the old picture stays under the shimmer; a new slot gets a stand-in or a sketch
+    const over = !!x.src && !landed
+    const sub = over ? '' : standinFor(x)
+    const under = over ? '' : sub && sub !== 'wait' ? `<img class="sb" src="${esc(sub)}" alt="" draggable="false">` : sketch(x)
+    if (landed) return `<div class="pt landing">${under}</div>`
+    const ago = since(w.from || w.t)
+    const pct = Math.min(92, Math.round(100 * (1 - Math.exp(-ago / 40))))
+    const tag = w.state === 'failed'
+      ? `<span class="pt-tag"><b>${esc(who)}</b>no picture</span><button class="pt-again" data-again="${esc(x.key)}">${ic('restore', 12)}Try again</button>`
+      : `<span class="pt-tag"><b>${esc(who)}</b>${w.state === 'again' ? 'painting it again' : 'real picture coming'}</span><i class="pt-bar" role="progressbar" aria-label="Painting" aria-valuenow="${pct}"><i style="width:${pct}%"></i></i>`
+    const th = P.board?.theme?.colors || []
+    return `<div class="pt${over ? ' over' : ''}" style="--ago:-${ago.toFixed(1)}s${th[1] ? `;--pt-tint:${esc(th[1])}` : ''}">${under}${tag}</div>`
+  }
+  // a found stand-in for the slot, from the studio's picture service; until it answers (or when it
+  // cannot), the sketch shows
+  function standinFor(x) {
+    const k = x.key
+    if (P.standin.has(k)) return P.standin.get(k)
+    if (hosted()) { P.standin.set(k, null); return null }
+    P.standin.set(k, 'wait')
+    const q = x.art?.gen || x.name
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), 4000)
+    sw.api(`/api/standin?${new URLSearchParams({ q, w: '512', h: '512', run: P.run || '' })}`, { signal: ac.signal })
+      .then(r => (r.ok ? r.json() : null)).catch(() => null)
+      .then(j => { clearTimeout(t); P.standin.set(k, j?.url || null); if (j?.url && P.on) renderStage() })
+    return 'wait'
+  }
+  // the fallback: a loose drawing of what is coming, from the words that asked for it, drawing itself in
+  function sketch(x) {
+    const words = String(x.art?.gen || x.name || '').toLowerCase()
+    let h = 7; for (const c of x.key) h = (h * 33 + c.charCodeAt(0)) >>> 0
+    const r = n => { h = (h * 1103515245 + 12345) >>> 0; return (h % 1000) / 1000 * n }
+    const has = re => re.test(words)
+    const parts = []
+    const horizon = 62 + r(10)
+    if (has(/sea|ocean|water|lake|river|beach|wave|tide|harbo/)) {
+      parts.push(`<path d="M0 ${horizon} H100"/>`)
+      for (let i = 0; i < 3; i++) { const y = horizon + 8 + i * 9; parts.push(`<path d="M${4 + r(8)} ${y} q 8 -4 16 0 t 16 0 t 16 0 t 16 0 t 16 0"/>`) }
+    } else if (has(/mountain|forest|landscape|valley|hill|sky|night|star|moon|sunset|sunrise/)) {
+      parts.push(`<path d="M0 ${horizon + 6} L${20 + r(10)} ${30 + r(10)} L${45 + r(10)} ${horizon - 6} L${65 + r(10)} ${26 + r(12)} L100 ${horizon + 4}"/>`)
+    } else if (has(/city|street|building|shop|store|market|room|interior|cafe|café|bar|restaurant|venue|stall|alley|house/)) {
+      let xx = 6
+      while (xx < 92) { const w = 10 + r(12), top = 28 + r(28); parts.push(`<path d="M${xx.toFixed(1)} 90 V${top.toFixed(1)} H${(xx + w).toFixed(1)} V90"/>`); xx += w + 3 }
+    } else parts.push(`<path d="M0 ${horizon} H100"/>`)
+    if (has(/person|people|portrait|chef|player|man|woman|girl|boy|crowd|host|friend|team|barista|face/)) {
+      const cx = 40 + r(20)
+      parts.push(`<circle cx="${cx.toFixed(1)}" cy="40" r="9"/><path d="M${(cx - 18).toFixed(1)} 86 q 18 -36 36 0"/>`)
+    } else if (has(/food|dish|coffee|cup|plate|bowl|tea|wine|drink|cake|bread|noodle|ramen|meal/)) {
+      parts.push(`<ellipse cx="50" cy="60" rx="26" ry="9"/><path d="M34 58 q 16 -18 32 0"/>`)
+    } else if (has(/product|bottle|bag|box|jar|candle|device|phone|shoe|book/)) {
+      parts.push(`<rect x="${(38 + r(6)).toFixed(1)}" y="34" width="22" height="40" rx="3"/>`)
+    } else parts.push(`<circle cx="${(22 + r(56)).toFixed(1)}" cy="${(20 + r(14)).toFixed(1)}" r="${(6 + r(5)).toFixed(1)}"/>`)
+    return `<svg class="sk" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${parts.join('')}</svg>`
+  }
+
+  // ---------- the review on the artboards: the page being checked has a scan line, pages waiting
+  // their turn say so, each issue is a pin on its section, a checked page is ticked
+  function reviewOf(x) {
+    const rv = P.board?.review
+    if (!rv) return null
+    const p = rv.pages?.find(q => q.id === x.page)
+    if (!p) return null
+    const fresh = rv.active || Date.now() - (rv.last || 0) < 20000
+    if (!fresh) return null
+    return p
+  }
+  function reviewMarks(x, p) {
+    const n = (P.board.review.pages.findIndex(q => q.id === x.page) || 0) + 1
+    if (p.state === 'queued') return `<span class="rv-tag">Queued ${n}</span>`
+    if (p.state === 'checking') return `<div class="rv-scan"><i style="animation-delay:-${((Date.now() % 4000) / 1000).toFixed(2)}s"></i></div><span class="rv-tag on">${esc(REVIEWER)} checking</span>${pins(x, p)}`
+    return `<span class="rv-ok" role="img" aria-label="${p.issues.length ? `Reviewed, ${p.issues.length} to fix` : 'Reviewed, looks good'}">${ic('check', 12)}${p.issues.length ? `<b>${p.issues.length}</b>` : ''}</span>${pins(x, p)}`
+  }
+  function pins(x, p) {
+    const ratio = P.aspect.get(x.page)
+    if (!p.issues.length || !ratio || !x.snap || !sw.layers) return ''
+    const h = pageH(ratio), list = sw.layers.list(x.page)
+    return [...new Set(p.issues.map(i => i.layer))].map((layer, i) => {
+      const l = list.find(y => y.id === layer || y.key === `${x.page}/${layer}`)
+      if (!l?.box) return ''
+      return `<span class="rv-pin" style="top:${Math.min(h - 8, l.box.top * 124 * ratio + 4).toFixed(1)}px" aria-label="To fix: ${esc(l.role || layer)}">${i + 1}</span>`
+    }).join('')
+  }
+
   // a page is 124 px wide on the stage; its snapshot sets how long it is (a very long page is cut off)
   const pageH = ratio => Math.round(Math.min(124 * ratio, 124 * 9))
   function outline(x) {
@@ -792,26 +912,73 @@ export function makeProject({ sw, C, root }) {
   }
   scopeEl.onclick = () => { pickLayer(null); input.focus() }
 
-  // ---------- the crew at work: named cursors over the artboards while a build runs
+  function liveLine() {
+    const b = P.board || {}
+    const parts = []
+    const waiting = (b.painting || []).filter(w => w.state !== 'failed')
+    if (waiting.length) {
+      const names = [...new Set(waiting.map(w => painterOf(`${w.page}/${w.layer}/${w.gen}`)))]
+      const { done = 0, total = waiting.length } = b.paintCount || {}
+      parts.push(`${names.slice(0, 2).join(', ')}${names.length > 2 ? ' +1' : ''} painting ${Math.min(total, done + 1)} of ${Math.max(total, 1)}`)
+    }
+    const rv = b.review
+    if (rv?.active) {
+      const at = rv.current ? rv.pages.findIndex(p => p.id === rv.current) + 1 : Math.min(rv.total, rv.done + 1)
+      parts.push(`${REVIEWER} reviewing page ${Math.max(1, at)} of ${rv.total}`)
+    }
+    liveEl.hidden = !parts.length
+    const text = parts.join(' · ')
+    if (liveEl.dataset.t !== text) { liveEl.dataset.t = text; liveEl.innerHTML = `<i></i><span>${esc(text)}</span>` }
+  }
+
+  // ---------- the crew at work: named cursors over the artboards while a build runs. A painter sits
+  // on the picture it is making (and travels between its slots when it has more than one); the
+  // reviewer rides the scan line down the page being checked; the rest wander while the build runs
+  const jobs = () => {
+    const b = P.board || {}, out = new Map()
+    for (const w of b.painting || []) {
+      if (w.state === 'failed') continue
+      const who = painterOf(`${w.page}/${w.layer}/${w.gen}`)
+      if (!out.has(who)) out.set(who, [])
+      // a picture sent back goes first: the painter goes back to it
+      out.get(who)[w.state === 'again' ? 'unshift' : 'push'](`[data-key="${CSS.escape(`art:${w.page}/${w.layer}/${w.gen}`)}"]`)
+    }
+    if (b.review?.active && b.review.current) out.set(REVIEWER, [`[data-key="${CSS.escape(`page:${b.review.current}`)}"]`])
+    return out
+  }
+  const working = () => !!P.board?.live || jobs().size > 0
   function crewAtWork() {
-    const live = !!P.board?.live
-    if (!live) { curEl.innerHTML = ''; return }
+    if (!working()) { curEl.innerHTML = ''; return }
     if (!curEl.children.length) curEl.innerHTML = CREW.map(n => cursor(n)).join('')
-    if (P.wander) return
+    if (P.wander) { placeCrew(); return }
     const move = () => {
-      if (!P.on || !P.board?.live) { P.wander = 0; curEl.innerHTML = ''; return }
-      const abs = [...world.querySelectorAll('.ab')], s = stage.getBoundingClientRect()
-      for (const c of curEl.children) {
-        const a = abs[Math.floor(Math.random() * abs.length)]
-        if (!a) continue
-        const r = a.getBoundingClientRect()
-        c.style.left = `${r.left - s.left + r.width * (0.2 + Math.random() * 0.6)}px`
-        c.style.top = `${r.top - s.top + r.height * (0.2 + Math.random() * 0.6)}px`
-      }
+      if (!P.on || !working()) { P.wander = 0; curEl.innerHTML = ''; return }
+      P.tick++
+      placeCrew(true)
       P.wander = setTimeout(move, 1400 + Math.random() * 900)
     }
     P.wander = setTimeout(move, 50)
   }
+  function placeCrew(roam = false) {
+    const abs = [...world.querySelectorAll('.ab')], s = stage.getBoundingClientRect(), js = jobs(), live = !!P.board?.live
+    for (const c of curEl.children) {
+      const mine = js.get(c.dataset.n)
+      let a = null, fx = 0.2 + Math.random() * 0.6, fy = 0.2 + Math.random() * 0.6
+      if (mine?.length) {
+        a = world.querySelector(mine[Math.floor(P.tick / 2) % mine.length])
+        if (c.dataset.n === REVIEWER && a) { fx = 0.7; fy = scanAt() }
+        else { fx = 0.62; fy = 0.58 }
+      } else if (live && roam) a = abs[Math.floor(Math.random() * abs.length)]
+      else if (!live) { c.style.opacity = '0'; continue }
+      if (!a) continue
+      c.style.opacity = ''
+      const r = a.getBoundingClientRect()
+      c.style.left = `${r.left - s.left + r.width * fx}px`
+      c.style.top = `${r.top - s.top + Math.min(r.height * fy, r.height - 6)}px`
+    }
+  }
+  // where the review's scan line is on its page, 0..1 (it sweeps down every four seconds)
+  const scanAt = () => ((Date.now() / 4000) % 1) * 0.9 + 0.05
 
   let toastEl = null
   function toast(html) {
@@ -834,8 +1001,21 @@ export function makeProject({ sw, C, root }) {
     if ((e.key === 'Delete' || e.key === 'Backspace') && P.sel?.startsWith('up:')) { const x = find(P.sel); if (x) { e.preventDefault(); fileOp({ op: 'delete', name: x.name }).then(() => select(null)) } }
   }, true)
   addEventListener('resize', () => { if (P.on) crewAtWork() })
+  // a picture that did not come: paint it again from the same words
+  world.addEventListener('click', e => {
+    const b = e.target.closest('[data-again]')
+    if (!b) return
+    e.stopPropagation()
+    const w = P.board?.painting?.find(x => `art:${x.page}/${x.layer}/${x.gen}` === b.dataset.again)
+    if (!w) return
+    b.disabled = true
+    w.state = 'painting'; w.from = Date.now()
+    renderStage(); liveLine()
+    Promise.resolve(sw.layers?.paint(`${w.page}/${w.layer}`, w.gen)).then(ok => { if (!ok) toast('That picture could not start again'); load() })
+  }, true)
   sw.on(e => {
     if (!P.on) return
+    if (/^(image|review)(:|$)/.test(e.type) && (!e.run || e.run === P.run)) { clearTimeout(P.soonP); P.soonP = setTimeout(load, 350) }
     if (e.type === 'run:start' || e.type === 'reset') { if (e.run) P.run = e.run; P.thumbs.clear(); setTimeout(load, 600) }
     if (e.type === 'image' || e.type === 'page' || e.type === 'video:done' || e.type === 'run:done') { clearTimeout(P.soon); P.soon = setTimeout(load, 800) }
     if (e.type === 'layer:done') { P.thumbs.clear(); clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
