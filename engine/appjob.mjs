@@ -244,7 +244,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!inst.ok) throw new Error(`pnpm install failed: ${inst.out.slice(-300)}`)
     j.port = await freePort()
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
-    const p = spawn(join(dir, 'node_modules', '.bin', 'vite'), ['--port', String(j.port), '--strictPort', '--host', '127.0.0.1'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } })
+    // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
+    const p = spawn(join(dir, 'node_modules', '.bin', 'vite'), ['--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } })
     j.proc = p
     let log = ''
     p.stdout.on('data', b => { log = (log + b).slice(-4000) })
