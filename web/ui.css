@@ -227,17 +227,3 @@ body:has(.game-pop) .auto-panel { z-index: 30; }
 /* on a Projects page too narrow for the pill beside the prompt, it waits under the top bar instead */
 @media (max-width: 1140px) { body.cosmos-home .auto-panel { top: 68px; bottom: auto; max-height: max(180px, calc(100vh - 340px)); } }
 
-/* ---------- phones in Classic view: the grid is one column there, so the App and Video views
-   (placed in column 2 on a desktop) made an implicit column that squeezed the top bar to a sliver
-   and put the side panel over it. They take the row under the side panel instead. */
-@media (max-width: 700px) {
-  body:not(.cosmos) .appview, body:not(.cosmos).view-video .video-pop { grid-area: 3 / 1 / 4 / -1; }
-  body:not(.cosmos) .show-sum { grid-area: 2 / 1 / -1 / -1; }
-}
-
-/* Classic top bar: on a laptop-or-smaller window the button words fold into their icons (each keeps
-   its name as its aria-label) so ☰, and with it the Classic view switch, stays on screen */
-@media (max-width: 1180px) {
-  body:not(.cosmos) .topbar :is(#game-btn, #play-btn, #publish-btn, #more-btn) .t,
-  body:not(.cosmos) .topbar #publish-btn .caret { display: none; }
-}

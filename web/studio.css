@@ -1,10 +1,10 @@
 /* ---------- The studio frame (docs/ux/PATTERNS.md): Projects (web/home.css), a project (web/project.css)
-   and the rooms (Design deck, Film studio, Engine room). Off in classic view (☰ → Classic view) and on
-   wall tiles: everything here hangs off body.cosmos. */
+   and the rooms (Design deck, Film studio, Engine room). Off on wall tiles: everything here hangs off
+   body.cosmos. */
 :root { --cosmos-ease: cubic-bezier(.65, 0, .35, 1); }
 
 /* ---------- lean chrome: back, Projects › name, the crew, Play, Publish, ☰ */
-body.cosmos .starmap, body.cosmos #game-btn, body.cosmos .undo-redo, body.cosmos .clock,
+body.cosmos #views, body.cosmos #game-btn, body.cosmos .undo-redo, body.cosmos .clock,
 body.cosmos #more-btn .t, body.cosmos #more-btn .count { display: none !important; }
 body.cosmos #more-btn { padding: 4px 9px; }
 .cosmos-back { display: none; align-items: center; gap: 6px; }
@@ -55,7 +55,7 @@ body.cosmos .side-min-btn { display: none; }
 /* the wall tiles never show any of it */
 html.wall .home, html.wall .project, html.wall .cosmos-chatbtn { display: none !important; }
 
-/* the break room is a classic-view thing: in the studio the idle crew rest out of sight */
+/* idle crew rest out of sight */
 body.cosmos .dock, body.cosmos .cursor.docked { display: none !important; }
 /* a sheet opened from Projects (the Start sheet, the game wizard) sits above it */
 body.cosmos-home .game-pop { position: fixed; inset: 56px 0 0 248px; z-index: 160; }

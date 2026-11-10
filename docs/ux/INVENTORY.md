@@ -48,7 +48,8 @@ Controls added, moved or removed after the 2026-11-09 snapshot. The raw inventor
 | PR hosted-studio | Guest name dialog | **Added**: asks a name before the first hosted build (prefilled with the Feed's generated guest name) | dialog, hosted only |
 | PR studio-home | Projects (web/home.js) | **Replaced** the galaxy: a file browser with a sidebar (Recent, All projects, Assets, Trash, Folders +), one input with Make, cards (picture, title, kind icons), right-click and ⋯ menus, drag to folders, multi-select, stacked versions | Projects |
 | PR studio-canvas | A project (web/project.js) | **Replaced** the orbit: one canvas with Files and Layers, artboards in sections, the inspector (Export, Replace), the dock (Move, Frame, Text, Image, Comment, Tell the crew…), uploads by drop or + → Upload files. Recentre, planets, stations, the sun, the comm bar and the crew sprites are gone; the crew are named cursors and letter marks | A project |
-| PR studio-canvas | Sound (#crew-mute), Break room | **Moved**: in the studio, Sound is a ☰ item (and in the Projects user menu); the break room shows only in Classic view | ☰ |
+| PR studio-canvas | Sound (#crew-mute), Break room | **Moved**: in the studio, Sound is a ☰ item (and in the Projects user menu); the break room is gone from view | ☰ |
+| PR no-classic | Classic view (☰ → Classic view, `swarm.classic`) | **Removed**, with the old layout's star map, star nodes, warp streaks and sprite motion; a browser's stored choice is cleared. Projects, a project and its rooms are the only layout | — |
 
 ## Landmarks, with only what is visible at rest
 

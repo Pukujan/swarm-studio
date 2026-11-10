@@ -100,7 +100,7 @@ const SCREENS = [
   ['film-studio', 'Film studio room: the promo video', room('video')],
   ['engine-room', 'Engine room: the working app', room('app')],
   ['new-game', 'New game wizard, first step', async p => { await fresh(p, project()); await p.evaluate(() => document.querySelector('#game-btn').click()); await wait(1200) }],
-  ['project-menu', 'A project\'s ☰ menu (Sound, Game, Classic view)', async p => { await fresh(p, project()); await p.click('#more-btn'); await wait(400) }],
+  ['project-menu', 'A project\'s ☰ menu (Sound, Game)', async p => { await fresh(p, project()); await p.click('#more-btn'); await wait(400) }],
 ]
 
 const { chromium } = await loadPlaywright()

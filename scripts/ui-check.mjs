@@ -11,8 +11,8 @@
 // Start sheet and a project's canvas; a click on a card opens its project; a drag on the stage pans
 // it and Frame brings it back; a double-click on an artboard opens its room and Esc comes back; the
 // Start sheet closes with Esc, an outside click and ×; the launch-kit checkbox sits by its label;
-// the logo and Esc lead home from every view (Classic, a room, App, a replay); ☰ → Sound switches the
-// crew's voices. At 390 wide nothing scrolls sideways.
+// the logo and Esc lead home from every view (a room, App, a replay); there is no Classic view;
+// ☰ → Sound switches the crew's voices. At 390 wide nothing scrolls sideways.
 //
 // Tooltips (docs/ux/RULES.md, rule 1): there are none. No title= or data-tip anywhere in web/, and no
 // [title] or [data-tip] on any screen it visits. Icon-only controls are named by aria-label.
@@ -104,7 +104,7 @@ async function overlaps(page, where) {
   ok(!out.length, `${where}: no overlapping clickable boxes${out.length ? `\n      ${out.slice(0, 8).join('\n      ')}` : ''}`)
   await tips(page, where)
 }
-const mode = page => page.evaluate(() => ({ mode: window.swarmCosmos.mode, view: window.swarm.view, classic: window.swarmCosmos.classic }))
+const mode = page => page.evaluate(() => ({ mode: window.swarmCosmos.mode, view: window.swarm.view }))
 // a page still busy with an earlier navigation can abort the next one: try once more
 const go = (page, url) => page.goto(BASE + url).catch(() => wait(500).then(() => page.goto(BASE + url)))
 async function fresh(page, url = '/') {
@@ -202,14 +202,13 @@ async function home(page, w) {
     ['Design deck', () => window.swarmCosmos.go('station', 'canvas')],
     ['App view', () => window.swarmCosmos.go('station', 'app')],
     ['Film studio', () => window.swarmCosmos.go('station', 'video')],
-    ['Classic view', () => document.querySelector('#cosmos-classic').click()],
   ]
   for (const [name, enter] of views) {
     await page.evaluate(enter); await wait(900)
     // in a project the breadcrumb's Projects is the way home (the logo shows everywhere else)
     await page.click(name === 'project' ? '.pj-up' : '.topbar .brand'); await wait(900)
     const m = await mode(page)
-    ok(m.mode === 'home' && !m.classic, `Home @${w}: the logo goes to Projects from ${name} (${m.mode}${m.classic ? ', classic' : ''})`)
+    ok(m.mode === 'home', `Home @${w}: the logo goes to Projects from ${name} (${m.mode})`)
   }
   // Esc climbs: room → project → Projects
   await page.evaluate(() => window.swarmCosmos.go('project')); await wait(400)
@@ -220,13 +219,9 @@ async function home(page, w) {
   await page.keyboard.press('Escape'); await wait(900)
   const b = await mode(page)
   ok(a.mode === 'project' && b.mode === 'home', `Home @${w}: Esc goes room → project → Projects (${a.mode} → ${b.mode})`)
-  // Classic view can be switched off from where you are: the ☰ menu has it
-  await page.evaluate(() => document.querySelector('#cosmos-classic').click()); await wait(600)
-  await tips(page, `Classic view @${w}`)
-  const vis = await page.evaluate(() => { document.querySelector('#more-btn').click(); const b = document.querySelector('#cosmos-classic'); const r = b.getBoundingClientRect(); return r.width > 0 && r.right <= innerWidth && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('#cosmos-classic') === b })
-  ok(vis, `Home @${w}: Classic view's own switch is reachable in Classic view`)
-  await page.click('#cosmos-classic'); await wait(900)
-  ok(!(await mode(page)).classic, `Home @${w}: Classic view switches back off`)
+  // the old layout is gone: ☰ has no Classic view, and nothing shows the star map
+  const gone = await page.evaluate(() => { document.querySelector('#more-btn').click(); const r = !document.querySelector('#cosmos-classic') && !document.querySelector('.starmap, .warp, .node'); document.querySelector('#more-btn').click(); return r })
+  ok(gone, `Home @${w}: there is no Classic view and no star map`)
 }
 
 const browser = await chromium.launch()
@@ -309,13 +304,6 @@ try {
     await page.evaluate(view => window.swarmCosmos.go('station', view), v); await wait(900)
     ok(await page.evaluate(hscroll) <= 0, `390: the ${v} room does not scroll sideways`)
   }
-  await page.evaluate(() => document.querySelector('#cosmos-classic').click()); await wait(500)
-  await page.evaluate(() => document.querySelector('#views [data-view="app"]').click()); await wait(900)
-  const tb = await page.evaluate(() => { const t = document.querySelector('.topbar').getBoundingClientRect(), s = document.querySelector('.side').getBoundingClientRect(); return { tw: t.width, sTop: s.top, tBottom: t.bottom } })
-  ok(tb.tw >= 380 && tb.sTop >= tb.tBottom - 1, `390: in Classic App view the side panel stays under the top bar (top bar ${Math.round(tb.tw)} px wide)`)
-  ok(await page.evaluate(hscroll) <= 0, '390: Classic App view does not scroll sideways')
-  await page.click('.topbar .brand'); await wait(900)
-  ok((await mode(page)).mode === 'home', '390: the logo goes home from Classic App view')
   await page.close()
 } catch (e) {
   if (e !== 'done') throw e

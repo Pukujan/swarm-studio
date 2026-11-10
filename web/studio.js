@@ -19,22 +19,22 @@ const ICON = {
   back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
   chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-  layout: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>',
   sound: '<path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/>',
   gamepad: '<line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="2"/>'
 }
 const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ''}</svg>`
 
 // =====================================================================================
-// the controller: Projects (home), a project, a room (Canvas, Video, App), or classic
+// the controller: Projects (home), a project, or a room (Canvas, Video, App)
 // =====================================================================================
 const C = W.swarmCosmos = {
   mode: 'off',
   ico, esc, reduced,
   // the canvas asks this before it opens the latest file behind an empty canvas
-  atHome: () => C.mode === 'home',
-  classic: !!store.get('classic', false)
+  atHome: () => C.mode === 'home'
 }
+// the old one-screen layout ("Classic view") is gone; forget a browser's old choice
+try { localStorage.removeItem('swarm.classic') } catch {}
 const STATIONS = { canvas: 'Design deck', video: 'Film studio', app: 'Engine room' }
 C.STATIONS = STATIONS
 
@@ -43,12 +43,10 @@ function setMode(m) {
 }
 
 C.go = (m, v) => {
-  if (m === 'galaxy') m = 'home'
-  if (m === 'orbit') m = 'project'
-  if (C.classic || sw.wall) return
+  if (sw.wall) return
   body.classList.add('cosmos')
-  // the side panel's own small-chat mode does not apply here; it comes back in classic view
-  if (body.classList.contains('side-min')) { C.sideMin = true; body.classList.remove('side-min') }
+  // the side panel's own small-chat mode does not apply here
+  body.classList.remove('side-min')
   C.mode = m
   setMode(m)
   if (m === 'home') {
@@ -75,25 +73,10 @@ function renderBack() {
   b.setAttribute('aria-label', toProject ? 'Back to the project' : 'Back to Projects')
 }
 
-// Classic view: the old layout, exactly. Remembered per browser (storage may throw; that is fine).
-function setClassic(on) {
-  C.classic = on
-  store.set('classic', on)
-  $('#cosmos-classic')?.classList.toggle('on', on)
-  if (on) {
-    C.homeView?.hide(); C.projectView?.hide()
-    C.mode = 'off'
-    body.classList.remove('cosmos', 'cosmos-home', 'cosmos-project', 'cosmos-station', 'cosmos-chat')
-    if (C.sideMin) body.classList.add('side-min')
-  } else {
-    C.go(sw.S?.run || sw.viewing ? 'project' : 'home')
-  }
-}
-
-// The way home, from any view: the logo always lands on Projects (it also leaves Classic view),
+// The way home, from any view: the logo always lands on Projects,
 // and Esc climbs one level, room → project → Projects, when no panel is open.
-C.home = () => { if (sw.wall) return; if (C.classic) setClassic(false); C.go('home') }
-C.up = () => { if (C.classic || sw.wall) return false; if (C.mode === 'station') { C.go('project'); return true } if (C.mode === 'project') { C.go('home'); return true } return false }
+C.home = () => { if (sw.wall) return; C.go('home') }
+C.up = () => { if (sw.wall) return false; if (C.mode === 'station') { C.go('project'); return true } if (C.mode === 'project') { C.go('home'); return true } return false }
 // open a project: its newest build (or the one asked for); with no run, the build just started
 C.open = (run, pid) => {
   C.project = pid || null
@@ -127,22 +110,19 @@ function chrome() {
   back.onclick = () => C.go(C.mode === 'station' ? 'project' : 'home')
   $('.topbar').prepend(back)
   renderBack()
-  // ☰: what the lean top bar folds away, and the classic switch
+  // ☰: what the lean top bar folds away
   const menu = $('#more-menu')
   if (menu) {
     menu.insertAdjacentHTML('beforeend', `<div class="cosmos-sep" role="separator"></div>
       <button class="toggle cosmos-only" id="cosmos-sound">${ico('sound')}<span>Sound</span></button>
-      <button class="toggle cosmos-only" id="cosmos-game">${ico('gamepad')}Game</button>
-      <button class="toggle" id="cosmos-classic">${ico('layout')}Classic view</button>`)
+      <button class="toggle cosmos-only" id="cosmos-game">${ico('gamepad')}Game</button>`)
     $('#cosmos-game').onclick = () => $('#game-btn')?.click()
-    // the crew's voices: on or off from the menu (quiet stays a choice in classic view)
+    // the crew's voices: on or off from the menu
     const sound = $('#cosmos-sound')
     const paint = () => { const on = sw.sound?.() === 'on'; sound.classList.toggle('on', on); sound.querySelector('span').textContent = on ? 'Sound on' : 'Sound off' }
     sound.onclick = () => { sw.sound?.(sw.sound() === 'on' ? 'muted' : 'on'); paint() }
     $('#more-btn')?.addEventListener('click', paint)
     paint()
-    $('#cosmos-classic').onclick = () => setClassic(!C.classic)
-    $('#cosmos-classic').classList.toggle('on', C.classic)
   }
   // in a room, the chat column comes back with one button
   const chat = document.createElement('button')
@@ -176,7 +156,6 @@ function start() {
   sw.on(e => {
     if (e.type === 'run:start' || e.type === 'run:done' || e.type === 'reset') setTimeout(() => C.mode === 'home' && C.homeView.refresh(), 600)
   })
-  if (C.classic) return
   C.go(Q.get('replay') || Q.get('run') ? 'project' : 'home')
 }
 // fold-button style lives here: it is the only rule that needs the side panel's tab bar
@@ -186,7 +165,7 @@ document.head.append(style)
 
 if (sw && !sw.wall) {
   // the mode is known before the canvas's own start-up timers run
-  if (!C.classic) C.mode = Q.get('replay') || Q.get('run') ? 'project' : 'home'
+  C.mode = Q.get('replay') || Q.get('run') ? 'project' : 'home'
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
   else setTimeout(start)
 }
