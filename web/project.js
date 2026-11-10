@@ -202,7 +202,7 @@ export function makeProject({ sw, C, root }) {
     P.thumbBusy = true
     try {
       for (const p of P.board.pages) {
-        if (p.cover || P.thumbs.has(p.id)) continue
+        if (p.cover || P.thumbs.has(p.id)) { if (p === P.board.pages[0]) saveCover(p.cover ? base() + p.cover : P.thumbs.get(p.id)); continue }
         const src = await sw.thumb(p.id).catch(() => null)
         // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
         const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
