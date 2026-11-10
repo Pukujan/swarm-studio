@@ -20,6 +20,7 @@ import { dirname, extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
+import { intake } from '../engine/intake.mjs'
 import { exportRun } from '../engine/export.mjs'
 import { canvasPage, webVersion } from './page.mjs'
 import { runBoard } from './board.mjs'
@@ -405,6 +406,8 @@ const server = createServer(async (req, res) => {
   // design-panel edits stay in this browser for guests; the plugin saves them with the build
   if (/^\/api\/runs\/[^/]+\/(edit|restore)$/.test(path) && req.method === 'POST') { req.resume(); return json(res, 200, { ok: true, saved: false }) }
 
+  // the Make box: the showcases a guest can build (websites) and the grill-me interview
+  if (path === '/api/intake' && req.method === 'GET') return json(res, 200, intake({ hosted: true }))
   if (QUIET[path] && req.method === 'GET') return json(res, 200, QUIET[path])
   if (path === '/api/models' && req.method === 'GET') return json(res, 200, { roles: { planner: { model: MODEL.planner, picked: null }, worker: { model: MODEL.worker, picked: null }, reviewer: { model: '', picked: null } }, text: [], vision: [], lite: null, image: { pick: 'off', providers: [] } })
   if (isApi) { req.resume(); return json(res, 403, install(/video/.test(path) ? 'Video' : /app/.test(path) ? 'The working app' : /publish|export/.test(path) ? 'Publishing' : /review|comment|tours/.test(path) ? 'This agent step' : 'This')) }

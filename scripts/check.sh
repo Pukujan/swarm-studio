@@ -32,6 +32,7 @@ curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<title>Swarm Studio'
 get /api/state; has '"working"'
 get /api/runs
 get /api/game; has '"questions"'
+get /api/intake; has '"showcases"'; has '"game"'
 get /api/packs; has '"events"'
 curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; grep -q '__SWARM_TOKEN__' "$tmp/reply" && { echo 'the wall has no token'; exit 1; }
 get /api/auto; has '"state"'
@@ -46,6 +47,7 @@ trap 'kill $pid $hpid 2>/dev/null || true; rm -rf "$tmp"' EXIT
 for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:$hport/healthz && break; sleep 0.5; done
 curl -sf http://127.0.0.1:$hport/healthz > "$tmp/reply" || { cat "$tmp/hosted.log"; echo 'hosted /healthz did not answer'; exit 1; }; has '"ok":true'
 curl -sf http://127.0.0.1:$hport/ > "$tmp/reply"; has '<title>Swarm Studio'; has '"hosted"'
+curl -sf http://127.0.0.1:$hport/studio/app/api/intake > "$tmp/reply"; has '"showcases"'
 # a build needs a guest (and a model key): refused, never started
 curl -s -X POST -H 'content-type: application/json' -d '{"brief":"a bakery site with an order form"}' http://127.0.0.1:$hport/api/run > "$tmp/reply"; has '"error"'
 echo "all checks passed"

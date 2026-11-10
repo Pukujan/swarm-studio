@@ -39,7 +39,8 @@ export function makeHome({ sw, C, root }) {
     <main class="hm-main">
       <div class="hm-top"><button class="ib hm-burger" aria-label="Menu">${ic('menu')}</button>${logo()}</div>
       <form class="hm-ask" autocomplete="off"><button type="button" class="hm-kind" aria-label="What to make" aria-haspopup="menu"></button><input name="q" placeholder="What should the crew build?" aria-label="What should the crew build?" maxlength="4000">
-        <button type="submit" class="btn pri hm-make">${ic('up', 16)}Make</button></form>
+        <button type="button" class="ib hm-ideas" aria-label="Showcase builds" aria-haspopup="dialog">${ic('idea', 18)}</button><button type="submit" class="btn pri hm-make">${ic('up', 16)}Make</button></form>
+      <div class="hm-pop" hidden></div>
       <div class="hm-bar"></div>
       <div class="hm-body"></div>
       <div class="hm-selbar" hidden></div>
@@ -580,21 +581,102 @@ export function makeHome({ sw, C, root }) {
   const showKind = () => { kindBtn.innerHTML = `${ic(make.icon, 16)}<span>${make.label}</span>${ic('chd', 14)}` }
   showKind()
   if (hosted()) kindBtn.hidden = true  // the hosted studio makes websites only
-  kindBtn.onclick = () => showMenu(MAKES.map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })), kindBtn)
-  form.onsubmit = async e => {
-    e.preventDefault()
-    const text = input.value.trim()
-    if (!text) return input.focus()
-    if (make.k === 'site') {
+  // the kind menu also holds the one Grill me switch: on, a vague prompt gets a few questions first
+  let grillOn = store.get('home.grill', true)
+  kindBtn.onclick = () => showMenu([
+    ...MAKES.map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })),
+    '-',
+    { k: 'grill', icon: 'msg', label: 'Grill me', on: grillOn, run: () => { grillOn = !grillOn; store.set('home.grill', grillOn); input.focus() } }
+  ], kindBtn)
+
+  // what the Make box asks the server for once: the showcases and the interview (engine/intake.mjs)
+  let intakeP = null
+  const intake = () => (intakeP ||= api('/api/intake').catch(() => { intakeP = null; return { showcases: [], questions: [], words: 12 } }))
+
+  // start a build: a website builds live on the canvas; App, Game and Video run their steps in order
+  async function start(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }) {
+    closePop()
+    if (!run || hosted()) {
       input.value = ''
       sw.submit(text)
       return C.open(null)
     }
     try {
-      await post('/api/auto', { prompt: text, games: make.games, only: make.only })
+      await post('/api/auto', { prompt: text, ...run })
       input.value = ''
       C.open(null)
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
+  }
+
+  form.onsubmit = async e => {
+    e.preventDefault()
+    const text = input.value.trim()
+    if (!text) return showcases()
+    const words = (await intake()).words || 12
+    if (grillOn && text.split(/\s+/).length < words) return grill(text)
+    start(text)
+  }
+
+  // ---------- the pop under the Make box: the showcases, or the interview. One at a time;
+  // it closes with ×, Esc and a click outside, and the prompt stays in the box.
+  const pop = $('.hm-pop'), ideasBtn = $('.hm-ideas')
+  let popOff = null
+  function openPop(cls, html) {
+    pop.className = `hm-pop ${cls}`
+    pop.innerHTML = `<button type="button" class="ib hm-pop-x" aria-label="Close">${ic('x', 16)}</button>${html}`
+    pop.style.top = `${form.offsetTop + form.offsetHeight + 8}px`
+    pop.hidden = false
+    pop.querySelector('.hm-pop-x').onclick = closePop
+    if (!popOff) popOff = window.SwarmUI?.layer(pop, closePop, { extra: [form] })
+  }
+  function closePop() { popOff?.(); popOff = null; pop.hidden = true; pop.innerHTML = ''; ideasBtn.classList.remove('on') }
+
+  // the showcases: a name, the steps the crew will take, and one click runs it
+  async function showcases() {
+    if (!pop.hidden && pop.classList.contains('show')) return closePop()
+    const list = (await intake()).showcases || []
+    if (!list.length) return input.focus()
+    openPop('show', `<div class="hm-show" role="list" aria-label="Showcase builds">${list.map(s => `<button type="button" class="hm-sc" role="listitem" data-id="${esc(s.id)}" aria-label="Build ${esc(s.name)}">${ic(s.icon, 18)}<span class="nm">${esc(s.name)}</span><span class="st">${s.steps.map(x => `<i>${esc(x)}</i>`).join('')}</span>${ic('up', 15)}</button>`).join('')}</div>`)
+    ideasBtn.classList.add('on')
+    pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
+    for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
+      const s = list.find(x => x.id === b.dataset.id)
+      start(s.prompt, s.run || null)
+    }
+  }
+  ideasBtn.onclick = () => showcases()
+
+  // the grill: one question at a time (chips or your own words), then it builds from the locked answers.
+  // The same shape as the game interview (QUESTIONS in engine/game.mjs), which a Game uses.
+  const G = { text: '', qs: [], i: 0, answers: {} }
+  async function grill(text) {
+    const d = await intake()
+    const qs = make.k === 'game' && d.game?.length ? d.game : d.questions || []
+    if (!qs.length) return start(text)
+    Object.assign(G, { text, qs, i: 0, answers: {} })
+    drawGrill()
+  }
+  function brief() {
+    const lines = G.qs.map(q => [q.label || q.q.replace(/\s*\(.*\)\s*$/, '').replace(/\?$/, ''), String(G.answers[q.id] || '').trim()])
+      .filter(([, v]) => v && !/^(surprise me|nothing in particular)$/i.test(v)).map(([k, v]) => `- ${k}: ${v}`)
+    return lines.length ? `${G.text}\n\nLocked with the person (build exactly this):\n${lines.join('\n')}` : G.text
+  }
+  function drawGrill() {
+    const q = G.qs[G.i], val = G.answers[q.id] || '', last = G.i === G.qs.length - 1
+    openPop('grill', `<div class="hm-dots" aria-label="Question ${G.i + 1} of ${G.qs.length}">${G.qs.map((_, i) => `<i class="${i < G.i ? 'done' : i === G.i ? 'on' : ''}"></i>`).join('')}</div>
+      <h3>${esc(q.q)}</h3>
+      <div class="hm-chips">${q.chips.map(c => `<button type="button" class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+      <input class="hm-free" aria-label="Your own words" placeholder="Or in your own words" maxlength="300" value="${q.chips.includes(val) ? '' : esc(val)}">
+      <div class="hm-gfoot">${G.i ? `<button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button>` : '<span></span>'}<span><button type="button" class="btn ghost" data-skip>Just build</button><button type="button" class="btn pri" data-next>${last ? 'Build' : 'Next'}</button></span></div>`)
+    const free = pop.querySelector('.hm-free')
+    const take = v => { if (v) G.answers[q.id] = v; else delete G.answers[q.id] }
+    const next = () => { take(free.value.trim() || G.answers[q.id]); if (!last) { G.i++; drawGrill() } else start(brief()) }
+    for (const b of pop.querySelectorAll('[data-c]')) b.onclick = () => { take(b.dataset.c); free.value = ''; next() }
+    free.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); next() } }
+    pop.querySelector('[data-next]').onclick = next
+    pop.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || G.answers[q.id]); start(brief()) }
+    pop.querySelector('[data-back]')?.addEventListener('click', () => { G.i--; drawGrill() })
+    free.focus({ preventScroll: true })
   }
 
   // ---------- you: theme, sound and models live in your menu; the globe opens the Feed
@@ -654,6 +736,6 @@ export function makeHome({ sw, C, root }) {
       refresh()
       setTimeout(() => { if (H.on && innerWidth > 760 && !document.activeElement?.closest('input, textarea')) input.focus({ preventScroll: true }) }, 60)
     },
-    hide() { H.on = false; clearTimeout(H.timer); closeMenu(); drawer(false); root.hidden = true }
+    hide() { H.on = false; clearTimeout(H.timer); closeMenu(); closePop(); drawer(false); root.hidden = true }
   }
 }
