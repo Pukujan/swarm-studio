@@ -4212,7 +4212,7 @@ function renderGame() {
   } else if (game.busy) {
     el.innerHTML = `${head}<div class="gbody"><div class="spin"></div><p>${esc(game.busy)}</p></div>`
   } else if (game.spec) {
-    const s = game.spec, list = v => (Array.isArray(v) ? v.join(', ') : v || '')
+    const s = game.spec, list = gameList
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
     el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
@@ -4275,11 +4275,15 @@ async function gameOnline() {
   renderGame()
 }
 
+// names of a spec's list (a big spec's entries are objects with a name)
+const gameList = v => (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : x?.name || '')).join(', ') : v || '')
+
 async function gameBuild() {
   // the card's edits go into the spec
   for (const x of game.el?.querySelectorAll('[data-k]') || []) {
     const k = x.dataset.k, v = x.textContent.trim()
-    if (k === 'enemies') game.spec.enemies = v.split(/\s*,\s*/).filter(Boolean)
+    // a big spec's enemies are objects: keep them unless the line was changed
+    if (k === 'enemies') { if (v !== gameList(game.spec.enemies)) game.spec.enemies = v.split(/\s*,\s*/).filter(Boolean) }
     else if (v) game.spec[k] = v
   }
   game.busy = 'Starting the build…'

@@ -788,7 +788,7 @@ async function videoNow(id, input = {}) {
 
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
-const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor }))))
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame }))))
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
@@ -874,6 +874,39 @@ function brandOf(id) {
   const sites = events.filter(e => e.type === 'publish:done' && e.url && e.target !== 'local').map(e => e.url)
   const app = events.findLast(e => e.type === 'app:deployed')?.url
   return { from: id, name: c.brand, brief: c.brief, vars: c.theme.vars || {}, fonts: c.theme.fonts || {}, direction: c.theme.direction || '', copy: c.copy.slice(0, 1800), url: app || sites.at(-1) || null }
+}
+
+// A big game's art: portraits, boon icons, room backdrops and a title picture,
+// through the same art director as a site's pictures, into the app's public/art/.
+// Styled from the project's own art when it has a drawn style (a film-photo style
+// suits a site, not a game's portraits: then the game's own look picks one).
+function gameGuide(spec) {
+  const site = spec.brand?.from && RUN_ID.test(spec.brand.from) && existsSync(join(runsDir, spec.brand.from)) ? guideFor(spec.brand.from) : null
+  if (site && site.style !== 'photo') return site
+  return art.styleGuide({ brief: `${spec.look || ''}. ${spec.setting || ''}. Hand-painted style` })
+}
+async function paintGame(runId, spec, items, appDir, step) {
+  const choice = await imageChoice()
+  if (!choice) { step({ kind: 'setup', text: 'no image model: the game draws its art in code', ok: false }); return [] }
+  const guide = gameGuide(spec)
+  step({ kind: 'setup', text: `painting in ${guide.name}` })
+  mkdirSync(join(appDir, 'public', 'art'), { recursive: true })
+  mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
+  const done = new Map(), queue = [...items]
+  const worker = async () => {
+    for (let it; (it = queue.shift());) {
+      const r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title' }).catch(err => ({ ok: false, error: String(err.message || err) }))
+      if (!r.ok || !r.path || !existsSync(r.path)) { step({ kind: 'setup', text: `could not paint the ${it.what}: ${String(r.error || 'no image').slice(0, 120)}`, ok: false }); continue }
+      const file = `art/${it.id}${extname(r.path) || '.png'}`
+      copyFileSync(r.path, join(appDir, 'public', file))
+      // the Studio keeps a copy with the run, so its art shows beside the game
+      copyFileSync(r.path, join(runsDir, runId, 'img', file.replace('art/', 'game-')))
+      done.set(it.id, { file, what: it.what, kind: it.kind })
+      step({ kind: 'setup', text: `painted the ${it.what}` })
+    }
+  }
+  await Promise.all([worker(), worker(), worker()])
+  return items.map(i => done.get(i.id)).filter(Boolean)
 }
 
 async function startGame(spec) {
@@ -1524,7 +1557,7 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       const go = url.pathname === '/api/game/spec'
-        ? gameMod().then(g => g.writeSpec({ provider: provider('planner'), model: modelFor('planner'), idea: String(input.idea || '').slice(0, 600), answers: typeof input.answers === 'object' && input.answers ? input.answers : {}, brand: brandOf(input.from), signal: AbortSignal.timeout(90000) })).then(spec => ({ spec }))
+        ? gameMod().then(g => g.writeSpec({ provider: provider('planner'), model: modelFor('planner'), idea: String(input.idea || '').slice(0, 600), answers: typeof input.answers === 'object' && input.answers ? input.answers : {}, brand: brandOf(input.from), big: input.big === true, signal: AbortSignal.timeout(input.big ? 180000 : 90000) })).then(spec => ({ spec }))
         : startGame(input.spec)
       go.then(out => reply(200, out)).catch(err => reply(400, { error: String(err.message || err) }))
     })
