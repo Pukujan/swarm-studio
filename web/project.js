@@ -182,6 +182,20 @@ export function makeProject({ sw, C, root }) {
   }
 
   // a page's real look, once the canvas behind has drawn it
+  // the first page's snapshot becomes the build's cover on Projects (a picture cover still wins there)
+  async function saveCover(src) {
+    const run = P.run
+    if (!run || P.saved?.has(run)) return
+    ;(P.saved ||= new Set()).add(run)
+    const im = new Image()
+    await new Promise(r => { im.onload = r; im.onerror = r; im.src = src })
+    if (!im.naturalWidth) return
+    const c = document.createElement('canvas'), w = 800, h = 500
+    c.width = w; c.height = h
+    const k = w / im.naturalWidth
+    c.getContext('2d').drawImage(im, 0, 0, im.naturalWidth, Math.min(im.naturalHeight, h / k), 0, 0, w, Math.min(h, im.naturalHeight * k))
+    sw.api(`/api/runs/${encodeURIComponent(run)}/snap`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: c.toDataURL('image/jpeg', 0.82) }) }).catch(() => {})
+  }
   async function thumbs() {
     if (P.thumbBusy || !P.board?.pages?.length) return
     P.thumbBusy = true
@@ -191,7 +205,7 @@ export function makeProject({ sw, C, root }) {
         const src = await sw.thumb(p.id).catch(() => null)
         // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
         const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
-        if (ok && P.on) { P.thumbs.set(p.id, src); renderList(); renderStage() }
+        if (ok && P.on) { P.thumbs.set(p.id, src); renderList(); renderStage(); if (p === P.board.pages[0]) saveCover(await sw.thumb(p.id, 0.6).catch(() => null) || src) }
       }
     } finally { P.thumbBusy = false }
     if (P.on && P.board.pages.some(p => !p.cover && !P.thumbs.has(p.id)) && (P.thumbTries = (P.thumbTries || 0) + 1) < 8) setTimeout(thumbs, 2500)

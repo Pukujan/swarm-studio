@@ -33,7 +33,7 @@ export function makeHome({ sw, C, root }) {
     <div class="hm-scrim" hidden></div>
     <main class="hm-main">
       <div class="hm-top"><button class="ib hm-burger" aria-label="Menu">${ic('menu')}</button>${logo()}</div>
-      <form class="hm-ask" autocomplete="off"><input name="q" placeholder="What should the crew build?" aria-label="What should the crew build?" maxlength="4000">
+      <form class="hm-ask" autocomplete="off"><button type="button" class="hm-kind" aria-label="What to make" aria-haspopup="menu"></button><input name="q" placeholder="What should the crew build?" aria-label="What should the crew build?" maxlength="4000">
         <button type="submit" class="btn pri hm-make">${ic('up', 16)}Make</button></form>
       <div class="hm-bar"></div>
       <div class="hm-body"></div>
@@ -128,11 +128,15 @@ export function makeHome({ sw, C, root }) {
   const crew = p => p.live ? `<div class="crew">${CREW.slice(0, 2 + (p.id.length % 3)).map(n => cursor(n)).join('')}</div><div class="prog" role="progressbar" aria-label="Building" aria-valuenow="${Math.round((p.progress ?? 0.1) * 100)}"><i style="width:${Math.max(6, Math.round((p.progress ?? 0.1) * 100))}%"></i></div>` : ''
   const ago = t => { const d = (Date.now() - t) / 1000; return d < 90 ? 'now' : d < 3600 ? `${Math.round(d / 60)}m` : d < 86400 ? `${Math.round(d / 3600)}h` : d < 86400 * 30 ? `${Math.round(d / 86400)}d` : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
 
+  // a card's own buttons, on its cover: Delete (to Trash) and Open, or in Trash, Restore and Delete forever
+  const acts = p => hosted() || H.stack || p.version ? '' : H.view === 'trash'
+    ? `<div class="acts"><button class="ib sm" data-act="restore" aria-label="Restore">${ic('restore', 16)}</button><button class="ib sm red" data-act="purge" aria-label="Delete forever">${ic('trash', 16)}</button></div>`
+    : `<div class="acts"><button class="ib sm red" data-act="trash" aria-label="Delete">${ic('trash', 16)}</button></div>`
   function card(p) {
     const stack = p.count > 1 && !H.stack
     const sel = H.sel.has(p.id)
     return `<div class="card${sel ? ' selc' : ''}${p.live ? ' live' : ''}" data-id="${esc(p.id)}" draggable="${!hosted() && H.view !== 'trash'}" tabindex="0" role="button" aria-label="${esc(p.title)}">
-      <div class="cv${stack ? ' stack' : ''}">${cover(p.cover, p.theme, p.title)}${stack ? `<span class="badge" aria-label="${p.count} versions">${p.count}</span>` : ''}${kinds(p.kinds)}${crew(p)}</div>
+      <div class="cv${stack ? ' stack' : ''}">${cover(p.cover, p.theme, p.title)}${stack ? `<span class="badge" aria-label="${p.count} versions">${p.count}</span>` : ''}${kinds(p.kinds)}${crew(p)}${acts(p)}</div>
       ${sel ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''}
       <div class="nm"><b>${esc(p.title)}</b>${hosted() ? '' : `<button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button>`}</div>
       ${H.layout === 'list' ? `<span class="meta">${p.count > 1 ? `<span aria-label="${p.count} versions">${ic('layers', 13)}${p.count}</span>` : ''}${p.folder && H.view !== 'folder' ? `<span>${ic('folder', 13)}${esc(p.folder)}</span>` : ''}<span>${ago(seen(p))}</span></span>` : ''}
@@ -213,6 +217,8 @@ export function makeHome({ sw, C, root }) {
     const c = e.target.closest('.card')
     if (!c) { if (H.sel.size) { H.sel.clear(); renderCards(); renderSelbar() } return }
     if (e.target.closest('.more')) return menuFor(c.dataset.id, e.target.closest('.more'))
+    const btn = e.target.closest('[data-act]')
+    if (btn) return act(btn.dataset.act, [c.dataset.id])
     if (e.target.closest('.hm-rename')) return
     if ((e.shiftKey || e.metaKey || e.ctrlKey) && !H.stack) {
       const id = c.dataset.id
@@ -375,20 +381,26 @@ export function makeHome({ sw, C, root }) {
       if (op === 'duplicate' && out.id) setTimeout(() => rename(out.id), 50)
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
+  // Delete forever and Empty Trash cannot be undone: the button stays off until "delete" is typed
   function confirmDelete(n, all) {
     return new Promise(resolve => {
       const ui = window.SwarmUI
-      if (!ui) return resolve(confirm('Delete for good?'))
+      if (!ui) return resolve(prompt('Type delete to delete for good') === 'delete')
       let ok = false
       const d = ui.dialog({
         title: all ? 'Empty Trash?' : `Delete ${n > 1 ? `${n} projects` : 'this project'} for good?`,
-        desc: `${n > 1 ? `${n} projects and their files` : 'Its files'} can't be brought back.`,
-        footer: `<button class="ui-btn ui-btn-ghost ui-btn-sm hm-no">Cancel</button><button class="ui-btn ui-btn-destructive ui-btn-sm hm-yes">${all ? 'Empty Trash' : 'Delete'}</button>`,
+        desc: `${n > 1 || all ? `${n} project${n > 1 ? 's' : ''} and their files` : 'Its files'} can't be brought back. Type <b>delete</b> to confirm.`,
+        body: '<input class="ui-input hm-typed" autocomplete="off" spellcheck="false" aria-label="Type delete to confirm" placeholder="delete">',
+        footer: `<button class="ui-btn ui-btn-ghost ui-btn-sm hm-no">Cancel</button><button class="ui-btn ui-btn-destructive ui-btn-sm hm-yes" disabled>${all ? 'Empty Trash' : 'Delete'}</button>`,
         onClose: () => resolve(ok)
       })
+      const typed = d.el.querySelector('.hm-typed'), yes = d.footer.querySelector('.hm-yes')
+      const ready = () => typed.value.trim().toLowerCase() === 'delete'
+      typed.oninput = () => { yes.disabled = !ready() }
+      typed.onkeydown = e => { if (e.key === 'Enter' && ready()) { ok = true; d.close('ok') } }
       d.footer.querySelector('.hm-no').onclick = () => d.close('cancel')
-      d.footer.querySelector('.hm-yes').onclick = () => { ok = true; d.close('ok') }
-      setTimeout(() => d.footer.querySelector('.hm-no').focus(), 30)
+      yes.onclick = () => { if (ready()) { ok = true; d.close('ok') } }
+      setTimeout(() => typed.focus(), 30)
     })
   }
   async function emptyTrash() {
@@ -501,14 +513,34 @@ export function makeHome({ sw, C, root }) {
     else act('move', ids, { folder: t.dataset.folder })
   })
 
-  // ---------- the one input: Make starts a build, exactly as the composer's Build does
-  form.onsubmit = e => {
+  // ---------- the one input: pick what to make (Website, App, Game, Video), then Make.
+  // A website builds live on the canvas; App, Game and Video run the steps they need, one after another.
+  const MAKES = [
+    { k: 'site', icon: 'site', label: 'Website' },
+    { k: 'app', icon: 'code', label: 'App', only: ['app', 'data', 'deploy'], games: 'none' },
+    { k: 'game', icon: 'game', label: 'Game', only: ['app', 'games', 'deploy'], games: 'big' },
+    { k: 'video', icon: 'film', label: 'Video', only: ['review', 'video'], games: 'none' }
+  ]
+  let make = MAKES.find(m => m.k === store.get('home.make', 'site')) || MAKES[0]
+  const kindBtn = $('.hm-kind')
+  const showKind = () => { kindBtn.innerHTML = `${ic(make.icon, 16)}<span>${make.label}</span>${ic('chd', 14)}` }
+  showKind()
+  if (hosted()) kindBtn.hidden = true  // the hosted studio makes websites only
+  kindBtn.onclick = () => showMenu(MAKES.map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })), kindBtn)
+  form.onsubmit = async e => {
     e.preventDefault()
     const text = input.value.trim()
     if (!text) return input.focus()
-    input.value = ''
-    sw.submit(text)
-    C.open(null)
+    if (make.k === 'site') {
+      input.value = ''
+      sw.submit(text)
+      return C.open(null)
+    }
+    try {
+      await post('/api/auto', { prompt: text, games: make.games, only: make.only })
+      input.value = ''
+      C.open(null)
+    } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 
   // ---------- you: theme, sound and models live in your menu; the globe opens the Feed

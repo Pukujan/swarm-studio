@@ -288,6 +288,7 @@ export function autoJob(d) {
       ['video', video, false]
     ]
     for (const [id, fn, needed] of plan) {
+      if (!step(id)) continue  // a kind picked on Projects (App, Game, Video) runs only its own steps
       if (job.stopped) { set(id, 'skipped', 'stopped'); continue }
       try { await fn() } catch (err) {
         set(id, 'failed', String(err.message || err))
@@ -296,7 +297,8 @@ export function autoJob(d) {
     }
     for (const s of job.steps) if (s.state === 'wait' && s.id !== 'deploy' && s.id !== 'launch') set(s.id, 'skipped', job.fatal ? 'an earlier step failed' : 'skipped')
     // what was built goes live, even when a later step failed
-    if (!job.stopped) await deploy().catch(err => set('deploy', 'failed', String(err.message || err)))
+    if (!step('deploy')) { /* not part of this kind */ }
+    else if (!job.stopped) await deploy().catch(err => set('deploy', 'failed', String(err.message || err)))
     else set('deploy', 'skipped', 'stopped')
     // the optional launch kit: posts written from the run's facts, never posted from here
     if (step('launch')) {
@@ -315,7 +317,7 @@ export function autoJob(d) {
     push()
   }
 
-  function start({ prompt, games, pack, intake, launch }) {
+  function start({ prompt, games, pack, intake, launch, only }) {
     prompt = String(prompt || '').trim().slice(0, 1200)
     if (!prompt) throw new Error('say what to make')
     if (job?.state === 'working') throw new Error('auto mode is already running')
@@ -331,7 +333,7 @@ export function autoJob(d) {
     }
     if (launch) steps.push(['launch', '📣 Write the launch kit'])
     job = { state: 'working', launch: !!launch, prompt, brief: p ? packBrief(p, prompt, iv) : prompt, pack: p, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
-      steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none')).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
+      steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none') && (!Array.isArray(only) || id === 'design' || only.includes(id))).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
     go().catch(err => { Object.assign(job, { state: 'failed', message: String(err.message || err), end: Date.now() }); push() })
     return view()
