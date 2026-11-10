@@ -93,7 +93,7 @@ export function makeProject({ sw, C, root }) {
     if (!P.on) return
     // a picture that was being made and now is there: it fades in over its stand-in
     const now = new Set((board?.painting || []).filter(w => w.state !== 'failed').map(w => `art:${w.page}/${w.layer}/${w.gen}`))
-    for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k); if (P.on) renderStage() }, 1600) }
+    for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k.split('/').slice(2).join('/')); if (P.on) renderStage() }, 1600) }
     P.pendingKeys = now
     P.board = board
     P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run)) || null
@@ -180,7 +180,7 @@ export function makeProject({ sw, C, root }) {
     // painted again: the old picture stays under the shimmer; a new slot gets a stand-in or a sketch
     const over = !!x.src && !landed
     const sub = over ? '' : standinFor(x)
-    const under = over ? '' : sub && sub !== 'wait' ? `<img class="sb" src="${esc(sub)}" alt="" draggable="false">` : sketch(x)
+    const under = over ? '' : sub && sub !== 'wait' ? `${sketch(x)}<img class="sb" src="${esc(sub.url)}" alt="" draggable="false" style="animation-delay:-${since(sub.at).toFixed(1)}s">` : sketch(x)
     if (landed) return `<div class="pt landing">${under}</div>`
     const ago = since(w.from || w.t)
     const pct = Math.min(92, Math.round(100 * (1 - Math.exp(-ago / 40))))
@@ -190,18 +190,24 @@ export function makeProject({ sw, C, root }) {
     const th = P.board?.theme?.colors || []
     return `<div class="pt${over ? ' over' : ''}" style="--ago:-${ago.toFixed(1)}s${th[1] ? `;--pt-tint:${esc(th[1])}` : ''}">${under}${tag}</div>`
   }
-  // a found stand-in for the slot, from the studio's picture service; until it answers (or when it
-  // cannot), the sketch shows
+  // a found stand-in for the slot, from the studio's picture service. The sketch shows at once; a new
+  // subject can take the service 10-30 s (it searches and tags), so the call never blocks and the
+  // stand-in fades in over the sketch when it comes. Kept by the picture's words, in memory only.
+  const standinOf = gen => { const s = P.standin.get(gen); return s && s !== 'wait' ? s : null }
   function standinFor(x) {
-    const k = x.key
-    if (P.standin.has(k)) return P.standin.get(k)
-    if (hosted()) { P.standin.set(k, null); return null }
-    P.standin.set(k, 'wait')
     const q = x.art?.gen || x.name
-    const ac = new AbortController(), t = setTimeout(() => ac.abort(), 4000)
+    if (P.standin.has(q)) return P.standin.get(q)
+    if (hosted()) { P.standin.set(q, null); return null }
+    P.standin.set(q, 'wait')
+    const ac = new AbortController(), t = setTimeout(() => ac.abort(), 60000)
     sw.api(`/api/standin?${new URLSearchParams({ q, w: '512', h: '512', run: P.run || '' })}`, { signal: ac.signal })
       .then(r => (r.ok ? r.json() : null)).catch(() => null)
-      .then(j => { clearTimeout(t); P.standin.set(k, j?.url || null); if (j?.url && P.on) renderStage() })
+      .then(j => {
+        clearTimeout(t)
+        const url = j?.url ? (/^https?:/.test(j.url) ? j.url : base() + j.url) : null
+        P.standin.set(q, url ? { url, credit: j.credit || null, source: j.source || null, at: Date.now() } : null)
+        if (url && P.on) renderStage()
+      })
     return 'wait'
   }
   // the fallback: a loose drawing of what is coming, from the words that asked for it, drawing itself in
@@ -348,7 +354,7 @@ export function makeProject({ sw, C, root }) {
       ${edit && colors.length ? g('Fill', `<div class="pj-sws">${colors.map(([k, v]) => `<button class="pj-sw${cur.bg === k.slice(2) ? ' on' : ''}" data-bg="${esc(k.slice(2))}" aria-label="${esc(k.slice(2))}" style="--c:${esc(v)}"></button>`).join('')}<button class="pj-sw none${cur.bg ? '' : ' on'}" data-bg="none" aria-label="No fill"></button></div>`) : ''}
       ${edit ? g('Type', `${cur.hsize ? stepper('hsize', 'Heading', cur.hsize) : ''}${['heading', 'body'].map(r => `<label class="pj-f row"><span>${r === 'heading' ? 'Heading' : 'Body'}</span><select data-font="${r}" aria-label="${r === 'heading' ? 'Heading' : 'Body'} font, every page">${[...new Set([th.fonts?.[r], ...sc.fonts].filter(Boolean))].map(f => `<option${f === th.fonts?.[r] ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>`).join('')}`) : ''}
       ${edit ? g('Spacing', `${stepper('pad', 'Padding', px(cur.py))}${cur.gap != null ? stepper('gap', 'Gap', px(cur.gap)) : ''}${cur.radius != null ? `<label class="pj-f row"><span>Corners</span><select data-radius aria-label="Corners">${sc.radius.map(r => `<option value="${r}"${r === (cur.radius || '') ? ' selected' : ''}>${r === 'theme' ? 'Theme' : r || 'base'}</option>`).join('')}</select></label>` : ''}`) : ''}
-      ${edit && l.gens.length ? g('Pictures', l.gens.map((p, i) => `<div class="pj-pic" data-pic="${i}">${p.src ? `<img src="${esc(p.src.startsWith('data:') ? p.src : base() + p.src)}" alt="">` : `<span class="blank">${ic('image', 20)}</span>`}<textarea rows="2" aria-label="What the picture shows">${esc(p.gen)}</textarea><button class="btn ghost" data-paint="${i}"${p.busy ? ' disabled' : ''}>${ic('image', 15)}${p.busy ? 'Painting' : 'Paint'}</button></div>`).join('')) : ''}
+      ${edit && l.gens.length ? g('Pictures', l.gens.map((p, i) => `<div class="pj-pic" data-pic="${i}">${p.src ? `<img src="${esc(p.src.startsWith('data:') ? p.src : base() + p.src)}" alt="">` : standinOf(p.gen) ? `<img class="sb" src="${esc(standinOf(p.gen).url)}" alt="">` : `<span class="blank">${ic('image', 20)}</span>`}<textarea rows="2" aria-label="What the picture shows">${esc(p.gen)}</textarea>${!p.src && standinOf(p.gen) ? `<small class="pj-credit">Stand-in · ${esc(standinOf(p.gen).credit || 'from an earlier build')}</small>` : ''}<button class="btn ghost" data-paint="${i}"${p.busy ? ' disabled' : ''}>${ic('image', 15)}${p.busy ? 'Painting' : 'Paint'}</button></div>`).join('')) : ''}
       <div class="btns">${edit ? `<button class="btn ghost" data-act="code">${ic('code', 15)}Code</button>` : ''}<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button></div>
       ${edit ? `<form class="pj-ask pj-lask" autocomplete="off"><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew about ${esc(l.role)}" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>` : ''}`
   }
