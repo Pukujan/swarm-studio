@@ -982,7 +982,7 @@ function focusPage(id) {
 
 function setAuto(v) {
   cam.auto = v
-  els.camHint.textContent = v ? 'camera: auto (follows agents)' : 'camera: manual · double-click for auto'
+  els.camHint.setAttribute('aria-pressed', String(v))
   els.camHint.classList.toggle('auto', v)
   cam.nextFit = 0
 }
@@ -3199,7 +3199,7 @@ function renderVideo() {
   const liveOn = video.busy && /render|assembl|mixing/.test(video.stage || '')
   if (liveOn && !video.liveAt) video.liveAt = Date.now()
   if (!video.busy) video.liveAt = 0
-  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message, video.pick, video.cuts.length, liveOn])
+  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message, video.pick, video.cuts.length, liveOn, !!video.min])
   if (el.dataset.sig === sig) {
     const bar = el.querySelector('.vbar i'), txt = el.querySelector('.vstage')
     if (bar) bar.style.width = `${Math.max(3, video.pct)}%`
@@ -3222,8 +3222,11 @@ function renderVideo() {
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
         : `<div class="vstage">A short promo of this build: the planner writes the storyboard and a voiceover from your pages and pictures, HyperFrames renders it in your theme, and Kokoro reads it over music made for it, all on this machine.</div>${opts}<div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
-  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><button class="vclose" aria-label="Close">${ico('x')}</button></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
+  // minimized: only the title and the progress, so the canvas and the crew stay in view
+  el.classList.toggle('min', !!video.min && !document.body.classList.contains('view-video'))
+  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><span class="vhead-acts"><button class="vmin" aria-label="${video.min ? 'Expand' : 'Minimize'}" aria-expanded="${!video.min}">${ico(video.min ? 'up' : 'minus')}</button><button class="vclose" aria-label="Close">${ico('x')}</button></span></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
   el.querySelector('.vclose').onclick = () => toggleVideo(false)
+  el.querySelector('.vmin').onclick = e => { e.stopPropagation(); video.min = !video.min; renderVideo() }
   const again = el.querySelector('.vagain')
   if (again) again.onclick = () => makeVideo()
   const vid = el.querySelector('video')

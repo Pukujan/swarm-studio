@@ -24,7 +24,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
-    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, tool: 'move', thumbs: new Map(),
+    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: store.get('project.follow', true), followSig: '', tool: 'move', thumbs: new Map(),
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), tick: 0
   }
 
@@ -48,6 +48,7 @@ export function makeProject({ sw, C, root }) {
       <button class="ib pj-files-btn" data-tool="files" aria-label="Files" aria-expanded="false">${ic('folder')}</button>
       <button class="ib on" data-tool="move" aria-label="Move">${ic('move')}</button>
       <button class="ib" data-tool="frame" aria-label="Frame all">${ic('frame')}</button>
+      <button class="ib pj-follow" data-tool="follow" aria-label="Follow the crew" aria-pressed="true" hidden>${ic('users')}</button>
       <button class="ib" data-tool="text" aria-label="New page">${ic('type')}</button>
       <button class="ib" data-tool="image" aria-label="Upload files">${ic('image')}</button>
       <button class="ib" data-tool="comment" aria-label="Chat">${ic('msg')}</button>
@@ -570,12 +571,13 @@ export function makeProject({ sw, C, root }) {
       const px = pinch.mx - r.left, py = pinch.my - r.top
       P.cam = { k, x: px - (px - pinch.cx) * k / pinch.k + ((a.x + b.x) / 2 - pinch.mx), y: py - (py - pinch.cy) * k / pinch.k + ((a.y + b.y) / 2 - pinch.my) }
       applyCam()
+      setFollow(false)
       return
     }
     if (!drag) return
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y
     if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true
-    if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(); stage.classList.add('panning') }
+    if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(); stage.classList.add('panning'); setFollow(false) }
   })
   const endDrag = e => {
     touches.delete(e.pointerId)
@@ -595,6 +597,7 @@ export function makeProject({ sw, C, root }) {
       P.cam.x = px - (px - P.cam.x) * k / P.cam.k; P.cam.y = py - (py - P.cam.y) * k / P.cam.k; P.cam.k = k
     } else { P.cam.x -= e.deltaX; P.cam.y -= e.deltaY }
     applyCam()
+    setFollow(false)
   }, { passive: false })
 
   // ---------- selecting and opening
@@ -885,7 +888,8 @@ export function makeProject({ sw, C, root }) {
     if (!b) return
     const t = b.dataset.tool
     if (t === 'files') return sheet(!root.classList.contains('files-on'))
-    if (t === 'frame') return frameAll()
+    if (t === 'frame') { setFollow(false); return frameAll() }
+    if (t === 'follow') return setFollow(!P.follow)
     if (t === 'text') return newPage()
     if (t === 'image') return hosted() ? null : fileIn.click()
     if (t === 'comment') return C.chat(!document.body.classList.contains('cosmos-chat'))
@@ -953,8 +957,22 @@ export function makeProject({ sw, C, root }) {
     return out
   }
   const working = () => !!P.board?.live || jobs().size > 0
+  // Follow: while the crew work, the camera keeps what they are on in view. Panning, scrolling or
+  // pinching hands the camera back to you; the Follow button (shown only while they work) takes it again.
+  function setFollow(on) {
+    if (P.follow === on) return
+    P.follow = on
+    P.followSig = ''
+    store.set('project.follow', on)
+    const b = root.querySelector('.pj-follow')
+    b?.setAttribute('aria-pressed', String(on))
+    b?.classList.toggle('on', on)
+    if (on) placeCrew()
+  }
   function crewAtWork() {
-    if (!working()) { curEl.innerHTML = ''; return }
+    const fb = root.querySelector('.pj-follow')
+    if (fb) { fb.hidden = !working(); fb.classList.toggle('on', P.follow); fb.setAttribute('aria-pressed', String(P.follow)) }
+    if (!working()) { curEl.innerHTML = ''; P.followSig = ''; return }
     if (!curEl.children.length) curEl.innerHTML = CREW.map(n => cursor(n)).join('')
     if (P.wander) { placeCrew(); return }
     const move = () => {
@@ -966,7 +984,13 @@ export function makeProject({ sw, C, root }) {
     P.wander = setTimeout(move, 50)
   }
   function placeCrew(roam = false) {
-    const abs = [...world.querySelectorAll('.ab')], s = stage.getBoundingClientRect(), js = jobs(), live = !!P.board?.live
+    const abs = [...world.querySelectorAll('.ab')], js = jobs(), live = !!P.board?.live
+    // where the work is: the pictures and the page in review, else the newest page of a live build
+    const busy = [...new Set([...js.values()].flat())].map(q => world.querySelector(q)).filter(Boolean)
+    const pages = abs.filter(a => a.dataset.key?.startsWith('page:'))
+    const focus = busy.length ? busy : live ? (pages.length ? pages : abs).slice(-1) : []
+    // each cursor's artboard and spot on it, in world units (from layout, so a camera still easing doesn't skew it)
+    const spots = []
     for (const c of curEl.children) {
       const mine = js.get(c.dataset.n)
       let a = null, fx = 0.2 + Math.random() * 0.6, fy = 0.2 + Math.random() * 0.6
@@ -974,14 +998,40 @@ export function makeProject({ sw, C, root }) {
         a = world.querySelector(mine[Math.floor(P.tick / 2) % mine.length])
         if (c.dataset.n === REVIEWER && a) { fx = 0.7; fy = scanAt() }
         else { fx = 0.62; fy = 0.58 }
-      } else if (live && roam) a = abs[Math.floor(Math.random() * abs.length)]
-      else if (!live) { c.style.opacity = '0'; continue }
+      } else if (live && roam) {
+        // following, the others gather where the camera is; otherwise they wander the whole canvas
+        const pool = P.follow && focus.length ? focus : abs
+        a = pool[Math.floor(Math.random() * pool.length)]
+      } else if (!live) { c.style.opacity = '0'; continue }
       if (!a) continue
-      c.style.opacity = ''
-      const r = a.getBoundingClientRect()
-      c.style.left = `${r.left - s.left + r.width * fx}px`
-      c.style.top = `${r.top - s.top + Math.min(r.height * fy, r.height - 6)}px`
+      const r = worldBox(a)
+      spots.push([c, r.x + r.w * fx, r.y + Math.min(r.h * fy, r.h - 6)])
     }
+    if (P.follow && focus.length) {
+      const sig = focus.map(a => a.dataset.key).join('|')
+      if (sig !== P.followSig) {
+        const bs = focus.map(worldBox).filter(b => b.w)
+        if (bs.length) {
+          P.followSig = sig
+          const x = Math.min(...bs.map(b => b.x)), y = Math.min(...bs.map(b => b.y))
+          const b = { x, y, w: Math.max(...bs.map(b => b.x + b.w)) - x, h: Math.max(...bs.map(b => b.y + b.h)) - y }
+          // a long page: its top, at a readable size
+          if (b.h > b.w * 1.6) b.h = b.w * 1.6
+          fit(b, 1.25, true)
+        }
+      }
+    }
+    for (const [c, x, y] of spots) {
+      c.style.opacity = ''
+      c.style.left = `${world.offsetLeft + P.cam.x + x * P.cam.k}px`
+      c.style.top = `${world.offsetTop + P.cam.y + y * P.cam.k}px`
+    }
+  }
+  // an element's box in world units, from layout (offsets up to the world), not from the screen
+  function worldBox(el) {
+    let x = 0, y = 0, e = el
+    while (e && e !== world) { x += e.offsetLeft; y += e.offsetTop; e = e.offsetParent }
+    return e === world ? { x, y, w: el.offsetWidth, h: el.offsetHeight } : { x: 0, y: 0, w: 0, h: 0 }
   }
   // where the review's scan line is on its page, 0..1 (it sweeps down every four seconds)
   const scanAt = () => ((Date.now() / 4000) % 1) * 0.9 + 0.05
