@@ -40,6 +40,19 @@ async function launch(chromium) {
   throw last
 }
 
+// The screenshot is one flat colour: almost every sampled pixel is within a few levels of the
+// most common one. Decoded by the page itself, so no image library is needed.
+async function blank(page, png) {
+  return page.evaluate(async b64 => {
+    const img = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob())
+    const c = new OffscreenCanvas(160, 100), x = c.getContext('2d')
+    x.drawImage(img, 0, 0, 160, 100)
+    const d = x.getImageData(0, 0, 160, 100).data, n = d.length / 4, counts = new Map()
+    for (let i = 0; i < d.length; i += 4) { const k = (d[i] >> 3) << 10 | (d[i + 1] >> 3) << 5 | (d[i + 2] >> 3); counts.set(k, (counts.get(k) || 0) + 1) }
+    return Math.max(...counts.values()) / n > 0.985
+  }, png.toString('base64')).catch(() => false)
+}
+
 // { ok, skipped?, problem?, seconds } — `problem` is one sentence for a fix turn
 // shot: a file to save the title screen to (the game's cover), as a JPEG
 export async function playtest(url, { seconds = 4, timeout = 30000, shot = null } = {}) {
@@ -47,20 +60,32 @@ export async function playtest(url, { seconds = 4, timeout = 30000, shot = null 
   if (!pw) return { ok: true, skipped: 'no browser for the play test' }
   let browser
   try { browser = await launch(pw.chromium) } catch (e) { return { ok: true, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
-  const errors = []
+  const errors = [], blocked = []
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
     page.on('pageerror', e => errors.push(String(e.message).slice(0, 200)))
-    await page.goto(url, { waitUntil: 'load', timeout })
-    const canvas = await page.waitForSelector('canvas', { timeout: 15000 }).catch(() => null)
-    if (!canvas) return { ok: false, problem: `No game canvas appeared within 15 s of opening the page.${errors.length ? ` Errors: ${errors.slice(0, 2).join(' | ')}` : ''}` }
+    page.on('console', m => {
+      if (m.type() !== 'error') return
+      const t = m.text()
+      if (/^Uncaught/.test(t)) errors.push(t.slice(0, 200))
+      else if (/CORS|SecurityError|Failed to load module|localStorage|sessionStorage|indexedDB/i.test(t)) blocked.push(t.slice(0, 200))
+    })
+    // Hermes shows the Studio, and so the game, in a sandboxed frame (scripts only, origin null):
+    // play it the same way, so a game that only works in a plain tab fails here too
+    await page.setContent(`<!doctype html><body style="margin:0;background:#000"><iframe sandbox="allow-scripts allow-forms" src="${String(url).replace(/"/g, '&quot;')}" style="display:block;width:100vw;height:100vh;border:0"></iframe>`, { waitUntil: 'load', timeout })
+    const g = await (await page.$('iframe')).contentFrame()
+    const why = () => [...new Set([...errors, ...blocked])].slice(0, 3).join(' | ')
+    const canvas = await g.waitForSelector('canvas', { timeout: 15000 }).catch(() => null)
+    if (!canvas) return { ok: false, problem: `No game canvas appeared within 15 s of opening the page inside a sandboxed frame (allow-scripts, no same origin), the way Hermes shows it.${why() ? ` Errors: ${why()}` : ''}${blocked.length ? ' Storage (localStorage, sessionStorage, IndexedDB) throws in a sandboxed frame: wrap every use in try/catch and fall back to memory.' : ''}` }
     await page.waitForTimeout(1200)
+    const png = await page.screenshot({ type: 'png' }).catch(() => null)
+    if (png && await blank(page, png)) return { ok: false, problem: `The game's screen is blank: one flat colour about a second after it opened, with no title, text or scene drawn.${why() ? ` Errors: ${why()}` : ''} Make the title screen draw straight away (title, start button, a scene behind), and check the canvas is sized to its container and the render loop runs.` }
     if (shot) await page.screenshot({ path: shot, type: 'jpeg', quality: 72 }).catch(() => {})
-    const textOf = () => page.evaluate(() => document.body.innerText || '')
+    const textOf = () => g.evaluate(() => document.body.innerText || '')
     const before = await textOf()
 
     // the start control: a visible button or link that says play/start/begin, else the canvas
-    const buttons = await page.$$('button, [role=button], a')
+    const buttons = await g.$$('button, [role=button], a')
     let started = false
     for (const b of buttons) {
       const label = ((await b.innerText().catch(() => '')) || '').trim()
@@ -88,7 +113,7 @@ export async function playtest(url, { seconds = 4, timeout = 30000, shot = null 
       if (m && ENDED.test(before) && now !== before && i > 2) { endedAt = Date.now(); break }
     }
     const lasted = ((endedAt || Date.now()) - t0) / 1000
-    if (errors.length) return { ok: false, seconds: lasted, problem: `The game threw errors while playing: ${errors.slice(0, 3).join(' | ')}` }
+    if (errors.length) return { ok: false, seconds: lasted, problem: `The game threw errors while playing: ${why()}` }
     if (endedAt && lasted < 2.5) return { ok: false, seconds: lasted, problem: `The run ends about ${lasted.toFixed(1)} s after pressing start, before the player can do anything (the end screen appears with nothing achieved). Find why a fresh run is lost straight away: the player spawning off a platform, a camera or bounds check that already counts as a fall, a timer or health that starts at zero, or a lose condition checked before the first frame. Fix it so a new run starts safely and lasts until the player makes a mistake.` }
     return { ok: true, seconds: lasted, ended: !!endedAt }
   } catch (e) {
