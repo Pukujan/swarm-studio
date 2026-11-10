@@ -1,5 +1,5 @@
 // A project: one canvas (docs/ux/PATTERNS.md). The top bar carries the breadcrumb (Projects ›
-// name ▾), the crew, Play and Publish. The left panel lists every file the build made, by kind
+// name ▾), Play and Publish. The left panel lists every file the build made, by kind
 // (Files), or its pages and sections (Layers). The stage shows the same files as artboards in
 // sections on one dotted canvas; selecting one opens the inspector, double-clicking opens its
 // room. A selected page's sections can be picked too (a click on the page, or the Layers panel):
@@ -57,17 +57,12 @@ export function makeProject({ sw, C, root }) {
   const listEl = $('.pj-list'), layersEl = $('.pj-layers'), stage = $('.pj-stage'), world = $('.pj-world'), insp = $('.pj-insp'), curEl = $('.pj-cursors')
   const ask = $('.pj-ask'), input = ask.q, fileIn = $('.pj-file')
 
-  // ---------- the top bar: Projects › name ▾ and the crew
+  // ---------- the top bar: Projects › name ▾ (the crew show as named cursors on the board while they work)
   const crumb = document.createElement('div')
   crumb.className = 'pj-crumb'
   crumb.innerHTML = `<button class="pj-up">Projects</button>${ic('chr', 14)}<button class="pj-name" aria-haspopup="menu"><b></b>${ic('chd', 14)}</button>`
-  const crew = document.createElement('div')
-  crew.className = 'pj-crew'
-  crew.setAttribute('aria-label', 'The crew')
-  crew.innerHTML = CREW.map(n => `<span aria-label="${n}">${n[0]}</span>`).join('')
   const bar = document.querySelector('.topbar')
   bar?.querySelector('.spacer')?.before(crumb)
-  bar?.querySelector('#play-btn')?.before(crew)
   crumb.querySelector('.pj-up').onclick = () => C.go('home')
   crumb.querySelector('.pj-name').onclick = e => projectMenu(e.currentTarget)
 

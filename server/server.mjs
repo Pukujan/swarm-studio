@@ -26,7 +26,7 @@ import { speak, music, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
-import { makeProjects } from './projects.mjs'
+import { makeProjects, stateOf } from './projects.mjs'
 import { autoJob } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
 import { runBoard as boardOf } from './board.mjs'
@@ -394,11 +394,14 @@ function runCard(id) {
       game: events.some(e => e.type === 'game:spec') || pages.some(p => /\b(play|game|arcade|trial)\b/i.test(`${p.id} ${p.title}`)),
       app: events.some(e => e.type === 'app:ready' || e.type === 'app:done'),
       planned: events.filter(e => e.type === 'layer:plan').length,
+      // the last app build's outcome (as the app jobs read it): working (or stopped), built or failed
+      build: ({ 'app:start': 'working', 'app:done': 'built', 'app:failed': 'failed' })[events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))?.type] || null,
+      deployed: events.findLast(e => e.type === 'app:deployed' && e.url)?.url || null,
     } }
     cards.set(id, card)
   }
   const meta = runMeta(id)
-  return {
+  const out = {
     ...card.info,
     autoTitle: card.info.title,
     title: meta.title || card.info.title,
@@ -415,6 +418,23 @@ function runCard(id) {
     // the cover: its hero picture, else a snapshot of its first page (saved by the canvas), else a film frame
     cover: card.info.cover || snapOf(id) || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
   }
+  out.state = stateOf(out)
+  return out
+}
+
+// a picture's own name: its page and section in words ("perks-and-partners-hero" on Perks & Partners →
+// "Perks & Partners hero"), else picture plus page; the home page says Home, not the build's name
+function pieceName(e, pageTitle) {
+  const words = s => String(s || '').replace(/[-_]+/g, ' ').trim()
+  const pid = String(e.page || '')
+  // a long page title often carries the build's name ("Tidebreak — Press Kit"): the page's short id says it better
+  const short = t => t && t.length <= 22 && !/ [—–|:] /.test(t) ? t : null
+  const page = /^(home|index)$/i.test(pid) ? 'Home' : short(pageTitle[pid]) || (w => w.charAt(0).toUpperCase() + w.slice(1))(words(pid))
+  const rest = words(pid && String(e.layer || '').startsWith(`${pid}-`) ? String(e.layer).slice(pid.length + 1) : e.layer)
+  if (!rest) return page ? `Picture, ${page}` : 'Picture'
+  if (!page || pid === '*') return rest.charAt(0).toUpperCase() + rest.slice(1)
+  // "Leaderboard leaderboard hero" says the page once
+  return rest.toLowerCase().startsWith(`${page.toLowerCase()} `) ? `${page}${rest.slice(page.length)}` : `${page} ${rest}`
 }
 
 // the saved first-page snapshot, versioned so a newer one is not served from cache
@@ -1079,8 +1099,10 @@ const server = createServer((req, res) => {
     const out = []
     for (const p of projects.list().projects.filter(x => !x.trashed)) {
       for (const v of p.versions) {
-        for (const e of (readEvents(v.id) || []).filter(e => e.type === 'image' && e.src)) out.push({ project: p.id, run: v.id, kind: 'art', name: e.layer || 'picture', src: e.src, t: e.t })
-        if (existsSync(join(runsDir, v.id, 'video', 'promo.mp4'))) out.push({ project: p.id, run: v.id, kind: 'film', name: 'Promo', src: `/video/${v.id}/promo.mp4`, poster: existsSync(join(runsDir, v.id, 'video', 'p1.webp')) ? `/video/${v.id}/live/p1.webp` : null, t: v.updated })
+        const events = readEvents(v.id) || []
+        const pageTitle = Object.fromEntries(events.filter(e => e.type === 'page').map(e => [e.id, e.title]))
+        for (const e of events.filter(e => e.type === 'image' && e.src)) out.push({ project: p.id, run: v.id, kind: 'art', name: pieceName(e, pageTitle), page: pageTitle[e.page] || null, src: e.src, t: e.t })
+        if (existsSync(join(runsDir, v.id, 'video', 'promo.mp4'))) out.push({ project: p.id, run: v.id, kind: 'film', name: 'Promo film', src: `/video/${v.id}/promo.mp4`, poster: existsSync(join(runsDir, v.id, 'video', 'p1.webp')) ? `/video/${v.id}/live/p1.webp` : null, t: v.updated })
       }
       for (const u of projects.uploadsOf(p.id)) out.push({ project: p.id, kind: 'upload', name: u.name, src: u.src, type: u.type, t: u.t })
     }

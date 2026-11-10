@@ -165,3 +165,36 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .hm-kind { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2, transparent); color: var(--text); font: 600 13px var(--label, inherit); letter-spacing: .04em; text-transform: uppercase; cursor: pointer; flex: none; }
 .hm-kind:hover, .hm-kind[aria-expanded="true"] { border-color: var(--line-2); }
 @media (max-width: 520px) { .hm-kind span { display: none; } }
+
+/* a card's state: what it is and how far it got, one quiet line under the title */
+.home .card .st { display: block; margin-top: 3px; color: var(--muted); font: 12px/1.3 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-body.list .card .st { flex: 0 1 auto; max-width: 40%; margin: 0; }
+/* the filter in use, beside the filter button: its name and a way out */
+.hm-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px 0 11px; border: 1px solid var(--line-2); border-radius: 8px; background: transparent; color: var(--text); font: 12px var(--mono); cursor: pointer; white-space: nowrap; }
+.hm-chip svg.i { width: 13px; height: 13px; color: var(--muted); }
+.hm-chip:hover svg.i { color: var(--text); }
+.hm-filter.on { color: var(--text); background: var(--deep); }
+
+/* Assets, grouped: a folder line, then each project's heading over its own tiles */
+.hm-body.assets { display: block; }
+.as-folder { display: flex; align-items: center; gap: 8px; margin: 30px 0 4px; color: var(--muted); font: 600 13px var(--label, inherit); letter-spacing: .08em; text-transform: uppercase; }
+.as-folder:first-child { margin-top: 4px; }
+.as-group { margin-bottom: 30px; }
+.as-head { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 0 12px; padding: 4px 0; border: 0; background: none; color: var(--text); cursor: pointer; }
+.as-head b { font: 800 20px/1.1 var(--display); text-transform: uppercase; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-head svg.i { flex: none; color: var(--muted); transition: transform .12s; }
+.as-head:hover svg.i, .as-head:focus-visible svg.i { color: var(--text); transform: translateX(2px); }
+.as-tiles.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 18px 16px; }
+.as-tiles.list { display: flex; flex-direction: column; gap: 2px; }
+.as-tiles.list .card { display: flex; align-items: center; gap: 16px; padding: 6px 8px; border-radius: 10px; }
+.as-tiles.list .card:hover { background: var(--deep); }
+.as-tiles.list .card .cv { width: 96px; flex: none; border-radius: 8px; }
+.as-tiles.list .card .cv .kinds { display: none; }
+.as-tiles.list .card .nm { flex: 1; margin: 0; }
+.home .card.asset .nm b { font: 600 13px/1.3 var(--font); text-transform: none; letter-spacing: 0; }
+@media (max-width: 760px) {
+  .as-tiles.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+  .as-head b { font-size: 17px; }
+  .hm-chip { height: 28px; padding: 0 6px 0 9px; }
+}
+@media (max-width: 760px) { .home .card .st .h { display: none; } }

@@ -233,6 +233,28 @@ async function cardPick(page, w) {
   await page.evaluate(() => window.swarmCosmos.go('home')); await wait(600)
 }
 
+// Projects: each card says what it is and how far it got; a filter by kind or status; Assets by project
+async function homeState(page, w) {
+  const st = await page.evaluate(() => [...document.querySelectorAll('.hm-body .card')].map(c => c.querySelector('.st')?.textContent || ''))
+  const shape = /^(Website|App|Game|Video) · (Draft|Building|Designed|App built|App failed|Game built|Game failed|Live)\b/
+  ok(st.length > 0 && st.every(t => shape.test(t)), `Cards @${w}: each card has a one-line kind · status (${st.slice(0, 3).join(' | ')})`)
+  await page.evaluate(() => document.querySelector('.hm-filter').click()); await wait(300)
+  const opts = await page.evaluate(() => [...document.querySelectorAll('.hm-menu button')].map(b => b.textContent.trim()))
+  ok(opts[0] === 'Everything' && opts.length > 2, `Cards @${w}: the filter lists kinds and states (${opts.join(', ')})`)
+  const pick = opts.find(o => o !== 'Everything')
+  await page.evaluate(t => [...document.querySelectorAll('.hm-menu button')].find(b => b.textContent.trim() === t).click(), pick); await wait(300)
+  const kept = await page.evaluate(() => [...document.querySelectorAll('.hm-body .card .st')].map(e => e.textContent))
+  ok(kept.length > 0 && kept.every(t => t.includes(pick)) && await page.isVisible('.hm-chip'), `Cards @${w}: filtering by ${pick} keeps only those, with a chip to clear it (${kept.length})`)
+  await page.click('.hm-chip'); await wait(300)
+  ok(!(await page.$('.hm-chip')), `Cards @${w}: the chip clears the filter`)
+  await page.evaluate(() => document.querySelector('[data-v="assets"]').click()); await wait(1500)
+  const as = await page.evaluate(() => [...document.querySelectorAll('.as-group')].map(g => ({ head: g.querySelector('.as-head b').textContent, names: [...g.querySelectorAll('.card.asset .nm b')].map(b => b.textContent) })))
+  ok(as.length > 0 && as.every(g => g.names.length && g.names.every(n => n && n.toLowerCase() !== g.head.toLowerCase())), `Assets @${w}: grouped by project, each tile with its own name (${as.length} groups; ${as[0]?.names.slice(0, 2).join(', ')})`)
+  await page.evaluate(() => document.querySelector('.as-head').click()); await wait(1500)
+  ok((await mode(page)).mode === 'project', `Assets @${w}: a project's heading opens it`)
+  await page.evaluate(() => window.swarmCosmos.go('home')); await wait(600)
+}
+
 async function home(page, w) {
   // from each view: the logo lands on Projects
   const views = [
@@ -290,6 +312,7 @@ try {
     await overlaps(page, `Projects @${w}`)
     if (w === 1280 || w === 768) await shot(page, `projects-${w}.png`)
     await cardPick(page, w)
+    await homeState(page, w)
 
     await fresh(page, `/?run=${encodeURIComponent(RUN)}`)
     ok((await mode(page)).mode === 'project', `Project @${w}: ?run= opens the project`)
@@ -307,6 +330,17 @@ try {
       if (await page.isVisible('#more-menu')) { await page.keyboard.press('Escape'); await wait(200) }
       await page.evaluate(() => document.querySelector('#more-btn').click()); await wait(300)
       await tips(page, `☰ menu @${w}`)
+      // in a project, ☰ holds only what works there: the Canvas room's panels stay in the room
+      const panels = await page.evaluate(() => [...document.querySelectorAll('#more-menu [data-panel]')].filter(b => b.offsetParent).map(b => b.textContent.trim()))
+      ok(!panels.length, `☰ @${w}: no Design, Planner or Agents in a project (${panels.join(', ')})`)
+      ok(!(await page.$('.pj-crew')), `Project @${w}: no crew letter circles in the top bar`)
+      // Light/Dark switches the colours in place: the project stays open
+      const t0 = await page.evaluate(() => document.documentElement.dataset.theme || '')
+      await page.evaluate(() => document.querySelector('#theme-btn').click()); await wait(1200)
+      const after = await page.evaluate(() => ({ t: document.documentElement.dataset.theme, home: document.body.classList.contains('cosmos-home') }))
+      ok(after.t !== t0 && !after.home, `☰ @${w}: Light/Dark switches in place and the project stays open (${t0 || 'system'} → ${after.t})`)
+      await page.evaluate(() => document.querySelector('#theme-btn').click()); await wait(400)
+      await page.evaluate(t => { if (!t) { delete document.documentElement.dataset.theme; try { localStorage.removeItem('swarm-theme') } catch {} } }, t0)
       await page.keyboard.press('Escape'); await wait(200)
     }
     await modeMenu(page, w)
