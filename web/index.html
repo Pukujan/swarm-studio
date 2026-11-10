@@ -33,8 +33,9 @@
       <button class="toggle" id="publish-btn" aria-label="Publish" aria-haspopup="true" disabled><i data-i="rocket"></i><span class="t">Publish</span><i data-i="chevron-down" class="caret"></i></button>
       <div class="more-menu pub-menu" id="pub-menu" hidden>
         <div class="menu-title">Put it <em>online</em></div>
-        <button class="pub-opt" data-pub="site"><b><i data-i="globe"></i>Website</b><small>The designed pages, no server. GitHub Pages, Vercel, Cloudflare or this computer.</small></button>
-        <button class="pub-opt" data-pub="app"><b><i data-i="server"></i>Working app</b><small>The site with its server: orders save, /admin works. Live on Vercel.</small><em class="pub-why"></em></button>
+        <div class="pub-live" hidden><a href="#" target="_blank" rel="noopener"></a><button class="pub-copy">Copy</button></div>
+        <button class="pub-opt" data-pub="site"><b><i data-i="globe"></i>Website</b><small>Pages only</small></button>
+        <button class="pub-opt" data-pub="app"><b><i data-i="server"></i>Working app</b><small>With its server</small><em class="pub-why"></em></button>
       </div>
     </div>
     <div class="more">

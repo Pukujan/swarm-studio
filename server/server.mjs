@@ -836,9 +836,9 @@ async function publish(id, input = {}) {
     : publishGitHub({ dir, name: out.name, title, onStage })
   go.then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
     .catch(err => {
-      // the host didn't work out: the site is still hosted here
-      Object.assign(job, { target: 'local', message: String(err.message || err).slice(0, 300) })
-      finish(local, { fallback: job.message, tried: target })
+      // said out loud, never swapped for the local link: the person asked for a public one
+      Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
+      send('publish:failed', { target, message: job.message, ms: Date.now() - job.t })
     })
   return job
 }
@@ -1203,8 +1203,11 @@ const server = createServer((req, res) => {
     const id = runPublish[1]
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method !== 'POST') {
-      const last = (readEvents(id) || []).filter(e => e.type === 'publish:done').pop()
-      return reply(200, publishes.get(id) || (last ? { state: 'done', ...last } : { state: 'none' }))
+      // what is live for this build, by host, from its saved events: it survives a restart
+      const events = readEvents(id) || [], live = {}
+      for (const e of events) if (e.type === 'publish:done' && e.url) live[e.target] = e.url
+      const last = events.filter(e => e.type === 'publish:done' || e.type === 'publish:failed').pop()
+      return reply(200, { ...(publishes.get(id) || (last ? { state: last.type === 'publish:failed' ? 'failed' : 'done', ...last } : { state: 'none' })), live })
     }
     let body = ''
     req.on('data', c => { body += c; if (body.length > 8e6) req.destroy() })
