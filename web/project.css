@@ -254,3 +254,8 @@ body.cosmos-project .pj-now:hover { border-color: var(--text); }
 .ab .ab-work.ind i { width: 30%; animation: ab-work 1.6s ease-in-out infinite; }
 @keyframes ab-work { from { transform: translateX(-100%) } to { transform: translateX(340%) } }
 @media (prefers-reduced-motion: reduce) { .ab .ab-work.ind i { animation: none; width: 100%; opacity: .5 } }
+
+/* a game's name on its card, over a shade so it reads on any cover */
+.ab .ab-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 10px; font-size: 13px; font-weight: 700; color: #fff; background: linear-gradient(transparent, rgb(0 0 0 / .6)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.ab .ab-work ~ .ab-cap { padding-bottom: 13px; }
+.pj-pitch { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }

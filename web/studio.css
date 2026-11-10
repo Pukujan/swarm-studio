@@ -39,7 +39,7 @@ body.cosmos-home .cbox, body.cosmos-project .cbox { display: none; }
 body.cosmos-home .appview, body.cosmos-project .appview { visibility: hidden; }
 
 /* in a station (Canvas, Video, App) a round button brings the chat column back */
-.cosmos-chatbtn { position: fixed; right: 14px; bottom: 14px; z-index: 64; display: none; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+.cosmos-chatbtn { position: fixed; left: 14px; bottom: 14px; z-index: 64; display: none; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
   background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--panel-edge); border-radius: 999px; color: var(--text); cursor: pointer;
   font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .cosmos-chatbtn img { width: 24px; height: 24px; border-radius: 50%; }

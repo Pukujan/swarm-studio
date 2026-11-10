@@ -4,7 +4,7 @@
 // App tab, so a studio that never builds an app never loads it.
 
 import { spawn, execFile, execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
@@ -211,7 +211,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     step({ kind: 'test', text: 'checking the game\'s links and play-testing it' })
     let links = linkProblem()
     if (links) step({ kind: 'test', text: 'the game links to a made-up web address', ok: false })
-    let t = await playtest(j.url)
+    // the title screen becomes the game's cover (img/snap.jpg, the run's snapshot)
+    const shot = join(runsDir, j.id, 'img', 'snap.jpg')
+    try { mkdirSync(join(runsDir, j.id, 'img'), { recursive: true }) } catch {}
+    let t = await playtest(j.url, { shot })
     if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
     else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s` })
     else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false })
