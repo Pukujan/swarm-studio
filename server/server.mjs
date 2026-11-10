@@ -893,6 +893,18 @@ async function paintGame(runId, spec, items, appDir, step) {
   mkdirSync(join(appDir, 'public', 'art'), { recursive: true })
   mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
   const done = new Map(), queue = [...items]
+  // a picture painted for this game before (a build stopped by a restart, a Try again)
+  // is kept with the run: it is used again, not painted and paid for again
+  const kept = (() => { try { return readdirSync(join(runsDir, runId, 'img')).filter(f => f.startsWith('game-')) } catch { return [] } })()
+  for (const it of [...queue]) {
+    const f = kept.find(k => k.replace(/\.[a-z]+$/i, '') === `game-${it.id}`)
+    if (!f) continue
+    const file = `art/${it.id}${extname(f)}`
+    copyFileSync(join(runsDir, runId, 'img', f), join(appDir, 'public', file))
+    done.set(it.id, { file, what: it.what, kind: it.kind })
+    queue.splice(queue.indexOf(it), 1)
+  }
+  if (done.size) step({ kind: 'setup', text: `using ${done.size} pictures painted before; painting ${queue.length}` })
   const worker = async () => {
     for (let it; (it = queue.shift());) {
       const r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title' }).catch(err => ({ ok: false, error: String(err.message || err) }))
@@ -1260,6 +1272,8 @@ const server = createServer((req, res) => {
         if (w) jobs.push({ project: p.id, head: (p.parts || {})[id] || id, run: id, title: p.title, cover: p.cover, ...w })
       }
     }
+    // an app or game still building that no project lists yet counts too, so a restart never cuts it off
+    for (const [id, a] of appsNow?.jobs || []) if (a.state === 'working' && !jobs.some(j => j.run === id)) jobs.push({ project: null, head: id, run: id, title: a.kind, cover: null, ...workOf(id) })
     return json(200, { jobs })
   }
   const runMetaPost = url.pathname.match(/^\/api\/runs\/([^/]+)\/meta$/)
