@@ -5595,11 +5595,30 @@ const hosted = BOOT.hosted && (() => {
     })
   }
 
+  // the Feed takes a poster of at most 2 MB: 640 px wide, the top of the page, as JPEG
+  function poster(src) {
+    return new Promise((ok, fail) => {
+      const img = new Image()
+      img.onload = () => {
+        const w = 640, k = w / img.naturalWidth, h = Math.min(Math.round(img.naturalHeight * k), 1600)
+        const c = document.createElement('canvas')
+        c.width = w; c.height = h
+        c.getContext('2d').drawImage(img, 0, 0, w, img.naturalHeight * k)
+        ok(c.toDataURL('image/jpeg', 0.8))
+      }
+      img.onerror = () => fail(new Error('the poster did not load'))
+      img.src = src
+    })
+  }
+
   async function postToFeed() {
     if (!finished() || posting) return
     posting = true; draw()
     try {
-      const shot = await snapFrame(S.frames[0], 0.5).catch(() => null)
+      // a resting page is frozen into a picture (its frame emptied), so that picture is the poster
+      const first = S.frames[0]
+      const raw = first?.frozen ? first.frozen.img.src : (await snapFrame(first, 0.5).catch(() => null))?.image
+      const shot = raw ? { image: await poster(raw).catch(() => null) } : null
       const run = shown()
       if (!shot?.image) return refuse({ title: 'Could not post', message: 'The canvas could not take a picture of the build. Try again.' })
       // the studio puts the pages online, then the Feed takes the card from this browser, as this guest
