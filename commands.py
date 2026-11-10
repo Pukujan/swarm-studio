@@ -392,6 +392,30 @@ def _dispatch(cmd: str, args: list[str]) -> str:
     return HELP
 
 
+def post_json(run_id: str, unlisted: bool = False) -> dict:
+    """The canvas's Post to Feed button: {ok, url, message} or {ok: False, connect?, message}."""
+    try:
+        r = _pick_run(run_id)
+        if not r:
+            return {"ok": False, "message": "No such build."}
+        return feed.post_result(r, [run_id] + (["--unlisted"] if unlisted else []), _export_zip)
+    except feed.FeedError as exc:
+        return {"ok": False, "connect": not feed.load().get("token"), "message": str(exc)}
+    except RuntimeError as exc:
+        return {"ok": False, "message": str(exc)}
+
+
+def connect_json() -> dict:
+    """Start (or check) Connect Hermes from the canvas: {connected, name?, code?, url?, message}."""
+    try:
+        msg = feed.connect([])
+    except feed.FeedError as exc:
+        return {"connected": False, "message": str(exc)}
+    cfg = feed.load()
+    p = cfg.get("pending") or {}
+    return {"connected": bool(cfg.get("token")), "name": cfg.get("name") or cfg.get("handle"), "code": p.get("userCode"), "url": p.get("url"), "message": msg}
+
+
 def _export_zip(run_id: str) -> str | None:
     """The build's export zip (static HTML, React project, ABA spec), made now so it matches the build."""
     out = _api(f"/api/runs/{run_id}/export", {}, timeout=120)

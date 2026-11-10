@@ -40,6 +40,7 @@ const store = {
 // Lucide line icons (ISC, lucide.dev; licence in web/brand/LICENSE-lucide.txt), only the ones the studio uses.
 // Emoji stay in chat and agent messages; the chrome uses these.
 const LUCIDE = {
+  "send":"<path d=\"M14.5 21.5a.5.5 0 00.9-.1L22 3.5a.5.5 0 00-.6-.6L3.6 9.6a.5.5 0 00-.1.9l7.4 3.2a2 2 0 011.1 1.1z\" /><path d=\"M21.9 2.1L11 13\" />",
   "sun":"<circle cx=\"12\" cy=\"12\" r=\"4\" /><path d=\"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41\" />",
   "moon":"<path d=\"M12 3a6 6 0 009 9 9 9 0 11-9-9z\" />",
   "minus":"<path d=\"M5 12h14\" />",
@@ -2551,11 +2552,11 @@ const PUB_STAGES = {
   cloudflare: { export: 'Exporting the pages', project: 'Setting up the Pages project', upload: 'Uploading the files', building: 'Cloudflare is going live' },
 }
 
-function pubPop(html) {
+function pubPop(html, title = 'Publish the <em>website</em>') {
   pub.el?.remove()
   pub.el = document.createElement('div')
   pub.el.className = 'export-pop publish-pop'
-  pub.el.innerHTML = `<div class="vhead pop-title"><span>Publish the <em>website</em></span><button class="vclose" aria-label="Close">${ico('x')}</button></div>${html}`
+  pub.el.innerHTML = `<div class="vhead pop-title"><span>${title}</span><button class="vclose" aria-label="Close">${ico('x')}</button></div>${html}`
   document.body.append(pub.el)
   pub.el.querySelector('.vclose').onclick = () => { pub.el.remove(); pub.el = null }
   closeable(pub.el, () => { pub.el?.remove(); pub.el = null }, { extra: ['#pub-menu', '.pubwrap'] })
@@ -2665,6 +2666,7 @@ const shortReason = m => {
 
 // The three states, always shown: publishing (the steps), live (the link, Copy, Open), failed (why, Retry).
 function pubShow() {
+  posted.alone = false
   if (pub.state === 'working') {
     const names = PUB_STAGES[pub.target]
     if (!names) return pubPop('<div class="pstage">Publishing…</div>')
@@ -2682,10 +2684,58 @@ function pubShow() {
   if (!url) return publishMenu()
   const el = pubPop(`<div class="pstate live"><b>Live</b><span>${esc(HOSTS[pub.liveTarget]?.label || '')}${pub.pending ? ' · going live' : ''}</span></div>
     <div class="plink"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(shortUrl(url))}</a></div>
-    <div class="vfoot"><button class="vagain pagain">Publish again</button><button class="vagain pcopy">Copy link</button><a class="vagain" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a></div>`)
+    <div class="vfoot"><button class="vagain pagain">Publish again</button><button class="vagain pcopy">Copy link</button><a class="vagain" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a></div>
+    ${feedRow()}`)
   el.querySelector('.pcopy').onclick = ev => copyText(url, ev.currentTarget, el.querySelector('.plink a'))
   el.querySelector('.pagain').onclick = () => publishMenu()
+  wireFeedRow(el)
   return el
+}
+
+// Post to Feed, under the Live link: Public (in the feed) or Unlisted (link only), one button.
+const posted = { runs: new Map(), busy: false, unlisted: false, note: '', connect: null, alone: false }
+function feedPop() {
+  posted.alone = true
+  const el = pubPop(feedRow(), 'Post to the <em>Feed</em>')
+  wireFeedRow(el)
+}
+const feedRefresh = () => (posted.alone ? feedPop() : pubShow())
+function feedRow() {
+  const run = shownRun(), done = posted.runs.get(run)
+  if (done) return `<div class="pfeed"><div class="pstate live"><b>In the Feed</b><span>${done.unlisted ? 'Unlisted' : 'Public'}</span></div><div class="plink"><a href="${esc(done.url)}" target="_blank" rel="noopener">${esc(shortUrl(done.url))}</a></div></div>`
+  if (posted.connect) return `<div class="pfeed"><div class="pstate"><b>Connect Hermes</b><span>${posted.connect.code ? esc(posted.connect.code) : ''}</span></div>
+    <div class="vfoot">${posted.connect.url ? `<a class="vagain" href="${esc(posted.connect.url)}" target="_blank" rel="noopener">Open ↗</a>` : ''}<button class="vagain pfpost">Post</button></div></div>`
+  return `<div class="pfeed"><div class="pseg" role="radiogroup" aria-label="Who can find it">
+      <button role="radio" aria-checked="${!posted.unlisted}" class="${posted.unlisted ? '' : 'on'}" data-v="public">Public</button>
+      <button role="radio" aria-checked="${posted.unlisted}" class="${posted.unlisted ? 'on' : ''}" data-v="unlisted">Unlisted</button></div>
+    <button class="ui-btn ui-btn-default pfpost" ${posted.busy ? 'disabled' : ''}>${posted.busy ? 'Posting…' : 'Post to Feed'}</button>
+    ${posted.note ? `<div class="pstate err"><span>${esc(shortReason(posted.note))}</span></div>` : ''}</div>`
+}
+function wireFeedRow(el) {
+  el.querySelectorAll('.pseg button').forEach(b => { b.onclick = () => { posted.unlisted = b.dataset.v === 'unlisted'; feedRefresh() } })
+  const go = el.querySelector('.pfpost')
+  if (go) go.onclick = postToFeedNow
+}
+async function postToFeedNow() {
+  const run = shownRun()
+  if (!run || posted.busy) return
+  Object.assign(posted, { busy: true, note: '' })
+  feedRefresh()
+  const json = { method: 'POST', headers: { 'content-type': 'application/json' } }
+  const post = () => api(`/api/runs/${encodeURIComponent(run)}/feed`, { ...json, body: JSON.stringify({ unlisted: posted.unlisted }) }).then(r => r.json()).catch(() => ({ ok: false }))
+  let out = await post()
+  if (!out.ok && out.connect) {
+    // not linked yet: start (or finish) Connect Hermes; once the code is approved, post straight away
+    const c = await api('/api/feed/connect', { ...json, body: '{}' }).then(r => r.json()).catch(() => ({}))
+    if (c.connected) out = await post()
+    else posted.connect = c
+  }
+  posted.busy = false
+  if (out.ok) {
+    posted.connect = null
+    posted.runs.set(run, { url: out.url, unlisted: !!out.unlisted || posted.unlisted })
+  } else if (!out.connect) posted.note = out.message || 'The Feed did not take it.'
+  feedRefresh()
 }
 
 async function publishNow(target = 'github') {
@@ -4601,6 +4651,7 @@ els.publishBtn.onclick = async e => {
 pubMenu.querySelector('.pub-copy').onclick = ev => { ev.stopPropagation(); copyText(liveUrl(), ev.currentTarget, pubMenu.querySelector('.pub-live a')) }
 for (const b of pubMenu.querySelectorAll('[data-pub]')) b.onclick = () => {
   closePub()
+  if (b.dataset.pub === 'feed') return feedPop()
   if (b.dataset.pub === 'site') return pub.state === 'failed' && pub.run === shownRun() ? pubShow() : publishMenu()
   if (view !== 'app') setView('app')
   if (appv.run !== shownRun()) resetApp(shownRun())

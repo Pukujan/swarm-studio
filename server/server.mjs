@@ -91,6 +91,16 @@ function listModels(role) {
   return modelLists.get(m.baseUrl)
 }
 
+// commands.py's JSON helpers, run once in Hermes's Python: {ok:false, message} when that fails
+const pyCommand = (call, timeout) => new Promise(resolve => {
+  if (!PY) return resolve({ ok: false, message: 'Start Swarm Studio from Hermes to post to the Feed.' })
+  const code = `import sys, json; sys.path.insert(0, ${JSON.stringify(root)}); import commands; print(json.dumps(commands.${call}))`
+  execFile(PY, ['-c', code], { env: pyEnv, cwd: root, timeout, maxBuffer: 1 << 20 }, (err, stdout) => {
+    const line = String(stdout || '').trim().split('\n').pop()
+    try { resolve(JSON.parse(line)) } catch { resolve({ ok: false, message: err ? String(err.message || err).split('\n')[0] : 'The Feed did not answer.' }) }
+  })
+})
+
 // ---------- images, from Hermes's own image providers (a Codex login, xAI, FAL…)
 // imagegen.py runs in Hermes's Python, so the provider tokens never reach this server.
 const PY = process.env.SWARM_HERMES_PY || ''
@@ -1011,6 +1021,15 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/projects') {
     if (req.method !== 'POST') return json(200, projects.list())
     return readJson(1e5, input => json(200, projects.op(input)))
+  }
+  // Post to Feed from the canvas, and Connect Hermes when it is not connected yet.
+  // feed.py does the work in Hermes's Python, so the feed token never reaches this server.
+  const feedPost = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/feed$/)
+  if ((feedPost || url.pathname === '/api/feed/connect') && req.method === 'POST') {
+    return readJson(1e4, input => {
+      const call = feedPost ? `post_json(${JSON.stringify(feedPost[1])}, ${input.unlisted ? 'True' : 'False'})` : 'connect_json()'
+      pyCommand(call, 180000).then(out => json(200, out))
+    })
   }
   if (url.pathname === '/api/me') {
     let feed = {}

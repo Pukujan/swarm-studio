@@ -157,6 +157,11 @@ class FeedClientTest(unittest.TestCase):
         self.assertEqual(StandIn.state["uploads"], [("/upload/b_built00001", ZIP)])
         self.assertIn("already in the feed", feed.post(run, ["1"], lambda rid: None))
         self.assertIn("Posted", feed.post(run, ["1", "--again"], lambda rid: None))
+        self.assertNotIn("visibility", StandIn.state["posts"][0])
+        got = feed.post_result(run, ["1", "--again", "--unlisted"], lambda rid: None)
+        self.assertTrue(got["ok"] and got["unlisted"] and got["url"])
+        self.assertEqual(StandIn.state["posts"][-1]["visibility"], "unlisted")
+        self.assertNotIn("--unlisted", StandIn.state["posts"][-1].get("caption", ""))
 
     def test_remix_starts_a_run_and_links_the_post(self):
         self._connect()

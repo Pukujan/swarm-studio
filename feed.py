@@ -376,7 +376,7 @@ def live_url(r: dict) -> str | None:
 
 
 def parse_post_args(args: list[str]) -> tuple[str, str, str, bool]:
-    """[n|id] [--jam <id>] [--again] [caption…] -> (ref, jam, caption, again)."""
+    """[n|id] [--jam <id>] [--again] [--unlisted] [caption…] -> (ref, jam, caption, again)."""
     ref, jam, again, words = "", "", False, []
     i = 0
     while i < len(args):
@@ -387,6 +387,9 @@ def parse_post_args(args: list[str]) -> tuple[str, str, str, bool]:
         if a == "--again":
             again, i = True, i + 1
             continue
+        if a == "--unlisted":
+            i += 1
+            continue
         if not ref and not words and (a.isdigit() or a.startswith("20")):
             ref = a
         else:
@@ -395,7 +398,7 @@ def parse_post_args(args: list[str]) -> tuple[str, str, str, bool]:
     return ref, jam, " ".join(words).strip().strip('"“”'), again
 
 
-def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | None = None) -> dict:
+def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | None = None, unlisted: bool = False) -> dict:
     folder = run_dir(r["id"])
     url = live_url(r)
     if not url:
@@ -420,18 +423,28 @@ def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | No
         body["jamId"] = jam
     if caption:
         body["caption"] = caption[:280]
+    if unlisted:
+        # off the feed and Browse; anyone with the link still sees it
+        body["visibility"] = "unlisted"
     return body
 
 
 def post(r: dict, args: list[str], export) -> str:
     """Post a build. ``export(run_id) -> zip path or None`` makes the export zip through the canvas server."""
+    out = post_result(r, args, export)
+    return out["message"]
+
+
+def post_result(r: dict, args: list[str], export) -> dict:
+    """Like post, as {ok, url, message} for the canvas's Post to Feed button."""
     token = _token()
     _, jam, caption, again = parse_post_args(args)
+    unlisted = "--unlisted" in args
     cfg = load()
     done = (cfg.get("posted") or {}).get(r["id"])
     if done and not again:
-        return f"“{r['title']}” is already in the feed: {origin()}/b/{done}. /swarm post {r['id']} --again posts it once more."
-    body = build_payload(r, jam=jam, caption=caption, parent=(cfg.get("remixes") or {}).get(r["id"]))
+        return {"ok": True, "already": True, "url": f"{origin()}/b/{done}", "message": f"“{r['title']}” is already in the feed: {origin()}/b/{done}. /swarm post {r['id']} --again posts it once more."}
+    body = build_payload(r, jam=jam, caption=caption, parent=(cfg.get("remixes") or {}).get(r["id"]), unlisted=unlisted)
     got = _call("/api/feed/builds", body, token=token, timeout=60)
     build_id = got["id"]
     _update(lambda c: c.setdefault("posted", {}).__setitem__(r["id"], build_id))
@@ -449,7 +462,9 @@ def post(r: dict, args: list[str], export) -> str:
         note = f"\nThe files did not upload ({exc}); remixers start from the prompt only."
     jam_line = f" Entered in the jam {jam}." if jam else ""
     remix_line = f" Remix of {body['parentId']}." if body.get("parentId") else ""
-    return f"Posted “{r['title']}” to the Swarm Feed: {got.get('url') or origin() + '/b/' + build_id}{remix_line}{jam_line}{note}"
+    url = got.get("url") or origin() + "/b/" + build_id
+    seen = " Unlisted: only people with the link see it." if unlisted else ""
+    return {"ok": True, "url": url, "unlisted": unlisted, "message": f"Posted “{r['title']}” to the Swarm Feed: {url}{remix_line}{jam_line}{seen}{note}"}
 
 
 # ------------------------------------------------------------------- remix ---
