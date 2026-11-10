@@ -40,13 +40,21 @@ export async function streamChat(provider, opts) {
 // InferHub serves one model on several routes (cb/x, ali/x, x…). When the asked
 // route is full, the others are tried in turn; one that worked is used first for a while.
 const busy = new Map()
+// A route that took a call and then sent nothing (a full route can queue instead of
+// answering 429) goes to the back of the list for a while.
+const stalled = new Map()
+export function markStalled(provider, model) {
+  for (const route of routesFor(provider, model).slice(0, 1)) stalled.set(route, Date.now() + 5 * 60e3)
+}
 function routesFor(provider, model) {
   if (!/inferhub/.test(provider?.baseUrl || '') || !model) return [model]
   const bare = model.replace(/^[a-z]+\//, '')
   const list = [model, bare, `ali/${bare}`, `alitp/${bare}`, `ocg/${bare}`, `cb/${bare}`]
   const hot = busy.get(model)
   if (hot && hot.until > Date.now()) list.unshift(hot.route)
-  return [...new Set(list)].slice(0, 5)
+  const cold = r => (stalled.get(r) ?? 0) > Date.now()
+  const routes = [...new Set(list)]
+  return [...routes.filter(r => !cold(r)), ...routes.filter(cold)].slice(0, 5)
 }
 
 async function chat(provider, { model, messages, maxTokens = 2048, temperature = 0.7, extra = {}, signal, onDelta }, started) {
