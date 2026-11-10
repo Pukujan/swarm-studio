@@ -10,6 +10,7 @@ import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
+import { playtest } from './playtest.mjs'
 import { planBrief } from './advisor.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
@@ -144,9 +145,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       // a busy or rate-limited model: on InferHub try the same model's other route,
       // then other fast coders; elsewhere wait a little and go again
       const chain = [m, ...(/inferhub/.test(provider('worker').baseUrl) ? APP_FALLBACKS.filter(x => x !== m) : [m, m])]
-      let result
+      let result, used = m
       for (let i = 0; ; i++) {
         try {
+          used = chain[i]
           result = await runEngine({ workspace: dir, prompt, provider: provider('worker'), model: chain[i], turns: input.turns || (input.plan ? 6 : 4), onStep: step, signal: j.controller.signal })
           break
         } catch (err) {
@@ -158,6 +160,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
       if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
       await serve(id, j, step)
+      if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step)
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
@@ -167,6 +170,27 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       send(id, 'app:failed', { message: j.message, result: j.result })
     })
     return view(j)
+  }
+
+  // Play the built game for a few seconds. The typecheck and build pass a game
+  // whose run ends the moment it starts; one fix turn goes back to the engine
+  // when that, a crash or a missing canvas shows up. Vite reloads the fix itself.
+  async function playGame(j, dir, model, step) {
+    step({ kind: 'test', text: 'play-testing the game' })
+    let t = await playtest(j.url)
+    if (t.skipped) { step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false }); return { skipped: t.skipped } }
+    if (t.ok) { step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s` }); return { ok: true, seconds: t.seconds } }
+    step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false })
+    try {
+      await runEngine({ workspace: dir, prompt: `A play test of this game failed. ${t.problem}\n\nKeep everything else as it is. Finish with a working build: the typecheck and build must pass.`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+    } catch (err) {
+      step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
+      return { ok: false, problem: t.problem }
+    }
+    await new Promise(r => setTimeout(r, 2500))
+    t = await playtest(j.url)
+    step({ kind: 'test', text: t.ok ? 'play test passed after the fix' : `play test still fails: ${(t.problem || '').split('. ')[0]}`, ok: !!t.ok })
+    return t.ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: t.problem }
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).
