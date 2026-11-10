@@ -1698,6 +1698,20 @@ const server = createServer((req, res) => {
     return
   }
 
+  // An engine port (Godot, Unity, Unreal) the game job wrote to app/ports/<target>/, zipped on request
+  const portZip = url.pathname.match(/^\/api\/runs\/([^/]+)\/port\/(godot|unity|unreal)\.zip$/)
+  if (portZip && RUN_ID.test(portZip[1])) {
+    const [, id, target] = portZip, base = join(runsDir, id, 'app', 'ports')
+    if (!existsSync(join(base, target))) return res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no port yet' }))
+    const name = `${fileSlug(id)}-${target}.zip`, out = join(base, name)
+    execFile('zip', ['-qr', name, target], { cwd: base }, err => {
+      if (err) return res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'could not zip the project' }))
+      res.writeHead(200, { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="${name}"` })
+      createReadStream(out).pipe(res)
+    })
+    return
+  }
+
   // Export: static HTML, a React + Vite + Tailwind project and an ABA handoff,
   // written to runs/<id>/export/ and zipped.
   const runExport = url.pathname.match(/^\/api\/runs\/([^/]+)\/export(\.zip)?$/)

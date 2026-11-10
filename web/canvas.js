@@ -3826,7 +3826,7 @@ async function replayRun(id, speed = 8) {
 // change; on Video, an idea for a new cut.
 let view = 'canvas'
 const appv = { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false }
-const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), stop: $('#app-stop') }
+const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
 const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
 
 function setView(v) {
@@ -3950,6 +3950,14 @@ function renderApp() {
   if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
   appEls.stop.hidden = !working
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
+  // the same game as a Godot, Unity or Unreal project, when the job wrote one
+  const port = appv.result?.port
+  appEls.port.hidden = !port?.files
+  if (port?.files) {
+    appEls.port.href = `${location.origin}/api/runs/${encodeURIComponent(appv.run)}/port/${port.target}.zip?k=${encodeURIComponent(BOOT.token || '')}`
+    appEls.port.textContent = port.label
+    appEls.port.setAttribute('aria-label', `Download the ${port.label} project`)
+  }
   // the preview, or what to do first
   if (appv.url && appEls.frame.dataset.src !== appv.url) { appEls.frame.dataset.src = appv.url; loadFrame() }
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
