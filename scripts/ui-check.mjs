@@ -196,6 +196,34 @@ async function artboards(page, w) {
   }
 }
 
+// a page's sections: a click on the selected page picks the one under it, the inspector edits it,
+// the dock talks about it, the Layers panel picks too, and Esc steps back to the page (nothing saved)
+async function sections(page, w) {
+  await page.evaluate(() => { const a = document.querySelector('.ab.page'); a?.scrollIntoView() })
+  const a = await page.$('.ab.page')
+  if (!a) return
+  await a.click(); await wait(500)
+  const rows = await page.$$eval('.pj-insp .pj-ly', r => r.length)
+  ok(rows > 0, `Sections @${w}: a selected page lists its sections (${rows})`)
+  const b = await a.boundingBox()
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height * 0.35); await wait(600)
+  const got = await page.evaluate(() => ({ back: !!document.querySelector('.pj-insp .pj-back'), outline: !!document.querySelector('.ab .lsel'), text: document.querySelectorAll('.pj-insp [data-text]').length, code: !!document.querySelector('.pj-insp [data-act="code"]'), scope: !document.querySelector('.pj-scope')?.hidden, design: document.body.classList.contains('design-on'), pin: !!document.querySelector('.cbox') && getComputedStyle(document.querySelector('.cbox')).display !== 'none' }))
+  ok(got.back && got.outline && got.text > 0 && got.code, `Sections @${w}: a click on the page picks a section: outlined, its words, Code (${JSON.stringify(got)})`)
+  ok(got.scope && !got.design && !got.pin, `Sections @${w}: the dock is scoped to it, and the room's Design panel and comment pin stay away`)
+  await page.click('.pj-insp [data-act="code"]'); await wait(300)
+  ok(await page.isVisible('.pj-code textarea'), `Sections @${w}: Code opens the section's HTML`)
+  await page.keyboard.press('Escape'); await wait(300)
+  ok(!(await page.$('.pj-code')), `Sections @${w}: Esc closes the code editor`)
+  await page.keyboard.press('Escape'); await wait(300)
+  ok(!(await page.$('.pj-insp .pj-back')) && await page.isVisible('.pj-insp'), `Sections @${w}: Esc steps back from the section to its page`)
+  // the Layers panel picks a section on this canvas too
+  await page.click('.pj-tab[data-tab="layers"]'); await wait(300)
+  await page.click('.pj-layers .ly[data-key] >> nth=2'); await wait(500)
+  ok(!!(await page.$('.pj-insp .pj-back')) && (await mode(page)).mode === 'project', `Sections @${w}: a Layers row picks that section in the inspector`)
+  await page.click('.pj-tab[data-tab="files"]')
+  await page.keyboard.press('Escape'); await wait(200); await page.keyboard.press('Escape'); await wait(300)
+}
+
 async function cardPick(page, w) {
   const c = await page.$('.home .card:not(.asset)')
   ok(!!c, `Projects @${w}: a project card is showing`)
@@ -283,6 +311,7 @@ try {
     }
     await modeMenu(page, w)
     await canvasPan(page, w)
+    await sections(page, w)
     await artboards(page, w)
     await home(page, w)
     // a replay opens the project and the logo still goes home

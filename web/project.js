@@ -2,8 +2,16 @@
 // name ▾), the crew, Play and Publish. The left panel lists every file the build made, by kind
 // (Files), or its pages and sections (Layers). The stage shows the same files as artboards in
 // sections on one dotted canvas; selecting one opens the inspector, double-clicking opens its
-// room (Design deck, Film studio, Engine room). Files dropped from Finder land in the project's
+// room. A selected page's sections can be picked too (a click on the page, or the Layers panel):
+// the inspector then edits that one by hand (words, fill, type, spacing, pictures, code), and
+// "Tell the crew…" changes just it. Edits are saved edit events, so they undo and reach everyone.
+// The old line about rooms continues:
+// // room (Design deck, Film studio, Engine room). Files dropped from Finder land in the project's
 // uploads/ and go to the crew with the next build. The dock: tools and "Tell the crew…".
+// A selected page's sections can be picked too (a click on the page, or the Layers panel): the
+// inspector then edits that one by hand (words, fill, type, spacing, pictures, its code), and
+// "Tell the crew…" changes just it. Each change is a saved edit event, so it undoes, replays and
+// reaches anyone else on the same build (room for working together later).
 import { ic, cursor, CREW } from './icons.js'
 import { routeMessage } from './route.js'
 
@@ -16,7 +24,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
-    sel: null, tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, tool: 'move', thumbs: new Map()
+    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, tool: 'move', thumbs: new Map()
   }
 
   root.className = 'project'
@@ -42,7 +50,7 @@ export function makeProject({ sw, C, root }) {
       <button class="ib" data-tool="text" aria-label="New page">${ic('type')}</button>
       <button class="ib" data-tool="image" aria-label="Upload files">${ic('image')}</button>
       <button class="ib" data-tool="comment" aria-label="Chat">${ic('msg')}</button>
-      <form class="pj-ask" autocomplete="off"><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
+      <form class="pj-ask" autocomplete="off"><button type="button" class="pj-scope" hidden aria-label="Talk to the crew about the whole project"><span></span>${ic('x', 12)}</button><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
     </div>
     <input type="file" class="pj-file" multiple hidden>`
   const $ = s => root.querySelector(s)
@@ -86,7 +94,7 @@ export function makeProject({ sw, C, root }) {
   function groups() {
     const b = P.board || {}
     const g = {}
-    if (b.pages?.length) g.site = b.pages.map(p => ({ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: p.cover || P.thumbs.get(p.id) }))
+    if (b.pages?.length) g.site = b.pages.map(p => ({ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id) }))
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, src: b.game.cover }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
@@ -134,7 +142,37 @@ export function makeProject({ sw, C, root }) {
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? '<span class="play"></span>'
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
-    return `<div class="ab ${x.kind}" data-key="${esc(x.key)}" tabindex="-1">${img}${extra}${sel}</div>`
+    const tall = x.kind === 'page' && x.snap && P.aspect.get(x.page)
+    return `<div class="ab ${x.kind}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${img}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>` : ''}${sel}</div>`
+  }
+  // a page is 124 px wide on the stage; its snapshot sets how long it is (a very long page is cut off)
+  const pageH = ratio => Math.round(Math.min(124 * ratio, 124 * 9))
+  function outline(x) {
+    if (!P.layer || P.sel !== x.key || !sw.layers) return ''
+    const l = sw.layers.list(x.page).find(y => y.key === P.layer)
+    const ratio = P.aspect.get(x.page)
+    if (!l?.box || !ratio || !x.snap) return ''
+    const h = 124 * ratio
+    return `<div class="lsel" style="top:${(l.box.top * h).toFixed(1)}px;height:${Math.max(4, l.box.height * h).toFixed(1)}px"></div>`
+  }
+  function drawOutline() {
+    for (const a of world.querySelectorAll('.ab.page')) { const lys = a.querySelector('.lys'); if (lys) lys.innerHTML = outline(find(a.dataset.key) || {}) }
+  }
+  // a snapshot that loads tells the page's length; the page grows to it in place
+  function measurePages() {
+    for (const im of world.querySelectorAll('.ab.page img')) {
+      const a = im.closest('.ab'), x = find(a.dataset.key)
+      if (!x?.snap) continue
+      const set = () => {
+        if (!im.naturalWidth) return
+        const r = im.naturalHeight / im.naturalWidth
+        if (Math.abs((P.aspect.get(x.page) || 0) - r) < 0.01) return
+        P.aspect.set(x.page, r)
+        a.style.height = `${pageH(r)}px`
+        drawOutline()
+      }
+      if (im.complete) set(); else im.addEventListener('load', set, { once: true })
+    }
   }
   function renderStage() {
     const g = groups()
@@ -142,6 +180,7 @@ export function makeProject({ sw, C, root }) {
     const sec = (k, label) => g[k] ? `<section class="pj-sec ${k}"><span class="al">${label}</span><div class="abs">${g[k].map(board).join('')}</div></section>` : ''
     world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
     applyCam()
+    measurePages()
     if (!P.framed && world.offsetWidth) { P.framed = true; frameAll(false) }
     crewAtWork()
   }
@@ -150,6 +189,10 @@ export function makeProject({ sw, C, root }) {
     insp.hidden = !x
     root.classList.toggle('insp-on', !!x)
     if (!x) return
+    // never redraw under someone typing in it
+    if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return
+    if (x.kind === 'page' && P.layer && sw.layers?.get(P.layer)) return renderLayer(x)
+    P.layer = null
     if (dims.has(x.key)) x.dims = dims.get(x.key)
     const kv = [
       x.dims && ['Size', x.dims],
@@ -166,11 +209,123 @@ export function makeProject({ sw, C, root }) {
       x.kind === 'page' && `<button class="btn ghost" data-act="zip">${ic('download', 15)}Export</button>`,
       (x.kind === 'art' || (x.kind === 'upload' && x.sending == null)) && !hosted() && `<button class="btn ghost" data-act="replace">${ic('upload', 15)}Replace</button>`
     ].filter(Boolean).join('')
+    const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
+    const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
     insp.innerHTML = `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>
-      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}<div class="btns">${btns}</div>`
+      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}<div class="btns">${btns}</div>`
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
   }
+  // ---------- one section of a page: its words, fill, type, spacing, pictures and code
+  const step = (list, v, d) => list[Math.max(0, Math.min(list.length - 1, (list.indexOf(v) < 0 ? 0 : list.indexOf(v)) + d))]
+  function renderLayer(x) {
+    const L = sw.layers, l = L.get(P.layer)
+    const edit = l.done && !hosted()
+    const cur = L.current(P.layer), th = L.theme || {}, sc = L.scales
+    const texts = edit ? L.texts(P.layer).slice(0, 14) : []
+    const colors = Object.entries(th.vars || {}).filter(([k]) => !/radius|font/.test(k))
+    const stepper = (k, label, v) => `<div class="pj-step"><span>${label}</span><button class="ib sm" data-step="${k}:-1" aria-label="${label} smaller">${ic('minus', 14)}</button><b>${esc(v)}</b><button class="ib sm" data-step="${k}:1" aria-label="${label} bigger">${ic('plus', 14)}</button></div>`
+    const px = v => v == null ? '' : String(Number(v) * 4 || v)
+    const g = (title, body) => body ? `<div class="pj-g"><h4>${title}</h4>${body}</div>` : ''
+    insp.innerHTML = `<h3><button class="ib sm pj-back" aria-label="Back to ${esc(x.name)}">${ic('chl', 16)}</button><span>${esc(l.role)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>
+      ${edit ? '' : `<div class="kv"><span>${l.done ? 'View only' : 'Building'}</span><b></b></div>`}
+      ${g('Text', texts.map(t => t.text.length > 56 ? `<label class="pj-f"><span>${t.kind}</span><textarea rows="${Math.min(5, Math.ceil(t.text.length / 34))}" data-text="${t.i}">${esc(t.text)}</textarea></label>` : `<label class="pj-f"><span>${t.kind}</span><input data-text="${t.i}" value="${esc(t.text)}"></label>`).join(''))}
+      ${edit && colors.length ? g('Fill', `<div class="pj-sws">${colors.map(([k, v]) => `<button class="pj-sw${cur.bg === k.slice(2) ? ' on' : ''}" data-bg="${esc(k.slice(2))}" aria-label="${esc(k.slice(2))}" style="--c:${esc(v)}"></button>`).join('')}<button class="pj-sw none${cur.bg ? '' : ' on'}" data-bg="none" aria-label="No fill"></button></div>`) : ''}
+      ${edit ? g('Type', `${cur.hsize ? stepper('hsize', 'Heading', cur.hsize) : ''}${['heading', 'body'].map(r => `<label class="pj-f row"><span>${r === 'heading' ? 'Heading' : 'Body'}</span><select data-font="${r}" aria-label="${r === 'heading' ? 'Heading' : 'Body'} font, every page">${[...new Set([th.fonts?.[r], ...sc.fonts].filter(Boolean))].map(f => `<option${f === th.fonts?.[r] ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>`).join('')}`) : ''}
+      ${edit ? g('Spacing', `${stepper('pad', 'Padding', px(cur.py))}${cur.gap != null ? stepper('gap', 'Gap', px(cur.gap)) : ''}${cur.radius != null ? `<label class="pj-f row"><span>Corners</span><select data-radius aria-label="Corners">${sc.radius.map(r => `<option value="${r}"${r === (cur.radius || '') ? ' selected' : ''}>${r === 'theme' ? 'Theme' : r || 'base'}</option>`).join('')}</select></label>` : ''}`) : ''}
+      ${edit && l.gens.length ? g('Pictures', l.gens.map((p, i) => `<div class="pj-pic" data-pic="${i}">${p.src ? `<img src="${esc(p.src.startsWith('data:') ? p.src : base() + p.src)}" alt="">` : `<span class="blank">${ic('image', 20)}</span>`}<textarea rows="2" aria-label="What the picture shows">${esc(p.gen)}</textarea><button class="btn ghost" data-paint="${i}"${p.busy ? ' disabled' : ''}>${ic('image', 15)}${p.busy ? 'Painting' : 'Paint'}</button></div>`).join('')) : ''}
+      <div class="btns">${edit ? `<button class="btn ghost" data-act="code">${ic('code', 15)}Code</button>` : ''}<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button></div>
+      ${edit ? `<form class="pj-ask pj-lask" autocomplete="off"><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew about ${esc(l.role)}" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>` : ''}`
+  }
+  // narrow panes: the dock sits under the inspector sheet, so a picked section has its own line
+  insp.addEventListener('submit', e => {
+    e.preventDefault()
+    const q = e.target.q, text = q?.value.trim()
+    if (!text || !P.layer) return
+    q.value = ''
+    sw.layers.fix(P.layer, text)
+    toast(`${ic('msg', 15)}<span>On it</span>`)
+  })
+  function pickLayer(key) {
+    P.layer = key || null
+    sw.layers?.select(P.layer)
+    renderInsp()
+    drawOutline()
+    scope()
+    if (P.layer && narrow()) requestAnimationFrame(() => { const o = world.querySelector('.lsel'); if (o) fit(bounds([o]), 2, true) })
+  }
+  // after a hand edit: the inspector shows the new values and the page's picture catches up
+  function edited(page) {
+    setTimeout(() => { if (P.layer) renderInsp() }, 60)
+    clearTimeout(P.snapT)
+    P.snapT = setTimeout(async () => {
+      const src = await sw.thumb(page, 0.26).catch(() => null)
+      if (!src || !P.on) return
+      P.thumbs.set(page, src)
+      const im = world.querySelector(`.ab[data-key="${CSS.escape(`page:${page}`)}"] img`)
+      if (im) im.src = src; else renderStage()
+    }, 1200)
+  }
+  insp.addEventListener('change', e => {
+    const x = find(P.sel), L = sw.layers
+    if (!x || !P.layer || !L) return
+    const t = e.target
+    if (t.dataset.text != null) L.setText(P.layer, Number(t.dataset.text), t.value).then(ok => ok && edited(x.page))
+    if (t.dataset.font) { L.token('font', t.dataset.font, t.value); edited(x.page) }
+    if (t.hasAttribute('data-radius')) { L.edit(P.layer, 'radius', t.value); edited(x.page) }
+  })
+  insp.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input[data-text]')) { e.preventDefault(); e.target.blur() } })
+  function layerClick(e) {
+    const x = find(P.sel), L = sw.layers
+    if (!x || !L) return false
+    const ly = e.target.closest('[data-layer]')
+    if (ly) { pickLayer(ly.dataset.layer); return true }
+    if (e.target.closest('.pj-back')) { pickLayer(null); return true }
+    if (!P.layer) return false
+    const bg = e.target.closest('[data-bg]')
+    if (bg) { L.edit(P.layer, 'bg', bg.dataset.bg); edited(x.page); return true }
+    const st = e.target.closest('[data-step]')
+    if (st) {
+      const [k, d] = st.dataset.step.split(':'), cur = L.current(P.layer)
+      const v = k === 'hsize' ? step(L.scales.sizes, cur.hsize, +d) : step(L.scales.space, k === 'pad' ? cur.py : cur.gap, +d * 2)
+      L.edit(P.layer, k, v); edited(x.page); return true
+    }
+    const pt = e.target.closest('[data-paint]')
+    if (pt) {
+      const row = pt.closest('.pj-pic'), p = L.get(P.layer).gens[Number(pt.dataset.paint)]
+      pt.disabled = true
+      L.paint(P.layer, p.gen, row.querySelector('textarea').value.trim()).then(ok => { if (!ok) { pt.disabled = false; toast(`<span>That picture could not start</span>`) } })
+      return true
+    }
+    const b = e.target.closest('[data-act="code"]')
+    if (b) { codeEditor(x); return true }
+    return false
+  }
+
+  // the section's HTML in an editor: Save (or ⌘S / Ctrl+S) puts it on the page straight away
+  function codeEditor(x) {
+    const L = sw.layers, key = P.layer, l = L.get(key)
+    const wrap = document.createElement('div')
+    wrap.className = 'pj-code'
+    wrap.innerHTML = `<div class="pj-code-box" role="dialog" aria-label="Code for ${esc(l.role)}"><h3><span>${esc(l.role)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><textarea spellcheck="false" aria-label="HTML">${esc(l.html)}</textarea><div class="btns"><button class="btn ghost" data-c="cancel">Cancel</button><button class="btn pri" data-c="save">Save</button></div></div>`
+    document.body.append(wrap)
+    const ta = wrap.querySelector('textarea')
+    let off = null
+    const close = () => { off?.(); wrap.remove() }
+    off = window.SwarmUI?.layer(wrap.firstElementChild, close)
+    const save = async () => {
+      const ok = await L.save(key, ta.value, 'code')
+      close()
+      if (ok) { toast(`${ic('check', 15)}<span>Saved</span>`); edited(x.page) }
+    }
+    wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('.pj-x, [data-c="cancel"]')) close(); if (e.target.closest('[data-c="save"]')) save() })
+    ta.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); save() }
+      if (e.key === 'Tab') { e.preventDefault(); ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end') }
+    })
+    ta.focus(); ta.setSelectionRange(0, 0)
+  }
+
   const dims = new Map()
   let inspT = 0
   const renderInspSoon = () => { clearTimeout(inspT); inspT = setTimeout(() => { const x = find(P.sel); if (x) { x.dims = dims.get(x.key); renderInspKv(x) } }, 0) }
@@ -180,7 +335,7 @@ export function makeProject({ sw, C, root }) {
     const row = document.createElement('div')
     row.className = 'kv kv-size'
     row.innerHTML = `<span>Size</span><b>${esc(x.dims)}</b>`
-    if (first) first.before(row); else insp.querySelector('.btns').before(row)
+    if (first) first.before(row); else (insp.querySelector('.pj-secs') || insp.querySelector('.btns')).before(row)
   }
 
   // a page's real look, once the canvas behind has drawn it
@@ -203,14 +358,16 @@ export function makeProject({ sw, C, root }) {
     P.thumbBusy = true
     try {
       for (const p of P.board.pages) {
-        if (p.cover || P.thumbs.has(p.id)) { if (p === P.board.pages[0]) saveCover(p.cover ? base() + p.cover : P.thumbs.get(p.id)); continue }
+        // the build's card on Projects: the first page's picture, else its snapshot (once per build)
+        if (p === P.board.pages[0] && (p.cover || P.thumbs.has(p.id))) saveCover(p.cover ? base() + p.cover : P.thumbs.get(p.id))
+        if (P.thumbs.has(p.id)) continue
         const src = await sw.thumb(p.id).catch(() => null)
         // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
         const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
         if (ok && P.on) { P.thumbs.set(p.id, src); renderList(); renderStage(); if (p === P.board.pages[0]) saveCover(await sw.thumb(p.id, 0.6).catch(() => null) || src) }
       }
     } finally { P.thumbBusy = false }
-    if (P.on && P.board.pages.some(p => !p.cover && !P.thumbs.has(p.id)) && (P.thumbTries = (P.thumbTries || 0) + 1) < 8) setTimeout(thumbs, 2500)
+    if (P.on && P.board.pages.some(p => !P.thumbs.has(p.id)) && (P.thumbTries = (P.thumbTries || 0) + 1) < 8) setTimeout(thumbs, 2500)
   }
 
   // ---------- the stage: pan (drag empty space, wheel), zoom (pinch, ⌘ wheel), Frame fits all
@@ -250,7 +407,10 @@ export function makeProject({ sw, C, root }) {
   }
   function zoomTo(key) {
     const el = world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)
-    if (el) fit(bounds([el]), 2, true)
+    const b = el && bounds([el])
+    // a long page: its top, at a readable size
+    if (b && b.h > b.w * 1.4) b.h = b.w * 1.4
+    if (b) fit(b, 2, true)
   }
   function frameAll(animate = true) {
     const b = bounds(world.querySelectorAll('.ab, .pj-sec > .al'))
@@ -318,6 +478,7 @@ export function makeProject({ sw, C, root }) {
 
   // ---------- selecting and opening
   function select(key, { pan = false } = {}) {
+    if (key !== P.sel && P.layer) { P.layer = null; sw.layers?.select(null); scope() }
     P.sel = key
     // in place: re-rendering would reload every picture on the stage
     for (const r of listEl.querySelectorAll('.row')) r.classList.toggle('on', r.dataset.key === key)
@@ -348,13 +509,35 @@ export function makeProject({ sw, C, root }) {
   }
   // an artboard the inspector would slide over: wait out a double-click, then select and pan it clear
   let clickT = 0
+  const sectionAt = (a, e) => {
+    const x = find(a.dataset.key), ratio = x && P.aspect.get(x.page)
+    if (x?.kind !== 'page' || !x.snap || !ratio || !sw.layers) return null
+    const y = (e.clientY - a.getBoundingClientRect().top) / (a.getBoundingClientRect().height || 1) * a.offsetHeight / (124 * ratio)
+    return sw.layers.list(x.page).filter(l => l.box && y >= l.box.top && y < l.box.top + l.box.height).pop() || null
+  }
   world.addEventListener('click', e => {
     const a = e.target.closest('.ab'); if (!a) return
     clearTimeout(clickT)
+    // (not the second click of a double-click, which opens the page's room)
+    if (a.classList.contains('page') && e.detail < 2 && (a.dataset.key === P.sel || e.metaKey || e.ctrlKey)) {
+      const l = sectionAt(a, e)
+      if (l) { if (a.dataset.key !== P.sel) select(a.dataset.key); return pickLayer(l.key) }
+    }
     const r = a.getBoundingClientRect(), s = stage.getBoundingClientRect()
     if (insp.hidden && r.right > s.right - 292) clickT = setTimeout(() => select(a.dataset.key, { pan: true }), 280)
     else select(a.dataset.key)
   })
+  world.addEventListener('pointermove', e => {
+    const a = e.target.closest('.ab.page')
+    const hov = world.querySelector('.lhov')
+    if (!a || a.dataset.key !== P.sel || e.pointerType === 'touch') { hov?.remove(); return }
+    const l = sectionAt(a, e), ratio = P.aspect.get(find(a.dataset.key)?.page)
+    if (!l || l.key === P.layer) { hov?.remove(); return }
+    const el = hov || Object.assign(document.createElement('div'), { className: 'lhov' })
+    el.style.top = `${(l.box.top * 124 * ratio).toFixed(1)}px`; el.style.height = `${(l.box.height * 124 * ratio).toFixed(1)}px`
+    if (el.parentElement !== a.querySelector('.lys')) a.querySelector('.lys')?.append(el)
+  })
+  world.addEventListener('pointerleave', () => world.querySelector('.lhov')?.remove())
   world.addEventListener('dblclick', e => { const a = e.target.closest('.ab'); if (a) { clearTimeout(clickT); openItem(find(a.dataset.key)) } })
   world.addEventListener('contextmenu', e => { const a = e.target.closest('.ab'); if (!a) return; e.preventDefault(); select(a.dataset.key); fileMenu(find(a.dataset.key), null, { x: e.clientX, y: e.clientY }) })
   listEl.addEventListener('click', e => {
@@ -377,6 +560,7 @@ export function makeProject({ sw, C, root }) {
   listEl.addEventListener('contextmenu', e => { const r = e.target.closest('.row'); if (!r) return; e.preventDefault(); select(r.dataset.key); fileMenu(find(r.dataset.key), null, { x: e.clientX, y: e.clientY }) })
   insp.addEventListener('click', e => {
     if (e.target.closest('.pj-x')) return select(null)
+    if (layerClick(e)) return
     const b = e.target.closest('[data-act]'), x = find(P.sel)
     if (!b || !x) return
     const act = b.dataset.act
@@ -549,6 +733,21 @@ export function makeProject({ sw, C, root }) {
     listEl.hidden = P.tab !== 'files'; layersEl.hidden = P.tab !== 'layers'
     if (P.tab === 'layers') { const tree = document.getElementById('tree'); if (tree && tree.parentElement !== layersEl) { P.treeHome = tree.parentElement; layersEl.append(tree) } }
   })
+  layersEl.addEventListener('click', e => {
+    if (e.target.closest('.eye, .tw, .caret')) return
+    const row = e.target.closest('.ly[data-key]'), pg = e.target.closest('.pg-title[data-page]')
+    if (!row && !pg) return
+    e.stopPropagation()
+    const pages = P.board?.pages || []
+    if (pg) { if (pg.dataset.page !== '*') select(`page:${pg.dataset.page}`, { pan: true }); return }
+    const l = sw.layers?.get(row.dataset.key)
+    if (!l) return
+    const page = l.page === '*' ? (find(P.sel)?.page || pages[0]?.id) : l.page
+    if (!page) return
+    if (P.sel !== `page:${page}`) select(`page:${page}`, { pan: true })
+    pickLayer(row.dataset.key)
+    if (narrow()) sheet(false)
+  }, true)
   const search = $('.pj-search'), sInput = search.querySelector('input')
   $('.pj-find').onclick = () => { search.hidden = !search.hidden; if (!search.hidden) sInput.focus(); else { P.q = ''; sInput.value = ''; render() } }
   sInput.oninput = () => { P.q = sInput.value.trim(); renderList(); renderStage() }
@@ -580,6 +779,7 @@ export function makeProject({ sw, C, root }) {
     const x = P.sel && find(P.sel)
     if (x?.kind === 'art') return replace(x)
     input.value = ''
+    if (x?.kind === 'page' && P.layer && sw.layers?.get(P.layer)?.done) { sw.layers.fix(P.layer, text); toast(`${ic('msg', 15)}<span>On it</span>`); return }
     const route = routeMessage({ text, run: P.run, site: !P.board?.game && P.board?.pages?.length > 0, selected: x?.kind === 'page', hosted: hosted() })
     if (route === 'fix') { sw.focusPage(x.page); sw.submit(`/fix ${text}`); toast(`${ic('msg', 15)}<span>On it</span>`); setTimeout(load, 1500); return }
     // the project's next version: every page kept, the crew builds what was asked
@@ -587,6 +787,15 @@ export function makeProject({ sw, C, root }) {
     P.run = null; P.framed = false
     setTimeout(() => { P.run = sw.S?.run || null; load() }, 1200)
   }
+
+  // the section the dock is talking about; its × goes back to the whole project
+  const scopeEl = $('.pj-scope')
+  function scope() {
+    const l = P.layer && sw.layers?.get(P.layer)
+    scopeEl.hidden = !l
+    if (l) { scopeEl.querySelector('span').textContent = l.role; scopeEl.setAttribute('aria-label', `About ${l.role}; clear`) }
+  }
+  scopeEl.onclick = () => { pickLayer(null); input.focus() }
 
   // ---------- the crew at work: named cursors over the artboards while a build runs
   function crewAtWork() {
@@ -623,6 +832,7 @@ export function makeProject({ sw, C, root }) {
   addEventListener('keydown', e => {
     if (!P.on || e.defaultPrevented || e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return
     if (window.SwarmUI?.open?.() || document.querySelector('.hm-menu')) return
+    if (e.key === 'Escape' && P.layer) { e.preventDefault(); e.stopPropagation(); pickLayer(null); return }
     if (e.key === 'Escape' && P.sel) { e.preventDefault(); e.stopPropagation(); select(null) }
     if (e.key === 'Enter' && P.sel) { e.preventDefault(); openItem(find(P.sel)) }
     if (e.key === 'f' && !e.metaKey && !e.ctrlKey) frameAll()

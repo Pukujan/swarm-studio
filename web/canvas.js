@@ -1048,6 +1048,7 @@ function renderTree() {
     div.className = `pg${S.closed.has(g.id) ? '' : ' open'}`
     const title = document.createElement('div')
     title.className = 'pg-title'
+    title.dataset.page = g.id
     title.innerHTML = `<span class="num"></span><span class="ttl"></span><span class="caret">▶</span>`
     title.children[0].textContent = g.num
     title.children[1].textContent = g.title
@@ -1065,6 +1066,7 @@ function renderTree() {
       const open = layersOpen.has(l.key), hid = layersHidden.has(l.key)
       const row = document.createElement('div')
       row.className = `ly ${l.status}${S.sel === l.key ? ' sel' : ''}${hid ? ' hid' : ''}`
+      row.dataset.key = l.key
       row.innerHTML = `<span class="tw">${l.status === 'done' ? (open ? '▼' : '▶') : ''}</span><span class="dot"></span><span></span><span class="who"></span><button class="eye" aria-label="${hid ? 'Show' : 'Hide'} on the canvas">${hid ? '◌' : '👁'}</button>`
       row.children[2].textContent = l.role
       if (a) {
@@ -3540,7 +3542,8 @@ for (const b of document.querySelectorAll('.toggle[data-panel]')) b.onclick = ()
 // The Design panel follows the selection: open while a section or agent is
 // picked, closed again after, unless the person opened or closed it themself.
 setInterval(() => {
-  const want = S.sel || design.pinned || null
+  // the project canvas has its own inspector for a picked section
+  const want = document.body.classList.contains('cosmos-project') ? null : S.sel || design.pinned || null
   if (want && !panels.has('design') && design.closedFor !== want) { panels.add('design'); design.autoOpen = true; renderPanels() }
   else if (!want && panels.has('design') && design.autoOpen) { panels.delete('design'); design.autoOpen = false; renderPanels() }
   if (!want) design.closedFor = null
@@ -5280,6 +5283,94 @@ window.swarm = {
     if (f.frozen && scale <= 0.25) return f.frozen.img.src
     if (!f.ready || !f.slots.size) return f.frozen?.img.src || null
     return (await snapFrame(f, scale)).image
+  },
+  // a page's sections for the project canvas's inspector: pick one, change it by hand, open its
+  // code, or tell the crew about just that one. Every change is a saved edit event, so it undoes,
+  // replays when the file reopens and reaches anyone else looking at the same build.
+  layers: {
+    // in page order, each with where it sits on the page (0..1 of the page's height) once laid out
+    list(page) {
+      const f = S.frames.find(x => x.id === page)
+      const hgt = f ? Math.max(f.h || 0, f.geo.height || 0) : 0
+      return S.order.map(k => S.layers.get(k)).filter(l => l && (l.page === page || l.page === '*')).map(l => {
+        const g = f?.geo.slots[l.key]
+        return { key: l.key, id: l.id, role: l.role || l.id, shared: l.page === '*', done: l.status === 'done', box: g && hgt ? { top: g.box[1] / hgt, height: g.box[3] / hgt } : null }
+      }).sort((a, b) => (a.box?.top ?? 9) - (b.box?.top ?? 9))
+    },
+    get(key) {
+      const l = S.layers.get(key)
+      if (!l) return null
+      return { key, id: l.id, page: l.page, role: l.role || l.id, done: l.status === 'done', html: l.text, props: sectionProps(l), kids: layerKids(l.text), gens: gensOf(l).map(g => ({ gen: g, src: S.images.get(`${l.key}|${g}`) || null, busy: pics.pending.has(`${l.key}|${g}`) })) }
+    },
+    get theme() { return S.theme },
+    // one finished section: pad, gap, dir, align, bg, hsize or radius (the Design panel's edits)
+    edit(key, prop, value) { const l = S.layers.get(key); if (l?.status === 'done') return commitEdit({ kind: 'section', layer: key, prop, value }) },
+    // a design token: a colour (--name) or a font (heading / body); it changes every page
+    token(kind, name, value) { return kind === 'font' ? commitEdit({ kind: 'font', role: name, value }) : commitEdit({ kind: 'var', name, value }) },
+    // its words, in order, and a way to change them
+    texts(key) {
+      const l = S.layers.get(key)
+      if (!l) return []
+      const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
+      const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT), out = []
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) if (n.textContent.trim() && !n.parentElement.closest('svg, script, style')) {
+        const tag = n.parentElement.tagName.toLowerCase()
+        out.push({ i: out.length, text: n.textContent.trim().replace(/\s+/g, ' '), kind: /^h[1-6]$/.test(tag) ? 'Heading' : tag === 'a' || tag === 'button' ? 'Button' : 'Text' })
+      }
+      return out
+    },
+    async setText(key, i, value) {
+      const l = S.layers.get(key)
+      if (l?.status !== 'done') return false
+      const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
+      const walk = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+      let n = walk.nextNode(), at = 0
+      for (; n; n = walk.nextNode()) if (n.textContent.trim() && !n.parentElement.closest('svg, script, style')) { if (at === i) break; at++ }
+      if (!n || n.textContent.trim().replace(/\s+/g, ' ') === value.trim()) return false
+      const old = n.textContent
+      n.textContent = old.match(/^\s*/)[0] + value.trim() + old.match(/\s*$/)[0]
+      return window.swarm.layers.save(key, doc.body.innerHTML.trim(), 'text')
+    },
+    // the whole section's HTML, from the code editor
+    async save(key, html, why = 'code') {
+      const l = S.layers.get(key)
+      if (!l || html == null || html === l.text) return false
+      const step = { kind: 'layer', key: l.key, page: l.page, layer: l.id, before: l.text, after: html, label: `${why} in ${l.role || l.id}` }
+      remember(step)
+      await restoreLayer(step, html, why)
+      return true
+    },
+    // tell the crew about this section only: its builder rewrites it
+    fix(key, text) { return sendComment(text, S.layers.get(key)?.status === 'done' ? key : null) },
+    // paint one of its pictures again, from new words
+    async paint(key, gen, prompt) {
+      const l = S.layers.get(key), run = shownRun()
+      if (!l || !run) return false
+      const k = `${l.key}|${gen}`
+      pics.pending.add(k)
+      const res = await api(`/api/runs/${encodeURIComponent(run)}/image`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page: l.page, layer: l.id, gen, prompt: prompt && prompt !== gen ? prompt : '' }) }).catch(() => null)
+      if (!res?.ok) pics.pending.delete(k)
+      return !!res?.ok
+    },
+    select(key) { S.sel = key && S.layers.has(key) ? key : null; design.last = ''; renderTree() },
+    scales: { space: SPACE, sizes: SIZES, fonts: FONTS, radius: ['none', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', 'full', 'theme'] },
+    // the values the hand edits step from: vertical padding, gap and heading size as Tailwind steps
+    current(key) {
+      const l = S.layers.get(key)
+      if (!l?.text) return {}
+      const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
+      const root = doc.body.firstElementChild
+      if (!root) return {}
+      const cls = el => el?.getAttribute('class') || ''
+      const py = tw(cls(root), /^py-(\S+)$/) || tw(cls(root), /^p-(\S+)$/)
+      const lay = layoutEl(root)
+      const gap = lay && tw(cls(lay), /^gap-(\S+)$/)
+      const h = root.querySelector('h1, h2, h3') || [...root.querySelectorAll('[class*="text-"]')].sort((a, b) => sizeOf(b) - sizeOf(a))[0]
+      const hs = h && tw(cls(h), SIZE_RE)
+      const bg = tw(cls(root), /^bg-\[var\(--([\w-]+)\)\]$/)
+      const rad = [root, ...root.querySelectorAll('[class*="rounded"]')].map(cls).join(' ').match(/(?:^|\s)rounded(?:-(none|sm|md|lg|xl|2xl|3xl|full|\[var\(--radius\)\]))?(?=\s|$)/)
+      return { py: py?.[1] ?? '0', gap: lay ? gap?.[1] ?? '0' : null, hsize: hs?.[1] || null, bg: bg?.[1] || null, radius: rad ? (rad[1]?.startsWith('[') ? 'theme' : rad[1] || '') : null }
+    }
   },
   // start a build from Projects or a project's dock (the second argument, once Auto, is ignored).
   // Without a project (Projects home) it is a new project; with one, `from` is the open version it extends
