@@ -8,7 +8,7 @@ from their labels, panels that won't close, no way back home.
 Read this file, [PATTERNS.md](PATTERNS.md), [AUDIENCE.md](AUDIENCE.md) and [INVENTORY.md](INVENTORY.md) before
 changing any UI. Run the checklist at the end before opening a PR.
 
-## The three standing rules (owner, 2026-11-09)
+## The standing rules (owner, 2026-11-09)
 
 These win over every rule below that disagrees.
 
@@ -19,8 +19,13 @@ These win over every rule below that disagrees.
    helper sentences, sub-paragraphs or explanatory captions. Clear empty space beats words.
 3. **Few colours.** Black, graphite and white, plus **one** accent for the whole plugin, in one CSS variable,
    `--accent` (`web/canvas.css`). No per-room, per-view or per-agent colours: the crew is told apart by shade.
-   The accent is white `#f4f4f5` for now, with `#0b0b0c` text on accent fills; the owner picks the final hue,
-   and changing it is that one line (every tint is a `color-mix` of `--accent`). Red is kept only for errors.
+   The accent is the text colour: a white button with black text in dark mode, black with white text in light
+   mode. The owner may pick a hue later, and that is the one line (every tint is a `color-mix` of `--accent`).
+   Red is kept only for errors. Pictures (built pages, planets, art, video) are the only other colour.
+4. **Light and dark.** The studio follows the system's `prefers-color-scheme`; ☰ → Light / Dark overrides it
+   and is remembered. Light is a white `#ffffff` page, `#f4f4f5` surfaces, `#e4e4e7` lines and `#0b0b0c` text;
+   dark is the graphite. Colours come only from the tokens, so a new screen works in both without extra rules.
+   Screenshot both modes before merging a UI change.
 
 ## Where the rules come from
 
@@ -89,7 +94,7 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
     icon. In a menu, every item has an icon or none do. Menu headings look like headings and don't react to
     hover.
 16. **Targets are at least 40 × 40 px** on desktop and 44 × 44 px on touch.
-17. **One primary action per view**, always in the same place. Text on the accent fill is `#0b0b0c`.
+17. **One primary action per view**, always in the same place. Text on the accent fill is `--accent-ink`.
 18. **Every panel closes three ways:** ×, Esc, and a click outside it. Only one sheet or popover is open at a
     time.
 19. **Progress is a pill or ring that expands.** A step list is never shown by default.
@@ -162,6 +167,7 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 - [ ] No `title=`, `data-tip` or tooltip anywhere (standing rule 1).
 - [ ] Default screens are a headline, one input and one button (standing rule 2).
 - [ ] No colour but black, graphite, white and `var(--accent)` (standing rule 3).
+- [ ] It looks right in light and in dark; no hard-coded colour outside the tokens (standing rule 4).
 - [ ] At most 15 words of interface text at rest (rule 30).
 - [ ] The screen uses only the frame's zones; no new sidebar, dock or strip (rules 27 and 28).
 - [ ] The nav and the primary button keep their place and size in every state (rule 29).

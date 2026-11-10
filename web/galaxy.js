@@ -38,6 +38,9 @@ function token(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback
 }
+// light theme (canvas.css): glows can't add light to a white page, so the scenes draw normally on it
+const isLight = () => { const v = token('--void', '#0b0b0c'); return parseInt(v.slice(1, 3), 16) > 128 }
+const blending = T => isLight() ? T.NormalBlending : T.AdditiveBlending
 const palette = () => ({
   void: token('--void', '#0b0b0c'), deep: token('--deep', '#161618'), frame: token('--frame', '#3a3a3f'), frameHi: token('--frame-hi', '#a1a1a6'),
   text: token('--text', '#f4f4f5'), muted: token('--muted', '#8e8e93'), accent: token('--accent', '#f4f4f5'), pink: token('--pink', '#f4f4f5'), ok: token('--ok', '#00F279'),
@@ -278,7 +281,7 @@ function makeGalaxy(root) {
           float tw = 1.0 - uTwinkle * 0.35 * (0.5 + 0.5 * sin(uTime * 1.7 + aSeed * 7.0));
           gl_PointSize = aSize * uPx * (26.0 / -mv.z); vColor = aColor * tw; }`,
       fragmentShader: `varying vec3 vColor; void main() { vec2 d = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(d)); a *= a; gl_FragColor = vec4(vColor * a, a); }`,
-      transparent: true, depthWrite: false, blending: T.AdditiveBlending
+      transparent: true, depthWrite: false, blending: blending(T)
     })
     group.add(new T.Points(geo, galaxyMat))
 
@@ -288,16 +291,16 @@ function makeGalaxy(root) {
     for (let i = 0; i < 26; i++) {
       const arm = i % ARMS, rad = 2.5 + rn() * 13
       const a = arm * (Math.PI * 2 / ARMS) + rad * TWIST + gauss(rn) * 0.3
-      const m = new T.SpriteMaterial({ map: glow, color: new T.Color(rn() < 0.3 ? P.nebula2 : rn() < 0.6 ? P.nebula : P.frameHi), transparent: true, opacity: 0.09 + rn() * 0.08, depthWrite: false, blending: T.AdditiveBlending })
+      const m = new T.SpriteMaterial({ map: glow, color: new T.Color(rn() < 0.3 ? P.nebula2 : rn() < 0.6 ? P.nebula : P.frameHi), transparent: true, opacity: 0.09 + rn() * 0.08, depthWrite: false, blending: blending(T) })
       const s = new T.Sprite(m)
       s.position.set(Math.cos(a) * rad, 0, Math.sin(a) * rad)
       s.scale.setScalar(4 + rn() * 6)
       group.add(s)
     }
-    core = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.touch).lerp(new T.Color(P.text), 0.5), transparent: true, opacity: 0.5, depthWrite: false, blending: T.AdditiveBlending }))
+    core = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.touch).lerp(new T.Color(P.text), 0.5), transparent: true, opacity: isLight() ? 0.15 : 0.5, depthWrite: false, blending: blending(T) }))
     core.scale.setScalar(6)
     scene.add(core)
-    const halo = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.frame), transparent: true, opacity: 0.16, depthWrite: false, blending: T.AdditiveBlending }))
+    const halo = new T.Sprite(new T.SpriteMaterial({ map: glow, color: new T.Color(P.frame), transparent: true, opacity: 0.16, depthWrite: false, blending: blending(T) }))
     halo.scale.setScalar(24)
     scene.add(halo)
 
@@ -339,7 +342,7 @@ function makeGalaxy(root) {
           float ring = smoothstep(0.08, 0.0, abs(d - 0.72)) * (0.35 + vHot * 0.65);
           vec3 c = vColor * (glow + dot * 1.6) + vec3(1.0) * dot * 0.6 + mix(vColor, uRing, vLive) * ring + uRing * vLive * smoothstep(0.12, 0.0, abs(d - 0.9));
           float a = clamp(dot + glow + ring, 0.0, 1.0); gl_FragColor = vec4(c, a); }`,
-      transparent: true, depthWrite: false, blending: T.AdditiveBlending
+      transparent: true, depthWrite: false, blending: blending(T)
     })
     ready = true
     resize()
@@ -630,7 +633,7 @@ function makeGalaxy(root) {
 // =====================================================================================
 const C = W.swarmCosmos = {
   mode: 'off',
-  three, palette, glowTexture, ico, esc, reduced,
+  three, palette, blending, isLight, glowTexture, ico, esc, reduced,
   // the canvas asks this before it opens the latest file behind an empty canvas
   home: () => C.mode === 'galaxy',
   classic: !!store.get('classic', false),

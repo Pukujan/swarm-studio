@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Swarm Studio</title>
 <link rel="icon" type="image/svg+xml" href="brand/hermia-mark.svg">
+<script>try { const t = localStorage.getItem('swarm-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch {}</script>
 <link rel="stylesheet" href="canvas.css">
 <link rel="stylesheet" href="galaxy.css">
 <link rel="stylesheet" href="ui.css">
@@ -47,6 +48,7 @@
         <button class="toggle" data-panel="planner"><i data-i="map"></i>Planner</button>
         <button class="toggle" data-panel="agents"><i data-i="users"></i>Agents</button>
         <button class="toggle" id="breakroom-btn"><i data-i="coffee"></i>Break room</button>
+        <button class="toggle" id="theme-btn"><i data-i="sun"></i>Light</button>
       </div>
     </div>
     <div class="clock"><span id="timer">00.0s</span></div>

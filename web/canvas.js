@@ -40,6 +40,8 @@ const store = {
 // Lucide line icons (ISC, lucide.dev; licence in web/brand/LICENSE-lucide.txt), only the ones the studio uses.
 // Emoji stay in chat and agent messages; the chrome uses these.
 const LUCIDE = {
+  "sun":"<circle cx=\"12\" cy=\"12\" r=\"4\" /><path d=\"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41\" />",
+  "moon":"<path d=\"M12 3a6 6 0 009 9 9 9 0 11-9-9z\" />",
   "minus":"<path d=\"M5 12h14\" />",
   "brain-circuit":"<path d=\"M12 13h4\" /><path d=\"M12 18h6a2 2 0 012 2v1\" /><path d=\"M12 8h8\" /><path d=\"M12 9a4.17 4.17 0 01-3 4\" /><path d=\"M16 8V5a2 2 0 012-2\" /><path d=\"M6 18a4 4 0 01-2-7.465\" /><path d=\"M6.004 5.125a4 4 0 00-2.526 5.77\" /><path d=\"M6.294 6.294A3 3 0 1112 5v13a4 4 0 11-7.967-.518\" /><circle cx=\"16\" cy=\"13\" r=\"0.5\" fill=\"currentColor\" /><circle cx=\"18\" cy=\"3\" r=\"0.5\" fill=\"currentColor\" /><circle cx=\"20\" cy=\"21\" r=\"0.5\" fill=\"currentColor\" /><circle cx=\"20\" cy=\"8\" r=\"0.5\" fill=\"currentColor\" />",
   "mouse-pointer-2":"<path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\"/>",
@@ -3393,6 +3395,22 @@ const moreMenu = $('#more-menu'), moreBtn = $('#more-btn')
 moreBtn.onclick = e => { e.stopPropagation(); moreMenu.hidden = !moreMenu.hidden; moreBtn.classList.toggle('on', !moreMenu.hidden); if (!moreMenu.hidden) closeable(moreMenu, () => { moreMenu.hidden = true; moreBtn.classList.remove('on') }, { extra: [moreBtn] }) }
 moreMenu.addEventListener('click', () => setTimeout(() => { moreMenu.hidden = true; moreBtn.classList.remove('on') }))
 document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.closest('.more')) { moreMenu.hidden = true; moreBtn.classList.remove('on') } })
+
+// ☰ → Light / Dark. The system's choice by default (prefers-color-scheme); a pick here is kept.
+// The page's colours follow at once; the WebGL scenes are built from the tokens, so they reload.
+const themeBtn = $('#theme-btn'), sysLight = matchMedia('(prefers-color-scheme: light)')
+const theme = () => document.documentElement.dataset.theme || (sysLight.matches ? 'light' : 'dark')
+function themeLabel() { const next = theme() === 'light' ? 'dark' : 'light'; themeBtn.innerHTML = `${ico(next === 'light' ? 'sun' : 'moon')}${next === 'light' ? 'Light' : 'Dark'}` }
+function setTheme(t) {
+  const before = theme()
+  document.documentElement.dataset.theme = t
+  try { localStorage.setItem('swarm-theme', t) } catch {}
+  themeLabel()
+  if (theme() !== before && document.body.classList.contains('cosmos')) location.reload()
+}
+themeBtn.onclick = () => setTheme(theme() === 'light' ? 'dark' : 'light')
+sysLight.addEventListener('change', () => { if (!document.documentElement.dataset.theme) location.reload() })
+themeLabel()
 
 // The side panel can shrink to a small chat over the canvas; the chat stays.
 function sideMin(on = !document.body.classList.contains('side-min')) {
