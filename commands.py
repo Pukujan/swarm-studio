@@ -150,6 +150,7 @@ def _info(r: dict) -> str:
                                                f"{r['edits']} edits" if r.get("edits") else "", f"{r['exports']} exports" if r.get("exports") else ""] if x)),
         ("Live at", " · ".join(f"{k}: {u}" for k, u in (r.get("sites") or {}).items())),
         ("Video", (r.get("videoFile") or f"runs/{r['id']}/video/promo.mp4") if r.get("video") else ""),
+        ("Phone video", f"runs/{r['id']}/video/promo-tall.mp4" if r.get("videoTall") else ""),
         ("Folder", r.get("folder")), ("Tags", ", ".join(r.get("tags") or [])), ("Note", r.get("note")), ("ID", r["id"]),
     ]
     return "\n".join(f"{k + ':':<12} {v}" for k, v in rows if v)
