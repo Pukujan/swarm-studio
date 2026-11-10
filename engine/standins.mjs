@@ -1,6 +1,7 @@
 // Stand-in pictures. While the crew paints a real picture, its slot shows a
-// matching photo marked "real picture coming", so a build looks alive. Sources,
-// in order: pictures earlier builds made (tagged by the prompt that made them),
+// matching photo marked "real picture coming", so a build looks alive. Sources:
+// the shipped library (photos tagged by a vision model and hosted on the Octo R2
+// CDN, built by scripts/stock-library.mjs), pictures earlier builds made (tagged by the prompt that made them),
 // Pexels when the studio has a key (directly or through Octo's vault proxy), and
 // public-domain photos from Openverse (CC0 and the public domain mark, no key).
 // A vision model looks at each found photo once, rejects what isn't a clean
@@ -21,6 +22,8 @@ const STOP = new Set(('a an the of and or with for in on at to from by into over
   'image photo photograph picture shot scene style website hero section background banner cover close closeup up view wide light lighting ' +
   'soft warm cool natural cinematic realism realistic dramatic detailed high quality editorial film grain depth field bokeh tones palette color colors colour').split(' '))
 export const words = s => [...new Set(String(s || '').toLowerCase().match(/[a-z]{3,}/g) || [])].filter(w => !STOP.has(w))
+// one form per word, so 'bakeries' finds 'bakery' and 'cyclists' finds 'cyclist'
+export const stem = w => (w.length > 4 ? w.replace(/ies$/, 'y').replace(/(sses|xes|ches|shes)$/, m => m.slice(0, -2)).replace(/([^s])s$/, '$1').replace(/ing$/, '') : w)
 const aspectOf = (w, h) => (!w || !h ? '' : w / h > 1.25 ? 'wide' : w / h < 0.8 ? 'tall' : 'square')
 
 const TAG_RULES = `You sort stock photos for a design tool that shows them as placeholders. Look at the photo and return JSON only:
@@ -29,7 +32,7 @@ const TAG_RULES = `You sort stock photos for a design tool that shows them as pl
  "tags": 6-12 lowercase single words for what is in it (subjects, place, mood, setting),
  "colors": up to 3 dominant colours as hex}`
 
-export function standins({ dataDir, runsDir, provider = null, model = '', octo = null, pexels = null, fetchImpl = fetch }) {
+export function standins({ dataDir, runsDir, provider = null, model = '', octo = null, pexels = null, fetchImpl = fetch, libraryFile = new URL('./stock/library.json', import.meta.url) }) {
   const dir = join(dataDir, 'standins')
   mkdirSync(dir, { recursive: true })
   const idxFile = join(dir, 'index.json')
@@ -57,15 +60,36 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
     return own
   }
 
+  // the shipped library (scripts/stock-library.mjs): photos on the R2 CDN with structured tags.
+  // Subjects, tags and businesses weigh most; the caption and place help break ties.
+  let library = null
+  function libraryPhotos() {
+    if (library) return library
+    library = []
+    let photos = []
+    try { photos = JSON.parse(readFileSync(libraryFile, 'utf8')).photos || [] } catch {}
+    for (const p of photos) {
+      if (!p.url) continue
+      const keys = new Map()
+      const add = (list, wt) => { for (const w of list) { const k = stem(w); keys.set(k, Math.max(keys.get(k) || 0, wt)) } }
+      add(words(`${p.caption} ${p.place} ${(p.mood || []).join(' ')}`), 0.5)
+      add([...(p.tags || []), ...words((p.subjects || []).join(' ')), ...words((p.businesses || []).join(' ')), ...words((p.themes || []).join(' '))], 1)
+      library.push({ id: p.id, src: 'library', url: p.url, publicUrl: p.url, credit: p.credit, page: p.page, aspect: p.aspect, quality: p.quality, copySpace: p.copySpace, tags: p.tags || [], keys })
+    }
+    return library
+  }
+
   function rank(want, aspect, exclude) {
-    const set = new Set(want)
+    const stems = [...new Set(want.map(stem))]
     let best = null
-    for (const x of [...ownPictures(), ...index]) {
+    for (const x of [...libraryPhotos(), ...ownPictures(), ...index]) {
       if (exclude && x.run === exclude) continue // never a build's own picture as its own stand-in
-      const hit = x.tags.filter(t => set.has(t)).length
-      if (hit < Math.min(2, want.length)) continue
-      const s = hit + (aspect && x.aspect === aspect ? 0.5 : 0) + (x.quality || 3) / 10 + (x.src === 'own' ? 0.3 : 0)
-      if (!best || s > best.s) best = { ...x, s, hit }
+      const keys = x.keys || (x.keys = new Map(x.tags.map(t => [stem(t), 1])))
+      let hit = 0, w = 0
+      for (const k of stems) { const v = keys.get(k); if (v) { w += v; if (v >= 1) hit++ } }
+      if (w < Math.min(2, stems.length)) continue
+      const s = w + (aspect && x.aspect === aspect ? 0.5 : 0) + (x.quality || 3) / 10 + (x.src === 'own' ? 0.3 : x.src === 'library' ? 0.2 : 0)
+      if (!best || s > best.s) best = { ...x, s, hit: Math.max(hit, Math.floor(w)) }
     }
     return best
   }
