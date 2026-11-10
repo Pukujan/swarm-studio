@@ -13,13 +13,24 @@ import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
+import { gameSlug } from './game.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
 const BACKEND = `Server code: call enable_nitro first, then put API routes in server/routes/api/ (Nitro file routes, e.g. server/routes/api/orders.post.ts, served at /api/orders) and keep data in a small typed server-side store module, so the same code runs here and deploys to Vercel. Never put secrets in client code.`
 
 // What the design implies, made real: the default first turn for a website.
-export function sitePrompt(snap, ask, plan = null) {
+// A site with promo games gets rewards: points from what visitors book or buy and
+// from the games (their win screen links back with ?game=<slug>&points=N), spent
+// in a small shop of perks. Partners are made up: a real brand would suggest a deal
+// that does not exist.
+export const rewardsBrief = games => `Rewards: this site has ${games.length > 1 ? 'promo games' : 'a promo game'} (${games.map(g => `"${g.title}", ?game=${g.slug}`).join('; ')}) whose win and lose screens send players back here with points.
+- A points balance per visitor (keyed by email once they book or sign up, by a random id kept in localStorage before that), with a history of every change, in the server store.
+- Earning: each booking or purchase earns 1 point per whole unit of its price; a visit to any page with ?game=<slug>&points=N adds N (whole number, at most 500) once per game per visitor per day, shows a small toast "+N points from <game>" and removes the query from the address bar. Unknown games earn nothing.
+- A /rewards page in the nav: the balance, the history, and a shop of 6 perks the points buy (things like a month of a streaming service, a lounge pass, a seat upgrade, a coffee voucher), each from a made-up partner with an invented name. Never use a real company's name or logo. Redeeming takes the points and shows a one-time code; you cannot go below zero.
+- Server routes for the balance, the claim, the history and redeeming; validate everything on the server (zod).`
+
+export function sitePrompt(snap, ask, plan = null, games = []) {
   const behind = planBrief(plan)
   const pages = snap.pages.map((p, i) => {
     const roles = p.sections.filter(s => s.page !== '*').map(s => s.role).slice(0, 14).join('; ')
@@ -39,7 +50,7 @@ Pages:
 ${pages}
 
 ${want}
-${behind ? `\n${behind}\n` : ''}
+${behind ? `\n${behind}\n` : ''}${games.length && !ask ? `\n${rewardsBrief(games)}\n` : ''}
 ${BACKEND}
 
 Finish with a working build: the typecheck and build must pass.`
@@ -102,7 +113,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         const snap = snapshot(events, Array.isArray(input.sections) ? input.sections.slice(0, 80) : [])
         if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
         dyadApp(snap, dir, { runId: id, runDir: join(runsDir, id), scaffold: scaffoldDir })
-        prompt = sitePrompt(snap, ask, input.plan && typeof input.plan === 'object' ? input.plan : null)
+        const games = [...new Map(events.filter(e => e.type === 'game:linked' && e.title).map(e => [e.game, { title: e.title, slug: gameSlug(e.title) }])).values()]
+        prompt = sitePrompt(snap, ask, input.plan && typeof input.plan === 'object' ? input.plan : null, input.rewards === false ? [] : games)
       }
     } else {
       if (!ask) throw new Error('say what to change')

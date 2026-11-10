@@ -97,9 +97,14 @@ function fallbackSpec(a, idea) {
   }
 }
 
+// A game's name as the site's rewards know it: ?game=<slug>
+export const gameSlug = t => String(t || 'game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'game'
+// The link back from a promo game: the site, with the points to claim
+export const rewardsLink = (url, slug = 'game') => `${String(url).replace(/[?#].*$/, '')}?game=${slug}&points=N (N is the score)`
+
 function brandRules(b) {
   const vars = Object.entries(b.vars || {}).map(([k, v]) => `${k}: ${v}`).join('; ')
-  return `- This is a promo game for ${b.name}. Use its theme for the whole UI and the scene's key colours: ${vars || 'its brand colours'}${b.fonts?.heading ? `; headings in ${b.fonts.heading}, text in ${b.fonts.body || b.fonts.heading} (Google Fonts)` : ''}. The title screen says "A ${b.name} game". ${b.url ? `The win and lose screens have a button back to ${b.name} (${b.url}, opens in a new tab) with the site's call to action, next to Play again.` : `${b.name} is not online yet, so the game links nowhere: no button or link to the site, and the win screen's call to action is words only, next to Play again.`}
+  return `- This is a promo game for ${b.name}. Use its theme for the whole UI and the scene's key colours: ${vars || 'its brand colours'}${b.fonts?.heading ? `; headings in ${b.fonts.heading}, text in ${b.fonts.body || b.fonts.heading} (Google Fonts)` : ''}. The title screen says "A ${b.name} game". ${b.url ? `The win and lose screens have a button back to ${b.name}, next to Play again, that opens ${rewardsLink(b.url, b.game)} in a new tab with the run's score as a whole number from 0 to 500 (the height, distance or points the HUD shows, scaled); it reads "Claim N points at ${b.name}" (the site turns them into rewards).` : `${b.name} is not online yet, so the game links nowhere: no button or link to the site, and the win screen's call to action is words only, next to Play again.`}
 - Never write a web address that is not given here: no made-up domain for ${b.name} or anyone else (a guessed domain belongs to someone else).
 `
 }
@@ -144,7 +149,7 @@ How to build it:
 - Game feel: hit-stop, screen shake, knockback, particles, easing, juicy feedback on every action.
 - Fixed timestep update loop; works at 60 fps on a laptop; resizes with the window; no console errors.
 - Original content only: the names, characters, world and art in the spec are new. Never use names, characters or assets from existing games.
-${spec.brand ? brandRules(spec.brand) : ''}
+${spec.brand ? brandRules({ ...spec.brand, game: gameSlug(spec.title) }) : ''}
 ${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
 Finish with a working build: the typecheck and build must pass, and the game must start and be playable to a win and a loss.
 

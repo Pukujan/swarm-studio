@@ -4174,9 +4174,10 @@ function renderGame() {
   } else if (game.spec) {
     const s = game.spec, list = v => (Array.isArray(v) ? v.join(', ') : v || '')
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
-    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
+    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
     el.querySelector('[data-build]').onclick = () => gameBuild()
+    el.querySelector('[data-online]')?.addEventListener('click', () => gameOnline())
   } else {
     const val = game.answers[q.id] || ''
     el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
@@ -4209,6 +4210,28 @@ async function gameSpec(build = false) {
   }
   game.busy = false
   if (build) return gameBuild()
+  renderGame()
+}
+
+// The promo game links back only to a real address: put the site online first
+// (a connected Vercel or Cloudflare, else GitHub Pages), then the link goes in the spec.
+async function gameOnline() {
+  const brand = game.spec?.brand
+  if (!brand?.from) return
+  const h = await api('/api/publish').then(r => r.json()).catch(() => ({}))
+  const target = h.vercel?.user ? 'vercel' : h.cloudflare?.user ? 'cloudflare' : h.github ? 'github' : null
+  if (!target) return botMsg('Game: sign in to a host first (🌐 Publish on the canvas), then try again.')
+  game.busy = `Putting ${brand.name} online on ${HOSTS[target].label}…`
+  renderGame()
+  const path = `/api/runs/${encodeURIComponent(brand.from)}/publish`
+  let job = await api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target }) }).then(r => r.json()).catch(err => ({ state: 'failed', error: err.message }))
+  for (let i = 0; i < 120 && job.state === 'working'; i++) {
+    await new Promise(r => setTimeout(r, 2000))
+    job = await api(path).then(r => r.json()).catch(() => job)
+  }
+  game.busy = false
+  if (job.state === 'done' && job.url) brand.url = job.url
+  else botMsg(`Game: ${brand.name} did not go online: ${job.message || job.error || 'it took too long'}`)
   renderGame()
 }
 
