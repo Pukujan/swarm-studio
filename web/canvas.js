@@ -1425,7 +1425,7 @@ const SLASH = [
   ['play', '', 'click through the prototype'],
   ['review', '', 'a vision model checks every page; agents fix what it finds'],
   ['fix', '<what to change>', 'an agent rewrites the selected section, or the page'],
-  ['video', '[style] [idea]', 'cut a promo video; styles: auto (AI director), promo, kinetic, slideshow, teaser, story'],
+  ['video', '[prompt]', 'cut a film from a prompt, e.g. a fast trailer, scary but cute'],
   ['app', '[change]', 'the App view: make this design a working app, or change it'],
   ['game', '[idea]', 'make an original browser game: a few questions, then it builds'],
   ['canvas', '', 'back to the canvas view'],
@@ -3144,17 +3144,21 @@ els.reviewBtn.onclick = e => { if (!reviewerOn()) { e.stopPropagation(); return 
 // The planner storyboards the build into a few scenes, each handed to an agent,
 // and HyperFrames renders them in the site's theme. The panel shows the
 // storyboard, the render, then the video.
-const video = { run: null, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '', el: null, cuts: [], pick: -1, next: null }
+const video = { run: null, busy: false, pct: 0, stage: '', story: [], board: null, notes: null, notesOpen: false, src: '', file: '', message: '', el: null, cuts: [], pick: -1, next: null }
 const shownRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
 
 function videoEvent(e) {
-  if (video.run !== e.run) Object.assign(video, { run: e.run, busy: false, pct: 0, stage: '', story: [], src: '', file: '', message: '', cuts: [], pick: -1, next: null })
+  if (video.run !== e.run) Object.assign(video, { run: e.run, busy: false, pct: 0, stage: '', story: [], board: null, notes: null, src: '', file: '', message: '', cuts: [], pick: -1, next: null })
   const fresh = !e.t || Date.now() - e.t < 8000 // a replayed file shows its video quietly
   if (e.type === 'video:start') {
-    Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], src: '', message: '', heard: fresh ? Date.now() : 0, next: { style: e.style, idea: e.idea } })
-    if (fresh) feed(null, `🎬 ${e.model || 'the planner'} is storyboarding a ${VIDEO_STYLES.find(([k]) => k === e.style)?.[1].toLowerCase() || 'promo'} video${e.transition ? ` (${e.transition} cuts)` : ''}${e.idea ? `: “${e.idea}”` : ''}`, 'sys')
+    Object.assign(video, { busy: true, pct: 0, stage: 'storyboard', story: [], board: null, notes: null, notesOpen: false, src: '', message: '', heard: fresh ? Date.now() : 0, next: { style: e.style, idea: e.prompt || e.idea } })
+    if (fresh) feed(null, `🎬 ${e.model || 'the planner'} is storyboarding a film${(e.prompt || e.idea) ? `: “${e.prompt || e.idea}”` : ''}`, 'sys')
+  } else if (e.type === 'video:style') {
+    video.notes = e.notes
   } else if (e.type === 'video:story') {
     video.story = e.scenes
+    video.board = { title: e.title, pace: e.pace, music: e.music, plan: e.plan }
+    if (e.notes) video.notes = e.notes
     if (fresh) e.scenes.forEach((sc, i) => setTimeout(() => feed(S.agents.get(sc.agent), `scene ${i + 1} · ${sc.kind}: “${sc.headline}”`, ''), i * 350))
     if (fresh && e.cast?.narrator) feed(null, `🎙 cast for the theme: ${e.cast.narrator}${e.cast.second ? ` with ${e.cast.second}` : ''} reading, ${e.music || 'matching'} music`, 'sys')
   } else if (e.type === 'video:progress') {
@@ -3193,13 +3197,13 @@ function renderVideo() {
       renderVideo()
     }).catch(() => {})
   }
-  const stage = { storyboard: 'Writing the storyboard…', rendering: 'Rendering frames in headless Chrome…', assembling: 'Encoding the MP4…', 'recording the voiceover': 'Kokoro is reading the voiceover…', 'mixing the sound': 'Mixing the music and the voice…' }[video.stage] || video.stage
+  const stage = { storyboard: 'Writing the storyboard…', 'reading the style references': 'Reading the references…', scoring: 'Scoring the film…', rendering: 'Rendering frames in headless Chrome…', assembling: 'Encoding the MP4…', 'recording the voiceover': 'Kokoro is reading the voiceover…', 'mixing the sound': 'Mixing the music and the voice…' }[video.stage] || video.stage
   // progress only moves the bar, so the storyboard cards don't replay their entrance
   // once the composition is written (rendering onward), it plays live in the panel
   const liveOn = video.busy && /render|assembl|mixing/.test(video.stage || '')
   if (liveOn && !video.liveAt) video.liveAt = Date.now()
   if (!video.busy) video.liveAt = 0
-  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message, video.pick, video.cuts.length, liveOn, !!video.min])
+  const sig = JSON.stringify([video.run, video.story.length, video.busy, video.src, video.message, video.pick, video.cuts.length, liveOn, !!video.min, !!video.notes, video.notesOpen, videoOpts.refs.length])
   if (el.dataset.sig === sig) {
     const bar = el.querySelector('.vbar i'), txt = el.querySelector('.vstage')
     if (bar) bar.style.width = `${Math.max(3, video.pct)}%`
@@ -3207,11 +3211,13 @@ function renderVideo() {
     return
   }
   el.dataset.sig = sig
-  const story = video.story.map((sc, i) => {
-    const a = S.agents.get(sc.agent)
-    return `<div class="vscene" style="--c:${a?.color || 'var(--muted)'}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind)}</span>`}<b>${i + 1}. ${esc(sc.headline)}</b><small>${esc(a?.name || '')} · ${esc(sc.kind)}</small></div>`
-  }).join('')
-  const opts = `<div class="vopts"><label>Style <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Cut <select class="vcut">${VIDEO_CUTS.map(([v, l]) => `<option value="${v}" ${videoOpts.transition === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div><input class="videa" placeholder="Your idea for the video (optional): “end on the night market crowd”, “for Instagram, upbeat”" value="${esc(videoOpts.idea || '')}"><div class="vopts"><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
+  // the storyboard: one card per beat, its length and camera; names only, the rest a click away
+  const story = video.story.map((sc, i) => `<div class="vscene L-${esc(sc.layer || 'type')}">${sc.image ? `<img src="${esc(sc.image)}" alt="">` : `<span class="vkind">${esc(sc.kind === 'black' ? '' : sc.kind)}</span>`}<b>${esc(sc.headline || (sc.kind === 'black' ? '·' : ''))}</b><small>${sc.seconds ? `${Number(sc.seconds).toFixed(1)}s` : ''}${sc.camera && sc.image ? ` · ${esc(sc.camera)}` : ''}${sc.speed > 1 ? ` · ${sc.speed}×` : ''}${sc.cue ? ` · ${esc(sc.cue)}` : ''}</small></div>`).join('')
+  const n = video.notes
+  const notes = n ? `<button class="vnotes-btn" aria-expanded="${video.notesOpen}">Style${n.palette?.length ? n.palette.slice(0, 5).map(h => `<i style="background:${esc(h)}"></i>`).join('') : ''}</button>${video.notesOpen ? `<dl class="vnotes">${[['From', (n.from || []).map(x => x.what).join(', ')], ['Type', n.type], ['Pacing', n.pacing], ['Cuts', n.cutRhythm?.text], ['Camera', n.camera], ['Motion', n.motion], ['Mood', n.mood], ['Music', n.music && [n.music.tempo && `${n.music.tempo} BPM`, n.music.instruments?.join(', '), n.music.structure].filter(Boolean).join(' · ')]].filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}` : ''
+  const head = video.board ? `<div class="vboard"><b>${esc(video.board.title || '')}</b><small>${esc(video.board.pace || '')}${video.board.music?.bpm ? ` · ${video.board.music.bpm} BPM` : ''}</small>${notes}</div>` : notes ? `<div class="vboard">${notes}</div>` : ''
+  const refs = videoOpts.refs.map((r, i) => `<span class="vref">${esc(r.name || r.url)}<button data-unref="${i}" aria-label="Remove ${esc(r.name || r.url)}">${ico('x')}</button></span>`).join('')
+  const opts = `<div class="vprompt-row"><textarea class="vprompt" rows="2" placeholder="Describe the film">${esc(videoOpts.idea || '')}</textarea><button class="vaddref" aria-label="Add a style reference">${ico('plus')}</button><input type="file" class="vreffile" accept="image/*,video/*,audio/*" hidden></div>${refs ? `<div class="vrefs">${refs}</div>` : ''}<div class="vopts"><label>Start from <select class="vstyle">${VIDEO_STYLES.map(([v, l]) => `<option value="${v}" ${videoOpts.style === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Voice <select class="vvoice">${VOICE_OPTS.map(([v, l]) => `<option value="${v}" ${videoOpts.voice === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label><input type="checkbox" class="vmusic" ${videoOpts.music ? 'checked' : ''}> Music</label></div>`
   const cut = video.cuts[video.pick], latest = video.pick < 0 || video.pick === video.cuts.length - 1
   const src = latest ? video.src : `/video/${video.run}/cut/${cut.name}`, file = cut?.file || video.file
   const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" aria-label="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
@@ -3221,10 +3227,10 @@ function renderVideo() {
       ? `${liveOn ? `<div class="vlive"><iframe src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
-        : `<div class="vstage">A short promo of this build: the planner writes the storyboard and a voiceover from your pages and pictures, HyperFrames renders it in your theme, and Kokoro reads it over music made for it, all on this machine.</div>${opts}<div class="vfoot"><span></span><button class="vagain">Make the video</button></div>`
+        : `${opts}<div class="vfoot"><span></span><button class="vagain">Make the film</button></div>`
   // minimized: only the title and the progress, so the canvas and the crew stay in view
   el.classList.toggle('min', !!video.min && !document.body.classList.contains('view-video'))
-  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><span class="vhead-acts"><button class="vmin" aria-label="${video.min ? 'Expand' : 'Minimize'}" aria-expanded="${!video.min}">${ico(video.min ? 'up' : 'minus')}</button><button class="vclose" aria-label="Close">${ico('x')}</button></span></div>${story ? `<div class="vstory">${story}</div>` : ''}${body}`
+  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><span class="vhead-acts"><button class="vmin" aria-label="${video.min ? 'Expand' : 'Minimize'}" aria-expanded="${!video.min}">${ico(video.min ? 'up' : 'minus')}</button><button class="vclose" aria-label="Close">${ico('x')}</button></span></div>${head}${story ? `<div class="vstory">${story}</div>` : ''}${body}`
   el.querySelector('.vclose').onclick = () => toggleVideo(false)
   el.querySelector('.vmin').onclick = e => { e.stopPropagation(); video.min = !video.min; renderVideo() }
   const again = el.querySelector('.vagain')
@@ -3238,8 +3244,17 @@ function renderVideo() {
   for (const b of el.querySelectorAll('[data-cut]')) b.onclick = () => { video.pick = Number(b.dataset.cut); renderVideo() }
   el.querySelector('.vreveal')?.addEventListener('click', () => api(`/api/runs/${encodeURIComponent(video.run || viewing || S.run)}/reveal?what=video`, { method: 'POST' }))
   el.querySelector('.vstyle')?.addEventListener('change', e => { videoOpts.style = e.target.value; store.set('videoStyle', videoOpts.style) })
-  el.querySelector('.vcut')?.addEventListener('change', e => { videoOpts.transition = e.target.value; store.set('videoCut', videoOpts.transition) })
-  el.querySelector('.videa')?.addEventListener('input', e => { videoOpts.idea = e.target.value })
+  el.querySelector('.vprompt')?.addEventListener('input', e => { videoOpts.idea = e.target.value })
+  el.querySelector('.vnotes-btn')?.addEventListener('click', () => { video.notesOpen = !video.notesOpen; renderVideo() })
+  const refFile = el.querySelector('.vreffile')
+  el.querySelector('.vaddref')?.addEventListener('click', () => refFile?.click())
+  refFile?.addEventListener('change', async () => {
+    const f = refFile.files?.[0]
+    if (!f || !video.run) return
+    const r = await api(`/api/runs/${encodeURIComponent(video.run)}/video/ref?name=${encodeURIComponent(f.name)}`, { method: 'POST', body: f }).then(x => x.json()).catch(() => null)
+    if (r?.name) { videoOpts.refs.push({ name: r.name }); renderVideo() }
+  })
+  for (const b of el.querySelectorAll('[data-unref]')) b.onclick = () => { videoOpts.refs.splice(Number(b.dataset.unref), 1); renderVideo() }
   el.querySelector('.vvoice')?.addEventListener('change', e => { videoOpts.voice = e.target.value; store.set('videoVoice', videoOpts.voice) })
   el.querySelector('.vmusic')?.addEventListener('change', e => { videoOpts.music = e.target.checked; store.set('videoMusic', videoOpts.music) })
 }
@@ -3257,10 +3272,9 @@ setInterval(async () => {
 
 // The voiceover: Kokoro, on this machine, in one of its voices; or none.
 const VOICE_OPTS = [['', 'Kokoro · fits the theme'], ['af_heart', 'Kokoro · Heart'], ['af_bella', 'Kokoro · Bella'], ['am_michael', 'Kokoro · Michael'], ['bf_emma', 'Kokoro · Emma (UK)'], ['bm_george', 'Kokoro · George (UK)'], ['off', 'No voice']]
-const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true, style: store.get('videoStyle') || 'auto', transition: store.get('videoCut') || '', idea: '' }
+const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true, style: store.get('videoStyle') || '', idea: '', refs: [] }
 // video plans and cuts (the server has the same lists, in engine/video.mjs)
-const VIDEO_STYLES = [['auto', 'AI director (a new look every time)'], ['promo', 'Promo'], ['kinetic', 'Kinetic type'], ['slideshow', 'Slideshow'], ['teaser', 'Teaser'], ['story', 'Customer story']]
-const VIDEO_CUTS = [['', 'Fits the look'], ['wipe', 'Colour wipe'], ['fade', 'Fade'], ['zoom', 'Zoom'], ['slide', 'Slide'], ['flash', 'Flash'], ['iris', 'Iris'], ['blinds', 'Blinds'], ['split', 'Split'], ['push', 'Push'], ['glitch', 'Glitch'], ['whip', 'Whip pan']]
+const VIDEO_STYLES = [['', 'The prompt'], ['trailer', 'Movie trailer'], ['promo', 'Promo'], ['kinetic', 'Kinetic type'], ['slideshow', 'Slideshow'], ['teaser', 'Teaser'], ['story', 'Customer story'], ['calm', 'Calm film']]
 
 // The video filling the whole pane (and the screen, where the app allows it).
 function bigScreen(on) {
@@ -3285,7 +3299,7 @@ async function makeVideo({ idea = null, style = null } = {}) {
   if (!run || video.busy) return
   video.mine = true
   toggleVideo(true)
-  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music, style: style || videoOpts.style || undefined, idea: idea || videoOpts.idea || undefined, transition: videoOpts.transition || undefined, film: 'auto' }) })
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/video`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voice: videoOpts.voice || undefined, music: videoOpts.music, template: style || videoOpts.style || undefined, prompt: idea || videoOpts.idea || undefined, refs: videoOpts.refs, film: 'auto' }) })
   if (!res.ok) {
     const out = await res.json().catch(() => ({}))
     Object.assign(video, { run, message: out.error || `HTTP ${res.status}`, busy: false })

@@ -23,7 +23,7 @@ import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
 import { MOTION_CSS, SNAPPY, swarmMotion, motionPreset } from '../engine/motion.mjs'
-import { speak, music, mix, VOICES } from '../engine/sound.mjs'
+import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
@@ -34,7 +34,10 @@ import { runBoard as boardOf } from './board.mjs'
 import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
-import { collect, writeStory, fallbackStory, composition, sceneLength, VOICE_LEAD, videoTools, render, stagePictures, STYLES, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
+import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
+import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
+import { scoreWav, elevenScore } from '../engine/score.mjs'
+import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -634,7 +637,37 @@ async function reviewNow(id, input) {
 const videos = new Map() // run id -> { state, pct, stage, src, file, seconds, message }
 const makeVideo = (id, input) => withTrace(id, () => videoNow(id, input))
 // New pictures for the video: two at a time; a scene whose picture fails becomes a quote.
-async function shootScenes(id, c, scenes, choice, progress) {
+// The film's style references: files the person added (kept in video/refs) and links in the prompt.
+function refsOf(id, input, prompt) {
+  const dirOf = join(runsDir, id, 'video', 'refs')
+  const out = []
+  for (const r of Array.isArray(input.refs) ? input.refs : []) {
+    if (r?.name) { const file = join(dirOf, safeName(r.name)); if (existsSync(file)) out.push({ file, name: safeName(r.name), kind: kindOf({ file }) }) }
+    else if (/^https?:\/\//.test(r?.url || '')) out.push({ url: r.url, kind: kindOf({ url: r.url }) })
+    else if (r?.text) out.push({ text: String(r.text).slice(0, 200), kind: 'game' })
+  }
+  for (const m of prompt.matchAll(/https?:\/\/[^\s"'<>]+/g)) if (!out.some(r => r.url === m[0])) out.push({ url: m[0], kind: kindOf({ url: m[0] }) })
+  return out
+}
+
+// Flow (Veo) clips made from the studio's stills: <run>/flow/<still name>.mp4. A story beat
+// on a still that has one plays the clip instead (its first seconds, the way the trailer uses them).
+function useFlowClips(id, c, scenes) {
+  const flow = join(runsDir, id, 'flow')
+  if (!existsSync(flow)) return
+  for (const sc of scenes) {
+    if (sc.layer !== 'story' || !(sc.kind === 'image' || sc.kind === 'split') || !sc.image) continue
+    const still = c.images.find(x => x.n === sc.image)
+    const file = still && join(flow, `${basename(still.file).replace(/\.[^.]+$/, '')}.mp4`)
+    if (!file || !existsSync(file)) continue
+    const n = c.clips.length + 1
+    c.clips.push({ n, what: still.gen, label: '', seconds: 8, from: 0, file })
+    Object.assign(sc, { kind: 'clip', clip: n, from: 0, speed: 1 })
+    delete sc.image
+  }
+}
+
+async function shootScenes(id, c, scenes, choice, progress, notes = null) {
   const todo = scenes.filter(sc => sc.shot)
   const img = join(runsDir, id, 'img')
   mkdirSync(img, { recursive: true })
@@ -643,14 +676,14 @@ async function shootScenes(id, c, scenes, choice, progress) {
   const guide = guideFor(id)
   const one = async sc => {
     // a video frame is a poster: the best tier, the build's own style, and no phones or interfaces
-    const r = await paintArt(choice, guide, { gen: `${sc.shot}, filling the frame, no screens, phones or website interfaces`, aspect: 'landscape', hero: true })
+    const r = await paintArt(choice, guide, { gen: `${sc.shot}${notes ? `, ${[notes.mood, notes.palette?.length ? `colours ${notes.palette.slice(0, 4).join(' ')}` : ''].filter(Boolean).join(', ')}` : ''}, filling the frame, no screens, phones or website interfaces`, aspect: 'landscape', hero: true })
     if (r.ok && r.path && existsSync(r.path)) {
       const file = join(img, `video-${Date.now().toString(36)}-${done}${extname(r.path) || '.png'}`)
       copyFileSync(r.path, file)
       const n = c.images.length + 1
       c.images.push({ n, gen: sc.shot.slice(0, 160), page: 'video', file })
       sc.image = n
-    } else sc.kind = 'quote'
+    } else { sc.kind = 'title'; sc.layer = 'type'; if (!sc.headline) sc.headline = c.brand }
     delete sc.shot
     progress(0, `making pictures (${++done}/${todo.length})`)
   }
@@ -687,57 +720,91 @@ async function videoNow(id, input = {}) {
     }
     const c = collect(readEvents(id) || events, join(runsDir, id))
     const model = modelFor('planner')
-    // the plan: a style (its own prompt, pace, cut and music), an optional idea, an optional cut
-    // 'auto' lets the storyboard writer pick the plan; every video gets its own seed and look
-    let style = STYLES[input.style] || input.style === 'auto' ? input.style : 'promo', plan = STYLES[style] || STYLES.promo
-    const idea = String(input.idea || '').trim().slice(0, 400)
+    // the prompt shapes the film; a template is only a starting point the writer may borrow from
+    const prompt = String(input.prompt || input.idea || '').trim().slice(0, 600)
+    const template = TEMPLATES[input.template || input.style] ? (input.template || input.style) : ''
     const seed = (Date.now() ^ (Math.random() * 2 ** 31)) >>> 0
     const pinned = TRANSITIONS.includes(input.transition)
-    let transition = pinned ? input.transition : plan.transition
-    send('video:start', { model, images: c.images.length, style, idea, transition })
+    let transition = pinned ? input.transition : 'wipe'
+    send('video:start', { model, images: c.images.length, style: template || 'prompt', idea: prompt, prompt, transition, refs: (input.refs || []).length })
     const tools = videoTools(dataDir, stage => progress(0, stage)) // fetches the renderer while the story is written
+    mkdirSync(dir, { recursive: true })
+    // style references: each broken into a style description, kept with the run; never copied
+    let notes = null
+    const refs = refsOf(id, input, prompt)
+    if (refs.length) {
+      progress(0, 'reading the style references')
+      const t0 = await tools
+      const vision = models.reviewer.apiKey && modelFor('reviewer') ? ['reviewer', modelFor('reviewer')] : ['planner', model]
+      const done = []
+      for (const ref of refs.slice(0, 3)) {
+        try { done.push(await breakdown(ref, { ffmpeg: t0.ffmpeg, provider: models[vision[0]].apiKey ? provider(vision[0]) : null, model: vision[1], signal: AbortSignal.timeout(120000) })) }
+        catch (err) { send('video:note', { message: `could not read a reference: ${String(err.message || err).split('\n')[0].slice(0, 120)}` }) }
+      }
+      if (done.length) {
+        notes = mergeRefs(done)
+        writeFileSync(join(dir, 'style-notes.json'), JSON.stringify({ notes, refs: done }, null, 2))
+        send('video:style', { notes })
+      }
+    }
     let scenes
     try {
       if (!model || !models.planner.apiKey) throw new Error('no planner model')
-      // with an image model, the storyboard may ask for new pictures (what the idea wants to see)
+      // with an image model, the storyboard may ask for new story stills
       const shooter = await imageChoice().catch(() => null)
-      scenes = await writeStory({ provider: provider('planner'), model, c, style, idea, shots: !!shooter, seed, signal: AbortSignal.timeout(90000) })
-      if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress)
-    } catch {
-      scenes = fallbackStory(c, seed)
+      scenes = await writeBoard({ provider: provider('planner'), model, c, prompt, template, notes, shots: !!shooter, seed, signal: AbortSignal.timeout(120000) })
+      if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress, notes)
+    } catch (err) {
+      scenes = fallbackBoard(c, { prompt, notes, seed, template, fixes: [`no writer this time: ${String(err.message || err).slice(0, 80)}`] })
     }
-    if (style === 'auto') { style = scenes.plan || 'promo'; plan = STYLES[style]; if (!pinned) transition = plan.transition }
+    // a beat whose painted shot failed has no picture: it becomes a type card
+    for (const sc of scenes) if ((sc.kind === 'image' || sc.kind === 'split') && !sc.image) { sc.kind = 'title'; sc.layer = 'type'; if (!sc.headline) sc.headline = c.brand }
+    useFlowClips(id, c, scenes)
     if (pinned) scenes.look.pinned = true
-    scenes.fx = fxFor(scenes.fx, idea)
+    scenes.fx = fxFor(scenes.fx, prompt)
     const agents = c.agents
-    send('video:story', { look: scenes.look, plan: style, clips: c.clips.length, fx: scenes.fx, cast: scenes.cast, music: scenes.music, scenes: scenes.map((s, i) => ({ kind: s.kind, headline: s.headline, image: (s.image || s.images?.[0]) ? `/img/${id}/${basename(c.images.find(x => x.n === (s.image || s.images[0])).file)}` : null, agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
-    mkdirSync(dir, { recursive: true })
+    const picOf = s => { const n = s.image || s.images?.[0]; const f = n && c.images.find(x => x.n === n); return f ? `/img/${id}/${basename(f.file)}` : null }
+    send('video:story', { look: scenes.look, plan: scenes.plan, title: scenes.title, pace: scenes.pace, clips: c.clips.length, fx: scenes.fx, music: scenes.music, fixes: scenes.fixes, notes, scenes: scenes.map((s, i) => ({ kind: s.kind, layer: s.layer, seconds: s.seconds, camera: s.camera, cut: s.cut, cue: s.cue, sfx: s.sfx, headline: s.headline, accent: s.accent, speed: s.speed, image: picOf(s), agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
     stagePictures(c, dir)
     const t = await tools
-    // the voiceover first: each scene stretches to fit its line
+    // a long take sped up for its beat: the footage itself is sped up, and the beat wears the 8× chip
+    let fast = 0
+    for (const sc of scenes) if (sc.kind === 'clip' && sc.speed > 1) {
+      const f = c.clips.find(x => x.n === sc.clip)
+      const name = `c${sc.clip}x${sc.speed}-${fast++}.mp4`
+      try {
+        await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-ss', String(sc.from || 0), '-i', f.file, '-t', String(Math.min(60, (sc.seconds + 0.5) * sc.speed)), '-an', '-vf', `setpts=PTS/${sc.speed},fps=30`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', join(dir, name)], { env: { ...process.env, PATH: t.path } }, err => (err ? fail(err) : ok())))
+        sc.speedName = name
+      } catch { sc.speed = 1 }
+    }
+    // the voice only when the film wants narration, or the person picked a voice
     const preset = motionPreset(c.theme)
     let voices = []
-    if (input.voice !== 'off') {
+    const picked = VOICES[input.voice] || (/^[a-z][fm]_[a-z]+$/.test(input.voice || '') ? input.voice : null)
+    if (input.voice !== 'off' && (scenes.voice || picked) && scenes.some(s => s.say)) {
       try {
-        // a voice the person picked reads everything; otherwise the storyboard's cast
-        const picked = VOICES[input.voice] || (/^[a-z][fm]_[a-z]+$/.test(input.voice || '') ? input.voice : null)
         const cast = scenes.cast || {}, narrator = picked || cast.narrator || VOICES[preset]
         voices = await speak({ dataDir, dir, lines: scenes.map(s => s.say || ''), voice: narrator, voices: picked ? [] : scenes.map(s => (s.who === 'second' && cast.second) || narrator), onStage: stage => progress(1, stage) })
       } catch (err) {
         send('video:note', { message: `no voiceover this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
-    const lengths = scenes.map((s, i) => sceneLength(s, voices[i]?.seconds, plan.pace))
+    const lengths = scenes.map((s, i) => Number(Math.max(s.seconds || 2, voices[i]?.seconds ? voices[i].seconds + 0.6 : 0).toFixed(3)))
     const comp = composition(scenes, c, lengths, transition)
     // the tall cut for phones: the same storyboard, look and timing, laid out again for a 9:16 frame
     const tallComp = composition(scenes, c, lengths, transition, comp.look, { shape: 'tall' })
     const tallDir = join(dir, 'tall')
     mkdirSync(tallDir, { recursive: true })
     stagePictures(c, tallDir)
+    for (const sc of scenes) if (sc.speedName) copyFileSync(join(dir, sc.speedName), join(tallDir, sc.speedName))
     writeFileSync(join(dir, 'index.html'), comp.html)
     writeFileSync(join(tallDir, 'index.html'), tallComp.html)
     const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ plan: style, look: comp.look, cast: scenes.cast, music: scenes.music, fx: scenes.fx, files, scenes }, null, 2))
+    const cues = cueSheet(scenes, lengths)
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, scenes }, null, 2))
+    // the stills and motion lines for Flow (Veo): the flow-video skill animates them into <run>/flow/<still>.mp4,
+    // and the next cut plays those clips instead of the stills
+    writeFileSync(join(dir, 'flow-prompts.json'), JSON.stringify(scenes.filter(s => s.layer === 'story' && s.image).map(s => { const f = c.images.find(x => x.n === s.image); return { still: f.file, clip: join(runsDir, id, 'flow', `${basename(f.file).replace(/\.[^.]+$/, '')}.mp4`), camera: s.camera, seconds: s.seconds, action: `${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape` } }), null, 2))
     progress(2, 'rendering')
     const quality = ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft'
     const silent = join(dir, 'promo-silent.mp4'), out = join(dir, SHAPES.wide.file)
@@ -751,14 +818,24 @@ async function videoNow(id, input = {}) {
       tall = false
       send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
-    // music to the theme's mood with a whoosh into every cut, the voice on top
-    progress(97, 'mixing the sound')
-    const starts = lengths.map((_, i) => lengths.slice(0, i).reduce((a, b) => a + b, 0))
-    let sound = false
+    // the score to the storyboard's cue sheet: ElevenLabs when the studio has a key, else written here
+    progress(97, 'scoring')
+    let sound = false, scoredBy = null
     try {
-      const musicFile = input.music === false ? null : join(dir, 'music.wav')
-      if (musicFile) music({ seconds: comp.seconds, preset: plan.music || scenes.music || preset, cuts: starts.slice(1), file: musicFile })
-      sound = await mix({ ffmpeg: t.ffmpeg, env: { ...process.env, PATH: t.path }, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: starts[i] + VOICE_LEAD }), out })
+      let musicFile = null, fx = []
+      if (input.music !== false) {
+        const key = process.env.SWARM_ELEVENLABS_KEY
+        if (key && input.eleven !== false) {
+          try {
+            progress(97, 'ElevenLabs is scoring the film')
+            const e = await elevenScore({ key, music: scenes.music, cues, seconds: comp.seconds, dir })
+            musicFile = e.music; fx = e.sfx; scoredBy = 'elevenlabs'
+          } catch (err) { send('video:note', { message: `ElevenLabs did not score it, so the studio did: ${String(err.message || err).slice(0, 100)}` }) }
+        }
+        if (!musicFile) { musicFile = join(dir, 'music.wav'); scoreWav({ seconds: comp.seconds, music: scenes.music, cues, file: musicFile, seed }); scoredBy = 'studio' }
+      }
+      progress(98, 'mixing the sound')
+      sound = await mix({ ffmpeg: t.ffmpeg, env: { ...process.env, PATH: t.path }, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: (cues.cuts[i - 1] || 0) + VOICE_LEAD }), fx, silence: cues.silence, out })
     } catch (err) {
       send('video:note', { message: `sound failed, the video is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
@@ -778,7 +855,7 @@ async function videoNow(id, input = {}) {
     const v = Date.now()
     const tallSrc = tall ? `/video/${id}/${SHAPES.tall.file}?v=${v}` : null
     Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
-    send('video:done', { src: job.src, tall: tallSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound })
+    send('video:done', { src: job.src, tall: tallSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound, scoredBy })
   })().catch(err => {
     Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })
@@ -1407,6 +1484,20 @@ const server = createServer((req, res) => {
   }
 
   const runVideo = url.pathname.match(/^\/api\/runs\/([^/]+)\/video$/)
+  // a style reference for the film (an image, a video or a piece of music), kept in the run's video/refs
+  const runRef = url.pathname.match(/^\/api\/runs\/([^/]+)\/video\/ref$/)
+  if (runRef && req.method === 'POST' && RUN_ID.test(runRef[1])) {
+    const name = safeName(url.searchParams.get('name') || 'reference')
+    if (!/\.(png|jpe?g|webp|gif|avif|mp4|mov|webm|m4v|mp3|wav|m4a|aac|ogg|flac)$/i.test(name)) return res.writeHead(400, { 'content-type': 'application/json' }).end('{"error":"an image, a video or a sound file"}')
+    const chunks = []
+    let n = 0
+    req.on('data', ch => { n += ch.length; if (n > 300e6) { req.destroy(); return } chunks.push(ch) })
+    req.on('end', () => {
+      writeFileSync(join(refDir(join(runsDir, runRef[1])), name), Buffer.concat(chunks))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ name, kind: kindOf({ file: name }) }))
+    })
+    return
+  }
   if (runVideo && RUN_ID.test(runVideo[1])) {
     const id = runVideo[1]
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))

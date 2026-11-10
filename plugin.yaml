@@ -11,4 +11,8 @@ requires_env:
   - name: SWARM_STUDIO_API_KEY
     description: "API key for an OpenAI-compatible chat endpoint (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"
     secret: true
+optional_env:
+  - name: ELEVENLABS_API_KEY
+    description: "Optional: ElevenLabs key for the Film studio's music and sound effects (without it the studio writes its own score)"
+    secret: true
 license: FSL-1.1-ALv2
