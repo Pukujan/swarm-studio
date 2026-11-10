@@ -90,7 +90,7 @@ Rules:
 // With an image model picked, a section may ask for one real photo or illustration;
 // the server generates it after the section is done and fills in the src.
 export const SVG_ONLY = ' For imagery use simple inline SVG shapes or CSS shapes, never external image URLs.'
-export const IMAGE_RULE = `- Imagery: if a real photo or illustration would clearly help this section (a hero, a product, a place, people), add at most ONE <img data-gen="what the image shows, its style and mood, under 25 words" alt="..." class="w-full h-full object-cover rounded-[var(--radius)]"> inside a sized box (for example aspect-[4/3] or h-80). Leave out src: it is filled in for you. Otherwise use simple inline SVG or CSS shapes. Never external image URLs.`
+export const IMAGE_RULE = `- Imagery: if a real photo or illustration would clearly help this section (a hero, a product, a place, people), add at most ONE <img data-gen="what the image shows, its style and mood, under 25 words" alt="..." class="w-full h-full object-cover rounded-[var(--radius)]"> inside a sized box (for example aspect-[4/3] or h-80). Leave out src: it is filled in for you. The picture is a real scene, object or person: never a screen, dashboard, app, website, chart, nav bar, sign or anything with words or numbers in it. Words and numbers go in the HTML, not the picture. Otherwise use simple inline SVG or CSS shapes. Never external image URLs.`
 
 // Sections that look bare without a photo: heroes, places, products, people. Left
 // to choose, the workers tend to draw SVG icons instead, so a build ends with none.

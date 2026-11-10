@@ -71,3 +71,15 @@ test('the check reads the reviewer\'s answer, and doubt passes', () => {
   assert.match(m[0].content, /neon cyberpunk/)
   assert.equal(m[1].content[1].type, 'image_url')
 })
+
+test('words and UI never reach the picture prompt, and the check sends them back', () => {
+  const g = styleGuide({ brief: 'a robot factory site' })
+  const what = cleanGen('hero dashboard showing assembly cell production stats with a nav bar, robot arms in a factory', g)
+  assert.ok(!/dashboard|stats|nav bar/i.test(what), what)
+  assert.ok(/robot arms in a factory/.test(what), what)
+  const p = promptFor('robot arms', g)
+  assert.match(p, /No user interface/)
+  const sys = checkMessages(g, 'data:image/png;base64,AA')[0].content
+  assert.match(sys, /ANY user interface/)
+  assert.match(sys, /Text and interfaces are always sent back/)
+})

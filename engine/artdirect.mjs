@@ -132,8 +132,11 @@ const banOf = id => [...BANNED, PHOTO_ONLY].find(b => b.id === id)
 
 // What a worker asked for, without the banned words (a worker's "glowing lantern
 // festival" becomes "festival"), so the prompt can't pull the picture back there.
+// Words and UI belong in the HTML, never in a picture: a worker's "dashboard showing
+// production stats" must not come back as a fake screen with a nav bar and numbers.
+const UI_WORDS = /\b(dashboards?|user interfaces?|interfaces?|UI|UX|HUD|app screens?|screens?(hots?)?|monitors?|displays?|websites?|web ?pages?|landing pages?|mock-?ups?|wireframes?|nav(igation)? ?bars?|menus?|buttons?|charts?|graphs?|stats|statistics|metrics|readouts?|labels?|captions?|headlines?|text|typography|logos?|signs?|signage)\b/gi
 export function cleanGen(gen, guide) {
-  let out = String(gen || '')
+  let out = String(gen || '').replace(UI_WORDS, '')
   for (const id of guide?.bans || []) out = out.replace(banOf(id).words, '')
   out = out.replace(/\s+([,.;])/g, '$1').replace(/(,\s*){2,}/g, ', ').replace(/\b(an?|the|of|with|and)\s+(?=[,.;]|$)/gi, '')
   out = out.replace(/\ban\s+(?=[^aeiou\s])/gi, 'a ').replace(/\ba\s+(?=[aeiou])/gi, 'an ')
@@ -155,7 +158,7 @@ export function promptFor(gen, guide, { aspect = 'landscape', strict = '' } = {}
     SHAPE[aspect] || SHAPE.landscape,
     `${what}.`,
     guide?.guide || STYLES.photo.guide,
-    'No text, letters, numbers, logos or brand marks anywhere in the picture; no readable screens or signs.',
+    'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
     avoid ? `Avoid: ${avoid}.` : '',
     strict ? `This is a second try. The first picture was sent back for: ${strict}. Make sure none of that is in this one.` : ''
   ].filter(Boolean).join(' '), 1200)
@@ -181,9 +184,9 @@ export function checkMessages(guide, image) {
       content: `You are an art director checking one picture for a website before it goes live. The build's style is "${guide?.name || 'Film photo'}": ${guide?.guide || ''}
 
 Send it back only for a clear, visible problem:
-${[...bans, 'a different style from the one above', 'garbled or readable text, letters or logos', 'broken hands, faces or warped objects', 'a look-alike of a famous character'].map(b => `- ${b}`).join('\n')}
+${[...bans, 'a different style from the one above', 'ANY readable or garbled text, letters, numbers or logos, even small', 'ANY user interface: a screen, dashboard, app, chart, nav bar, button or HUD', 'broken hands, faces or warped objects', 'a look-alike of a famous character'].map(b => `- ${b}`).join('\n')}
 
-Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. If in doubt, it is ok.`
+Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. Text and interfaces are always sent back; for anything else, if in doubt, it is ok.`
     },
     { role: 'user', content: [{ type: 'text', text: 'Check this picture.' }, { type: 'image_url', image_url: { url: image } }] }
   ]
