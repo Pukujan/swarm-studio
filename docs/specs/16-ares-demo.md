@@ -1,14 +1,14 @@
-# 16. GODSPEED: the flagship demo
+# 16. ARES: the flagship demo
 
 ## The idea
 
 One original game, and Swarm Studio builds everything around it: the game, its website, its player app, its trailer and its launch posts. One product shows the whole engine. The game is a fast first-person arena shooter. Its bosses are members of the Nous Hermes hackathon Discord, and Jev plays through them on camera. The trailer cuts it like a superhero blockbuster.
 
-Why this one: the earlier demos (the Atelier Nord portal and the Tempo launch) prove the studio works for professionals. GODSPEED shows the studio's ceiling. It is a real 3D game on a real GPU, on Windows, with a full launch around it, and its trailer lands in front of the people who judge the hackathon.
+Why this one: the earlier demos (the Atelier Nord portal and the Tempo launch) prove the studio works for professionals. ARES shows the studio's ceiling. It is a real 3D game on a real GPU, on Windows, with a full launch around it, and its trailer lands in front of the people who judge the hackathon.
 
 ## The game
 
-**GODSPEED** (Hermes is the messenger of the gods and the fastest of them; the name is his speed and a send-off) is a fast first-person arena shooter boss rush, built in Godot 4 on the Windows PC (RTX 4060).
+**ARES** (the Olympian god of war: Hermes's swift messenger storms the war god's arena, where the community bosses are his champions) is a fast first-person arena shooter boss rush, built in Godot 4 on the Windows PC (RTX 4060).
 
 - **Look:** anime, cel-shaded with thick ink outlines. Fiery red, orange and gold on dark. Kills burst into stylized ink splashes, never gore. No blue, purple or green as the main colours.
 - **Hero:** "Design Bakery", in winged sandals (the dash and double jump are Hermes's speed). Jev pilots the hero, and first person needs no animated hero model.
@@ -55,7 +55,7 @@ Each is one prompt in the studio, recorded live for the trailer.
 
 | Piece | What it is | Shows off |
 |---|---|---|
-| Game | GODSPEED in Godot, playable on Windows | big-game mode, the Godot port, existing 3D models |
+| Game | ARES in Godot, playable on Windows | big-game mode, the Godot port, existing 3D models |
 | Website | A launch site: a hero with gameplay, the boss roster (one card per boss with art, handle and title), the trailer, download | multi-page design, painted art, stock fill, motion |
 | Player app | Sign-in; a leaderboard of the fastest clear per boss; "beat Jev's time" ghost runs; a skins shop with credits; an admin dashboard | a real app with a database, credits checkout, admin |
 | Trailer | The blockbuster cut below, plus the studio's own film step | the film studio |
@@ -66,7 +66,7 @@ Each is one prompt in the studio, recorded live for the trailer.
 
 Superhero-blockbuster grammar: cold open, bass hits on title slams, fast cuts, a hard silence before the reveal and a stinger after the logo. Everything is original, with no studio logos, music or characters from any film. Music: "No Limits" by ArcticFoxMusic (credit in the post).
 
-1. **Cold open (0–6 s):** black. A typed line in Hermes: `/swarm make GODSPEED…`. A single heartbeat bass.
+1. **Cold open (0–6 s):** black. A typed line in Hermes: `/swarm make ARES…`. A single heartbeat bass.
 2. **The crew assembles (6–20 s):** the canvas fills, cursors fly, and the website and app build live in quick cuts. Slam: **ONE PROMPT.**
 3. **The world (20–35 s):** gameplay at full speed (dash, finisher, ink burst). Slam: **A WHOLE LAUNCH.**
 4. **The roster (35–60 s):** boss name cards hit one per beat, each with a 1–2 s fight clip: flownium, HotDawg, UKG, rahlquist, Nicho, Suzu, LocutusOfTheEye. They come faster and faster.
@@ -86,11 +86,11 @@ The professional builds (Atelier Nord, Tempo) appear for a beat in part 2, so th
 4. **Noon:** cut the trailer and the posts.
 5. **By 15:00 EST:** post the video on X tagging @NousResearch, then submit the form.
 
-If the Windows setup stalls, the fallback is the existing trailer plan with Atelier, Tempo and Lokee. GODSPEED is the upgrade, not a dependency.
+If the Windows setup stalls, the fallback is the existing trailer plan with Atelier, Tempo and Lokee. ARES is the upgrade, not a dependency.
 
 ## Done when
 
-- GODSPEED runs on Windows: one full boss fight with the resource loop, played by Jev on camera.
+- ARES runs on Windows: one full boss fight with the resource loop, played by Jev on camera.
 - The website and the app are built by the studio from one prompt each and recorded.
 - The trailer is under 90 s, follows the beats above and is posted.
 - `bosses.json` holds the roster, and the credits name the Discord.
