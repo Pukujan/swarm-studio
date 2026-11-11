@@ -4117,6 +4117,8 @@ function frameLoaded() { clearTimeout(frameWait); const el = $('#app-loading'); 
 function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && appEls.frame.src !== 'about:blank') { clearTimeout(frameWait); frameWait = setTimeout(frameLoaded, 700) } }
 
 function renderApp() {
+  // while the crew builds the box talks to it; a game's own examples are a game's
+  if (view === 'app') els.brief.placeholder = appv.state === 'working' ? 'Ask the crew, or say what to change…' : appv.kind === 'game' ? 'Change the game: “make the jump higher”, “add a boss”…' : PLACEHOLDER.app
   renderAppLink()
   renderBadges()
   if (view !== 'app') return
