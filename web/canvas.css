@@ -636,6 +636,17 @@ body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
 .app-stage { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw; }
 .app-body { flex: 1; display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
 .app-steps { border-right: 1px solid var(--line); overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; background: var(--panel); }
+/* the steps read like a chat: they start at the bottom and push older ones up */
+.app-steps > :first-child, #log > :first-child { margin-top: auto; }
+.appview.steps-min .app-body { grid-template-columns: minmax(0, 1fr); }
+.appview.steps-min .app-steps { display: none; }
+.appview.steps-min #app-steps-btn .ico { transform: scaleX(-1); }
+/* Hermia in the Log: her lines as chat messages */
+#log .item.say { align-self: flex-start; max-width: 94%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px 12px 12px 4px; padding: 7px 10px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere; }
+#log .item.say > b { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 11px; letter-spacing: .04em; margin-bottom: 3px; }
+#log .item.say > b :is(img, svg) { width: 16px; height: 16px; flex: none; }
+#log .item.say .to { color: var(--muted); }
+#log .item.say.reason { color: var(--muted); background: transparent; border-style: dashed; }
 .app-steps .st { display: flex; gap: 7px; align-items: baseline; color: var(--muted); animation: in .25s ease-out; }
 .app-steps .st b { flex: 0 0 auto; width: 16px; text-align: center; }
 .app-steps .st span { min-width: 0; overflow-wrap: anywhere; }
@@ -891,12 +902,23 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 @media (max-width: 900px) { .codewall .cw-grid { grid-template-columns: 1fr; grid-template-rows: repeat(4, minmax(120px, 1fr)); overflow: auto; } }
 .codewall .cw-tile { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--void); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; transition: border-color .3s; }
 .codewall .cw-tile.typing { border-color: var(--line-2); }
+/* a clicked tile takes most of the wall; the other three line up on its right */
+.codewall .cw-tile { cursor: zoom-in; }
+.codewall .cw-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.codewall .cw-grid { transition: grid-template-columns .25s var(--ease, ease-out); }
+.codewall .cw-grid.zoom { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); grid-template-rows: repeat(3, minmax(0, 1fr)); }
+.codewall .cw-grid.zoom .cw-tile.big { grid-column: 1; grid-row: 1 / -1; cursor: zoom-out; }
+@media (max-width: 900px) {
+  .codewall .cw-grid.zoom { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: minmax(120px, auto); }
+  .codewall .cw-grid.zoom .cw-tile.big { grid-row: auto; order: -1; min-height: 60vh; }
+}
 .codewall .cw-file { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--deep); font: 11.5px var(--mono); color: var(--muted); }
 .codewall .cw-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .codewall .cw-who:empty { display: none; }
 .codewall .cw-who { font-style: normal; color: var(--accent-ink); font-weight: 600; border-radius: 99px; padding: 0 7px; font-family: inherit; }
 .codewall .cw-code { flex: 1; margin: 0; padding: 8px 10px; overflow: hidden; font: 11.5px/1.5 var(--mono); color: var(--code); white-space: pre-wrap; word-break: break-all; }
 .codewall .cw-c { color: var(--muted); font-style: italic; } .codewall .cw-s { color: var(--ok); font-style: normal; } .codewall .cw-k { color: var(--accent); font-style: normal; } .codewall .cw-t { color: var(--info); font-style: normal; }
+.codewall .cw-tile.reading .cw-code { opacity: .7; }
 .codewall .cw-caret { display: inline-block; width: 7px; height: 1.1em; vertical-align: -2px; background: var(--accent); margin-left: 1px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
