@@ -1,0 +1,173 @@
+{
+ "id": "t-ares",
+ "v": 1,
+ "kind": "game",
+ "name": "ARES",
+ "from": null,
+ "idea": "ARES, a girls-only action RPG in the war god's arena: combos, ults with cut-ins, a boss ladder of Discord handles",
+ "answers": {
+  "genre": "Action RPG",
+  "cast": "Girls only",
+  "size": "6",
+  "combat": "Stylish combos",
+  "enemies": "Minions, elites, bosses",
+  "progression": "New Game+",
+  "money": "Free + cosmetics",
+  "look": "Anime cel-shaded"
+ },
+ "cards": [
+  {
+   "id": "cast",
+   "name": "Cast",
+   "body": {
+    "count": "6",
+    "rule": "Girls only",
+    "roster": [
+     {
+      "name": "Heroine 1",
+      "role": "Lead",
+      "look": "",
+      "weapon": "twin blades"
+     },
+     {
+      "name": "Heroine 2",
+      "role": "Bruiser",
+      "look": "",
+      "weapon": "greatsword"
+     },
+     {
+      "name": "Heroine 3",
+      "role": "Gunner",
+      "look": "",
+      "weapon": "gauntlets"
+     },
+     {
+      "name": "Heroine 4",
+      "role": "Blade",
+      "look": "",
+      "weapon": "scythe"
+     },
+     {
+      "name": "Heroine 5",
+      "role": "Caster",
+      "look": "",
+      "weapon": "katana"
+     },
+     {
+      "name": "Heroine 6",
+      "role": "Support",
+      "look": "",
+      "weapon": "spear"
+     }
+    ]
+   }
+  },
+  {
+   "id": "story",
+   "name": "Story",
+   "body": {
+    "premise": "ARES, a girls-only action RPG in the war god's arena: combos, ults with cut-ins, a boss ladder of Discord handles",
+    "acts": "3",
+    "ending": "One ending, unlocked by the final boss"
+   }
+  },
+  {
+   "id": "combat",
+   "name": "Combat",
+   "body": {
+    "style": "Combos with a launcher, air juggles and a D–SSS style rank",
+    "ults": "Orb-charged cinematic ults with cut-ins",
+    "weapons": "Switch weapons mid-combo",
+    "tools": "Grenades",
+    "tactic": "Hit and run against strong enemies"
+   }
+  },
+  {
+   "id": "enemies",
+   "name": "Enemies",
+   "body": {
+    "tiers": "Minions, elites, bosses",
+    "boss": "3 stages, switches weapons each stage",
+    "final": "Ares himself, with asura arms",
+    "telegraphs": "Every attack is telegraphed"
+   }
+  },
+  {
+   "id": "progression",
+   "name": "Progression",
+   "body": {
+    "levelUp": "New Game+",
+    "ngPlus": "New Game+",
+    "growth": "An aura and wings that grow",
+    "pet": "A pet companion"
+   }
+  },
+  {
+   "id": "world",
+   "name": "World",
+   "body": {
+    "setting": "a sunset colosseum; burning ruins; a sky split by red lightning",
+    "stages": "3",
+    "camera": "Third person, over the shoulder",
+    "backdrops": "3 painted panoramas a stage"
+   }
+  },
+  {
+   "id": "look",
+   "name": "Look",
+   "body": {
+    "style": "Anime cel-shaded",
+    "palette": "bronze, ember red, gold, night black",
+    "locked": "no"
+   }
+  },
+  {
+   "id": "money",
+   "name": "Money",
+   "body": {
+    "model": "Free + cosmetics",
+    "gacha": "Cosmetics only, published rates, a pity counter",
+    "subscription": "",
+    "carry": "Cosmetics carry into the game"
+   }
+  },
+  {
+   "id": "systems",
+   "name": "Systems",
+   "body": {
+    "Logins": "on",
+    "Payments": "on",
+    "Subscriptions": "off",
+    "Leaderboard": "on",
+    "Gacha": "on",
+    "Autoplay pilot": "on",
+    "Enemy AI": "off",
+    "Loadout": "off"
+   }
+  }
+ ],
+ "systems": {
+  "logins": true,
+  "payments": true,
+  "subscriptions": false,
+  "leaderboard": true,
+  "gacha": true,
+  "pilot": true,
+  "enemyAI": false,
+  "loadout": false
+ },
+ "style": {
+  "name": "Anime cel-shaded",
+  "locked": false,
+  "picks": ""
+ },
+ "settings": {
+  "polycount": 40000,
+  "clips": 8,
+  "stages": 3,
+  "backdropsPerStage": 3
+ },
+ "sheets": [],
+ "parts": [],
+ "created": "2026-11-11T00:00:00.000Z"
+}

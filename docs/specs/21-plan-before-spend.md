@@ -273,7 +273,8 @@ Plan files are served at `/plans/<id>/<file>.png` (the sheet and mock pictures),
   (`sheetsplit.py`); they stay on the price but the build does not make them yet.
 - [x] (d) The Systems switches in the build prompt: `engine/systems.mjs` `systemsAsk(plan)`, joined with the cards and the
   close-up rule in `gameBrief(plan)` (`GET /api/plans/:id/brief`). Starting the game's coding run from the brief is still to do.
-- [ ] (e) ARES as a remixable template.
+- [x] (e) ARES as a remixable template: `engine/template.mjs`, `games/ares/plan.json`, remix from the Make box's 💡 pop
+  and Save as template from the plan's ▾. Remixing from the hosted Feed is still to do.
 
 ## Out of scope
 

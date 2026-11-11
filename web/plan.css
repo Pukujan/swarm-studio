@@ -75,3 +75,4 @@ body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
 .pl-err { margin: 0; font: 13px var(--body); color: var(--muted); }
 .pl-grp { display: flex; gap: 8px; align-items: flex-start; }
 .plan .pl-build .abs, .plan .pl-close .abs { gap: 30px 22px; max-width: 760px; }
+.pl-crumb .pl-menu { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); min-width: 0; }

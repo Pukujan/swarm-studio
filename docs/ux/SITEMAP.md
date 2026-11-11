@@ -175,7 +175,8 @@ A Game opens here after its questions. Nothing that costs credits runs before th
 
 ```mermaid
 flowchart LR
-  PB["Projects › plan"] --> CARDS["Nine cards: name and one value"]
+  TPL["💡 → a template: Remix"] --> PB
+  PB["Projects › plan ▾ (Save as template)"] --> CARDS["Nine cards: name and one value"]
   CARDS --> INS["Inspector: fields, cast roster, system switches"]
   PB --> LOCK["Lock · N credits"]
   LOCK --> GATE["Gate: price by part, runs, pictures, Test one first"]

@@ -23,9 +23,30 @@ export function makePlan({ sw, C, root }) {
   const bar = document.querySelector('.topbar')
   const crumb = document.createElement('div')
   crumb.className = 'pl-crumb'
-  crumb.innerHTML = `<button class="pl-up">Projects</button>${ic('chr', 14)}<b class="pl-name"></b>`
+  crumb.innerHTML = `<button class="pl-up">Projects</button>${ic('chr', 14)}<button class="pl-menu" aria-haspopup="menu"><b class="pl-name"></b>${ic('chd', 14)}</button>`
   bar?.querySelector('.spacer')?.before(crumb)
   crumb.querySelector('.pl-up').onclick = () => C.go('home')
+  // ▾ beside the name: save the plan as a template others remix (spec 21)
+  let menu = null
+  const closeMenu = () => { menu?.off?.(); menu?.el.remove(); menu = null }
+  crumb.querySelector('.pl-menu').onclick = e => {
+    if (menu) return closeMenu()
+    const a = e.currentTarget, r = a.getBoundingClientRect()
+    const el = document.createElement('div')
+    el.className = 'hm-menu'
+    el.setAttribute('role', 'menu')
+    el.innerHTML = `<button role="menuitem" data-k="tpl">${ic('remix', 16)}<span>Save as template</span></button>`
+    document.body.append(el)
+    el.style.left = `${Math.max(8, Math.min(innerWidth - el.offsetWidth - 8, r.left))}px`
+    el.style.top = `${r.bottom + 6}px`
+    menu = { el, off: window.SwarmUI?.layer(el, closeMenu, { extra: [a] }) }
+    el.querySelector('button').focus({ preventScroll: true })
+    el.onclick = ev => {
+      if (!ev.target.closest('[data-k="tpl"]')) return
+      closeMenu()
+      post(url('template'), { name: P.plan?.title }).then(() => toast('Saved as template')).catch(err => toast(err.message))
+    }
+  }
   const primary = document.createElement('button')
   primary.className = 'toggle pl-primary'
   primary.innerHTML = '<span class="t"></span>'
@@ -399,7 +420,7 @@ export function makePlan({ sw, C, root }) {
       await load()
       if (fresh) writeIn()
     },
-    hide() { P.on = false; root.hidden = true; clearTimeout(P.saving); clearTimeout(P.poll) },
+    hide() { closeMenu(); P.on = false; root.hidden = true; clearTimeout(P.saving); clearTimeout(P.poll) },
     // the plan made from the questions, from Projects' Make box
     async create(idea, answers) {
       const plan = await post('/api/plans', { idea, answers })
