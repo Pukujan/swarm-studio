@@ -1247,7 +1247,15 @@ function summarize(e) {
 // ---------- loop
 
 let lastPanels = 0
+// The crew's cursors don't need the screen's 60-120 Hz: 24 fps while a build runs (20 with a big
+// crew), full rate only while the camera itself moves, so a drag or zoom stays smooth.
+const loopAt = { last: 0, dt: 16.7 }
 function frameLoop(now) {
+  const moving = Math.abs(cam.ts - cam.s) > 1e-3 || Math.abs(cam.tx - cam.x) > 1 || Math.abs(cam.ty - cam.y) > 1
+  const fps = moving ? 120 : S.agents.size > 8 ? 20 : 24
+  if (now - loopAt.last < 1000 / fps - 2) return requestAnimationFrame(frameLoop)
+  loopAt.dt = Math.min(100, now - (loopAt.last || now - 16.7))
+  loopAt.last = now
   syncSlots(now)
 
   if (cam.auto && now > cam.nextFit) {
@@ -1255,7 +1263,9 @@ function frameLoop(now) {
     if (b) fit(b)
     cam.nextFit = now + 700
   }
-  const k = cam.auto ? 0.06 : 0.25
+  // the same glide at any frame rate: the per-60fps factor, raised to the frames that passed
+  const ease = k0 => 1 - Math.pow(1 - k0, loopAt.dt / 16.7)
+  const k = ease(cam.auto ? 0.06 : 0.25)
   cam.s += (cam.ts - cam.s) * k
   cam.x += (cam.tx - cam.x) * k
   cam.y += (cam.ty - cam.y) * k
@@ -1282,19 +1292,23 @@ function frameLoop(now) {
     } else if (!a.layer && now > a.toolUntil) {
       if (!a.docked) { const p = toScreen(a.wx, a.wy); a.sx = p.x; a.sy = p.y; a.docked = true }
       const c = dockCell(a.seat)
-      a.sx += (c.x - a.sx) * 0.12
-      a.sy += (c.y - a.sy) * 0.12
+      a.sx += (c.x - a.sx) * ease(0.12)
+      a.sy += (c.y - a.sy) * ease(0.12)
     } else {
       if (a.docked) { a.wx = (a.sx - cam.x) / cam.s; a.wy = (a.sy - cam.y) / cam.s; a.docked = false }
       const t = agentTarget(a, now)
       if (t) {
-        a.wx += (t.x - a.wx) * 0.22
-        a.wy += (t.y - a.wy) * 0.22
+        a.wx += (t.x - a.wx) * ease(0.22)
+        a.wy += (t.y - a.wy) * ease(0.22)
       }
       const p = toScreen(a.wx, a.wy)
       a.sx = p.x
       a.sy = p.y
     }
+    // a cursor far off screen keeps its place but skips its redraw
+    const off = a.sx < -200 || a.sy < -200 || a.sx > innerWidth + 200 || a.sy > innerHeight + 200
+    if (off && a.off) continue
+    a.off = off
     const pos = `translate(${a.sx.toFixed(1)}px, ${a.sy.toFixed(1)}px)`
     const step = Math.abs(a.sx - (a.lx ?? a.sx)) + Math.abs(a.sy - (a.ly ?? a.sy))
     a.lx = a.sx; a.ly = a.sy
