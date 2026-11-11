@@ -454,3 +454,12 @@ and it rides the core's `frame` (no loop of its own), so the clock is the frame 
   screen x, and the master ducks to 70% while `voicePlaying()`.
 - URL: `?sfx=0` mutes, `?sfxvol=0.5`, `?sfxlog` records
   `SFXLOG {events, skipped, maxLive, cap, errors, loaded}` (voices too) for tests.
+
+## loadout.js
+
+Baker wears what the player equipped in the ARES Player Hub. The Hub's "Equip and play" opens the
+game with `?hub=<origin>&player=<id>&loadout=<signed copy>`; at boot `loadout.js` asks
+`<hub>/api/loadout?player=<id>` (read-only, CORS) and applies the sword (`WEAPON.set`), the trail
+colours and the finisher colours (it recolours each new `TRAIL.swings` entry; trails.js is not
+edited). The Hub down: the link's copy, then the last loadout this browser saw, then defaults.
+`?loadout=0` turns it off. `LOADOUT` holds what was applied and where it came from (`src`).
