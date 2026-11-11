@@ -643,11 +643,17 @@ export function makeHome({ sw, C, root }) {
   async function showcases() {
     if (!pop.hidden && pop.classList.contains('show')) return closePop()
     const list = (await intake()).showcases || []
-    if (!list.length) return input.focus()
-    openPop('show', `<div class="hm-show" role="list" aria-label="Showcase builds">${list.map(s => `<button type="button" class="hm-sc" role="listitem" data-id="${esc(s.id)}" aria-label="Build ${esc(s.name)}">${ic(s.icon, 18)}<span class="nm">${esc(s.name)}</span><span class="st">${s.steps.map(x => `<i>${esc(x)}</i>`).join('')}</span>${ic('up', 15)}</button>`).join('')}</div>`)
+    // game templates to remix (spec 21): a new plan from one, straight to its price
+    const tpls = hosted() ? [] : await api('/api/templates').then(r => r.templates || []).catch(() => [])
+    if (!list.length && !tpls.length) return input.focus()
+    openPop('show', `<div class="hm-show" role="list" aria-label="Showcase builds">${list.map(s => `<button type="button" class="hm-sc" role="listitem" data-id="${esc(s.id)}" aria-label="Build ${esc(s.name)}">${ic(s.icon, 18)}<span class="nm">${esc(s.name)}</span><span class="st">${s.steps.map(x => `<i>${esc(x)}</i>`).join('')}</span>${ic('up', 15)}</button>`).join('')}${tpls.map(t => `<button type="button" class="hm-sc" role="listitem" data-tpl="${esc(t.id)}" aria-label="Remix ${esc(t.name)}">${ic('remix', 18)}<span class="nm">${esc(t.name)}</span><span class="st"><i>Remix</i><i>${t.price} credits</i></span>${ic('up', 15)}</button>`).join('')}</div>`)
     ideasBtn.classList.add('on')
     pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
     for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
+      if (b.dataset.tpl) {
+        b.disabled = true
+        return api(`/api/templates/${encodeURIComponent(b.dataset.tpl)}/remix`, { method: 'POST' }).then(p => { closePop(); C.plan(p.id) }).catch(() => { b.disabled = false })
+      }
       const s = list.find(x => x.id === b.dataset.id)
       start(s.prompt, s.run || null)
     }

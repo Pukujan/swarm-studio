@@ -2,15 +2,18 @@
 // plan, its previews and its gate live in one place. Nothing here spends credits or starts a coding
 // run unless the plan is locked at the price the person was shown (engine/plan.mjs lockPlan).
 import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { join, extname } from 'node:path'
 import { planStore, planView, editCard, setSystems, lockPlan, assertLocked, pickCell, roster, PLAN_ID } from '../engine/plan.mjs'
 import { addSheet, addMocks, lockStyle, addBackdrops, addCloseups, entryFor, settleStale, buildScope, charEntry, viewJob, VIEWS, gameBrief } from '../engine/planart.mjs'
+import { planTemplate, remixPlan, templateStore, TEMPLATE_ID } from '../engine/template.mjs'
 
 // paint({ prompt, quality: 'medium' | 'high', aspect, crop, refs }) -> { ok, path, error }: one picture
 // through the person's own image login (imagegen.py). paint.ready() says whether one is signed in.
 // make.character(opts) is engine/meshy.mjs makeCharacter (spends Meshy credits); make.key() the key or ''.
-export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onPicture = null }) {
+export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onPicture = null, builtInTemplates = [] }) {
   const store = planStore(join(dataDir, 'plans'))
+  const templates = templateStore(join(dataDir, 'templates'), { builtIn: builtInTemplates })
   const files = id => join(store.dir, id)
   const view = plan => planView(settleStale(plan))
 
@@ -141,6 +144,18 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     return true
   }
 
+  // a new plan from a template: its carried files copied in, landing at the gate
+  function remix(t) {
+    const tdir = templates.files(t.id)
+    const has = f => !t.builtIn && existsSync(join(tdir, f))
+    const plan = { id: `p-${randomBytes(5).toString('hex')}`, v: 1, kind: 'game', created: new Date().toISOString(), ...remixPlan(t, { has }) }
+    const dir = files(plan.id)
+    mkdirSync(join(dir, 'models'), { recursive: true })
+    for (const sh of plan.sheets) { copyFileSync(join(tdir, sh.file), join(dir, sh.file)); sh.src = `/plans/${plan.id}/${sh.file}` }
+    for (const c of plan.build.characters) { copyFileSync(join(tdir, c.model.file), join(dir, 'models', c.model.file)); c.model.src = `/plans/${plan.id}/models/${c.model.file}` }
+    return store.save(plan)
+  }
+
   // true when the request was a plan route (and has been answered)
   return function handle(req, res, url) {
     if (servePicture(req, res, url)) return true
@@ -154,6 +169,15 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
         return true
       }
       json(res, 405, { error: 'GET or POST' }); return true
+    }
+    if (url.pathname === '/api/templates' && req.method === 'GET') { json(res, 200, { templates: templates.list() }); return true }
+    const tm = url.pathname.match(/^\/api\/templates\/([^/]+)\/remix$/)
+    if (tm) {
+      if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
+      const t = TEMPLATE_ID.test(tm[1]) && templates.get(tm[1])
+      if (!t) { json(res, 404, { error: 'no such template' }); return true }
+      try { json(res, 200, view(remix(t))) } catch (err) { fail(res, err) }
+      return true
     }
     const m = url.pathname.match(/^\/api\/plans\/([^/]+)(?:\/([a-z]+))?$/)
     if (!m) return false
@@ -177,6 +201,10 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
         else if (sub === 'systems') setSystems(plan, input || {})
         else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) plan.title = t }
         else if (sub === 'pick') pickCell(plan, input)
+        else if (sub === 'template') {
+          const t = templates.save(planTemplate(plan, { name: input.name }), files(plan.id))
+          return json(res, 200, { template: { id: t.id, name: t.name, parts: t.parts.length } })
+        }
         else if (sub === 'lock') lockPlan(plan, { credits: input.credits, testFirst: input.testFirst === true })
         else if (sub === 'build') {
           assertLocked(plan)

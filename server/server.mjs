@@ -1016,7 +1016,7 @@ async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', cro
 }
 planPaint.ready = async () => !!(await imageChoice())
 // The build (spec 21) spends Meshy credits only on a locked plan, inside the price it was locked at.
-const plans = planRoutes({ dataDir, paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() } })
+const plans = planRoutes({ dataDir, builtInTemplates: [join(root, 'games', 'ares', 'plan.json')], paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() } })
 let meshyP = null
 const meshyMod = () => (meshyP ||= import('../engine/meshy.mjs'))
 
