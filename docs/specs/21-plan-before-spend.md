@@ -44,14 +44,18 @@ coding run starts before that one click.
    so the creator sees the game before it is built.
 5. **Style lock.** One click fixes the look: the picked cells and the style name become the reference every later
    picture and model is made from.
-6. **The gate.** One primary button carries the price of everything expensive: **Lock · 324 credits · 8 runs**.
+7. **The gate.** One primary button carries the price of everything expensive: **Lock · 324 credits · 8 runs**.
    Its sheet lists the parts. A **Test one first** switch builds one character fully (turnarounds, model, rig,
    animations) before the rest; the rest then has its own button with its own price.
-7. **Build.** Per locked character: side and back views drawn from the front (the image model, with the front as a
+8. **Build.** Per locked character: the close-up art (a cut-in and a dialogue portrait), side and back views drawn from the front (the image model, with the front as a
    reference), Meshy **multi-image-to-3D** from the three views at the plan's poly count, the rig, then one shared
    animation set, the props split from the weapon sheet, the systems the plan switched on, and the game itself.
-8. **Remix.** A finished plan (ARES) is saved as a template: the cards, the style, the systems and the shared
+9. **Remix.** A finished plan (ARES) is saved as a template: the cards, the style, the systems and the shared
    parts. Another creator remixes it from the Feed and lands straight on the gate with the price already shown.
+6. **Backdrops.** From the locked style, the crew paints 2–4 large panoramas per stage on the World card (a sunset
+   colosseum, burning ruins, a red-lightning sky), sized for a skybox (2:1 equirect) or a wide matte strip (4:1).
+   The game uses them as its sky and backdrop; 3D is only the arena floor and what stands on it. Pictures only, no
+   Meshy.
 
 ## The cards
 
@@ -66,7 +70,7 @@ is in the inspector.
 | Combat | `style` (DMC combos, launcher, air juggle, style rank D–SSS), `ults` (orb-charged cut-ins), `weapons` (switching), `tools` (grenades), `tactic` (hit and run) | combat |
 | Enemies | `tiers` (minion, elite, boss), `boss` (3 stages, weapon switch), `final` ("asura arms"), `telegraphs` | enemies |
 | Progression | `levelUp` (roguelike 1 of 3), `ngPlus`, `growth` (aura, wings), `pet` | progression |
-| World | `setting`, `stages`, `camera` (third person, Star Rail style) | genre |
+| World | `setting`, `stages`, `camera` (third person, Star Rail style), `backdrops` (2–4 painted panoramas per stage) | genre |
 | Look | `style` (one named anime style), `palette`, `locked` | look |
 | Money | `model` (free, premium, free + cosmetics), `gacha`, `subscription`, `carry` (cosmetics carried into the game) | money |
 | Systems | one switch per module (below) | money + genre |
@@ -87,12 +91,13 @@ Prices come from Meshy's table (spec 20, Nous's Meshy plugin, as of 2026-10-12) 
 | Shared animation set | once | 3 per clip | default 8 clips (idle, light, heavy, launcher, air, dodge, hit, down); one humanoid rig, so every character shares it |
 | Weapon or prop | per prop on the weapon sheet | 15 | image-to-3D, meshy-6-lite, textured, one prop per file |
 | Agent coding runs | estimated | runs | 2 for the game, 1 per system switched on, 1 for the bosses' AI |
-| Pictures | sheets, mocks, turnarounds | (your image login) | counted and shown, not priced: they come from the person's own Codex/xAI/FAL login |
+| Pictures | sheets, mocks, backdrops, close-up art, turnarounds | image runs | counted as image runs on the gate and shown, not priced in credits: they come from the person's own Codex/xAI/FAL login |
 
 ARES's plan (6 characters, 8 clips, 6 weapons, 5 systems): 6 × 35 + 24 + 6 × 15 = **324 credits** and about
 **8 runs**. Test one first: **59 credits** (one character and the animation set), then **Make the rest · 265**.
 
-`planPrice(plan)` returns `{ credits, runs, images, parts: [{ what, n, each, credits }], first, rest }`. The server
+`planPrice(plan)` counts every picture the plan will still paint (backdrops, two close-ups and two turnaround
+views per character) as `images`, and returns `{ credits, runs, images, parts: [{ what, n, each, credits }], first, rest }`. The server
 recomputes it on every lock; the button's number is the ask (spec 20's rule): a lock whose `credits` differs from the
 current price is refused with 402 and nothing is locked.
 
@@ -107,6 +112,23 @@ current price is refused with 402 and nothing is locked.
   (spec 20's rule); Redo is the person's, by its price.
 
 ## The build
+
+### Art at close-ups, 3D at a distance
+
+The image-gen look is the look the creator wants, so the game is made from it wherever the camera is close:
+
+- **Drawn art, close up:** ult cut-ins, the boss intro and stage-change cards, dialogue, character select, the
+  level-up screen, HUD portraits and the ending poster all use the painted character art, never a render of the
+  3D model.
+- **3D, at gameplay distance only:** the Meshy model with the toon shader and outline, and a painted face decal
+  cropped from the same art so the face matches the close-ups.
+- **Per locked character**, the build step paints its **cut-in** (waist-up action pose, 16:9, empty space on one
+  side for the name) and its **dialogue portrait** (waist-up, calm, transparent or plain background) at high
+  quality, from the front picture as a reference. They land on the Build section as crew work before any credit is
+  spent.
+- The game template's build prompt carries this as a rule (`CLOSEUP_RULE` in `engine/plan.mjs`), with the file names
+  (`public/art/<name>-cutin.png`, `-portrait.png`, `public/art/backdrops/<stage>-<n>.png`) and how to load them: a
+  backdrop as the sky (an equirect on a sky sphere, Godot's `PanoramaSkyMaterial`) or a matte plane behind the arena.
 
 ### Turnarounds
 
@@ -167,13 +189,15 @@ The Plan board is a project's canvas before its first build, so it follows **Fig
   is **Lock · 324 credits**; after, **Build**; while testing first, **Make the rest · 265**. The button keeps its
   slot and width in every state (rule 29).
 - **Stage:** sections on the dotted canvas: **Plan** (the nine cards), **Sketches** (the sheets), **Mocks**
-  (the frames), **Build** (turnaround strips and models once locked). At rest a card is its name and one value;
+  (the frames), **World** (the backdrops), **Build** (turnaround strips and models once locked). At rest a card is its name and one value;
   a sheet is its picture with a ring on each picked cell. Names only (rule 8).
 - **Inspector** (only while something is selected): a card's lines as inputs; a sheet's picks and the note for
   the selected cell, and **Draw again**; a mock's **Draw again**; the Look card's **Lock style** switch.
 - **The gate's sheet:** opened by the primary button. The parts as rows (name, count, credits), the total, the
   `[☐] Test one first` switch beside its label, and one confirm button carrying the price. ×, Esc, outside click.
-- **The crew:** while cards are written or sheets drawn, the crew's cursors sit on the card or sheet they work on.
+- **The crew:** while cards are written, sheets, mocks and backdrops painted, or close-up art drawn, the crew's
+  cursors sit on the card or picture they work on, with a slim bar; the picture fades in when it lands.
+- **Backdrops** sit in their own **World** section after Mocks, one wide picture each.
 - **No tooltips, no helper text, no new colour.** States are rings and dots with `aria-label`s.
 - Esc steps up: selection → board → Projects.
 
@@ -188,10 +212,11 @@ The Plan board is a project's canvas before its first build, so it follows **Fig
   systems: { logins: true, payments: true, subscriptions: false, leaderboard: true, gacha: true, pilot: true, enemyAI: true, loadout: true },
   sheets: [{ id, kind: 'cast' | 'weapons', grid: [5, 4], prompt, src, quality: 'medium', picks: [3, 7], notes: { 3: 'heels' }, state }],
   mocks: [{ id, shot: 'combat' | 'boss' | 'ult' | 'levelup' | 'select', src, state }],
+  backdrops: [{ id, stage, n, shape: 'equirect' | 'strip', prompt, src, state }],
   style: { name, locked: false, refs: ['/plans/<id>/…png'] },
   settings: { polycount: 40000, clips: 8 },
   gate: { locked: false, testFirst: false, price: null, lockedAt: null, phase: null },
-  build: { characters: [{ name, front, side, back, job, file, state }], props: [], animations: null }
+  build: { characters: [{ name, front, cutin, portrait, side, back, job, file, state }], props: [], animations: null }
 }
 ```
 
@@ -209,6 +234,7 @@ The Plan board is a project's canvas before its first build, so it follows **Fig
 | `POST /api/plans/:id/pick` `{ sheet, cell, on, note? }` | pick a cell, note it | – |
 | `POST /api/plans/:id/mocks` | draw the mock screenshots | 4–5 images |
 | `POST /api/plans/:id/style` `{ locked }` | lock the look | – |
+| `POST /api/plans/:id/backdrops` `{ stage? }` | paint the World card's backdrops from the locked style | 2–4 images a stage |
 | `POST /api/plans/:id/lock` `{ credits, testFirst }` | lock at that price (402 if stale) | – |
 | `POST /api/plans/:id/build` | start the build of what is locked (409 if not) | credits, runs |
 | `GET /api/plans/:id/build` | the build's state | – |
@@ -238,6 +264,7 @@ Plan files are served at `/plans/<id>/<file>.png` (the sheet and mock pictures),
 - [ ] The spec (this file).
 - [ ] (a) Plan cards from the questions, editable on the board, and the lock gate with its price.
 - [ ] (b) Sketch sheets with picks and notes, mock screenshots, the style lock.
+- [ ] (b2) World backdrops and the close-up art rule (cut-in and portrait per character), counted on the gate.
 - [ ] (c) Turnarounds and multi-view Meshy in `engine/meshy.mjs`, mocked in tests.
 - [ ] (d) The Systems switches in the build prompt.
 - [ ] (e) ARES as a remixable template.
