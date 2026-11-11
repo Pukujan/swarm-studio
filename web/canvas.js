@@ -4283,8 +4283,25 @@ async function tellCrew(text) {
     const r = await appApi('/tell', { text: t, ...(who ? { who, on } : {}) })
     const answer = r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next slice.' : 'The crew is working.')
     cwSay(k, answer)
-    botMsg(who ? `${who}: ${answer}` : answer)
+    const item = botMsg(who ? `${who}: ${answer}` : answer)
+    if (r.media) item.append(mediaBlock(r.media))
   } catch (err) { cwSay(k, ''); botMsg(`App: ${err.message}`) }
+}
+// what Hermia shows when asked to see the build: the newest play test clip and pictures
+function mediaBlock(m) {
+  const box = document.createElement('div')
+  box.className = 'tell-media'
+  if (m.clip) {
+    const v = document.createElement('video')
+    Object.assign(v, { src: BASE + m.clip, muted: true, autoplay: true, loop: true, playsInline: true })
+    box.append(v)
+  }
+  for (const p of (m.pics || []).slice(0, 4)) {
+    const i = document.createElement('img')
+    Object.assign(i, { src: BASE + p.src, alt: p.name || '', loading: 'lazy' })
+    box.append(i)
+  }
+  return box
 }
 // a crew member's answer, said in their own window for a while (k -1: over the wall's title)
 function cwSay(k, words, thinking = false) {

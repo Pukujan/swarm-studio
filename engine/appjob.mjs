@@ -686,3 +686,26 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   return { start, state, stop, tell, open, files, deploy, close, dirOf, jobs }
 }
+
+// "can I see it", "show me the pictures": the person wants to look, not to change anything
+const SEE = /\b(screen ?shots?|pictures?|pics?|images?|art|sprites?|clips?|videos?|previews?|footage|show me|let me see|can i see|look(s)? like)\b/i
+export const wantsToSee = text => SEE.test(String(text || ''))
+// What there is to look at for a build, newest first: the play test clips (from the slices done
+// and the steps) and the painted pictures in the run's img folder.
+// files: [{ name, mtime }] of the run's img folder; slices: app:stage bigs; steps: the job's steps
+const PIC = /^game-(?!.*-(?:raw|check|peek)\.)[a-z0-9-]{1,48}\.(png|webp|jpe?g)$/
+export function buildMedia({ id, files = [], slices = [], steps = [] } = {}) {
+  const clips = [
+    ...steps.filter(s => s?.clip).map(s => ({ src: s.clip, t: s.t || 0, name: '' })),
+    ...slices.filter(b => b?.clip).map(b => ({ src: b.clip, t: b.t || 0, name: b.name ? `slice ${(b.i ?? 0) + 1}, ${b.name}` : '' }))
+  ].sort((x, y) => y.t - x.t)
+  const pics = files.filter(f => PIC.test(f.name)).sort((x, y) => y.mtime - x.mtime)
+    .map(f => ({ src: `/img/${id}/${f.name}`, name: f.name.replace(/^game-/, '').replace(/\.\w+$/, '').replace(/-/g, ' ') }))
+  return { clip: clips[0] || null, clips: clips.length, pics: pics.slice(0, 4), picCount: pics.length }
+}
+// the line Hermia reads, so she never says there is nothing to see when there is
+export function mediaNotes(m, attached) {
+  if (!m.clip && !m.picCount) return 'Nothing has been painted or filmed yet, so there is nothing to show.'
+  const have = [m.clips ? `${m.clips} play test clip${m.clips > 1 ? 's' : ''}` : '', m.picCount ? `${m.picCount} painted picture${m.picCount > 1 ? 's' : ''} (newest: ${m.pics.map(p => p.name).join(', ')})` : ''].filter(Boolean).join(' and ')
+  return `The build has ${have}. ${attached ? 'The newest clip and pictures are shown right under your answer: say so in a few words and say what they show; never say there is nothing to see.' : 'If they ask to see something, tell them you can show it.'}`
+}
