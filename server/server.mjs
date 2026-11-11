@@ -2302,7 +2302,7 @@ const server = createServer((req, res) => {
         const spec = (readEvents(id) || []).findLast(e => e.type === 'game:spec')?.spec
         if (spec && !input.prompt && !a.state(id).hasApp) {
           const g = await gameMod()
-          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}) }
+          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}) }
         }
         return a.start(id, input)
       }).then(s => reply(200, s)).catch(fail)

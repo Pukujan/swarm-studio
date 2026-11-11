@@ -334,11 +334,12 @@ ${files.map(f => f.kind === 'sheet' && f.cell
 
 // The engine's prompt for one stage. The first stage also carries how to build
 // (the engine notes and the reference skills); later ones say what is done.
-export function bigStagePrompt(spec, i, { art = [], failed = '' } = {}) {
+export function bigStagePrompt(spec, i, { art = [], failed = '', note = '' } = {}) {
   const all = stagesFor(spec), st = all[i]
   const done = all.slice(0, i).map(s => s.name).join(', ')
   const head = `This is a big browser game, built in ${all.length} slices; this is slice ${i + 1}: ${st.name}. GAME_SPEC.md in the project root is the whole spec; follow its genre, names, numbers and content, and never turn it into another kind of game.`
-  const stage = `${failed ? `First: ${failed}\n\n` : ''}${done ? `Already built: ${done}. Keep all of it working; change it only where this stage needs to.\n\n` : ''}Build this slice now: ${st.what}
+  const said = cut(note, 1200)
+  const stage = `${said ? `The person played the last slice and said: "${said}". Do what they ask first (it may change what is already built), then build this slice in that spirit.\n\n` : ''}${failed ? `First: ${failed}\n\n` : ''}${done ? `Already built: ${done}. Keep all of it working; change it only where this stage needs to.\n\n` : ''}Build this slice now: ${st.what}
 
 Do only this slice; later slices add the rest (see "Build slices" in GAME_SPEC.md), so leave clean places for them instead of building them now.
 ${artBrief(art)}
@@ -349,4 +350,19 @@ ${FIGURE_RULES}
 Finish with a working build: the typecheck and build must pass, and the game must start from the title and be playable.`
   if (i > 0) return `${head}\n\n${stage}`
   return `${gamePrompt(spec).replace(/^Build this browser game as the whole app\. GAME_SPEC\.md \(in the project root\) is the spec; follow it exactly\.\n/, `${head}\n`).replace(/\nFinish with a working build:[^\n]*\n/, '\n').replace('so no image files are needed', 'for everything that is not painted art in public/art/')}\n\n---\n\n${stage}`
+}
+
+// After a slice the build stops and asks, in the left chat, before the next one: what was
+// built, what comes next, and a few things the person might want, in their game's own words.
+export function sliceAsk(spec, i) {
+  const all = stagesFor(spec), st = all[i], next = all[i + 1]
+  const hero = String(spec?.hero || 'the hero').split(/[,—.;]/)[0].trim()
+  const ask = `Slice ${i + 1} of ${all.length}, ${st.name}, is built and the bots have played it. Watch their run here, or play it yourself in the App window: anything to change before ${next ? next.name : 'the end'}?`
+  const ideas = [
+    next ? `Looks good, go on to ${next.name}` : 'Looks good, finish it',
+    `Make ${hero} bigger and easier to read`,
+    viewOf(spec) === 'side' ? 'Faster, with longer jumps' : 'Faster, with harder hits',
+    'Easier start, harder later'
+  ]
+  return { ask, ideas, next: next?.name || '' }
 }

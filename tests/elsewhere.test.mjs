@@ -34,3 +34,16 @@ test('a build whose log went quiet long ago is not taken for running', () => {
     assert.notEqual(jobs.state('r1').elsewhere, true)
   } finally { rmSync(runsDir, { recursive: true, force: true }) }
 })
+
+test('a big game waiting after a slice reads back as paused, with its slice for the chat', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'runs-'))
+  try {
+    const slice = { i: 0, n: 4, name: 'the core run', ask: 'Slice 1 of 4…', ideas: ['Looks good, go on'], clip: '/img/r1/playtest-1.webm' }
+    const events = [...log(0), { type: 'app:stage', t: now, big: { i: 0, n: 4, ok: true } }, { type: 'app:paused', t: now, slice }]
+    const jobs = appJobs({ runsDir, record() {}, broadcast() {}, readEvents: () => events, provider: () => ({}), modelFor: () => '' })
+    const s = jobs.state('r1')
+    assert.equal(s.state, 'paused')
+    assert.notEqual(s.elsewhere, true)
+    assert.deepEqual(s.slice, slice)
+  } finally { rmSync(runsDir, { recursive: true, force: true }) }
+})

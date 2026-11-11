@@ -14,7 +14,7 @@ import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
-import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt } from './game.mjs'
+import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk } from './game.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
@@ -150,7 +150,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // a finished app from before a restart: rebuild the state from the log
     const events = readEvents(id) || []
     // the last build's outcome: app:ready and app:deployed only say a server started or a deploy went out
-    const last = events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))
+    const last = events.findLast(e => ['app:start', 'app:done', 'app:failed', 'app:paused'].includes(e.type))
     const steps = events.filter(e => e.type === 'app:step').slice(-200).map(e => e.step)
     if (!last) return { state: 'idle', engineReady: engineReady() }
     // a build another Studio drives (same runs folder): its log still moves, so it is working,
@@ -161,11 +161,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const stage = steps.findLast(s => /^stage \d+ of \d+/.test(s.text || ''))?.text || steps.at(-1)?.text || ''
       return { state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
     }
-    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:start' ? 'stopped' : 'done', kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
+    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
   const built = (id, events = readEvents(id) || []) => events.some(e => e.type === 'app:done') && existsSync(join(dirOf(id), 'package.json'))
-  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady() })
+  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
 
   // Start the first build, or one more turn on the same app.
   async function start(id, input = {}) {
@@ -265,7 +265,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         }
       }
       if (big) {
-        await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input, resumeAt)
+        if (await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input, resumeAt) === 'paused') {
+          Object.assign(j, { state: 'paused', stage: `slice ${j.slice.i + 1} of ${j.slice.n} built` })
+          await j.radio?.stop()
+          return send(id, 'app:paused', { slice: j.slice, result: j.result, url: j.url, ms: Date.now() - j.t })
+        }
       } else {
         const result = await engineCall(prompt, input.turns || (input.plan ? 6 : 4))
         j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
@@ -354,7 +358,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       step({ kind: 'setup', text: `stage ${i + 1} of ${stages.length}: ${st.name}` })
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { last = await engineCall(bigStagePrompt(spec, i, { art, failed }), input.turns || st.turns); break } catch (err) {
+        try { last = await engineCall(bigStagePrompt(spec, i, { art, failed, note: i === from ? input.note : '' }), input.turns || st.turns); break } catch (err) {
           if (j.controller.signal.aborted) throw err
           step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
           if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
@@ -370,6 +374,15 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
       // each slice carries the bots' filmed play test, so the person sees it before the next one
       send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}) } })
+      // guided (the default): stop after each slice but the last and ask in the left chat; the
+      // person's answer starts the next slice (a resume) with their words in its prompt
+      if (input.guided !== false && i < stages.length - 1) {
+        const talk = sliceAsk(spec, i)
+        // what the chat shows: the bots' filmed play, the game's still (img/snap.jpg) and the live game
+        j.slice = { i, n: stages.length, name: st.name, shot: `/img/${id}/snap.jpg?v=${Date.now()}`, ok: !!last.ok, play: !!play?.ok, url: j.url || null, ...(play?.clip ? { clip: play.clip } : {}), ...talk }
+        j.result.paused = j.slice
+        return 'paused'
+      }
     }
     if (!last?.ok) {
       step({ kind: 'test', text: 'the last stage did not pass its build: one fix turn', ok: false })
