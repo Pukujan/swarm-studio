@@ -288,6 +288,9 @@ function on(e) {
     case 'crew:act':
       radioEvent(e)
       break
+    case 'art:job':
+      artEvent(e)
+      break
     case 'crew:lead': {
       // the app engine's lead agent, speaking as Hermia: thinking out loud and giving orders
       radioEvent(e)
@@ -4038,6 +4041,10 @@ function renderApp() {
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
       : working || appv.opening
         ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+        : st === 'failed' && appv.result?.artStop
+          ? artStopCard(appv.result.artStop)
+        : st === 'failed' && appv.message === 'stopped'
+          ? `<div class="fail-card stopped"><h2><em>Stopped</em></h2><p class="fail-msg">${esc(stopSummary())}</p><button class="big" data-build>${ico('rotate-ccw')}Go on</button></div>`
         : st === 'failed'
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
           : appv.hasApp && appv.message
@@ -4046,6 +4053,9 @@ function renderApp() {
             ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
             : `<h2>Turn this design into a working app</h2><p>The design stays exactly as it is. Hermia first asks what runs behind it (dashboards, customers, an admin panel), then the engine builds it all.</p><button class="big" data-build>Build the app</button>`
     appEls.empty.querySelector('[data-build]')?.addEventListener('click', buildApp)
+    // out of quota: another image model, then build again (pictures already painted are kept)
+    for (const b of appEls.empty.querySelectorAll('[data-image]')) b.addEventListener('click', async () => { b.disabled = true; await saveModel({ role: 'image', provider: b.dataset.image, model: b.dataset.model || '' }); buildApp() })
+    appEls.empty.querySelector('[data-incode]')?.addEventListener('click', () => appAsk('', { art: false }))
     appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { appv.message = ''; loadApp() })
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
@@ -4209,6 +4219,24 @@ async function advPlan() {
 
 // a site's first app build goes through the advisor; a game or a retry goes straight on
 const buildApp = () => (appv.kind !== 'game' && !appv.hasApp && !appv.plan ? openAdvisor() : appAsk('', appv.plan ? { plan: appv.plan } : {}))
+
+// The image model ran out before any art landed: say which, offer the other image models
+// Hermes has signed in, and building with shapes drawn in code.
+function artStopCard(stop) {
+  if (!modelsInfo?.image && !artStopCard.asked) { artStopCard.asked = true; loadModels().then(() => renderApp()) }
+  const others = (modelsInfo?.image?.providers || []).filter(p => p.available && p.provider !== stop.provider)
+  return `<div class="fail-card"><span class="fail-ico">${ico('image')}</span><h2>No <em>art</em></h2>`
+    + `<p class="fail-msg">${esc(stop.model)} is out of quota</p>`
+    + (others.length ? `<div class="fail-pick" role="group" aria-label="Image model">${others.map(p => `<button class="fail-model" data-image="${esc(p.provider)}" data-model="${esc(p.default || '')}">${esc(p.provider)}</button>`).join('')}</div>` : '')
+    + `<div class="fail-acts"><button class="big" data-build>${ico('rotate-ccw')}Try again</button><button class="fail-alt" data-incode>Draw in code</button></div></div>`
+}
+// what a stopped build had done: its pictures and its stages
+function stopSummary() {
+  const steps = appv.steps || [], art = artPhase(steps)
+  const painted = steps.filter(s => /^painted the /.test(s.text || '')).length
+  const stage = steps.findLast(s => /^stage \d+ of/.test(s.text || ''))?.text.match(/^stage (\d+ of \d+)/)?.[1]
+  return [painted || art ? `${painted}${art?.total ? `/${art.total}` : ''} pictures` : '', stage ? `stage ${stage}` : ''].filter(Boolean).join(' · ') || 'nothing built yet'
+}
 
 async function deployApp() {
   if (!appv.run) return
@@ -4795,7 +4823,7 @@ function crewJob() {
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
     return cw.thinking
       ? { key: `app-plan|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
-      : { key: `app-code|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['writing code'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+      : { key: `app-${cw.mode || 'code'}|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: [cw.mode === 'art' ? 'painting' : 'writing code'], tool: cw.mode === 'art' ? ['image', 'image', 'image', 'text'] : ['text', 'text', 'connect', 'frame'], pin: cwPin }
   }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
@@ -5641,12 +5669,35 @@ function radioEvent(e) {
 const radioOn = () => radio.run && radio.run === appv.run
 // the wall's crew: the helpers the radio has heard from first, then the build's agents
 function wallNames() {
+  if (cw.mode === 'art') return [...PAINTERS.map(n => [n, Crew.color(n)]), ...crewMembers(4).filter(([n]) => !PAINTERS.includes(n))].slice(0, CW_TILES)
   const heard = radioOn() ? radio.order.slice(0, CW_TILES).map(n => [n, Crew.color(n)]) : []
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
 const heardIn = (x, ms) => x && Date.now() - x.t < ms
 const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
-const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
+const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '', mode: '' }
+// ---------- the art wall: while a game's art is painted, the wall is mostly pictures. Three
+// painters (the server's PAINTERS) each get a tile with the picture they are on: painting,
+// cut out, checked, sent back, done. The last tile stays code. When the code starts, the
+// wall turns back to three code tiles and the asset pane.
+const PAINTERS = ['Kiki', 'Juno', 'Tofu']
+const ART_STATE = { painting: 'painting', cutting: 'cutting', checking: 'checking', 'sent back': 'again', done: 'done', failed: 'failed' }
+const paintv = { run: null, slots: [] }
+function artEvent(e) {
+  if (paintv.run !== e.run) Object.assign(paintv, { run: e.run, slots: [] })
+  const prev = paintv.slots[e.slot]
+  paintv.slots[e.slot] = { who: e.who, id: e.id, what: e.what, state: e.state, src: e.src || (prev?.id === e.id ? prev.src : ''), problems: e.problems || [], t: e.t || Date.now() }
+}
+// art time: the build said it is painting, and no code stage or turn has started since
+function artPhase(steps) {
+  const at = steps.findLastIndex(s => /^painting the game's art/.test(s.text || ''))
+  if (at < 0) return null
+  const after = steps.slice(at + 1)
+  if (after.some(s => s.kind === 'turn' || s.kind === 'write' || /^stage \d+ of/.test(s.text || ''))) return null
+  const total = Number(/(\d+) pictures/.exec(steps[at].text)?.[1]) || 0
+  const kept = Number(/using (\d+) pictures painted before/.exec(after.find(s => /^using \d+ pictures/.test(s.text || ''))?.text || '')?.[1]) || 0
+  return { total, painted: kept + after.filter(s => /^painted the /.test(s.text || '')).length, failed: after.filter(s => s.ok === false).length }
+}
 const clock = ms => { const t = Math.max(0, Math.round(ms / 1000)); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s` }
 const kTokens = n => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
 // Between batches the engine is thinking (its "next step" line): nothing is written for a
@@ -5692,6 +5743,16 @@ function codeWall() {
     Object.assign(cw, { run: appv.run, seen: Math.max(0, appv.steps.length - 30), queue: [], tiles: [], hide: false, ...CW_FRESH })
     cw.el.querySelector('.cw-grid').replaceChildren()
   }
+  // art time: three painter tiles and one code tile; code time: three code tiles and the asset pane
+  const artNow = artPhase(appv.steps), mode = artNow ? 'art' : 'code'
+  if (cw.mode !== mode) {
+    cw.mode = mode
+    cw.tiles = []
+    cw.el.querySelector('.cw-grid').replaceChildren()
+    if (mode === 'art') cw.queue = ['GAME_SPEC.md']
+    cw.el.querySelector('.cw-head .pop-title').innerHTML = mode === 'art' ? 'Painting the <em>art</em>' : appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'
+  }
+  const codeTile = i => (mode === 'art' ? i === CW_TILES - 1 : i !== CW_ASSET)
   cw.el.hidden = cw.hide
   // the wall just came up while Auto is running: fold the Auto panel to its pill so it does not cover the code
   if (!cw.hide && !cw.shown) {
@@ -5708,7 +5769,7 @@ function codeWall() {
   // a free tile (empty, or done typing for a moment) takes the next file
   const now = performance.now()
   for (let i = 0; i < CW_TILES && cw.queue.length; i++) {
-    if (i === CW_ASSET) continue
+    if (!codeTile(i)) continue
     const t = cw.tiles[i]
     if (t && (t.loading || t.shown < t.text.length || now - t.doneAt < 1500)) continue
     const path = cw.queue.shift()
@@ -5732,7 +5793,11 @@ function codeWall() {
   }
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
-    if (grid.children.length === CW_ASSET) {
+    if (!codeTile(grid.children.length) && mode === 'art') {
+      d.className = 'cw-tile cw-paint'
+      d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-state"></em><em class="cw-who"></em></div>'
+        + '<div class="cw-easel"><img class="cw-pic" alt=""><i class="cw-wash"></i><i class="cw-scan"></i><i class="cw-pin"></i></div><p class="cw-why" hidden></p>'
+    } else if (!codeTile(grid.children.length)) {
       d.className = 'cw-tile cw-asset empty'
       d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div>'
         + '<div class="cw-stage" aria-hidden="true"><div class="cw-turn"><img class="cw-face" alt=""><img class="cw-face" alt=""></div>'
@@ -5743,7 +5808,10 @@ function codeWall() {
     }
     grid.append(d)
   }
-  cwAssetTile(grid.children[CW_ASSET], names[CW_ASSET], now)
+  if (mode === 'art') {
+    cwAssets()
+    for (let i = 0; i < CW_TILES - 1; i++) cwPaintTile(grid.children[i], i, names[i])
+  } else cwAssetTile(grid.children[CW_ASSET], names[CW_ASSET], now)
   let writing = 0
   cw.tiles.forEach((t, i) => {
     const d = grid.children[i]
@@ -5786,10 +5854,46 @@ function codeWall() {
     setText(planEl.querySelector('.cw-plan-age'), `${age} since the last file`)
     setText(planEl.querySelector('.cw-plan-act'), acts[0] ? `${acts[0][0]}: ${acts[0][1].text}` : '')
     setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · planning turn ${plan.turn} (${age})`)
+  } else if (artNow) {
+    cw.planKey = ''
+    setText(cw.el.querySelector('.cw-count'), `${artNow.painted}/${artNow.total || '?'} pictures${artNow.failed ? ` · ${artNow.failed} ⚠` : ''}`)
   } else {
     cw.planKey = ''
     setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · ${writing} typing · ${appv.stage || ''}`)
   }
+}
+
+// A painter's tile: the picture they are on, as it goes from a wash of paint to the painted
+// picture, its cut-out on dark and magenta while it is checked, and a ⚠ with the reviewer's
+// words when it is sent back. Before the first word from a painter: the next picture's name.
+function cwPaintTile(d, i, member) {
+  if (!d) return
+  cwWho(d, member)
+  const sl = paintv.run === cw.run ? paintv.slots[i] : null
+  const state = sl?.state || 'waiting'
+  d.dataset.state = state
+  setText(d.querySelector('.cw-path'), sl?.what || cw.assets?.next?.[i] || 'Art')
+  const chip = d.querySelector('.cw-state')
+  setText(chip, ART_STATE[state] || '')
+  chip.setAttribute('aria-label', ART_STATE[state] || 'waiting')
+  const pic = d.querySelector('.cw-pic'), src = sl?.src || ''
+  if (pic.dataset.src !== src) {
+    pic.dataset.src = src
+    pic.classList.remove('on')
+    if (src) {
+      const im = new Image()
+      im.onload = () => {
+        if (pic.dataset.src !== src) return
+        pic.src = src
+        pic.classList.add('on')
+        d.classList.remove('scan'); void d.offsetWidth; d.classList.add('scan')
+      }
+      im.src = src
+    }
+  }
+  const why = d.querySelector('.cw-why'), words = state === 'sent back' || state === 'failed' ? (sl.problems || []).join(' · ') : ''
+  why.hidden = !words
+  setText(why, words ? `⚠ ${words}` : '')
 }
 
 // a tile's name chip: the courier working on it
@@ -5804,11 +5908,16 @@ function cwWho(d, member) {
 // are listed by the server but not drawn: the Studio does not load three.js. Nothing painted
 // yet: the next picture's name over a turning wireframe cube, never an empty pane.
 function cwAssets() {
-  if (cw.assetsLoading || Date.now() - cw.assetsAt < 12000) return
+  if (cw.assetsLoading || Date.now() - cw.assetsAt < (cw.mode === 'art' ? 4000 : 12000)) return
   cw.assetsLoading = true
   const run = cw.run
   api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => r.ok ? r.json() : null)
-    .then(j => { if (j && cw.run === run) cw.assets = { pics: (j.assets || []).filter(a => a.kind === 'art' && a.src), next: j.next || [] } })
+    .then(j => {
+      if (!j || cw.run !== run) return
+      cw.assets = { pics: (j.assets || []).filter(a => a.kind === 'art' && a.src), next: j.next || [] }
+      // the painters' jobs, for a canvas that missed their live events (opened mid-art, a reload)
+      for (const e of j.painting || []) if (paintv.run !== run || !paintv.slots[e.slot] || paintv.slots[e.slot].t < e.t) artEvent(e)
+    })
     .catch(() => {})
     .finally(() => { cw.assetsLoading = false; cw.assetsAt = Date.now() })
 }
@@ -5842,7 +5951,12 @@ function cwAssetTile(d, member, now) {
 
 // the crew's cursor for tile i sits on that tile's caret (the asset pane: beside its card)
 function cwPin(i) {
-  if (i === CW_ASSET) {
+  if (cw.mode === 'art' && i < CW_TILES - 1) {
+    const sl = paintv.run === cw.run ? paintv.slots[i] : null
+    const pin = cw.el?.querySelector('.cw-grid')?.children[i]?.querySelector('.cw-pin')?.getBoundingClientRect()
+    return pin?.width ? { x: pin.left, y: pin.top, text: sl ? `${ART_STATE[sl.state] || ''} ${sl.what}`.trim() : 'waiting', typing: sl?.state === 'painting' } : null
+  }
+  if (cw.mode !== 'art' && i === CW_ASSET) {
     const pin = cw.el?.querySelector('.cw-asset .cw-pin')?.getBoundingClientRect()
     return pin?.width ? { x: pin.left, y: pin.top, text: cw.assetName, typing: true } : null
   }
