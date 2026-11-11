@@ -19,9 +19,16 @@ const THEMES := {
 	"crimson": {"paint": "crimson", "fire": Color(1.0, 0.14, 0.05), "core": Color(1.0, 0.55, 0.22),
 		"sky": Color(0.2, 0.03, 0.025), "haze": Color(0.5, 0.06, 0.03), "fog": Color(0.38, 0.05, 0.03),
 		"sand": Color(0.4, 0.22, 0.16), "ruin": "tiers", "heat": 1.0},
-	"gold": {"paint": "gold", "fire": Color(1.0, 0.68, 0.18), "core": Color(1.0, 0.95, 0.6),
-		"sky": Color(0.32, 0.13, 0.04), "haze": Color(0.72, 0.4, 0.12), "fog": Color(0.5, 0.27, 0.1),
-		"sand": Color(0.5, 0.35, 0.21), "ruin": "pylons", "heat": 0.6},
+	# Jade Exchange (翡翠の取引所): white jade-veined marble, jade banners and awnings, a
+	# cool daylit market. Crimson is its one warm accent (rim fire, channel); the painting
+	# keeps its greens, so the backdrop's warm palette guard is off for this stage only.
+	"gold": {"paint": "gold", "fire": Color(0.86, 0.12, 0.16), "core": Color(1.0, 0.93, 0.84),
+		"sky": Color(0.36, 0.5, 0.45), "haze": Color(0.69, 0.83, 0.79), "fog": Color(0.62, 0.76, 0.71),
+		"sand": Color(0.84, 0.83, 0.77), "ruin": "pylons", "heat": 0.25,
+		"top": Color(0.12, 0.2, 0.18), "backdrop_sky": Color(0.5, 0.62, 0.57), "tint": Color(0.89, 0.96, 0.92),
+		"keep_hue": true, "ambient": Color(0.62, 0.72, 0.68), "stone": Color(0.78, 0.8, 0.75),
+		"trim": Color(0.12, 0.45, 0.34), "trim_glow": Color(0.3, 0.7, 0.55),
+		"panel": Color(0.2, 0.4, 0.33), "rim": 180},
 	"snow": {"paint": "snow", "fire": Color(1.0, 0.6, 0.25), "core": Color(1.0, 0.92, 0.7),
 		"sky": Color(0.36, 0.24, 0.22), "haze": Color(0.78, 0.6, 0.52), "fog": Color(0.62, 0.5, 0.46),
 		"sand": Color(0.62, 0.56, 0.52), "ruin": "arches", "heat": 0.2},
@@ -74,7 +81,7 @@ func apply(name_: String) -> void:
 			_rubble()
 	if theme["ruin"] == "colossi":
 		_obelisks()
-	_rim_fire(520 if theme["ruin"] != "broken" else 200)
+	_rim_fire(int(theme.get("rim", 520 if theme["ruin"] != "broken" else 200)))
 	_embers()
 	Look.scenery = false
 
@@ -82,11 +89,11 @@ func apply(name_: String) -> void:
 
 func _air() -> void:
 	var fire: Color = theme["fire"]
-	sky_mat.set_shader_parameter("top", Color(0.03, 0.01, 0.008))
+	sky_mat.set_shader_parameter("top", theme.get("top", Color(0.03, 0.01, 0.008)))
 	sky_mat.set_shader_parameter("mid", theme["sky"])
 	sky_mat.set_shader_parameter("horizon", fire.lerp(theme["haze"], 0.4))
 	env.fog_light_color = (theme["fog"] as Color).darkened(0.35)
-	env.ambient_light_color = Color(0.55, 0.42, 0.36).lerp(fire, 0.12)
+	env.ambient_light_color = theme.get("ambient", Color(0.55, 0.42, 0.36).lerp(fire, 0.12))
 	floor_mat.set_shader_parameter("sand", theme["sand"])
 	floor_mat.set_shader_parameter("heat", fire)
 	floor_mat.set_shader_parameter("heat_amount", float(theme["heat"]) * 1.4)
@@ -99,7 +106,9 @@ func _backdrop() -> void:
 	var m = ShaderMaterial.new()
 	m.shader = preload("res://shaders/backdrop.gdshader")
 	m.set_shader_parameter("paint", load("res://assets/backdrops/%s.jpg" % theme["paint"]))
-	m.set_shader_parameter("sky_color", Color(0.05, 0.016, 0.012))
+	m.set_shader_parameter("sky_color", theme.get("backdrop_sky", Color(0.05, 0.016, 0.012)))
+	m.set_shader_parameter("tint", theme.get("tint", Color.WHITE))
+	m.set_shader_parameter("keep_hue", theme.get("keep_hue", false))
 	m.set_shader_parameter("haze_color", theme["haze"])
 	m.set_shader_parameter("repeats", 3.0)
 	var c = CylinderMesh.new()
@@ -146,6 +155,16 @@ func _mm(shape: Mesh, color: Color, xforms: Array, emit := 0.0, emit_color := Co
 	_root.add_child(mmi)
 	return mmi
 
+## The stage's stone and metal trim (warm basalt and bronze unless the theme says otherwise).
+func _stone() -> Color:
+	return theme.get("stone", STONE)
+
+func _trim() -> Color:
+	return theme.get("trim", BRONZE)
+
+func _trim_glow() -> Color:
+	return theme.get("trim_glow", GOLD)
+
 func _wall() -> void:
 	var piers: Array = []
 	var lintels: Array = []
@@ -165,11 +184,15 @@ func _wall() -> void:
 			trims.append(_seg(k, R + 0.15, 0.0, 9.2))
 		heat.append(_seg(k, R + 2.2, 0.0, 3.6))
 		base.append(_seg(k, R - 0.3, 0.0, 0.18))
-	_mm(_box(Vector3(1.6, 9.0, 2.2)), STONE, piers)
-	_mm(_box(Vector3(7.6, 1.4, 2.2)), STONE.lightened(0.04), lintels)
-	_mm(_box(Vector3(7.6, 0.28, 0.5)), BRONZE, trims, 0.25, GOLD)
+	_mm(_box(Vector3(1.6, 9.0, 2.2)), _stone(), piers)
+	_mm(_box(Vector3(7.6, 1.4, 2.2)), _stone().lightened(0.04), lintels)
+	_mm(_box(Vector3(7.6, 0.28, 0.5)), _trim(), trims, 0.25, _trim_glow())
 	var fire: Color = theme["fire"]
-	_mm(_box(Vector3(3.4, 5.6, 0.3)), fire.darkened(0.78), heat, 0.3, fire.darkened(0.45))
+	if theme.has("panel"):
+		var p: Color = theme["panel"]
+		_mm(_box(Vector3(3.4, 5.6, 0.3)), p, heat, 0.15, p.lightened(0.2))
+	else:
+		_mm(_box(Vector3(3.4, 5.6, 0.3)), fire.darkened(0.78), heat, 0.3, fire.darkened(0.45))
 	_mm(_box(Vector3(7.4, 0.22, 0.4)), fire, base, 1.2, fire)
 
 func _banners() -> void:
@@ -192,8 +215,8 @@ func _pylons() -> void:
 		cols.append(t.translated(Vector3(0, 9.0, 0)))
 		caps.append(t.translated(Vector3(0, 18.3, 0)))
 		tops.append(t.origin + Vector3(0, 19.2, 0))
-	_mm(_box(Vector3(1.8, 18.0, 1.8)), STONE, cols)
-	_mm(_box(Vector3(2.6, 0.7, 2.6)), BRONZE, caps, 0.3, GOLD)
+	_mm(_box(Vector3(1.8, 18.0, 1.8)), _stone(), cols)
+	_mm(_box(Vector3(2.6, 0.7, 2.6)), _trim(), caps, 0.3, _trim_glow())
 	var f = _flames(30 * tops.size() / 4, 1.6)
 	f.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINTS
 	f.emission_points = tops
