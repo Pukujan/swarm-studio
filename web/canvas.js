@@ -4397,6 +4397,8 @@ function appEvent(e) {
   const fresh_ = !e.t || Date.now() - e.t < 8000
   if (e.type === 'app:start') {
     Object.assign(appv, { state: 'working', kind: e.kind || appv.kind, stage: 'starting', message: '' })
+    // a build from scratch: the painters' tiles from an earlier build (another game's art) go
+    if (e.fresh) paintv.slots = []
     if (e.ask && appv.asks.at(-1) !== e.ask) appv.asks.push(e.ask)
     appv.steps.push({ kind: 'ask', text: e.ask || 'build', t: e.t })
     if (fresh_) feed(null, `🧩 ${e.model || 'the engine'} is ${e.fresh ? `building the ${e.kind === 'game' ? 'game' : 'app'}` : 'changing the app'}${e.ask ? `: “${e.ask}”` : ''}`, 'sys')
