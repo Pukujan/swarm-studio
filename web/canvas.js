@@ -6768,7 +6768,13 @@ const hosted = BOOT.hosted && (() => {
     } finally { posting = false; draw() }
   }
 
-  cosmosHooks.add(e => { if (e?.type === 'run:done' || e?.type === 'reset' || e?.type === 'run:start') { if (e.type === 'run:done') refresh(); else draw() } })
+  cosmosHooks.add(e => {
+    if (e?.type !== 'run:done' && e?.type !== 'reset' && e?.type !== 'run:start') return
+    if (e.type !== 'run:done') return draw()
+    refresh()
+    // a build that made nothing says so (the server does not count it): the canvas is never left blank and silent
+    if (!e.done && live(e)) refuse({ title: 'That build did not start', message: 'The crew could not plan it. It did not count: try again in a moment.' })
+  })
   draw()
   if (!open) setTimeout(() => refuse({ error: 'closed', title: 'Done for today', message: H.closedMessage }), 400)
   return { ready, refresh, refuse }
