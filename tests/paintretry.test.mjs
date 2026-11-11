@@ -92,3 +92,19 @@ test('no pick: the Codex login, else any signed-in provider, else no pictures', 
 test('Off stays off', () => {
   assert.equal(chooseImage(LIST, 'off'), null)
 })
+
+// ckff: the studio's own image key, listed beside Hermes's logins when it has one
+const WITH_CKFF = [...LIST, { provider: 'ckff', available: true, models: ['gpt-image-2.5', 'gpt-image-2-4k'], default: 'gpt-image-2.5' }]
+test('ckff can be picked like any signed-in provider', () => {
+  assert.deepEqual(chooseImage(WITH_CKFF, { provider: 'ckff', model: 'gpt-image-2-4k' }), { provider: 'ckff', model: 'gpt-image-2-4k' })
+})
+test('a pick that is not signed in falls back to ckff before the Codex login', () => {
+  const c = chooseImage(WITH_CKFF, { provider: 'openai', model: 'gpt-image-2.5' })
+  assert.equal(c.provider, 'ckff')
+  assert.equal(c.model, 'gpt-image-2.5')
+  assert.equal(c.insteadOf, 'openai')
+})
+test('no pick still means the Codex login when it is signed in, ckff when it is not', () => {
+  assert.equal(chooseImage(WITH_CKFF, null).provider, 'openai-codex')
+  assert.equal(chooseImage(WITH_CKFF.filter(x => x.provider !== 'openai-codex'), null).provider, 'ckff')
+})

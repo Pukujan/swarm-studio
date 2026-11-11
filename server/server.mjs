@@ -131,7 +131,23 @@ const hermesPy = (script, what) => (args, timeout) => new Promise(resolve => {
     try { resolve(JSON.parse(line)) } catch { resolve({ ok: false, error: String(err?.message || 'no answer').slice(0, 200) }) }
   })
 })
-const imagegen = hermesPy('imagegen.py', 'image')
+const imagegenHermes = hermesPy('imagegen.py', 'image')
+// ckff (engine/ckff.mjs) is an image provider of the studio's own: an OpenAI-shaped image API with
+// its own key (CKFF_API_KEY). With a key it is listed beside Hermes's image logins, so it can be
+// picked in the Images menu and a build can paint with it when no Hermes login works.
+const CKFF_MODELS = ['gpt-image-2.5', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2-4k']
+const ckffProvider = () => (ckffCreds() ? { provider: 'ckff', available: true, models: CKFF_MODELS, default: process.env.CKFF_MODEL || CKFF_MODELS[0] } : null)
+const argAfter = (args, flag) => { const i = args.indexOf(flag); return i >= 0 ? String(args[i + 1] || '') : '' }
+const imagegen = (args, timeout) => {
+  if (args[0] === '--list') return imagegenHermes(args, timeout).then(r => {
+    const mine = ckffProvider(), listed = (r?.ok ? r.providers : []).filter(x => x.provider !== 'ckff')
+    return mine ? { ok: true, providers: [...listed, mine] } : r
+  })
+  if (argAfter(args, '--provider') !== 'ckff') return imagegenHermes(args, timeout)
+  // the same arguments imagegen.py takes; ckff has no centre-crop, so the picture comes back whole
+  const refs = args.flatMap((x, i) => (x === '--ref' && args[i + 1] ? [args[i + 1]] : [])).filter(r => existsSync(r))
+  return ckffPaint({ prompt: String(args[args.length - 1] || ''), aspect: argAfter(args, '--aspect') || 'landscape', refs, model: argAfter(args, '--model') || undefined, timeoutMs: timeout || 300000 })
+}
 // moving clips from a still, through Hermes's video providers (FAL's Veo 3.1, xAI…)
 const videogen = hermesPy('videogen.py', 'video')
 let imageProviders = null, videoProviders = null
@@ -185,7 +201,8 @@ async function checkArt(path, guide, messages = art.checkMessages) {
 // another signed-in image provider than the one in use: Codex first, then any other
 async function backupImage(choice) {
   const list = (await loadImageProviders()).filter(x => x.available && x.provider !== choice?.provider)
-  const p = list.find(x => x.provider === 'openai-codex') || list[0]
+  // ckff first when it has a key: it is the one that still paints when a Hermes login is out of quota
+  const p = list.find(x => x.provider === 'ckff') || list.find(x => x.provider === 'openai-codex') || list[0]
   return p ? { provider: p.provider, model: p.provider === 'openai-codex' ? 'gpt-image-2-low' : p.default || '' } : null
 }
 async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false, ref = '' }, onSentBack) {
@@ -194,6 +211,11 @@ async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false
   const once = (c, strict) => { const pick = art.tierFor(c, { hero }); return imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, ...(withRef ? ['--ref', ref] : []), art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000) }
   // a refusal that isn't out of quota: once more after a pause, then on another provider (engine/paintretry.mjs)
   let first = await paintWithBackup(c => once(c, ''), { choice, backup: () => backupImage(choice), quota: OUT_OF_QUOTA, exists: existsSync })
+  // out of quota on a Hermes login: ckff paints it when it has a key, rather than no picture
+  if (OUT_OF_QUOTA.test(String(first?.error || '')) && choice?.provider !== 'ckff' && ckffProvider()) {
+    const alt = { provider: 'ckff', model: ckffProvider().default }, other = await once(alt, '')
+    if (other?.ok && other.path && existsSync(other.path)) first = { ...other, backup: alt }
+  }
   // not every provider takes a reference picture: without one, rather than no picture
   if (withRef && (!first.ok || !first.path || !existsSync(first.path)) && !OUT_OF_QUOTA.test(String(first.error || ''))) {
     withRef = false
