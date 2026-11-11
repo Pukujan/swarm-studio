@@ -683,6 +683,12 @@ const BOSS_SPELLS = (() => {
   // flight. Then a tick: colour snaps back and, after a short grace, they all fly. A gap is
   // always left. No damage while stopped. Later modes stop twice and re-aim the shots in flight.
   const HOUR = { wind: 0.7, place: 2.3, grace: 0.3 }
+  // his own poses for it (t-hourwind / t-hourstop / t-hourend), picked frame by frame: the
+  // wind-up draws the watch and snaps (only the frames where the watch stays in one hand), each
+  // blink in the stop is a calm step then a placing gesture, the release shuts the watch and
+  // folds his arms. Never the run or dash sheets.
+  const HOUR_POSE = { wind: [0, 1, 3, 4, 4], stop: [[1, 0], [5, 2], [3, 4]], end: [0, 1, 2, 3, 5, 5] }
+  const hourPose = (anim, f) => { B.anim = anim; B.animT = f / 10 + 0.05 }
   function tick(f0) { if (typeof tone === 'function') tone('square', f0, f0 * 0.7, 0.04, 0.05) }
   function layout(kind, cx, cy, n) {
     const out = [], ar = AR(), lo = ar.l + 30, hi = ar.r - 30
@@ -725,9 +731,15 @@ const BOSS_SPELLS = (() => {
     const cx = () => P.x, cy = () => P.y - 90
     // the wind-up runs in normal time (a hand up, the clock blooms, ticks speed up)
     let nextTick = 0
+    hourPose('hourwind', 0)
     fx.push({ boss: true, t: 0, dur: HOUR.wind, update() {
+      const w = HOUR_POSE.wind; hourPose('hourwind', w[Math.min(w.length - 1, (this.t / HOUR.wind * w.length) | 0)])
       if (this.t >= nextTick) { tick(1500 + 1500 * this.t / HOUR.wind); nextTick = this.t + 0.18 * (1 - this.t / HOUR.wind) + 0.04 }
-    }, draw(k) { drawClock(B.x, B.y + (B.float ? -140 : 0) - B.h * 0.6, ease(k), 1, T) } })
+    }, draw(k) {
+      drawClock(B.x, B.y + (B.float ? -140 : 0) - B.h * 0.6, ease(k), 1, T)
+      // he stands in front of his clock, drawn solid (the clock leaves the blend on 'lighter')
+      ctx.globalCompositeOperation = 'source-over'; ctx.save(); try { drawBoss() } catch { } ctx.restore()
+    } })
     later(HOUR.wind, () => {
       if (!live()) return
       // stop the world: the core skips every update while stopT > 0; this fx drives itself from T
@@ -736,7 +748,10 @@ const BOSS_SPELLS = (() => {
       stash = parts; parts = []
       held = reaim ? bullets.filter(b => b.enemy && !b.dead && b.type !== 'doom') : []
       SFX.glare(); tick(900)
-      const spots = [-1, 1, -1].map((s, i) => clamp(P.x + s * (220 + 60 * i), AR().l + 100, AR().r - 100))
+      const view = [Math.max(AR().l + 100, cam.x + 140), Math.min(AR().r - 100, cam.x + VW() - 140)]   // every spot on screen: the stop is his showpiece
+      const spots = []
+      for (const d of [-220, 280, -340, 420, -460, 560]) { const x = P.x + d; if (spots.length < 3 && x > view[0] && x < view[1] && spots.every(o => Math.abs(o - x) > 120)) spots.push(x) }
+      while (spots.length < 3) spots.push(clamp(P.x + (spots.length % 2 ? 280 : -280), view[0], view[1]))
       fx.push({ boss: true, t: 0, dur: 99, draw() {
         const c = ctx, u = T - t0, k = Math.min(1, u / HOUR.place)
         if (!resumed && u >= HOUR.place) resumed = true
@@ -744,7 +759,9 @@ const BOSS_SPELLS = (() => {
         if (done) { this.t = 99; return }
         // the boss blinks between spots and hangs the weapons as she goes
         const si = Math.min(spots.length - 1, (k * spots.length) | 0)
-        if (B.x !== spots[si] && !B.float) { glowAt(B.x, B.y - B.h * 0.5, 80, pal.glow, 0.6); B.x = spots[si]; B.face = P.x < B.x ? -1 : 1; tick(700) }
+        if (B.x !== spots[si] && !B.float) { glowAt(B.x, B.y - B.h * 0.5, 80, pal.glow, 0.6); B.x = spots[si]; B.y = groundAtBoss(B.x); B.vy = 0; B.face = P.x < B.x ? -1 : 1; tick(700) }   // on the floor at her level, in view
+        // at each spot: a relaxed step, then the hand goes out and sets a weapon in the air
+        hourPose('hourstop', HOUR_POSE.stop[si][k * spots.length - si < 0.35 ? 0 : 1])
         const want = Math.min(plan.length, Math.ceil(plan.length * Math.min(1, u / (HOUR.place * 0.8))))
         while (placed.length < want) { const w = plan[placed.length]; placed.push({ ...w, at: u, kind: ['dagger', 'card', 'hand'][placed.length % 3] }); tick(1200 + placed.length * 40) }
         // the drained world: low quality gets a sepia veil, high a real colour drain
@@ -763,7 +780,7 @@ const BOSS_SPELLS = (() => {
         if (u < 0.5) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(${pal.hot},${1 - u * 2})`; c.lineWidth = 10 * (1 - u * 2) + 2; c.beginPath(); c.arc(B.x, B.y - B.h * 0.6, 60 + 2400 * ease(u * 2), 0, TAU); c.stroke() }
         // she stays in colour, and the clock stays up behind her
         drawClock(B.x, B.y + (B.float ? -140 : 0) - B.h * 0.6, 1, 0.7, t0)
-        c.save(); try { drawBoss() } catch { } c.restore()
+        c.globalCompositeOperation = 'source-over'; c.save(); try { drawBoss() } catch { } c.restore()
         // guide lines first (visible on sepia: dark under, gold over), then the weapons
         for (const b of held) guide(b.x, b.y, ang(b.x, b.y, P.x, P.y - 80), 0.7)
         for (const w of placed) guide(w.x, w.y, w.a, Math.min(1, (u - w.at) * 4))
@@ -772,6 +789,13 @@ const BOSS_SPELLS = (() => {
     }, 'boss')
     function resume() {
       tick(400); SFX.zap()
+      // the release: the watch snaps shut, a glove tug, arms folded; then back to his idle
+      hourPose('hourend', 0)
+      fx.push({ boss: true, t: 0, dur: 1.4, update() {
+        if (B.anim !== 'hourend') return
+        const e = HOUR_POSE.end
+        if (this.t >= this.dur - 0.05) { B.anim = 'idle'; B.animT = 0 } else hourPose('hourend', e[Math.min(e.length - 1, (this.t / 1.2 * e.length) | 0)])
+      }, draw() { } })   // a draw is required: the fx loop ends any fx whose draw throws
       flash = Math.max(flash, 0.4); flashColor = '255,244,220'; if (!low()) shake = Math.max(shake, 6)
       if (stash) { parts = stash.concat(parts); stash = null }
       for (const b of held) { const a = ang(b.x, b.y, P.x, P.y - 80), sp = Math.max(260, Math.hypot(b.vx, b.vy)); b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp }
@@ -846,7 +870,8 @@ const BOSS_SPELLS = (() => {
   // -------------------------------------------------------------- wiring
   const NEW = { storm, firewall, maelstrom, radiance, arcs, nova, hound, stopped_hour: stoppedHour }
   if (typeof PATTERNS !== 'undefined') Object.assign(PATTERNS, NEW)
-  if (typeof PATTERN_POSE !== 'undefined') Object.assign(PATTERN_POSE, { storm: 'cast', firewall: 'cast', maelstrom: 'cast', radiance: 'laugh', arcs: 'cast', nova: 'cast', hound: 'cast', stopped_hour: 'laugh' })
+  if (typeof PATTERN_POSE !== 'undefined') Object.assign(PATTERN_POSE, { storm: 'cast', firewall: 'cast', maelstrom: 'cast', radiance: 'laugh', arcs: 'cast', nova: 'cast', hound: 'cast', stopped_hour: 'hourwind' })
+  if (typeof BOSS_SHEETS !== 'undefined') Object.assign(BOSS_SHEETS, { hourwind: ['hourwind', 'laugh', 'idle'], hourstop: ['hourstop', 'idle'], hourend: ['hourend', 'idle'] })
   // slot the spells into the boss's modes at the start of the fight (a copy: FIGHTS is untouched)
   function withSpells(handle, f) {
     const s = SET[handle]

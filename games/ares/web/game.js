@@ -23,7 +23,8 @@ const boxHit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h &
 const circBox = (cx, cy, r, b) => { const x = clamp(cx, b.x, b.x + b.w), y = clamp(cy, b.y, b.y + b.h); return (cx - x) ** 2 + (cy - y) ** 2 < r * r }
 
 // ---------------------------------------------------------------- loading
-const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('missing ' + src)); i.src = src })
+// images are decoded before they are handed over, so the first draw never stalls a frame
+const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => (i.decode ? i.decode().catch(() => { }) : Promise.resolve()).then(() => ok(i)); i.onerror = () => no(new Error('missing ' + src)); i.src = src })
 const getJSON = u => fetch(u).then(r => { if (!r.ok) throw new Error('missing ' + u); return r.json() })
 const HEROES = ['messenger', 'runner']
 const SCALE = { messenger: 0.47, runner: 0.43 }
@@ -49,7 +50,8 @@ async function load() {
 // camera needs (her figure at ~1.7x her normal size), the same factor for every sheet so they
 // stay in step; anchors shrink with them and fitScale() makes up the difference.
 // ?q=high keeps the painted size; ?q=low cuts deeper. PERF.low thins the effects at run time.
-const QUALITY = (location.search.match(/[?&]q=(high|low)\b/) || [])[1] || 'auto'
+// ?q=high|low wins; otherwise the player's pick from the title (G), else auto
+const QUALITY = (location.search.match(/[?&]q=(high|low)\b/) || [])[1] || (() => { try { const v = localStorage.getItem('ares.q'); return v === 'high' || v === 'low' ? v : null } catch { return null } })() || 'auto'
 const PERF = { ms: 16.7, slowT: 0, fastT: 0, low: QUALITY === 'low' }
 function shrinkHero(h) {
   if (QUALITY === 'high') return

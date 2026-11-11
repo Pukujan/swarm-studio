@@ -56,14 +56,15 @@ function sheet(sprite, name) {
   if (!sprite || !name) return null
   const key = sprite + '/' + name, s = SHEETS[key]
   if (s !== undefined) return s && s.img ? s : null
-  SHEETS[key] = { loading: true }
-  loadImg(`../assets/skins/${sprite}/default/${name}.webp`).then(img => { SHEETS[key] = { img, ...anchorOf(img) } }).catch(() => { SHEETS[key] = null })
+  const p = loadImg(`../assets/skins/${sprite}/default/${name}.webp`).then(img => { SHEETS[key] = { img, ...anchorOf(img) } }).catch(() => { SHEETS[key] = null })
+  SHEETS[key] = { loading: true, p }
   return null
 }
 function anchorOf(img) {
   const slot = img.height, n = Math.max(1, Math.round(img.width / slot)), q = 4, w = Math.ceil(slot / q)
   const c = document.createElement('canvas'); c.width = w * n; c.height = w
-  const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height)
+  // read on the CPU: a GPU canvas would stall the frame to copy its pixels back
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0, c.width, c.height)
   const d = g.getImageData(0, 0, c.width, c.height).data
   let bottom = 0, top = w, xs = 0, xn = 0
   for (let f = 0; f < n; f++) for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
@@ -770,6 +771,19 @@ function startRun() {
   resetPlayer()
   startStage(Math.max(0, Math.min((STAGES?.length || 1) - 1, +(new URLSearchParams(location.search).get('stage') || 0) || 0)))
 }
+// every boss and titan in the stage, loaded and decoded while the loading screen is up (capped,
+// so a slow connection still starts the stage; anything late loads as before)
+async function preloadStageFoes(i) {
+  try {
+    for (const s of STAGES[i]?.sections || []) { if (s.boss) preloadBoss(s.boss); if (s.titan) preloadTitan(s.titan) }
+    const ps = Object.values(SHEETS).filter(s => s && s.loading && s.p).map(s => s.p)
+    // the intro portraits too (boss and heroine), so the first intro frame doesn't wait on them
+    if (typeof portraitOf === 'function') for (const id of new Set([P.hero, ...(STAGES[i]?.sections || []).filter(s => s.boss).map(s => voiceOf(s.boss))])) {
+      try { portraitOf(id); const im = PORTRAITS[id]; if (im?.decode) ps.push(im.decode().catch(() => im.decode().catch(() => { }))) } catch { }
+    }
+    if (ps.length) await Promise.race([Promise.all(ps), new Promise(r => setTimeout(r, 6000))])
+  } catch (e) { console.warn('preload', e) }
+}
 async function startStage(i) {
   mode = 'loading'
   const keep = { hp: P.hp, max: P.max, meter: P.meter, hero: P.hero }
@@ -778,6 +792,7 @@ async function startStage(i) {
   if (!STAGES) { kit = KITS.temple; STAGES = [templeStage()] }
   kit = await loadKit(STAGES[i].kit)
   buildStage(i)
+  await preloadStageFoes(i)
   Object.assign(P, { x: 140, y: GROUND, vx: 0, vy: 0, face: 1, act: null, chant: null, dead: false, safeX: 140, trail: [], cds: {} }, keep.max ? keep : {})
   cam.x = 0; cam.z = (stage.zoom?.calm || 1.25) + 0.3; cam.y = GROUND + 80 - VH()
   mode = 'play'
