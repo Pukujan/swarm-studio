@@ -645,7 +645,8 @@ function agentTarget(a, now) {
 // illustration, pull a wire to another page, nudge the finished section. Each is
 // drawn in world space in the agent's colour, then it goes back to the caret.
 
-const live = e => !viewing && (!e.t || Date.now() - e.t < 5000)
+// a replay (?replay=) plays a saved run as if it were live: bubbles, sparks and gestures included
+const live = e => (!viewing || !!Q.get('replay')) && (!e.t || Date.now() - e.t < 5000)
 const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 const lerp = (a, b, t) => a + (b - a) * t
 const rand = (a, b) => a + Math.random() * (b - a)
@@ -3961,12 +3962,33 @@ async function openRun(id) {
   setAuto(true)
 }
 
+// A saved run keeps each section's finished HTML but not the stream that wrote it, so a replay
+// showed every section popping in whole. This types it back in: the HTML in pieces, spread over
+// the time between the agent taking the section and finishing it.
+function withTyping(events) {
+  const took = new Map(), out = []
+  let last = 0
+  for (const e of events) {
+    const t = e.t || last
+    last = t
+    const k = `${e.page}/${e.layer}`
+    if (e.type === 'agent:assign') took.set(k, t)
+    if (e.type === 'layer:done' && e.html && !e.kept && took.has(k)) {
+      const t0 = Math.max(took.get(k), t - (e.ms || 4000)), n = Math.min(40, Math.max(6, Math.round(e.html.length / 220)))
+      took.delete(k)
+      for (let i = 0; i < n; i++) out.push({ type: 'layer:delta', run: e.run, page: e.page, layer: e.layer, agent: e.agent, text: e.html.slice(Math.floor(i * e.html.length / n), Math.floor((i + 1) * e.html.length / n)), t: t0 + (t - t0) * (i + 0.5) / n })
+    }
+    out.push(e.t ? e : { ...e, t })
+  }
+  return out.map((e, i) => [e, i]).sort((x, y) => x[0].t - y[0].t || x[1] - y[1]).map(x => x[0])
+}
+
 // Replay a saved run on its own clock, sped up: the Swarm Wall plays four of these side by side.
 // Long quiet gaps (a model thinking) are cut to 1.5 s of real time so the tile never looks stuck.
 async function replayRun(id, speed = 8) {
   const res = await api(`/api/runs/${encodeURIComponent(id)}/events`).catch(() => null)
   if (!res?.ok) return botMsg('That run could not be loaded.')
-  const events = (await res.json()).filter(e => e.type !== 'cmd')
+  const events = withTyping((await res.json()).filter(e => e.type !== 'cmd'))
   viewing = id
   fresh(id)
   let clock = 0, prev = events[0]?.t || 0
@@ -3977,7 +3999,8 @@ async function replayRun(id, speed = 8) {
     prev = e.t || prev
     const wait = clock - (performance.now() - start)
     if (wait > 4) await new Promise(r => setTimeout(r, wait))
-    try { on(e) } catch (err) { console.error(err) }
+    // stamped now, so the canvas treats it as happening (a saved time would mute the crew)
+    try { on({ ...e, t: Date.now() }) } catch (err) { console.error(err) }
     if (i % 25 === 0) parent.postMessage?.({ wall: 'tick', run: id, i, of: events.length, t: e.t - events[0].t }, '*')
   }
   parent.postMessage?.({ wall: 'done', run: id, ms: (events.at(-1)?.t || 0) - (events[0]?.t || 0) }, '*')
