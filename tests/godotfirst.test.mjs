@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { godotFirst, isGodotFirst, seedGodot, godotStagePrompt, godotArtBrief, unpersist, WEB_PRESET } from '../engine/godotfirst.mjs'
+import { godotFirst, isGodotFirst, seedGodot, syncGodotArt, godotStagePrompt, godotArtBrief, unpersist, WEB_PRESET } from '../engine/godotfirst.mjs'
 
 test('Godot-first only when the spec names Godot and a binary is found', () => {
   const bin = join(mkdtempSync(join(tmpdir(), 'gf-')), 'godot'); writeFileSync(bin, '')
@@ -25,6 +25,21 @@ test('seedGodot writes the skeleton, the Web preset and copies the art', () => {
   assert.ok(existsSync(join(root, 'assets', 'art', 'sprite-hero.png')))
   assert.ok(isGodotFirst(dir))
   assert.match(WEB_PRESET, /variant\/thread_support=false/)
+})
+
+test('syncGodotArt keeps a picture the crew changed in the project, and copies new paintings', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gf-')), art = join(dir, 'public', 'art'), out = join(dir, 'ports', 'godot', 'assets', 'art')
+  mkdirSync(art, { recursive: true })
+  writeFileSync(join(art, 'portrait-mika.webp'), 'poster')
+  writeFileSync(join(art, 'room-hub.webp'), 'hub')
+  assert.deepEqual(syncGodotArt(dir).sort(), ['portrait-mika.webp', 'room-hub.webp'])
+  writeFileSync(join(out, 'portrait-mika.webp'), 'face') // the crew cut a face
+  writeFileSync(join(art, 'room-hub.webp'), 'hub, painted again')
+  writeFileSync(join(art, 'boon-pulse.webp'), 'pulse')
+  assert.deepEqual(syncGodotArt(dir).sort(), ['boon-pulse.webp', 'room-hub.webp'])
+  assert.equal(readFileSync(join(out, 'portrait-mika.webp'), 'utf8'), 'face')
+  assert.equal(readFileSync(join(out, 'room-hub.webp'), 'utf8'), 'hub, painted again')
+  assert.deepEqual(syncGodotArt(dir), [])
 })
 
 test('stage prompts say Godot 4 and keep work in ports/godot', () => {

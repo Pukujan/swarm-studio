@@ -6,7 +6,8 @@
 // playable slice after every stage.
 
 import { execFile } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
 import { stagesFor, viewOf, skillText } from './game.mjs'
@@ -81,14 +82,31 @@ export function seedGodot(dir, spec) {
 }
 
 // The app's public/art/ copied into the Godot project's assets/art/ (again after a mid-build
-// ask is painted: Godot imports the new files on its next open). → the file names copied
+// ask is painted: Godot imports the new files on its next open). A file the crew changed in
+// assets/art/ since the last copy (a face cut from the title art, say) is theirs and is kept:
+// .synced.json holds what each copy wrote. → the file names copied
+const sumOf = f => createHash('sha1').update(readFileSync(f)).digest('hex')
 export function syncGodotArt(dir) {
-  const root = portDir(dir, 'godot'), from = join(dir, 'public', 'art'), copied = []
-  mkdirSync(join(root, 'assets', 'art'), { recursive: true })
+  const root = portDir(dir, 'godot'), from = join(dir, 'public', 'art'), to = join(root, 'assets', 'art'), copied = []
+  mkdirSync(to, { recursive: true })
+  const log = join(to, '.synced.json')
+  let synced = {}
+  try { synced = JSON.parse(readFileSync(log, 'utf8')) || {} } catch {}
   if (existsSync(from)) for (const f of readdirSync(from)) {
     if (!/^[\w.-]{1,90}\.(png|webp|jpe?g|json)$/i.test(f)) continue
-    try { copyFileSync(join(from, f), join(root, 'assets', 'art', f)); copied.push(f) } catch {}
+    try {
+      const src = join(from, f), dst = join(to, f), sum = sumOf(src)
+      if (existsSync(dst)) {
+        const now = sumOf(dst)
+        if (now === sum) { synced[f] = sum; continue }
+        // changed in the project since the last copy (or, with no record, newer than the painting)
+        const theirs = synced[f] ? now !== synced[f] : statSync(dst).mtimeMs > statSync(src).mtimeMs
+        if (theirs) continue
+      }
+      copyFileSync(src, dst); synced[f] = sum; copied.push(f)
+    } catch {}
   }
+  try { writeFileSync(log, JSON.stringify(synced, null, 1)) } catch {}
   return copied
 }
 
