@@ -1,7 +1,8 @@
 // Stand-in pictures. While the crew paints a real picture, its slot shows a
-// matching photo marked "real picture coming", so a build looks alive. Sources:
+// matching photo marked "real picture coming", so a build looks alive. Stock photos only: a
+// picture another build made is never a stand-in (it reads as that other site's art). Sources:
 // the shipped library (photos tagged by a vision model and hosted on the Octo R2
-// CDN, built by scripts/stock-library.mjs), pictures earlier builds made (tagged by the prompt that made them),
+// CDN, built by scripts/stock-library.mjs),
 // Pexels when the studio has a key (directly or through Octo's vault proxy), and
 // public-domain photos from Openverse (CC0 and the public domain mark, no key).
 // A vision model looks at each found photo once, rejects what isn't a clean
@@ -14,7 +15,7 @@
 // hosted studio can hand visitors a stable public URL.
 
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { streamChat } from './llm.mjs'
 
@@ -44,24 +45,6 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
   const searched = new Set(index.flatMap(x => x.q || []))
   const inflight = new Map()
 
-  // earlier builds' pictures: their prompts already say what is in them
-  let own = null
-  function ownPictures() {
-    if (own) return own
-    own = []
-    let runs = []
-    try { runs = readdirSync(runsDir) } catch {}
-    for (const r of runs) {
-      let lines = []
-      try { lines = readFileSync(join(runsDir, r, 'events.jsonl'), 'utf8').split('\n') } catch { continue }
-      for (const l of lines) {
-        if (!l.includes('"type":"image"')) continue
-        try { const e = JSON.parse(l); if (e.src && e.gen) own.push({ id: `own-${r}-${own.length}`, src: 'own', run: r, url: e.src, tags: words(e.gen), quality: 4 }) } catch {}
-      }
-    }
-    return own
-  }
-
   // the shipped library (scripts/stock-library.mjs): photos on the R2 CDN with structured tags.
   // Subjects, tags and businesses weigh most; the caption and place help break ties.
   let library = null
@@ -81,17 +64,16 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
     return library
   }
 
-  function rank(want, aspect, exclude, avoid) {
+  function rank(want, aspect, avoid) {
     const stems = [...new Set(want.map(stem))]
     let best = null
-    for (const x of [...libraryPhotos(), ...ownPictures(), ...index]) {
-      if (exclude && x.run === exclude) continue // never a build's own picture as its own stand-in
+    for (const x of [...libraryPhotos(), ...index]) {
       if (avoid?.has(x.url)) continue // a photo already used elsewhere on the same build
       const keys = x.keys instanceof Map ? x.keys : (x.keys = new Map(x.tags.map(t => [stem(t), 1]))) // an index saved by an older studio kept keys as {}
       let hit = 0, w = 0
       for (const k of stems) { const v = keys.get(k); if (v) { w += v; if (v >= 1) hit++ } }
       if (w < Math.min(2, stems.length)) continue
-      const s = w + (aspect && x.aspect === aspect ? 0.5 : 0) + (x.quality || 3) / 10 + (x.src === 'own' ? 0.3 : x.src === 'library' ? 0.2 : 0)
+      const s = w + (aspect && x.aspect === aspect ? 0.5 : 0) + (x.quality || 3) / 10 + (x.src === 'library' ? 0.2 : 0)
       if (!best || s > best.s) best = { ...x, s, hit: Math.max(hit, Math.floor(w)) }
     }
     return best
@@ -183,7 +165,7 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
     const want = words(q).slice(0, 10)
     if (!want.length) return null
     const aspect = aspectOf(Number(w), Number(h))
-    let best = rank(want, aspect, run, avoid)
+    let best = rank(want, aspect, avoid)
     if (!best || best.hit < Math.min(3, want.length)) {
       for (const key of [want.slice(0, 3).join(' '), want.slice(0, 2).join(' ')]) {
       if (!searched.has(key)) {
@@ -191,8 +173,8 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
         if (!inflight.has(key)) inflight.set(key, search(key, aspect).then(ok => { if (!ok) searched.delete(key) }).finally(() => inflight.delete(key)))
       }
       if (inflight.has(key)) await inflight.get(key)
-      best = rank(want, aspect, run, avoid) || best
-      if (best && best.src !== 'own') break
+      best = rank(want, aspect, avoid) || best
+      if (best) break
       }
     }
     if (!best) return null
