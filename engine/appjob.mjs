@@ -142,6 +142,10 @@ export function titleApp(dir, name) {
 // it a big game draws everything in code)
 // fill(runId, appDir, step): fills picture slots the crew did not paint (optional)
 // nameFor(id) -> { name, kind }: the run's project name and piece (docs/specs/18-projects.md)
+// A question to the crew (answered, not queued as a change)
+const QUESTION = /\?\s*$|^(what|what's|whats|why|how|when|where|who|which|is|are|was|were|can|could|does|did|do|will|status)\b/i
+export const isQuestion = text => QUESTION.test(String(text || '').trim())
+
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
   const jobs = new Map() // run id -> job
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
@@ -366,9 +370,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (j.controller.signal.aborted) throw new Error('stopped')
       const st = stages[i], t = Date.now()
       step({ kind: 'setup', text: `stage ${i + 1} of ${stages.length}: ${st.name}` })
+      // what the person said during the last stage goes into this one's prompt
+      const heard = takeTold(j)
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { last = await engineCall((godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: i === from ? input.note : '' }), input.turns || st.turns); break } catch (err) {
+        try { last = await engineCall((godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') }), input.turns || st.turns); break } catch (err) {
           if (j.controller.signal.aborted) throw err
           step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
           if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
@@ -549,6 +555,18 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     return view(k)
   }
 
+  // Words from the person while a build runs: kept with the run, and handed to the crew at the
+  // start of the next stage (or the next slice), since a turn in flight cannot take new words.
+  function tell(id, text) {
+    const j = jobs.get(id)
+    const t = String(text || '').trim().slice(0, 1200)
+    if (!t || j?.state !== 'working') return { queued: false, state: j?.state || state(id).state }
+    ;(j.told ||= []).push(t)
+    send(id, 'app:told', { text: t })
+    return { queued: true, state: j.state, waiting: j.told.length }
+  }
+  const takeTold = j => (j.told || []).splice(0).map(t => `The person said while you were building: "${t}"`)
+
   function stop(id) {
     const j = jobs.get(id)
     if (j?.state === 'working') j.controller.abort()
@@ -599,5 +617,5 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   function close() { for (const j of jobs.values()) { j.controller?.abort(); j.proc?.kill() } }
 
-  return { start, state, stop, open, files, deploy, close, dirOf, jobs }
+  return { start, state, stop, tell, open, files, deploy, close, dirOf, jobs }
 }
