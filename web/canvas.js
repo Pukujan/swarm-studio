@@ -1613,6 +1613,8 @@ els.form.addEventListener('submit', async e => {
   const skip = () => { nextRoute?.done?.(null); nextRoute = null }
   // a big game waiting after a slice: the answer goes into the next slice, from any view
   if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
+  // a game being built: the words go to its crew from any view, never to a new build
+  if (appv.state === 'working' && appv.kind === 'game' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return tellCrew(brief) }
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
   if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
