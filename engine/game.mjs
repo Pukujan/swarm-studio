@@ -273,23 +273,38 @@ const slug = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').repl
 // speaking person, an icon per boon, a backdrop per room type (and the hub).
 // Each is a file in the app's public/art/ that the game loads; `gen` is what the
 // art director paints. Capped, so a long spec does not become a long bill.
-export function artList(spec, { max = 20 } = {}) {
+export function artList(spec, { max = 26 } = {}) {
   const where = spec.setting || ''
   const items = [{ id: 'title', kind: 'title', aspect: 'landscape', what: 'title screen picture', gen: `Key art for a game called ${spec.title}: ${spec.hero}, in ${where}, ready to fight` }]
   for (const c of (spec.characters || []).slice(0, 5)) items.push({ id: `portrait-${slug(c.name)}`, kind: 'portrait', aspect: 'portrait', what: `portrait of ${c.name} (${c.role || 'character'}) for dialogue`, gen: `Chest-up character portrait of ${c.name}, ${c.role || ''}: ${c.look || ''}. Facing three-quarters, plain dark backdrop, from ${where}` })
   if (spec.boss?.name && !items.some(i => i.id === `portrait-${slug(spec.boss.name)}`)) items.push({ id: `portrait-${slug(spec.boss.name)}`, kind: 'portrait', aspect: 'portrait', what: `portrait of the boss ${spec.boss.name}`, gen: `Menacing portrait of ${spec.boss.name}: ${spec.boss.look || ''}, plain dark backdrop` })
   const patron = n => (spec.patrons || []).find(p => p.name === n)
   for (const b of (spec.blessings || []).slice(0, 9)) items.push({ id: `boon-${slug(b.name)}`, kind: 'icon', aspect: 'square', what: `icon for the boon ${b.name}`, gen: `A single emblem for "${b.name}": ${b.effect || ''}. ${patron(b.patron)?.look ? `In the colours of ${patron(b.patron).look}. ` : ''}One bold symbol centred on a plain dark circle, readable when small` })
-  if (spec.hub?.name) items.push({ id: 'room-hub', kind: 'backdrop', aspect: 'landscape', what: `backdrop for the hub, ${spec.hub.name}`, gen: `Top-down three-quarter view of ${spec.hub.name}: ${spec.hub.what || ''}. An empty floor with walls around the edges, open space in the middle for characters` })
-  for (const r of (spec.rooms || []).slice(0, 5)) items.push({ id: `room-${slug(r.type)}`, kind: 'backdrop', aspect: 'landscape', what: `backdrop for ${r.type} rooms`, gen: `Top-down three-quarter view of an arena floor in ${where}: ${r.what || r.type}. Empty of characters, walls and props at the edges, open floor in the middle` })
-  if (spec.boss?.name) items.push({ id: 'room-boss', kind: 'backdrop', aspect: 'landscape', what: `backdrop for the boss arena of ${spec.boss.name}`, gen: `Top-down three-quarter view of a large round boss arena in ${where}, the lair of ${spec.boss.name}. Empty floor, ominous edges` })
+  if (spec.hub?.name) items.push({ id: 'room-hub', kind: 'backdrop', aspect: 'landscape', what: `backdrop for the hub, ${spec.hub.name}`, gen: `Top-down three-quarter view of ${spec.hub.name}: ${spec.hub.what || ''}. An empty floor with walls around the edges, open space in the middle for characters. ${NO_PEOPLE}` })
+  for (const r of (spec.rooms || []).slice(0, 5)) items.push({ id: `room-${slug(r.type)}`, kind: 'backdrop', aspect: 'landscape', what: `backdrop for ${r.type} rooms`, gen: `Top-down three-quarter view of an arena floor in ${where}: ${r.what || r.type}. Walls and props at the edges, open floor in the middle. ${NO_PEOPLE}` })
+  // the fighters as sprites: one full figure each, cut out of a flat background after painting
+  const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. Standing, facing the viewer, head to feet in frame with space around, bold clean outline. ${SPRITE_GROUND}` })
+  if (spec.hero) sprite('hero', String(spec.hero).split(/[,—.]/)[0].trim(), String(spec.hero))
+  for (const e of (spec.enemies || []).slice(0, 5)) if (e?.name) sprite(slug(e.name), e.name, e.look)
+  if (spec.boss?.name) sprite('boss', spec.boss.name, spec.boss.look)
+  if (spec.boss?.name) items.push({ id: 'room-boss', kind: 'backdrop', aspect: 'landscape', what: `backdrop for the boss arena of ${spec.boss.name}`, gen: `Top-down three-quarter view of a large round boss arena in ${where}, the lair of ${spec.boss.name}. Empty floor, ominous edges. ${NO_PEOPLE}` })
   // the title, then one of each kind, then the rest: a cap keeps some of every kind
-  const order = ['title', 'portrait', 'backdrop', 'icon']
+  const order = ['title', 'sprite', 'portrait', 'backdrop', 'icon']
   const byKind = order.map(k => items.filter(i => i.kind === k))
   const out = []
   for (let round = 0; out.length < Math.min(max, items.length); round++) for (const list of byKind) if (list[round] && out.length < max) out.push(list[round])
   return out
 }
+
+// The fighters stand on the backdrops, so a backdrop holds no figures of its own.
+export const NO_PEOPLE = 'No people, creatures, figures, statues or faces anywhere in the picture: an empty place waiting for its characters'
+
+// Sprites are painted on one flat colour and cut out (scripts/cutout.py).
+export const SPRITE_GROUND = 'On a perfectly plain flat pale grey background: no floor, no shadow, no scenery, nothing else in the picture'
+
+// How figures move on screen, for every game: the art is drawn upright, facing the viewer.
+export const FIGURE_RULES = `- Characters (hero, enemies, boss) are upright figures seen from the front: never rotate a character to face where it aims or walks, so it never looks fallen over. Flip it left or right (flipX) to face its way, and show the aim with the weapon, a reticle or the attack itself. Give them life with tweens: a bob while walking, a squash on a hit, a lean on a dash, a white tint flash when hurt.
+- Before pausing a scene for dialogue or a menu, clear camera effects (cameras.main.resetFX()), or a flash or fade freezes over the screen until the scene resumes.`
 
 // How the game uses the painted art. `files` are the ones that were painted
 // ({ file: 'art/x.png', what }); none painted means everything is drawn in code.
@@ -297,7 +312,7 @@ export function artBrief(files = []) {
   if (!files.length) return '- No painted art this time: draw every portrait, icon and backdrop in code (shapes, gradients, canvas textures).'
   return `- Painted art is in public/art/ (served at /art/…). Load these files and use them as named; keep a drawn-in-code stand-in if one fails to load, so the game never breaks:
 ${files.map(f => `  - ${f.file}: ${f.what}`).join('\n')}
-  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Room backdrops fill the arena floor under the action (darken them a little so the fighters read); portraits sit beside the dialogue box; boon icons sit on the boon cards and in the HUD and run summary; the title picture fills the title screen behind the menu.`
+  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the fighters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for; scale them so the hero stands about 72 px tall and the boss about twice that, and keep drawn shapes only for projectiles, effects and stand-ins. Room backdrops fill the arena floor under the action (darken them a little so the fighters read); portraits sit beside the dialogue box; boon icons sit on the boon cards and in the HUD and run summary; the title picture fills the title screen behind the menu.`
 }
 
 // The big game's build, one system group per stage. Each stage is its own
@@ -320,6 +335,7 @@ export function bigStagePrompt(spec, i, { art = [], failed = '' } = {}) {
 
 Do only this stage; later stages add the rest, so leave clean places for them (a room type table, a boon list, a dialogue module) instead of building them now.
 ${artBrief(art)}
+${FIGURE_RULES}
 - Keep the code in src/game/ with one module per system; no file over about 400 lines.
 - Original content only: the names, characters, world and art in the spec are new.
 

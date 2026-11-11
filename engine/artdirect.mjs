@@ -151,14 +151,16 @@ const SHAPE = {
 
 // The prompt for one picture. The shape is said in words too: some image backends
 // pick the size from the prompt, not the size asked for.
-export function promptFor(gen, guide, { aspect = 'landscape', strict = '' } = {}) {
+export function promptFor(gen, guide, { aspect = 'landscape', strict = '', cutout = false } = {}) {
   const what = cleanGen(gen, guide)
   const avoid = [guide?.avoid, ...(guide?.bans || []).map(id => banOf(id).label)].filter(Boolean).join('; ')
   return clip([
     SHAPE[aspect] || SHAPE.landscape,
     `${what}.`,
     guide?.guide || STYLES.photo.guide,
-    'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
+    cutout
+      ? 'No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on a perfectly flat plain pale grey background, with no floor, shadow, scenery or frame, so it can be cut out.'
+      : 'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
     avoid ? `Avoid: ${avoid}.` : '',
     strict ? `This is a second try. The first picture was sent back for: ${strict}. Make sure none of that is in this one.` : ''
   ].filter(Boolean).join(' '), 1200)
