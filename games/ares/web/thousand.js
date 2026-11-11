@@ -555,6 +555,13 @@ let ULT = null, ECL = null
     }
     ctx.restore()
   }
+  // The ult frames a fixed box while she dashes its legs. Once the cuts land (the split and the
+  // eclipse finisher, often started in the air) the camera lets go of that spot and moves with her.
+  function followAfterCuts() {
+    if (!ULT || !cam.focus || !/^(split|ecl1|ecl2|done)$/.test(ULT.phase)) return
+    if (cam.focus.x !== undefined) { delete cam.focus.x; delete cam.focus.y }
+    cam.focus.t = Math.min(cam.focus.t, 0.6)
+  }
   const MGR = { t: 0, dur: Infinity, ultMgr: true,
     behind() { if (ULT) drawWings(ULT) },
     update(dt) {
@@ -611,6 +618,7 @@ let ULT = null, ECL = null
     if (ULT && ULT.phase !== 'done' && !P.dead) {
       if (!fx.includes(MGR)) fx.push(MGR)
       try { return tick(dt) } catch (e) { console.warn('ULT', e); ULT = null; if (cam.focus) cam.focus.t = 0.2 }
+      finally { followAfterCuts() }
     }
     baseUpdate(dt)
   }

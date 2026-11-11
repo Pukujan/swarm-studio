@@ -352,7 +352,7 @@ const FXK = (() => {
     const slot = img.width / 6, S = 160, out = {}
     for (const k in SMOKE) out[k] = []
     for (let f = 0; f < 6; f++) {
-      const src = mk(S, S), sc = src.getContext('2d')
+      const src = mk(S, S), sc = src.getContext('2d', { willReadFrequently: true })
       sc.filter = 'blur(2.5px)'; sc.drawImage(img, f * slot, 0, slot, img.height, 0, 0, S, S); sc.filter = 'none'
       const d = sc.getImageData(0, 0, S, S), px = d.data
       for (const k in SMOKE) {
