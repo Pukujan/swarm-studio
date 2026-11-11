@@ -97,7 +97,8 @@ export function bigResumeAt(events, dir) {
 // paint(runId, spec, items, appDir, step) → [{ file, what, kind }]: a big game's art,
 // painted by the server's art pipeline into the app's public/art/ (optional: without
 // it a big game draws everything in code)
-export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null }) {
+// fill(runId, appDir, step): fills picture slots the crew did not paint (optional)
+export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null }) {
   const jobs = new Map() // run id -> job
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const dirOf = id => join(runsDir, id, 'app')
@@ -218,6 +219,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         const result = await engineCall(prompt, input.turns || (input.plan ? 6 : 4))
         j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
         if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
+        if (fill && kind !== 'game') try { j.result.standins = (await fill(id, dir, step)).filled } catch (err) { step({ kind: 'setup', text: `empty picture slots could not be filled: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
         await serve(id, j, step)
         if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events))
       }

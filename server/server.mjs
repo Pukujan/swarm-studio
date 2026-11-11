@@ -896,7 +896,7 @@ async function videoNow(id, input = {}) {
 
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
-const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame }))))
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp }))))
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
@@ -982,6 +982,21 @@ const standinsOf = () => (standinP ||= (() => {
     octo: octoKey ? { baseUrl: octoBase, key: octoKey, workspaceId: hermesKey('OCTO_SWARM_WORKSPACE_ID') || '9aba6ef6-d196-412f-9344-0efb744b9c6c' } : null,
     pexels: pexelsKey ? { key: pexelsKey } : lease ? { key: lease, proxy: `${octoBase}/api/vault/proxy` } : null })
 })())
+// An app's empty picture slots get stand-in photos, copied into the app with their credit
+async function fillApp(id, dir, step) {
+  const { fillPictures } = await import('../engine/fillpics.mjs')
+  const st = standinsOf()
+  const bytesOf = async u => {
+    const own = u.match(/^\/img\/([\w:.-]+)\/([\w.-]+)$/)
+    if (own) { const f = join(runsDir, own[1], 'img', own[2]); return existsSync(f) ? readFileSync(f) : null }
+    const si = u.match(/^\/standin\/([0-9a-f]{16}\.(jpg|png|webp))$/)
+    if (si) { const f = st.file(si[1]); return f ? readFileSync(f) : null }
+    if (!/^https:\/\//.test(u)) return null
+    const r = await fetch(u, { headers: { 'user-agent': 'swarm-studio/1.0' }, signal: AbortSignal.timeout(20000) })
+    return r.ok ? Buffer.from(await r.arrayBuffer()) : null
+  }
+  return fillPictures(dir, { pick: st.pick, bytesOf, run: id, step })
+}
 // A promo game for a build: the site's name, brief, theme, copy and links, so the
 // game is set in the brand's world, wears its colours and points back to it.
 function brandOf(id) {

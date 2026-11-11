@@ -1,0 +1,50 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { emptySlots, fillPictures } from '../engine/fillpics.mjs'
+
+function app() {
+  const dir = mkdtempSync(join(tmpdir(), 'fp-'))
+  mkdirSync(join(dir, 'src', 'components'), { recursive: true })
+  writeFileSync(join(dir, 'src', 'components', 'Grid.tsx'), `export default () => (<div>
+  <img data-gen="timber boathouse on a canal" alt="Boathouse" className="w-full" />
+  <img data-gen="villa facade behind a hedge" alt="Villa" src="" />
+  <img data-gen="painted hero" src="/img/1.webp" alt="Hero" />
+  <img data-gen={art.dataGen} alt="dynamic" />
+  <img data-gen="grey placeholder slot" src="data:image/svg+xml;utf8,%3Csvg" alt="x" />
+</div>)`)
+  return dir
+}
+
+test('finds only the empty, static picture slots', () => {
+  assert.deepEqual(emptySlots(app()).map(s => s.gen), ['timber boathouse on a canal', 'villa facade behind a hedge', 'grey placeholder slot'])
+})
+
+test('fills empty slots with different photos and keeps their credit', async () => {
+  const dir = app()
+  const asked = []
+  const pick = async ({ q, avoid }) => {
+    asked.push([...avoid])
+    return { url: `https://cdn.example/${q.split(' ')[0]}.jpg`, credit: `${q} by Sam (Pexels)`, page: 'https://pexels.example/1', source: 'library' }
+  }
+  const r = await fillPictures(dir, { pick, bytesOf: async () => Buffer.alloc(100, 1) })
+  assert.deepEqual(r, { filled: 3, left: 0 })
+  const code = readFileSync(join(dir, 'src', 'components', 'Grid.tsx'), 'utf8')
+  assert.match(code, /<img src="\/img\/stock\/[0-9a-f]{12}\.jpg" data-standin="stock" data-gen="timber/)
+  assert.ok(code.includes('src="/img/1.webp"'))
+  assert.ok(code.includes('data-gen={art.dataGen} alt="dynamic" />'))
+  assert.ok(!code.includes('data:image/svg+xml'))
+  assert.equal(asked[1].length, 1) // the second pick avoids the first photo
+  const credits = readFileSync(join(dir, 'public', 'img', 'stock', 'CREDITS.md'), 'utf8')
+  assert.match(credits, /villa facade behind a hedge by Sam \(Pexels\)/)
+  assert.deepEqual(emptySlots(dir), [])
+})
+
+test('a slot with no match stays as it was', async () => {
+  const dir = app()
+  const r = await fillPictures(dir, { pick: async () => null, bytesOf: async () => null })
+  assert.deepEqual(r, { filled: 0, left: 3 })
+  assert.ok(!existsSync(join(dir, 'public', 'img', 'stock')))
+})
