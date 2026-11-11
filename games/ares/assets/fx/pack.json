@@ -1,0 +1,38 @@
+{
+ "sheets": {
+  "feather-1": {
+   "file": "feather-1.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "feather-1.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.37
+   }
+  },
+  "feather-5": {
+   "file": "feather-5.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "feather-5.png",
+   "qc": {
+    "ok": false,
+    "frames": 6,
+    "edge": [
+     2
+    ],
+    "height_spread": 1.39
+   }
+  }
+ }
+}

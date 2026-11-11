@@ -106,6 +106,7 @@ def main() -> int:
     ap.add_argument("--model", default="")
     ap.add_argument("--aspect", default="landscape")
     ap.add_argument("--ref", action="append", default=[], help="a reference picture (path or data URL); repeatable")
+    ap.add_argument("--edit", action="store_true", help="paint over the first --ref (keeps a character's exact look); the rest stay references")
     ap.add_argument("--crop", default="", help="centre-crop the result to W:H, e.g. 2:1 for a sky panorama")
     ap.add_argument("--list", action="store_true")
     args = ap.parse_args()
@@ -129,7 +130,12 @@ def main() -> int:
         os.environ["OPENAI_IMAGE_MODEL"] = args.model
     try:
         # references only when given: not every provider takes them
-        res = p.generate(args.prompt, aspect_ratio=args.aspect, reference_image_urls=args.ref) if args.ref else p.generate(args.prompt, aspect_ratio=args.aspect)
+        if args.edit and args.ref:
+            res = p.generate(args.prompt, aspect_ratio=args.aspect, image_url=args.ref[0], reference_image_urls=args.ref[1:] or None)
+        elif args.ref:
+            res = p.generate(args.prompt, aspect_ratio=args.aspect, reference_image_urls=args.ref)
+        else:
+            res = p.generate(args.prompt, aspect_ratio=args.aspect)
     except Exception as exc:
         print(json.dumps({"ok": False, "error": str(exc)[:300]}))
         return 1
