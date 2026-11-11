@@ -218,3 +218,90 @@ export const spritePick = ({ role, label, art }) => ({
   role, label, name: `${label || role} (sprite)`, creator: 'this project', source: 'art', format: 'sprite', art,
   licence: { restyle: false, creditRequired: false, credit: 'The project\'s own art' }
 })
+
+// ---------- the Studio's Meshy jobs: one or several characters at once, each the person's yes
+// A crew member works each job on the canvas (web/canvas.js, the Cast step's bench), so every job
+// carries the name of the one making it. At most PARALLEL run on Meshy at once; the rest wait in
+// line (stage 'queued'), already confirmed by the click, and start as a place frees up.
+export const PARALLEL = 3
+export const BATCH_MAX = 16 // about half a Pro month (1,000 credits) at most in one click
+// The sculptors who make characters, in the order they take a job (names from web/crew.js).
+export const SCULPTORS = ['Pebble', 'Mochi', 'Tofu', 'Bean', 'Puff', 'Sprout']
+const cleanRole = r => String(r || 'hero').replace(/[^\w-]/g, '').slice(0, 40) || 'hero'
+const refuse = (message, status) => Object.assign(new Error(message), { status })
+
+// resolveArt(art) -> the picture's file on disk, or throws (only the project's own pictures).
+// key() is read on every ask, so a key added later is picked up; it only goes into makeCharacter.
+export function meshyJobs({ outDir, resolveArt, key = () => meshyKey(), fetchImpl = fetch, clock, make = makeCharacter, newId = () => Math.random().toString(16).slice(2, 14), parallel = PARALLEL } = {}) {
+  const jobs = new Map()
+  const line = []
+  const live = () => [...jobs.values()].filter(j => j.state === 'running')
+  const busy = () => live().filter(j => j.stage !== 'queued').length
+
+  function run(job, image, k) {
+    Object.assign(job, { stage: 'model', progress: 0, startedAt: Date.now() })
+    Promise.resolve()
+      .then(() => make({ image, role: job.role, key: k, outDir, fetchImpl, clock, onStep: s => Object.assign(job, s) }))
+      .then(r => Object.assign(job, { state: 'done', stage: 'done', progress: 100, pick: { ...meshyPick({ role: job.role, label: job.label, ...r }), thumbSrc: r.thumb ? `/models/${r.thumb}` : null } }))
+      .catch(err => Object.assign(job, { state: 'failed', error: String(err.message || err).slice(0, 240) }))
+      .finally(next)
+  }
+  function next() {
+    while (line.length && busy() < parallel) {
+      const { job, image, k } = line.shift()
+      run(job, image, k)
+    }
+  }
+  // every item is checked before anything is spent: one bad item refuses the whole ask
+  function check(items) {
+    const seen = new Set()
+    return items.map(it => {
+      const role = cleanRole(it?.role)
+      if (seen.has(role)) throw refuse(`${role} is asked twice`, 400)
+      seen.add(role)
+      const art = String(it?.art || '')
+      return { role, label: String(it?.label || role).slice(0, 40), art, image: resolveArt(art) }
+    })
+  }
+  function begin(items, k) {
+    return items.map(it => {
+      // one paid run per role at a time: asking again joins the first instead of paying twice
+      const running = live().find(j => j.role === it.role)
+      if (running) return running
+      const used = new Set(live().map(j => j.worker))
+      const worker = SCULPTORS.find(n => !used.has(n)) || SCULPTORS[jobs.size % SCULPTORS.length]
+      const job = { id: newId(), role: it.role, label: it.label, art: it.art, worker, state: 'running', stage: 'queued', progress: 0, credits: meshyCost().credits, pick: null, error: null, at: Date.now() }
+      jobs.set(job.id, job)
+      line.push({ job, image: it.image, k })
+      return job
+    })
+  }
+  // one character: { role, label, art, credits }, credits being the price the person was shown
+  function start(input = {}) {
+    const k = key()
+    if (!k) throw refuse('no Meshy key', 409)
+    const cost = meshyCost().credits
+    if (Number(input.credits) !== cost) throw refuse(`confirm ${cost} credits first`, 402)
+    const [job] = begin(check([input]), k)
+    next()
+    return job
+  }
+  // several at once: { items: [{ role, label, art }], credits }, credits being the total on the button
+  // (one price per item). A role already being made joins its run and spends nothing more, so a batch
+  // never spends more than the number the person clicked.
+  function batch(input = {}) {
+    const k = key()
+    if (!k) throw refuse('no Meshy key', 409)
+    const items = Array.isArray(input.items) ? input.items : []
+    if (!items.length) throw refuse('nothing to make', 400)
+    if (items.length > BATCH_MAX) throw refuse(`${BATCH_MAX} characters at most`, 400)
+    const total = meshyCost().credits * items.length
+    if (Number(input.credits) !== total) throw refuse(`confirm ${total} credits first`, 402)
+    const ok = check(items)
+    const before = new Set(jobs.keys())
+    const out = begin(ok, k)
+    next()
+    return { jobs: out, credits: total, spent: out.filter(j => !before.has(j.id)).length * meshyCost().credits }
+  }
+  return { jobs, start, batch, get: id => jobs.get(String(id || '')) || null }
+}

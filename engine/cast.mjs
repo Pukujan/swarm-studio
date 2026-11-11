@@ -271,10 +271,12 @@ const ownPick = c => c.source === 'meshy'
   : c.source === 'art'
     ? (ART_URL.test(String(c.art || '')) ? { ...base(c), url: '', source: 'art', format: 'sprite', art: String(c.art), licence: { restyle: false, creditRequired: false, credit: 'The project\'s own art' } } : null)
     : undefined
+const own = c => c.source === 'meshy' || c.source === 'art'
 export const cleanCast = cast => (Array.isArray(cast) ? cast : [])
   .map(c => (c && typeof c === 'object' ? ownPick(c) ?? (SOURCE_URL.test(String(c.url || '')) && !BANNED_HOSTS.test(String(c.url)) ? c : null) : null))
   .filter(Boolean)
-  .slice(0, 4)
+  // four found models at most (spec 19); characters made from the project's own art, up to 16 (spec 20)
+  .filter((c, i, all) => (own(c) ? all.slice(0, i).filter(own).length < 16 : all.slice(0, i).filter(x => !own(x)).length < 4))
   .map(c => c.source === 'meshy' || c.source === 'art' ? c : ({
     ...base(c), url: cut(c.url, 300),
     source: c.source === 'vroid' ? 'vroid' : 'sketchfab', format: c.format === 'vrm' ? 'vrm' : 'gltf', vrm: c.vrm === '1.0' ? '1.0' : c.format === 'vrm' ? '0.x' : undefined,

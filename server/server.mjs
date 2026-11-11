@@ -1034,30 +1034,34 @@ function meshyArt(from) {
     .sort((a, b) => b.person - a.person)
     .slice(0, 12)
 }
-const meshyJobs = new Map() // job id -> { id, role, state, stage, progress, pick, error }
-async function meshyStart(input = {}) {
-  const m = await meshyMod()
-  const key = m.meshyKey()
-  if (!key) throw Object.assign(new Error('no Meshy key'), { status: 409 })
-  // the person's yes is the price they were shown: a missing or different number spends nothing
-  const cost = m.meshyCost()
-  if (Number(input.credits) !== cost.credits) throw Object.assign(new Error(`confirm ${cost.credits} credits first`), { status: 402 })
-  const art = String(input.art || '').match(/^\/img\/([\w-]{1,64})\/([\w.-]{1,80})$/)
-  if (!art || !ART_FILE.test(art[2])) throw new Error('pick a picture from the project')
+// The project's picture a character is made from: only /img/<run>/<file> of the project's own art
+function meshyImage(src) {
+  const art = String(src || '').match(/^\/img\/([\w-]{1,64})\/([\w.-]{1,80})$/)
+  if (!art || !RUN_ID.test(art[1]) || !ART_FILE.test(art[2])) throw Object.assign(new Error('pick a picture from the project'), { status: 400 })
   const image = join(runsDir, art[1], 'img', art[2])
-  if (!existsSync(image)) throw new Error('that picture is gone')
-  const role = String(input.role || 'hero').replace(/[^\w-]/g, '').slice(0, 40) || 'hero'
-  const label = String(input.label || role).slice(0, 40)
-  // one paid run per role at a time: a second click joins the first instead of paying twice
-  const running = [...meshyJobs.values()].find(j => j.role === role && j.state === 'running')
-  if (running) return running
-  const job = { id: randomBytes(6).toString('hex'), role, art: input.art, state: 'running', stage: 'model', progress: 0, credits: cost.credits, pick: null, error: null }
-  meshyJobs.set(job.id, job)
-  m.makeCharacter({ image, role, key, outDir: join(dataDir, 'models'), onStep: s => Object.assign(job, s) })
-    .then(r => Object.assign(job, { state: 'done', stage: 'done', progress: 100, pick: { ...m.meshyPick({ role, label, ...r }), thumbSrc: r.thumb ? `/models/${r.thumb}` : null } }))
-    .catch(err => Object.assign(job, { state: 'failed', error: String(err.message || err).slice(0, 240) }))
-  return job
+  if (!existsSync(image)) throw Object.assign(new Error('that picture is gone'), { status: 400 })
+  return image
 }
+// A picture the person added becomes a role: its bytes must be a real PNG, JPEG or WebP (16 MB at most),
+// and its name a short slug from the file's name ("00a-messenger.png" -> role "messenger").
+const PIC_MAGIC = [['png', b => b[0] === 0x89 && b.toString('latin1', 1, 4) === 'PNG'], ['jpg', b => b[0] === 0xff && b[1] === 0xd8], ['webp', b => b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP']]
+function meshyAddArt(input = {}) {
+  const from = String(input.from || '')
+  if (!RUN_ID.test(from) || !existsSync(join(runsDir, from))) throw Object.assign(new Error('open a build first'), { status: 400 })
+  const m = String(input.data || '').match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/)
+  if (!m) throw Object.assign(new Error('a PNG, JPEG or WebP picture'), { status: 400 })
+  const buf = Buffer.from(m[2], 'base64')
+  const kind = PIC_MAGIC.find(([, ok]) => buf.length > 12 && ok(buf))?.[0]
+  if (!kind || buf.length > 16 * 1024 * 1024) throw Object.assign(new Error('a PNG, JPEG or WebP picture, 16 MB at most'), { status: 400 })
+  const role = String(input.name || 'character').replace(/\.[a-z0-9]+$/i, '').replace(/^\d+[a-z]?[-_ ]+/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 38) || 'character'
+  const file = `game-cast-${role}.${kind}`
+  mkdirSync(join(runsDir, from, 'img'), { recursive: true })
+  writeFileSync(join(runsDir, from, 'img', file), buf)
+  return { src: `/img/${from}/${file}`, role }
+}
+// one list of jobs for the studio: one character or several at once, each worked by a crew member
+let meshyJobsP = null
+const meshyJobs = () => (meshyJobsP ||= meshyMod().then(m => m.meshyJobs({ outDir: join(dataDir, 'models'), resolveArt: meshyImage })))
 // stand-ins load lazily; the vision tagger is the reviewer model; Octo's public lane when the studio has a key
 let standinP = null
 const standinsOf = () => (standinP ||= (() => {
@@ -1911,18 +1915,39 @@ const server = createServer((req, res) => {
     return
   }
   if (url.pathname === '/api/meshy/job' && req.method === 'GET') {
-    const j = meshyJobs.get(String(url.searchParams.get('id') || ''))
-    res.writeHead(j ? 200 : 404, { 'content-type': 'application/json' }).end(JSON.stringify(j || { error: 'no such job' }))
+    meshyJobs().then(q => {
+      const j = q.get(url.searchParams.get('id'))
+      res.writeHead(j ? 200 : 404, { 'content-type': 'application/json' }).end(JSON.stringify(j || { error: 'no such job' }))
+    })
     return
   }
-  if (url.pathname === '/api/meshy' && req.method === 'POST') {
+  // POST /api/meshy/art { from, name, data } keeps a picture the person added (picked or dropped in the
+  // Cast step) in that build's pictures, as game-cast-<name>.<ext>: it becomes one role's art. Free.
+  if (url.pathname === '/api/meshy/art' && req.method === 'POST') {
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    const chunks = []
+    let size = 0
+    req.on('data', c => { size += c.length; if (size > 24e6) req.destroy(); else chunks.push(c) })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(Buffer.concat(chunks).toString() || '{}') } catch {}
+      try { reply(200, meshyAddArt(input)) } catch (err) { reply(err.status || 400, { error: String(err.message || err) }) }
+    })
+    return
+  }
+  // POST /api/meshy { role, label, art, credits } makes one; POST /api/meshy/batch { items, credits }
+  // makes several at once, credits being the total on the button. Nothing is spent on a wrong number.
+  if ((url.pathname === '/api/meshy' || url.pathname === '/api/meshy/batch') && req.method === 'POST') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     let body = ''
-    req.on('data', c => { body += c; if (body.length > 4000) req.destroy() })
+    req.on('data', c => { body += c; if (body.length > 8000) req.destroy() })
     req.on('end', async () => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
-      try { reply(200, await meshyStart(input)) } catch (err) { reply(err.status || 400, { error: String(err.message || err) }) }
+      try {
+        const q = await meshyJobs()
+        reply(200, url.pathname === '/api/meshy' ? q.start(input) : q.batch(input))
+      } catch (err) { reply(err.status || 400, { error: String(err.message || err) }) }
     })
     return
   }
