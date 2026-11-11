@@ -391,6 +391,7 @@ function on(e) {
       botMsg(`🎮 ${e.spec.title}: ${e.spec.pitch || ''} (${e.spec.engine})`)
       break
     case 'app:start': case 'app:step': case 'app:ready': case 'app:done': case 'app:failed': case 'app:deployed':
+    case 'app:paused': case 'app:slice': case 'app:steer':
       appEvent(e)
       break
   }
@@ -4302,6 +4303,7 @@ function cwSay(k, words, thinking = false) {
 // the person's own words start the next slice with that note.
 function sliceCard(s, run = shownRun()) {
   if (!s || !run) return
+  if (s.kind === 'board') return boardCard(s, run)
   const key = `${run}:${s.i}:${s.clip || ''}`
   if (els.feed.querySelector(`.slice-card[data-key="${CSS.escape(key)}"]`)) return
   const item = document.createElement('div')
@@ -4309,10 +4311,11 @@ function sliceCard(s, run = shownRun()) {
   item.dataset.key = key
   item.dataset.run = run
   item.dataset.i = s.i
-  const vid = s.clip ? `<video class="sc-clip" src="${esc(BASE + s.clip)}" muted playsinline autoplay loop></video>` : ''
-  const pic = s.shot ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
+  // the slice's report card (sliceReport) already shows its pictures: the question stands alone
+  const vid = s.clip && !s.report ? `<video class="sc-clip" src="${esc(BASE + s.clip)}" muted playsinline autoplay loop></video>` : ''
+  const pic = s.shot && !s.report ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
   item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${s.i + 1} of ${s.n}</small></b>`
-    + `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>`
+    + (vid || pic ? `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>` : '')
     + `<span class="txt"></span>`
     + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
     + `<div class="sc-ideas">${(s.ideas || []).map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
@@ -4324,11 +4327,69 @@ function sliceCard(s, run = shownRun()) {
 async function sliceGo(text) {
   const s = appv.slice
   if (appv.state !== 'paused' || !s) return botMsg('The game is not waiting on a slice right now.')
+  // the mood board waits on a look: its name picks it
+  if (s.kind === 'board') {
+    const o = (s.options || []).find(x => new RegExp(`\\b${x.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text))
+    return o ? lookGo(o) : botMsg('Pick a look first.')
+  }
   // the first suggestion is "go on": no note, the next slice as planned
   const note = /^looks good/i.test(text) ? '' : String(text || '').trim()
   feed(null, text, 'you')
   for (const c of els.feed.querySelectorAll('.slice-card .sc-ideas')) c.remove()
   await appAsk('', note ? { note } : {})
+}
+
+// Show before deciding: the big game's mood board, four looks of its title picture. One pick
+// and the art is painted in it; nothing else is asked.
+function boardCard(s, run) {
+  const key = `${run}:board`
+  if (els.feed.querySelector(`.slice-card[data-key="${CSS.escape(key)}"]`)) return
+  const item = document.createElement('div')
+  item.className = 'item bot slice-card board-card'
+  item.dataset.key = key
+  item.innerHTML = `<b>${HERMIA}Hermia<small>look</small></b><span class="txt"></span>`
+    + `<div class="bd-grid">${(s.options || []).map((o, j) => `<button class="bd-opt" data-j="${j}" aria-label="${esc(o.name)}"><img src="${esc(BASE + o.src)}" alt=""><span>${esc(o.name)}</span></button>`).join('')}</div>`
+  item.querySelector('.txt').textContent = s.ask || 'Which look?'
+  for (const b of item.querySelectorAll('.bd-opt')) b.onclick = () => { if (!item.classList.contains('past')) { b.classList.add('on'); lookGo(s.options[+b.dataset.j]) } }
+  push(els.feed, item)
+}
+async function lookGo(o) {
+  if (appv.state !== 'paused' || appv.slice?.kind !== 'board') return
+  feed(null, o.name, 'you')
+  for (const c of els.feed.querySelectorAll('.board-card')) { c.classList.add('past'); c.querySelector(`.bd-opt[aria-label="${CSS.escape(o.name)}"]`)?.classList.add('on') }
+  await appAsk('', { look: o.key })
+}
+
+// Each slice ends with things to look at: the bots' run, its frames, before and after, and a
+// close-up of every visual bug the bots saw (with the fix beside it). Click a picture: bigger.
+function sliceReport(r, run) {
+  if (!r || !run) return
+  const key = `${run}:report:${r.i}:${r.again ? 'more' : ''}`
+  let item = els.feed.querySelector(`.slice-report[data-key="${CSS.escape(key)}"]`)
+  const fresh = !item
+  if (fresh) { item = document.createElement('div'); item.className = 'item bot slice-report'; item.dataset.key = key }
+  const media = (r.visuals || []).map(v => v.kind === 'clip'
+    ? `<figure class="sr-v"><video src="${esc(BASE + v.src)}" muted playsinline autoplay loop></video><figcaption>${esc(v.name)}</figcaption></figure>`
+    : `<figure class="sr-v"><img src="${esc(BASE + v.src)}" alt=""><figcaption>${esc(v.name)}</figcaption></figure>`).join('')
+  const bugs = (r.findings || []).filter(f => f.src || f.after).map(f => `<figure class="sr-bug${f.fixed ? ' fixed' : ''}"><img src="${esc(BASE + (f.after || f.src))}" alt=""><figcaption><span aria-label="${f.fixed ? 'fixed' : 'seen'}">${f.fixed ? '✓' : '⚠'}</span>${esc(f.what)}</figcaption></figure>`).join('')
+  const c = r.code || {}
+  const code = c.files || c.commits ? `<div class="sr-code">${c.files ? `${c.files} files` : ''}${c.files && c.commits ? ' · ' : ''}${c.commits ? `${c.commits} commits` : ''}</div>` : ''
+  item.innerHTML = `<b>${HERMIA}Hermia<small>${r.again ? 'your changes' : `slice ${r.i + 1} of ${r.n}`} · ${esc(r.name || '')}</small></b>`
+    + `<div class="sr-media">${media}</div>${bugs ? `<div class="sr-bugs">${bugs}</div>` : ''}${code}`
+  for (const f of item.querySelectorAll('figure')) f.onclick = () => f.classList.toggle('big')
+  if (fresh) push(els.feed, item)
+}
+
+// What the person said mid-build, as the crew takes it: into this slice, or a polish pass.
+function steerMsg(e) {
+  const key = `${e.run}:steer:${e.t}`
+  if (els.feed.querySelector(`.steer[data-key="${CSS.escape(key)}"]`)) return
+  const item = document.createElement('div')
+  item.className = 'item bot steer'
+  item.dataset.key = key
+  item.innerHTML = `<b>${HERMIA}Hermia<small>${e.how === 'polish' ? 'polish' : `slice ${(e.i || 0) + 1}`}</small></b><span class="txt"></span>`
+  item.querySelector('.txt').textContent = `“${e.text}”`
+  push(els.feed, item)
 }
 
 // ---------- the app advisor
@@ -4467,6 +4528,8 @@ function appEvent(e) {
   const fresh_ = !e.t || Date.now() - e.t < 8000
   if (e.type === 'app:start') {
     Object.assign(appv, { state: 'working', kind: e.kind || appv.kind, stage: 'starting', message: '' })
+    // the build goes on: the questions it asked before are answered
+    for (const c of els.feed.querySelectorAll('.slice-card')) c.classList.add('past')
     // a build from scratch: the painters' tiles from an earlier build (another game's art) go
     if (e.fresh) paintv.slots = []
     if (e.ask && appv.asks.at(-1) !== e.ask) appv.asks.push(e.ask)
@@ -4485,6 +4548,10 @@ function appEvent(e) {
     if (e.url && fresh_) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
     if (fresh_) feed(null, `🧩 the ${appv.kind === 'game' ? 'game' : 'app'} is ready (${e.result?.turns || 1} turn${e.result?.turns === 1 ? '' : 's'}, checks ${e.result?.gatesPassed ? 'passed' : 'not passed'}, ${Math.round((e.ms || 0) / 1000)}s). Open the App view to try it, or chat to change it.`, 'sys')
+  } else if (e.type === 'app:slice') {
+    sliceReport(e.report, e.run)
+  } else if (e.type === 'app:steer') {
+    steerMsg(e)
   } else if (e.type === 'app:paused') {
     // a big game stops after each slice and asks in the chat (sliceCard)
     Object.assign(appv, { state: 'paused', result: e.result, slice: e.slice, stage: '' })

@@ -119,8 +119,9 @@ function grade(theme) {
 }
 
 // One style guide per build: { style, name, guide, avoid, bans }.
-export function styleGuide({ brief, theme } = {}) {
-  const style = pickStyle(brief)
+export function styleGuide({ brief, theme, style: asked = '' } = {}) {
+  // a look the person picked (the big game's mood board) wins over the brief's words
+  const style = asked && asked !== 'photo' && STYLES[asked] ? asked : pickStyle(brief)
   const s = STYLES[style]
   const asked = String(brief || '')
   const bans = [...BANNED, ...(style === 'photo' ? [PHOTO_ONLY] : [])]

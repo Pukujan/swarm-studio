@@ -12,6 +12,7 @@ import { deployName, isScreenName, projectName } from './naming.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
+import { filmFrames, spread, contactSheet, beforeAfter, closeUp, lookMessages, parseFindings, goneMessages, parseGone, whereMessages, parseWhere, dataUrl, isPolish, polishPrompt, fixPrompt, withTemp } from './slicecheck.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk, artBrief, viewOf } from './game.mjs'
@@ -173,7 +174,7 @@ export function processNotes({ kind = 'site', state = 'idle', stage = '', done =
 }
 export const isQuestion = text => QUESTION.test(String(text || '').trim())
 
-export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
+export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, board = null, see = null, fill = null, nameFor = () => null }) {
   const jobs = new Map() // run id -> job
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const dirOf = id => join(runsDir, id, 'app')
@@ -283,7 +284,16 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       else send(id, 'app:step', { step: item })
     }
     // a big game builds in stages from its saved spec; everything else is one engine call
-    const spec = kind === 'game' && fresh ? events.findLast(e => e.type === 'game:spec')?.spec : null
+    // the look picked on the mood board (a resume carries it once; later starts read it back)
+    const look = /^[a-z0-9-]{1,30}$/.test(String(input.look || '')) ? input.look : ''
+    if (look && kind === 'game') {
+      send(id, 'game:look', { look })
+      // the picked picture is the game's title picture: kept like a painted one, so it is never painted again
+      try { const f = readdirSync(join(runsDir, id, 'img')).find(x => x.startsWith(`board-${look}.`)); if (f) copyFileSync(join(runsDir, id, 'img', f), join(runsDir, id, 'img', `game-title${f.slice(f.lastIndexOf('.'))}`)) } catch {}
+    }
+    const picked = look || events.findLast(e => e.type === 'game:look')?.look || ''
+    const saved = kind === 'game' && fresh ? events.findLast(e => e.type === 'game:spec')?.spec : null
+    const spec = saved && picked ? { ...saved, artStyle: picked } : saved
     const big = !!spec && (isBig(spec) || input.big === true)
     ;(async () => {
       // a busy or rate-limited model: on InferHub try the same model's other route,
@@ -304,7 +314,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       }
       if (big) {
         if (await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input, resumeAt) === 'paused') {
-          Object.assign(j, { state: 'paused', stage: `slice ${j.slice.i + 1} of ${j.slice.n} built` })
+          Object.assign(j, { state: 'paused', stage: j.slice.kind === 'board' ? 'picking a look' : `slice ${j.slice.i + 1} of ${j.slice.n} built` })
           await j.radio?.stop()
           return send(id, 'app:paused', { slice: j.slice, result: j.result, url: j.url, ms: Date.now() - j.t })
         }
@@ -375,6 +385,19 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const before = askedBefore(dir)
     const items = [...artList(spec), ...sheetList(spec)]
     for (const it of before) if (!items.some(x => x.id === it.id)) items.push(it)
+    // show before deciding: guided, with nothing painted yet and no look picked, the person
+    // first picks the look from a board of four, and only then are the pictures painted in it
+    if (board && paint && input.art !== false && input.guided !== false && !from && !spec.artStyle && !keptArt(id)) {
+      let options = []
+      try { options = await board(id, spec, step, j.controller.signal) } catch (err) { step({ kind: 'setup', text: `the looks could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+      if (j.controller.signal.aborted) throw new Error('stopped')
+      if (options.length >= 2) {
+        j.result = { ok: false, big: true, art: 0, stages: [], turns: 0, commits: 0, files: 0 }
+        j.slice = { kind: 'board', i: -1, n: stagesFor(spec).length, name: 'look', ask: 'Which look?', options }
+        j.result.paused = j.slice
+        return 'paused'
+      }
+    }
     if (paint && input.art !== false) {
       step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
       try { art = await paint(id, spec, items, dir, step, j.controller.signal) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
@@ -435,10 +458,13 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const st = stages[i], t = Date.now()
       step({ kind: 'setup', text: `stage ${i + 1} of ${stages.length}: ${st.name}` })
       // what the person said during the last stage goes into this one's prompt
-      const heard = takeTold(j)
+      // what the person said: a change goes into this slice; "looks rough" is a polish pass at its end
+      const said = [i === from ? input.note : '', ...(j.told || []).splice(0)].map(t => String(t || '').trim()).filter(Boolean)
+      const polish = said.filter(isPolish), heard = said.filter(t => !isPolish(t)).map(t => `The person said while you were building: "${t}"`)
+      for (const t of said) send(id, 'app:steer', { text: t, i, n: stages.length, how: isPolish(t) ? 'polish' : 'slice', slice: st.name })
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); break } catch (err) {
+        try { last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: heard.join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); break } catch (err) {
           if (j.controller.signal.aborted) throw err
           step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
           if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
@@ -457,8 +483,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result.commits += last.commits || 0
       j.result.files = Math.max(j.result.files, last.files?.length || 0)
       if (!godot) await serve(id, j, step)
-      const play = await playGame(j, dir, model(), step, brand)
-      j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
+      let play = await playGame(j, dir, model(), step, brand)
+      // the slice's pictures for the chat, the bots' look at them, their fixes and any polish pass
+      const report = await sliceReport(j, id, dir, spec, { i, n: stages.length, name: st.name }, play, { engineCall, model, step, godot, brand, polish, code: last })
+      if (report.play) play = report.play
+      j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t, seen: report.findings.length, fixed: report.findings.filter(f => f.fixed).length })
       // each slice carries the bots' filmed play test, so the person sees it before the next one
       send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}), ...(godot ? { godot: true } : {}) } })
       // guided (the default): stop after each slice but the last and ask in the left chat; the
@@ -466,10 +495,24 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (input.guided !== false && i < stages.length - 1) {
         const talk = sliceAsk(spec, i)
         // what the chat shows: the bots' filmed play, the game's still (img/snap.jpg) and the live game
-        j.slice = { i, n: stages.length, name: st.name, shot: `/img/${id}/snap.jpg?v=${Date.now()}`, ok: !!last.ok, play: !!play?.ok, url: j.url || null, ...(play?.clip ? { clip: play.clip } : {}), ...talk }
+        j.slice = { i, n: stages.length, name: st.name, shot: `/img/${id}/snap.jpg?v=${Date.now()}`, ok: !!last.ok, play: !!play?.ok, url: j.url || null, ...(play?.clip ? { clip: play.clip } : {}), ...talk, ...(report.visuals.length ? { report: true } : {}) }
         j.result.paused = j.slice
         return 'paused'
       }
+    }
+    // words that came in during the last slice: one more turn for them, never dropped
+    const late = (j.told || []).splice(0)
+    if (late.length && !j.controller.signal.aborted) {
+      const n = stages.length, polish = late.filter(isPolish), heard = late.filter(t => !isPolish(t))
+      for (const t of late) send(id, 'app:steer', { text: t, i: n - 1, n, how: isPolish(t) ? 'polish' : 'slice', slice: stages.at(-1).name })
+      if (heard.length) {
+        step({ kind: 'setup', text: `one more turn for what you said: ${heard.length} change${heard.length === 1 ? '' : 's'}` })
+        try { last = await engineCall(`This is a big ${godot ? '2D game in Godot 4 in ports/godot/' : 'browser game'} made from GAME_SPEC.md; keep what works. The person said while you were building:\n${heard.map(t => `- "${t}"`).join('\n')}\n\nDo what they ask. ${godot ? 'Touch nothing outside ports/godot/.' : 'Finish with the typecheck and build passing.'}`, 3) } catch (err) { if (j.controller.signal.aborted) throw err; step({ kind: 'setup', text: `that turn stopped: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+        if (godot) await godotStage(id, j, dir, null, step)
+        else await serve(id, j, step)
+      }
+      const play = await playGame(j, dir, model(), step, brand)
+      await sliceReport(j, id, dir, spec, { i: n - 1, n, name: stages.at(-1).name, again: true }, play, { engineCall, model, step, godot, brand, polish, code: last || {} })
     }
     if (!last?.ok) {
       step({ kind: 'test', text: 'the last stage did not pass its build: one fix turn', ok: false })
@@ -481,6 +524,74 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     }
     Object.assign(j.result, { ok: !!last.ok, gatesPassed: last.gatesPassed, playtest: j.result.stages.at(-1)?.playtest })
     if (!last.ok) throw new Error(last.error || 'the engine could not finish the game')
+  }
+
+  // a picture painted for this game already (kept with the run): no mood board then
+  const keptArt = id => { try { return readdirSync(join(runsDir, id, 'img')).some(f => /^game-.*\.(png|jpe?g|webp)$/i.test(f)) } catch { return false } }
+
+  // ---------- the slice in the chat: pictures first, then what the bots saw and fixed
+  // About three things to look at for every line of code news: the contact sheet of the bots'
+  // run, the game before and after the slice, a close-up per bug (before and after its fix),
+  // and a polish pass's close-up. Sent as app:slice; a slice that cannot be filmed sends none.
+  async function sliceReport(j, id, dir, spec, at, play, { engineCall, model, step, godot, brand, polish = [], code = {} }) {
+    const img = join(runsDir, id, 'img'), tag = `slice-${at.i + 1}${at.again ? '-more' : ''}`
+    const url = f => `/img/${id}/${f}?v=${Date.now()}`
+    const visuals = [], findings = [], out = { visuals, findings, play: null }
+    const clipFile = c => (c?.clip ? join(img, c.clip.split('/').pop()) : '')
+    if (!clipFile(play) || !existsSync(clipFile(play))) return out
+    const ask = async (msgs, max) => { if (!see) return null; try { return await see(msgs, { maxTokens: max }) } catch { return null } }
+    await withTemp(async tmp => {
+      mkdirSync(join(tmp, 'a'), { recursive: true }); mkdirSync(join(tmp, 'b'), { recursive: true })
+      const pick = spread(await filmFrames(clipFile(play), join(tmp, 'a')), 6)
+      if (pick.length < 2) return
+      if (play.clip) visuals.push({ kind: 'clip', src: play.clip, name: 'Play test' })
+      const sheet = join(img, `${tag}-sheet.jpg`)
+      if (await contactSheet(pick.map(p => p.file), sheet)) visuals.push({ kind: 'sheet', src: url(`${tag}-sheet.jpg`), name: 'Frames' })
+      // the game after this slice, beside how it looked after the one before
+      const still = join(img, `slice-${at.i + 1}-still.jpg`), prev = join(img, `slice-${at.i}-still.jpg`)
+      if (!at.again && at.i > 0 && await beforeAfter(prev, pick.at(-1).file, join(img, `${tag}-ba.jpg`))) visuals.push({ kind: 'ba', src: url(`${tag}-ba.jpg`), name: 'Before · after' })
+      try { copyFileSync(pick.at(-1).file, still) } catch {}
+      // the bots look at the frames for visual bugs
+      const seen = existsSync(sheet) ? parseFindings(await ask(lookMessages({ title: spec.title, slice: at.name, image: dataUrl(sheet) }), 700)) : null
+      if (seen === null && see && existsSync(sheet)) step({ kind: 'test', text: 'the bots could not read the frames this time', ok: false })
+      for (const [k, f] of (seen || []).entries()) {
+        const name = `${tag}-bug-${k + 1}.jpg`
+        const ok = f.box && await closeUp(pick[f.frame - 1]?.file || pick.at(-1).file, join(img, name), f.box)
+        findings.push({ ...f, src: ok ? url(name) : '', fixed: false })
+      }
+      if (findings.length) step({ kind: 'test', text: `the bots saw ${findings.length} visual problem${findings.length === 1 ? '' : 's'}: ${findings.map(f => f.what).join('; ')}`, ok: false })
+      else if (seen) step({ kind: 'test', text: 'the bots saw no visual problems in the frames' })
+      // the obvious ones are fixed now, with a polish pass for what the person called rough
+      const fix = findings.filter(f => f.obvious).slice(0, 3)
+      if (!fix.length && !polish.length) return
+      const where = polish.length && existsSync(sheet) ? parseWhere(await ask(whereMessages({ what: polish.join('; '), image: dataUrl(sheet) }), 120)) : null
+      step({ kind: 'setup', text: [fix.length ? `fixing ${fix.length} visual bug${fix.length === 1 ? '' : 's'} the bots saw` : '', polish.length ? 'a polish pass on what you called rough' : ''].filter(Boolean).join(', and ') })
+      const prompt = [fix.length ? fixPrompt(fix, { godot }) : '', polish.length ? polishPrompt(polish, { godot }) : ''].filter(Boolean).join('\n\n---\n\n')
+      try { await engineCall(prompt, polish.length ? 4 : 2) } catch (err) { if (j.controller.signal.aborted) throw err; step({ kind: 'setup', text: `the fix turn stopped: ${String(err.message || err).slice(0, 160)}`, ok: false }); return }
+      if (godot) await godotStage(id, j, dir, null, step)
+      else await serve(id, j, step)
+      const again = await playGame(j, dir, model(), step, brand)
+      out.play = again
+      const after = spread(await filmFrames(clipFile(again), join(tmp, 'b')), 6)
+      if (after.length < pick.length) return
+      if (again.clip) visuals.splice(0, 1, { kind: 'clip', src: again.clip, name: 'Play test' })
+      for (const f of fix) {
+        const name = `${tag}-fix-${findings.indexOf(f) + 1}.jpg`
+        if (!f.box || !await beforeAfter(pick[f.frame - 1].file, after[f.frame - 1].file, join(img, name), f.box)) continue
+        f.after = url(name)
+        f.fixed = parseGone(await ask(goneMessages({ what: f.what, image: dataUrl(join(img, name)) }), 60))
+      }
+      if (polish.length) {
+        const fr = where?.frame || pick.length, name = `${tag}-polish.jpg`
+        if (await beforeAfter(pick[fr - 1].file, after[fr - 1].file, join(img, name), where?.box || null)) visuals.push({ kind: 'polish', src: url(name), name: 'Polish', notes: polish })
+      }
+      const sheet2 = `${tag}-sheet-after.jpg`
+      if (await contactSheet(after.map(p => p.file), join(img, sheet2)) && visuals[1]?.kind === 'sheet') visuals[1] = { ...visuals[1], src: url(sheet2) }
+      try { copyFileSync(after.at(-1).file, still) } catch {}
+    }).catch(err => { if (j.controller.signal.aborted) throw err; step({ kind: 'setup', text: `the slice pictures could not be made: ${String(err.message || err).slice(0, 160)}`, ok: false }) })
+    const report = { i: at.i, n: at.n, name: at.name, ...(at.again ? { again: true } : {}), visuals, findings: findings.map(({ what, src, after, fixed, obvious }) => ({ what, src, after, fixed, obvious })), code: { turns: code.turns || 0, commits: code.commits || 0, files: Array.isArray(code.files) ? code.files.length : (code.files || 0) } }
+    if (visuals.length || findings.length) send(id, 'app:slice', { report })
+    return out
   }
 
   // A Godot-first stage's checks: Godot opens the project headless (its errors get one
@@ -632,7 +743,6 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     send(id, 'app:told', { text: t })
     return { queued: true, state: j.state, waiting: j.told.length }
   }
-  const takeTold = j => (j.told || []).splice(0).map(t => `The person said while you were building: "${t}"`)
 
   function stop(id) {
     const j = jobs.get(id)

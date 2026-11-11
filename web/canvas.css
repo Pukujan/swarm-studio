@@ -1902,3 +1902,23 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .slice-card .sc-ideas button:hover { border-color: var(--accent); }
 .feed .slice-card .sc-ideas button, .feed .slice-card .sc-live { text-transform: none; letter-spacing: normal; font-family: inherit; }
 .feed .slice-card .sc-live { display: flex; width: max-content; }
+.feed .slice-card.past .sc-ideas, .feed .slice-card.past .sc-live { display: none; }
+/* the mood board: four looks, one pick */
+.feed .board-card .bd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.feed .board-card .bd-opt { display: grid; gap: 4px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 12px; text-transform: none; letter-spacing: normal; cursor: pointer; overflow: hidden; text-align: left; }
+.feed .board-card .bd-opt img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; border: 0; border-radius: 0; }
+.feed .board-card .bd-opt span { padding: 0 8px 6px; }
+.feed .board-card .bd-opt:hover, .feed .board-card .bd-opt:focus-visible, .feed .board-card .bd-opt.on { border-color: var(--accent); }
+.feed .board-card.past .bd-opt { cursor: default; }
+.feed .board-card.past .bd-opt:not(.on) { opacity: 0.45; }
+/* a slice's report: what it looks like, what the bots saw */
+.feed .slice-report .sr-media { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.feed .slice-report .sr-bugs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.feed .slice-report figure { margin: 0; cursor: zoom-in; min-width: 0; }
+.feed .slice-report figure.big { grid-column: 1 / -1; cursor: zoom-out; }
+.feed .slice-report figure img, .feed .slice-report figure video { width: 100%; display: block; border-radius: 6px; border: 1px solid var(--line); background: var(--deep); aspect-ratio: 16 / 10; object-fit: cover; }
+.feed .slice-report figure.big img, .feed .slice-report figure.big video { aspect-ratio: auto; object-fit: contain; }
+.feed .slice-report figcaption { font-size: 11px; color: var(--muted, var(--text)); margin-top: 3px; display: flex; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed .slice-report .sr-bug.fixed figcaption span { color: var(--accent); }
+.feed .slice-report .sr-code { font-size: 11px; color: var(--muted, var(--text)); margin-top: 6px; }
+.feed .steer .txt { font-style: italic; }

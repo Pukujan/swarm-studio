@@ -953,7 +953,7 @@ async function videoNow(id, input = {}) {
 
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
-const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp, nameFor }))))
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, board: paintBoard, see: seeFrames, fill: fillApp, nameFor }))))
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
@@ -1052,8 +1052,10 @@ async function tellBuilder(a, id, text, { who = '', on = '' } = {}) {
       .filter(x => SLICE.test(x.s)).sort((x, y) => y.t - x.t)[0]?.s || ''
   const slices = (spec?.stages || []).map(x => x?.name).filter(Boolean)
   const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage, done, slices })
-  const queued = told.queued ? 'Their words are queued: the crew reads them at the start of the next stage (a turn in flight cannot take new words).' : ''
-  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}${told.queued ? ' Got it: that goes to the crew at the start of the next stage.' : ''}`
+  const { isPolish } = await import('../engine/slicecheck.mjs')
+  const polish = told.queued && isPolish(t)
+  const queued = !told.queued ? '' : polish ? 'They called something rough: at the end of this stage the crew runs a polish pass on it and shows close-ups before and after.' : 'Their words are queued: the crew reads them at the start of the next stage (a turn in flight cannot take new words).'
+  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}${!told.queued ? '' : polish ? ' Got it: a polish pass with close-ups at the end of this slice.' : ' Got it: that goes into the next slice.'}`
   const model = modelFor('planner')
   if (!model) return { ...told, answer: fallback }
   try {
@@ -1195,9 +1197,54 @@ function brandOf(id) {
 // Styled from the project's own art when it has a drawn style (a film-photo style
 // suits a site, not a game's portraits: then the game's own look picks one).
 function gameGuide(spec) {
+  // the look picked on the big game's mood board wins
+  if (spec.artStyle && art.STYLES[spec.artStyle]) return art.styleGuide({ brief: `${spec.look || ''}. ${spec.setting || ''}`, style: spec.artStyle })
   const site = spec.brand?.from && RUN_ID.test(spec.brand.from) && existsSync(join(runsDir, spec.brand.from)) ? guideFor(spec.brand.from) : null
   if (site && site.style !== 'photo') return site
   return art.styleGuide({ brief: `${spec.look || ''}. ${spec.setting || ''}. Hand-painted style` })
+}
+
+// A big game's mood board: its title key art in four anime-family looks, painted side by side
+// before anything else, so the person picks the look before twenty pictures are painted in it.
+// The picked one becomes the game's title picture (engine/appjob.mjs copies it to game-title).
+const BOARD_LOOKS = ['anime-cel', 'gouache', 'watercolour', 'vhs-anime']
+async function paintBoard(runId, spec, step, signal = null) {
+  const choice = await imageChoice()
+  if (!choice) return []
+  const g = await gameMod()
+  const title = g.artList(spec)[0]
+  if (!title) return []
+  mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
+  const looks = BOARD_LOOKS.filter(k => art.STYLES[k])
+  step({ kind: 'setup', text: `painting ${looks.length} looks to pick from` })
+  const out = await Promise.all(looks.map(async (key, slot) => {
+    if (signal?.aborted) return null
+    const guide = art.styleGuide({ brief: `${spec.look || ''}. ${spec.setting || ''}`, style: key })
+    const it = { id: `board-${key}`, what: `${guide.name} look`, kind: 'title' }
+    broadcast({ type: 'art:job', t: Date.now(), run: runId, slot, who: PAINTERS[slot % PAINTERS.length], id: it.id, what: it.what, kind: 'title', state: 'painting', done: 0, total: looks.length })
+    const r = await paintArt(choice, guide, { gen: title.gen, aspect: 'landscape', hero: true }).catch(err => ({ ok: false, error: String(err.message || err) }))
+    if (!r.ok || !r.path || !existsSync(r.path)) return null
+    const f = `board-${key}${extname(r.path) || '.png'}`
+    copyFileSync(r.path, join(runsDir, runId, 'img', f))
+    broadcast({ type: 'art:job', t: Date.now(), run: runId, slot, who: PAINTERS[slot % PAINTERS.length], id: it.id, what: it.what, kind: 'title', state: 'done', src: `/img/${runId}/${f}`, done: slot + 1, total: looks.length })
+    return { key, name: guide.name, src: `/img/${runId}/${f}` }
+  }))
+  return out.filter(Boolean)
+}
+
+// The play-test bots' eyes: the reviewer model (or the next vision model on InferHub) reads
+// frames of a slice. → the reply text, or null with no vision model
+async function seeFrames(messages, { maxTokens = 600 } = {}) {
+  const model = modelFor('reviewer')
+  if (!model || !models.reviewer.apiKey) return null
+  const chain = [model, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? ART_CHECK_FALLBACKS.filter(m => m !== model) : [])]
+  for (const m of chain) {
+    try {
+      const res = await streamChat(provider('reviewer'), { trace: { kind: 'slice-look' }, model: m, messages, maxTokens, temperature: 0, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(60000) })
+      if (String(res.text || '').includes('{')) return res.text
+    } catch {}
+  }
+  return null
 }
 // The painters: three of the crew, one per picture at a time, each with its own tile on the
 // build's wall. What each is doing goes out live as art:job (never kept with the run).
@@ -2397,7 +2444,7 @@ const server = createServer((req, res) => {
         const spec = (readEvents(id) || []).findLast(e => e.type === 'game:spec')?.spec
         if (spec && !input.prompt && !a.state(id).hasApp) {
           const g = await gameMod()
-          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}) }
+          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(/^[a-z0-9-]{1,30}$/.test(String(input.look || '')) ? { look: input.look } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}) }
         }
         return a.start(id, input)
       }).then(s => reply(200, s)).catch(fail)
@@ -2577,7 +2624,7 @@ const server = createServer((req, res) => {
     res.end(body)
     return
   }
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib|board|slice)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
