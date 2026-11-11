@@ -639,8 +639,13 @@ func _run_move(delta: float, p, dir: Vector3, dist: float) -> void:
 				move_stage = 1
 				_play("Spellcast_Summon" if anim and anim.has_animation("Spellcast_Summon") else "Spellcast_Raise")
 				_shout("LOADING CHECKPOINTS")
-				for i in 3 + phase:
-					var a3 = i * TAU / (3 + phase)
+				var alive = 0
+				for e in Game.live_enemies():
+					if e is Enemy and e.kind == "checkpoint":
+						alive += 1
+				var n = clampi(3 + phase - alive, 0, 3 + phase)
+				for i in n:
+					var a3 = i * TAU / maxf(1.0, n)
 					Game.main.spawn_enemy("checkpoint", global_position + Vector3(cos(a3) * 3.0, 2.0, sin(a3) * 3.0))
 				Fx.ring(global_position + Vector3(0, 2, 0), 6.0, Fx.GOLD, 0.5, 0.3)
 				Fx.light(global_position + Vector3(0, 3, 0), Fx.GOLD, 14.0, 18.0, 0.6)

@@ -59,6 +59,8 @@ export function decisionBody(s, history) {
   if (h.punch > 0 && (near.length >= 3 || near.some(e => e.shield))) ops.PUNCH = OPS.PUNCH
   const wps = s.boss?.weakpoints || []
   if (wps.length && canShoot) { ops.WEAKPOINT = OPS.WEAKPOINT; heads.weakpoint_target = wps }
+  // empty gun with fuel in the tank: only the moves that refill it
+  if (!canShoot && ops.RIP) { delete ops.BURN; delete ops.PUNCH }
   if (!Object.keys(ops).length) ops.PRESSURE = OPS.PRESSURE
   const questions = { operation: { type: 'choice', criteria: ops, instructions: { goal: GOAL } } }
   for (const [name, list] of Object.entries(heads)) {
