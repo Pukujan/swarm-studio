@@ -1907,3 +1907,12 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .item .tell-media video { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 .feed .item .tell-media img { width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--deep); }
 .feed .item .tell-media > * { border-radius: 8px; border: 1px solid var(--line); display: block; }
+/* a change Talk wrote out, waiting for the person's yes */
+.feed .item .tell-change { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.feed .item .tell-change p { margin: 0 0 8px; color: var(--text); font-size: 12.5px; }
+.feed .item .tell-change div { display: flex; gap: 6px; }
+.feed .item .tell-change button { padding: 4px 12px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.feed .item .tell-change button.main { background: var(--text); color: var(--void); border-color: var(--text); }
+.feed .item .tell-change button:disabled { opacity: .5; cursor: default; }
+.feed .item .tell-change.sent div { display: none; }
+.feed .item .tell-change.sent p { opacity: .6; margin: 0; }

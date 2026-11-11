@@ -4279,13 +4279,40 @@ async function tellCrew(text) {
   const who = k >= 0 ? names[k][0] : ''
   const on = k < 0 ? '' : k === CW_CODE ? `writing ${cw.tiles[k]?.path || 'code'}` : cw.mode === 'art' ? `painting ${paintv.slots[k]?.what || 'art'}` : k === 0 ? 'the play test window' : `the picture ${cw.av[k]?.name || ''}`.trim()
   cwSay(k, who ? '…' : '', true)
+  // Talk looks things up before it answers (files, pictures), which can take a few seconds
+  const wait = botMsg('…', true)
   try {
-    const r = await appApi('/tell', { text: t, ...(who ? { who, on } : {}) })
+    const r = await appApi('/tell', { text: t, ...(who ? { who, on } : {}) }).finally(() => wait.remove())
     const answer = r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next slice.' : 'The crew is working.')
     cwSay(k, answer)
     const item = botMsg(who ? `${who}: ${answer}` : answer)
     if (r.media) item.append(mediaBlock(r.media))
+    if (r.proposal) item.append(changeBlock(r.proposal))
   } catch (err) { cwSay(k, ''); botMsg(`App: ${err.message}`) }
+}
+// a change Talk wrote out for the builder: sent only when the person confirms it, at the next
+// slice, or now (the builder's turn stops and the slice starts again with it)
+function changeBlock(p) {
+  const box = document.createElement('div')
+  box.className = 'tell-change'
+  const q = document.createElement('p')
+  q.textContent = p.change
+  const row = document.createElement('div')
+  const btn = (label, now) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = label
+    b.onclick = async () => {
+      for (const x of row.children) x.disabled = true
+      try { const r = await appApi('/tell', { confirm: p.change, now }); box.classList.add('sent'); botMsg(r.answer) } catch (err) { for (const x of row.children) x.disabled = false; botMsg(`App: ${err.message}`) }
+    }
+    return b
+  }
+  const next = btn('Next slice', false), now = btn('Now', true)
+  ;(p.now ? now : next).classList.add('main')
+  row.append(...(p.now ? [now, next] : [next, now]))
+  box.append(q, row)
+  return box
 }
 // what Hermia shows when asked to see the build: the newest play test clip and pictures
 function mediaBlock(m) {

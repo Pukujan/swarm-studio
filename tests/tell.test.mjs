@@ -58,3 +58,19 @@ test('asking to see the build brings its newest clip and pictures', async () => 
   assert.match(mediaNotes(m, true), /1 play test clip and 2 painted pictures.*shown right under/)
   assert.match(mediaNotes(buildMedia({ id: 'r1' }), false), /nothing to show/)
 })
+
+test('a confirmed change sent now stops only the builder turn of a big game slice', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'swarm-redirect-'))
+  mkdirSync(join(runsDir, 'r1'))
+  writeFileSync(join(runsDir, 'r1', 'events.jsonl'), '')
+  const a = appJobs({ runsDir, record: () => {}, broadcast: () => {}, readEvents: () => [], provider: () => ({}), modelFor: () => '' })
+  const job = new AbortController(), turn = new AbortController()
+  a.jobs.set('r1', { id: 'r1', state: 'working', steps: [], big: true, inStage: true, turn, controller: job })
+  const r = a.redirect('r1', 'Kumo should be a cat, not a dog')
+  assert.equal(r.now, true)
+  assert.ok(turn.signal.aborted && !job.signal.aborted)
+  assert.deepEqual(a.jobs.get('r1').told, ['Kumo should be a cat, not a dog'])
+  // between turns (painting, the play test): it waits for the next one
+  a.jobs.set('r2', { id: 'r2', state: 'working', steps: [], big: true, inStage: false, turn: new AbortController(), controller: new AbortController() })
+  assert.equal(a.redirect('r2', 'x').now, false)
+})
