@@ -1004,7 +1004,18 @@ const gameMod = () => (gameP ||= import('../engine/game.mjs'))
 let castP = null
 const castMod = () => (castP ||= import('../engine/cast.mjs'))
 // plans (spec 21): the board's routes; the paid steps are hooks that check the lock first
-const plans = planRoutes({ dataDir })
+// The Plan board's pictures (spec 21): sketches and mocks at medium, backdrops and close-up art at
+// high, through the same image login as the builds. Image runs only; no Meshy credits.
+async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', crop = '', refs = [] }) {
+  const choice = await imageChoice()
+  if (!choice) return { ok: false, error: 'no image model' }
+  const model = choice.provider === 'openai-codex' ? `gpt-image-2-${quality === 'high' ? 'high' : 'medium'}` : choice.model
+  const args = ['--provider', choice.provider, ...(model ? ['--model', model] : []), '--aspect', aspect, ...(crop ? ['--crop', crop] : [])]
+  for (const r of refs.slice(0, 4)) if (existsSync(r)) args.push('--ref', r)
+  return imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
+}
+planPaint.ready = async () => !!(await imageChoice())
+const plans = planRoutes({ dataDir, paint: planPaint })
 let meshyP = null
 const meshyMod = () => (meshyP ||= import('../engine/meshy.mjs'))
 

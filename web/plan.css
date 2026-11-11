@@ -43,3 +43,28 @@ body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
 .pl-row i { font: 12px var(--mono); font-style: normal; color: var(--muted); }
 .pl-row b { font: 600 13px var(--mono); text-align: right; }
 .pl-gate .pl-go { min-width: 180px; justify-content: center; }
+
+/* the pictures: sheets, mocks, backdrops, close-ups. The name sits under the frame (names only at rest) */
+.plan .pl-sheets .abs, .plan .pl-mocks .abs, .plan .pl-world .abs, .plan .pl-close .abs { max-width: 700px; gap: 30px 16px; }
+.ab.ppic { overflow: visible; }
+.ab.ppic img { object-position: center; }
+.ab.ppic > em { position: absolute; left: 0; top: calc(100% + 6px); font: 500 12px var(--body); font-style: normal; color: var(--muted); white-space: nowrap; }
+.ab.ppic.sheet { width: 342px; height: 228px; }
+.ab.ppic.mock { width: 222px; height: 148px; }
+.ab.ppic.bd.equirect { width: 342px; height: 171px; }
+.ab.ppic.bd.strip { width: 342px; height: 86px; }
+.ab.ppic.cutin { width: 222px; height: 125px; }
+.ab.ppic.portrait { width: 84px; height: 125px; }
+.ab.ppic.failed { border-style: dashed; }
+.ab.ppic .cur { left: 62%; top: 58%; }
+/* the crew at work: a slow sheen over an empty frame */
+.pl-work { position: absolute; inset: 0; border-radius: 3px; background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--text) 12%, transparent) 50%, transparent 70%) 0 0 / 260% 100%; animation: pl-sheen 2.4s linear infinite; }
+@keyframes pl-sheen { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+@media (prefers-reduced-motion: reduce) { .pl-work { animation: none; } }
+/* a picked cell on a sheet: a ring, the noted one solid */
+.pl-ring { position: absolute; box-sizing: border-box; border: 2px solid var(--accent); border-radius: 3px; pointer-events: none; }
+.pl-ring.on { box-shadow: 0 0 0 2px var(--void), 0 0 0 4px var(--accent); }
+.pl-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.pl-pick { min-width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--deep); color: var(--text); font: 600 12px var(--mono); cursor: pointer; }
+.pl-pick.on { border-color: var(--accent); color: var(--accent); }
+.pl-paint { justify-content: center; }

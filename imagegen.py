@@ -77,12 +77,36 @@ def shrink(path: str, width: int = 1024) -> str:
         return path
 
 
+def crop(path: str, ratio: str) -> str:
+    """Centre-crop to W:H (a 2:1 sky panorama, a 4:1 strip) next to the original. Falls back to the original."""
+    try:
+        from PIL import Image
+
+        w, h = (float(x) for x in ratio.split(":"))
+        src = Path(path)
+        out = src.with_name(src.stem + f"-{ratio.replace(':', 'x')}.png")
+        with Image.open(src) as im:
+            want = w / h
+            if im.width / im.height > want:
+                cw = round(im.height * want)
+                box = ((im.width - cw) // 2, 0, (im.width - cw) // 2 + cw, im.height)
+            else:
+                ch = round(im.width / want)
+                box = (0, (im.height - ch) // 2, im.width, (im.height - ch) // 2 + ch)
+            im.crop(box).save(out)
+        return str(out)
+    except Exception:
+        return path
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("prompt", nargs="?", default="")
     ap.add_argument("--provider", default="openai-codex")
     ap.add_argument("--model", default="")
     ap.add_argument("--aspect", default="landscape")
+    ap.add_argument("--ref", action="append", default=[], help="a reference picture (path or data URL); repeatable")
+    ap.add_argument("--crop", default="", help="centre-crop the result to W:H, e.g. 2:1 for a sky panorama")
     ap.add_argument("--list", action="store_true")
     args = ap.parse_args()
     found = providers()
@@ -104,7 +128,8 @@ def main() -> int:
     if args.model:
         os.environ["OPENAI_IMAGE_MODEL"] = args.model
     try:
-        res = p.generate(args.prompt, aspect_ratio=args.aspect)
+        # references only when given: not every provider takes them
+        res = p.generate(args.prompt, aspect_ratio=args.aspect, reference_image_urls=args.ref) if args.ref else p.generate(args.prompt, aspect_ratio=args.aspect)
     except Exception as exc:
         print(json.dumps({"ok": False, "error": str(exc)[:300]}))
         return 1
@@ -114,6 +139,9 @@ def main() -> int:
         print(json.dumps({"ok": False, "error": str(res.get("error") or "image generation failed")[:300]}))
         return 1
     path = res.get("image")
+    if args.crop and path and os.path.isfile(path):  # a panorama keeps its full width
+        print(json.dumps({"ok": True, "path": crop(path, args.crop), "model": res.get("model")}))
+        return 0
     print(json.dumps({"ok": True, "path": shrink(path) if path and os.path.isfile(path) else path, "model": res.get("model")}))
     return 0
 
