@@ -639,7 +639,36 @@ body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
 /* the steps read like a chat: they start at the bottom and push older ones up */
 .app-steps > :first-child, #log > :first-child { margin-top: auto; }
 .appview.steps-min .app-body { grid-template-columns: minmax(0, 1fr); }
-.appview.steps-min .app-steps { display: none; }
+.appview.steps-min .app-side { display: none; }
+/* the left column: the steps, and under them Hermia's dock */
+.app-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+.app-side .app-steps { flex: 1; min-height: 0; border-right: 0; }
+.app-hermia { flex: none; position: relative; height: var(--ah-h, 240px); display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); background: var(--panel); }
+.app-hermia[hidden] { display: none; }
+.app-hermia.min { height: auto; }
+.app-hermia.min .ah-feed, .app-hermia.min .ah-grip { display: none; }
+.ah-grip { position: absolute; top: -6px; left: 0; right: 0; height: 12px; cursor: row-resize; z-index: 1; touch-action: none; }
+.ah-grip::after { content: ''; position: absolute; left: 50%; top: 4px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--line-2); }
+.ah-grip:hover::after, .ah-grip:focus-visible::after { background: var(--accent); }
+.ah-grip:focus-visible { outline: none; }
+.ah-head { flex: none; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; background: none; border: 0; color: var(--text); cursor: pointer; text-align: left; }
+.ah-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ah-head .cw-radio-av { width: 28px; height: 28px; }
+.ah-head .cw-radio-av .hermia { width: 24px; height: 24px; }
+.ah-head b { font: 600 12px/1 var(--label); letter-spacing: .1em; text-transform: uppercase; }
+.ah-head .ah-kind { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-2); font: 500 10.5px/1.3 var(--mono); font-style: normal; color: var(--muted); }
+.ah-head .ah-kind:empty { display: none; }
+.ah-head .ah-kind.k-assign { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
+.ah-head > .ico { margin-left: auto; width: 16px; height: 16px; color: var(--muted); transition: transform .2s var(--ease, ease-out); }
+.app-hermia.min .ah-head > .ico { transform: rotate(180deg); }
+.ah-feed { flex: 1; min-height: 0; overflow: auto; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.ah-feed > :first-child { margin-top: auto; }
+/* the floating Chat pill sits over the column's foot: keep the newest line clear of it */
+body.cosmos .ah-feed { padding-bottom: 56px; }
+.ah-msg { margin: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 10px 10px 10px 4px; background: var(--panel-2); color: var(--text); font: 12px/1.45 var(--font); overflow-wrap: anywhere; animation: in .25s ease-out; }
+.ah-msg.k-assign { border-left: 2px solid var(--accent); }
+.ah-msg .to { display: block; margin-bottom: 2px; color: var(--muted); font-size: 11px; }
+.ah-msg.k-reason { background: transparent; border-style: dashed; color: var(--muted); font-style: italic; }
 .appview.steps-min #app-steps-btn .ico { transform: scaleX(-1); }
 /* Hermia in the Log: her lines as chat messages */
 #log .item.say { align-self: flex-start; max-width: 94%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px 12px 12px 4px; padding: 7px 10px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere; }
@@ -678,7 +707,7 @@ body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
 .app-tree div:hover, .app-tree div.on { background: var(--panel-2); color: var(--text); }
 .app-tree h4 { margin: 10px 0 4px; font: 600 11px var(--font); color: var(--text); }
 .app-file { margin: 0; overflow: auto; padding: 14px; font: 12px/1.5 var(--mono); color: var(--text); white-space: pre; tab-size: 2; }
-@media (max-width: 900px) { .app-body { grid-template-columns: 1fr; grid-template-rows: 160px 1fr; } .app-steps { border-right: 0; border-bottom: 1px solid var(--line); } }
+@media (max-width: 900px) { .app-body { grid-template-columns: 1fr; grid-template-rows: minmax(160px, 38vh) 1fr; } .app-side { border-right: 0; border-bottom: 1px solid var(--line); } .app-hermia { height: min(var(--ah-h, 240px), 50%); } }
 body.side-min .appview, body.side-min.view-video .video-pop { grid-area: 2 / 1 / 3 / 2; }
 
 /* ---------- 🎮 game interview */
@@ -1211,6 +1240,8 @@ em { font-style: italic; }
 .app-bar { background: rgb(var(--deep-rgb) / .55); border-color: var(--panel-edge); gap: 10px; padding: 9px 14px; }
 .app-stage { font: 11.5px var(--mono); }
 .app-steps { background: rgb(var(--deep-rgb) / .4); border-color: var(--panel-edge); font: 11.5px/1.5 var(--mono); }
+.app-side { border-color: var(--panel-edge); }
+.app-hermia { background: rgb(var(--deep-rgb) / .55); border-color: var(--panel-edge); }
 .app-steps .st.turn { font: 600 13px/1.3 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .app-stagearea, .app-empty { background: transparent; }
 .app-empty { background: radial-gradient(ellipse 50% 40% at 50% 45%, var(--glow), transparent 70%), var(--void); }
