@@ -1,13 +1,58 @@
 // The Plan board's routes (docs/specs/21-plan-before-spend.md). Kept out of server.mjs so the
 // plan, its previews and its gate live in one place. Nothing here spends credits or starts a coding
 // run unless the plan is locked at the price the person was shown (engine/plan.mjs lockPlan).
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs'
+import { join, extname } from 'node:path'
 import { planStore, planView, editCard, setSystems, lockPlan, assertLocked, pickCell, PLAN_ID } from '../engine/plan.mjs'
+import { addSheet, addMocks, lockStyle, addBackdrops, addCloseups, entryFor, settleStale } from '../engine/planart.mjs'
 
-export function planRoutes({ dataDir, hooks = {} }) {
+// paint({ prompt, quality: 'medium' | 'high', aspect, crop, refs }) -> { ok, path, error }: one picture
+// through the person's own image login (imagegen.py). paint.ready() says whether one is signed in.
+export function planRoutes({ dataDir, hooks = {}, paint = null, onPicture = null }) {
   const store = planStore(join(dataDir, 'plans'))
   const files = id => join(store.dir, id)
+  const view = plan => planView(settleStale(plan))
+
+  // Pictures paint in the background, two at a time per plan; each lands in the plan as it finishes.
+  const queues = new Map()
+  function runJobs(planId, jobs) {
+    const q = queues.get(planId) || { jobs: [], busy: 0 }
+    queues.set(planId, q)
+    q.jobs.push(...jobs)
+    const next = () => {
+      while (q.busy < 2 && q.jobs.length) {
+        const job = q.jobs.shift()
+        q.busy++
+        paint(job).catch(err => ({ ok: false, error: String(err?.message || err) })).then(r => {
+          const plan = store.get(planId)
+          const e = plan && entryFor(plan, job.list, job.id)
+          if (e) {
+            if (r?.ok && r.path && existsSync(r.path)) {
+              const file = `${job.id}${extname(r.path).toLowerCase() || '.png'}`
+              mkdirSync(files(planId), { recursive: true })
+              copyFileSync(r.path, join(files(planId), file))
+              Object.assign(e, { state: 'done', file, src: `/plans/${planId}/${file}`, model: r.model || null, error: null })
+            } else Object.assign(e, { state: 'failed', error: String(r?.error || 'no picture').slice(0, 200) })
+            store.save(plan)
+            onPicture?.(planId, job, e)
+          }
+        }).finally(() => { q.busy--; next() })
+      }
+    }
+    setImmediate(next)
+  }
+  const PAINTS = new Set(['sheet', 'mocks', 'backdrops', 'closeups'])
+  function painting(plan, make) {
+    const jobs = make(files(plan.id))
+    return () => runJobs(plan.id, jobs)
+  }
+  const art = {
+    sheet: (plan, input) => painting(plan, () => addSheet(plan, String(input.kind || 'cast'))),
+    mocks: (plan, input) => painting(plan, dir => addMocks(plan, dir, Array.isArray(input.shots) && input.shots.length ? input.shots.map(String) : undefined)),
+    backdrops: (plan, input) => painting(plan, () => addBackdrops(plan, { stage: input.stage })),
+    closeups: (plan, input) => painting(plan, dir => addCloseups(plan, dir, { name: input.name ? String(input.name) : undefined })),
+    style: (plan, input) => { lockStyle(plan, input.locked !== false) }
+  }
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const body = (req, cap = 1e5) => new Promise(resolve => {
     let b = ''
@@ -35,7 +80,7 @@ export function planRoutes({ dataDir, hooks = {} }) {
       if (req.method === 'POST') {
         body(req).then(input => {
           const plan = store.create({ idea: input.idea, answers: input.answers && typeof input.answers === 'object' ? input.answers : {}, title: input.title })
-          json(res, 200, planView(plan))
+          json(res, 200, view(plan))
         }).catch(err => fail(res, err))
         return true
       }
@@ -47,11 +92,15 @@ export function planRoutes({ dataDir, hooks = {} }) {
     if (!PLAN_ID.test(id)) { json(res, 404, { error: 'no such plan' }); return true }
     const plan = store.get(id)
     if (!plan) { json(res, 404, { error: 'no such plan' }); return true }
-    if (req.method === 'GET' && !sub) { json(res, 200, planView(plan)); return true }
+    if (req.method === 'GET' && !sub) { json(res, 200, view(plan)); return true }
     if (req.method === 'GET' && sub === 'build') { json(res, 200, { gate: plan.gate, build: plan.build }); return true }
     if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
     body(req).then(async input => {
       try {
+        if (PAINTS.has(sub) && !(paint && await paint.ready())) throw Object.assign(new Error('sign in an image model first'), { status: 503 })
+        // read again after every wait: a picture may have landed meanwhile; nothing below awaits
+        const plan = store.get(id)
+        let after = null
         if (sub === 'card') editCard(plan, String(input.card || ''), input.body || {})
         else if (sub === 'systems') setSystems(plan, input || {})
         else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) plan.title = t }
@@ -61,10 +110,12 @@ export function planRoutes({ dataDir, hooks = {} }) {
           assertLocked(plan)
           if (!hooks.build) throw Object.assign(new Error('the build is not ready on this server yet'), { status: 501 })
           await hooks.build(plan, store)
-        } else if (hooks[sub]) await hooks[sub](plan, input, store)
+        } else if (art[sub]) after = art[sub](plan, input)
+        else if (hooks[sub]) await hooks[sub](plan, input, store)
         else return json(res, 404, { error: 'no such action' })
         store.save(plan)
-        json(res, 200, planView(plan))
+        if (typeof after === 'function') after()
+        json(res, 200, view(plan))
       } catch (err) { fail(res, err) }
     })
     return true

@@ -158,11 +158,14 @@ export function planPrice(plan) {
   const bosses = has(card(plan, 'enemies')?.body.boss, /\w/)
   const runs = 2 + sys + (bosses ? 1 : 0)
   const stages = Math.max(1, parseInt(card(plan, 'world')?.body.stages, 10) || SETTINGS.stages)
+  // pictures still to paint (image runs on the person's own login, not credits)
+  const done = list => (list || []).filter(x => x.state === 'done').length
+  const art = new Map((plan.build?.characters || []).map(c => [c.name, c]))
   const pics = {
-    sheets: (plan.sheets || []).length ? 0 : 2,
-    mocks: (plan.mocks || []).length ? 0 : 5,
-    backdrops: (plan.backdrops || []).length ? 0 : stages * Number(plan.settings?.backdropsPerStage ?? SETTINGS.backdropsPerStage),
-    closeups: cast.filter(r => !made.has(r.name)).length * 2,
+    sheets: Math.max(0, 2 - done(plan.sheets)),
+    mocks: Math.max(0, 5 - done(plan.mocks)),
+    backdrops: Math.max(0, stages * Number(plan.settings?.backdropsPerStage ?? SETTINGS.backdropsPerStage) - done(plan.backdrops)),
+    closeups: cast.reduce((n, r) => n + ['cutin', 'portrait'].filter(w => art.get(r.name)?.[w]?.state !== 'done').length, 0),
     turnarounds: todo.length * 2
   }
   const images = Object.values(pics).reduce((s, n) => s + n, 0)

@@ -3,12 +3,12 @@
 // stage that pans and zooms, the inspector on the right only while something is selected, and the
 // top bar's one primary button, which carries the price: "Lock · 324 credits". Nothing expensive
 // runs before that click; the server checks the same number again (engine/plan.mjs lockPlan).
-import { ic, cursor, CREW } from './icons.js'
+import { ic, cursor, CREW, painterOf } from './icons.js'
 
 export function makePlan({ sw, C, root }) {
   const esc = sw.esc
   const base = () => sw.base || ''
-  const P = { on: false, id: null, plan: null, sel: null, cam: { x: 0, y: 0, k: 1 }, framed: false, writing: null, saving: null }
+  const P = { on: false, id: null, plan: null, sel: null, cam: { x: 0, y: 0, k: 1 }, framed: false, writing: null, saving: null, poll: null, cell: null }
 
   root.className = 'project plan'
   root.hidden = true
@@ -52,17 +52,49 @@ export function makePlan({ sw, C, root }) {
     const first = Object.values(b).find(v => typeof v === 'string' && v.trim())
     return first ? first.split(/[,.]/)[0].slice(0, 28) : ''
   }
+  // ---------- the pictures: sheets, mocks, backdrops, close-ups (engine/planart.mjs)
+  const SHEETS = [['cast', 'Cast'], ['weapons', 'Weapons']]
+  const SHOTS = [['combat', 'Combat'], ['boss', 'Boss'], ['ult', 'Ult'], ['levelup', 'Level-up'], ['select', 'Select']]
+  const painting = p => [...(p.sheets || []), ...(p.mocks || []), ...(p.backdrops || []), ...(p.build?.characters || []).flatMap(c => [c.cutin, c.portrait])].some(e => e?.state === 'painting')
+  const sel = key => P.sel === key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
+  // one picture slot: the picture when done, the crew at work while painting, an empty frame before
+  function slot(key, cls, name, e, extra = '') {
+    const pic = e?.state === 'done' && e.src ? `<img src="${esc(base() + e.src)}" alt="" draggable="false" loading="lazy">` : ''
+    const work = e?.state === 'painting' ? `<div class="pl-work"></div>${cursor(painterOf(key))}` : ''
+    const failed = e?.state === 'failed' ? ' failed' : ''
+    return `<div class="ab ppic ${cls}${failed}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(name)}">${pic}${work}${extra}<em>${esc(name)}</em>${sel(key)}</div>`
+  }
+  const rings = s => (s.picks || []).map(c => {
+    const [cols, rows] = s.grid || [5, 4]
+    const x = (c % cols) / cols * 100, y = Math.floor(c / cols) / rows * 100
+    return `<i class="pl-ring${P.sel === `sheet:${s.kind}` && P.cell === c ? ' on' : ''}" style="left:${x}%;top:${y}%;width:${100 / cols}%;height:${100 / rows}%"></i>`
+  }).join('')
   function render() {
     const p = P.plan
     if (!p) { world.innerHTML = ''; return }
     crumb.querySelector('.pl-name').textContent = p.title || 'Plan'
     renderPrimary()
     const cards = p.cards.map((c, i) => `<div class="ab pcard${P.writing != null && i >= P.writing ? ' wait' : ''}" data-key="card:${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.name)}">
-      <b>${esc(c.name)}</b><span>${esc(cardValue(c))}</span>${P.sel === `card:${c.id}` ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''}${P.writing != null && i === P.writing - 1 ? cursor(CREW[i % CREW.length]) : ''}</div>`).join('')
-    world.innerHTML = `<div class="col"><section class="pj-sec plan-cards"><span class="al">Plan</span><div class="abs">${cards}</div></section></div>`
+      <b>${esc(c.name)}</b><span>${esc(cardValue(c))}</span>${sel(`card:${c.id}`)}${P.writing != null && i === P.writing - 1 ? cursor(CREW[i % CREW.length]) : ''}</div>`).join('')
+    const writing = P.writing != null
+    const sheets = SHEETS.map(([k, n]) => { const s = (p.sheets || []).find(x => x.kind === k); return slot(`sheet:${k}`, 'sheet', n, s, s?.state === 'done' ? rings(s) : '') }).join('')
+    const mocks = SHOTS.map(([k, n]) => slot(`mock:${k}`, 'mock', n, (p.mocks || []).find(x => x.shot === k))).join('')
+    const bds = (p.backdrops || []).slice().sort((a, b) => a.stage - b.stage || a.n - b.n)
+    const worldSec = bds.length ? bds.map(b => slot(`bd:${b.id}`, `bd ${b.shape}`, b.n === 1 ? b.name : '', b)).join('') : slot('bd:new', 'bd equirect', 'Backdrops', null)
+    const cast = (p.cards.find(c => c.id === 'cast')?.body.roster || []).filter(r => r?.name)
+    const chars = new Map((p.build?.characters || []).map(c => [c.name, c]))
+    const closeups = p.gate?.locked ? cast.map(r => slot(`cu:${r.name}:cutin`, 'cutin', r.name, chars.get(r.name)?.cutin) + slot(`cu:${r.name}:portrait`, 'portrait', '', chars.get(r.name)?.portrait)).join('') : ''
+    world.innerHTML = `<div class="col"><section class="pj-sec plan-cards"><span class="al">Plan</span><div class="abs">${cards}</div></section>
+      ${writing ? '' : `<section class="pj-sec pl-sheets"><span class="al">Sketches</span><div class="abs">${sheets}</div></section>`}</div>
+      ${writing ? '' : `<div class="col"><section class="pj-sec pl-mocks"><span class="al">Mocks</span><div class="abs">${mocks}</div></section>
+      <section class="pj-sec pl-world"><span class="al">World</span><div class="abs">${worldSec}</div></section>
+      ${closeups ? `<section class="pj-sec pl-close"><span class="al">Close-ups</span><div class="abs">${closeups}</div></section>` : ''}</div>`}`
     applyCam()
-    if (!P.framed && world.offsetWidth) { P.framed = true; frameAll(false) }
+    if (!P.framed && world.offsetWidth && !writing) { P.framed = true; frameAll(false) }
     renderInsp()
+    // while the crew paint, look again every few seconds
+    clearTimeout(P.poll)
+    if (P.on && painting(p)) P.poll = setTimeout(load, 3000)
   }
   function renderPrimary() {
     const p = P.plan, pr = price()
@@ -88,17 +120,21 @@ export function makePlan({ sw, C, root }) {
 
   // ---------- the inspector: the selected card's lines, as inputs; saved as they change
   function renderInsp() {
-    const c = P.sel?.startsWith('card:') && P.plan?.cards.find(x => `card:${x.id}` === P.sel)
-    insp.hidden = !c
-    root.classList.toggle('insp-on', !!c)
-    if (!c) return
+    const p = P.plan
+    const c = P.sel?.startsWith('card:') && p?.cards.find(x => `card:${x.id}` === P.sel)
+    const pic = !c && P.sel && p ? picInsp(p, P.sel) : ''
+    insp.hidden = !c && !pic
+    root.classList.toggle('insp-on', !insp.hidden)
+    if (insp.hidden) return
     if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea')) return
+    if (pic) { insp.innerHTML = pic; return }
     const b = c.body || {}
     let html = ''
     if (c.id === 'systems') {
       html = Object.entries(b).map(([k, v]) => `<label class="pl-sw"><input type="checkbox" data-k="${esc(k)}" ${v === 'on' ? 'checked' : ''}><span>${esc(k)}</span></label>`).join('')
     } else {
-      html = Object.entries(b).filter(([k]) => k !== 'roster' && !(c.id === 'cast' && k === 'count')).map(([k, v]) => `<label class="pl-f"><span>${esc(label(k))}</span><input data-k="${esc(k)}" value="${esc(Array.isArray(v) ? v.join(', ') : v)}" maxlength="400"></label>`).join('')
+      html = Object.entries(b).filter(([k]) => k !== 'roster' && !(c.id === 'cast' && k === 'count') && !(c.id === 'look' && k === 'locked')).map(([k, v]) => `<label class="pl-f"><span>${esc(label(k))}</span><input data-k="${esc(k)}" value="${esc(Array.isArray(v) ? v.join(', ') : v)}" maxlength="400"></label>`).join('')
+      if (c.id === 'look') html += styleSwitch(p)
       if (c.id === 'cast') {
         html += `<div class="pl-roster" role="list" aria-label="Cast">${(b.roster || []).map((r, i) => `<div class="pl-r" role="listitem" data-i="${i}">
           <input data-r="name" value="${esc(r.name)}" aria-label="Name" maxlength="40"><input data-r="weapon" value="${esc(r.weapon)}" aria-label="Weapon" maxlength="60">
@@ -108,6 +144,40 @@ export function makePlan({ sw, C, root }) {
       }
     }
     insp.innerHTML = `<h3><span>${esc(c.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>${html}`
+  }
+  const styleSwitch = p => `<label class="pl-sw"><input type="checkbox" data-style ${p.style?.locked ? 'checked' : ''}><span>Lock style</span></label>`
+  const head = name => `<h3><span>${esc(name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>`
+  const busy = e => e?.state === 'painting'
+  const again = (what, e, label = 'Draw') => `<button class="btn${e?.state === 'done' ? ' ghost' : ' pri'} pl-paint" data-paint="${esc(what)}" ${busy(e) ? 'disabled' : ''}>${esc(e?.state === 'done' || e?.state === 'failed' ? `${label} again` : label)}</button>`
+  // a picture's inspector: its picks and note (a sheet), and the one action that paints it
+  function picInsp(p, key) {
+    const [kind, ...rest] = key.split(':')
+    const id = rest.join(':')
+    if (kind === 'sheet') {
+      const s = (p.sheets || []).find(x => x.kind === id)
+      const name = SHEETS.find(x => x[0] === id)?.[1] || id
+      const picks = s?.picks || []
+      const cell = P.cell != null && picks.includes(P.cell) ? P.cell : null
+      return head(name) + (picks.length ? `<div class="pl-picks">${picks.map(c => `<button class="pl-pick${c === cell ? ' on' : ''}" data-cell="${c}">${c + 1}</button>`).join('')}</div>` : '') +
+        (cell != null ? `<label class="pl-f"><span>Note</span><input data-note="${cell}" value="${esc(s.notes?.[cell] || '')}" maxlength="120"></label>` : '') +
+        again(`sheet:${id}`, s)
+    }
+    if (kind === 'mock') {
+      const m = (p.mocks || []).find(x => x.shot === id)
+      const any = (p.mocks || []).length
+      return head(SHOTS.find(x => x[0] === id)?.[1] || id) + (any ? again(`mock:${id}`, m) : again('mocks', null, 'Draw all'))
+    }
+    if (kind === 'bd') {
+      const b = (p.backdrops || []).find(x => x.id === id)
+      return head(b?.name || 'Backdrops') + (p.style?.locked ? '' : styleSwitch(p)) +
+        (p.style?.locked ? (b ? again(`bd:${b.stage}`, b, 'Paint') : again('bd:', null, 'Paint')) : '')
+    }
+    if (kind === 'cu') {
+      const [name, which] = [rest.slice(0, -1).join(':'), rest.at(-1)]
+      const c = (p.build?.characters || []).find(x => x.name === name)
+      return head(name) + again(`cu:${name}`, c?.[which], 'Paint')
+    }
+    return ''
   }
   const label = k => ({ levelUp: 'Level-ups', ngPlus: 'New Game+', enemyAI: 'Enemy AI' }[k] || k.replace(/([A-Z])/g, ' $1').replace(/^\w/, s => s.toUpperCase()))
   function readCard() {
@@ -136,10 +206,20 @@ export function makePlan({ sw, C, root }) {
     if (now) return go()
     P.saving = setTimeout(go, 450)
   }
-  insp.addEventListener('input', e => { if (e.target.matches('input:not([type=checkbox])')) saveSoon() })
-  insp.addEventListener('change', e => { if (e.target.matches('input[type=checkbox]')) saveSoon(true) })
+  insp.addEventListener('input', e => {
+    if (e.target.matches('[data-note]')) return noteSoon(e.target)
+    if (e.target.matches('input:not([type=checkbox])')) saveSoon()
+  })
+  insp.addEventListener('change', e => {
+    if (e.target.matches('[data-style]')) return act('style', { locked: e.target.checked })
+    if (e.target.matches('input[type=checkbox]')) saveSoon(true)
+  })
   insp.addEventListener('click', e => {
     if (e.target.closest('.pj-x')) return select(null)
+    const pk = e.target.closest('[data-cell]')
+    if (pk) { P.cell = Number(pk.dataset.cell); insp.innerHTML = ''; return render() }
+    const pt = e.target.closest('[data-paint]')
+    if (pt) return paintIt(pt.dataset.paint, pt)
     const del = e.target.closest('[data-del]')
     if (del) { del.closest('.pl-r').remove(); saveSoon(true).then(() => { insp.innerHTML = ''; renderInsp() }); return }
     if (e.target.closest('[data-add]')) {
@@ -149,6 +229,40 @@ export function makePlan({ sw, C, root }) {
         .then(plan => { P.plan = plan; insp.innerHTML = ''; render() }).catch(err => toast(err.message))
     }
   })
+
+  // ---------- the crew paint: one call each, the pictures land as they finish
+  async function act(sub, body) {
+    try { P.plan = await post(url(sub), body); insp.innerHTML = ''; render() } catch (err) { toast(err.message); insp.innerHTML = ''; render() }
+  }
+  function paintIt(what, btn) {
+    btn.disabled = true
+    const [kind, ...rest] = what.split(':')
+    const id = rest.join(':')
+    if (kind === 'sheet') return act('sheet', { kind: id })
+    if (kind === 'mocks') return act('mocks')
+    if (kind === 'mock') return act('mocks', { shots: [id] })
+    if (kind === 'bd') return act('backdrops', id === '' ? {} : { stage: Number(id) })
+    if (kind === 'cu') return act('closeups', { name: id })
+  }
+  // a sheet: the first click selects it; then a click on a cell picks it (or unpicks it)
+  function pickAt(a, e) {
+    const s = (P.plan.sheets || []).find(x => `sheet:${x.kind}` === a.dataset.key)
+    if (!s || s.state !== 'done') return false
+    const r = a.getBoundingClientRect()
+    const [cols, rows] = s.grid || [5, 4]
+    const cell = Math.min(rows - 1, Math.floor((e.clientY - r.top) / r.height * rows)) * cols + Math.min(cols - 1, Math.floor((e.clientX - r.left) / r.width * cols))
+    const on = !(s.picks || []).includes(cell)
+    P.cell = on ? cell : null
+    act('pick', { sheet: s.id, cell, on })
+    return true
+  }
+  let noting = null
+  function noteSoon(input) {
+    clearTimeout(noting)
+    const s = (P.plan.sheets || []).find(x => `sheet:${x.kind}` === P.sel)
+    if (!s) return
+    noting = setTimeout(() => post(url('pick'), { sheet: s.id, cell: Number(input.dataset.note), note: input.value }).then(p => { P.plan = p }).catch(err => toast(err.message)), 450)
+  }
 
   // ---------- the gate: the parts, the total, Test one first, and one confirm carrying the price
   function gate() {
@@ -221,11 +335,17 @@ export function makePlan({ sw, C, root }) {
     applyCam()
   }, { passive: false })
   function select(key) {
+    if (key !== P.sel) P.cell = null
     P.sel = key
     insp.innerHTML = ''
     render()
   }
-  world.addEventListener('click', e => { const a = e.target.closest('.ab'); if (a) select(a.dataset.key) })
+  world.addEventListener('click', e => {
+    const a = e.target.closest('.ab')
+    if (!a) return
+    if (a.dataset.key === P.sel && a.classList.contains('sheet') && pickAt(a, e)) return
+    select(a.dataset.key)
+  })
   world.addEventListener('keydown', e => { const a = e.target.closest('.ab'); if (a && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select(a.dataset.key) } })
   addEventListener('keydown', e => {
     if (!P.on || e.key !== 'Escape' || e.defaultPrevented || window.SwarmUI?.open?.()) return
@@ -250,14 +370,14 @@ export function makePlan({ sw, C, root }) {
     get id() { return P.id },
     get selected() { return !!P.sel },
     async show(id, { fresh = false } = {}) {
-      if (id && id !== P.id) { P.id = id; P.plan = null; P.sel = null; P.framed = false }
+      if (id && id !== P.id) { P.id = id; P.plan = null; P.sel = null; P.cell = null; P.framed = false }
       P.on = true
       root.hidden = false
       crumb.hidden = false
       await load()
       if (fresh) writeIn()
     },
-    hide() { P.on = false; root.hidden = true; clearTimeout(P.saving) },
+    hide() { P.on = false; root.hidden = true; clearTimeout(P.saving); clearTimeout(P.poll) },
     // the plan made from the questions, from Projects' Make box
     async create(idea, answers) {
       const plan = await post('/api/plans', { idea, answers })

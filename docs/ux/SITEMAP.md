@@ -180,6 +180,10 @@ flowchart LR
   PB --> LOCK["Lock · N credits"]
   LOCK --> GATE["Gate: price by part, runs, pictures, Test one first"]
   GATE --> BUILD["Build / Build one"]
+  PB --> SK["Sketches: Cast, Weapons (pick cells, a note each)"]
+  PB --> MK["Mocks: five in-game frames"]
+  PB --> WD["World: backdrops, after Lock style"]
+  BUILD --> CU["Close-ups: cut-in and portrait per character"]
 ```
 
 ## 6. Projects

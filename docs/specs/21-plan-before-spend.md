@@ -235,6 +235,7 @@ The Plan board is a project's canvas before its first build, so it follows **Fig
 | `POST /api/plans/:id/mocks` | draw the mock screenshots | 4–5 images |
 | `POST /api/plans/:id/style` `{ locked }` | lock the look | – |
 | `POST /api/plans/:id/backdrops` `{ stage? }` | paint the World card's backdrops from the locked style | 2–4 images a stage |
+| `POST /api/plans/:id/closeups` `{ name? }` | paint the cut-in and portrait per character (409 before the lock) | 2 images a character |
 | `POST /api/plans/:id/lock` `{ credits, testFirst }` | lock at that price (402 if stale) | – |
 | `POST /api/plans/:id/build` | start the build of what is locked (409 if not) | credits, runs |
 | `GET /api/plans/:id/build` | the build's state | – |
@@ -263,8 +264,8 @@ Plan files are served at `/plans/<id>/<file>.png` (the sheet and mock pictures),
 
 - [ ] The spec (this file).
 - [ ] (a) Plan cards from the questions, editable on the board, and the lock gate with its price.
-- [ ] (b) Sketch sheets with picks and notes, mock screenshots, the style lock.
-- [ ] (b2) World backdrops and the close-up art rule (cut-in and portrait per character), counted on the gate.
+- [x] (b) Sketch sheets with picks and notes, mock screenshots, the style lock.
+- [x] (b2) World backdrops and the close-up art rule (cut-in and portrait per character), counted on the gate.
 - [ ] (c) Turnarounds and multi-view Meshy in `engine/meshy.mjs`, mocked in tests.
 - [ ] (d) The Systems switches in the build prompt.
 - [ ] (e) ARES as a remixable template.
