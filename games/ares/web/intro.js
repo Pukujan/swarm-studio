@@ -47,6 +47,8 @@ function startIntro(handle) {
   for (const b of bullets) if (b.enemy) b.dead = true
   // a clean frame: no swing or callout frozen mid-air
   callouts = []; fx = fx.filter(f => f.boss && !f.kind); P.act = null; P.str = []
+  // she stops to listen: no run or dash carried into the held frame, so she stands in her idle
+  P.vx = 0; P.dashT = 0; P.sprint = false; P.animT = 0
   if (typeof FXK !== 'undefined') try { FXK.clear() } catch { }
   portraitOf(INTRO.id); portraitOf(P.hero)
   introNext()
@@ -141,5 +143,26 @@ function drawIntro() {
     const r = base.apply(this, arguments)
     if (!o.chase && B && !B.chaser && !(window.ARES_NO_INTRO)) later(0.95, () => { if (B && !B.active && !B.introDone) startIntro(handle) }, 'boss')
     return r
+  }
+}
+
+// While an intro holds the fight she stands still and listens: whatever speed a wrapper or the
+// autopilot left on her, the pose is picked as if she were standing (idle, not run or walk).
+if (typeof pickAnim === 'function') {
+  const corePick = pickAnim
+  window.pickAnim = function () {
+    if (!(typeof INTRO !== 'undefined' && INTRO && P.ground)) return corePick.apply(this, arguments)
+    const vx = P.vx, sp = P.sprint
+    P.vx = 0; P.sprint = false
+    try { return corePick.apply(this, arguments) } finally { P.vx = vx; P.sprint = sp }
+  }
+}
+
+// The autopilot (demo runs, Jev) waits out the intro too, instead of swinging at a held frame.
+if (typeof autopilot === 'function') {
+  const coreAuto = autopilot
+  window.autopilot = function () {
+    if (typeof INTRO !== 'undefined' && INTRO) { for (const k of AUTO.held) keys.delete(k); AUTO.held.clear(); return }
+    return coreAuto.apply(this, arguments)
   }
 }
