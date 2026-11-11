@@ -113,3 +113,11 @@ test('a key-colour problem swaps the key for the second try', async () => {
   assert.match(swapKey('A figure'), /#00FF00/)
   assert.doesNotMatch(swapKey(spriteGround()), /\bmagenta\b/)
 })
+
+test('a backdrop with no people says so up front and at the end, without the style\'s "moment"', async () => {
+  const { promptFor, STYLES, EMPTY_PLACE } = await import('../engine/artdirect.mjs')
+  const p = promptFor('Side-on view of wet rooftops at dusk. No people, creatures or figures anywhere in the picture', STYLES['anime-cel'])
+  assert.ok(p.startsWith(p.split(EMPTY_PLACE)[0]) && p.split(EMPTY_PLACE).length === 3)
+  assert.doesNotMatch(p, /slice-of-life moment|Original characters/)
+  assert.doesNotMatch(promptFor('A girl reading on a rooftop', STYLES['anime-cel']), /An empty place/)
+})
