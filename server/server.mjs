@@ -282,7 +282,7 @@ function broadcast(event) {
   for (const res of clients) res.write(line)
 }
 
-function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null }) {
+function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '' }) {
   setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
@@ -339,6 +339,8 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     ask,
     // the last builds' page types and colours, so this one looks different
     recent: recentLooks(runsDir),
+    // a page type the request names (PAGE_TYPES key) wins over the pick
+    pageType: typeof pageType === 'string' ? pageType : '',
     agents: agents || defaultAgents,
     plannerModel: modelFor('planner'),
     workerModel: modelFor('worker'),

@@ -88,3 +88,10 @@ test('cream counts as cream, and the next build is given another ground and main
   const col = fitTheme({ vars: { '--background': '#F4F1EA', '--primary': '#E8442A' } }, { ground: 'colour' })
   assert.equal(groundOf(col.vars['--background']), 'colour')
 })
+
+test('the zine type leads with pictures, not boxed cards with offset shadows', () => {
+  const g = PAGE_TYPES.zine.grid
+  assert.match(g, /pictures first/)
+  assert.doesNotMatch(g, /shadow-\[/)
+  assert.match(g, /never hard offset drop shadows/)
+})
