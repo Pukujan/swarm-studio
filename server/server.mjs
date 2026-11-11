@@ -396,6 +396,9 @@ function runCard(id) {
     const theme = events.findLast(e => e.type === 'theme') || (brand?.vars ? { name: brand.name || 'game', vars: brand.vars, fonts: brand.fonts } : {})
     const sites = {}
     for (const e of events) if (e.type === 'publish:done' && e.url) sites[e.target] = e.url
+    // an app's own deploy (Auto or Deploy) is its public link too, so it can be posted to the Feed
+    const deployed = events.findLast(e => e.type === 'app:deployed' && e.url && !e.pending)
+    if (deployed && !sites.vercel) sites.vercel = deployed.url
     const video = events.findLast(e => e.type === 'video:done')
     card = { key, info: {
       id,
