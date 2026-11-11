@@ -39,7 +39,7 @@ import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
-import { paintWithBackup } from '../engine/paintretry.mjs'
+import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
 import { library } from '../engine/library.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
@@ -140,15 +140,11 @@ const loadVideoProviders = () => (videoProviders ||= videogen(['--list'], 60000)
 loadImageProviders()
 loadVideoProviders()
 // The image model for new builds: the pick, else your Codex login's cheapest tier when it is signed in.
+// A pick that is not signed in falls back to one that is (engine/paintretry.mjs chooseImage), so
+// a stale pick never leaves a build without pictures.
 async function imageChoice() {
   if (picks.image === 'off') return null
-  const list = await loadImageProviders()
-  const want = picks.image || { provider: 'openai-codex', model: 'gpt-image-2-low' }
-  const p = list.find(x => x.provider === want.provider && x.available)
-  if (p) return { provider: p.provider, model: want.model || p.default || '' }
-  // no pick and no Codex login: any image provider Hermes has signed in (a pasted FAL key, xAI…)
-  const any = !picks.image && list.find(x => x.available)
-  return any ? { provider: any.provider, model: any.default || '' } : null
+  return chooseImage(await loadImageProviders(), picks.image)
 }
 
 const IMG_MAX = 8

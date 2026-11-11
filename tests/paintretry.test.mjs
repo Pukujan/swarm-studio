@@ -1,7 +1,7 @@
 // A refused picture is tried again, then on another provider (engine/paintretry.mjs).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { paintWithBackup } from '../engine/paintretry.mjs'
+import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
 
 const codex = { provider: 'openai-codex', model: 'gpt-image-2-low' }
 const openai = { provider: 'openai', model: 'gpt-image-2.5' }
@@ -57,4 +57,38 @@ test('a result whose file is missing counts as a failure', async () => {
   const r = await paintWithBackup(f.paint, opts({ exists: () => false }))
   assert.equal(r.secondTry, undefined)
   assert.equal(f.calls.length, 2)
+})
+
+// the image model for a build (chooseImage)
+const LIST = [
+  { provider: 'openai', available: false, models: ['gpt-image-2-low', 'gpt-image-2-medium'], default: 'gpt-image-2-medium' },
+  { provider: 'openai-codex', available: true, models: ['gpt-image-2-low', 'gpt-image-2-medium'], default: 'gpt-image-2-medium' },
+  { provider: 'xai', available: true, models: [], default: null }
+]
+
+test('a pick that is signed in is used as picked', () => {
+  assert.deepEqual(chooseImage(LIST, { provider: 'xai', model: '' }), { provider: 'xai', model: '' })
+  assert.deepEqual(chooseImage(LIST, { provider: 'openai-codex', model: 'gpt-image-2-medium' }), { provider: 'openai-codex', model: 'gpt-image-2-medium' })
+})
+
+test('a pick that is not signed in falls back instead of switching pictures off', () => {
+  const c = chooseImage(LIST, { provider: 'openai', model: 'gpt-image-2.5' })
+  assert.equal(c.provider, 'openai-codex')
+  assert.equal(c.model, 'gpt-image-2-low')
+  assert.equal(c.insteadOf, 'openai')
+  assert.equal(chooseImage(LIST.filter(x => x.provider !== 'openai-codex'), { provider: 'openai', model: 'gpt-image-2.5' }).provider, 'xai')
+})
+
+test('a model the provider does not list gives way to its default', () => {
+  assert.equal(chooseImage(LIST, { provider: 'openai-codex', model: 'gpt-image-2.5' }).model, 'gpt-image-2-medium')
+})
+
+test('no pick: the Codex login, else any signed-in provider, else no pictures', () => {
+  assert.deepEqual(chooseImage(LIST, null), { provider: 'openai-codex', model: 'gpt-image-2-low' })
+  assert.equal(chooseImage(LIST.filter(x => x.provider !== 'openai-codex'), null).provider, 'xai')
+  assert.equal(chooseImage(LIST.map(x => ({ ...x, available: false })), null), null)
+})
+
+test('Off stays off', () => {
+  assert.equal(chooseImage(LIST, 'off'), null)
 })
