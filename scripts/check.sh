@@ -33,7 +33,12 @@ get /api/state; has '"working"'
 get /api/runs
 get /api/game; has '"questions"'
 get /api/meshy; has '"ready"'; has '"credits":35'
-get /api/intake; has '"showcases"'; has '"game"'
+get /api/intake; has '"showcases"'; has '"game"'; has '"plan"'
+# plan before spend (spec 21): a plan is free; a lock at a stale price and a build before the lock are refused
+curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"idea":"Check, a test game","answers":{"size":"2"}}' http://127.0.0.1:$port/api/plans > "$tmp/reply"; has '"credits"'
+pid=$(sed -E 's/^\{"id":"(p-[a-z0-9]+)".*/\1/' "$tmp/reply")
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{"credits":1}' http://127.0.0.1:$port/api/plans/$pid/lock)" = 402 ] || { echo 'a stale price locked the plan'; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/plans/$pid/build)" = 409 ] || { echo 'an unlocked plan started a build'; exit 1; }
 get /api/packs; has '"events"'
 curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; grep -q '__SWARM_TOKEN__' "$tmp/reply" && { echo 'the wall has no token'; exit 1; }
 get /api/auto; has '"state"'

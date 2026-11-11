@@ -1,0 +1,45 @@
+/* ---------- The Plan board (web/plan.js, docs/specs/21-plan-before-spend.md): a project's canvas before
+   its first build. It reuses the project's stage, sections, artboards and inspector (web/project.css);
+   this file adds the plan cards, the inspector's fields and the gate's rows. Tokens only. */
+
+/* the top bar: Projects › name, and the one primary button (the price), only on the board */
+.pl-crumb, .pl-primary { display: none !important; }
+body.cosmos-plan .pl-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
+body.cosmos-plan .pl-primary { display: inline-flex !important; align-items: center; justify-content: center; min-width: 168px; }
+body.cosmos-plan .pl-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+body.cosmos-plan .brand, body.cosmos-plan .file-name, body.cosmos-plan #play-btn, body.cosmos-plan .pubwrap, body.cosmos-plan .mode-wrap { display: none !important; }
+body.cosmos-plan .cosmos-back { display: inline-flex; }
+body.cosmos-plan .cosmos-back .t { display: none; }
+body.cosmos-plan .topbar { background: var(--void); backdrop-filter: none; }
+body.cosmos-plan .viewport, body.cosmos-plan .appview { visibility: hidden; }
+body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
+.pl-crumb button { background: none; border: 0; color: inherit; cursor: pointer; font: 500 14px var(--body); padding: 6px; border-radius: 8px; }
+.pl-crumb button:hover { color: var(--text); background: var(--surface-2); }
+.pl-crumb .pl-name { color: var(--text); font: 600 14px var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34vw; }
+
+/* the cards: a name and one value at rest */
+.plan .pj-sec.plan-cards .abs { max-width: 700px; gap: 16px; }
+.ab.pcard { width: 210px; height: 118px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; background: var(--surface); transition: opacity .3s var(--ease), transform .3s var(--ease); }
+.ab.pcard b { font: 600 13px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ab.pcard > span { font: 600 22px/1.15 var(--display); color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ab.pcard:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.ab.pcard.wait { opacity: 0; transform: translateY(6px); }
+.ab.pcard .cur { left: 70%; top: 62%; }
+@media (prefers-reduced-motion: reduce) { .ab.pcard { transition: none; } }
+
+/* the inspector's fields: a label over an input; switches beside their label */
+.pl-f { display: flex; flex-direction: column; gap: 4px; font: 12px var(--mono); color: var(--muted); }
+.pl-f input, .pl-r input { height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px var(--body); padding: 0 10px; outline: none; min-width: 0; }
+.pl-f input:focus, .pl-r input:focus { border-color: var(--text); }
+.pl-sw { display: flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; font: 13px var(--body); color: var(--text); }
+.pl-sw input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+.pl-roster { display: flex; flex-direction: column; gap: 10px; }
+.pl-r { display: grid; grid-template-columns: 1fr 1fr 24px; gap: 6px; align-items: center; }
+.pl-r .wide { grid-column: 1 / -1; }
+
+/* the gate: the parts, the total, Test one first */
+.pl-rows { display: flex; flex-direction: column; }
+.pl-row { display: grid; grid-template-columns: 1fr auto 64px; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font: 13px var(--body); color: var(--text); }
+.pl-row i { font: 12px var(--mono); font-style: normal; color: var(--muted); }
+.pl-row b { font: 600 13px var(--mono); text-align: right; }
+.pl-gate .pl-go { min-width: 180px; justify-content: center; }

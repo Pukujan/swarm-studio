@@ -36,6 +36,8 @@ import { listAssets, assetFiles } from '../engine/assets.mjs'
 import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
+import { planRoutes } from './plans.mjs'
+import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
 import { scoreWav, elevenScore } from '../engine/score.mjs'
@@ -1001,6 +1003,8 @@ let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
 let castP = null
 const castMod = () => (castP ||= import('../engine/cast.mjs'))
+// plans (spec 21): the board's routes; the paid steps are hooks that check the lock first
+const plans = planRoutes({ dataDir })
 let meshyP = null
 const meshyMod = () => (meshyP ||= import('../engine/meshy.mjs'))
 
@@ -1858,10 +1862,13 @@ const server = createServer((req, res) => {
     return
   }
 
+  // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
+  if (plans(req, res, url)) return
+
   // The Make box's showcases and its "grill me" interview (engine/intake.mjs); a Game gets the game interview
   if (url.pathname === '/api/intake' && req.method === 'GET') {
     Promise.all([import('../engine/intake.mjs'), gameMod()])
-      .then(([m, g]) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ...m.intake(), game: g.QUESTIONS })))
+      .then(([m, g]) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ...m.intake(), game: g.QUESTIONS, plan: PLAN_QUESTIONS })))
       .catch(err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
     return
   }
