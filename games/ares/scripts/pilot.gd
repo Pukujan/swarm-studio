@@ -174,6 +174,10 @@ func drive(p, delta: float) -> void:
 				keep = 0.0
 		"evade":
 			keep = 18.0
+	if aim_at == null and b and is_instance_valid(b):
+		for pt in b.pets:
+			if is_instance_valid(pt) and pt.dome_up() and p.global_position.distance_to(pt.dome.global_position) > pt.dome_r:
+				aim_at = pt.global_position + Vector3(0, 1.2 + pt.hover, 0)
 	if aim_at == null:
 		if b and is_instance_valid(b) and not b.dead and b.intangible <= 0.0:
 			aim_at = b.global_position + Vector3(0, (2.4 if String(b.data.get("model")) == "eye" else 1.2 * b.scale_f), 0)
@@ -186,10 +190,36 @@ func drive(p, delta: float) -> void:
 			goal = b.global_position
 		else:
 			goal = Vector3.ZERO
+	if p.third:
+		var close = _blade_target(p)
+		# hit and run: dart in on the boss for a combo, then back out to range
+		if tactic == "pressure" and b and is_instance_valid(b) and not b.dead and (fmod(Game.time, 7.0) < 2.6 or b.is_staggered()):
+			goal = b.global_position
+			keep = float(b.radius) + 1.4
+		if close != null and tactic != "evade" and tactic != "collect":
+			# taps: 2 frames down, 4 up, so the chain keeps going; launch now and then
+			p.in_attack = Engine.get_physics_frames() % 6 < 2
+			p.in_move.y = -1.0 if fmod(Game.time, 9.0) < 0.3 else p.in_move.y
+		else:
+			p.in_attack = false
+		if p.ult >= 100.0 and b and is_instance_valid(b) and not b.dead and b.ai:
+			p.in_ult = true
 	_steer(p, delta, goal, keep)
 	_dodge(p)
 	_aim(p, delta, aim_at)
 	_weapon(p, aim_at)
+
+func _blade_target(p):
+	var best = null
+	for e in Game.live_enemies():
+		if e.global_position.distance_to(p.global_position) < 3.2 + (float(e.radius) if "radius" in e else 0.5):
+			best = e
+	var b = Game.boss
+	if b and is_instance_valid(b) and not b.dead and b.intangible <= 0.0:
+		var d = Vector2(b.global_position.x - p.global_position.x, b.global_position.z - p.global_position.z).length()
+		if d < 3.0 + b.radius and absf(b.global_position.y - p.global_position.y) < 4.0:
+			best = b
+	return best
 
 func _crowd_center(p) -> Vector3:
 	var sum = Vector3.ZERO

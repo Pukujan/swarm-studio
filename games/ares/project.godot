@@ -15,6 +15,8 @@ Fx="*res://scripts/fx.gd"
 
 [display]
 
+window/dpi/allow_hidpi.web=false
+
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
@@ -26,5 +28,16 @@ common/physics_ticks_per_second=60
 
 [rendering]
 
+renderer/rendering_method.web="gl_compatibility"
+
 anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/msaa_3d.web=0
+lights_and_shadows/directional_shadow/size.web=2048
 lights_and_shadows/directional_shadow/size=4096
+
+[importer_defaults]
+
+texture={
+"compress/lossy_quality": 0.8,
+"compress/mode": 1
+}

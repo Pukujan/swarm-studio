@@ -39,6 +39,12 @@ var _anim_now := ""
 var _tele: Array = []
 var scale_f := 2.6
 var tint := Color.WHITE
+var pets: Array = []
+# guard bar (weakness break): blade hits and charged shots drain it; at zero the boss breaks
+var guard := 120.0
+var max_guard := 120.0
+var guard_cd := 0.0
+var broken_t := 0.0          # robot pets (Pet); a raised dome blocks the player's damage from outside
 
 func setup(d: Dictionary, is_clone := false) -> void:
 	data = d
@@ -49,6 +55,8 @@ func setup(d: Dictionary, is_clone := false) -> void:
 	if clone:
 		max_hp *= 0.22
 	hp = max_hp
+	max_guard = clampf(max_hp * 0.11, 90.0, 220.0) if not clone else 40.0
+	guard = max_guard
 	flying = bool(d.get("flying", false))
 	armored = bool(d.get("armored", false))
 	scale_f = float(d.get("scale", 2.6)) * (0.7 if clone else 1.0)
@@ -335,6 +343,13 @@ func _physics_process(delta: float) -> void:
 	flash_t = maxf(0.0, flash_t - delta)
 	shard_cd = maxf(0.0, shard_cd - delta)
 	intangible = maxf(0.0, intangible - delta)
+	guard_cd = maxf(0.0, guard_cd - delta)
+	if broken_t > 0.0:
+		broken_t -= delta
+		if broken_t <= 0.0:
+			guard = max_guard
+	elif guard_cd <= 0.0 and guard < max_guard:
+		guard = minf(max_guard, guard + max_guard * 0.12 * delta)
 	if stagger_t > 0.0:
 		stagger_t -= delta
 		Look.flash(model, 0.4 + 0.35 * sin(Game.time * 16.0), Fx.GOLD)
@@ -732,11 +747,12 @@ func _make_beam() -> Node3D:
 	mc.mesh = core
 	mc.position.z = 20.0
 	root.add_child(mc)
-	var l = OmniLight3D.new()
-	l.light_color = Color(1.0, 0.6, 0.2)
-	l.light_energy = 6.0
-	l.omni_range = 10.0
-	root.add_child(l)
+	if not Game.lite:
+		var l = OmniLight3D.new()
+		l.light_color = Color(1.0, 0.6, 0.2)
+		l.light_energy = 6.0
+		l.omni_range = 10.0
+		root.add_child(l)
 	return root
 
 func _check_phase() -> void:
@@ -756,17 +772,48 @@ func _check_phase() -> void:
 func take_hit(amount: float, at: Vector3, src := "") -> bool:
 	if dead or intangible > 0.0 or not ai:
 		return false
+	for pt in pets:
+		if is_instance_valid(pt) and pt.dome_up() and Game.player and Game.player.global_position.distance_to(pt.dome.global_position) > pt.dome_r:
+			pt.dome_hit(at)
+			return false
 	if armored and stagger_t <= 0.0 and src == "gun":
 		amount *= 0.7
 	if burn_t > 0.0 and shard_cd <= 0.0 and src != "fire":
 		shard_cd = 0.6
 		Game.main.spawn_pickup("armor", global_position + Vector3(0, 2.0, 0), 1)
 	flash_t = 0.08
+	if broken_t > 0.0:
+		amount *= 2.0
 	hp -= amount
 	Fx.number(at, amount, Color(1.0, 0.92, 0.75) if amount < 30 else Fx.GOLD, amount >= 30)
 	if hp <= 0.0:
 		die()
 	return true
+
+## Blade hits and charged shots wear the guard down; at zero: BREAK.
+func guard_hit(amount: float) -> void:
+	if dead or broken_t > 0.0 or not ai:
+		return
+	guard -= amount
+	guard_cd = 2.5
+	if guard <= 0.0:
+		guard = 0.0
+		guard_break()
+
+func guard_break() -> void:
+	broken_t = 4.0
+	stagger_t = maxf(stagger_t, 4.0)
+	if move != "":
+		_end(1.0)
+	Game.slowmo(0.35, 0.25)
+	Game.hit_stop(0.12)
+	Game.shake(0.9)
+	Fx.ink(global_position + Vector3(0, 1.4 * scale_f * 0.6, 0), 3.2, Fx.GOLD)
+	if Game.main:
+		Game.main.hud.break_slam()
+		Game.main.spawn_orbs(global_position + Vector3(0, 2.0, 0), 6, true)
+		if Game.player and Game.player.third:
+			Game.player.style.add("break", "break")
 
 func weakpoint_broken(wp) -> void:
 	disabled[wp.disables] = true

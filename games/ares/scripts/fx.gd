@@ -126,6 +126,8 @@ func tracer(from: Vector3, to: Vector3, color: Color, width := 0.05, life := 0.0
 	t.tween_callback(mi.queue_free)
 
 func light(pos: Vector3, color: Color, energy := 4.0, range_ := 6.0, life := 0.08) -> void:
+	if Game.lite:
+		return
 	var l = OmniLight3D.new()
 	l.light_color = color
 	l.light_energy = energy

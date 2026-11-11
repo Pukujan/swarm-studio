@@ -2,11 +2,20 @@ class_name Enemy
 extends CharacterBody3D
 ## Arena minions: they keep coming, reel and flash GOLD when they can be finished.
 
+## One model per kind: swap a minion's look by pointing its entry at another GLB
+## (the bronze automatons from Meshy drop in here). The model is cel-shaded on load.
+const MODELS := {
+	"grunt": "res://assets/models/Skeleton_Minion.glb",
+	"shield": "res://assets/models/Skeleton_Warrior.glb",
+	"caster": "res://assets/models/Skeleton_Mage.glb",
+	"checkpoint": "",   # built in code: a glowing orb with a checkpoint tag
+}
+
 const KINDS := {
-	"grunt": {"model": "Skeleton_Minion", "hp": 45.0, "speed": 7.0, "dmg": 9.0, "scale": 1.15},
-	"shield": {"model": "Skeleton_Warrior", "hp": 80.0, "speed": 5.5, "dmg": 12.0, "scale": 1.3},
-	"caster": {"model": "Skeleton_Mage", "hp": 38.0, "speed": 6.0, "dmg": 8.0, "scale": 1.15},
-	"checkpoint": {"model": "", "hp": 40.0, "speed": 9.0, "dmg": 7.0, "scale": 1.0},
+	"grunt": {"hp": 45.0, "speed": 7.0, "dmg": 9.0, "scale": 1.15},
+	"shield": {"hp": 80.0, "speed": 5.5, "dmg": 12.0, "scale": 1.3},
+	"caster": {"hp": 38.0, "speed": 6.0, "dmg": 8.0, "scale": 1.15},
+	"checkpoint": {"hp": 40.0, "speed": 9.0, "dmg": 7.0, "scale": 1.0},
 }
 
 var id := 0
@@ -78,7 +87,7 @@ func _ready() -> void:
 		model.add_child(label)
 		add_child(model)
 	else:
-		model = Look.model(d["model"])
+		model = (load(MODELS[kind]) as PackedScene).instantiate()
 		model.scale = Vector3.ONE * float(d["scale"])
 		model.rotation.y = PI
 		add_child(model)
