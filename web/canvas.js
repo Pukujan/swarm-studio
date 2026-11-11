@@ -1550,23 +1550,30 @@ els.form.addEventListener('submit', async e => {
   if (/^\/[a-z?]/i.test(brief)) {
     els.brief.value = ''
     slashPop.hidden = true
+    nextRoute?.done?.(null); nextRoute = null
     feed(null, `› ${brief}`, '')
     try { await runSlash(brief) } catch (err) { botMsg(`/${brief.slice(1).split(' ')[0]} failed: ${err.message}`) }
     return
   }
   // the chat follows the view: the app's next change, or an idea for the video
-  if (view === 'app' && shownRun()) { els.brief.value = ''; return appAsk(brief) }
-  if (view === 'video' && shownRun()) { els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
+  const skip = () => { nextRoute?.done?.(null); nextRoute = null }
+  if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
+  if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
-  if (hosted && !(await hosted.ready())) return
+  if (hosted && !(await hosted.ready())) return skip()
   const to = nextRoute || { from: shownRun(), selected: !!S.sel }
   nextRoute = null
-  const route = to.fresh ? 'new' : routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
-  if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); return commandOps.fix({ text: brief }) }
+  // a project's dock has already decided (web/project.js): its open version is what the words
+  // extend, whatever run this canvas happens to be showing
+  const route = to.fresh ? 'new' : to.route || routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
+  if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); to.done?.(null); return commandOps.fix({ text: brief }) }
   setAuto(true)
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}) }) }).catch(() => null)
+  const j = res ? await res.clone().json().catch(() => ({})) : {}
+  to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
-  else if (hosted && res) hosted.refuse(await res.json().catch(() => ({})))
+  else if (res?.status === 409) feed(null, 'The crew are still on the last change.', 'err')
+  else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
 })
 els.brief.addEventListener('keydown', e => {
@@ -6113,11 +6120,14 @@ window.swarm = {
   },
   // start a build from Projects or a project's dock (the second argument, once Auto, is ignored).
   // Without a project (Projects home) it is a new project; with one, `from` is the open version it extends
+  // It resolves to the new run's id (null when none started, { busy } while the last turn still builds)
   submit(text, auto = false, project = null, from = null) {
-    els.brief.value = text
-    nextRoute = project || from ? { project, from, selected: false } : { fresh: true }
-    if (view !== 'canvas') setView('canvas')
-    els.form.requestSubmit()
+    return new Promise(done => {
+      els.brief.value = text
+      nextRoute = project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done } : { fresh: true, done }
+      if (view !== 'canvas') setView('canvas')
+      els.form.requestSubmit()
+    })
   }
 }
 

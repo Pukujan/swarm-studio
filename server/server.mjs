@@ -14,7 +14,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
-import { extendBase, rehomeImages } from '../engine/extend.mjs'
+import { followUp, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
@@ -1581,19 +1581,28 @@ const server = createServer((req, res) => {
       }
       // A message inside an open build (from: its run) is that project's next version: the
       // last version is kept as it stands and the crew adds only what the message asks for
+      // (engine/extend.mjs followUp). While the last turn is still building, the next one waits:
+      // starting it would stop that build and lose what it was doing.
       const from = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
-      const base = from ? extendBase(readEvents(from), (() => { try { return JSON.parse(readFileSync(join(runsDir, from, 'plan.json'), 'utf8')) } catch { return null } })()) : null
-      if (base) {
+      const building = r => r && !r.done && !r.controller.signal.aborted && !r.events.some(e => e.type === 'error' && (e.where === 'run' || e.where === 'models'))
+      if (from && building(current) && (current.id === from || (input.project && projects.projectOf(current.id) === input.project))) {
+        res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'busy', run: current.id }))
+        return
+      }
+      const readRun = id => { const events = readEvents(id); if (!events) return null; let plan = null; try { plan = JSON.parse(readFileSync(join(runsDir, id, 'plan.json'), 'utf8')) } catch {} return { events, plan } }
+      const next = from ? followUp({ ask: String(input.brief).trim(), from, versions: (input.project && projects.get(input.project)?.versions.map(v => v.id)) || [], read: readRun }) : null
+      const base = next?.base || null
+      if (next) {
         input.ask = String(input.brief).trim()
-        input.brief = `${base.brief}\n\nFor this version: ${input.ask}`
-        input.base = base
+        input.brief = next.brief
+        if (base) input.base = base
       }
       const pid = typeof input.project === 'string' ? input.project : null
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (pid) projects.claim(run.id, pid)
       broadcast({ type: 'reset', run: run.id })
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(base ? { extend: true, from } : {}) }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(base ? { extend: true, from: next.from } : {}) }))
     })
     return
   }

@@ -72,6 +72,7 @@ Only if the request asks to change something already on an existing page, one li
 {"type":"change","page":"<existing page id>","layer":"<existing section id>","ask":"<exactly what to change in that section>"}
 
 Rules:
+- A section named without its page ("the hero", "the headline") is the one on the first page.
 - Never re-plan, repeat or rename an existing page. Never plan the navigation or footer: the navigation is updated for you so every new page is linked.
 - New pages belong to the same site: same product, same voice, the same page type and theme. Give each one a memorable, unusual section.
 - If the request is about something the site doesn't cover yet ("add more about X"), that is a new page about X. Put two related asks on one page only when they are small.
@@ -123,4 +124,24 @@ export function rehomeImages(base, runsDir, dir, id, { existsSync, mkdirSync, co
   for (const c of base.carry) if (c.type === 'layer:done' && c.data.html) c.data = { ...c.data, html: c.data.html.replace(/\/img\/[\w-]{1,64}\/[\w.-]+\.(?:png|jpe?g|webp)/g, s => moved.get(s) || s) }
   for (const l of [...base.shared, ...base.pages.flatMap(p => p.layers)]) l.html = l.html.replace(/\/img\/[\w-]{1,64}\/[\w.-]+\.(?:png|jpe?g|webp)/g, s => moved.get(s) || s)
   return moved.size
+}
+
+// A message sent inside an open project (from: the version on screen) is that project's next
+// turn. It extends the version on screen; when that version has nothing to extend (its build
+// failed, or no page finished), the project's newest version that does; and when none does, it
+// is built from the project's own brief plus the message, so "continue the work" stays the same
+// product instead of a new one made from those three words. versions: the project's runs, newest
+// first. read(id) gives { events, plan } or null.
+export function followUp({ ask, from, versions = [], read }) {
+  const ids = [...new Set([from, ...versions].filter(Boolean))]
+  const runs = ids.map(id => ({ id, ...(read(id) || {}) })).filter(r => Array.isArray(r.events))
+  for (const r of runs) {
+    const base = extendBase(r.events, r.plan || null)
+    if (base) return { from: r.id, base, brief: `${base.brief}\n\nFor this version: ${ask}` }
+  }
+  // the project's idea: its first site brief (a game's brief is not a site's)
+  const first = runs.map(r => r.events.find(e => e.type === 'run:start')).filter(s => s && s.kind !== 'game' && s.brief).at(-1)
+  const idea = first ? baseBrief(first.brief) : ''
+  if (!idea || idea === String(ask).trim()) return null
+  return { from: null, base: null, brief: `${idea}\n\nFor this version: ${ask}` }
 }
