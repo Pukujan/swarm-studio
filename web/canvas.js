@@ -6270,7 +6270,8 @@ function cwAssetTile(d, member, now, k = 0) {
   cwWho(d, member)
   const ranked = cwRanked(), live = k === 1 ? cwLive() : null
   const a = cw.av[k] ||= { src: '', name: '' }
-  const slice = String(appv.stage || '').match(/stage (\d+) of (\d+)/)
+  // the slice from the status line, else the build's last "stage n of N" step (the line often reads "next step")
+  const slice = String(appv.stage || '').match(/stage (\d+) of (\d+)/) || String(appv.steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text || '').match(/stage (\d+) of (\d+)/)
   let pic = null, label = '', state = ''
   if (k === 0) {
     pic = ranked[0] || null
