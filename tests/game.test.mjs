@@ -111,3 +111,22 @@ test("a game's models are copied into its app, and kept on a start over", async 
   assert.equal(copyModels(again, {}), 1)
   assert.ok(existsSync(join(again, 'public', 'models', 'Mage.glb')))
 })
+
+test('a runner gets side-view run and move sheets, painted after the hero sprite', async () => {
+  const { sheetList, sideView } = await import('../engine/game.mjs')
+  const runner = { hero: 'Mika, a girl courier in a yellow rain jacket; with Rust-8, a small rusty robot', pitch: 'A rooftop runner: jump and slide across the city' }
+  assert.equal(sideView(runner), true)
+  const s = sheetList(runner)
+  assert.deepEqual(s.map(x => x.id), ['sheet-hero-run', 'sheet-hero-moves'])
+  assert.ok(s.every(x => x.after === 'sprite-hero' && x.kind === 'sheet' && x.layout))
+  assert.ok(!/Rust-8/.test(s[0].look), 'a companion is left out of the figure')
+  assert.equal(sheetList({ hero: 'Senna', pitch: 'a top-down roguelike' })[0].id, 'sheet-hero-walk')
+  assert.deepEqual(sheetList({}), [])
+})
+
+test('the art brief tells the stage how to play a sheet', () => {
+  const b = artBrief([{ file: 'art/sheet-hero-run.webp', what: 'run sheet of Mika', kind: 'sheet', count: 6, cell: [511, 511], fps: 12, loop: true, frames: 'a run cycle' }])
+  assert.match(b, /6 frames side by side, each 511×511 px/)
+  assert.match(b, /12 fps, looping/)
+  assert.match(b, /sheet-hero-\*\.webp\) are its animation/)
+})

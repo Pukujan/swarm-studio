@@ -94,7 +94,10 @@ export function stepOf(line) {
 // Run the engine on a seeded workspace with a prompt. Resolves with the engine's
 // final JSON result ({ ok, gatesPassed, turns, files, commits, ... }).
 export async function runEngine({ workspace, prompt, provider, model, turns = 4, viewRender = true, onStep = () => {}, onLog = () => {}, signal }) {
+  // a stop pressed while the engine was still being set up (or between stages)
+  if (signal?.aborted) throw new Error('stopped')
   await setupEngine(t => onStep({ kind: 'setup', text: t }))
+  if (signal?.aborted) throw new Error('stopped')
   const meta = join(dirname(workspace), '.engine')
   mkdirSync(meta, { recursive: true })
   // dyad's saved chat keeps the model it began with, so each model gets its own data dir

@@ -307,6 +307,32 @@ export function artList(spec, { max = 26 } = {}) {
   return out
 }
 
+// The hero's moves as painted 3×2 sheets (the contract engine/skins.mjs paints ARES's outfits
+// with), from the hero's own painted sprite: each is cut into a strip of frames and checked.
+// A side-view game (a runner, a platformer) gets side-view moves; the rest face the viewer.
+export const SHEET_LAYOUT = 'Six frames in a 3 by 2 grid, read left to right, top to bottom. In every frame the character is small, about 45 percent of the grid cell height, centred, with wide empty space all around, so hair, clothes and anything held stay fully inside its own cell with a clear gap to the edges. Same character, same outfit, same size in every frame, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow'
+export const sideView = spec => /runner|platform|side.?scroll|parkour|\bjump|\bslide/i.test([spec?.pitch, spec?.loop, spec?.controls, spec?.genre, ...(spec?.skills || [])].join(' '))
+export function sheetList(spec) {
+  if (!spec?.hero) return []
+  const who = String(spec.hero).split(/[,—.]/)[0].trim()
+  const sheets = sideView(spec)
+    ? [
+        { name: 'run', fps: 12, loop: true, frames: 'a side-view run cycle facing right in six steps (contact, down, passing, up, contact, passing), legs and arms clearly in a new place each frame' },
+        { name: 'moves', fps: 8, frames: 'side view facing right: 1 crouch before a jump, 2 rising jump with knees tucked, 3 falling with arms up, 4 low slide along the ground, 5 hurt and knocked back, 6 landing in a crouch' }
+      ]
+    : [
+        { name: 'walk', fps: 10, loop: true, frames: 'facing the viewer: 1 and 2 standing and breathing, 3 to 6 a walk cycle' },
+        { name: 'action', fps: 12, frames: 'facing the viewer: 1 wind-up, 2 attack, 3 follow-through, 4 dash, 5 hurt, 6 knocked down' }
+      ]
+  return sheets.map(s => ({
+    id: `sheet-hero-${s.name}`, kind: 'sheet', aspect: 'landscape', after: 'sprite-hero', sheet: s.name, fps: s.fps, loop: !!s.loop, frames: s.frames, layout: SHEET_LAYOUT,
+    what: `${s.name} sheet of ${who}`,
+    // the figure alone: a companion named in the hero line ("with Rust-8, …") is left out
+    look: String(spec.hero).split(/[;,]\s*(?:with|and her|and his|followed by|accompanied by)\b/i)[0].slice(0, 320),
+    gen: `${who} ${s.name} sheet`
+  }))
+}
+
 // The fighters stand on the backdrops, so a backdrop holds no figures of its own.
 export const NO_PEOPLE = 'No people, creatures, figures, statues or faces anywhere in the picture: an empty place waiting for its characters'
 
@@ -322,8 +348,11 @@ export const FIGURE_RULES = `- Characters (hero, enemies, boss) are upright figu
 export function artBrief(files = []) {
   if (!files.length) return '- No painted art this time: draw every portrait, icon and backdrop in code (shapes, gradients, canvas textures).'
   return `- Painted art is in public/art/ (served at /art/…). Load these files and use them as named; keep a drawn-in-code stand-in if one fails to load, so the game never breaks:
-${files.map(f => `  - ${f.file}: ${f.what}`).join('\n')}
-  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the fighters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for; scale them so the hero stands about 72 px tall and the boss about twice that, and keep drawn shapes only for projectiles, effects and stand-ins. Room backdrops fill the arena floor under the action (darken them a little so the fighters read); portraits sit beside the dialogue box; boon icons sit on the boon cards and in the HUD and run summary; the title picture fills the title screen behind the menu.`
+${files.map(f => f.kind === 'sheet' && f.cell
+    ? `  - ${f.file}: ${f.what}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px (frame n starts at x = n×${f.cell[0]}, from 0), played at ${f.fps} fps${f.loop ? ', looping' : ', one frame per move'}. The frames: ${f.frames}`
+    : `  - ${f.file}: ${f.what}`).join('\n')}
+  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the fighters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for; scale them so the hero stands about 72 px tall and the boss about twice that, and keep drawn shapes only for projectiles, effects and stand-ins. Room backdrops fill the arena floor under the action (darken them a little so the fighters read); portraits sit beside the dialogue box; boon icons sit on the boon cards and in the HUD and run summary; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
+  The hero's sheets (sheet-hero-*.webp) are its animation: cut each strip into frames (Phaser: load.spritesheet with that frame size; Pixi: Texture frames from the strip), play the looping one while it moves and the move frames for each action, scaled so the figure is as tall as sprite-hero would be, and keep sprite-hero only for stills. These frames replace the bob and lean tweens for the hero; flip it to face left.` : ''}`
 }
 
 // The big game's build, one system group per stage. Each stage is its own

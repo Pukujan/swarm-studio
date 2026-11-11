@@ -14,7 +14,7 @@ import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
-import { gameSlug, isBig, artList, BIG_STAGES, bigStagePrompt } from './game.mjs'
+import { gameSlug, isBig, artList, sheetList, BIG_STAGES, bigStagePrompt } from './game.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
@@ -318,15 +318,24 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // to the next stage first; the last one gets a fix turn of its own.
   async function buildBig(j, id, dir, spec, engineCall, model, step, brand, input, from = 0) {
     let art = []
-    const items = artList(spec)
+    const items = [...artList(spec), ...sheetList(spec)]
     if (paint && input.art !== false) {
       step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
-      try { art = await paint(id, spec, items, dir, step) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+      try { art = await paint(id, spec, items, dir, step, j.controller.signal) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
     }
+    if (j.controller.signal.aborted) throw new Error('stopped')
     j.result = { ok: false, big: true, art: art.length, stages: [], turns: 0, commits: 0, files: 0, ...(from ? { resumedAt: from } : {}) }
+    // the image model ran out before any art landed: stop here and say so, rather than build a
+    // game of placeholder shapes. The owner picks another image model, Try again, or Draw in code.
+    if (art.stopped) {
+      j.result.artStop = art.stopped
+      if (!art.length) throw new Error(`No art: ${art.stopped.model} is out of quota. ${art.stopped.missing} pictures not painted.`)
+      step({ kind: 'setup', text: `${art.stopped.missing} of ${items.length} pictures missing: the game draws them in code`, ok: false })
+    }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
     let failed = from ? 'the last build stopped partway through this stage: some of its changes may already be in the code (git status shows them). Finish them or redo them.' : '', last = null
     for (let i = from; i < BIG_STAGES.length; i++) {
+      if (j.controller.signal.aborted) throw new Error('stopped')
       const st = BIG_STAGES[i], t = Date.now()
       step({ kind: 'setup', text: `stage ${i + 1} of ${BIG_STAGES.length}: ${st.name}` })
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
