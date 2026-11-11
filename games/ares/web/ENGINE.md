@@ -3,7 +3,7 @@
 `index.html` loads classic scripts in this order: `game.js` (core: loop, input, player,
 camera, hit rules), `sfx.js` (sound effects; it wraps the others at window `load`), `fx.js` (the FXK effects kit, may be missing), `stage.js` (stages, kits,
 camera zoom, titan, boons, chant), `boss.js` (boss fights), `enemies.js`, `foe-fx.js`, `boss-spells.js`,
-`foe-casts.js`, `spells.js`, `hazards.js`, `personality.js`, `intro.js`, `moves.js`, `trails.js`, `thousand.js`, `skywave.js`, `weapons.js`, `quake.js`, `icons.js`, `drops.js`, `mood.js`, `heroine-status.js`, and then calls
+`foe-casts.js`, `spells.js`, `hazards.js`, `personality.js`, `intro.js`, `moves.js`, `trails.js`, `thousand.js`, `skywave.js`, `weapons.js`, `quake.js`, `icons.js`, `drops.js`, `mood.js`, `heroine-status.js`, `look.js`, `pose-fit.js`, `loadout.js`, and then calls
 `ARES_BOOT()`. The last fifteen layer on top of the core by reassigning its top-level functions (a classic
 script's `function` declaration is a writable `window` property), so the core never calls them
 directly. Top-level `const`/`let` such as `FXK`, `CFG` and `RUN` are not on `window`: test them
@@ -454,6 +454,18 @@ and it rides the core's `frame` (no loop of its own), so the clock is the frame 
   screen x, and the master ducks to 70% while `voicePlaying()`.
 - URL: `?sfx=0` mutes, `?sfxvol=0.5`, `?sfxlog` records
   `SFXLOG {events, skipped, maxLive, cap, errors, loaded}` (voices too) for tests.
+
+## pose-fit.js
+
+Loaded after `look.js`, so its canvas transform covers the outline, rim and status layers. It wraps
+`pickAnim` and `drawSprite` for the heroine only:
+
+- Idle breaks (`m-tease`, `m-breeze`, `m-win` and the Oracle's `o-` ones) are painted taller than the idle;
+  they are drawn at the idle's height, scaled about her feet.
+- Into or out of a break, the old pose fades out over the new one for 0.18 s, and the idle resumes on the
+  frame nearest the break's last pose (`BACK`, measured from the default sheets).
+- The crouch (jump sheet frames 0-1 on the ground) is moved down so its lowest opaque row sits where the
+  idle's does. It is measured from the loaded image, so every outfit gets its own offset.
 
 ## loadout.js
 

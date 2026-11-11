@@ -4403,27 +4403,40 @@ function idleCard(e) {
     if (el.dataset.src !== src) { el.dataset.src = src; el.src = BASE + src }
   }
   // the first frame while the model works, then the clip in its place, then the loop beside it
-  if (e.state === 'making') show('start', e.start)
+  // (the keys route: the painted keyframes while the in-betweener works)
+  if (e.state === 'making' || e.state === 'tween') { media.querySelector('.ic-start')?.replaceWith(); show('start', e.start) }
   if (e.clip) { media.querySelector('.ic-start')?.replaceWith(); show('clip', e.clip) }
   if (e.sheet) show('sheet', e.sheet)
   if (e.state !== 'ask') return
+  // the video models Hermes offers, the picked one first: the button carries the chosen one's price
+  const options = e.options?.length ? e.options : [{ id: e.option, by: e.by, usd: e.usd, line: e.line }]
+  let pick = options[0]
   const go = document.createElement('button')
   go.className = 'primary'
-  go.textContent = `Animate · $${Number(e.usd).toFixed(2)}`
   const no = document.createElement('button')
-  no.textContent = 'Keep painted'
+  no.textContent = e.keys ? 'No clip' : 'Keep painted'
   const line = document.createElement('small')
   line.className = 'ic-line'
-  line.textContent = e.line || ''
+  const set = o => { pick = o; go.textContent = `Animate · $${Number(o.usd).toFixed(2)}`; line.textContent = o.line || '' }
+  set(pick)
+  let model = null
+  if (options.length > 1) {
+    model = document.createElement('select')
+    model.className = 'ic-model'
+    model.setAttribute('aria-label', 'Video model')
+    for (const o of options) model.append(new Option(o.by, o.id))
+    model.onchange = () => set(options.find(o => o.id === model.value) || options[0])
+  }
   const answer = ok => {
     go.disabled = no.disabled = true
-    api(`/api/runs/${encodeURIComponent(e.run)}/app/idle`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok, usd: e.usd }) })
+    if (model) model.disabled = true
+    api(`/api/runs/${encodeURIComponent(e.run)}/app/idle`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok, usd: pick.usd, option: pick.id }) })
       .then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`) })
-      .catch(err => { item.querySelector('.txt').textContent = `⚠ ${err.message}` })
+      .catch(err => { item.querySelector('.txt').textContent = `⚠ ${err.message}`; go.disabled = no.disabled = false; if (model) model.disabled = false })
   }
   go.onclick = () => answer(true)
   no.onclick = () => answer(false)
-  acts.append(go, no, line)
+  acts.append(...(model ? [model] : []), go, no, line)
 }
 async function sliceGo(text) {
   const s = appv.slice

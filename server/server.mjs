@@ -48,8 +48,8 @@ import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyb
 import { scoreWav, elevenScore } from '../engine/score.mjs'
 import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
-import { idleCost, idleKey, priceOk, idleAspect, idleStartName, idlePrompt, idleMessages, IDLE_SECONDS, IDLE_SAY } from '../engine/idle.mjs'
-import { heavyConfig, runHeavy } from '../engine/heavy.mjs'
+import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idleMessages, IDLE_SAY } from '../engine/idle.mjs'
+import { heavyConfig, runHeavy, interpOf } from '../engine/heavy.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -1266,44 +1266,59 @@ const cutPy = () => (cutPyP ||= (async () => {
 // what a stage is told about a sheet: its frame size and timing, from the cut
 const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: meta.fps || it.fps, loop: meta.loop ?? it.loop, frames: meta.video ? IDLE_FRAMES : it.frames } : {})
 const IDLE_FRAMES = 'a looping idle from a video clip: breathing, a small sway of weight, a blink'
-// The video idle's go-ahead (engine/idle.mjs): with a video model signed in, the chat asks once
-// with the clip's price on the button; the build's own input can carry the yes at that price
-// ({ idle: { usd } }) or a no ('no'). No answer in a few minutes is a no: nothing is spent unasked.
-const idleAsks = new Map() // run id -> { cost, resolve }
+// The animated idle's go-ahead (engine/idle.mjs). With a video model signed in, the chat asks once,
+// with the picked model's price on the button and the other video models Hermes offers beside it
+// (the pick is kept in models.json as `idle`); the build's own input can carry the yes at that
+// price ({ idle: { usd, video } }) or a no ('no'). No answer in a few minutes is a no: nothing is
+// spent unasked. Without a video model, or on a no, the keys route runs when an in-betweener is
+// set up (close painted keyframes, RIFE between them); else the painted idle stays.
+const idleAsks = new Map() // run id -> { options, resolve }
 const IDLE_ASK_MS = Number(process.env.SWARM_IDLE_ASK_MS) || 5 * 60e3
+const idleChoices = async () => idleOptions(await loadVideoProviders().catch(() => []), picks.idle)
 async function idleGate(runId, spec, pre, signal) {
-  // made before (a Try again): the video sheet is kept with the run and used again
-  try { if (JSON.parse(readFileSync(join(runsDir, runId, 'img', 'game-sheet-hero-idle.json'), 'utf8')).video) return [] } catch {}
-  const media = await mediaNow().catch(() => null)
-  if (!media?.clips?.on) return [] // no video model: the painted sheets stay
-  const v = (await loadVideoProviders()).find(x => x.provider === media.clips.provider && x.available)
-  const cost = idleCost({ ...media.clips, model: v?.model || '' })
+  // made before (a Try again): the animated sheet is kept with the run and used again
+  try { const m = JSON.parse(readFileSync(join(runsDir, runId, 'img', 'game-sheet-hero-idle.json'), 'utf8')); if (m.video || m.keys) return [] } catch {}
   const g = await gameMod()
   const who = String(spec.hero || 'the hero').split(/[,—.;]/)[0].trim()
   const said = (state, extra = {}) => record(runId, { type: 'game:idle', t: Date.now(), run: runId, state, who, ...extra })
-  let yes
-  if (pre && typeof pre === 'object' && priceOk(cost, pre.usd)) yes = true
-  else {
-    said('ask', { text: IDLE_SAY.ask(who), line: cost.line, usd: cost.usd, by: cost.by })
-    yes = await new Promise(resolve => {
-      const end = ok => { clearTimeout(t); signal?.removeEventListener?.('abort', stop); idleAsks.delete(runId); resolve(ok) }
+  const interp = interpOf(heavyConfig(dataDir))
+  const keys = why => {
+    if (!interp) { said('no', { text: why }); return [] }
+    said('keys', { text: `${why}; ${interp.name} will fill in the frames between close keyframes` })
+    return g.idleSheets(spec, undefined, 'keys')
+  }
+  const options = pre === 'no' ? [] : await idleChoices()
+  if (!options.length) return keys(pre === 'no' ? 'No clip' : 'No video model, so no clip')
+  let chosen = null
+  if (pre && typeof pre === 'object') { const o = optionOf(options, pre.video); if (priceOk(o, pre.usd)) chosen = o }
+  if (!chosen) {
+    const def = options[0]
+    said('ask', { text: IDLE_SAY.ask(who), line: def.line, usd: def.usd, by: def.by, option: def.id, options: options.map(({ id, by, usd, line }) => ({ id, by, usd, line })), keys: interp?.name || null })
+    chosen = await new Promise(resolve => {
+      const end = o => { clearTimeout(t); signal?.removeEventListener?.('abort', stop); idleAsks.delete(runId); resolve(o) }
       const stop = () => end(false)
       const t = setTimeout(() => end(null), IDLE_ASK_MS)
       signal?.addEventListener?.('abort', stop)
-      idleAsks.set(runId, { cost, resolve: end })
+      idleAsks.set(runId, { options, resolve: end })
     })
   }
-  if (!yes) { said('no', { text: yes === null ? 'No answer, so I kept the painted idle' : IDLE_SAY.no() }); return [] }
-  said('yes', { text: `Animating ${who}'s idle`, line: cost.line, usd: cost.usd })
+  if (!chosen) return signal?.aborted ? [] : keys(chosen === null ? 'No answer, so no clip' : 'No clip')
+  said('yes', { text: `Animating ${who}'s idle with ${chosen.by}`, line: chosen.line, usd: chosen.usd, option: chosen.id })
   const more = g.idleSheets(spec)
-  for (const m of more) if (m.video) m.cost = { ...cost, model: v?.model || '' }
+  for (const m of more) if (m.video) m.option = chosen
   return more
 }
 function idleAnswer(id, input) {
   const a = idleAsks.get(id)
   if (!a) throw new Error('that question has closed')
-  if (input.ok === true && !priceOk(a.cost, input.usd)) { const e = new Error(`the price changed: ${a.cost.line}`); e.status = 402; throw e }
-  a.resolve(input.ok === true)
+  if (input.ok !== true) { a.resolve(false); return { ok: true } }
+  const o = optionOf(a.options, input.option)
+  if (!o) { const e = new Error('that video model is not offered'); e.status = 400; throw e }
+  if (!priceOk(o, input.usd)) { const e = new Error(`the price changed: ${o.line}`); e.status = 402; throw e }
+  // the model picked is the next build's default
+  picks.idle = { provider: o.provider, model: o.model }
+  try { mkdirSync(dataDir, { recursive: true }); writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {}
+  a.resolve(o)
   return { ok: true }
 }
 // have: the art painted before (a mid-build ask): a sheet can be painted over one of those
@@ -1321,21 +1336,23 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   // a picture painted for this game before (a build stopped by a restart, a Try again)
   // is kept with the run: it is used again, not painted and paid for again
   const kept = (() => { try { return readdirSync(join(runsDir, runId, 'img')).filter(f => /^game-.*\.(png|jpe?g|webp)$/i.test(f) && !/-check\./.test(f)) } catch { return [] } })()
-  for (const it of [...queue]) {
+  const reuse = it => {
     const f = kept.find(k => k.replace(/\.[a-z]+$/i, '') === `game-${it.id}`)
-    if (!f) continue
+    if (!f) return false
     let meta = null
-    if (it.kind === 'sheet') { try { meta = JSON.parse(readFileSync(join(runsDir, runId, 'img', `game-${it.id}.json`), 'utf8')) } catch { continue } }
+    if (it.kind === 'sheet') { try { meta = JSON.parse(readFileSync(join(runsDir, runId, 'img', `game-${it.id}.json`), 'utf8')) } catch { return false } }
     const file = `art/${it.id}${extname(f)}`
     copyFileSync(join(runsDir, runId, 'img', f), join(appDir, 'public', file))
     done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}), ...sheetInfo(it, meta) })
-    queue.splice(queue.indexOf(it), 1)
+    return true
   }
+  for (const it of [...queue]) if (reuse(it)) queue.splice(queue.indexOf(it), 1)
   // the hero's idle from a video clip (engine/idle.mjs): asked for at the clip's price while the
   // rest paints; a yes adds the painted idle (its first frame is animated) and the video one
   let idleWait = null
-  if (items.some(i => i.id === 'sprite-hero') && idle !== 'no') {
-    idleWait = idleGate(runId, spec, idle, signal).then(more => { for (const m of more) if (!items.some(i => i.id === m.id) && !done.has(m.id)) { queue.push(m); items.push(m) } })
+  if (items.some(i => i.id === 'sprite-hero')) {
+    // (the idle's own pictures kept from a build before, such as its keyframes, are used again)
+    idleWait = idleGate(runId, spec, idle, signal).then(more => { for (const m of more) if (!items.some(i => i.id === m.id) && !done.has(m.id)) { items.push(m); if (!reuse(m)) queue.push(m) } })
       .catch(err => step({ kind: 'setup', text: `no video idle: ${String(err.message || err).slice(0, 120)}`, ok: false }))
       .finally(() => { idleWait = null })
   }
@@ -1377,12 +1394,14 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     for (;;) {
       if (signal?.aborted) return null
       // the image model ran out: no more pictures are tried, but the video idle (another
-      // provider, asked for at its own price) still goes on, from the sprite
-      const open = q => !stopped || q.video
+      // provider, asked for at its own price) and the in-betweening of kept keyframes still go on
+      const open = q => !stopped || q.video || q.tween
       // a reference (ref) is waited for while it is being painted, but its failure drops nothing
       const pending = id => busy.has(id) || (!stopped && queue.some(o => o.id === id))
       const i = queue.findIndex(q => open(q) && (!q.after || done.has(q.after)) && (!q.ref || !pending(q.ref)))
       if (i >= 0) { const [it] = queue.splice(i, 1); busy.add(it.id); return it }
+      // out of quota: what can no longer be painted is dropped, and with it what waits on it
+      if (stopped) for (const q of [...queue]) if (!open(q)) queue.splice(queue.indexOf(q), 1)
       for (const q of [...queue]) if (q.after && !done.has(q.after) && !busy.has(q.after) && !queue.some(o => o.id === q.after)) queue.splice(queue.indexOf(q), 1)
       if (!queue.some(open) && !idleWait) return null
       await new Promise(r => setTimeout(r, 1000))
@@ -1391,6 +1410,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   const worker = async slot => {
     for (let it; (it = await next()); busy.delete(it.id)) {
       if (it.kind === 'sheet' && it.video) { await videoSheet(slot, it); continue }
+      if (it.kind === 'sheet' && it.tween) { await tweenSheet(slot, it); continue }
       if (it.kind === 'sheet') { await paintSheet(slot, it); continue }
       live(slot, it, 'painting')
       const refFile = it.ref && done.get(it.ref)?.file
@@ -1524,11 +1544,17 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   // (scripts/idle_sheet.py through engine/heavy.mjs) and checked frame by frame. It replaces the
   // painted idle only when it passes; otherwise the painted one stays.
   async function videoSheet(slot, it) {
-    const say = (state, extra = {}) => record(runId, { type: 'game:idle', t: Date.now(), run: runId, state, who: it.who, ...extra })
-    const fail = (why, extra = {}) => {
+    const say = idleSay(it)
+    const fail = async (why, extra = {}) => {
       live(slot, it, 'failed', { problems: [String(why).slice(0, 80)] })
-      say('failed', { text: IDLE_SAY.failed(why), ...extra })
-      step({ kind: 'setup', text: `kept the painted idle: ${why}`, ok: false })
+      // the next route: close keyframes and the in-betweener, when one is set up
+      // (keyframes kept from a build before are used again, even with the image model out)
+      const interp = interpOf(heavyConfig(dataDir)), g = await gameMod()
+      const next = interp ? g.idleKeySheets(spec).filter(m => !items.some(i => i.id === m.id)) : []
+      const go = next.length && (done.has(next[0].id) || reuse(next[0]) || !stopped)
+      say('failed', { text: go ? `${why}; ${interp.name} will fill in the frames between close keyframes` : IDLE_SAY.failed(why), ...extra })
+      step({ kind: 'setup', text: `${go ? 'no video idle' : 'kept the painted idle'}: ${why}`, ok: false })
+      if (go) for (const m of next) { items.push(m); if (!done.has(m.id)) queue.push(m) }
     }
     const base = done.get(it.ref), sprite = done.get('sprite-hero')
     const strip = base?.file && join(appDir, 'public', base.file)
@@ -1537,39 +1563,73 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     if (!src || !existsSync(src)) return fail('no painted frame to animate')
     const py = await cutPy()
     if (!py) return fail('no Python with numpy and scipy (set SWARM_CUT_PY)')
-    const key = idleKey(it.look), aspect = idleAspect(it.cost.provider)
+    const o = it.option, key = idleKey(it.look), aspect = o.aspect
     const startName = idleStartName(runId), start = join(imgDir, startName)
     const made = await new Promise(ok => execFile(py, [join(root, 'scripts', 'idle_sheet.py'), 'start', src, start, '--cell', String(fromStrip ? base.cell[0] : 0), '--key', key.hex, '--aspect', aspect], { timeout: 60000 }, err => ok(!err)))
     if (!made || !existsSync(start)) return fail('could not make the first frame')
     live(slot, it, 'painting', { src: img(startName) })
-    say('making', { text: IDLE_SAY.making(it.cost.by), start: img(startName), line: it.cost.line })
+    say('making', { text: IDLE_SAY.making(o.by), start: img(startName), line: o.line })
     const tag = randomBytes(4).toString('hex'), clipName = `idle-${tag}.mp4`, clip = join(imgDir, clipName)
-    const v = await videogen(['--provider', it.cost.provider, ...(it.cost.model ? ['--model', it.cost.model] : []), '--image', start, '--seconds', String(IDLE_SECONDS), '--aspect', aspect, '--out', clip, idlePrompt({ who: it.who, look: it.look, key })], 900000)
+    const v = await videogen(['--provider', o.provider, ...(o.model ? ['--model', o.model] : []), '--image', start, '--seconds', String(o.seconds), '--aspect', aspect, '--out', clip, idlePrompt({ who: it.who, look: it.look, key, tune: o.tune })], 900000)
     if (!v.ok || !existsSync(clip)) return fail(`the video model made no clip (${String(v.error || 'no answer').slice(0, 100)})`)
     say('clip', { text: IDLE_SAY.clip(), clip: `/img/${runId}/${clipName}`, model: v.model || null })
     live(slot, it, 'cutting', { src: img(startName) })
     const heavy = heavyConfig(dataDir)
     const out = `idle-${tag}.webp`, outs = [out, `idle-${tag}.json`, `idle-${tag}-check.png`, `idle-${tag}-loop.webp`]
-    const r = await runHeavy({ config: heavy, script: join(root, 'scripts', 'idle_sheet.py'), files: [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), clip], args: ['sheet', clipName, out, ...(heavy.rife ? ['--rife', heavy.rife] : [])], outputs: outs, outDir: imgDir, timeout: 600000 })
+    const r = await runHeavy({ config: heavy, script: join(root, 'scripts', 'idle_sheet.py'), files: [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), clip], args: ['sheet', clipName, out, ...(interpOf(heavy)?.args || [])], outputs: outs, outDir: imgDir, timeout: 600000 })
+    await idleKeep(slot, it, r, outs, fail, 'the clip could not be cut into a loop', meta => ({
+      how: 'the clip', step: `animated the ${it.who} idle from a ${o.by} clip: ${meta.frames} frames at ${meta.fps} fps${meta.video?.rife ? `, ${meta.video.rife} in-between frames on the seam` : ''}`
+    }))
+  }
+  const idleSay = it => (state, extra = {}) => record(runId, { type: 'game:idle', t: Date.now(), run: runId, state, who: it.who, ...extra })
+  // a made idle sheet back from the heavy machine: the numbers, then the reviewer on every frame;
+  // a pass replaces the painted idle in the game
+  async function idleKeep(slot, it, r, outs, fail, cutWhy, said) {
+    const say = idleSay(it)
     let meta = null
     try { meta = JSON.parse(readFileSync(join(imgDir, outs[1]), 'utf8')) } catch {}
-    if (!r.ok || !meta || !existsSync(join(imgDir, out))) return fail(`the clip could not be cut into a loop (${(r.err.trim().split('\n').pop() || 'no sheet').slice(0, 100)})`)
-    say('sheet', { text: IDLE_SAY.sheet(meta.frames), sheet: img(outs[3]), check: img(outs[2]), where: r.where, rife: meta.video?.rife || 0 })
+    if (!r.ok || !meta || !existsSync(join(imgDir, outs[0]))) return fail(`${cutWhy} (${(r.err.trim().split('\n').pop() || 'no sheet').slice(0, 100)})`)
+    say('sheet', { text: IDLE_SAY.sheet(meta.frames), sheet: img(outs[3]), check: img(outs[2]), where: r.where, rife: meta.video?.rife || meta.keys?.made || 0 })
     live(slot, it, 'checking', { src: img(outs[2]) })
-    // the numbers (edges, size, jumps, key colour left), then the reviewer on every frame
     const look = await checkArt(join(imgDir, outs[2]), guide, (_, image) => idleMessages(it.what, image))
     const problems = [...(meta.qc?.problems || []), ...(look.skipped ? [] : look.problems)]
     if (problems.length) return fail(problems.slice(0, 2).join(', '), { sheet: img(outs[3]), check: img(outs[2]) })
-    const { file, name } = keep({ id: it.replaces }, join(imgDir, out))
+    const { file, name } = keep({ id: it.replaces }, join(imgDir, outs[0]))
     writeFileSync(join(imgDir, name.replace(/\.[a-z]+$/i, '.json')), JSON.stringify(meta))
     done.set(it.replaces, { file, what: `idle loop of ${it.who}`, kind: 'sheet', ...sheetInfo({ kind: 'sheet' }, meta) })
     live(slot, it, 'done', { src: img(outs[2]) })
-    say('done', { text: IDLE_SAY.done(meta.frames), sheet: img(outs[3]), check: img(outs[2]), fps: meta.fps, frames: meta.frames, reviewed: !look.skipped })
-    step({ kind: 'setup', text: `animated the ${it.who} idle from a ${it.cost.by} clip: ${meta.frames} frames at ${meta.fps} fps${meta.video?.rife ? `, ${meta.video.rife} RIFE frames on the seam` : ''}` })
+    const w = said(meta)
+    say('done', { text: IDLE_SAY.done(meta.frames, w.how), sheet: img(outs[3]), check: img(outs[2]), fps: meta.fps, frames: meta.frames, reviewed: !look.skipped })
+    step({ kind: 'setup', text: w.step })
+  }
+  // The keys route: the close keyframes (painted over the sprite, cut like any sheet) back on the
+  // key colour, the frames between them made by the in-betweener, checked for ghost blends. A
+  // failure (keys too far apart, a ghost) keeps the painted idle.
+  async function tweenSheet(slot, it) {
+    const say = idleSay(it)
+    const fail = why => {
+      live(slot, it, 'failed', { problems: [String(why).slice(0, 80)] })
+      say('failed', { text: IDLE_SAY.failed(why) })
+      step({ kind: 'setup', text: `kept the painted idle: ${why}`, ok: false })
+    }
+    const heavy = heavyConfig(dataDir), interp = interpOf(heavy)
+    if (!interp) return fail('no in-betweener set up')
+    const keysFile = done.get(it.after)?.file, strip = keysFile && join(appDir, 'public', keysFile)
+    const meta = join(imgDir, `game-${it.after}.json`)
+    if (!strip || !existsSync(strip) || !existsSync(meta)) return fail('no keyframes')
+    live(slot, it, 'painting', { src: img(`game-${it.after}${extname(strip)}`) })
+    say('tween', { text: IDLE_SAY.tween(interp.name), start: img(`game-${it.after}${extname(strip)}`) })
+    const tag = randomBytes(4).toString('hex'), out = `idle-${tag}.webp`, outs = [out, `idle-${tag}.json`, `idle-${tag}-check.png`, `idle-${tag}-loop.webp`]
+    const sName = `keys-${tag}${extname(strip)}`, mName = `keys-${tag}.json`
+    copyFileSync(strip, join(imgDir, sName)); copyFileSync(meta, join(imgDir, mName))
+    const r = await runHeavy({ config: heavy, script: join(root, 'scripts', 'idle_sheet.py'), files: [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), join(imgDir, sName), join(imgDir, mName)], args: ['keys', sName, mName, out, '--key', idleKey(it.look).hex, ...interp.args], outputs: outs, outDir: imgDir, timeout: 600000 })
+    await idleKeep(slot, it, r, outs, fail, 'the keyframes could not be in-betweened', m => ({
+      how: `${m.keys?.keys || 4} keyframes and ${interp.name}`, step: `animated the ${it.who} idle from ${m.keys?.keys || 4} close keyframes with ${interp.name}: ${m.frames} frames at ${m.fps} fps, no ghost blends`
+    }))
   }
   await Promise.all(PAINTERS.map((_, i) => worker(i)))
   artJobs.delete(runId)
-  const out = items.map(i => done.get(i.id)).filter(Boolean)
+  const out = items.filter(i => !i.keys).map(i => done.get(i.id)).filter(Boolean)
   // out of quota: the build is told which pictures are missing and which model ran out
   if (stopped) out.stopped = { ...stopped, painted: out.length, missing: items.length - out.length }
   return out
@@ -2602,9 +2662,11 @@ const server = createServer((req, res) => {
   }
 
   if (url.pathname === '/api/models' && req.method === 'GET') {
-    Promise.all([listModels('planner'), listModels('reviewer'), loadImageProviders()]).then(([text, vision, image]) => {
+    Promise.all([listModels('planner'), listModels('reviewer'), loadImageProviders(), idleChoices().catch(() => [])]).then(([text, vision, image, idleOpts]) => {
       const roles = Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), hermes: models[r].model, host: host(models[r].baseUrl), picked: picks[r] || null }]))
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image } }))
+      // the idle's video model: the pick and every video model Hermes offers, with its price
+      const idle = { pick: picks.idle || null, options: idleOpts, interp: interpOf(heavyConfig(dataDir))?.name || null }
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image }, idle }))
     })
     return
   }
@@ -2626,6 +2688,11 @@ const server = createServer((req, res) => {
         if (input.provider === 'off') picks.image = 'off'
         else if (input.provider) picks.image = { provider: input.provider, model: input.model || '' }
         else delete picks.image
+      } else if (input.role === 'idle' && (input.provider === 'off' || input.provider === null || (name(input.provider) && (!input.model || name(input.model))))) {
+        // the video model the hero's idle is animated with ('off': no clips, the keys route)
+        if (input.provider === 'off') picks.idle = 'off'
+        else if (input.provider) picks.idle = { provider: input.provider, model: input.model || '' }
+        else delete picks.idle
       } else {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'bad pick' }))
         return
