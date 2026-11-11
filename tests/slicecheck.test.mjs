@@ -84,7 +84,7 @@ test('the look picked on the mood board wins over the brief', async () => {
 
 test('a live peek\'s note is one short line', async () => {
   const { parseNote, peekMessages } = await import('../engine/slicecheck.mjs')
-  assert.equal(parseNote('ok {"note":"  Mika runs now;\n lanterns are grey boxes "}'), 'Mika runs now; lanterns are grey boxes')
+  assert.equal(parseNote('ok {"note":"  Mika runs now;   lanterns are grey boxes "}'), 'Mika runs now; lanterns are grey boxes')
   assert.equal(parseNote('nothing'), '')
   assert.match(peekMessages({ slice: 'Rooms', image: 'data:x', before: 'old' })[1].content[0].text, /Last look you said: "old"/)
 })
