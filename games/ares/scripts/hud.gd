@@ -474,6 +474,14 @@ func _draw_story(S: float, W: float, H: float) -> void:
 		src.size.x = nw
 	draw_set_transform(pr.get_center(), -0.015, Vector2.ONE)
 	var lr = Rect2(-pr.size * 0.5, pr.size)
+	# a portrait image is narrower than the panel: keep the crop inside the picture and
+	# narrow the panel to match, instead of smearing its edge pixels
+	var inside: Rect2 = src.intersection(Rect2(0, 0, tw, th))
+	if inside.size.x < src.size.x - 0.5 or inside.size.y < src.size.y - 0.5:
+		var k = lr.size / src.size
+		lr = Rect2(lr.position + (inside.position - src.position) * k, inside.size * k)
+		lr.position = -lr.size * 0.5
+		src = inside
 	draw_rect(lr.grow(14 * S), Color(GOLD, a))
 	draw_rect(lr.grow(8 * S), Color(INK, a))
 	draw_texture_rect_region(panel_tex, lr, src, Color(tint, a))

@@ -55,8 +55,10 @@ func _ready() -> void:
 	Game.main = self
 	_setup_input()
 	_load_bosses()
+	Look.scenery = true
 	_build_world()
 	_build_arena()
+	Look.scenery = false
 	player = Player.new()
 	add_child(player)
 	player.global_position = Vector3(0, 0.2, 16)
@@ -86,6 +88,8 @@ func _ready() -> void:
 	for i in bosses.size():
 		if String(bosses[i].get("handle")).to_lower() == want.to_lower():
 			index = i
+	if Game.arg("count-inst", false):
+		get_tree().create_timer(3.0).timeout.connect(func(): print("INST ", Look.count_instance_users(self)))
 	if Game.arg("cards", false):
 		tour = true
 		_set_state("tour")

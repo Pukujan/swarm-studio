@@ -9,6 +9,10 @@ const TELEGRAPH := preload("res://shaders/telegraph.gdshader")
 static var _toons := {}
 static var _outlines := {}
 static var _scenes := {}
+static var _statics := {}
+## While true, new toon materials come out static (scenery being built).
+static var scenery := false
+static var _static_shader: Shader
 
 static func outline(width: float) -> ShaderMaterial:
 	var key = snappedf(width, 0.001)
@@ -23,7 +27,7 @@ static func outline(width: float) -> ShaderMaterial:
 static func toon(tex: Texture2D, color: Color, emit := Color(0, 0, 0), emit_strength := 0.0, ow := 0.02) -> ShaderMaterial:
 	var key = "%d|%s|%s|%.2f|%.3f" % [tex.get_instance_id() if tex else 0, color.to_html(), emit.to_html(), emit_strength, ow]
 	if _toons.has(key):
-		return _toons[key]
+		return _static_of(_toons[key]) if scenery else _toons[key]
 	var m = ShaderMaterial.new()
 	m.shader = TOON
 	if tex:
@@ -37,7 +41,56 @@ static func toon(tex: Texture2D, color: Color, emit := Color(0, 0, 0), emit_stre
 	if ow > 0.0:
 		m.next_pass = outline(ow)
 	_toons[key] = m
-	return m
+	return _static_of(m) if scenery else m
+
+## Scenery never flashes or fades, but every instance of a shader with instance uniforms
+## takes slots in a buffer WebGL caps at 1024 (4 per toon mesh). Swap static scenery to a
+## twin shader whose per-instance values are plain uniforms.
+static func make_static(root: Node) -> void:
+	for g in root.find_children("*", "GeometryInstance3D", true, false):
+		if g is MeshInstance3D:
+			var mi := g as MeshInstance3D
+			if mi.material_override:
+				mi.material_override = _static_of(mi.material_override)
+			if mi.mesh:
+				for i in mi.mesh.get_surface_count():
+					var m = mi.get_surface_override_material(i)
+					if m:
+						mi.set_surface_override_material(i, _static_of(m))
+
+static func _static_of(m: Material) -> Material:
+	if not (m is ShaderMaterial and (m as ShaderMaterial).shader == TOON):
+		return m
+	if _statics.has(m):
+		return _statics[m]
+	if _static_shader == null:
+		_static_shader = Shader.new()
+		_static_shader.code = TOON.code.replace("instance uniform", "uniform")
+	var d: ShaderMaterial = m.duplicate()
+	d.shader = _static_shader
+	_statics[m] = d
+	return d
+
+## How many live instances use instance uniforms (WebGL holds 1024 slots, 4 per toon mesh).
+static func count_instance_users(root: Node) -> Dictionary:
+	var out := {}
+	for g in root.find_children("*", "GeometryInstance3D", true, false):
+		var mats := []
+		var gi := g as GeometryInstance3D
+		if gi.material_override:
+			mats.append(gi.material_override)
+		if g is MeshInstance3D and g.mesh:
+			for i in g.mesh.get_surface_count():
+				mats.append(g.get_active_material(i))
+		for m in mats:
+			if m is ShaderMaterial and m.shader and m.shader.code.contains("instance uniform"):
+				var top = g
+				while top.get_parent() and top.get_parent() != root:
+					top = top.get_parent()
+				var k = "%s:%s" % [top.name, m.shader.resource_path.get_file()]
+				out[k] = out.get(k, 0) + 1
+				break
+	return out
 
 static func model(file: String) -> Node3D:
 	var path = "res://assets/models/%s.glb" % file

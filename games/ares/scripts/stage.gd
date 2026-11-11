@@ -56,6 +56,7 @@ func apply(name_: String) -> void:
 		_root.queue_free()
 	_root = Node3D.new()
 	add_child(_root)
+	Look.scenery = true
 	_rng.seed = hash(name_)
 	_air()
 	_backdrop()
@@ -72,6 +73,7 @@ func apply(name_: String) -> void:
 		_obelisks()
 	_rim_fire(520 if theme["ruin"] != "broken" else 200)
 	_embers()
+	Look.scenery = false
 
 # ------------------------------------------------------------- air -------
 
