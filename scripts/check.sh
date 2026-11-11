@@ -32,6 +32,7 @@ curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<title>Swarm Studio'
 get /api/state; has '"working"'
 get /api/runs
 get /api/game; has '"questions"'
+get /api/meshy; has '"ready"'; has '"credits":35'
 get /api/intake; has '"showcases"'; has '"game"'
 get /api/packs; has '"events"'
 curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; grep -q '__SWARM_TOKEN__' "$tmp/reply" && { echo 'the wall has no token'; exit 1; }

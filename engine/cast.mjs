@@ -257,26 +257,48 @@ export const hasCombat = spec => /fight|combat|boss|shoot|attack|weapon|kill|ene
 // must point at one of the two sources, and its text is cut short.
 const SOURCE_URL = /^https:\/\/(hub\.vroid\.com|sketchfab\.com)\//
 const cut = (v, n) => String(v ?? '').slice(0, n)
+const ART_URL = /^\/img\/[\w-]{1,64}\/[\w.-]{1,80}\.(png|jpe?g|webp)$/
+const MODEL_FILE = /^[\w.-]{1,80}\.(vrm|glb|gltf|fbx)$/i
+const base = c => ({ role: cut(c.role, 40), label: cut(c.label, 40), name: cut(c.name, 120), creator: cut(c.creator, 80) })
+// Two more sources need no outside page (spec 20): a model made with Meshy from the
+// project's own art (it must name its file), and the art itself as a 2.5D sprite.
+const ownPick = c => c.source === 'meshy'
+  ? (MODEL_FILE.test(String(c.file || '')) && /\.glb$/i.test(c.file)
+      ? { ...base(c), url: '', source: 'meshy', format: 'gltf', rigged: true, file: String(c.file),
+          clips: Object.fromEntries(['walk', 'run'].filter(k => MODEL_FILE.test(String(c.clips?.[k] || ''))).map(k => [k, String(c.clips[k])])),
+          licence: { restyle: true, creditRequired: false, credit: 'Made from the project\'s own art with Meshy' } }
+      : null)
+  : c.source === 'art'
+    ? (ART_URL.test(String(c.art || '')) ? { ...base(c), url: '', source: 'art', format: 'sprite', art: String(c.art), licence: { restyle: false, creditRequired: false, credit: 'The project\'s own art' } } : null)
+    : undefined
 export const cleanCast = cast => (Array.isArray(cast) ? cast : [])
-  .filter(c => c && SOURCE_URL.test(String(c.url || '')) && !BANNED_HOSTS.test(String(c.url)))
+  .map(c => (c && typeof c === 'object' ? ownPick(c) ?? (SOURCE_URL.test(String(c.url || '')) && !BANNED_HOSTS.test(String(c.url)) ? c : null) : null))
+  .filter(Boolean)
   .slice(0, 4)
-  .map(c => ({
-    role: cut(c.role, 40), label: cut(c.label, 40), name: cut(c.name, 120), creator: cut(c.creator, 80), url: cut(c.url, 300),
+  .map(c => c.source === 'meshy' || c.source === 'art' ? c : ({
+    ...base(c), url: cut(c.url, 300),
     source: c.source === 'vroid' ? 'vroid' : 'sketchfab', format: c.format === 'vrm' ? 'vrm' : 'gltf', vrm: c.vrm === '1.0' ? '1.0' : c.format === 'vrm' ? '0.x' : undefined,
-    ...(/^[\w.-]{1,80}\.(vrm|glb|gltf|fbx)$/i.test(String(c.file || '')) ? { file: String(c.file) } : {}),
+    ...(MODEL_FILE.test(String(c.file || '')) ? { file: String(c.file) } : {}),
     licence: { restyle: c.licence?.restyle !== false, creditRequired: c.licence?.creditRequired !== false, credit: cut(c.licence?.credit || `“${c.name}” by ${c.creator}`, 240) }
   }))
 
+// The sprite file a game gets for an art pick: models/<role>.<ext>.
+export const spriteFile = c => `${String(c.role || 'hero').replace(/[^\w-]/g, '') || 'hero'}${String(c.art).match(/\.\w+$/)[0]}`
+
 // The credits file a game ships with, from its cast.
 export const castCredits = cast => cleanCast(cast).length
-  ? `# Credits\n\n## Characters\n\n${cleanCast(cast).map(c => `- ${c.label || c.role}: ${c.licence.credit} — ${c.url}`).join('\n')}\n`
+  ? `# Credits\n\n## Characters\n\n${cleanCast(cast).map(c => `- ${c.label || c.role}: ${c.licence.credit}${c.url ? ` — ${c.url}` : ''}`).join('\n')}\n`
   : ''
 
 // What the game builder is told about the picks (it goes into the build prompt).
 export function castPrompt(cast = []) {
   if (!cast.length) return ''
-  return `- The cast are real rigged anime models the person picked; never rebuild a character from primitive shapes.
-${cast.map(c => `  - ${c.label || c.role}: ${c.file ? `models/${c.file}` : `“${c.name}” (${c.url}), not downloaded yet: load models/${c.role || 'hero'}.vrm or .glb when it is there, and until then a plain stand-in labelled with the role`} (${c.format === 'vrm' ? `VRM ${c.vrm || ''}: load it with the godot-vrm addon in Godot, or @pixiv/three-vrm in three.js` : 'glTF: GLTFLoader in three.js, or import in Godot'}).${c.licence?.restyle === false ? ' Keep its own materials: its licence forbids changes.' : ' Give it the game\'s cel shading and outline.'}`).join('\n')}
+  return `- The cast are the characters the person picked; never rebuild a character from primitive shapes.
+${cast.map(c => c.source === 'meshy'
+    ? `  - ${c.label || c.role}: models/${c.file}, made with Meshy from the project's own art, already rigged as a humanoid (glTF skin; GLTFLoader + SkeletonUtils.clone in three.js, import in Godot).${Object.keys(c.clips || {}).length ? ` Its clips: ${Object.entries(c.clips).map(([k, f]) => `${k} models/${f}`).join(', ')}: play them on the same skeleton (retarget by bone name), cross-fading.` : ''} Give it the game's cel shading and outline.`
+    : c.source === 'art'
+      ? `  - ${c.label || c.role}: models/${spriteFile(c)}, the project's own art as a 2.5D billboard: a camera-facing sprite (THREE.Sprite in three.js, Sprite3D with billboard on in Godot) standing on the floor with a soft round shadow, scaled to about 1.7 m, flipped to face where it moves, with a small bob when walking and a squash on hits. Never rebuild it from shapes.`
+      : `  - ${c.label || c.role}: ${c.file ? `models/${c.file}` : `“${c.name}” (${c.url}), not downloaded yet: load models/${c.role || 'hero'}.vrm or .glb when it is there, and until then a plain stand-in labelled with the role`} (${c.format === 'vrm' ? `VRM ${c.vrm || ''}: load it with the godot-vrm addon in Godot, or @pixiv/three-vrm in three.js` : 'glTF: GLTFLoader in three.js, or import in Godot'}).${c.licence?.restyle === false ? ' Keep its own materials: its licence forbids changes.' : ' Give it the game\'s cel shading and outline.'}`).join('\n')}
 - Credits: a Credits screen in the game and a credits line on its site, word for word:
 ${cast.filter(c => c.licence?.creditRequired !== false).map(c => `  - ${c.licence?.credit || c.name}`).join('\n') || '  - (none required; credit them anyway)'}
 `

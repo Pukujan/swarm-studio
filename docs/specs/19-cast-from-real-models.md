@@ -112,5 +112,5 @@ the character from shapes.
 ## Out of scope
 
 - Paid models (Booth and the like): a separate decision per game.
-- Generating characters with image-to-3D (spec 4 covers the paid hero model).
+- Generating characters with image-to-3D: spec 20 adds it as one more card in the Cast step.
 - Editing a model's mesh or rig.
