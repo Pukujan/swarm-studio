@@ -5128,7 +5128,7 @@ function crewTick(now) {
     m.el.classList.toggle('press', now > m.pressAt && now < m.pressAt + 160)
   }
   // Hermia's dotted line, from her strip to the helper she is giving an order to
-  const from = lineTo && cw.el?.querySelector('.cw-radio:not([hidden]) .cw-radio-av')?.getBoundingClientRect()
+  const from = lineTo && document.querySelector('#app-hermia:not([hidden]):not(.min) .ah-head .cw-radio-av')?.getBoundingClientRect()
   radioLine.hidden = !from?.width
   if (!radioLine.hidden) {
     const x1 = from.left + from.width / 2, y1 = from.bottom, x2 = lineTo.x + 6, y2 = lineTo.y + 4
@@ -5857,21 +5857,28 @@ Chatter?.watch?.(() => renderSoundPop())
 // writes type out in tiles, one agent per tile with its cursor on the caret. The last
 // tile is the asset pane, always: the build's pictures turning on a card, one after another.
 const CW_TILES = 4
-const CW_ASSET = CW_TILES - 1
+const CW_CODE = CW_TILES - 1 // the one code tile, in both modes; the other three are pictures
 const CW_TURN = 2600 // ms per asset
 // ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
 // and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
 // talking to, each helper's reply as a bubble on its cursor, and what it is doing right now
 // (crew:act, live only) as its name-pill status.
-const radio = { run: null, lead: null, reason: null, acts: new Map(), says: new Map(), order: [] }
+const radio = { run: null, lead: null, reason: null, acts: new Map(), says: new Map(), order: [], feed: [] }
+// Hermia's history for her dock: her thinking fragments join into one line while fresh
+function dockLine(x) {
+  const last = radio.feed.at(-1)
+  if (x.kind === 'reason' && last?.kind === 'reason' && x.t - last.t < 20000 && last.text.length < 1400) { last.text += ` ${x.text}`; last.t = x.t; last.n = (last.n || 1) + 1; return }
+  radio.feed.push(x)
+  if (radio.feed.length > 60) radio.feed.shift()
+}
 function radioEvent(e) {
   const run = e.run || appv.run || shownRun()
-  if (radio.run !== run) Object.assign(radio, { run, lead: null, reason: null, acts: new Map(), says: new Map(), order: [] })
+  if (radio.run !== run) Object.assign(radio, { run, lead: null, reason: null, acts: new Map(), says: new Map(), order: [], feed: [] })
   const t = e.t || Date.now()
   const meet = n => { if (n && n !== 'Hermia' && !radio.order.includes(n)) radio.order.push(n) }
   // the lead's reasoning (kind 'reason', "💭 …"): a dimmer thought line in her strip, never an order
-  if (e.type === 'crew:lead' && e.kind === 'reason') radio.reason = { text: String(e.text || '').replace(/^💭\s*/u, ''), full: e.full || '', t }
-  else if (e.type === 'crew:lead') { radio.lead = { text: e.text, to: e.to, kind: e.kind || 'think', t }; meet(e.to) }
+  if (e.type === 'crew:lead' && e.kind === 'reason') { radio.reason = { text: String(e.text || '').replace(/^💭\s*/u, ''), full: e.full || '', t }; dockLine({ kind: 'reason', text: radio.reason.text, t }) }
+  else if (e.type === 'crew:lead') { radio.lead = { text: e.text, to: e.to, kind: e.kind || 'think', t }; meet(e.to); dockLine({ ...radio.lead }) }
   else if (e.type === 'crew:act') { radio.acts.set(e.name, { text: e.text, t }); meet(e.name) }
   else if (e.type === 'agent:say') { radio.says.set(e.name, { text: e.text, kind: e.kind, t }); meet(e.name) }
 }
@@ -5883,8 +5890,8 @@ function wallNames() {
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
 const heardIn = (x, ms) => x && Date.now() - x.t < ms
-const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
-const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '', mode: '', reads: null, readAt: 0 }
+const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, av: [] }
+const CW_FRESH = { assets: null, assetsAt: 0, av: [], mode: '', reads: null, readAt: 0 }
 // ---------- the art wall: while a game's art is painted, the wall is mostly pictures. Three
 // painters (the server's PAINTERS) each get a tile with the picture they are on: painting,
 // cut out, checked, sent back, done. The last tile stays code. When the code starts, the
@@ -5948,7 +5955,46 @@ window.addEventListener('keydown', e => {
   cwZoom(cw.big)
 }, true)
 
+// ---------- Hermia's dock: the commander's own section under the steps. Her orders and her
+// thinking out loud, newest at the bottom like a chat. Folds to its header and slides
+// taller or shorter from its top edge; both stay as set in this browser.
+const hdock = { el: $('#app-hermia'), key: '' }
+;(() => {
+  const el = hdock.el
+  if (!el) return
+  el.innerHTML = `<div class="ah-grip" role="separator" aria-orientation="horizontal" aria-label="Resize Hermia" tabindex="0"></div><button class="ah-head" aria-expanded="true"><span class="cw-radio-av">${HERMIA}</span><b>Hermia</b><em class="ah-kind"></em>${ico('chevron-down')}</button><div class="ah-feed"></div>`
+  const side = el.parentElement, head = el.querySelector('.ah-head'), grip = el.querySelector('.ah-grip')
+  const save = () => { try { localStorage.setItem('swarm-hermia', JSON.stringify({ h: el.style.getPropertyValue('--ah-h'), min: el.classList.contains('min') })) } catch {} }
+  const fold = on => { el.classList.toggle('min', on); head.setAttribute('aria-expanded', String(!on)) }
+  const size = h => el.style.setProperty('--ah-h', `${Math.round(Math.max(96, Math.min(h, side.clientHeight - 80)))}px`)
+  try { const o = JSON.parse(localStorage.getItem('swarm-hermia') || '{}'); if (o.h) el.style.setProperty('--ah-h', o.h); if (o.min) fold(true) } catch {}
+  head.onclick = () => { fold(!el.classList.contains('min')); save() }
+  grip.onpointerdown = ev => {
+    ev.preventDefault(); grip.setPointerCapture(ev.pointerId)
+    const y0 = ev.clientY, h0 = el.getBoundingClientRect().height
+    grip.onpointermove = m => size(h0 + y0 - m.clientY)
+    grip.onpointerup = () => { grip.onpointermove = grip.onpointerup = null; save() }
+  }
+  grip.onkeydown = ev => { const d = { ArrowUp: 24, ArrowDown: -24 }[ev.key]; if (d) { ev.preventDefault(); size(el.getBoundingClientRect().height + d); save() } }
+})()
+function hermiaDock() {
+  const el = hdock.el
+  if (!el) return
+  const feedL = radioOn() ? radio.feed : []
+  el.hidden = !feedL.length || crewQuiet()
+  const last = feedL.at(-1), key = `${radio.run}|${feedL.length}|${last?.t}|${last?.text.length}`
+  if (el.hidden || hdock.key === key) return
+  hdock.key = key
+  const lead = radio.lead
+  setText(el.querySelector('.ah-kind'), lead ? { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind : 'thinking')
+  el.querySelector('.ah-kind').className = `ah-kind ${lead?.kind || 'reason'}`
+  const box = el.querySelector('.ah-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 60
+  box.innerHTML = feedL.map(x => `<p class="ah-msg ${esc(x.kind)}">${x.to ? `<span class="to">→ <b style="color:${Crew.color(x.to)}">${esc(x.to)}</b></span>` : ''}${esc(x.text)}</p>`).join('')
+  if (stick) box.scrollTop = box.scrollHeight
+}
+
 function codeWall() {
+  hermiaDock()
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
     cw.shown = false
@@ -5959,7 +6005,7 @@ function codeWall() {
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-radio" hidden></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
+    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
     // a click on a tile makes it big, the others line up beside it; a second click (or Esc) puts it back
     const g = cw.el.querySelector('.cw-grid')
@@ -5980,7 +6026,7 @@ function codeWall() {
     if (mode === 'art') cw.queue = ['GAME_SPEC.md']
     cw.el.querySelector('.cw-head .pop-title').innerHTML = mode === 'art' ? 'Painting the <em>art</em>' : appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'
   }
-  const codeTile = i => (mode === 'art' ? i === CW_TILES - 1 : i !== CW_ASSET)
+  const codeTile = i => i === CW_CODE
   cw.el.hidden = cw.hide
   // the wall just came up while Auto is running: fold the Auto panel to its pill so it does not cover the code
   if (!cw.hide && !cw.shown) {
@@ -6020,18 +6066,6 @@ function codeWall() {
   }
   const grid = cw.el.querySelector('.cw-grid')
   const names = wallNames()
-  // Hermia's strip: her newest line, and who it is for
-  const strip = cw.el.querySelector('.cw-radio'), lead = radioOn() ? radio.lead : null
-  // her reasoning shows under her newest line while it is fresh (or alone, before her first line)
-  const reason = radioOn() && heardIn(radio.reason, 20000) && (!lead || radio.reason.t >= lead.t - 1000) ? radio.reason : null
-  strip.hidden = !(lead || reason) || crewQuiet()
-  const stamp = `${lead?.t || 0}/${reason?.t || 0}`
-  if ((lead || reason) && strip.dataset.t !== stamp) {
-    strip.dataset.t = stamp
-    const kind = lead ? { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind : 'reasoning'
-    strip.className = `cw-radio ${lead ? lead.kind : 'reason'}`
-    strip.innerHTML = `<span class="cw-radio-av">${HERMIA}</span><div class="cw-radio-main"><div class="cw-radio-who"><b>Hermia</b>${lead?.to ? `<span class="to">→</span><b style="color:${Crew.color(lead.to)}">${esc(lead.to)}</b>` : ''}<em>${esc(kind)}</em></div>${lead ? `<p>${esc(lead.text)}</p>` : ''}${reason ? `<p class="cw-reason">💭 ${esc(reason.text)}</p>` : ''}</div>`
-  }
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
     if (!codeTile(grid.children.length) && mode === 'art') {
@@ -6054,7 +6088,7 @@ function codeWall() {
   if (mode === 'art') {
     cwAssets()
     for (let i = 0; i < CW_TILES - 1; i++) cwPaintTile(grid.children[i], i, names[i])
-  } else cwAssetTile(grid.children[CW_ASSET], names[CW_ASSET], now)
+  } else for (let k = 0; k < CW_CODE; k++) cwAssetTile(grid.children[k], names[k], now, k)
   let writing = 0
   cw.tiles.forEach((t, i) => {
     const d = grid.children[i]
@@ -6173,28 +6207,34 @@ function cwAssets() {
     .catch(() => {})
     .finally(() => { cw.assetsLoading = false; cw.assetsAt = Date.now() })
 }
-function cwAssetTile(d, member, now) {
+// k: which of the three picture tiles. Each turns on its own beat (a third of a turn apart)
+// and takes a picture the other two are not showing, so the wall shows three at once.
+function cwAssetTile(d, member, now, k = 0) {
   if (!d) return
   cwAssets()
   cwWho(d, member)
   const pics = cw.assets?.pics || []
+  const a = cw.av[k] ||= { i: -1, at: 0, wait: now + k * 800, name: '' }
   d.classList.toggle('empty', !pics.length)
   if (!pics.length) {
-    cw.assetName = cw.assets?.next?.[0] || 'Art'
-    setText(d.querySelector('.cw-path'), cw.assetName)
+    a.name = cw.assets?.next?.[k] || cw.assets?.next?.[0] || 'Art'
+    setText(d.querySelector('.cw-path'), a.name)
     return
   }
-  if (cw.ai >= 0 && now - cw.aiAt < CW_TURN) return
-  const i = (cw.ai + 1) % pics.length, pic = pics[i]
-  cw.ai = i; cw.aiAt = now
+  if (now < a.wait || (a.i >= 0 && now - a.at < CW_TURN * 1.5)) return
+  const taken = new Set(cw.av.filter((x, j) => x && j !== k).map(x => x.i))
+  let i = (a.i < 0 ? k : a.i + 1) % pics.length
+  for (let n = 0; n < pics.length && taken.has(i) && pics.length > CW_CODE - 1; n++) i = (i + 1) % pics.length
+  const pic = pics[i]
+  a.i = i; a.at = now
   // the hidden face takes the next picture once it has loaded, then the faces trade places
   const faces = [...d.querySelectorAll('.cw-face')], next = faces.find(f => !f.classList.contains('on')) || faces[0]
   const im = new Image()
   im.onload = () => {
-    if (cw.ai !== i) return
+    if (a.i !== i) return
     next.src = pic.src
     for (const f of faces) f.classList.toggle('on', f === next)
-    cw.assetName = pic.name
+    a.name = pic.name
     setText(d.querySelector('.cw-path'), pic.name)
     d.classList.remove('scan'); void d.offsetWidth; d.classList.add('scan')
   }
@@ -6208,9 +6248,9 @@ function cwPin(i) {
     const pin = cw.el?.querySelector('.cw-grid')?.children[i]?.querySelector('.cw-pin')?.getBoundingClientRect()
     return pin?.width ? { x: pin.left, y: pin.top, text: sl ? `${ART_STATE[sl.state] || ''} ${sl.what}`.trim() : 'waiting', typing: sl?.state === 'painting' } : null
   }
-  if (cw.mode !== 'art' && i === CW_ASSET) {
-    const pin = cw.el?.querySelector('.cw-asset .cw-pin')?.getBoundingClientRect()
-    return pin?.width ? { x: pin.left, y: pin.top, text: cw.assetName, typing: true } : null
+  if (cw.mode !== 'art' && i !== CW_CODE) {
+    const pin = cw.el?.querySelector('.cw-grid')?.children[i]?.querySelector('.cw-pin')?.getBoundingClientRect()
+    return pin?.width ? { x: pin.left, y: pin.top, text: cw.av[i]?.name || 'Art', typing: true } : null
   }
   const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
   const caret = d?.querySelector('.cw-caret')
