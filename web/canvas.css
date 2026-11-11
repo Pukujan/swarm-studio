@@ -1902,6 +1902,16 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .slice-card .sc-ideas button:hover { border-color: var(--accent); }
 .feed .slice-card .sc-ideas button, .feed .slice-card .sc-live { text-transform: none; letter-spacing: normal; font-family: inherit; }
 .feed .slice-card .sc-live { display: flex; width: max-content; }
+/* the hero's idle from a video clip: the clip and the keyed loop side by side, the price on the button */
+.feed .idle-card .ic-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; margin: 6px 0 8px; }
+.feed .idle-card .ic-media:empty { display: none; }
+.feed .idle-card video, .feed .idle-card img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); background: var(--deep); display: block; }
+.feed .idle-card .ic-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.feed .idle-card .ic-acts:empty { display: none; }
+.feed .idle-card .ic-acts button { padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; text-transform: none; letter-spacing: normal; }
+.feed .idle-card .ic-acts button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.feed .idle-card .ic-acts button:disabled { opacity: .5; cursor: default; }
+.feed .idle-card .ic-line { flex-basis: 100%; color: var(--muted); font-size: 11px; }
 /* Hermia's answer to "can I see it": the newest clip wide, then the pictures in a row */
 .feed .item .tell-media { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
 .feed .item .tell-media video { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }

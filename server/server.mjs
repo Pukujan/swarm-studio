@@ -48,6 +48,8 @@ import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyb
 import { scoreWav, elevenScore } from '../engine/score.mjs'
 import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
+import { idleCost, idleKey, priceOk, idleAspect, idleStartName, idlePrompt, idleMessages, IDLE_SECONDS, IDLE_SAY } from '../engine/idle.mjs'
+import { heavyConfig, runHeavy } from '../engine/heavy.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const webDir = join(root, 'web')
@@ -1262,10 +1264,52 @@ const cutPy = () => (cutPyP ||= (async () => {
   return null
 })())
 // what a stage is told about a sheet: its frame size and timing, from the cut
-const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: it.fps, loop: it.loop, frames: it.frames } : {})
+const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: meta.fps || it.fps, loop: meta.loop ?? it.loop, frames: meta.video ? IDLE_FRAMES : it.frames } : {})
+const IDLE_FRAMES = 'a looping idle from a video clip: breathing, a small sway of weight, a blink'
+// The video idle's go-ahead (engine/idle.mjs): with a video model signed in, the chat asks once
+// with the clip's price on the button; the build's own input can carry the yes at that price
+// ({ idle: { usd } }) or a no ('no'). No answer in a few minutes is a no: nothing is spent unasked.
+const idleAsks = new Map() // run id -> { cost, resolve }
+const IDLE_ASK_MS = Number(process.env.SWARM_IDLE_ASK_MS) || 5 * 60e3
+async function idleGate(runId, spec, pre, signal) {
+  // made before (a Try again): the video sheet is kept with the run and used again
+  try { if (JSON.parse(readFileSync(join(runsDir, runId, 'img', 'game-sheet-hero-idle.json'), 'utf8')).video) return [] } catch {}
+  const media = await mediaNow().catch(() => null)
+  if (!media?.clips?.on) return [] // no video model: the painted sheets stay
+  const v = (await loadVideoProviders()).find(x => x.provider === media.clips.provider && x.available)
+  const cost = idleCost({ ...media.clips, model: v?.model || '' })
+  const g = await gameMod()
+  const who = String(spec.hero || 'the hero').split(/[,—.;]/)[0].trim()
+  const said = (state, extra = {}) => record(runId, { type: 'game:idle', t: Date.now(), run: runId, state, who, ...extra })
+  let yes
+  if (pre && typeof pre === 'object' && priceOk(cost, pre.usd)) yes = true
+  else {
+    said('ask', { text: IDLE_SAY.ask(who), line: cost.line, usd: cost.usd, by: cost.by })
+    yes = await new Promise(resolve => {
+      const end = ok => { clearTimeout(t); signal?.removeEventListener?.('abort', stop); idleAsks.delete(runId); resolve(ok) }
+      const stop = () => end(false)
+      const t = setTimeout(() => end(null), IDLE_ASK_MS)
+      signal?.addEventListener?.('abort', stop)
+      idleAsks.set(runId, { cost, resolve: end })
+    })
+  }
+  if (!yes) { said('no', { text: yes === null ? 'No answer, so I kept the painted idle' : IDLE_SAY.no() }); return [] }
+  said('yes', { text: `Animating ${who}'s idle`, line: cost.line, usd: cost.usd })
+  const more = g.idleSheets(spec)
+  for (const m of more) if (m.video) m.cost = { ...cost, model: v?.model || '' }
+  return more
+}
+function idleAnswer(id, input) {
+  const a = idleAsks.get(id)
+  if (!a) throw new Error('that question has closed')
+  if (input.ok === true && !priceOk(a.cost, input.usd)) { const e = new Error(`the price changed: ${a.cost.line}`); e.status = 402; throw e }
+  a.resolve(input.ok === true)
+  return { ok: true }
+}
 // have: the art painted before (a mid-build ask): a sheet can be painted over one of those
 // sprites and a sprite can take the hero's picture as its reference
-async function paintGame(runId, spec, items, appDir, step, signal = null, { have = [] } = {}) {
+async function paintGame(runId, spec, items, appDir, step, signal = null, { have = [], idle = null } = {}) {
+  items = [...items]
   const choice = await imageChoice()
   if (!choice) { step({ kind: 'setup', text: 'no image model: the game draws its art in code', ok: false }); return [] }
   const guide = gameGuide(spec)
@@ -1286,6 +1330,14 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     copyFileSync(join(runsDir, runId, 'img', f), join(appDir, 'public', file))
     done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}), ...sheetInfo(it, meta) })
     queue.splice(queue.indexOf(it), 1)
+  }
+  // the hero's idle from a video clip (engine/idle.mjs): asked for at the clip's price while the
+  // rest paints; a yes adds the painted idle (its first frame is animated) and the video one
+  let idleWait = null
+  if (items.some(i => i.id === 'sprite-hero') && idle !== 'no') {
+    idleWait = idleGate(runId, spec, idle, signal).then(more => { for (const m of more) if (!items.some(i => i.id === m.id) && !done.has(m.id)) { queue.push(m); items.push(m) } })
+      .catch(err => step({ kind: 'setup', text: `no video idle: ${String(err.message || err).slice(0, 120)}`, ok: false }))
+      .finally(() => { idleWait = null })
   }
   // a sheet is painted over its figure's own painted picture (kept before the cut)
   const raws = new Map()
@@ -1323,18 +1375,22 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   const busy = new Set()
   const next = async () => {
     for (;;) {
-      if (stopped || signal?.aborted) return null
+      if (signal?.aborted) return null
+      // the image model ran out: no more pictures are tried, but the video idle (another
+      // provider, asked for at its own price) still goes on, from the sprite
+      const open = q => !stopped || q.video
       // a reference (ref) is waited for while it is being painted, but its failure drops nothing
-      const pending = id => busy.has(id) || queue.some(o => o.id === id)
-      const i = queue.findIndex(q => (!q.after || done.has(q.after)) && (!q.ref || !pending(q.ref)))
+      const pending = id => busy.has(id) || (!stopped && queue.some(o => o.id === id))
+      const i = queue.findIndex(q => open(q) && (!q.after || done.has(q.after)) && (!q.ref || !pending(q.ref)))
       if (i >= 0) { const [it] = queue.splice(i, 1); busy.add(it.id); return it }
-      for (const q of [...queue]) if (q.after && !busy.has(q.after) && !queue.some(o => o.id === q.after)) queue.splice(queue.indexOf(q), 1)
-      if (!queue.length) return null
+      for (const q of [...queue]) if (q.after && !done.has(q.after) && !busy.has(q.after) && !queue.some(o => o.id === q.after)) queue.splice(queue.indexOf(q), 1)
+      if (!queue.some(open) && !idleWait) return null
       await new Promise(r => setTimeout(r, 1000))
     }
   }
   const worker = async slot => {
     for (let it; (it = await next()); busy.delete(it.id)) {
+      if (it.kind === 'sheet' && it.video) { await videoSheet(slot, it); continue }
       if (it.kind === 'sheet') { await paintSheet(slot, it); continue }
       live(slot, it, 'painting')
       const refFile = it.ref && done.get(it.ref)?.file
@@ -1463,6 +1519,54 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       return
     }
   }
+  // The idle from a video clip: the painted idle's first frame (else the sprite) on the key colour,
+  // animated by the video model, then cut into a looping sheet on the heavy machine
+  // (scripts/idle_sheet.py through engine/heavy.mjs) and checked frame by frame. It replaces the
+  // painted idle only when it passes; otherwise the painted one stays.
+  async function videoSheet(slot, it) {
+    const say = (state, extra = {}) => record(runId, { type: 'game:idle', t: Date.now(), run: runId, state, who: it.who, ...extra })
+    const fail = (why, extra = {}) => {
+      live(slot, it, 'failed', { problems: [String(why).slice(0, 80)] })
+      say('failed', { text: IDLE_SAY.failed(why), ...extra })
+      step({ kind: 'setup', text: `kept the painted idle: ${why}`, ok: false })
+    }
+    const base = done.get(it.ref), sprite = done.get('sprite-hero')
+    const strip = base?.file && join(appDir, 'public', base.file)
+    const fromStrip = !!(strip && existsSync(strip) && base.cell)
+    const src = fromStrip ? strip : sprite?.file && join(appDir, 'public', sprite.file)
+    if (!src || !existsSync(src)) return fail('no painted frame to animate')
+    const py = await cutPy()
+    if (!py) return fail('no Python with numpy and scipy (set SWARM_CUT_PY)')
+    const key = idleKey(it.look), aspect = idleAspect(it.cost.provider)
+    const startName = idleStartName(runId), start = join(imgDir, startName)
+    const made = await new Promise(ok => execFile(py, [join(root, 'scripts', 'idle_sheet.py'), 'start', src, start, '--cell', String(fromStrip ? base.cell[0] : 0), '--key', key.hex, '--aspect', aspect], { timeout: 60000 }, err => ok(!err)))
+    if (!made || !existsSync(start)) return fail('could not make the first frame')
+    live(slot, it, 'painting', { src: img(startName) })
+    say('making', { text: IDLE_SAY.making(it.cost.by), start: img(startName), line: it.cost.line })
+    const tag = randomBytes(4).toString('hex'), clipName = `idle-${tag}.mp4`, clip = join(imgDir, clipName)
+    const v = await videogen(['--provider', it.cost.provider, ...(it.cost.model ? ['--model', it.cost.model] : []), '--image', start, '--seconds', String(IDLE_SECONDS), '--aspect', aspect, '--out', clip, idlePrompt({ who: it.who, look: it.look, key })], 900000)
+    if (!v.ok || !existsSync(clip)) return fail(`the video model made no clip (${String(v.error || 'no answer').slice(0, 100)})`)
+    say('clip', { text: IDLE_SAY.clip(), clip: `/img/${runId}/${clipName}`, model: v.model || null })
+    live(slot, it, 'cutting', { src: img(startName) })
+    const heavy = heavyConfig(dataDir)
+    const out = `idle-${tag}.webp`, outs = [out, `idle-${tag}.json`, `idle-${tag}-check.png`, `idle-${tag}-loop.webp`]
+    const r = await runHeavy({ config: heavy, script: join(root, 'scripts', 'idle_sheet.py'), files: [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), clip], args: ['sheet', clipName, out, ...(heavy.rife ? ['--rife', heavy.rife] : [])], outputs: outs, outDir: imgDir, timeout: 600000 })
+    let meta = null
+    try { meta = JSON.parse(readFileSync(join(imgDir, outs[1]), 'utf8')) } catch {}
+    if (!r.ok || !meta || !existsSync(join(imgDir, out))) return fail(`the clip could not be cut into a loop (${(r.err.trim().split('\n').pop() || 'no sheet').slice(0, 100)})`)
+    say('sheet', { text: IDLE_SAY.sheet(meta.frames), sheet: img(outs[3]), check: img(outs[2]), where: r.where, rife: meta.video?.rife || 0 })
+    live(slot, it, 'checking', { src: img(outs[2]) })
+    // the numbers (edges, size, jumps, key colour left), then the reviewer on every frame
+    const look = await checkArt(join(imgDir, outs[2]), guide, (_, image) => idleMessages(it.what, image))
+    const problems = [...(meta.qc?.problems || []), ...(look.skipped ? [] : look.problems)]
+    if (problems.length) return fail(problems.slice(0, 2).join(', '), { sheet: img(outs[3]), check: img(outs[2]) })
+    const { file, name } = keep({ id: it.replaces }, join(imgDir, out))
+    writeFileSync(join(imgDir, name.replace(/\.[a-z]+$/i, '.json')), JSON.stringify(meta))
+    done.set(it.replaces, { file, what: `idle loop of ${it.who}`, kind: 'sheet', ...sheetInfo({ kind: 'sheet' }, meta) })
+    live(slot, it, 'done', { src: img(outs[2]) })
+    say('done', { text: IDLE_SAY.done(meta.frames), sheet: img(outs[3]), check: img(outs[2]), fps: meta.fps, frames: meta.frames, reviewed: !look.skipped })
+    step({ kind: 'setup', text: `animated the ${it.who} idle from a ${it.cost.by} clip: ${meta.frames} frames at ${meta.fps} fps${meta.video?.rife ? `, ${meta.video.rife} RIFE frames on the seam` : ''}` })
+  }
   await Promise.all(PAINTERS.map((_, i) => worker(i)))
   artJobs.delete(runId)
   const out = items.map(i => done.get(i.id)).filter(Boolean)
@@ -1480,7 +1584,7 @@ function isGltf(file) {
   } catch { return false }
 }
 
-async function startGame(spec, extraCopy = {}) {
+async function startGame(spec, extraCopy = {}, { idle } = {}) {
   const g = await gameMod()
   if (!spec?.title || !spec?.loop) throw new Error('no game spec')
   if (spec.models) spec = { ...spec, models: g.gameModels(spec).filter(m => isGltf(join(dataDir, 'models', m.file))) }
@@ -1506,7 +1610,7 @@ async function startGame(spec, extraCopy = {}) {
   Object.assign(copy, extraCopy)
   const a = await apps()
   const credits = cm.castCredits(spec.cast)
-  await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec), ...(credits ? { 'CREDITS.md': credits } : {}) }, copy })
+  await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec), ...(credits ? { 'CREDITS.md': credits } : {}) }, copy, ...(idle !== undefined ? { idle } : {}) })
   // the site remembers its game, so each can open the other
   if (spec.brand?.from && existsSync(join(runsDir, spec.brand.from))) record(spec.brand.from, { type: 'game:linked', t, run: spec.brand.from, game: id, title: String(spec.title).slice(0, 80) })
   broadcast({ type: 'files:changed', t, run: id })
@@ -2298,7 +2402,7 @@ const server = createServer((req, res) => {
             const c = await castMod()
             return { spec, ...(c.needsCast(spec) ? { cast: { roles: c.castRoles(spec), violent: c.hasCombat(spec) } } : {}) }
           })
-        : startGame(input.spec)
+        : startGame(input.spec, {}, { idle: input.idle })
       go.then(out => reply(200, out)).catch(err => reply(400, { error: String(err.message || err) }))
     })
     return
@@ -2396,7 +2500,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy|tell))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy|tell|idle))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
@@ -2412,6 +2516,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       apps().then(async a => {
         if (sub === 'stop') return a.stop(id)
+        if (sub === 'idle') return idleAnswer(id, input)
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id)
         if (sub === 'deploy') {
@@ -2423,7 +2528,7 @@ const server = createServer((req, res) => {
         const spec = (readEvents(id) || []).findLast(e => e.type === 'game:spec')?.spec
         if (spec && !input.prompt && !a.state(id).hasApp) {
           const g = await gameMod()
-          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}) }
+          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}), ...(input.idle !== undefined ? { idle: input.idle } : {}) }
         }
         return a.start(id, input)
       }).then(s => reply(200, s)).catch(fail)
@@ -2586,13 +2691,13 @@ const server = createServer((req, res) => {
   }
 
   // a game's filmed play test (engine/playtest.mjs), replayed in the App view
-  const clip = url.pathname.match(/^\/img\/([\w-]{1,64})\/(playtest-\d{1,3}\.webm)$/)
+  const clip = url.pathname.match(/^\/img\/([\w-]{1,64})\/(playtest-\d{1,3}\.webm|idle-[a-f0-9]{8}\.mp4)$/)
   if (clip) {
     const file = join(runsDir, clip[1], 'img', clip[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
     // a byte range, so the replay can seek past the loading screen
     const body = readFileSync(file), r = String(req.headers.range || '').match(/^bytes=(\d*)-(\d*)$/)
-    const head = { 'content-type': 'video/webm', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' }
+    const head = { 'content-type': clip[2].endsWith('.mp4') ? 'video/mp4' : 'video/webm', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' }
     if (r && (r[1] || r[2])) {
       const a = r[1] ? +r[1] : Math.max(0, body.length - +r[2]), b = r[1] && r[2] ? Math.min(+r[2], body.length - 1) : body.length - 1
       if (a > b || a >= body.length) return res.writeHead(416, { 'content-range': `bytes */${body.length}` }).end()
@@ -2603,7 +2708,7 @@ const server = createServer((req, res) => {
     res.end(body)
     return
   }
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib|idle)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
