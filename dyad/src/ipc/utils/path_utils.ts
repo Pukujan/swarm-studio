@@ -5,7 +5,7 @@ import { normalizePath } from "../../../shared/normalizePath";
 
 /**
  * Safely joins paths while ensuring the result stays within the base directory.
- * This prevents directory traversal attacks where malicious paths like "../../etc/passwd"
+ * This prevents directory traversal attacks where malicious paths like "../../outside-the-app"
  * could be used to access files outside the intended directory.
  *
  * @param basePath The base directory that should contain the result

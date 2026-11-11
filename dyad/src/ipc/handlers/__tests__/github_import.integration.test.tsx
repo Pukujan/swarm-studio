@@ -152,7 +152,7 @@ describe("GitHub import dialog (integration)", () => {
   it("skips the tagger upgrade when 'Optimize for Dyad' is unchecked", async () => {
     await harness.github.resetRepos();
     writeSettings({
-      githubAccessToken: { value: "fake_access_token_12345" },
+      githubAccessToken: { value: "fake_token_1" },
       githubUser: {
         email: "testuser@example.com",
       },

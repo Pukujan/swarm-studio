@@ -139,7 +139,7 @@ describe("Git collaboration actions (integration)", () => {
     await waitFor(
       () => {
         expect(readSettings().githubAccessToken?.value).toBe(
-          "fake_access_token_12345",
+          "fake_token_1",
         );
       },
       { timeout: 15_000 },
