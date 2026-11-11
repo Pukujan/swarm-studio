@@ -72,3 +72,8 @@ test('turns in a row each build on the last: no edit is lost, the brief does not
   assert.deepEqual(edits, ['--turn-1', '--turn-2', '--turn-3'], 'every edit is carried')
   assert.equal(last.base.brief, BRIEF)
 })
+
+test('a section named without its page is the one on the first page', async () => {
+  const { EXTEND_SYSTEM } = await import('../engine/extend.mjs')
+  assert.match(EXTEND_SYSTEM, /named without its page[^\n]*first page/)
+})
