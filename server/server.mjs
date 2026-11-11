@@ -40,6 +40,7 @@ import { planRoutes } from './plans.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { paintWithBackup } from '../engine/paintretry.mjs'
+import { library } from '../engine/library.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
@@ -1184,6 +1185,8 @@ const PAINTERS = ['Kiki', 'Juno', 'Tofu']
 // an image model that is out of quota or credit answers every picture the same way: stop on the first
 // what each painter is on right now, per run: a canvas opened mid-art reads it with the assets
 const artJobs = new Map()
+// the last resort for an icon or backdrop no provider would paint (engine/library.mjs)
+const assetLibrary = library({ dataDir })
 const OUT_OF_QUOTA = /\b(429|402)\b|usage limit|quota|insufficient|no capacity|rate.?limit|billing|credits?\b/i
 // Cut a sprite out, then check it: the cut's own numbers first, and a sprite that looks off
 // goes to the reviewer on dark and on magenta. → { ok, path, problems, report }
@@ -1221,7 +1224,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
   step({ kind: 'setup', text: `painting in ${guide.name}` })
   mkdirSync(join(appDir, 'public', 'art'), { recursive: true })
   mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
-  const done = new Map(), queue = [...items]
+  const done = new Map(), queue = [...items], libUsed = new Set()
   // a picture painted for this game before (a build stopped by a restart, a Try again)
   // is kept with the run: it is used again, not painted and paid for again
   const kept = (() => { try { return readdirSync(join(runsDir, runId, 'img')).filter(f => /^game-.*\.(png|jpe?g|webp)$/i.test(f) && !/-check\./.test(f)) } catch { return [] } })()
@@ -1290,6 +1293,18 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
           live(slot, it, 'failed', { problems: ['out of quota'] })
           step({ kind: 'setup', text: `${stopped.model} is out of quota: stopped painting`, ok: false, art: 'quota' })
           break
+        }
+        // a picture from the library in a close style, so the game isn't left without it;
+        // kept beside the run as lib-<id>, not game-<id>, so a Try again paints it for real
+        const lib = await assetLibrary.pick(it, guide.style, libUsed)
+        if (lib) {
+          const file = `art/${it.id}${extname(lib.path) || '.png'}`, name = `lib-${it.id}${extname(lib.path) || '.png'}`
+          copyFileSync(lib.path, join(appDir, 'public', file))
+          copyFileSync(lib.path, join(runsDir, runId, 'img', name))
+          done.set(it.id, { file, what: it.what, kind: it.kind, credit: lib.credit })
+          live(slot, it, 'done', { src: img(name) })
+          step({ kind: 'setup', text: `used a library picture for the ${it.what} (${why.slice(0, 80)})` })
+          continue
         }
         live(slot, it, 'failed', { problems: [why.slice(0, 80)] })
         step({ kind: 'setup', text: `could not paint the ${it.what}: ${why.slice(0, 120)}`, ok: false })
@@ -2533,7 +2548,7 @@ const server = createServer((req, res) => {
     res.end(body)
     return
   }
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
