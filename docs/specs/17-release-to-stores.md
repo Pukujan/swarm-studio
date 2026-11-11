@@ -1,6 +1,6 @@
-# 17. Release to stores, with the Studio as guide
+# 17. Release to stores, guided by the agent
 
-A developer who builds a game in Swarm Studio can release it on **itch.io** and then **Steam** from the Studio. The Studio does the work it can do: the builds, the store art, the copy, the trailer, the checks and the upload. It **guides** the person through the steps only they can take: accounts, fees, tax forms, agreements and the final submit. Commander Hermia leads the release the way she leads a build.
+A developer who builds a game in Swarm Studio can release it on **itch.io** and then **Steam** from the Studio. The Studio does the work it can do: the builds, the store art, the copy, the trailer, the checks and the upload. It **guides** the person through the steps only they can take: accounts, fees, tax forms, agreements and the final submit. The agent (Hermes, as Commander Hermia) is the guide: it talks the person through every step, answers their questions, reads the store pages with them, fills in what is safe, and hands over only what must be theirs.
 
 This is for every developer, not only our own demo. It comes after the hackathon. In the pitch it is the next line: **one prompt → a built game → a post on the Feed → released on a store.**
 
@@ -50,7 +50,21 @@ The Studio never pays a fee, signs an agreement, fills in tax or identity forms,
    - Steam: `steamcmd` with an `app_build` and a `depot_build` script the Studio writes, uploaded to a **beta branch**. The person moves it to the default branch on Steamworks; Steam does not allow that from the uploader.
 8. **The Feed.** The game's post gets a "Get it on itch" or "Get it on Steam" button, and the release shows up on the maker's profile.
 
-## The guide
+## The agent is the guide
+
+The guide is **Hermes itself**, speaking as Commander Hermia, not a help page. The person says "release this on Steam" in the Studio or in Hermes chat, and the agent takes it from there:
+
+- **It walks them through it in conversation.** One step at a time, in plain words: what this step is, why the store wants it, what to click. It answers questions in place ("what's a depot?", "do I need a company?", "which tax form is mine?") from the store's own documentation, and says when it doesn't know.
+- **It looks before it speaks.** With the person's OK it opens the store pages in the Studio's browser, reads where they are, and says what's next. When a page changes, it reads the new page; it doesn't recite old steps.
+- **It fills in what is safe to fill.** Store page text, tags, system requirements, art uploads and build settings are things the agent wrote, so it can fill them in, and it shows each change first. It never types passwords, payment or bank details, tax or identity information, and never accepts an agreement or presses pay, submit or release. For those it stops, says "Your turn", and points at the one button.
+- **It notices when a step is done** (the App ID exists, the page answers, the build arrived) and moves on without being told.
+- **It remembers.** Progress and open questions are kept per game, so the person can come back days later and the agent picks up where they left off: "Valve approved your page yesterday. Next: upload the build."
+- **It checks in on its own** while something waits on the store (a review, the waiting period) and says when it moved.
+- **It fixes what the store sends back.** When a review comes back with changes, the agent reads them, fixes what is its own work (art, copy, build), and walks the person through the rest.
+
+The Release panel below is the same guide drawn as a list, so the person can see the whole path at a glance.
+
+## The Release panel
 
 A **Release** panel opens from the game's canvas. It is one column of steps for the chosen store, top to bottom:
 
