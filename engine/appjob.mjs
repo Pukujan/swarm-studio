@@ -14,7 +14,7 @@ import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
-import { gameSlug, isBig, artList, sheetList, BIG_STAGES, bigStagePrompt } from './game.mjs'
+import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt } from './game.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
@@ -107,13 +107,15 @@ const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args
 
 // A big game stopped partway: the stage to go on from (0: start over). Only
 // stages since the last build from scratch count, and only with the app still there.
+// The count of slices is the spec's own (stagesFor), saved on each app:stage event; older runs had five.
 export function bigResumeAt(events, dir) {
   if (!dir || !existsSync(join(dir, 'package.json'))) return 0
   const startIdx = events.findLastIndex(e => e.type === 'app:start' && e.fresh && !e.resume)
   if (startIdx < 0) return 0
   let next = 0
-  for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big && e.big.ok && e.big.i === next) next++
-  return next < BIG_STAGES.length ? next : 0
+  let total = 5
+  for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big) { if (e.big.n) total = e.big.n; if (e.big.ok && e.big.i === next) next++ }
+  return next < total ? next : 0
 }
 
 // An app's <title> is its project's name: a missing one, or one an engine turn took
@@ -343,10 +345,13 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
     let failed = from ? 'the last build stopped partway through this stage: some of its changes may already be in the code (git status shows them). Finish them or redo them.' : '', last = null
-    for (let i = from; i < BIG_STAGES.length; i++) {
+    // the slices are the game's own, planned with its spec from the person's answers and picks
+    const stages = stagesFor(spec)
+    if (from >= stages.length) from = 0
+    for (let i = from; i < stages.length; i++) {
       if (j.controller.signal.aborted) throw new Error('stopped')
-      const st = BIG_STAGES[i], t = Date.now()
-      step({ kind: 'setup', text: `stage ${i + 1} of ${BIG_STAGES.length}: ${st.name}` })
+      const st = stages[i], t = Date.now()
+      step({ kind: 'setup', text: `stage ${i + 1} of ${stages.length}: ${st.name}` })
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
         try { last = await engineCall(bigStagePrompt(spec, i, { art, failed }), input.turns || st.turns); break } catch (err) {
@@ -362,8 +367,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result.files = Math.max(j.result.files, last.files?.length || 0)
       await serve(id, j, step)
       const play = await playGame(j, dir, model(), step, brand)
-      j.result.stages.push({ id: st.id, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
-      send(id, 'app:stage', { stage: `stage ${i + 1} of ${BIG_STAGES.length} done: ${st.name}`, big: { i, ok: !!last.ok, play: !!play?.ok } })
+      j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
+      // each slice carries the bots' filmed play test, so the person sees it before the next one
+      send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}) } })
     }
     if (!last?.ok) {
       step({ kind: 'test', text: 'the last stage did not pass its build: one fix turn', ok: false })
@@ -413,20 +419,21 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
     else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s`, ...film })
     else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false, ...film })
-    if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : { ok: true, seconds: t.seconds }
+    const withClip = o => (film.clip ? { ...o, clip: film.clip } : o)
+    if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
     const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, links || ''].filter(Boolean).join('\n\n')
     try {
       await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. Finish with a working build: the typecheck and build must pass.`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
     } catch (err) {
       step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
-      return { ok: false, problem: problems }
+      return withClip({ ok: false, problem: problems })
     }
     await new Promise(r => setTimeout(r, 2500))
     links = linkProblem()
     if (!t.ok) t = await playtest(j.url)
     const ok = !links && t.ok
     step({ kind: 'test', text: ok ? 'the game passes its checks after the fix' : `still wrong after the fix: ${(links || t.problem || '').split('. ')[0]}`, ok })
-    return ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, links || ''].filter(Boolean).join(' ') }
+    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, links || ''].filter(Boolean).join(' ') })
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).

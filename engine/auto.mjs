@@ -38,8 +38,9 @@ const ROGUELIKE = `It is a room-based action roguelike:
 
 const GENERIC_GAME = `It is one complete game in the genre the brief names: a title screen, a core loop done really well, rising difficulty over several stages or waves, at least 6 upgrades or unlocks, a final challenge (a boss, a last level or a high-score push), a win and a loss screen, and progress saved in localStorage.`
 
+const ROGUE = /rogue|top-down action|action rpg|arpg|twin-stick|hack.?and.?slash/i
 export function bigGameAsk(prompt, skills = '') {
-  const kind = /rogue|top-down action|action rpg|arpg|twin-stick|hack.?and.?slash/i.test(prompt) ? ROGUELIKE : GENERIC_GAME
+  const kind = ROGUE.test(prompt) ? ROGUELIKE : GENERIC_GAME
   return `This product IS a game. Build ONE real, polished game, not mini games, on a 🎮 Play page at /play, linked in the nav. The brief: ${String(prompt).slice(0, 1200)}
 
 Code: a canvas game in src/games/<slug>/, split into modules: scene (the loop), player, enemies, rooms (or levels), upgrades, ui and audio. Fixed timestep at 60 fps, capped entity and particle counts, no DOM work inside the loop. It must run smoothly on a laptop's built-in graphics.
@@ -210,8 +211,10 @@ export function autoJob(d) {
   async function games() {
     if (job.games === 'big') {
       const g = await import('./game.mjs')
-      const skills = g.skillText(['gamedev/roguelike', 'gamedev/game-feel', 'gamedev/procedural-gen', 'gamedev/input-systems'], 9000)
-      await appTurn('games', { ask: bigGameAsk(job.prompt, skills) }, 'one big game on /play: core loop, rooms, enemies, upgrades, the boss, then polish', 10)
+      // the roguelike notes only for a roguelike; any other genre gets level design instead
+      const rogue = ROGUE.test(job.prompt)
+      const skills = g.skillText([rogue ? 'gamedev/roguelike' : 'gamedev/level-design', 'gamedev/game-feel', 'gamedev/procedural-gen', 'gamedev/input-systems'], 9000)
+      await appTurn('games', { ask: bigGameAsk(job.prompt, skills) }, rogue ? 'one big game on /play: core loop, rooms, enemies, upgrades, the boss, then polish' : 'one big game on /play: core loop, stages, upgrades, the final challenge, then polish', 10)
       return set('games', 'done', '/play: one full game')
     }
     await appTurn('games', { ask: GAMES_ASK }, 'three mini games on a 🎮 Play page', 6)
