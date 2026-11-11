@@ -40,7 +40,9 @@ export function chooseImage(list = [], pick = null) {
     const known = !p.models?.length || p.models.includes(want.model)
     return { provider: p.provider, model: (known && want.model) || p.default || '' }
   }
-  const other = ready.find(x => x.provider === CODEX.provider) || ready[0]
+  // ckff (the studio's own image key, engine/ckff.mjs) comes first here: it is the one that still
+  // paints when a Hermes login is signed out or out of quota
+  const other = ready.find(x => x.provider === 'ckff') || ready.find(x => x.provider === CODEX.provider) || ready[0]
   if (!other) return null
   return { provider: other.provider, model: other.provider === CODEX.provider ? CODEX.model : other.default || '', insteadOf: pick?.provider || undefined }
 }
