@@ -114,5 +114,44 @@
   // a slider shows how full it is: the kit's track reads --v
   const slider = el => { const min = Number(el.min || 0), max = Number(el.max || 100); el.style.setProperty('--v', `${((Number(el.value) - min) / (max - min || 1)) * 100}%`) }
   addEventListener('input', e => { if (e.target.classList?.contains('ui-slider')) slider(e.target) }, true)
-  window.SwarmUI = { dialog, popover, layer: join, esc, X, slider, open: () => stack.length }
+  // A picture at the size it is drawn: a small webp copy (its long side, or its width, at most `max`
+  // px), made once per picture and size and kept. A big picture is decoded only to make the copy, so
+  // a canvas zoomed out, or a row of thumbnails, never holds full-size pictures. Returns the copy's
+  // url, or null until it is ready; `ready` is called with it then.
+  const smalls = new Map()
+  function small(src, max = 256, { by = 'long', ready } = {}) {
+    if (!src) return null
+    const k = `${max}|${by}|${src}`
+    const have = smalls.get(k)
+    if (typeof have === 'string') return have
+    if (ready) (smalls.get(`${k}|wait`) || smalls.set(`${k}|wait`, []).get(`${k}|wait`)).push(ready)
+    if (have) return null
+    smalls.set(k, (async () => {
+      const im = new Image()
+      im.decoding = 'async'
+      im.src = src
+      await im.decode()
+      const nw = im.naturalWidth, nh = im.naturalHeight
+      const s = Math.min(1, max / (by === 'width' ? nw : Math.max(nw, nh)))
+      if (s >= 1) return src // already small: keep it as it is
+      const w = Math.max(1, Math.round(nw * s)), h = Math.max(1, Math.round(nh * s))
+      const bmp = await createImageBitmap(im, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' })
+      im.src = ''
+      const cv = document.createElement('canvas')
+      cv.width = w; cv.height = h
+      cv.getContext('2d').drawImage(bmp, 0, 0)
+      bmp.close()
+      const blob = await new Promise(ok => cv.toBlob(ok, 'image/webp', 0.86))
+      cv.width = cv.height = 0
+      return blob ? URL.createObjectURL(blob) : src
+    })().catch(() => src).then(url => {
+      smalls.set(k, url)
+      for (const fn of smalls.get(`${k}|wait`) || []) try { fn(url) } catch {}
+      smalls.delete(`${k}|wait`)
+      return url
+    }))
+    return null
+  }
+
+  window.SwarmUI = { dialog, popover, layer: join, esc, X, slider, small, open: () => stack.length }
 })()

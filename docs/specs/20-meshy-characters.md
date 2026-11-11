@@ -16,7 +16,7 @@ model with Meshy, or, without Meshy, standing in the 3D world as a 2.5D sprite.
    - **Sprite** when there is none. Clicking it picks it at once: it is free.
 3. **Opened**, the card shows a strip of the project's pictures to choose from and, for Meshy, one button:
    **Make · 35 credits**. The price on the button is the ask. Nothing is spent until it is clicked.
-4. **Making** (2–4 minutes): a spinner and the stage (Modelling, Rigging, Saving) with its percentage.
+4. **Making** (2–4 minutes): the crew does it on a bench under the cards (see *The bench*).
 5. **Made**: the model's picture, **Redo · 35 credits** (asks again, by its price) and **Accept**. Accept makes it
    the role's pick. A failure shows ⚠ and Meshy's reason, and the Make button again.
 6. **Build**: the pick goes into `spec.cast`. `startGame` copies the GLB and its walk and run clips from the model
@@ -24,6 +24,47 @@ model with Meshy, or, without Meshy, standing in the 3D world as a 2.5D sprite.
    prompt (`castPrompt`) says how to load each one.
 
 Without art (a game with no site behind it) there is no extra card, and the spec 19 shortlist is the cast step.
+
+### The person's own pictures
+
+**+ Pictures** in the role tabs (and **Add pictures** on an empty Cast step) takes pictures from disk; they can
+also be dropped on the step. Each picture becomes one role, labelled from its filename (`03-lokee.png` → Lokee,
+a leading number is dropped), with that picture as its art. `POST /api/meshy/art { from, name, data }` stores it
+as `runs/<run>/img/game-cast-<role>.<ext>`: PNG, JPEG or WebP by their first bytes, 16 MB at most, into a run
+that exists. A cast holds up to 16 own-art roles next to at most 4 found models.
+
+`/cast` in "Tell the crew…" opens the Cast step on its own (no game spec needed), for the open build's art.
+
+### Make all
+
+With more than one role ready to make, the opened Meshy card also shows **Make all N · N×35 credits**. One click
+sends `POST /api/meshy/batch { items: [{ role, src }], credits }`. The server checks the whole batch before
+anything is spent: `credits` must equal 35 × the number of items (else 402), at most 16 items, no role twice,
+every picture the project's own. Then each role is one job: 3 run at once and the rest queue. A role already
+running joins its run, so it is never paid twice.
+
+### The bench
+
+While jobs run, a row of small tiles sits under the cards, one per job, with a crew worker of its own
+(Pebble, Mochi, Tofu, Bean, Puff, Sprout). The worker's cursor (name only) works on its tile:
+
+| Stage | Tile | Worker |
+|---|---|---|
+| Queued | dim, the waiting worker's face | parked |
+| Modelling | a grey clay figure rises from the feet under a turning wire mesh, as far as Meshy's percentage | sweeps along the fill line |
+| Rigging | bones and joints appear one by one | hops joint to joint |
+| Saving | the coloured figure lifts | carries a small copy to the library box |
+| Done | — | the model's picture lands in the library box (count, last three) and on the role's card, with Redo and Accept |
+| Failed | ⚠ | — |
+
+There is no 3D preview: it is a still picture, so no WebGL context is made. The bench is light by rule:
+
+- Tiles are small, `contain: strict`, and animate only `transform` and `opacity`. There is no blur and no
+  `will-change`.
+- The bench pauses when off screen (IntersectionObserver) and stands still with reduced motion.
+- Every picture on it is a copy at most 256 px, made once as WebP (`SwarmUI.small`), lazy and `decoding=async`.
+  The full art is never drawn there.
+- The page asks for job state on a single 2.5 s poll.
 
 ## Meshy
 
@@ -74,6 +115,9 @@ moves, with a small walking bob and a squash on hits.
 - [x] `cleanCast`, `castPrompt`, `castCredits` and `startGame` handle `meshy` and `art` picks.
 - [x] Tests on a mocked Meshy (`tests/meshy.test.mjs`): price, key lookup, request body, polling policy, the
       full run, a failed rig, no key, the download guard, cast picks. No real credits.
+- [x] The person's own pictures (`+ Pictures`, drop, `/cast`), `POST /api/meshy/art`.
+- [x] Make all: `POST /api/meshy/batch` with the total checked by the server, a queue of 3 at once, one worker
+      a job, and the bench. Tests: wrong totals, a bad item, duplicates, over 16, the queue and joining.
 - [ ] One real run with a key, checked by eye before it is shown.
 - [ ] A turntable `<model-viewer>` on the Made card instead of the still picture.
 
@@ -81,4 +125,3 @@ moves, with a small walking bob and a squash on hits.
 
 - Animations past walk and run (`meshy_animate`, 3 credits each).
 - Text-to-3D without a picture.
-- Making several roles in one click.

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { meshyCost, meshyKey, imageTo3dBody, rigBody, rigOutputs, classifyFailure, backoffMs, waitTask, download, makeCharacter, assetAllowed, meshyPick, spritePick, STYLE } from '../engine/meshy.mjs'
+import { meshyCost, meshyKey, meshyJobs, BATCH_MAX,imageTo3dBody, rigBody, rigOutputs, classifyFailure, backoffMs, waitTask, download, makeCharacter, assetAllowed, meshyPick, spritePick, STYLE } from '../engine/meshy.mjs'
 import { cleanCast, castPrompt, castCredits, spriteFile } from '../engine/cast.mjs'
 
 const KEY = 'msy_test_not_a_real_key'
@@ -144,4 +144,108 @@ test('art-made picks join the cast: Meshy needs its file, a sprite needs a proje
   const credits = castCredits(cast)
   assert.match(credits, /Hero: Made from the project's own art with Meshy\n/)
   assert.doesNotMatch(credits, / — \n/)
+})
+
+test('own-art characters go past the four found models: up to 16 in one cast', () => {
+  const many = Array.from({ length: 18 }, (_, i) => meshyPick({ role: `r${i}`, label: `R${i}`, file: `meshy-r${i}-t.glb` }))
+  const found = Array.from({ length: 6 }, (_, i) => ({ role: `f${i}`, name: 'x', creator: 'y', url: `https://sketchfab.com/3d-models/x-${i}`, source: 'sketchfab' }))
+  const cast = cleanCast([...found, ...many])
+  assert.equal(cast.filter(c => c.source === 'meshy').length, 16)
+  assert.equal(cast.filter(c => c.source === 'sketchfab').length, 4)
+})
+
+// ---------- the Studio's job list (meshyJobs): one or several at once, the price checked first
+const settle = () => new Promise(r => setImmediate(r))
+function jobList({ key = KEY, parallel, fail = new Set() } = {}) {
+  const d = tmp()
+  for (const n of ['a', 'b', 'c', 'd']) writeFileSync(join(d, `${n}.png`), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+  const resolveArt = art => { const m = /^\/img\/run\/([a-d])\.png$/.exec(art); if (!m) throw Object.assign(new Error('pick a picture from the project'), { status: 400 }); return join(d, `${m[1]}.png`) }
+  // each run waits for the test to let it finish, so the line can be seen
+  const gates = new Map(), made = []
+  const make = ({ role, image, key: k }) => {
+    made.push({ role, image, key: k })
+    return new Promise((ok, no) => gates.set(role, () => (fail.has(role) ? no(new Error('pose not detected')) : ok({ file: `meshy-${role}-t.glb`, clips: {}, thumb: `meshy-${role}-t.png`, credits: 35 }))))
+  }
+  let n = 0
+  const q = meshyJobs({ outDir: join(d, 'models'), resolveArt, key: () => key, make, parallel, newId: () => `job${++n}` })
+  return { q, made, finish: async role => { gates.get(role)(); for (let i = 0; i < 5; i++) await settle() } }
+}
+const items = roles => roles.map(r => ({ role: r, label: r.toUpperCase(), art: `/img/run/${r}.png` }))
+
+test('make all: the total on the button is checked before anything starts', async () => {
+  const { q, made } = jobList()
+  assert.throws(() => q.batch({ items: items(['a', 'b', 'c']), credits: 35 }), err => err.status === 402 && /105/.test(err.message))
+  assert.throws(() => q.batch({ items: items(['a', 'b', 'c']) }), err => err.status === 402)
+  assert.throws(() => q.batch({ items: items(['a', 'b', 'c']), credits: 140 }), err => err.status === 402)
+  await settle()
+  assert.equal(q.jobs.size, 0)
+  assert.equal(made.length, 0)
+})
+
+test('make all: one bad item refuses the whole ask, nothing spent', async () => {
+  const { q, made } = jobList()
+  assert.throws(() => q.batch({ items: [...items(['a', 'b']), { role: 'c', art: 'https://evil.example/x.png' }], credits: 105 }), err => err.status === 400)
+  assert.throws(() => q.batch({ items: [...items(['a']), ...items(['a'])], credits: 70 }), /asked twice/)
+  assert.throws(() => q.batch({ items: [], credits: 0 }), /nothing to make/)
+  assert.throws(() => q.batch({ items: Array.from({ length: BATCH_MAX + 1 }, (_, i) => ({ role: `r${i}`, art: '/img/run/a.png' })), credits: 35 * (BATCH_MAX + 1) }), /at most/)
+  await settle()
+  assert.equal(q.jobs.size, 0)
+  assert.equal(made.length, 0)
+})
+
+test('no key: neither one nor several start', async () => {
+  const { q, made } = jobList({ key: '' })
+  assert.throws(() => q.start({ role: 'a', art: '/img/run/a.png', credits: 35 }), err => err.status === 409)
+  assert.throws(() => q.batch({ items: items(['a', 'b']), credits: 70 }), err => err.status === 409)
+  await settle()
+  assert.equal(made.length, 0)
+})
+
+test('make all: jobs run in parallel up to the limit, the rest wait in line, each with its own worker', async () => {
+  const { q, made, finish } = jobList({ parallel: 2 })
+  const out = q.batch({ items: items(['a', 'b', 'c', 'd']), credits: 140 })
+  assert.equal(out.credits, 140)
+  assert.equal(out.spent, 140)
+  assert.deepEqual(out.jobs.map(j => j.stage), ['model', 'model', 'queued', 'queued'])
+  await settle()
+  assert.deepEqual(made.map(m => m.role), ['a', 'b'])
+  assert.equal(new Set(out.jobs.map(j => j.worker)).size, 4)
+  assert.ok(made.every(m => m.key === KEY))
+  // the key is never on a job the browser sees
+  assert.ok(!JSON.stringify([...q.jobs.values()]).includes(KEY))
+  await finish('a')
+  assert.equal(q.get('job1').state, 'done')
+  assert.equal(q.get('job1').pick.thumbSrc, '/models/meshy-a-t.png')
+  assert.equal(q.get('job3').stage, 'model')
+  assert.deepEqual(made.map(m => m.role), ['a', 'b', 'c'])
+  await finish('b'); await finish('c'); await finish('d')
+  assert.deepEqual([...q.jobs.values()].map(j => j.state), ['done', 'done', 'done', 'done'])
+})
+
+test('a role already being made joins its run: the batch never spends more than was clicked', async () => {
+  const { q, made, finish } = jobList({ fail: new Set(['b']) })
+  const one = q.start({ role: 'a', label: 'A', art: '/img/run/a.png', credits: 35 })
+  assert.throws(() => q.start({ role: 'b', art: '/img/run/b.png', credits: 30 }), err => err.status === 402)
+  const out = q.batch({ items: items(['a', 'b']), credits: 70 })
+  assert.equal(out.jobs[0].id, one.id)
+  assert.equal(out.spent, 35)
+  await settle()
+  assert.deepEqual(made.map(m => m.role), ['a', 'b'])
+  await finish('b')
+  assert.equal(out.jobs[1].state, 'failed')
+  assert.match(out.jobs[1].error, /pose not detected/)
+  await finish('a')
+  assert.equal(one.state, 'done')
+})
+
+test('the full run through the job list on a mocked Meshy: two paid calls per character', async () => {
+  const d = tmp()
+  writeFileSync(join(d, 'hero.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+  const { fetchImpl, calls } = fakeMeshy()
+  const q = meshyJobs({ outDir: join(d, 'models'), resolveArt: () => join(d, 'hero.png'), key: () => KEY, fetchImpl, clock: clock() })
+  const job = q.start({ role: 'hero', art: '/img/run/hero.png', credits: 35 })
+  for (let i = 0; i < 200 && job.state === 'running'; i++) await settle()
+  assert.equal(job.state, 'done', job.error || '')
+  assert.equal(calls.filter(c => c.method === 'POST').length, 2)
+  assert.ok(existsSync(join(d, 'models', job.pick.file)))
 })

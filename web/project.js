@@ -172,7 +172,8 @@ export function makeProject({ sw, C, root }) {
   }
   function board(x) {
     const sel = P.sel === x.key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
-    const img = x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="" draggable="false" loading="lazy">`
+    const full = x.src ? (x.src.startsWith('data:') ? x.src : base() + x.src) : ''
+    const img = x.src ? `<img src="${esc(picNow(full))}" data-full="${esc(full)}" alt="" draggable="false" loading="lazy" decoding="async">`
       : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code' }[x.kind] || 'file', 26)}</span>`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
@@ -192,7 +193,7 @@ export function makeProject({ sw, C, root }) {
     // painted again: the old picture stays under the shimmer; a new slot gets a stand-in or a sketch
     const over = !!x.src && !landed
     const sub = over ? '' : standinFor(x)
-    const under = over ? '' : sub && sub !== 'wait' ? `${sketch(x)}<img class="sb" src="${esc(sub.url)}" alt="" draggable="false" style="animation-delay:-${since(sub.at).toFixed(1)}s">` : sketch(x)
+    const under = over ? '' : sub && sub !== 'wait' ? `${sketch(x)}<img class="sb" src="${esc(picNow(sub.url))}" data-full="${esc(sub.url)}" alt="" draggable="false" decoding="async" style="animation-delay:-${since(sub.at).toFixed(1)}s">` : sketch(x)
     if (landed) return `<div class="pt landing">${under}</div>`
     const ago = since(w.from || w.t)
     const pct = Math.min(92, Math.round(100 * (1 - Math.exp(-ago / 40))))
@@ -513,7 +514,28 @@ export function makeProject({ sw, C, root }) {
     offSheet?.(); offSheet = null
     if (on) offSheet = window.SwarmUI?.layer(root.querySelector('.pj-side'), () => sheet(false), { extra: [root.querySelector('.pj-files-btn')] })
   }
-  function applyCam() { world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})` }
+  function applyCam() { world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})`; sizeSoon() }
+  // Pictures at the size they are drawn: zoomed out, an artboard shows a 256 or 512 px wide copy
+  // (web/ui.js small) instead of its full picture, so a whole project on screen holds a few MB of
+  // pictures, not every page's full-length snapshot. Zoomed in past that, the full picture comes back.
+  const TIERS = [256, 512]
+  const picTier = new Map() // full src -> the tier last shown
+  const tierFor = im => TIERS.find(t => im.offsetWidth * P.cam.k * (devicePixelRatio || 1) <= t * 0.9) || 0
+  const picNow = full => { const t = picTier.get(full); return (t && window.SwarmUI?.small?.(full, t, { by: 'width' })) || full }
+  let sizeT = 0
+  function sizeSoon() { clearTimeout(sizeT); sizeT = setTimeout(sizePics, 160) }
+  function sizePics() {
+    const small = window.SwarmUI?.small
+    if (!small) return
+    for (const im of world.querySelectorAll('img[data-full]')) {
+      const full = im.dataset.full, t = tierFor(im)
+      if (!im.offsetWidth) continue
+      picTier.set(full, t)
+      if (!t) { if (im.getAttribute('src') !== full) im.src = full; continue }
+      const url = small(full, t, { by: 'width', ready: u => { if (im.isConnected && picTier.get(full) === t && im.getAttribute('src') !== u) im.src = u } })
+      if (url && im.getAttribute('src') !== url) im.src = url
+    }
+  }
   // the box the artboards and their section names take up, in world units
   function bounds(els) {
     const wr = world.getBoundingClientRect(), k = P.cam.k

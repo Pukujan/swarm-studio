@@ -1430,6 +1430,7 @@ const SLASH = [
   ['video', '[prompt]', 'cut a film from a prompt, e.g. a fast trailer, scary but cute'],
   ['app', '[change]', 'the App view: make this design a working app, or change it'],
   ['game', '[idea]', 'make an original browser game: a few questions, then it builds'],
+  ['cast', '', 'make characters from pictures, with Meshy'],
   ['canvas', '', 'back to the canvas view'],
   ['export', '', 'save as static HTML, React + Tailwind and an ABA handoff'],
   ['publish', '[github|vercel|cloudflare|local]', 'put it live and get the link'],
@@ -1466,6 +1467,7 @@ async function runSlash(text) {
     }
     case 'app': if (!needRun()) return; return arg ? appAsk(arg) : appv.hasApp || appv.state === 'working' ? setView('app') : (setView('app'), buildApp())
     case 'game': return openGame(arg)
+    case 'cast': return openCastOnly()
     case 'canvas': return setView('canvas')
     case 'export': return needRun() && exportRunNow()
     case 'publish': return needRun() && publishNow(['local', 'vercel', 'cloudflare', 'github'].includes(arg.toLowerCase()) ? arg.toLowerCase() : 'github')
@@ -4356,34 +4358,176 @@ function openCast() {
 async function ownArt() {
   const c = game.cast
   if (c.meshy) return
-  const from = game.spec?.brand?.from || game.from || ''
   c.meshy = { art: [] }
-  const out = await api(`/api/meshy?from=${encodeURIComponent(from)}`).then(r => r.json()).catch(() => ({}))
-  c.meshy = { ready: !!out.ready, cost: out.cost?.credits || 0, art: (out.art || []).map(a => a.src) }
-  c.own = {}
-  if (game.cast === c && c.meshy.art.length) renderGame()
-}
-async function meshyMake(r) {
-  const c = game.cast, o = c.own[r.id]
-  o.job = { state: 'running', stage: 'model', progress: 0 }
-  renderGame()
-  try {
-    const job = await api('/api/meshy', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: r.id, label: r.label, art: o.art, credits: c.meshy.cost }) }).then(x => x.json())
-    if (!job.id) throw new Error(job.error || 'Meshy did not start')
-    o.job = job
-    while (o.job.state === 'running') {
-      await new Promise(res => setTimeout(res, 3000))
-      o.job = await api(`/api/meshy/job?id=${job.id}`).then(x => x.json()).catch(() => o.job)
-      if (game.cast === c) renderGame()
-    }
-  } catch (err) {
-    o.job = { state: 'failed', error: err.message }
-  }
+  c.own = c.own || {}
+  const out = await api(`/api/meshy?from=${encodeURIComponent(castFrom())}`).then(r => r.json()).catch(() => ({}))
+  c.meshy = { ready: !!out.ready, cost: out.cost?.credits || 0, art: [...new Set([...(out.art || []).map(a => a.src), ...Object.values(c.own).map(o => o.art)])] }
+  // each role starts on its own picture (people first), not all on the first one
+  c.roles.forEach((r, i) => { if (c.meshy.art.length) c.own[r.id] ||= { art: c.meshy.art[i % c.meshy.art.length], job: null } })
   if (game.cast === c) renderGame()
 }
+const castFrom = () => game.spec?.brand?.from || game.from || ''
+
+// Pictures the person adds (picked or dropped): each one becomes a role, named from its file
+// ("00a-messenger.png" -> Messenger), with that picture as its art.
+const roleLabel = name => String(name).replace(/\.[a-z0-9]+$/i, '').replace(/^\d+[a-z]?[-_ ]+/i, '').replace(/[-_]+/g, ' ').trim().replace(/^./, ch => ch.toUpperCase()) || 'Character'
+async function castAdd(files) {
+  const c = game.cast
+  const pics = [...files].filter(f => /^image\/(png|jpeg|webp)$/.test(f.type)).slice(0, 16)
+  if (!pics.length || !castFrom()) return
+  c.adding = pics.length
+  renderGame()
+  for (const f of pics) {
+    const data = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(''); fr.readAsDataURL(f) })
+    const out = data ? await api('/api/meshy/art', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from: castFrom(), name: f.name, data }) }).then(r => r.json()).catch(() => ({})) : {}
+    c.adding--
+    if (!out.src) { botMsg(`Cast: ${f.name}: ${out.error || 'not added'}`); continue }
+    let id = out.role, n = 2
+    while (c.roles.some(r => r.id === id)) id = `${out.role}-${n++}`
+    c.roles.push({ id, label: roleLabel(f.name), name: roleLabel(f.name) })
+    c.own[id] = { art: out.src, job: null }
+    if (!c.meshy.art.includes(out.src)) c.meshy.art.push(out.src)
+    if (c.roles.length === 1) c.role = 0
+    if (game.cast === c) renderGame()
+  }
+  c.adding = 0
+  if (game.cast === c) renderGame()
+}
+
+// ---------- the bench: every Meshy job of this cast, each worked by its own crew member
+const castJobs = (c = game.cast) => (c?.roles || []).map((r, i) => ({ r, i, o: c.own?.[r.id] })).filter(x => x.o?.job)
+const makingJobs = c => castJobs(c).filter(x => x.o.job.state === 'running')
+// the ones a crew member is working right now (the rest wait in line, their worker's mark on the tile)
+const workedJobs = c => makingJobs(c).filter(x => x.o.job.stage !== 'queued')
+// the roles "Make all" would make: a picture, nothing made or being made
+const makeable = c => (c.meshy?.ready ? c.roles.filter(r => c.own?.[r.id]?.art && !['running', 'done'].includes(c.own[r.id].job?.state)) : [])
+async function meshyMake(r) {
+  const c = game.cast, o = c.own[r.id]
+  o.job = { state: 'running', stage: 'queued', progress: 0, worker: 'Pebble' }
+  renderGame()
+  const job = await api('/api/meshy', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: r.id, label: r.label, art: o.art, credits: c.meshy.cost }) }).then(x => x.json()).catch(err => ({ error: err.message }))
+  o.job = job.id ? job : { state: 'failed', error: job.error || 'Meshy did not start' }
+  meshyPoll(c)
+}
+// Make all: one click, one price for every role on the button, and the server checks that total
+async function meshyAll() {
+  const c = game.cast, roles = makeable(c)
+  if (roles.length < 2) return
+  for (const r of roles) c.own[r.id].job = { state: 'running', stage: 'queued', progress: 0, worker: '' }
+  renderGame()
+  const out = await api('/api/meshy/batch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: roles.map(r => ({ role: r.id, label: r.label, art: c.own[r.id].art })), credits: roles.length * c.meshy.cost }) }).then(x => x.json()).catch(err => ({ error: err.message }))
+  for (const r of roles) c.own[r.id].job = out.jobs?.find(j => j.role === r.id.replace(/[^\w-]/g, '').slice(0, 40)) || { state: 'failed', error: out.error || 'Meshy did not start' }
+  meshyPoll(c)
+}
+// one poll for every job; the bench is patched in place, the step re-drawn only when a job ends
+async function meshyPoll(c) {
+  if (c.polling) return
+  c.polling = true
+  if (game.cast === c) renderGame()
+  while (game.cast === c && makingJobs(c).length) {
+    await new Promise(res => setTimeout(res, 2500))
+    let ended = false
+    await Promise.all(makingJobs(c).map(async ({ o }) => {
+      if (!o.job.id) return
+      const j = await api(`/api/meshy/job?id=${o.job.id}`).then(x => (x.ok ? x.json() : null)).catch(() => null)
+      if (!j) return
+      if (j.state !== 'running') { ended = true; j.endedAt = Date.now() }
+      if (j.stage !== o.job.stage) j.stageAt = Date.now()
+      else j.stageAt = o.job.stageAt
+      o.job = j
+    }))
+    if (game.cast !== c) break
+    if (ended) renderGame()
+    else benchPatch()
+  }
+  c.polling = false
+}
+
+// Pictures on the bench are small copies (256 px at most, webp, web/ui.js), made once and kept:
+// never the full-size art. Until a copy is ready the tile shows nothing rather than the big picture.
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+function small(src, max = 256) {
+  const ready = url => { for (const img of document.querySelectorAll('img[data-small]')) if (img.dataset.small === src && Number(img.dataset.max || 256) === max) img.src = url }
+  return window.SwarmUI?.small ? window.SwarmUI.small(src, max, { ready }) || BLANK : src || BLANK
+}
+const smallImg = (src, max = 256, cls = '') => `<img${cls ? ` class="${cls}"` : ''} src="${esc(small(src, max))}" data-small="${esc(src)}" data-max="${max}" alt="" loading="lazy" decoding="async">`
+
+const STAGE_WORD = { queued: 'waiting', model: 'sculpting', rig: 'rigging', download: 'carrying' }
+// A clay figure under a turning wire mesh; bones for the rig. Small SVG, transform and opacity only.
+const WIRE = '<svg class="fg-wire" viewBox="0 0 60 100" aria-hidden="true"><g class="fg-lat"><ellipse cx="30" cy="16" rx="11" ry="3"/><ellipse cx="30" cy="36" rx="16" ry="4"/><ellipse cx="30" cy="56" rx="14" ry="4"/><ellipse cx="30" cy="78" rx="12" ry="3.5"/></g><g class="fg-mer"><ellipse cx="30" cy="16" rx="11" ry="11"/><ellipse cx="30" cy="57" rx="16" ry="38"/></g><g class="fg-mer b"><ellipse cx="30" cy="16" rx="11" ry="11"/><ellipse cx="30" cy="57" rx="16" ry="38"/></g></svg>'
+// joints in the 60x100 box: head, neck, shoulders, elbows, hands, hips, knees, feet
+const JOINTS = [[30, 14], [30, 27], [19, 31], [41, 31], [14, 46], [46, 46], [12, 60], [48, 60], [30, 52], [24, 56], [36, 56], [23, 74], [37, 74], [22, 92], [38, 92]]
+const BONES = [[0, 1], [1, 8], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [8, 9], [8, 10], [9, 11], [10, 12], [11, 13], [12, 14]]
+const RIG = `<svg class="fg-bones" viewBox="0 0 60 100" aria-hidden="true">${BONES.map(([a, b], i) => `<line style="--i:${i}" x1="${JOINTS[a][0]}" y1="${JOINTS[a][1]}" x2="${JOINTS[b][0]}" y2="${JOINTS[b][1]}"/>`).join('')}${JOINTS.map(([x, y], i) => `<circle style="--i:${i}" cx="${x}" cy="${y}" r="1.8"/>`).join('')}</svg>`
+function benchTile({ r, o }) {
+  const j = o.job, p = Math.max(0, Math.min(100, Number(j.progress) || 0)) / 100
+  const stage = j.state === 'failed' ? 'failed' : j.stage || 'queued'
+  const ago = ((Date.now() - (j.stageAt || Date.now())) / 1000).toFixed(1)
+  return `<button type="button" class="fg st-${stage}" role="listitem" data-job="${esc(j.id || r.id)}" data-role-id="${esc(r.id)}" style="--p:${stage === 'model' ? p : 1};--ago:-${ago}s" aria-label="${esc(r.label)}, ${esc(STAGE_WORD[stage] || 'failed')}"><span class="fg-stage">${WIRE}<span class="fg-fill"><span>${smallImg(o.art, 256, 'fg-clay')}</span></span>${RIG}${smallImg(o.art, 256, 'fg-made')}${stage === 'failed' ? '<span class="fg-warn" aria-hidden="true">⚠</span>' : ''}${stage === 'queued' && j.worker ? `<span class="fg-who" aria-hidden="true">${Crew.avatar(j.worker, 20)}</span>` : ''}</span><b>${esc(r.label)}</b></button>`
+}
+function benchHtml(c) {
+  const jobs = castJobs(c)
+  if (!jobs.length) return ''
+  const work = jobs.filter(x => x.o.job.state !== 'done'), made = jobs.filter(x => x.o.job.state === 'done')
+  const fresh = made.some(x => Date.now() - (x.o.job.endedAt || 0) < 1600)
+  const lib = `<div class="fg-lib${fresh ? ' got' : ''}" role="group" aria-label="Model library, ${made.length}"><span class="fg-shelf">${ico('box')}<span class="t">${made.length}</span></span>${made.slice(-3).map(({ r, o }) => `<button type="button" data-role-id="${esc(r.id)}" aria-label="${esc(r.label)}">${smallImg(o.job.pick?.thumbSrc || o.art, 64)}</button>`).join('')}</div>`
+  return `<div class="cforge"><div class="fg-row" role="list" aria-label="Making">${work.map(benchTile).join('')}</div>${lib}</div>`
+}
+// a poll patches the tiles in place, so their motion runs on without a restart
+function benchPatch() {
+  const box = game.el?.querySelector('.cforge'), c = game.cast
+  if (!box || !c) return
+  for (const x of castJobs(c)) {
+    if (x.o.job.state !== 'running') continue
+    const t = box.querySelector(`.fg[data-role-id="${CSS.escape(x.r.id)}"]`)
+    if (!t) continue
+    const st = `st-${x.o.job.stage || 'queued'}`
+    if (!t.classList.contains(st)) { t.outerHTML = benchTile(x); continue }
+    t.style.setProperty('--p', x.o.job.stage === 'model' ? String((Number(x.o.job.progress) || 0) / 100) : '1')
+  }
+  benchWatch()
+}
+// offscreen, the bench rests: its animations pause until it scrolls back into view
+let benchSeen = null
+function benchWatch() {
+  const box = game.el?.querySelector('.cforge')
+  if (!box || box.dataset.watched) return
+  box.dataset.watched = '1'
+  benchSeen?.disconnect()
+  benchSeen = new IntersectionObserver(es => { for (const e of es) e.target.classList.toggle('rest', !e.isIntersecting) })
+  benchSeen.observe(box)
+}
+// Where each job's crew member is: on its tile while it sculpts and rigs, then carrying the model
+// to the library. One cursor per running job, the same names the server gave the jobs.
+function benchPin(i) {
+  const x = workedJobs()[i]
+  const box = game.el?.querySelector('.cforge')
+  if (!x || !box || box.classList.contains('rest')) return null
+  const t = box.querySelector(`.fg[data-role-id="${CSS.escape(x.r.id)}"] .fg-stage`)?.getBoundingClientRect()
+  if (!t?.width) return null
+  const now = performance.now(), j = x.o.job, stage = j.stage || 'queued', text = ''
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (stage === 'queued' || calm) return { x: t.right - 10, y: t.bottom - 14, text }
+  if (stage === 'model') {
+    // along the line where the clay is rising, side to side
+    const p = Math.max(0.08, Math.min(0.95, (Number(j.progress) || 0) / 100))
+    return { x: t.left + t.width * (0.5 + 0.32 * Math.sin(now / 900 + i * 1.7)), y: t.top + t.height * (1 - p), text, typing: true }
+  }
+  if (stage === 'rig') {
+    // joint to joint, the way the bones go in
+    const [jx, jy] = JOINTS[Math.floor(now / 1100 + i * 3) % JOINTS.length]
+    return { x: t.left + t.width * jx / 60, y: t.top + t.height * jy / 100, text, typing: true }
+  }
+  // saving: pick the model up at the tile, carry it to the library, come back for the next part
+  const lib = box.querySelector('.fg-shelf')?.getBoundingClientRect()
+  const phase = (now / 3200 + i * 0.3) % 1
+  if (!lib?.width || phase < 0.3) return { x: t.left + t.width / 2, y: t.top + t.height * 0.6, text, carry: null }
+  return { x: lib.left + lib.width / 2, y: lib.top + lib.height / 2, text, carry: small(x.o.art, 256) }
+}
+
 async function castSearch() {
   const c = game.cast, r = c.roles[c.role]
-  if (!r || c.lists[r.id]) return
+  if (!r || c.lists[r.id] || c.only) return
   c.lists[r.id] = { busy: true, models: [] }
   try {
     const out = await api('/api/cast', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: r, violent: c.violent }) }).then(x => x.json())
@@ -4394,53 +4538,88 @@ async function castSearch() {
   if (game.cast === c) renderGame()
 }
 function renderCast(el, head) {
-  const c = game.cast, r = c.roles[c.role], list = c.lists[r.id] || { busy: true, models: [] }
-  const pick = c.picks[r.id]
-  const tabs = c.roles.length > 1 ? `<div class="gchips ctabs" role="tablist">${c.roles.map((x, i) => `<button role="tab" aria-selected="${i === c.role}" class="${i === c.role ? 'on' : ''}" data-role="${i}">${c.picks[x.id] ? ico('check') : ''}${esc(x.label)}</button>`).join('')}</div>` : ''
-  const sel = list.models.find(m => `${m.source}:${m.id}` === c.sel)
-  const cards = list.busy ? '<div class="gbody"><div class="spin" aria-label="Searching"></div></div>'
-    : list.models.length ? `<div class="cgrid">${list.models.map(m => {
-      const k = `${m.source}:${m.id}`
-      return `<button class="ccard${pick?.key === k ? ' on' : ''}${c.sel === k ? ' open' : ''}" data-pick="${esc(k)}" aria-label="${m.n}. ${esc(m.name)}"><span class="cn">${m.n}</span>${m.preview ? `<img src="${esc(m.preview)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<i></i>'}<b>${esc(m.name)}</b></button>`
-    }).join('')}</div>`
-    : `<div class="gbody"><span aria-hidden="true">⚠</span><span>${list.error ? 'No answer' : 'Nothing fits'}</span></div>`
-  // the project's own art: one more card, first in the grid
-  const m = c.meshy, o = m?.art.length ? (c.own[r.id] ||= { art: m.art[0], job: null }) : null
-  const ownCard = o ? `<button class="ccard own${pick?.key === 'own' ? ' on' : ''}${c.sel === 'own' ? ' open' : ''}" data-own aria-label="${m.ready ? 'Meshy' : 'Sprite'}"><span class="cn">${ico(m.ready ? 'box' : 'image')}</span><img src="${esc(o.job?.pick?.thumbSrc || o.art)}" alt=""><b>${m.ready ? 'Meshy' : 'Sprite'}</b></button>` : ''
-  const withOwn = ownCard ? (cards.startsWith('<div class="cgrid">') ? cards.replace('<div class="cgrid">', `<div class="cgrid">${ownCard}`) : `<div class="cgrid">${ownCard}</div>${list.busy ? '' : cards}`) : cards
-  const arts = o && m.art.length > 1 ? `<div class="cart">${m.art.map(a => `<button class="${a === o.art ? 'on' : ''}" data-art="${esc(a)}" aria-label="Picture"><img src="${esc(a)}" alt=""></button>`).join('')}</div>` : ''
-  const j = o?.job
-  const ownInfo = c.sel !== 'own' || !o ? ''
-    : !m.ready ? `<div class="cinfo"><b>Sprite</b>${arts}</div>`
-    : j?.state === 'running' ? `<div class="cinfo"><b>Meshy</b><div class="gbody"><div class="spin" aria-label="Making"></div><span>${esc(j.stage === 'rig' ? 'Rigging' : j.stage === 'download' ? 'Saving' : 'Modelling')} ${Number(j.progress) || 0}%</span></div></div>`
-    : j?.state === 'done' ? `<div class="cinfo"><b>Meshy</b><div class="cmade">${j.pick.thumbSrc ? `<img src="${esc(j.pick.thumbSrc)}" alt="">` : ''}</div><span class="cact"><button class="glink" data-make>${ico('refresh-cw')}Redo · ${m.cost} credits</button><button class="glink" data-accept>${pick?.key === 'own' ? ico('check') : ''}Accept</button></span></div>`
-    : `<div class="cinfo"><b>Meshy</b>${arts}${j?.state === 'failed' ? `<p><span aria-hidden="true">⚠</span> ${esc(j.error || '')}</p>` : ''}<span class="cact"><button class="glink" data-make>Make · ${m.cost} credits</button></span></div>`
-  const info = sel ? `<div class="cinfo"><b>${esc(sel.name)}</b><dl><dt>By</dt><dd>${esc(sel.creator)}</dd><dt>Licence</dt><dd>${esc(sel.licence.credit)}${sel.licence.restyle ? '' : ' · own look kept'}</dd><dt>Triangles</dt><dd>${Number(sel.triangles).toLocaleString()}</dd></dl><a class="glink" href="${esc(sel.url)}" target="_blank" rel="noopener">${ico('external-link')}${sel.source === 'vroid' ? 'VRoid Hub' : 'Sketchfab'}</a></div>` : ''
-  el.innerHTML = `${head}<h3>${esc(r.name || r.label)}</h3>${tabs}${withOwn}${ownInfo}${info}<div class="gfoot"><button class="glink" data-back>← Spec</button><span><button class="glink" data-skip>Skip</button><button class="big" data-build>Build the game</button></span></div>`
-  for (const b of el.querySelectorAll('[data-role]')) b.onclick = () => { c.role = Number(b.dataset.role); c.sel = null; renderGame(); castSearch() }
-  el.querySelector('[data-own]')?.addEventListener('click', () => {
-    c.sel = 'own'
-    // without a key the art is the pick at once (free); a Meshy model waits for Accept
-    if (!m.ready) c.picks[r.id] = { key: 'own', role: r.id, label: r.label, source: 'art', format: 'sprite', art: o.art, name: `${r.label} (sprite)`, creator: 'this project' }
-    renderGame()
-  })
-  for (const b of el.querySelectorAll('[data-art]')) b.onclick = () => {
-    o.art = b.dataset.art
-    if (!m.ready && c.picks[r.id]?.key === 'own') c.picks[r.id].art = o.art
-    renderGame()
+  const c = game.cast, r = c.roles[c.role]
+  const addBtn = `<button class="glink cadd" data-add>${ico('plus')}<span class="t">Pictures</span></button><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden data-files>`
+  const foot = c.only ? `<div class="gfoot"><span></span><span>${c.adding ? '<div class="spin" aria-label="Adding"></div>' : ''}</span></div>`
+    : `<div class="gfoot"><button class="glink" data-back>← Spec</button><span><button class="glink" data-skip>Skip</button><button class="big" data-build>Build the game</button></span></div>`
+  if (!r) {
+    // no roles yet (/cast on a build): the pictures the person adds become the cast
+    el.innerHTML = `${head}<h3>Cast</h3><div class="gbody cdrop">${c.adding ? '<div class="spin" aria-label="Adding"></div>' : `<button class="big" data-add>${ico('image')}<span class="t">Add pictures</span></button><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden data-files>`}</div>${foot}`
+  } else {
+    const list = c.only ? { models: [] } : c.lists[r.id] || { busy: true, models: [] }
+    const pick = c.picks[r.id]
+    const tabs = `<div class="gchips ctabs" role="tablist">${c.roles.map((x, i) => `<button role="tab" aria-selected="${i === c.role}" class="${i === c.role ? 'on' : ''}" data-role="${i}">${c.picks[x.id] ? ico('check') : ''}${esc(x.label)}</button>`).join('')}${addBtn}</div>`
+    const sel = list.models.find(m => `${m.source}:${m.id}` === c.sel)
+    const cards = list.busy ? '<div class="gbody"><div class="spin" aria-label="Searching"></div></div>'
+      : list.models.length ? `<div class="cgrid">${list.models.map(m => {
+        const k = `${m.source}:${m.id}`
+        return `<button class="ccard${pick?.key === k ? ' on' : ''}${c.sel === k ? ' open' : ''}" data-pick="${esc(k)}" aria-label="${m.n}. ${esc(m.name)}"><span class="cn">${m.n}</span>${m.preview ? `<img src="${esc(m.preview)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<i></i>'}<b>${esc(m.name)}</b></button>`
+      }).join('')}</div>`
+      : c.only ? '' : `<div class="gbody"><span aria-hidden="true">⚠</span><span>${list.error ? 'No answer' : 'Nothing fits'}</span></div>`
+    // the project's own art: one more card, first in the grid
+    const m = c.meshy, o = m?.art.length ? (c.own[r.id] ||= { art: m.art[c.role % m.art.length], job: null }) : null
+    const ownCard = o ? `<button class="ccard own${pick?.key === 'own' ? ' on' : ''}${c.sel === 'own' ? ' open' : ''}" data-own aria-label="${m.ready ? 'Meshy' : 'Sprite'}"><span class="cn">${ico(m.ready ? 'box' : 'image')}</span>${smallImg(o.job?.pick?.thumbSrc || o.art)}<b>${m.ready ? 'Meshy' : 'Sprite'}</b></button>` : ''
+    const withOwn = ownCard ? (cards.startsWith('<div class="cgrid">') ? cards.replace('<div class="cgrid">', `<div class="cgrid">${ownCard}`) : `<div class="cgrid">${ownCard}</div>${list.busy ? '' : cards}`) : cards
+    const arts = o && m.art.length > 1 ? `<div class="cart">${m.art.map(a => `<button class="${a === o.art ? 'on' : ''}" data-art="${esc(a)}" aria-label="Picture">${smallImg(a, 128)}</button>`).join('')}</div>` : ''
+    const j = o?.job
+    const all = makeable(c)
+    const allBtn = all.length > 1 ? `<button class="glink" data-make-all>Make all ${all.length} · ${all.length * m.cost} credits</button>` : ''
+    const ownInfo = c.sel !== 'own' || !o ? ''
+      : !m.ready ? `<div class="cinfo"><b>Sprite</b>${arts}</div>`
+      : j?.state === 'running' ? (allBtn ? `<div class="cinfo"><b>Meshy</b><span class="cact">${allBtn}</span></div>` : '')
+      : j?.state === 'done' ? `<div class="cinfo"><b>Meshy</b><div class="cmade">${j.pick.thumbSrc ? smallImg(j.pick.thumbSrc) : ''}</div><span class="cact"><button class="glink" data-make>${ico('refresh-cw')}Redo · ${m.cost} credits</button><button class="glink" data-accept>${pick?.key === 'own' ? ico('check') : ''}Accept</button>${allBtn}</span></div>`
+      : `<div class="cinfo"><b>Meshy</b>${arts}${j?.state === 'failed' ? `<p><span aria-hidden="true">⚠</span> ${esc(j.error || '')}</p>` : ''}<span class="cact"><button class="glink" data-make>Make · ${m.cost} credits</button>${allBtn}</span></div>`
+    const info = sel ? `<div class="cinfo"><b>${esc(sel.name)}</b><dl><dt>By</dt><dd>${esc(sel.creator)}</dd><dt>Licence</dt><dd>${esc(sel.licence.credit)}${sel.licence.restyle ? '' : ' · own look kept'}</dd><dt>Triangles</dt><dd>${Number(sel.triangles).toLocaleString()}</dd></dl><a class="glink" href="${esc(sel.url)}" target="_blank" rel="noopener">${ico('external-link')}${sel.source === 'vroid' ? 'VRoid Hub' : 'Sketchfab'}</a></div>` : ''
+    el.innerHTML = `${head}<h3>${esc(r.name || r.label)}</h3>${tabs}${benchHtml(c)}${withOwn}${ownInfo}${info}${foot}`
+    for (const b of el.querySelectorAll('[data-role]')) b.onclick = () => { c.role = Number(b.dataset.role); c.sel = null; renderGame(); castSearch() }
+    el.querySelector('[data-own]')?.addEventListener('click', () => {
+      c.sel = 'own'
+      // without a key the art is the pick at once (free); a Meshy model waits for Accept
+      if (!m.ready) c.picks[r.id] = { key: 'own', role: r.id, label: r.label, source: 'art', format: 'sprite', art: o.art, name: `${r.label} (sprite)`, creator: 'this project' }
+      renderGame()
+    })
+    for (const b of el.querySelectorAll('[data-art]')) b.onclick = () => {
+      o.art = b.dataset.art
+      if (!m.ready && c.picks[r.id]?.key === 'own') c.picks[r.id].art = o.art
+      renderGame()
+    }
+    el.querySelector('[data-make]')?.addEventListener('click', () => meshyMake(r))
+    el.querySelector('[data-make-all]')?.addEventListener('click', () => meshyAll())
+    el.querySelector('[data-accept]')?.addEventListener('click', () => { c.picks[r.id] = { key: 'own', ...o.job.pick }; renderGame() })
+    // a tile on the bench or a model in the library opens its role's Meshy card (delegated: a poll
+    // swaps a tile without a re-draw)
+    el.onclick = e => {
+      const b = e.target.closest('.cforge [data-role-id]')
+      const i = b ? c.roles.findIndex(x => x.id === b.dataset.roleId) : -1
+      if (i >= 0) { c.role = i; c.sel = 'own'; renderGame() }
+    }
+    for (const b of el.querySelectorAll('.ccard[data-pick]')) b.onclick = () => {
+      const m = list.models.find(x => `${x.source}:${x.id}` === b.dataset.pick)
+      c.sel = b.dataset.pick
+      c.picks[r.id] = { key: b.dataset.pick, role: r.id, label: r.label, ...m }
+      renderGame()
+    }
   }
-  el.querySelector('[data-make]')?.addEventListener('click', () => meshyMake(r))
-  el.querySelector('[data-accept]')?.addEventListener('click', () => { c.picks[r.id] = { key: 'own', ...o.job.pick }; renderGame() })
-  for (const b of el.querySelectorAll('.ccard[data-pick]')) b.onclick = () => {
-    const m = list.models.find(x => `${x.source}:${x.id}` === b.dataset.pick)
-    c.sel = b.dataset.pick
-    c.picks[r.id] = { key: b.dataset.pick, role: r.id, label: r.label, ...m }
-    renderGame()
-  }
-  el.querySelector('[data-back]').onclick = () => { c.open = false; c.sel = null; renderGame() }
-  el.querySelector('[data-skip]').onclick = () => { c.done = true; c.open = false; gameBuild() }
-  el.querySelector('[data-build]').onclick = () => { c.done = true; c.open = false; gameBuild() }
+  const files = el.querySelector('[data-files]')
+  for (const b of el.querySelectorAll('[data-add]')) b.onclick = () => files?.click()
+  if (files) files.onchange = () => castAdd(files.files)
+  el.ondragover = e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault() }
+  el.ondrop = e => { if (e.dataTransfer?.files?.length) { e.preventDefault(); castAdd(e.dataTransfer.files) } }
+  el.querySelector('[data-back]')?.addEventListener('click', () => { c.open = false; c.sel = null; renderGame() })
+  el.querySelector('[data-skip]')?.addEventListener('click', () => { c.done = true; c.open = false; gameBuild() })
+  el.querySelector('[data-build]')?.addEventListener('click', () => { c.done = true; c.open = false; gameBuild() })
   el.querySelector('.gclose').onclick = closeGame
+  benchWatch()
+}
+// /cast: the Cast step on its own, for the build that is open: no questions and no spec, just the
+// characters, from the pictures the person adds (or the build's own art).
+async function openCastOnly() {
+  const run = shownRun()
+  if (!run) return botMsg('/cast needs a build open.')
+  await openGame()
+  Object.assign(game, { from: run, spec: { title: S.title || 'Cast', brand: null }, cast: { roles: [], lists: {}, picks: {}, own: {}, open: true, done: false, sel: null, only: true, role: 0 } })
+  renderGame()
+  ownArt()
 }
 
 // The promo game links back only to a real address: put the site online first
@@ -4606,6 +4785,12 @@ crewLayer.append(radioLine)
 
 // Which screen is busy, where the agents may point, and what they are each doing.
 function crewJob() {
+  // Meshy characters being made: one crew member per job, on its tile of the Cast step's bench
+  const making = game.el && game.cast?.open && !game.busy ? workedJobs() : []
+  if (making.length) {
+    const names = making.map((x, i) => x.o.job.worker || ['Pebble', 'Mochi', 'Tofu', 'Bean', 'Puff', 'Sprout'][i % 6])
+    return { key: `meshy|${making.map(x => x.r.id).join(',')}`, names: names.map(n => [n, Crew.color(n)]), host: game.el, spots: '.cforge', n: making.length, lines: [''], tool: ['rect'], pin: benchPin, keep: true, cls: 'bench' }
+  }
   if (game.el && game.busy) return { key: 'game', host: game.el, spots: '.gbody, .spin, h3, .gspec', n: 3, lines: ['inventing the world', 'naming the hero', 'drafting enemies', 'picking the engine', 'tuning game feel', 'writing win and lose'], tool: ['text', 'comment', 'frame'] }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
     return cw.thinking
@@ -4650,13 +4835,17 @@ function crewTick(now) {
   const key = job ? job.key : ''
   if (key !== crew.key) {
     crew.key = key
-    for (const m of crew.members) { m.el.classList.add('leaving'); setTimeout(() => m.el.remove(), 500) }
+    // a job that keeps its crew (the Meshy bench): whoever is still working stays where they are
+    const stay = job?.keep ? new Set((job.names || []).map(([n]) => n)) : new Set()
+    const kept = new Map(crew.members.filter(m => stay.has(m.name)).map(m => [m.name, m]))
+    for (const m of crew.members) if (!kept.has(m.name)) { m.el.classList.add('leaving'); setTimeout(() => m.el.remove(), 500) }
     crew.members = []
     if (job) {
       const r = job.host.getBoundingClientRect()
       crew.members = (job.names || crewMembers(job.n)).map(([name, color], i) => {
+        if (kept.has(name)) return kept.get(name)
         const el = document.createElement('div')
-        el.className = 'cursor crew'
+        el.className = `cursor crew${job.cls ? ` ${job.cls}` : ''}`
         el.innerHTML = `${ARROW(color, name)}<div class="tag" style="background:${color};color:${Crew.ink(color)}">${TOOL[job.tool[i % job.tool.length]].svg}<span>${esc(name)}</span><em class="doing"></em></div><div class="bubble"></div>`
         crewLayer.append(el)
         const x = r.left + r.width / 2 + (i - 1) * 40, y = r.bottom - 20
@@ -4669,6 +4858,11 @@ function crewTick(now) {
   for (const [i, m] of crew.members.entries()) {
     // pinned: the cursor rides its file's caret while the code types out
     const pin = job.pin?.(i)
+    if (pin && 'carry' in pin) {
+      // a courier carrying a made model (a small picture of it) to the library
+      if (pin.carry && !m.carry) { m.carry = document.createElement('img'); m.carry.className = 'carry'; m.carry.alt = ''; m.el.append(m.carry) }
+      if (m.carry) { if (pin.carry && m.carry.getAttribute('src') !== pin.carry) m.carry.src = pin.carry; m.carry.hidden = !pin.carry }
+    } else if (m.carry) m.carry.hidden = true
     if (pin) {
       m.tx = pin.x; m.ty = pin.y
       setText(m.doing, pin.text)
