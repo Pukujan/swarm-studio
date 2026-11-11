@@ -197,20 +197,31 @@ def ensure_server() -> dict:
     if os.environ.get("SWARM_STUDIO_AGENTS"):
         env["SWARM_AGENTS"] = os.environ["SWARM_STUDIO_AGENTS"]
 
+    # The server outlives Hermes: its own session on POSIX. On Windows a detached
+    # process, out of the caller's job when the job allows it (an SSH session's job
+    # otherwise ends the server with the session).
+    if os.name == "nt":
+        detached = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        tries = [{"creationflags": detached | subprocess.CREATE_BREAKAWAY_FROM_JOB}, {"creationflags": detached}]
+    else:
+        tries = [{"start_new_session": True}]
     log = open(data_dir() / "server.log", "ab")
     try:
-        subprocess.Popen(
-            [node, str(ROOT / "server" / "server.mjs"), "--port", str(port())],
-            cwd=str(ROOT),
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=log,
-            # the server outlives Hermes: its own session on POSIX, a detached process on Windows
-            **({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}),
-        )
-    except OSError as exc:
-        return {"running": False, "error": f"could not start node: {exc}"}
+        for i, flags in enumerate(tries):
+            try:
+                subprocess.Popen(
+                    [node, str(ROOT / "server" / "server.mjs"), "--port", str(port())],
+                    cwd=str(ROOT),
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=log,
+                    **flags,
+                )
+                break
+            except OSError as exc:
+                if i == len(tries) - 1:
+                    return {"running": False, "error": f"could not start node: {exc}"}
     finally:
         log.close()
 
