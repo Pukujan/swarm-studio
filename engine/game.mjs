@@ -9,6 +9,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { keyFor, keyGround } from './keycolor.mjs'
 import { streamChat } from './llm.mjs'
 import { castPrompt, cleanCast } from './cast.mjs'
 import { workshopMarkdown } from './workshop.mjs'
@@ -230,7 +231,7 @@ export function gamePrompt(spec, assets = gameModels(spec)) {
 ${specMarkdown(spec)}
 How to build it:
 - ${engineHow}
-${spec.workshop?.art?.length ? `- The person painted the art in the studio: load the pictures listed under "Art" in GAME_SPEC.md from /art/ (they are in public/art/) and use them for those things; cut sprite sheets into frames by their grid and key out the flat grey; draw in code only what has no picture.\n` : ''}${spec.levels?.length ? '- Build the first stage from the level map in GAME_SPEC.md, one cell per tile.\n' : ''}- The game lives in src/game/ (one module per system: scene setup, input, hero, enemies, spawning or rooms, combat, effects, audio, UI state). src/pages/Index.tsx mounts it full-screen in a React component and cleans up on unmount. Remove the starter page content.
+${spec.workshop?.art?.length ? `- The person painted the art in the studio: load the pictures listed under "Art" in GAME_SPEC.md from /art/ (they are in public/art/) and use them for those things; cut sprite sheets into frames by their grid and key out the flat background colour (magenta or green); draw in code only what has no picture.\n` : ''}${spec.levels?.length ? '- Build the first stage from the level map in GAME_SPEC.md, one cell per tile.\n' : ''}- The game lives in src/game/ (one module per system: scene setup, input, hero, enemies, spawning or rooms, combat, effects, audio, UI state). src/pages/Index.tsx mounts it full-screen in a React component and cleans up on unmount. Remove the starter page content.
 - Title screen, pause (Esc / P), win and lose screens with restart, a HUD (health, score or room, timer) as React + shadcn/Tailwind over the canvas.
 - Sound with the Web Audio API, synthesised in code (hits, pickups, a simple music loop); starts after the first click or key.
 - Game feel: hit-stop, screen shake, knockback, particles, easing, juicy feedback on every action.
@@ -268,7 +269,7 @@ export function artList(spec, { max = 26 } = {}) {
   for (const it of (spec.items || []).slice(0, 9)) if (it?.name) items.push({ id: `item-${slug(it.name)}`, kind: 'icon', aspect: 'square', what: `icon for ${it.name}`, gen: `A single emblem for "${it.name}": ${it.effect || ''}. One bold symbol centred on a plain dark circle, readable when small` })
   for (const pl of (spec.places || []).slice(0, 6)) if (pl?.name) items.push({ id: `place-${slug(pl.name)}`, kind: 'backdrop', aspect: 'landscape', what: `backdrop for ${pl.name}`, gen: `${shot(where, `${pl.name}: ${pl.what || ''}`)}. ${NO_PEOPLE}` })
   // the hero, enemies and boss as sprites: one full figure each, cut out of a flat background after painting
-  const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. ${viewOf(spec) === 'side' ? 'Side view facing right, mid-stride' : 'Standing, facing the viewer'}, head to feet in frame with space around, bold clean outline. ${SPRITE_GROUND}` })
+  const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. ${viewOf(spec) === 'side' ? 'Side view facing right, mid-stride' : 'Standing, facing the viewer'}, head to feet in frame with space around, bold clean outline. ${keyGround(look || who)}` })
   if (spec.hero) sprite('hero', String(spec.hero).split(/[,—.;]/)[0].trim(), String(spec.hero))
   for (const e of (spec.enemies || []).slice(0, 5)) if (e?.name) sprite(slug(e.name), e.name, e.look)
   if (spec.boss?.name) {
@@ -286,7 +287,7 @@ export function artList(spec, { max = 26 } = {}) {
 // The hero's moves as painted 3×2 sheets (the contract engine/skins.mjs paints ARES's outfits
 // with), from the hero's own painted sprite: each is cut into a strip of frames and checked.
 // A side-view game (a runner, a platformer) gets side-view moves; the rest face the viewer.
-export const SHEET_LAYOUT = 'Six frames in a 3 by 2 grid, read left to right, top to bottom. In every frame the character is small, about 45 percent of the grid cell height, centred, with wide empty space all around, so hair, clothes and anything held stay fully inside its own cell with a clear gap to the edges. Same character, same outfit, same size in every frame, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow'
+export const SHEET_LAYOUT = 'Six frames in a 3 by 2 grid, read left to right, top to bottom. In every frame the character is small, about 45 percent of the grid cell height, centred, with wide empty space all around, so hair, clothes and anything held stay fully inside its own cell with a clear gap to the edges. Same character, same outfit, same size in every frame, feet on one shared baseline, the flat key colour background named below, no text, no borders, no grid lines, no extra people, no floor shadow'
 export const sideView = spec => spec?.view === 'side' || /runner|platform|side.?scroll|parkour|\bjump|\bslide/i.test([spec?.pitch, spec?.loop, spec?.controls, spec?.genre, spec?.answers?.type, ...(spec?.skills || [])].join(' '))
 export function sheetList(spec) {
   if (!spec?.hero) return []
@@ -301,7 +302,7 @@ export function sheetList(spec) {
         { name: 'action', fps: 12, frames: 'facing the viewer: 1 wind-up, 2 attack, 3 follow-through, 4 dash, 5 hurt, 6 knocked down' }
       ]
   return sheets.map(s => ({
-    id: `sheet-hero-${s.name}`, kind: 'sheet', aspect: 'landscape', after: 'sprite-hero', sheet: s.name, fps: s.fps, loop: !!s.loop, frames: s.frames, layout: SHEET_LAYOUT,
+    id: `sheet-hero-${s.name}`, kind: 'sheet', aspect: 'landscape', after: 'sprite-hero', sheet: s.name, fps: s.fps, loop: !!s.loop, frames: s.frames, layout: `${SHEET_LAYOUT}. The background is ${keyFor(spec.hero).name} (${keyFor(spec.hero).hex}), flat chroma key, edge to edge, and no ${keyFor(spec.hero).name} on the character`,
     what: `${s.name} sheet of ${who}`,
     // the figure alone: a companion named in the hero line ("with Rust-8, …") is left out
     look: String(spec.hero).split(/[;,]\s*(?:with|and her|and his|followed by|accompanied by)\b/i)[0].slice(0, 320),
@@ -313,7 +314,7 @@ export function sheetList(spec) {
 export const NO_PEOPLE = 'No people, creatures, figures, statues or faces anywhere in the picture: an empty place waiting for its characters'
 
 // Sprites are painted on one flat colour and cut out (scripts/cutout.py).
-export const SPRITE_GROUND = 'On a perfectly plain flat pale grey background: no floor, no shadow, no scenery, nothing else in the picture'
+export const SPRITE_GROUND = keyGround('')
 
 // How figures move on screen, for every game: the art is drawn upright, facing the viewer.
 export const FIGURE_RULES = `- Characters (hero, enemies, boss) are upright figures seen from the front: never rotate a character to face where it aims or walks, so it never looks fallen over. Flip it left or right (flipX) to face its way, and show the aim with the weapon, a reticle or the attack itself. Give them life with tweens: a bob while walking, a squash on a hit, a lean on a dash, a white tint flash when hurt.

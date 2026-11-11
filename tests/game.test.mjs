@@ -1,5 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { sheetList as sheetListAll } from '../engine/game.mjs'
+const sheetListOf = s => sheetListAll(s)[0]
 import { QUESTIONS, plan, isBig, bigGaps, artList, artBrief, stagesFor, bigStagePrompt, gamePrompt, specMarkdown } from '../engine/game.mjs'
 
 const big = {
@@ -47,7 +49,7 @@ test('the art list follows the game: side view for a runner, places, items, unde
   assert.deepEqual(backs.map(a => a.id), ['place-harbour-roofs', 'place-neon-market', 'place-home-tower'])
   assert.ok(backs.every(a => /Side-on view/.test(a.gen) && !/Top-down/.test(a.gen) && /No people/.test(a.gen)))
   const sprites = all.filter(a => a.kind === 'sprite')
-  assert.ok(sprites.some(a => a.id === 'sprite-hero') && sprites.every(a => a.cutout && /flat pale grey background/.test(a.gen)))
+  assert.ok(sprites.some(a => a.id === 'sprite-hero') && sprites.every(a => a.cutout && /flat solid magenta \(#FF00FF\) chroma-key/.test(a.gen)))
   assert.ok(/Side view facing right/.test(sprites[0].gen))
   assert.ok(!all.some(a => /^room-|^boon-/.test(a.id)), 'no hub, rooms or boons the game never had')
   assert.ok(all.some(a => a.id === 'item-glide-kite'))
@@ -137,4 +139,13 @@ test('the art brief tells the stage how to play a sheet', () => {
   assert.match(b, /6 frames side by side, each 511×511 px/)
   assert.match(b, /12 fps, looping/)
   assert.match(b, /sheet-hero-\*\.webp\) are its animation/)
+})
+
+test('sprites stand on magenta, or green when the character is pink', async () => {
+  const { keyFor } = await import('../engine/keycolor.mjs')
+  assert.equal(keyFor('yellow rain jacket').hex, '#FF00FF')
+  assert.equal(keyFor('an elegant pink-haired caster').hex, '#00FF00')
+  const pink = artList({ ...big, hero: 'Rin, a deadpan caster with pink hair' })
+  assert.match(pink.find(a => a.id === 'sprite-hero').gen, /solid green \(#00FF00\)/)
+  assert.match(sheetListOf({ ...big }).layout, /magenta \(#FF00FF\)/)
 })
