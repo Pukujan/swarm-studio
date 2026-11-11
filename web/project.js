@@ -942,10 +942,15 @@ export function makeProject({ sw, C, root }) {
     if (x?.kind === 'page' && P.layer && sw.layers?.get(P.layer)?.done) { sw.layers.fix(P.layer, text); toast(`${ic('msg', 15)}<span>On it</span>`); return }
     const route = routeMessage({ text, run: P.run, site: !P.board?.game && P.board?.pages?.length > 0, selected: x?.kind === 'page', hosted: hosted() })
     if (route === 'fix') { sw.focusPage(x.page); sw.submit(`/fix ${text}`); toast(`${ic('msg', 15)}<span>On it</span>`); setTimeout(load, 1500); return }
-    // the project's next version: every page kept, the crew builds what was asked
-    sw.submit(text, false, P.pid, route === 'extend' ? P.run : null)
-    P.run = null; P.framed = false
-    setTimeout(() => { P.run = sw.S?.run || null; load() }, 1200)
+    // the project's next version: every page kept, the crew builds what was asked. A version with
+    // no pages yet (its build failed) is still this project's: the server builds on its brief.
+    // Each turn extends the one before it: the open version becomes the run that starts.
+    const from = route === 'extend' || (route === 'new' && P.run && P.board?.kind !== 'game' && !hosted()) ? P.run : null
+    Promise.resolve(sw.submit(text, false, P.pid, from)).then(r => {
+      if (r?.busy) { if (!input.value) input.value = text; toast(`${ic('msg', 15)}<span>Still on the last change</span>`); return }
+      if (typeof r === 'string' && r !== P.run) { P.run = r; P.sel = null; P.framed = false; P.thumbs.clear() }
+      load()
+    })
   }
 
   // the section the dock is talking about; its × goes back to the whole project
@@ -1107,7 +1112,9 @@ export function makeProject({ sw, C, root }) {
   sw.on(e => {
     if (!P.on) return
     if (/^(image|review)(:|$)/.test(e.type) && (!e.run || e.run === P.run)) { clearTimeout(P.soonP); P.soonP = setTimeout(load, 350) }
-    if (e.type === 'run:start' || e.type === 'reset') { if (e.run) P.run = e.run; P.thumbs.clear(); setTimeout(load, 600) }
+    // a run starting elsewhere (another project, another window) does not take over this one;
+    // the dock's own turns switch to their run when it starts (above)
+    if (e.type === 'run:start' || e.type === 'reset') { if (e.run && !P.run) P.run = e.run; if (!e.run || e.run === P.run) { P.thumbs.clear(); setTimeout(load, 600) } }
     if (e.type === 'image' || e.type === 'page' || e.type === 'video:done' || e.type === 'run:done') { clearTimeout(P.soon); P.soon = setTimeout(load, 800) }
     if (e.type === 'layer:done') { P.thumbs.clear(); clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
   })
