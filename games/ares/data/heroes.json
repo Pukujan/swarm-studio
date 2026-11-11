@@ -1,0 +1,278 @@
+{
+  "_note": "The playable heroines. Each one has a role, a personality, a voice and her moves with the Japanese line she calls out. Add a heroine or a move here, then run `node engine/voice.mjs games/ares/data/heroes.json` to record any missing lines into assets/voice/<hero>/<move>.mp3. A voice is {provider, voice, model?, vault?}: provider fish (Fish Audio) or elevenlabs. vault names the Octo vault key used for a lease; a FISH_API_KEY or ELEVENLABS_API_KEY in the environment is used instead when set.",
+  "voices": {
+    "calm_woman": {
+      "provider": "fish",
+      "voice": "0089dce5fefb4c6ba9b9f2f0debe1ddc",
+      "model": "s2.1-pro-free",
+      "vault": "fish_audio_api",
+      "about": "落ち着いた女性: low, composed, cool"
+    },
+    "genki_woman": {
+      "provider": "fish",
+      "voice": "5161d41404314212af1254556477c17d",
+      "model": "s2.1-pro-free",
+      "vault": "fish_audio_api",
+      "about": "元気な女性: bright, quick, cheeky"
+    }
+  },
+  "heroes": {
+    "messenger": {
+      "name": "THE MESSENGER",
+      "role": "sword: brute close combat, long combos, launchers and air juggles",
+      "personality": "playful, cocky and teasing. A brawler who loves the fight: grins, winks and taunts the bosses mid-combo.",
+      "voice": "genki_woman",
+      "weapon": "winged greatsword",
+      "poses": {
+        "loading": "m-loading",
+        "idle": "m-idle"
+      },
+      "barks": {
+        "start": {
+          "line": "よーし、かかってきなさい！"
+        },
+        "kill": {
+          "line": "はい、おしまい♪"
+        },
+        "hurt": {
+          "line": "いったぁ！やったわね！"
+        },
+        "win": {
+          "line": "ちょろいちょろい！"
+        }
+      },
+      "moves": {
+        "slash1": {
+          "name": "一閃",
+          "reading": "いっせん",
+          "input": "attack",
+          "anim": "slash1"
+        },
+        "slash2": {
+          "name": "二閃",
+          "reading": "にせん",
+          "input": "attack attack",
+          "anim": "slash2"
+        },
+        "slash3": {
+          "name": "三閃・翼断",
+          "reading": "さんせん・よくだん",
+          "input": "attack attack attack",
+          "anim": "slash3",
+          "line": "よくだん！"
+        },
+        "spin": {
+          "name": "旋風翼",
+          "reading": "せんぷうよく",
+          "input": "attack attack (pause) attack",
+          "anim": "m-spin",
+          "line": "回れ回れー！せんぷうよく！"
+        },
+        "launch": {
+          "name": "昇翼",
+          "reading": "しょうよく",
+          "input": "up+attack",
+          "anim": "launcher",
+          "line": "飛んでけー！"
+        },
+        "air": {
+          "name": "空舞",
+          "reading": "くうぶ",
+          "input": "air: attack attack attack",
+          "anim": "air1+m-air2",
+          "line": "まだまだ！くうぶ！"
+        },
+        "slam": {
+          "name": "墜天",
+          "reading": "ついてん",
+          "input": "air: down+attack",
+          "anim": "airslam",
+          "line": "落ちなさい！ついてん！"
+        },
+        "dash": {
+          "name": "疾翼",
+          "reading": "しつよく",
+          "input": "dash attack",
+          "anim": "dash"
+        },
+        "charge": {
+          "name": "剛翼斬",
+          "reading": "ごうよくざん",
+          "input": "hold attack",
+          "anim": "m-charge",
+          "line": "いっくよー！ごうよくざん！"
+        },
+        "counter": {
+          "name": "月影返し",
+          "reading": "つきかげがえし",
+          "input": "guard just before a hit",
+          "anim": "m-counter",
+          "line": "残念でした！つきかげがえし！"
+        },
+        "wave": {
+          "name": "天裂波",
+          "reading": "てんれっぱ",
+          "input": "skill",
+          "anim": "m-wave",
+          "line": "てんれっぱ！"
+        },
+        "ult": {
+          "name": "神使・天翔断",
+          "reading": "しんし・てんしょうだん",
+          "input": "ult",
+          "anim": "ult",
+          "line": "神々の使者の名において……ぜーんぶ斬っちゃえ！しんし、てんしょうだん！"
+        }
+      },
+      "combos": [
+        {
+          "name": "地上三連",
+          "chain": [
+            "slash1",
+            "slash2",
+            "slash3"
+          ]
+        },
+        {
+          "name": "旋風",
+          "chain": [
+            "slash1",
+            "slash2",
+            "spin"
+          ]
+        },
+        {
+          "name": "天舞",
+          "chain": [
+            "slash1",
+            "launch",
+            "air",
+            "slam"
+          ]
+        },
+        {
+          "name": "疾風斬",
+          "chain": [
+            "dash",
+            "slash2",
+            "charge"
+          ]
+        },
+        {
+          "name": "返し刃",
+          "chain": [
+            "counter",
+            "launch",
+            "air",
+            "slam"
+          ]
+        }
+      ]
+    },
+    "runner": {
+      "name": "THE RUNNER",
+      "role": "run and gun: keeps moving, shoots while running and spams spells",
+      "personality": "mature, elegant and deadpan. A cold calm killer who never hurries; her face stays expressionless and her eyes close when she casts. Every move is graceful, like a dancer.",
+      "voice": "calm_woman",
+      "weapon": "winged revolver and gold magic",
+      "poses": {
+        "loading": "r-loading",
+        "idle": "r-idle"
+      },
+      "barks": {
+        "start": {
+          "line": "……始めましょうか。"
+        },
+        "kill": {
+          "line": "終わり。"
+        },
+        "dodge": {
+          "line": "遅い。"
+        },
+        "hurt": {
+          "line": "……っ。"
+        },
+        "win": {
+          "line": "退屈だったわ。"
+        }
+      },
+      "moves": {
+        "shoot": {
+          "name": "連射",
+          "reading": "れんしゃ",
+          "input": "shoot (also while running)",
+          "anim": "r-run"
+        },
+        "dodge": {
+          "name": "宙返り撃ち",
+          "reading": "ちゅうがえりうち",
+          "input": "dash backward + shoot",
+          "anim": "r-dodge"
+        },
+        "feather": {
+          "name": "天翼連弾",
+          "reading": "てんよくれんだん",
+          "input": "spell 1",
+          "anim": "r-cast",
+          "line": "翼よ、舞え。てんよくれんだん。"
+        },
+        "sunlance": {
+          "name": "日輪の槍",
+          "reading": "にちりんのやり",
+          "input": "spell 2",
+          "anim": "r-cast",
+          "line": "光よ、貫け。にちりんのやり。"
+        },
+        "laurel": {
+          "name": "月桂環",
+          "reading": "げっけいかん",
+          "input": "spell 3",
+          "anim": "r-cast",
+          "line": "守れ。げっけいかん。"
+        },
+        "gale": {
+          "name": "疾風翔",
+          "reading": "しっぷうしょう",
+          "input": "spell 4",
+          "anim": "r-cast",
+          "line": "風よ。しっぷうしょう。"
+        },
+        "halo": {
+          "name": "天光柱",
+          "reading": "てんこうちゅう",
+          "input": "spell 5",
+          "anim": "r-cast",
+          "line": "天より降れ。てんこうちゅう。"
+        },
+        "wing": {
+          "name": "白翼の盾",
+          "reading": "はくよくのたて",
+          "input": "spell 6",
+          "anim": "r-cast",
+          "line": "はくよくのたて。"
+        },
+        "sky": {
+          "name": "天穹爆",
+          "reading": "てんきゅうばく",
+          "input": "spell 7",
+          "anim": "r-cast",
+          "line": "弾けろ。てんきゅうばく。"
+        },
+        "comet": {
+          "name": "流星墜",
+          "reading": "りゅうせいつい",
+          "input": "spell 8",
+          "anim": "r-cast",
+          "line": "落ちろ。りゅうせいつい。"
+        },
+        "ult": {
+          "name": "星雨・千翼乱舞",
+          "reading": "せいう・せんよくらんぶ",
+          "input": "ult",
+          "anim": "ult",
+          "line": "静かに眠りなさい。せいう、せんよくらんぶ。"
+        }
+      }
+    }
+  }
+}

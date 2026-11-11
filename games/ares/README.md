@@ -26,3 +26,4 @@ Clear times print as `CLEAR <handle> <seconds>` and land in `user://clears.json`
 
 - `data/bosses.json`: the roster. Rename or remove a boss in one edit.
 - `data/items.json`: the cosmetic items shared with the player app, and what is equipped.
+- `data/heroes.json`: the two heroines, their role, personality, voice and every move with the Japanese line she calls out. Add a move or a heroine there, then record the new lines with `node ../../engine/voice.mjs data/heroes.json` (Fish Audio or ElevenLabs; key from the environment or an Octo vault lease via `OCTO_VAULT_GRANT`). Files land in `assets/voice/<hero>/<move>.mp3`.
