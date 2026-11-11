@@ -15,7 +15,8 @@
 // Sword level (TRAIL.level(), trails.js): tier 2 is wider, brighter and hits harder; tier 3 adds
 // a rose echo wave a beat behind and more lightning. PERF.low: fewer columns, ribbons, veins and
 // particles. Colours: white-hot, gold, crimson, rose. Never blue, purple or green.
-// Sound: SFX.heavy() and SFX.boom() at impact, plus the optional hook SFX.skywave().
+// Sound: SFX.heavy() and SFX.boom() at impact, plus the optional hook SFX.skywave(). Voice: her
+// line assets/voice/messenger/skywave.mp3 (heroes.json moves.skywave.line), with the name subtitle.
 // Autopilot: AUTO uses it on a group of three or more ahead of her.
 
 const SKYWAVE = { cd: 9, waves: [] }
@@ -32,7 +33,7 @@ const SKYWAVE = { cd: 9, waves: [] }
   // inside a gold-orange haze, so its soft edges never fringe purple.
 
   // ---- the move: a hop, then the plunge; the eruption fires on landing (see tick)
-  MOVES.messenger.skywave = { sheet: 'slash3', dur: 2.2, cancel: 2.2, cd: SKYWAVE.cd, move: 0, jump: -560, hits: [] }
+  MOVES.messenger.skywave = { sheet: 'slash3', dur: 2.2, cancel: 2.2, cd: SKYWAVE.cd, move: 0, jump: -560, voice: 'skywave', hits: [] }
   SKILL_KEYS.messenger.u = 'skywave'   // the core binds the key and draws the cooldown on the HUD
 
   // ---- soft column sprites: a horizontal falloff times a vertical one (bright at the base,

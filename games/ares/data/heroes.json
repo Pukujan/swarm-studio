@@ -191,14 +191,16 @@
           "en": "Heavenpierce Tide",
           "reading": "てんしょうとう",
           "input": "skill3 (U)",
-          "anim": "airslam"
+          "anim": "airslam",
+          "line": "砕けちゃえ！てんしょうとう！"
         },
         "quake": {
           "name": "天地崩",
           "en": "Worldfall Rupture",
           "reading": "てんちほう",
           "input": "ult (with the Coresunder)",
-          "anim": "airslam"
+          "anim": "airslam",
+          "line": "世界ごと割れなさい！てんちほう！"
         },
         "ult": {
           "name": "千閃",
