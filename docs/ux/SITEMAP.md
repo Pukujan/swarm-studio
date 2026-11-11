@@ -163,9 +163,23 @@ flowchart LR
   RC --> RC2[Post to Feed]
   L1 --> O1["Canvas: Site"]
   L2 --> O2["Canvas: App, Code"]
-  L3 --> O3["Canvas: Game, Film"]
+  L3 --> PQ["Plan questions"] --> PB["Plan board: cards, inspector, Lock · N credits"]
+  PB --> O3["Canvas: Game, Film"]
   L4 --> O4["Canvas: Site, Film, Posts"]
   L5 --> O5["Canvas: Site, App, Code"]
+```
+
+## 5b. The Plan board (spec 21)
+
+A Game opens here after its questions. Nothing that costs credits runs before the lock.
+
+```mermaid
+flowchart LR
+  PB["Projects › plan"] --> CARDS["Nine cards: name and one value"]
+  CARDS --> INS["Inspector: fields, cast roster, system switches"]
+  PB --> LOCK["Lock · N credits"]
+  LOCK --> GATE["Gate: price by part, runs, pictures, Test one first"]
+  GATE --> BUILD["Build / Build one"]
 ```
 
 ## 6. Projects

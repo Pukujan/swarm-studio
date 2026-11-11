@@ -60,6 +60,11 @@ export function makeHome({ sw, C, root }) {
       const runs = await api('/api/runs').catch(() => [])
       H.data = { folders: [], projects: (Array.isArray(runs) ? runs : []).map(r => ({ id: r.id, title: String(r.title || '').split(/\s[—–|:-]\s/)[0], head: r.id, count: 1, made: r.t, updated: r.updated || r.t, cover: r.cover || null, theme: r.cover ? null : r.theme, kinds: [r.pages > 0 && 'site', r.video && 'film'].filter(Boolean), state: r.state || null, live: !!r.live, versions: [{ id: r.id, title: r.title, t: r.t, updated: r.updated, cover: r.cover || null, theme: r.theme, kinds: [], live: !!r.live }] })) }
     }
+    // a game's plan (spec 21) is a project before its first build: it opens on the Plan board
+    if (!hosted()) {
+      const plans = (await api('/api/plans').catch(() => null))?.plans || []
+      H.data.projects = [...H.data.projects.filter(p => !p.plan), ...plans.map(x => ({ id: x.id, plan: true, title: x.title, head: null, count: 1, made: Date.parse(x.updated), updated: Date.parse(x.updated), cover: x.cover, kinds: ['game'], state: { kind: 'Game', status: x.locked ? 'Locked' : 'Plan' }, versions: [] }))]
+    }
     H.loaded = true
     if (H.view === 'assets') H.assets = await api('/api/assets').then(j => j.assets).catch(() => [])
     if (H.view === 'folder' && !H.data.folders.some(f => f.name === H.folder)) go('recent')
@@ -148,16 +153,16 @@ export function makeHome({ sw, C, root }) {
   const ago = t => { const d = (Date.now() - t) / 1000; return d < 90 ? 'now' : d < 3600 ? `${Math.round(d / 60)}m` : d < 86400 ? `${Math.round(d / 3600)}h` : d < 86400 * 30 ? `${Math.round(d / 86400)}d` : new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }
 
   // a card's own buttons, on its cover: Delete (to Trash) and Open, or in Trash, Restore and Delete forever
-  const acts = p => hosted() || H.stack || p.version ? '' : H.view === 'trash'
+  const acts = p => hosted() || H.stack || p.version || p.plan ? '' : H.view === 'trash'
     ? `<div class="acts"><button class="ib sm" data-act="restore" aria-label="Restore">${ic('restore', 16)}</button><button class="ib sm red" data-act="purge" aria-label="Delete forever">${ic('trash', 16)}</button></div>`
     : `<div class="acts"><button class="ib sm red" data-act="trash" aria-label="Delete">${ic('trash', 16)}</button></div>`
   function card(p) {
     const stack = p.count > 1 && !H.stack
     const sel = H.sel.has(p.id)
-    return `<div class="card${sel ? ' selc' : ''}${p.live ? ' live' : ''}" data-id="${esc(p.id)}" draggable="${!hosted() && H.view !== 'trash'}" tabindex="0" role="button" aria-label="${esc(p.title)}">
+    return `<div class="card${sel ? ' selc' : ''}${p.live ? ' live' : ''}" data-id="${esc(p.id)}" draggable="${!hosted() && !p.plan && H.view !== 'trash'}" tabindex="0" role="button" aria-label="${esc(p.title)}">
       <div class="cv${stack ? ' stack' : ''}">${cover(p.cover, p.theme, p.title)}${stack ? `<span class="badge" aria-label="${p.count} versions">${p.count}</span>` : ''}${kinds(p.kinds)}${crew(p)}${acts(p)}</div>
       ${sel ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''}
-      <div class="nm"><b>${esc(p.title)}</b>${hosted() ? '' : `<button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button>`}</div>
+      <div class="nm"><b>${esc(p.title)}</b>${hosted() || p.plan ? '' : `<button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button>`}</div>
       ${stateLine(p)}
       ${H.layout === 'list' ? `<span class="meta">${p.count > 1 ? `<span aria-label="${p.count} versions">${ic('layers', 13)}${p.count}</span>` : ''}${p.folder && H.view !== 'folder' ? `<span>${ic('folder', 13)}${esc(p.folder)}</span>` : ''}<span>${ago(seen(p))}</span></span>` : ''}
     </div>`
@@ -240,6 +245,7 @@ export function makeHome({ sw, C, root }) {
 
   function openProject(p, version = null) {
     if (!p) return
+    if (p.plan) return C.plan(p.id)
     opened[p.id] = Date.now()
     store.set('home.opened', opened)
     C.open(version || p.head, p.id)
@@ -287,7 +293,7 @@ export function makeHome({ sw, C, root }) {
   })
   bodyEl.addEventListener('contextmenu', e => {
     const c = e.target.closest('.card:not(.asset)')
-    if (!c || hosted()) return
+    if (!c || hosted() || /^p-/.test(c.dataset.id)) return
     e.preventDefault()
     menuFor(c.dataset.id, null, { x: e.clientX, y: e.clientY })
   })
@@ -613,6 +619,8 @@ export function makeHome({ sw, C, root }) {
     const text = input.value.trim()
     if (!text) return showcases()
     const words = (await intake()).words || 12
+    // a game is planned before anything costly is made (spec 21): its questions, then the Plan board
+    if (make.k === 'game' && !hosted()) return grill(text)
     if (grillOn && text.split(/\s+/).length < words) return grill(text)
     start(text)
   }
@@ -648,12 +656,13 @@ export function makeHome({ sw, C, root }) {
 
   // the grill: one question at a time (chips or your own words), then it builds from the locked answers.
   // The same shape as the game interview (QUESTIONS in engine/game.mjs), which a Game uses.
-  const G = { text: '', qs: [], i: 0, answers: {} }
+  const G = { text: '', qs: [], i: 0, answers: {}, plan: false }
   async function grill(text) {
     const d = await intake()
-    const qs = make.k === 'game' && d.game?.length ? d.game : d.questions || []
+    const plan = make.k === 'game' && d.plan?.length && !hosted()
+    const qs = plan ? d.plan : make.k === 'game' && d.game?.length ? d.game : d.questions || []
     if (!qs.length) return start(text)
-    Object.assign(G, { text, qs, i: 0, answers: {} })
+    Object.assign(G, { text, qs, i: 0, answers: {}, plan })
     drawGrill()
   }
   function brief() {
@@ -667,16 +676,27 @@ export function makeHome({ sw, C, root }) {
       <h3>${esc(q.q)}</h3>
       <div class="hm-chips">${q.chips.map(c => `<button type="button" class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
       <input class="hm-free" aria-label="Your own words" placeholder="Or in your own words" maxlength="300" value="${q.chips.includes(val) ? '' : esc(val)}">
-      <div class="hm-gfoot">${G.i ? `<button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button>` : '<span></span>'}<span><button type="button" class="btn ghost" data-skip>Just build</button><button type="button" class="btn pri" data-next>${last ? 'Build' : 'Next'}</button></span></div>`)
+      <div class="hm-gfoot">${G.i ? `<button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button>` : '<span></span>'}<span><button type="button" class="btn ghost" data-skip>${G.plan ? 'Just plan' : 'Just build'}</button><button type="button" class="btn pri" data-next>${last ? (G.plan ? 'Plan' : 'Build') : 'Next'}</button></span></div>`)
     const free = pop.querySelector('.hm-free')
     const take = v => { if (v) G.answers[q.id] = v; else delete G.answers[q.id] }
-    const next = () => { take(free.value.trim() || G.answers[q.id]); if (!last) { G.i++; drawGrill() } else start(brief()) }
+    const done = () => (G.plan ? toPlan() : start(brief()))
+    const next = () => { take(free.value.trim() || G.answers[q.id]); if (!last) { G.i++; drawGrill() } else done() }
     for (const b of pop.querySelectorAll('[data-c]')) b.onclick = () => { take(b.dataset.c); free.value = ''; next() }
     free.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); next() } }
     pop.querySelector('[data-next]').onclick = next
-    pop.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || G.answers[q.id]); start(brief()) }
+    pop.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || G.answers[q.id]); done() }
     pop.querySelector('[data-back]')?.addEventListener('click', () => { G.i--; drawGrill() })
     free.focus({ preventScroll: true })
+  }
+
+  // the answers become a plan, and the Plan board opens with the crew writing its cards (spec 21)
+  async function toPlan() {
+    try {
+      const id = await C.planView.create(G.text, G.answers)
+      closePop()
+      input.value = ''
+      C.plan(id, true)
+    } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 
   // ---------- you: theme, sound and models live in your menu; the globe opens the Feed
