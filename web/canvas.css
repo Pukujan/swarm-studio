@@ -658,7 +658,7 @@ body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
 .ah-head b { font: 600 12px/1 var(--label); letter-spacing: .1em; text-transform: uppercase; }
 .ah-head .ah-kind { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-2); font: 500 10.5px/1.3 var(--mono); font-style: normal; color: var(--muted); }
 .ah-head .ah-kind:empty { display: none; }
-.ah-head .ah-kind.assign { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
+.ah-head .ah-kind.k-assign { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
 .ah-head > .ico { margin-left: auto; width: 16px; height: 16px; color: var(--muted); transition: transform .2s var(--ease, ease-out); }
 .app-hermia.min .ah-head > .ico { transform: rotate(180deg); }
 .ah-feed { flex: 1; min-height: 0; overflow: auto; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 6px; }

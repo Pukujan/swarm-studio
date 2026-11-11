@@ -5865,7 +5865,10 @@ const CW_TURN = 2600 // ms per asset
 // (crew:act, live only) as its name-pill status.
 const radio = { run: null, lead: null, reason: null, acts: new Map(), says: new Map(), order: [], feed: [] }
 // Hermia's history for her dock: her thinking fragments join into one line while fresh
+// the engine's own boilerplate (file-size notes, where the chat backup is) is not her talking
+const DOCK_NOISE = /^(Note: This file may be large|If you need to retrieve earlier parts of the conversation)/
 function dockLine(x) {
+  if (DOCK_NOISE.test(String(x.text || '').trim())) return
   const last = radio.feed.at(-1)
   if (x.kind === 'reason' && last?.kind === 'reason' && x.t - last.t < 20000 && last.text.length < 1400) { last.text += ` ${x.text}`; last.t = x.t; last.n = (last.n || 1) + 1; return }
   radio.feed.push(x)
@@ -5987,7 +5990,7 @@ function hermiaDock() {
   hdock.key = key
   const lead = radio.lead
   setText(el.querySelector('.ah-kind'), lead ? { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind : 'thinking')
-  el.querySelector('.ah-kind').className = `ah-kind ${lead?.kind || 'reason'}`
+  el.querySelector('.ah-kind').className = `ah-kind k-${lead?.kind || 'reason'}`
   const box = el.querySelector('.ah-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 60
   box.innerHTML = feedL.map(x => `<p class="ah-msg k-${esc(x.kind)}">${x.to ? `<span class="to">→ <b style="color:${Crew.color(x.to)}">${esc(x.to)}</b></span>` : ''}${esc(x.text)}</p>`).join('')
   if (stick) box.scrollTop = box.scrollHeight
