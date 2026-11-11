@@ -4025,9 +4025,13 @@ setInterval(() => { if (view === 'app' && appv.elsewhere && !document.hidden) lo
 
 // the latest play test, filmed: the clip loops from the first key, with the key it pressed
 const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
+// While the code wall is up, the play test is one of its windows (the first tile, over that
+// tile's pictures); otherwise a small card over the game, which × hides.
 function playClip() {
   const s = appv.run === shownRun() ? appv.steps.findLast(x => x.clip) : null
-  if (!s || clip.shut === s.clip) { if (clip.el) clip.el.hidden = true; return }
+  const tile = cw.el && !cw.el.hidden && cw.mode === 'code' ? cw.el.querySelector('.cw-grid')?.children[0] : null
+  for (const t of cw.el?.querySelectorAll('.cw-tile.has-play') || []) if (t !== tile || !s) t.classList.remove('has-play')
+  if (!s || (!tile && clip.shut === s.clip)) { if (clip.el) clip.el.hidden = true; return }
   if (!clip.el) {
     clip.el = document.createElement('div')
     clip.el.className = 'playclip'
@@ -4040,8 +4044,11 @@ function playClip() {
       const k = clip.keys.findLast(x => x.t <= v.currentTime + 0.05)
       setText(clip.el.querySelector('.pc-key'), k ? k.k : '')
     })
-    appEls.preview.append(clip.el)
   }
+  const host = tile || appEls.preview
+  if (clip.el.parentElement !== host) { host.append(clip.el); clip.el.querySelector('video').play().catch(() => {}) }
+  tile?.classList.add('has-play')
+  clip.el.classList.toggle('in-wall', !!tile)
   clip.el.hidden = false
   clip.el.classList.toggle('failed', s.ok === false)
   if (clip.src !== s.clip) {
@@ -5998,6 +6005,7 @@ function hermiaDock() {
 
 function codeWall() {
   hermiaDock()
+  playClip()
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
     cw.shown = false
@@ -6252,8 +6260,8 @@ function cwPin(i) {
     return pin?.width ? { x: pin.left, y: pin.top, text: sl ? `${ART_STATE[sl.state] || ''} ${sl.what}`.trim() : 'waiting', typing: sl?.state === 'painting' } : null
   }
   if (cw.mode !== 'art' && i !== CW_CODE) {
-    const pin = cw.el?.querySelector('.cw-grid')?.children[i]?.querySelector('.cw-pin')?.getBoundingClientRect()
-    return pin?.width ? { x: pin.left, y: pin.top, text: cw.av[i]?.name || 'Art', typing: true } : null
+    const d = cw.el?.querySelector('.cw-grid')?.children[i], pin = d?.querySelector('.cw-pin')?.getBoundingClientRect()
+    return pin?.width ? { x: pin.left, y: pin.top, text: d.classList.contains('has-play') ? 'play testing' : cw.av[i]?.name || 'Art', typing: true } : null
   }
   const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
   const caret = d?.querySelector('.cw-caret')
