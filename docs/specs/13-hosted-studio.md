@@ -72,6 +72,7 @@ All limits are environment settings with these defaults:
 | Builds per guest per day (UTC) | 3 | `HOSTED_GUEST_BUILDS` |
 | Builds per IP per day | 6 | `HOSTED_IP_BUILDS` |
 | Builds running at once, one guest | 1 | — |
+| Builds that made nothing, given back per guest per day | 3 | — |
 | Builds running at once, whole studio | 4 | `HOSTED_CONCURRENT` |
 | Crew size | 6 agents | `HOSTED_AGENTS` |
 | Pages per build | 2 | `HOSTED_PAGES` |
