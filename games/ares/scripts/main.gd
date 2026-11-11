@@ -454,6 +454,8 @@ func _tour_show(i: int) -> void:
 	var dist: float = 6.0 + b.scale_f * 1.6
 	card_cam.global_position = b.global_position + Vector3(dist * 0.35, h * 0.55, dist)
 	card_cam.look_at(b.global_position + Vector3(0, h, 0), Vector3.UP)
+	# the boss stands in the right third, clear of the slammed handle on the left
+	card_cam.look_at(b.global_position + Vector3(0, h * 0.85, 0) - card_cam.global_transform.basis.x * h * 0.75, Vector3.UP)
 	card_cam.current = true
 	hud.namecard(b.handle, b.title, i + 1, bosses.size(), bool(b.data.get("final", false)))
 

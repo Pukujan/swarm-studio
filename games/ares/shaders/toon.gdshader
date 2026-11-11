@@ -14,6 +14,13 @@ instance uniform float fade = 1.0;
 
 void fragment() {
 	vec3 tex = mix(vec3(1.0), texture(albedo_tex, UV).rgb, use_tex);
+	// Palette guard: texture colours that are green or blue dominant (KayKit hoods, gems)
+	// are swung to red and bronze, so nothing on screen leaves the fiery palette.
+	if (tex.g > tex.r * 1.08 && tex.g >= tex.b) {
+		tex = vec3(tex.g, tex.r * 0.8 + tex.b * 0.2, tex.b * 0.6);
+	} else if (tex.b > tex.r * 1.08 && tex.b > tex.g) {
+		tex = vec3(tex.b, tex.g * 0.9 + tex.r * 0.1, tex.r * 0.5);
+	}
 	vec3 c = tex * base_color.rgb * tint.rgb;
 	ALBEDO = mix(c, flash_color.rgb, clamp(flash, 0.0, 1.0));
 	EMISSION = emit_color.rgb * emit_strength + flash_color.rgb * flash * 1.4;

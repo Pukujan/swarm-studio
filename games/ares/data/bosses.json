@@ -42,7 +42,7 @@
      "model": "Knight", "scale": 3.2, "tint": "#ffe0cc", "prop": "hammer", "hp": 1600, "moves": ["slam", "ring", "summon", "slam"], "projectile": "gavel",
      "weakpoints": [{"name": "Timeout Hammer", "at": "prop", "disables": "slam"}, {"name": "Mod Badge", "at": "chest", "disables": "ring"}]},
     {"handle": "Teknium", "title": "The Hermes Architect", "theme": "a wise winged messenger who summons glowing model checkpoints", "attack": "checkpoint swarms, messenger beams and wing gusts",
-     "model": "Mage", "scale": 3.6, "tint": "#ffe9b8", "prop": "caduceus", "hp": 2400, "moves": ["checkpoints", "beam", "volley", "ring", "checkpoints"], "projectile": "feather", "flying": true, "final": true,
+     "model": "Mage", "scale": 3.6, "tint": "#ffe9b8", "prop": "caduceus", "hp": 1500, "moves": ["checkpoints", "beam", "volley", "ring", "checkpoints"], "projectile": "feather", "flying": true, "final": true,
      "weakpoints": [{"name": "Left Wing", "at": "wing_l", "disables": "ring"}, {"name": "Caduceus", "at": "prop", "disables": "beam"}]}
   ]
 }
