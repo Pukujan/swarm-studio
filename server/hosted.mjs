@@ -31,6 +31,7 @@ const dataDir = process.env.SWARM_DATA_DIR || join(root, 'hosted-data')
 const runsDir = process.env.SWARM_RUNS_DIR || join(dataDir, 'runs')
 const port = Number(process.env.PORT || 8080)
 const bindHost = process.env.HOST || '127.0.0.1'
+const aresDir = join(root, 'games', 'ares')
 const BASE = (process.env.HOSTED_BASE ?? '/studio/app').replace(/\/$/, '')
 const PUBLIC = (process.env.HOSTED_PUBLIC_URL || 'https://swarm.design-bakery.com').replace(/\/$/, '')
 const num = (name, d) => { const v = Number(process.env[name]); return Number.isFinite(v) && v >= 0 ? v : d }
@@ -263,7 +264,7 @@ async function siteFor(id) {
 }
 
 // ---------- HTTP
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.ttf': 'font/ttf', '.glb': 'model/gltf-binary', '.txt': 'text/plain; charset=utf-8' }
 const json = (res, status, body) => res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(body))
 const body = (req, max = 3e6) => new Promise(resolve => {
   let s = '', n = 0
@@ -290,6 +291,19 @@ const server = createServer(async (req, res) => {
   res.setHeader('referrer-policy', 'strict-origin-when-cross-origin')
 
   if (path === '/healthz') return json(res, 200, { ok: true, open: isOpen(), running: running().length })
+
+  // The ARES web game (games/ares/web), with the assets and data it loads as ../assets and ../data.
+  // Plain static files: no guest, no rate limit, no API. /ares/ opens the game.
+  const ares = path.match(/^\/ares(\/(?:web|assets|data)(?:\/[\w .,()+-]*)*)?\/?$/)
+  if (ares && (req.method === 'GET' || req.method === 'HEAD')) {
+    if (!ares[1] || ares[1] === '/web') return res.writeHead(301, { location: `${BASE}/ares/web/${url.search}` }).end()
+    const rel = ares[1].slice(1) + (path.endsWith('/') ? '/index.html' : '')
+    const file = join(aresDir, rel)
+    if (rel.split('/').includes('..') || !file.startsWith(aresDir) || !existsSync(file) || !statSync(file).isFile()) return res.writeHead(404).end('not found')
+    const code = /\.(html|js|json)$/.test(file)
+    res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'content-length': statSync(file).size, 'cache-control': code ? 'no-cache' : 'public, max-age=86400' })
+    return req.method === 'HEAD' ? res.end() : createReadStream(file).pipe(res)
+  }
 
   const ip = ipOf(req)
   const isApi = path === '/events' || path.startsWith('/api/')
