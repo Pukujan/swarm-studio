@@ -153,17 +153,24 @@ const SHAPE = {
 
 // The prompt for one picture. The shape is said in words too: some image backends
 // pick the size from the prompt, not the size asked for.
+export const EMPTY_PLACE = 'An empty place with nobody in it: no people, characters, figures, silhouettes or animals anywhere, not even small or far away.'
 export function promptFor(gen, guide, { aspect = 'landscape', strict = '', cutout = false } = {}) {
   const what = cleanGen(gen, guide)
   const avoid = [guide?.avoid, ...(guide?.bans || []).map(id => banOf(id).label)].filter(Boolean).join('; ')
+  // an empty place (a game backdrop): said up front and again at the end, and the style's
+  // "moment" wording, which paints people into the scene, left out
+  const empty = !cutout && /\bNo people\b/i.test(String(gen))
+  const style = String(guide?.guide || STYLES.photo.guide)
   return clip([
     SHAPE[aspect] || SHAPE.landscape,
+    empty ? EMPTY_PLACE : '',
     `${what}.`,
-    guide?.guide || STYLES.photo.guide,
+    empty ? style.replace(/,?\s*an? (everyday )?(slice-of-life )?moment\b/gi, '').replace(/\b(original )?characters?( and original designs)? only\.?/gi, '').trim() : style,
     cutout
       ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on ${keyBackground(what)}, with no floor, shadow, scenery or frame, so it can be cut out.`
       : 'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
     avoid ? `Avoid: ${avoid}.` : '',
+    empty ? EMPTY_PLACE : '',
     strict ? `This is a second try. The first picture was sent back for: ${strict}. Make sure none of that is in this one.` : ''
   ].filter(Boolean).join(' '), 1200)
 }
