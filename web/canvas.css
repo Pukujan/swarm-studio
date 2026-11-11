@@ -1902,3 +1902,8 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .slice-card .sc-ideas button:hover { border-color: var(--accent); }
 .feed .slice-card .sc-ideas button, .feed .slice-card .sc-live { text-transform: none; letter-spacing: normal; font-family: inherit; }
 .feed .slice-card .sc-live { display: flex; width: max-content; }
+/* Hermia's answer to "can I see it": the newest clip wide, then the pictures in a row */
+.feed .item .tell-media { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.feed .item .tell-media video { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.feed .item .tell-media img { width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--deep); }
+.feed .item .tell-media > * { border-radius: 8px; border: 1px solid var(--line); display: block; }

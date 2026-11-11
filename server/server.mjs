@@ -1033,8 +1033,9 @@ async function chatterMake(text, voice) {
 async function tellBuilder(a, id, text, { who = '', on = '' } = {}) {
   const t = String(text || '').trim().slice(0, 1200)
   if (!t) throw new Error('say something to the crew')
-  const { isQuestion, processNotes } = await import('../engine/appjob.mjs')
-  const ask = isQuestion(t)
+  const { isQuestion, processNotes, wantsToSee, buildMedia, mediaNotes } = await import('../engine/appjob.mjs')
+  const see = wantsToSee(t)
+  const ask = see || isQuestion(t)
   const told = ask ? { queued: false, state: a.state(id).state } : a.tell(id, t)
   const j = a.jobs.get(id)
   const events = readEvents(id) || []
@@ -1052,21 +1053,27 @@ async function tellBuilder(a, id, text, { who = '', on = '' } = {}) {
       .filter(x => SLICE.test(x.s)).sort((x, y) => y.t - x.t)[0]?.s || ''
   const slices = (spec?.stages || []).map(x => x?.name).filter(Boolean)
   const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage, done, slices })
+  let files = []
+  try { const dir = join(runsDir, id, 'img'); files = readdirSync(dir).map(name => ({ name, mtime: statSync(join(dir, name)).mtimeMs })) } catch {}
+  const media = buildMedia({ id, files, slices: events.slice(since + 1).filter(e => e.type === 'app:stage' && e.big).map(e => ({ ...e.big, t: e.t })), steps: j?.steps || [] })
+  const show = see && (media.clip || media.pics.length) ? { clip: media.clip?.src || null, pics: media.pics } : null
+  const seeing = mediaNotes(media, !!show)
   const queued = told.queued ? 'Their words are queued: the crew reads them at the start of the next stage (a turn in flight cannot take new words).' : ''
   const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}${told.queued ? ' Got it: that goes to the crew at the start of the next stage.' : ''}`
   const model = modelFor('planner')
-  if (!model) return { ...told, answer: fallback }
+  const withMedia = show ? { media: show } : {}
+  if (!model) return { ...told, ...withMedia, answer: show ? 'Here is the newest from the build.' : fallback }
   try {
     const res = await streamChat(provider('planner'), {
       trace: { kind: 'tell' }, model, maxTokens: 220, temperature: 0.3, signal: AbortSignal.timeout(30000),
       extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
       messages: [
-        { role: 'system', content: `${who ? `You are ${String(who).slice(0, 40)}, one of the Swarm crew (Hermia leads it), answering for yourself in the first person: right now you are on ${String(on || 'the build').slice(0, 160)}. You are part of` : 'You are Hermia, the lead of'} the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${how} ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
+        { role: 'system', content: `${who ? `You are ${String(who).slice(0, 40)}, one of the Swarm crew (Hermia leads it), answering for yourself in the first person: right now you are on ${String(on || 'the build').slice(0, 160)}. You are part of` : 'You are Hermia, the lead of'} the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${how} ${seeing} ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
         { role: 'user', content: t }
       ]
     })
-    return { ...told, answer: String(res.text || '').trim().slice(0, 600) || fallback }
-  } catch { return { ...told, answer: fallback } }
+    return { ...told, ...withMedia, answer: String(res.text || '').trim().slice(0, 600) || fallback }
+  } catch { return { ...told, ...withMedia, answer: fallback } }
 }
 
 // ---------- game mode: answers → a spec → a new build whose app is the game

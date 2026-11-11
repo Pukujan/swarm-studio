@@ -46,3 +46,15 @@ test('Hermia knows the slice plan: which slice, how many left, which are done', 
   assert.match(done, /1 move, jump and climb \(done\); 2 against the clock;/)
   assert.match(processNotes({ kind: 'game', stage: 'stage 4 of 4: home' }), /the last one/)
 })
+
+test('asking to see the build brings its newest clip and pictures', async () => {
+  const { wantsToSee, buildMedia, mediaNotes } = await import('../engine/appjob.mjs')
+  for (const q of ['can i see any screenshots of it', 'show me the art', 'what does it look like']) assert.ok(wantsToSee(q), q)
+  assert.ok(!wantsToSee('make Mika bigger'))
+  const files = [{ name: 'game-sprite-kumo.png', mtime: 3 }, { name: 'game-sheet-hero-raw.png', mtime: 9 }, { name: 'game-title.webp', mtime: 5 }, { name: 'plan.json', mtime: 8 }, { name: 'playtest-3.webm', mtime: 7 }]
+  const m = buildMedia({ id: 'r1', files, slices: [{ i: 0, name: 'Rooftop', clip: '/img/r1/playtest-3.webm', t: 10 }] })
+  assert.equal(m.clip.src, '/img/r1/playtest-3.webm')
+  assert.deepEqual(m.pics.map(p => p.src), ['/img/r1/game-title.webp', '/img/r1/game-sprite-kumo.png'])
+  assert.match(mediaNotes(m, true), /1 play test clip and 2 painted pictures.*shown right under/)
+  assert.match(mediaNotes(buildMedia({ id: 'r1' }), false), /nothing to show/)
+})
