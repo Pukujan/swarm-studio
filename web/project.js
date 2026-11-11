@@ -24,7 +24,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
-    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: store.get('project.follow', true), followSig: '', tool: 'move', thumbs: new Map(),
+    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(),
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0
   }
 
@@ -48,7 +48,7 @@ export function makeProject({ sw, C, root }) {
       <button class="ib pj-files-btn" data-tool="files" aria-label="Files" aria-expanded="false">${ic('folder')}</button>
       <button class="ib on" data-tool="move" aria-label="Move">${ic('move')}</button>
       <button class="ib" data-tool="frame" aria-label="Frame all">${ic('frame')}</button>
-      <button class="ib pj-follow" data-tool="follow" aria-label="Follow the crew" aria-pressed="true" hidden>${ic('users')}</button>
+      <button class="ib pj-follow" data-tool="follow" aria-label="Follow the crew" aria-pressed="true" disabled>${ic('users')}</button>
       <button class="ib" data-tool="text" aria-label="New page">${ic('type')}</button>
       <button class="ib" data-tool="image" aria-label="Upload files">${ic('image')}</button>
       <button class="ib" data-tool="comment" aria-label="Chat">${ic('msg')}</button>
@@ -1003,20 +1003,29 @@ export function makeProject({ sw, C, root }) {
   }
   const working = () => !!P.board?.live || jobs().size > 0
   // Follow: while the crew work, the camera keeps what they are on in view. Panning, scrolling or
-  // pinching hands the camera back to you; the Follow button (shown only while they work) takes it again.
+  // pinching hands the camera back to you for the rest of that build, and the Follow button takes it
+  // again. It is never remembered as off: every new build starts with the camera following, so one
+  // pan long ago cannot leave later builds filling up off screen. The button keeps its place in the
+  // dock and is disabled while nobody is working (docs/ux/RULES.md, rule 29).
   function setFollow(on) {
     if (P.follow === on) return
     P.follow = on
     P.followSig = ''
-    store.set('project.follow', on)
     const b = root.querySelector('.pj-follow')
     b?.setAttribute('aria-pressed', String(on))
     b?.classList.toggle('on', on)
     if (on) placeCrew()
   }
   function crewAtWork() {
+    // a build that has just started (another run, or this one going live again) follows from its first page
+    const at = working() ? `${P.run}|${P.board?.live ? 'live' : 'after'}` : ''
+    if (at && at !== P.followRun) {
+      const [run, phase] = at.split('|'), [wasRun, wasPhase] = P.followRun.split('|')
+      if (run !== wasRun || (phase === 'live' && wasPhase !== 'live')) setFollow(true)
+      P.followRun = at
+    }
     const fb = root.querySelector('.pj-follow')
-    if (fb) { fb.hidden = !working(); fb.classList.toggle('on', P.follow); fb.setAttribute('aria-pressed', String(P.follow)) }
+    if (fb) { fb.disabled = !working(); fb.classList.toggle('on', P.follow && working()); fb.setAttribute('aria-pressed', String(P.follow)) }
     if (!working()) { curEl.innerHTML = ''; P.followSig = ''; return }
     if (!curEl.children.length) curEl.innerHTML = CREW.map(n => cursor(n)).join('')
     if (P.wander) { placeCrew(); return }
@@ -1033,7 +1042,8 @@ export function makeProject({ sw, C, root }) {
     // where the work is: the pictures and the page in review, else the newest page of a live build
     const busy = [...new Set([...js.values()].flat())].map(q => world.querySelector(q)).filter(Boolean)
     const pages = abs.filter(a => a.dataset.key?.startsWith('page:'))
-    const focus = busy.length ? busy : live ? (pages.length ? pages : abs).slice(-1) : []
+    // (the crew build every page at once, so a live build keeps all its pages in view, not just the newest)
+    const focus = busy.length ? busy : live ? (pages.length ? pages : abs.slice(-1)) : []
     // each cursor's artboard and spot on it, in world units (from layout, so a camera still easing doesn't skew it)
     const spots = []
     for (const c of curEl.children) {
