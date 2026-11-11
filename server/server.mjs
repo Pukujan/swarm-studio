@@ -27,7 +27,7 @@ import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
-import { makeProjects, stateOf } from './projects.mjs'
+import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
@@ -387,7 +387,7 @@ function workOf(id) {
     return { what: 'site', stage: plan ? 'building pages' : 'planning', pct: Math.min(1, current.events.filter(e => e.type === 'layer:done').length / Math.max(1, plan || 12)) }
   }
   const a = appsNow?.jobs?.get(id)
-  if (a?.state === 'working') return { what: a.kind === 'game' ? 'game' : 'app', stage: clipStage(a.stage), pct: null, steps: a.steps?.length || 0 }
+  if (a?.state === 'working') return { what: a.kind === 'game' ? 'game' : 'app', stage: clipStage(a.stage), pct: null, steps: a.steps?.length || 0, ...(a.kind === 'game' ? { progress: gameProgress(a.steps) } : {}) }
   const v = videos.get(id)
   if (v?.state === 'working') return { what: 'film', stage: clipStage(v.stage), pct: Math.min(1, (Number(v.pct) || 0) / 100) }
   return null
@@ -397,6 +397,7 @@ const clipStage = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 60) 
 // A run's file card, from its events plus the person's meta. Cached by the
 // events file's size and time, so listing many runs stays quick.
 const cards = new Map()
+const gameCover = id => { try { const f = readdirSync(join(runsDir, id, 'img')).find(n => /^game-title\.(webp|png|jpe?g)$/.test(n)); return f ? `/img/${id}/${f}` : null } catch { return null } }
 function runCard(id) {
   const file = join(runsDir, id, 'events.jsonl')
   let st
@@ -448,12 +449,15 @@ function runCard(id) {
       videoSeconds: video?.seconds ?? null,
       preview: events.some(e => e.type === 'layer:done' && e.html),
       // the cover: the hero picture the art director made, else the first picture
-      cover: (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || null,
+      // a game's own title picture once it is painted
+      cover: (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || gameCover(id),
       game: events.some(e => e.type === 'game:spec') || pages.some(p => /\b(play|game|arcade|trial)\b/i.test(`${p.id} ${p.title}`)),
       app: events.some(e => e.type === 'app:ready' || e.type === 'app:done'),
       planned: events.filter(e => e.type === 'layer:plan').length,
       // the last app build's outcome (as the app jobs read it): working (or stopped), built or failed
-      build: ({ 'app:start': 'working', 'app:done': 'built', 'app:failed': 'failed' })[events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))?.type] || null,
+      build: (b => b?.type === 'app:failed' && b.message === 'stopped' ? 'stopped' : ({ 'app:start': 'working', 'app:done': 'built', 'app:failed': 'failed' })[b?.type] || null)(events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))),
+      // how far a game build got, from its own steps (another Studio server may be running it)
+      gameAt: events.some(e => e.type === 'game:spec') ? gameProgress(events.filter(e => e.type === 'app:step').map(e => e.step)) : null,
       deployed: events.findLast(e => e.type === 'app:deployed' && e.url)?.url || null,
     } }
     cards.set(id, card)
