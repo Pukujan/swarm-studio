@@ -663,10 +663,12 @@ body.view-video .viewport, body.view-app .viewport { visibility: hidden; }
 .app-hermia.min .ah-head > .ico { transform: rotate(180deg); }
 .ah-feed { flex: 1; min-height: 0; overflow: auto; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
 .ah-feed > :first-child { margin-top: auto; }
+/* the floating Chat pill sits over the column's foot: keep the newest line clear of it */
+body.cosmos .ah-feed { padding-bottom: 56px; }
 .ah-msg { margin: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 10px 10px 10px 4px; background: var(--panel-2); color: var(--text); font: 12px/1.45 var(--font); overflow-wrap: anywhere; animation: in .25s ease-out; }
-.ah-msg.assign { border-left: 2px solid var(--accent); }
+.ah-msg.k-assign { border-left: 2px solid var(--accent); }
 .ah-msg .to { display: block; margin-bottom: 2px; color: var(--muted); font-size: 11px; }
-.ah-msg.reason { background: transparent; border-style: dashed; color: var(--muted); font-style: italic; }
+.ah-msg.k-reason { background: transparent; border-style: dashed; color: var(--muted); font-style: italic; }
 .appview.steps-min #app-steps-btn .ico { transform: scaleX(-1); }
 /* Hermia in the Log: her lines as chat messages */
 #log .item.say { align-self: flex-start; max-width: 94%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px 12px 12px 4px; padding: 7px 10px; color: var(--text); line-height: 1.45; overflow-wrap: anywhere; }

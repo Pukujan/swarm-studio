@@ -5989,7 +5989,7 @@ function hermiaDock() {
   setText(el.querySelector('.ah-kind'), lead ? { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind : 'thinking')
   el.querySelector('.ah-kind').className = `ah-kind ${lead?.kind || 'reason'}`
   const box = el.querySelector('.ah-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 60
-  box.innerHTML = feedL.map(x => `<p class="ah-msg ${esc(x.kind)}">${x.to ? `<span class="to">→ <b style="color:${Crew.color(x.to)}">${esc(x.to)}</b></span>` : ''}${esc(x.text)}</p>`).join('')
+  box.innerHTML = feedL.map(x => `<p class="ah-msg k-${esc(x.kind)}">${x.to ? `<span class="to">→ <b style="color:${Crew.color(x.to)}">${esc(x.to)}</b></span>` : ''}${esc(x.text)}</p>`).join('')
   if (stick) box.scrollTop = box.scrollHeight
 }
 
