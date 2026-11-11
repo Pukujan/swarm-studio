@@ -1017,6 +1017,37 @@ async function chatterMake(text, voice) {
   } catch {} finally { chatterBusy.delete(file); try { rmSync(dir, { recursive: true, force: true }) } catch {} }
 }
 
+// ---------- the person talks to the crew while it builds
+// A question gets an answer from what the crew is doing right now (its stage, steps and the
+// lead's last thoughts); anything else is a change, queued for the start of the next stage.
+async function tellBuilder(a, id, text) {
+  const t = String(text || '').trim().slice(0, 1200)
+  if (!t) throw new Error('say something to the crew')
+  const ask = (await import('../engine/appjob.mjs')).isQuestion(t)
+  const told = ask ? { queued: false, state: a.state(id).state } : a.tell(id, t)
+  const j = a.jobs.get(id)
+  const events = readEvents(id) || []
+  const lead = events.filter(e => e.type === 'crew:lead' && e.text).slice(-14).map(e => `- ${String(e.text).slice(0, 220)}`)
+  const steps = (j?.steps || []).filter(x => x.kind !== 'write').slice(-10).map(x => `- ${String(x.text).slice(0, 160)}`)
+  const writes = (j?.steps || []).filter(x => x.kind === 'write').slice(-6).map(x => x.path || x.text).filter(Boolean)
+  const spec = events.findLast(e => e.type === 'game:spec')?.spec
+  const queued = told.queued ? 'Their words are queued: the crew reads them at the start of the next stage (a turn in flight cannot take new words).' : ''
+  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}${told.queued ? ' Got it: that goes to the crew at the start of the next stage.' : ''}`
+  const model = modelFor('planner')
+  if (!model) return { ...told, answer: fallback }
+  try {
+    const res = await streamChat(provider('planner'), {
+      trace: { kind: 'tell' }, model, maxTokens: 220, temperature: 0.3, signal: AbortSignal.timeout(30000),
+      extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
+      messages: [
+        { role: 'system', content: `You are Hermia, the lead of the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
+        { role: 'user', content: t }
+      ]
+    })
+    return { ...told, answer: String(res.text || '').trim().slice(0, 600) || fallback }
+  } catch { return { ...told, answer: fallback } }
+}
+
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
@@ -2295,7 +2326,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy|tell))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
@@ -2311,6 +2342,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       apps().then(async a => {
         if (sub === 'stop') return a.stop(id)
+        if (sub === 'tell') return tellBuilder(a, id, input.text)
         if (sub === 'open') return a.open(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')

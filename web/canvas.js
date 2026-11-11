@@ -4250,7 +4250,9 @@ async function appAsk(ask, extra = {}) {
   if (!run) return botMsg('Open a build first: the app is made from its design.')
   if (appv.run !== run) resetApp(run)
   if (view !== 'app') setView('app')
-  if (appv.state === 'working') return botMsg('The app is still building; your change can go in when this turn is done.')
+  // while it builds, the crew still listens: a question gets an answer from what it is doing,
+  // a change is queued for the start of the next stage
+  if (appv.state === 'working') return tellCrew(ask)
   if (ask && !appv.hasApp) return botMsg('Build the app first (the button in the App view), then change it by chatting.')
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
   try {
@@ -4262,6 +4264,16 @@ async function appAsk(ask, extra = {}) {
     botMsg(`App: ${err.message}`)
   }
   renderApp()
+}
+
+async function tellCrew(text) {
+  const t = String(text || '').trim()
+  if (!t) return botMsg('The crew is building. Ask what it is doing, or say what to change next.')
+  feed(null, t, 'you')
+  try {
+    const r = await appApi('/tell', { text: t })
+    botMsg(r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next stage.' : 'The crew is working.'))
+  } catch (err) { botMsg(`App: ${err.message}`) }
 }
 
 // ---------- a big game, slice by slice, in the chat
