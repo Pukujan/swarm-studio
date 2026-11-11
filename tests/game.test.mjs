@@ -37,13 +37,19 @@ test('a big spec is whole only with a hub, rooms, weapons, boons, enemies, a bos
 test('the art list covers every kind and stays under its cap', () => {
   const all = artList(big)
   const kinds = new Set(all.map(a => a.kind))
-  for (const k of ['title', 'portrait', 'icon', 'backdrop']) assert.ok(kinds.has(k), k)
-  assert.ok(all.length <= 20)
+  for (const k of ['title', 'sprite', 'portrait', 'icon', 'backdrop']) assert.ok(kinds.has(k), k)
+  assert.ok(all.length <= 26)
+  // the fighters are painted as sprites, cut out of a flat background
+  const sprites = all.filter(a => a.kind === 'sprite')
+  assert.ok(sprites.some(a => a.id === 'sprite-hero') && sprites.some(a => a.id === 'sprite-boss'))
+  assert.ok(sprites.length >= 3, 'the hero, the boss and the enemies')
+  assert.ok(all.filter(a => a.kind === 'backdrop').every(a => /No people/.test(a.gen)), 'backdrops hold no figures of their own')
+  assert.ok(sprites.every(a => a.cutout && a.aspect === 'square' && /flat pale grey background/.test(a.gen)))
   assert.ok(all.some(a => a.id === 'portrait-the-cracked-tenor'), 'the boss gets a portrait')
   assert.ok(all.some(a => a.id === 'room-boss') && all.some(a => a.id === 'room-hub'))
   assert.equal(new Set(all.map(a => a.id)).size, all.length, 'ids are unique')
-  const few = artList(big, { max: 4 })
-  assert.equal(few.length, 4)
+  const few = artList(big, { max: 5 })
+  assert.equal(few.length, 5)
   assert.deepEqual(new Set(few.map(a => a.kind)), kinds, 'a tight cap still keeps one of each kind')
 })
 
@@ -56,6 +62,8 @@ test('the stages go one system group at a time and name the painted files', () =
   assert.match(first, /How to build it/, 'the first stage carries the engine notes')
   assert.match(first, /art\/title\.png/)
   assert.doesNotMatch(first, /so no image files are needed/)
+  // every stage keeps the figures upright and clears camera effects before a dialogue pause
+  for (const i of [0, 4]) { const p = bigStagePrompt(big, i, { art }); assert.match(p, /never rotate a character/); assert.match(p, /resetFX/) }
   const later = bigStagePrompt(big, 2, { art, failed: 'the build failed. Make it pass.' })
   assert.match(later, /Already built: the core fight, the run of rooms/)
   assert.match(later, /^This is a big browser game/)

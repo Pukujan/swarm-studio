@@ -174,9 +174,9 @@ async function checkArt(path, guide) {
 }
 // One picture through the art director. A picture sent back is made once more with
 // the reasons in its prompt; the second one stands.
-async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false }, onSentBack) {
+async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false }, onSentBack) {
   const pick = art.tierFor(choice, { hero })
-  const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, art.promptFor(gen, guide, { aspect, strict })], hero ? 300000 : 150000)
+  const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000)
   const r = await go('')
   if (!r.ok || !r.path || !existsSync(r.path)) return r
   const check = await checkArt(r.path, guide)
@@ -1025,8 +1025,15 @@ async function paintGame(runId, spec, items, appDir, step) {
   if (done.size) step({ kind: 'setup', text: `using ${done.size} pictures painted before; painting ${queue.length}` })
   const worker = async () => {
     for (let it; (it = queue.shift());) {
-      const r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title' }).catch(err => ({ ok: false, error: String(err.message || err) }))
+      const r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title', cutout: !!it.cutout }).catch(err => ({ ok: false, error: String(err.message || err) }))
       if (!r.ok || !r.path || !existsSync(r.path)) { step({ kind: 'setup', text: `could not paint the ${it.what}: ${String(r.error || 'no image').slice(0, 120)}`, ok: false }); continue }
+      // a sprite is painted on a flat colour: cut it out to a transparent PNG
+      if (it.cutout) {
+        const cut = join(dirname(r.path), `${it.id}-cut.png`)
+        const c = await new Promise(ok => execFile('python3', [join(root, 'scripts', 'cutout.py'), r.path, cut], { timeout: 60000 }, (err, out, errOut) => ok({ ok: !err, why: String(errOut || err?.message || '').trim() })))
+        if (!c.ok || !existsSync(cut)) { step({ kind: 'setup', text: `could not cut out the ${it.what}: ${c.why.split('\n').pop().slice(0, 120)}`, ok: false }); continue }
+        r.path = cut
+      }
       const file = `art/${it.id}${extname(r.path) || '.png'}`
       copyFileSync(r.path, join(appDir, 'public', file))
       // the Studio keeps a copy with the run, so its art shows beside the game
