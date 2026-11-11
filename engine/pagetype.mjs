@@ -39,7 +39,7 @@ export const PAGE_TYPES = {
     name: 'Zine',
     words: /zine|diy|punk|craft|collage|kids|school|club|community|volunteer|garden|skate|thrift|sticker|handmade|workshop|art/i,
     sections: 'cover, cut-and-paste, list, letters, map-sketch, back-page',
-    grid: 'Cut-and-paste zine layout: cards set at slight angles (rotate-1, -rotate-2), tape-strip labels, mixed type sizes on one line, hand-drawn SVG doodles and arrows, thick borders with hard offset shadows (shadow-[6px_6px_0_var(--foreground)]), elements that overlap a little in the normal flow (negative margins, not absolute text). max-w-6xl px-6, broken often.',
+    grid: 'Pasted-up zine spread, pictures first: every section is led by a big picture (full-bleed, or at least half the width at desktop), and the words sit on it or beside it like a cut-out caption. Pictures pasted at slight angles (rotate-1, -rotate-2) and overlapping a little in the normal flow (negative margins, not absolute text), torn or rough edges drawn with clip-path, a tape strip on a corner, giant mixed-size display type, hand-drawn SVG doodles and arrows. No boxed text cards: never a grid of bordered boxes, never hard offset drop shadows, no monospace label chips. Few words per section. max-w-7xl px-6, broken often.',
     voice: 'First person, chatty, a bit scrappy; lowercase headings are fine. Write like a person handing you a flyer.'
   },
   gallery: {
