@@ -218,7 +218,7 @@ let QK = null
     if (!mine() || QK || PANEL) return baseUlt()
     let d = 0
     try { if (fxk()?.ultPanel) d = FXK.ultPanel('messenger', { name: moveName('messenger', 'quake') }) || 1.4 } catch (e) { console.warn('ultPanel', e); d = 0 }
-    say('messenger', 'ult', true); if (typeof nameSub === 'function') nameSub(moveName('messenger', 'quake'), 1.8)
+    say('messenger', 'quake', true); if (typeof nameSub === 'function') nameSub(moveName('messenger', 'quake'), 1.8)
     P.meter = 0; P.iframe = Math.max(P.iframe, d + 1); P.act = null; P.queueMove = null
     for (const e of targets()) e.stun = Math.max(e.stun || 0, d + 0.5)
     if (!d) { start(); return }
