@@ -14,6 +14,9 @@ import { join, relative, resolve, sep } from 'node:path'
 const SKIP = /^(node_modules|\.git|dist|build|\.output|\.vercel|\.engine|\.nitro|\.cache|\.godot|\.import|exports?)$/
 const TEXT = /\.(tsx?|jsx?|mjs|cjs|css|html|json|md|gd|tscn|tres|cfg|godot|txt|vue|svelte|ya?ml|toml)$/
 export const MAX_STEPS = 5
+const SEE = /\b(screen ?shots?|pictures?|pics?|images?|sprites?|clips?|videos?|previews?|footage|show me|let me see|can i see|looks? like)\b/i
+export const wantsToSee = text => SEE.test(String(text || ''))
+const newest = m => (m.clips[0] || m.pics.length ? { clip: m.clips[0]?.src || null, pics: m.pics.slice(0, 4) } : null)
 
 // the app's own files, shortest paths first (what Talk can read)
 export function appFiles(dir, limit = 120) {
@@ -67,7 +70,7 @@ You can use tools. Each turn, reply with ONE JSON object and nothing else:
 
 A change is never sent by you: you write it out and they confirm it with a button under your answer. In "say", say what you understood in a few words and ask them to confirm. "now": true only when it cannot wait for the next slice (the builder is going the wrong way right now); it stops the builder's turn and redoes the slice.
 
-Answer in one to four short plain sentences, no markdown, no lists. When they ask to see something, show it; when they ask how something works, read the code first. Never say a change is done or sent. At most ${MAX_STEPS} tool calls, then answer.
+Answer in one to four short plain sentences, no markdown, no lists. When they ask to see something, show it at once in this answer (the newest clip and pictures; never ask which, never say you cannot); when they ask how something works, read the code first. Never say a change is done or sent. At most ${MAX_STEPS} tool calls, then answer.
 
 ${notes}
 
@@ -97,6 +100,8 @@ export async function talk({ chat, look = null, appDir, media = { pics: [], clip
       const srcs = (Array.isArray(a.show) ? a.show : []).map(String).filter(s => shown.has(s.split('?')[0]))
       const clip = srcs.find(s => /\.(webm|mp4)$/i.test(s)) || null
       const pics = srcs.filter(s => !/\.(webm|mp4)$/i.test(s)).slice(0, 4).map(src => ({ src, name: media.pics.find(p => p.src === src)?.name || '' }))
+      // asked to see and nothing shown: the newest clip and pictures go under the answer anyway
+      if (!clip && !pics.length && wantsToSee(text)) return { answer: String(a.say || '').trim().slice(0, 700), media: newest(media), proposal: null, used }
       const change = building && typeof a.change === 'string' && a.change.trim() ? { change: a.change.trim().slice(0, 1200), now: a.now === true } : null
       return { answer: String(a.say || '').trim().slice(0, 700), media: clip || pics.length ? { clip, pics } : null, proposal: change, used }
     }

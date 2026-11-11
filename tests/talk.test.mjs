@@ -54,3 +54,8 @@ test('Talk looks at a listed picture and stops after its tool limit', async () =
   assert.equal(r.answer, '')
   assert.match(m.seen[5].at(-1), /No more tools/)
 })
+
+test('asked to see, Talk always shows the newest even when the model forgets to', async () => {
+  const r = await talk({ chat: scripted(['{"say":"Which one would you like?"}']).chat, appDir: app(), media, text: 'can i see any screenshots of it' })
+  assert.deepEqual(r.media, { clip: '/img/r1/playtest-3.webm', pics: media.pics })
+})
