@@ -149,10 +149,20 @@ const QUESTION = /\?\s*$|^(what|what's|whats|why|how|when|where|who|which|is|are
 export const alive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
 // How a build runs, for Hermia's answers in the chat: without it she only sees the crew's last
 // lines and guesses (she once said the play test "isn't in the notes, so it isn't built").
-export function processNotes({ kind = 'site', state = 'idle', stage = '', done = [] } = {}) {
+// slices: the plan's slice names in order, when the build has them (a game spec's stages)
+export function processNotes({ kind = 'site', state = 'idle', stage = '', done = [], slices = [] } = {}) {
   const game = kind === 'game'
-  const at = String(stage).match(/stage (\d+) of (\d+)/)
-  const where = at ? `The build is on slice ${at[1]} of ${at[2]}${done.length ? ` (done: ${done.join('; ')})` : ''}.` : ''
+  const at = String(stage).match(/stage (\d+) of (\d+)( done)?/)
+  let where = ''
+  if (at) {
+    const n = Number(at[2]), i = Number(at[1]), finished = !!at[3]
+    const left = n - i
+    where = finished
+      ? `Slice ${i} of ${n} is done${left ? `; ${left} more to go after it` : ', the last one'}.`
+      : `The build is on slice ${i} of ${n}${left ? `, with ${left} more after it` : ', the last one'}.`
+    if (done.length) where += ` Done so far: ${done.join('; ')}.`
+    if (slices.length === n) where += ` The slices: ${slices.map((x, k) => `${k + 1} ${x}${k + 1 < i || (finished && k + 1 === i) ? ' (done)' : k + 1 === i ? ' (now)' : ''}`).join('; ')}.`
+  }
   return [
     game
       ? 'How the Studio builds a game: the art is painted first, then the game is built in slices (stages), one at a time. Each slice: the crew writes the code in turns, the Studio checks the build (Godot: a headless run, then a web export), then the play test runs by itself: a bot plays the exported game and films it, and that clip fills the Play test window. The play test is the "autoplay"; nobody has to ask for it or add it to the notes. After the clip the build pauses so the owner can watch it and say go on or what to change, then the next slice starts. Words sent while the crew works are read at the start of the next slice.'

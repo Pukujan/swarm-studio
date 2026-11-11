@@ -34,3 +34,15 @@ test('Hermia knows the play test runs by itself after each slice, and which slic
   assert.match(processNotes({ kind: 'game', state: 'paused', stage: 'stage 2 of 4', done: ['slice 1 the core run'] }), /paused.*go on/)
   assert.doesNotMatch(processNotes({ kind: 'site' }), /play test/)
 })
+
+test('Hermia knows the slice plan: which slice, how many left, which are done', async () => {
+  const { processNotes } = await import('../engine/appjob.mjs')
+  const slices = ['move, jump and climb', 'against the clock', 'relays', 'home']
+  const now = processNotes({ kind: 'game', state: 'working', stage: 'stage 2 of 4: against the clock', slices })
+  assert.match(now, /slice 2 of 4, with 2 more after it/)
+  assert.match(now, /1 move, jump and climb \(done\); 2 against the clock \(now\); 3 relays; 4 home/)
+  const done = processNotes({ kind: 'game', state: 'paused', stage: 'stage 1 of 4 done: move, jump and climb', slices })
+  assert.match(done, /Slice 1 of 4 is done; 3 more to go after it/)
+  assert.match(done, /1 move, jump and climb \(done\); 2 against the clock;/)
+  assert.match(processNotes({ kind: 'game', stage: 'stage 4 of 4: home' }), /the last one/)
+})
