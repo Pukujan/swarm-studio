@@ -10,6 +10,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { keyFor, keyGround } from './keycolor.mjs'
+import { idleItems } from './idle.mjs'
 import { streamChat } from './llm.mjs'
 import { castPrompt, cleanCast } from './cast.mjs'
 import { workshopMarkdown } from './workshop.mjs'
@@ -368,6 +369,14 @@ export function sheetList(spec) {
   return out
 }
 
+// The hero's idle from a video clip (engine/idle.mjs), once the owner said yes to its price:
+// the painted idle sheet (unless the game paints one already) and the video sheet that replaces it.
+export function idleSheets(spec, have = sheetList(spec)) {
+  if (!spec?.hero) return []
+  const who = String(spec.hero).split(/[,—.]/)[0].trim()
+  return idleItems({ who, look: heroLook(spec), side: sideView(spec), MOVES, have, sheetItem: o => sheetItem(spec, o) })
+}
+
 // The fighters stand on the backdrops, so a backdrop holds no figures of its own.
 export const NO_PEOPLE = 'No people, creatures, figures, statues or faces anywhere in the picture: an empty place waiting for its characters'
 
@@ -387,7 +396,7 @@ ${files.map(f => f.kind === 'sheet' && f.cell
     ? `  - ${f.file}: ${f.what}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px (frame n starts at x = n×${f.cell[0]}, from 0), played at ${f.fps} fps${f.loop ? ', looping' : ', one frame per move'}. The frames: ${f.frames}`
     : `  - ${f.file}: ${f.what}`).join('\n')}
   Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for. Keep the hero big and easy to read: about a sixth of the screen height in a top-down or front view and about a third in a side-view game (never under 96 px), enemies sized to match, the boss about twice the hero; drawn shapes only for projectiles, effects and stand-ins. Backdrops (place-*.png) are the stages or areas they are named for, behind the action (a side-view game scrolls them with the camera, with a slower layer for depth; darken them a little so the characters read); portraits sit beside the dialogue box; item icons sit on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
-  The hero's sheets (sheet-hero-*.webp) are its animation: cut each strip into frames (Phaser: load.spritesheet with that frame size; Pixi: Texture frames from the strip), play the looping one while it moves and the move frames for each action, scaled so the figure is as tall as sprite-hero would be, and keep sprite-hero only for stills. These frames replace the bob and lean tweens for the hero; flip it to face left.` : ''}${files.some(f => f.companion || /^art\/sheet-(?!hero-)/.test(f.file)) ? `
+  The hero's sheets (sheet-hero-*.webp) are its animation: cut each strip into frames (Phaser: load.spritesheet with that frame size; Pixi: Texture frames from the strip), play the looping one while it moves and the move frames for each action, scaled so the figure is as tall as sprite-hero would be, and keep sprite-hero only for stills. These frames replace the bob and lean tweens for the hero; flip it to face left.${files.some(f => /^art\/sheet-hero-idle\./.test(f.file)) ? ' sheet-hero-idle is the idle: loop it whenever the hero stands still, at its own fps.' : ''}` : ''}${files.some(f => f.companion || /^art\/sheet-(?!hero-)/.test(f.file)) ? `
   The hero's companion has its own sprite and run sheet (named for it above): it follows the hero a little behind, at about half the hero's height, playing its sheet while it moves.` : ''}`
 }
 

@@ -173,6 +173,10 @@ export function processNotes({ kind = 'site', state = 'idle', stage = '', done =
 }
 export const isQuestion = text => QUESTION.test(String(text || '').trim())
 
+// the video idle's go-ahead carried by the build itself: 'no', or a yes at a price ({ usd })
+// that must match the clip's price when it is asked (engine/idle.mjs priceOk)
+export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v === 'object' && Number.isFinite(Number(v.usd)) ? { usd: Number(v.usd) } : null)
+
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
   const jobs = new Map() // run id -> job
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
@@ -381,7 +385,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     for (const it of before) if (!items.some(x => x.id === it.id)) items.push(it)
     if (paint && input.art !== false) {
       step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
-      try { art = await paint(id, spec, items, dir, step, j.controller.signal) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+      try { art = await paint(id, spec, items, dir, step, j.controller.signal, { idle: idleInput(input.idle) }) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
     }
     if (j.controller.signal.aborted) throw new Error('stopped')
     j.result = { ok: false, big: true, art: art.length, stages: [], turns: 0, commits: 0, files: 0, ...(from ? { resumedAt: from } : {}) }

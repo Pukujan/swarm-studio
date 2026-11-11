@@ -293,6 +293,9 @@ function on(e) {
     case 'art:job':
       artEvent(e)
       break
+    case 'game:idle':
+      idleCard(e)
+      break
     case 'crew:lead': {
       // the app engine's lead agent, speaking as Hermia: thinking out loud and giving orders
       radioEvent(e)
@@ -4369,6 +4372,58 @@ function sliceCard(s, run = shownRun()) {
   item.querySelector('.sc-live').onclick = () => setView('app')
   for (const b of item.querySelectorAll('.sc-ideas button')) b.onclick = () => sliceGo(s.ideas[+b.dataset.j])
   push(els.feed, item)
+}
+// The hero's idle from a video clip (engine/idle.mjs), in the chat: Hermia asks once with the
+// clip's price on the button, then the same card shows the first frame, the clip and the loop
+// as they come in. One card per build, updated in place (a reopened build shows where it got to).
+function idleCard(e) {
+  if (!e.run) return
+  let item = els.feed.querySelector(`.idle-card[data-run="${CSS.escape(e.run)}"]`)
+  if (!item) {
+    item = document.createElement('div')
+    item.className = 'item bot idle-card'
+    item.dataset.run = e.run
+    item.innerHTML = `<b>${HERMIA}Hermia<small>idle</small></b><div class="ic-media"></div><span class="txt"></span><div class="ic-acts"></div>`
+    push(els.feed, item)
+  }
+  item.dataset.state = e.state
+  item.querySelector('.txt').textContent = e.text || ''
+  const media = item.querySelector('.ic-media'), acts = item.querySelector('.ic-acts')
+  acts.replaceChildren()
+  const show = (kind, src) => {
+    if (!src) return
+    let el = media.querySelector(`.ic-${kind}`)
+    if (!el) {
+      el = document.createElement(kind === 'clip' ? 'video' : 'img')
+      el.className = `ic-${kind}`
+      if (kind === 'clip') Object.assign(el, { muted: true, autoplay: true, loop: true, playsInline: true })
+      else el.alt = ''
+      media.append(el)
+    }
+    if (el.dataset.src !== src) { el.dataset.src = src; el.src = BASE + src }
+  }
+  // the first frame while the model works, then the clip in its place, then the loop beside it
+  if (e.state === 'making') show('start', e.start)
+  if (e.clip) { media.querySelector('.ic-start')?.replaceWith(); show('clip', e.clip) }
+  if (e.sheet) show('sheet', e.sheet)
+  if (e.state !== 'ask') return
+  const go = document.createElement('button')
+  go.className = 'primary'
+  go.textContent = `Animate · $${Number(e.usd).toFixed(2)}`
+  const no = document.createElement('button')
+  no.textContent = 'Keep painted'
+  const line = document.createElement('small')
+  line.className = 'ic-line'
+  line.textContent = e.line || ''
+  const answer = ok => {
+    go.disabled = no.disabled = true
+    api(`/api/runs/${encodeURIComponent(e.run)}/app/idle`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok, usd: e.usd }) })
+      .then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`) })
+      .catch(err => { item.querySelector('.txt').textContent = `⚠ ${err.message}` })
+  }
+  go.onclick = () => answer(true)
+  no.onclick = () => answer(false)
+  acts.append(go, no, line)
 }
 async function sliceGo(text) {
   const s = appv.slice
