@@ -287,15 +287,22 @@ export function artList(spec, { max = 26 } = {}) {
 // The hero's moves as painted 3×2 sheets (the contract engine/skins.mjs paints ARES's outfits
 // with), from the hero's own painted sprite: each is cut into a strip of frames and checked.
 // A side-view game (a runner, a platformer) gets side-view moves; the rest face the viewer.
-export const SHEET_LAYOUT = 'Six frames in a 3 by 2 grid, read left to right, top to bottom. In every frame the character is small, about 45 percent of the grid cell height, centred, with wide empty space all around, so hair, clothes and anything held stay fully inside its own cell with a clear gap to the edges. Same character, same outfit, same size in every frame, feet on one shared baseline, the flat key colour background named below, no text, no borders, no grid lines, no extra people, no floor shadow'
+export const SHEET_LAYOUT = 'Six frames in a 3 by 2 grid, read left to right, top to bottom. In every frame the character is large, about 75 percent of the grid cell height, centred, with a clear margin of empty background on every side, so hair, clothes and anything held stay fully inside its own cell and nothing touches a cell edge. Crisp, clean hair strands and clothes with solid ink outlines, no wispy loose hairs. Same character, same outfit, same size in every frame, feet on one shared baseline, the flat key colour background named below, no text, no borders, no grid lines, no extra people, no floor shadow'
 export const sideView = spec => spec?.view === 'side' || /runner|platform|side.?scroll|parkour|\bjump|\bslide/i.test([spec?.pitch, spec?.loop, spec?.controls, spec?.genre, spec?.answers?.type, ...(spec?.skills || [])].join(' '))
 export function sheetList(spec) {
   if (!spec?.hero) return []
   const who = String(spec.hero).split(/[,—.]/)[0].trim()
+  // a side-view game: one sheet per move, painted large (a figure painted small and scaled up
+  // comes out with rough hair and edges); climbing and repairs get their own when the game has them
+  const text = [spec.pitch, spec.loop, spec.controls, spec.genre, ...(spec.skills || []), ...(spec.stages || []).map(x => `${x?.name || ''} ${x?.goal || x?.what || ''}`)].join(' ')
   const sheets = sideView(spec)
     ? [
-        { name: 'run', fps: 12, loop: true, frames: 'a side-view run cycle facing right in six steps (contact, down, passing, up, contact, passing), legs and arms clearly in a new place each frame' },
-        { name: 'moves', fps: 8, frames: 'side view facing right: 1 crouch before a jump, 2 rising jump with knees tucked, 3 falling with arms up, 4 low slide along the ground, 5 hurt and knocked back, 6 landing in a crouch' }
+        { name: 'run', fps: 12, loop: true, frames: 'a side-view run cycle facing right in six steps (contact, down, passing, up, contact on the other leg, passing), legs and arms clearly in a new place each frame' },
+        { name: 'jump', fps: 10, frames: 'side view facing right: crouch before the jump, take-off pushing up, rising with knees tucked, top of the jump, falling with legs reaching down, landing crouch' },
+        { name: 'slide', fps: 10, frames: 'side view facing right: starting to drop, leaning back into a slide, low feet-first slide with one hand on the ground, holding the slide, still sliding, getting back up' },
+        ...(/climb|ladder|vertical|scal(e|ing) (a |the )?wall|wall.?run|ledge/i.test(text) ? [{ name: 'climb', fps: 10, loop: true, frames: 'climbing a wall seen from the side: reaching up with one hand, pulling up, the other hand reaching, pulling up, grabbing a ledge, hauling up over the top' }] : []),
+        ...(/repair|fix|relay|antenna|wrench|mend/i.test(text) ? [{ name: 'fix', fps: 8, frames: 'side view facing right: kneeling at a repair, reaching with a tool, turning it, arm raised with effort, checking the work, standing up pleased' }] : []),
+        { name: 'hurt', fps: 10, frames: 'side view facing right: hit and knocked back, stumbling backwards, arms flung out, half falling, catching balance, back on the feet' }
       ]
     : [
         { name: 'walk', fps: 10, loop: true, frames: 'facing the viewer: 1 and 2 standing and breathing, 3 to 6 a walk cycle' },
@@ -328,7 +335,7 @@ export function artBrief(files = []) {
 ${files.map(f => f.kind === 'sheet' && f.cell
     ? `  - ${f.file}: ${f.what}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px (frame n starts at x = n×${f.cell[0]}, from 0), played at ${f.fps} fps${f.loop ? ', looping' : ', one frame per move'}. The frames: ${f.frames}`
     : `  - ${f.file}: ${f.what}`).join('\n')}
-  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for. Keep the hero big and easy to read: about a sixth of the screen height (never under 96 px), enemies sized to match, the boss about twice the hero; drawn shapes only for projectiles, effects and stand-ins. Backdrops (place-*.png) are the stages or areas they are named for, behind the action (a side-view game scrolls them with the camera, with a slower layer for depth; darken them a little so the characters read); portraits sit beside the dialogue box; item icons sit on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
+  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for. Keep the hero big and easy to read: about a sixth of the screen height in a top-down or front view and about a third in a side-view game (never under 96 px), enemies sized to match, the boss about twice the hero; drawn shapes only for projectiles, effects and stand-ins. Backdrops (place-*.png) are the stages or areas they are named for, behind the action (a side-view game scrolls them with the camera, with a slower layer for depth; darken them a little so the characters read); portraits sit beside the dialogue box; item icons sit on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
   The hero's sheets (sheet-hero-*.webp) are its animation: cut each strip into frames (Phaser: load.spritesheet with that frame size; Pixi: Texture frames from the strip), play the looping one while it moves and the move frames for each action, scaled so the figure is as tall as sprite-hero would be, and keep sprite-hero only for stills. These frames replace the bob and lean tweens for the hero; flip it to face left.` : ''}`
 }
 

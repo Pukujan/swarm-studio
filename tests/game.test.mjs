@@ -127,7 +127,10 @@ test('a runner gets side-view run and move sheets, painted after the hero sprite
   const runner = { hero: 'Mika, a girl courier in a yellow rain jacket; with Rust-8, a small rusty robot', pitch: 'A rooftop runner: jump and slide across the city' }
   assert.equal(sideView(runner), true)
   const s = sheetList(runner)
-  assert.deepEqual(s.map(x => x.id), ['sheet-hero-run', 'sheet-hero-moves'])
+  assert.deepEqual(s.map(x => x.id), ['sheet-hero-run', 'sheet-hero-jump', 'sheet-hero-slide', 'sheet-hero-hurt'])
+  assert.match(s[0].layout, /about 75 percent of the grid cell height/)
+  const climber = sheetList({ ...runner, pitch: 'A rooftop runner: climb water towers and repair a broken relay at the end of each stage' })
+  assert.deepEqual(climber.map(x => x.id), ['sheet-hero-run', 'sheet-hero-jump', 'sheet-hero-slide', 'sheet-hero-climb', 'sheet-hero-fix', 'sheet-hero-hurt'])
   assert.ok(s.every(x => x.after === 'sprite-hero' && x.kind === 'sheet' && x.layout))
   assert.ok(!/Rust-8/.test(s[0].look), 'a companion is left out of the figure')
   assert.equal(sheetList({ hero: 'Senna', pitch: 'a top-down roguelike' })[0].id, 'sheet-hero-walk')
