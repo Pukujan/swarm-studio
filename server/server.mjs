@@ -1023,7 +1023,7 @@ async function chatterMake(text, voice) {
 // ---------- the person talks to the crew while it builds
 // A question gets an answer from what the crew is doing right now (its stage, steps and the
 // lead's last thoughts); anything else is a change, queued for the start of the next stage.
-async function tellBuilder(a, id, text) {
+async function tellBuilder(a, id, text, { who = '', on = '' } = {}) {
   const t = String(text || '').trim().slice(0, 1200)
   if (!t) throw new Error('say something to the crew')
   const { isQuestion, processNotes } = await import('../engine/appjob.mjs')
@@ -1048,7 +1048,7 @@ async function tellBuilder(a, id, text) {
       trace: { kind: 'tell' }, model, maxTokens: 220, temperature: 0.3, signal: AbortSignal.timeout(30000),
       extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
       messages: [
-        { role: 'system', content: `You are Hermia, the lead of the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${how} ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
+        { role: 'system', content: `${who ? `You are ${String(who).slice(0, 40)}, one of the Swarm crew (Hermia leads it), answering for yourself in the first person: right now you are on ${String(on || 'the build').slice(0, 160)}. You are part of` : 'You are Hermia, the lead of'} the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${how} ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
         { role: 'user', content: t }
       ]
     })
@@ -2364,7 +2364,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       apps().then(async a => {
         if (sub === 'stop') return a.stop(id)
-        if (sub === 'tell') return tellBuilder(a, id, input.text)
+        if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on })
         if (sub === 'open') return a.open(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')
