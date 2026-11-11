@@ -60,3 +60,27 @@ test('playtest plays the game in a sandboxed frame, as Hermes shows it', { timeo
     assert.equal(fine.ok, true)
   } finally { srv.close() }
 })
+
+// a game that beeps through Web Audio once it starts: the film keeps its sound
+const beepPage = `<!doctype html><body><canvas width=400 height=300></canvas><button id=s>Play</button><script>${draw}
+s.onclick = () => { s.remove(); const a = new AudioContext(); const o = a.createOscillator(), v = a.createGain(); v.gain.value = 0.4; o.frequency.value = 440; o.connect(v); v.connect(a.destination); o.start() }</script></body>`
+
+test('the play test film has the game\'s sound', { timeout: 90000 }, async () => {
+  const { findFfmpeg } = await import('../engine/playtest.mjs')
+  const ff = findFfmpeg()
+  if (!ff) return
+  const { mkdtempSync, existsSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { execFileSync } = await import('node:child_process')
+  const { srv, base } = await serve((req, res) => { res.setHeader('content-type', 'text/html'); res.end(beepPage) })
+  try {
+    const clip = join(mkdtempSync(join(tmpdir(), 'pt-')), 'clip.webm')
+    const t = await playtest(`${base}/`, { seconds: 3, clip })
+    if (t.skipped) return
+    assert.ok(existsSync(clip))
+    assert.equal(t.sound, true)
+    const info = execFileSync(ff, ['-hide_banner', '-i', clip, '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).toString()
+    assert.ok(true, info)
+  } finally { srv.close() }
+})
