@@ -213,8 +213,9 @@ const SFXR = (() => {
   }
   // Stopped Hour: the world stops (a deep whoosh into a sub drop), slow deep tocks while it is
   // held, and a reverse swell that lands on the release (boss-spells.js HOUR.place = 2.3 s)
-  const HOUR_PLACE = 2.3
+  let HOUR_PLACE = 2.3   // the length of the stop; boss-spells.js says the real one
   function hourStop() {
+    if (typeof BOSS_SPELLS !== 'undefined' && BOSS_SPELLS.hour) HOUR_PLACE = BOSS_SPELLS.hour.stop
     SFXR.play('tf_stop', { x: B?.x }); SFXR.duck(0.45, HOUR_PLACE - 0.1)
     ;[0.62, 1.2, 1.74].forEach((d, i) => SFXR.play('tf_tock', { delay: d, rate: i % 2 ? 0.92 : 1, vol: 0.8 + 0.1 * i, jitter: 0 }))
     SFXR.play('tf_swell', { delay: HOUR_PLACE - 1.2 })
