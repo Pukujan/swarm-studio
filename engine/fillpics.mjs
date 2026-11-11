@@ -41,8 +41,8 @@ const isEmpty = tag => {
   return !m[1] || m[1].startsWith('data:image/svg+xml')
 }
 
-// an empty frame: <div className="... aspect-[3/4] ..."></div>
-const FRAME = /<div className="([^"]*\baspect-(?:\[[^\]]+\]|square|video)[^"]*)"\s*>\s*<\/div>/g
+// an empty frame: <div className="... aspect-[3/4] ..."></div> (or class=, in an exported site's HTML)
+const FRAME = /<div (className|class)="([^"]*\baspect-(?:\[[^\]]+\]|square|video)[^"]*)"\s*>\s*<\/div>/g
 const clean = s => String(s).replace(/<[^>]+>/g, ' ').replace(/\{[^}]*\}/g, ' ').replace(/["<>{}]/g, '').replace(/\s+/g, ' ').trim()
 
 // framesToSlots(text) -> text: every empty frame gets an <img data-gen> filling it
@@ -50,19 +50,19 @@ export function framesToSlots(text) {
   if (!FRAME.test(text)) return text
   FRAME.lastIndex = 0
   const theme = (text.match(/\sdata-gen="([^"]+)"/) || [])[1] || ''
-  return text.replace(FRAME, (m, cls, at) => {
+  return text.replace(FRAME, (m, attr, cls, at) => {
     // the card's title: the first bit of text after the frame
     const after = text.slice(at + m.length, at + m.length + 800).split(/<[^>]+>/).map(clean).filter(Boolean).slice(0, 2).join(' ').split(' ').slice(0, 10).join(' ')
     const gen = clean(`${theme ? theme.split(',')[0] : ''}${theme && after ? ', ' : ''}${after}`).slice(0, 200)
     if (!gen) return m
-    return `<div className="${cls}"><img data-gen="${gen}" alt="${clean(after).slice(0, 80)}" className="w-full h-full object-cover" /></div>`
+    return `<div ${attr}="${cls}"><img data-gen="${gen}" alt="${clean(after).slice(0, 80)}" ${attr}="w-full h-full object-cover" /></div>`
   })
 }
 
 // slots(dir) -> [{ file, gen }]: the picture slots still empty
-export function emptySlots(appDir) {
+export function emptySlots(appDir, root = 'src') {
   const out = []
-  for (const file of codeFiles(join(appDir, 'src'))) {
+  for (const file of codeFiles(root ? join(appDir, root) : appDir)) {
     const text = readFileSync(file, 'utf8')
     for (const tag of text.match(IMG) || []) { const gen = genOf(tag); if (gen && isEmpty(tag)) out.push({ file, gen }) }
   }
@@ -71,14 +71,16 @@ export function emptySlots(appDir) {
 
 // fillPictures(appDir, { pick, bytesOf, run }) -> { filled, left }
 // pick({ q, run, avoid }) is standins().pick; bytesOf(url) returns the photo's bytes (or null).
-export async function fillPictures(appDir, { pick, bytesOf, run = null, step = () => {} }) {
-  for (const file of codeFiles(join(appDir, 'src'))) {
+// An app's code is in src/ and its photos are served from /img/stock/ out of public/; an
+// exported static site (fillSite) has its pages at the top and the photos beside them.
+export async function fillPictures(appDir, { pick, bytesOf, run = null, step = () => {}, root = 'src', out = join('public', 'img', 'stock'), prefix = '/img/stock/' }) {
+  for (const file of codeFiles(root ? join(appDir, root) : appDir)) {
     const text = readFileSync(file, 'utf8'), next = framesToSlots(text)
     if (next !== text) writeFileSync(file, next)
   }
-  const slots = emptySlots(appDir)
+  const slots = emptySlots(appDir, root)
   if (!slots.length) return { filled: 0, left: 0 }
-  const outDir = join(appDir, 'public', 'img', 'stock')
+  const outDir = join(appDir, out)
   const credits = new Map()
   const chosen = new Map() // gen -> local path, so the same prompt gets the same photo
   const avoid = new Set()
@@ -97,7 +99,7 @@ export async function fillPictures(appDir, { pick, bytesOf, run = null, step = (
     const name = `${createHash('sha1').update(photo.url).digest('hex').slice(0, 12)}.${ext}`
     mkdirSync(outDir, { recursive: true })
     if (!existsSync(join(outDir, name))) writeFileSync(join(outDir, name), bytes)
-    chosen.set(gen, `/img/stock/${name}`)
+    chosen.set(gen, `${prefix}${name}`)
     credits.set(name, { credit: photo.credit || (photo.source === 'own' ? 'Painted for an earlier Swarm Studio build' : 'Stock photo'), page: photo.page || null })
   }
   // write the srcs in, file by file
@@ -125,4 +127,13 @@ export async function fillPictures(appDir, { pick, bytesOf, run = null, step = (
   const left = slots.length - filled
   if (filled) step({ kind: 'setup', text: `filled ${filled} empty picture slot${filled === 1 ? '' : 's'} with stand-in photos${left ? `; ${left} still empty` : ''}` })
   return { filled, left }
+}
+
+// An exported site: its static pages (html/, relative links so it works under any
+// path, like <login>.github.io/<repo>/) and its React copy (react/, an app layout)
+// get the same stand-ins as an app, so no published site ships grey boxes.
+export async function fillSite(exportDir, opts) {
+  const html = await fillPictures(join(exportDir, 'html'), { ...opts, root: '', out: join('img', 'stock'), prefix: 'img/stock/' })
+  const react = existsSync(join(exportDir, 'react', 'src')) ? await fillPictures(join(exportDir, 'react'), opts) : { filled: 0, left: 0 }
+  return { filled: html.filled + react.filled, left: html.left + react.left }
 }

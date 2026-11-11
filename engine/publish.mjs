@@ -169,6 +169,18 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
   })
   if (!dep.ok) throw new Error(`Vercel: ${dep.body.error?.message || dep.status}`)
   rememberProject(dataDir, 'vercel', project)
+  const projectRef = encodeURIComponent(dep.body.projectId || project)
+  // The settings go on the project too (encrypted), so a later Deploy without them
+  // keeps them: inside the deployment alone they last one deployment. Only key names are ever logged.
+  let envSaved = null
+  const keys = env ? Object.keys(env).filter(k => env[k] != null && env[k] !== '') : []
+  if (keys.length) {
+    const r = await api(`/v10/projects/${projectRef}/env?upsert=true`, {
+      method: 'POST', body: JSON.stringify(keys.map(key => ({ key, value: String(env[key]), type: 'encrypted', target: ['production', 'preview'] }))),
+    }).catch(err => ({ ok: false, status: String(err.message || err) }))
+    envSaved = !!r.ok
+    if (!r.ok) onLog?.([`the app's settings (${keys.join(', ')}) could not be saved on the Vercel project (${r.body?.error?.code || r.status}); a later Deploy may run without them`])
+  }
 
   onStage('building')
   let d = dep.body
@@ -189,18 +201,24 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
     await log()
   }
   if (d.readyState !== 'READY') throw new Error(`Vercel deployment ${String(d.readyState || 'timed out').toLowerCase()}`)
-  // The project's own <name>.vercel.app is public. Team and per-deployment
-  // addresses may sit behind Vercel's login, and the project alias can be
-  // assigned a moment after the deployment is ready, so wait for it briefly.
-  const pub = `${project}.vercel.app`
-  for (let i = 0; i < 6 && !(d.alias || []).includes(pub); i++) {
+  // Only addresses Vercel assigned to this deployment or this project count. A
+  // <name>.vercel.app is global: when someone else owns it, Vercel gives the project
+  // another (ares-nu-nine.vercel.app) and whatever answers at <name>.vercel.app is theirs.
+  // The project alias can be assigned a moment after the deployment is ready, so wait briefly.
+  const assigned = async () => {
+    const p = (await api(`/v9/projects/${projectRef}`).catch(() => ({ body: {} }))).body || {}
+    return [...(d.alias || []), ...(p.targets?.production?.alias || [])].filter(a => typeof a === 'string' && a)
+  }
+  let names = await assigned()
+  for (let i = 0; i < 6 && !names.some(a => a.endsWith('.vercel.app')); i++) {
     await wait(2500)
     d = (await api(`/v13/deployments/${dep.body.id}`)).body || d
+    names = await assigned()
   }
-  const names = [...new Set([pub, ...(d.alias || []).filter(a => a.endsWith('.vercel.app')).sort((a, b) => a.length - b.length), d.url].filter(Boolean))]
+  const ordered = [...new Set([...names.filter(a => a.endsWith('.vercel.app')).sort((a, b) => a.length - b.length), ...names, d.url].filter(Boolean))]
   let url = null
-  for (const n of names) if (await live(`https://${n}/`, 15000)) { url = `https://${n}/`; break }
-  return { url: url || `https://${pub}/`, repo: `vercel:${project}`, pending: !url }
+  for (const n of ordered) if (await live(`https://${n}/`, 15000)) { url = `https://${n}/`; break }
+  return { url: url || (ordered[0] ? `https://${ordered[0]}/` : null), repo: `vercel:${project}`, pending: !url, ...(envSaved === null ? {} : { envSaved }) }
 }
 
 // ---------- Cloudflare Pages: direct upload, the way wrangler does it, without wrangler.
@@ -235,7 +253,7 @@ export async function publishCloudflare({ dir, name, creds, dataDir, onStage = (
   const jwt = tok.body.result?.jwt
   if (!jwt) throw new Error(`Cloudflare upload token: ${why(tok)}`)
   const up = (path, body) => rest(CF, jwt, path, { method: 'POST', body: JSON.stringify(body) })
-  const list = files(dir).filter(f => !build || !SKIP.test(f.rel)).map(f => {
+  const list = files(dir).map(f => {
     const value = readFileSync(f.path).toString('base64'), ext = f.rel.split('.').pop().toLowerCase()
     return { rel: f.rel, value, contentType: TYPES[ext] || 'application/octet-stream', hash: createHash('sha256').update(value + ext).digest('hex').slice(0, 32) }
   })
@@ -255,6 +273,10 @@ export async function publishCloudflare({ dir, name, creds, dataDir, onStage = (
   if (!dep.ok) throw new Error(`Cloudflare deployment: ${why(dep)}`)
 
   onStage('building')
-  const url = `https://${sub || `${project}.pages.dev`}/`
+  // Only an address Cloudflare assigned: Pages names are global too, so a taken
+  // <name>.pages.dev becomes <name>-xyz.pages.dev, and the plain one is someone else's.
+  if (!sub) sub = (await api(`/${project}`)).body?.result?.subdomain || null
+  const url = sub ? `https://${sub}/` : dep.body.result?.url ? String(dep.body.result.url).replace(/\/?$/, '/') : null
+  if (!url) throw new Error(`Cloudflare did not say where ${project} is served`)
   return { url, repo: `cloudflare:${project}`, pending: !(await live(url)) }
 }
