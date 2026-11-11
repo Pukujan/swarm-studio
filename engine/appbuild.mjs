@@ -8,7 +8,7 @@
 
 import { spawn, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, statSync, watch } from 'node:fs'
-import { join, dirname, relative } from 'node:path'
+import { join, dirname, relative, delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const dyadDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'dyad')
@@ -16,6 +16,11 @@ export const scaffoldDir = join(dyadDir, 'scaffold')
 const bundle = join(dyadDir, '.vite', 'build', 'aba_headless.cjs')
 
 export const engineReady = () => existsSync(bundle)
+
+// npm-installed tools (pnpm, npx) are .cmd shims on Windows, and Node runs a
+// .cmd only through a shell. The arguments passed this way are plain words.
+export const WIN = process.platform === 'win32'
+export const viaShell = WIN ? { shell: true } : {}
 
 // dugite downloads its own git at install time and that download often fails;
 // the system git does the same job.
@@ -29,7 +34,7 @@ function gitEnv() {
 
 function run(cmd, args, opts, onLine) {
   return new Promise((ok, fail) => {
-    const p = spawn(cmd, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+    const p = spawn(cmd, args, { ...viaShell, ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
     let tail = ''
     const eat = b => {
       tail = (tail + b).slice(-4000)
@@ -48,8 +53,8 @@ let nodeFor = null
 export function engineNode() {
   if (nodeFor) return nodeFor
   // every node on PATH, not only the first: Hermes puts its own Node in front
-  const onPath = (process.env.PATH || '').split(':').filter(Boolean).map(d => join(d, 'node'))
-  const login = (() => { try { return execFileSync('/bin/sh', ['-lc', 'command -v node'], { encoding: 'utf8' }).trim() } catch { return '' } })()
+  const onPath = (process.env.PATH || process.env.Path || '').split(delimiter).filter(Boolean).map(d => join(d, WIN ? 'node.exe' : 'node'))
+  const login = WIN ? '' : (() => { try { return execFileSync('/bin/sh', ['-lc', 'command -v node'], { encoding: 'utf8' }).trim() } catch { return '' } })()
   const candidates = [process.execPath, ...onPath, login, '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
   for (const n of candidates) {
     try {

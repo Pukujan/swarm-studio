@@ -1045,7 +1045,7 @@ async function paintGame(runId, spec, items, appDir, step) {
       // a sprite is painted on a flat colour: cut it out to a transparent PNG
       if (it.cutout) {
         const cut = join(dirname(r.path), `${it.id}-cut.png`)
-        const c = await new Promise(ok => execFile('python3', [join(root, 'scripts', 'cutout.py'), r.path, cut], { timeout: 60000 }, (err, out, errOut) => ok({ ok: !err, why: String(errOut || err?.message || '').trim() })))
+        const c = await new Promise(ok => execFile(process.platform === 'win32' ? 'python' : 'python3', [join(root, 'scripts', 'cutout.py'), r.path, cut], { timeout: 60000 }, (err, out, errOut) => ok({ ok: !err, why: String(errOut || err?.message || '').trim() })))
         if (!c.ok || !existsSync(cut)) { step({ kind: 'setup', text: `could not cut out the ${it.what}: ${c.why.split('\n').pop().slice(0, 120)}`, ok: false }); continue }
         r.path = cut
       }
