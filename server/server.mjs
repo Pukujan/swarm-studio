@@ -190,10 +190,17 @@ async function backupImage(choice) {
   const p = list.find(x => x.provider === 'openai-codex') || list[0]
   return p ? { provider: p.provider, model: p.provider === 'openai-codex' ? 'gpt-image-2-low' : p.default || '' } : null
 }
-async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false }, onSentBack) {
-  const once = (c, strict) => { const pick = art.tierFor(c, { hero }); return imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000) }
+async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false, ref = '' }, onSentBack) {
+  // ref: a picture to match in style (the hero's sprite, for a figure or prop painted to stand beside it)
+  let withRef = !!(ref && existsSync(ref))
+  const once = (c, strict) => { const pick = art.tierFor(c, { hero }); return imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, ...(withRef ? ['--ref', ref] : []), art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000) }
   // a refusal that isn't out of quota: once more after a pause, then on another provider (engine/paintretry.mjs)
-  const first = await paintWithBackup(c => once(c, ''), { choice, backup: () => backupImage(choice), quota: OUT_OF_QUOTA, exists: existsSync })
+  let first = await paintWithBackup(c => once(c, ''), { choice, backup: () => backupImage(choice), quota: OUT_OF_QUOTA, exists: existsSync })
+  // not every provider takes a reference picture: without one, rather than no picture
+  if (withRef && (!first.ok || !first.path || !existsSync(first.path)) && !OUT_OF_QUOTA.test(String(first.error || ''))) {
+    withRef = false
+    first = await paintWithBackup(c => once(c, ''), { choice, backup: () => backupImage(choice), quota: OUT_OF_QUOTA, exists: existsSync })
+  }
   if (!first.ok || !first.path || !existsSync(first.path)) return first
   const used = first.backup || choice, pick = art.tierFor(used, { hero })
   const go = strict => once(used, strict)
@@ -1224,7 +1231,9 @@ const cutPy = () => (cutPyP ||= (async () => {
 })())
 // what a stage is told about a sheet: its frame size and timing, from the cut
 const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: it.fps, loop: it.loop, frames: it.frames } : {})
-async function paintGame(runId, spec, items, appDir, step, signal = null) {
+// have: the art painted before (a mid-build ask): a sheet can be painted over one of those
+// sprites and a sprite can take the hero's picture as its reference
+async function paintGame(runId, spec, items, appDir, step, signal = null, { have = [] } = {}) {
   const choice = await imageChoice()
   if (!choice) { step({ kind: 'setup', text: 'no image model: the game draws its art in code', ok: false }); return [] }
   const guide = gameGuide(spec)
@@ -1232,6 +1241,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
   mkdirSync(join(appDir, 'public', 'art'), { recursive: true })
   mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
   const done = new Map(), queue = [...items], libUsed = new Set()
+  for (const f of have) { const id = String(f.file || '').replace(/^art\//, '').replace(/\.[a-z0-9]+$/i, ''); if (id && !items.some(i => i.id === id)) done.set(id, f) }
   // a picture painted for this game before (a build stopped by a restart, a Try again)
   // is kept with the run: it is used again, not painted and paid for again
   const kept = (() => { try { return readdirSync(join(runsDir, runId, 'img')).filter(f => /^game-.*\.(png|jpe?g|webp)$/i.test(f) && !/-check\./.test(f)) } catch { return [] } })()
@@ -1242,14 +1252,16 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
     if (it.kind === 'sheet') { try { meta = JSON.parse(readFileSync(join(runsDir, runId, 'img', `game-${it.id}.json`), 'utf8')) } catch { continue } }
     const file = `art/${it.id}${extname(f)}`
     copyFileSync(join(runsDir, runId, 'img', f), join(appDir, 'public', file))
-    done.set(it.id, { file, what: it.what, kind: it.kind, ...sheetInfo(it, meta) })
+    done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}), ...sheetInfo(it, meta) })
     queue.splice(queue.indexOf(it), 1)
   }
   // a sheet is painted over its figure's own painted picture (kept before the cut)
   const raws = new Map()
   const imgDir = join(runsDir, runId, 'img'), peeks = readdirSync(imgDir).filter(f => /^peek-.*-raw\./.test(f))
   for (const it of items) { const f = peeks.find(k => k.startsWith(`peek-${it.id}-raw.`)); if (it.kind === 'sprite' && f) raws.set(it.id, join(imgDir, f)) }
-  if (done.size) step({ kind: 'setup', text: `using ${done.size} pictures painted before; painting ${queue.length}` })
+  for (const id of done.keys()) { const f = peeks.find(k => k.startsWith(`peek-${id}-raw.`)); if (/^sprite-/.test(id) && f && !raws.has(id)) raws.set(id, join(imgDir, f)) }
+  const fresh = items.filter(i => done.has(i.id)).length
+  if (fresh) step({ kind: 'setup', text: `using ${fresh} pictures painted before; painting ${queue.length}` })
   let stopped = null // the image model ran out: no more pictures are tried
   const img = name => `/img/${runId}/${name}`
   const live = (slot, it, state, extra = {}) => {
@@ -1280,9 +1292,11 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
   const next = async () => {
     for (;;) {
       if (stopped || signal?.aborted) return null
-      const i = queue.findIndex(q => !q.after || done.has(q.after))
+      // a reference (ref) is waited for while it is being painted, but its failure drops nothing
+      const pending = id => busy.has(id) || queue.some(o => o.id === id)
+      const i = queue.findIndex(q => (!q.after || done.has(q.after)) && (!q.ref || !pending(q.ref)))
       if (i >= 0) { const [it] = queue.splice(i, 1); busy.add(it.id); return it }
-      for (const q of [...queue]) if (!busy.has(q.after) && !queue.some(o => o.id === q.after)) queue.splice(queue.indexOf(q), 1)
+      for (const q of [...queue]) if (q.after && !busy.has(q.after) && !queue.some(o => o.id === q.after)) queue.splice(queue.indexOf(q), 1)
       if (!queue.length) return null
       await new Promise(r => setTimeout(r, 1000))
     }
@@ -1291,7 +1305,9 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
     for (let it; (it = await next()); busy.delete(it.id)) {
       if (it.kind === 'sheet') { await paintSheet(slot, it); continue }
       live(slot, it, 'painting')
-      let r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title', cutout: !!it.cutout }, c => live(slot, it, 'sent back', { problems: c.problems })).catch(err => ({ ok: false, error: String(err.message || err) }))
+      const refFile = it.ref && done.get(it.ref)?.file
+      const ref = it.ref ? [refFile && join(appDir, 'public', refFile), raws.get(it.ref)].find(f => f && existsSync(f)) : ''
+      let r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title', cutout: !!it.cutout, ref }, c => live(slot, it, 'sent back', { problems: c.problems })).catch(err => ({ ok: false, error: String(err.message || err) }))
       if (!r.ok || !r.path || !existsSync(r.path)) {
         const why = String(r.error || 'no image')
         if (OUT_OF_QUOTA.test(why) && !stopped) {
@@ -1329,7 +1345,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
           // the key colour was the trouble: paint it again on the other key (magenta ↔ green)
           const swap = art.keyTrouble(c.problems), gen = swap ? art.swapKey(it.gen) : it.gen
           step({ kind: 'setup', text: `sent back the ${it.what}: ${c.problems.join(', ') || 'the cut'}${swap ? `; painting it again on ${art.keyOf(gen)}` : ''}` })
-          const again = await paintArt(choice, guide, { gen: `${gen}. ${art.SPRITE_RETRY}; fix: ${c.problems.join('; ')}`, aspect: it.aspect, cutout: true }).catch(() => null)
+          const again = await paintArt(choice, guide, { gen: `${gen}. ${art.SPRITE_RETRY}; fix: ${c.problems.join('; ')}`, aspect: it.aspect, cutout: true, ref }).catch(() => null)
           if (again?.ok && again.path && existsSync(again.path)) {
             live(slot, it, 'cutting', { src: peek(it, again.path, 'raw2') })
             const c2 = await cutAndCheck(again.path, it, guide)
@@ -1340,7 +1356,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
         r = { ...r, path: c.path }
       }
       const { file, name } = keep(it, r.path)
-      done.set(it.id, { file, what: it.what, kind: it.kind })
+      done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}) })
       live(slot, it, 'done', { src: img(name) })
       step({ kind: 'setup', text: `painted the ${it.what}${r.backup ? ` with ${r.backup.provider} (${choice.provider} refused it)` : r.secondTry ? ' on the second try' : ''}` })
     }

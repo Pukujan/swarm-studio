@@ -77,7 +77,14 @@ export function seedGodot(dir, spec) {
   writeFileSync(join(root, 'export_presets.cfg'), WEB_PRESET)
   if (!existsSync(join(root, '.gitignore'))) writeFileSync(join(root, '.gitignore'), '.godot/\nbuild/\n')
   writeFileSync(join(root, '.godotfirst'), 'this game is built in Godot first\n')
-  const from = join(dir, 'public', 'art'), copied = []
+  return syncGodotArt(dir)
+}
+
+// The app's public/art/ copied into the Godot project's assets/art/ (again after a mid-build
+// ask is painted: Godot imports the new files on its next open). → the file names copied
+export function syncGodotArt(dir) {
+  const root = portDir(dir, 'godot'), from = join(dir, 'public', 'art'), copied = []
+  mkdirSync(join(root, 'assets', 'art'), { recursive: true })
   if (existsSync(from)) for (const f of readdirSync(from)) {
     if (!/^[\w.-]{1,90}\.(png|webp|jpe?g|json)$/i.test(f)) continue
     try { copyFileSync(join(from, f), join(root, 'assets', 'art', f)); copied.push(f) } catch {}
