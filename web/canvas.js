@@ -4270,10 +4270,30 @@ async function tellCrew(text) {
   const t = String(text || '').trim()
   if (!t) return botMsg('The crew is building. Ask what it is doing, or say what to change next.')
   feed(null, t, 'you')
+  // a question to one of the crew by name ("Pip, what are you on?"): their window answers on the wall
+  const names = cw.el && !cw.el.hidden ? wallNames() : []
+  const k = names.findIndex(([n]) => n && new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(t))
+  const who = k >= 0 ? names[k][0] : ''
+  const on = k < 0 ? '' : k === CW_CODE ? `writing ${cw.tiles[k]?.path || 'code'}` : cw.mode === 'art' ? `painting ${paintv.slots[k]?.what || 'art'}` : k === 0 ? 'the play test window' : `the picture ${cw.av[k]?.name || ''}`.trim()
+  cwSay(k, who ? '…' : '', true)
   try {
-    const r = await appApi('/tell', { text: t })
-    botMsg(r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next stage.' : 'The crew is working.'))
-  } catch (err) { botMsg(`App: ${err.message}`) }
+    const r = await appApi('/tell', { text: t, ...(who ? { who, on } : {}) })
+    const answer = r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next slice.' : 'The crew is working.')
+    cwSay(k, answer)
+    botMsg(who ? `${who}: ${answer}` : answer)
+  } catch (err) { cwSay(k, ''); botMsg(`App: ${err.message}`) }
+}
+// a crew member's answer, said in their own window for a while (k -1: over the wall's title)
+function cwSay(k, words, thinking = false) {
+  const host = k >= 0 ? cw.el?.querySelector('.cw-grid')?.children[k] : cw.el?.querySelector('.cw-head')
+  if (!host) return
+  let b = host.querySelector(':scope > .cw-say')
+  if (!words) { b?.remove(); return }
+  if (!b) { b = document.createElement('p'); b.className = 'cw-say'; host.append(b) }
+  b.classList.toggle('thinking', thinking)
+  setText(b, words)
+  clearTimeout(b._t)
+  if (!thinking) b._t = setTimeout(() => b.remove(), 14000)
 }
 
 // ---------- a big game, slice by slice, in the chat
@@ -6230,35 +6250,59 @@ function cwAssets() {
     .catch(() => {})
     .finally(() => { cw.assetsLoading = false; cw.assetsAt = Date.now() })
 }
-// k: which of the three picture tiles. Each turns on its own beat (a third of a turn apart)
-// and takes a picture the other two are not showing, so the wall shows three at once.
+// The code wall's three picture windows, newest first (never a loop through old pictures):
+// k 0 is the play test (the filmed clip covers it once a slice has one; before that, the
+// newest picture under a "plays after this slice" note); k 1 and 2 show what was made last.
+// A picture being painted right now (mid-build) takes window 1, in its painting state.
+const CW_NEW = 5 * 60e3
+function cwRanked() {
+  const pics = cw.assets?.pics || []
+  // newest first; pictures with no time keep the art plan's order, after the timed ones
+  return pics.map((p, i) => ({ ...p, i })).sort((x, y) => (y.t || 0) - (x.t || 0) || y.i - x.i)
+}
+function cwLive() {
+  if (paintv.run !== cw.run) return null
+  return paintv.slots.filter(sl => sl && ['painting', 'cutting', 'checking', 'sent back'].includes(sl.state)).sort((x, y) => (y.t || 0) - (x.t || 0))[0] || null
+}
 function cwAssetTile(d, member, now, k = 0) {
   if (!d) return
   cwAssets()
   cwWho(d, member)
-  const pics = cw.assets?.pics || []
-  const a = cw.av[k] ||= { i: -1, at: 0, wait: now + k * 800, name: '' }
-  d.classList.toggle('empty', !pics.length)
-  if (!pics.length) {
-    a.name = cw.assets?.next?.[k] || cw.assets?.next?.[0] || 'Art'
-    setText(d.querySelector('.cw-path'), a.name)
-    return
+  const ranked = cwRanked(), live = k === 1 ? cwLive() : null
+  const a = cw.av[k] ||= { src: '', name: '' }
+  const slice = String(appv.stage || '').match(/stage (\d+) of (\d+)/)
+  let pic = null, label = '', state = ''
+  if (k === 0) {
+    pic = ranked[0] || null
+    label = d.classList.contains('has-play') ? 'Play test' : `Play test · plays after ${slice ? `slice ${slice[1]} of ${slice[2]}` : 'this slice'}`
+    state = 'waiting'
+  } else if (live) {
+    pic = live.src ? { src: live.src, name: live.what } : null
+    label = live.what
+    state = ART_STATE[live.state] || 'painting'
+  } else {
+    // with something painting in window 1, window 2 shows the newest finished picture
+    pic = ranked[cwLive() ? 0 : k - 1] || null
+    label = pic?.name || cw.assets?.next?.[k - 1] || 'Art'
+    state = pic && pic.t && Date.now() - pic.t < CW_NEW ? 'new' : ''
   }
-  if (now < a.wait || (a.i >= 0 && now - a.at < CW_TURN * 1.5)) return
-  const taken = new Set(cw.av.filter((x, j) => x && j !== k).map(x => x.i))
-  let i = (a.i < 0 ? k : a.i + 1) % pics.length
-  for (let n = 0; n < pics.length && taken.has(i) && pics.length > CW_CODE - 1; n++) i = (i + 1) % pics.length
-  const pic = pics[i]
-  a.i = i; a.at = now
-  // the hidden face takes the next picture once it has loaded, then the faces trade places
+  d.classList.toggle('empty', !pic)
+  d.classList.toggle('play-wait', k === 0 && !d.classList.contains('has-play'))
+  d.dataset.state = state
+  setText(d.querySelector('.cw-path'), label)
+  let chip = d.querySelector('.cw-state')
+  if (!chip) { chip = document.createElement('em'); chip.className = 'cw-state'; d.querySelector('.cw-file').insertBefore(chip, d.querySelector('.cw-who')) }
+  setText(chip, state === 'waiting' ? '' : state)
+  a.name = label
+  if (!pic || a.src === pic.src) return
+  a.src = pic.src
+  // the hidden face takes the new picture once it has loaded, then the faces trade places
   const faces = [...d.querySelectorAll('.cw-face')], next = faces.find(f => !f.classList.contains('on')) || faces[0]
   const im = new Image()
   im.onload = () => {
-    if (a.i !== i) return
+    if (a.src !== pic.src) return
     next.src = pic.src
     for (const f of faces) f.classList.toggle('on', f === next)
-    a.name = pic.name
-    setText(d.querySelector('.cw-path'), pic.name)
     d.classList.remove('scan'); void d.offsetWidth; d.classList.add('scan')
   }
   im.src = pic.src

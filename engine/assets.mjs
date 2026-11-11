@@ -3,7 +3,7 @@
 // img/ as game-*.webp) and any 3D models the app holds (public/models/*.glb|gltf, from
 // an upload or a connector). `next` names the pictures still to come, so the pane can
 // show what the crew is about to make before anything is painted.
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const words = s => String(s || '').replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -33,7 +33,7 @@ export function listAssets({ id, events = [], files = {}, plan = [], pieceName =
   for (const f of (files.img || []).filter(f => /^game-[a-z0-9-]{1,48}\.(png|jpe?g|webp)$/.test(f)).sort().sort((a, b) => at(a) - at(b))) {
     const art = f.slice(5).replace(/\.[a-z]+$/, '')
     painted.add(art)
-    assets.push({ kind: 'art', name: artName(art), src: `/img/${id}/${f}`, t: 0 })
+    assets.push({ kind: 'art', name: artName(art), src: `/img/${id}/${f}`, t: files.times?.[f] || 0 })
   }
   for (const f of (files.models || []).filter(f => /^[\w.-]{1,80}\.(glb|gltf)$/i.test(f)).sort()) {
     assets.push({ kind: 'model', name: cap(words(f)), file: f, t: 0 }) // the Studio does not load three.js: listed, not drawn
@@ -51,5 +51,9 @@ export function listAssets({ id, events = [], files = {}, plan = [], pieceName =
 // the files listAssets reads, from a run's folder
 export function assetFiles(runDir) {
   const ls = d => { try { return existsSync(d) ? readdirSync(d) : [] } catch { return [] } }
-  return { img: ls(join(runDir, 'img')), models: ls(join(runDir, 'app', 'public', 'models')) }
+  const img = ls(join(runDir, 'img'))
+  // when each game picture was made: the wall shows the newest first
+  const times = {}
+  for (const f of img) if (/^game-/.test(f)) try { times[f] = Math.round(statSync(join(runDir, 'img', f)).mtimeMs) } catch {}
+  return { img, models: ls(join(runDir, 'app', 'public', 'models')), times }
 }

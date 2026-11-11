@@ -29,9 +29,19 @@ test("a run's pictures: the newest per slot, a game's kept art, its models, and 
 
 test('a run with nothing yet lists nothing, and its files are read from its folder', () => {
   const dir = mkdtempSync(join(tmpdir(), 'assets-'))
-  assert.deepEqual(assetFiles(dir), { img: [], models: [] })
+  assert.deepEqual(assetFiles(dir), { img: [], models: [], times: {} })
   mkdirSync(join(dir, 'img'))
   writeFileSync(join(dir, 'img', 'game-title.webp'), 'x')
   assert.deepEqual(assetFiles(dir).img, ['game-title.webp'])
   assert.deepEqual(listAssets({ id: 'r2' }), { assets: [], next: [], sheet: [] })
+})
+
+test('a game picture carries the time it was made, so the wall can show the newest first', () => {
+  const { assets } = listAssets({ id: 'r', files: { img: ['game-title.webp', 'game-place-roof.webp'], times: { 'game-place-roof.webp': 2000, 'game-title.webp': 1000 } } })
+  const t = Object.fromEntries(assets.map(a => [a.src.split('/').pop(), a.t]))
+  assert.deepEqual(t, { 'game-title.webp': 1000, 'game-place-roof.webp': 2000 })
+  const dir = mkdtempSync(join(tmpdir(), 'assets-'))
+  mkdirSync(join(dir, 'img'))
+  writeFileSync(join(dir, 'img', 'game-title.webp'), 'x')
+  assert.ok(assetFiles(dir).times['game-title.webp'] > 0)
 })
