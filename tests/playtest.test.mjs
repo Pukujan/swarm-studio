@@ -60,3 +60,34 @@ test('playtest plays the game in a sandboxed frame, as Hermes shows it', { timeo
     assert.equal(fine.ok, true)
   } finally { srv.close() }
 })
+
+// a game that beeps through Web Audio once it starts: the film keeps its sound
+const beepPage = `<!doctype html><body><canvas width=400 height=300></canvas><button id=s>Play</button><script>${draw}
+s.onclick = () => { s.remove(); const a = new AudioContext(); const o = a.createOscillator(), v = a.createGain(); v.gain.value = 0.4; o.frequency.value = 440; o.connect(v); v.connect(a.destination); o.start() }</script></body>`
+
+test('the play test film has the game\'s sound', { timeout: 90000 }, async () => {
+  const { findFfmpeg, launch, loadPlaywright } = await import('../engine/playtest.mjs')
+  const ff = findFfmpeg(), pw = await loadPlaywright()
+  if (!ff || !pw) return
+  // a machine with no sound output (a server over SSH) never runs the browser's audio clock
+  const b = await launch(pw.chromium).catch(() => null)
+  if (!b) return
+  const clock = await (await b.newPage()).evaluate(() => new Promise(r => { const a = new AudioContext(); setTimeout(() => r(a.currentTime), 600) })).catch(() => 0)
+  await b.close()
+  if (clock < 0.2) return
+  const { mkdtempSync, existsSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { spawnSync } = await import('node:child_process')
+  const { srv, base } = await serve((req, res) => { res.setHeader('content-type', 'text/html'); res.end(beepPage) })
+  try {
+    const clip = join(mkdtempSync(join(tmpdir(), 'pt-')), 'clip.webm')
+    const t = await playtest(`${base}/`, { seconds: 3, clip })
+    if (t.skipped) return
+    assert.ok(existsSync(clip))
+    assert.equal(t.sound, true)
+    const info = spawnSync(ff, ['-hide_banner', '-i', clip, '-map', '0:a', '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8' }).stderr
+    const mean = Number(info.match(/mean_volume: (-?[\d.]+) dB/)?.[1] ?? -99)
+    assert.ok(mean > -40, `the clip is silent (mean ${mean} dB)`)
+  } finally { srv.close() }
+})

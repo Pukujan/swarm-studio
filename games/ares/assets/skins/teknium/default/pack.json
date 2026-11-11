@@ -175,6 +175,54 @@
     "edge": [],
     "height_spread": 1.27
    }
+  },
+  "t-hourwind": {
+   "file": "t-hourwind.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "t-hourwind.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.01
+   }
+  },
+  "t-hourstop": {
+   "file": "t-hourstop.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "t-hourstop.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.04
+   }
+  },
+  "t-hourend": {
+   "file": "t-hourend.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "t-hourend.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.02
+   }
   }
  }
 }

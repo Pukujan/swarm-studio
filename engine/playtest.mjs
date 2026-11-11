@@ -4,10 +4,11 @@
 // page) pass a game whose run ends the moment it starts; this catches that, and
 // crashes, a missing canvas and a start button that does nothing.
 
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { dyadDir } from './appbuild.mjs'
 
 const START = /^(play|start|begin|go|new game|tap to (play|start)|press .* to (play|start))|\b(play|start|begin)\b/i
@@ -22,7 +23,7 @@ export async function loadPlaywright() {
 }
 
 // Playwright's own browser, else installed Chrome, else any headless shell Playwright downloaded before
-export async function launch(chromium) {
+export async function launch(chromium, extra = {}) {
   const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || join(homedir(), process.platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright')
   const shells = []
   try {
@@ -35,7 +36,7 @@ export async function launch(chromium) {
   } catch {}
   let last
   for (const opts of [{}, { channel: 'chrome' }, ...shells.map(executablePath => ({ executablePath }))]) {
-    try { return await chromium.launch(opts) } catch (e) { last = e }
+    try { return await chromium.launch({ ...opts, ...extra }) } catch (e) { last = e }
   }
   throw last
 }
@@ -53,6 +54,83 @@ async function blank(page, png) {
   }, png.toString('base64')).catch(() => false)
 }
 
+// The film's sound. Playwright films the picture only, so the page records its own sound:
+// every Web Audio graph (a Godot export plays through one) and every <audio>/<video> is
+// tapped into one recorder, started at the first sound. Runs in every frame, the game's too.
+export const SOUND_TAP = `(() => {
+  if (window.__swarmSound) return
+  const S = window.__swarmSound = { chunks: [], at: 0, rec: null, ctx: null, dest: null }
+  const AC = window.AudioContext || window.webkitAudioContext
+  if (!AC || typeof MediaRecorder === 'undefined') return
+  const hub = () => {
+    if (S.dest) return S.dest
+    S.ctx = new AC(); S.dest = S.ctx.createMediaStreamDestination()
+    try { S.ctx.resume() } catch {}
+    const type = ['audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t))
+    S.rec = new MediaRecorder(S.dest.stream, type ? { mimeType: type } : {})
+    S.rec.ondataavailable = e => { if (e.data && e.data.size) S.chunks.push(e.data) }
+    S.rec.start(500); S.at = Date.now()
+    const wake = () => { try { S.ctx.resume() } catch {} }
+    addEventListener('pointerdown', wake, true); addEventListener('keydown', wake, true)
+    return S.dest
+  }
+  const taps = new WeakMap()
+  const tapOf = ctx => {
+    if (ctx === S.ctx) return null
+    if (!taps.has(ctx)) {
+      try { const t = ctx.createMediaStreamDestination(); S.ctx || hub(); S.ctx.createMediaStreamSource(t.stream).connect(hub()); taps.set(ctx, t) } catch { taps.set(ctx, null) }
+    }
+    return taps.get(ctx)
+  }
+  const connect = AudioNode.prototype.connect
+  AudioNode.prototype.connect = function (to, ...rest) {
+    const r = connect.call(this, to, ...rest)
+    try { if (to instanceof AudioDestinationNode && this.context !== S.ctx) { const t = tapOf(this.context); if (t) connect.call(this, t, ...rest) } } catch {}
+    return r
+  }
+  const play = HTMLMediaElement.prototype.play
+  HTMLMediaElement.prototype.play = function (...a) {
+    try { if (!this.__swarmTap && this.captureStream) { this.__swarmTap = 1; const st = this.captureStream(); const go = () => { if (st.getAudioTracks().length) { hub(); S.ctx.createMediaStreamSource(st).connect(S.dest) } }; st.getAudioTracks().length ? go() : st.addEventListener('addtrack', go, { once: true }) } } catch {}
+    return play.apply(this, a)
+  }
+})()`
+
+// the recorded sound, as base64 webm, and when it started (ms since the epoch); null if silent
+async function takeSound(frame) {
+  return frame.evaluate(() => new Promise(done => {
+    const S = window.__swarmSound
+    if (!S || !S.rec) return done(null)
+    const finish = async () => {
+      if (!S.chunks.length) return done(null)
+      const b = new Uint8Array(await new Blob(S.chunks).arrayBuffer())
+      let s = ''
+      for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000))
+      done({ b64: btoa(s), at: S.at })
+    }
+    if (S.rec.state === 'inactive') return finish()
+    S.rec.onstop = finish
+    S.rec.stop()
+  })).catch(() => null)
+}
+
+// ffmpeg: SWARM_FFMPEG, then the PATH, then the one Hermes ships with
+export function findFfmpeg(env = process.env) {
+  if (env.SWARM_FFMPEG && existsSync(env.SWARM_FFMPEG)) return env.SWARM_FFMPEG
+  for (const d of String(env.PATH || '').split(delimiter).filter(Boolean)) { const f = join(d, 'ffmpeg'); if (existsSync(f)) return f }
+  for (const d of ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin']) { const f = join(d, 'ffmpeg'); if (existsSync(f)) return f }
+  try {
+    const tools = join(homedir(), '.hermes', 'tools')
+    for (const d of readdirSync(tools).filter(d => /^ffmpeg-/.test(d)).sort().reverse()) { const f = join(tools, d, 'ffmpeg'); if (existsSync(f)) return f }
+  } catch {}
+  return null
+}
+
+// the silent film and its sound → one webm, the sound delayed to where it started in the film
+function mux(ffmpeg, video, audio, delayMs, out) {
+  const d = Math.max(0, Math.round(delayMs))
+  return new Promise((ok, fail) => execFile(ffmpeg, ['-y', '-v', 'error', '-i', video, '-i', audio, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-af', `adelay=${d}:all=1,apad`, '-c:a', 'libopus', '-b:a', '96k', '-shortest', out], { timeout: 60000 }, err => (err ? fail(err) : ok(out))))
+}
+
 // { ok, skipped?, problem?, seconds } — `problem` is one sentence for a fix turn
 // shot: a file to save the title screen to (the game's cover), as a JPEG
 // clip: a path to film the test to (.webm); the result then has clip and the keys pressed, in order
@@ -61,23 +139,36 @@ export async function playtest(url, opts = {}) {
   const r = await playtestRun(url, opts, box)
   return { ...r, ...(box.filmed || {}) }
 }
-async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false } = {}, box = {}) {
-  let film = async () => ({}), vdir = null
+async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false, ffmpeg = undefined } = {}, box = {}) {
+  let film = async () => ({}), vdir = null, g = null
   const pw = await loadPlaywright()
   if (!pw) return { ok: true, skipped: 'no browser for the play test' }
   let browser
-  try { browser = await launch(pw.chromium) } catch (e) { return { ok: true, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
+  // sound plays without a click first, so the film can record it
+  try { browser = await launch(pw.chromium, { args: ['--autoplay-policy=no-user-gesture-required'] }) } catch (e) { return { ok: true, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
   const errors = [], blocked = []
   try {
     vdir = clip ? mkdtempSync(join(tmpdir(), 'playtest-')) : null
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...(vdir ? { recordVideo: { dir: vdir, size: { width: 640, height: 400 } } } : {}) })
+    if (vdir) await ctx.addInitScript(SOUND_TAP).catch(() => {})
     const page = await ctx.newPage()
     const pressed = [], t00 = Date.now()
     const press = k => pressed.push({ k, t: +((Date.now() - t00) / 1000).toFixed(2) })
     // the film is saved however the test ends
     film = async () => {
       if (!vdir) return {}
-      try { const v = page.video(); await ctx.close(); const f = await v?.path(); if (f && existsSync(f)) { copyFileSync(f, clip); return { clip, keys: pressed.slice(0, 80) } } } catch {}
+      try {
+        const sound = g ? await takeSound(g) : null
+        const v = page.video(); await ctx.close(); const f = await v?.path()
+        if (!f || !existsSync(f)) return {}
+        const ff = ffmpeg === undefined ? findFfmpeg() : ffmpeg
+        let sounded = false
+        if (sound && ff) {
+          try { const a = join(vdir, 'sound.webm'); writeFileSync(a, Buffer.from(sound.b64, 'base64')); await mux(ff, f, a, sound.at - t00, join(vdir, 'with-sound.webm')); copyFileSync(join(vdir, 'with-sound.webm'), clip); sounded = true } catch {}
+        }
+        if (!sounded) copyFileSync(f, clip)
+        return { clip, keys: pressed.slice(0, 80), sound: sounded }
+      } catch {}
       return {}
     }
     page.on('pageerror', e => errors.push(String(e.message).slice(0, 200)))
@@ -93,7 +184,7 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     // (a Godot web export refuses to start without one; Hermes and the feed are secure parents)
     if (secure) await page.goto(new URL('/__frame', url).href, { timeout }).catch(() => {})
     await page.setContent(`<!doctype html><body style="margin:0;background:#000"><iframe sandbox="allow-scripts allow-forms" src="${String(url).replace(/"/g, '&quot;')}" style="display:block;width:100vw;height:100vh;border:0"></iframe>`, { waitUntil: 'load', timeout })
-    const g = await (await page.$('iframe')).contentFrame()
+    g = await (await page.$('iframe')).contentFrame()
     const why = () => [...new Set([...errors, ...blocked])].slice(0, 3).join(' | ')
     const canvas = await g.waitForSelector('canvas', { timeout: 15000 }).catch(() => null)
     if (!canvas) return { ok: false, problem: `No game canvas appeared within 15 s of opening the page inside a sandboxed frame (allow-scripts, no same origin), the way Hermes shows it.${why() ? ` Errors: ${why()}` : ''}${blocked.length ? ' Storage (localStorage, sessionStorage, IndexedDB) throws in a sandboxed frame: wrap every use in try/catch and fall back to memory.' : ''}` }

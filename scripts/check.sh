@@ -5,6 +5,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+echo "· no tracked symlinks"
+# `hermes plugins install` copies the clone and refuses a symlink it cannot read,
+# so a tracked symlink (like a local node_modules link) breaks every install.
+links=$(git ls-files -s | awk '$1 == "120000" {print $4}')
+if [ -n "$links" ]; then echo "tracked symlinks break the plugin install: $links"; exit 1; fi
+
 echo "· syntax"
 for f in $(git ls-files '*.mjs' '*.js' | grep -v '^dyad/\|^gameskills/'); do node --check "$f"; done
 

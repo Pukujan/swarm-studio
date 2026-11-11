@@ -21,9 +21,16 @@ See [FEATURES.md](FEATURES.md) for everything it does, with the canvas button an
 ## Install
 
 ```bash
-hermes plugins install https://github.com/Pukujan/swarm-studio
+hermes plugins install Pukujan/swarm-studio --force
 hermes plugins enable swarm-studio
 ```
+
+Why `--force`: Hermes scans every plugin on install. This repo vendors the dyad app engine, whose dev files
+(its CI workflows, test fixtures and docs that list blocked commands such as `rm -rf /`) match the scan's
+patterns, so the verdict is CAUTION and a plain install stops with `Decision: BLOCKED … Use --force to
+override.` In a terminal it instead lists the findings and asks
+`Install anyway? Only continue if you trust the source. [y/N]:`, where `y` does the same as `--force`.
+`--force` accepts a CAUTION verdict only; Hermes still refuses a DANGEROUS one.
 
 That's it: the swarm uses the models you already set up in Hermes. Check with:
 
