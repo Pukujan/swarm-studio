@@ -89,3 +89,14 @@ entries at the bottom with the date; don't rewrite old ones.
 > Can we borrow some of those ideas from Kresilo, Behance and more?
 
 These are answered in [PATTERNS.md](PATTERNS.md) and RULES.md rules 9 and 27–32.
+
+## 2026-11-11
+
+**Watching the crew**
+> u didint go in here on time btw maybe we should make this a default when they create a website btw
+
+Said of the Design deck, after a website finished in about 40 seconds on the project's canvas before anyone had
+double-clicked into a page. A website started with Make opens in the Design deck (SITEMAP.md sections 8 and 10).
+The project's canvas and the Design deck stay two places: the canvas holds the files, the deck is where the crew
+is watched and a page is designed.
+

@@ -277,6 +277,7 @@ flowchart LR
   STG --> DD["Double-click a page → Design deck"]
   STG --> ER["Double-click the app or game → Engine room"]
   PJ --> GB["A game still building opens on its build (Engine room) once; Back shows the canvas"]
+  PJ --> WB["A website just started with Make opens in the Design deck (Follow on); Back shows the canvas"]
   STG --> FS["Double-click a film → Film studio"]
   INS --> EXP["Size, Style, Used on; Export, Replace"]
   DOCK --> CREW["The crew: fix the selected page, repaint the selected picture, or build the next version"]
@@ -338,6 +339,10 @@ flowchart LR
 
 The one room with a full toolset. It follows Figma's layout and tools almost one to one (see
 [PATTERNS.md](PATTERNS.md)): two panels, the canvas and one toolbar. The panels are zones, not layers.
+
+It is also the one room where the crew can be watched at work, so a website started with Make on Projects opens
+here, with the Follow camera on and the progress chip in view (owner, 2026-11-11: a build finished before anyone
+had opened a page). Back goes to the project's canvas. A page double-clicked on that canvas opens here too.
 
 ```mermaid
 flowchart LR
@@ -519,7 +524,7 @@ The main path for each audience, start to finish. Every builder starts on Home a
 
 ```mermaid
 flowchart LR
-  a0[Home] --> a1["+ Create"] --> a2[Type the idea] --> a3[Watch the ring] --> a4[Result card] --> a5[Post to Feed]
+  a0[Home] --> a1["+ Create"] --> a2[Type the idea] --> a3["Watch the crew (a website: in the Design deck)"] --> a4[Result card] --> a5[Post to Feed]
 ```
 
 **Design**
