@@ -6,6 +6,7 @@
 //
 // Pure functions; the server owns the image calls and the vision check's model.
 import { keyBackground } from './keycolor.mjs'
+export { keyTrouble, keyOf, swapKey } from './keycolor.mjs'
 
 // The styles. Photo is the default; the brief picks another by naming it.
 export const STYLES = {
@@ -221,7 +222,7 @@ export function sheetMessages(what, image, frames = '') {
   return [
     {
       role: 'system',
-      content: `You check one animation strip before it goes into a game: ${clip(what, 80)}. Its frames were cut out of a painted sheet and are shown side by side, once on dark and once on magenta.${frames ? ` The frames should show: ${clip(frames, 300)}` : ''}
+      content: `You check one animation strip before it goes into a game: ${clip(what, 80)}. Its frames were cut out of a painted sheet and are shown side by side, once on dark and once on light grey.${frames ? ` The frames should show: ${clip(frames, 300)}` : ''}
 
 Send it back only for a clear, visible problem:
 - a frame shows a different character, outfit or colours than the others
@@ -239,7 +240,7 @@ export function cutoutMessages(what, image) {
   return [
     {
       role: 'system',
-      content: `You check one game sprite before it goes into the game: ${clip(what, 80)}. It was cut out of a flat background and is shown twice, on dark and on magenta.
+      content: `You check one game sprite before it goes into the game: ${clip(what, 80)}. It was cut out of a flat key-colour background and is shown twice, on dark and on light grey.
 
 Send it back only for a clear, visible problem:
 - leftover background: magenta, green, grey or white patches, specks or a coloured rim inside or around the figure (between hair strands, inside loops, under arms)
