@@ -394,6 +394,8 @@ function runCard(id) {
     // a game made on its own has no page theme: it wears the brand from its spec
     const brand = events.find(e => e.type === 'game:spec')?.spec?.brand
     const theme = events.findLast(e => e.type === 'theme') || (brand?.vars ? { name: brand.name || 'game', vars: brand.vars, fonts: brand.fonts } : {})
+    // an app build is named by its brief ("ARES Player Hub — ..."), not its first screen ("Sign in")
+    const isApp = events.some(e => typeof e.type === 'string' && e.type.startsWith('app:'))
     const sites = {}
     for (const e of events) if (e.type === 'publish:done' && e.url) sites[e.target] = e.url
     // an app's own deploy (Auto or Deploy) is its public link too, so it can be posted to the Feed
@@ -402,8 +404,8 @@ function runCard(id) {
     const video = events.findLast(e => e.type === 'video:done')
     card = { key, info: {
       id,
-      title: start.title || pages[0]?.title || start.brief.slice(0, 60),
-      kind: start.kind || 'site',
+      title: start.title || (isApp && nameOfBrief(start.brief)) || pages[0]?.title || start.brief.slice(0, 60),
+      kind: start.kind || (isApp ? 'app' : 'site'),
       // a game made from a site: that site's run, so the game joins its version
       from: start.from || null,
       brief: start.brief,
@@ -1096,6 +1098,12 @@ async function startGame(spec) {
   if (spec.brand?.from && existsSync(join(runsDir, spec.brand.from))) record(spec.brand.from, { type: 'game:linked', t, run: spec.brand.from, game: id, title: String(spec.title).slice(0, 80) })
   broadcast({ type: 'files:changed', t, run: id })
   return { run: id }
+}
+
+// The name a brief starts with, before a dash or colon: "ARES Player Hub — the account app ..." -> "ARES Player Hub".
+function nameOfBrief(brief = '') {
+  const m = String(brief).match(/^\s*([^\n—–:]{2,48}?)\s*(?:—|–| - |:)/)
+  return m && m[1].trim().split(/\s+/).length <= 6 ? m[1].trim() : ''
 }
 
 // ---------- publish: the static export, on GitHub Pages or hosted by this server
