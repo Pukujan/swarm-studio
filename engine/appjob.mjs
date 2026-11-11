@@ -12,7 +12,7 @@ import { deployName, isScreenName, projectName } from './naming.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
-import { filmFrames, spread, contactSheet, beforeAfter, closeUp, lookMessages, parseFindings, goneMessages, parseGone, whereMessages, parseWhere, dataUrl, isPolish, polishPrompt, fixPrompt, withTemp } from './slicecheck.mjs'
+import { filmFrames, spread, contactSheet, beforeAfter, closeUp, lookMessages, parseFindings, goneMessages, parseGone, whereMessages, parseWhere, dataUrl, isPolish, polishPrompt, fixPrompt, withTemp, PEEK_MS, peekMessages, parseNote } from './slicecheck.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk, artBrief, viewOf } from './game.mjs'
@@ -462,7 +462,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const said = [i === from ? input.note : '', ...(j.told || []).splice(0)].map(t => String(t || '').trim()).filter(Boolean)
       const polish = said.filter(isPolish), heard = said.filter(t => !isPolish(t)).map(t => `The person said while you were building: "${t}"`)
       for (const t of said) send(id, 'app:steer', { text: t, i, n: stages.length, how: isPolish(t) ? 'polish' : 'slice', slice: st.name })
+      // the bots look at the game live while the crew builds this slice (a web build with a dev server)
+      if (!godot && !j.url && existsSync(join(dir, 'package.json'))) try { await serve(id, j, () => {}) } catch {}
+      const unpeek = godot ? async () => {} : peeker(j, id, spec, { i, n: stages.length, name: st.name })
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
+      try {
       for (let go = 0; ; go++) {
         try { last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: heard.join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); break } catch (err) {
           if (j.controller.signal.aborted) throw err
@@ -471,6 +475,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
           failed = 'the last try at this stage stopped partway: some of its changes may already be in the code (git status shows them). Finish them or redo them.'
         }
       }
+      } finally { await unpeek() }
       // the pictures this slice asked for: painted now, then one short turn to use them
       const asked = await paintAsks(i)
       if (asked) last = { ...asked, turns: (last?.turns || 0) + (asked.turns || 0), commits: (last?.commits || 0) + (asked.commits || 0) }
@@ -524,6 +529,36 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     }
     Object.assign(j.result, { ok: !!last.ok, gatesPassed: last.gatesPassed, playtest: j.result.stages.at(-1)?.playtest })
     if (!last.ok) throw new Error(last.error || 'the engine could not finish the game')
+  }
+
+  // the next play-test film's number (the films are cached for good, so a name is never reused)
+  const nextClip = id => { let n = 1; try { n = 1 + Math.max(0, ...readdirSync(join(runsDir, id, 'img')).map(f => +(f.match(/^playtest-(\d+)\.webm$/)?.[1] || 0))) } catch {} return Math.min(n, 999) }
+
+  // Live peeks while the crew codes a slice: every PEEK_MS the bots play a few seconds of the
+  // game as it is now, and Hermia posts the frame, the short film and one line on what she sees
+  // (app:peek). Returns a stop function that waits for a peek in flight.
+  function peeker(j, id, spec, at) {
+    let stop = false, k = 0, lastSize = 0, busy = null
+    const img = join(runsDir, id, 'img')
+    const tick = async () => {
+      if (stop || !j.url) return
+      const n = nextClip(id), clip = join(img, `playtest-${n}.webm`), name = `slice-${at.i + 1}-live-${k + 1}.jpg`
+      const t = await playtest(j.url, { clip, seconds: 3 }).catch(() => null)
+      if (stop || !t?.clip || !existsSync(clip)) return
+      const frame = await withTemp(async tmp => { const fr = await filmFrames(clip, tmp); const f = fr.at(-1)?.file; if (f) copyFileSync(f, join(img, name)); return f ? join(img, name) : '' }).catch(() => '')
+      if (!frame || stop) return
+      // nothing changed on screen since the last peek: say nothing
+      const size = statSync(frame).size
+      if (lastSize && Math.abs(size - lastSize) / lastSize < 0.01) { rmSync(frame, { force: true }); return }
+      lastSize = size
+      k++
+      let note = ''
+      if (see) try { note = parseNote(await see(peekMessages({ title: spec.title, slice: at.name, image: dataUrl(frame), before: j.peek?.note || '' }), { maxTokens: 120 })) } catch {}
+      j.peek = { i: at.i, n: at.n, name: at.name, k, src: `/img/${id}/${name}`, clip: `/img/${id}/playtest-${n}.webm`, note, ok: !!t.ok, t: Date.now() }
+      send(id, 'app:peek', { peek: j.peek })
+    }
+    const timer = setInterval(() => { if (!busy && !stop) busy = tick().catch(() => {}).finally(() => { busy = null }) }, PEEK_MS)
+    return async () => { stop = true; clearInterval(timer); await busy }
   }
 
   // a picture painted for this game already (kept with the run): no mood board then

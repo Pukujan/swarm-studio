@@ -391,7 +391,7 @@ function on(e) {
       botMsg(`🎮 ${e.spec.title}: ${e.spec.pitch || ''} (${e.spec.engine})`)
       break
     case 'app:start': case 'app:step': case 'app:ready': case 'app:done': case 'app:failed': case 'app:deployed':
-    case 'app:paused': case 'app:slice': case 'app:steer':
+    case 'app:paused': case 'app:slice': case 'app:steer': case 'app:peek':
       appEvent(e)
       break
   }
@@ -4382,6 +4382,23 @@ function sliceReport(r, run) {
   if (fresh) push(els.feed, item)
 }
 
+// A live look while the crew builds: a few seconds of the game as it is now, and one line on it.
+// Only the newest peek plays; the older ones show their frame.
+function peekMsg(p, run) {
+  if (!p || !run) return
+  const key = `${run}:peek:${p.i}:${p.k}`
+  if (els.feed.querySelector(`.peek[data-key="${CSS.escape(key)}"]`)) return
+  for (const v of els.feed.querySelectorAll('.peek video')) { const img = document.createElement('img'); img.src = v.dataset.still; img.alt = ''; v.replaceWith(img) }
+  const item = document.createElement('div')
+  item.className = 'item bot peek'
+  item.dataset.key = key
+  const media = p.clip ? `<video src="${esc(BASE + p.clip)}" data-still="${esc(BASE + p.src)}" muted playsinline autoplay loop></video>` : `<img src="${esc(BASE + p.src)}" alt="">`
+  item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${p.i + 1} · live</small></b><figure class="pk-v">${media}</figure><span class="txt"></span>`
+  item.querySelector('.txt').textContent = p.note || ''
+  item.querySelector('figure').onclick = e => e.currentTarget.classList.toggle('big')
+  push(els.feed, item)
+}
+
 // What the person said mid-build, as the crew takes it: into this slice, or a polish pass.
 function steerMsg(e) {
   const key = `${e.run}:steer:${e.t}`
@@ -4554,6 +4571,8 @@ function appEvent(e) {
     sliceReport(e.report, e.run)
   } else if (e.type === 'app:steer') {
     steerMsg(e)
+  } else if (e.type === 'app:peek') {
+    peekMsg(e.peek, e.run)
   } else if (e.type === 'app:paused') {
     // a big game stops after each slice and asks in the chat (sliceCard)
     Object.assign(appv, { state: 'paused', result: e.result, slice: e.slice, stage: '' })

@@ -1922,3 +1922,6 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .slice-report .sr-bug.fixed figcaption span { color: var(--accent); }
 .feed .slice-report .sr-code { font-size: 11px; color: var(--muted, var(--text)); margin-top: 6px; }
 .feed .steer .txt { font-style: italic; }
+.feed .peek figure { margin: 6px 0 4px; width: 72%; cursor: zoom-in; }
+.feed .peek figure.big { width: 100%; cursor: zoom-out; }
+.feed .peek figure img, .feed .peek figure video { width: 100%; display: block; border-radius: 6px; border: 1px solid var(--line); background: var(--deep); aspect-ratio: 16 / 10; object-fit: cover; }

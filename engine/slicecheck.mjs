@@ -151,3 +151,26 @@ export async function withTemp(fn) {
   const dir = mkdtempSync(join(tmpdir(), 'slice-'))
   try { return await fn(dir) } finally { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
 }
+
+// ---------- live peeks while a slice is being built
+// Every few minutes the bots open the game as it stands (Vite reloads the crew's changes),
+// play a few seconds and film it; Hermia says in one line what works and what looks broken.
+export const PEEK_MS = Number(process.env.SWARM_PEEK_MS) || 180000
+
+export function peekMessages({ title = 'the game', slice = '', image, before = '' }) {
+  return [
+    { role: 'system', content: 'You are Hermia, the lead of a game crew, looking at the game live while the crew builds it. Plain words, no markdown. Reply with JSON only.' },
+    {
+      role: 'user', content: [
+        { type: 'text', text: `A frame of ${title} right now, while the crew builds ${slice ? `the slice "${slice}"` : 'it'}.${before ? ` Last look you said: "${before}".` : ''} In at most 16 words, tell the owner what works and what looks broken or missing on screen, as a crew lead would (e.g. "Mika runs and slashes now; the lanterns are still grey boxes, fixing next"). {"note":""}` },
+        { type: 'image_url', image_url: { url: image } }
+      ]
+    }
+  ]
+}
+export function parseNote(text) {
+  const s = String(text || ''), a = s.indexOf('{'), b = s.lastIndexOf('}')
+  let note = ''
+  if (a >= 0 && b > a) try { note = String(JSON.parse(s.slice(a, b + 1)).note || '') } catch {}
+  return note.replace(/\s+/g, ' ').trim().slice(0, 160)
+}
