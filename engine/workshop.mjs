@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 import { join } from 'node:path'
 import { streamChat } from './llm.mjs'
 import { blockHit } from './cast.mjs'
+import { keyFor, keyBackground } from './keycolor.mjs'
 
 export const STEPS = [
   ['design', 'Game'],
@@ -126,15 +127,15 @@ export function paintPrompt(step, option, spec = {}, picks = {}) {
   const world = picks.world ? ` Set in ${picks.world.name}: ${picks.world.setting} Palette: ${picks.world.palette}.` : ''
   if (step === 'story') return { prompt: `Key art for an original game, "${cut(spec.title, 60)}": ${option.art || option.logline}${world} ${style}`, aspect: 'landscape' }
   if (step === 'world') return { prompt: `A wide game backdrop with no characters: ${option.art || option.setting} Palette: ${option.palette}. Layered depth for parallax, the playable ground along the bottom third. ${style}`, aspect: 'landscape' }
-  if (step === 'heroes') return { prompt: `Character design of an original game hero, full body, standing, centred on a plain light grey background: ${option.name}, ${option.role}. ${option.look} Personality: ${option.personality}.${world} ${style}`, aspect: 'portrait' }
-  if (step === 'enemies') return { prompt: `Design of an original game ${option.kind === 'boss' ? 'boss' : 'enemy'}, full body, centred on a plain light grey background: ${option.name}. ${option.look} It ${option.behaviour}${world} ${style}`, aspect: 'square' }
+  if (step === 'heroes') return { prompt: `Character design of an original game hero, full body, standing, centred on ${keyBackground(option.look)}: ${option.name}, ${option.role}. ${option.look} Personality: ${option.personality}.${world} ${style}`, aspect: 'portrait' }
+  if (step === 'enemies') return { prompt: `Design of an original game ${option.kind === 'boss' ? 'boss' : 'enemy'}, full body, centred on ${keyBackground(option.look)}: ${option.name}. ${option.look} It ${option.behaviour}${world} ${style}`, aspect: 'square' }
   throw Object.assign(new Error('this step has no pictures'), { status: 400 })
 }
 
-// The sprite sheet painted from the picked hero design: 3 × 2 poses on flat grey, for the
+// The sprite sheet painted from the picked hero design: 3 × 2 poses on a flat chroma-key colour, for the
 // studio's moving preview and the game. The design picture goes in as the reference.
 export function spritePrompt(hero, spec = {}) {
-  return `A game sprite sheet of this exact character (same face, hair, outfit and colours as the reference), a 3 by 2 grid of six equal cells on a flat light grey background, one full-body pose per cell, all facing right, same size and baseline in every cell, generous empty margin around each figure, no cell borders, no text: top row ${SPRITE_POSES.slice(0, 3).join(', ')}; bottom row ${SPRITE_POSES.slice(3).join(', ')}. ${hero.name}, ${hero.role}. ${styleOf(spec)}`
+  return `A game sprite sheet of this exact character (same face, hair, outfit and colours as the reference), a 3 by 2 grid of six equal cells on ${keyBackground(hero.look)}, one full-body pose per cell, all facing right, same size and baseline in every cell, generous empty margin around each figure, no cell borders, no text: top row ${SPRITE_POSES.slice(0, 3).join(', ')}; bottom row ${SPRITE_POSES.slice(3).join(', ')}. ${hero.name}, ${hero.role}. ${styleOf(spec)}`
 }
 
 // ---------- a pick writes its part of the spec
@@ -180,8 +181,8 @@ export function shippedArt(ws) {
   add(of('world', ws.picks.world?.id), 'backdrop', 'the stage backdrop (parallax background)')
   const hero = of('heroes', ws.picks.heroes?.id)
   add(hero, 'hero', 'the hero design (portrait for menus)')
-  if (hero?.sprite?.file) out.push({ file: hero.sprite.file, as: `hero-sheet${hero.sprite.file.match(/\.\w+$/)[0]}`, what: `the hero's sprite sheet: 3 columns × 2 rows of equal cells on flat light grey, poses ${SPRITE_POSES.join(', ')} (left to right, top to bottom); key out the grey` })
-  for (const id of ws.picks.enemies?.ids || []) { const e = of('enemies', id); add(e, `enemy-${slug(e?.name)}`, `${e?.name} (${e?.kind}), single sprite on light grey; key out the grey`) }
+  if (hero?.sprite?.file) out.push({ file: hero.sprite.file, as: `hero-sheet${hero.sprite.file.match(/\.\w+$/)[0]}`, what: `the hero's sprite sheet: 3 columns × 2 rows of equal cells on flat ${keyFor(hero.look).name} (${keyFor(hero.look).hex}), poses ${SPRITE_POSES.join(', ')} (left to right, top to bottom); key out the ${keyFor(hero.look).name}` })
+  for (const id of ws.picks.enemies?.ids || []) { const e = of('enemies', id); add(e, `enemy-${slug(e?.name)}`, `${e?.name} (${e?.kind}), single sprite on flat ${keyFor(e?.look).name}; key out the ${keyFor(e?.look).name}`) }
   return out
 }
 const slug = s => String(s || 'x').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'x'
