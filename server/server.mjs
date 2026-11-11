@@ -1028,24 +1028,45 @@ async function chatterMake(text, voice) {
 }
 
 // ---------- the person talks to the crew while it builds
-// A question gets an answer from what the crew is doing right now (its stage, steps and the
-// lead's last thoughts); anything else is a change, queued for the start of the next stage.
-async function tellBuilder(a, id, text, { who = '', on = '' } = {}) {
+// Talk (engine/talk.mjs) answers: a crew member whose only job is to talk, so the builder never
+// stops for a question. It reads the app's files, looks at the pictures and shows them, and
+// writes a change out for the person to confirm. Only a confirmation (confirm: the change)
+// reaches the builder: at the start of the next slice, or now (the turn in flight stops and
+// the slice starts again with it).
+const imgFileOf = src => { const m = String(src || '').split('?')[0].match(/^\/img\/([A-Za-z0-9_-]{1,80})\/([A-Za-z0-9_.-]{1,120})$/); return m ? join(runsDir, m[1], 'img', m[2]) : null }
+async function lookAt(src) {
+  const model = modelFor('reviewer') || modelFor('planner'), file = imgFileOf(src)
+  if (!model || !file || !existsSync(file) || statSync(file).size > 6e6) return null
+  const ext = /\.png$/i.test(file) ? 'png' : /\.webp$/i.test(file) ? 'webp' : 'jpeg'
+  const res = await streamChat(provider(modelFor('reviewer') ? 'reviewer' : 'planner'), {
+    trace: { kind: 'talk-look' }, model, maxTokens: 220, temperature: 0.2, signal: AbortSignal.timeout(40000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'Say in two or three plain sentences what this game picture shows: who or what, the pose or layout, the style and colours, and anything that looks wrong.' }, { type: 'image_url', image_url: { url: `data:image/${ext};base64,${readFileSync(file).toString('base64')}` } }] }]
+  })
+  return String(res.text || '').trim() || null
+}
+async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now = false } = {}) {
+  // a confirmed change: to the builder, and nothing to answer but where it went
+  if (confirm) {
+    const r = now ? a.redirect(id, confirm) : a.tell(id, confirm)
+    if (!r.queued) return { ...r, answer: 'The crew is not building right now, so there is nothing to send it to: say it in your answer to the slice.' }
+    return { ...r, answer: r.now ? 'Sent. The builder stopped its turn and is doing this slice again with your change.' : now ? 'Sent. The builder is between turns, so it takes your change at the start of its next one.' : 'Sent. The builder takes it at the start of the next slice.' }
+  }
   const t = String(text || '').trim().slice(0, 1200)
   if (!t) throw new Error('say something to the crew')
-  const { isQuestion, processNotes, wantsToSee, buildMedia, mediaNotes } = await import('../engine/appjob.mjs')
-  const see = wantsToSee(t)
-  const ask = see || isQuestion(t)
-  const told = ask ? { queued: false, state: a.state(id).state } : a.tell(id, t)
+  const { processNotes, buildMedia, mediaNotes } = await import('../engine/appjob.mjs')
+  const { talk } = await import('../engine/talk.mjs')
   const j = a.jobs.get(id)
+  const st = a.state(id)
+  const building = (j?.state || st?.state) === 'working'
   const events = readEvents(id) || []
   const lead = events.filter(e => e.type === 'crew:lead' && e.text).slice(-14).map(e => `- ${String(e.text).slice(0, 220)}`)
-  const steps = (j?.steps || []).filter(x => x.kind !== 'write').slice(-10).map(x => `- ${String(x.text).slice(0, 160)}`)
-  const writes = (j?.steps || []).filter(x => x.kind === 'write').slice(-6).map(x => x.path || x.text).filter(Boolean)
+  const steps = (j?.steps || []).filter(x => x.kind !== 'write').slice(-12).map(x => `- ${String(x.text).slice(0, 160)}`)
+  const writes = (j?.steps || []).filter(x => x.kind === 'write').slice(-8).map(x => x.path || x.text).filter(Boolean)
   const spec = events.findLast(e => e.type === 'game:spec')?.spec
-  const st = j ? null : a.state(id)
   const since = events.findLastIndex(e => e.type === 'app:start' && e.fresh)
-  const done = events.slice(since + 1).filter(e => e.type === 'app:stage' && e.big?.ok && e.big.name).map(e => `slice ${e.big.i + 1} ${e.big.name}${e.big.clip ? ', play test filmed' : ''}`)
+  const bigs = events.slice(since + 1).filter(e => e.type === 'app:stage' && e.big)
+  const done = bigs.filter(e => e.big.ok && e.big.name).map(e => `slice ${e.big.i + 1} ${e.big.name}${e.big.clip ? ', play test filmed' : ''}`)
   // the status line often reads "next step" or a test: the slice comes from the last "stage n of N" said
   const SLICE = /stage \d+ of \d+/
   const stage = SLICE.test(j?.stage || st?.stage || '') ? (j?.stage || st?.stage)
@@ -1055,25 +1076,21 @@ async function tellBuilder(a, id, text, { who = '', on = '' } = {}) {
   const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage, done, slices })
   let files = []
   try { const dir = join(runsDir, id, 'img'); files = readdirSync(dir).map(name => ({ name, mtime: statSync(join(dir, name)).mtimeMs })) } catch {}
-  const media = buildMedia({ id, files, slices: events.slice(since + 1).filter(e => e.type === 'app:stage' && e.big).map(e => ({ ...e.big, t: e.t })), steps: j?.steps || [] })
-  const show = see && (media.clip || media.pics.length) ? { clip: media.clip?.src || null, pics: media.pics } : null
-  const seeing = mediaNotes(media, !!show)
-  const queued = told.queued ? 'Their words are queued: the crew reads them at the start of the next stage (a turn in flight cannot take new words).' : ''
-  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}${told.queued ? ' Got it: that goes to the crew at the start of the next stage.' : ''}`
+  const m = buildMedia({ id, files, slices: bigs.map(e => ({ ...e.big, t: e.t })), steps: j?.steps || [] })
+  const snap = snapOf(id)
+  const media = { clips: m.clipList, pics: [...(snap ? [{ src: snap.split('?')[0], name: 'the game right now (a still)' }] : []), ...m.picList] }
+  const notes = `${how} ${mediaNotes(m, false)}\n\nState: ${j?.state || st?.state || 'idle'}. Stage: ${j?.stage || stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}`
+  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}`
   const model = modelFor('planner')
-  const withMedia = show ? { media: show } : {}
-  if (!model) return { ...told, ...withMedia, answer: show ? 'Here is the newest from the build.' : fallback }
+  if (!model) return { queued: false, state: st.state, answer: fallback }
+  const chat = async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'talk' }, model, maxTokens: 500, temperature: 0.3, signal: AbortSignal.timeout(40000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text
   try {
-    const res = await streamChat(provider('planner'), {
-      trace: { kind: 'tell' }, model, maxTokens: 220, temperature: 0.3, signal: AbortSignal.timeout(30000),
-      extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
-      messages: [
-        { role: 'system', content: `${who ? `You are ${String(who).slice(0, 40)}, one of the Swarm crew (Hermia leads it), answering for yourself in the first person: right now you are on ${String(on || 'the build').slice(0, 160)}. You are part of` : 'You are Hermia, the lead of'} the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${how} ${seeing} ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
-        { role: 'user', content: t }
-      ]
-    })
-    return { ...told, ...withMedia, answer: String(res.text || '').trim().slice(0, 600) || fallback }
-  } catch { return { ...told, ...withMedia, answer: fallback } }
+    const r = await talk({ chat, look: lookAt, appDir: join(runsDir, id, 'app'), media, text: t, notes, who: String(who || '').slice(0, 40), on: String(on || '').slice(0, 160), title: spec?.title || '', building, deadline: Date.now() + 75000 })
+    return { queued: false, state: st.state, answer: r.answer || fallback, ...(r.media ? { media: r.media } : {}), ...(r.proposal ? { proposal: r.proposal } : {}), used: r.used }
+  } catch { return { queued: false, state: st.state, answer: fallback } }
 }
 
 // ---------- game mode: answers → a spec → a new build whose app is the game
@@ -2393,7 +2410,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       apps().then(async a => {
         if (sub === 'stop') return a.stop(id)
-        if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on })
+        if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')

@@ -285,18 +285,22 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // a big game builds in stages from its saved spec; everything else is one engine call
     const spec = kind === 'game' && fresh ? events.findLast(e => e.type === 'game:spec')?.spec : null
     const big = !!spec && (isBig(spec) || input.big === true)
+    j.big = big
     ;(async () => {
       // a busy or rate-limited model: on InferHub try the same model's other route,
       // then other fast coders; elsewhere wait a little and go again
       const chain = [m, ...(/inferhub/.test(provider('worker').baseUrl) ? APP_FALLBACKS.filter(x => x !== m) : [m, m])]
       let used = m
       const engineCall = async (text, turns) => {
+        // each turn can be stopped on its own (redirect: the person changed direction), the job goes on
+        j.turn = new AbortController()
+        const signal = AbortSignal.any([j.controller.signal, j.turn.signal])
         for (let i = chain.indexOf(used); ; i++) {
           try {
             used = chain[i]
-            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal: j.controller.signal })
+            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal })
           } catch (err) {
-            if (i + 1 >= chain.length || j.controller.signal.aborted || !BUSY.test(err.message)) throw err
+            if (i + 1 >= chain.length || signal.aborted || !BUSY.test(err.message)) throw err
             step({ kind: 'setup', text: `${chain[i]} is busy at the provider; going on with ${chain[i + 1]}`, ok: false })
             if (chain[i + 1] === chain[i]) await new Promise(r => setTimeout(r, 30000))
           }
@@ -438,8 +442,18 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const heard = takeTold(j)
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); break } catch (err) {
+        try { j.inStage = true; last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); j.inStage = false; break } catch (err) {
+          j.inStage = false
           if (j.controller.signal.aborted) throw err
+          // the person confirmed a change that cannot wait: this stage again, with their words, from where it got to
+          if (j.redirected) {
+            j.redirected = false
+            heard.push(...takeTold(j))
+            failed = 'The person stopped your last turn to change direction: some of its changes may already be in the code (git status shows them). Do what they said now, then finish this stage.'
+            step({ kind: 'setup', text: `stage ${i + 1} again, with the change you sent` })
+            go = -1
+            continue
+          }
           step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
           if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
           failed = 'the last try at this stage stopped partway: some of its changes may already be in the code (git status shows them). Finish them or redo them.'
@@ -632,6 +646,18 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     send(id, 'app:told', { text: t })
     return { queued: true, state: j.state, waiting: j.told.length }
   }
+  // A confirmed change that cannot wait: the builder's turn in flight stops, and the stage starts
+  // again at once with the words (a big game's slices only; anywhere else it waits for the next stage).
+  function redirect(id, text) {
+    const j = jobs.get(id)
+    const told = tell(id, text)
+    if (!told.queued) return told
+    if (!j.big || !j.inStage || !j.turn || j.turn.signal.aborted) return { ...told, now: false }
+    j.redirected = true
+    j.turn.abort()
+    send(id, 'app:redirect', { text: String(text).trim().slice(0, 1200) })
+    return { ...told, now: true }
+  }
   const takeTold = j => (j.told || []).splice(0).map(t => `The person said while you were building: "${t}"`)
 
   function stop(id) {
@@ -684,7 +710,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   function close() { for (const j of jobs.values()) { j.controller?.abort(); j.proc?.kill() } }
 
-  return { start, state, stop, tell, open, files, deploy, close, dirOf, jobs }
+  return { start, state, stop, tell, redirect, open, files, deploy, close, dirOf, jobs }
 }
 
 // "can I see it", "show me the pictures": the person wants to look, not to change anything
@@ -701,7 +727,7 @@ export function buildMedia({ id, files = [], slices = [], steps = [] } = {}) {
   ].sort((x, y) => y.t - x.t)
   const pics = files.filter(f => PIC.test(f.name)).sort((x, y) => y.mtime - x.mtime)
     .map(f => ({ src: `/img/${id}/${f.name}`, name: f.name.replace(/^game-/, '').replace(/\.\w+$/, '').replace(/-/g, ' ') }))
-  return { clip: clips[0] || null, clips: clips.length, pics: pics.slice(0, 4), picCount: pics.length }
+  return { clip: clips[0] || null, clips: clips.length, clipList: clips.slice(0, 4), pics: pics.slice(0, 4), picCount: pics.length, picList: pics.slice(0, 24) }
 }
 // the line Hermia reads, so she never says there is nothing to see when there is
 export function mediaNotes(m, attached) {
