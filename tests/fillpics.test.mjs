@@ -56,3 +56,9 @@ test('an empty picture frame becomes a slot named by its section and card', () =
   assert.match(out, /<div className="overflow-hidden bg-muted aspect-\[3\/4\]"><img data-gen="Charcoal study of a facade, Plate II Complete 2023" alt="Plate II Complete 2023"/)
   assert.ok(out.includes('<div className="aspect-square p-4"><span>has content</span></div>'))
 })
+
+test('when every match is used, a slot repeats a photo instead of staying empty', async () => {
+  const dir = app()
+  const pick = async ({ avoid }) => (avoid?.size ? null : { url: 'https://cdn.example/one.jpg', credit: 'One by Sam (Pexels)' })
+  assert.deepEqual(await fillPictures(dir, { pick, bytesOf: async () => Buffer.alloc(10, 1) }), { filled: 3, left: 0 })
+})
