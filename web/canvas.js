@@ -3,7 +3,8 @@
 // cursor move, tool and bubble comes from a real model stream.
 
 import { routeMessage } from './route.js'
-import { painterOf, REVIEWER } from './icons.js'
+import { openWorkshop } from './workshop.js'
+import { painterOf, REVIEWER, cursor } from './icons.js'
 
 const $ = s => document.querySelector(s)
 // Inlined by the server: the API token and the page-frame template. Frames are
@@ -1246,7 +1247,15 @@ function summarize(e) {
 // ---------- loop
 
 let lastPanels = 0
+// The crew's cursors don't need the screen's 60-120 Hz: 24 fps while a build runs (20 with a big
+// crew), full rate only while the camera itself moves, so a drag or zoom stays smooth.
+const loopAt = { last: 0, dt: 16.7 }
 function frameLoop(now) {
+  const moving = Math.abs(cam.ts - cam.s) > 1e-3 || Math.abs(cam.tx - cam.x) > 1 || Math.abs(cam.ty - cam.y) > 1
+  const fps = moving ? 120 : S.agents.size > 8 ? 20 : 24
+  if (now - loopAt.last < 1000 / fps - 2) return requestAnimationFrame(frameLoop)
+  loopAt.dt = Math.min(100, now - (loopAt.last || now - 16.7))
+  loopAt.last = now
   syncSlots(now)
 
   if (cam.auto && now > cam.nextFit) {
@@ -1254,7 +1263,9 @@ function frameLoop(now) {
     if (b) fit(b)
     cam.nextFit = now + 700
   }
-  const k = cam.auto ? 0.06 : 0.25
+  // the same glide at any frame rate: the per-60fps factor, raised to the frames that passed
+  const ease = k0 => 1 - Math.pow(1 - k0, loopAt.dt / 16.7)
+  const k = ease(cam.auto ? 0.06 : 0.25)
   cam.s += (cam.ts - cam.s) * k
   cam.x += (cam.tx - cam.x) * k
   cam.y += (cam.ty - cam.y) * k
@@ -1281,19 +1292,23 @@ function frameLoop(now) {
     } else if (!a.layer && now > a.toolUntil) {
       if (!a.docked) { const p = toScreen(a.wx, a.wy); a.sx = p.x; a.sy = p.y; a.docked = true }
       const c = dockCell(a.seat)
-      a.sx += (c.x - a.sx) * 0.12
-      a.sy += (c.y - a.sy) * 0.12
+      a.sx += (c.x - a.sx) * ease(0.12)
+      a.sy += (c.y - a.sy) * ease(0.12)
     } else {
       if (a.docked) { a.wx = (a.sx - cam.x) / cam.s; a.wy = (a.sy - cam.y) / cam.s; a.docked = false }
       const t = agentTarget(a, now)
       if (t) {
-        a.wx += (t.x - a.wx) * 0.22
-        a.wy += (t.y - a.wy) * 0.22
+        a.wx += (t.x - a.wx) * ease(0.22)
+        a.wy += (t.y - a.wy) * ease(0.22)
       }
       const p = toScreen(a.wx, a.wy)
       a.sx = p.x
       a.sy = p.y
     }
+    // a cursor far off screen keeps its place but skips its redraw
+    const off = a.sx < -200 || a.sy < -200 || a.sx > innerWidth + 200 || a.sy > innerHeight + 200
+    if (off && a.off) continue
+    a.off = off
     const pos = `translate(${a.sx.toFixed(1)}px, ${a.sy.toFixed(1)}px)`
     const step = Math.abs(a.sx - (a.lx ?? a.sx)) + Math.abs(a.sy - (a.ly ?? a.sy))
     a.lx = a.sx; a.ly = a.sy
@@ -1349,8 +1364,24 @@ function frameLoop(now) {
     }
     if (S.t0 && !(viewing && !S.tEnd)) setText(els.timer, `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`)
   }
-  requestAnimationFrame(frameLoop)
+  // nothing moving (camera settled, no cursor at work, no build running): a few frames a second
+  // is enough; any input wakes it at once (wakeLoops)
+  const still = Math.abs(cam.ts - cam.s) < 1e-4 && Math.abs(cam.tx - cam.x) < 0.2 && Math.abs(cam.ty - cam.y) < 0.2 &&
+    !S.frames.some(frameBusy) && ![...S.agents.values()].some(a => a.act || a.queued || now < (a.moving || 0) || now < (a.sayUntil || 0))
+  nextFrame(frameLoop, still)
 }
+
+// Per-frame loops run at the screen's rate only while something moves; at rest they tick a few
+// times a second, so a finished canvas stops costing a full 60 fps of DOM work.
+const sleepers = new Map()
+function nextFrame(fn, idle, ms = 200) {
+  if (!idle) return requestAnimationFrame(fn)
+  sleepers.set(fn, setTimeout(() => { sleepers.delete(fn); requestAnimationFrame(fn) }, ms))
+}
+function wakeLoops() {
+  for (const [fn, t] of sleepers) { clearTimeout(t); sleepers.delete(fn); requestAnimationFrame(fn) }
+}
+for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown']) addEventListener(ev, wakeLoops, { capture: true, passive: true })
 
 // ---------- input
 
@@ -3399,7 +3430,7 @@ commandOps.video = c => makeVideo({ idea: c.idea, style: c.style })
 const lite = { last: 0, busy: false, quiet: 0 }
 // Auto: on for small machines, and for everyone once the agents have been done
 // for half a minute (a finished build doesn't need every page live).
-const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 30000)))
+const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 5000)))
 
 const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
 const frameBusy = f => S.order.some(k => { const l = S.layers.get(k); return belongs(f, l) && l.status !== 'done' && l.status !== 'failed' })
@@ -4020,14 +4051,16 @@ function renderApp() {
   renderAppLink()
   renderBadges()
   if (view !== 'app') return
-  const st = appv.state, working = st === 'working'
+  // a build another Studio drives looks stopped here; recent steps say it is still going
+  const elsewhere = appv.state === 'stopped' && !appv.hasApp && (appv.steps[appv.steps.length - 1]?.t || 0) > Date.now() - 15 * 60e3
+  const st = elsewhere ? 'working' : appv.state, working = st === 'working'
   appEls.state.className = `app-state pill ${st}`
   appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : appv.hasApp ? 'built' : 'no app yet'
   setText(appEls.stage, working ? appv.stage : appv.result ? `${appv.result.turns} turn${appv.result.turns === 1 ? '' : 's'} · ${appv.result.files} files · checks ${appv.result.gatesPassed ? 'passed' : 'not passed'}${appv.deployed ? ` · live at ${appv.deployed}` : ''}` : '')
   const stick = appEls.steps.scrollHeight - appEls.steps.scrollTop - appEls.steps.clientHeight < 60
   appEls.steps.innerHTML = stepsHtml()
   if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
-  appEls.stop.hidden = !working
+  appEls.stop.hidden = !working || elsewhere
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
   // the same game as a Godot, Unity or Unreal project, when the job wrote one
   const port = appv.result?.port
@@ -4042,7 +4075,10 @@ function renderApp() {
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   const empty = !appv.url || (st === 'failed' && !appv.hasApp)
   appEls.empty.hidden = !empty
-  if (empty) {
+  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && (working || appv.steps.length)
+  if (!sheet) appEls.empty.classList.remove('sheet')
+  if (sheet) artSheet(shownRun())
+  else if (empty) {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
@@ -4071,6 +4107,30 @@ function renderApp() {
   appEls.shell.classList.toggle('dev', !!appv.w)
   appEls.shell.style.width = appv.w ? `${appv.w}px` : '100%'
   if (appv.mode === 'code') renderCode()
+}
+
+// A game being built: its whole art plan as one sheet, each picture landing in its cell as the
+// crew paints it, the cell being painted showing who is on it. Read again every 4 s while shown.
+const sheetv = { run: null, data: null, t: 0, busy: false }
+function artSheet(run) {
+  if (sheetv.run !== run) Object.assign(sheetv, { run, data: null, t: 0 })
+  if (!sheetv.busy && Date.now() - sheetv.t > 4000) {
+    sheetv.busy = true
+    api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => (r.ok ? r.json() : null)).then(d => { if (sheetv.run === run && d) sheetv.data = d }).catch(() => {})
+      .finally(() => { sheetv.busy = false; sheetv.t = Date.now(); if (sheetv.run === run && !appEls.empty.hidden) renderApp() })
+  }
+  const cells = sheetv.data?.sheet || []
+  const done = cells.filter(c => c.src).length
+  const next = cells.find(c => !c.src)
+  const last = appv.steps[appv.steps.length - 1]?.text || appv.stage || ''
+  const head = !cells.length ? 'Building the game' : done < cells.length ? `Painting the art · ${done}/${cells.length}` : 'Building the game'
+  const cell = c => {
+    const on = c === next
+    const who = on ? painterOf(c.id) : ''
+    return `<figure class="as-cell ${c.aspect || 'square'}${c.src ? ' done' : on ? ' on' : ''}">${c.src ? `<img src="${esc(BASE + c.src)}" alt="" loading="lazy">` : on ? `<span class="as-bot">${cursor(who)}</span>` : ''}<figcaption>${esc(c.name)}</figcaption></figure>`
+  }
+  appEls.empty.innerHTML = `<div class="art-sheet"><h2>${esc(head)}</h2>${last ? `<p class="as-line">${esc(last)}</p>` : ''}<div class="as-grid">${cells.map(cell).join('')}</div></div>`
+  appEls.empty.classList.add('sheet')
 }
 
 async function renderCode() {
@@ -4309,6 +4369,8 @@ async function openGame(idea = '', answers = null, build = false) {
   game.off?.()
   game.off = window.SwarmUI?.layer(game.el, closeGame, { extra: [$('#game-btn')], canClose: () => !game.busy })
   if (answers || build) return gameSpec(build)
+  // an unfinished Shape it walk can be picked up from here
+  game.resume = (await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null))?.workshops?.[0] || null
   renderGame()
 }
 const closeGame = () => { game.off?.(); game.off = null; game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
@@ -4329,13 +4391,16 @@ function renderGame() {
   } else if (game.spec) {
     const s = game.spec, list = gameList
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
-    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
+    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><span><button class="glink" data-shape>Shape it</button><button class="big" data-build>Build the game</button></span></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
     el.querySelector('[data-build]').onclick = () => (game.cast && !game.cast.done ? openCast() : gameBuild())
+    el.querySelector('[data-shape]').onclick = () => gameShape()
     el.querySelector('[data-online]')?.addEventListener('click', () => gameOnline())
   } else {
     const val = game.answers[q.id] || ''
-    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
+    const W = game.i === 0 && game.resume
+    const STEPN = ['design', 'story', 'world', 'heroes', 'enemies', 'levels', 'sound']
+    el.innerHTML = `${head}${W ? `<button class="gresume" data-resume>${ico('rotate-ccw')}<span>Continue <b>${esc(W.title || 'the game')}</b></span><em>${Math.max(1, STEPN.indexOf(W.step) + 1)}/7</em></button>` : ''}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
     const free = el.querySelector('.gfree')
     const take = v => { if (v) game.answers[q.id] = v; else delete game.answers[q.id] }
     const next = () => { take(free.value.trim() || game.answers[q.id]); if (game.i < qs.length - 1) { game.i++; renderGame() } else gameSpec() }
@@ -4344,6 +4409,11 @@ function renderGame() {
     el.querySelector('.gidea')?.addEventListener('input', e => { game.idea = e.target.value })
     el.querySelector('.gpromo input')?.addEventListener('change', e => { game.promo = e.target.checked })
     el.querySelector('[data-next]').onclick = next
+    el.querySelector('[data-resume]')?.addEventListener('click', () => {
+      const id = game.resume.id
+      closeGame()
+      openWorkshop({ api, ico, id, onBuilt: async (run, built) => { await loadFiles(); await openRun(run); setView('app'); botMsg(`🎮 Building “${built?.title || 'the game'}” with the art, story, levels and sound you picked.`) } })
+    })
     el.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || game.answers[q.id]); gameSpec() }
     el.querySelector('[data-back]')?.addEventListener('click', () => { game.i--; renderGame() })
     ;(game.i === 0 ? el.querySelector('.gidea') : free)?.focus()
@@ -4682,6 +4752,26 @@ async function gameOnline() {
 // names of a spec's list (a big spec's entries are objects with a name)
 const gameList = v => (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : x?.name || '')).join(', ') : v || '')
 
+// Shape it: the spec walked step by step with pictures (web/workshop.js), then the same build
+async function gameShape() {
+  readSpecEdits()
+  const spec = { ...game.spec }
+  closeGame()
+  // an unfinished walk of the same game opens where it was left
+  const key = String(spec.title || '').trim().toLowerCase()
+  const open = await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null)
+  const id = (open?.workshops || []).find(w => String(w.title || '').trim().toLowerCase() === key)?.id
+  openWorkshop({
+    api, ico, spec, id,
+    onBuilt: async (run, built) => {
+      await loadFiles()
+      await openRun(run)
+      setView('app')
+      botMsg(`🎮 Building “${built?.title || spec.title}” with the art, story, levels and sound you picked. The App view shows every file as it is written.`)
+    }
+  })
+}
+
 async function gameBuild() {
   // the card's edits go into the spec (a big spec's enemies stay objects unless that line changed)
   readSpecEdits()
@@ -4865,8 +4955,9 @@ function crewSpot(job, me) {
 }
 
 function crewTick(now) {
-  requestAnimationFrame(crewTick)
   const job = crewJob()
+  // no crew on screen: look again a few times a second instead of every frame
+  nextFrame(crewTick, !job && !crew.members.length, 300)
   const key = job ? job.key : ''
   if (key !== crew.key) {
     crew.key = key
@@ -5974,7 +6065,7 @@ function cwPin(i) {
   if (!r.width && !r.height) return null
   return { x: r.left + 2, y: r.top + 4, text: t.path.split('/').pop(), typing: t.shown < t.text.length }
 }
-;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } requestAnimationFrame(cwLoop) })()
+;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } nextFrame(cwLoop, !(view === 'app' && appv.state === 'working'), 400) })()
 
 // ---------- 🔌 sign-in connectors (Supabase), through Hermes: Connect opens the provider's
 // sign-in page; Hermes keeps the token, the canvas only learns who is connected.

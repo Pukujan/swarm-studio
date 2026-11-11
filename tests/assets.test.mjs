@@ -33,5 +33,5 @@ test('a run with nothing yet lists nothing, and its files are read from its fold
   mkdirSync(join(dir, 'img'))
   writeFileSync(join(dir, 'img', 'game-title.webp'), 'x')
   assert.deepEqual(assetFiles(dir).img, ['game-title.webp'])
-  assert.deepEqual(listAssets({ id: 'r2' }), { assets: [], next: [] })
+  assert.deepEqual(listAssets({ id: 'r2' }), { assets: [], next: [], sheet: [] })
 })

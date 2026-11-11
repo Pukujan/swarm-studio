@@ -1,0 +1,79 @@
+/* Shape it: the game walked one step at a time (web/workshop.js). Tokens only (RULES 3, 4). */
+.ws-pop { position: fixed; inset: 0; z-index: 400; background: var(--void); color: var(--text); display: flex; flex-direction: column; animation: in .2s ease-out; }
+.ws-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); }
+.ws-crumb { display: flex; gap: 8px; align-items: baseline; min-width: 0; color: var(--muted); font-size: 14px; }
+.ws-crumb span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40vw; }
+.ws-crumb b { color: var(--text); font-weight: 600; }
+.ws-ctl { display: flex; align-items: center; gap: 10px; }
+.ws-ring { position: relative; width: 40px; height: 40px; border: 0; background: none; color: var(--text); cursor: pointer; padding: 0; }
+.ws-ring svg { width: 40px; height: 40px; transform: rotate(-90deg); }
+.ws-ring circle { fill: none; stroke-width: 3; }
+.ws-ring .t { stroke: var(--line); }
+.ws-ring .f { stroke: var(--accent); transition: stroke-dasharray .3s; }
+.ws-ring b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; }
+.ws-back, .ws-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; display: grid; place-items: center; }
+.ws-back:disabled { opacity: .3; cursor: default; }
+.ws-x { border: 0; color: var(--muted); }
+.ws-back svg, .ws-x svg { width: 16px; height: 16px; }
+.ws-next { min-width: 140px; justify-content: center; }
+.ws-next:disabled { opacity: .5; }
+.ws-steps { position: absolute; top: 64px; right: 120px; z-index: 2; background: var(--deep); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; flex-direction: column; min-width: 160px; }
+.ws-steps button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; background: none; color: var(--text); text-align: left; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.ws-steps button:hover, .ws-steps button.on { background: var(--panel-2); }
+.ws-steps i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--frame-hi); }
+.ws-steps .done i { background: var(--accent); border-color: var(--accent); }
+.ws-body { flex: 1; min-height: 0; display: flex; }
+.ws-stage { flex: 1; min-width: 0; overflow: auto; padding: 32px 40px 40px; display: flex; flex-direction: column; align-items: center; }
+.ws-stage.busy { justify-content: center; }
+.ws-stage h3 { margin: 0 0 24px; font-size: 32px; text-align: center; }
+.ws-grid { display: grid; gap: 16px; width: 100%; max-width: 1180px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.ws-grid.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ws-grid.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ws-slice { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; text-align: left; transition: border-color .15s, transform .15s; min-width: 0; }
+.ws-slice:hover { border-color: var(--line-2); }
+.ws-slice.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.ws-slice:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.ws-name { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 15px; padding: 0 2px 2px; }
+.ws-name em { font-style: normal; font-weight: 400; color: var(--muted); font-size: 12px; }
+.ws-pic { aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--deep); display: grid; place-items: center; }
+.ws-slice.tall .ws-pic, .ws-slice.tall .ws-sprite { aspect-ratio: 3 / 4; }
+.ws-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ws-slice.tall .ws-pic img { object-fit: contain; }
+.ws-fail { color: var(--muted); font-size: 22px; }
+.ws-sprite { border-radius: 10px; background-color: var(--deep); background-size: 300% 200%; background-repeat: no-repeat; display: grid; place-items: center; }
+.ws-wait .spin, .ws-stage .spin, .ws-models .spin { width: 26px; height: 26px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; display: block; }
+.ws-card-text { min-height: 150px; border-radius: 10px; background: var(--deep); padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; }
+.ws-card-text b { font-size: 17px; line-height: 1.35; font-weight: 500; }
+.ws-card-text span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.ws-map { width: 100%; aspect-ratio: 2 / 1; height: auto; border-radius: 10px; background: var(--deep); image-rendering: pixelated; }
+.ws-wave { height: 120px; border-radius: 10px; background: var(--deep); display: flex; align-items: center; justify-content: center; gap: 6px; }
+.ws-wave i { width: 6px; height: 18px; border-radius: 3px; background: var(--frame-hi); }
+.ws-wave.on i { background: var(--accent); animation: ws-bar .9s ease-in-out infinite; }
+.ws-wave.on i:nth-child(2n) { animation-delay: -.3s; } .ws-wave.on i:nth-child(3n) { animation-delay: -.6s; }
+@keyframes ws-bar { 0%, 100% { height: 14px } 50% { height: 64px } }
+.ws-own { display: flex; gap: 10px; width: 100%; max-width: 720px; margin-top: 24px; }
+.ws-input { flex: 1; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; }
+.ws-input:focus { outline: 2px solid var(--text); outline-offset: 1px; }
+.ws-err { color: rgb(var(--hot-rgb)); margin: 14px 0 0; font-size: 14px; }
+.ws-insp { width: 340px; flex: none; border-left: 1px solid var(--line); background: var(--deep); padding: 24px; overflow: auto; }
+.ws-insp h4 { margin: 0 0 14px; font-size: 20px; }
+.ws-insp dl { margin: 0 0 16px; display: grid; gap: 4px 0; }
+.ws-insp dt { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; margin-top: 8px; }
+.ws-insp dd { margin: 0; font-size: 14px; line-height: 1.45; }
+.ws-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.ws-voice { height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); padding: 0 10px; font: inherit; }
+.ws-poses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 0 0 16px; font-size: 11px; color: var(--muted); text-align: center; }
+.ws-models { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.ws-model { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; font-size: 12px; text-align: left; }
+.ws-model img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
+.ws-model:hover { border-color: var(--accent); }
+@media (max-width: 900px) {
+  .ws-grid.n3, .ws-grid.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ws-body { flex-direction: column; }
+  .ws-insp { width: auto; border-left: 0; border-top: 1px solid var(--line); }
+  .ws-stage { padding: 24px 16px; }
+  .ws-crumb span:first-child, .ws-crumb span:nth-child(2) { display: none; }
+}
+.ws-wait { position: relative; overflow: hidden; }
+.ws-wait::before { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgb(var(--glass-rgb) / .08) 50%, transparent 70%); background-size: 200% 100%; animation: as-shine 1.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .ws-wait::before { animation: none } }
