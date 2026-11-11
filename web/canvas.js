@@ -4029,7 +4029,10 @@ const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
 // tile's pictures); otherwise a small card over the game, which × hides.
 function playClip() {
   const s = appv.run === shownRun() ? appv.steps.findLast(x => x.clip) : null
-  const tile = cw.el && !cw.el.hidden && cw.mode === 'code' ? cw.el.querySelector('.cw-grid')?.children[0] : null
+  // its window on the wall: the first while the crew writes code, the code window while it paints
+  // (the painters keep theirs); off the wall it is the small card over the game
+  const grid = cw.el && !cw.el.hidden ? cw.el.querySelector('.cw-grid') : null
+  const tile = grid ? (cw.mode === 'code' ? grid.children[0] : cw.mode === 'art' ? grid.children[CW_CODE] : null) || null : null
   for (const t of cw.el?.querySelectorAll('.cw-tile.has-play') || []) if (t !== tile || !s) t.classList.remove('has-play')
   if (!s || (!tile && clip.shut === s.clip)) { if (clip.el) clip.el.hidden = true; return }
   if (!clip.el) {
@@ -6335,6 +6338,8 @@ function cwPin(i) {
     return pin?.width ? { x: pin.left, y: pin.top, text: d.classList.contains('has-play') ? 'play testing' : cw.av[i]?.name || 'Art', typing: true } : null
   }
   const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
+  // while painting, the code window is the play test's (playClip): its cursor sits on the clip's header
+  if (d?.classList.contains('has-play')) { const r = d.getBoundingClientRect(); return r.width ? { x: r.left + 24, y: r.top + 14, text: 'play testing', typing: true } : null }
   const caret = d?.querySelector('.cw-caret')
   if (!t || !caret || (cw.thinking && t.shown >= t.text.length)) return null
   const r = caret.getBoundingClientRect()
