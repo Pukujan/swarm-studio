@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PAGE_TYPES, pickPageType, recentLooks, lookBrief, isDark, hueName } from '../engine/pagetype.mjs'
+import { PAGE_TYPES, pickPageType, recentLooks, lookBrief, pickLook, isDark, hueName } from '../engine/pagetype.mjs'
 import { workerMessages, pagePlannerMessages } from '../engine/prompts.mjs'
 
 test('a brief gets the page type that fits it', () => {
@@ -41,9 +41,11 @@ test('recent runs are read newest first, and steer the palette', () => {
   run('2026-11-03T00', 'zine', '#0d1b1e', '#f0a020')
   const looks = recentLooks(dir)
   assert.deepEqual(looks.map(l => l.type), ['zine', 'poster', 'shop'])
-  const text = lookBrief('index', looks)
-  assert.match(text, /light background/)
-  assert.match(text, /orange or amber/)
+  const look = pickLook(looks, () => 0)
+  assert.notEqual(look.ground, 'dark')
+  assert.ok(!['orange or amber', 'blue'].includes(look.hue))
+  const text = lookBrief('index', looks, look)
+  assert.match(text, /Required for this build's theme/)
   assert.match(text, /Page type: Index/)
 })
 
@@ -62,4 +64,27 @@ test('a fragment cut short is closed, and prose around it is dropped', async () 
   assert.equal(tidyFragment('<section><div class="a">x</div></section>\nDone.'), '<section><div class="a">x</div></section>')
   assert.equal(tidyFragment('<section><div><img src="a"><svg><path d="M0"/></svg><span class="tex'), '<section><div><img src="a"><svg><path d="M0"/></svg></div></section>')
   assert.equal(tidyFragment('<!-- say: hi --><nav><a href="#">x</a></nav>'), '<!-- say: hi --><nav><a href="#">x</a></nav>')
+})
+
+test('cream counts as cream, and the next build is given another ground and main colour', async () => {
+  const { groundOf, pickLook, fitTheme } = await import('../engine/pagetype.mjs')
+  for (const c of ['#F4F1EA', '#F7F4ED', '#F6F2EA', '#FBF4E4', '#faf7f2']) assert.equal(groundOf(c), 'cream', c)
+  assert.equal(groundOf('#ffffff'), 'white')
+  assert.equal(groundOf('#F7F8F9'), 'white')
+  assert.equal(groundOf('#0D0B0A'), 'dark')
+  const recent = [{ background: '#F4F1EA', primary: '#E8442A' }, { background: '#F6F2EA', primary: '#8C6B3F' }]
+  for (let i = 0; i < 40; i++) {
+    const look = pickLook(recent)
+    assert.ok(['dark', 'white', 'colour'].includes(look.ground))
+    assert.ok(!['red', 'orange or amber'].includes(look.hue), look.hue)
+  }
+  assert.match(lookBrief('poster', recent, { ground: 'dark', hue: 'blue' }), /Required for this build's theme: --background is a dark/)
+  assert.deepEqual(pickLook(recent, Math.random, 'a black and gold jazz bar'), { ground: '', hue: '' })
+  const t = fitTheme({ name: 'x', vars: { '--background': '#F4F1EA', '--primary': '#1f6feb', '--foreground': '#111' } }, { ground: 'dark' })
+  assert.equal(groundOf(t.vars['--background']), 'dark')
+  assert.equal(t.vars['--primary'], '#1f6feb')
+  const same = { vars: { '--background': '#0b0b0c', '--primary': '#fff' } }
+  assert.equal(fitTheme(same, { ground: 'dark' }), same)
+  const col = fitTheme({ vars: { '--background': '#F4F1EA', '--primary': '#E8442A' } }, { ground: 'colour' })
+  assert.equal(groundOf(col.vars['--background']), 'colour')
 })
