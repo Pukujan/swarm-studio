@@ -8,7 +8,7 @@
 
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
@@ -1061,9 +1061,19 @@ async function paintGame(runId, spec, items, appDir, step) {
   return items.map(i => done.get(i.id)).filter(Boolean)
 }
 
+// a glTF binary (glb, magic "glTF") or a glTF JSON file
+function isGltf(file) {
+  try {
+    const fd = openSync(file, 'r'), b = Buffer.alloc(4)
+    try { readSync(fd, b, 0, 4, 0) } finally { closeSync(fd) }
+    return /\.glb$/i.test(file) ? b.toString('latin1') === 'glTF' : b.toString('latin1').trimStart().startsWith('{')
+  } catch { return false }
+}
+
 async function startGame(spec) {
   const g = await gameMod()
   if (!spec?.title || !spec?.loop) throw new Error('no game spec')
+  if (spec.models) spec = { ...spec, models: g.gameModels(spec).filter(m => isGltf(join(dataDir, 'models', m.file))) }
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
   mkdirSync(dir, { recursive: true })
@@ -1073,8 +1083,12 @@ async function startGame(spec) {
     { type: 'run:start', t, run: id, brief, kind: 'game', title: String(spec.title).slice(0, 80), workerModel: modelFor('worker'), ...(spec.brand?.from ? { from: spec.brand.from, fromName: spec.brand.name } : {}) },
     { type: 'game:spec', t, run: id, spec }
   ].map(e => JSON.stringify(e)).join('\n') + '\n')
+  // the spec's 3D models, from the model library (<data>/models/): only real glTF files that are there
+  const lib = join(dataDir, 'models')
+  const models = g.gameModels(spec)
+  const copy = Object.fromEntries(models.map(m => [`public/models/${m.file}`, join(lib, m.file)]))
   const a = await apps()
-  await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) } })
+  await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, copy })
   // the site remembers its game, so each can open the other
   if (spec.brand?.from && existsSync(join(runsDir, spec.brand.from))) record(spec.brand.from, { type: 'game:linked', t, run: spec.brand.from, game: id, title: String(spec.title).slice(0, 80) })
   broadcast({ type: 'files:changed', t, run: id })

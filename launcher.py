@@ -171,7 +171,7 @@ def ensure_server() -> dict:
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
     # On Windows, Node also needs the system folders (SYSTEMROOT for its sockets and
     # crypto, TEMP, APPDATA for npm and pnpm, PATHEXT for finding .cmd tools).
-    keep = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME")
+    keep = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME", "SWARM_GODOT")
     if os.name == "nt":
         keep += ("SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "USERPROFILE",
                  "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",
