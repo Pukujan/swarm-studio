@@ -14,7 +14,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
-import { extendBase, rehomeImages } from '../engine/extend.mjs'
+import { followUp, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
@@ -27,7 +27,7 @@ import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
-import { makeProjects, stateOf } from './projects.mjs'
+import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
@@ -37,6 +37,10 @@ import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
+import { workshopRoutes } from './workshops.mjs'
+import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
+import { paintWithBackup } from '../engine/paintretry.mjs'
+import { library } from '../engine/library.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
@@ -162,7 +166,7 @@ function guideFor(runId) {
   return guide
 }
 const ART_CHECK_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
-async function checkArt(path, guide) {
+async function checkArt(path, guide, messages = art.checkMessages) {
   const model = modelFor('reviewer')
   if (!model || !models.reviewer.apiKey || !/\.(webp|png|jpe?g)$/i.test(path)) return { ok: true, problems: [], skipped: true }
   const ext = extname(path).slice(1).toLowerCase().replace('jpg', 'jpeg')
@@ -170,25 +174,43 @@ async function checkArt(path, guide) {
   const chain = [model, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? ART_CHECK_FALLBACKS.filter(m => m !== model) : [])]
   for (const m of chain) {
     try {
-      const res = await streamChat(provider('reviewer'), { trace: { kind: 'art-check' }, model: m, messages: art.checkMessages(guide, image), maxTokens: 300, temperature: 0, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(45000) })
-      return { ...art.parseCheck(res.text), model: m }
+      const res = await streamChat(provider('reviewer'), { trace: { kind: 'art-check' }, model: m, messages: messages(guide, image), maxTokens: 300, temperature: 0, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(45000) })
+      const verdict = art.parseCheck(res.text)
+      if (verdict.unread) continue
+      return { ...verdict, model: m }
     } catch {}
   }
   return { ok: true, problems: [], skipped: true }
 }
 // One picture through the art director. A picture sent back is made once more with
 // the reasons in its prompt; the second one stands.
-async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false }, onSentBack) {
-  const pick = art.tierFor(choice, { hero })
-  const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000)
-  const r = await go('')
-  if (!r.ok || !r.path || !existsSync(r.path)) return r
+// another signed-in image provider than the one in use: Codex first, then any other
+async function backupImage(choice) {
+  const list = (await loadImageProviders()).filter(x => x.available && x.provider !== choice?.provider)
+  const p = list.find(x => x.provider === 'openai-codex') || list[0]
+  return p ? { provider: p.provider, model: p.provider === 'openai-codex' ? 'gpt-image-2-low' : p.default || '' } : null
+}
+async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false, ref = '' }, onSentBack) {
+  // ref: a picture to match in style (the hero's sprite, for a figure or prop painted to stand beside it)
+  let withRef = !!(ref && existsSync(ref))
+  const once = (c, strict) => { const pick = art.tierFor(c, { hero }); return imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, ...(withRef ? ['--ref', ref] : []), art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000) }
+  // a refusal that isn't out of quota: once more after a pause, then on another provider (engine/paintretry.mjs)
+  let first = await paintWithBackup(c => once(c, ''), { choice, backup: () => backupImage(choice), quota: OUT_OF_QUOTA, exists: existsSync })
+  // not every provider takes a reference picture: without one, rather than no picture
+  if (withRef && (!first.ok || !first.path || !existsSync(first.path)) && !OUT_OF_QUOTA.test(String(first.error || ''))) {
+    withRef = false
+    first = await paintWithBackup(c => once(c, ''), { choice, backup: () => backupImage(choice), quota: OUT_OF_QUOTA, exists: existsSync })
+  }
+  if (!first.ok || !first.path || !existsSync(first.path)) return first
+  const used = first.backup || choice, pick = art.tierFor(used, { hero })
+  const go = strict => once(used, strict)
+  const r = { ...first, model: first.model || pick.model }
   const check = await checkArt(r.path, guide)
-  if (check.ok) return { ...r, model: r.model || pick.model, check }
+  if (check.ok) return { ...r, check }
   onSentBack?.(check)
   const again = await go(check.problems.join('; '))
   if (!again.ok || !again.path || !existsSync(again.path)) return { ...r, model: r.model || pick.model, check }
-  return { ...again, model: again.model || pick.model, check: await checkArt(again.path, guide), retried: true }
+  return { ...again, model: again.model || pick.model, check: await checkArt(again.path, guide), retried: true, backup: first.backup }
 }
 
 // One picture for a finished section: a new one asked for in an edit, or a
@@ -377,13 +399,15 @@ const withTrace = (id, fn) => traced(traceScope(id), fn)
 // What a run is working on right now, if anything: the site build, an app or game build, a film.
 // { what: site | app | game | film, stage, pct (0..1, or null when the job cannot say) }
 let appsNow = null // the app jobs, once loaded, so this can stay synchronous
+// a Studio process that started a build: still running? (a killed one leaves its app:start behind)
+const appAlive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
 function workOf(id) {
   if (current?.id === id && !current.done) {
     const plan = current.events.filter(e => e.type === 'layer:plan').length
     return { what: 'site', stage: plan ? 'building pages' : 'planning', pct: Math.min(1, current.events.filter(e => e.type === 'layer:done').length / Math.max(1, plan || 12)) }
   }
   const a = appsNow?.jobs?.get(id)
-  if (a?.state === 'working') return { what: a.kind === 'game' ? 'game' : 'app', stage: clipStage(a.stage), pct: null, steps: a.steps?.length || 0 }
+  if (a?.state === 'working') return { what: a.kind === 'game' ? 'game' : 'app', stage: clipStage(a.stage), pct: null, steps: a.steps?.length || 0, ...(a.kind === 'game' ? { progress: gameProgress(a.steps) } : {}) }
   const v = videos.get(id)
   if (v?.state === 'working') return { what: 'film', stage: clipStage(v.stage), pct: Math.min(1, (Number(v.pct) || 0) / 100) }
   return null
@@ -393,6 +417,7 @@ const clipStage = s => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 60) 
 // A run's file card, from its events plus the person's meta. Cached by the
 // events file's size and time, so listing many runs stays quick.
 const cards = new Map()
+const gameCover = id => { try { const f = readdirSync(join(runsDir, id, 'img')).find(n => /^game-title\.(webp|png|jpe?g)$/.test(n)); return f ? `/img/${id}/${f}` : null } catch { return null } }
 function runCard(id) {
   const file = join(runsDir, id, 'events.jsonl')
   let st
@@ -444,12 +469,15 @@ function runCard(id) {
       videoSeconds: video?.seconds ?? null,
       preview: events.some(e => e.type === 'layer:done' && e.html),
       // the cover: the hero picture the art director made, else the first picture
-      cover: (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || null,
+      // a game's own title picture once it is painted
+      cover: (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || gameCover(id),
       game: events.some(e => e.type === 'game:spec') || pages.some(p => /\b(play|game|arcade|trial)\b/i.test(`${p.id} ${p.title}`)),
       app: events.some(e => e.type === 'app:ready' || e.type === 'app:done'),
       planned: events.filter(e => e.type === 'layer:plan').length,
       // the last app build's outcome (as the app jobs read it): working (or stopped), built or failed
-      build: ({ 'app:start': 'working', 'app:done': 'built', 'app:failed': 'failed' })[events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))?.type] || null,
+      build: (b => (b?.type === 'app:failed' && b.message === 'stopped') || (b?.type === 'app:start' && b.pid && !appAlive(b.pid)) ? 'stopped' : ({ 'app:start': 'working', 'app:done': 'built', 'app:failed': 'failed' })[b?.type] || null)(events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))),
+      // how far a game build got, from its own steps (another Studio server may be running it)
+      gameAt: events.some(e => e.type === 'game:spec') ? gameProgress(events.filter(e => e.type === 'app:step').map(e => e.step)) : null,
       deployed: events.findLast(e => e.type === 'app:deployed' && e.url)?.url || null,
     } }
     cards.set(id, card)
@@ -999,6 +1027,72 @@ async function chatterMake(text, voice) {
   } catch {} finally { chatterBusy.delete(file); try { rmSync(dir, { recursive: true, force: true }) } catch {} }
 }
 
+// ---------- the person talks to the crew while it builds
+// Talk (engine/talk.mjs) answers: a crew member whose only job is to talk, so the builder never
+// stops for a question. It reads the app's files, looks at the pictures and shows them, and
+// writes a change out for the person to confirm. Only a confirmation (confirm: the change)
+// reaches the builder: at the start of the next slice, or now (the turn in flight stops and
+// the slice starts again with it).
+const imgFileOf = src => { const m = String(src || '').split('?')[0].match(/^\/img\/([A-Za-z0-9_-]{1,80})\/([A-Za-z0-9_.-]{1,120})$/); return m ? join(runsDir, m[1], 'img', m[2]) : null }
+async function lookAt(src) {
+  const model = modelFor('reviewer') || modelFor('planner'), file = imgFileOf(src)
+  if (!model || !file || !existsSync(file) || statSync(file).size > 6e6) return null
+  const ext = /\.png$/i.test(file) ? 'png' : /\.webp$/i.test(file) ? 'webp' : 'jpeg'
+  const res = await streamChat(provider(modelFor('reviewer') ? 'reviewer' : 'planner'), {
+    trace: { kind: 'talk-look' }, model, maxTokens: 220, temperature: 0.2, signal: AbortSignal.timeout(40000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'Say in two or three plain sentences what this game picture shows: who or what, the pose or layout, the style and colours, and anything that looks wrong.' }, { type: 'image_url', image_url: { url: `data:image/${ext};base64,${readFileSync(file).toString('base64')}` } }] }]
+  })
+  return String(res.text || '').trim() || null
+}
+async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now = false } = {}) {
+  // a confirmed change: to the builder, and nothing to answer but where it went
+  if (confirm) {
+    const r = now ? a.redirect(id, confirm) : a.tell(id, confirm)
+    if (!r.queued) return { ...r, answer: 'The crew is not building right now, so there is nothing to send it to: say it in your answer to the slice.' }
+    return { ...r, answer: r.now ? 'Sent. The builder stopped its turn and is doing this slice again with your change.' : now ? 'Sent. The builder is between turns, so it takes your change at the start of its next one.' : 'Sent. The builder takes it at the start of the next slice.' }
+  }
+  const t = String(text || '').trim().slice(0, 1200)
+  if (!t) throw new Error('say something to the crew')
+  const { processNotes, buildMedia, mediaNotes } = await import('../engine/appjob.mjs')
+  const { talk } = await import('../engine/talk.mjs')
+  const j = a.jobs.get(id)
+  const st = a.state(id)
+  const building = (j?.state || st?.state) === 'working'
+  const events = readEvents(id) || []
+  const lead = events.filter(e => e.type === 'crew:lead' && e.text).slice(-14).map(e => `- ${String(e.text).slice(0, 220)}`)
+  const steps = (j?.steps || []).filter(x => x.kind !== 'write').slice(-12).map(x => `- ${String(x.text).slice(0, 160)}`)
+  const writes = (j?.steps || []).filter(x => x.kind === 'write').slice(-8).map(x => x.path || x.text).filter(Boolean)
+  const spec = events.findLast(e => e.type === 'game:spec')?.spec
+  const since = events.findLastIndex(e => e.type === 'app:start' && e.fresh)
+  const bigs = events.slice(since + 1).filter(e => e.type === 'app:stage' && e.big)
+  const done = bigs.filter(e => e.big.ok && e.big.name).map(e => `slice ${e.big.i + 1} ${e.big.name}${e.big.clip ? ', play test filmed' : ''}`)
+  // the status line often reads "next step" or a test: the slice comes from the last "stage n of N" said
+  const SLICE = /stage \d+ of \d+/
+  const stage = SLICE.test(j?.stage || st?.stage || '') ? (j?.stage || st?.stage)
+    : [...(j?.steps || st?.steps || []).map(x => ({ t: x.t || 0, s: x.text || '' })), ...events.filter(e => e.type === 'app:stage').map(e => ({ t: e.t || 0, s: e.stage || '' }))]
+      .filter(x => SLICE.test(x.s)).sort((x, y) => y.t - x.t)[0]?.s || ''
+  const slices = (spec?.stages || []).map(x => x?.name).filter(Boolean)
+  const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage, done, slices })
+  let files = []
+  try { const dir = join(runsDir, id, 'img'); files = readdirSync(dir).map(name => ({ name, mtime: statSync(join(dir, name)).mtimeMs })) } catch {}
+  const m = buildMedia({ id, files, slices: bigs.map(e => ({ ...e.big, t: e.t })), steps: j?.steps || [] })
+  const snap = snapOf(id)
+  const media = { clips: m.clipList, pics: [...(snap ? [{ src: snap.split('?')[0], name: 'the game right now (a still)' }] : []), ...m.picList] }
+  const notes = `${how} ${mediaNotes(m, false)}\n\nState: ${j?.state || st?.state || 'idle'}. Stage: ${j?.stage || stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}`
+  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}`
+  const model = modelFor('planner')
+  if (!model) return { queued: false, state: st.state, answer: fallback }
+  const chat = async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'talk' }, model, maxTokens: 500, temperature: 0.3, signal: AbortSignal.timeout(40000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text
+  try {
+    const r = await talk({ chat, look: lookAt, appDir: join(runsDir, id, 'app'), media, text: t, notes, who: String(who || '').slice(0, 40), on: String(on || '').slice(0, 160), title: spec?.title || '', building, deadline: Date.now() + 75000 })
+    return { queued: false, state: st.state, answer: r.answer || fallback, ...(r.media ? { media: r.media } : {}), ...(r.proposal ? { proposal: r.proposal } : {}), used: r.used }
+  } catch { return { queued: false, state: st.state, answer: fallback } }
+}
+
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
@@ -1008,15 +1102,27 @@ const castMod = () => (castP ||= import('../engine/cast.mjs'))
 // high, through the same image login as the builds. Image runs only; no Meshy credits.
 async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', crop = '', refs = [] }) {
   const choice = await imageChoice()
-  if (!choice) return { ok: false, error: 'no image model' }
+  // ckff (engine/ckff.mjs) is the fallback when no Hermes image login works (Codex out of quota)
+  const fallback = () => (ckffCreds() && !crop ? ckffPaint({ prompt, aspect, refs }) : null)
+  if (!choice) return (await fallback()) || { ok: false, error: 'no image model' }
   const model = choice.provider === 'openai-codex' ? `gpt-image-2-${quality === 'high' ? 'high' : 'medium'}` : choice.model
   const args = ['--provider', choice.provider, ...(model ? ['--model', model] : []), '--aspect', aspect, ...(crop ? ['--crop', crop] : [])]
   for (const r of refs.slice(0, 4)) if (existsSync(r)) args.push('--ref', r)
-  return imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
+  const r = await imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
+  return r?.ok ? r : (await fallback()) || r
 }
-planPaint.ready = async () => !!(await imageChoice())
+planPaint.ready = async () => !!ckffCreds() || !!(await imageChoice())
 // The build (spec 21) spends Meshy credits only on a locked plan, inside the price it was locked at.
 const plans = planRoutes({ dataDir, builtInTemplates: [join(root, 'games', 'ares', 'plan.json')], paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() } })
+// Guided game making (engine/workshop.mjs): the spec walked one step at a time, with pictures
+const workshops = workshopRoutes({
+  dataDir,
+  paint: planPaint,
+  planner: () => ({ provider: provider('planner'), model: modelFor('planner') }),
+  voices: (() => { try { return JSON.parse(readFileSync(join(root, 'games', 'ares', 'data', 'heroes.json'), 'utf8')).voices || {} } catch { return {} } })(),
+  speak: (voice, text, out) => import('../engine/voice.mjs').then(v => v.speakLine(voice, text, out)),
+  build: (spec, copy) => startGame(spec, copy)
+})
 let meshyP = null
 const meshyMod = () => (meshyP ||= import('../engine/meshy.mjs'))
 
@@ -1117,47 +1223,250 @@ function gameGuide(spec) {
   if (site && site.style !== 'photo') return site
   return art.styleGuide({ brief: `${spec.look || ''}. ${spec.setting || ''}. Hand-painted style` })
 }
-async function paintGame(runId, spec, items, appDir, step) {
+// The painters: three of the crew, one per picture at a time, each with its own tile on the
+// build's wall. What each is doing goes out live as art:job (never kept with the run).
+const PAINTERS = ['Kiki', 'Juno', 'Tofu']
+// an image model that is out of quota or credit answers every picture the same way: stop on the first
+// what each painter is on right now, per run: a canvas opened mid-art reads it with the assets
+const artJobs = new Map()
+// the last resort for an icon or backdrop no provider would paint (engine/library.mjs)
+const assetLibrary = library({ dataDir })
+const OUT_OF_QUOTA = /\b(429|402)\b|usage limit|quota|insufficient|no capacity|rate.?limit|billing|credits?\b/i
+// Cut a sprite out, then check it: the cut's own numbers first, and a sprite that looks off
+// goes to the reviewer on dark and on magenta. → { ok, path, problems, report }
+async function cutAndCheck(src, it, guide) {
+  const cut = join(dirname(src), `${it.id}-cut.png`), view = join(dirname(src), `${it.id}-check.png`)
+  const c = await new Promise(ok => execFile(process.platform === 'win32' ? 'python' : 'python3', [join(root, 'scripts', 'cutout.py'), src, cut, '--preview', view], { timeout: 90000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
+  if (!c.ok || !existsSync(cut)) return { ok: false, cutFailed: true, problems: [c.why.split('\n').pop().slice(0, 120) || 'the cut failed'] }
+  let report = {}
+  try { report = JSON.parse(c.out.trim().split('\n').pop()) } catch {}
+  const looksOff = report.clipped || report.halo > 0.004
+  // with a reviewer, every sprite is looked at; without one, the numbers decide
+  const check = existsSync(view) ? await checkArt(view, guide, (_, image) => art.cutoutMessages(it.what, image)) : { ok: true, skipped: true, problems: [] }
+  const problems = check.skipped
+    ? [...(report.clipped ? ['cut off by the edge'] : []), ...(report.halo > 0.004 ? ['background left around the figure'] : [])]
+    : check.problems
+  return { ok: check.skipped ? !looksOff : check.ok, path: cut, view, problems, report }
+}
+// The sheet cutter needs numpy and scipy, which the Python first on the PATH may lack (a
+// venv's): the first of SWARM_CUT_PY, python3 and the system Python that has them.
+let cutPyP = null
+const cutPy = () => (cutPyP ||= (async () => {
+  const win = process.platform === 'win32'
+  for (const py of [process.env.SWARM_CUT_PY, win ? 'python' : 'python3', win ? '' : '/usr/bin/python3', PY].filter(Boolean)) {
+    const ok = await new Promise(r => execFile(py, ['-c', 'import numpy, scipy, PIL'], { timeout: 30000 }, err => r(!err)))
+    if (ok) return py
+  }
+  return null
+})())
+// what a stage is told about a sheet: its frame size and timing, from the cut
+const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: it.fps, loop: it.loop, frames: it.frames } : {})
+// have: the art painted before (a mid-build ask): a sheet can be painted over one of those
+// sprites and a sprite can take the hero's picture as its reference
+async function paintGame(runId, spec, items, appDir, step, signal = null, { have = [] } = {}) {
   const choice = await imageChoice()
   if (!choice) { step({ kind: 'setup', text: 'no image model: the game draws its art in code', ok: false }); return [] }
   const guide = gameGuide(spec)
   step({ kind: 'setup', text: `painting in ${guide.name}` })
   mkdirSync(join(appDir, 'public', 'art'), { recursive: true })
   mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
-  const done = new Map(), queue = [...items]
+  const done = new Map(), queue = [...items], libUsed = new Set()
+  for (const f of have) { const id = String(f.file || '').replace(/^art\//, '').replace(/\.[a-z0-9]+$/i, ''); if (id && !items.some(i => i.id === id)) done.set(id, f) }
   // a picture painted for this game before (a build stopped by a restart, a Try again)
   // is kept with the run: it is used again, not painted and paid for again
-  const kept = (() => { try { return readdirSync(join(runsDir, runId, 'img')).filter(f => f.startsWith('game-')) } catch { return [] } })()
+  const kept = (() => { try { return readdirSync(join(runsDir, runId, 'img')).filter(f => /^game-.*\.(png|jpe?g|webp)$/i.test(f) && !/-check\./.test(f)) } catch { return [] } })()
   for (const it of [...queue]) {
     const f = kept.find(k => k.replace(/\.[a-z]+$/i, '') === `game-${it.id}`)
     if (!f) continue
+    let meta = null
+    if (it.kind === 'sheet') { try { meta = JSON.parse(readFileSync(join(runsDir, runId, 'img', `game-${it.id}.json`), 'utf8')) } catch { continue } }
     const file = `art/${it.id}${extname(f)}`
     copyFileSync(join(runsDir, runId, 'img', f), join(appDir, 'public', file))
-    done.set(it.id, { file, what: it.what, kind: it.kind })
+    done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}), ...sheetInfo(it, meta) })
     queue.splice(queue.indexOf(it), 1)
   }
-  if (done.size) step({ kind: 'setup', text: `using ${done.size} pictures painted before; painting ${queue.length}` })
-  const worker = async () => {
-    for (let it; (it = queue.shift());) {
-      const r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title', cutout: !!it.cutout }).catch(err => ({ ok: false, error: String(err.message || err) }))
-      if (!r.ok || !r.path || !existsSync(r.path)) { step({ kind: 'setup', text: `could not paint the ${it.what}: ${String(r.error || 'no image').slice(0, 120)}`, ok: false }); continue }
-      // a sprite is painted on a flat colour: cut it out to a transparent PNG
-      if (it.cutout) {
-        const cut = join(dirname(r.path), `${it.id}-cut.png`)
-        const c = await new Promise(ok => execFile(process.platform === 'win32' ? 'python' : 'python3', [join(root, 'scripts', 'cutout.py'), r.path, cut], { timeout: 60000 }, (err, out, errOut) => ok({ ok: !err, why: String(errOut || err?.message || '').trim() })))
-        if (!c.ok || !existsSync(cut)) { step({ kind: 'setup', text: `could not cut out the ${it.what}: ${c.why.split('\n').pop().slice(0, 120)}`, ok: false }); continue }
-        r.path = cut
-      }
-      const file = `art/${it.id}${extname(r.path) || '.png'}`
-      copyFileSync(r.path, join(appDir, 'public', file))
-      // the Studio keeps a copy with the run, so its art shows beside the game
-      copyFileSync(r.path, join(runsDir, runId, 'img', file.replace('art/', 'game-')))
-      done.set(it.id, { file, what: it.what, kind: it.kind })
-      step({ kind: 'setup', text: `painted the ${it.what}` })
+  // a sheet is painted over its figure's own painted picture (kept before the cut)
+  const raws = new Map()
+  const imgDir = join(runsDir, runId, 'img'), peeks = readdirSync(imgDir).filter(f => /^peek-.*-raw\./.test(f))
+  for (const it of items) { const f = peeks.find(k => k.startsWith(`peek-${it.id}-raw.`)); if (it.kind === 'sprite' && f) raws.set(it.id, join(imgDir, f)) }
+  for (const id of done.keys()) { const f = peeks.find(k => k.startsWith(`peek-${id}-raw.`)); if (/^sprite-/.test(id) && f && !raws.has(id)) raws.set(id, join(imgDir, f)) }
+  const fresh = items.filter(i => done.has(i.id)).length
+  if (fresh) step({ kind: 'setup', text: `using ${fresh} pictures painted before; painting ${queue.length}` })
+  let stopped = null // the image model ran out: no more pictures are tried
+  const img = name => `/img/${runId}/${name}`
+  const live = (slot, it, state, extra = {}) => {
+    const e = { type: 'art:job', t: Date.now(), run: runId, slot, who: PAINTERS[slot], id: it.id, what: it.what, kind: it.kind, state, done: done.size, total: items.length, ...extra }
+    const slots = artJobs.get(runId) || []
+    slots[slot] = { ...e, src: e.src || (slots[slot]?.id === it.id ? slots[slot].src : undefined) }
+    artJobs.set(runId, slots)
+    broadcast(e)
+    const say = { painting: `painting the ${it.what}`, cutting: `cutting out the ${it.what}`, checking: `checking the ${it.what}`, 'sent back': `painting the ${it.what} again` }[state]
+    if (say) broadcast({ type: 'crew:act', t: Date.now(), run: runId, name: PAINTERS[slot], text: say, app: true })
+  }
+  const keep = (it, path) => {
+    const file = `art/${it.id}${extname(path) || '.png'}`, name = file.replace('art/', 'game-')
+    copyFileSync(path, join(appDir, 'public', file))
+    // the Studio keeps a copy with the run, so its art shows beside the game
+    copyFileSync(path, join(runsDir, runId, 'img', name))
+    return { file, name }
+  }
+  // a picture on its way (painted, being cut or checked): shown on its painter's tile only
+  const peek = (it, path, tag) => {
+    const name = `peek-${it.id}-${tag}${extname(path) || '.png'}`
+    copyFileSync(path, join(runsDir, runId, 'img', name))
+    return img(name)
+  }
+  // the next picture a painter can start: one that waits on another (a sheet on its sprite)
+  // waits while that one is still being painted, and is dropped if it failed
+  const busy = new Set()
+  const next = async () => {
+    for (;;) {
+      if (stopped || signal?.aborted) return null
+      // a reference (ref) is waited for while it is being painted, but its failure drops nothing
+      const pending = id => busy.has(id) || queue.some(o => o.id === id)
+      const i = queue.findIndex(q => (!q.after || done.has(q.after)) && (!q.ref || !pending(q.ref)))
+      if (i >= 0) { const [it] = queue.splice(i, 1); busy.add(it.id); return it }
+      for (const q of [...queue]) if (q.after && !busy.has(q.after) && !queue.some(o => o.id === q.after)) queue.splice(queue.indexOf(q), 1)
+      if (!queue.length) return null
+      await new Promise(r => setTimeout(r, 1000))
     }
   }
-  await Promise.all([worker(), worker(), worker()])
-  return items.map(i => done.get(i.id)).filter(Boolean)
+  const worker = async slot => {
+    for (let it; (it = await next()); busy.delete(it.id)) {
+      if (it.kind === 'sheet') { await paintSheet(slot, it); continue }
+      live(slot, it, 'painting')
+      const refFile = it.ref && done.get(it.ref)?.file
+      const ref = it.ref ? [refFile && join(appDir, 'public', refFile), raws.get(it.ref)].find(f => f && existsSync(f)) : ''
+      let r = await paintArt(choice, guide, { gen: it.gen, aspect: it.aspect, hero: it.kind === 'title', cutout: !!it.cutout, ref }, c => live(slot, it, 'sent back', { problems: c.problems })).catch(err => ({ ok: false, error: String(err.message || err) }))
+      if (!r.ok || !r.path || !existsSync(r.path)) {
+        const why = String(r.error || 'no image')
+        if (OUT_OF_QUOTA.test(why) && !stopped) {
+          stopped = { provider: choice.provider, model: choice.model || choice.provider, why: why.slice(0, 200) }
+          queue.unshift(it)
+          live(slot, it, 'failed', { problems: ['out of quota'] })
+          step({ kind: 'setup', text: `${stopped.model} is out of quota: stopped painting`, ok: false, art: 'quota' })
+          break
+        }
+        // a picture from the library in a close style, so the game isn't left without it;
+        // kept beside the run as lib-<id>, not game-<id>, so a Try again paints it for real
+        const lib = await assetLibrary.pick(it, guide.style, libUsed)
+        if (lib) {
+          const file = `art/${it.id}${extname(lib.path) || '.png'}`, name = `lib-${it.id}${extname(lib.path) || '.png'}`
+          copyFileSync(lib.path, join(appDir, 'public', file))
+          copyFileSync(lib.path, join(runsDir, runId, 'img', name))
+          done.set(it.id, { file, what: it.what, kind: it.kind, credit: lib.credit })
+          live(slot, it, 'done', { src: img(name) })
+          step({ kind: 'setup', text: `used a library picture for the ${it.what} (${why.slice(0, 80)})` })
+          continue
+        }
+        live(slot, it, 'failed', { problems: [why.slice(0, 80)] })
+        step({ kind: 'setup', text: `could not paint the ${it.what}: ${why.slice(0, 120)}`, ok: false })
+        continue
+      }
+      // a sprite is painted on a flat colour: cut it out to a transparent PNG and check the cut;
+      // one sent back is painted once more with the reasons, and the second one stands
+      if (it.cutout) {
+        live(slot, it, 'cutting', { src: peek(it, r.path, 'raw') })
+        raws.set(it.id, r.path)
+        let c = await cutAndCheck(r.path, it, guide)
+        if (!c.cutFailed) live(slot, it, 'checking', { src: peek(it, c.view, 'check') })
+        if (!c.ok) {
+          live(slot, it, 'sent back', { problems: c.problems })
+          // the key colour was the trouble: paint it again on the other key (magenta ↔ green)
+          const swap = art.keyTrouble(c.problems), gen = swap ? art.swapKey(it.gen) : it.gen
+          step({ kind: 'setup', text: `sent back the ${it.what}: ${c.problems.join(', ') || 'the cut'}${swap ? `; painting it again on ${art.keyOf(gen)}` : ''}` })
+          const again = await paintArt(choice, guide, { gen: `${gen}. ${art.SPRITE_RETRY}; fix: ${c.problems.join('; ')}`, aspect: it.aspect, cutout: true, ref }).catch(() => null)
+          if (again?.ok && again.path && existsSync(again.path)) {
+            live(slot, it, 'cutting', { src: peek(it, again.path, 'raw2') })
+            const c2 = await cutAndCheck(again.path, it, guide)
+            if (!c2.cutFailed) { c = c2; live(slot, it, 'checking', { src: peek(it, c.view, 'check2') }) }
+          }
+        }
+        if (c.cutFailed) { live(slot, it, 'failed', { problems: c.problems }); step({ kind: 'setup', text: `could not cut out the ${it.what}: ${c.problems[0]}`, ok: false }); continue }
+        r = { ...r, path: c.path }
+      }
+      const { file, name } = keep(it, r.path)
+      done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}) })
+      live(slot, it, 'done', { src: img(name) })
+      step({ kind: 'setup', text: `painted the ${it.what}${r.backup ? ` with ${r.backup.provider} (${choice.provider} refused it)` : r.secondTry ? ' on the second try' : ''}` })
+    }
+  }
+  // A sprite sheet: painted over the figure's own picture so it stays on-model, cut into a
+  // strip of frames (games/ares/tools/sheets/cut.py), then checked by its numbers and by the
+  // reviewer on dark and magenta. One sent back is painted once more; the second one stands.
+  const quota = (it, slot, why) => {
+    if (!OUT_OF_QUOTA.test(why) || stopped) return false
+    stopped = { provider: choice.provider, model: choice.model || choice.provider, why: why.slice(0, 200) }
+    live(slot, it, 'failed', { problems: ['out of quota'] })
+    step({ kind: 'setup', text: `${stopped.model} is out of quota: stopped painting`, ok: false, art: 'quota' })
+    return true
+  }
+  async function paintSheet(slot, it) {
+    // the uncut picture of the figure, else (art kept from an older build) its cut-out sprite
+    const still = done.get(it.after)?.file
+    const ref = [raws.get(it.after), still && join(appDir, 'public', still)].find(f => f && existsSync(f))
+    if (!ref) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
+    const pick = art.tierFor(choice, { hero: true })
+    let layout = it.layout
+    // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
+    const go = strict => paintWithBackup(() => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout })], 300000), { choice: pick, quota: OUT_OF_QUOTA, exists: existsSync })
+    let fixes = ''
+    for (let go2 = 0; go2 < 2; go2++) {
+      live(slot, it, go2 ? 'sent back' : 'painting', go2 ? { problems: fixes.split('; ') } : {})
+      const r = await go(fixes).catch(err => ({ ok: false, error: String(err.message || err) }))
+      if (!r.ok || !r.path || !existsSync(r.path)) {
+        const why = String(r.error || 'no image')
+        if (quota(it, slot, why)) { queue.unshift(it); return }
+        live(slot, it, 'failed', { problems: [why.slice(0, 80)] })
+        step({ kind: 'setup', text: `could not paint the ${it.what}: ${why.slice(0, 120)}`, ok: false })
+        return
+      }
+      live(slot, it, 'cutting', { src: peek(it, r.path, go2 ? 'raw2' : 'raw') })
+      const strip = join(dirname(r.path), `${it.id}-strip.webp`), view = join(dirname(r.path), `${it.id}-check.png`)
+      const py = await cutPy()
+      if (!py) { live(slot, it, 'failed', { problems: ['cutting sheets needs numpy and scipy'] }); step({ kind: 'setup', text: `could not cut the ${it.what}: no Python with numpy and scipy (set SWARM_CUT_PY)`, ok: false }); return }
+      const cut = await new Promise(ok => execFile(py, [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), r.path, strip], { timeout: 120000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
+      let meta = null
+      try { meta = JSON.parse(cut.out.trim().split('\n').pop()) } catch {}
+      if (!cut.ok || !meta || !existsSync(strip)) {
+        live(slot, it, 'failed', { problems: [cut.why.split('\n').pop().slice(0, 80) || 'the cut failed'] })
+        step({ kind: 'setup', text: `could not cut the ${it.what} into frames: ${cut.why.split('\n').pop().slice(0, 120)}`, ok: false })
+        return
+      }
+      await new Promise(ok => execFile(py, [join(root, 'scripts', 'cutout.py'), '--preview-only', strip, view], { timeout: 60000 }, () => ok()))
+      if (existsSync(view)) live(slot, it, 'checking', { src: peek(it, view, go2 ? 'check2' : 'check') })
+      const qc = meta.qc || {}
+      const numbers = [...(qc.edge?.length ? [`frame ${qc.edge.map(n => n + 1).join(', ')} cut off at the edge`] : []), ...(qc.ok === false && !qc.edge?.length ? ['frames differ in size'] : [])]
+      const look = existsSync(view) ? await checkArt(view, guide, (_, image) => art.sheetMessages(it.what, image, it.frames)) : { ok: true, skipped: true, problems: [] }
+      const problems = [...numbers, ...(look.skipped ? [] : look.problems)]
+      if (problems.length && go2 === 0) {
+        fixes = problems.join('; ')
+        // the key colour was the trouble: the second sheet is painted on the other key
+        const swap = art.keyTrouble(problems)
+        if (swap) layout = art.swapKey(layout)
+        step({ kind: 'setup', text: `sent back the ${it.what}: ${problems.join(', ')}${swap ? `; painting it again on ${art.keyOf(layout)}` : ''}` })
+        continue
+      }
+      // the reviewer still sees a wrong sheet after the second try: the game keeps the still sprite
+      if (!look.skipped && look.problems.length) {
+        live(slot, it, 'failed', { problems: look.problems })
+        step({ kind: 'setup', text: `left out the ${it.what}: ${look.problems[0]}; the game uses the still sprite`, ok: false })
+        return
+      }
+      const { file, name } = keep(it, strip)
+      writeFileSync(join(runsDir, runId, 'img', name.replace(/\.[a-z]+$/i, '.json')), JSON.stringify(meta))
+      done.set(it.id, { file, what: it.what, kind: it.kind, ...sheetInfo(it, meta) })
+      live(slot, it, 'done', { src: img(name), ...(problems.length ? { problems } : {}) })
+      step({ kind: 'setup', text: `painted the ${it.what}: ${meta.frames} frames${problems.length ? ` (kept after a second try: ${problems[0]})` : ''}` })
+      return
+    }
+  }
+  await Promise.all(PAINTERS.map((_, i) => worker(i)))
+  artJobs.delete(runId)
+  const out = items.map(i => done.get(i.id)).filter(Boolean)
+  // out of quota: the build is told which pictures are missing and which model ran out
+  if (stopped) out.stopped = { ...stopped, painted: out.length, missing: items.length - out.length }
+  return out
 }
 
 // a glTF binary (glb, magic "glTF") or a glTF JSON file
@@ -1169,7 +1478,7 @@ function isGltf(file) {
   } catch { return false }
 }
 
-async function startGame(spec) {
+async function startGame(spec, extraCopy = {}) {
   const g = await gameMod()
   if (!spec?.title || !spec?.loop) throw new Error('no game spec')
   if (spec.models) spec = { ...spec, models: g.gameModels(spec).filter(m => isGltf(join(dataDir, 'models', m.file))) }
@@ -1192,6 +1501,7 @@ async function startGame(spec) {
     if (c.source === 'meshy') for (const f of [c.file, ...Object.values(c.clips || {})]) { if (isGltf(join(lib, f))) copy[`public/models/${f}`] = join(lib, f) }
     if (c.source === 'art') { const [, run, f] = c.art.match(/^\/img\/([^/]+)\/(.+)$/); if (existsSync(join(runsDir, run, 'img', f))) copy[`public/models/${cm.spriteFile(c)}`] = join(runsDir, run, 'img', f) }
   }
+  Object.assign(copy, extraCopy)
   const a = await apps()
   const credits = cm.castCredits(spec.cast)
   await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec), ...(credits ? { 'CREDITS.md': credits } : {}) }, copy })
@@ -1408,19 +1718,28 @@ const server = createServer((req, res) => {
       }
       // A message inside an open build (from: its run) is that project's next version: the
       // last version is kept as it stands and the crew adds only what the message asks for
+      // (engine/extend.mjs followUp). While the last turn is still building, the next one waits:
+      // starting it would stop that build and lose what it was doing.
       const from = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
-      const base = from ? extendBase(readEvents(from), (() => { try { return JSON.parse(readFileSync(join(runsDir, from, 'plan.json'), 'utf8')) } catch { return null } })()) : null
-      if (base) {
+      const building = r => r && !r.done && !r.controller.signal.aborted && !r.events.some(e => e.type === 'error' && (e.where === 'run' || e.where === 'models'))
+      if (from && building(current) && (current.id === from || (input.project && projects.projectOf(current.id) === input.project))) {
+        res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'busy', run: current.id }))
+        return
+      }
+      const readRun = id => { const events = readEvents(id); if (!events) return null; let plan = null; try { plan = JSON.parse(readFileSync(join(runsDir, id, 'plan.json'), 'utf8')) } catch {} return { events, plan } }
+      const next = from ? followUp({ ask: String(input.brief).trim(), from, versions: (input.project && projects.get(input.project)?.versions.map(v => v.id)) || [], read: readRun }) : null
+      const base = next?.base || null
+      if (next) {
         input.ask = String(input.brief).trim()
-        input.brief = `${base.brief}\n\nFor this version: ${input.ask}`
-        input.base = base
+        input.brief = next.brief
+        if (base) input.base = base
       }
       const pid = typeof input.project === 'string' ? input.project : null
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (pid) projects.claim(run.id, pid)
       broadcast({ type: 'reset', run: run.id })
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(base ? { extend: true, from } : {}) }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(base ? { extend: true, from: next.from } : {}) }))
     })
     return
   }
@@ -1538,7 +1857,7 @@ const server = createServer((req, res) => {
     const id = runAssets[1], events = readEvents(id)
     if (!events) return json(404, { error: 'no such build' })
     const spec = events.findLast(e => e.type === 'game:spec')?.spec
-    gameMod().then(g => spec ? g.artList(spec) : []).catch(() => []).then(plan => json(200, listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan, pieceName })))
+    gameMod().then(g => spec ? g.artList(spec) : []).catch(() => []).then(plan => json(200, { ...listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan, pieceName }), painting: (artJobs.get(id) || []).filter(Boolean) }))
     return
   }
   // what the crew are working on right now, across projects: the Studio's queue
@@ -1880,6 +2199,7 @@ const server = createServer((req, res) => {
 
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
+  if (workshops(req, res, url)) return
 
   // The Make box's showcases and its "grill me" interview (engine/intake.mjs); a Game gets the game interview
   if (url.pathname === '/api/intake' && req.method === 'GET') {
@@ -2074,7 +2394,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy|tell))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
@@ -2090,6 +2410,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       apps().then(async a => {
         if (sub === 'stop') return a.stop(id)
+        if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')
@@ -2100,7 +2421,7 @@ const server = createServer((req, res) => {
         const spec = (readEvents(id) || []).findLast(e => e.type === 'game:spec')?.spec
         if (spec && !input.prompt && !a.state(id).hasApp) {
           const g = await gameMod()
-          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) } }
+          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}) }
         }
         return a.start(id, input)
       }).then(s => reply(200, s)).catch(fail)
@@ -2262,7 +2583,25 @@ const server = createServer((req, res) => {
     return
   }
 
-  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|game-[a-z0-9-]{1,48})\.(png|jpe?g|webp))$/)
+  // a game's filmed play test (engine/playtest.mjs), replayed in the App view
+  const clip = url.pathname.match(/^\/img\/([\w-]{1,64})\/(playtest-\d{1,3}\.webm)$/)
+  if (clip) {
+    const file = join(runsDir, clip[1], 'img', clip[2])
+    if (!existsSync(file)) return res.writeHead(404).end('not found')
+    // a byte range, so the replay can seek past the loading screen
+    const body = readFileSync(file), r = String(req.headers.range || '').match(/^bytes=(\d*)-(\d*)$/)
+    const head = { 'content-type': 'video/webm', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' }
+    if (r && (r[1] || r[2])) {
+      const a = r[1] ? +r[1] : Math.max(0, body.length - +r[2]), b = r[1] && r[2] ? Math.min(+r[2], body.length - 1) : body.length - 1
+      if (a > b || a >= body.length) return res.writeHead(416, { 'content-range': `bytes */${body.length}` }).end()
+      res.writeHead(206, { ...head, 'content-range': `bytes ${a}-${b}/${body.length}`, 'content-length': b - a + 1 })
+      return res.end(body.subarray(a, b + 1))
+    }
+    res.writeHead(200, { ...head, 'content-length': body.length })
+    res.end(body)
+    return
+  }
+  const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek|lib)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')

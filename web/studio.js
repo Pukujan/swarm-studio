@@ -161,6 +161,11 @@ const MODES = [['canvas', 'Canvas'], ['video', 'Video'], ['app', 'App'], ['game'
 // the game's own room is the App view on the game's run: the menu calls it Game
 const onGame = () => !!C.pair?.game && sw.viewing === C.pair.game
 const modeNow = () => (sw.view === 'app' && onGame() ? 'game' : sw.view)
+// the game's room: the App view on the game's run (the label says Game once that run is open)
+C.toGame = () => {
+  C.go('station', 'app')
+  return Promise.resolve(sw.viewing !== C.pair.game && sw.openRun(C.pair.game)).then(renderMode)
+}
 function renderMode() {
   const b = $('.mode-btn')
   if (!b) return
@@ -196,9 +201,7 @@ function modeMenu() {
     // Game: the project's game, when it has one; else the wizard that makes one
     if (id === 'game') {
       if (!C.pair?.game) return $('#game-btn')?.click()
-      C.go('station', 'app')
-      // the label says Game once the game's run is open
-      return Promise.resolve(sw.viewing !== C.pair.game && sw.openRun(C.pair.game)).then(renderMode)
+      return C.toGame()
     }
     // the other rooms show the site's run, not the game's (which has no pages or film)
     if (onGame() && C.pair.site) Promise.resolve(sw.openRun(C.pair.site)).then(() => { if (sw.view !== id) sw.setView(id); renderMode() })

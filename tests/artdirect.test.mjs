@@ -83,3 +83,41 @@ test('words and UI never reach the picture prompt, and the check sends them back
   assert.match(sys, /ANY user interface/)
   assert.match(sys, /Text and interfaces are always sent back/)
 })
+
+test('an empty or unreadable reviewer answer is unread, so the next reviewer is asked', () => {
+  assert.equal(parseCheck('').unread, true)
+  assert.equal(parseCheck('{oops').unread, true)
+  assert.equal(parseCheck('{"ok":true}').unread, undefined)
+})
+
+test('a sheet prompt keeps its layout and frames ahead of the style, with no companions', async () => {
+  const { sheetPrompt } = await import('../engine/artdirect.mjs')
+  const guide = styleGuide({ brief: 'anime cel, hand-painted' })
+  const p = sheetPrompt({ look: 'Mika, '.repeat(200), frames: 'crouch, jump, fall, slide, hurt, land' }, guide, { layout: 'Six frames in a 3 by 2 grid' })
+  assert.ok(p.indexOf('crouch, jump') < 200, 'the frames come first')
+  assert.match(p, /3 by 2 grid/)
+  assert.match(p, /no companions/)
+  assert.ok(p.length <= 1400)
+})
+
+test('a key-colour problem swaps the key for the second try', async () => {
+  const { keyTrouble, swapKey, keyOf } = await import('../engine/artdirect.mjs')
+  const { SPRITE_GROUND: spriteGround0, sheetList } = await import('../engine/game.mjs')
+  const spriteGround = () => spriteGround0, sheetLayout = () => sheetList({ hero: 'Mika, a courier in a yellow coat' })[0].layout
+  assert.equal(keyTrouble(['magenta rim around the hair']), true)
+  assert.equal(keyTrouble(['background left around the figure']), true)
+  assert.equal(keyTrouble(['frame 3 cut off at the edge']), false)
+  assert.match(swapKey(spriteGround()), /#00FF00/)
+  assert.doesNotMatch(swapKey(spriteGround()), /#FF00FF/)
+  assert.equal(keyOf(swapKey(swapKey(sheetLayout()))), 'magenta')
+  assert.match(swapKey('A figure'), /#00FF00/)
+  assert.doesNotMatch(swapKey(spriteGround()), /\bmagenta\b/)
+})
+
+test('a backdrop with no people says so up front and at the end, without the style\'s "moment"', async () => {
+  const { promptFor, STYLES, EMPTY_PLACE } = await import('../engine/artdirect.mjs')
+  const p = promptFor('Side-on view of wet rooftops at dusk. No people, creatures or figures anywhere in the picture', STYLES['anime-cel'])
+  assert.ok(p.startsWith(p.split(EMPTY_PLACE)[0]) && p.split(EMPTY_PLACE).length === 3)
+  assert.doesNotMatch(p, /slice-of-life moment|Original characters/)
+  assert.doesNotMatch(promptFor('A girl reading on a rooftop', STYLES['anime-cel']), /An empty place/)
+})

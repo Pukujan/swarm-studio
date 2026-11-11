@@ -55,14 +55,37 @@ export function kindsOf(card) {
 // what a build is and how far it got, in words, from its real events (never a guess):
 // kind Website, App, Game or Video; status Draft, Building, Designed, App built, App failed or Live with its host
 const hostOf = url => { try { return new URL(url).host } catch { return null } }
+// how far a game build is, from its step lines: painting its art (n of N), then stage x of y
+export function gameProgress(steps = []) {
+  const t = steps.map(s => String(s?.text ?? s ?? ''))
+  let from = -1
+  for (let i = t.length - 1; i >= 0; i--) if (/^painting the game's art: \d+ pictures/.test(t[i])) { from = i; break }
+  const stage = t.findLast(x => /^stage \d+ of \d+/.test(x))?.match(/^stage (\d+) of (\d+)/)
+  const stageAt = t.findLastIndex(x => /^stage \d+ of \d+/.test(x))
+  if (stage && stageAt > from) return { stage: [Number(stage[1]), Number(stage[2])] }
+  if (from < 0) return null
+  const total = Number(t[from].match(/(\d+) pictures/)[1])
+  const after = t.slice(from + 1)
+  const kept = Number(after.map(x => x.match(/^using (\d+) pictures painted before/)).find(Boolean)?.[1] || 0)
+  const done = Math.min(total, kept + after.filter(x => /^painted the /.test(x)).length)
+  return { art: [done, total] }
+}
 export function stateOf(card, cards = [card]) {
   const game = card.kind === 'game' || card.game
   const kind = game ? 'Game' : card.build || card.app ? 'App' : card.pages > 0 || card.planned > 0 ? 'Website' : card.video ? 'Video' : 'Website'
   const made = game ? 'Game' : 'App'
   // live once any version went out: its newest published address
   const out = [...cards].reverse().map(c => c.deployed || Object.values(c.sites || {})[0]).find(Boolean)
+  // a build still writing steps in the last ten minutes is running, here or on another Studio server
+  const busy = game && card.build === 'working' && Date.now() - (card.updated || 0) < 600000
+  const g = game ? card.work?.progress || (busy ? card.gameAt : null) : null
   const status = out ? 'Live'
+    : g?.art ? `Painting art · ${g.art[0]} of ${g.art[1]}`
+    : g?.stage ? `Building · stage ${g.stage[0]} of ${g.stage[1]}`
     : card.live || card.work ? 'Building'
+    // a game build that was stopped (or whose server went away) keeps app:start as its last word
+    : busy ? 'Building'
+    : game && (card.build === 'working' || card.build === 'stopped') ? 'Stopped'
     : card.build === 'failed' ? `${made} failed`
     : card.build === 'built' || (card.app && !card.build) ? `${made} built`
     : card.layers > 0 || card.video ? 'Designed'
@@ -151,6 +174,22 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       owner.set(id, pid)
       changed = true
     }
+    // one idea, one card: a project named the same as another, or as another plus more words
+    // ("Rooftop Signal Art Test" of "Rooftop Signal"), folds into the older one. A project the
+    // person split off or renamed themself stays apart.
+    const key = s => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim()
+    const open = Object.entries(data.projects).filter(([, p]) => !p.trashed && !p.own).map(([pid, p]) => ({ pid, p, k: key(nameOfProject(p)) })).filter(x => x.k)
+      .sort((a, b) => a.k.length - b.k.length || (a.p.made || 0) - (b.p.made || 0))
+    for (const child of open) {
+      if (!data.projects[child.pid]) continue
+      const parent = open.find(x => x !== child && data.projects[x.pid] && (x.k === child.k ? (x.p.made || 0) < (child.p.made || 0) || ((x.p.made || 0) === (child.p.made || 0) && x.pid < child.pid) : !child.p.title && child.k.startsWith(`${x.k} `)))
+      if (!parent) continue
+      parent.p.runs = [...new Set([...parent.p.runs, ...child.p.runs])].sort()
+      for (const id of child.p.runs) owner.set(id, parent.pid)
+      if (!parent.p.folder && child.p.folder) parent.p.folder = child.p.folder
+      delete data.projects[child.pid]
+      changed = true
+    }
     if (changed) write(data)
     return { data, owner }
   }
@@ -163,13 +202,19 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     // a game made from a site in this project is part of that site's version, not a version of its own
     const ids = new Set(all.map(c => c.id))
     const isPart = c => c.from && c.from !== c.id && ids.has(c.from)
-    const cards = all.filter(c => !isPart(c))
+    // a game try that stopped or failed with nothing to show (no art, no app) is not a version of
+    // its own once a newer try of the same piece exists: a retry replaces it on the card
+    const empty = c => (c.kind === 'game' || c.game) && !c.cover && !c.app && !c.deployed && !c.work && !c.live && ['failed', 'stopped', 'working'].includes(c.build) && Date.now() - (c.updated || 0) > 600000
+    const kept = all.filter(c => !isPart(c))
+    const cards = kept.filter((c, i) => !(empty(c) && kept.slice(i + 1).some(n => pieceOfCard(n) === pieceOfCard(c))))
     const parts = Object.fromEntries(all.filter(isPart).map(c => [c.id, c.from]))
     // a version is working while it or one of its parts is
     const workOf = c => c.work || all.find(x => x.from === c.id && x.work)?.work || null
     const withWork = c => ({ ...c, work: workOf(c), kinds: [...new Set([...kindsOf(c), ...all.filter(x => x.from === c.id).flatMap(kindsOf)])] })
-    const newest = withWork(cards.at(-1))
-    const withCover = [...cards].reverse().find(c => c.cover) || null
+    // the version being built leads the card: its status, cover and the one a click opens
+    const busyCard = [...cards].reverse().find(c => c.live || workOf(c))
+    const newest = withWork(busyCard || cards.at(-1))
+    const withCover = (busyCard?.cover && busyCard) || [...cards].reverse().find(c => c.cover) || null
     const kinds = [...new Set(all.flatMap(kindsOf))]
     const name = nameOfProject(p)
     // the project's pieces: one per kind, each its newest run (older runs of a kind are its versions)

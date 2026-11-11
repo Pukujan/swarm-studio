@@ -1,0 +1,76 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { appJobs, isQuestion } from '../engine/appjob.mjs'
+
+test('a question to the crew is told apart from a change', () => {
+  for (const q of ['whats going on', 'what is happening?', 'why is she so small', 'is it done', 'how long left?']) assert.ok(isQuestion(q), q)
+  for (const c of ['make Mika bigger', 'use the cat sheet for Kumo', 'no people in the background']) assert.ok(!isQuestion(c), c)
+})
+
+test('words told during a build are queued and kept with the run, only while it builds', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'swarm-tell-'))
+  mkdirSync(join(runsDir, 'r1'))
+  writeFileSync(join(runsDir, 'r1', 'events.jsonl'), '')
+  const kept = []
+  const a = appJobs({ runsDir, record: (id, e) => kept.push(e), broadcast: () => {}, readEvents: () => [], provider: () => ({}), modelFor: () => '' })
+  assert.equal(a.tell('r1', 'make Mika bigger').queued, false)
+  a.jobs.set('r1', { id: 'r1', state: 'working', steps: [] })
+  const r = a.tell('r1', '  make Mika bigger  ')
+  assert.equal(r.queued, true)
+  assert.equal(r.waiting, 1)
+  assert.deepEqual(a.jobs.get('r1').told, ['make Mika bigger'])
+  assert.ok(kept.some(e => e.type === 'app:told' && e.text === 'make Mika bigger'))
+  assert.equal(a.tell('r1', '   ').queued, false)
+})
+
+test('Hermia knows the play test runs by itself after each slice, and which slice it is on', async () => {
+  const { processNotes } = await import('../engine/appjob.mjs')
+  const n = processNotes({ kind: 'game', state: 'working', stage: 'stage 1 of 4: move, jump and climb' })
+  assert.match(n, /play test runs by itself/)
+  assert.match(n, /slice 1 of 4/)
+  assert.match(processNotes({ kind: 'game', state: 'paused', stage: 'stage 2 of 4', done: ['slice 1 the core run'] }), /paused.*go on/)
+  assert.doesNotMatch(processNotes({ kind: 'site' }), /play test/)
+})
+
+test('Hermia knows the slice plan: which slice, how many left, which are done', async () => {
+  const { processNotes } = await import('../engine/appjob.mjs')
+  const slices = ['move, jump and climb', 'against the clock', 'relays', 'home']
+  const now = processNotes({ kind: 'game', state: 'working', stage: 'stage 2 of 4: against the clock', slices })
+  assert.match(now, /slice 2 of 4, with 2 more after it/)
+  assert.match(now, /1 move, jump and climb \(done\); 2 against the clock \(now\); 3 relays; 4 home/)
+  const done = processNotes({ kind: 'game', state: 'paused', stage: 'stage 1 of 4 done: move, jump and climb', slices })
+  assert.match(done, /Slice 1 of 4 is done; 3 more to go after it/)
+  assert.match(done, /1 move, jump and climb \(done\); 2 against the clock;/)
+  assert.match(processNotes({ kind: 'game', stage: 'stage 4 of 4: home' }), /the last one/)
+})
+
+test('asking to see the build brings its newest clip and pictures', async () => {
+  const { wantsToSee, buildMedia, mediaNotes } = await import('../engine/appjob.mjs')
+  for (const q of ['can i see any screenshots of it', 'show me the art', 'what does it look like']) assert.ok(wantsToSee(q), q)
+  assert.ok(!wantsToSee('make Mika bigger'))
+  const files = [{ name: 'game-sprite-kumo.png', mtime: 3 }, { name: 'game-sheet-hero-raw.png', mtime: 9 }, { name: 'game-title.webp', mtime: 5 }, { name: 'plan.json', mtime: 8 }, { name: 'playtest-3.webm', mtime: 7 }]
+  const m = buildMedia({ id: 'r1', files, slices: [{ i: 0, name: 'Rooftop', clip: '/img/r1/playtest-3.webm', t: 10 }] })
+  assert.equal(m.clip.src, '/img/r1/playtest-3.webm')
+  assert.deepEqual(m.pics.map(p => p.src), ['/img/r1/game-title.webp', '/img/r1/game-sprite-kumo.png'])
+  assert.match(mediaNotes(m, true), /1 play test clip and 2 painted pictures.*shown right under/)
+  assert.match(mediaNotes(buildMedia({ id: 'r1' }), false), /nothing to show/)
+})
+
+test('a confirmed change sent now stops only the builder turn of a big game slice', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'swarm-redirect-'))
+  mkdirSync(join(runsDir, 'r1'))
+  writeFileSync(join(runsDir, 'r1', 'events.jsonl'), '')
+  const a = appJobs({ runsDir, record: () => {}, broadcast: () => {}, readEvents: () => [], provider: () => ({}), modelFor: () => '' })
+  const job = new AbortController(), turn = new AbortController()
+  a.jobs.set('r1', { id: 'r1', state: 'working', steps: [], big: true, inStage: true, turn, controller: job })
+  const r = a.redirect('r1', 'Kumo should be a cat, not a dog')
+  assert.equal(r.now, true)
+  assert.ok(turn.signal.aborted && !job.signal.aborted)
+  assert.deepEqual(a.jobs.get('r1').told, ['Kumo should be a cat, not a dog'])
+  // between turns (painting, the play test): it waits for the next one
+  a.jobs.set('r2', { id: 'r2', state: 'working', steps: [], big: true, inStage: false, turn: new AbortController(), controller: new AbortController() })
+  assert.equal(a.redirect('r2', 'x').now, false)
+})

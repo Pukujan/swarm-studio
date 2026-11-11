@@ -4,7 +4,7 @@
 
 import { markStalled, streamChat } from './llm.mjs'
 import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
-import { PAGE_TYPES, pickPageType, lookBrief } from './pagetype.mjs'
+import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme } from './pagetype.mjs'
 import { tidyFragment } from './tidy.mjs'
 import { fixSection } from './review.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
@@ -93,6 +93,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
   // one page type per build, away from the last builds' types and colours
   // a follow-up (base: the project's last version) keeps that version's page type, theme and pages
   const type = PAGE_TYPES[base?.pageType] ? base.pageType : PAGE_TYPES[pageType] ? pageType : pickPageType(brief, recent.map(r => r.type).filter(Boolean))
+  const look = base ? null : pickLook(recent, Math.random, brief)
   const plan = base
     ? { theme: base.theme, pages: base.pages.map(p => ({ ...p, layers: p.layers.map(l => ({ ...l })) })), shared: base.shared.map(l => ({ ...l })), pageType: type }
     : { theme: null, pages: [], shared: [], pageType: type }
@@ -169,8 +170,8 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
 
   const onSitemap = obj => {
     if (obj.type === 'theme') {
-      plan.theme = obj
-      emit('theme', obj)
+      plan.theme = fitTheme(obj, look)
+      emit('theme', plan.theme)
     } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id) && !(maxPages && plan.pages.length >= maxPages)) {
       const page = { ...obj, index: plan.pages.length, layers: [] }
       plan.pages.push(page)
@@ -194,7 +195,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         model: plannerModel,
         messages: [
           { role: 'system', content: SITEMAP_SYSTEM },
-          { role: 'user', content: `Brief: ${brief}\n\n${lookBrief(type, recent)}` }
+          { role: 'user', content: `Brief: ${brief}\n\n${lookBrief(type, recent, look)}` }
         ],
         maxTokens: 2000,
         temperature: 0.8,

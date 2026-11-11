@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { brandOf, deployName, isScreenName, packageName, pieceKind, projectName } from '../engine/naming.mjs'
 import { snapshot } from '../engine/export.mjs'
-import { makeProjects } from '../server/projects.mjs'
+import { makeProjects, gameProgress, stateOf } from '../server/projects.mjs'
 
 const SITE = 'ARES — Boss Rush of the Burning Colosseum: an original fast first-person arena shooter boss rush.'
 const APP = 'ARES Player Hub — the account app for ARES, an original fast first-person arena shooter boss rush where players sign in.'
@@ -130,5 +130,62 @@ test('the start request can name the project by id or by name; Trash is never jo
     assert.equal(w.p.get(fresh.id).name, 'Tempo Two')
     w.p.op({ op: 'rename', id: fresh.id, title: 'Dashboard' })
     assert.equal(w.p.get(fresh.id).name, 'Tempo Two')
+  } finally { w.cleanup() }
+})
+
+test('a game card says how far its build is: art n of N, then the stage, or Stopped', () => {
+  const steps = ['painting the game\'s art: 10 pictures', 'painting in Anime cel', 'using 6 pictures painted before; painting 4', 'painted the sprite of Mika', 'could not paint the icon']
+  assert.deepEqual(gameProgress(steps.map(text => ({ text }))), { art: [7, 10] })
+  assert.deepEqual(gameProgress([...steps, 'stage 2 of 5: the run of rooms', 'turn 1: building']), { stage: [2, 5] })
+  assert.equal(gameProgress(['turn 1']), null)
+  const game = { kind: 'game', game: true, pages: 0 }
+  assert.equal(stateOf({ ...game, work: { what: 'game', progress: { art: [7, 10] } } }).status, 'Painting art · 7 of 10')
+  assert.equal(stateOf({ ...game, work: { what: 'game', progress: { stage: [2, 5] } } }).status, 'Building · stage 2 of 5')
+  assert.equal(stateOf({ ...game, build: 'working' }).status, 'Stopped')
+})
+
+test('a retry of a game replaces a try that left nothing behind', () => {
+  const w = world()
+  try {
+    const brief = 'Rooftop Signal: a rooftop runner game'
+    w.add('2026-11-11T12-29-35-444Z', { title: 'Rooftop Signal', brief, kind: 'game', game: true, pages: 0, build: 'working' }, { projectName: 'Rooftop Signal' })
+    w.add('2026-11-11T12-45-22-265Z', { title: 'Rooftop Signal', brief, kind: 'game', game: true, pages: 0, build: 'working', cover: '/img/x/game-title.webp', work: { what: 'game', progress: { stage: [2, 5] } } }, { projectName: 'Rooftop Signal' })
+    const [p] = w.p.list().projects
+    assert.equal(p.count, 1)
+    assert.equal(p.cover, '/img/x/game-title.webp')
+    assert.equal(p.state.status, 'Building · stage 2 of 5')
+    // a try with art of its own stays a version
+    w.add('2026-11-11T13-00-28-617Z', { title: 'Rooftop Signal', brief, kind: 'game', game: true, pages: 0, build: 'failed', cover: '/img/y/game-title.webp' }, { projectName: 'Rooftop Signal' })
+    assert.equal(w.p.list().projects[0].count, 2)
+  } finally { w.cleanup() }
+})
+
+test('one idea is one card: the same name, or that name plus more words, folds into the older project', () => {
+  const w = world()
+  try {
+    w.add('2026-11-11T12-29-35-444Z', { title: 'Rooftop Signal', brief: 'Rooftop Signal, a rain-soaked rooftop platformer', kind: 'game' })
+    w.add('2026-11-11T13-00-28-617Z', { title: 'Rooftop Signal Art Test', brief: 'Rooftop Signal Art Test: sprint across skylines', kind: 'game' }, { projectName: 'Rooftop Signal Art Test' })
+    w.add('2026-11-11T14-00-00-000Z', { title: 'Lantern Drift', brief: 'Lantern Drift, a night river game', kind: 'game' })
+    let { projects } = w.p.list()
+    assert.deepEqual(projects.map(x => x.name).sort(), ['Lantern Drift', 'Rooftop Signal'])
+    assert.equal(projects.find(x => x.name === 'Rooftop Signal').pieces[0].versions, 2)
+    // split off by the person: it stays its own
+    w.p.op({ op: 'split', id: '2026-11-11T12-29-35-444Z', run: '2026-11-11T13-00-28-617Z' })
+    projects = w.p.list().projects
+    assert.equal(projects.length, 3)
+  } finally { w.cleanup() }
+})
+
+test('the version being built leads the card, even when a newer try exists', () => {
+  const w = world()
+  try {
+    const brief = 'Rooftop Signal: a rooftop runner game'
+    w.add('2026-11-11T12-45-22-265Z', { title: 'Rooftop Signal', brief, kind: 'game', game: true, pages: 0, build: 'working', cover: '/img/a/game-title.webp', work: { what: 'game', progress: { stage: [1, 4] } } }, { projectName: 'Rooftop Signal' })
+    w.add('2026-11-11T13-00-28-617Z', { title: 'Rooftop Signal Art Test', brief, kind: 'game', game: true, pages: 0, build: 'stopped', cover: '/img/b/game-title.webp' }, { projectName: 'Rooftop Signal' })
+    const [p] = w.p.list().projects
+    assert.equal(p.count, 2)
+    assert.equal(p.head, '2026-11-11T12-45-22-265Z')
+    assert.equal(p.state.status, 'Building · stage 1 of 4')
+    assert.equal(p.cover, '/img/a/game-title.webp')
   } finally { w.cleanup() }
 })

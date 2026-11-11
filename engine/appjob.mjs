@@ -14,8 +14,10 @@ import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
-import { gameSlug, isBig, artList, BIG_STAGES, bigStagePrompt } from './game.mjs'
+import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk, artBrief, viewOf } from './game.mjs'
+import { takeAsks, askedBefore, keepAsked, askBrief, ASKS_PER_STAGE } from './artask.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
+import { godotFirst, isGodotFirst, seedGodot, syncGodotArt, godotArtBrief, godotStagePrompt, exportWeb, serveStatic, webBuild } from './godotfirst.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
@@ -107,13 +109,17 @@ const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args
 
 // A big game stopped partway: the stage to go on from (0: start over). Only
 // stages since the last build from scratch count, and only with the app still there.
+// The count of slices is the spec's own (stagesFor), saved on each app:stage event; older runs had five.
 export function bigResumeAt(events, dir) {
   if (!dir || !existsSync(join(dir, 'package.json'))) return 0
   const startIdx = events.findLastIndex(e => e.type === 'app:start' && e.fresh && !e.resume)
   if (startIdx < 0) return 0
+  // a Godot-first game counts only its Godot stages (a web build before it does not carry over)
+  const godot = isGodotFirst(dir)
   let next = 0
-  for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big && e.big.ok && e.big.i === next) next++
-  return next < BIG_STAGES.length ? next : 0
+  let total = 5
+  for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big && !!e.big.godot === godot) { if (e.big.n) total = e.big.n; if (e.big.ok && e.big.i === next) next++ }
+  return next < total ? next : 0
 }
 
 // An app's <title> is its project's name: a missing one, or one an engine turn took
@@ -137,6 +143,36 @@ export function titleApp(dir, name) {
 // it a big game draws everything in code)
 // fill(runId, appDir, step): fills picture slots the crew did not paint (optional)
 // nameFor(id) -> { name, kind }: the run's project name and piece (docs/specs/18-projects.md)
+// A question to the crew (answered, not queued as a change)
+const QUESTION = /\?\s*$|^(what|what's|whats|why|how|when|where|who|which|is|are|was|were|can|could|does|did|do|will|status)\b/i
+// is a process still running (a Studio server that started a build)
+export const alive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
+// How a build runs, for Hermia's answers in the chat: without it she only sees the crew's last
+// lines and guesses (she once said the play test "isn't in the notes, so it isn't built").
+// slices: the plan's slice names in order, when the build has them (a game spec's stages)
+export function processNotes({ kind = 'site', state = 'idle', stage = '', done = [], slices = [] } = {}) {
+  const game = kind === 'game'
+  const at = String(stage).match(/stage (\d+) of (\d+)( done)?/)
+  let where = ''
+  if (at) {
+    const n = Number(at[2]), i = Number(at[1]), finished = !!at[3]
+    const left = n - i
+    where = finished
+      ? `Slice ${i} of ${n} is done${left ? `; ${left} more to go after it` : ', the last one'}.`
+      : `The build is on slice ${i} of ${n}${left ? `, with ${left} more after it` : ', the last one'}.`
+    if (done.length) where += ` Done so far: ${done.join('; ')}.`
+    if (slices.length === n) where += ` The slices: ${slices.map((x, k) => `${k + 1} ${x}${k + 1 < i || (finished && k + 1 === i) ? ' (done)' : k + 1 === i ? ' (now)' : ''}`).join('; ')}.`
+  }
+  return [
+    game
+      ? 'How the Studio builds a game: the art is painted first, then the game is built in slices (stages), one at a time. Each slice: the crew writes the code in turns, the Studio checks the build (Godot: a headless run, then a web export), then the play test runs by itself: a bot plays the exported game and films it, and that clip fills the Play test window. The play test is the "autoplay"; nobody has to ask for it or add it to the notes. After the clip the build pauses so the owner can watch it and say go on or what to change, then the next slice starts. Words sent while the crew works are read at the start of the next slice.'
+      : 'How the Studio builds an app: the crew writes the code in turns, the Studio runs its checks, then serves the app in the preview. Words sent while the crew works are read at the start of the next stage.',
+    where,
+    state === 'paused' ? 'Right now the build is paused, waiting for the owner to watch the slice\'s play test and say go on.' : ''
+  ].filter(Boolean).join(' ')
+}
+export const isQuestion = text => QUESTION.test(String(text || '').trim())
+
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
   const jobs = new Map() // run id -> job
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
@@ -148,14 +184,24 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // a finished app from before a restart: rebuild the state from the log
     const events = readEvents(id) || []
     // the last build's outcome: app:ready and app:deployed only say a server started or a deploy went out
-    const last = events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))
+    const last = events.findLast(e => ['app:start', 'app:done', 'app:failed', 'app:paused'].includes(e.type))
     const steps = events.filter(e => e.type === 'app:step').slice(-200).map(e => e.step)
     if (!last) return { state: 'idle', engineReady: engineReady() }
-    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:start' ? 'stopped' : 'done', kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
+    // a build another Studio drives (same runs folder): its log still moves, so it is working,
+    // with the dev server it reported; this Studio only watches it
+    // (a build that names its Studio's process counts only while that process lives: one killed mid-build stopped)
+    const elsewhere = last.type === 'app:start' && (last.pid ? last.pid !== process.pid && alive(last.pid) : Date.now() - (events.at(-1)?.t || 0) < 20 * 60e3)
+    if (elsewhere) {
+      const ready = events.slice(events.lastIndexOf(last)).findLast(e => e.type === 'app:ready')
+      const stage = steps.findLast(s => /^stage \d+ of \d+/.test(s.text || ''))?.text || steps.at(-1)?.text || ''
+      const at = steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number) || (events.findLast(e => e.type === 'app:step' && /^stage \d+ of \d+/.test(e.step?.text || ''))?.step.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number))
+      return { ...(at ? { at } : {}), state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
+    }
+    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
   const built = (id, events = readEvents(id) || []) => events.some(e => e.type === 'app:done') && existsSync(join(dirOf(id), 'package.json'))
-  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady() })
+  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
 
   // Start the first build, or one more turn on the same app.
   async function start(id, input = {}) {
@@ -163,6 +209,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!events) throw new Error('no such build')
     let j = jobs.get(id)
     if (j?.state === 'working') return view(j)
+    if (!j && state(id).elsewhere) throw new Error('another Swarm Studio is building this one; it shows here as it goes')
     if ([...jobs.values()].some(x => x.state === 'working')) throw new Error('another app is building; wait for it or stop it')
     const dir = dirOf(id)
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
@@ -204,7 +251,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     j.asks.push(ask || (kind === 'game' ? 'build the game' : 'make it a working app'))
     jobs.set(id, j)
     const m = modelFor('worker')
-    send(id, 'app:start', { kind, ask: j.asks.at(-1), model: m, fresh, ...(resumeAt ? { resume: resumeAt } : {}) })
+    send(id, 'app:start', { kind, ask: j.asks.at(-1), model: m, fresh, pid: process.pid, ...(resumeAt ? { resume: resumeAt } : {}) })
     // the crew radio: the engine's lead and helpers, said out loud as Hermia and the crew
     const crew = ((readEvents(id) || []).find(e => e.type === 'run:start')?.agents || []).map(a => ({ id: a.id, name: a.name }))
     const queue = []
@@ -229,6 +276,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.steps.push(item)
       if (j.steps.length > 400) j.steps.splice(0, j.steps.length - 400)
       if (s.kind !== 'write') j.stage = s.text
+      // the slice it is on outlives the status line ("next step") and the 200 steps the view sends
+      if (/^stage \d+ of \d+/.test(s.text || '')) j.slice_at = s.text.match(/^stage (\d+) of (\d+)/).slice(1).map(Number)
       // file writes go live only; the rest is kept with the run
       if (s.kind === 'write' || s.kind === 'think') broadcast({ type: 'app:step', t: item.t, run: id, step: item })
       else send(id, 'app:step', { step: item })
@@ -236,25 +285,33 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // a big game builds in stages from its saved spec; everything else is one engine call
     const spec = kind === 'game' && fresh ? events.findLast(e => e.type === 'game:spec')?.spec : null
     const big = !!spec && (isBig(spec) || input.big === true)
+    j.big = big
     ;(async () => {
       // a busy or rate-limited model: on InferHub try the same model's other route,
       // then other fast coders; elsewhere wait a little and go again
       const chain = [m, ...(/inferhub/.test(provider('worker').baseUrl) ? APP_FALLBACKS.filter(x => x !== m) : [m, m])]
       let used = m
       const engineCall = async (text, turns) => {
+        // each turn can be stopped on its own (redirect: the person changed direction), the job goes on
+        j.turn = new AbortController()
+        const signal = AbortSignal.any([j.controller.signal, j.turn.signal])
         for (let i = chain.indexOf(used); ; i++) {
           try {
             used = chain[i]
-            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal: j.controller.signal })
+            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal })
           } catch (err) {
-            if (i + 1 >= chain.length || j.controller.signal.aborted || !BUSY.test(err.message)) throw err
+            if (i + 1 >= chain.length || signal.aborted || !BUSY.test(err.message)) throw err
             step({ kind: 'setup', text: `${chain[i]} is busy at the provider; going on with ${chain[i + 1]}`, ok: false })
             if (chain[i + 1] === chain[i]) await new Promise(r => setTimeout(r, 30000))
           }
         }
       }
       if (big) {
-        await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input, resumeAt)
+        if (await buildBig(j, id, dir, spec, engineCall, () => used, step, liveBrand(events), input, resumeAt) === 'paused') {
+          Object.assign(j, { state: 'paused', stage: `slice ${j.slice.i + 1} of ${j.slice.n} built` })
+          await j.radio?.stop()
+          return send(id, 'app:paused', { slice: j.slice, result: j.result, url: j.url, ms: Date.now() - j.t })
+        }
       } else {
         const result = await engineCall(prompt, input.turns || (input.plan ? 6 : 4))
         j.result = { ok: result.ok, gatesPassed: result.gatesPassed, turns: result.turns, commits: result.commits, files: result.files?.length || 0 }
@@ -265,7 +322,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       }
       // Godot, Unity or Unreal asked for: the same game written as that engine's project too
       const target = kind === 'game' ? portTarget(input.target ? input : spec || events.findLast(e => e.type === 'game:spec')?.spec) : null
-      if (target) j.result.port = await buildPort(dir, target, spec || events.findLast(e => e.type === 'game:spec')?.spec || {}, engineCall, step)
+      if (target && !(target === 'godot' && isGodotFirst(dir))) j.result.port = await buildPort(dir, target, spec || events.findLast(e => e.type === 'game:spec')?.spec || {}, engineCall, step)
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
@@ -318,41 +375,156 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // to the next stage first; the last one gets a fix turn of its own.
   async function buildBig(j, id, dir, spec, engineCall, model, step, brand, input, from = 0) {
     let art = []
-    const items = artList(spec)
+    // the pictures asked for during an earlier run of this build come back with the first pass
+    const before = askedBefore(dir)
+    const items = [...artList(spec), ...sheetList(spec)]
+    for (const it of before) if (!items.some(x => x.id === it.id)) items.push(it)
     if (paint && input.art !== false) {
       step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
-      try { art = await paint(id, spec, items, dir, step) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+      try { art = await paint(id, spec, items, dir, step, j.controller.signal) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
     }
+    if (j.controller.signal.aborted) throw new Error('stopped')
     j.result = { ok: false, big: true, art: art.length, stages: [], turns: 0, commits: 0, files: 0, ...(from ? { resumedAt: from } : {}) }
+    // the image model ran out before any art landed: stop here and say so, rather than build a
+    // game of placeholder shapes. The owner picks another image model, Try again, or Draw in code.
+    if (art.stopped) {
+      j.result.artStop = art.stopped
+      if (!art.length) throw new Error(`No art: ${art.stopped.model} is out of quota. ${art.stopped.missing} pictures not painted.`)
+      step({ kind: 'setup', text: `${art.stopped.missing} of ${items.length} pictures missing: the game draws them in code`, ok: false })
+    }
+    // Godot asked for and on this machine: the game is a Godot project from the start
+    const godot = godotFirst(input.target ? input : spec)
+    if (godot) {
+      const n = seedGodot(dir, spec)
+      j.result.godot = true
+      step({ kind: 'setup', text: `building it in Godot 4: ${n.length} pictures copied into the project` })
+    }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
+    // art asked for mid-build (engine/artask.mjs): only with painting on and the image model not out of quota
+    let askedN = before.length
+    const canAsk = () => !!(paint && input.art !== false && !art.stopped && ASKS_PER_STAGE)
+    const paintAsks = async i => {
+      if (!canAsk()) return null
+      const { items: asks, refused } = takeAsks(dir, spec, { have: art, asked: askedN })
+      for (const r of refused) step({ kind: 'setup', text: `left out the asked picture "${r.what}": ${r.why}`, ok: false })
+      if (!asks.length) return null
+      askedN += asks.length
+      step({ kind: 'setup', text: `stage ${i + 1} asked for ${asks.length} picture${asks.length === 1 ? '' : 's'}: ${asks.map(a => a.what).join(', ')}` })
+      keepAsked(dir, asks)
+      let more = []
+      try { more = await paint(id, spec, asks, dir, step, j.controller.signal, { have: art }) } catch (err) { step({ kind: 'setup', text: `the asked pictures could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+      if (j.controller.signal.aborted) throw new Error('stopped')
+      const stopped = more.stopped || art.stopped
+      art = [...art, ...more]
+      if (stopped) art.stopped = stopped
+      j.result.asked = (j.result.asked || 0) + more.length
+      if (!more.length) return null
+      if (godot) syncGodotArt(dir)
+      // the crew swaps its stand-ins for the new pictures while the slice is still fresh
+      const brief = godot ? godotArtBrief(more, viewOf(spec)) : artBrief(more)
+      try {
+        return await engineCall(`The pictures you asked for in slice ${i + 1} are painted:\n${brief}\n\nUse them in place of the stand-ins you drew for them, in the game as it is now. Change nothing else.${godot ? ' Touch nothing outside ports/godot/.' : ' Finish with the typecheck and build passing.'}`, 2)
+      } catch (err) {
+        if (j.controller.signal.aborted) throw err
+        step({ kind: 'setup', text: `the turn to use the asked pictures stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
+        return null
+      }
+    }
     let failed = from ? 'the last build stopped partway through this stage: some of its changes may already be in the code (git status shows them). Finish them or redo them.' : '', last = null
-    for (let i = from; i < BIG_STAGES.length; i++) {
-      const st = BIG_STAGES[i], t = Date.now()
-      step({ kind: 'setup', text: `stage ${i + 1} of ${BIG_STAGES.length}: ${st.name}` })
+    // the slices are the game's own, planned with its spec from the person's answers and picks
+    const stages = stagesFor(spec)
+    if (from >= stages.length) from = 0
+    for (let i = from; i < stages.length; i++) {
+      if (j.controller.signal.aborted) throw new Error('stopped')
+      const st = stages[i], t = Date.now()
+      step({ kind: 'setup', text: `stage ${i + 1} of ${stages.length}: ${st.name}` })
+      // what the person said during the last stage goes into this one's prompt
+      const heard = takeTold(j)
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { last = await engineCall(bigStagePrompt(spec, i, { art, failed }), input.turns || st.turns); break } catch (err) {
+        try { j.inStage = true; last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); j.inStage = false; break } catch (err) {
+          j.inStage = false
           if (j.controller.signal.aborted) throw err
+          // the person confirmed a change that cannot wait: this stage again, with their words, from where it got to
+          if (j.redirected) {
+            j.redirected = false
+            heard.push(...takeTold(j))
+            failed = 'The person stopped your last turn to change direction: some of its changes may already be in the code (git status shows them). Do what they said now, then finish this stage.'
+            step({ kind: 'setup', text: `stage ${i + 1} again, with the change you sent` })
+            go = -1
+            continue
+          }
           step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
           if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
           failed = 'the last try at this stage stopped partway: some of its changes may already be in the code (git status shows them). Finish them or redo them.'
         }
       }
-      failed = last.ok ? '' : `the typecheck or build failed at the end of the last stage${last.error ? ` (${String(last.error).slice(0, 300)})` : ''}. Make it pass before anything else.`
+      // the pictures this slice asked for: painted now, then one short turn to use them
+      const asked = await paintAsks(i)
+      if (asked) last = { ...asked, turns: (last?.turns || 0) + (asked.turns || 0), commits: (last?.commits || 0) + (asked.commits || 0) }
+      if (godot) {
+        const g = await godotStage(id, j, dir, engineCall, step)
+        last = { ...last, ok: g.ok, error: g.error }
+        failed = g.ok ? '' : `Godot reported problems at the end of the last stage: ${String(g.error).slice(0, 600)}. Fix them before anything else.`
+      } else failed = last.ok ? '' : `the typecheck or build failed at the end of the last stage${last.error ? ` (${String(last.error).slice(0, 300)})` : ''}. Make it pass before anything else.`
       j.result.turns += last.turns || 0
       j.result.commits += last.commits || 0
       j.result.files = Math.max(j.result.files, last.files?.length || 0)
-      await serve(id, j, step)
+      if (!godot) await serve(id, j, step)
       const play = await playGame(j, dir, model(), step, brand)
-      j.result.stages.push({ id: st.id, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
-      send(id, 'app:stage', { stage: `stage ${i + 1} of ${BIG_STAGES.length} done: ${st.name}`, big: { i, ok: !!last.ok, play: !!play?.ok } })
+      j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
+      // each slice carries the bots' filmed play test, so the person sees it before the next one
+      send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}), ...(godot ? { godot: true } : {}) } })
+      // guided (the default): stop after each slice but the last and ask in the left chat; the
+      // person's answer starts the next slice (a resume) with their words in its prompt
+      if (input.guided !== false && i < stages.length - 1) {
+        const talk = sliceAsk(spec, i)
+        // what the chat shows: the bots' filmed play, the game's still (img/snap.jpg) and the live game
+        j.slice = { i, n: stages.length, name: st.name, shot: `/img/${id}/snap.jpg?v=${Date.now()}`, ok: !!last.ok, play: !!play?.ok, url: j.url || null, ...(play?.clip ? { clip: play.clip } : {}), ...talk }
+        j.result.paused = j.slice
+        return 'paused'
+      }
     }
     if (!last?.ok) {
       step({ kind: 'test', text: 'the last stage did not pass its build: one fix turn', ok: false })
-      last = await engineCall(`This is a big browser game made from GAME_SPEC.md; keep what works. ${failed}\n\nFinish with a working build: the typecheck and build must pass.`, 3)
+      if (godot) {
+        await engineCall(`This is a big 2D game in Godot 4 in ports/godot/, made from GAME_SPEC.md; keep what works. ${failed}\n\nFinish with the project opening in Godot with no errors. Touch nothing outside ports/godot/.`, 3)
+        const g = await godotStage(id, j, dir, null, step)
+        last = { ...last, ok: g.ok, error: g.error }
+      } else last = await engineCall(`This is a big browser game made from GAME_SPEC.md; keep what works. ${failed}\n\nFinish with a working build: the typecheck and build must pass.`, 3)
     }
     Object.assign(j.result, { ok: !!last.ok, gatesPassed: last.gatesPassed, playtest: j.result.stages.at(-1)?.playtest })
     if (!last.ok) throw new Error(last.error || 'the engine could not finish the game')
+  }
+
+  // A Godot-first stage's checks: Godot opens the project headless (its errors get one
+  // fix turn), then the Web export is served for the play test. → { ok, error }
+  async function godotStage(id, j, dir, engineCall, step) {
+    step({ kind: 'test', text: 'opening the project in Godot' })
+    let opened = await checkGodot(dir)
+    if (opened && !opened.ok && engineCall) {
+      step({ kind: 'test', text: `Godot reports ${opened.errors.length} error${opened.errors.length === 1 ? '' : 's'}: fixing`, ok: false })
+      await engineCall(`Godot 4 opened ports/godot/ headless and reported these errors:\n${opened.errors.map(e => `- ${e}`).join('\n')}\n\nFix them in ports/godot/ (GDScript 4 syntax, node paths, resource paths). Touch nothing outside ports/godot/.`, 2)
+      opened = await checkGodot(dir)
+    }
+    if (opened) step({ kind: 'test', text: opened.ok ? 'Godot opens and runs the project with no errors' : `Godot still reports: ${opened.errors[0]}`, ok: opened.ok })
+    step({ kind: 'test', text: 'exporting the game to the web' })
+    const web = await exportWeb(dir)
+    step({ kind: 'test', text: web.ok ? 'web export ready' : `the web export failed: ${web.error}`, ok: web.ok })
+    if (web.ok) await serveGodot(id, j)
+    const ok = !!opened?.ok && web.ok
+    return { ok, error: ok ? '' : [...(opened?.errors || []).slice(0, 12), web.ok ? '' : `web export: ${web.error}`].filter(Boolean).join('\n') }
+  }
+
+  // The Godot export, served as files (Godot reads its .pck and .wasm from the same place)
+  async function serveGodot(id, j) {
+    j.godot = true
+    if (j.gsrv) return
+    if (j.proc && j.proc.exitCode === null) { await stopProc(j.proc); j.proc = null }
+    j.port = j.port && await portFree(j.port) ? j.port : await freePort()
+    j.gsrv = await serveStatic(webBuild(dirOf(id)), j.port)
+    j.url = j.gsrv.url
+    send(id, 'app:ready', { url: j.url })
   }
 
   // The promo game's brand, with the address its site has now: a site put online
@@ -384,24 +556,34 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // the title screen becomes the game's cover (img/snap.jpg, the run's snapshot)
     const shot = join(runsDir, j.id, 'img', 'snap.jpg')
     try { mkdirSync(join(runsDir, j.id, 'img'), { recursive: true }) } catch {}
-    let t = await playtest(j.url, { shot })
+    // the play test is filmed: the App view replays it, with the keys it pressed
+    // numbered from the clips already there, so a restart never reuses a name (they are cached for good)
+    let n = 1
+    try { n = 1 + Math.max(0, ...readdirSync(join(runsDir, j.id, 'img')).map(f => +(f.match(/^playtest-(\d+)\.webm$/)?.[1] || 0))) } catch {}
+    if (n > 999) n = 999
+    const clip = join(runsDir, j.id, 'img', `playtest-${n}.webm`)
+    let t = await playtest(j.url, { shot, clip, secure: !!j.godot })
+    const film = t.clip ? { clip: `/img/${j.id}/playtest-${n}.webm`, keys: t.keys || [] } : {}
     if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
-    else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s` })
-    else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false })
-    if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : { ok: true, seconds: t.seconds }
+    else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s`, ...film })
+    else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false, ...film })
+    const withClip = o => (film.clip ? { ...o, clip: film.clip } : o)
+    if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
     const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, links || ''].filter(Boolean).join('\n\n')
     try {
-      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. Finish with a working build: the typecheck and build must pass.`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+      const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
+      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+      if (j.godot) await exportWeb(dir)
     } catch (err) {
       step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
-      return { ok: false, problem: problems }
+      return withClip({ ok: false, problem: problems })
     }
     await new Promise(r => setTimeout(r, 2500))
     links = linkProblem()
     if (!t.ok) t = await playtest(j.url)
     const ok = !links && t.ok
     step({ kind: 'test', text: ok ? 'the game passes its checks after the fix' : `still wrong after the fix: ${(links || t.problem || '').split('. ')[0]}`, ok })
-    return ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, links || ''].filter(Boolean).join(' ') }
+    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, links || ''].filter(Boolean).join(' ') })
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).
@@ -442,14 +624,41 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   async function open(id) {
     const j = jobs.get(id)
+    if (j?.url && j.gsrv) return view(j)
     if (j?.url && j.proc?.exitCode === null && j.sig === serveSig(dirOf(id))) return view(j)
     if (!existsSync(join(dirOf(id), 'package.json'))) throw new Error('no app yet')
     const k = j || { id, kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
     jobs.set(id, k)
-    await serve(id, k)
+    // a Godot-first game plays from its Web export
+    if (isGodotFirst(dirOf(id)) && existsSync(join(webBuild(dirOf(id)), 'index.html'))) await serveGodot(id, k)
+    else await serve(id, k)
     k.state = k.state === 'working' ? 'working' : 'done'
     return view(k)
   }
+
+  // Words from the person while a build runs: kept with the run, and handed to the crew at the
+  // start of the next stage (or the next slice), since a turn in flight cannot take new words.
+  function tell(id, text) {
+    const j = jobs.get(id)
+    const t = String(text || '').trim().slice(0, 1200)
+    if (!t || j?.state !== 'working') return { queued: false, state: j?.state || state(id).state }
+    ;(j.told ||= []).push(t)
+    send(id, 'app:told', { text: t })
+    return { queued: true, state: j.state, waiting: j.told.length }
+  }
+  // A confirmed change that cannot wait: the builder's turn in flight stops, and the stage starts
+  // again at once with the words (a big game's slices only; anywhere else it waits for the next stage).
+  function redirect(id, text) {
+    const j = jobs.get(id)
+    const told = tell(id, text)
+    if (!told.queued) return told
+    if (!j.big || !j.inStage || !j.turn || j.turn.signal.aborted) return { ...told, now: false }
+    j.redirected = true
+    j.turn.abort()
+    send(id, 'app:redirect', { text: String(text).trim().slice(0, 1200) })
+    return { ...told, now: true }
+  }
+  const takeTold = j => (j.told || []).splice(0).map(t => `The person said while you were building: "${t}"`)
 
   function stop(id) {
     const j = jobs.get(id)
@@ -501,5 +710,28 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   function close() { for (const j of jobs.values()) { j.controller?.abort(); j.proc?.kill() } }
 
-  return { start, state, stop, open, files, deploy, close, dirOf, jobs }
+  return { start, state, stop, tell, redirect, open, files, deploy, close, dirOf, jobs }
+}
+
+// "can I see it", "show me the pictures": the person wants to look, not to change anything
+const SEE = /\b(screen ?shots?|pictures?|pics?|images?|art|sprites?|clips?|videos?|previews?|footage|show me|let me see|can i see|look(s)? like)\b/i
+export const wantsToSee = text => SEE.test(String(text || ''))
+// What there is to look at for a build, newest first: the play test clips (from the slices done
+// and the steps) and the painted pictures in the run's img folder.
+// files: [{ name, mtime }] of the run's img folder; slices: app:stage bigs; steps: the job's steps
+const PIC = /^game-(?!.*-(?:raw|check|peek)\.)[a-z0-9-]{1,48}\.(png|webp|jpe?g)$/
+export function buildMedia({ id, files = [], slices = [], steps = [] } = {}) {
+  const clips = [
+    ...steps.filter(s => s?.clip).map(s => ({ src: s.clip, t: s.t || 0, name: '' })),
+    ...slices.filter(b => b?.clip).map(b => ({ src: b.clip, t: b.t || 0, name: b.name ? `slice ${(b.i ?? 0) + 1}, ${b.name}` : '' }))
+  ].sort((x, y) => y.t - x.t)
+  const pics = files.filter(f => PIC.test(f.name)).sort((x, y) => y.mtime - x.mtime)
+    .map(f => ({ src: `/img/${id}/${f.name}`, name: f.name.replace(/^game-/, '').replace(/\.\w+$/, '').replace(/-/g, ' ') }))
+  return { clip: clips[0] || null, clips: clips.length, clipList: clips.slice(0, 4), pics: pics.slice(0, 4), picCount: pics.length, picList: pics.slice(0, 24) }
+}
+// the line Hermia reads, so she never says there is nothing to see when there is
+export function mediaNotes(m, attached) {
+  if (!m.clip && !m.picCount) return 'Nothing has been painted or filmed yet, so there is nothing to show.'
+  const have = [m.clips ? `${m.clips} play test clip${m.clips > 1 ? 's' : ''}` : '', m.picCount ? `${m.picCount} painted picture${m.picCount > 1 ? 's' : ''} (newest: ${m.pics.map(p => p.name).join(', ')})` : ''].filter(Boolean).join(' and ')
+  return `The build has ${have}. ${attached ? 'The newest clip and pictures are shown right under your answer: say so in a few words and say what they show; never say there is nothing to see.' : 'If they ask to see something, tell them you can show it.'}`
 }

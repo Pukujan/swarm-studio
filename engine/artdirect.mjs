@@ -1,4 +1,3 @@
-import { keyGround } from './keycolor.mjs'
 // The art director: every build gets one named style for all of its pictures, so
 // a build looks like one person made it and the Feed looks like many people did.
 // It writes each picture's prompt from that style, asks for the high-quality tier
@@ -6,6 +5,8 @@ import { keyGround } from './keycolor.mjs'
 // look (glow, teal and gold, neon fantasy, symmetrical "epic" shots).
 //
 // Pure functions; the server owns the image calls and the vision check's model.
+import { keyBackground } from './keycolor.mjs'
+export { keyTrouble, keyOf, swapKey } from './keycolor.mjs'
 
 // The styles. Photo is the default; the brief picks another by naming it.
 export const STYLES = {
@@ -152,17 +153,24 @@ const SHAPE = {
 
 // The prompt for one picture. The shape is said in words too: some image backends
 // pick the size from the prompt, not the size asked for.
+export const EMPTY_PLACE = 'An empty place with nobody in it: no people, characters, figures, silhouettes or animals anywhere, not even small or far away.'
 export function promptFor(gen, guide, { aspect = 'landscape', strict = '', cutout = false } = {}) {
   const what = cleanGen(gen, guide)
   const avoid = [guide?.avoid, ...(guide?.bans || []).map(id => banOf(id).label)].filter(Boolean).join('; ')
+  // an empty place (a game backdrop): said up front and again at the end, and the style's
+  // "moment" wording, which paints people into the scene, left out
+  const empty = !cutout && /\bNo people\b/i.test(String(gen))
+  const style = String(guide?.guide || STYLES.photo.guide)
   return clip([
     SHAPE[aspect] || SHAPE.landscape,
+    empty ? EMPTY_PLACE : '',
     `${what}.`,
-    guide?.guide || STYLES.photo.guide,
+    empty ? style.replace(/,?\s*an? (everyday )?(slice-of-life )?moment\b/gi, '').replace(/\b(original )?characters?( and original designs)? only\.?/gi, '').trim() : style,
     cutout
-      ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone, so it can be cut out. ${keyGround(gen)}, and no frame.`
+      ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on ${keyBackground(what)}, with no floor, shadow, scenery or frame, so it can be cut out.`
       : 'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
     avoid ? `Avoid: ${avoid}.` : '',
+    empty ? EMPTY_PLACE : '',
     strict ? `This is a second try. The first picture was sent back for: ${strict}. Make sure none of that is in this one.` : ''
   ].filter(Boolean).join(' '), 1200)
 }
@@ -195,14 +203,73 @@ Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 1
   ]
 }
 
+// The sprite check: a cut-out game sprite, shown side by side on dark and on magenta so
+// leftover background, halos and holes stand out. Messages only; the server sends them.
+export const SPRITE_RETRY = 'paint the whole figure inside the frame on one flat plain background, with no gaps, loops or holes that show the background through the figure'
+// A sheet's own prompt: the layout and the frames first, so the clip never cuts them,
+// and only the style's look (not its composition words, which fight a grid).
+export function sheetPrompt({ look = '', frames = '' }, guide, { strict = '', layout = '' } = {}) {
+  const style = String(guide?.guide || '').split(/(?<=\.)\s+/).map(x => x.replace(/\.$/, '').split(/,\s*/).filter(c => !/composition|moment|background|scene|framing|shot/i.test(c)).join(', ')).filter(Boolean).join('. ')
+  const avoid = [guide?.avoid, ...(guide?.bans || []).map(id => banOf(id).label)].filter(Boolean).join('; ')
+  return clip([
+    'A 2D game animation sprite sheet, not a character reference sheet: exactly six full-body poses of ONE character, in a 3 by 2 grid, one pose per cell.',
+    `The six poses, left to right, top to bottom: ${frames}.`,
+    layout && `${layout.replace(/\.$/, '')}.`,
+    'No close-ups, no faces or expressions on their own, no turnaround, no companions, pets, robots or props beside the character.',
+    `The character: ${look}.`,
+    style && `${style}.`,
+    'No text, letters or numbers anywhere.',
+    avoid ? `Avoid: ${avoid}.` : '',
+    strict ? `This is a second try. The first sheet was sent back for: ${strict}. Make sure none of that is in this one.` : ''
+  ].filter(Boolean).join(' '), 1400)
+}
+
+// A sprite sheet's frames, cut out and laid side by side, shown on dark and on magenta.
+export function sheetMessages(what, image, frames = '') {
+  return [
+    {
+      role: 'system',
+      content: `You check one animation strip before it goes into a game: ${clip(what, 80)}. Its frames were cut out of a painted sheet and are shown side by side, once on dark and once on light grey.${frames ? ` The frames should show: ${clip(frames, 300)}` : ''}
+
+Send it back only for a clear, visible problem:
+- a frame shows a different character, outfit or colours than the others
+- the figure changes size a lot between frames, or a frame is empty
+- a head, hand, foot or hair cut off at a frame's edge, or two figures in one frame
+- leftover background: magenta, green, grey or white patches, specks or a coloured rim around the figure
+- the frames do not show the moves asked for
+
+Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. If in doubt, it is ok.`
+    },
+    { role: 'user', content: [{ type: 'text', text: 'Check this animation strip.' }, { type: 'image_url', image_url: { url: image } }] }
+  ]
+}
+export function cutoutMessages(what, image) {
+  return [
+    {
+      role: 'system',
+      content: `You check one game sprite before it goes into the game: ${clip(what, 80)}. It was cut out of a flat key-colour background and is shown twice, on dark and on light grey.
+
+Send it back only for a clear, visible problem:
+- leftover background: magenta, green, grey or white patches, specks or a coloured rim inside or around the figure (between hair strands, inside loops, under arms)
+- a hole through the figure where it should be solid
+- a head, hand, foot, tail or weapon cut off by the edge of the picture
+- more than one figure, or a scene instead of one figure
+
+Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. If in doubt, it is ok.`
+    },
+    { role: 'user', content: [{ type: 'text', text: 'Check this sprite.' }, { type: 'image_url', image_url: { url: image } }] }
+  ]
+}
+
 export function parseCheck(text) {
   const s = String(text || ''), a = s.indexOf('{'), b = s.lastIndexOf('}')
-  if (a < 0 || b <= a) return { ok: true, problems: [] }
+  // no verdict in the answer (an empty reply): unread, so the next reviewer model is asked
+  if (a < 0 || b <= a) return { ok: true, problems: [], unread: true }
   try {
     const j = JSON.parse(s.slice(a, b + 1))
     const problems = (Array.isArray(j.problems) ? j.problems : []).map(p => clip(p, 80)).filter(Boolean).slice(0, 3)
     return { ok: j.ok !== false || !problems.length, problems }
   } catch {
-    return { ok: true, problems: [] }
+    return { ok: true, problems: [], unread: true }
   }
 }

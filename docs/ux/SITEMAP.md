@@ -276,6 +276,7 @@ flowchart LR
   FIL --> UP["+ → New page, Upload files; or drop from Finder"]
   STG --> DD["Double-click a page → Design deck"]
   STG --> ER["Double-click the app or game → Engine room"]
+  PJ --> GB["A game still building opens on its build (Engine room) once; Back shows the canvas"]
   STG --> FS["Double-click a film → Film studio"]
   INS --> EXP["Size, Style, Used on; Export, Replace"]
   DOCK --> CREW["The crew: fix the selected page, repaint the selected picture, or build the next version"]
@@ -440,6 +441,22 @@ flowchart LR
 ```
 
 The 7-step game wizard is gone. Its questions become the Tweak branch, asked after the first playable build.
+
+A game build's wall follows what the crew is doing: three painters and one code tile while the art is painted, four code tiles after. When the build stops:
+
+```mermaid
+flowchart LR
+  B[Build] --> A[Painting the art]
+  A --> C[Writing the game]
+  A -->|image model out of quota| Q["No art: model out of quota"]
+  Q --> Q1[Another image model]
+  Q --> Q2[Try again]
+  Q --> Q3[Draw in code]
+  Q1 --> A
+  B -->|Stop| S["Stopped: N/M pictures · stage x of 5"]
+  S --> S1[Go on]
+  S1 --> A
+```
 
 ### Film studio and Launch pad
 

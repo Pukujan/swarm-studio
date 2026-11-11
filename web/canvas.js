@@ -3,7 +3,9 @@
 // cursor move, tool and bubble comes from a real model stream.
 
 import { routeMessage } from './route.js'
-import { painterOf, REVIEWER } from './icons.js'
+import { openWorkshop } from './workshop.js'
+import { stateSlice } from './store.js'
+import { painterOf, REVIEWER, cursor } from './icons.js'
 
 const $ = s => document.querySelector(s)
 // Inlined by the server: the API token and the page-frame template. Frames are
@@ -288,11 +290,14 @@ function on(e) {
     case 'crew:act':
       radioEvent(e)
       break
+    case 'art:job':
+      artEvent(e)
+      break
     case 'crew:lead': {
       // the app engine's lead agent, speaking as Hermia: thinking out loud and giving orders
       radioEvent(e)
-      if (e.kind === 'reason') { feed(null, `🛰️ Hermia ${e.text}`, 'sys'); break } // her reasoning: the log only, no bubble or order
-      feed(null, `🛰️ Hermia${e.to ? ` → ${e.to}` : ''}: ${e.text}`, 'sys')
+      logSay(e)
+      if (e.kind === 'reason') break // her reasoning: the log only, no bubble or order
       const to = e.to && [...S.agents.values()].find(x => x.name === e.to)
       if (to && Date.now() - e.t < 5000) say(to, `Hermia: ${e.text.slice(0, 120)}`, 3200)
       break
@@ -1196,6 +1201,27 @@ function push(f, item) {
   if (stick) f.scrollTop = f.scrollHeight
 }
 
+// Hermia in the Log, as a chat: each line a message from her, the newest at the bottom.
+// Her thinking out loud arrives in fragments; one joins her last thought while it is fresh,
+// so it reads as one message rather than a wall of lines.
+function logSay(e) {
+  const f = els.log, last = f.lastElementChild, t = e.t || Date.now(), reason = e.kind === 'reason'
+  const txt = last?.classList.contains('reason') ? last.querySelector('.txt') : null
+  if (reason && txt && t - Number(last.dataset.t) < 20000 && txt.textContent.length < 1400) {
+    const stick = f.scrollHeight - f.scrollTop - f.clientHeight < 80
+    txt.append(` ${e.text}`)
+    last.dataset.t = t
+    if (stick) f.scrollTop = f.scrollHeight
+    return
+  }
+  const item = document.createElement('div')
+  item.className = `item say${reason ? ' reason' : ''}`
+  item.dataset.t = t
+  item.innerHTML = `<b>${HERMIA}Hermia${e.to ? `<span class="to">→</span><span style="color:${Crew.color(e.to)}">${esc(e.to)}</span>` : ''}</b><span class="txt"></span>`
+  item.querySelector('.txt').textContent = e.text
+  push(f, item)
+}
+
 function botMsg(text, working = false) {
   const item = document.createElement('div')
   item.className = `item bot${working ? ' working' : ''}`
@@ -1243,7 +1269,15 @@ function summarize(e) {
 // ---------- loop
 
 let lastPanels = 0
+// The crew's cursors don't need the screen's 60-120 Hz: 24 fps while a build runs (20 with a big
+// crew), full rate only while the camera itself moves, so a drag or zoom stays smooth.
+const loopAt = { last: 0, dt: 16.7 }
 function frameLoop(now) {
+  const moving = Math.abs(cam.ts - cam.s) > 1e-3 || Math.abs(cam.tx - cam.x) > 1 || Math.abs(cam.ty - cam.y) > 1
+  const fps = moving ? 120 : S.agents.size > 8 ? 20 : 24
+  if (now - loopAt.last < 1000 / fps - 2) return requestAnimationFrame(frameLoop)
+  loopAt.dt = Math.min(100, now - (loopAt.last || now - 16.7))
+  loopAt.last = now
   syncSlots(now)
 
   if (cam.auto && now > cam.nextFit) {
@@ -1251,7 +1285,9 @@ function frameLoop(now) {
     if (b) fit(b)
     cam.nextFit = now + 700
   }
-  const k = cam.auto ? 0.06 : 0.25
+  // the same glide at any frame rate: the per-60fps factor, raised to the frames that passed
+  const ease = k0 => 1 - Math.pow(1 - k0, loopAt.dt / 16.7)
+  const k = ease(cam.auto ? 0.06 : 0.25)
   cam.s += (cam.ts - cam.s) * k
   cam.x += (cam.tx - cam.x) * k
   cam.y += (cam.ty - cam.y) * k
@@ -1278,19 +1314,23 @@ function frameLoop(now) {
     } else if (!a.layer && now > a.toolUntil) {
       if (!a.docked) { const p = toScreen(a.wx, a.wy); a.sx = p.x; a.sy = p.y; a.docked = true }
       const c = dockCell(a.seat)
-      a.sx += (c.x - a.sx) * 0.12
-      a.sy += (c.y - a.sy) * 0.12
+      a.sx += (c.x - a.sx) * ease(0.12)
+      a.sy += (c.y - a.sy) * ease(0.12)
     } else {
       if (a.docked) { a.wx = (a.sx - cam.x) / cam.s; a.wy = (a.sy - cam.y) / cam.s; a.docked = false }
       const t = agentTarget(a, now)
       if (t) {
-        a.wx += (t.x - a.wx) * 0.22
-        a.wy += (t.y - a.wy) * 0.22
+        a.wx += (t.x - a.wx) * ease(0.22)
+        a.wy += (t.y - a.wy) * ease(0.22)
       }
       const p = toScreen(a.wx, a.wy)
       a.sx = p.x
       a.sy = p.y
     }
+    // a cursor far off screen keeps its place but skips its redraw
+    const off = a.sx < -200 || a.sy < -200 || a.sx > innerWidth + 200 || a.sy > innerHeight + 200
+    if (off && a.off) continue
+    a.off = off
     const pos = `translate(${a.sx.toFixed(1)}px, ${a.sy.toFixed(1)}px)`
     const step = Math.abs(a.sx - (a.lx ?? a.sx)) + Math.abs(a.sy - (a.ly ?? a.sy))
     a.lx = a.sx; a.ly = a.sy
@@ -1346,8 +1386,24 @@ function frameLoop(now) {
     }
     if (S.t0 && !(viewing && !S.tEnd)) setText(els.timer, `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`)
   }
-  requestAnimationFrame(frameLoop)
+  // nothing moving (camera settled, no cursor at work, no build running): a few frames a second
+  // is enough; any input wakes it at once (wakeLoops)
+  const still = Math.abs(cam.ts - cam.s) < 1e-4 && Math.abs(cam.tx - cam.x) < 0.2 && Math.abs(cam.ty - cam.y) < 0.2 &&
+    !S.frames.some(frameBusy) && ![...S.agents.values()].some(a => a.act || a.queued || now < (a.moving || 0) || now < (a.sayUntil || 0))
+  nextFrame(frameLoop, still)
 }
+
+// Per-frame loops run at the screen's rate only while something moves; at rest they tick a few
+// times a second, so a finished canvas stops costing a full 60 fps of DOM work.
+const sleepers = new Map()
+function nextFrame(fn, idle, ms = 200) {
+  if (!idle) return requestAnimationFrame(fn)
+  sleepers.set(fn, setTimeout(() => { sleepers.delete(fn); requestAnimationFrame(fn) }, ms))
+}
+function wakeLoops() {
+  for (const [fn, t] of sleepers) { clearTimeout(t); sleepers.delete(fn); requestAnimationFrame(fn) }
+}
+for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown']) addEventListener(ev, wakeLoops, { capture: true, passive: true })
 
 // ---------- input
 
@@ -1547,23 +1603,32 @@ els.form.addEventListener('submit', async e => {
   if (/^\/[a-z?]/i.test(brief)) {
     els.brief.value = ''
     slashPop.hidden = true
+    nextRoute?.done?.(null); nextRoute = null
     feed(null, `› ${brief}`, '')
     try { await runSlash(brief) } catch (err) { botMsg(`/${brief.slice(1).split(' ')[0]} failed: ${err.message}`) }
     return
   }
   // the chat follows the view: the app's next change, or an idea for the video
-  if (view === 'app' && shownRun()) { els.brief.value = ''; return appAsk(brief) }
-  if (view === 'video' && shownRun()) { els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
+  const skip = () => { nextRoute?.done?.(null); nextRoute = null }
+  // a big game waiting after a slice: the answer goes into the next slice, from any view
+  if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
+  if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
+  if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
-  if (hosted && !(await hosted.ready())) return
+  if (hosted && !(await hosted.ready())) return skip()
   const to = nextRoute || { from: shownRun(), selected: !!S.sel }
   nextRoute = null
-  const route = to.fresh ? 'new' : routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
-  if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); return commandOps.fix({ text: brief }) }
+  // a project's dock has already decided (web/project.js): its open version is what the words
+  // extend, whatever run this canvas happens to be showing
+  const route = to.fresh ? 'new' : to.route || routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
+  if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); to.done?.(null); return commandOps.fix({ text: brief }) }
   setAuto(true)
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}) }) }).catch(() => null)
+  const j = res ? await res.clone().json().catch(() => ({})) : {}
+  to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
-  else if (hosted && res) hosted.refuse(await res.json().catch(() => ({})))
+  else if (res?.status === 409) feed(null, 'The crew are still on the last change.', 'err')
+  else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
 })
 els.brief.addEventListener('keydown', e => {
@@ -3389,7 +3454,7 @@ commandOps.video = c => makeVideo({ idea: c.idea, style: c.style })
 const lite = { last: 0, busy: false, quiet: 0 }
 // Auto: on for small machines, and for everyone once the agents have been done
 // for half a minute (a finished build doesn't need every page live).
-const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 30000)))
+const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 5000)))
 
 const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
 const frameBusy = f => S.order.some(k => { const l = S.layers.get(k); return belongs(f, l) && l.status !== 'done' && l.status !== 'failed' })
@@ -3894,7 +3959,9 @@ async function replayRun(id, speed = 8) {
 // it is doing. The chat follows the view: on App, a message is the app's next
 // change; on Video, an idea for a new cut.
 let view = 'canvas'
-const appv = { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false }
+// the App view's state (web/store.js): reset when another run is shown, keeping the preview mode and width
+const appStore = stateSlice('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
+const appv = appStore.state
 const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
 const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
 
@@ -3925,7 +3992,7 @@ setInterval(renderBadges, 1000)
 const appApi = (path = '', body) => api(`/api/runs/${encodeURIComponent(appv.run)}/app${path}`, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
 
 function resetApp(run) {
-  Object.assign(appv, { run, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null })
+  appStore.reset({ run })
   appEls.frame.removeAttribute('src')
 }
 
@@ -3936,9 +4003,10 @@ async function loadApp() {
   try {
     const st = await appApi()
     if (appv.run !== run) return
-    Object.assign(appv, { state: st.state, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
+    Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
+    if (st.state === 'paused' && st.slice) { appv.slice = st.slice; sliceCard(st.slice, run) }
     // the server knows whether the app is running: an address from the log may be a dev server
     // that stopped with a restart, so it opens again rather than showing a dead page
     appv.url = st.url || null
@@ -3950,6 +4018,48 @@ async function loadApp() {
     }
   } catch (err) { appv.message = err.message }
   renderApp()
+}
+
+// a build another Studio drives has no live feed here: read the shared log again every few seconds
+setInterval(() => { if (view === 'app' && appv.elsewhere && !document.hidden) loadApp() }, 4000)
+
+// the latest play test, filmed: the clip loops from the first key, with the key it pressed
+const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
+// While the code wall is up, the play test is one of its windows (the first tile, over that
+// tile's pictures); otherwise a small card over the game, which × hides.
+function playClip() {
+  const s = appv.run === shownRun() ? appv.steps.findLast(x => x.clip) : null
+  // its window on the wall: the first while the crew writes code, the code window while it paints
+  // (the painters keep theirs); off the wall it is the small card over the game
+  const grid = cw.el && !cw.el.hidden ? cw.el.querySelector('.cw-grid') : null
+  const tile = grid ? (cw.mode === 'code' ? grid.children[0] : cw.mode === 'art' ? grid.children[CW_CODE] : null) || null : null
+  for (const t of cw.el?.querySelectorAll('.cw-tile.has-play') || []) if (t !== tile || !s) t.classList.remove('has-play')
+  if (!s || (!tile && clip.shut === s.clip)) { if (clip.el) clip.el.hidden = true; return }
+  if (!clip.el) {
+    clip.el = document.createElement('div')
+    clip.el.className = 'playclip'
+    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline autoplay></video>`
+    clip.el.querySelector('.pc-x').onclick = () => { clip.shut = clip.src; clip.el.hidden = true }
+    const v = clip.el.querySelector('video')
+    v.addEventListener('loadedmetadata', () => { v.currentTime = clip.at })
+    v.addEventListener('ended', () => { v.currentTime = clip.at; v.play().catch(() => {}) })
+    v.addEventListener('timeupdate', () => {
+      const k = clip.keys.findLast(x => x.t <= v.currentTime + 0.05)
+      setText(clip.el.querySelector('.pc-key'), k ? k.k : '')
+    })
+  }
+  const host = tile || appEls.preview
+  if (clip.el.parentElement !== host) { host.append(clip.el); clip.el.querySelector('video').play().catch(() => {}) }
+  tile?.classList.add('has-play')
+  clip.el.classList.toggle('in-wall', !!tile)
+  clip.el.hidden = false
+  clip.el.classList.toggle('failed', s.ok === false)
+  if (clip.src !== s.clip) {
+    clip.src = s.clip
+    clip.keys = (s.keys || []).filter(x => typeof x.t === 'number')
+    clip.at = Math.max(0, (clip.keys[0]?.t || 0) - 1)
+    clip.el.querySelector('video').src = BASE + s.clip
+  }
 }
 
 const STEP_ICON = { setup: '⚙︎', turn: '▸', write: '✎', render: '👁', think: '·', tokens: 'Σ', serve: '▶', gate: '✓', ask: '💬' }
@@ -4007,17 +4117,20 @@ function frameLoaded() { clearTimeout(frameWait); const el = $('#app-loading'); 
 function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && appEls.frame.src !== 'about:blank') { clearTimeout(frameWait); frameWait = setTimeout(frameLoaded, 700) } }
 
 function renderApp() {
+  // while the crew builds the box talks to it; a game's own examples are a game's
+  if (view === 'app') els.brief.placeholder = appv.state === 'working' ? 'Ask the crew, or say what to change…' : appv.kind === 'game' ? 'Change the game: “make the jump higher”, “add a boss”…' : PLACEHOLDER.app
   renderAppLink()
   renderBadges()
   if (view !== 'app') return
-  const st = appv.state, working = st === 'working'
+  // a build another Studio drives comes from the shared run log: the server says so
+  const st = appv.state, working = st === 'working', elsewhere = !!appv.elsewhere
   appEls.state.className = `app-state pill ${st}`
-  appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : appv.hasApp ? 'built' : 'no app yet'
+  appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : st === 'paused' ? 'your turn' : appv.hasApp ? 'built' : 'no app yet'
   setText(appEls.stage, working ? appv.stage : appv.result ? `${appv.result.turns} turn${appv.result.turns === 1 ? '' : 's'} · ${appv.result.files} files · checks ${appv.result.gatesPassed ? 'passed' : 'not passed'}${appv.deployed ? ` · live at ${appv.deployed}` : ''}` : '')
   const stick = appEls.steps.scrollHeight - appEls.steps.scrollTop - appEls.steps.clientHeight < 60
   appEls.steps.innerHTML = stepsHtml()
   if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
-  appEls.stop.hidden = !working
+  appEls.stop.hidden = !working || elsewhere
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
   // the same game as a Godot, Unity or Unreal project, when the job wrote one
   const port = appv.result?.port
@@ -4032,12 +4145,19 @@ function renderApp() {
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   const empty = !appv.url || (st === 'failed' && !appv.hasApp)
   appEls.empty.hidden = !empty
-  if (empty) {
+  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && (working || appv.steps.length)
+  if (!sheet) appEls.empty.classList.remove('sheet')
+  if (sheet) artSheet(shownRun())
+  else if (empty) {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
       : working || appv.opening
         ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+        : st === 'failed' && appv.result?.artStop
+          ? artStopCard(appv.result.artStop)
+        : st === 'failed' && appv.message === 'stopped'
+          ? `<div class="fail-card stopped"><h2><em>Stopped</em></h2><p class="fail-msg">${esc(stopSummary())}</p><button class="big" data-build>${ico('rotate-ccw')}Go on</button></div>`
         : st === 'failed'
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
           : appv.hasApp && appv.message
@@ -4046,14 +4166,42 @@ function renderApp() {
             ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
             : `<h2>Turn this design into a working app</h2><p>The design stays exactly as it is. Hermia first asks what runs behind it (dashboards, customers, an admin panel), then the engine builds it all.</p><button class="big" data-build>Build the app</button>`
     appEls.empty.querySelector('[data-build]')?.addEventListener('click', buildApp)
+    // out of quota: another image model, then build again (pictures already painted are kept)
+    for (const b of appEls.empty.querySelectorAll('[data-image]')) b.addEventListener('click', async () => { b.disabled = true; await saveModel({ role: 'image', provider: b.dataset.image, model: b.dataset.model || '' }); buildApp() })
+    appEls.empty.querySelector('[data-incode]')?.addEventListener('click', () => appAsk('', { art: false }))
     appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { appv.message = ''; loadApp() })
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
+  playClip()
   appEls.preview.hidden = appv.mode !== 'preview'
   appEls.code.hidden = appv.mode !== 'code'
   appEls.shell.classList.toggle('dev', !!appv.w)
   appEls.shell.style.width = appv.w ? `${appv.w}px` : '100%'
   if (appv.mode === 'code') renderCode()
+}
+
+// A game being built: its whole art plan as one sheet, each picture landing in its cell as the
+// crew paints it, the cell being painted showing who is on it. Read again every 4 s while shown.
+const sheetv = { run: null, data: null, t: 0, busy: false }
+function artSheet(run) {
+  if (sheetv.run !== run) Object.assign(sheetv, { run, data: null, t: 0 })
+  if (!sheetv.busy && Date.now() - sheetv.t > 4000) {
+    sheetv.busy = true
+    api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => (r.ok ? r.json() : null)).then(d => { if (sheetv.run === run && d) sheetv.data = d }).catch(() => {})
+      .finally(() => { sheetv.busy = false; sheetv.t = Date.now(); if (sheetv.run === run && !appEls.empty.hidden) renderApp() })
+  }
+  const cells = sheetv.data?.sheet || []
+  const done = cells.filter(c => c.src).length
+  const next = cells.find(c => !c.src)
+  const last = appv.steps[appv.steps.length - 1]?.text || appv.stage || ''
+  const head = !cells.length ? 'Building the game' : done < cells.length ? `Painting the art · ${done}/${cells.length}` : 'Building the game'
+  const cell = c => {
+    const on = c === next
+    const who = on ? painterOf(c.id) : ''
+    return `<figure class="as-cell ${c.aspect || 'square'}${c.src ? ' done' : on ? ' on' : ''}">${c.src ? `<img src="${esc(BASE + c.src)}" alt="" loading="lazy">` : on ? `<span class="as-bot">${cursor(who)}</span>` : ''}<figcaption>${esc(c.name)}</figcaption></figure>`
+  }
+  appEls.empty.innerHTML = `<div class="art-sheet"><h2>${esc(head)}</h2>${last ? `<p class="as-line">${esc(last)}</p>` : ''}<div class="as-grid">${cells.map(cell).join('')}</div></div>`
+  appEls.empty.classList.add('sheet')
 }
 
 async function renderCode() {
@@ -4089,6 +4237,16 @@ for (const b of document.querySelectorAll('#app-device button')) b.onclick = () 
   renderApp()
 }
 $('#app-reload').onclick = () => { if (appv.url) loadFrame() }
+// the steps column folds away, and stays folded the next time (this browser only)
+const stepsMin = on => {
+  appEls.view.classList.toggle('steps-min', on)
+  const b = $('#app-steps-btn')
+  b.setAttribute('aria-pressed', String(on))
+  b.setAttribute('aria-label', on ? 'Show the steps' : 'Hide the steps')
+  try { localStorage.setItem('swarm-steps-min', on ? '1' : '') } catch {}
+}
+try { if (localStorage.getItem('swarm-steps-min')) stepsMin(true) } catch {}
+$('#app-steps-btn').onclick = () => stepsMin(!appEls.view.classList.contains('steps-min'))
 appEls.stop.onclick = () => appApi('/stop', {}).catch(() => {})
 
 // The first build of the app, or one more change to it.
@@ -4097,7 +4255,9 @@ async function appAsk(ask, extra = {}) {
   if (!run) return botMsg('Open a build first: the app is made from its design.')
   if (appv.run !== run) resetApp(run)
   if (view !== 'app') setView('app')
-  if (appv.state === 'working') return botMsg('The app is still building; your change can go in when this turn is done.')
+  // while it builds, the crew still listens: a question gets an answer from what it is doing,
+  // a change is queued for the start of the next stage
+  if (appv.state === 'working') return tellCrew(ask)
   if (ask && !appv.hasApp) return botMsg('Build the app first (the button in the App view), then change it by chatting.')
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
   try {
@@ -4111,12 +4271,121 @@ async function appAsk(ask, extra = {}) {
   renderApp()
 }
 
+async function tellCrew(text) {
+  const t = String(text || '').trim()
+  if (!t) return botMsg('The crew is building. Ask what it is doing, or say what to change next.')
+  feed(null, t, 'you')
+  // a question to one of the crew by name ("Pip, what are you on?"): their window answers on the wall
+  const names = cw.el && !cw.el.hidden ? wallNames() : []
+  const k = names.findIndex(([n]) => n && new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(t))
+  const who = k >= 0 ? names[k][0] : ''
+  const on = k < 0 ? '' : k === CW_CODE ? `writing ${cw.tiles[k]?.path || 'code'}` : cw.mode === 'art' ? `painting ${paintv.slots[k]?.what || 'art'}` : k === 0 ? 'the play test window' : `the picture ${cw.av[k]?.name || ''}`.trim()
+  cwSay(k, who ? '…' : '', true)
+  // Talk looks things up before it answers (files, pictures), which can take a few seconds
+  const wait = botMsg('…', true)
+  try {
+    const r = await appApi('/tell', { text: t, ...(who ? { who, on } : {}) }).finally(() => wait.remove())
+    const answer = r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next slice.' : 'The crew is working.')
+    cwSay(k, answer)
+    const item = botMsg(who ? `${who}: ${answer}` : answer)
+    if (r.media) item.append(mediaBlock(r.media))
+    if (r.proposal) item.append(changeBlock(r.proposal))
+  } catch (err) { cwSay(k, ''); botMsg(`App: ${err.message}`) }
+}
+// a change Talk wrote out for the builder: sent only when the person confirms it, at the next
+// slice, or now (the builder's turn stops and the slice starts again with it)
+function changeBlock(p) {
+  const box = document.createElement('div')
+  box.className = 'tell-change'
+  const q = document.createElement('p')
+  q.textContent = p.change
+  const row = document.createElement('div')
+  const btn = (label, now) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = label
+    b.onclick = async () => {
+      for (const x of row.children) x.disabled = true
+      try { const r = await appApi('/tell', { confirm: p.change, now }); box.classList.add('sent'); botMsg(r.answer) } catch (err) { for (const x of row.children) x.disabled = false; botMsg(`App: ${err.message}`) }
+    }
+    return b
+  }
+  const next = btn('Next slice', false), now = btn('Now', true)
+  ;(p.now ? now : next).classList.add('main')
+  row.append(...(p.now ? [now, next] : [next, now]))
+  box.append(q, row)
+  return box
+}
+// what Hermia shows when asked to see the build: the newest play test clip and pictures
+function mediaBlock(m) {
+  const box = document.createElement('div')
+  box.className = 'tell-media'
+  if (m.clip) {
+    const v = document.createElement('video')
+    Object.assign(v, { src: BASE + m.clip, muted: true, autoplay: true, loop: true, playsInline: true })
+    box.append(v)
+  }
+  for (const p of (m.pics || []).slice(0, 4)) {
+    const i = document.createElement('img')
+    Object.assign(i, { src: BASE + p.src, alt: p.name || '', loading: 'lazy' })
+    box.append(i)
+  }
+  return box
+}
+// a crew member's answer, said in their own window for a while (k -1: over the wall's title)
+function cwSay(k, words, thinking = false) {
+  const host = k >= 0 ? cw.el?.querySelector('.cw-grid')?.children[k] : cw.el?.querySelector('.cw-head')
+  if (!host) return
+  let b = host.querySelector(':scope > .cw-say')
+  if (!words) { b?.remove(); return }
+  if (!b) { b = document.createElement('p'); b.className = 'cw-say'; host.append(b) }
+  b.classList.toggle('thinking', thinking)
+  setText(b, words)
+  clearTimeout(b._t)
+  if (!thinking) b._t = setTimeout(() => b.remove(), 14000)
+}
+
+// ---------- a big game, slice by slice, in the chat
+// After each slice the build waits: Hermia shows what the bots played (their filmed run and a
+// still), points at the live game in the App view, and asks what to change. A suggestion or
+// the person's own words start the next slice with that note.
+function sliceCard(s, run = shownRun()) {
+  if (!s || !run) return
+  const key = `${run}:${s.i}:${s.clip || ''}`
+  if (els.feed.querySelector(`.slice-card[data-key="${CSS.escape(key)}"]`)) return
+  const item = document.createElement('div')
+  item.className = 'item bot slice-card'
+  item.dataset.key = key
+  item.dataset.run = run
+  item.dataset.i = s.i
+  const vid = s.clip ? `<video class="sc-clip" src="${esc(BASE + s.clip)}" muted playsinline autoplay loop></video>` : ''
+  const pic = s.shot ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
+  item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${s.i + 1} of ${s.n}</small></b>`
+    + `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>`
+    + `<span class="txt"></span>`
+    + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
+    + `<div class="sc-ideas">${(s.ideas || []).map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
+  item.querySelector('.txt').textContent = s.ask || `Slice ${s.i + 1} is built. Anything to change?`
+  item.querySelector('.sc-live').onclick = () => setView('app')
+  for (const b of item.querySelectorAll('.sc-ideas button')) b.onclick = () => sliceGo(s.ideas[+b.dataset.j])
+  push(els.feed, item)
+}
+async function sliceGo(text) {
+  const s = appv.slice
+  if (appv.state !== 'paused' || !s) return botMsg('The game is not waiting on a slice right now.')
+  // the first suggestion is "go on": no note, the next slice as planned
+  const note = /^looks good/i.test(text) ? '' : String(text || '').trim()
+  feed(null, text, 'you')
+  for (const c of els.feed.querySelectorAll('.slice-card .sc-ideas')) c.remove()
+  await appAsk('', note ? { note } : {})
+}
+
 // ---------- the app advisor
 // Before a site becomes a working app, Hermia reads its pages and asks, in the
 // chat, what the business needs behind it (users, what gets saved, dashboards,
 // a CRM, an admin panel). Each question comes with her recommended answer; the
 // answers become an app plan to tick through, and the plan becomes dyad's brief.
-const adv = { run: null, qs: [], i: 0, qa: [], busy: false }
+const adv = stateSlice('advisor', { run: null, qs: [], i: 0, qa: [], busy: false }).state
 function advMsg(html, cls = '') {
   const item = document.createElement('div')
   item.className = `item bot adv ${cls}`
@@ -4210,6 +4479,24 @@ async function advPlan() {
 // a site's first app build goes through the advisor; a game or a retry goes straight on
 const buildApp = () => (appv.kind !== 'game' && !appv.hasApp && !appv.plan ? openAdvisor() : appAsk('', appv.plan ? { plan: appv.plan } : {}))
 
+// The image model ran out before any art landed: say which, offer the other image models
+// Hermes has signed in, and building with shapes drawn in code.
+function artStopCard(stop) {
+  if (!modelsInfo?.image && !artStopCard.asked) { artStopCard.asked = true; loadModels().then(() => renderApp()) }
+  const others = (modelsInfo?.image?.providers || []).filter(p => p.available && p.provider !== stop.provider)
+  return `<div class="fail-card"><span class="fail-ico">${ico('image')}</span><h2>No <em>art</em></h2>`
+    + `<p class="fail-msg">${esc(stop.model)} is out of quota</p>`
+    + (others.length ? `<div class="fail-pick" role="group" aria-label="Image model">${others.map(p => `<button class="fail-model" data-image="${esc(p.provider)}" data-model="${esc(p.default || '')}">${esc(p.provider)}</button>`).join('')}</div>` : '')
+    + `<div class="fail-acts"><button class="big" data-build>${ico('rotate-ccw')}Try again</button><button class="fail-alt" data-incode>Draw in code</button></div></div>`
+}
+// what a stopped build had done: its pictures and its stages
+function stopSummary() {
+  const steps = appv.steps || [], art = artPhase(steps)
+  const painted = steps.filter(s => /^painted the /.test(s.text || '')).length
+  const stage = steps.findLast(s => /^stage \d+ of/.test(s.text || ''))?.text.match(/^stage (\d+ of \d+)/)?.[1]
+  return [painted || art ? `${painted}${art?.total ? `/${art.total}` : ''} pictures` : '', stage ? `stage ${stage}` : ''].filter(Boolean).join(' · ') || 'nothing built yet'
+}
+
 async function deployApp() {
   if (!appv.run) return
   appv.deploying = true
@@ -4229,12 +4516,15 @@ function appEvent(e) {
   const fresh_ = !e.t || Date.now() - e.t < 8000
   if (e.type === 'app:start') {
     Object.assign(appv, { state: 'working', kind: e.kind || appv.kind, stage: 'starting', message: '' })
+    // a build from scratch: the painters' tiles from an earlier build (another game's art) go
+    if (e.fresh) paintv.slots = []
     if (e.ask && appv.asks.at(-1) !== e.ask) appv.asks.push(e.ask)
     appv.steps.push({ kind: 'ask', text: e.ask || 'build', t: e.t })
     if (fresh_) feed(null, `🧩 ${e.model || 'the engine'} is ${e.fresh ? `building the ${e.kind === 'game' ? 'game' : 'app'}` : 'changing the app'}${e.ask ? `: “${e.ask}”` : ''}`, 'sys')
   } else if (e.type === 'app:step') {
     appv.steps.push(e.step)
     if (e.step.kind !== 'write' && e.step.kind !== 'think') appv.stage = e.step.text
+    { const m = /^stage (\d+) of (\d+)/.exec(e.step.text || ''); if (m) appv.at = [+m[1], +m[2]] }
     if (e.step.kind === 'write') appv.files = null
   } else if (e.type === 'app:ready') {
     // only a live event: an old one from the log names a dev server that may be gone
@@ -4244,6 +4534,11 @@ function appEvent(e) {
     if (e.url && fresh_) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
     if (fresh_) feed(null, `🧩 the ${appv.kind === 'game' ? 'game' : 'app'} is ready (${e.result?.turns || 1} turn${e.result?.turns === 1 ? '' : 's'}, checks ${e.result?.gatesPassed ? 'passed' : 'not passed'}, ${Math.round((e.ms || 0) / 1000)}s). Open the App view to try it, or chat to change it.`, 'sys')
+  } else if (e.type === 'app:paused') {
+    // a big game stops after each slice and asks in the chat (sliceCard)
+    Object.assign(appv, { state: 'paused', result: e.result, slice: e.slice, stage: '' })
+    if (e.url && fresh_) appv.url = e.url
+    sliceCard(e.slice, e.run)
   } else if (e.type === 'app:failed') {
     Object.assign(appv, { state: 'failed', message: e.message })
     if (fresh_) feed(null, `🧩 app: ${e.message}`, 'err')
@@ -4259,7 +4554,7 @@ commandOps.view = c => setView(c.view)
 // ---------- 🎮 game mode
 // A few questions, one at a time (chips or your own words; "Just build it"
 // fills the rest), then the spec card, then the build in the App view.
-const game = { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false, cast: null }
+const game = stateSlice('game', { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false, cast: null }).state
 async function openGame(idea = '', answers = null, build = false) {
   if (!game.questions?.length) game.questions = (await api('/api/game').then(r => r.ok ? r.json() : {}).catch(() => ({}))).questions || []
   // a site build is open: the game can be its promo game, in its world and colours
@@ -4274,6 +4569,8 @@ async function openGame(idea = '', answers = null, build = false) {
   game.off?.()
   game.off = window.SwarmUI?.layer(game.el, closeGame, { extra: [$('#game-btn')], canClose: () => !game.busy })
   if (answers || build) return gameSpec(build)
+  // an unfinished Shape it walk can be picked up from here
+  game.resume = (await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null))?.workshops?.[0] || null
   renderGame()
 }
 const closeGame = () => { game.off?.(); game.off = null; game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
@@ -4294,13 +4591,16 @@ function renderGame() {
   } else if (game.spec) {
     const s = game.spec, list = gameList
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
-    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
+    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><span><button class="glink" data-shape>Shape it</button><button class="big" data-build>Build the game</button></span></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
     el.querySelector('[data-build]').onclick = () => (game.cast && !game.cast.done ? openCast() : gameBuild())
+    el.querySelector('[data-shape]').onclick = () => gameShape()
     el.querySelector('[data-online]')?.addEventListener('click', () => gameOnline())
   } else {
     const val = game.answers[q.id] || ''
-    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
+    const W = game.i === 0 && game.resume
+    const STEPN = ['design', 'story', 'world', 'heroes', 'enemies', 'levels', 'sound']
+    el.innerHTML = `${head}${W ? `<button class="gresume" data-resume>${ico('rotate-ccw')}<span>Continue <b>${esc(W.title || 'the game')}</b></span><em>${Math.max(1, STEPN.indexOf(W.step) + 1)}/7</em></button>` : ''}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
     const free = el.querySelector('.gfree')
     const take = v => { if (v) game.answers[q.id] = v; else delete game.answers[q.id] }
     const next = () => { take(free.value.trim() || game.answers[q.id]); if (game.i < qs.length - 1) { game.i++; renderGame() } else gameSpec() }
@@ -4309,6 +4609,11 @@ function renderGame() {
     el.querySelector('.gidea')?.addEventListener('input', e => { game.idea = e.target.value })
     el.querySelector('.gpromo input')?.addEventListener('change', e => { game.promo = e.target.checked })
     el.querySelector('[data-next]').onclick = next
+    el.querySelector('[data-resume]')?.addEventListener('click', () => {
+      const id = game.resume.id
+      closeGame()
+      openWorkshop({ api, ico, id, onBuilt: async (run, built) => { await loadFiles(); await openRun(run); setView('app'); botMsg(`🎮 Building “${built?.title || 'the game'}” with the art, story, levels and sound you picked.`) } })
+    })
     el.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || game.answers[q.id]); gameSpec() }
     el.querySelector('[data-back]')?.addEventListener('click', () => { game.i--; renderGame() })
     ;(game.i === 0 ? el.querySelector('.gidea') : free)?.focus()
@@ -4647,6 +4952,26 @@ async function gameOnline() {
 // names of a spec's list (a big spec's entries are objects with a name)
 const gameList = v => (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : x?.name || '')).join(', ') : v || '')
 
+// Shape it: the spec walked step by step with pictures (web/workshop.js), then the same build
+async function gameShape() {
+  readSpecEdits()
+  const spec = { ...game.spec }
+  closeGame()
+  // an unfinished walk of the same game opens where it was left
+  const key = String(spec.title || '').trim().toLowerCase()
+  const open = await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null)
+  const id = (open?.workshops || []).find(w => String(w.title || '').trim().toLowerCase() === key)?.id
+  openWorkshop({
+    api, ico, spec, id,
+    onBuilt: async (run, built) => {
+      await loadFiles()
+      await openRun(run)
+      setView('app')
+      botMsg(`🎮 Building “${built?.title || spec.title}” with the art, story, levels and sound you picked. The App view shows every file as it is written.`)
+    }
+  })
+}
+
 async function gameBuild() {
   // the card's edits go into the spec (a big spec's enemies stay objects unless that line changed)
   readSpecEdits()
@@ -4795,7 +5120,7 @@ function crewJob() {
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
     return cw.thinking
       ? { key: `app-plan|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
-      : { key: `app-code|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['writing code'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+      : { key: `app-${cw.mode || 'code'}|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: [cw.mode === 'art' ? 'painting' : 'writing code'], tool: cw.mode === 'art' ? ['image', 'image', 'image', 'text'] : ['text', 'text', 'connect', 'frame'], pin: cwPin }
   }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
@@ -4830,8 +5155,9 @@ function crewSpot(job, me) {
 }
 
 function crewTick(now) {
-  requestAnimationFrame(crewTick)
   const job = crewJob()
+  // no crew on screen: look again a few times a second instead of every frame
+  nextFrame(crewTick, !job && !crew.members.length, 300)
   const key = job ? job.key : ''
   if (key !== crew.key) {
     crew.key = key
@@ -4891,7 +5217,7 @@ function crewTick(now) {
     m.el.classList.toggle('press', now > m.pressAt && now < m.pressAt + 160)
   }
   // Hermia's dotted line, from her strip to the helper she is giving an order to
-  const from = lineTo && cw.el?.querySelector('.cw-radio:not([hidden]) .cw-radio-av')?.getBoundingClientRect()
+  const from = lineTo && document.querySelector('#app-hermia:not([hidden]):not(.min) .ah-head .cw-radio-av')?.getBoundingClientRect()
   radioLine.hidden = !from?.width
   if (!radioLine.hidden) {
     const x1 = from.left + from.width / 2, y1 = from.bottom, x2 = lineTo.x + 6, y2 = lineTo.y + 4
@@ -5620,33 +5946,66 @@ Chatter?.watch?.(() => renderSoundPop())
 // writes type out in tiles, one agent per tile with its cursor on the caret. The last
 // tile is the asset pane, always: the build's pictures turning on a card, one after another.
 const CW_TILES = 4
-const CW_ASSET = CW_TILES - 1
+const CW_CODE = CW_TILES - 1 // the one code tile, in both modes; the other three are pictures
 const CW_TURN = 2600 // ms per asset
 // ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
 // and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
 // talking to, each helper's reply as a bubble on its cursor, and what it is doing right now
 // (crew:act, live only) as its name-pill status.
-const radio = { run: null, lead: null, reason: null, acts: new Map(), says: new Map(), order: [] }
+const radio = { run: null, lead: null, reason: null, acts: new Map(), says: new Map(), order: [], feed: [] }
+// Hermia's history for her dock: her thinking fragments join into one line while fresh
+// the engine's own boilerplate (file-size notes, where the chat backup is) is not her talking
+const DOCK_NOISE = /^(Note: This file may be large|If you need to retrieve earlier parts of the conversation)/
+function dockLine(x) {
+  if (DOCK_NOISE.test(String(x.text || '').trim())) return
+  const last = radio.feed.at(-1)
+  if (x.kind === 'reason' && last?.kind === 'reason' && x.t - last.t < 20000 && last.text.length < 1400) { last.text += ` ${x.text}`; last.t = x.t; last.n = (last.n || 1) + 1; return }
+  radio.feed.push(x)
+  if (radio.feed.length > 60) radio.feed.shift()
+}
 function radioEvent(e) {
   const run = e.run || appv.run || shownRun()
-  if (radio.run !== run) Object.assign(radio, { run, lead: null, reason: null, acts: new Map(), says: new Map(), order: [] })
+  if (radio.run !== run) Object.assign(radio, { run, lead: null, reason: null, acts: new Map(), says: new Map(), order: [], feed: [] })
   const t = e.t || Date.now()
   const meet = n => { if (n && n !== 'Hermia' && !radio.order.includes(n)) radio.order.push(n) }
   // the lead's reasoning (kind 'reason', "💭 …"): a dimmer thought line in her strip, never an order
-  if (e.type === 'crew:lead' && e.kind === 'reason') radio.reason = { text: String(e.text || '').replace(/^💭\s*/u, ''), full: e.full || '', t }
-  else if (e.type === 'crew:lead') { radio.lead = { text: e.text, to: e.to, kind: e.kind || 'think', t }; meet(e.to) }
+  if (e.type === 'crew:lead' && e.kind === 'reason') { radio.reason = { text: String(e.text || '').replace(/^💭\s*/u, ''), full: e.full || '', t }; dockLine({ kind: 'reason', text: radio.reason.text, t }) }
+  else if (e.type === 'crew:lead') { radio.lead = { text: e.text, to: e.to, kind: e.kind || 'think', t }; meet(e.to); dockLine({ ...radio.lead }) }
   else if (e.type === 'crew:act') { radio.acts.set(e.name, { text: e.text, t }); meet(e.name) }
   else if (e.type === 'agent:say') { radio.says.set(e.name, { text: e.text, kind: e.kind, t }); meet(e.name) }
 }
 const radioOn = () => radio.run && radio.run === appv.run
 // the wall's crew: the helpers the radio has heard from first, then the build's agents
 function wallNames() {
+  if (cw.mode === 'art') return [...ART_TILES.map(n => [n, Crew.color(n)]), ...crewMembers(4).filter(([n]) => !ART_TILES.includes(n))].slice(0, CW_TILES)
   const heard = radioOn() ? radio.order.slice(0, CW_TILES).map(n => [n, Crew.color(n)]) : []
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
 const heardIn = (x, ms) => x && Date.now() - x.t < ms
-const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
-const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
+const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, av: [] }
+const CW_FRESH = { assets: null, assetsAt: 0, av: [], mode: '', reads: null, readAt: 0 }
+// ---------- the art wall: while a game's art is painted, the wall is mostly pictures. Three
+// painters (the server's PAINTERS) each get a tile with the picture they are on: painting,
+// cut out, checked, sent back, done. The last tile stays code. When the code starts, the
+// wall turns back to three code tiles and the asset pane.
+const ART_TILES = ['Kiki', 'Juno', 'Tofu']
+const ART_STATE = { painting: 'painting', cutting: 'cutting', checking: 'checking', 'sent back': 'again', done: 'done', failed: 'failed' }
+const paintv = { run: null, slots: [] }
+function artEvent(e) {
+  if (paintv.run !== e.run) Object.assign(paintv, { run: e.run, slots: [] })
+  const prev = paintv.slots[e.slot]
+  paintv.slots[e.slot] = { who: e.who, id: e.id, what: e.what, state: e.state, src: e.src || (prev?.id === e.id ? prev.src : ''), problems: e.problems || [], t: e.t || Date.now() }
+}
+// art time: the build said it is painting, and no code stage or turn has started since
+function artPhase(steps) {
+  const at = steps.findLastIndex(s => /^painting the game's art/.test(s.text || ''))
+  if (at < 0) return null
+  const after = steps.slice(at + 1)
+  if (after.some(s => s.kind === 'turn' || s.kind === 'write' || /^stage \d+ of/.test(s.text || ''))) return null
+  const total = Number(/(\d+) pictures/.exec(steps[at].text)?.[1]) || 0
+  const kept = Number(/using (\d+) pictures painted before/.exec(after.find(s => /^using \d+ pictures/.test(s.text || ''))?.text || '')?.[1]) || 0
+  return { total, painted: kept + after.filter(s => /^painted the /.test(s.text || '')).length, failed: after.filter(s => s.ok === false).length }
+}
 const clock = ms => { const t = Math.max(0, Math.round(ms / 1000)); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s` }
 const kTokens = n => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
 // Between batches the engine is thinking (its "next step" line): nothing is written for a
@@ -5673,7 +6032,62 @@ function cwHighlight(text) {
   return out + esc(text.slice(last))
 }
 
+function cwZoom(i) {
+  cw.big = cw.big === i ? -1 : i
+  const g = cw.el?.querySelector('.cw-grid')
+  if (g) cwZoomShow(g)
+}
+function cwZoomShow(g) {
+  g.classList.toggle('zoom', cw.big >= 0)
+  ;[...g.children].forEach((d, i) => { d.classList.toggle('big', i === cw.big); d.setAttribute('aria-expanded', String(i === cw.big)) })
+}
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || cw.big < 0 || !cw.el || cw.el.hidden) return
+  e.stopImmediatePropagation()
+  cwZoom(cw.big)
+}, true)
+
+// ---------- Hermia's dock: the commander's own section under the steps. Her orders and her
+// thinking out loud, newest at the bottom like a chat. Folds to its header and slides
+// taller or shorter from its top edge; both stay as set in this browser.
+const hdock = { el: $('#app-hermia'), key: '' }
+;(() => {
+  const el = hdock.el
+  if (!el) return
+  el.innerHTML = `<div class="ah-grip" role="separator" aria-orientation="horizontal" aria-label="Resize Hermia" tabindex="0"></div><button class="ah-head" aria-expanded="true"><span class="cw-radio-av">${HERMIA}</span><b>Hermia</b><em class="ah-kind"></em>${ico('chevron-down')}</button><div class="ah-feed"></div>`
+  const side = el.parentElement, head = el.querySelector('.ah-head'), grip = el.querySelector('.ah-grip')
+  const save = () => { try { localStorage.setItem('swarm-hermia', JSON.stringify({ h: el.style.getPropertyValue('--ah-h'), min: el.classList.contains('min') })) } catch {} }
+  const fold = on => { el.classList.toggle('min', on); head.setAttribute('aria-expanded', String(!on)) }
+  const size = h => el.style.setProperty('--ah-h', `${Math.round(Math.max(96, Math.min(h, side.clientHeight - 80)))}px`)
+  try { const o = JSON.parse(localStorage.getItem('swarm-hermia') || '{}'); if (o.h) el.style.setProperty('--ah-h', o.h); if (o.min) fold(true) } catch {}
+  head.onclick = () => { fold(!el.classList.contains('min')); save() }
+  grip.onpointerdown = ev => {
+    ev.preventDefault(); grip.setPointerCapture(ev.pointerId)
+    const y0 = ev.clientY, h0 = el.getBoundingClientRect().height
+    grip.onpointermove = m => size(h0 + y0 - m.clientY)
+    grip.onpointerup = () => { grip.onpointermove = grip.onpointerup = null; save() }
+  }
+  grip.onkeydown = ev => { const d = { ArrowUp: 24, ArrowDown: -24 }[ev.key]; if (d) { ev.preventDefault(); size(el.getBoundingClientRect().height + d); save() } }
+})()
+function hermiaDock() {
+  const el = hdock.el
+  if (!el) return
+  const feedL = radioOn() ? radio.feed : []
+  el.hidden = !feedL.length || crewQuiet()
+  const last = feedL.at(-1), key = `${radio.run}|${feedL.length}|${last?.t}|${last?.text.length}`
+  if (el.hidden || hdock.key === key) return
+  hdock.key = key
+  const lead = radio.lead
+  setText(el.querySelector('.ah-kind'), lead ? { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind : 'thinking')
+  el.querySelector('.ah-kind').className = `ah-kind k-${lead?.kind || 'reason'}`
+  const box = el.querySelector('.ah-feed'), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 60
+  box.innerHTML = feedL.map(x => `<p class="ah-msg k-${esc(x.kind)}">${x.to ? `<span class="to">→ <b style="color:${Crew.color(x.to)}">${esc(x.to)}</b></span>` : ''}${esc(x.text)}</p>`).join('')
+  if (stick) box.scrollTop = box.scrollHeight
+}
+
 function codeWall() {
+  hermiaDock()
+  playClip()
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
     cw.shown = false
@@ -5684,14 +6098,28 @@ function codeWall() {
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-radio" hidden></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
+    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
+    // a click on a tile makes it big, the others line up beside it; a second click (or Esc) puts it back
+    const g = cw.el.querySelector('.cw-grid')
+    g.onclick = ev => { const t = ev.target.closest('.cw-tile'); if (t) cwZoom([...g.children].indexOf(t)) }
+    g.onkeydown = ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList?.contains('cw-tile')) { ev.preventDefault(); cwZoom([...g.children].indexOf(ev.target)) } }
     appEls.preview.append(cw.el)
   }
   if (cw.run !== appv.run) {
     Object.assign(cw, { run: appv.run, seen: Math.max(0, appv.steps.length - 30), queue: [], tiles: [], hide: false, ...CW_FRESH })
     cw.el.querySelector('.cw-grid').replaceChildren()
   }
+  // art time: three painter tiles and one code tile; code time: three code tiles and the asset pane
+  const artNow = artPhase(appv.steps), mode = artNow ? 'art' : 'code'
+  if (cw.mode !== mode) {
+    cw.mode = mode
+    cw.tiles = []
+    cw.el.querySelector('.cw-grid').replaceChildren()
+    if (mode === 'art') cw.queue = ['GAME_SPEC.md']
+    cw.el.querySelector('.cw-head .pop-title').innerHTML = mode === 'art' ? 'Painting the <em>art</em>' : appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'
+  }
+  const codeTile = i => i === CW_CODE
   cw.el.hidden = cw.hide
   // the wall just came up while Auto is running: fold the Auto panel to its pill so it does not cover the code
   if (!cw.hide && !cw.shown) {
@@ -5708,7 +6136,7 @@ function codeWall() {
   // a free tile (empty, or done typing for a moment) takes the next file
   const now = performance.now()
   for (let i = 0; i < CW_TILES && cw.queue.length; i++) {
-    if (i === CW_ASSET) continue
+    if (!codeTile(i)) continue
     const t = cw.tiles[i]
     if (t && (t.loading || t.shown < t.text.length || now - t.doneAt < 1500)) continue
     const path = cw.queue.shift()
@@ -5716,23 +6144,28 @@ function codeWall() {
     const tile = cw.tiles[i]
     appApi(`/files?path=${encodeURIComponent(path)}`).then(r => { tile.text = String(r.text || '').slice(0, 6000) }).catch(() => { tile.text = '' }).finally(() => { tile.loading = false; if (!tile.text) tile.doneAt = 0 })
   }
+  // nothing written yet (the crew is reading and planning): an empty code tile shows a file the
+  // app already has, scrolling slowly and marked as being read, so the wall is never blank
+  if (mode === 'code' && !cw.queue.length && !cw.reads?.length && now - cw.readAt > 20000) {
+    cw.readAt = now
+    appApi('/files').then(r => { if (cw.run === appv.run) cw.reads = (r.files || []).map(f => f.path).filter(p => /\.(tsx?|jsx?|css|md|gd)$/.test(p) && !/lock|tsbuildinfo|node_modules|\.d\.ts$/.test(p)) }).catch(() => {})
+  }
+  for (let i = 0; i < CW_TILES && cw.reads?.length && !cw.queue.length; i++) {
+    if (!codeTile(i) || cw.tiles[i]) continue
+    const up = new Set(cw.tiles.filter(Boolean).map(t => t.path)), pick = cw.reads.filter(p => !up.has(p))
+    if (!pick.length) break
+    const tile = cw.tiles[i] = { path: pick[(Math.random() * pick.length) | 0], text: '', shown: 0, loading: true, doneAt: 0, read: true, scroll: 0 }
+    appApi(`/files?path=${encodeURIComponent(tile.path)}`).then(r => { tile.text = String(r.text || '').slice(0, 6000); tile.shown = tile.text.length }).catch(() => {}).finally(() => { tile.loading = false })
+  }
   const grid = cw.el.querySelector('.cw-grid')
   const names = wallNames()
-  // Hermia's strip: her newest line, and who it is for
-  const strip = cw.el.querySelector('.cw-radio'), lead = radioOn() ? radio.lead : null
-  // her reasoning shows under her newest line while it is fresh (or alone, before her first line)
-  const reason = radioOn() && heardIn(radio.reason, 20000) && (!lead || radio.reason.t >= lead.t - 1000) ? radio.reason : null
-  strip.hidden = !(lead || reason) || crewQuiet()
-  const stamp = `${lead?.t || 0}/${reason?.t || 0}`
-  if ((lead || reason) && strip.dataset.t !== stamp) {
-    strip.dataset.t = stamp
-    const kind = lead ? { assign: 'order', ack: 'roger', think: 'thinking' }[lead.kind] || lead.kind : 'reasoning'
-    strip.className = `cw-radio ${lead ? lead.kind : 'reason'}`
-    strip.innerHTML = `<span class="cw-radio-av">${HERMIA}</span><div class="cw-radio-main"><div class="cw-radio-who"><b>Hermia</b>${lead?.to ? `<span class="to">→</span><b style="color:${Crew.color(lead.to)}">${esc(lead.to)}</b>` : ''}<em>${esc(kind)}</em></div>${lead ? `<p>${esc(lead.text)}</p>` : ''}${reason ? `<p class="cw-reason">💭 ${esc(reason.text)}</p>` : ''}</div>`
-  }
   while (grid.children.length < CW_TILES) {
     const d = document.createElement('div')
-    if (grid.children.length === CW_ASSET) {
+    if (!codeTile(grid.children.length) && mode === 'art') {
+      d.className = 'cw-tile cw-paint'
+      d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-state"></em><em class="cw-who"></em></div>'
+        + '<div class="cw-easel"><img class="cw-pic" alt=""><i class="cw-wash"></i><i class="cw-scan"></i><i class="cw-pin"></i></div><p class="cw-why" hidden></p>'
+    } else if (!codeTile(grid.children.length)) {
       d.className = 'cw-tile cw-asset empty'
       d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div>'
         + '<div class="cw-stage" aria-hidden="true"><div class="cw-turn"><img class="cw-face" alt=""><img class="cw-face" alt=""></div>'
@@ -5741,9 +6174,14 @@ function codeWall() {
       d.className = 'cw-tile'
       d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
     }
+    d.tabIndex = 0
     grid.append(d)
   }
-  cwAssetTile(grid.children[CW_ASSET], names[CW_ASSET], now)
+  cwZoomShow(grid)
+  if (mode === 'art') {
+    cwAssets()
+    for (let i = 0; i < CW_TILES - 1; i++) cwPaintTile(grid.children[i], i, names[i])
+  } else for (let k = 0; k < CW_CODE; k++) cwAssetTile(grid.children[k], names[k], now, k)
   let writing = 0
   cw.tiles.forEach((t, i) => {
     const d = grid.children[i]
@@ -5754,8 +6192,17 @@ function codeWall() {
       writing++
     }
     d.classList.toggle('typing', !t.loading && t.shown < t.text.length)
+    d.classList.toggle('reading', !!t.read)
     setText(d.querySelector('.cw-path'), t.path)
     cwWho(d, names[i])
+    if (t.read) {
+      // a file being read: all of it, scrolling down slowly, then back to the top
+      const pre = d.querySelector('.cw-code')
+      if (d.dataset.path !== t.path || d.dataset.shown !== String(t.shown)) { d.dataset.path = t.path; d.dataset.shown = t.shown; pre.innerHTML = cwHighlight(t.text); t.scroll = 0 }
+      t.scroll = t.scroll + 0.6 > pre.scrollHeight - pre.clientHeight + 40 ? 0 : t.scroll + 0.6
+      pre.scrollTop = t.scroll | 0
+      return
+    }
     if (d.dataset.shown !== String(t.shown) || d.dataset.path !== t.path) {
       d.dataset.shown = t.shown; d.dataset.path = t.path
       // the last lines, so the caret stays in view
@@ -5786,10 +6233,46 @@ function codeWall() {
     setText(planEl.querySelector('.cw-plan-age'), `${age} since the last file`)
     setText(planEl.querySelector('.cw-plan-act'), acts[0] ? `${acts[0][0]}: ${acts[0][1].text}` : '')
     setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · planning turn ${plan.turn} (${age})`)
+  } else if (artNow) {
+    cw.planKey = ''
+    setText(cw.el.querySelector('.cw-count'), `${artNow.painted}/${artNow.total || '?'} pictures${artNow.failed ? ` · ${artNow.failed} ⚠` : ''}`)
   } else {
     cw.planKey = ''
     setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · ${writing} typing · ${appv.stage || ''}`)
   }
+}
+
+// A painter's tile: the picture they are on, as it goes from a wash of paint to the painted
+// picture, its cut-out on dark and magenta while it is checked, and a ⚠ with the reviewer's
+// words when it is sent back. Before the first word from a painter: the next picture's name.
+function cwPaintTile(d, i, member) {
+  if (!d) return
+  cwWho(d, member)
+  const sl = paintv.run === cw.run ? paintv.slots[i] : null
+  const state = sl?.state || 'waiting'
+  d.dataset.state = state
+  setText(d.querySelector('.cw-path'), sl?.what || cw.assets?.next?.[i] || 'Art')
+  const chip = d.querySelector('.cw-state')
+  setText(chip, ART_STATE[state] || '')
+  chip.setAttribute('aria-label', ART_STATE[state] || 'waiting')
+  const pic = d.querySelector('.cw-pic'), src = sl?.src || ''
+  if (pic.dataset.src !== src) {
+    pic.dataset.src = src
+    pic.classList.remove('on')
+    if (src) {
+      const im = new Image()
+      im.onload = () => {
+        if (pic.dataset.src !== src) return
+        pic.src = src
+        pic.classList.add('on')
+        d.classList.remove('scan'); void d.offsetWidth; d.classList.add('scan')
+      }
+      im.src = src
+    }
+  }
+  const why = d.querySelector('.cw-why'), words = state === 'sent back' || state === 'failed' ? (sl.problems || []).join(' · ') : ''
+  why.hidden = !words
+  setText(why, words ? `⚠ ${words}` : '')
 }
 
 // a tile's name chip: the courier working on it
@@ -5804,37 +6287,86 @@ function cwWho(d, member) {
 // are listed by the server but not drawn: the Studio does not load three.js. Nothing painted
 // yet: the next picture's name over a turning wireframe cube, never an empty pane.
 function cwAssets() {
-  if (cw.assetsLoading || Date.now() - cw.assetsAt < 12000) return
+  if (cw.assetsLoading || Date.now() - cw.assetsAt < (cw.mode === 'art' ? 4000 : 12000)) return
   cw.assetsLoading = true
   const run = cw.run
   api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => r.ok ? r.json() : null)
-    .then(j => { if (j && cw.run === run) cw.assets = { pics: (j.assets || []).filter(a => a.kind === 'art' && a.src), next: j.next || [] } })
+    .then(j => {
+      if (!j || cw.run !== run) return
+      cw.assets = { pics: (j.assets || []).filter(a => a.kind === 'art' && a.src), next: j.next || [] }
+      // the painters' jobs, for a canvas that missed their live events (opened mid-art, a reload)
+      for (const e of j.painting || []) if (paintv.run !== run || !paintv.slots[e.slot] || paintv.slots[e.slot].t < e.t) artEvent(e)
+    })
     .catch(() => {})
     .finally(() => { cw.assetsLoading = false; cw.assetsAt = Date.now() })
 }
-function cwAssetTile(d, member, now) {
+// The code wall's three picture windows, newest first: each is a slow slideshow through the
+// latest few pictures only (never a loop through every old one), and a picture just made
+// jumps to the front. k 0 is the play test (the filmed clip covers it once a slice has one;
+// before that, the latest pictures under a "plays after this slice" note); k 1 and 2 share
+// the latest pictures between them. A picture being painted right now takes window 1.
+const CW_NEW = 5 * 60e3, CW_SHOW = 6, CW_EVERY = 5200
+// the picture window k shows now from the latest few, turning every CW_EVERY (staggered)
+function cwSlide(a, k, pool, now) {
+  if (!pool.length) return null
+  const top = pool[0].src
+  if (a.top !== top) { a.top = top; a.n = 0; a.turn = now + CW_EVERY + k * 1700 }
+  else if (now >= (a.turn || 0)) { a.n = (a.n || 0) + 1; a.turn = now + CW_EVERY }
+  // k 1 and 2 take turns over the pool (the newest on 1, the next on 2); k 0 walks all of it
+  const own = k === 0 ? pool : pool.filter((_, i) => i % 2 === (k === 1 ? 0 : 1))
+  const list = own.length ? own : pool
+  return list[(a.n || 0) % list.length]
+}
+function cwRanked() {
+  const pics = cw.assets?.pics || []
+  // newest first; pictures with no time keep the art plan's order, after the timed ones
+  return pics.map((p, i) => ({ ...p, i })).sort((x, y) => (y.t || 0) - (x.t || 0) || y.i - x.i)
+}
+function cwLive() {
+  if (paintv.run !== cw.run) return null
+  return paintv.slots.filter(sl => sl && ['painting', 'cutting', 'checking', 'sent back'].includes(sl.state)).sort((x, y) => (y.t || 0) - (x.t || 0))[0] || null
+}
+function cwAssetTile(d, member, now, k = 0) {
   if (!d) return
   cwAssets()
   cwWho(d, member)
-  const pics = cw.assets?.pics || []
-  d.classList.toggle('empty', !pics.length)
-  if (!pics.length) {
-    cw.assetName = cw.assets?.next?.[0] || 'Art'
-    setText(d.querySelector('.cw-path'), cw.assetName)
-    return
+  const ranked = cwRanked(), live = k === 1 ? cwLive() : null
+  const a = cw.av[k] ||= { src: '', name: '' }
+  // the slice from the status line, else the build's last "stage n of N" step (the line often reads "next step")
+  const slice = appv.at ? [null, ...appv.at] : String(appv.stage || '').match(/stage (\d+) of (\d+)/) || String(appv.steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text || '').match(/stage (\d+) of (\d+)/)
+  let pic = null, label = '', state = ''
+  const pool = ranked.slice(0, CW_SHOW)
+  if (k === 0) {
+    pic = cwSlide(a, 0, pool, now)
+    label = d.classList.contains('has-play') ? 'Play test' : `Play test · plays after ${slice ? `slice ${slice[1]} of ${slice[2]}` : 'this slice'}`
+    state = 'waiting'
+  } else if (live) {
+    pic = live.src ? { src: live.src, name: live.what } : null
+    label = live.what
+    state = ART_STATE[live.state] || 'painting'
+  } else {
+    // with something painting in window 1, window 2 has the latest finished pictures to itself
+    pic = cwSlide(a, cwLive() ? 0 : k, pool, now)
+    label = pic?.name || cw.assets?.next?.[k - 1] || 'Art'
+    state = pic && pic.t && Date.now() - pic.t < CW_NEW ? 'new' : ''
   }
-  if (cw.ai >= 0 && now - cw.aiAt < CW_TURN) return
-  const i = (cw.ai + 1) % pics.length, pic = pics[i]
-  cw.ai = i; cw.aiAt = now
-  // the hidden face takes the next picture once it has loaded, then the faces trade places
+  d.classList.toggle('empty', !pic)
+  d.classList.toggle('play-wait', k === 0 && !d.classList.contains('has-play'))
+  d.dataset.state = state
+  setText(d.querySelector('.cw-path'), label)
+  let chip = d.querySelector('.cw-state')
+  if (!chip) { chip = document.createElement('em'); chip.className = 'cw-state'; d.querySelector('.cw-file').insertBefore(chip, d.querySelector('.cw-who')) }
+  setText(chip, state === 'waiting' ? '' : state)
+  a.name = label
+  if (!pic || a.src === pic.src) return
+  a.src = pic.src
+  // the hidden face takes the new picture once it has loaded, then the faces trade places
   const faces = [...d.querySelectorAll('.cw-face')], next = faces.find(f => !f.classList.contains('on')) || faces[0]
   const im = new Image()
   im.onload = () => {
-    if (cw.ai !== i) return
+    if (a.src !== pic.src) return
     next.src = pic.src
     for (const f of faces) f.classList.toggle('on', f === next)
-    cw.assetName = pic.name
-    setText(d.querySelector('.cw-path'), pic.name)
     d.classList.remove('scan'); void d.offsetWidth; d.classList.add('scan')
   }
   im.src = pic.src
@@ -5842,18 +6374,25 @@ function cwAssetTile(d, member, now) {
 
 // the crew's cursor for tile i sits on that tile's caret (the asset pane: beside its card)
 function cwPin(i) {
-  if (i === CW_ASSET) {
-    const pin = cw.el?.querySelector('.cw-asset .cw-pin')?.getBoundingClientRect()
-    return pin?.width ? { x: pin.left, y: pin.top, text: cw.assetName, typing: true } : null
+  if (cw.mode === 'art' && i < CW_TILES - 1) {
+    const sl = paintv.run === cw.run ? paintv.slots[i] : null
+    const pin = cw.el?.querySelector('.cw-grid')?.children[i]?.querySelector('.cw-pin')?.getBoundingClientRect()
+    return pin?.width ? { x: pin.left, y: pin.top, text: sl ? `${ART_STATE[sl.state] || ''} ${sl.what}`.trim() : 'waiting', typing: sl?.state === 'painting' } : null
+  }
+  if (cw.mode !== 'art' && i !== CW_CODE) {
+    const d = cw.el?.querySelector('.cw-grid')?.children[i], pin = d?.querySelector('.cw-pin')?.getBoundingClientRect()
+    return pin?.width ? { x: pin.left, y: pin.top, text: d.classList.contains('has-play') ? 'play testing' : cw.av[i]?.name || 'Art', typing: true } : null
   }
   const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
+  // while painting, the code window is the play test's (playClip): its cursor sits on the clip's header
+  if (d?.classList.contains('has-play')) { const r = d.getBoundingClientRect(); return r.width ? { x: r.left + 24, y: r.top + 14, text: 'play testing', typing: true } : null }
   const caret = d?.querySelector('.cw-caret')
   if (!t || !caret || (cw.thinking && t.shown >= t.text.length)) return null
   const r = caret.getBoundingClientRect()
   if (!r.width && !r.height) return null
   return { x: r.left + 2, y: r.top + 4, text: t.path.split('/').pop(), typing: t.shown < t.text.length }
 }
-;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } requestAnimationFrame(cwLoop) })()
+;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } nextFrame(cwLoop, !(view === 'app' && appv.state === 'working'), 400) })()
 
 // ---------- 🔌 sign-in connectors (Supabase), through Hermes: Connect opens the provider's
 // sign-in page; Hermes keeps the token, the canvas only learns who is connected.
@@ -5999,11 +6538,14 @@ window.swarm = {
   },
   // start a build from Projects or a project's dock (the second argument, once Auto, is ignored).
   // Without a project (Projects home) it is a new project; with one, `from` is the open version it extends
+  // It resolves to the new run's id (null when none started, { busy } while the last turn still builds)
   submit(text, auto = false, project = null, from = null) {
-    els.brief.value = text
-    nextRoute = project || from ? { project, from, selected: false } : { fresh: true }
-    if (view !== 'canvas') setView('canvas')
-    els.form.requestSubmit()
+    return new Promise(done => {
+      els.brief.value = text
+      nextRoute = project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done } : { fresh: true, done }
+      if (view !== 'canvas') setView('canvas')
+      els.form.requestSubmit()
+    })
   }
 }
 

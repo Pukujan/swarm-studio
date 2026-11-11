@@ -132,8 +132,47 @@ export function recentLooks(runsDir, n = 4) {
   return out
 }
 
-// The lines the sitemap planner reads: the page type, and the palette to move away from.
-export function lookBrief(key, recent = []) {
+// The ground (background family) of a theme: dark, cream, white or colour.
+export function groundOf(h) {
+  const c = hex(h)
+  if (!c) return ''
+  const [r, g, b] = c
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  if (max - min >= 0.25 && max > 0.3) return 'colour'
+  if (isDark(h)) return 'dark'
+  if (max - min < 0.12) return r - b > 0.025 ? 'cream' : 'white'
+  return max > 0.85 && r >= b && (max - min) < 0.2 ? 'cream' : 'colour'
+}
+
+const GROUNDS = {
+  dark: 'a dark background: near-black or a very deep colour (lightness under 15%), with light text',
+  white: 'a clean white or cool light-grey background (#ffffff to #eef0f2), dark text; not cream, not beige',
+  colour: 'a strongly coloured background: one saturated or deep hue fills the page (not white, cream, beige or black), text in white or near-black for contrast'
+}
+const HUES = ['red', 'orange or amber', 'yellow', 'green', 'teal or cyan', 'blue', 'violet', 'pink or magenta']
+
+// The look this build must take, decided in code so a small planner cannot drift back
+// to the same cream page: a ground the last two builds did not use, and a main colour
+// none of the last four used.
+// A brief that names its own colours or mood (dark, pastel, neon, black and gold…) keeps them.
+const COLOUR_WORDS = /\b(dark|light|black|white|cream|beige|pastel|neon|monochrome|mono|colou?rs?|palette|red|orange|amber|yellow|gold|green|teal|cyan|blue|navy|violet|purple|pink|magenta|brown)\b/i
+export function pickLook(recent = [], rand = Math.random, brief = '') {
+  if (COLOUR_WORDS.test(brief)) return { ground: '', hue: '' }
+  const grounds = recent.map(r => groundOf(r.background)).filter(Boolean)
+  const last = grounds.slice(0, 2)
+  const free = Object.keys(GROUNDS).filter(g => !last.includes(g))
+  const count = g => grounds.filter(x => x === g).length
+  const least = Math.min(...free.map(count))
+  const pool = free.filter(g => count(g) === least)
+  const ground = pool[Math.floor(rand() * pool.length)] || 'dark'
+  const used = new Set(recent.slice(0, 4).map(r => hueName(r.primary)))
+  const hues = HUES.filter(h => !used.has(h))
+  const hue = hues.length ? hues[Math.floor(rand() * hues.length)] : ''
+  return { ground, hue }
+}
+
+// The lines the sitemap planner reads: the page type, and the look this build must take.
+export function lookBrief(key, recent = [], look = pickLook(recent)) {
   const t = PAGE_TYPES[key]
   const lines = [
     `Page type: ${t.name}. ${t.grid}`,
@@ -142,17 +181,47 @@ export function lookBrief(key, recent = []) {
   ]
   const fonts = [...new Set(recent.map(r => r.font).filter(Boolean))].slice(0, 4)
   if (fonts.length) lines.push(`Recent builds used these heading fonts, so use a different one: ${fonts.join(', ')}.`)
-  const cols = recent.filter(r => r.background || r.primary).slice(0, 4)
-  if (cols.length) {
-    const dark = cols.filter(r => isDark(r.background)).length
-    const hues = [...new Set(cols.map(r => hueName(r.primary)).filter(Boolean))]
-    if (dark >= 2) lines.push('The last builds were dark: use a light background this time.')
-    else if (cols.length - dark >= 2) lines.push('The last builds were light: a dark or strongly coloured background is welcome this time.')
-    const cream = cols.filter(r => !isDark(r.background) && hueName(r.background) !== 'white or grey').length
-    if (cream) lines.push('Avoid a cream, beige or paper-coloured background: a recent build used one.')
-    if (hues.length) lines.push(`The last builds used ${hues.join(', ')} for the main colour: pick a clearly different main colour.`)
-  }
+  if (look?.ground) lines.push(`Required for this build's theme: --background is ${GROUNDS[look.ground]}.`)
+  if (look?.hue) lines.push(`Required: --primary is a ${look.hue} colour. Never a cream, beige or paper-coloured background.`)
   return lines.join('\n')
+}
+
+// --- hsl helpers for the fallback below
+const toHex = (h, s, l) => {
+  s /= 100; l /= 100
+  const k = n => (n + h / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = n => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))))).toString(16).padStart(2, '0')
+  return `#${f(0)}${f(8)}${f(4)}`
+}
+const hueDeg = h => {
+  const c = hex(h)
+  if (!c) return 30
+  const [r, g, b] = c
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+  if (!d) return 30
+  const x = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  return (x * 60 + 360) % 360
+}
+
+// When the planner ignores the required ground anyway, the surface colours are rebuilt
+// around its own main colour. The primary, fonts and name stay the planner's.
+export function fitTheme(theme, look) {
+  const vars = theme?.vars
+  if (!vars || !look?.ground || groundOf(vars['--background']) === look.ground) return theme
+  const h = Math.round(hueDeg(vars['--primary']))
+  const set = look.ground === 'dark'
+    ? { bg: toHex(h, 22, 7), card: toHex(h, 18, 11), muted: toHex(h, 14, 15), border: toHex(h, 12, 22), fg: '#f3f1ee', mfg: toHex(h, 8, 68) }
+    : look.ground === 'white'
+      ? { bg: '#ffffff', card: '#f5f6f7', muted: '#eef0f2', border: '#dfe2e6', fg: '#121314', mfg: '#5b6068' }
+      : { bg: toHex(h, 62, 24), card: toHex(h, 55, 30), muted: toHex(h, 45, 34), border: toHex(h, 40, 42), fg: '#fbf9f6', mfg: toHex(h, 30, 80) }
+  const out = { ...vars, '--background': set.bg, '--card': set.card, '--muted': set.muted, '--border': set.border, '--foreground': set.fg, '--muted-foreground': set.mfg }
+  if (look.ground === 'colour') {
+    // the main colour cannot vanish into a field of its own hue: use a light accent instead
+    out['--primary'] = toHex((h + 180) % 360, 85, 62)
+    out['--primary-foreground'] = '#121314'
+  }
+  return { ...theme, vars: out, fitted: look.ground }
 }
 
 // Every page type: no stock formula headlines. These came up on nearly every site.

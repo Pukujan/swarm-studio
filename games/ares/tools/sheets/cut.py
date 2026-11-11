@@ -1,19 +1,14 @@
 """Cut a painted 3x2 sprite sheet into a strip of frames the game plays, and check it.
 
-    python cut.py sheet.png out.webp            # a character sheet on flat magenta (or green)
+    python cut.py sheet.png out.webp            # a character sheet on flat magenta (or green, or grey)
     python cut.py fx.png out.webp --fx          # an effect sheet on black (drawn additive)
 
-Character sheets are painted on one flat key colour (magenta #FF00FF by default, chroma
-green for pink or purple subjects: engine/keycolor.mjs). The alpha comes from the studio
-keyer, scripts/cutout.py key_alpha(): a flood fill from the sheet edges takes the
-background, enclosed pools of key colour (between hair locks, inside a wing guard) are
-cleared too, the edge gets a soft alpha and the key colour is taken back out of it
-(despill). The figure's own white cloth and dark hair are never keyed.
-
-Each painted shape then belongs to the cell holding its centre of mass, so a long sword
-arc or a trailing sleeve that crosses into the next cell stays with its own frame instead
-of being chopped. Frames keep their place in the cell, so the feet stay on the painted
-baseline.
+Character sheets: the flat key colour (magenta #FF00FF by default) is keyed out from the
+corner colour, its spill is pulled out of the outline, the inside of the
+body is made solid (only the edges stay soft), and each painted shape belongs to
+the cell holding its centre, so a long sword arc or a trailing sleeve that crosses
+into the next cell stays with its own frame instead of being chopped. Frames keep
+their place in the cell, so the feet stay on the painted baseline.
 
 Effect sheets keep their black: the engine adds them as light.
 
@@ -30,84 +25,56 @@ from pathlib import Path
 
 import numpy as np
 import scipy.ndimage as nd
-from PIL import Image
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
-import cutout  # noqa: E402  the studio keyer
+from PIL import Image, ImageFilter
 
 COLS, ROWS = 3, 2
 
 
-def key_cut(a: np.ndarray):
-    """RGB array in; (despilled RGB, alpha) out, from the studio keyer."""
-    im = cutout.key_alpha(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "RGB"))
-    out = np.asarray(im)
-    rgb, al = out[..., :3].astype(int), out[..., 3].copy()
-    bg = np.median(a[:20, :20].reshape(-1, 3), 0)
-    if bg[0] > 180 and bg[2] > 180 and bg[1] < 90:
-        rgb, al = unmix_key(rgb, al, "magenta")
-    elif bg[1] > 180 and bg[0] < 90 and bg[2] < 90:
-        rgb, al = unmix_key(rgb, al, "green")
-    return rgb, al
-
-
-def unmix_key(rgb: np.ndarray, al: np.ndarray, key) -> tuple[np.ndarray, np.ndarray]:
-    """Second pass for chroma keys: paint that is the key colour blended into the figure
-    (a soft pocket between hair locks, a glow over the backdrop) is unmixed: its alpha is
-    how little key is in it and the key is taken out of its colour. Only pixels with the
-    key's own hue count, so a crimson cape or a pink cheek is left alone."""
-    r, g, b = (rgb[..., i].astype(float) for i in range(3))
-    if key == "magenta":
-        s = np.minimum(r, b) - g                          # magenta strength
-        hue = (b >= 0.7 * r) & (r >= 0.7 * b)             # red and blue together, unlike a red cape
-    else:
-        s = g - np.maximum(r, b)
-        hue = np.ones_like(s, bool)
-    hit = hue & (s > 30) & (al > 0)
-    k = np.clip(s / 255.0, 0, 1)                          # share of key in the pixel
-    f = np.clip(1 - k, 0.05, 1)
-    K = np.array([255.0, 0, 255.0]) if key == "magenta" else np.array([0, 255.0, 0])
-    un = (rgb - K * k[..., None]) / f[..., None]
-    rgb = np.where(hit[..., None], np.clip(un, 0, 255), rgb)
-    if key == "magenta":
-        # magenta light the painter spilled onto red cloth and hair: blue rises above where
-        # crimson or chestnut would have it. Pull it back; skin, white and gold are untouched.
-        r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
-        warm = (r > g + 30) & (b > g) & (al > 0)
-        rgb = rgb.copy()
-        rgb[..., 2] = np.where(warm, np.minimum(b, np.maximum(g, 0.4 * r)), b)
-    a = np.where(hit, np.minimum(al, (255 * np.clip((f - 0.12) / 0.88, 0, 1))).astype(np.uint8), al)
-    return rgb.astype(int), a
-
-
 def key_alpha(a: np.ndarray) -> np.ndarray:
-    """The studio keyer's alpha for an RGB array (kept for kit.py)."""
-    return key_cut(a)[1]
+    bg = np.median(a[:20, :20].reshape(-1, 3), 0)
+    d = np.sqrt(((a - bg) ** 2).sum(2))
+    al = np.asarray(Image.fromarray(np.clip((d - 10) * 12, 0, 255).astype(np.uint8)).filter(ImageFilter.MinFilter(3)))
+    body = nd.binary_closing(al > 40, iterations=2)
+    # fill holes inside the body (pale cloth close to the grey), but not gaps that show the
+    # plain background, like the inside of a halo or the space under an arm
+    holes = nd.binary_fill_holes(body) & ~body
+    solid = body | (holes & (d > 6))
+    core = nd.binary_erosion(solid, iterations=2)
+    out = np.where(core, 255, al).astype(np.uint8)
+    # a key colour (magenta or green) is never on the figure: wherever it shows, even in a
+    # gap the closing filled (between fur, strands or robe tatters), it is background
+    if is_key(bg):
+        out = np.minimum(out, np.clip((d - 70) * 4.5, 0, 255)).astype(np.uint8)
+    return out
+
+
+def is_key(bg) -> bool:
+    r, g, b = bg
+    return (r > 180 and b > 180 and g < 90) or (g > 180 and r < 110 and b < 110)
 
 
 def despill(a: np.ndarray, al: np.ndarray) -> np.ndarray:
-    """Take the key colour back out of soft edge pixels, so strands carry no fringe."""
+    """Magenta or green from the key colour bleeds into the outline: in the band near the
+    clear part only, pull the channels it lifts back down, so no coloured rim shows."""
     bg = np.median(a[:20, :20].reshape(-1, 3), 0)
-    soft = (al > 0) & (al < 250)
-    r, g, b = a[..., 0], a[..., 1], a[..., 2]
-    if bg[0] > 180 and bg[2] > 180 and bg[1] < 90:      # magenta
-        s = np.clip(np.minimum(r, b) - g, 0, None) * soft
-        return np.dstack([r - s, g, b - s])
-    if bg[1] > 180 and bg[0] < 90 and bg[2] < 90:       # green
-        return np.dstack([r, np.where(soft, np.minimum(g, np.maximum(r, b)), g), b])
-    f = al[..., None] / 255.0                            # any other flat colour: unmix it
-    un = (a - bg * (1 - f)) / np.maximum(f, 0.25)
-    return np.where(soft[..., None], np.clip(un, 0, 255), a)
+    band = ~nd.binary_erosion(al >= 250, iterations=7) & (al > 0)
+    out = a.copy()
+    r, g, b = out[..., 0], out[..., 1], out[..., 2]
+    if bg[0] > 180 and bg[2] > 180 and bg[1] < 90:
+        k = np.clip(np.minimum(r, b) - g, 0, None) * band
+        out[..., 0], out[..., 2] = r - k, b - k
+    elif bg[1] > 180 and bg[0] < 110 and bg[2] < 110:
+        out[..., 1] = np.where(band, np.minimum(g, np.maximum(r, b)), g)
+    return out
 
 
 def cut(path: str, fx: bool = False):
     a = np.asarray(Image.open(path).convert("RGB")).astype(int)
     H, W = a.shape[:2]
     cw, ch = W // COLS, H // ROWS
-    if fx:
-        al = np.clip(a.max(2) * 2, 0, 255).astype(np.uint8)
-    else:
-        a, al = key_cut(a)
+    al = np.clip(a.max(2) * 2, 0, 255).astype(np.uint8) if fx else key_alpha(a)
+    if not fx:
+        a = despill(a, al)
     lab, n = nd.label(al > 8, structure=np.ones((3, 3)))
     idx = np.arange(1, n + 1)
     if n:
