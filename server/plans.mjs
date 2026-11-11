@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { planStore, planView, editCard, setSystems, lockPlan, assertLocked, pickCell, roster, PLAN_ID } from '../engine/plan.mjs'
-import { addSheet, addMocks, lockStyle, addBackdrops, addCloseups, entryFor, settleStale, buildScope, charEntry, viewJob, VIEWS } from '../engine/planart.mjs'
+import { addSheet, addMocks, lockStyle, addBackdrops, addCloseups, entryFor, settleStale, buildScope, charEntry, viewJob, VIEWS, gameBrief } from '../engine/planart.mjs'
 
 // paint({ prompt, quality: 'medium' | 'high', aspect, crop, refs }) -> { ok, path, error }: one picture
 // through the person's own image login (imagegen.py). paint.ready() says whether one is signed in.
@@ -162,6 +162,7 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     const plan = store.get(id)
     if (!plan) { json(res, 404, { error: 'no such plan' }); return true }
     if (req.method === 'GET' && !sub) { json(res, 200, view(plan)); return true }
+    if (req.method === 'GET' && sub === 'brief') { json(res, 200, { brief: gameBrief(plan) }); return true }
     if (req.method === 'GET' && sub === 'build') { json(res, 200, { gate: plan.gate, build: plan.build }); return true }
     if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
     body(req).then(async input => {

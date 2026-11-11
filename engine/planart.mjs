@@ -4,6 +4,7 @@
 // none of this spends Meshy credits.
 import { randomBytes } from 'node:crypto'
 import { card, roster, is3d, CLOSEUP_RULE } from './plan.mjs'
+import { systemsAsk } from './systems.mjs'
 
 const clean = (v, n = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const fail = (msg, status = 400) => Object.assign(new Error(msg), { status })
@@ -235,4 +236,14 @@ export function viewJob(plan, dir, r, view) {
     ? (plan.sheets || []).filter(s => s.kind === 'cast' && s.file && s.state === 'done').map(s => `${dir}/${s.file}`)
     : c.front?.file ? [`${dir}/${c.front.file}`] : []
   return { list: 'views', id, prompt: turnaroundPrompt(plan, r, view), quality: 'high', aspect: 'portrait', refs }
+}
+
+// ---------- the whole game brief: the cards, the switched-on systems, the art rule and files
+export function gameBrief(plan) {
+  const lines = plan.cards.map(c => {
+    const b = { ...c.body }
+    if (c.id === 'cast') b.roster = (b.roster || []).map(r => [r.name, r.role, r.look, r.weapon].filter(Boolean).join(' / ')).join('; ')
+    return `${c.name}: ${Object.entries(b).filter(([, v]) => v && String(v).trim()).map(([k, v]) => `${k} ${String(v).trim()}`).join('; ')}`
+  })
+  return [`Make the game "${clean(plan.title, 80)}"${plan.idea ? `: ${clean(plan.idea, 400)}` : ''}.`, `The plan:\n${lines.join('\n')}`, systemsAsk(plan), artBrief(plan)].filter(Boolean).join('\n\n')
 }
