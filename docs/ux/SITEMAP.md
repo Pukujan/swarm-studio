@@ -184,6 +184,7 @@ flowchart LR
   PB --> MK["Mocks: five in-game frames"]
   PB --> WD["World: backdrops, after Lock style"]
   BUILD --> CU["Close-ups: cut-in and portrait per character"]
+  BUILD --> BV["Build: front, side, back, the model (Download)"]
 ```
 
 ## 6. Projects

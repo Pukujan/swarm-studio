@@ -96,7 +96,7 @@ Prices come from Meshy's table (spec 20, Nous's Meshy plugin, as of 2026-10-12) 
 ARES's plan (6 characters, 8 clips, 6 weapons, 5 systems): 6 × 35 + 24 + 6 × 15 = **324 credits** and about
 **8 runs**. Test one first: **59 credits** (one character and the animation set), then **Make the rest · 265**.
 
-`planPrice(plan)` counts every picture the plan will still paint (backdrops, two close-ups and two turnaround
+`planPrice(plan)` counts every picture the plan will still paint (backdrops, two close-ups and three turnaround
 views per character) as `images`, and returns `{ credits, runs, images, parts: [{ what, n, each, credits }], first, rest }`. The server
 recomputes it on every lock; the button's number is the ask (spec 20's rule): a lock whose `credits` differs from the
 current price is refused with 402 and nothing is locked.
@@ -132,7 +132,8 @@ The image-gen look is the look the creator wants, so the game is made from it wh
 
 ### Turnarounds
 
-For each locked cast member, the image model draws the **side** and **back** views from the front picture
+For each locked cast member, the image model first draws a clean **front** (full body, A-pose, from the picked cast
+sheet), then the **side** and **back** views from that front picture
 (`imagegen.py --ref <front>`, the same provider, high quality, "same character, same outfit, full body, A-pose,
 plain light background, orthographic"). They go on the Build section as a three-up strip before any credit is spent,
 and the creator can redraw one.
@@ -266,7 +267,10 @@ Plan files are served at `/plans/<id>/<file>.png` (the sheet and mock pictures),
 - [ ] (a) Plan cards from the questions, editable on the board, and the lock gate with its price.
 - [x] (b) Sketch sheets with picks and notes, mock screenshots, the style lock.
 - [x] (b2) World backdrops and the close-up art rule (cut-in and portrait per character), counted on the gate.
-- [ ] (c) Turnarounds and multi-view Meshy in `engine/meshy.mjs`, mocked in tests.
+- [x] (c) Turnarounds and multi-view Meshy in `engine/meshy.mjs`, mocked in tests. The build (`POST /build`) paints
+  the views and close-ups, then makes and rigs each character in the locked scope; test-one-first reopens the gate
+  for the rest. Still to do: the shared animation set (`POST /openapi/v1/animations`) and the weapon props
+  (`sheetsplit.py`); they stay on the price but the build does not make them yet.
 - [ ] (d) The Systems switches in the build prompt.
 - [ ] (e) ARES as a remixable template.
 

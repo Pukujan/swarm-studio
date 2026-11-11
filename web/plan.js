@@ -55,7 +55,7 @@ export function makePlan({ sw, C, root }) {
   // ---------- the pictures: sheets, mocks, backdrops, close-ups (engine/planart.mjs)
   const SHEETS = [['cast', 'Cast'], ['weapons', 'Weapons']]
   const SHOTS = [['combat', 'Combat'], ['boss', 'Boss'], ['ult', 'Ult'], ['levelup', 'Level-up'], ['select', 'Select']]
-  const painting = p => [...(p.sheets || []), ...(p.mocks || []), ...(p.backdrops || []), ...(p.build?.characters || []).flatMap(c => [c.cutin, c.portrait])].some(e => e?.state === 'painting')
+  const painting = p => p.build?.state === 'building' || [...(p.sheets || []), ...(p.mocks || []), ...(p.backdrops || []), ...(p.build?.characters || []).flatMap(c => [c.cutin, c.portrait, c.front, c.side, c.back])].some(e => e?.state === 'painting')
   const sel = key => P.sel === key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
   // one picture slot: the picture when done, the crew at work while painting, an empty frame before
   function slot(key, cls, name, e, extra = '') {
@@ -63,6 +63,13 @@ export function makePlan({ sw, C, root }) {
     const work = e?.state === 'painting' ? `<div class="pl-work"></div>${cursor(painterOf(key))}` : ''
     const failed = e?.state === 'failed' ? ' failed' : ''
     return `<div class="ab ppic ${cls}${failed}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(name)}">${pic}${work}${extra}<em>${esc(name)}</em>${sel(key)}</div>`
+  }
+  // the made model: its picture when done, the crew at work while Meshy makes it
+  function modelSlot(r, m) {
+    const key = `md:${r.name}`
+    const pic = m?.state === 'done' && m.thumb ? `<img src="${esc(base() + m.thumb)}" alt="" draggable="false" loading="lazy">` : m?.state === 'done' ? `<div class="blank">${ic('box', 22)}</div>` : ''
+    const work = m?.state === 'making' ? `<div class="pl-work"></div>${cursor(painterOf(key))}` : ''
+    return `<div class="ab ppic view model${m?.state === 'failed' ? ' failed' : ''}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(r.name)} model">${pic}${work}${sel(key)}</div>`
   }
   const rings = s => (s.picks || []).map(c => {
     const [cols, rows] = s.grid || [5, 4]
@@ -83,9 +90,12 @@ export function makePlan({ sw, C, root }) {
     const worldSec = bds.length ? bds.map(b => slot(`bd:${b.id}`, `bd ${b.shape}`, b.n === 1 ? b.name : '', b)).join('') : slot('bd:new', 'bd equirect', 'Backdrops', null)
     const cast = (p.cards.find(c => c.id === 'cast')?.body.roster || []).filter(r => r?.name)
     const chars = new Map((p.build?.characters || []).map(c => [c.name, c]))
-    const closeups = p.gate?.locked ? cast.map(r => slot(`cu:${r.name}:cutin`, 'cutin', r.name, chars.get(r.name)?.cutin) + slot(`cu:${r.name}:portrait`, 'portrait', '', chars.get(r.name)?.portrait)).join('') : ''
+    const shown = p.gate?.locked || (p.build?.characters || []).length
+    const views = shown ? cast.map(r => { const c = chars.get(r.name) || {}; return `<div class="pl-grp">${['front', 'side', 'back'].map((v, i) => slot(`vw:${r.name}:${v}`, 'view', i ? '' : r.name, c[v])).join('')}${modelSlot(r, c.model)}</div>` }).join('') : ''
+    const closeups = shown ? cast.map(r => '<div class="pl-grp">' + slot(`cu:${r.name}:cutin`, 'cutin', r.name, chars.get(r.name)?.cutin) + slot(`cu:${r.name}:portrait`, 'portrait', '', chars.get(r.name)?.portrait) + '</div>').join('') : ''
     world.innerHTML = `<div class="col"><section class="pj-sec plan-cards"><span class="al">Plan</span><div class="abs">${cards}</div></section>
-      ${writing ? '' : `<section class="pj-sec pl-sheets"><span class="al">Sketches</span><div class="abs">${sheets}</div></section>`}</div>
+      ${writing ? '' : `<section class="pj-sec pl-sheets"><span class="al">Sketches</span><div class="abs">${sheets}</div></section>`}
+      ${views && !writing ? `<section class="pj-sec pl-build"><span class="al">Build</span><div class="abs">${views}</div></section>` : ''}</div>
       ${writing ? '' : `<div class="col"><section class="pj-sec pl-mocks"><span class="al">Mocks</span><div class="abs">${mocks}</div></section>
       <section class="pj-sec pl-world"><span class="al">World</span><div class="abs">${worldSec}</div></section>
       ${closeups ? `<section class="pj-sec pl-close"><span class="al">Close-ups</span><div class="abs">${closeups}</div></section>` : ''}</div>`}`
@@ -98,7 +108,9 @@ export function makePlan({ sw, C, root }) {
   }
   function renderPrimary() {
     const p = P.plan, pr = price()
-    const label = !p ? '' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${pr.credits} credits`
+    const busy = p?.build?.state === 'building'
+    const label = !p ? '' : busy ? 'Building' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${pr.credits} credits`
+    primary.disabled = busy
     primary.querySelector('.t').textContent = label
     primary.classList.toggle('pri', !!p)
     primary.setAttribute('aria-label', label)
@@ -172,6 +184,15 @@ export function makePlan({ sw, C, root }) {
       return head(b?.name || 'Backdrops') + (p.style?.locked ? '' : styleSwitch(p)) +
         (p.style?.locked ? (b ? again(`bd:${b.stage}`, b, 'Paint') : again('bd:', null, 'Paint')) : '')
     }
+    if (kind === 'vw') {
+      const [name, v] = [rest.slice(0, -1).join(':'), rest.at(-1)]
+      const c = (p.build?.characters || []).find(x => x.name === name)
+      return head(name) + (p.gate?.locked && p.build?.state !== 'building' ? again(`vw:${name}:${v}`, c?.[v]) : '')
+    }
+    if (kind === 'md') {
+      const m = (p.build?.characters || []).find(x => x.name === id)?.model
+      return head(id) + (m?.state === 'done' ? `<a class="btn ghost pl-paint" href="${esc(base() + m.src)}" download>Download</a>` : m?.error ? `<p class="pl-err">${esc(m.error)}</p>` : '')
+    }
     if (kind === 'cu') {
       const [name, which] = [rest.slice(0, -1).join(':'), rest.at(-1)]
       const c = (p.build?.characters || []).find(x => x.name === name)
@@ -243,6 +264,7 @@ export function makePlan({ sw, C, root }) {
     if (kind === 'mock') return act('mocks', { shots: [id] })
     if (kind === 'bd') return act('backdrops', id === '' ? {} : { stage: Number(id) })
     if (kind === 'cu') return act('closeups', { name: id })
+    if (kind === 'vw') return act('view', { name: rest.slice(0, -1).join(':'), view: rest.at(-1) })
   }
   // a sheet: the first click selects it; then a click on a cell picks it (or unpicks it)
   function pickAt(a, e) {

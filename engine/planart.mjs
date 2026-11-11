@@ -153,7 +153,7 @@ export function closeupPrompt(plan, r, which) {
     `Style: ${styleLine(plan)}. Finished painted character art, the same face and outfit as the reference sheet.`].join(' ')
 }
 const fileName = name => clean(name, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'hero'
-export function addCloseups(plan, dir, { name } = {}) {
+export function addCloseups(plan, dir, { name, missing = false } = {}) {
   if (!plan.gate?.locked) throw fail('lock the plan first', 409)
   plan.build ||= { characters: [], props: [], animations: null }
   const cast = roster(plan).filter(r => !name || r.name === name)
@@ -164,7 +164,7 @@ export function addCloseups(plan, dir, { name } = {}) {
     let c = plan.build.characters.find(x => x.name === r.name)
     if (!c) { c = { name: r.name, slug: fileName(r.name), state: 'planned' }; plan.build.characters.push(c) }
     for (const which of ['cutin', 'portrait']) {
-      if (c[which]?.state === 'painting') continue
+      if (c[which]?.state === 'painting' || (missing && c[which]?.state === 'done')) continue
       const id = newId(which === 'cutin' ? 'c' : 'f')
       c[which] = { id, state: 'painting', started: Date.now(), error: null }
       jobs.push({ list: 'closeups', id, prompt: closeupPrompt(plan, r, which), quality: 'high', aspect: which === 'cutin' ? 'landscape' : 'portrait', crop: which === 'cutin' ? '16:9' : '', refs })
@@ -175,8 +175,8 @@ export function addCloseups(plan, dir, { name } = {}) {
 
 // Where a finished picture lands in the plan: the entry for a job id.
 export function entryFor(plan, list, id) {
-  if (list === 'closeups') {
-    for (const c of plan.build?.characters || []) for (const w of ['cutin', 'portrait']) if (c[w]?.id === id) return c[w]
+  if (list === 'closeups' || list === 'views') {
+    for (const c of plan.build?.characters || []) for (const w of ['cutin', 'portrait', 'front', 'side', 'back']) if (c[w]?.id === id) return c[w]
     return null
   }
   return (plan[list] || []).find(x => x.id === id) || null
@@ -184,8 +184,10 @@ export function entryFor(plan, list, id) {
 
 // A picture left painting by a server that stopped is shown as failed after a while.
 export function settleStale(plan, now = Date.now(), maxMs = 15 * 60 * 1000) {
-  const all = [...(plan.sheets || []), ...(plan.mocks || []), ...(plan.backdrops || []), ...(plan.build?.characters || []).flatMap(c => [c.cutin, c.portrait]).filter(Boolean)]
+  const all = [...(plan.sheets || []), ...(plan.mocks || []), ...(plan.backdrops || []), ...(plan.build?.characters || []).flatMap(c => [c.cutin, c.portrait, c.front, c.side, c.back]).filter(Boolean)]
   for (const e of all) if (e.state === 'painting' && now - (e.started || 0) > maxMs) Object.assign(e, { state: 'failed', error: 'stopped' })
+  // a model (Meshy: the mesh, then the rig) gets three times as long
+  for (const c of plan.build?.characters || []) if (c.model?.state === 'making' && now - (c.model.started || 0) > maxMs * 3) Object.assign(c.model, { state: 'failed', error: 'stopped' })
   return plan
 }
 
@@ -199,4 +201,38 @@ export function artBrief(plan) {
   }
   for (const b of (plan.backdrops || []).filter(done)) files.push(`public/art/backdrops/${b.stage + 1}-${b.n}.png (${b.shape}, ${b.name})`)
   return [CLOSEUP_RULE, files.length ? `The painted art in this build:\n${files.map(f => `- ${f}`).join('\n')}` : ''].filter(Boolean).join('\n\n')
+}
+
+// ---------- turnarounds (spec 21, Build): front from the cast sheet, then side and back drawn
+// with the front as the reference, so Meshy's multi-image-to-3D gets one character from three sides.
+export const VIEWS = ['front', 'side', 'back']
+export function turnaroundPrompt(plan, r, view) {
+  const pose = { front: 'front view', side: 'side view, facing left, in profile', back: 'back view, seen from behind' }[view]
+  return [
+    `A character turnaround picture: ${clean(r.name, 60)}, full body, ${pose}, A-pose (arms out and down at 45°, feet apart), orthographic, plain light grey background, nothing else in the picture, the whole figure inside the frame with a margin.`,
+    view === 'front' ? `Character: ${[r.role, r.look, r.weapon && `holding nothing; her ${r.weapon} is made separately`].filter(Boolean).map(x => clean(x, 120)).join(', ')}.` : 'The same character as the reference picture: the same face, hair, outfit, colours and proportions.',
+    `Style: ${styleLine(plan)}. Clean flat colours and line art, no dramatic lighting, no shadows on the ground.`
+  ].join(' ')
+}
+// The characters this build covers: the first only while the gate is at "test one first".
+export function buildScope(plan, name) {
+  const cast = roster(plan)
+  if (name) return cast.filter(r => r.name === name)
+  return plan.gate?.phase === 'first' ? cast.slice(0, 1) : cast
+}
+export function charEntry(plan, r) {
+  plan.build ||= { characters: [], props: [], animations: null }
+  let c = plan.build.characters.find(x => x.name === r.name)
+  if (!c) { c = { name: r.name, slug: fileName(r.name), state: 'planned' }; plan.build.characters.push(c) }
+  return c
+}
+// one picture job for a character's view; the front's reference is the cast sheet, the others' the front
+export function viewJob(plan, dir, r, view) {
+  const c = charEntry(plan, r)
+  const id = newId(view[0] === 'f' ? 'v' : view[0] === 's' ? 'w' : 'k')
+  c[view] = { id, state: 'painting', started: Date.now(), error: null }
+  const refs = view === 'front'
+    ? (plan.sheets || []).filter(s => s.kind === 'cast' && s.file && s.state === 'done').map(s => `${dir}/${s.file}`)
+    : c.front?.file ? [`${dir}/${c.front.file}`] : []
+  return { list: 'views', id, prompt: turnaroundPrompt(plan, r, view), quality: 'high', aspect: 'portrait', refs }
 }

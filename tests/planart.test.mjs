@@ -77,7 +77,7 @@ test('close-up art waits for the lock; test one first paints one character', () 
 test('pictures count down on the gate as they land; credits do not change', () => {
   const p = ares()
   const before = planPrice(p)
-  assert.deepEqual(before.pics, { sheets: 2, mocks: 5, backdrops: 9, closeups: 12, turnarounds: 12 })
+  assert.deepEqual(before.pics, { sheets: 2, mocks: 5, backdrops: 9, closeups: 12, turnarounds: 18 })
   addSheet(p, 'cast'); p.sheets[0].state = 'done'
   addMocks(p, '/d'); p.mocks.forEach(m => { m.state = 'done' })
   const after = planPrice(p)
@@ -144,5 +144,69 @@ test('routes: pictures paint in the background and land in the plan; no image lo
     const end = await fetch(`${base}/api/plans/${plan.id}`).then(r => r.json())
     assert.ok(end.backdrops.every(b => b.state === 'done'))
     assert.equal(landed.length, 4)
+  } finally { srv.close() }
+})
+
+test('the build: views from the front, close-ups, then three views to Meshy; test one first reopens the gate for the rest', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'planbuild-'))
+  const painted = []
+  const paint = async job => { painted.push(job); const f = join(dir, `o-${painted.length}.png`); writeFileSync(f, 'png'); return { ok: true, path: f } }
+  paint.ready = async () => true
+  const made = []
+  const make = { key: () => 'msy_fake', character: async opts => { made.push(opts); return { file: 'meshy-heroine-1-t.glb', clips: {}, thumb: null, tasks: { mesh: 'm', rig: 'r' }, credits: 35 } } }
+  const handle = planRoutes({ dataDir: dir, paint, make })
+  const srv = createServer((req, res) => { if (!handle(req, res, new URL(req.url, 'http://x'))) res.writeHead(404).end() })
+  await new Promise(r => srv.listen(0, r))
+  const base = `http://127.0.0.1:${srv.address().port}`
+  const post = (path, body) => fetch(base + path, { method: 'POST', body: JSON.stringify(body || {}) }).then(async r => ({ status: r.status, data: await r.json() }))
+  const get = id => fetch(`${base}/api/plans/${id}`).then(r => r.json())
+  try {
+    const { data: plan } = await post('/api/plans', { idea: 'ARES, a test', answers: { size: '3', cast: 'Girls only' } })
+    assert.equal((await post(`/api/plans/${plan.id}/build`)).status, 409)
+    const first = plan.price.first.credits
+    assert.equal((await post(`/api/plans/${plan.id}/lock`, { credits: first, testFirst: true })).status, 200)
+    assert.equal((await post(`/api/plans/${plan.id}/build`)).data.build.state, 'building')
+    let p
+    for (let i = 0; i < 50; i++) { await new Promise(r => setTimeout(r, 20)); p = await get(plan.id); if (p.build.state === 'idle') break }
+    const c = p.build.characters[0]
+    assert.equal(p.build.characters.length, 1)
+    assert.equal(c.state, 'done')
+    assert.ok(['front', 'side', 'back', 'cutin', 'portrait'].every(v => c[v].state === 'done'), 'views and close-ups painted')
+    // the front first (from the sheet), then side and back with the front as their reference
+    assert.equal(painted[0].prompt.includes('front view'), true)
+    const side = painted.find(j => /side view/.test(j.prompt))
+    assert.deepEqual(side.refs, [join(dir, 'plans', plan.id, c.front.file)])
+    assert.equal(made.length, 1)
+    assert.equal(made[0].images.length, 3)
+    assert.equal(made[0].polycount, 40000)
+    assert.equal(c.model.src, `/plans/${plan.id}/models/meshy-heroine-1-t.glb`)
+    // the gate is open again, at the price of the rest
+    assert.equal(p.gate.locked, false)
+    assert.equal(p.gate.tested, 'Heroine 1')
+    assert.equal(p.price.parts[0].n, 2)
+    assert.equal(p.price.parts.find(x => x.what === 'Characters').credits, 60)
+  } finally { srv.close() }
+})
+
+test('the build without a Meshy key paints the views and stops before any credit', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'planbuild-'))
+  const paint = async () => { const f = join(dir, `o-${Math.random().toString(36).slice(2)}.png`); writeFileSync(f, 'png'); return { ok: true, path: f } }
+  paint.ready = async () => true
+  let called = false
+  const handle = planRoutes({ dataDir: dir, paint, make: { key: () => '', character: async () => { called = true } } })
+  const srv = createServer((req, res) => { if (!handle(req, res, new URL(req.url, 'http://x'))) res.writeHead(404).end() })
+  await new Promise(r => srv.listen(0, r))
+  const base = `http://127.0.0.1:${srv.address().port}`
+  const post = (path, body) => fetch(base + path, { method: 'POST', body: JSON.stringify(body || {}) }).then(r => r.json())
+  try {
+    const plan = await post('/api/plans', { answers: { size: '1' } })
+    await post(`/api/plans/${plan.id}/lock`, { credits: plan.price.credits })
+    await post(`/api/plans/${plan.id}/build`)
+    let p
+    for (let i = 0; i < 50; i++) { await new Promise(r => setTimeout(r, 20)); p = await fetch(`${base}/api/plans/${plan.id}`).then(r => r.json()); if (p.build.state === 'idle') break }
+    assert.equal(p.build.characters[0].model.error, 'no Meshy key')
+    assert.equal(p.build.characters[0].front.state, 'done')
+    assert.equal(called, false)
+    assert.equal(p.gate.locked, true)
   } finally { srv.close() }
 })
