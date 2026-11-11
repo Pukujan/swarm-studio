@@ -1,6 +1,8 @@
 class_name Player
 extends CharacterBody3D
-## Design Bakery, Hermes's swift messenger in winged sandals. First person, fast.
+## The heroine (the Messenger or the Runner). Third person with a damped follow camera
+## (gacha-action style), blade on the attack button, guns on aim. `--fps` keeps the old
+## first-person view.
 
 signal died
 
@@ -12,7 +14,7 @@ const JUMP := 11.5
 const DJUMP := 10.5
 const DASH_SPEED := 32.0
 const DASH_TIME := 0.17
-const DASH_REGEN := 1.3
+const DASH_REGEN := 1.3       # the Runner refills a little faster (see _timers)
 const EYE := 1.6
 
 const WEAPONS := [
@@ -57,6 +59,7 @@ var recoil := 0.0
 var dead := false
 var hits := 0
 var kills := 0
+var aiming := false
 
 # intent: filled by a human (mouse and keys) or by the reflex pilot
 var in_move := Vector2.ZERO
@@ -68,7 +71,33 @@ var in_rip := false
 var in_burn := false
 var in_punch := false
 var in_weapon := -1
+var in_attack := false     # blade button held
+var in_aim := false        # gun: aim and shoot
+var in_ult := false
 var pilot = null
+
+# third person
+var third := true
+var hero := "messenger"
+var avatar: Avatar
+var rig: Node3D
+var arm: SpringArm3D
+var body_yaw := 0.0
+var rig_yaw := 0.0
+var aim_k := 0.0
+var look_idle := 0.0
+var cine_t := 0.0
+var cine_yaw := 0.0
+var melee: Melee
+var style: Style
+var ult := 0.0
+var dash_start := -9.0
+var perfect_cd := 0.0
+var dash_max := 2.0
+# run modifiers (roguelike upgrades write these)
+var blade_reach := 1.0
+var plunge_mult := 1.0
+var mods := {}
 
 var cam: Camera3D
 var view: Node3D
@@ -90,16 +119,61 @@ func _ready() -> void:
 	shape.shape = cap
 	shape.position.y = 0.9
 	add_child(shape)
-	cam = Camera3D.new()
-	cam.position.y = EYE
-	cam.fov = 92.0
-	cam.near = 0.05
-	cam.far = 400.0
-	add_child(cam)
-	cam.current = true
+	third = not Game.arg("fps", false)
+	hero = String(Game.arg("hero", hero))
+	melee = Melee.new(self)
+	style = Style.new()
 	trail_color = Game.cosmetic_color("sandal_trail", trail_color)
 	gun_color = Game.cosmetic_color("weapon_skin", gun_color)
-	_build_view()
+	if hero == "messenger":
+		max_health = 110.0
+		health = max_health
+	cam = Camera3D.new()
+	cam.near = 0.05
+	cam.far = 400.0
+	if third:
+		_build_third()
+	else:
+		cam.position.y = EYE
+		cam.fov = 92.0
+		add_child(cam)
+		_build_view()
+	cam.current = true
+
+## Character select: rebuild the avatar as the other heroine.
+func set_hero(h: String) -> void:
+	hero = h
+	max_health = 110.0 if h == "messenger" else 100.0
+	health = max_health
+	if not third:
+		return
+	avatar.queue_free()
+	avatar = Avatar.new()
+	add_child(avatar)
+	avatar.build(hero)
+	muzzle = avatar.muzzle
+
+func _build_third() -> void:
+	avatar = Avatar.new()
+	add_child(avatar)
+	avatar.build(hero)
+	muzzle = avatar.muzzle
+	rig = Node3D.new()
+	rig.top_level = true
+	add_child(rig)
+	arm = SpringArm3D.new()
+	arm.spring_length = 4.3
+	arm.collision_mask = 1
+	var sh = SphereShape3D.new()
+	sh.radius = 0.3
+	arm.shape = sh
+	arm.margin = 0.1
+	arm.add_excluded_object(get_rid())
+	rig.add_child(arm)
+	arm.add_child(cam)
+	cam.fov = 68.0
+	pitch = -0.2
+	rig.global_position = global_position + Vector3(0, 1.55, 0)
 
 func _build_view() -> void:
 	view = Node3D.new()
@@ -156,13 +230,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		yaw -= event.relative.x * 0.0025
-		pitch = clampf(pitch - event.relative.y * 0.0025, -1.4, 1.4)
+		pitch = clampf(pitch - event.relative.y * 0.0025, -1.4 if not third else -1.1, 1.4 if not third else 0.7)
+		look_idle = 0.0
 
 func _read_human() -> void:
 	in_move = Vector2(Input.get_axis("left", "right"), Input.get_axis("back", "forward"))
 	in_jump = Input.is_action_pressed("jump")
 	in_dash = Input.is_action_just_pressed("dash")
 	in_fire = Input.is_action_pressed("fire")
+	in_attack = third and Input.is_action_pressed("attack")
+	in_aim = third and Input.is_action_pressed("fire")
+	in_ult = Input.is_action_just_pressed("ult")
 	in_finish = Input.is_action_just_pressed("finish")
 	in_rip = Input.is_action_just_pressed("rip")
 	in_burn = Input.is_action_just_pressed("burn")
@@ -192,6 +270,7 @@ func _physics_process(delta: float) -> void:
 	in_burn = false
 	in_punch = false
 	in_weapon = -1
+	in_ult = false
 
 func _timers(delta: float) -> void:
 	invuln = maxf(0.0, invuln - delta)
@@ -203,7 +282,11 @@ func _timers(delta: float) -> void:
 	fov_kick = maxf(0.0, fov_kick - delta * 3.0)
 	recoil = maxf(0.0, recoil - delta * 8.0)
 	trauma = maxf(0.0, trauma - delta * 1.6)
-	dash_charges = minf(2.0, dash_charges + delta / DASH_REGEN)
+	dash_charges = minf(dash_max, dash_charges + delta / (DASH_REGEN * (0.8 if hero == "runner" else 1.0)))
+	perfect_cd = maxf(0.0, perfect_cd - delta)
+	cine_t = maxf(0.0, cine_t - delta)
+	look_idle += delta
+	style.tick(delta)
 	fuel = minf(max_fuel, fuel + delta / 8.0)
 
 func forward_dir() -> Vector3:
@@ -212,9 +295,54 @@ func forward_dir() -> Vector3:
 func aim_dir() -> Vector3:
 	return -cam.global_transform.basis.z
 
+## Where the heroine's body points (third person); the camera's yaw in first person.
+func facing() -> Vector3:
+	if not third:
+		return forward_dir()
+	return Vector3(-sin(body_yaw), 0, -cos(body_yaw))
+
+## Turn to the attack: the closest enemy near the camera's aim, else the aim itself.
+func face_aim() -> void:
+	if not third:
+		return
+	var fwd = forward_dir()
+	var best = null
+	var bd := 7.0
+	var cands: Array = Game.live_enemies()
+	if Game.boss and is_instance_valid(Game.boss) and not Game.boss.dead:
+		cands.append(Game.boss)
+	for e in cands:
+		var to: Vector3 = e.global_position - global_position
+		to.y = 0
+		var d = to.length() - (float(e.radius) if "radius" in e else 0.5)
+		if d < bd and (d < 2.0 or fwd.angle_to(to.normalized()) < 1.1):
+			bd = d
+			best = to
+	if best != null:
+		body_yaw = atan2(-best.x, -best.z)
+	else:
+		body_yaw = yaw
+	avatar.rotation.y = body_yaw
+
+func blade_mult() -> float:
+	return float(mods.get("blade", 1.0)) * (1.25 if swap_boost > 0.0 else 1.0)
+
+func guard_mult() -> float:
+	return float(mods.get("guard", 1.0))
+
+func blade_heft() -> float:
+	return avatar.blade_scale if avatar else 1.0
+
+func combo_hit() -> void:
+	last_hit_t = Game.time
+	hits += 1
+	if Game.main:
+		Game.main.hud.hitmark()
+
 func _move(delta: float) -> void:
-	rotation.y = yaw
-	cam.rotation.x = pitch
+	if not third:
+		rotation.y = yaw
+		cam.rotation.x = pitch
 	var on_floor = is_on_floor()
 	if on_floor:
 		jumps_left = 1
@@ -233,12 +361,16 @@ func _move(delta: float) -> void:
 		if Engine.get_physics_frames() % 2 == 0:
 			Fx.feathers(global_position + Vector3(0, 0.3, 0), trail_color)
 	else:
-		var target = wish * SPEED
+		var target = wish * SPEED * float(mods.get("speed", 1.0))
 		var a = ACCEL if on_floor else AIR_ACCEL
+		if third and melee.busy():
+			target *= 0.15
+			a = 38.0
 		var hv = Vector3(velocity.x, 0, velocity.z).move_toward(target, a * delta)
-		velocity.x = hv.x
-		velocity.z = hv.z
-		velocity.y -= GRAVITY * delta
+		if not (third and melee.move == "plunge"):
+			velocity.x = hv.x
+			velocity.z = hv.z
+			velocity.y -= GRAVITY * delta * (0.45 if third and melee.busy() and not on_floor else 1.0)
 	var jump_edge = in_jump and not _jump_was
 	_jump_was = in_jump
 	if jump_edge and frozen <= 0.0:
@@ -249,13 +381,24 @@ func _move(delta: float) -> void:
 			velocity.y = DJUMP
 			Fx.feathers(global_position, trail_color)
 			Fx.ring(global_position, 1.6, trail_color, 0.3, 0.1)
-	if in_dash and dash_charges >= 1.0 and frozen <= 0.0:
+	if in_dash and dash_charges >= 1.0 and frozen <= 0.0 and melee.move != "plunge":
 		dash_charges -= 1.0
-		dash_dir = wish.normalized() if wish.length() > 0.1 else fwd
+		dash_dir = wish.normalized() if wish.length() > 0.1 else (fwd if not third else facing())
+		dash_start = Game.time
+		melee.on_dash()
+		if third:
+			body_yaw = atan2(-dash_dir.x, -dash_dir.z)
 		dash_t = DASH_TIME
 		invuln = maxf(invuln, 0.24)
 		fov_kick = 1.0
 		Fx.feathers(global_position + Vector3(0, 0.6, 0), trail_color)
+	if third and not melee.busy() and dash_t <= 0.0:
+		if in_aim or in_fire:
+			body_yaw = lerp_angle(body_yaw, yaw, minf(1.0, delta * 18.0))
+		elif wish.length() > 0.1:
+			body_yaw = lerp_angle(body_yaw, atan2(-wish.x, -wish.z), minf(1.0, delta * 12.0))
+	if third and not melee.busy():
+		avatar.rotation.y = body_yaw
 	move_and_slide()
 	var hspeed = Vector2(velocity.x, velocity.z).length()
 	if on_floor and hspeed < 2.5 and Game.main and Game.main.state == "fight":
@@ -274,6 +417,8 @@ func _actions(delta: float) -> void:
 	if in_weapon >= 0 and in_weapon != weapon:
 		if Game.time - last_hit_t < 0.5:
 			swap_boost = 2.0
+			if third:
+				style.add("swap", "swap")
 			Game.announce("SWAP BOOST", "", Color(1.0, 0.62, 0.2), 0.6)
 		weapon = in_weapon
 		charge = 0.0
@@ -297,6 +442,13 @@ func _actions(delta: float) -> void:
 		_burn()
 	if in_punch and punch > 0:
 		_punch()
+	if in_ult and ult >= 100.0 and Game.main:
+		ult = 0.0
+		Game.main.start_ult(self)
+		return
+	if third:
+		melee.update(delta, in_attack)
+		aiming = in_aim or in_fire
 	var w: Dictionary = WEAPONS[weapon]
 	if silenced > 0.0:
 		charge = 0.0
@@ -353,11 +505,19 @@ func _shoot(w: Dictionary) -> void:
 			end = hit["position"]
 			var c = hit["collider"]
 			if c and c.has_method("take_hit"):
-				if c.take_hit(float(w["dmg"]) * boost, end, "gun"):
+				if c.take_hit(float(w["dmg"]) * boost * float(mods.get("gun", 1.0)), end, "gun"):
 					last_hit_t = Game.time
 					hits += 1
 					if Game.main:
 						Game.main.hud.hitmark()
+					if third:
+						style.add("gun%d" % weapon, "gun")
+						if c is Boss and w.has("charge"):
+							c.guard_hit(25.0 * guard_mult())
+						if c is CharacterBody3D and not (c is Boss) and not (c is Pet) and not c.is_on_floor():
+							c.velocity.y = maxf(c.velocity.y, 3.5)
+						if randf() < 0.3:
+							Game.main.spawn_orbs(end, 1, false)
 			else:
 				Fx.sparks(end, Color(1.0, 0.6, 0.25), 4, 5.0)
 		var col = gun_color
@@ -401,10 +561,14 @@ func _do_lock(delta: float) -> void:
 	to.y = 0
 	var dist = to.length()
 	var want_yaw = atan2(-to.x, -to.z)
-	yaw = lerp_angle(yaw, want_yaw, minf(1.0, delta * 18.0))
-	pitch = lerpf(pitch, -0.25, minf(1.0, delta * 10.0))
-	rotation.y = yaw
-	cam.rotation.x = pitch
+	if third:
+		body_yaw = lerp_angle(body_yaw, want_yaw, minf(1.0, delta * 18.0))
+		avatar.rotation.y = body_yaw
+	else:
+		yaw = lerp_angle(yaw, want_yaw, minf(1.0, delta * 18.0))
+		pitch = lerpf(pitch, -0.25, minf(1.0, delta * 10.0))
+		rotation.y = yaw
+		cam.rotation.x = pitch
 	var reach = 1.6 + (t.radius if "radius" in t else 0.0)
 	if dist > reach and not lock_hit:
 		var v = to.normalized() * 26.0
@@ -417,6 +581,12 @@ func _do_lock(delta: float) -> void:
 			if lock_kind == "finish":
 				var fin = Game.cosmetic_color("finisher", Fx.GOLD)
 				t.finish()
+				if third:
+					cinematic(0.7, 1.25 if randf() < 0.5 else -1.25)
+					Game.slowmo(0.45, 0.3)
+					style.add("finish", "finish")
+					Game.main.spawn_orbs(pos, 4, true)
+					avatar.start_swing(Vector3(PI * 0.95, 0, 0), Vector3(PI * 0.2, 0, 0))
 				punch = mini(2, punch + 1)
 				kills += 1
 				Game.hit_stop(0.16)
@@ -427,6 +597,8 @@ func _do_lock(delta: float) -> void:
 			else:
 				t.rip()
 				kills += 1
+				if third:
+					style.add("rip", "rip")
 				Game.hit_stop(0.12)
 				Game.shake(0.6)
 				Fx.sparks(pos, Color(1, 0.8, 0.3), 40, 14.0)
@@ -473,7 +645,15 @@ func _punch() -> void:
 	if Game.main:
 		Game.main.hud.callout("punch")
 
+## A short cinematic angle: the camera swings to the side (yaw offset, rad) and pushes in.
+func cinematic(sec: float, side: float) -> void:
+	cine_t = sec
+	cine_yaw = side
+
 func _camera(delta: float) -> void:
+	if third:
+		_camera_third(delta)
+		return
 	var hspeed = Vector2(velocity.x, velocity.z).length()
 	var bob = sin(bob_t * 2.0) * 0.05 * minf(1.0, hspeed / SPEED) if is_on_floor() else 0.0
 	cam.position.y = EYE + bob
@@ -489,9 +669,43 @@ func _camera(delta: float) -> void:
 	view.rotation.x = recoil * 0.12 + charge * 0.1
 	view.visible = lock <= 0.0
 
+func _camera_third(delta: float) -> void:
+	var real = delta / maxf(Engine.time_scale, 0.001)
+	var hspeed = Vector2(velocity.x, velocity.z).length()
+	# ease back behind the heroine while she runs and the mouse is still
+	if pilot == null and look_idle > 0.9 and hspeed > 4.0 and not in_aim and not melee.busy():
+		yaw = lerp_angle(yaw, body_yaw, minf(1.0, real * 1.4))
+	aim_k = move_toward(aim_k, 1.0 if (in_aim and lock <= 0.0) else 0.0, real * 6.0)
+	var c = 1.0 - exp(-real * 9.0)
+	var right = Vector3(cos(yaw), 0, -sin(yaw))
+	var focus = global_position + Vector3(0, 1.55 - aim_k * 0.05, 0) + right * aim_k * 0.65
+	rig.global_position = rig.global_position.lerp(focus, minf(1.0, 1.0 - exp(-real * 14.0)))
+	var want_yaw = yaw
+	var want_pitch = pitch
+	var length = lerpf(4.3, 2.5, aim_k)
+	if cine_t > 0.0:
+		want_yaw = body_yaw + cine_yaw
+		want_pitch = -0.08
+		length = 2.8
+	rig_yaw = lerp_angle(rig_yaw, want_yaw, minf(1.0, 1.0 - exp(-real * (16.0 if cine_t <= 0.0 else 7.0))))
+	rig.rotation = Vector3(lerp_angle(rig.rotation.x, want_pitch, minf(1.0, 1.0 - exp(-real * 16.0))), rig_yaw, 0)
+	arm.spring_length = lerpf(arm.spring_length, length, c)
+	var target_fov = 68.0 + fov_kick * 10.0 + minf(hspeed, 30.0) * 0.12 - aim_k * 8.0
+	cam.fov = lerpf(cam.fov, target_fov, minf(1.0, real * 10.0))
+	var s = trauma * trauma
+	cam.h_offset = randf_range(-1, 1) * 0.22 * s
+	cam.v_offset = randf_range(-1, 1) * 0.22 * s
+	cam.rotation.z = randf_range(-1, 1) * 0.04 * s
+	avatar.pose(delta, velocity, is_on_floor(), dash_t > 0.0, aiming or in_fire, avatar.swing)
+
 func hurt(amount: float, from := Vector3.ZERO, kind := "") -> bool:
+	if third and invuln > 0.0 and Game.time - dash_start < 0.2 and perfect_cd <= 0.0 and not dead:
+		_perfect_dodge()
+		return false
 	if dead or invuln > 0.0 or lock > 0.0:
 		return false
+	if third:
+		style.hurt()
 	_hurt_raw(amount * Game.damage_taken)
 	trauma = minf(1.0, trauma + 0.35)
 	if Game.main:
@@ -506,6 +720,17 @@ func _hurt_raw(amount: float) -> void:
 		health = 0.0
 		dead = true
 		died.emit()
+
+## Dashed through a hit at the last moment: slow-mo, gold tint, and the next attack counters.
+func _perfect_dodge() -> void:
+	perfect_cd = 1.0
+	Game.slowmo(0.6, 0.3)
+	melee.counter_until = Game.time + 1.0
+	style.add("perfect", "perfect")
+	Fx.word(global_position + Vector3(0, 2.2, 0), "PERFECT", Fx.GOLD, 90, 0.5)
+	if Game.main:
+		Game.main.hud.perfect()
+		Game.main.spawn_orbs(global_position + Vector3(0, 1.2, 0), 3, true)
 
 func timeout(sec: float) -> void:
 	frozen = sec

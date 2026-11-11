@@ -23,6 +23,33 @@ var hazards: Array = []
 var clears := {}
 var tour := false
 var tour_i := 0
+var stage: Stage
+var sky_mat: ShaderMaterial
+var hero := "messenger"
+var story: Array = []
+var story_i := 0
+var story_next: Callable
+var told := {}
+var ending_due := false
+
+## Comic-panel story beats: [image, focus rect (fractions), caption, title card, tint].
+const STORY := {
+	"opening": [
+		["res://assets/art/poster.webp", Rect2(0.3, 0.0, 0.45, 0.75), "Teknium, the Hermes Architect, built the great colosseum.", "", Color(1, 1, 1)],
+		["res://assets/art/poster.webp", Rect2(0.0, 0.3, 1.0, 0.7), "Then the war god's fire took it, and took him with it.", "", Color(1.0, 0.7, 0.6)],
+		["res://assets/art/hero-card.webp", Rect2(0.1, 0.0, 0.8, 0.8), "Hermes sends his swiftest messenger. Fourteen champions stand in her way.", "BRING HIM HOME", Color(1, 1, 1)],
+	],
+	"reveal": [
+		["res://assets/art/champ/champ-teknium.webp", Rect2(0.15, 0.0, 0.7, 0.7), "Teknium waits at the top of the ladder. His eyes burn crimson.", "", Color(1.0, 0.75, 0.7)],
+		["res://assets/art/champ/champ-teknium.webp", Rect2(0.3, 0.05, 0.4, 0.4), "\"There is no architect here. Only war.\"", "ARES · THE BETRAYER", Color(1.0, 0.35, 0.25)],
+	],
+	"ending": [
+		["res://assets/art/champ/champ-teknium.webp", Rect2(0.2, 0.0, 0.6, 0.65), "The war god's hold breaks. The crimson shatters out of him like ink.", "", Color(1.0, 0.5, 0.4)],
+		["res://assets/art/champ/champ-teknium.webp", Rect2(0.1, 0.0, 0.8, 0.8), "Teknium's own light returns, gold and calm.", "", Color(1.0, 0.95, 0.75)],
+		["res://assets/art/poster.webp", Rect2(0.25, 0.0, 0.5, 0.7), "With Ares cast out, Teknium takes the throne: the rightful God of War. The fires turn gold.", "", Color(1.0, 0.92, 0.7)],
+		["res://assets/art/poster.webp", Rect2(0.0, 0.0, 1.0, 1.0), "", "ARES", Color(1, 1, 1)],
+	],
+}
 
 func _ready() -> void:
 	Game.main = self
@@ -64,6 +91,8 @@ func _ready() -> void:
 		_set_state("tour")
 	elif Game.arg("credits", false):
 		_set_state("credits")
+	elif Game.arg("face-test", false):
+		add_child(load("res://tools/face_test.gd").new())
 	elif Game.arg("skip-title", false):
 		_start_boss(index)
 	else:
@@ -71,7 +100,7 @@ func _ready() -> void:
 
 func _setup_input() -> void:
 	var keys = {"forward": [KEY_W], "back": [KEY_S], "left": [KEY_A], "right": [KEY_D], "jump": [KEY_SPACE], "dash": [KEY_SHIFT],
-		"finish": [KEY_F], "rip": [KEY_Q], "burn": [KEY_R], "punch": [KEY_V], "weapon1": [KEY_1], "weapon2": [KEY_2], "weapon3": [KEY_3], "start": [KEY_ENTER, KEY_SPACE]}
+		"finish": [KEY_F], "rip": [KEY_G], "ult": [KEY_Q], "burn": [KEY_R], "punch": [KEY_V], "weapon1": [KEY_1], "weapon2": [KEY_2], "weapon3": [KEY_3], "start": [KEY_ENTER, KEY_SPACE]}
 	for a in keys:
 		if not InputMap.has_action(a):
 			InputMap.add_action(a)
@@ -79,11 +108,14 @@ func _setup_input() -> void:
 			var e = InputEventKey.new()
 			e.physical_keycode = k
 			InputMap.action_add_event(a, e)
-	if not InputMap.has_action("fire"):
-		InputMap.add_action("fire")
-		var m = InputEventMouseButton.new()
-		m.button_index = MOUSE_BUTTON_LEFT
-		InputMap.action_add_event("fire", m)
+	# third person: left mouse is the blade, right mouse aims and shoots; first person: left shoots
+	var fps = bool(Game.arg("fps", false))
+	for pair in [["fire", MOUSE_BUTTON_LEFT if fps else MOUSE_BUTTON_RIGHT], ["attack", MOUSE_BUTTON_LEFT]]:
+		if not InputMap.has_action(pair[0]):
+			InputMap.add_action(pair[0])
+			var m = InputEventMouseButton.new()
+			m.button_index = pair[1]
+			InputMap.action_add_event(pair[0], m)
 
 func _load_bosses() -> void:
 	var f = FileAccess.open("res://data/bosses.json", FileAccess.READ)
@@ -97,9 +129,9 @@ func _build_world() -> void:
 	world_env = WorldEnvironment.new()
 	var env = Environment.new()
 	var sky = Sky.new()
-	var sm = ShaderMaterial.new()
-	sm.shader = preload("res://shaders/sky.gdshader")
-	sky.sky_material = sm
+	sky_mat = ShaderMaterial.new()
+	sky_mat.shader = preload("res://shaders/sky.gdshader")
+	sky.sky_material = sky_mat
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -113,9 +145,9 @@ func _build_world() -> void:
 	env.glow_hdr_threshold = 1.2
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.3, 0.12, 0.07)
-	env.fog_density = 0.0035
-	env.fog_sky_affect = 0.3
-	env.ssao_enabled = true
+	env.fog_density = 0.0028
+	env.fog_sky_affect = 0.0
+	env.ssao_enabled = not Game.lite
 	env.ssao_intensity = 1.2
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 0.98
@@ -129,6 +161,18 @@ func _build_world() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 90.0
 	add_child(sun)
+	# screen-space ink lines over the whole 3D view (works in the Compatibility renderer)
+	var ink = MeshInstance3D.new()
+	var q = QuadMesh.new()
+	q.size = Vector2(2, 2)
+	ink.mesh = q
+	var im = ShaderMaterial.new()
+	im.shader = preload("res://shaders/ink.gdshader")
+	ink.material_override = im
+	ink.extra_cull_margin = 16384.0
+	ink.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ink.name = "Ink"
+	add_child(ink)
 
 func _static_box(size: Vector3, pos: Vector3, color: Color, emit := 0.0, ow := 0.03) -> MeshInstance3D:
 	var body = StaticBody3D.new()
@@ -145,11 +189,10 @@ func _static_box(size: Vector3, pos: Vector3, color: Color, emit := 0.0, ow := 0
 	return mi
 
 func _build_arena() -> void:
-	var sand = Color(0.62, 0.48, 0.38)
-	var stone = Color(0.3, 0.2, 0.17)
-	var bronze = Color(0.7, 0.38, 0.16)
-	var gold = Color(1.0, 0.7, 0.25)
-	# floor
+	var stone = Stage.STONE
+	var bronze = Stage.BRONZE
+	var gold = Stage.GOLD
+	# floor: one collider, painted sand with hard light bands
 	var floor_body = StaticBody3D.new()
 	var fcs = CollisionShape3D.new()
 	var fcyl = CylinderShape3D.new()
@@ -159,88 +202,117 @@ func _build_arena() -> void:
 	fcs.position.y = -1.0
 	floor_body.add_child(fcs)
 	add_child(floor_body)
-	var fl = Look.cyl(ARENA_R + 6.0, 2.0, sand, 0.0, 0.0, -1.0, 72)
+	var floor_mat = ShaderMaterial.new()
+	floor_mat.shader = preload("res://shaders/floor.gdshader")
+	var fmesh = CylinderMesh.new()
+	fmesh.top_radius = ARENA_R + 6.0
+	fmesh.bottom_radius = ARENA_R + 6.0
+	fmesh.height = 2.0
+	fmesh.radial_segments = 72
+	var fl = MeshInstance3D.new()
+	fl.mesh = fmesh
+	fl.material_override = floor_mat
 	fl.position.y = -1.0
 	add_child(fl)
-	# inlaid rings and spokes
+	# inlaid rings: near-black stone with a bronze line, and a gold seal at the centre
 	for r in [6.0, 12.5, 19.0]:
-		var ring = Look.cyl(r, 0.04, stone, 0.0, 0.0, -1.0, 72)
-		ring.position.y = 0.01
-		add_child(ring)
-		var inner = Look.cyl(r - 0.35, 0.05, sand.darkened(0.05), 0.0, 0.0, -1.0, 72)
-		inner.position.y = 0.012
-		add_child(inner)
-	var seal = Look.cyl(3.2, 0.06, gold, 0.5, 0.0, -1.0, 6)
+		_ring(r, 0.55, stone, 0.01)
+		_ring(r - 0.18, 0.14, bronze, 0.02)
+	var seal = Look.cyl(3.2, 0.06, gold, 0.4, 0.0, -1.0, 6)
 	seal.position.y = 0.02
 	add_child(seal)
-	var seal2 = Look.cyl(2.4, 0.07, Color(0.55, 0.12, 0.06), 0.0, 0.0, -1.0, 6)
+	var seal2 = Look.cyl(2.4, 0.07, stone, 0.0, 0.0, -1.0, 6)
 	seal2.position.y = 0.025
 	seal2.rotation.y = PI / 6
 	add_child(seal2)
-	for k in 12:
-		var spoke = Look.box(Vector3(0.25, 0.03, 13.0), stone, 0.0, 0.0)
-		var a = k * TAU / 12.0
-		spoke.position = Vector3(sin(a) * 12.5, 0.015, cos(a) * 12.5)
-		spoke.rotation.y = a
-		add_child(spoke)
-	# molten channel
-	var lava = Look.cyl(25.6, 0.05, Color(1.0, 0.45, 0.1), 1.4, 0.0, -1.0, 72)
+	var seal3 = Look.cyl(1.0, 0.08, Color(0.85, 0.2, 0.06), 0.8, 0.0, -1.0, 6)
+	seal3.position.y = 0.03
+	add_child(seal3)
+	# molten channel, recoloured by each stage
+	var lava_mat = Look.toon(null, Color(1.0, 0.45, 0.1), Color(1.0, 0.45, 0.1), 1.6, 0.0).duplicate()
+	var lava = Look.cyl(25.6, 0.05, Color(1.0, 0.45, 0.1), 0.0, 0.0, -1.0, 72)
+	lava.material_override = lava_mat
 	lava.position.y = 0.02
 	add_child(lava)
-	var lip = Look.cyl(24.4, 0.07, sand, 0.0, 0.0, -1.0, 72)
+	var lip = Look.cyl(24.4, 0.07, Color(0, 0, 0), 0.0, 0.0, -1.0, 72)
+	lip.material_override = floor_mat
 	lip.position.y = 0.03
 	add_child(lip)
-	# colosseum wall, columns, stands and banners
+	_ring(24.5, 0.5, stone, 0.04)
+	_ring(24.3, 0.14, bronze, 0.05)
+	# the wall's collider (its look comes from the stage)
 	var n = 28
 	for k in n:
 		var a2 = k * TAU / n
 		var dir = Vector3(sin(a2), 0, cos(a2))
-		var wall = _static_box(Vector3(7.2, 7.0, 1.6), dir * (ARENA_R + 1.0) + Vector3(0, 3.5, 0), stone, 0.0, 0.04)
-		wall.get_parent().rotation.y = a2
-		var col = Look.model("column")
-		col.scale = Vector3(2.2, 2.6, 2.2)
-		col.position = dir * (ARENA_R - 0.4)
-		add_child(col)
-		Look.apply(col, 0.02, Color(1.0, 0.8, 0.65))
-		for tier in 3:
-			var step = Look.box(Vector3(7.4, 1.2, 2.4), stone.darkened(0.15 * tier), 0.0, 0.03)
-			step.position = dir * (ARENA_R + 2.8 + tier * 2.4) + Vector3(0, 7.6 + tier * 1.6, 0)
-			step.rotation.y = a2
-			add_child(step)
-		if k % 2 == 0:
-			var ban = Look.model("banner_patternA_red" if k % 4 == 0 else "banner_patternB_red")
+		var body = StaticBody3D.new()
+		var cs = CollisionShape3D.new()
+		var bs = BoxShape3D.new()
+		bs.size = Vector3(7.2, 9.0, 1.6)
+		cs.shape = bs
+		body.add_child(cs)
+		add_child(body)
+		body.position = dir * (ARENA_R + 1.0) + Vector3(0, 4.5, 0)
+		body.rotation.y = a2
+		if k % 4 == 1:
+			var ban = Look.model("banner_patternA_red" if k % 8 == 1 else "banner_patternB_red")
 			ban.scale = Vector3.ONE * 2.4
-			ban.position = dir * (ARENA_R - 0.1) + Vector3(0, 3.2, 0)
+			ban.position = dir * (ARENA_R - 0.15) + Vector3(0, 3.6, 0) + Vector3(cos(a2), 0, -sin(a2)) * 3.0
 			ban.rotation.y = a2 + PI
 			add_child(ban)
-			Look.apply(ban, 0.02)
-		if k % 4 == 2:
-			_brazier(dir * (ARENA_R - 2.2))
-	# gates
+			Look.apply(ban, 0.0)
+	# gates: stone arch, bronze trim, the stage's fire behind
 	for g in GATES:
-		var arch = Look.box(Vector3(5.0, 0.9, 1.0), bronze, 0.0, 0.04)
-		arch.position = g * 1.12 + Vector3(0, 6.2, 0)
-		arch.rotation.y = atan2(g.x, g.z)
+		var yaw = atan2(g.x, g.z)
+		var arch = Look.box(Vector3(5.6, 1.2, 1.4), stone, 0.0, 0.0)
+		arch.position = g * 1.12 + Vector3(0, 6.3, 0)
+		arch.rotation.y = yaw
 		add_child(arch)
-		var glow = Look.box(Vector3(4.0, 5.5, 0.2), Color(1.0, 0.4, 0.1), 0.9, 0.0)
+		var trim = Look.box(Vector3(5.8, 0.25, 1.5), bronze, 0.2, 0.0)
+		trim.position = g * 1.12 + Vector3(0, 5.6, 0)
+		trim.rotation.y = yaw
+		add_child(trim)
+		var glow = Look.box(Vector3(4.0, 5.5, 0.2), Color(1.0, 0.35, 0.08), 1.2, 0.0)
 		glow.position = g * 1.14 + Vector3(0, 2.8, 0)
-		glow.rotation.y = atan2(g.x, g.z)
+		glow.rotation.y = yaw
 		add_child(glow)
 	# platforms with jump pads and grab bars (vertical play)
 	for k in 4:
 		var a3 = k * TAU / 4.0 + PI / 4.0
 		var dir2 = Vector3(sin(a3), 0, cos(a3))
-		var plat = _static_box(Vector3(7.0, 0.8, 7.0), dir2 * 18.0 + Vector3(0, 4.6, 0), bronze, 0.0, 0.04)
-		var trim = Look.box(Vector3(7.2, 0.2, 7.2), gold, 0.6, 0.0)
-		trim.position = dir2 * 18.0 + Vector3(0, 4.15, 0)
-		add_child(trim)
+		_static_box(Vector3(7.0, 0.8, 7.0), dir2 * 18.0 + Vector3(0, 4.6, 0), stone.lightened(0.05), 0.0, 0.0)
+		var trim2 = Look.box(Vector3(7.25, 0.22, 7.25), bronze, 0.0, 0.0)
+		trim2.position = dir2 * 18.0 + Vector3(0, 4.95, 0)
+		add_child(trim2)
+		var edge = Look.box(Vector3(7.3, 0.12, 7.3), gold, 0.7, 0.0)
+		edge.position = dir2 * 18.0 + Vector3(0, 4.18, 0)
+		add_child(edge)
 		for leg in [Vector3(-2.8, 0, -2.8), Vector3(2.8, 0, 2.8), Vector3(2.8, 0, -2.8), Vector3(-2.8, 0, 2.8)]:
-			var pillar = Look.cyl(0.35, 4.2, stone, 0.0, 0.03)
+			var pillar = Look.cyl(0.4, 4.2, stone, 0.0, 0.0)
 			pillar.position = dir2 * 18.0 + leg + Vector3(0, 2.1, 0)
 			add_child(pillar)
 		_jump_pad(dir2 * 11.0, (dir2 * 7.0 + Vector3(0, 17.0, 0)))
 		var b_dir = Vector3(sin(a3 + PI / 4.0), 0, cos(a3 + PI / 4.0))
 		_grab_bar(b_dir * 19.5 + Vector3(0, 6.8, 0), a3 + PI / 4.0)
+	stage = Stage.new()
+	add_child(stage)
+	stage.setup(world_env.environment, sky_mat, floor_mat, lava_mat)
+	stage.apply("ember")
+
+## A flat inlaid ring on the floor (a squashed torus), no outline.
+func _ring(r: float, w: float, color: Color, y: float) -> void:
+	var t = TorusMesh.new()
+	t.inner_radius = r - w
+	t.outer_radius = r
+	t.rings = 72
+	t.ring_segments = 4
+	var mi = MeshInstance3D.new()
+	mi.mesh = t
+	mi.material_override = Look.toon(null, color, Color(0, 0, 0), 0.0, 0.0)
+	mi.scale = Vector3(1, 0.02, 1)
+	mi.position.y = y
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
 
 func _brazier(at: Vector3) -> void:
 	var bowl = Look.cyl(0.9, 0.6, Color(0.5, 0.25, 0.12), 0.0, 0.03, 1.2)
@@ -273,6 +345,8 @@ func _brazier(at: Vector3) -> void:
 	f.color = Color(1.0, 0.55, 0.15)
 	f.position = at + Vector3(0, 2.0, 0)
 	add_child(f)
+	if Game.lite:
+		return
 	var l = OmniLight3D.new()
 	l.light_color = Color(1.0, 0.5, 0.18)
 	l.light_energy = 3.0
@@ -320,21 +394,39 @@ func _grab_bar(at: Vector3, yaw: float) -> void:
 
 # -------------------------------------------------------------- flow -----
 
+## Show a story beat (once per run), then carry on with `next`.
+func play_story(key: String, next: Callable) -> void:
+	if told.has(key) or Game.arg("no-story", false):
+		next.call()
+		return
+	told[key] = true
+	story = STORY[key]
+	story_i = 0
+	story_next = next
+	_set_state("story")
+	hud.story_panel(story[0])
+
 func _set_state(s: String) -> void:
 	state = s
 	state_t = 0.0
 	hud.on_state(s)
 
 func _start_boss(i: int) -> void:
+	if player.third and String(bosses[i].get("handle")) == "Teknium" and not told.has("reveal") and not Game.arg("no-story", false):
+		play_story("reveal", func(): _start_boss(i))
+		return
 	index = i
 	_clear_field()
 	var d: Dictionary = bosses[i]
+	stage.apply(String(d.get("stage", "ember")))
 	var b = Boss.new()
 	b.setup(d)
 	add_child(b)
 	b.global_position = Vector3(0, 0, -10) if not b.flying else Vector3(0, 3.5, -10)
 	b.rotation.y = 0.0
 	Game.boss = b
+	if d.has("pet"):
+		spawn_pet(String(d["pet"]), b)
 	player.global_position = Vector3(0, 0.2, 14)
 	player.velocity = Vector3.ZERO
 	player.yaw = 0.0
@@ -355,9 +447,18 @@ func _show_card(b) -> void:
 	var h: float = 2.4 if String(b.data.get("model")) == "eye" else 1.25 * b.scale_f
 	var dist: float = 6.0 + b.scale_f * 1.6
 	var face: Vector3 = b.global_position + Vector3(0, h, 0)
-	card_cam.global_position = b.global_position + Vector3(dist * 0.35, h * 0.55, dist)
-	card_cam.look_at(face, Vector3.UP)
 	card_cam.current = true
+	# a sweeping pan round the boss while the name card is up
+	var tw = create_tween()
+	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	var center: Vector3 = b.global_position
+	var orbit = func(a: float) -> void:
+		var r = dist * (1.25 - 0.25 * a)
+		var ang = lerpf(-1.1, 0.35, a)
+		card_cam.global_position = center + Vector3(sin(ang) * r, h * lerpf(0.25, 0.6, a), cos(ang) * r)
+		card_cam.look_at(face, Vector3.UP)
+	orbit.call(0.0)
+	tw.tween_method(orbit, 0.0, 1.0, 2.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	hud.namecard(b.handle, b.title, index + 1, bosses.size(), bool(b.data.get("final", false)))
 	get_tree().create_timer(2.6, true, false, true).timeout.connect(_end_card)
 
@@ -372,6 +473,10 @@ func _end_card() -> void:
 	Game.announce("FIGHT", "%s — %s" % [b.handle, b.title.to_upper()], Fx.GOLD, 1.2)
 
 func _clear_field() -> void:
+	for o in orbs:
+		if is_instance_valid(o["node"]):
+			o["node"].queue_free()
+	orbs.clear()
 	for e in Game.enemies.duplicate():
 		if is_instance_valid(e):
 			e.queue_free()
@@ -404,14 +509,47 @@ func _process(delta: float) -> void:
 		"title":
 			_title_cam(delta)
 			var hold = float(Game.arg("title-hold", 3.0))
-			if state_t > hold and (pilot != null or Input.is_action_just_pressed("start")):
-				_start_boss(index)
-			elif pilot == null and Input.is_action_just_pressed("start"):
-				_start_boss(index)
+			if (state_t > hold and pilot != null) or (pilot == null and Input.is_action_just_pressed("start")):
+				if player.third:
+					_set_state("select")
+				else:
+					_start_boss(index)
+		"select":
+			_title_cam(delta)
+			if hud.sel_t < 0.0:
+				if pilot == null:
+					if Input.is_action_just_pressed("left"):
+						hud.sel = "messenger"
+					elif Input.is_action_just_pressed("right"):
+						hud.sel = "runner"
+					if state_t > 0.4 and Input.is_action_just_pressed("start"):
+						hud.select_confirm()
+				elif state_t > 1.4:
+					hud.select_confirm()
+			elif hud.sel_t > 1.0:
+				hero = hud.sel
+				player.set_hero(hero)
+				play_story("opening", func(): _start_boss(index))
+		"story":
+			_title_cam(delta)
+			var panel: Array = story[story_i]
+			var sec = 4.2 if String(panel[2]) != "" else 3.0
+			if state_t > sec or (pilot == null and state_t > 0.5 and Input.is_action_just_pressed("start")):
+				story_i += 1
+				state_t = 0.0
+				if story_i >= story.size():
+					var cb = story_next
+					cb.call()
+				else:
+					hud.story_panel(story[story_i])
 		"tour":
 			_tour(delta)
 		"won":
-			if state_t > 4.5:
+			if state_t > 4.5 and ending_due:
+				ending_due = false
+				Game.reset_time()
+				play_story("ending", func(): _set_state("credits"))
+			elif state_t > 4.5:
 				Game.reset_time()
 				if ladder and index + 1 < bosses.size():
 					_start_boss(index + 1)
@@ -441,6 +579,7 @@ func _tour(_delta: float) -> void:
 
 func _tour_show(i: int) -> void:
 	_clear_field()
+	stage.apply(String(bosses[i].get("stage", "ember")))
 	var b = Boss.new()
 	b.setup(bosses[i])
 	add_child(b)
@@ -466,6 +605,7 @@ func _physics_process(delta: float) -> void:
 	_spawner(delta)
 	_hazards(delta)
 	_update_pickups(delta)
+	_update_orbs(delta)
 	_update_shots(delta)
 	_update_waves(delta)
 	for t in Game.threats:
@@ -480,7 +620,7 @@ func _spawner(delta: float) -> void:
 		spawn_t = maxf(1.6, 3.2 - phase * 0.5)
 		var minions = 0
 		for e in Game.live_enemies():
-			if e is Enemy and e.kind != "checkpoint":
+			if e is Enemy and not e is Pet and e.kind != "checkpoint":
 				minions += 1
 		if minions < cap:
 			var g: Vector3 = GATES[randi() % GATES.size()]
@@ -527,6 +667,16 @@ func spawn_enemy(kind: String, at: Vector3) -> Enemy:
 	e.global_position = Vector3(at.x, at.y if kind == "checkpoint" else 0.1, at.z)
 	Game.enemies.append(e)
 	Fx.ring(Vector3(at.x, 0.1, at.z), 2.2, Fx.EMBER, 0.4, 0.2)
+	return e
+
+func spawn_pet(p: String, b) -> Pet:
+	var e = Pet.new()
+	e.setup_pet(p, b)
+	add_child(e)
+	e.global_position = b.global_position + Vector3(4.5 * e.side, 0.1, 1.5)
+	e.global_position.y = 0.1
+	b.pets.append(e)
+	Game.enemies.append(e)
 	return e
 
 func spawn_clone(d: Dictionary, at: Vector3):
@@ -662,27 +812,76 @@ func _update_shots(delta: float) -> void:
 			n.queue_free()
 			Game.projectiles.erase(s)
 
+## A shockwave: a crisp cel ring on the floor (ink edge, hot core), a short standing band
+## the player has to jump, and embers flying off it. No soft glow.
 func spawn_wave(at: Vector3, speed: float, dmg: float, effect: String, color: Color) -> void:
-	var t = TorusMesh.new()
-	t.inner_radius = 0.9
-	t.outer_radius = 1.0
-	t.rings = 64
-	t.ring_segments = 8
-	t.material = Look.glow(color)
-	var mi = MeshInstance3D.new()
-	mi.mesh = t
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
-	mi.global_position = Vector3(at.x, 0.45, at.z)
-	Game.waves.append({"node": mi, "pos": Vector3(at.x, 0, at.z), "r": 1.0, "speed": speed, "dmg": dmg, "effect": effect, "hit": false, "id": Game.new_id()})
+	var root = Node3D.new()
+	add_child(root)
+	root.global_position = Vector3(at.x, 0.0, at.z)
+	var core = Color(1.0, 0.86, 0.38)
+	var disc = MeshInstance3D.new()
+	var pm = PlaneMesh.new()
+	pm.size = Vector2(2, 2)
+	disc.mesh = pm
+	var dm = ShaderMaterial.new()
+	dm.shader = preload("res://shaders/wave.gdshader")
+	dm.set_shader_parameter("core", core)
+	dm.set_shader_parameter("rim", color)
+	disc.material_override = dm
+	disc.position.y = 0.06
+	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(disc)
+	var band = MeshInstance3D.new()
+	var cm = CylinderMesh.new()
+	cm.top_radius = 1.0
+	cm.bottom_radius = 1.0
+	cm.height = 0.9
+	cm.cap_top = false
+	cm.cap_bottom = false
+	cm.radial_segments = 64
+	cm.rings = 1
+	band.mesh = cm
+	var bm = ShaderMaterial.new()
+	bm.shader = preload("res://shaders/wave_band.gdshader")
+	bm.set_shader_parameter("core", core)
+	bm.set_shader_parameter("rim", color)
+	band.material_override = bm
+	band.position.y = 0.45
+	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(band)
+	var sparks = CPUParticles3D.new()
+	var q = QuadMesh.new()
+	q.size = Vector2(0.22, 0.22)
+	q.material = stage._flame_mat(core, color)
+	sparks.mesh = q
+	sparks.amount = 36
+	sparks.lifetime = 0.5
+	sparks.local_coords = false
+	sparks.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	sparks.emission_ring_axis = Vector3.UP
+	sparks.emission_ring_height = 0.2
+	sparks.emission_ring_radius = 1.0
+	sparks.emission_ring_inner_radius = 0.8
+	sparks.direction = Vector3.UP
+	sparks.spread = 50.0
+	sparks.initial_velocity_min = 3.0
+	sparks.initial_velocity_max = 7.0
+	sparks.gravity = Vector3(0, -14, 0)
+	sparks.position.y = 0.8
+	root.add_child(sparks)
+	Game.waves.append({"node": root, "disc": disc, "band": band, "sparks": sparks, "pos": Vector3(at.x, 0, at.z), "r": 1.0, "speed": speed, "dmg": dmg, "effect": effect, "hit": false, "id": Game.new_id()})
 
 func _update_waves(delta: float) -> void:
 	for w in Game.waves.duplicate():
 		w["r"] += w["speed"] * delta
 		var r: float = w["r"]
-		var n: MeshInstance3D = w["node"]
+		var n: Node3D = w["node"]
 		if is_instance_valid(n):
-			n.scale = Vector3(r, 6.0, r)
+			w["disc"].scale = Vector3(r, 1.0, r)
+			w["disc"].set_instance_shader_parameter("radius", r)
+			w["band"].scale = Vector3(r - 0.45, 1.0, r - 0.45)
+			w["sparks"].emission_ring_radius = r
+			w["sparks"].emission_ring_inner_radius = maxf(r - 0.6, 0.0)
 		var d = Vector2(player.global_position.x - w["pos"].x, player.global_position.z - w["pos"].z).length()
 		if not w["hit"] and absf(d - r) < 0.9 and player.global_position.y < 1.0:
 			w["hit"] = true
@@ -703,6 +902,104 @@ func on_boss_phase(b, phase: int) -> void:
 	Game.shake(0.6)
 	Fx.ring(b.global_position + Vector3(0, 1, 0), 18.0, Fx.EMBER, 0.6, 0.5)
 	Game.announce("PHASE %s" % ["I", "II", "III"][phase - 1], "the arena burns" if phase == 2 else "no mercy", Fx.EMBER, 1.4)
+	if b.handle == "Teknium" and phase == 2:
+		# Ares's control at full strength: he speaks through Teknium from here on
+		b.title = "Ares · The Betrayer"
+		b.tint = Color(1.0, 0.35, 0.25)
+		Look.param(b.model, "tint", b.tint)
+		hud.cutin(load("res://assets/art/champ/champ-teknium.webp"), "ARES · THE BETRAYER", "the war god takes full control", 1.2, Color(1.0, 0.3, 0.2))
+
+# ----------------------------------------------------- blade and orbs -----
+
+var orbs: Array = []
+
+## A cel slash crescent at `at`, turned to `yaw`, tilted by `tilt` (rad, around the
+## swing's forward axis), spanning angles a0 -> a1. It retracts from the tail in 0.15 s.
+func slash_trail(at: Vector3, yaw: float, tilt: float, reach: float, a0: float, a1: float) -> void:
+	var mi = MeshInstance3D.new()
+	var pm = PlaneMesh.new()
+	pm.size = Vector2(2, 2)
+	mi.mesh = pm
+	if _slash_mat == null:
+		_slash_mat = ShaderMaterial.new()
+		_slash_mat.shader = preload("res://shaders/slash.gdshader")
+	mi.material_override = _slash_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	mi.global_position = at
+	mi.rotation = Vector3(0, yaw, 0)
+	mi.rotate_object_local(Vector3.FORWARD, tilt)
+	mi.scale = Vector3(reach, 1, reach)
+	mi.set_instance_shader_parameter("a0", a0)
+	mi.set_instance_shader_parameter("a1", a1)
+	mi.set_instance_shader_parameter("fade", 0.0)
+	var tw = mi.create_tween()
+	tw.tween_method(func(v): mi.set_instance_shader_parameter("fade", v), 0.0, 1.0, 0.06)
+	tw.tween_method(func(v): mi.set_instance_shader_parameter("fade", v), 1.0, 0.0, 0.15)
+	tw.tween_callback(mi.queue_free)
+
+var _slash_mat: ShaderMaterial
+
+## A thrust: a narrow crescent fired forward.
+func slash_stab(at: Vector3, dir: Vector3, reach: float) -> void:
+	var yaw = atan2(-dir.x, -dir.z)
+	slash_trail(at + dir * reach * 0.15, yaw, PI * 0.5, reach * 0.9, -0.12, 0.12)
+	slash_trail(at + dir * reach * 0.1, yaw, 0.0, reach * 0.95, 0.1, -0.1)
+
+## The plunge's shockwave: a flat full-circle slash on the floor plus a short ring.
+func slash_ring(at: Vector3, r: float) -> void:
+	slash_trail(Vector3(at.x, 0.12, at.z), 0.0, 0.0, r, -PI, PI)
+	Fx.ring(Vector3(at.x, 0.1, at.z), r, Fx.GOLD, 0.35, 0.3)
+
+## Energy orbs: pop out, arc, then fly to the heroine after 0.4 s and fill the ult meter.
+func spawn_orbs(at: Vector3, n: int, big: bool) -> void:
+	if player == null or not player.third:
+		return
+	var count = int(ceil(n * player.style.mult()))
+	for i in mini(count, 8):
+		var col = Fx.GOLD if (i % 2 == 0) else Color(0.95, 0.25, 0.08)
+		var node = Look.ball(0.16 if big else 0.09, col, 1.6, 0.02)
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(node)
+		node.global_position = at
+		var v = Vector3(randf_range(-1, 1), randf_range(0.8, 1.6), randf_range(-1, 1)).normalized() * randf_range(4.0, 7.0)
+		orbs.append({"node": node, "vel": v, "t": 0.0, "value": 6.0 if big else 1.6})
+	if orbs.size() > 60:
+		for o in orbs.slice(0, orbs.size() - 60):
+			if is_instance_valid(o["node"]):
+				o["node"].queue_free()
+		orbs = orbs.slice(orbs.size() - 60)
+
+func _update_orbs(delta: float) -> void:
+	if orbs.is_empty():
+		return
+	var target = player.global_position + Vector3(0, 1.1, 0)
+	for o in orbs.duplicate():
+		var n: Node3D = o["node"]
+		if not is_instance_valid(n):
+			orbs.erase(o)
+			continue
+		o["t"] += delta
+		var v: Vector3 = o["vel"]
+		if o["t"] < 0.4:
+			v.y -= 14.0 * delta
+			v *= 1.0 - delta * 2.0
+		else:
+			var to = target - n.global_position
+			v = v.lerp(to.normalized() * (14.0 + o["t"] * 30.0), minf(1.0, delta * 8.0))
+			if to.length() < 0.7:
+				player.ult = minf(100.0, player.ult + float(o["value"]) * float(player.mods.get("ult", 1.0)))
+				Fx.sparks(target, Fx.GOLD, 3, 3.0)
+				n.queue_free()
+				orbs.erase(o)
+				continue
+		o["vel"] = v
+		n.global_position += v * delta
+
+func start_ult(p) -> void:
+	var u = preload("res://scripts/ult.gd").new()
+	add_child(u)
+	u.run(p)
 
 func on_boss_dead(b) -> void:
 	_set_state("won")
@@ -721,6 +1018,8 @@ func on_boss_dead(b) -> void:
 			else:
 				e.die()
 	Game.announce("CHAMPION FALLS", "%s — %s  ·  %.1f s" % [b.handle, b.title.to_upper(), secs], Fx.GOLD, 3.5)
+	if b.handle == "Teknium" and player.third:
+		ending_due = true
 
 func _on_player_died() -> void:
 	_set_state("down")
@@ -731,5 +1030,5 @@ func credits_lines() -> Array:
 	var lines: Array = ["ARES", "", "Hero", "Design Bakery", "", credit_line, ""]
 	for b in bosses:
 		lines.append("%s — %s" % [b.get("handle"), b.get("title")])
-	lines += ["", "3D models (CC0)", "KayKit Adventurers, Skeletons and Dungeon Remastered by Kay Lousberg", "", "Engine", "Godot 4", "", "Made with Swarm Studio for Hermes Agent"]
+	lines += ["", "3D models (CC0)", "KayKit Adventurers, Skeletons and Dungeon Remastered by Kay Lousberg", "", "Robot pets (CC BY 4.0, modified)", "RHINO BOT CHARACTER 3D by oscar_creativo", "Stream Protector by Vasian-Digital3D", "", "Engine", "Godot 4", "", "Made with Swarm Studio for Hermes Agent"]
 	return lines

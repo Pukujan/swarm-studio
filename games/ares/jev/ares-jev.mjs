@@ -35,6 +35,8 @@ export function summary(s) {
   const lines = [h.ammo < 8 ? 'AMMO EMPTY: rip an enemy or finish one.' : h.health < 40 ? 'LOW HEALTH: finish a staggered enemy.' : '', `hero health ${h.health} armor ${h.armor} ammo ${h.ammo} fuel ${h.fuel} burn ${h.fire_cd > 0 ? `ready in ${h.fire_cd}s` : 'ready'} punch charges ${h.punch} dash ${h.dash} weapon ${h.weapon}${h.frozen ? ' FROZEN' : ''}${h.silenced ? ' SILENCED' : ''}`]
   if (b) lines.push(`boss ${b.handle} (${b.title}) hp ${b.hp}/${b.max} phase ${b.phase} doing ${b.move || 'nothing'}${b.staggered ? ' STAGGERED' : ''}`)
   lines.push(`${s.enemies.length} minions, ${s.enemies.filter(e => e.staggered).length} staggered, ${s.enemies.filter(e => e.burning).length} burning, ${s.enemies.filter(e => e.shield).length} shielded`)
+  const dome = s.enemies.find(e => String(e.kind).includes('shielding'))
+  if (dome) lines.push(`DOME UP: shots at the boss stop on the dome. Pressure hits the ${dome.kind.split(' ')[0]} pet instead; break it and finish it.`)
   if (s.threats.length) lines.push(`danger: ${s.threats.map(t => `${t.kind} in ${t.t}s`).join(', ')}`)
   if (s.projectiles.length) lines.push(`${s.projectiles.length} projectiles incoming`)
   return lines.filter(Boolean).join('\n')

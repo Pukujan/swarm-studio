@@ -11,6 +11,15 @@ instance uniform vec4 tint : source_color = vec4(1.0);
 instance uniform float flash = 0.0;
 instance uniform vec4 flash_color : source_color = vec4(1.0, 0.78, 0.25, 1.0);
 instance uniform float fade = 1.0;
+// Faces: above face_y (model space) the light is pulled toward the camera, so a face is
+// lit from the front and never splits into a half-dark cel band. Off by default.
+uniform float face_y = 99.0;
+uniform float face_bias = 0.0;
+varying float model_y;
+
+void vertex() {
+	model_y = VERTEX.y;
+}
 
 void fragment() {
 	vec3 tex = mix(vec3(1.0), texture(albedo_tex, UV).rgb, use_tex);
@@ -32,6 +41,9 @@ void fragment() {
 
 void light() {
 	float ndl = dot(NORMAL, LIGHT);
+	if (model_y > face_y) {
+		ndl = mix(ndl, max(ndl, dot(NORMAL, VIEW)), face_bias);
+	}
 	float lit = smoothstep(0.0, 0.05, ndl) * 0.8 + smoothstep(0.55, 0.6, ndl) * 0.25;
 	DIFFUSE_LIGHT += ALBEDO * LIGHT_COLOR * ATTENUATION * lit / PI;
 	float rim = smoothstep(0.62, 0.66, 1.0 - dot(NORMAL, VIEW)) * smoothstep(0.0, 0.2, ndl);

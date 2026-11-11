@@ -143,14 +143,19 @@ static func glow(color: Color, alpha := 1.0) -> StandardMaterial3D:
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	return m
 
+# Bundled OFL fonts (assets/fonts), so the web build looks the same: browsers have no Impact.
+static var _slam: Font
+static var _body: Font
+
 static func slam_font() -> Font:
-	var f = SystemFont.new()
-	f.font_names = PackedStringArray(["Impact", "Arial Black", "Arial"])
-	f.font_weight = 900
-	return f
+	if _slam == null:
+		_slam = load("res://assets/fonts/Anton-Regular.ttf")
+	return _slam
 
 static func body_font() -> Font:
-	var f = SystemFont.new()
-	f.font_names = PackedStringArray(["Bahnschrift", "Segoe UI", "Arial"])
-	f.font_weight = 700
-	return f
+	if _body == null:
+		var v = FontVariation.new()
+		v.base_font = load("res://assets/fonts/Oswald.ttf")
+		v.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 600}
+		_body = v
+	return _body

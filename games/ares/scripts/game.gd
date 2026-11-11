@@ -18,6 +18,9 @@ var damage_taken := 1.0
 var _stop := 0.0
 var _slow := 0.0
 var _id := 0
+## Web (or --lite): the Compatibility renderer redraws each object per omni light, so the
+## lite profile drops dynamic lights and SSAO and leans on emission instead.
+var lite := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -28,6 +31,7 @@ func _ready() -> void:
 			args[s.substr(0, i)] = s.substr(i + 1)
 		else:
 			args[s] = true
+	lite = OS.has_feature("web") or args.has("lite")
 	if args.has("damage"):
 		damage_taken = float(args["damage"])
 	_load_items()
