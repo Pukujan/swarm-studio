@@ -271,7 +271,8 @@ Plan files are served at `/plans/<id>/<file>.png` (the sheet and mock pictures),
   the views and close-ups, then makes and rigs each character in the locked scope; test-one-first reopens the gate
   for the rest. Still to do: the shared animation set (`POST /openapi/v1/animations`) and the weapon props
   (`sheetsplit.py`); they stay on the price but the build does not make them yet.
-- [ ] (d) The Systems switches in the build prompt.
+- [x] (d) The Systems switches in the build prompt: `engine/systems.mjs` `systemsAsk(plan)`, joined with the cards and the
+  close-up rule in `gameBrief(plan)` (`GET /api/plans/:id/brief`). Starting the game's coding run from the brief is still to do.
 - [ ] (e) ARES as a remixable template.
 
 ## Out of scope
