@@ -23,7 +23,7 @@ export async function loadPlaywright() {
 }
 
 // Playwright's own browser, else installed Chrome, else any headless shell Playwright downloaded before
-export async function launch(chromium) {
+export async function launch(chromium, extra = {}) {
   const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || join(homedir(), process.platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright')
   const shells = []
   try {
@@ -35,10 +35,8 @@ export async function launch(chromium) {
     }
   } catch {}
   let last
-  // sound plays without a click first, so the play test's film can record it
-  const args = ['--autoplay-policy=no-user-gesture-required']
   for (const opts of [{}, { channel: 'chrome' }, ...shells.map(executablePath => ({ executablePath }))]) {
-    try { return await chromium.launch({ ...opts, args }) } catch (e) { last = e }
+    try { return await chromium.launch({ ...opts, ...extra }) } catch (e) { last = e }
   }
   throw last
 }
@@ -146,7 +144,8 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
   const pw = await loadPlaywright()
   if (!pw) return { ok: true, skipped: 'no browser for the play test' }
   let browser
-  try { browser = await launch(pw.chromium) } catch (e) { return { ok: true, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
+  // sound plays without a click first, so the film can record it
+  try { browser = await launch(pw.chromium, { args: ['--autoplay-policy=no-user-gesture-required'] }) } catch (e) { return { ok: true, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
   const errors = [], blocked = []
   try {
     vdir = clip ? mkdtempSync(join(tmpdir(), 'playtest-')) : null

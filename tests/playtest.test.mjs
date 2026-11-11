@@ -66,9 +66,15 @@ const beepPage = `<!doctype html><body><canvas width=400 height=300></canvas><bu
 s.onclick = () => { s.remove(); const a = new AudioContext(); const o = a.createOscillator(), v = a.createGain(); v.gain.value = 0.4; o.frequency.value = 440; o.connect(v); v.connect(a.destination); o.start() }</script></body>`
 
 test('the play test film has the game\'s sound', { timeout: 90000 }, async () => {
-  const { findFfmpeg } = await import('../engine/playtest.mjs')
-  const ff = findFfmpeg()
-  if (!ff) return
+  const { findFfmpeg, launch, loadPlaywright } = await import('../engine/playtest.mjs')
+  const ff = findFfmpeg(), pw = await loadPlaywright()
+  if (!ff || !pw) return
+  // a machine with no sound output (a server over SSH) never runs the browser's audio clock
+  const b = await launch(pw.chromium).catch(() => null)
+  if (!b) return
+  const clock = await (await b.newPage()).evaluate(() => new Promise(r => { const a = new AudioContext(); setTimeout(() => r(a.currentTime), 600) })).catch(() => 0)
+  await b.close()
+  if (clock < 0.2) return
   const { mkdtempSync, existsSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
