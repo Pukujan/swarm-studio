@@ -13,8 +13,9 @@
 //   nova       a slow molten orb bursts where its floor ring shows (late modes: three); step out
 //   hound      a fire ring opens, a flame beast runs the lit floor lane (jump it) and erupts
 //              into a gold pillar where it hits; GhostBear's signature
-//   stopped_hour  the world stops (sepia); the boss hangs weapons around her, each with a guide
-//              line; time resumes, they fly after a 0.3 s grace; one gap always; Teknium's signature
+//   stopped_hour  bursts of knives, cards and orbs leave the boss's hand, brake and lock in a
+//              sepia stop with aim lines; colour snaps back and they launch group by group:
+//              dash the knives, slash the orbs back, outrun the wall; Teknium's signature
 //
 // Each boss has its own colour family (SPELL_HUE). Warm only: crimson, ember, gold, rose,
 // white-hot. While a spell threatens her, an invisible `kind: 'laser'` hint says which way is
@@ -50,7 +51,7 @@ const BOSS_SPELLS = (() => {
     rahlquist: { hue: 'ember', spells: ['nova', 'maelstrom'] },
     Suzu: { hue: 'rose', spells: ['radiance', 'storm'] },
     LocutusOfTheEye: { hue: 'crimson', spells: ['maelstrom', 'firewall'] },
-    Teknium: { hue: 'white', spells: ['stopped_hour', 'radiance', 'storm', 'maelstrom'], sig: 'stopped_hour' },
+    Teknium: { hue: 'white', spells: ['stopped_hour', 'storm', 'radiance', 'maelstrom'], sig: 'stopped_hour' },
   }
   const hue = () => HUES[(B && SET[B.handle]?.hue) || 'crimson']
   // soft smoke from the shared sprite cache (fx.js); never flat circles
@@ -158,12 +159,15 @@ const BOSS_SPELLS = (() => {
     fx.push({ boss: true, kind: 'laser', x, t: 0, dur: 1.05, update(dt) {
       if (this.t < 0.72) { if (!low() && Math.random() < 0.35) push({ x: x + rnd(-40, 40), y: y - 2, vx: 0, vy: rnd(-200, -90), life: 0.35, t: 0, size: rnd(1.5, 2.5), color: p.spark, add: true, streak: true }) ; return }
       if (!pts) {
-        pts = bolt(x + rnd(-60, 60), top, x, y, 0.2, low() ? 4 : 5); fk = low() ? [] : forks(pts, 3, 140)
-        flash = Math.max(flash, 0.18); flashColor = p.hot; shake = Math.max(shake, 5); SFX.zap()
-        sparksAt(x, y - 4, 14, p); if (typeof FOE !== 'undefined') { FOE.scorch(x, y, 50); FOE.shock(x, y - 4, 80, { ground: y, flat: 0.3, dur: 0.35, col: 'gold' }) }
+        pts = bolt(x + rnd(-60, 60), top, x, y, 0.2, low() ? 4 : 6); fk = branches(pts, s)
+        flash = Math.max(flash, low() ? 0.22 : 0.34); flashColor = p.core; shake = Math.max(shake, low() ? 5 : 8); SFX.zap()
+        sparksAt(x, y - 4, 18, p); if (typeof FOE !== 'undefined') { FOE.scorch(x, y, 64); FOE.shock(x, y - 4, 90, { ground: y, flat: 0.3, dur: 0.35, col: 'gold' }) }
+        // rock chips and dust from the pool
+        PP.floor = y; PP.burst(5, x, y - 2, low() ? 3 : 10, 180, 520, -Math.PI / 2, 1.1, 0.5, 1.0, 2, 5); if (!low()) PP.burst(4, x, y - 6, 6, 40, 160, -Math.PI / 2, 1.4, 0.5, 0.9, 5, 10)
       }
       jag -= dt
-      if (jag <= 0 && !low() && this.t < 0.9) { jag = 0.045; pts = bolt(pts[0][0], top, x, y, 0.2, 5); fk = forks(pts, 2, 120) }
+      if (jag <= 0 && !low() && this.t < 0.9) { jag = 0.045; pts = bolt(pts[0][0], top, x, y, 0.2, 6); fk = branches(pts, s) }
+      if (this.t > 0.5 && !this.crack) { this.crack = true; sfx('crackle', { x, vol: 0.5 }) }
       if (this.t < 0.86 && !this.hit && Math.abs(P.x - x) < 54 * s && P.y <= y + 4 && P.y > top) { this.hit = hurt(14, Math.sign(P.x - x) || 1) }
     }, draw() {
       const c = ctx
@@ -178,9 +182,20 @@ const BOSS_SPELLS = (() => {
         return
       }
       const q = this.t < 0.86 ? 1 : Math.max(0, 1 - (this.t - 0.86) / 0.19)
+      // the sky lights up for a moment as it lands
+      if (this.t < 0.84) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); const g = c.createLinearGradient(0, 0, 0, H * 0.7); g.addColorStop(0, `rgba(${p.hot},${(low() ? 0.12 : 0.24) * (1 - (this.t - 0.72) / 0.12)})`); g.addColorStop(1, `rgba(${p.hot},0)`); c.fillStyle = g; c.fillRect(0, 0, W, H * 0.7); c.restore() }
       if (pts) drawBolt(pts, fk, s, q, p)
       glowAt(x, y - 6, 120 * s, p.glow, 0.7 * q); glowAt(x, y - 6, 40 * s, p.core, q)
     } })
+  }
+  // the branches of a strike: forks off the main bolt, smaller forks off those, and two arcs that
+  // run along the floor from where it lands
+  function branches(pts, s) {
+    if (low()) return forks(pts, 1, 120)
+    const f = forks(pts, 5, 200 * s), e = pts[pts.length - 1]
+    for (const b of f.slice(0, 2)) f.push(...forks(b, 1, 80))
+    for (const d of [-1, 1]) f.push(bolt(e[0], e[1] - 2, e[0] + d * rnd(90, 170) * s, e[1] - rnd(0, 8), 0.3, 3))
+    return f
   }
   function storm() {
     const p = hue(), ar = AR(), cx = (ar.l + ar.r) / 2, n = (low() ? 10 : 13) + 2 * Math.max(0, B.mode), dur = 4.6
@@ -515,7 +530,14 @@ const BOSS_SPELLS = (() => {
   }
   if (typeof drawBullet === 'function') {
     const coreDraw = drawBullet
-    window.drawBullet = function (b) { if (b && b.dart) return drawDart(b); if (b && b.blade) return drawBlade(b); return coreDraw(b) }
+    window.drawBullet = function (b) {
+      if (!b) return coreDraw(b)
+      if (b.hour) return   // the stopped hour draws its own shots in batches
+      if (b.hourR) return drawHourRefl(b)
+      if (b.dart) return drawDart(b)
+      if (b.enemy && B && B.handle === 'Teknium' && (b.type === 'orb' || b.type === 'heavy')) return drawTek(b)
+      return coreDraw(b)
+    }
   }
 
   // -------------------------------------------------------------- nova (detonation orb)
@@ -678,57 +700,210 @@ const BOSS_SPELLS = (() => {
   }
 
   // -------------------------------------------------------------- stopped hour
-  // a clock face blooms behind the boss and the world stops: sepia, nothing moves but her. She
-  // blinks around the heroine and hangs weapons in the air, each with a faint line showing its
-  // flight. Then a tick: colour snaps back and, after a short grace, they all fly. A gap is
-  // always left. No damage while stopped. Later modes stop twice and re-aim the shots in flight.
-  const HOUR = { wind: 0.7, place: 2.3, grace: 0.3 }
+  // Teknium's signature. A wind-up in normal time (the watch comes out, the ticks speed up), then
+  // the world stops. He blinks to three spots round the heroine, and at each one a burst of
+  // knives, cards and orbs leaves his hand at speed, brakes hard over ~0.15 s and locks in the
+  // air with a ripple and a faint aim line. Everything except him and his clock goes sepia
+  // (colour drained, warm grade, film grain, vignette, a slow shimmer). Then the watch snaps shut:
+  // colour comes back at once with a shockwave and the clock breaks; after a 0.3 s grace the groups
+  // launch one after another, each going from zero to full speed along its line. Three kinds, and
+  // each has its own answer:
+  //   knives, cards  thin gold steel, fast: dash through them, or be out of the ring in time
+  //   orbs           big crimson glass with a gold clock ring, slow: slash them back at him
+  //   wall           a black-and-crimson wall rolling in from one side: run past the gold line on
+  //                  the floor where it stops (a dash does not save you)
+  // The first cast is knives only, the next adds orbs, and the final mode adds the wall. There is
+  // always a way out: the rings leave the run lane open, the rain leaves a marked spot, and the
+  // wall stops short of that spot. Everything is drawn in batches (sprites made once, one path per
+  // kind), and the breaks come from a fixed particle pool (the oldest particles are reused).
+  const HOUR = { wind: 0.7, stop: 1.95, grace: 0.3, bursts: [0, 0.7, 1.3] }
   // his own poses for it (t-hourwind / t-hourstop / t-hourend), picked frame by frame: the
   // wind-up draws the watch and snaps (only the frames where the watch stays in one hand), each
-  // blink in the stop is a calm step then a placing gesture, the release shuts the watch and
+  // blink in the stop is a calm step then a throwing gesture, the release shuts the watch and
   // folds his arms. Never the run or dash sheets.
   const HOUR_POSE = { wind: [0, 1, 3, 4, 4], stop: [[1, 0], [5, 2], [3, 4]], end: [0, 1, 2, 3, 5, 5] }
   const hourPose = (anim, f) => { B.anim = anim; B.animT = f / 10 + 0.05 }
   function tick(f0) { if (typeof tone === 'function') tone('square', f0, f0 * 0.7, 0.04, 0.05) }
-  function layout(kind, cx, cy, n) {
-    const out = [], ar = AR(), lo = ar.l + 30, hi = ar.r - 30
-    const add = (x, y, a) => { if (x > lo && x < hi && y > cam.y + 30 && y < GROUND - 14) out.push({ x, y, a }) }
-    if (kind === 'ring') {
-      const gap = Math.random() < 0.5 ? 0 : Math.PI, r = 300, m = n + 2
-      for (let i = 0; i < m; i++) { const a = i / m * TAU; if (Math.abs(Math.atan2(Math.sin(a - gap), Math.cos(a - gap))) < 0.5) continue; add(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.75, a + Math.PI) }
-    } else if (kind === 'rows') {
-      // two diagonal rows crossing over her, falling from both upper sides; the lowest slot is open
-      const k = Math.ceil(n / 2)
-      for (let i = 0; i < k; i++) { add(cx - 420 + i * 40, cy - 330 + i * 60, 0.62); add(cx + 420 - i * 40, cy - 330 + i * 60, Math.PI - 0.62) }
-    } else if (kind === 'cage') {
-      // above and both sides, all aimed at her; the gap is low on one side
-      const side = Math.random() < 0.5 ? -1 : 1
-      for (let i = 0; i < n; i++) {
-        const a = -Math.PI + i / (n - 1) * Math.PI * 2, x = cx + Math.cos(a) * 280, y = cy - Math.abs(Math.sin(a)) * 260 - 40
-        if (Math.sign(x - cx) === side && y > cy - 120) continue
-        add(x, y, ang(x, y, cx, cy))
-      }
-    } else {
-      // a staggered fan from her side of the screen
-      const sx = cx + (Math.random() < 0.5 ? -1 : 1) * 380
-      for (let i = 0; i < n; i++) { const y = cy - 260 + i * (300 / n); add(sx + (i % 2) * 30 * Math.sign(cx - sx), y, ang(sx, y, cx, cy - 20 + (i - n / 2) * 18)) }
+  const sfx = (n, o) => { if (typeof SFXR !== 'undefined') try { SFXR.play(n, o) } catch { } }
+  // hitboxes are well inside the sprites
+  const KIND = {
+    knife: { type: 'heavy', r: 5, dmg: 9, spd: 1050 },
+    card: { type: 'heavy', r: 6, dmg: 9, spd: 920 },
+    orb: { type: 'orb', r: 13, dmg: 12, spd: 430 },
+    wall: { type: 'doom', r: 13, dmg: 16, spd: 250 },
+  }
+  let HW = null   // the live wave (the autoplay reads it)
+
+  // ---- sprites, made once
+  let SPR = null
+  function canvas(w, h, f) { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); return c }
+  function softGlow(g, x, y, rx, ry, rgb, a) { g.save(); g.translate(x, y); g.scale(1, ry / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, `rgba(${rgb},${a})`); gr.addColorStop(1, `rgba(${rgb},0)`); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, TAU); g.fill(); g.restore() }
+  function sprites() {
+    if (SPR) return SPR
+    SPR = {
+      // a throwing knife along +x; its centre is (40, 12) and the tip reaches x = 70
+      knife: canvas(74, 24, g => {
+        softGlow(g, 46, 12, 30, 9, '255,206,110', 0.55)
+        g.beginPath(); g.moveTo(71, 12); g.lineTo(40, 6.5); g.lineTo(31, 8); g.lineTo(31, 16); g.lineTo(40, 17.5); g.closePath()
+        const lg = g.createLinearGradient(31, 0, 71, 0); lg.addColorStop(0, '#e9cf96'); lg.addColorStop(1, '#ffffff')
+        g.fillStyle = lg; g.fill(); g.strokeStyle = '#3a1a06'; g.lineWidth = 1.6; g.stroke()
+        g.strokeStyle = 'rgba(190,130,50,0.9)'; g.lineWidth = 1; g.beginPath(); g.moveTo(33, 12); g.lineTo(66, 12); g.stroke()
+        g.fillStyle = '#e0a83a'; g.fillRect(27, 4, 4, 16); g.strokeStyle = '#3a1a06'; g.lineWidth = 1; g.strokeRect(27, 4, 4, 16)
+        g.fillStyle = '#9e1420'; g.fillRect(13, 9, 14, 6)
+        g.fillStyle = '#e0a83a'; g.beginPath(); g.arc(11, 12, 3.5, 0, TAU); g.fill()
+      }),
+      // a playing card, centre (20, 15)
+      card: canvas(40, 30, g => {
+        softGlow(g, 20, 15, 20, 15, '255,206,110', 0.5)
+        g.fillStyle = '#f8ead0'; g.fillRect(8, 4, 24, 22); g.strokeStyle = '#5a3008'; g.lineWidth = 1.5; g.strokeRect(8, 4, 24, 22)
+        g.strokeStyle = '#d8a03a'; g.lineWidth = 1; g.strokeRect(10.5, 6.5, 19, 17)
+        g.fillStyle = '#b0121e'; g.beginPath(); g.moveTo(20, 9); g.lineTo(25, 15); g.lineTo(20, 21); g.lineTo(15, 15); g.closePath(); g.fill()
+      }),
+      // the big crimson glass orb with a gold clock ring, centre (48, 48)
+      orb: canvas(96, 96, g => {
+        const c = 48, gr = g.createRadialGradient(c - 6, c - 7, 1, c, c, 24)
+        gr.addColorStop(0, '#fffaf2'); gr.addColorStop(0.28, '#ffc8b4'); gr.addColorStop(0.62, '#e8202c'); gr.addColorStop(1, '#6a0010')
+        g.fillStyle = gr; g.beginPath(); g.arc(c, c, 24, 0, TAU); g.fill()
+        g.strokeStyle = '#2a0006'; g.lineWidth = 2; g.beginPath(); g.arc(c, c, 24.5, 0, TAU); g.stroke()
+        g.strokeStyle = '#ffd27a'; g.lineWidth = 3; g.beginPath(); g.arc(c, c, 29, 0, TAU); g.stroke()
+        g.lineWidth = 2.4; g.beginPath()
+        for (let i = 0; i < 12; i++) { const a = i / 12 * TAU, r0 = i % 3 ? 32 : 31, r1 = i % 3 ? 35 : 39; g.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0); g.lineTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1) }
+        g.stroke()
+      }),
+      glow: canvas(128, 128, g => softGlow(g, 64, 64, 64, 64, '255,70,40', 0.7)),
+      gold: canvas(128, 128, g => softGlow(g, 64, 64, 64, 64, '255,200,110', 0.8)),
+      // a block of the rolling wall: a black core in a crimson rim (black = jump or run, as always)
+      wall: canvas(48, 48, g => {
+        softGlow(g, 24, 24, 24, 24, '200,20,36', 0.7)
+        g.fillStyle = '#12020a'; g.beginPath(); g.arc(24, 24, 14, 0, TAU); g.fill()
+        g.strokeStyle = 'rgba(255,90,90,0.95)'; g.lineWidth = 2; g.beginPath(); g.arc(24, 24, 15, 0, TAU); g.stroke()
+        g.strokeStyle = '#ffd27a'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(24, 14); g.lineTo(24, 24); g.lineTo(31, 24); g.stroke()
+      }),
+      vig: canvas(320, 180, g => { const gr = g.createRadialGradient(160, 90, 50, 160, 90, 190); gr.addColorStop(0, 'rgba(40,20,6,0)'); gr.addColorStop(0.6, 'rgba(40,20,6,0.25)'); gr.addColorStop(1, 'rgba(26,12,2,0.85)'); g.fillStyle = gr; g.fillRect(0, 0, 320, 180) }),
+      grain: [0, 1, 2].map(() => canvas(128, 128, g => { const im = g.createImageData(128, 128); for (let i = 0; i < im.data.length; i += 4) { const v = 128 + ((Math.random() * 2 - 1) * 70) | 0; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255 } g.putImageData(im, 0, 0) })),
     }
-    return out
+    SPR.pat = SPR.grain.map(c => ctx.createPattern(c, 'repeat'))
+    return SPR
   }
+  // draw sprite `img` at world (x, y) rotated by r, centred on (cx, cy) of the image, scale s;
+  // the matrix is built by hand from the camera matrix m (no save/restore per shot)
+  function blit(m, img, x, y, r, cx, cy, s) {
+    const co = Math.cos(r) * s, si = Math.sin(r) * s
+    ctx.setTransform(m.a * co + m.c * si, m.b * co + m.d * si, -m.a * si + m.c * co, -m.b * si + m.d * co, m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f)
+    ctx.drawImage(img, -cx, -cy)
+  }
+
+  // ---- the particle pool for the breaks: fixed size, the oldest are reused, one batched path
+  // per kind and fade step, no shadowBlur
+  const PP = (() => {
+    const N = 1400, X = new Float32Array(N), Y = new Float32Array(N), VX = new Float32Array(N), VY = new Float32Array(N), TT = new Float32Array(N), LF = new Float32Array(N), SZ = new Float32Array(N), K = new Uint8Array(N)
+    // kinds: 0 gold spark, 1 crimson spark, 2 steel shard, 3 crimson glass, 4 dust, 5 rock chip
+    const G = [1500, 1500, 1900, 1700, -40, 1900], COL = ['255,224,150', '255,96,60', '255,240,214', '226,36,46', '150,118,84', '110,82,60']
+    const A = [1, 0.62, 0.3]
+    let head = 0, host = null, alive = 0
+    const api = { floor: GROUND, get alive() { return alive } }
+    const cap = () => low() ? 380 : N
+    function hostUp() { if (!host || !fx.includes(host)) { host = { t: 0, dur: 99, update(dt) { step(dt); if (!alive) this.t = this.dur }, draw() { draw() } }; fx.push(host) } }
+    api.add = (k, x, y, vx, vy, life, size) => { hostUp(); const i = head; head = (head + 1) % cap(); X[i] = x; Y[i] = y; VX[i] = vx; VY[i] = vy; TT[i] = 0; LF[i] = life; SZ[i] = size; K[i] = k; alive = Math.max(alive, 1) }
+    // n particles of kind k from (x, y): speed sp, direction dir +- spread
+    api.burst = (k, x, y, n, sp0, sp1, dir, spread, l0, l1, s0, s1) => { for (let i = 0; i < n; i++) { const a = dir + rnd(-spread, spread), s = rnd(sp0, sp1); api.add(k, x, y, Math.cos(a) * s, Math.sin(a) * s, rnd(l0, l1), rnd(s0, s1)) } }
+    function step(dt) {
+      const n = cap(), fl = api.floor
+      let c = 0
+      for (let i = 0; i < n; i++) {
+        if (TT[i] >= LF[i]) continue
+        TT[i] += dt; c++
+        const k = K[i]
+        VY[i] += G[k] * dt; X[i] += VX[i] * dt; Y[i] += VY[i] * dt
+        if (k === 4) { VX[i] *= 1 - 2 * dt; VY[i] *= 1 - 2 * dt }
+        else if (Y[i] > fl && (k === 2 || k === 3 || k === 5)) { Y[i] = fl; VY[i] *= -0.32; VX[i] *= 0.55 }
+      }
+      alive = c
+    }
+    function draw() {
+      const n = cap(), paths = []
+      for (let k = 0; k < 6; k++) paths.push([new Path2D(), new Path2D(), new Path2D()])
+      for (let i = 0; i < n; i++) {
+        if (TT[i] >= LF[i]) continue
+        const q = 1 - TT[i] / LF[i], b = q > 0.66 ? 0 : q > 0.33 ? 1 : 2, k = K[i], p = paths[k][b], s = SZ[i]
+        if (k < 2) { p.moveTo(X[i], Y[i]); p.lineTo(X[i] - VX[i] * 0.022, Y[i] - VY[i] * 0.022) }
+        else if (k === 4) p.rect(X[i] - s, Y[i] - s, s * 2, s * 2)
+        else { const a = TT[i] * 14 + i, co = Math.cos(a) * s, si = Math.sin(a) * s; p.moveTo(X[i] + co, Y[i] + si); p.lineTo(X[i] - co * 0.6 - si * 0.7, Y[i] - si * 0.6 + co * 0.7); p.lineTo(X[i] - co * 0.4 + si * 0.8, Y[i] - si * 0.4 - co * 0.8); p.closePath() }
+      }
+      const c = ctx
+      c.lineCap = 'round'
+      for (let k = 0; k < 6; k++) for (let b = 0; b < 3; b++) {
+        const p = paths[k][b]
+        if (k < 2) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(${COL[k]},${A[b]})`; c.lineWidth = 2.2; c.stroke(p) }
+        else { c.globalCompositeOperation = 'source-over'; c.fillStyle = `rgba(${COL[k]},${A[b] * (k === 4 ? 0.4 : 0.95)})`; c.fill(p) }
+      }
+      c.globalCompositeOperation = 'source-over'
+    }
+    return api
+  })()
+
+  // ---- the plan: every shot's slot, aim and launch time, from where she stands now
+  function hourPlan(lvl) {
+    const lo = low(), P0 = { x: P.x, y: P.y }, fl = x => floorAt(x, P0.y - 40), fy = fl(P0.x)
+    const ar = AR(), top = cam.y + 24
+    let L = Math.max(cam.x + 30, ar.l + 30), R = Math.min(cam.x + VW() - 30, ar.r - 30)
+    // the open floor she can run on: up to the nearest standing wall on each side
+    if (typeof plats !== 'undefined') for (const p of plats) if (p.kind === 'wall' && !p.broken) { if (p.r < P0.x) L = Math.max(L, p.r + 34); else if (p.l > P0.x) R = Math.min(R, p.l - 34) }
+    // the way out: toward the side with more room; the safe spot gx is there
+    const d = (R - P0.x) >= (P0.x - L) ? 1 : -1, room = d > 0 ? R - P0.x : P0.x - L
+    let gx = clamp(P0.x + d * clamp(room - 150, 170, 300), L + 90, R - 90)
+    if (typeof inPit === 'function') for (let i = 0; i < 12 && inPit(gx); i++) gx -= d * 30
+    const shots = []
+    const add = (g, kind, x, y, a, go, burst) => { if (x < cam.x - 120 || x > cam.x + VW() + 120 || y < top || y > fy - 14) return null; const s = { g, kind, sx: x, sy: y, a, go, burst, curve: rnd(-1, 1) * 70, fd: rnd(0.3, 0.38) }; shots.push(s); return s }
+    // a ring: upper arcs aimed at a point; the low sector on the way-out side stays open, so the
+    // run lane at her height is clear in both directions
+    const ring = (g, cx, cy, n, go, burst) => (lo ? [270, 330] : [255, 300, 345]).forEach((r, j) => {
+      const ry = Math.min(r * 0.76, cy - top - 8 - j * 10)   // flatter under a low ceiling, never cut off
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI + 0.42 + (i + (j % 2) * 0.5) / n * (Math.PI - 0.84)
+        if (Math.cos(a) * d > 0 && Math.abs(Math.sin(a)) < Math.sin(1.05)) continue
+        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * ry
+        add(g, i % 4 === 2 ? 'card' : 'knife', x, y, ang(x, y, cx, cy), go, burst)
+      }
+    })
+    ring(1, P0.x, P0.y - 60, lo ? 22 : 38, 0.3, 0)
+    // the rain: two crossing sheets of knives into the floor, everywhere but the safe spot
+    const th = 0.95, ct = Math.cos(th), st = Math.sin(th), step = lo ? 56 : 40
+    let lane = 0
+    for (let tx = L + 10; tx <= R - 10; tx += step, lane++) {
+      if (Math.abs(tx - gx) < 90) continue
+      const ty = fl(tx)
+      for (const s of [-1, 1]) for (let j = 0; j < (lo ? 1 : 2); j++) {
+        if (lo && s !== (lane % 2 ? 1 : -1)) continue
+        const len = Math.min(430, (ty - top - 10) / st) - j * 80, sx = tx - s * ct * len, sy = ty - st * len
+        // never low over the safe spot
+        if (Math.min(sx, tx) < gx + 40 && Math.max(sx, tx) > gx - 40 && (Math.abs(gx - tx) - 40) * st / ct < 170) continue
+        add(2, 'knife', sx, sy, ang(sx, sy, tx, ty), 1.0, 1)
+      }
+    }
+    // the orbs: an arc above the safe spot, aimed at it, one after another (slash them back)
+    if (lvl >= 1) { const no = lo ? 5 : 10; for (let i = 0; i < no; i++) { const a = -2.55 + i / (no - 1) * 2.0, x = gx + Math.cos(a) * 400, y = Math.max(top + 20, fy - 70 + Math.sin(a) * 280); add(3, 'orb', x, y, ang(x, y, gx + rnd(-24, 24), fy - 70), 1.25 + i * 0.07, 1) } }
+    // the last ring closes on the safe spot itself (dash it)
+    ring(4, gx, fy - 60, lo ? 18 : 34, 2.5, 2)
+    // the wall: from the far side, it stops at the gold line short of the safe spot (run)
+    let xe = null
+    if (lvl >= 2) {
+      const dist = d > 0 ? P0.x - L : R - P0.x, x0 = P0.x - d * Math.max(240, Math.min(dist + 60, 520))
+      xe = gx - d * 120
+      for (let y = fy - 14; y > fy - 310; y -= lo ? 40 : 26) { const s = add(5, 'wall', x0, y, d > 0 ? 0 : Math.PI, 0.35, 2); if (s) { s.curve = 0; s.xe = xe } }
+    }
+    return { shots, gx, d, fy, xe, lvl, P0, lastGo: Math.max(...shots.map(s => s.go)) }
+  }
+
   function stoppedHour() {
-    const last = (B.f.modes?.length || 1) - 1, twice = B.mode >= Math.max(1, last), reaim = B.mode >= 1
-    const one = (delay, kind) => later(delay, () => { if (live()) hourStop(kind, reaim) }, 'boss')
-    const kinds = ['ring', 'rows', 'cage', 'fan']
-    one(0, kinds[(B.step || 0) % 4])
-    if (twice) one(HOUR.wind + 0.05 + HOUR.grace + 1.1, kinds[((B.step || 0) + 2) % 4])
-    return HOUR.wind + HOUR.grace + 1.6 + (twice ? HOUR.wind + HOUR.grace + 1.2 : 0)
+    const last = (B.f.modes?.length || 1) - 1
+    const lvl = window.HOUR_LVL ?? (B.mode >= Math.max(1, last) ? 2 : B.hourN ? 1 : 0)
+    B.hourN = (B.hourN || 0) + 1
+    later(0, () => { if (live()) hourStop(lvl) }, 'boss')
+    return HOUR.wind + HOUR.stop + 2.9
   }
-  function hourStop(kind, reaim) {
-    const pal = HUES.gold, cr = HUES.crimson
+  function hourStop(lvl) {
     B.run = null
-    const n = low() ? 7 : 12
-    let t0 = null, held = null, stash = null, placed = [], done = false, resumed = false
-    const cx = () => P.x, cy = () => P.y - 90
     // the wind-up runs in normal time (a hand up, the clock blooms, ticks speed up)
     let nextTick = 0
     hourPose('hourwind', 0)
@@ -740,108 +915,334 @@ const BOSS_SPELLS = (() => {
       // he stands in front of his clock, drawn solid (the clock leaves the blend on 'lighter')
       ctx.globalCompositeOperation = 'source-over'; ctx.save(); try { drawBoss() } catch { } ctx.restore()
     } })
-    later(HOUR.wind, () => {
-      if (!live()) return
-      // stop the world: the core skips every update while stopT > 0; this fx drives itself from T
-      const plan = layout(kind, cx(), cy(), n)
-      stopT = HOUR.place + 0.02; t0 = T
-      stash = parts; parts = []
-      held = reaim ? bullets.filter(b => b.enemy && !b.dead && b.type !== 'doom') : []
-      SFX.glare(); tick(900)
-      const view = [Math.max(AR().l + 100, cam.x + 140), Math.min(AR().r - 100, cam.x + VW() - 140)]   // every spot on screen: the stop is his showpiece
-      const spots = []
-      for (const d of [-220, 280, -340, 420, -460, 560]) { const x = P.x + d; if (spots.length < 3 && x > view[0] && x < view[1] && spots.every(o => Math.abs(o - x) > 120)) spots.push(x) }
-      while (spots.length < 3) spots.push(clamp(P.x + (spots.length % 2 ? 280 : -280), view[0], view[1]))
-      fx.push({ boss: true, t: 0, dur: 99, draw() {
-        const c = ctx, u = T - t0, k = Math.min(1, u / HOUR.place)
-        if (!resumed && u >= HOUR.place) resumed = true
-        if (resumed && !done) { done = true; resume() }
-        if (done) { this.t = 99; return }
-        // the boss blinks between spots and hangs the weapons as she goes
-        const si = Math.min(spots.length - 1, (k * spots.length) | 0)
-        if (B.x !== spots[si] && !B.float) { glowAt(B.x, B.y - B.h * 0.5, 80, pal.glow, 0.6); B.x = spots[si]; B.y = groundAtBoss(B.x); B.vy = 0; B.face = P.x < B.x ? -1 : 1; tick(700) }   // on the floor at her level, in view
-        // at each spot: a relaxed step, then the hand goes out and sets a weapon in the air
-        hourPose('hourstop', HOUR_POSE.stop[si][k * spots.length - si < 0.35 ? 0 : 1])
-        const want = Math.min(plan.length, Math.ceil(plan.length * Math.min(1, u / (HOUR.place * 0.8))))
-        while (placed.length < want) { const w = plan[placed.length]; placed.push({ ...w, at: u, kind: ['dagger', 'card', 'hand'][placed.length % 3] }); tick(1200 + placed.length * 40) }
-        // the drained world: low quality gets a sepia veil, high a real colour drain
-        c.save(); c.setTransform(1, 0, 0, 1, 0, 0)
-        if (low()) { c.globalCompositeOperation = 'source-over'; c.fillStyle = 'rgba(112,86,56,0.5)'; c.fillRect(0, 0, W, H) }
-        else {
-          c.globalCompositeOperation = 'saturation'; c.fillStyle = '#808080'; c.fillRect(0, 0, W, H)
-          c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(236,206,160)'; c.fillRect(0, 0, W, H)
-        }
-        // the frozen sparks, drawn under the veil's line
-        c.restore()
-        c.globalCompositeOperation = 'source-over'
-        for (const q of stash) { c.globalAlpha = 0.5; drawPart(q) }
-        c.globalAlpha = 1
-        // the sweep ring that stopped it all
-        if (u < 0.5) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(${pal.hot},${1 - u * 2})`; c.lineWidth = 10 * (1 - u * 2) + 2; c.beginPath(); c.arc(B.x, B.y - B.h * 0.6, 60 + 2400 * ease(u * 2), 0, TAU); c.stroke() }
-        // she stays in colour, and the clock stays up behind her
-        drawClock(B.x, B.y + (B.float ? -140 : 0) - B.h * 0.6, 1, 0.7, t0)
-        c.globalCompositeOperation = 'source-over'; c.save(); try { drawBoss() } catch { } c.restore()
-        // guide lines first (visible on sepia: dark under, gold over), then the weapons
-        for (const b of held) guide(b.x, b.y, ang(b.x, b.y, P.x, P.y - 80), 0.7)
-        for (const w of placed) guide(w.x, w.y, w.a, Math.min(1, (u - w.at) * 4))
-        for (const w of placed) weapon(w.x, w.y, w.a, w.kind, Math.min(1, (u - w.at) * 5))
-      } })
-    }, 'boss')
-    function resume() {
-      tick(400); SFX.zap()
-      // the release: the watch snaps shut, a glove tug, arms folded; then back to his idle
-      hourPose('hourend', 0)
-      fx.push({ boss: true, t: 0, dur: 1.4, update() {
-        if (B.anim !== 'hourend') return
-        const e = HOUR_POSE.end
-        if (this.t >= this.dur - 0.05) { B.anim = 'idle'; B.animT = 0 } else hourPose('hourend', e[Math.min(e.length - 1, (this.t / 1.2 * e.length) | 0)])
-      }, draw() { } })   // a draw is required: the fx loop ends any fx whose draw throws
-      flash = Math.max(flash, 0.4); flashColor = '255,244,220'; if (!low()) shake = Math.max(shake, 6)
-      if (stash) { parts = stash.concat(parts); stash = null }
-      for (const b of held) { const a = ang(b.x, b.y, P.x, P.y - 80), sp = Math.max(260, Math.hypot(b.vx, b.vy)); b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp }
-      // the weapons become shots: still for the grace, then they fly, quickly one after another
-      const shots = placed.map((w, i) => {
-        const b = ebullet(w.x, w.y, w.a, 0, { type: 'heavy', r: 12, dmg: 12, life: 4 })
-        b.blade = w.kind; b.go = HOUR.grace + i * 0.035; b.dir = w.a; b.vx = 0; b.vy = 0
-        bullets.push(b); return b
-      })
-      fx.push({ boss: true, t: 0, dur: HOUR.grace + 2.5, update() {
-        for (const b of shots) if (!b.dead && b.go != null && this.t >= b.go) { b.vx = Math.cos(b.dir) * bsp(900); b.vy = Math.sin(b.dir) * bsp(900); b.go = null }
-        for (const b of shots) if (b.go != null) { b.t = 0 }
-      }, draw() {
-        const c = ctx
-        if (this.t < HOUR.grace + 0.3) for (const b of shots) if (b.go != null) guide(b.x, b.y, b.dir, 1)
-        if (this.t < 0.25) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(255,244,220,${1 - this.t * 4})`; c.lineWidth = 6; c.beginPath(); c.arc(P.x, P.y - 80, 2000 * this.t, 0, TAU); c.stroke() }
-      } })
-    }
+    later(HOUR.wind, () => { if (live()) startWave(lvl) }, 'boss')
   }
-  // the guide line: a dark under-stroke and a thin gold line, so it reads on sepia and colour
-  function guide(x, y, a, k) {
-    const c = ctx, L = 1400
-    c.globalCompositeOperation = 'source-over'
-    c.strokeStyle = `rgba(40,20,6,${0.45 * k})`; c.lineWidth = 3.5
-    c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); c.stroke()
-    c.globalCompositeOperation = 'lighter'
-    c.strokeStyle = `rgba(255,214,120,${0.55 * k})`; c.lineWidth = 1.2
-    c.setLineDash([10, 8]); c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); c.stroke(); c.setLineDash([])
+  function startWave(lvl) {
+    const w = hourPlan(lvl)
+    HW = w
+    sprites()
+    w.s0 = T; w.fired = [false, false, false]; w.locked = [false, false, false]; w.refl = []; w.si = 0
+    // stop the world: the core skips every update while stopT > 0, so the stop is drawn from T
+    stopT = HOUR.stop + 0.02
+    w.stash = parts; parts = []
+    w.held = B.mode >= 1 ? bullets.filter(b => b.enemy && !b.dead && b.type !== 'doom' && !b.hour) : []
+    PP.floor = w.fy
+    // the blink spots: his own spot first, then one on each side of her, all on screen
+    const view = [Math.max(AR().l + 100, cam.x + 140), Math.min(AR().r - 100, cam.x + VW() - 140)]
+    const spots = [B.x]
+    for (const dd of [280, -280, 340, -340, 420, -420, 220, -220]) { const x = P.x + dd * (spots.length === 1 ? Math.sign(B.x - P.x) || 1 : -Math.sign(spots[1] - P.x) || 1); if (spots.length < 3 && x > view[0] && x < view[1] && spots.every(o => Math.abs(o - x) > 140)) spots.push(x) }
+    while (spots.length < 3) spots.push(clamp(P.x + (spots.length % 2 ? 300 : -300), view[0], view[1]))
+    w.spots = spots
+    w.fx = { boss: true, t: 0, dur: 99, update(dt) { if (w.released && !w.over) waveStep(w, dt) }, draw() { waveDraw(w, this) } }
+    fx.push(w.fx)
   }
-  // daggers, cards and broken clock hands, crimson and gold
-  function weapon(x, y, a, kind, k) {
+
+  const hand = () => ({ x: B.x + (B.face || 1) * 44, y: B.y + (B.float ? -140 : 0) - (B.h || 280) * 0.6 })
+  function shotPos(w, s) {
+    if (s.b) return !s.b.dead
+    if (s.ox == null) return false
+    const u = T - w.s0 - s.ls
+    if (u < 0) return false
+    const k = Math.min(1, u / s.fd), e = 1 - (1 - k) ** 4, dx = s.sx - s.ox, dy = s.sy - s.oy, m = Math.hypot(dx, dy) || 1, o = Math.sin(Math.PI * k) * s.curve
+    s.x = s.ox + dx * e - dy / m * o; s.y = s.oy + dy * e + dx / m * o; s.k = k
+    s.rot = s.kind === 'card' ? s.a + (1 - e) * 16 : s.kind === 'wall' ? 0 : Math.atan2(dy, dx) + (s.a - Math.atan2(dy, dx)) * k * k
+    if (k >= 1 && s.lock == null) s.lock = T
+    return true
+  }
+
+  function waveDraw(w, self) {
     const c = ctx
-    c.save(); c.translate(x, y); c.rotate(a); c.globalAlpha = k
-    c.globalCompositeOperation = 'lighter'; glowAt(0, 0, 34, '255,170,60', 0.5)
-    c.globalCompositeOperation = 'source-over'
-    if (kind === 'dagger') {
-      c.fillStyle = '#fff4dc'; c.beginPath(); c.moveTo(30, 0); c.lineTo(-4, -6); c.lineTo(-4, 6); c.closePath(); c.fill()
-      c.fillStyle = '#d8a03a'; c.fillRect(-8, -10, 4, 20); c.fillStyle = '#9e1420'; c.fillRect(-22, -3, 14, 6)
-    } else if (kind === 'card') {
-      c.fillStyle = '#f6e6c4'; c.fillRect(-16, -11, 32, 22); c.strokeStyle = '#b8862c'; c.lineWidth = 2; c.strokeRect(-16, -11, 32, 22)
-      c.fillStyle = '#b0121e'; c.beginPath(); c.moveTo(6, 0); c.lineTo(0, -6); c.lineTo(-6, 0); c.lineTo(0, 6); c.closePath(); c.fill()
-    } else {
-      c.fillStyle = '#e0b04a'; c.beginPath(); c.moveTo(34, 0); c.lineTo(10, -5); c.lineTo(-18, -3); c.lineTo(-22, 2); c.lineTo(10, 5); c.closePath(); c.fill()
-      c.fillStyle = '#9e1420'; c.beginPath(); c.arc(-14, 0, 5, 0, TAU); c.fill()
+    if (w.over) { self.t = self.dur; if (HW === w) HW = null; window.HOUR_BEAT = null; return }
+    if (!w.released) {
+      const u = T - w.s0
+      if (u >= HOUR.stop) { release(w) }
+      else {
+        // which spot he is at: a blink at each burst after the first
+        const si = u < HOUR.bursts[1] - 0.15 ? 0 : u < HOUR.bursts[2] - 0.15 ? 1 : 2
+        if (si !== w.si) { w.si = si; glowAt(B.x, B.y - B.h * 0.5, 80, '255,160,36', 0.6); B.x = w.spots[si]; B.y = groundAtBoss(B.x); B.vy = 0; B.face = P.x < B.x ? -1 : 1; tick(700) }
+        hourPose('hourstop', HOUR_POSE.stop[si][u >= HOUR.bursts[si] - 0.02 ? 1 : 0])
+        // the bursts leave his hand
+        for (let i = 0; i < 3; i++) if (!w.fired[i] && u >= HOUR.bursts[i]) {
+          w.fired[i] = true
+          const h = hand(), list = w.shots.filter(s => s.burst === i)
+          list.forEach((s, j) => { s.ox = s.kind === 'wall' ? s.sx : h.x; s.oy = s.kind === 'wall' ? w.fy + 10 : h.y; s.ls = HOUR.bursts[i] + j / Math.max(1, list.length) * 0.16 })
+          w['flash' + i] = { x: h.x, y: h.y, t: T }
+          sfx('o_blade', { x: h.x, vol: 0.8 }); sfx('card_deal', { x: h.x, delay: 0.05 })
+        }
+        const beatSummon = HOUR.bursts.some(b => u >= b && u < b + 0.55)
+        window.HOUR_BEAT = beatSummon ? 'summon' : 'freeze'
+        // the world drains to sepia as the first burst locks
+        const kS = clamp((u - 0.3) / 0.1, 0, 1)
+        // the sparks that were in the air hang there, graded with the rest of the world
+        c.globalCompositeOperation = 'source-over'
+        for (const q of w.stash) { c.globalAlpha = 0.5; drawPart(q) }
+        c.globalAlpha = 1
+        grade(kS, u)
+        // the sweep ring that stops it all
+        const ru = u - 0.3
+        if (ru > 0 && ru < 0.5) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(255,236,160,${1 - ru * 2})`; c.lineWidth = 10 * (1 - ru * 2) + 2; c.beginPath(); c.arc(B.x, B.y - B.h * 0.6, 60 + 2400 * ease(ru * 2), 0, TAU); c.stroke() }
+        if (!w.lockSnd && ru > 0) { w.lockSnd = true; SFX.glare(); tick(900) }
+        // he and his clock stay in colour
+        drawClock(B.x, B.y + (B.float ? -140 : 0) - B.h * 0.6, 1, 0.7, w.s0)
+        c.globalCompositeOperation = 'source-over'; c.save(); try { drawBoss() } catch { } c.restore()
+        // the held shots from before the stop get their new lines too
+        for (const b of w.held) if (!b.dead) aimLine(b.x, b.y, ang(b.x, b.y, P.x, P.y - 80), 0.7, '255,214,120')
+        for (const s of w.shots) shotPos(w, s)
+        drawMarks(w, kS)
+        drawShots(w)
+        for (let i = 0; i < 3; i++) { const f = w['flash' + i]; if (f && T - f.t < 0.2) muzzle(f.x, f.y, (T - f.t) / 0.2) }
+      }
+      return
     }
+    // after the release: the snap, then the shots in flight (moved by the core, driven by waveStep)
+    const r = w.rt
+    window.HOUR_BEAT = w.broken ? 'break' : 'release'
+    if (r < 0.45) {
+      const q = r / 0.45, x = w.cx, y = w.cy
+      c.globalCompositeOperation = 'lighter'
+      c.strokeStyle = `rgba(255,244,220,${1 - q})`; c.lineWidth = 14 * (1 - q) + 2; c.beginPath(); c.arc(x, y, 40 + 2200 * ease(q), 0, TAU); c.stroke()
+      c.strokeStyle = `rgba(255,80,60,${0.6 * (1 - q)})`; c.lineWidth = 5; c.beginPath(); c.arc(x, y, 30 + 2050 * ease(q), 0, TAU); c.stroke()
+      if (q < 0.4) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = `rgba(255,248,232,${0.35 * (1 - q / 0.4)})`; c.fillRect(0, 0, W, H); c.restore() }
+    }
+    drawMarks(w, 1)
+    drawShots(w)
+  }
+
+  // the screen grade for the stop: drained colour, a warm sepia, grain, a vignette and a slow
+  // shimmer (low quality: a sepia veil and the vignette)
+  function grade(k, u) {
+    if (k <= 0) return
+    const c = ctx, S = sprites()
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = k
+    if (low()) { c.globalCompositeOperation = 'source-over'; c.fillStyle = 'rgba(112,84,52,0.58)'; c.fillRect(0, 0, W, H) }
+    else {
+      c.globalCompositeOperation = 'saturation'; c.fillStyle = '#808080'; c.fillRect(0, 0, W, H)
+      c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(242,204,150)'; c.fillRect(0, 0, W, H)
+      c.globalCompositeOperation = 'screen'; c.fillStyle = 'rgb(44,26,10)'; c.fillRect(0, 0, W, H)
+      // film grain, a new frame of it 24 times a second
+      const f = (T * 24) | 0, ox = (f * 37) % 128, oy = (f * 71) % 128
+      c.globalCompositeOperation = 'overlay'; c.globalAlpha = 0.42 * k; c.fillStyle = S.pat[f % 3]
+      c.translate(-ox, -oy); c.fillRect(0, 0, W + 128, H + 128); c.translate(ox, oy)
+      // the frozen shimmer: a slow bright band over the stopped world
+      const x = ((u * 0.5) % 1.4 - 0.2) * W, g = c.createLinearGradient(x - 220, 0, x + 220, H * 0.5)
+      g.addColorStop(0, 'rgba(255,236,190,0)'); g.addColorStop(0.5, 'rgba(255,236,190,0.13)'); g.addColorStop(1, 'rgba(255,236,190,0)')
+      c.globalCompositeOperation = 'lighter'; c.globalAlpha = k; c.fillStyle = g; c.fillRect(0, 0, W, H)
+      // two film scratches
+      c.fillStyle = 'rgba(255,240,210,0.16)'; for (let i = 0; i < 2; i++) c.fillRect(((f * (i ? 131 : 57)) % 97) / 97 * W, 0, 1.5, H)
+    }
+    c.globalCompositeOperation = 'source-over'; c.globalAlpha = k; c.drawImage(S.vig, 0, 0, W, H)
     c.restore()
+  }
+  function muzzle(x, y, q) {
+    const c = ctx
+    c.globalCompositeOperation = 'lighter'
+    glowAt(x, y, 90 * (1 - q * 0.5), '255,230,170', 1 - q)
+    c.strokeStyle = `rgba(255,246,220,${1 - q})`; c.lineWidth = 2.5; c.beginPath()
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + 0.2, r0 = 20 + 40 * q, r1 = r0 + 50 * (1 - q); c.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0); c.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1) }
+    c.stroke()
+  }
+  // the floor marks: the safe spot (a gold ring) and, with the wall, the gold line where it stops
+  function drawMarks(w, k) {
+    const c = ctx, pulse = 0.6 + 0.4 * Math.sin(T * 8)
+    c.globalCompositeOperation = 'lighter'
+    if (!w.released || w.rt < 2.6) {
+      c.strokeStyle = `rgba(255,214,120,${0.55 * k * pulse})`; c.lineWidth = 2.5
+      c.beginPath(); c.ellipse(w.gx, w.fy - 3, 54, 10, 0, 0, TAU); c.stroke()
+    }
+    if (w.xe != null && w.shots.some(s => s.kind === 'wall' && (s.ox != null) && !s.done)) {
+      c.fillStyle = `rgba(255,214,120,${0.75 * k})`; c.fillRect(w.xe - 2, w.fy - 70, 4, 70)
+      c.strokeStyle = `rgba(255,214,120,${0.5 * k})`; c.lineWidth = 2; c.beginPath()
+      for (let i = 1; i <= 3; i++) { const x = w.xe - w.d * (i * 26 + ((T * 60) % 26)); c.moveTo(x - w.d * 8, w.fy - 12); c.lineTo(x, w.fy - 4); c.lineTo(x - w.d * 8, w.fy + 4) }
+      c.stroke()
+    }
+  }
+  function aimLine(x, y, a, k, rgb) {
+    const c = ctx, sn = Math.sin(a), L = sn > 0.05 ? Math.min(1100, ((HW ? HW.fy : GROUND) - y) / sn) : 1100
+    c.globalCompositeOperation = 'source-over'; c.strokeStyle = `rgba(40,20,6,${0.4 * k})`; c.lineWidth = 3
+    c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * L, y + sn * L); c.stroke()
+    c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(${rgb},${0.6 * k})`; c.lineWidth = 1.2
+    c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * L, y + sn * L); c.stroke()
+  }
+  // every shot of the wave in a handful of calls: aim lines (two paths per colour), ripples, trails,
+  // then the sprites
+  function drawShots(w) {
+    const c = ctx, S = sprites(), lo = low()
+    const next = w.released ? Math.min(...w.shots.filter(s => s.b && !s.done && w.rt < s.go).map(s => s.go)) : w.shots[0]?.go
+    const lines = { kb: new Path2D(), kd: new Path2D(), ob: new Path2D(), od: new Path2D() }, under = new Path2D(), rip = new Path2D(), tk = new Path2D(), to = new Path2D()
+    const pulse = 0.5 + 0.5 * Math.sin(T * 40)
+    const live = []
+    for (const s of w.shots) {
+      let x, y, rot, moving
+      if (s.b) { if (s.done || s.b.dead) continue; x = s.b.x; y = s.b.y; moving = w.rt >= s.go; rot = s.kind === 'card' ? s.a + (moving ? (w.rt - s.go) * 30 : 0) : s.kind === 'wall' ? 0 : s.a }
+      else { if (s.x == null || s.ox == null || T - w.s0 < s.ls) continue; x = s.x; y = s.y; rot = s.rot; moving = s.k < 1 }
+      live.push([s, x, y, rot])
+      // the aim line, from the moment it locks until it flies
+      const locked = s.b ? w.rt < s.go : s.k >= 1
+      if (locked && s.kind !== 'wall') {
+        const bright = s.go === next, sn = Math.sin(s.a), L = sn > 0.05 ? Math.min(1100, (w.fy - y) / sn) : 1100, ex = x + Math.cos(s.a) * L, ey = y + sn * L
+        const p = s.kind === 'orb' ? (bright ? lines.ob : lines.od) : (bright ? lines.kb : lines.kd)
+        p.moveTo(x, y); p.lineTo(ex, ey)
+        if (bright) { under.moveTo(x, y); under.lineTo(ex, ey) }
+      }
+      // the time ripple as it locks
+      if (!s.b && s.lock != null && T - s.lock < 0.3) { const q = (T - s.lock) / 0.3, rr = 4 + 26 * q; rip.moveTo(x + rr, y); rip.arc(x, y, rr, 0, TAU) }
+      // trails while it moves
+      if (moving && s.kind !== 'wall') {
+        let vx, vy
+        if (s.b) { vx = s.b.vx; vy = s.b.vy } else { vx = (s.sx - s.ox) * 4 * (1 - s.k) ** 3 / s.fd; vy = (s.sy - s.oy) * 4 * (1 - s.k) ** 3 / s.fd }
+        const sp = Math.hypot(vx, vy), l = Math.min(s.kind === 'orb' ? 70 : 90, sp * 0.05)
+        if (sp > 30) { const p = s.kind === 'orb' ? to : tk; p.moveTo(x, y); p.lineTo(x - vx / sp * l, y - vy / sp * l) }
+      }
+    }
+    c.lineCap = 'round'
+    c.globalCompositeOperation = 'source-over'; c.strokeStyle = 'rgba(40,20,6,0.3)'; c.lineWidth = 2.5; c.stroke(under)
+    c.globalCompositeOperation = 'lighter'
+    const kb = w.released ? 0.5 + 0.4 * pulse : 0.34
+    c.lineWidth = 1
+    c.strokeStyle = `rgba(255,214,120,${kb})`; c.stroke(lines.kb)
+    c.strokeStyle = 'rgba(255,214,120,0.12)'; c.stroke(lines.kd)
+    c.lineWidth = 2
+    c.strokeStyle = `rgba(255,90,70,${kb})`; c.stroke(lines.ob)
+    c.strokeStyle = 'rgba(255,90,70,0.24)'; c.stroke(lines.od)
+    c.strokeStyle = 'rgba(255,236,190,0.6)'; c.lineWidth = 1.5; c.stroke(rip)
+    c.strokeStyle = 'rgba(255,214,130,0.5)'; c.lineWidth = 2; c.stroke(tk)
+    c.strokeStyle = 'rgba(255,70,50,0.35)'; c.lineWidth = 14; c.stroke(to)
+    // the wall's band, behind its blocks
+    const walls = live.filter(([s]) => s.kind === 'wall')
+    if (walls.length) {
+      const x = walls[0][1], top = Math.min(...walls.map(v => v[2])) - 24, g = c.createLinearGradient(x - 40, 0, x + 40, 0)
+      g.addColorStop(0, 'rgba(120,0,16,0)'); g.addColorStop(0.5, 'rgba(70,0,12,0.55)'); g.addColorStop(1, 'rgba(120,0,16,0)')
+      c.globalCompositeOperation = 'source-over'; c.fillStyle = g; c.fillRect(x - 40, top, 80, w.fy - top)
+    }
+    const m = c.getTransform()
+    // glows first (added), then the bodies (drawn over, so they read on any sky and on sepia)
+    if (!lo) { c.globalCompositeOperation = 'lighter'; for (const [s, x, y] of live) if (s.kind === 'orb') blit(m, S.glow, x, y, 0, 64, 64, 0.75) }
+    c.globalCompositeOperation = 'source-over'
+    for (const [s, x, y, rot] of live) {
+      if (s.kind === 'knife') blit(m, S.knife, x, y, rot, 40, 12, 0.62)
+      else if (s.kind === 'card') blit(m, S.card, x, y, rot, 20, 15, 0.7)
+      else if (s.kind === 'orb') blit(m, S.orb, x, y, T * 0.8 + s.sx, 48, 48, 0.8)
+      else blit(m, S.wall, x, y, 0, 24, 24, 1)
+    }
+    c.setTransform(m)
+  }
+
+  function release(w) {
+    w.released = true; w.rt = 0
+    tick(400); SFX.zap(); sfx('boom', { vol: 0.5 })
+    // the release: the watch snaps shut, a glove tug, arms folded; then back to his idle
+    hourPose('hourend', 0)
+    fx.push({ boss: true, t: 0, dur: 1.4, update() {
+      if (B.anim !== 'hourend') return
+      const e = HOUR_POSE.end
+      if (this.t >= this.dur - 0.05) { B.anim = 'idle'; B.animT = 0 } else hourPose('hourend', e[Math.min(e.length - 1, (this.t / 1.2 * e.length) | 0)])
+    }, draw() { } })   // a draw is required: the fx loop ends any fx whose draw throws
+    flash = Math.max(flash, 0.5); flashColor = '255,246,226'; shake = Math.max(shake, low() ? 4 : 9)
+    if (w.stash) { parts = w.stash.concat(parts); w.stash = null }
+    for (const b of w.held) { const a = ang(b.x, b.y, P.x, P.y - 80), sp = Math.max(260, Math.hypot(b.vx, b.vy)); b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp }
+    // the clock breaks
+    w.cx = B.x; w.cy = B.y + (B.float ? -140 : 0) - B.h * 0.6
+    const lo = low()
+    for (let i = 0; i < (lo ? 14 : 44); i++) { const a = rnd(0, TAU), r = 190 * rnd(0.6, 1); PP.add(i % 3 ? 2 : 0, w.cx + Math.cos(a) * r, w.cy + Math.sin(a) * r, Math.cos(a) * rnd(200, 600), Math.sin(a) * rnd(200, 600) - 200, rnd(0.6, 1.2), rnd(3, 6)) }
+    // every shot becomes a real bullet, still for its grace
+    for (const s of w.shots) {
+      if (s.ox == null) continue
+      const K = KIND[s.kind], b = ebullet(s.sx, s.sy, s.a, 0, { type: K.type, r: K.r, dmg: K.dmg, life: s.go + 3.5 })
+      b.vx = 0; b.vy = 0; b.hour = s.kind; s.b = b; s.full = bsp(K.spd)
+      bullets.push(b)
+    }
+  }
+  function waveStep(w, dt) {
+    w.rt += dt
+    const lo = low(), ar = AR()
+    let left = 0
+    for (const s of w.shots) {
+      const b = s.b
+      if (!b || s.done) continue
+      if (b.dead) { s.done = true; broke(w, s, b); continue }
+      left++
+      if (w.rt < s.go) { b.vx = 0; b.vy = 0; continue }
+      if (!s.went) { s.went = true; if (s.kind === 'orb') sfx('o_shot', { x: b.x, vol: 0.5 }); else if (!w['snd' + s.g]) { w['snd' + s.g] = true; sfx('o_blade', { x: b.x }) } }
+      // from zero to full speed in 0.16 s
+      const k = Math.min(1, (w.rt - s.go) / 0.16), sp = s.full * k * k
+      b.vx = Math.cos(s.a) * sp; b.vy = Math.sin(s.a) * sp
+      if (s.kind === 'wall') {
+        if ((b.x - s.xe) * w.d >= 0) { b.dead = true; s.done = true; for (let i = 0; i < (lo ? 2 : 5); i++) PP.add(i % 2 ? 4 : 5, b.x, b.y, rnd(-120, 120), rnd(-260, 40), rnd(0.4, 0.9), rnd(3, 7)); if (!w.crumble) { w.crumble = true; sfx('debris', { x: b.x }) } }
+        else if (!lo && b.y > w.fy - 20 && Math.random() < 0.6) PP.add(4, b.x - w.d * 20, w.fy - 4, -w.d * rnd(40, 120), rnd(-60, -10), rnd(0.4, 0.8), rnd(4, 8))
+      } else if (b.y >= w.fy - 2) { b.dead = true; s.done = true; floorBreak(w, s, b) }
+      else if (b.x < ar.l + 4 || b.x > ar.r - 4) { b.dead = true; s.done = true; PP.burst(0, b.x, b.y, lo ? 2 : 5, 120, 420, b.x < ar.l + 4 ? 0 : Math.PI, 1.2, 0.15, 0.35, 1, 2) }
+    }
+    // reflected orbs: follow them back to him and shatter them where they land
+    for (const o of w.refl) if (o.dead || !bullets.includes(o)) { o.gone = true; shatter(o.x, o.y, 1.4) }
+    w.refl = w.refl.filter(o => !o.gone)
+    if ((!left && !w.refl.length) || w.rt > w.lastGo + 3.5) w.over = true
+  }
+  function floorBreak(w, s, b) {
+    w.broken = true
+    const lo = low(), x = b.x, y = w.fy - 2
+    if (s.kind === 'orb') { shatter(x, y, 1); if (typeof FOE !== 'undefined') FOE.scorch(x, w.fy, 34); return }
+    PP.burst(0, x, y, lo ? 2 : 5, 160, 520, -Math.PI / 2, 1.3, 0.15, 0.4, 1, 2)
+    PP.burst(2, x, y, lo ? 1 : 2, 120, 380, -Math.PI / 2, 1.1, 0.4, 0.8, 2, 4)
+    if (!lo) PP.add(4, x, y, rnd(-40, 40), rnd(-80, -20), rnd(0.4, 0.7), rnd(3, 6))
+    sfx('hit_metal', { x, vol: 0.25 })
+  }
+  function shatter(x, y, s) {
+    const lo = low()
+    PP.burst(3, x, y, Math.round((lo ? 4 : 12) * s), 160, 520, -Math.PI / 2, Math.PI, 0.5, 1.0, 2.5, 5)
+    PP.burst(1, x, y, Math.round((lo ? 3 : 9) * s), 200, 620, -Math.PI / 2, Math.PI, 0.15, 0.4, 1, 2)
+    PP.burst(0, x, y, lo ? 1 : 4, 100, 300, -Math.PI / 2, Math.PI, 0.2, 0.4, 1, 2)
+    sfx('o_crash', { x, vol: 0.45 })
+  }
+  // a shot that died to something else: the sword (orbs go back at him), a spell, or her
+  function broke(w, s, b) {
+    if (b.x < cam.x - 60 || b.x > cam.x + VW() + 60) return
+    if (s.kind === 'orb') {
+      const o = bullets.find(o => !o.enemy && o.reflected && !o.hourR && Math.abs(o.x - b.x) < 40 && Math.abs(o.y - b.y) < 40)
+      if (o) { o.hourR = true; w.refl.push(o) }
+      shatter(b.x, b.y, 0.6)
+    } else PP.burst(0, b.x, b.y, low() ? 2 : 5, 140, 420, 0, Math.PI, 0.15, 0.35, 1, 2)
+  }
+  // a reflected orb on its way back: brighter, gold-ringed
+  function drawHourRefl(b) {
+    const S = sprites(), m = ctx.getTransform()
+    ctx.globalCompositeOperation = 'lighter'; blit(m, S.gold, b.x, b.y, 0, 64, 64, 0.8)
+    ctx.globalCompositeOperation = 'source-over'; blit(m, S.orb, b.x, b.y, T * 6, 48, 48, 0.8)
+    ctx.setTransform(m); ctx.globalCompositeOperation = 'lighter'
+  }
+  // Teknium's ordinary shots (fan, ring, spiral, lances, rain) get the same look: gold knives for
+  // the heavy ones, crimson clock orbs for the red ones, each with a short trail
+  function drawTek(b) {
+    const S = sprites(), m = ctx.getTransform(), sp = Math.hypot(b.vx, b.vy), a = Math.atan2(b.vy, b.vx)
+    if (sp > 30) { const l = Math.min(70, sp * 0.06); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = b.type === 'heavy' ? 'rgba(255,214,130,0.55)' : 'rgba(255,70,50,0.35)'; ctx.lineWidth = b.type === 'heavy' ? 3 : b.r * 1.4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - Math.cos(a) * l, b.y - Math.sin(a) * l); ctx.stroke() }
+    if (b.type === 'heavy') { ctx.globalCompositeOperation = 'source-over'; blit(m, S.knife, b.x, b.y, a, 40, 12, Math.max(1, b.r / 9)) }
+    else { if (!low()) { ctx.globalCompositeOperation = 'lighter'; blit(m, S.glow, b.x, b.y, 0, 64, 64, b.r / 18) } ctx.globalCompositeOperation = 'source-over'; blit(m, S.orb, b.x, b.y, T * 0.8 + b.x * 0.01, 48, 48, b.r / 15) }
+    ctx.setTransform(m); ctx.globalCompositeOperation = 'lighter'
+  }
+  // the autoplay for the wave: go to the safe spot (past the wall's line), dash a knife that is
+  // about to land, slash an orb back (Messenger) or dash it, and never stand in the wall's way
+  function hourPilot(w) {
+    const go = d => vkey(d > 0 ? 'arrowright' : 'arrowleft')
+    const canDash = P.dashCD <= 0 && (P.ground || P.airDash > 0)
+    const cx = P.x, cy = P.y - 60
+    let kT = 9, oT = 9, ob = null
+    for (const s of w.shots) {
+      const b = s.b
+      if (!b || b.dead || s.done || s.kind === 'wall') continue
+      const sp2 = b.vx * b.vx + b.vy * b.vy
+      if (sp2 < 1600) continue
+      const rx = b.x - cx, ry = b.y - cy, tt = -(rx * b.vx + ry * b.vy) / sp2
+      if (tt < 0 || tt > 0.5) continue
+      const mx = rx + b.vx * tt, my = (ry + b.vy * tt) * 0.5
+      if (Math.hypot(mx, my) > 30 + b.r) continue
+      if (s.kind === 'orb') { if (tt < oT) { oT = tt; ob = b } } else kT = Math.min(kT, tt)
+    }
+    const dir = Math.sign(w.gx - P.x) || w.d
+    if (kT < 0.11 && canDash) { vtap('shift'); go(dir); return }
+    if (ob && oT < 0.26) {
+      if (P.hero === 'messenger') { P.face = Math.sign(ob.x - P.x) || P.face; vtap('j'); return }
+      if (canDash && oT < 0.12) { vtap('shift'); go(dir); return }
+    }
+    if (Math.abs(w.gx - P.x) > 22) go(w.gx - P.x)
   }
   // the clock face: rings, twelve numeral marks (gold), two hands
   function drawClock(x, y, k, a, t0) {
@@ -861,10 +1262,6 @@ const BOSS_SPELLS = (() => {
     c.lineWidth = 6; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(ha) * r * 0.45, y + Math.sin(ha) * r * 0.45); c.stroke()
     c.lineWidth = 3; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(ma) * r * 0.7, y + Math.sin(ma) * r * 0.7); c.stroke()
     glowAt(x, y, 14, '255,250,236', a)
-  }
-  function drawBlade(b) {
-    weapon(b.x, b.y, b.go != null ? b.dir : Math.atan2(b.vy, b.vx), b.blade, 1)
-    if (b.go == null && !low()) { ctx.globalCompositeOperation = 'lighter'; glowAt(b.x - Math.cos(Math.atan2(b.vy, b.vx)) * 30, b.y - Math.sin(Math.atan2(b.vy, b.vx)) * 30, 26, '255,190,90', 0.5) }
   }
 
   // -------------------------------------------------------------- wiring
@@ -893,8 +1290,21 @@ const BOSS_SPELLS = (() => {
     window.startBoss = function (handle, sec, o) {
       const r = coreStart(handle, sec, o)
       if (B && B.handle === handle && !window.NOSPELLS) B.f = withSpells(handle, B.f)
+      if (B && B.handle === 'Teknium') try { sprites() } catch { }   // made before the fight, not mid-spell
       return r
     }
   }
-  return { ...NEW, hues: HUES, set: SET, withSpells }
+  // the autoplay takes the stopped hour's wave itself (the core reflexes don't know its kinds)
+  if (typeof autopilot === 'function') {
+    const coreAuto = autopilot
+    window.autopilot = function () {
+      const w = HW
+      if (!w || !w.released || w.over || !AUTO.on || mode !== 'play' || P.dead || stopT > 0 || !fx.includes(w.fx)) return coreAuto()
+      for (const k of AUTO.held) if (!['j'].includes(k) || !AUTO.keepJ) keys.delete(k)
+      AUTO.held.clear()
+      if (tap('p')) { AUTO.on = false; return }
+      hourPilot(w)
+    }
+  }
+  return { ...NEW, hues: HUES, set: SET, withSpells, pool: PP, get wave() { return HW } }
 })()
