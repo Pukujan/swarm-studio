@@ -11,12 +11,23 @@ The way ARES's Oracle and Baker idles were made (games/ares/assets/skins/*/defau
           under WebP's 16383 px width) and packed side by side
 
     python3 idle_sheet.py start figure.webp start.png --cell 768 --key '#00FF00' --aspect 1:1
-    python3 idle_sheet.py sheet clip.mp4 out.webp --rife /path/rife-ncnn-vulkan [--frames 24]
+    python3 idle_sheet.py sheet clip.mp4 out.webp --interp "<in-betweener command>" [--frames 24]
+
+  keys    no video model: close keyframes painted over the same base frame (a cut strip and its
+          .json), put back on the key colour and aligned on the feet, the frames between them
+          made by the in-betweener, then keyed and packed as above, with a ghost check on every
+          made frame (a blend of two keys instead of a move between them)
+
+    python3 idle_sheet.py keys keys.webp keys.json out.webp --interp "<command>" --key '#00FF00'
+
+The in-betweener is a command with {a} {b} {out} {t} in it (two frames, the frame to write, the
+time between them), RIFE by default:  rife-ncnn-vulkan -0 {a} -1 {b} -o {out} -s {t} -m <dir>/rife-v4.6
 
 `sheet` writes out.webp, out.json (frames, cell, fps, anchor, qc, video), out-check.png (all
 frames on dark, for the frame-by-frame check) and out-loop.webp (the loop, animated, for the chat).
-RIFE is for characters only and only between neighbouring frames of one clip: never for FX, never
-between separately painted frames (those ghost). Without --rife the loop is cut where it meets itself.
+The in-betweener is for characters only: never for FX, and between painted frames only when they
+are close keyframes of one pose (big gaps ghost; the keys route checks every frame it makes).
+Without one the clip's loop is cut where it meets itself.
 Heavy (ffmpeg, RIFE): run it on a machine that can take it (engine/heavy.mjs).
 """
 
@@ -25,6 +36,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -116,16 +128,24 @@ def pick_loop(small: list, fps: float, span=(2.2, 3.0), lead=(0.15, 0.6), want=2
     return best[1], best[2], best[0]
 
 
-def rife_between(binary: str, model: str, a: np.ndarray, b: np.ndarray, t: float, tmp: str) -> np.ndarray:
-    pa, pb, po = (os.path.join(tmp, x) for x in ("ra.png", "rb.png", "ro.png"))
+def rife_cmd(binary: str, model: str = "rife-v4.6") -> str:
+    """The RIFE command template for a rife-ncnn-vulkan binary (its models sit next to it)."""
+    m = model if os.path.isabs(model) else os.path.join(os.path.dirname(binary), model)
+    return f"{shlex.quote(binary)} -0 {{a}} -1 {{b}} -o {{out}} -s {{t}} -m {shlex.quote(m)}"
+
+
+def interp_between(cmd: str, a: np.ndarray, b: np.ndarray, t: float, tmp: str) -> np.ndarray:
+    """One frame at time t between a and b, by the in-betweener command (RIFE or another)."""
+    pa, pb, po = (os.path.join(tmp, x) for x in ("ia.png", "ib.png", "io.png"))
     Image.fromarray(a).save(pa)
     Image.fromarray(b).save(pb)
-    m = model if os.path.isabs(model) else os.path.join(os.path.dirname(binary), model)
-    r = subprocess.run([binary, "-0", pa, "-1", pb, "-o", po, "-s", f"{t:.4f}", "-m", m], capture_output=True, text=True)
+    if os.path.exists(po):
+        os.remove(po)
+    argv = [x.format(a=pa, b=pb, out=po, t=f"{t:.4f}") for x in shlex.split(cmd)]
+    r = subprocess.run(argv, capture_output=True, text=True)
     if r.returncode or not os.path.exists(po):
-        raise SystemExit(f"rife failed: {r.stderr[-300:]}")
-    out = np.asarray(Image.open(po).convert("RGB")).copy()
-    os.remove(po)
+        raise SystemExit(f"the in-betweener failed: {(r.stderr or r.stdout)[-300:]}")
+    out = np.asarray(Image.open(po).convert("RGB").resize((a.shape[1], a.shape[0]))).copy()
     return out
 
 
@@ -184,26 +204,34 @@ def key_green_left(rgba: np.ndarray, bg) -> int:
     return int((k & vis).sum())
 
 
-def make_sheet(clip: str, out: str, rife: str = "", model: str = "rife-v4.6", frames: int = 24, bridge: int = 3,
-               cell_max: int = 680, start_png: str = "") -> dict:
+def make_sheet(clip: str, out: str, interp: str = "", frames: int = 24, bridge: int = 3, cell_max: int = 680) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         raw, fps = read_frames(clip, tmp)
         bg = tuple(int(x) for x in np.median(raw[0][:20, :20].reshape(-1, 3), 0))
         small = [np.asarray(Image.fromarray(f).convert("L").resize((160, round(160 * f.shape[0] / f.shape[1])))).astype(float) for f in raw]
         s, e, seam = pick_loop(small, fps)
-        use_rife = bool(rife) and os.path.exists(rife)
+        use_rife = bool(interp)
         if use_rife:
-            # sampled frames run from s to e; RIFE frames on the raw frames bridge e back to s
+            # sampled frames run from s to e; in-between frames on the raw frames bridge e back to s
             idx = np.linspace(s, e, frames - bridge).round().astype(int)
             picked = [raw[i] for i in idx]
-            picked += [rife_between(rife, model, raw[e], raw[s], (k + 1) / (bridge + 1), tmp) for k in range(bridge)]
+            picked += [interp_between(interp, raw[e], raw[s], (k + 1) / (bridge + 1), tmp) for k in range(bridge)]
             step = (e - s) / fps / (frames - bridge - 1)
         else:
             # no in-betweens: the span is cut just before it meets its start again
             idx = np.linspace(s, e, frames + 1).round().astype(int)[:-1]
             picked = [raw[i] for i in idx]
             step = (e - s) / fps / frames
-    # key, despill, drop strays
+    video = {"clip": os.path.basename(clip), "source_fps": round(fps, 3), "span_s": [round(s / fps, 2), round(e / fps, 2)],
+             "sampled": len(idx), "rife": bridge if use_rife else 0, "seam": round(seam, 2), "key": "#%02X%02X%02X" % bg}
+    return pack(picked, out, step, bg, cell_max, {"video": video})
+
+
+def pack(picked, out: str, step: float, bg, cell_max: int = 680, extra: dict = None, made=None) -> dict:
+    """Frames on the key colour to the sheet: keyed, despilled, cleared of strays, aligned on the
+    feet, one square cell each, with the numbers the check reads. made: {index: (a, b, t)} for
+    frames the in-betweener made between keyed neighbours, checked for ghost blends."""
+    extra = extra or {}
     keyed, dropped = [], []
     for f in picked:
         al = key_alpha(f.astype(int))
@@ -228,7 +256,7 @@ def make_sheet(clip: str, out: str, rife: str = "", model: str = "rife-v4.6", fr
     side = int(max(bot - top, right - left) * 1.08) + 8
     cx = (left + right) / 2
     x0, y0 = int(round(cx - side / 2)), int(bot + side * 0.04 + 4 - side)
-    cell = min(cell_max, side, WEBP_MAX // frames)
+    cell = min(cell_max, side, WEBP_MAX // len(keyed))
     cells = []
     for k in keyed:
         canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
@@ -263,6 +291,8 @@ def make_sheet(clip: str, out: str, rife: str = "", model: str = "rife-v4.6", fr
         "feet_x_spread_px": round(float(np.ptp([f[0] for f in fa if f])), 1),
         "feet_y_spread_px": round(float(np.ptp([f[1] for f in fa if f])), 1),
     }
+    if made:
+        qc["ghost"] = ghosts(A, px, made)
     problems = []
     if edge:
         problems.append(f"frame {', '.join(str(i + 1) for i in edge)} touches the cell edge")
@@ -272,6 +302,8 @@ def make_sheet(clip: str, out: str, rife: str = "", model: str = "rife-v4.6", fr
         problems.append(f"a jump at frame {qc['jumps'][0] + 1}")
     if qc["key_left_px"] > cell * cell * 0.002:
         problems.append("key colour left on the figure")
+    if qc.get("ghost"):
+        problems.append(f"ghost blend at frame {', '.join(str(i + 1) for i in qc['ghost'][:4])}")
     qc["ok"] = not problems
     qc["problems"] = problems
     loop_s = step * len(cells)
@@ -280,15 +312,89 @@ def make_sheet(clip: str, out: str, rife: str = "", model: str = "rife-v4.6", fr
         "frames": len(cells), "cell": [cell, cell], "fps": round(1 / step, 2), "loop": True, "blend": "mix",
         "anchor": {"feet": [round(fx), round(fy)]},
         "qc": qc,
-        "video": {"clip": os.path.basename(clip), "source_fps": round(fps, 3), "span_s": [round(s / fps, 2), round(e / fps, 2)],
-                  "loop_s": round(loop_s, 2), "sampled": len(idx), "rife": bridge if use_rife else 0, "seam": round(seam, 2),
-                  "key": "#%02X%02X%02X" % bg},
+        **{k: {**v, "loop_s": round(loop_s, 2)} for k, v in extra.items()},
     }
     base = out.rsplit(".", 1)[0]
     Path(f"{base}.json").write_text(json.dumps(meta, indent=1))
     check(cells, f"{base}-check.png")
     loop_preview(cells, f"{base}-loop.webp", 1000 / meta["fps"])
     return meta
+
+
+def ghosts(A, px, made) -> list:
+    """Frames the in-betweener made that look like two frames blended instead of one move: in
+    the places where the two keys differ, a ghost sits at their cross-fade (the made frame is
+    close to the mix of the two) and leaves see-through figure behind (much more half-alpha
+    edge than the keys have). A real move puts each part in one place, solid."""
+    out = []
+    half = lambda a: float(((a > 30) & (a < 220)).sum()) / max(1, int((a > 128).sum()))
+    for i, (ia, ib, t) in sorted(made.items()):
+        a, b, f = px[ia], px[ib], px[i]
+        if not (0.25 <= t <= 0.75):
+            continue
+        diff = np.abs(a - b).mean(2) > 40
+        area = max(1, int((A[ia] > 128).sum()))
+        if diff.sum() < 0.01 * area:
+            continue  # the keys hardly differ here: nothing to ghost
+        mix = (1 - t) * a + t * b
+        r = float(np.abs(f - mix).mean(2)[diff].mean() / max(1.0, np.abs(a - b).mean(2)[diff].mean()))
+        soft = half(A[i]) > 1.6 * max(half(A[ia]), half(A[ib])) + 0.01
+        if r < 0.12 or soft:
+            out.append(i)
+    return out
+
+
+# The loop the keys make: 0 is the base pose, 1 breathing in, 2 the sway, 3 the blink. Each
+# leg is (from, to, frames): breathe in and out, sway out and back, a quick blink; 24 frames.
+KEY_LOOP = [(0, 1, 6), (1, 0, 6), (0, 2, 4), (2, 0, 4), (0, 3, 2), (3, 0, 2)]
+
+
+def make_keys(strip: str, strip_json: str, out: str, interp: str, key, cell_max: int = 680, fps: float = 10.0) -> dict:
+    """Close painted keyframes to a looping idle: the keys back on the key colour, aligned on the
+    feet, the frames between them made by the in-betweener (on the flat-colour frames, before
+    keying, as for a clip's seam), then packed and checked like a clip's sheet."""
+    meta_in = json.loads(Path(strip_json).read_text())
+    cw, ch = meta_in["cell"]
+    im = Image.open(strip).convert("RGBA")
+    n = min(4, meta_in.get("frames", 6))
+    cells = [np.asarray(im.crop((i * cw, 0, (i + 1) * cw, ch))) for i in range(n)]
+    if n < 4:
+        raise SystemExit("fewer than four keyframes")
+    # on one canvas with room around, the feet of every key where the first one's are
+    pad = max(cw, ch) // 6
+    canv = []
+    for c in cells:
+        big = np.zeros((ch + 2 * pad, cw + 2 * pad, 4), np.uint8)
+        big[pad:pad + ch, pad:pad + cw] = c
+        canv.append(big)
+    feet = [feet_of(c[..., 3]) for c in canv]
+    if not all(feet):
+        raise SystemExit("a keyframe has no figure")
+    canv = [shift(c, int(round(feet[0][0] - f[0])), int(round(feet[0][1] - f[1]))) for c, f in zip(canv, feet)]
+    # keys that are not one pose (the figure moved or changed size) would ghost: refused here
+    m0 = canv[0][..., 3] > 128
+    for i, c in enumerate(canv[1:], 1):
+        m = c[..., 3] > 128
+        iou = (m & m0).sum() / max(1, (m | m0).sum())
+        if iou < 0.75:
+            raise SystemExit(f"keyframe {i + 1} is too far from the first (overlap {iou:.2f}): it would ghost")
+    flat = []
+    for c in canv:
+        rgb = c[..., :3].astype(float)
+        al = c[..., 3:4].astype(float) / 255
+        flat.append((rgb * al + np.array(key, float) * (1 - al)).round().astype(np.uint8))
+    picked, made = [], {}
+    with tempfile.TemporaryDirectory() as tmp:
+        for a, b, steps in KEY_LOOP:
+            picked.append(flat[a])
+            start = len(picked) - 1
+            for k in range(1, steps):
+                t = k / steps
+                picked.append(interp_between(interp, flat[a], flat[b], t, tmp))
+                made[len(picked) - 1] = (start, (start + steps) % sum(x[2] for x in KEY_LOOP), t)
+    keys_at = {i for i in range(len(picked)) if i not in made}
+    return pack(picked, out, 1 / fps, tuple(key), cell_max,
+                {"keys": {"strip": os.path.basename(strip), "keys": n, "made": len(made), "at": sorted(keys_at)}}, made=made)
 
 
 def check(cells, path: str, cols: int = 6, size: int = 220):
@@ -322,18 +428,30 @@ def main(argv):
     st.add_argument("--aspect", default="1:1")
     sh = sub.add_parser("sheet")
     sh.add_argument("clip"); sh.add_argument("out")
-    sh.add_argument("--rife", default=os.environ.get("SWARM_RIFE", ""))
-    sh.add_argument("--model", default="rife-v4.6")
     sh.add_argument("--frames", type=int, default=24)
-    sh.add_argument("--cell", type=int, default=680)
+    ky = sub.add_parser("keys")
+    ky.add_argument("strip"); ky.add_argument("strip_json"); ky.add_argument("out")
+    ky.add_argument("--key", default="#00FF00")
+    ky.add_argument("--fps", type=float, default=10.0)
+    for p in (sh, ky):
+        p.add_argument("--interp", default=os.environ.get("SWARM_INTERP", ""), help="in-betweener command with {a} {b} {out} {t}")
+        p.add_argument("--rife", default=os.environ.get("SWARM_RIFE", ""), help="a rife-ncnn-vulkan binary (the default in-betweener)")
+        p.add_argument("--model", default="rife-v4.6")
+        p.add_argument("--cell", type=int, default=680)
     o = ap.parse_args(argv)
     if o.cmd == "start":
         start_frame(figure_of(o.src, o.frame, o.cell), hex_rgb(o.key), o.aspect).save(o.out)
         print(json.dumps({"ok": True, "path": o.out}))
         return 0
+    interp = o.interp or (rife_cmd(o.rife, o.model) if o.rife and os.path.exists(o.rife) else "")
+    if o.cmd == "keys":
+        if not interp:
+            raise SystemExit("no in-betweener")
+        print(json.dumps(make_keys(o.strip, o.strip_json, o.out, interp, hex_rgb(o.key), o.cell, o.fps)))
+        return 0
     if not shutil.which("ffmpeg"):
         raise SystemExit("no ffmpeg")
-    meta = make_sheet(o.clip, o.out, o.rife, o.model, o.frames, cell_max=o.cell)
+    meta = make_sheet(o.clip, o.out, interp, o.frames, cell_max=o.cell)
     print(json.dumps(meta))
     return 0
 

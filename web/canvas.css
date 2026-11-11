@@ -1911,6 +1911,7 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .idle-card .ic-acts button { padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; text-transform: none; letter-spacing: normal; }
 .feed .idle-card .ic-acts button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .feed .idle-card .ic-acts button:disabled { opacity: .5; cursor: default; }
+.feed .idle-card .ic-acts select { padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--deep); color: var(--text); font: inherit; font-size: 12px; }
 .feed .idle-card .ic-line { flex-basis: 100%; color: var(--muted); font-size: 11px; }
 /* Hermia's answer to "can I see it": the newest clip wide, then the pictures in a row */
 .feed .item .tell-media { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }

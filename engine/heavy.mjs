@@ -1,5 +1,5 @@
 // Heavy jobs (ffmpeg, RIFE) on the machine that can take them. With a heavy host set
-// (SWARM_HEAVY_HOST, an SSH alias such as "mac-pro", or <data>/heavy.json { host, rife, python })
+// (SWARM_HEAVY_HOST, an SSH alias such as "mac-pro", or <data>/heavy.json { host, rife, interp, python })
 // the scripts and inputs are copied to a job folder there, run, and the outputs copied back; without
 // one they run here. Nothing secret goes over: only the files named.
 import { execFile } from 'node:child_process'
@@ -15,10 +15,19 @@ export function heavyConfig(dataDir, env = process.env) {
   return {
     host: /^[\w.@-]{1,80}$/.test(host) ? host : '',
     rife: String(env.SWARM_RIFE ?? file.rife ?? '').trim(),
+    // another frame in-betweener instead of RIFE: a command there with {a} {b} {out} {t} in it
+    // (the two frames, the frame to write, the time between them), and the name the chat shows
+    interp: String(env.SWARM_INTERP ?? file.interp?.cmd ?? file.interp ?? '').trim(),
+    interpName: String(env.SWARM_INTERP_NAME ?? file.interp?.name ?? '').trim().slice(0, 40),
     // unset: the first Python there with numpy, scipy and Pillow (a Mac's own python3 has none)
     python: String(env.SWARM_HEAVY_PY ?? file.python ?? '').trim(),
   }
 }
+
+// the in-betweener the idle uses: the one set up, else RIFE, else none (→ args for idle_sheet.py)
+export const interpOf = config => (config.interp
+  ? { name: config.interpName || 'the in-betweener', args: ['--interp', config.interp] }
+  : config.rife ? { name: 'RIFE', args: ['--rife', config.rife] } : null)
 
 const run = (cmd, args, opts) => new Promise(ok => execFile(cmd, args, { maxBuffer: 1 << 22, ...opts }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), err: String(errOut || err?.message || '') })))
 const q = s => `'${String(s).replace(/'/g, `'\\''`)}'`

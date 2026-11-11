@@ -32,5 +32,22 @@ class IdleSheetTest(unittest.TestCase):
         self.assertEqual(out[35, 63], 255)
 
 
+    def test_a_cross_fade_between_keys_is_a_ghost_and_a_move_is_not(self):
+        def frame(x):
+            a = np.zeros((80, 80), np.uint8)
+            a[10:70, x:x + 16] = 255
+            rgb = np.zeros((80, 80, 4), float)
+            rgb[..., :3] = np.where(a[..., None] > 0, 200.0, 0.0)
+            rgb[..., 3] = a
+            return a, rgb
+        a0, p0 = frame(20)
+        a1, p1 = frame(30)
+        am, pm = frame(25)  # half way: the figure in one place, solid
+        mix = (p0 + p1) / 2  # a cross-fade: two see-through figures
+        A, px = [a0, am, a1, mix[..., 3].astype(np.uint8)], [p0, pm, p1, mix]
+        made = {1: (0, 2, 0.5), 3: (0, 2, 0.5)}
+        self.assertEqual(idle_sheet.ghosts(A, px, made), [3])
+
+
 if __name__ == "__main__":
     unittest.main()

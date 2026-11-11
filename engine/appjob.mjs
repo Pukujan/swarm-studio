@@ -175,7 +175,7 @@ export const isQuestion = text => QUESTION.test(String(text || '').trim())
 
 // the video idle's go-ahead carried by the build itself: 'no', or a yes at a price ({ usd })
 // that must match the clip's price when it is asked (engine/idle.mjs priceOk)
-export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v === 'object' && Number.isFinite(Number(v.usd)) ? { usd: Number(v.usd) } : null)
+export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v === 'object' && Number.isFinite(Number(v.usd)) ? { usd: Number(v.usd), ...(typeof v.video === 'string' && /^[\w.\/:@+-]{1,160}$/.test(v.video) ? { video: v.video } : {}) } : null)
 
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
   const jobs = new Map() // run id -> job
