@@ -3,7 +3,8 @@
 Every sound here was cut, layered, pitched and normalised for ARES from CC0 (public domain) sources,
 or synthesised for ARES (also CC0). No attribution is required; we credit anyway. The packs were
 downloaded from OpenGameArt.org (Kenney's packs there are his own CC0 uploads of the kenney.nl packs).
-Built by a recipe script (layers, offsets, pitch) on the Pro: `~/.cache/acs/scratch/ares-sfx/tools/`.
+Built by a recipe script (layers, offsets, pitch) on the Pro: `~/.cache/acs/scratch/ares-sfx/tools/`
+(`recipes.py`; the ult, lightning and Stopped Hour sounds in `recipes_big.py`).
 
 | sound | length | made from (pack: file) | licence |
 |---|---|---|---|
@@ -21,6 +22,10 @@ Built by a recipe script (layers, offsets, pitch) on the Pro: `~/.cache/acs/scra
 | `bash.mp3` | 0.46 s | 100 CC0 SFX #2: `sfx100v2_metal_hit_01.ogg`; 100 CC0 SFX: `wooden_01.ogg`; Metal impact sounds: `thud3.wav` | CC0 |
 | `beam_charge.mp3` | 0.99 s | Kenney Digital Audio: `phaserUp1.mp3`; synthesised riser; Kenney Sci-fi Sounds: `forceField_002.ogg` | CC0 |
 | `beam_loop.mp3` | 1.9 s | Kenney Sci-fi Sounds: `spaceEngineLarge_000.ogg`; synthesised hum | CC0 |
+| `bolt_1.mp3` | 0.53 s | 25 CC0 bang / firework SFX: `shot_01.ogg`; Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-01.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Digital Audio: `zap1.mp3` | CC0 |
+| `bolt_2.mp3` | 0.55 s | 25 CC0 bang / firework SFX: `shot_02.ogg`; Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-02.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Digital Audio: `zap2.mp3` | CC0 |
+| `bolt_3.mp3` | 0.56 s | 25 CC0 bang / firework SFX: `shot_03.ogg`; Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-01.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Digital Audio: `zapTwoTone.mp3` | CC0 |
+| `bolt_4.mp3` | 0.58 s | 25 CC0 bang / firework SFX: `bang_02.ogg`; Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-02.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Digital Audio: `zap1.mp3` | CC0 |
 | `boom_1.mp3` | 0.65 s | 25 CC0 bang / firework SFX: `bang_01.ogg`; Kenney Sci-fi Sounds: `lowFrequency_explosion_001.ogg` | CC0 |
 | `boom_2.mp3` | 0.63 s | 25 CC0 bang / firework SFX: `bang_05.ogg`; Kenney Sci-fi Sounds: `lowFrequency_explosion_001.ogg` | CC0 |
 | `boss_hit_1.mp3` | 0.7 s | Impact (qubodup): `qubodupImpactStone.ogg`; Metal impact sounds: `thud2.wav`; Metal impact sounds: `bong1.wav`; Impact (qubodup): `qubodupImpactMeat01.ogg` | CC0 |
@@ -92,10 +97,21 @@ Built by a recipe script (layers, offsets, pitch) on the Pro: `~/.cache/acs/scra
 | `quake_rumble.mp3` | 3.63 s | 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Sci-fi Sounds: `lowFrequency_explosion_000.ogg`; Kenney Sci-fi Sounds: `spaceEngineLow_002.ogg`; 75 CC0 breaking / falling / hit SFX: `bfh1_rock_falling_01.ogg`; 75 CC0 breaking / falling / hit SFX: `bfh1_rock_falling_03.ogg`; 75 CC0 breaking / falling / hit SFX: `bfh1_rock_falling_06.ogg` | CC0 |
 | `reflect.mp3` | 0.29 s | 20 Sword Sound Effects (StarNinjas): `sword_clash.9.ogg`; Kenney Interface Sounds: `glass_002.ogg` | CC0 |
 | `resume.mp3` | 0.72 s | Air whoosh: `whoosh2_0.wav`; Swishes Sound Pack: `swish-9.wav` | CC0 |
+| `rise_long.mp3` | 1.14 s | synthesised riser; 100 CC0 SFX: `gong_02.ogg`; Air whoosh: `whoosh2_0.wav` | CC0 |
+| `rise_short.mp3` | 0.41 s | synthesised riser; Swishes Sound Pack: `swish-8.wav`; 100 CC0 SFX: `bell_03.ogg` | CC0 |
+| `roll_1.mp3` | 2.91 s | Rain and long thunder: `rain-thunder.ogg`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg` | CC0 |
+| `roll_2.mp3` | 2.9 s | Rain and long thunder: `rain-thunder.ogg`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg` | CC0 |
+| `roll_3.mp3` | 2.87 s | Rain and long thunder: `rain-thunder.ogg`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg` | CC0 |
 | `skywave.mp3` | 2.48 s | 25 CC0 bang / firework SFX: `cannon_04.ogg`; Kenney Sci-fi Sounds: `lowFrequency_explosion_000.ogg`; 75 CC0 breaking / falling / hit SFX: `bfh1_rock_breaking_01.ogg`; 100 CC0 SFX: `slam_03.ogg`; synthesised riser; Air whoosh: `whoosh2_0.wav`; Short wind sound: `short wind sound.wav`; Kenney Sci-fi Sounds: `thrusterFire_001.ogg`; Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-01.wav`; Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-02.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; 75 CC0 breaking / falling / hit SFX: `bfh1_rock_falling_02.ogg`; 75 CC0 breaking / falling / hit SFX: `bfh1_rock_falling_05.ogg` | CC0 |
 | `slam_1.mp3` | 0.71 s | 100 CC0 SFX: `slam_02.ogg`; Impact (qubodup): `qubodupImpactStone.ogg`; Metal impact sounds: `thud2.wav` | CC0 |
 | `slam_2.mp3` | 0.7 s | 100 CC0 SFX: `slam_06.ogg`; Impact (qubodup): `qubodupImpactStone.ogg`; Metal impact sounds: `thud2.wav` | CC0 |
 | `swipe.mp3` | 0.15 s | Swishes Sound Pack: `swish-6.wav`; Swishes Sound Pack: `swish-2.wav` | CC0 |
+| `tf_snap.mp3` | 1.07 s | 25 CC0 bang / firework SFX: `cannon_03.ogg`; Metal impact sounds: `clink3.wav`; synthesised sub-bass drop; Swishes Sound Pack: `swish-12.wav` | CC0 |
+| `tf_stop.mp3` | 2.43 s | Air whoosh: `whoosh2_0.wav`; Freeze spell: `freeze.wav`; synthesised sub-bass drop; 100 CC0 SFX: `gong_02.ogg` | CC0 |
+| `tf_swell.mp3` | 1.2 s | 100 CC0 SFX: `gong_01.ogg`; Air whoosh: `whoosh2_0.wav`; Freeze spell: `freeze.wav` | CC0 |
+| `tf_tock_1.mp3` | 1.44 s | Clock tick: `Timetick.ogg`; Tick and tock: `tick.wav`; synthesised sub-bass drop | CC0 |
+| `tf_tock_2.mp3` | 1.46 s | Clock tick: `Timetick.ogg`; Tick and tock: `tick.wav`; synthesised sub-bass drop | CC0 |
+| `tf_wind.mp3` | 1.4 s | synthesised riser; Tick and tock: `tick2.wav` | CC0 |
 | `thunder_1.mp3` | 1.36 s | Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-01.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Digital Audio: `zap2.mp3` | CC0 |
 | `thunder_2.mp3` | 1.21 s | Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-02.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Digital Audio: `zap1.mp3` | CC0 |
 | `thunder_3.mp3` | 1.26 s | Fantasy Sound Effects (Tinysized SFX): `paralyzer-discharge-01.wav`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg`; Kenney Digital Audio: `zap2.mp3` | CC0 |
@@ -109,6 +125,10 @@ Built by a recipe script (layers, offsets, pitch) on the Pro: `~/.cache/acs/scra
 | `u_finale.mp3` | 1.77 s | synthesised riser; 20 Sword Sound Effects (StarNinjas): `sword.9.ogg`; Air whoosh: `whoosh2_0.wav`; 25 CC0 bang / firework SFX: `cannon_01.ogg`; 20 Sword Sound Effects (StarNinjas): `sword_clash.6.ogg` | CC0 |
 | `u_rumble.mp3` | 3.78 s | Kenney Sci-fi Sounds: `lowFrequency_explosion_000.ogg`; 100 CC0 SFX #2: `sfx100v2_thunder_01.ogg` | CC0 |
 | `ult_sting.mp3` | 1.71 s | synthesised riser; 20 Sword Sound Effects (StarNinjas): `sword.10.ogg`; 100 CC0 SFX: `gong_01.ogg`; 25 CC0 bang / firework SFX: `cannon_03.ogg` | CC0 |
+| `ult_sub_1.mp3` | 1.45 s | synthesised sub-bass drop; 25 CC0 bang / firework SFX: `cannon_05.ogg`; Kenney Sci-fi Sounds: `lowFrequency_explosion_001.ogg` | CC0 |
+| `ult_sub_2.mp3` | 1.57 s | synthesised sub-bass drop; 25 CC0 bang / firework SFX: `cannon_03.ogg`; Kenney Sci-fi Sounds: `lowFrequency_explosion_000.ogg` | CC0 |
+| `ult_tail_1.mp3` | 3.18 s | Rain and long thunder: `rain-thunder.ogg`; 100 CC0 SFX: `gong_01.ogg` | CC0 |
+| `ult_tail_2.mp3` | 3.21 s | Rain and long thunder: `rain-thunder.ogg`; 100 CC0 SFX: `gong_02.ogg` | CC0 |
 
 ## Source packs (all CC0 1.0)
 
@@ -134,6 +154,7 @@ Built by a recipe script (layers, offsets, pitch) on the Pro: `~/.cache/acs/scra
 - Swishes Sound Pack: https://opengameart.org/content/swishes-sound-pack
 - 20 Sword Sound Effects (StarNinjas): https://opengameart.org/content/20-sword-sound-effects-attacks-and-clashes
 - Tick and tock: https://opengameart.org/content/tick-and-tock
+- Rain and long thunder: https://opengameart.org/content/rain-long-thunder
 - Fantasy Sound Effects (Tinysized SFX): https://opengameart.org/content/fantasy-sound-effects-tinysized-sfx
 - Air whoosh: https://opengameart.org/content/air-whoosh
 - Short wind sound: https://opengameart.org/content/short-wind-sound

@@ -15,6 +15,7 @@
     ctx.font = '600 13px Cinzel, serif'; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,241,220,0.55)'
     const live = QUALITY === 'auto' && PERF.low ? ' · light' : ''
     ctx.fillText(`G  Graphics ${NAME[QUALITY]}${live}`, W - 32, H - 24)
+    if (typeof MUSIC !== "undefined") ctx.fillText(`M  Music ${MUSIC.muted ? "Off" : "On"}`, W - 32, H - 44)
     ctx.restore()
   }
 }
