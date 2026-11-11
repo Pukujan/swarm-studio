@@ -12,13 +12,12 @@ test('words drops filler and style words', () => {
   assert.deepEqual(words('A cinematic photo of a barista pouring latte art, warm light'), ['barista', 'pouring', 'latte', 'art'])
 })
 
-test('an earlier build picture is picked, never for its own build', async () => {
+test('a picture another build made is never a stand-in', async () => {
   const runs = mkdtempSync(join(tmpdir(), 'st-runs-'))
   mkdirSync(join(runs, 'r1'))
   writeFileSync(join(runs, 'r1', 'events.jsonl'), JSON.stringify({ type: 'image', src: '/img/r1/1.webp', gen: 'barista pouring latte in a bakery' }) + '\n')
   const st = standins({ dataDir: mkdtempSync(join(tmpdir(), 'st-')), runsDir: runs, libraryFile: '/nonexistent', fetchImpl: async () => { throw new Error('offline') } })
-  assert.equal((await st.pick({ q: 'barista pouring latte', w: 1600, h: 900 })).url, '/img/r1/1.webp')
-  assert.equal(await st.pick({ q: 'barista pouring latte', run: 'r1' }), null)
+  assert.equal(await st.pick({ q: 'barista pouring latte', w: 1600, h: 900 }), null)
 })
 
 test('Pexels through the Octo proxy sends the working key and keeps credit', async () => {
