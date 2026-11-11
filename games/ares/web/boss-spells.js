@@ -733,6 +733,10 @@ const BOSS_SPELLS = (() => {
     wall: { type: 'doom', r: 13, dmg: 16, spd: 250 },
   }
   let HW = null   // the live wave (the autoplay reads it)
+  // the shared effect layer (fx.js) draws after every fx; while the world is stopped it is drawn
+  // here instead, under the sepia, so a frozen hit flash is graded like the rest of the world
+  let fxkDraw = null
+  if (typeof FXK !== 'undefined' && FXK.draw) { fxkDraw = FXK.draw; FXK.draw = function () { if (HW && !HW.released && !HW.over) return; return fxkDraw.apply(this, arguments) } }
 
   // ---- sprites, made once
   let SPR = null
@@ -924,6 +928,7 @@ const BOSS_SPELLS = (() => {
     w.s0 = T; w.fired = [false, false, false]; w.locked = [false, false, false]; w.refl = []; w.si = 0
     // stop the world: the core skips every update while stopT > 0, so the stop is drawn from T
     stopT = HOUR.stop + 0.02
+    SFX.glare(); tick(900)   // the freeze sound: sfx.js times its tocks and swell to HOUR.stop
     w.stash = parts; parts = []
     w.held = B.mode >= 1 ? bullets.filter(b => b.enemy && !b.dead && b.type !== 'doom' && !b.hour) : []
     PP.floor = w.fy
@@ -977,11 +982,11 @@ const BOSS_SPELLS = (() => {
         c.globalCompositeOperation = 'source-over'
         for (const q of w.stash) { c.globalAlpha = 0.5; drawPart(q) }
         c.globalAlpha = 1
+        if (fxkDraw) { c.save(); try { fxkDraw() } catch { } c.restore() }
         grade(kS, u)
         // the sweep ring that stops it all
         const ru = u - 0.3
         if (ru > 0 && ru < 0.5) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = `rgba(255,236,160,${1 - ru * 2})`; c.lineWidth = 10 * (1 - ru * 2) + 2; c.beginPath(); c.arc(B.x, B.y - B.h * 0.6, 60 + 2400 * ease(ru * 2), 0, TAU); c.stroke() }
-        if (!w.lockSnd && ru > 0) { w.lockSnd = true; SFX.glare(); tick(900) }
         // he and his clock stay in colour
         drawClock(B.x, B.y + (B.float ? -140 : 0) - B.h * 0.6, 1, 0.7, w.s0)
         c.globalCompositeOperation = 'source-over'; c.save(); try { drawBoss() } catch { } c.restore()
@@ -1306,5 +1311,5 @@ const BOSS_SPELLS = (() => {
       hourPilot(w)
     }
   }
-  return { ...NEW, hues: HUES, set: SET, withSpells, pool: PP, get wave() { return HW } }
+  return { ...NEW, hues: HUES, set: SET, withSpells, hour: HOUR, pool: PP, get wave() { return HW } }
 })()
