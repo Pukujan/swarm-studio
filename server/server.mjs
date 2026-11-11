@@ -39,6 +39,7 @@ import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
+import { paintWithBackup } from '../engine/paintretry.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
@@ -182,17 +183,26 @@ async function checkArt(path, guide, messages = art.checkMessages) {
 }
 // One picture through the art director. A picture sent back is made once more with
 // the reasons in its prompt; the second one stands.
+// another signed-in image provider than the one in use: Codex first, then any other
+async function backupImage(choice) {
+  const list = (await loadImageProviders()).filter(x => x.available && x.provider !== choice?.provider)
+  const p = list.find(x => x.provider === 'openai-codex') || list[0]
+  return p ? { provider: p.provider, model: p.provider === 'openai-codex' ? 'gpt-image-2-low' : p.default || '' } : null
+}
 async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false }, onSentBack) {
-  const pick = art.tierFor(choice, { hero })
-  const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000)
-  const r = await go('')
-  if (!r.ok || !r.path || !existsSync(r.path)) return r
+  const once = (c, strict) => { const pick = art.tierFor(c, { hero }); return imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', aspect, art.promptFor(gen, guide, { aspect, strict, cutout })], hero ? 300000 : 150000) }
+  // a refusal that isn't out of quota: once more after a pause, then on another provider (engine/paintretry.mjs)
+  const first = await paintWithBackup(c => once(c, ''), { choice, backup: () => backupImage(choice), quota: OUT_OF_QUOTA, exists: existsSync })
+  if (!first.ok || !first.path || !existsSync(first.path)) return first
+  const used = first.backup || choice, pick = art.tierFor(used, { hero })
+  const go = strict => once(used, strict)
+  const r = { ...first, model: first.model || pick.model }
   const check = await checkArt(r.path, guide)
-  if (check.ok) return { ...r, model: r.model || pick.model, check }
+  if (check.ok) return { ...r, check }
   onSentBack?.(check)
   const again = await go(check.problems.join('; '))
   if (!again.ok || !again.path || !existsSync(again.path)) return { ...r, model: r.model || pick.model, check }
-  return { ...again, model: again.model || pick.model, check: await checkArt(again.path, guide), retried: true }
+  return { ...again, model: again.model || pick.model, check: await checkArt(again.path, guide), retried: true, backup: first.backup }
 }
 
 // One picture for a finished section: a new one asked for in an edit, or a
@@ -1279,7 +1289,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
       const { file, name } = keep(it, r.path)
       done.set(it.id, { file, what: it.what, kind: it.kind })
       live(slot, it, 'done', { src: img(name) })
-      step({ kind: 'setup', text: `painted the ${it.what}` })
+      step({ kind: 'setup', text: `painted the ${it.what}${r.backup ? ` with ${r.backup.provider} (${choice.provider} refused it)` : r.secondTry ? ' on the second try' : ''}` })
     }
   }
   // A sprite sheet: painted over the figure's own picture so it stays on-model, cut into a
@@ -1299,7 +1309,8 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
     if (!ref) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
     const pick = art.tierFor(choice, { hero: true })
     let layout = it.layout
-    const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout })], 300000)
+    // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
+    const go = strict => paintWithBackup(() => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout })], 300000), { choice: pick, quota: OUT_OF_QUOTA, exists: existsSync })
     let fixes = ''
     for (let go2 = 0; go2 < 2; go2++) {
       live(slot, it, go2 ? 'sent back' : 'painting', go2 ? { problems: fixes.split('; ') } : {})
