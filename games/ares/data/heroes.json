@@ -1,5 +1,5 @@
 {
-  "_note": "The playable heroines. Each one has a role, a personality, a voice and her moves with the Japanese line she calls out. Add a heroine or a move here, then run `node engine/voice.mjs games/ares/data/heroes.json` to record any missing lines into assets/voice/<hero>/<move>.mp3. A voice is {provider, voice, model?, vault?}: provider fish (Fish Audio) or elevenlabs. vault names the Octo vault key used for a lease; a FISH_API_KEY or ELEVENLABS_API_KEY in the environment is used instead when set.",
+  "_note": "The playable heroines. Each one has a role, a personality, a voice and her moves with the Japanese line she calls out. Add a heroine, move, outfit or effect here, then run `node engine/voice.mjs games/ares/data/heroes.json` to record any missing lines into assets/voice/<hero>/<move>.mp3. A voice is {provider, voice, model?, vault?}: provider fish (Fish Audio) or elevenlabs. vault names the Octo vault key used for a lease; a FISH_API_KEY or ELEVENLABS_API_KEY in the environment is used instead when set. Sheets and outfit packs: `node engine/skins.mjs games/ares/data/heroes.json --hero <id> [--outfit <id>]` paints every sheet from the outfit's design picture, cuts the frames and checks them into assets/skins/<hero>/<outfit>/.",
   "voices": {
     "calm_woman": {
       "provider": "fish",
@@ -167,17 +167,53 @@
             "slam"
           ]
         }
-      ]
+      ],
+      "art": {
+        "look": "2D sprite sheet of the woman in the first reference image (Messenger), painted in exactly the same soft painted anime illustration style: same face, long wavy brown hair, gold laurel crown, white Greek wrap dress with gold leaf belt, red cape with gold trim, gold armband, laced gold sandals with small white wings. Her weapons are exactly the ones in the second reference image: a huge white-and-gold greatsword with white angel wings on the crossguard, a red grip, a red tassel and a glowing gold laurel blade; and a white-and-gold winged revolver. Side view facing right unless the frames say otherwise. Dress, cape and hair swing naturally with the motion.",
+        "personality": "Her personality: playful, cocky and teasing, a brawler who loves a fight; her face always shows it: a smug grin, a wink, a tongue out, a fierce laugh mid-swing, never neutral.",
+        "refs": [
+          "assets/art/heroes/weapons.jpg"
+        ],
+        "outfits": {
+          "default": {
+            "design": "assets/art/heroes/messenger-default.jpg"
+          }
+        },
+        "sheets": {
+          "idle": "idle stance loop, greatsword held low in both hands, gentle breathing, cape and hair drifting softly in the wind; frame 6 flows back into frame 1.",
+          "run": "running cycle, greatsword held back low in one hand, cape streaming behind, six evenly spaced run poses that loop.",
+          "slash1": "light attack 1, fast horizontal greatsword slash with a bright gold arc: ready, wind-up, swing, full arc, follow-through, recover.",
+          "slash2": "light attack 2, rising upward diagonal greatsword slash from low to high with a bright gold crescent arc: ready, crouch, rising swing, full arc overhead, follow-through, recover.",
+          "slash3": "heavy finisher, she leaps and brings the greatsword down overhead into the ground with a gold shockwave and dust burst: ready, leap, sword raised high, slam down, impact burst, recover.",
+          "dash": "forward dash thrust, she lunges low with the greatsword pointing forward, gold speed streaks behind her: ready, crouch, launch, long lunge, thrust, recover.",
+          "jump": "jump, greatsword in one hand: crouch, take off, rising, top of the jump with knees tucked, falling, landing crouch.",
+          "shoot": "revolver shot, greatsword on her back: draw revolver, aim forward with arm extended, fire with a bright gold muzzle flash, recoil, second shot, lower the gun.",
+          "hurt": "getting hit and knocked down, greatsword in hand: hit flinch, staggering back, falling, lying on the ground, pushing up, standing back up.",
+          "djump": "double jump in mid-air, greatsword in one hand: falling, small white wings flare from her sandals, push off the air with a gold burst ring under her feet, forward somersault flip, rising again, open to the top of the jump. All frames in the air.",
+          "roll": "dodge roll forward along the ground, greatsword held close: drop low, tuck, rolling ball with cape wrapped around, rolling, coming up, back to stance.",
+          "sprint": "full sprint cycle, leaning far forward, greatsword dragged behind in one hand trailing gold sparks, cape and hair streaming straight back, six run poses that loop.",
+          "launcher": "launcher attack: a huge rising upward greatsword uppercut that lifts the enemy into the air, she jumps up with the swing: low crouch with sword down behind, swing starts, sword sweeping upward with a tall gold vertical arc, she rises off the ground following the arc, top of the arc in the air, hang in the air ready to combo.",
+          "air1": "air combo, all frames in mid-air: quick horizontal greatsword slash, then a second reverse slash, each with a bright gold arc, cape and hair floating upward.",
+          "airslam": "air finisher: in mid-air she flips, raises the greatsword overhead, dives straight down with the blade pointing down, slams into the ground with a big gold shockwave and dust ring, crouched landing.",
+          "m-loading": "six separate pretty loading-screen poses, three-quarter view, full of attitude: 1 sitting on the crossguard of her planted greatsword, swinging her legs, grinning; 2 greatsword over both shoulders, arms hooked over it, winking; 3 leaning on the huge sword with one hand on her hip, tongue out; 4 mid-jump with a fist pumped in the air, cape flaring; 5 pointing the sword tip at the viewer with a cocky smirk; 6 looking back over her shoulder with a peace sign, cape and hair lifting in the wind.",
+          "m-idle": "teasing idle loop facing right: greatsword resting on her shoulder, she bounces on her toes, rolls her shoulder, grins and beckons with two fingers come at me, taps the sword on her shoulder, cape and hair swinging; frame 6 flows back into frame 1.",
+          "m-spin": "sword skill, side view facing right: a full spinning slash, she pivots on one foot and whirls the greatsword around her in a full gold circle: ready, wind-up, spin start, full gold ring of light around her, spin end, recover.",
+          "m-charge": "sword skill, side view facing right: charged heavy slash, she draws the greatsword far back as gold light gathers on the blade, then cuts a huge horizontal crescent that leaves a wide gold arc: crouch and draw back, blade glowing, brighter, step and swing, full huge arc, recover.",
+          "m-counter": "sword skill, side view facing right: parry and counter, she blocks with the flat of the greatsword held upright, a gold spark bursts, then she slides past and slashes: guard up, spark of the parry, slide forward, quick cut with a thin gold line, pause with her back turned, recover.",
+          "m-wave": "sword skill, side view facing right: she swings the greatsword upward and sends a tall gold crescent wave of light flying forward along the ground: ready, low draw, upward swing, crescent wave leaves the blade, wave travels forward, recover.",
+          "m-air2": "air combo, side view facing right, she is in the air the whole time: fast mid-air slash, second mid-air slash in the other direction, a mid-air flip with the sword, a downward diagonal air slash, a mid-air spin slash with a gold ring, drifting down."
+        }
+      }
     },
     "runner": {
-      "name": "THE RUNNER",
+      "name": "THE ORACLE",
       "role": "run and gun: keeps moving, shoots while running and spams spells",
       "personality": "mature, elegant and deadpan. A cold calm killer who never hurries; her face stays expressionless and her eyes close when she casts. Every move is graceful, like a dancer.",
       "voice": "calm_woman",
       "weapon": "winged revolver and gold magic",
       "poses": {
-        "loading": "r-loading",
-        "idle": "r-idle"
+        "loading": "o-loading",
+        "idle": "o-idle"
       },
       "barks": {
         "start": {
@@ -201,68 +237,113 @@
           "name": "連射",
           "reading": "れんしゃ",
           "input": "shoot (also while running)",
-          "anim": "r-run"
+          "anim": "o-run"
         },
         "dodge": {
           "name": "宙返り撃ち",
           "reading": "ちゅうがえりうち",
           "input": "dash backward + shoot",
-          "anim": "r-dodge"
+          "anim": "o-dodge"
         },
         "feather": {
           "name": "天翼連弾",
           "reading": "てんよくれんだん",
           "input": "spell 1",
-          "anim": "r-cast",
-          "line": "翼よ、舞え。てんよくれんだん。"
+          "anim": "o-cast",
+          "line": "翼よ、舞え。てんよくれんだん。",
+          "fx": {
+            "sheet": "feather",
+            "levels": {
+              "1": {
+                "art": "feather-1",
+                "scale": 1.0,
+                "projectiles": 3,
+                "damage": 1.0
+              },
+              "2": {
+                "art": "feather-1",
+                "scale": 1.15,
+                "projectiles": 4,
+                "damage": 1.2,
+                "trail": 1.3
+              },
+              "3": {
+                "art": "feather-5",
+                "scale": 0.8,
+                "projectiles": 6,
+                "damage": 1.5,
+                "trail": 1.5
+              },
+              "4": {
+                "art": "feather-5",
+                "scale": 0.95,
+                "projectiles": 8,
+                "damage": 1.8,
+                "trail": 1.8,
+                "shake": 1.2
+              },
+              "5": {
+                "art": "feather-5",
+                "scale": 1.1,
+                "projectiles": 12,
+                "damage": 2.3,
+                "trail": 2.2,
+                "shake": 1.5,
+                "cutin": true,
+                "name": "真・天翼連弾",
+                "reading": "しん・てんよくれんだん",
+                "line": "翼よ、すべてを覆え。しん、てんよくれんだん。"
+              }
+            }
+          }
         },
         "sunlance": {
           "name": "日輪の槍",
           "reading": "にちりんのやり",
           "input": "spell 2",
-          "anim": "r-cast",
+          "anim": "o-cast",
           "line": "光よ、貫け。にちりんのやり。"
         },
         "laurel": {
           "name": "月桂環",
           "reading": "げっけいかん",
           "input": "spell 3",
-          "anim": "r-cast",
+          "anim": "o-cast",
           "line": "守れ。げっけいかん。"
         },
         "gale": {
           "name": "疾風翔",
           "reading": "しっぷうしょう",
           "input": "spell 4",
-          "anim": "r-cast",
+          "anim": "o-cast",
           "line": "風よ。しっぷうしょう。"
         },
         "halo": {
           "name": "天光柱",
           "reading": "てんこうちゅう",
           "input": "spell 5",
-          "anim": "r-cast",
+          "anim": "o-cast",
           "line": "天より降れ。てんこうちゅう。"
         },
         "wing": {
           "name": "白翼の盾",
           "reading": "はくよくのたて",
           "input": "spell 6",
-          "anim": "r-cast",
+          "anim": "o-cast",
           "line": "はくよくのたて。"
         },
         "sky": {
           "name": "天穹爆",
           "reading": "てんきゅうばく",
           "input": "spell 7",
-          "anim": "r-cast",
+          "anim": "o-cast",
           "line": "弾けろ。てんきゅうばく。"
         },
         "comet": {
           "name": "流星墜",
           "reading": "りゅうせいつい",
           "input": "spell 8",
-          "anim": "r-cast",
+          "anim": "o-cast",
           "line": "落ちろ。りゅうせいつい。"
         },
         "ult": {
@@ -272,7 +353,46 @@
           "anim": "ult",
           "line": "静かに眠りなさい。せいう、せんよくらんぶ。"
         }
+      },
+      "art": {
+        "look": "2D sprite sheet of the woman in the first reference image (the Oracle), painted in exactly the same soft painted anime illustration style and the exact same design: same face, very long soft pastel pink hair in a low loose braid with gold pins, gold laurel circlet with a red jewel, a floating gold halo behind her head, layered sheer white and pale rose gown with long translucent sleeves, many trailing ribbons and tassels, gold laurel filigree, gold chains, high slit skirt, gold laced heeled sandals with tiny white wings. Her gun is the white-and-gold winged revolver in the second reference image; her free hand casts glowing gold magic. Personality: mature, elegant and deadpan; her face is expressionless in every frame, half-lidded eyes, eyes closed when casting, never smiling or straining; every pose graceful like a dancer. VERY FLOWY: her long hair, braid, sheer sleeves, skirt layers and ribbons are always in motion, flowing and rippling with a delay behind every movement, trailing in long soft curves, lifting in the air on jumps and spins.",
+        "personality": "",
+        "refs": [
+          "assets/art/heroes/weapons.jpg"
+        ],
+        "outfits": {
+          "default": {
+            "design": "assets/art/heroes/runner-default.jpg"
+          }
+        },
+        "sheets": {
+          "o-loading": "six separate beautiful elegant loading-screen poses, three-quarter view: 1 standing tall, eyes closed, revolver held upright beside her cheek, a gold magic circle turning at her feet, hair and ribbons lifting; 2 floating above the ground, legs crossed at the ankle, cradling a glowing gold orb, sleeves and skirt pooling in the air; 3 looking back over her shoulder with a cold half-lidded gaze, braid and ribbons sweeping in a long curve; 4 a slow dancer turn on pointed toes, one arm extended trailing gold light, skirt layers flaring in a circle; 5 lowering the revolver after a shot, a thin wisp of smoke, sleeves drifting; 6 walking away calmly, hair, ribbons and sheer layers streaming in the wind, gold feathers drifting.",
+          "o-idle": "calm elegant idle loop facing right: poised, weight on one hip, revolver held loosely at her side, free hand turning slowly with a small gold light above the palm, breathing slowly, hair, braid, sleeves and ribbons drifting and rippling in a soft breeze, each frame the fabric a little further along its wave; frame 6 flows back into frame 1.",
+          "o-run": "run-and-gun cycle, side view facing right, graceful light gliding run: she runs with long light strides on her toes, firing the revolver forward with a gold muzzle flash, hair, braid, sleeves and ribbons streaming far behind her, six evenly spaced running poses that loop: contact, down, passing, up, flight, contact.",
+          "o-cast": "spell cast, side view facing right, eyes closed throughout: a slow graceful spin with the skirt and sleeves flaring outward, a gold magic circle forms at her hand, she thrusts her palm forward, a burst of gold light feathers launches, she settles into a poised still pose as the fabric floats down.",
+          "o-dodge": "dodge, side view facing right: she glides backward in a graceful backflip through the air, firing the revolver mid-flip with a gold muzzle flash, hair and ribbons tracing a long spiral, lands softly on her toes and fires once more: crouch, take off, upside down firing, coming over, soft landing, poised shot.",
+          "o-jump": "jump and double jump, side view facing right: crouch, take off, rising with hair and skirt trailing down, a second jump off a small gold magic circle under her feet, spinning gracefully at the top with sleeves fanned out, floating down slowly with fabric billowing upward like a flower.",
+          "o-shoot": "standing shots, side view facing right: she raises the revolver in one elegant line, fires with a gold muzzle flash, fires again with recoil, twirls the revolver once, fires a charged shot with a large gold flash, lowers it; sleeves and ribbons swing with each shot.",
+          "o-hurt": "getting hit, side view facing right, still expressionless: hit flinch with hair whipping forward, staggering back, falling gracefully with fabric billowing, lying on the ground with hair and skirt spread out, rising, standing poised again."
+        }
       }
+    }
+  },
+  "sheet": {
+    "_note": "The contract every outfit pack follows: the same grid and layout rules for every sheet, so moves, sizes and timing match across outfits. Never change these between outfits.",
+    "grid": [
+      3,
+      2
+    ],
+    "aspect": "landscape",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every weapon, swing arc, hair strand, sleeve, ribbon and effect stays fully inside her own cell with a clear gap to the edges. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "fx_style": "2D game VFX sprite sheet, painted anime game effect style like a high-end gacha RPG, no character, effect only, on a pure solid black background for additive blending. Six frames in a 3 by 2 grid, read left to right, top to bottom, each effect centred in its own cell with wide empty black space around it, never touching the cell edges. No text, no borders, no grid lines. Palette: warm gold, white-gold and soft rose light."
+  },
+  "fx": {
+    "_note": "Effect sheets, painted on black and drawn as light. A move's fx.levels picks the art and how big, bright and dense it is at each level; levels 1, 3 and 5 can use new art.",
+    "sheets": {
+      "feather-1": "a spell called Heaven Wing Barrage at level 1, simple: a small gold magic circle appears, three glowing gold light feathers form and fly to the right in a short volley, then fade; frames: circle appears, feathers form, launch, flying, hit sparks, fade.",
+      "feather-5": "the same spell Heaven Wing Barrage at max level, grand and ornate: a large intricate double gold magic circle with laurel runes and a halo, a storm of many glowing white-gold and rose light feathers spirals out and flies right in a wide fan with long light trails, ending in a big bloom of feathers and petals; frames: ornate circle unfolds, feathers spiral out, huge fan launch, streaming trails, bright burst of light and petals, glittering fade."
     }
   }
 }

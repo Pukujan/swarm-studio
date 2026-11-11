@@ -404,7 +404,7 @@ func _draw_select(S: float, W: float, H: float) -> void:
 	if card_tex == null:
 		card_tex = load("res://assets/art/hero-card.webp")
 	_txt(slam, Vector2(0, 130 * S), "CHOOSE YOUR MESSENGER", int(70 * S), GOLD, HORIZONTAL_ALIGNMENT_CENTER, W, int(12 * S))
-	var names = {"messenger": ["THE MESSENGER", "laurel, white dress, red cape  ·  +10 health"], "runner": ["THE RUNNER", "auburn ponytail, dagger  ·  faster dash"]}
+	var names = {"messenger": ["THE MESSENGER", "laurel, white dress, red cape  ·  +10 health"], "runner": ["THE ORACLE", "pink braid, winged revolver, spells  ·  faster dash"]}
 	var i = 0
 	for h in ["messenger", "runner"]:
 		var picked: bool = h == sel
