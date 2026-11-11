@@ -28,6 +28,7 @@ import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
 import { makeProjects, stateOf } from './projects.mjs'
+import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
 import { runBoard as boardOf } from './board.mjs'
@@ -256,12 +257,22 @@ function broadcast(event) {
   for (const res of clients) res.write(line)
 }
 
-function startRun({ brief, agents, models: given, base = null, ask = '' }) {
+function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null }) {
   setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
   mkdirSync(dir, { recursive: true })
+  // the start request names a project (its id or its name): the run joins it as a piece (docs/specs/18-projects.md)
+  const wanted = typeof project === 'string' ? project.trim().slice(0, 64) : ''
+  if (wanted || PIECES.includes(piece)) {
+    const pid = wanted ? projects.resolve(wanted) : null
+    writeFileSync(join(dir, 'meta.json'), JSON.stringify({
+      // a project id that is gone (or in Trash) is not a name
+      ...(pid ? { project: pid } : wanted && !/^\d{4}-\d\d-\d\dT[\d-]+Z$/.test(wanted) && !isScreenName(wanted) ? { projectName: wanted.slice(0, 48) } : {}),
+      ...(PIECES.includes(piece) ? { piece } : {})
+    }))
+  }
   const run = { id, dir, events: [], controller: new AbortController(), done: false, result: null, working: new Set(), brief }
   current = run
   // a follow-up keeps the last version's art style, so new pictures match the old ones
@@ -404,7 +415,8 @@ function runCard(id) {
     const video = events.findLast(e => e.type === 'video:done')
     card = { key, info: {
       id,
-      title: start.title || (isApp && nameOfBrief(start.brief)) || pages[0]?.title || start.brief.slice(0, 60),
+      // never a screen's title ("Sign In to ARES"): the brief's name before that
+      title: start.title || (isApp && nameOfBrief(start.brief)) || (!isScreenName(pages[0]?.title) && pages[0]?.title) || nameOfBrief(start.brief) || start.brief.slice(0, 60),
       kind: start.kind || (isApp ? 'app' : 'site'),
       // a game made from a site: that site's run, so the game joins its version
       from: start.from || null,
@@ -541,8 +553,17 @@ const folderOp = input => projects.folderOp(input)
 
 function listRuns() {
   if (!existsSync(runsDir)) return []
-  return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 300).flatMap(id => runCard(id) || [])
+  // each run says its project and which piece of it it is, so the Feed posts per project
+  const index = projects.runIndex()
+  return readdirSync(runsDir).filter(id => RUN_ID.test(id)).sort().reverse().slice(0, 300).flatMap(id => {
+    const c = runCard(id)
+    if (!c) return []
+    const at = index.get(id)
+    return [at ? { ...c, project: { id: at.project, name: at.name }, piece: at.piece } : c]
+  })
 }
+// the project's name and the run's piece, for package and deploy names
+const nameFor = id => { try { const at = projects.runIndex().get(id); return at ? { name: at.name, kind: at.piece } : null } catch { return null } }
 
 // Visitor tours for a finished run, written once and kept with the run. The
 // canvas sends the inventory of each page, since it builds the pages.
@@ -901,7 +922,7 @@ async function videoNow(id, input = {}) {
 
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
-const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp }))))
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp, nameFor }))))
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
@@ -1115,7 +1136,8 @@ async function publish(id, input = {}) {
   const target = ['local', 'vercel', 'cloudflare'].includes(input.target) ? input.target : 'github'
   const creds = PROVIDERS[target] ? await credentials(dataDir, target) : null
   if (PROVIDERS[target] && !creds) throw new Error(`connect ${PROVIDERS[target].label} first: 🌐 Publish on the canvas, or set ${PROVIDERS[target].env}`)
-  const out = await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [] })
+  const named = nameFor(id)
+  const out = await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: named?.name })
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const local = `http://127.0.0.1:${port}/site/${id}/`
   const job = { state: 'working', target, stage: 'export', t: Date.now(), local, pages: out.pages }
@@ -1132,8 +1154,10 @@ async function publish(id, input = {}) {
   const title = String(out.brand || out.name)
   const onStage = stage => { job.stage = stage; broadcast({ type: 'publish:stage', t: Date.now(), run: id, target, stage }) }
   const dir = join(out.dir, 'html')
-  const go = target === 'vercel' ? publishVercel({ dir, name: out.name, creds, dataDir, onStage })
-    : target === 'cloudflare' ? publishCloudflare({ dir, name: out.name, creds, dataDir, onStage })
+  // a hosted site is named <project>-site, like ares-site
+  const hostName = deployName(out.brand, 'site')
+  const go = target === 'vercel' ? publishVercel({ dir, name: hostName, creds, dataDir, onStage })
+    : target === 'cloudflare' ? publishCloudflare({ dir, name: hostName, creds, dataDir, onStage })
     : publishGitHub({ dir, name: out.name, title, onStage })
   go.then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
     .catch(err => {
@@ -1960,7 +1984,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const events = readEvents(id)
       if (!events) return reply(404, { error: 'no such build' })
-      exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [] })
+      exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: nameFor(id)?.name })
         .then(out => {
           const copy = shelveExport(id, out.zip)
           record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections })

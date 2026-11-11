@@ -4,13 +4,19 @@
 // $HERMES_HOME/swarm-studio. A run's own folder is never touched here except by Empty Trash or
 // Delete forever, which the person asks for (and confirms) themself.
 //
-//   folders.json v2: { v: 2, folders: [name], projects: { <pid>: { runs: [id], title, folder, trashed, made } } }
+//   folders.json v2: { v: 2, folders: [name], projects: { <pid>: { runs: [id], name, title, folder, trashed, made } } }
+//
+// A project has one name (engine/naming.mjs): its brand, never a screen title. A new run joins
+// a project it names (meta.project / meta.projectName, from the start request) or whose name its
+// brief's brand matches, as a piece (site, app, game, film); a run of a kind the project already
+// has is that piece's next version. See docs/specs/18-projects.md.
 //
 // The first run of a project gives it its id. Runs written before v2 are grouped once, by how
 // alike their briefs and titles are, and their per-run folder (meta.json) becomes the project's.
 
 import { cpSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
+import { brandOf, isScreenName, pieceKind, projectName, sameName } from '../engine/naming.mjs'
 
 export const RUN_ID = /^[\w-]{1,64}$/
 const clip = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
@@ -86,6 +92,24 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
   }
   const runIds = () => (existsSync(runsDir) ? readdirSync(runsDir).filter(id => RUN_ID.test(id) && existsSync(join(runsDir, id, 'events.jsonl'))).sort() : [])
 
+  // the project's one name: the one it was given, else from its first run
+  function nameOfProject(p) {
+    if (p.name) return p.name
+    const first = p.runs.map(id => runCard(id)).find(Boolean)
+    if (!first) return p.title || 'Swarm build'
+    return projectName({ given: runMeta(first.id).projectName, brief: first.brief, title: first.autoTitle || first.title })
+  }
+  // a game is a build of its own (kind game); a site with a play page is still a site
+  const pieceOfCard = card => pieceKind({ piece: runMeta(card.id).piece, kind: card.kind, brief: card.brief, pages: card.pages, video: card.video })
+  // a project by its id or its name (not one in Trash)
+  function findIn(data, ref) {
+    const r = String(ref ?? '').trim()
+    if (!r) return null
+    if (data.projects[r] && !data.projects[r].trashed) return r
+    const live = Object.entries(data.projects).filter(([, p]) => !p.trashed)
+    return (live.find(([, p]) => !p.own && sameName(nameOfProject(p), r)) || live.find(([, p]) => sameName(nameOfProject(p), r)) || [])[0] || null
+  }
+
   // every run belongs to exactly one project; new and old runs are placed here, oldest first
   function load() {
     const data = read()
@@ -102,15 +126,23 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       const card = runCard(id)
       if (!card) continue
       const meta = runMeta(id)
-      const want = meta.project && data.projects[meta.project] ? meta.project : null
-      let pid = want
+      // 1. the start request named the project (by id or by name)
+      let pid = meta.project && data.projects[meta.project] ? meta.project : findIn(data, meta.projectName)
+      // 2. the brief's brand is a project's name: "ARES Player Hub — …" joins ARES
+      const brand = meta.projectName || brandOf(card.brief)
+      if (!pid && brand) pid = findIn(data, brand)
+      // 3. the same idea asked again, unless the brief names another brand
       if (!pid) {
         for (const [qid, q] of Object.entries(data.projects)) {
           if (q.trashed || q.own) continue
+          if (brand && !sameName(brand, nameOfProject(q))) continue
           if (q.runs.some(r => alike(runCard(r), card))) { pid = qid; break }
         }
       }
-      if (!pid) { pid = id; data.projects[pid] = { runs: [], title: null, folder: null, trashed: null, made: card.t || Date.now() } }
+      if (!pid) {
+        pid = id
+        data.projects[pid] = { runs: [], name: projectName({ given: meta.projectName, brief: card.brief, title: card.autoTitle || card.title }), title: null, folder: null, trashed: null, made: card.t || Date.now() }
+      }
       const p = data.projects[pid]
       p.runs.push(id)
       p.runs.sort()
@@ -139,12 +171,22 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     const newest = withWork(cards.at(-1))
     const withCover = [...cards].reverse().find(c => c.cover) || null
     const kinds = [...new Set(all.flatMap(kindsOf))]
+    const name = nameOfProject(p)
+    // the project's pieces: one per kind, each its newest run (older runs of a kind are its versions)
+    const byKind = new Map()
+    for (const c of all) byKind.set(pieceOfCard(c), c)
+    const pieces = [...byKind].sort((a, b) => a[1].t - b[1].t).map(([kind, c]) => ({
+      kind, runId: c.id, title: c.title, live: c.deployed || Object.values(c.sites || {}).find(u => /^https:/.test(u)) || null,
+      versions: all.filter(x => pieceOfCard(x) === kind).length
+    }))
     const working = all.find(c => c.live || c.work)
     const live = !!working
     const pct = working ? (working.work?.pct ?? working.progress ?? null) : null
     return {
       id: pid,
-      title: p.title || shortTitle(newest.title),
+      name,
+      title: p.title || name,
+      pieces,
       folder: p.folder || null,
       trashed: p.trashed || null,
       made: p.made || all[0].t,
@@ -161,7 +203,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       progress: pct,
       work: working ? (working.work || { what: 'site', stage: null, pct }) : null,
       count: cards.length,
-      versions: [...cards].reverse().map(withWork).map(c => ({ id: c.id, title: c.title, t: c.t, updated: c.updated, cover: c.cover || null, theme: c.cover ? null : c.theme || null, kinds: c.kinds, state: stateOf(c), live: !!(c.live || c.work), work: c.work, pages: c.pages })),
+      versions: [...cards].reverse().map(withWork).map(c => ({ id: c.id, piece: pieceOfCard(c), title: c.title, t: c.t, updated: c.updated, cover: c.cover || null, theme: c.cover ? null : c.theme || null, kinds: c.kinds, state: stateOf(c), live: !!(c.live || c.work), work: c.work, pages: c.pages })),
       uploads: uploadsOf(pid).length
     }
   }
@@ -183,7 +225,12 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     const at = Date.now()
     let out = {}
     switch (input.op) {
-      case 'rename': for (const id of ids) data.projects[id].title = clip(input.title, 80) || null; break
+      case 'rename': for (const id of ids) {
+        const t = clip(input.title, 80)
+        data.projects[id].title = t || null
+        // the project's one name follows a rename, unless the new title is a screen word
+        if (t && !isScreenName(t)) data.projects[id].name = clip(t, 48)
+      } break
       case 'move': {
         const f = name(input.folder)
         if (f && !data.folders.includes(f)) data.folders.push(f)
@@ -215,7 +262,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
           if (existsSync(p)) writeFileSync(p, readFileSync(p, 'utf8').split(from).join(to))
         }
         if (existsSync(join(projectsDir, ids[0]))) cpSync(join(projectsDir, ids[0]), join(projectsDir, to), { recursive: true })
-        data.projects[to] = { runs: [to], title: `${src.title || shortTitle(runCard(from)?.title)} copy`, folder: src.folder, trashed: null, made: at, own: true }
+        data.projects[to] = { runs: [to], name: src.name || null, title: `${src.title || shortTitle(runCard(from)?.title)} copy`, folder: src.folder, trashed: null, made: at, own: true }
         out.id = to
         break
       }
@@ -321,5 +368,17 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     return RUN_ID.test(pid) && UP_NAME.test(name) && existsSync(p) ? { file: p, type: UP_TYPES[extname(name).slice(1).toLowerCase()] || 'application/octet-stream' } : null
   }
 
-  return { list, get, op, claim, projectOf, folderOp, uploadsOf, saveUpload, uploadOp, uploadFile, uploadsDir, projectsDir }
+  // run id -> { project, name, piece } for every run (the run list, the Feed and deploy names read it)
+  function runIndex() {
+    const { data } = load()
+    const out = new Map()
+    for (const [pid, p] of Object.entries(data.projects)) {
+      const name = nameOfProject(p)
+      for (const id of p.runs) { const c = runCard(id); out.set(id, { project: pid, name, piece: c ? pieceOfCard(c) : 'site' }) }
+    }
+    return out
+  }
+  const resolve = ref => findIn(load().data, ref)
+
+  return { list, get, op, claim, projectOf, runIndex, resolve, folderOp, uploadsOf, saveUpload, uploadOp, uploadFile, uploadsDir, projectsDir }
 }

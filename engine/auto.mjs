@@ -139,7 +139,7 @@ export function autoJob(d) {
 
   async function design() {
     set('design', 'working', 'the planner is writing the sitemap')
-    const run = d.startRun({ brief: job.brief || job.prompt })
+    const run = d.startRun({ brief: job.brief || job.prompt, project: job.project, piece: job.piece })
     job.run = run.id
     push()
     await until(() => {
@@ -319,7 +319,7 @@ export function autoJob(d) {
     push()
   }
 
-  function start({ prompt, games, pack, intake, launch, only }) {
+  function start({ prompt, games, pack, intake, launch, only, project, piece }) {
     prompt = String(prompt || '').trim().slice(0, 1200)
     if (!prompt) throw new Error('say what to make')
     if (job?.state === 'working') throw new Error('auto mode is already running')
@@ -335,6 +335,8 @@ export function autoJob(d) {
     }
     if (launch) steps.push(['launch', '📣 Write the launch kit'])
     job = { state: 'working', launch: !!launch, prompt, brief: p ? packBrief(p, prompt, iv) : prompt, pack: p, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
+      // the project this run joins, by id or name (docs/specs/18-projects.md)
+      project: typeof project === 'string' ? project.slice(0, 64) : null, piece: typeof piece === 'string' ? piece : null,
       steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none') && (!Array.isArray(only) || id === 'design' || only.includes(id))).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
     go().catch(err => { Object.assign(job, { state: 'failed', message: String(err.message || err), end: Date.now() }); push() })

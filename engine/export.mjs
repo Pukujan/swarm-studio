@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { MOTION_CSS, motionPreset, motionSource, swarmMotion } from './motion.mjs'
 import { layoutSource, swarmLayout } from './layout.mjs'
+import { isScreenName, packageName, projectName } from './naming.mjs'
 
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const text = html => String(html || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()
@@ -18,7 +19,8 @@ const pascal = s => {
 const PLACEHOLDER = alt => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><rect width="800" height="600" fill="#ddd"/><text x="400" y="300" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#888">${clip(alt, 40).replace(/[<&]/g, '')}</text></svg>`)}`
 
 // ---------- the build as it stands: theme with edits, pages, sections in order
-export function snapshot(events, given = []) {
+// name: the project's one name (engine/naming.mjs); without it, the brief's brand. Never a page title.
+export function snapshot(events, given = [], { name = '' } = {}) {
   const theme = structuredClone(events.findLast(e => e.type === 'theme') || { vars: {}, fonts: {} })
   for (const e of events) {
     if (e.type !== 'edit') continue
@@ -42,7 +44,7 @@ export function snapshot(events, given = []) {
   const shared = sections.filter(s => s.page === '*')
   const top = shared.filter(s => /nav|header|menu/i.test(`${s.id} ${s.role}`))
   const bottom = shared.filter(s => !top.includes(s))
-  const brand = clip((pages[0]?.title || start.brief || 'Site').split(/\s[—–|:-]\s/)[0], 40)
+  const brand = clip(name && !isScreenName(name) ? name : projectName({ brief: start.brief, title: start.title }), 40)
   return { brief: start.brief || '', brand, theme, pages: pages.map(p => ({ ...p, sections: [...top, ...sections.filter(s => s.page === p.id), ...bottom] })) }
 }
 
@@ -312,7 +314,7 @@ export function seedProject(scaffold, dir, name) {
   cpSync(scaffold, dir, { recursive: true, filter: f => !/[\\/](node_modules|\.git)([\\/]|$)/.test(f) })
   writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - "@swc/core"\n  - esbuild\nallowBuilds:\n  "@swc/core": true\n  esbuild: true\n')
   const pkg = join(dir, 'package.json'), json = JSON.parse(readFileSync(pkg, 'utf8'))
-  writeFileSync(pkg, JSON.stringify({ ...json, name: slug(name) || json.name, pnpm: { ...json.pnpm, onlyBuiltDependencies: ['@swc/core', 'esbuild'] } }, null, 2) + '\n')
+  writeFileSync(pkg, JSON.stringify({ ...json, name: packageName(name, json.name), pnpm: { ...json.pnpm, onlyBuiltDependencies: ['@swc/core', 'esbuild'] } }, null, 2) + '\n')
 }
 
 export function dyadApp(snap, dir, { runId, runDir, scaffold }) {
@@ -467,8 +469,8 @@ ${pageSpec}
 
 const zip = (cwd, name) => new Promise(ok => execFile('zip', ['-qr', `${name}.zip`, name], { cwd }, err => ok(err ? null : join(cwd, `${name}.zip`))))
 
-export async function exportRun({ events, runId, runDir, sections }) {
-  const snap = snapshot(events, sections)
+export async function exportRun({ events, runId, runDir, sections, name: given = '' }) {
+  const snap = snapshot(events, sections, { name: given })
   if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
   const name = slug(snap.brand)
   const base = join(runDir, 'export'), root = join(base, name)
