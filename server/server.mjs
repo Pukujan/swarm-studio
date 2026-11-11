@@ -1263,8 +1263,10 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
         if (!c.cutFailed) live(slot, it, 'checking', { src: peek(it, c.view, 'check') })
         if (!c.ok) {
           live(slot, it, 'sent back', { problems: c.problems })
-          step({ kind: 'setup', text: `sent back the ${it.what}: ${c.problems.join(', ') || 'the cut'}` })
-          const again = await paintArt(choice, guide, { gen: `${it.gen}. ${art.SPRITE_RETRY}; fix: ${c.problems.join('; ')}`, aspect: it.aspect, cutout: true }).catch(() => null)
+          // the key colour was the trouble: paint it again on the other key (magenta ↔ green)
+          const swap = art.keyTrouble(c.problems), gen = swap ? art.swapKey(it.gen) : it.gen
+          step({ kind: 'setup', text: `sent back the ${it.what}: ${c.problems.join(', ') || 'the cut'}${swap ? `; painting it again on ${art.keyOf(gen)}` : ''}` })
+          const again = await paintArt(choice, guide, { gen: `${gen}. ${art.SPRITE_RETRY}; fix: ${c.problems.join('; ')}`, aspect: it.aspect, cutout: true }).catch(() => null)
           if (again?.ok && again.path && existsSync(again.path)) {
             live(slot, it, 'cutting', { src: peek(it, again.path, 'raw2') })
             const c2 = await cutAndCheck(again.path, it, guide)
@@ -1296,7 +1298,8 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
     const ref = [raws.get(it.after), still && join(appDir, 'public', still)].find(f => f && existsSync(f))
     if (!ref) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
     const pick = art.tierFor(choice, { hero: true })
-    const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout: it.layout })], 300000)
+    let layout = it.layout
+    const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout })], 300000)
     let fixes = ''
     for (let go2 = 0; go2 < 2; go2++) {
       live(slot, it, go2 ? 'sent back' : 'painting', go2 ? { problems: fixes.split('; ') } : {})
@@ -1328,7 +1331,10 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
       const problems = [...numbers, ...(look.skipped ? [] : look.problems)]
       if (problems.length && go2 === 0) {
         fixes = problems.join('; ')
-        step({ kind: 'setup', text: `sent back the ${it.what}: ${problems.join(', ')}` })
+        // the key colour was the trouble: the second sheet is painted on the other key
+        const swap = art.keyTrouble(problems)
+        if (swap) layout = art.swapKey(layout)
+        step({ kind: 'setup', text: `sent back the ${it.what}: ${problems.join(', ')}${swap ? `; painting it again on ${art.keyOf(layout)}` : ''}` })
         continue
       }
       // the reviewer still sees a wrong sheet after the second try: the game keeps the still sprite

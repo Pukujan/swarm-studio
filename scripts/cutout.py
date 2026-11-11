@@ -6,7 +6,8 @@ cleared too, and the edge loses the background's tint.
 python3 scripts/cutout.py in.png out.png [--preview check.png]
 python3 scripts/cutout.py --preview-only strip.png check.png
   → prints {"kept", "pockets", "halo", "clipped"}; --preview writes the sprite on dark and
-    on magenta side by side, for the sprite check
+    on light grey side by side, for the sprite check. Figures are painted on a flat key
+    colour (magenta #FF00FF by default, chroma green for pink figures); any flat colour works
 """
 import json
 import sys
@@ -72,6 +73,14 @@ def cutout(src, dst, tol=34, size=512):
                 for x, y in comp:
                     m[x, y] = 0
                 pockets += len(comp)
+    # a key colour (magenta or green) is never on the figure: every patch of it is background,
+    # however deep inside the outline (between hair strands, inside tatters)
+    if is_key(bg):
+        for y in range(h):
+            for x in range(w):
+                if m[x, y] and sum(abs(a - b) for a, b in zip(px[x, y][:3], bg)) <= 190:
+                    m[x, y] = 0
+                    pockets += 1
     # a soft edge, then trim to the figure
     mask = mask.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.8))
     im.putalpha(mask)
@@ -83,6 +92,7 @@ def cutout(src, dst, tol=34, size=512):
             if 0 < a < 250:
                 f = a / 255
                 px[x, y] = tuple(max(0, min(255, round((c - (1 - f) * k) / f))) for c, k in zip((r, g, b), bg)) + (a,)
+    despill(im, bg)
     box = mask.point(lambda v: 255 if v > 24 else 0).getbbox()
     if not box:
         raise SystemExit("nothing left after the cut")
@@ -96,6 +106,36 @@ def cutout(src, dst, tol=34, size=512):
     out.save(dst, "PNG", optimize=True)
     cutout.report = {"kept": round(kept, 3), "pockets": pockets, "halo": halo(out, bg), "clipped": clipped(raw, w, h)}
     return kept
+
+
+def is_key(bg):
+    r, g, b = bg
+    return (r > 180 and b > 180 and g < 90) or (g > 180 and r < 110 and b < 110)
+
+
+def despill(im, bg, band=7):
+    """A key colour (magenta or green) bleeds into the outline: in the outer band only,
+    pull the channels the key lifts back down to the others, so no pink or green rim shows."""
+    r0, g0, b0 = bg
+    magenta = r0 > 180 and b0 > 180 and g0 < 90
+    green = g0 > 180 and r0 < 110 and b0 < 110
+    if not (magenta or green):
+        return
+    px = im.load()
+    w, h = im.size
+    edge = im.getchannel("A").point(lambda v: 255 if v >= 250 else 0).filter(ImageFilter.MinFilter(band * 2 + 1)).load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0 or edge[x, y]:
+                continue
+            if magenta:
+                m = min(r, b)
+                if m > g:
+                    k = m - g
+                    px[x, y] = (r - k, g, b - k, a)
+            elif g > max(r, b):
+                px[x, y] = (r, max(r, b), b, a)
 
 
 def halo(im, bg, tol=34):
@@ -121,20 +161,21 @@ def clipped(box, w, h):
 
 
 def preview(src, dst, size=384):
-    """The cut sprite twice, on dark and on magenta, so leftovers show on either.
-    A wide strip of frames is stacked (dark above magenta); a single sprite sits side by side."""
+    """The cut sprite twice, on dark and on light grey, so leftovers (a magenta or green
+    rim, grey specks) show on either. A wide strip of frames is stacked (dark above grey);
+    a single sprite sits side by side."""
     im = Image.open(src).convert("RGBA")
     wide = im.width > im.height * 1.6
     im.thumbnail((size * 4, size) if wide else (size, size))
     w, h = im.size
     if wide:
         out = Image.new("RGBA", (w + 16, h * 2 + 24), (17, 17, 17, 255))
-        out.paste((255, 0, 200, 255), (0, h + 16, w + 16, h * 2 + 24))
+        out.paste((222, 222, 222, 255), (0, h + 16, w + 16, h * 2 + 24))
         out.alpha_composite(im, (8, 8))
         out.alpha_composite(im, (8, h + 16))
     else:
         out = Image.new("RGBA", (w * 2 + 24, h + 16), (17, 17, 17, 255))
-        out.paste((255, 0, 200, 255), (w + 16, 0, w * 2 + 24, h + 16))
+        out.paste((222, 222, 222, 255), (w + 16, 0, w * 2 + 24, h + 16))
         out.alpha_composite(im, (8, 8))
         out.alpha_composite(im, (w + 16, 8))
     out.convert("RGB").save(dst, "PNG")
