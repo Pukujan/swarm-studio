@@ -1038,7 +1038,9 @@ export function makeProject({ sw, C, root }) {
     P.wander = setTimeout(move, 50)
   }
   function placeCrew(roam = false) {
-    const abs = [...world.querySelectorAll('.ab')], js = jobs(), live = !!P.board?.live
+    // while the pages are being laid out the work is on the pages: the picture slots noted so far
+    // are painted afterwards, so neither the camera nor the crew leave for the art tiles yet
+    const abs = [...world.querySelectorAll('.ab')], live = !!P.board?.live, js = live ? new Map() : jobs()
     // where the work is: the pictures and the page in review, else the newest page of a live build
     const busy = [...new Set([...js.values()].flat())].map(q => world.querySelector(q)).filter(Boolean)
     const pages = abs.filter(a => a.dataset.key?.startsWith('page:'))
