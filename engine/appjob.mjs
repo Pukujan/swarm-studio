@@ -144,6 +144,8 @@ export function titleApp(dir, name) {
 // nameFor(id) -> { name, kind }: the run's project name and piece (docs/specs/18-projects.md)
 // A question to the crew (answered, not queued as a change)
 const QUESTION = /\?\s*$|^(what|what's|whats|why|how|when|where|who|which|is|are|was|were|can|could|does|did|do|will|status)\b/i
+// is a process still running (a Studio server that started a build)
+export const alive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
 export const isQuestion = text => QUESTION.test(String(text || '').trim())
 
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
@@ -162,7 +164,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!last) return { state: 'idle', engineReady: engineReady() }
     // a build another Studio drives (same runs folder): its log still moves, so it is working,
     // with the dev server it reported; this Studio only watches it
-    const elsewhere = last.type === 'app:start' && Date.now() - (events.at(-1)?.t || 0) < 20 * 60e3
+    // (a build that names its Studio's process counts only while that process lives: one killed mid-build stopped)
+    const elsewhere = last.type === 'app:start' && (last.pid ? last.pid !== process.pid && alive(last.pid) : Date.now() - (events.at(-1)?.t || 0) < 20 * 60e3)
     if (elsewhere) {
       const ready = events.slice(events.lastIndexOf(last)).findLast(e => e.type === 'app:ready')
       const stage = steps.findLast(s => /^stage \d+ of \d+/.test(s.text || ''))?.text || steps.at(-1)?.text || ''
@@ -222,7 +225,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     j.asks.push(ask || (kind === 'game' ? 'build the game' : 'make it a working app'))
     jobs.set(id, j)
     const m = modelFor('worker')
-    send(id, 'app:start', { kind, ask: j.asks.at(-1), model: m, fresh, ...(resumeAt ? { resume: resumeAt } : {}) })
+    send(id, 'app:start', { kind, ask: j.asks.at(-1), model: m, fresh, pid: process.pid, ...(resumeAt ? { resume: resumeAt } : {}) })
     // the crew radio: the engine's lead and helpers, said out loud as Hermia and the crew
     const crew = ((readEvents(id) || []).find(e => e.type === 'run:start')?.agents || []).map(a => ({ id: a.id, name: a.name }))
     const queue = []

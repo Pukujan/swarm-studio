@@ -391,6 +391,8 @@ const withTrace = (id, fn) => traced(traceScope(id), fn)
 // What a run is working on right now, if anything: the site build, an app or game build, a film.
 // { what: site | app | game | film, stage, pct (0..1, or null when the job cannot say) }
 let appsNow = null // the app jobs, once loaded, so this can stay synchronous
+// a Studio process that started a build: still running? (a killed one leaves its app:start behind)
+const appAlive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
 function workOf(id) {
   if (current?.id === id && !current.done) {
     const plan = current.events.filter(e => e.type === 'layer:plan').length
@@ -465,7 +467,7 @@ function runCard(id) {
       app: events.some(e => e.type === 'app:ready' || e.type === 'app:done'),
       planned: events.filter(e => e.type === 'layer:plan').length,
       // the last app build's outcome (as the app jobs read it): working (or stopped), built or failed
-      build: (b => b?.type === 'app:failed' && b.message === 'stopped' ? 'stopped' : ({ 'app:start': 'working', 'app:done': 'built', 'app:failed': 'failed' })[b?.type] || null)(events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))),
+      build: (b => (b?.type === 'app:failed' && b.message === 'stopped') || (b?.type === 'app:start' && b.pid && !appAlive(b.pid)) ? 'stopped' : ({ 'app:start': 'working', 'app:done': 'built', 'app:failed': 'failed' })[b?.type] || null)(events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))),
       // how far a game build got, from its own steps (another Studio server may be running it)
       gameAt: events.some(e => e.type === 'game:spec') ? gameProgress(events.filter(e => e.type === 'app:step').map(e => e.step)) : null,
       deployed: events.findLast(e => e.type === 'app:deployed' && e.url)?.url || null,

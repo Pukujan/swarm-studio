@@ -47,3 +47,18 @@ test('a big game waiting after a slice reads back as paused, with its slice for 
     assert.deepEqual(s.slice, slice)
   } finally { rmSync(runsDir, { recursive: true, force: true }) }
 })
+
+test('a build whose Studio process is gone reads as stopped at once, not as building elsewhere', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'runs-'))
+  try {
+    const dead = 2 ** 22 + 12345 // above any pid macOS or Linux hands out
+    const events = log(0).map(e => e.type === 'app:start' ? { ...e, pid: dead } : e)
+    const jobs = appJobs({ runsDir, record() {}, broadcast() {}, readEvents: () => events, provider: () => ({}), modelFor: () => '' })
+    assert.notEqual(jobs.state('r1').elsewhere, true)
+    assert.equal(jobs.state('r1').state, 'stopped')
+    // one whose process still runs (here: this test's own parent) is still taken for running
+    const live = log(0).map(e => e.type === 'app:start' ? { ...e, pid: process.ppid } : e)
+    const jobs2 = appJobs({ runsDir, record() {}, broadcast() {}, readEvents: () => live, provider: () => ({}), modelFor: () => '' })
+    assert.equal(jobs2.state('r1').elsewhere, true)
+  } finally { rmSync(runsDir, { recursive: true, force: true }) }
+})

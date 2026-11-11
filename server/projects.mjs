@@ -211,8 +211,10 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     // a version is working while it or one of its parts is
     const workOf = c => c.work || all.find(x => x.from === c.id && x.work)?.work || null
     const withWork = c => ({ ...c, work: workOf(c), kinds: [...new Set([...kindsOf(c), ...all.filter(x => x.from === c.id).flatMap(kindsOf)])] })
-    const newest = withWork(cards.at(-1))
-    const withCover = [...cards].reverse().find(c => c.cover) || null
+    // the version being built leads the card: its status, cover and the one a click opens
+    const busyCard = [...cards].reverse().find(c => c.live || workOf(c))
+    const newest = withWork(busyCard || cards.at(-1))
+    const withCover = (busyCard?.cover && busyCard) || [...cards].reverse().find(c => c.cover) || null
     const kinds = [...new Set(all.flatMap(kindsOf))]
     const name = nameOfProject(p)
     // the project's pieces: one per kind, each its newest run (older runs of a kind are its versions)

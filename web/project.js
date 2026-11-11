@@ -25,7 +25,7 @@ export function makeProject({ sw, C, root }) {
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
     sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: store.get('project.follow', true), followSig: '', tool: 'move', thumbs: new Map(),
-    standin: new Map(), landed: new Map(), pendingKeys: new Set(), tick: 0
+    standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0
   }
 
   root.className = 'project'
@@ -99,6 +99,11 @@ export function makeProject({ sw, C, root }) {
     P.board = board
     // a site and the game made from it are two runs of one version: the rooms switch between them
     C.pair = board?.game?.run ? { site: run, game: board.game.run } : board?.kind === 'game' ? { site: null, game: run } : { site: run, game: null }
+    // a game still being built opens on its build (art painting, code, play test), once per open:
+    // going back up from there shows the project
+    const building = board?.kind === 'game' ? board.work || board.busy : board?.game?.work
+    if (building && C.pair.game && !P.toGame.has(run) && C.mode === 'project') { P.toGame.add(run); C.toGame(); return }
+    P.toGame.add(run)
     P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || null
     // back from a site's game: the project shows the site's version, which holds the game
     const up = P.proj?.parts?.[run]
