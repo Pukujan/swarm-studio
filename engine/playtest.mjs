@@ -61,7 +61,7 @@ export async function playtest(url, opts = {}) {
   const r = await playtestRun(url, opts, box)
   return { ...r, ...(box.filmed || {}) }
 }
-async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null } = {}, box = {}) {
+async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false } = {}, box = {}) {
   let film = async () => ({}), vdir = null
   const pw = await loadPlaywright()
   if (!pw) return { ok: true, skipped: 'no browser for the play test' }
@@ -89,12 +89,18 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     })
     // Hermes shows the Studio, and so the game, in a sandboxed frame (scripts only, origin null):
     // play it the same way, so a game that only works in a plain tab fails here too
+    // secure: the outer page sits on the game's own origin first, so the frame is a secure context
+    // (a Godot web export refuses to start without one; Hermes and the feed are secure parents)
+    if (secure) await page.goto(new URL('/__frame', url).href, { timeout }).catch(() => {})
     await page.setContent(`<!doctype html><body style="margin:0;background:#000"><iframe sandbox="allow-scripts allow-forms" src="${String(url).replace(/"/g, '&quot;')}" style="display:block;width:100vw;height:100vh;border:0"></iframe>`, { waitUntil: 'load', timeout })
     const g = await (await page.$('iframe')).contentFrame()
     const why = () => [...new Set([...errors, ...blocked])].slice(0, 3).join(' | ')
     const canvas = await g.waitForSelector('canvas', { timeout: 15000 }).catch(() => null)
     if (!canvas) return { ok: false, problem: `No game canvas appeared within 15 s of opening the page inside a sandboxed frame (allow-scripts, no same origin), the way Hermes shows it.${why() ? ` Errors: ${why()}` : ''}${blocked.length ? ' Storage (localStorage, sessionStorage, IndexedDB) throws in a sandboxed frame: wrap every use in try/catch and fall back to memory.' : ''}` }
     await page.waitForTimeout(1200)
+    // a Godot export that cannot start shows its own notice over the canvas
+    const notice = await g.evaluate(() => { const n = document.getElementById('status-notice'); return n && n.offsetParent !== null ? n.innerText.trim() : '' }).catch(() => '')
+    if (notice) return { ok: false, problem: `The Godot web export did not start: ${notice.replace(/\s+/g, ' ').slice(0, 300)}` }
     const png = await page.screenshot({ type: 'png' }).catch(() => null)
     if (png && await blank(page, png)) return { ok: false, problem: `The game's screen is blank: one flat colour about a second after it opened, with no title, text or scene drawn.${why() ? ` Errors: ${why()}` : ''} Make the title screen draw straight away (title, start button, a scene behind), and check the canvas is sized to its container and the render loop runs.` }
     if (shot) await page.screenshot({ path: shot, type: 'jpeg', quality: 72 }).catch(() => {})

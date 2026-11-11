@@ -99,3 +99,17 @@ test('a sheet prompt keeps its layout and frames ahead of the style, with no com
   assert.match(p, /no companions/)
   assert.ok(p.length <= 1400)
 })
+
+test('a key-colour problem swaps the key for the second try', async () => {
+  const { keyTrouble, swapKey, keyOf } = await import('../engine/artdirect.mjs')
+  const { SPRITE_GROUND: spriteGround0, sheetList } = await import('../engine/game.mjs')
+  const spriteGround = () => spriteGround0, sheetLayout = () => sheetList({ hero: 'Mika, a courier in a yellow coat' })[0].layout
+  assert.equal(keyTrouble(['magenta rim around the hair']), true)
+  assert.equal(keyTrouble(['background left around the figure']), true)
+  assert.equal(keyTrouble(['frame 3 cut off at the edge']), false)
+  assert.match(swapKey(spriteGround()), /#00FF00/)
+  assert.doesNotMatch(swapKey(spriteGround()), /#FF00FF/)
+  assert.equal(keyOf(swapKey(swapKey(sheetLayout()))), 'magenta')
+  assert.match(swapKey('A figure'), /#00FF00/)
+  assert.doesNotMatch(swapKey(spriteGround()), /\bmagenta\b/)
+})

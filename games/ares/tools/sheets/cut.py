@@ -1,9 +1,10 @@
 """Cut a painted 3x2 sprite sheet into a strip of frames the game plays, and check it.
 
-    python cut.py sheet.png out.webp            # a character sheet on flat grey
+    python cut.py sheet.png out.webp            # a character sheet on flat magenta (or green, or grey)
     python cut.py fx.png out.webp --fx          # an effect sheet on black (drawn additive)
 
-Character sheets: the grey is keyed out from the corner colour, the inside of the
+Character sheets: the flat key colour (magenta #FF00FF by default) is keyed out from the
+corner colour, its spill is pulled out of the outline, the inside of the
 body is made solid (only the edges stay soft), and each painted shape belongs to
 the cell holding its centre, so a long sword arc or a trailing sleeve that crosses
 into the next cell stays with its own frame instead of being chopped. Frames keep
@@ -39,7 +40,32 @@ def key_alpha(a: np.ndarray) -> np.ndarray:
     holes = nd.binary_fill_holes(body) & ~body
     solid = body | (holes & (d > 6))
     core = nd.binary_erosion(solid, iterations=2)
-    return np.where(core, 255, al).astype(np.uint8)
+    out = np.where(core, 255, al).astype(np.uint8)
+    # a key colour (magenta or green) is never on the figure: wherever it shows, even in a
+    # gap the closing filled (between fur, strands or robe tatters), it is background
+    if is_key(bg):
+        out = np.minimum(out, np.clip((d - 70) * 4.5, 0, 255)).astype(np.uint8)
+    return out
+
+
+def is_key(bg) -> bool:
+    r, g, b = bg
+    return (r > 180 and b > 180 and g < 90) or (g > 180 and r < 110 and b < 110)
+
+
+def despill(a: np.ndarray, al: np.ndarray) -> np.ndarray:
+    """Magenta or green from the key colour bleeds into the outline: in the band near the
+    clear part only, pull the channels it lifts back down, so no coloured rim shows."""
+    bg = np.median(a[:20, :20].reshape(-1, 3), 0)
+    band = ~nd.binary_erosion(al >= 250, iterations=7) & (al > 0)
+    out = a.copy()
+    r, g, b = out[..., 0], out[..., 1], out[..., 2]
+    if bg[0] > 180 and bg[2] > 180 and bg[1] < 90:
+        k = np.clip(np.minimum(r, b) - g, 0, None) * band
+        out[..., 0], out[..., 2] = r - k, b - k
+    elif bg[1] > 180 and bg[0] < 110 and bg[2] < 110:
+        out[..., 1] = np.where(band, np.minimum(g, np.maximum(r, b)), g)
+    return out
 
 
 def cut(path: str, fx: bool = False):
@@ -47,6 +73,8 @@ def cut(path: str, fx: bool = False):
     H, W = a.shape[:2]
     cw, ch = W // COLS, H // ROWS
     al = np.clip(a.max(2) * 2, 0, 255).astype(np.uint8) if fx else key_alpha(a)
+    if not fx:
+        a = despill(a, al)
     lab, n = nd.label(al > 8, structure=np.ones((3, 3)))
     idx = np.arange(1, n + 1)
     if n:
