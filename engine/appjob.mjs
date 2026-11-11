@@ -14,9 +14,10 @@ import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
-import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk } from './game.mjs'
+import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk, artBrief, viewOf } from './game.mjs'
+import { takeAsks, askedBefore, keepAsked, askBrief, ASKS_PER_STAGE } from './artask.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
-import { godotFirst, isGodotFirst, seedGodot, godotStagePrompt, exportWeb, serveStatic, webBuild } from './godotfirst.mjs'
+import { godotFirst, isGodotFirst, seedGodot, syncGodotArt, godotArtBrief, godotStagePrompt, exportWeb, serveStatic, webBuild } from './godotfirst.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
@@ -357,7 +358,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // to the next stage first; the last one gets a fix turn of its own.
   async function buildBig(j, id, dir, spec, engineCall, model, step, brand, input, from = 0) {
     let art = []
+    // the pictures asked for during an earlier run of this build come back with the first pass
+    const before = askedBefore(dir)
     const items = [...artList(spec), ...sheetList(spec)]
+    for (const it of before) if (!items.some(x => x.id === it.id)) items.push(it)
     if (paint && input.art !== false) {
       step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
       try { art = await paint(id, spec, items, dir, step, j.controller.signal) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
@@ -379,6 +383,36 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       step({ kind: 'setup', text: `building it in Godot 4: ${n.length} pictures copied into the project` })
     }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
+    // art asked for mid-build (engine/artask.mjs): only with painting on and the image model not out of quota
+    let askedN = before.length
+    const canAsk = () => !!(paint && input.art !== false && !art.stopped && ASKS_PER_STAGE)
+    const paintAsks = async i => {
+      if (!canAsk()) return null
+      const { items: asks, refused } = takeAsks(dir, spec, { have: art, asked: askedN })
+      for (const r of refused) step({ kind: 'setup', text: `left out the asked picture "${r.what}": ${r.why}`, ok: false })
+      if (!asks.length) return null
+      askedN += asks.length
+      step({ kind: 'setup', text: `stage ${i + 1} asked for ${asks.length} picture${asks.length === 1 ? '' : 's'}: ${asks.map(a => a.what).join(', ')}` })
+      keepAsked(dir, asks)
+      let more = []
+      try { more = await paint(id, spec, asks, dir, step, j.controller.signal, { have: art }) } catch (err) { step({ kind: 'setup', text: `the asked pictures could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
+      if (j.controller.signal.aborted) throw new Error('stopped')
+      const stopped = more.stopped || art.stopped
+      art = [...art, ...more]
+      if (stopped) art.stopped = stopped
+      j.result.asked = (j.result.asked || 0) + more.length
+      if (!more.length) return null
+      if (godot) syncGodotArt(dir)
+      // the crew swaps its stand-ins for the new pictures while the slice is still fresh
+      const brief = godot ? godotArtBrief(more, viewOf(spec)) : artBrief(more)
+      try {
+        return await engineCall(`The pictures you asked for in slice ${i + 1} are painted:\n${brief}\n\nUse them in place of the stand-ins you drew for them, in the game as it is now. Change nothing else.${godot ? ' Touch nothing outside ports/godot/.' : ' Finish with the typecheck and build passing.'}`, 2)
+      } catch (err) {
+        if (j.controller.signal.aborted) throw err
+        step({ kind: 'setup', text: `the turn to use the asked pictures stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
+        return null
+      }
+    }
     let failed = from ? 'the last build stopped partway through this stage: some of its changes may already be in the code (git status shows them). Finish them or redo them.' : '', last = null
     // the slices are the game's own, planned with its spec from the person's answers and picks
     const stages = stagesFor(spec)
@@ -391,13 +425,16 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const heard = takeTold(j)
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { last = await engineCall((godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') }), input.turns || st.turns); break } catch (err) {
+        try { last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); break } catch (err) {
           if (j.controller.signal.aborted) throw err
           step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
           if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
           failed = 'the last try at this stage stopped partway: some of its changes may already be in the code (git status shows them). Finish them or redo them.'
         }
       }
+      // the pictures this slice asked for: painted now, then one short turn to use them
+      const asked = await paintAsks(i)
+      if (asked) last = { ...asked, turns: (last?.turns || 0) + (asked.turns || 0), commits: (last?.commits || 0) + (asked.commits || 0) }
       if (godot) {
         const g = await godotStage(id, j, dir, engineCall, step)
         last = { ...last, ok: g.ok, error: g.error }

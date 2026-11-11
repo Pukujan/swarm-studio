@@ -269,8 +269,12 @@ export function artList(spec, { max = 26 } = {}) {
   for (const it of (spec.items || []).slice(0, 9)) if (it?.name) items.push({ id: `item-${slug(it.name)}`, kind: 'icon', aspect: 'square', what: `icon for ${it.name}`, gen: `A single emblem for "${it.name}": ${it.effect || ''}. One bold symbol centred on a plain dark circle, readable when small` })
   for (const pl of (spec.places || []).slice(0, 6)) if (pl?.name) items.push({ id: `place-${slug(pl.name)}`, kind: 'backdrop', aspect: 'landscape', what: `backdrop for ${pl.name}`, gen: `${shot(where, `${pl.name}: ${pl.what || ''}`)}. ${NO_PEOPLE}` })
   // the hero, enemies and boss as sprites: one full figure each, cut out of a flat background after painting
-  const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. ${viewOf(spec) === 'side' ? 'Side view facing right, mid-stride' : 'Standing, facing the viewer'}, head to feet in frame with space around, bold clean outline. ${keyGround(look || who)}` })
-  if (spec.hero) sprite('hero', String(spec.hero).split(/[,—.;]/)[0].trim(), String(spec.hero))
+  const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, ...(look ? { look: String(look).slice(0, 300) } : {}), gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. ${viewOf(spec) === 'side' ? 'Side view facing right, mid-stride' : 'Standing, facing the viewer'}, head to feet in frame with space around, bold clean outline. ${keyGround(look || who)}` })
+  if (spec.hero) sprite('hero', String(spec.hero).split(/[,—.;]/)[0].trim(), heroLook(spec))
+  // a companion named in the hero line ("runs with her cat Kumo") is a sprite of its own,
+  // painted after the hero with the hero's picture as its style reference
+  const pal = companionOf(spec)
+  if (pal) { sprite(pal.id, `${pal.name}, the hero's ${pal.kind}`, pal.look); Object.assign(items.at(-1), { ref: 'sprite-hero', companion: true }) }
   for (const e of (spec.enemies || []).slice(0, 5)) if (e?.name) sprite(slug(e.name), e.name, e.look)
   if (spec.boss?.name) {
     sprite('boss', spec.boss.name, spec.boss.look)
@@ -289,32 +293,79 @@ export function artList(spec, { max = 26 } = {}) {
 // A side-view game (a runner, a platformer) gets side-view moves; the rest face the viewer.
 export const SHEET_LAYOUT = 'Six frames in a 3 by 2 grid, read left to right, top to bottom. In every frame the character is large, about 75 percent of the grid cell height, centred, with a clear margin of empty background on every side, so hair, clothes and anything held stay fully inside its own cell and nothing touches a cell edge. Crisp, clean hair strands and clothes with solid ink outlines, no wispy loose hairs. Same character, same outfit, same size in every frame, feet on one shared baseline, the flat key colour background named below, no text, no borders, no grid lines, no extra people, no floor shadow'
 export const sideView = spec => spec?.view === 'side' || /runner|platform|side.?scroll|parkour|\bjump|\bslide/i.test([spec?.pitch, spec?.loop, spec?.controls, spec?.genre, spec?.answers?.type, ...(spec?.skills || [])].join(' '))
+// A move's six frames, by name: the side-view moves, the front-view ones, and a companion's
+// (an animal runs on four legs, a drone or bird flies)
+export const MOVES = {
+  run: { fps: 12, loop: true, frames: 'a side-view run cycle facing right in six steps (contact, down, passing, up, contact on the other leg, passing), legs and arms clearly in a new place each frame' },
+  jump: { fps: 10, frames: 'side view facing right: crouch before the jump, take-off pushing up, rising with knees tucked, top of the jump, falling with legs reaching down, landing crouch' },
+  slide: { fps: 10, frames: 'side view facing right: starting to drop, leaning back into a slide, low feet-first slide with one hand on the ground, holding the slide, still sliding, getting back up' },
+  climb: { fps: 10, loop: true, frames: 'climbing a wall seen from the side: reaching up with one hand, pulling up, the other hand reaching, pulling up, grabbing a ledge, hauling up over the top' },
+  fix: { fps: 8, frames: 'side view facing right: kneeling at a repair, reaching with a tool, turning it, arm raised with effort, checking the work, standing up pleased' },
+  hurt: { fps: 10, frames: 'side view facing right: hit and knocked back, stumbling backwards, arms flung out, half falling, catching balance, back on the feet' },
+  idle: { fps: 6, loop: true, frames: 'side view facing right, standing: breathing in, breathing out, a small shift of weight, a glance, breathing in, breathing out' },
+  walk: { fps: 10, loop: true, frames: 'facing the viewer: 1 and 2 standing and breathing, 3 to 6 a walk cycle' },
+  action: { fps: 12, frames: 'facing the viewer: 1 wind-up, 2 attack, 3 follow-through, 4 dash, 5 hurt, 6 knocked down' }
+}
+const FOUR_LEGS = /\b(cat|kitten|dog|puppy|pup|fox|wolf|ferret|rabbit|bunny|otter|raccoon|tanuki|hamster|mouse|rat|tiger|lion|horse|pony|deer|boar|bear|panda|lizard|dragon|drake)\b/i
+const FLIES = /\b(bird|crow|raven|owl|parrot|hawk|drone|bat|fairy|wisp|spirit)\b/i
+export const companionRun = kind => FLIES.test(kind)
+  ? { fps: 12, loop: true, frames: 'side view facing right, flying along: wings or rotors up, coming down, down, coming up, up, a small glide, each frame clearly different' }
+  : FOUR_LEGS.test(kind)
+    ? { fps: 12, loop: true, frames: 'a side-view four-legged run cycle facing right in six steps (gathered, front paws reaching, stretched out, front paws landing, back paws pushing, gathered again), paws clearly in a new place each frame' }
+    : MOVES.run
+
+// The hero's companion, when the hero line (or the spec) names one: "runs with her cat Kumo",
+// "with Rust-8, a small robot", "a fox called Ember". → { id, name, kind, look, at } or null
+const PAL = 'cat|kitten|dog|puppy|pup|fox|wolf|ferret|rabbit|bunny|otter|raccoon|tanuki|hamster|mouse|rat|bird|crow|raven|owl|parrot|hawk|bat|dragon|drake|lizard|robot|droid|drone|bot|mech|spirit|familiar|golem|monkey|fairy|wisp|companion|sidekick|partner|pet'
+export function companionOf(spec) {
+  const c = spec?.companion
+  if (c?.name) { const name = String(c.name).slice(0, 40); return { id: slug(name), name, kind: String(c.kind || c.what || 'companion').slice(0, 40), look: String(c.look || c.what || name).slice(0, 240), at: -1 } }
+  const s = String(spec?.hero || '')
+  const clause = at => s.slice(at).split(/[;.]/)[0].slice(0, 240).trim()
+  let m = s.match(new RegExp(`\\b(?:her|his|their|its)\\s+((?:(?!with\\b|and\\b|who\\b|that\\b)[a-z-]+\\s+){0,3}?)(${PAL})\\s+(?:named\\s+|called\\s+)?([A-Z][\\w-]*)`))
+    || s.match(new RegExp(`\\b(?:a|an)\\s+((?:(?!with\\b|and\\b|who\\b|that\\b)[a-z-]+\\s+){0,3}?)(${PAL})\\s+(?:named|called)\\s+([A-Z][\\w-]*)`))
+  if (m) return { id: slug(m[3]), name: m[3], kind: `${m[1]}${m[2]}`.trim(), look: clause(m.index), at: m.index }
+  m = s.match(/\b(?:with|alongside|followed by|accompanied by)\s+([A-Z][\w-]*(?:\s[A-Z][\w-]*)?),\s+(?:a|an|her|his|their)\s+([^;.]{3,120})/)
+  if (m) { const kind = (m[2].match(new RegExp(`\\b(${PAL})\\b`, 'i')) || [])[1] || 'companion'; return { id: slug(m[1]), name: m[1], kind, look: `${m[1]}, ${clause(m.index + m[0].indexOf(', ') + 2)}`, at: m.index } }
+  return null
+}
+// The hero alone, without the companion in the same line: what the hero's sprite and sheets paint
+export function heroLook(spec) {
+  const s = String(spec?.hero || '')
+  const pal = companionOf(spec)
+  const cut = pal && pal.at > 0 ? s.slice(0, pal.at).replace(/[\s,;]*(?:\b(?:who|that)\s+\w+\s+)?\b(?:with|and|alongside|followed by|accompanied by)?\s*$/i, '') : s
+  return cut.split(/[;,]\s*(?:with|and her|and his|followed by|accompanied by)\b/i)[0].replace(/[\s,;]+$/, '').slice(0, 320)
+}
+
+// One animated 3×2 sheet of a figure: who it is, the sprite it is painted over, and the move
+export function sheetItem(spec, { owner = 'hero', who, look, move, after = `sprite-${owner}`, what }) {
+  const key = keyFor(look)
+  return {
+    id: `sheet-${owner}-${move.name}`, kind: 'sheet', aspect: 'landscape', after, sheet: move.name, fps: move.fps, loop: !!move.loop, frames: move.frames,
+    layout: `${SHEET_LAYOUT}. The background is ${key.name} (${key.hex}), flat chroma key, edge to edge, and no ${key.name} on the character`,
+    what: what || `${move.name} sheet of ${who}`,
+    look: String(look || who).slice(0, 320),
+    gen: `${who} ${move.name} sheet`
+  }
+}
+
 export function sheetList(spec) {
   if (!spec?.hero) return []
   const who = String(spec.hero).split(/[,—.]/)[0].trim()
   // a side-view game: one sheet per move, painted large (a figure painted small and scaled up
   // comes out with rough hair and edges); climbing and repairs get their own when the game has them
   const text = [spec.pitch, spec.loop, spec.controls, spec.genre, ...(spec.skills || []), ...(spec.stages || []).map(x => `${x?.name || ''} ${x?.goal || x?.what || ''}`)].join(' ')
-  const sheets = sideView(spec)
-    ? [
-        { name: 'run', fps: 12, loop: true, frames: 'a side-view run cycle facing right in six steps (contact, down, passing, up, contact on the other leg, passing), legs and arms clearly in a new place each frame' },
-        { name: 'jump', fps: 10, frames: 'side view facing right: crouch before the jump, take-off pushing up, rising with knees tucked, top of the jump, falling with legs reaching down, landing crouch' },
-        { name: 'slide', fps: 10, frames: 'side view facing right: starting to drop, leaning back into a slide, low feet-first slide with one hand on the ground, holding the slide, still sliding, getting back up' },
-        ...(/climb|ladder|vertical|scal(e|ing) (a |the )?wall|wall.?run|ledge/i.test(text) ? [{ name: 'climb', fps: 10, loop: true, frames: 'climbing a wall seen from the side: reaching up with one hand, pulling up, the other hand reaching, pulling up, grabbing a ledge, hauling up over the top' }] : []),
-        ...(/repair|fix|relay|antenna|wrench|mend/i.test(text) ? [{ name: 'fix', fps: 8, frames: 'side view facing right: kneeling at a repair, reaching with a tool, turning it, arm raised with effort, checking the work, standing up pleased' }] : []),
-        { name: 'hurt', fps: 10, frames: 'side view facing right: hit and knocked back, stumbling backwards, arms flung out, half falling, catching balance, back on the feet' }
-      ]
-    : [
-        { name: 'walk', fps: 10, loop: true, frames: 'facing the viewer: 1 and 2 standing and breathing, 3 to 6 a walk cycle' },
-        { name: 'action', fps: 12, frames: 'facing the viewer: 1 wind-up, 2 attack, 3 follow-through, 4 dash, 5 hurt, 6 knocked down' }
-      ]
-  return sheets.map(s => ({
-    id: `sheet-hero-${s.name}`, kind: 'sheet', aspect: 'landscape', after: 'sprite-hero', sheet: s.name, fps: s.fps, loop: !!s.loop, frames: s.frames, layout: `${SHEET_LAYOUT}. The background is ${keyFor(spec.hero).name} (${keyFor(spec.hero).hex}), flat chroma key, edge to edge, and no ${keyFor(spec.hero).name} on the character`,
-    what: `${s.name} sheet of ${who}`,
-    // the figure alone: a companion named in the hero line ("with Rust-8, …") is left out
-    look: String(spec.hero).split(/[;,]\s*(?:with|and her|and his|followed by|accompanied by)\b/i)[0].slice(0, 320),
-    gen: `${who} ${s.name} sheet`
-  }))
+  const side = sideView(spec)
+  const names = side
+    ? ['run', 'jump', 'slide', ...(/climb|ladder|vertical|scal(e|ing) (a |the )?wall|wall.?run|ledge/i.test(text) ? ['climb'] : []), ...(/repair|fix|relay|antenna|wrench|mend/i.test(text) ? ['fix'] : []), 'hurt']
+    : ['walk', 'action']
+  // the figure alone: a companion named in the hero line ("with Rust-8, …") is left out
+  const look = heroLook(spec)
+  const out = names.map(name => sheetItem(spec, { who, look, move: { name, ...MOVES[name] } }))
+  // the companion keeps up with the hero: its own run (or walk) sheet, over its own sprite
+  const pal = companionOf(spec)
+  if (pal) out.push(sheetItem(spec, { owner: pal.id, who: pal.name, look: pal.look, move: side ? { name: 'run', ...companionRun(pal.kind) } : { name: 'walk', ...MOVES.walk }, what: `${side ? 'run' : 'walk'} sheet of ${pal.name}, the hero's ${pal.kind}` }))
+  return out
 }
 
 // The fighters stand on the backdrops, so a backdrop holds no figures of its own.
@@ -336,7 +387,8 @@ ${files.map(f => f.kind === 'sheet' && f.cell
     ? `  - ${f.file}: ${f.what}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px (frame n starts at x = n×${f.cell[0]}, from 0), played at ${f.fps} fps${f.loop ? ', looping' : ', one frame per move'}. The frames: ${f.frames}`
     : `  - ${f.file}: ${f.what}`).join('\n')}
   Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for. Keep the hero big and easy to read: about a sixth of the screen height in a top-down or front view and about a third in a side-view game (never under 96 px), enemies sized to match, the boss about twice the hero; drawn shapes only for projectiles, effects and stand-ins. Backdrops (place-*.png) are the stages or areas they are named for, behind the action (a side-view game scrolls them with the camera, with a slower layer for depth; darken them a little so the characters read); portraits sit beside the dialogue box; item icons sit on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
-  The hero's sheets (sheet-hero-*.webp) are its animation: cut each strip into frames (Phaser: load.spritesheet with that frame size; Pixi: Texture frames from the strip), play the looping one while it moves and the move frames for each action, scaled so the figure is as tall as sprite-hero would be, and keep sprite-hero only for stills. These frames replace the bob and lean tweens for the hero; flip it to face left.` : ''}`
+  The hero's sheets (sheet-hero-*.webp) are its animation: cut each strip into frames (Phaser: load.spritesheet with that frame size; Pixi: Texture frames from the strip), play the looping one while it moves and the move frames for each action, scaled so the figure is as tall as sprite-hero would be, and keep sprite-hero only for stills. These frames replace the bob and lean tweens for the hero; flip it to face left.` : ''}${files.some(f => f.companion || /^art\/sheet-(?!hero-)/.test(f.file)) ? `
+  The hero's companion has its own sprite and run sheet (named for it above): it follows the hero a little behind, at about half the hero's height, playing its sheet while it moves.` : ''}`
 }
 
 // The engine's prompt for one stage. The first stage also carries how to build
