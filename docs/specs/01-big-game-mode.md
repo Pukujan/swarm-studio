@@ -61,3 +61,7 @@ Auto's games step (`GAMES_ASK` in `engine/auto.mjs`) always builds three small m
 ## Out of scope
 
 - Multiplayer, saved runs that sync between devices, a level editor, and 3D (see [04-3d.md](04-3d.md)).
+
+## Update: no fixed blueprint (Studio "Big game")
+
+The Studio's own Big game (engine/game.mjs) no longer forces every big game into an action roguelike (hub, rooms, weapons, boons, boss). The spec writer keeps the genre, goal and length the person picked, names only the parts that kind of game needs (`places`, `enemies`, `items`, an optional `boss` and `characters`), says how the camera sees play (`view`: side, top-down or front), and plans its own 3–6 build slices (`stages`), each playable. `stagesFor(spec)` reads them (plain genre-neutral slices when a spec has none); the art follows the view (side-on backdrops for a runner); every `app:stage` event carries the slice's name, the slice count and the bots' filmed play test (`big.clip`), so the person sees each slice before the next one starts.

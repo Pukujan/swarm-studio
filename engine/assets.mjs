@@ -12,9 +12,9 @@ const cap = s => s.charAt(0).toUpperCase() + s.slice(1)
 // a game picture's id ("portrait-lokee", "boon-applause-heal", "room-hub") as a name: "Lokee portrait"
 export function artName(id) {
   const w = words(id)
-  const m = w.match(/^(portrait|boon|room)\s+(.+)$/i)
+  const m = w.match(/^(portrait|boon|room|place|item)\s+(.+)$/i)
   if (!m) return cap(w || 'Art')
-  const kind = { portrait: 'portrait', boon: 'boon', room: 'room' }[m[1].toLowerCase()]
+  const kind = { portrait: 'portrait', boon: 'boon', room: 'room', place: 'backdrop', item: 'icon' }[m[1].toLowerCase()]
   return `${cap(m[2])} ${kind}`
 }
 
