@@ -1822,3 +1822,12 @@ body.view-video .video-pop .vmin { display: none; }
 .playclip .pc-x svg { width: 14px; height: 14px; }
 .playclip video { width: 100%; aspect-ratio: 16 / 10; border-radius: 8px; background: var(--void); display: block; }
 @media (max-width: 700px) { .playclip { width: calc(100% - 28px); } }
+/* the game's questions and spec as a card in the left chat (not an overlay) */
+.feed .game-pop.in-chat { grid-area: auto; z-index: auto; overflow: visible; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: block; animation: in .25s ease-out; flex: none; }
+.feed .game-pop.in-chat > * { max-width: none; }
+.feed .game-pop.in-chat h3 { font-size: 16px; margin: 6px 0 12px; }
+.feed .game-pop.in-chat .gspec h2 { font-size: 18px; }
+.feed .game-pop.in-chat .gchips button { padding: 6px 11px; font-size: 12.5px; }
+.feed .game-pop.in-chat dl { grid-template-columns: 72px 1fr; font-size: 12.5px; }
+.feed .game-pop.in-chat .gfoot { flex-wrap: wrap; }
+.feed .game-pop.in-chat .gbody { padding: 16px 6px; }
