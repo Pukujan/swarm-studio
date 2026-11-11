@@ -175,3 +175,17 @@ test('one idea is one card: the same name, or that name plus more words, folds i
     assert.equal(projects.length, 3)
   } finally { w.cleanup() }
 })
+
+test('the version being built leads the card, even when a newer try exists', () => {
+  const w = world()
+  try {
+    const brief = 'Rooftop Signal: a rooftop runner game'
+    w.add('2026-11-11T12-45-22-265Z', { title: 'Rooftop Signal', brief, kind: 'game', game: true, pages: 0, build: 'working', cover: '/img/a/game-title.webp', work: { what: 'game', progress: { stage: [1, 4] } } }, { projectName: 'Rooftop Signal' })
+    w.add('2026-11-11T13-00-28-617Z', { title: 'Rooftop Signal Art Test', brief, kind: 'game', game: true, pages: 0, build: 'stopped', cover: '/img/b/game-title.webp' }, { projectName: 'Rooftop Signal' })
+    const [p] = w.p.list().projects
+    assert.equal(p.count, 2)
+    assert.equal(p.head, '2026-11-11T12-45-22-265Z')
+    assert.equal(p.state.status, 'Building · stage 1 of 4')
+    assert.equal(p.cover, '/img/a/game-title.webp')
+  } finally { w.cleanup() }
+})

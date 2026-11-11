@@ -276,6 +276,7 @@ flowchart LR
   FIL --> UP["+ → New page, Upload files; or drop from Finder"]
   STG --> DD["Double-click a page → Design deck"]
   STG --> ER["Double-click the app or game → Engine room"]
+  PJ --> GB["A game still building opens on its build (Engine room) once; Back shows the canvas"]
   STG --> FS["Double-click a film → Film studio"]
   INS --> EXP["Size, Style, Used on; Export, Replace"]
   DOCK --> CREW["The crew: fix the selected page, repaint the selected picture, or build the next version"]
