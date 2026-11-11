@@ -15,15 +15,16 @@ import { words } from './standins.mjs'
 const RAW = 'https://raw.githubusercontent.com/mojomast/assetrizz/main/'
 export const CREDIT = 'assetrizz by mojomast'
 
-// the build's style (engine/artdirect.mjs STYLES) → the closest packs, nearest first
+// the build's style (engine/artdirect.mjs STYLES) → the closest packs, nearest first; none that
+// reads as a 3D or realistic render (low-poly, voxel, claymation, hand-painted fantasy)
 export const PACKS = {
   'anime-cel': ['cel_shaded_anime', 'storybook_gouache'],
   'vhs-anime': ['cel_shaded_anime', 'vaporwave_synth'],
   'manga-ink': ['ink_watercolor', 'cel_shaded_anime'],
   pixel: ['pixel_32', 'pixel_16bit', 'retro_8bit'],
-  gouache: ['storybook_gouache', 'hand_painted_fantasy'],
+  gouache: ['storybook_gouache'],
   watercolour: ['ink_watercolor', 'storybook_gouache'],
-  concept: ['hand_painted_fantasy', 'chalk_crayon'],
+  concept: ['chalk_crayon', 'storybook_gouache'],
   riso: ['paper_cutout', 'art_deco_poster'],
   sticker: ['flat_vector_ui', 'cozy_cartoon'],
   papercraft: ['paper_cutout']
