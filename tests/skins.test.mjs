@@ -13,7 +13,8 @@ test('every outfit job carries the look, the layout contract and the design pict
     const jobs = skinJobs(heroes, { root: 'g', hero })
     assert.ok(jobs.length >= 8, hero)
     for (const j of jobs) {
-      assert.ok(j.prompt.includes(heroes.sheet.layout))
+      // a hero's own art.layout overrides the shared sheet.layout (skinJobs does the same)
+      assert.ok(j.prompt.includes(heroes.heroes[hero].art.layout || heroes.sheet.layout), `${hero}/${j.sheet}`)
       assert.equal(j.refs[0], `g/${heroes.heroes[hero].art.outfits.default.design}`)
       assert.equal(j.out, `g/assets/skins/${hero}/default/${j.sheet}.webp`)
     }

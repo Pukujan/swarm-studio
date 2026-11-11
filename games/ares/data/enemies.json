@@ -1,0 +1,564 @@
+{
+  "_note": "Stage order: ember uses the plain types; gold adds gunner, caster, drone_ring; crimson adds shield_elite, grunt_elite, hound_elite, caster_ring; ruin adds hopper_elite, caster_elite, sentry_spiral, drone_elite; inferno is elites only. Elites reuse the plain sprite with a tint.",
+  "enemies": {
+    "grunt": {
+      "base": "walker",
+      "hp": 40,
+      "speed": 160,
+      "dmg": 10,
+      "attack": {
+        "kind": "melee",
+        "range": 90,
+        "windup": 0.45,
+        "every": 1.6
+      },
+      "sprite": "automaton-grunt",
+      "scale": 0.4,
+      "statusResist": [],
+      "barks": {
+        "spawn": {
+          "line": "目標、確認。",
+          "line_en": "Target acquired."
+        },
+        "attack": {
+          "line": "排除する。",
+          "line_en": "Eliminate."
+        },
+        "death": {
+          "line": "機能……停止……",
+          "line_en": "Function... stopped..."
+        }
+      }
+    },
+    "gunner": {
+      "base": "walker",
+      "hp": 36,
+      "speed": 130,
+      "dmg": 9,
+      "attack": {
+        "kind": "aimed",
+        "range": 520,
+        "windup": 0.5,
+        "every": 1.8
+      },
+      "sprite": "automaton-grunt",
+      "scale": 0.4,
+      "statusResist": [],
+      "tint": "#ffd08a",
+      "barks": {
+        "spawn": {
+          "line": "照準、固定。",
+          "line_en": "Sights locked."
+        },
+        "attack": {
+          "line": "射撃開始。",
+          "line_en": "Opening fire."
+        },
+        "death": {
+          "line": "弾……切れ……",
+          "line_en": "Out of... rounds..."
+        }
+      }
+    },
+    "grunt_elite": {
+      "base": "walker",
+      "hp": 90,
+      "speed": 210,
+      "dmg": 14,
+      "attack": {
+        "kind": "melee",
+        "range": 100,
+        "windup": 0.3,
+        "every": 1.1
+      },
+      "sprite": "automaton-grunt",
+      "scale": 0.46,
+      "statusResist": [
+        "burn"
+      ],
+      "tint": "#ff6a8a",
+      "barks": {
+        "spawn": {
+          "line": "上位機体、出撃。愚か者め。",
+          "line_en": "Elite unit deployed. Fool."
+        },
+        "attack": {
+          "line": "遅いな、人間。",
+          "line_en": "Slow, human."
+        },
+        "death": {
+          "line": "ありえない……計算外……",
+          "line_en": "Impossible... miscalculated..."
+        }
+      }
+    },
+    "gunner_elite": {
+      "base": "walker",
+      "hp": 80,
+      "speed": 170,
+      "dmg": 12,
+      "attack": {
+        "kind": "aimed",
+        "range": 600,
+        "windup": 0.35,
+        "every": 1.2
+      },
+      "sprite": "automaton-grunt",
+      "scale": 0.46,
+      "statusResist": [],
+      "tint": "#ff6a8a",
+      "barks": {
+        "spawn": {
+          "line": "外さない。私は上位機だ。",
+          "line_en": "I don't miss. I'm an elite."
+        },
+        "attack": {
+          "line": "狙い撃つ。",
+          "line_en": "Taking the shot."
+        },
+        "death": {
+          "line": "照準……誤差……",
+          "line_en": "Targeting... error..."
+        }
+      }
+    },
+    "shield": {
+      "base": "shield",
+      "hp": 70,
+      "speed": 120,
+      "dmg": 12,
+      "attack": {
+        "kind": "bash",
+        "range": 110,
+        "windup": 0.55,
+        "every": 2
+      },
+      "sprite": "automaton-shield",
+      "scale": 0.44,
+      "statusResist": [],
+      "barks": {
+        "spawn": {
+          "line": "防壁、展開。",
+          "line_en": "Barrier deployed."
+        },
+        "attack": {
+          "line": "押し潰す。",
+          "line_en": "Crush."
+        },
+        "death": {
+          "line": "装甲、破損……",
+          "line_en": "Armor... breached..."
+        }
+      }
+    },
+    "shield_elite": {
+      "base": "shield",
+      "hp": 140,
+      "speed": 150,
+      "dmg": 16,
+      "attack": {
+        "kind": "bash",
+        "range": 130,
+        "windup": 0.4,
+        "every": 1.4
+      },
+      "sprite": "automaton-shield",
+      "scale": 0.5,
+      "statusResist": [
+        "shock"
+      ],
+      "tint": "#ff6a8a",
+      "barks": {
+        "spawn": {
+          "line": "突破は、不可能だ。",
+          "line_en": "You cannot break through."
+        },
+        "attack": {
+          "line": "無駄な抵抗だ。",
+          "line_en": "Futile."
+        },
+        "death": {
+          "line": "防御……失敗……",
+          "line_en": "Defense... failed..."
+        }
+      }
+    },
+    "caster": {
+      "base": "caster",
+      "hp": 45,
+      "speed": 0,
+      "dmg": 12,
+      "attack": {
+        "kind": "laser",
+        "range": 700,
+        "windup": 0.8,
+        "every": 3
+      },
+      "sprite": "automaton-caster",
+      "scale": 0.42,
+      "statusResist": [],
+      "barks": {
+        "spawn": {
+          "line": "演算、開始。",
+          "line_en": "Computation started."
+        },
+        "attack": {
+          "line": "照射します。",
+          "line_en": "Firing beam."
+        },
+        "death": {
+          "line": "演算……中断……",
+          "line_en": "Computation... aborted..."
+        }
+      }
+    },
+    "caster_ring": {
+      "base": "caster",
+      "hp": 60,
+      "speed": 0,
+      "dmg": 10,
+      "attack": {
+        "kind": "ring",
+        "range": 600,
+        "windup": 0.6,
+        "every": 2.6
+      },
+      "sprite": "automaton-caster",
+      "scale": 0.42,
+      "statusResist": [],
+      "tint": "#ffb36b",
+      "barks": {
+        "spawn": {
+          "line": "波形、展開。",
+          "line_en": "Waveform deployed."
+        },
+        "attack": {
+          "line": "全方位、拡散。",
+          "line_en": "Dispersing, all sides."
+        },
+        "death": {
+          "line": "波形……消失……",
+          "line_en": "Waveform... lost..."
+        }
+      }
+    },
+    "caster_elite": {
+      "base": "caster",
+      "hp": 100,
+      "speed": 0,
+      "dmg": 14,
+      "attack": {
+        "kind": "laser",
+        "range": 800,
+        "windup": 0.6,
+        "every": 2
+      },
+      "sprite": "automaton-caster",
+      "scale": 0.48,
+      "statusResist": [
+        "burn"
+      ],
+      "tint": "#f2c46a",
+      "barks": {
+        "spawn": {
+          "line": "テクニウム様の、御心のままに。",
+          "line_en": "As Lord Teknium wills."
+        },
+        "attack": {
+          "line": "無意味な抵抗ですね。",
+          "line_en": "Pointless resistance."
+        },
+        "death": {
+          "line": "主よ……申し訳……",
+          "line_en": "Forgive me... master..."
+        }
+      }
+    },
+    "hound": {
+      "base": "charger",
+      "hp": 50,
+      "speed": 520,
+      "dmg": 14,
+      "attack": {
+        "kind": "rush",
+        "range": 700,
+        "windup": 0.6,
+        "every": 2.6
+      },
+      "sprite": "automaton-hound",
+      "scale": 0.4,
+      "statusResist": [],
+      "barks": {
+        "spawn": {
+          "line": "追跡、開始。",
+          "line_en": "Pursuit initiated."
+        },
+        "attack": {
+          "line": "突撃。",
+          "line_en": "Charge."
+        },
+        "death": {
+          "line": "追跡……終了……",
+          "line_en": "Pursuit... ended..."
+        }
+      }
+    },
+    "hound_elite": {
+      "base": "charger",
+      "hp": 100,
+      "speed": 680,
+      "dmg": 18,
+      "attack": {
+        "kind": "rush",
+        "range": 800,
+        "windup": 0.4,
+        "every": 1.8
+      },
+      "sprite": "automaton-hound",
+      "scale": 0.46,
+      "statusResist": [],
+      "tint": "#ff6a8a",
+      "barks": {
+        "spawn": {
+          "line": "獲物を、確認した。",
+          "line_en": "Prey identified."
+        },
+        "attack": {
+          "line": "逃げられないぞ。",
+          "line_en": "You can't escape."
+        },
+        "death": {
+          "line": "牙が……折れた……",
+          "line_en": "Fangs... broken..."
+        }
+      }
+    },
+    "hopper": {
+      "base": "jumper",
+      "hp": 45,
+      "speed": 260,
+      "dmg": 12,
+      "attack": {
+        "kind": "slam",
+        "range": 160,
+        "windup": 0.5,
+        "every": 2.2
+      },
+      "sprite": "automaton-hopper",
+      "scale": 0.4,
+      "statusResist": [],
+      "barks": {
+        "spawn": {
+          "line": "跳躍、準備。",
+          "line_en": "Ready to jump."
+        },
+        "attack": {
+          "line": "落下する。",
+          "line_en": "Dropping."
+        },
+        "death": {
+          "line": "着地……失敗……",
+          "line_en": "Landing... failed..."
+        }
+      }
+    },
+    "hopper_elite": {
+      "base": "jumper",
+      "hp": 95,
+      "speed": 320,
+      "dmg": 16,
+      "attack": {
+        "kind": "slam",
+        "range": 200,
+        "windup": 0.35,
+        "every": 1.5
+      },
+      "sprite": "automaton-hopper",
+      "scale": 0.46,
+      "statusResist": [],
+      "tint": "#f2c46a",
+      "barks": {
+        "spawn": {
+          "line": "上から、失礼。",
+          "line_en": "Pardon me, from above."
+        },
+        "attack": {
+          "line": "潰れろ。",
+          "line_en": "Be crushed."
+        },
+        "death": {
+          "line": "高度……喪失……",
+          "line_en": "Altitude... lost..."
+        }
+      }
+    },
+    "drone": {
+      "base": "drone",
+      "hp": 32,
+      "speed": 120,
+      "dmg": 8,
+      "attack": {
+        "kind": "fan",
+        "range": 600,
+        "windup": 0.5,
+        "every": 2
+      },
+      "statusResist": [],
+      "barks": {
+        "spawn": {
+          "line": "ドローン、展開。",
+          "line_en": "Drone online."
+        },
+        "attack": {
+          "line": "掃射します。",
+          "line_en": "Strafing."
+        },
+        "death": {
+          "line": "墜落……",
+          "line_en": "Going down..."
+        }
+      }
+    },
+    "drone_ring": {
+      "base": "drone",
+      "hp": 40,
+      "speed": 110,
+      "dmg": 8,
+      "attack": {
+        "kind": "ring",
+        "range": 500,
+        "windup": 0.6,
+        "every": 2.6
+      },
+      "statusResist": [],
+      "tint": "#ffc06a",
+      "barks": {
+        "spawn": {
+          "line": "包囲、開始。",
+          "line_en": "Encircling."
+        },
+        "attack": {
+          "line": "全方位、射撃。",
+          "line_en": "All-direction fire."
+        },
+        "death": {
+          "line": "信号……途絶……",
+          "line_en": "Signal... lost..."
+        }
+      }
+    },
+    "drone_elite": {
+      "base": "drone",
+      "hp": 70,
+      "speed": 160,
+      "dmg": 10,
+      "attack": {
+        "kind": "aimed",
+        "range": 700,
+        "windup": 0.35,
+        "every": 1.3
+      },
+      "statusResist": [],
+      "tint": "#ff6a8a",
+      "barks": {
+        "spawn": {
+          "line": "空は、我らのものだ。",
+          "line_en": "The sky is ours."
+        },
+        "attack": {
+          "line": "見下ろしてやる。",
+          "line_en": "Looking down on you."
+        },
+        "death": {
+          "line": "制空権……喪失……",
+          "line_en": "Air control... lost..."
+        }
+      }
+    },
+    "sentry": {
+      "base": "sentry",
+      "hp": 60,
+      "speed": 0,
+      "dmg": 10,
+      "attack": {
+        "kind": "ring",
+        "range": 650,
+        "windup": 0.7,
+        "every": 2.6
+      },
+      "statusResist": [],
+      "barks": {
+        "spawn": {
+          "line": "監視、開始。",
+          "line_en": "Monitoring started."
+        },
+        "attack": {
+          "line": "警告射撃。",
+          "line_en": "Warning shot."
+        },
+        "death": {
+          "line": "監視……終了……",
+          "line_en": "Monitoring... ended..."
+        }
+      }
+    },
+    "sentry_spiral": {
+      "base": "sentry",
+      "hp": 90,
+      "speed": 0,
+      "dmg": 10,
+      "attack": {
+        "kind": "spiral",
+        "range": 700,
+        "windup": 0.6,
+        "every": 3.2
+      },
+      "statusResist": [],
+      "tint": "#f2c46a",
+      "barks": {
+        "spawn": {
+          "line": "螺旋、起動。",
+          "line_en": "Spiral online."
+        },
+        "attack": {
+          "line": "回転、射撃。",
+          "line_en": "Spin. Fire."
+        },
+        "death": {
+          "line": "回転……停止……",
+          "line_en": "Rotation... halted..."
+        }
+      }
+    },
+    "sentry_elite": {
+      "base": "sentry",
+      "hp": 120,
+      "speed": 0,
+      "dmg": 12,
+      "attack": {
+        "kind": "aimed",
+        "range": 800,
+        "windup": 0.4,
+        "every": 1.4
+      },
+      "statusResist": [
+        "shock"
+      ],
+      "tint": "#ff6a8a",
+      "barks": {
+        "spawn": {
+          "line": "侵入者は、すべて記録する。",
+          "line_en": "Every intruder is logged."
+        },
+        "attack": {
+          "line": "記録完了。消去する。",
+          "line_en": "Logged. Deleting."
+        },
+        "death": {
+          "line": "ログ……消失……",
+          "line_en": "Logs... erased..."
+        }
+      }
+    }
+  }
+}

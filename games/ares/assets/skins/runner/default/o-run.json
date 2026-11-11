@@ -1,5 +1,5 @@
 {
- "frames": 6,
+ "frames": 12,
  "cell": [
   768,
   768
@@ -8,8 +8,14 @@
  "source": "o-run.png",
  "qc": {
   "ok": true,
-  "frames": 6,
+  "frames": 12,
   "edge": [],
-  "height_spread": 1.09
+  "height_spread": 1.02,
+  "green_pools_px": 18311
+ },
+ "rife": {
+  "from": 6,
+  "model": "rife-v4.6",
+  "originals": "../default-6f/"
  }
 }

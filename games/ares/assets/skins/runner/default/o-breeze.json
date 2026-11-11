@@ -1,0 +1,21 @@
+{
+ "frames": 12,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "mix",
+ "source": "o-breeze.png",
+ "qc": {
+  "ok": true,
+  "frames": 12,
+  "edge": [],
+  "height_spread": 1.02,
+  "green_pools_px": 30797
+ },
+ "rife": {
+  "from": 6,
+  "model": "rife-v4.6",
+  "originals": "../default-6f/"
+ }
+}

@@ -392,9 +392,9 @@ func _draw_title(S: float, W: float, H: float) -> void:
 	_txt(slam, Vector2(-W * 0.5, 0), "ARES", int(300 * S), GOLD, HORIZONTAL_ALIGNMENT_CENTER, W, int(40 * S))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if t > 0.3:
-		_txt(body, Vector2(0, H * 0.46 + 70 * S), "HERMES'S SWIFT MESSENGER STORMS THE WAR GOD'S ARENA", int(34 * S), CREAM, HORIZONTAL_ALIGNMENT_CENTER, W, int(8 * S))
+		_txt(body, Vector2(0, H * 0.46 + 70 * S), "BAKER STORMS THE WAR GOD'S ARENA", int(34 * S), CREAM, HORIZONTAL_ALIGNMENT_CENTER, W, int(8 * S))
 	if t > 0.6:
-		_txt(body, Vector2(0, H * 0.46 + 120 * S), "14 CHAMPIONS  ·  ONE MESSENGER", int(28 * S), EMBER, HORIZONTAL_ALIGNMENT_CENTER, W, int(7 * S))
+		_txt(body, Vector2(0, H * 0.46 + 120 * S), "14 CHAMPIONS  ·  ONE BAKER", int(28 * S), EMBER, HORIZONTAL_ALIGNMENT_CENTER, W, int(7 * S))
 	if t > 1.0 and fmod(t, 1.0) < 0.7:
 		_txt(body, Vector2(0, H * 0.86), "PRESS ENTER", int(30 * S), CREAM, HORIZONTAL_ALIGNMENT_CENTER, W, int(7 * S))
 
@@ -403,8 +403,8 @@ func _draw_select(S: float, W: float, H: float) -> void:
 	draw_rect(Rect2(0, 0, W, H), Color(0.04, 0.01, 0.0, 0.72))
 	if card_tex == null:
 		card_tex = load("res://assets/art/hero-card.webp")
-	_txt(slam, Vector2(0, 130 * S), "CHOOSE YOUR MESSENGER", int(70 * S), GOLD, HORIZONTAL_ALIGNMENT_CENTER, W, int(12 * S))
-	var names = {"messenger": ["THE MESSENGER", "laurel, white dress, red cape  ·  +10 health"], "runner": ["THE ORACLE", "pink braid, winged revolver, spells  ·  faster dash"]}
+	_txt(slam, Vector2(0, 130 * S), "CHOOSE YOUR HEROINE", int(70 * S), GOLD, HORIZONTAL_ALIGNMENT_CENTER, W, int(12 * S))
+	var names = {"messenger": ["BAKER", "laurel, white dress, red cape  ·  +10 health"], "runner": ["THE ORACLE", "pink braid, winged revolver, spells  ·  faster dash"]}
 	var i = 0
 	for h in ["messenger", "runner"]:
 		var picked: bool = h == sel

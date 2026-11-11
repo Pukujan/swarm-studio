@@ -24,9 +24,12 @@ const UA = 'curl/8.7.1'
 // Every line to record: one job per hero move or bark that has a `line`.
 export function voiceJobs(config, { root = '.', hero } = {}) {
   const jobs = []
-  for (const [id, h] of Object.entries(config.heroes || {})) {
+  // bosses are recorded like heroes; their `lines` are keyed as-is and `voice`
+  // may be a voice object instead of a name in `voices`
+  const all = [...Object.entries(config.heroes || {}), ...Object.entries(config.bosses || {})]
+  for (const [id, h] of all) {
     if (hero && id !== hero) continue
-    const voice = config.voices?.[h.voice]
+    const voice = typeof h.voice === 'object' ? h.voice : config.voices?.[h.voice]
     if (!voice) throw new Error(`${id}: voice "${h.voice}" is not in voices`)
     if (!PROVIDERS.includes(voice.provider)) throw new Error(`${id}: unknown provider "${voice.provider}"`)
     const add = (key, m) => m?.line && jobs.push({ hero: id, key, text: m.line, voice, out: join(root, 'assets', 'voice', id, `${key}.mp3`) })
@@ -36,6 +39,12 @@ export function voiceJobs(config, { root = '.', hero } = {}) {
       for (const [lv, l] of Object.entries(m.fx?.levels || {})) add(`${k}-lv${lv}`, l)
     }
     for (const [k, m] of Object.entries(h.barks || {})) add(`bark-${k}`, m)
+    // spells: the chant before casting and the name shouted at release
+    for (const [k, m] of Object.entries(h.spells || {})) {
+      if (m?.chant) add(`spell-${k}-chant`, { line: m.chant })
+      add(`spell-${k}`, m)
+    }
+    for (const [k, m] of Object.entries(h.lines || {})) add(k, m)
   }
   return jobs
 }

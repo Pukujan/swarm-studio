@@ -1,15 +1,25 @@
 {
- "frames": 6,
+ "frames": 24,
  "cell": [
-  768,
-  768
+  680,
+  680
  ],
  "blend": "mix",
- "source": "m-idle.png",
+ "source": "veo clip ee350510",
  "qc": {
   "ok": true,
-  "frames": 6,
+  "frames": 24,
   "edge": [],
-  "height_spread": 1.03
+  "feet_bottom_px": 578,
+  "feet_x_spread_px": 0.5
+ },
+ "veo": {
+  "clip": "video-studio output/flow/ee350510-bb15-4c67-bb12-4797b687cda7.mp4",
+  "start": "m-idle.12f.webp frame 0 on #00FF00, x1.345",
+  "frames_used": "5..62 (0.21-2.58 s), 21 frames sampled + 3 RIFE frames bridging 62 back to 5",
+  "loop_s": 2.85,
+  "ledger": 51,
+  "crop": "680 cells cut from 768 at (44,44), same pixel scale as the other m-* sheets (WebP max width 16383)",
+  "previous": "m-idle.12f.webp (painted 6f RIFE-doubled to 12f)"
  }
 }

@@ -1,15 +1,26 @@
 {
- "frames": 6,
+ "frames": 24,
  "cell": [
-  768,
-  768
+  680,
+  680
  ],
  "blend": "mix",
  "source": "o-idle.png",
  "qc": {
   "ok": true,
-  "frames": 6,
+  "frames": 12,
   "edge": [],
-  "height_spread": 1.0
+  "height_spread": 1.01,
+  "green_pools_px": 26394
+ },
+ "veo": {
+  "clip": "video-studio output/flow/308718f6-861e-4fdc-84a4-5731a9dd30bd.mp4",
+  "span_s": [
+   0.08,
+   2.88
+  ],
+  "loop_s": 2.79,
+  "ledger": 49,
+  "previous": "../rife/o-idle.webp (RIFE 12f), ../default-6f/ (painted 6f)"
  }
 }

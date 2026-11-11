@@ -1,0 +1,15 @@
+{
+ "frames": 6,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "mix",
+ "source": "a-sweep.png",
+ "qc": {
+  "ok": true,
+  "frames": 6,
+  "edge": [],
+  "height_spread": 1.02
+ }
+}

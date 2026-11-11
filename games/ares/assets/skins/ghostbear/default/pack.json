@@ -1,0 +1,100 @@
+{
+ "sheets": {
+  "run": {
+   "file": "run.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "run.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.05
+   }
+  },
+  "jump": {
+   "file": "jump.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "jump.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.36
+   }
+  },
+  "attack": {
+   "file": "attack.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "attack.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.18
+   }
+  },
+  "cast": {
+   "file": "cast.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "cast.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.03
+   }
+  },
+  "hurt": {
+   "file": "hurt.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "hurt.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.1
+   }
+  },
+  "idle": {
+   "file": "idle.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "idle.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.01
+   }
+  }
+ }
+}

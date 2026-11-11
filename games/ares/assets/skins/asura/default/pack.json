@@ -1,0 +1,116 @@
+{
+ "sheets": {
+  "a-idle": {
+   "file": "a-idle.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "a-idle.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.02
+   }
+  },
+  "a-raise": {
+   "file": "a-raise.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "a-raise.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.1
+   }
+  },
+  "a-slam": {
+   "file": "a-slam.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "a-slam.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.15
+   }
+  },
+  "a-sweep": {
+   "file": "a-sweep.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "a-sweep.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.02
+   }
+  },
+  "a-cast": {
+   "file": "a-cast.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "a-cast.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.15
+   }
+  },
+  "a-hurt": {
+   "file": "a-hurt.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "a-hurt.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.12
+   }
+  },
+  "a-roar": {
+   "file": "a-roar.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "a-roar.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.04
+   }
+  }
+ }
+}

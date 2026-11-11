@@ -1,0 +1,164 @@
+{
+ "sheets": {
+  "o-loading": {
+   "file": "o-loading.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-loading.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.09
+   }
+  },
+  "o-idle": {
+   "file": "o-idle.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-idle.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1
+   }
+  },
+  "o-run": {
+   "file": "o-run.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-run.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.09
+   }
+  },
+  "o-cast": {
+   "file": "o-cast.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-cast.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.06
+   }
+  },
+  "o-dodge": {
+   "file": "o-dodge.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-dodge.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.48
+   }
+  },
+  "o-jump": {
+   "file": "o-jump.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-jump.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.97
+   }
+  },
+  "o-shoot": {
+   "file": "o-shoot.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-shoot.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.08
+   }
+  },
+  "o-hurt": {
+   "file": "o-hurt.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-hurt.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 2.47
+   }
+  },
+  "o-tease": {
+   "file": "o-tease.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-tease.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.01
+   }
+  },
+  "o-win": {
+   "file": "o-win.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "o-win.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.09
+   }
+  }
+ }
+}

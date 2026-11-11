@@ -1,0 +1,1919 @@
+{
+  "_note": "ARES stages in ladder order. Sections tile 0..length. Mid-boss arenas first, the stage boss last.",
+  "stages": [
+    {
+      "id": "ember",
+      "name": "Ember Terraces",
+      "jp": "焔の段丘",
+      "kit": "ember",
+      "length": 7200,
+      "zoom": {
+        "calm": 1.62,
+        "fight": 1.18,
+        "crowd": 0.95
+      },
+      "sections": [
+        {
+          "kind": "run",
+          "from": 0,
+          "to": 1600,
+          "_note": "tutorial terraces: stairs up, a gentle ledge ladder, braziers to break",
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 300
+            },
+            {
+              "role": "ledge",
+              "x": 560,
+              "surf": 480,
+              "w": 300
+            },
+            {
+              "role": "ledge",
+              "x": 820,
+              "surf": 380,
+              "w": 260
+            },
+            {
+              "role": "step",
+              "x": 700,
+              "surf": 250
+            },
+            {
+              "role": "prop",
+              "x": 1170,
+              "hp": 30,
+              "kind": "brazier"
+            },
+            {
+              "role": "ledge",
+              "x": 1250,
+              "surf": 470,
+              "w": 300
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "grunt",
+                  "x": 900
+                },
+                {
+                  "type": "grunt",
+                  "x": 1100
+                },
+                {
+                  "type": "drone",
+                  "x": 980,
+                  "y": 260
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 1150
+              },
+              "enemies": [
+                {
+                  "type": "hopper",
+                  "x": 1450
+                },
+                {
+                  "type": "drone",
+                  "x": 1400,
+                  "y": 300
+                },
+                {
+                  "type": "drone",
+                  "x": 1520,
+                  "y": 220
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 1600,
+          "to": 2880,
+          "boss": "Lokee",
+          "plats": [
+            {
+              "role": "prop",
+              "x": 1640,
+              "hp": 30,
+              "kind": "brazier"
+            },
+            {
+              "role": "ledge",
+              "x": 1700,
+              "surf": 480,
+              "w": 280
+            },
+            {
+              "role": "bridge",
+              "x": 2060,
+              "surf": 360,
+              "w": 520
+            },
+            {
+              "role": "ledge",
+              "x": 2560,
+              "surf": 480,
+              "w": 280
+            },
+            {
+              "role": "prop",
+              "x": 2840,
+              "hp": 30,
+              "kind": "brazier"
+            }
+          ]
+        },
+        {
+          "kind": "run",
+          "from": 2880,
+          "to": 4300,
+          "_note": "the terrace climb: two walls to wall-kick up, a high bridge back down",
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 2950
+            },
+            {
+              "role": "ledge",
+              "x": 3200,
+              "surf": 470,
+              "w": 240
+            },
+            {
+              "role": "wall",
+              "x": 3460
+            },
+            {
+              "role": "step",
+              "x": 3560,
+              "surf": 330
+            },
+            {
+              "role": "ledge",
+              "x": 3700,
+              "surf": 220,
+              "w": 260
+            },
+            {
+              "role": "wall",
+              "x": 3980
+            },
+            {
+              "role": "bridge",
+              "x": 3860,
+              "surf": 400,
+              "w": 400
+            },
+            {
+              "role": "column",
+              "x": 4220,
+              "hp": 60
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "shield",
+                  "x": 3250
+                },
+                {
+                  "type": "grunt",
+                  "x": 3400
+                },
+                {
+                  "type": "sentry",
+                  "x": 3730,
+                  "y": 180
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 3700
+              },
+              "enemies": [
+                {
+                  "type": "hound",
+                  "x": 4150
+                },
+                {
+                  "type": "drone",
+                  "x": 3950,
+                  "y": 280
+                },
+                {
+                  "type": "hopper",
+                  "x": 4050
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 4300,
+          "to": 5580,
+          "boss": "flownium",
+          "_note": "a flat parade ground for his rushes, two high ledges to hop over them",
+          "plats": [
+            {
+              "role": "step",
+              "x": 4500,
+              "surf": 420
+            },
+            {
+              "role": "ledge",
+              "x": 4820,
+              "surf": 300,
+              "w": 300
+            },
+            {
+              "role": "step",
+              "x": 5280,
+              "surf": 420
+            },
+            {
+              "role": "column",
+              "x": 4380,
+              "hp": 70
+            },
+            {
+              "role": "column",
+              "x": 5500,
+              "hp": 70
+            }
+          ]
+        },
+        {
+          "kind": "run",
+          "from": 5580,
+          "to": 5920,
+          "_note": "a short breather before the stage boss",
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 5620
+            },
+            {
+              "role": "prop",
+              "x": 5880,
+              "hp": 30,
+              "kind": "brazier"
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "grunt",
+                  "x": 5800
+                },
+                {
+                  "type": "drone",
+                  "x": 5760,
+                  "y": 300
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 5920,
+          "to": 7200,
+          "boss": "Adolan",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 6000,
+              "surf": 480,
+              "w": 260
+            },
+            {
+              "role": "ledge",
+              "x": 6340,
+              "surf": 340,
+              "w": 260
+            },
+            {
+              "role": "bridge",
+              "x": 6560,
+              "surf": 220,
+              "w": 360
+            },
+            {
+              "role": "ledge",
+              "x": 6800,
+              "surf": 340,
+              "w": 260
+            },
+            {
+              "role": "ledge",
+              "x": 6960,
+              "surf": 480,
+              "w": 220
+            },
+            {
+              "role": "prop",
+              "x": 5960,
+              "hp": 30,
+              "kind": "brazier"
+            },
+            {
+              "role": "prop",
+              "x": 7160,
+              "hp": 30,
+              "kind": "brazier"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gold",
+      "name": "Jade Exchange",
+      "jp": "翡翠の取引所",
+      "kit": "gold",
+      "length": 6300,
+      "zoom": {
+        "calm": 1.56,
+        "fight": 1.12,
+        "crowd": 0.9
+      },
+      "sections": [
+        {
+          "kind": "run",
+          "from": 0,
+          "to": 1600,
+          "_note": "long jade-trimmed marble bridges over the market floor",
+          "plats": [
+            {
+              "role": "bridge",
+              "x": 300,
+              "surf": 470,
+              "w": 620
+            },
+            {
+              "role": "bridge",
+              "x": 1000,
+              "surf": 360,
+              "w": 560
+            },
+            {
+              "role": "step",
+              "x": 900,
+              "surf": 520
+            },
+            {
+              "role": "prop",
+              "x": 1500,
+              "hp": 30
+            },
+            {
+              "role": "prop",
+              "x": 700,
+              "hp": 30
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "grunt",
+                  "x": 600
+                },
+                {
+                  "type": "gunner",
+                  "x": 800
+                },
+                {
+                  "type": "drone",
+                  "x": 700,
+                  "y": 280
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 1000
+              },
+              "enemies": [
+                {
+                  "type": "shield",
+                  "x": 1350
+                },
+                {
+                  "type": "caster",
+                  "x": 1250
+                },
+                {
+                  "type": "drone_ring",
+                  "x": 1450,
+                  "y": 240
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 1600,
+          "to": 3000,
+          "boss": "salt555",
+          "plats": [
+            {
+              "role": "bridge",
+              "x": 1700,
+              "surf": 450,
+              "w": 500
+            },
+            {
+              "role": "bridge",
+              "x": 2400,
+              "surf": 450,
+              "w": 500
+            },
+            {
+              "role": "ledge",
+              "x": 2180,
+              "surf": 280,
+              "w": 240
+            },
+            {
+              "role": "column",
+              "x": 1660,
+              "hp": 70
+            },
+            {
+              "role": "column",
+              "x": 2960,
+              "hp": 70
+            }
+          ]
+        },
+        {
+          "kind": "chase",
+          "from": 3000,
+          "to": 5000,
+          "chaser": "HotDawg",
+          "wall": {
+            "speed": 230,
+            "color": "#ffc06a"
+          },
+          "_note": "the closing-time sale: HotDawg runs behind you firing price tags",
+          "pits": [
+            [
+              3400,
+              3560
+            ],
+            [
+              3900,
+              4060
+            ],
+            [
+              4450,
+              4640
+            ]
+          ],
+          "crumble": [
+            {
+              "x": 3420,
+              "surf": 520,
+              "w": 160
+            },
+            {
+              "x": 3920,
+              "surf": 500,
+              "w": 160
+            },
+            {
+              "x": 4470,
+              "surf": 520,
+              "w": 180
+            }
+          ],
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 3650,
+              "surf": 460,
+              "w": 220
+            },
+            {
+              "role": "bridge",
+              "x": 4150,
+              "surf": 420,
+              "w": 260
+            },
+            {
+              "role": "ledge",
+              "x": 4750,
+              "surf": 470,
+              "w": 200
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 5000,
+          "to": 6300,
+          "boss": "HotDawg",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 5100,
+              "surf": 470,
+              "w": 260
+            },
+            {
+              "role": "ledge",
+              "x": 5500,
+              "surf": 340,
+              "w": 300
+            },
+            {
+              "role": "ledge",
+              "x": 5940,
+              "surf": 470,
+              "w": 260
+            },
+            {
+              "role": "prop",
+              "x": 5060,
+              "hp": 30
+            },
+            {
+              "role": "prop",
+              "x": 6260,
+              "hp": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "snow",
+      "name": "Snow Shrine",
+      "jp": "雪の社",
+      "kit": "snow",
+      "length": 7000,
+      "zoom": {
+        "calm": 1.56,
+        "fight": 1.12,
+        "crowd": 0.9
+      },
+      "sections": [
+        {
+          "kind": "run",
+          "from": 0,
+          "to": 1600,
+          "_note": "the pilgrim path: snowy stone steps up past the shrine braziers",
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 220
+            },
+            {
+              "role": "step",
+              "x": 520,
+              "surf": 480
+            },
+            {
+              "role": "step",
+              "x": 700,
+              "surf": 400
+            },
+            {
+              "role": "step",
+              "x": 900,
+              "surf": 320
+            },
+            {
+              "role": "ledge",
+              "x": 1080,
+              "surf": 260,
+              "w": 240
+            },
+            {
+              "role": "step",
+              "x": 1380,
+              "surf": 380
+            },
+            {
+              "role": "column",
+              "x": 1560,
+              "hp": 70
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "shield_elite",
+                  "x": 650
+                },
+                {
+                  "type": "grunt",
+                  "x": 800
+                },
+                {
+                  "type": "gunner",
+                  "x": 1100
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 900
+              },
+              "enemies": [
+                {
+                  "type": "hopper",
+                  "x": 1300
+                },
+                {
+                  "type": "hound",
+                  "x": 1500
+                },
+                {
+                  "type": "drone_ring",
+                  "x": 1200,
+                  "y": 220
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 1600,
+          "to": 3000,
+          "boss": "UKG",
+          "_note": "three snowy tiers below the shrine",
+          "plats": [
+            {
+              "role": "bridge",
+              "x": 1700,
+              "surf": 480,
+              "w": 360
+            },
+            {
+              "role": "bridge",
+              "x": 2540,
+              "surf": 480,
+              "w": 360
+            },
+            {
+              "role": "bridge",
+              "x": 2100,
+              "surf": 340,
+              "w": 400
+            },
+            {
+              "role": "ledge",
+              "x": 1800,
+              "surf": 220,
+              "w": 240
+            },
+            {
+              "role": "ledge",
+              "x": 2640,
+              "surf": 220,
+              "w": 240
+            }
+          ]
+        },
+        {
+          "kind": "chase",
+          "from": 3000,
+          "to": 5000,
+          "wall": {
+            "speed": 230,
+            "color": "#ffd8c0"
+          },
+          "_note": "an avalanche rolls down the pass behind you",
+          "pits": [
+            [
+              3400,
+              3560
+            ],
+            [
+              3900,
+              4060
+            ],
+            [
+              4450,
+              4640
+            ]
+          ],
+          "crumble": [
+            {
+              "x": 3420,
+              "surf": 520,
+              "w": 160
+            },
+            {
+              "x": 3920,
+              "surf": 500,
+              "w": 160
+            },
+            {
+              "x": 4470,
+              "surf": 520,
+              "w": 180
+            }
+          ],
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 3650,
+              "surf": 460,
+              "w": 220
+            },
+            {
+              "role": "bridge",
+              "x": 4150,
+              "surf": 420,
+              "w": 260
+            },
+            {
+              "role": "ledge",
+              "x": 4750,
+              "surf": 470,
+              "w": 200
+            }
+          ]
+        },
+        {
+          "kind": "run",
+          "from": 5000,
+          "to": 5600,
+          "_note": "the shrine gate: a wall-kick climb between two walls",
+          "plats": [
+            {
+              "role": "wall",
+              "x": 5100
+            },
+            {
+              "role": "wall",
+              "x": 5280
+            },
+            {
+              "role": "ledge",
+              "x": 5150,
+              "surf": 260,
+              "w": 200
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "caster_ring",
+                  "x": 5500
+                },
+                {
+                  "type": "sentry",
+                  "x": 5520,
+                  "y": 260
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 5600,
+          "to": 7000,
+          "boss": "Nicho",
+          "_note": "steps cut into the summit like keys on a keyboard",
+          "plats": [
+            {
+              "role": "step",
+              "x": 5750,
+              "surf": 500
+            },
+            {
+              "role": "step",
+              "x": 5950,
+              "surf": 420
+            },
+            {
+              "role": "step",
+              "x": 6150,
+              "surf": 340
+            },
+            {
+              "role": "step",
+              "x": 6350,
+              "surf": 260
+            },
+            {
+              "role": "step",
+              "x": 6550,
+              "surf": 340
+            },
+            {
+              "role": "step",
+              "x": 6750,
+              "surf": 420
+            },
+            {
+              "role": "step",
+              "x": 6900,
+              "surf": 500
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crimson",
+      "name": "Crimson Bastion",
+      "jp": "紅の城塞",
+      "kit": "crimson",
+      "length": 7600,
+      "zoom": {
+        "calm": 1.56,
+        "fight": 1.12,
+        "crowd": 0.9
+      },
+      "sections": [
+        {
+          "kind": "run",
+          "from": 0,
+          "to": 1600,
+          "_note": "broken stairs: stair stubs and missing steps up to the ramparts",
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 220
+            },
+            {
+              "role": "step",
+              "x": 520,
+              "surf": 480
+            },
+            {
+              "role": "step",
+              "x": 700,
+              "surf": 400
+            },
+            {
+              "role": "step",
+              "x": 900,
+              "surf": 320
+            },
+            {
+              "role": "ledge",
+              "x": 1080,
+              "surf": 260,
+              "w": 240
+            },
+            {
+              "role": "step",
+              "x": 1380,
+              "surf": 380
+            },
+            {
+              "role": "column",
+              "x": 1560,
+              "hp": 70
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "shield_elite",
+                  "x": 650
+                },
+                {
+                  "type": "grunt",
+                  "x": 800
+                },
+                {
+                  "type": "gunner",
+                  "x": 1100
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 900
+              },
+              "enemies": [
+                {
+                  "type": "hopper",
+                  "x": 1300
+                },
+                {
+                  "type": "hound",
+                  "x": 1500
+                },
+                {
+                  "type": "drone_ring",
+                  "x": 1200,
+                  "y": 220
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "chase",
+          "from": 1600,
+          "to": 3400,
+          "chaser": "MikeMonty",
+          "wall": {
+            "speed": 250,
+            "color": "#ff5a3c"
+          },
+          "_note": "MikeMonty pounds the rampart down behind you",
+          "pits": [
+            [
+              1900,
+              2060
+            ],
+            [
+              2300,
+              2480
+            ],
+            [
+              2750,
+              2900
+            ],
+            [
+              3100,
+              3280
+            ]
+          ],
+          "crumble": [
+            {
+              "x": 1920,
+              "surf": 520,
+              "w": 150
+            },
+            {
+              "x": 2320,
+              "surf": 470,
+              "w": 160
+            },
+            {
+              "x": 2770,
+              "surf": 520,
+              "w": 140
+            },
+            {
+              "x": 3120,
+              "surf": 440,
+              "w": 170
+            }
+          ],
+          "plats": [
+            {
+              "role": "step",
+              "x": 2580,
+              "surf": 420
+            },
+            {
+              "role": "ledge",
+              "x": 2960,
+              "surf": 360,
+              "w": 200
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 3400,
+          "to": 4800,
+          "boss": "MikeMonty",
+          "_note": "a ring: low platforms only, the brawl stays on the floor",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 3500,
+              "surf": 500,
+              "w": 260
+            },
+            {
+              "role": "ledge",
+              "x": 4440,
+              "surf": 500,
+              "w": 260
+            },
+            {
+              "role": "column",
+              "x": 3440,
+              "hp": 90
+            },
+            {
+              "role": "column",
+              "x": 4760,
+              "hp": 90
+            }
+          ]
+        },
+        {
+          "kind": "run",
+          "from": 4800,
+          "to": 5800,
+          "_note": "the keep: a wall-kick chimney between two walls",
+          "plats": [
+            {
+              "role": "wall",
+              "x": 4900
+            },
+            {
+              "role": "wall",
+              "x": 5080
+            },
+            {
+              "role": "ledge",
+              "x": 4950,
+              "surf": 260,
+              "w": 200
+            },
+            {
+              "role": "bridge",
+              "x": 5150,
+              "surf": 300,
+              "w": 420
+            },
+            {
+              "role": "step",
+              "x": 5640,
+              "surf": 440
+            },
+            {
+              "role": "prop",
+              "x": 5760,
+              "hp": 30,
+              "kind": "brazier"
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "caster_ring",
+                  "x": 5300
+                },
+                {
+                  "type": "sentry",
+                  "x": 5320,
+                  "y": 260
+                },
+                {
+                  "type": "grunt_elite",
+                  "x": 5500
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 5400
+              },
+              "enemies": [
+                {
+                  "type": "hound_elite",
+                  "x": 5780
+                },
+                {
+                  "type": "drone",
+                  "x": 5600,
+                  "y": 280
+                },
+                {
+                  "type": "drone",
+                  "x": 5700,
+                  "y": 200
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "run",
+          "from": 5800,
+          "to": 6000,
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 5840
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "shield_elite",
+                  "x": 5960
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 6000,
+          "to": 7600,
+          "boss": "sovthpaw",
+          "_note": "the court: a wide hall with a high bench",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 6150,
+              "surf": 480,
+              "w": 280
+            },
+            {
+              "role": "bridge",
+              "x": 6600,
+              "surf": 320,
+              "w": 600
+            },
+            {
+              "role": "ledge",
+              "x": 7250,
+              "surf": 480,
+              "w": 280
+            },
+            {
+              "role": "column",
+              "x": 6040,
+              "hp": 90
+            },
+            {
+              "role": "column",
+              "x": 7560,
+              "hp": 90
+            },
+            {
+              "role": "prop",
+              "x": 6800,
+              "hp": 30,
+              "kind": "brazier"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ruin",
+      "name": "Moonlit Ruins",
+      "jp": "月光の遺跡",
+      "kit": "ruin",
+      "length": 8800,
+      "zoom": {
+        "calm": 1.62,
+        "fight": 1.12,
+        "crowd": 0.87
+      },
+      "sections": [
+        {
+          "kind": "run",
+          "from": 0,
+          "to": 1200,
+          "_note": "a vertical shaft: zig-zag ledges up, then down the far side",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 200,
+              "surf": 500,
+              "w": 220
+            },
+            {
+              "role": "ledge",
+              "x": 420,
+              "surf": 380,
+              "w": 220
+            },
+            {
+              "role": "ledge",
+              "x": 200,
+              "surf": 260,
+              "w": 220
+            },
+            {
+              "role": "bridge",
+              "x": 460,
+              "surf": 150,
+              "w": 380
+            },
+            {
+              "role": "step",
+              "x": 900,
+              "surf": 300
+            },
+            {
+              "role": "step",
+              "x": 1050,
+              "surf": 450
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "hopper_elite",
+                  "x": 500
+                },
+                {
+                  "type": "sentry_spiral",
+                  "x": 600,
+                  "y": 110
+                },
+                {
+                  "type": "drone",
+                  "x": 300,
+                  "y": 200
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 800
+              },
+              "enemies": [
+                {
+                  "type": "grunt_elite",
+                  "x": 1100
+                },
+                {
+                  "type": "caster",
+                  "x": 1000
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "chase",
+          "from": 1200,
+          "to": 3200,
+          "chaser": "GhostBear",
+          "wall": {
+            "speed": 260,
+            "color": "#ffe6c8"
+          },
+          "_note": "the ghost drifts behind you through a flooded colonnade",
+          "pits": [
+            [
+              1500,
+              1680
+            ],
+            [
+              1900,
+              2100
+            ],
+            [
+              2300,
+              2420
+            ],
+            [
+              2600,
+              2800
+            ],
+            [
+              2950,
+              3080
+            ]
+          ],
+          "crumble": [
+            {
+              "x": 1520,
+              "surf": 500,
+              "w": 150
+            },
+            {
+              "x": 1940,
+              "surf": 440,
+              "w": 140
+            },
+            {
+              "x": 2620,
+              "surf": 480,
+              "w": 160
+            },
+            {
+              "x": 2960,
+              "surf": 400,
+              "w": 120
+            }
+          ],
+          "plats": [
+            {
+              "role": "step",
+              "x": 2180,
+              "surf": 380
+            },
+            {
+              "role": "column",
+              "x": 2480,
+              "hp": 60
+            },
+            {
+              "role": "ledge",
+              "x": 2840,
+              "surf": 300,
+              "w": 160
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 3200,
+          "to": 4500,
+          "boss": "GhostBear",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 3300,
+              "surf": 460,
+              "w": 240
+            },
+            {
+              "role": "ledge",
+              "x": 3950,
+              "surf": 460,
+              "w": 240
+            },
+            {
+              "role": "bridge",
+              "x": 3550,
+              "surf": 300,
+              "w": 460
+            },
+            {
+              "role": "column",
+              "x": 3240,
+              "hp": 80
+            },
+            {
+              "role": "column",
+              "x": 4460,
+              "hp": 80
+            }
+          ]
+        },
+        {
+          "kind": "titan",
+          "from": 4500,
+          "to": 5600,
+          "titan": "Asura",
+          "seals": [
+            4750,
+            {
+              "x": 5050,
+              "surf": 500,
+              "need": 2.8
+            },
+            5380
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "caster_elite",
+                  "x": 4800
+                },
+                {
+                  "type": "drone_ring",
+                  "x": 4900,
+                  "y": 200
+                },
+                {
+                  "type": "shield_elite",
+                  "x": 5300
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 5100
+              },
+              "enemies": [
+                {
+                  "type": "hound_elite",
+                  "x": 5550
+                },
+                {
+                  "type": "sentry_spiral",
+                  "x": 5250,
+                  "y": 140
+                },
+                {
+                  "type": "hopper_elite",
+                  "x": 5450
+                }
+              ]
+            }
+          ],
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 5050,
+              "surf": 500,
+              "w": 320
+            },
+            {
+              "role": "step",
+              "x": 4880,
+              "surf": 570,
+              "w": 140
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 5600,
+          "to": 7000,
+          "boss": "rahlquist",
+          "_note": "a scrapyard pit, columns to hide behind during the long wind-ups",
+          "plats": [
+            {
+              "role": "column",
+              "x": 5800,
+              "hp": 100
+            },
+            {
+              "role": "column",
+              "x": 6800,
+              "hp": 100
+            },
+            {
+              "role": "ledge",
+              "x": 5900,
+              "surf": 420,
+              "w": 260
+            },
+            {
+              "role": "ledge",
+              "x": 6440,
+              "surf": 420,
+              "w": 260
+            },
+            {
+              "role": "step",
+              "x": 6300,
+              "surf": 260
+            }
+          ]
+        },
+        {
+          "kind": "run",
+          "from": 7000,
+          "to": 7300,
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 7040
+            },
+            {
+              "role": "prop",
+              "x": 7260,
+              "hp": 30
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "caster_elite",
+                  "x": 7200
+                },
+                {
+                  "type": "drone_elite",
+                  "x": 7150,
+                  "y": 260
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 7300,
+          "to": 8800,
+          "boss": "Suzu",
+          "_note": "a bell shrine: open floor to dash through the rings",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 7500,
+              "surf": 460,
+              "w": 220
+            },
+            {
+              "role": "ledge",
+              "x": 8380,
+              "surf": 460,
+              "w": 220
+            },
+            {
+              "role": "bridge",
+              "x": 7850,
+              "surf": 300,
+              "w": 420
+            },
+            {
+              "role": "step",
+              "x": 8050,
+              "surf": 170
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inferno",
+      "name": "Inferno Throne",
+      "jp": "煉獄の玉座",
+      "kit": "inferno",
+      "length": 9000,
+      "zoom": {
+        "calm": 1.5,
+        "fight": 1.06,
+        "crowd": 0.84
+      },
+      "sections": [
+        {
+          "kind": "run",
+          "from": 0,
+          "to": 1400,
+          "_note": "a burning gauntlet: elites only, fast",
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 200
+            },
+            {
+              "role": "bridge",
+              "x": 420,
+              "surf": 440,
+              "w": 420
+            },
+            {
+              "role": "ledge",
+              "x": 950,
+              "surf": 300,
+              "w": 240
+            },
+            {
+              "role": "wall",
+              "x": 1250
+            },
+            {
+              "role": "step",
+              "x": 1150,
+              "surf": 460
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "grunt_elite",
+                  "x": 600
+                },
+                {
+                  "type": "shield_elite",
+                  "x": 800
+                },
+                {
+                  "type": "drone_elite",
+                  "x": 700,
+                  "y": 260
+                },
+                {
+                  "type": "gunner_elite",
+                  "x": 1000
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 900
+              },
+              "enemies": [
+                {
+                  "type": "hound_elite",
+                  "x": 1350
+                },
+                {
+                  "type": "caster_elite",
+                  "x": 1200
+                },
+                {
+                  "type": "sentry_elite",
+                  "x": 980,
+                  "y": 260
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 1400,
+          "to": 2900,
+          "boss": "LocutusOfTheEye",
+          "_note": "an open sky arena: the Eye floats, the floor is yours",
+          "plats": [
+            {
+              "role": "step",
+              "x": 1600,
+              "surf": 460
+            },
+            {
+              "role": "ledge",
+              "x": 1900,
+              "surf": 340,
+              "w": 240
+            },
+            {
+              "role": "ledge",
+              "x": 2300,
+              "surf": 340,
+              "w": 240
+            },
+            {
+              "role": "step",
+              "x": 2700,
+              "surf": 460
+            },
+            {
+              "role": "bridge",
+              "x": 2050,
+              "surf": 180,
+              "w": 360
+            }
+          ]
+        },
+        {
+          "kind": "run",
+          "from": 2900,
+          "to": 4000,
+          "_note": "the stair to the throne: wall kicks and a long bridge",
+          "plats": [
+            {
+              "role": "stairs",
+              "x": 2960
+            },
+            {
+              "role": "ledge",
+              "x": 3200,
+              "surf": 460,
+              "w": 220
+            },
+            {
+              "role": "wall",
+              "x": 3420
+            },
+            {
+              "role": "step",
+              "x": 3520,
+              "surf": 300
+            },
+            {
+              "role": "bridge",
+              "x": 3600,
+              "surf": 220,
+              "w": 360
+            },
+            {
+              "role": "prop",
+              "x": 3960,
+              "hp": 30,
+              "kind": "brazier"
+            }
+          ],
+          "waves": [
+            {
+              "when": "enter",
+              "enemies": [
+                {
+                  "type": "hopper_elite",
+                  "x": 3250
+                },
+                {
+                  "type": "caster_elite",
+                  "x": 3400
+                },
+                {
+                  "type": "drone_elite",
+                  "x": 3550,
+                  "y": 160
+                }
+              ]
+            },
+            {
+              "when": {
+                "x": 3500
+              },
+              "enemies": [
+                {
+                  "type": "shield_elite",
+                  "x": 3900
+                },
+                {
+                  "type": "hound_elite",
+                  "x": 3950
+                },
+                {
+                  "type": "sentry_elite",
+                  "x": 3700,
+                  "y": 180
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 4000,
+          "to": 5400,
+          "boss": "Teknium",
+          "_note": "Teknium modes conductor and katana; at chase mode the right gate opens and the chase section starts",
+          "plats": [
+            {
+              "role": "wall",
+              "x": 4060
+            },
+            {
+              "role": "wall",
+              "x": 5340
+            },
+            {
+              "role": "ledge",
+              "x": 4250,
+              "surf": 460,
+              "w": 260
+            },
+            {
+              "role": "bridge",
+              "x": 4550,
+              "surf": 320,
+              "w": 360
+            },
+            {
+              "role": "ledge",
+              "x": 5000,
+              "surf": 460,
+              "w": 260
+            },
+            {
+              "role": "step",
+              "x": 4700,
+              "surf": 170
+            }
+          ]
+        },
+        {
+          "kind": "chase",
+          "from": 5400,
+          "to": 7600,
+          "chaser": "Teknium",
+          "wall": {
+            "speed": 290,
+            "color": "#ff2a3a"
+          },
+          "_note": "Teknium runs behind you to his throne: lances from the floor, rushes along it",
+          "pits": [
+            [
+              5700,
+              5880
+            ],
+            [
+              6100,
+              6300
+            ],
+            [
+              6500,
+              6640
+            ],
+            [
+              6850,
+              7060
+            ],
+            [
+              7250,
+              7400
+            ]
+          ],
+          "crumble": [
+            {
+              "x": 5720,
+              "surf": 500,
+              "w": 140
+            },
+            {
+              "x": 6120,
+              "surf": 460,
+              "w": 140
+            },
+            {
+              "x": 6520,
+              "surf": 400,
+              "w": 120
+            },
+            {
+              "x": 6880,
+              "surf": 480,
+              "w": 150
+            },
+            {
+              "x": 7270,
+              "surf": 440,
+              "w": 120
+            }
+          ],
+          "plats": [
+            {
+              "role": "step",
+              "x": 6380,
+              "surf": 360
+            },
+            {
+              "role": "ledge",
+              "x": 6700,
+              "surf": 300,
+              "w": 160
+            },
+            {
+              "role": "wall",
+              "x": 7480
+            }
+          ]
+        },
+        {
+          "kind": "arena",
+          "from": 7600,
+          "to": 9000,
+          "boss": "Teknium",
+          "_note": "the throne under the red moon: Teknium mode throne",
+          "plats": [
+            {
+              "role": "ledge",
+              "x": 7700,
+              "surf": 480,
+              "w": 240
+            },
+            {
+              "role": "ledge",
+              "x": 8660,
+              "surf": 480,
+              "w": 240
+            },
+            {
+              "role": "bridge",
+              "x": 8100,
+              "surf": 340,
+              "w": 400
+            },
+            {
+              "role": "step",
+              "x": 8300,
+              "surf": 180
+            },
+            {
+              "role": "column",
+              "x": 7640,
+              "hp": 120
+            },
+            {
+              "role": "column",
+              "x": 8960,
+              "hp": 120
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

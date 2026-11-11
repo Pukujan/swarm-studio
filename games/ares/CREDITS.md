@@ -21,6 +21,14 @@
 
 Licence: https://creativecommons.org/licenses/by/4.0/. The slimmed GLBs are committed in `assets/pets/`.
 
+## Painted icons (web build)
+
+Icons: assetrizz by mojomast (Kyle Durepos), used with permission. From the `hand_painted_fantasy` pack (https://github.com/mojomast/assetrizz), resized to 160 px WebP with cool hues pulled to gold and crimson; in `assets/art/icons/` (map in `icons.json`). Used on the boon and spell-pull cards and the item drops.
+
+## Sound effects (web build)
+
+Sound effects: cut and layered for ARES from CC0 packs on OpenGameArt (Kenney's RPG, Interface, Sci-fi, Digital and Casino audio, plus other CC0 packs) and a few synthesised layers; per-sound list in `assets/sfx/CREDITS.md`.
+
 Signature props (hammer, synth, bells, the Eye, wings, caduceus), the arena, VFX and shaders are made in code for this game.
 
 Engine: Godot 4 (MIT).

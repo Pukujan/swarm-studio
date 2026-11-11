@@ -1,0 +1,15 @@
+{
+ "frames": 11,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "mix",
+ "source": "m-breeze.png",
+ "qc": {
+  "ok": true,
+  "frames": 6,
+  "edge": [],
+  "height_spread": 1.01
+ }
+}

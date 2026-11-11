@@ -33,6 +33,168 @@
     ],
     "height_spread": 1.39
    }
+  },
+  "circle-gold": {
+   "file": "circle-gold.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "circle-gold.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.57
+   }
+  },
+  "circle-grand": {
+   "file": "circle-grand.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "circle-grand.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.58
+   }
+  },
+  "bolt-strike": {
+   "file": "bolt-strike.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "bolt-strike.png",
+   "qc": {
+    "ok": false,
+    "frames": 6,
+    "edge": [
+     2
+    ],
+    "height_spread": 1.08
+   }
+  },
+  "storm-cloud": {
+   "file": "storm-cloud.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "storm-cloud.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.74
+   }
+  },
+  "thunder-spear": {
+   "file": "thunder-spear.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "thunder-spear.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.79
+   }
+  },
+  "chain-arc": {
+   "file": "chain-arc.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "chain-arc.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 2.69
+   }
+  },
+  "holy-cross": {
+   "file": "holy-cross.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "holy-cross.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.11
+   }
+  },
+  "summon-blades": {
+   "file": "summon-blades.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "summon-blades.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.28
+   }
+  },
+  "ice-lance": {
+   "file": "ice-lance.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "ice-lance.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.17
+   }
+  },
+  "meteor": {
+   "file": "meteor.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "add",
+   "source": "meteor.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.91
+   }
   }
  }
 }

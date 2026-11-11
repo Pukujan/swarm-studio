@@ -1,0 +1,102 @@
+{
+ "sheets": {
+  "idle": {
+   "file": "idle.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "idle.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.11
+   }
+  },
+  "move": {
+   "file": "move.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "move.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.13
+   }
+  },
+  "charge": {
+   "file": "charge.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "charge.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.03
+   }
+  },
+  "blink": {
+   "file": "blink.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "blink.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.03
+   }
+  },
+  "hurt": {
+   "file": "hurt.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "hurt.png",
+   "qc": {
+    "ok": true,
+    "frames": 6,
+    "edge": [],
+    "height_spread": 1.09
+   }
+  },
+  "beam": {
+   "file": "beam.webp",
+   "frames": 6,
+   "cell": [
+    768,
+    768
+   ],
+   "blend": "mix",
+   "source": "beam.png",
+   "qc": {
+    "ok": false,
+    "frames": 6,
+    "edge": [
+     2
+    ],
+    "height_spread": 1.02
+   }
+  }
+ }
+}
