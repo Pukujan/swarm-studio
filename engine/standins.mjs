@@ -39,7 +39,8 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
   const idxFile = join(dir, 'index.json')
   let index = []
   try { index = JSON.parse(readFileSync(idxFile, 'utf8')) } catch {}
-  const save = () => writeFileSync(idxFile, JSON.stringify(index))
+  // the keys Map is rebuilt on load; JSON would turn it into {}
+  const save = () => writeFileSync(idxFile, JSON.stringify(index, (k, v) => (k === 'keys' ? undefined : v)))
   const searched = new Set(index.flatMap(x => x.q || []))
   const inflight = new Map()
 
@@ -86,7 +87,7 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
     for (const x of [...libraryPhotos(), ...ownPictures(), ...index]) {
       if (exclude && x.run === exclude) continue // never a build's own picture as its own stand-in
       if (avoid?.has(x.url)) continue // a photo already used elsewhere on the same build
-      const keys = x.keys || (x.keys = new Map(x.tags.map(t => [stem(t), 1])))
+      const keys = x.keys instanceof Map ? x.keys : (x.keys = new Map(x.tags.map(t => [stem(t), 1]))) // an index saved by an older studio kept keys as {}
       let hit = 0, w = 0
       for (const k of stems) { const v = keys.get(k); if (v) { w += v; if (v >= 1) hit++ } }
       if (w < Math.min(2, stems.length)) continue

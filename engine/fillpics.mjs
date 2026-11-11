@@ -5,6 +5,10 @@
 // pictures from earlier builds, Pexels or Openverse), copied into public/img/stock/
 // and listed with its credit in public/img/stock/CREDITS.md.
 // A slot whose src is set dynamically (data-gen={...}) is left to the app.
+// Designers may add only one real picture per section, so the other picture
+// frames in a grid come out as empty boxes (a div with an aspect ratio and
+// nothing inside). Those become slots too: their prompt is the section's own
+// picture prompt plus the card's title.
 
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -37,6 +41,24 @@ const isEmpty = tag => {
   return !m[1] || m[1].startsWith('data:image/svg+xml')
 }
 
+// an empty frame: <div className="... aspect-[3/4] ..."></div>
+const FRAME = /<div className="([^"]*\baspect-(?:\[[^\]]+\]|square|video)[^"]*)"\s*>\s*<\/div>/g
+const clean = s => String(s).replace(/<[^>]+>/g, ' ').replace(/\{[^}]*\}/g, ' ').replace(/["<>{}]/g, '').replace(/\s+/g, ' ').trim()
+
+// framesToSlots(text) -> text: every empty frame gets an <img data-gen> filling it
+export function framesToSlots(text) {
+  if (!FRAME.test(text)) return text
+  FRAME.lastIndex = 0
+  const theme = (text.match(/\sdata-gen="([^"]+)"/) || [])[1] || ''
+  return text.replace(FRAME, (m, cls, at) => {
+    // the card's title: the first bit of text after the frame
+    const after = text.slice(at + m.length, at + m.length + 800).split(/<[^>]+>/).map(clean).filter(Boolean).slice(0, 2).join(' ').split(' ').slice(0, 10).join(' ')
+    const gen = clean(`${theme ? theme.split(',')[0] : ''}${theme && after ? ', ' : ''}${after}`).slice(0, 200)
+    if (!gen) return m
+    return `<div className="${cls}"><img data-gen="${gen}" alt="${clean(after).slice(0, 80)}" className="w-full h-full object-cover" /></div>`
+  })
+}
+
 // slots(dir) -> [{ file, gen }]: the picture slots still empty
 export function emptySlots(appDir) {
   const out = []
@@ -50,6 +72,10 @@ export function emptySlots(appDir) {
 // fillPictures(appDir, { pick, bytesOf, run }) -> { filled, left }
 // pick({ q, run, avoid }) is standins().pick; bytesOf(url) returns the photo's bytes (or null).
 export async function fillPictures(appDir, { pick, bytesOf, run = null, step = () => {} }) {
+  for (const file of codeFiles(join(appDir, 'src'))) {
+    const text = readFileSync(file, 'utf8'), next = framesToSlots(text)
+    if (next !== text) writeFileSync(file, next)
+  }
   const slots = emptySlots(appDir)
   if (!slots.length) return { filled: 0, left: 0 }
   const outDir = join(appDir, 'public', 'img', 'stock')

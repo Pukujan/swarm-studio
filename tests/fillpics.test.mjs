@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { emptySlots, fillPictures } from '../engine/fillpics.mjs'
+import { emptySlots, fillPictures, framesToSlots } from '../engine/fillpics.mjs'
 
 function app() {
   const dir = mkdtempSync(join(tmpdir(), 'fp-'))
@@ -47,4 +47,12 @@ test('a slot with no match stays as it was', async () => {
   const r = await fillPictures(dir, { pick: async () => null, bytesOf: async () => null })
   assert.deepEqual(r, { filled: 0, left: 3 })
   assert.ok(!existsSync(join(dir, 'public', 'img', 'stock')))
+})
+
+test('an empty picture frame becomes a slot named by its section and card', () => {
+  const out = framesToSlots(`<img data-gen="Charcoal study of a facade, warm paper" src="/img/1.webp" />
+  <a><div className="overflow-hidden bg-muted aspect-[3/4]"></div><p>Plate II</p><p>Complete 2023</p></a>
+  <div className="aspect-square p-4"><span>has content</span></div>`)
+  assert.match(out, /<div className="overflow-hidden bg-muted aspect-\[3\/4\]"><img data-gen="Charcoal study of a facade, Plate II Complete 2023" alt="Plate II Complete 2023"/)
+  assert.ok(out.includes('<div className="aspect-square p-4"><span>has content</span></div>'))
 })

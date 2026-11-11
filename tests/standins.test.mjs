@@ -55,3 +55,11 @@ test('the shipped library matches on structured tags, with stemming, before any 
   assert.equal(r.source, 'library')
   assert.equal((await st.pick({ q: 'cyclists commuting across the city', w: 1600, h: 900 })).url, 'https://cdn.example/2')
 })
+
+test('an index saved with keys as {} still ranks after a restart', async () => {
+  const data = mkdtempSync(join(tmpdir(), 'st-'))
+  mkdirSync(join(data, 'standins'))
+  writeFileSync(join(data, 'standins', 'index.json'), JSON.stringify([{ id: 'a', src: 'pexels', url: '/standin/a.jpg', q: ['boathouse canal'], tags: ['boathouse', 'canal', 'harbour'], quality: 4, keys: {} }]))
+  const st = standins({ dataDir: data, runsDir: '/nonexistent', libraryFile: '/nonexistent', fetchImpl: async () => { throw new Error('offline') } })
+  assert.equal((await st.pick({ q: 'timber boathouse on a canal harbour' })).url, '/standin/a.jpg')
+})
