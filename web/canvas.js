@@ -6656,15 +6656,29 @@ const hosted = BOOT.hosted && (() => {
   // With the Feed, a guest is the Feed's guest (one name on both): the Feed makes one on the first
   // visit with a generated name ("Comet Otter"), and the guest confirms or changes it here, once.
   const feedApi = (path, opts) => fetch(`/api/feed${path}`, { credentials: 'same-origin', ...opts }).then(r => r.json().then(j => ({ ok: r.ok, ...j }))).catch(() => ({ ok: false }))
-  function ready() {
-    if (me?.name && (!H.feedIdentity || store.get('guestNamed', false))) return Promise.resolve(true)
+  // the event stream opened before the guest existed: open it again as this guest
+  const reconnect = () => { connect(); return new Promise(r => { es.addEventListener('open', r, { once: true }); setTimeout(r, 2500) }) }
+  // A build never waits for a name. With the Feed, the guest's generated name ("Comet Otter") is enough
+  // to build, and the Feed makes the guest here if this is the first visit; the guest picks their own
+  // name the first time they post, where it is the credit. Without a Feed (local testing) the name is asked.
+  async function ready() {
+    if (me?.name) return true
+    if (!H.feedIdentity) return named('Start building')
+    for (let i = 0; i < 2 && !me?.name; i++) {
+      await feedApi('/me')
+      const st = await api('/api/state?fresh=1').then(r => r.json()).catch(() => null)
+      if (st?.guest) { me = st.guest; draw(); await reconnect() }
+    }
+    return me?.name ? true : named('Start building')
+  }
+  function named(go_label) {
     return new Promise(async resolve => {
       let done = false
+      const had = !!me?.name // a guest who is only renaming keeps the stream (and the canvas) they have
       const d = ui.dialog({
-        kicker: 'Try Swarm Studio', title: 'What should the crew <em>call you</em>?',
-        desc: `Guests get ${H.limits.builds} builds a day with a crew of ${H.limits.agents}. Your name goes on anything you post to the Feed.`,
-        body: `<form class="ui-field g-form"><label class="ui-label" for="g-name">Guest name</label><input id="g-name" class="ui-input" maxlength="24" autocomplete="nickname" placeholder="e.g. Ada" required><p class="g-err" hidden></p></form>`,
-        footer: `<button class="ui-btn ui-btn-default g-go">Start building</button>`,
+        title: 'What should the crew <em>call you</em>?',
+        body: `<form class="ui-field g-form"><label class="ui-label" for="g-name">Name</label><input id="g-name" class="ui-input" maxlength="24" autocomplete="nickname" required><p class="g-err" hidden></p></form>`,
+        footer: `<button class="ui-btn ui-btn-default g-go">${go_label}</button>`,
         onClose: () => { if (!done) resolve(false) }
       })
       const input = d.body.querySelector('input'), err = d.body.querySelector('.g-err')
@@ -6690,9 +6704,7 @@ const hosted = BOOT.hosted && (() => {
           me = j.guest
         }
         done = true; d.close('ok'); draw()
-        // the event stream opened before the cookie existed: open it again as this guest
-        connect()
-        await new Promise(r => { es.addEventListener('open', r, { once: true }); setTimeout(r, 2500) })
+        if (!had) await reconnect()
         resolve(true)
       }
       d.body.querySelector('form').onsubmit = go
@@ -6731,6 +6743,8 @@ const hosted = BOOT.hosted && (() => {
 
   async function postToFeed() {
     if (!finished() || posting) return
+    // the name on the post: asked once, here (the Feed's generated name is the default)
+    if (H.feedIdentity && !store.get('guestNamed', false) && !(await named('Post'))) return
     posting = true; draw()
     try {
       // a resting page is frozen into a picture (its frame emptied), so that picture is the poster
@@ -6754,13 +6768,6 @@ const hosted = BOOT.hosted && (() => {
     } finally { posting = false; draw() }
   }
 
-  // ?prompt= from the Feed's /studio page fills both prompt boxes
-  const given = (Q.get('prompt') || '').slice(0, H.limits.promptChars)
-  if (given) {
-    els.brief.value = given
-    const fill = () => { const i = document.querySelector('.hm-ask input'); if (i && !i.value) i.value = given; return !!i }
-    if (!fill()) setTimeout(fill, 600)
-  }
   cosmosHooks.add(e => { if (e?.type === 'run:done' || e?.type === 'reset' || e?.type === 'run:start') { if (e.type === 'run:done') refresh(); else draw() } })
   draw()
   if (!open) setTimeout(() => refuse({ error: 'closed', title: 'Done for today', message: H.closedMessage }), 400)
