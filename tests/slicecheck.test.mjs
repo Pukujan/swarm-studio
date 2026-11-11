@@ -74,3 +74,10 @@ test('contact sheet, close-up and before/after are cut with ffmpeg', { skip: !ff
     assert.ok(existsSync(join(dir, 'ba.jpg')))
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('the look picked on the mood board wins over the brief', async () => {
+  const { styleGuide } = await import('../engine/artdirect.mjs')
+  assert.equal(styleGuide({ brief: 'a pixel art game', style: 'gouache' }).style, 'gouache')
+  assert.equal(styleGuide({ brief: 'a pixel art game', style: 'nope' }).style, 'pixel')
+  assert.equal(styleGuide({ brief: 'a pixel art game', style: 'photo' }).style, 'pixel')
+})
