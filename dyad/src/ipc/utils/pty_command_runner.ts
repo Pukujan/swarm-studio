@@ -422,6 +422,9 @@ function runCommandWithoutPty(
       // matching what the PTY path effectively provides.
       shell: true,
       windowsHide: true,
+      // No input: an open stdin pipe makes npm's PowerShell shims (pnpm.ps1,
+      // npx.ps1) wait for EOF before running, so installs hang on Windows.
+      stdio: ["ignore", "pipe", "pipe"],
     });
     const timeoutId = setTimeout(() => {
       if (didSettle) return;
