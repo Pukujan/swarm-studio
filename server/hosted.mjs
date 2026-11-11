@@ -44,7 +44,7 @@ const LIMITS = {
   pages: num('HOSTED_PAGES', 2),
   sections: num('HOSTED_SECTIONS', 6),
   promptChars: num('HOSTED_PROMPT_CHARS', 500),
-  rpm: num('HOSTED_RPM', 60), // API requests per IP per minute
+  rpm: num('HOSTED_RPM', 240), // API requests per IP per minute (one build with its canvas open is about 35)
   dailyUsd: num('HOSTED_DAILY_USD', 3),
   posts: num('HOSTED_GUEST_POSTS', 3) // Feed posts per guest per day
 }
