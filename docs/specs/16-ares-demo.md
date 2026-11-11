@@ -80,13 +80,22 @@ The professional builds (Atelier Nord, Tempo) appear for a beat in part 2, so th
 
 ## Order of work (deadline 2026-11-11 17:00 EST)
 
-1. **Tonight, on Windows:** Hermes, the plugin and Godot installed; one polished boss arena (sovthpaw or Teknium) with the full resource loop; Jev wired to it.
-2. **Early morning:** the rest of the ladder (simple fights are fine; the name cards and clips carry the trailer).
-3. **Morning, in the studio:** the website and the player app built live and recorded; the game footage captured (Godot movie-maker or a screen capture on the PC).
-4. **Noon:** cut the trailer and the posts.
-5. **By 15:00 EST:** post the video on X tagging @NousResearch, then submit the form.
+The game and the web pieces run **in parallel**. The game is the long pole and runs on the Windows PC. The Mac studio builds the site and the app at the same time, and those live builds are recorded, because the recordings are the trailer's "the crew builds it" footage. The studio builds one app at a time, so the site and the app go one after the other on the Mac.
 
-If the Windows setup stalls, the fallback is the existing trailer plan with Atelier, Tempo and Lokee. ARES is the upgrade, not a dependency.
+| When | Windows PC (game) | Mac (studio) |
+|---|---|---|
+| Tonight | Hermes, the plugin and Godot set up; **one polished boss arena** (sovthpaw or Teknium) with the full resource loop; Jev playing it | Restart the studio on current main; build the **ARES website** live and record it |
+| Tonight / early morning | The rest of the boss ladder (simple fights are fine; the name cards and clips carry the trailer) | Build the **player app** live and record it: sign-in, the leaderboard, "beat Jev's time", the skins shop with credits, admin |
+| Morning | Export boss renders, gameplay clips (Godot movie maker or a screen capture) and Jev's clear times | One more studio turn on the site and the app swaps the stand-in photos for boss renders and puts Jev's real times on the leaderboard |
+| Late morning | | Veo hero shots (the cold open, sovthpaw's freeze, the Teknium reveal) made from the real boss designs; owner approved spending credits |
+| Noon | | Cut the blockbuster trailer to "No Limits", plus the posts |
+| By 15:00 EST | | Post on X tagging @NousResearch; submit the form |
+
+The Tempo launch rerun is cut: Atelier Nord already covers the professionals beat. Tempo runs only if there is slack.
+
+If the Windows setup stalls, the fallback is the existing trailer plan with Atelier Nord and Lokee. ARES is the upgrade, not a dependency.
+
+Tracker: the GitHub issue "ARES flagship demo: tracker".
 
 ## Done when
 
