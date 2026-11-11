@@ -151,6 +151,14 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const last = events.findLast(e => ['app:start', 'app:done', 'app:failed'].includes(e.type))
     const steps = events.filter(e => e.type === 'app:step').slice(-200).map(e => e.step)
     if (!last) return { state: 'idle', engineReady: engineReady() }
+    // a build another Studio drives (same runs folder): its log still moves, so it is working,
+    // with the dev server it reported; this Studio only watches it
+    const elsewhere = last.type === 'app:start' && Date.now() - (events.at(-1)?.t || 0) < 20 * 60e3
+    if (elsewhere) {
+      const ready = events.slice(events.lastIndexOf(last)).findLast(e => e.type === 'app:ready')
+      const stage = steps.findLast(s => /^stage \d+ of \d+/.test(s.text || ''))?.text || steps.at(-1)?.text || ''
+      return { state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
+    }
     return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:start' ? 'stopped' : 'done', kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
@@ -163,6 +171,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!events) throw new Error('no such build')
     let j = jobs.get(id)
     if (j?.state === 'working') return view(j)
+    if (!j && state(id).elsewhere) throw new Error('another Swarm Studio is building this one; it shows here as it goes')
     if ([...jobs.values()].some(x => x.state === 'working')) throw new Error('another app is building; wait for it or stop it')
     const dir = dirOf(id)
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
@@ -393,10 +402,17 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // the title screen becomes the game's cover (img/snap.jpg, the run's snapshot)
     const shot = join(runsDir, j.id, 'img', 'snap.jpg')
     try { mkdirSync(join(runsDir, j.id, 'img'), { recursive: true }) } catch {}
-    let t = await playtest(j.url, { shot })
+    // the play test is filmed: the App view replays it, with the keys it pressed
+    // numbered from the clips already there, so a restart never reuses a name (they are cached for good)
+    let n = 1
+    try { n = 1 + Math.max(0, ...readdirSync(join(runsDir, j.id, 'img')).map(f => +(f.match(/^playtest-(\d+)\.webm$/)?.[1] || 0))) } catch {}
+    if (n > 999) n = 999
+    const clip = join(runsDir, j.id, 'img', `playtest-${n}.webm`)
+    let t = await playtest(j.url, { shot, clip })
+    const film = t.clip ? { clip: `/img/${j.id}/playtest-${n}.webm`, keys: t.keys || [] } : {}
     if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
-    else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s` })
-    else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false })
+    else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s`, ...film })
+    else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false, ...film })
     if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : { ok: true, seconds: t.seconds }
     const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, links || ''].filter(Boolean).join('\n\n')
     try {

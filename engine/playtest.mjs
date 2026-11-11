@@ -4,9 +4,9 @@
 // page) pass a game whose run ends the moment it starts; this catches that, and
 // crashes, a missing canvas and a start button that does nothing.
 
-import { existsSync, readdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { dyadDir } from './appbuild.mjs'
 
@@ -55,14 +55,31 @@ async function blank(page, png) {
 
 // { ok, skipped?, problem?, seconds } — `problem` is one sentence for a fix turn
 // shot: a file to save the title screen to (the game's cover), as a JPEG
-export async function playtest(url, { seconds = 4, timeout = 30000, shot = null } = {}) {
+// clip: a path to film the test to (.webm); the result then has clip and the keys pressed, in order
+export async function playtest(url, opts = {}) {
+  const box = {}
+  const r = await playtestRun(url, opts, box)
+  return { ...r, ...(box.filmed || {}) }
+}
+async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null } = {}, box = {}) {
+  let film = async () => ({}), vdir = null
   const pw = await loadPlaywright()
   if (!pw) return { ok: true, skipped: 'no browser for the play test' }
   let browser
   try { browser = await launch(pw.chromium) } catch (e) { return { ok: true, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
   const errors = [], blocked = []
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    vdir = clip ? mkdtempSync(join(tmpdir(), 'playtest-')) : null
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...(vdir ? { recordVideo: { dir: vdir, size: { width: 640, height: 400 } } } : {}) })
+    const page = await ctx.newPage()
+    const pressed = [], t00 = Date.now()
+    const press = k => pressed.push({ k, t: +((Date.now() - t00) / 1000).toFixed(2) })
+    // the film is saved however the test ends
+    film = async () => {
+      if (!vdir) return {}
+      try { const v = page.video(); await ctx.close(); const f = await v?.path(); if (f && existsSync(f)) { copyFileSync(f, clip); return { clip, keys: pressed.slice(0, 80) } } } catch {}
+      return {}
+    }
     page.on('pageerror', e => errors.push(String(e.message).slice(0, 200)))
     page.on('console', m => {
       if (m.type() !== 'error') return
@@ -91,21 +108,22 @@ export async function playtest(url, { seconds = 4, timeout = 30000, shot = null 
       const label = ((await b.innerText().catch(() => '')) || '').trim()
       if (label && label.length < 40 && START.test(label) && await b.isVisible().catch(() => false)) {
         await b.click({ timeout: 3000 }).catch(() => {})
+        press(label.slice(0, 20))
         started = true
         break
       }
     }
     const box = await canvas.boundingBox()
     const cx = box ? box.x + box.width / 2 : 640, cy = box ? box.y + box.height * 0.7 : 500
-    if (!started) { await page.mouse.click(cx, cy); await page.keyboard.press('Enter'); await page.keyboard.press('Space') }
+    if (!started) { await page.mouse.click(cx, cy); await page.keyboard.press('Enter'); await page.keyboard.press('Space'); press('Click'); press('Enter'); press('Space') }
 
     // keep playing with the usual controls: tap, hold-and-release, space, arrows
     const t0 = Date.now()
     let endedAt = 0
     const keys = ['Space', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'KeyW', 'KeyD']
     for (let i = 0; Date.now() - t0 < seconds * 1000; i++) {
-      if (i % 3 === 0) { await page.mouse.move(cx, cy); await page.mouse.down(); await page.waitForTimeout(220); await page.mouse.up() }
-      else await page.keyboard.press(keys[i % keys.length]).catch(() => {})
+      if (i % 3 === 0) { press('Hold'); await page.mouse.move(cx, cy); await page.mouse.down(); await page.waitForTimeout(220); await page.mouse.up() }
+      else { press(keys[i % keys.length]); await page.keyboard.press(keys[i % keys.length]).catch(() => {}) }
       await page.waitForTimeout(180)
       const now = await textOf()
       const m = now.match(ENDED)
@@ -119,6 +137,8 @@ export async function playtest(url, { seconds = 4, timeout = 30000, shot = null 
   } catch (e) {
     return { ok: true, skipped: `the play test could not run: ${String(e.message).slice(0, 160)}` }
   } finally {
+    box.filmed = await film().catch(() => ({}))
+    if (vdir) rmSync(vdir, { recursive: true, force: true })
     await browser.close().catch(() => {})
   }
 }

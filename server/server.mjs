@@ -2464,6 +2464,24 @@ const server = createServer((req, res) => {
     return
   }
 
+  // a game's filmed play test (engine/playtest.mjs), replayed in the App view
+  const clip = url.pathname.match(/^\/img\/([\w-]{1,64})\/(playtest-\d{1,3}\.webm)$/)
+  if (clip) {
+    const file = join(runsDir, clip[1], 'img', clip[2])
+    if (!existsSync(file)) return res.writeHead(404).end('not found')
+    // a byte range, so the replay can seek past the loading screen
+    const body = readFileSync(file), r = String(req.headers.range || '').match(/^bytes=(\d*)-(\d*)$/)
+    const head = { 'content-type': 'video/webm', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*', 'accept-ranges': 'bytes' }
+    if (r && (r[1] || r[2])) {
+      const a = r[1] ? +r[1] : Math.max(0, body.length - +r[2]), b = r[1] && r[2] ? Math.min(+r[2], body.length - 1) : body.length - 1
+      if (a > b || a >= body.length) return res.writeHead(416, { 'content-range': `bytes */${body.length}` }).end()
+      res.writeHead(206, { ...head, 'content-range': `bytes ${a}-${b}/${body.length}`, 'content-length': b - a + 1 })
+      return res.end(body.subarray(a, b + 1))
+    }
+    res.writeHead(200, { ...head, 'content-length': body.length })
+    res.end(body)
+    return
+  }
   const img = url.pathname.match(/^\/img\/([\w-]{1,64})\/((?:\d{1,3}|snap|kept-\d{1,3}|(?:edit|video)-[a-z0-9]{1,12}-?\d{0,2}|(?:game|peek)-[a-z0-9-]{1,56})\.(png|jpe?g|webp))$/)
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
