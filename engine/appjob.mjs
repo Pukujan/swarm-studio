@@ -113,9 +113,11 @@ export function bigResumeAt(events, dir) {
   if (!dir || !existsSync(join(dir, 'package.json'))) return 0
   const startIdx = events.findLastIndex(e => e.type === 'app:start' && e.fresh && !e.resume)
   if (startIdx < 0) return 0
+  // a Godot-first game counts only its Godot stages (a web build before it does not carry over)
+  const godot = isGodotFirst(dir)
   let next = 0
   let total = 5
-  for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big) { if (e.big.n) total = e.big.n; if (e.big.ok && e.big.i === next) next++ }
+  for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big && !!e.big.godot === godot) { if (e.big.n) total = e.big.n; if (e.big.ok && e.big.i === next) next++ }
   return next < total ? next : 0
 }
 
@@ -385,7 +387,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const play = await playGame(j, dir, model(), step, brand)
       j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
       // each slice carries the bots' filmed play test, so the person sees it before the next one
-      send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}) } })
+      send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}), ...(godot ? { godot: true } : {}) } })
       // guided (the default): stop after each slice but the last and ask in the left chat; the
       // person's answer starts the next slice (a resume) with their words in its prompt
       if (input.guided !== false && i < stages.length - 1) {

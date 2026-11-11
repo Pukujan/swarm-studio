@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
-import { BIG_STAGES, skillText } from './game.mjs'
+import { stagesFor, viewOf, skillText } from './game.mjs'
 import { portDir, godotBin, godotErrors } from './port.mjs'
 
 export const GODOT_SKILLS = ['gamedev/godot-gdscript', 'gamedev/godot-nodes-scenes', 'gamedev/godot-2d-movement', 'gamedev/godot-signals-groups']
@@ -86,20 +86,21 @@ export function seedGodot(dir, spec) {
 }
 
 // How the art is used in Godot: the same files as the web brief, under res://assets/art/
-export function godotArtBrief(files = []) {
+export function godotArtBrief(files = [], view = 'side') {
   if (!files.length) return '- No painted art this time: draw every portrait, icon and backdrop with Godot nodes (ColorRect, Polygon2D, _draw()).'
   return `- Painted art is in res://assets/art/ (already imported). Load each with load("res://assets/art/<file>") and use it as named; if one fails to load, draw a stand-in so the game never breaks:
 ${files.map(f => f.kind === 'sheet' && f.cell
     ? `  - ${f.file.replace(/^art\//, '')}: ${f.what}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px, played at ${f.fps} fps${f.loop ? ', looping' : ', once per move'}. The frames: ${f.frames}. Build its SpriteFrames in code: one AtlasTexture per frame (region = Rect2(n*${f.cell[0]}, 0, ${f.cell[0]}, ${f.cell[1]})), into an AnimatedSprite2D.`
     : `  - ${f.file.replace(/^art\//, '')}: ${f.what}`).join('\n')}
-  Sprites (sprite-*.png, transparent) are the fighters' own textures: sprite-hero is the hero, sprite-boss the boss, the others the enemies they are named for. Scale them so the hero stands about 150 px tall on the 1280×720 screen and the boss about twice that. Room backdrops fill the screen behind the action (modulate them a little darker so the fighters read); portraits sit beside the dialogue box; boon icons on the boon cards, the HUD and the run summary; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
-  The hero's sheets (sheet-hero-*) are its animation: play the looping one while it moves and the move frames for each action, and keep sprite-hero only for stills. Flip it (flip_h) to face left.` : ''}`
+  Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others the enemies or hazards they are named for. The hero is big and easy to read: at least a sixth of the 720 px screen height (about 130–160 px tall); enemies sized to match as solid filled figures, never thin outlines; the boss about twice the hero. Give every actor a dark outline or rim light (a small outline shader on the sprite, or a dark copy behind it offset 3 px) so it stands off the painting.
+  Backdrops (place-*, room-*) are scenery, not the play layer: ${view === 'side' ? 'a ParallaxBackground with two or more ParallaxLayers scrolling slower than the camera' : 'fill the screen behind the action'}, pushed back (modulate darker and cooler, lower contrast) so the actors and platforms read first. Platforms, ledges and obstacles are solid, opaque shapes with a bright top edge, clearly separate from the painting. Weather and particles (rain, sparks) go behind the actors (z_index below them), never over them. Portraits sit beside the dialogue box; item icons on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
+  The hero's sheets (sheet-hero-*) are its animation: play the looping one while it moves and the move frames for each action (jump, fall, slide, hurt, land), scaled to the hero's size, and keep sprite-hero only for stills. Flip it (flip_h) to face left.` : ''}`
 }
 
 export const GODOT_RULES = `- Godot 4 (4.7) with GDScript 2: typed variables, @export, @onready, signals with .connect(), await get_tree().create_timer(t).timeout. No Godot 3 syntax (no yield, no export var, no KinematicBody2D: CharacterBody2D with velocity and move_and_slide()).
 - The project is ports/godot/: project.godot (keep its display and rendering settings; add input actions there under [input] or create them in code with InputMap), the main scene res://scenes/main.tscn, scenes under scenes/, one script per system under scripts/. No file over about 400 lines.
 - Write .tscn files by hand only when they stay small (format=3, ext_resource ids as strings); build most of the scene tree in code from the scripts, which is less error-prone.
-- Inputs: keyboard (arrows and WASD to move, Space or J to attack, K special, Shift dash, E talk, Esc pause), the mouse, and touch (tap/hold) so it plays on a phone; Enter, Space or a click starts from the title.
+- Inputs: keyboard (arrows and WASD, Space, the keys the spec names, Esc pause), the mouse, and touch (tap, hold, swipe) so it plays on a phone; Enter, Space or a click starts from the title, and from the title one press reaches play (no extra menus in between).
 - Characters are upright figures seen from the side or front: never rotate a character to face where it aims or walks. Flip it (flip_h) and show the aim with the weapon or the attack. Give life with Tweens: a squash on a hit, a lean on a dash, a white modulate flash when hurt.
 - Game feel: hit-stop (a short Engine.time_scale dip), screen shake on a Camera2D, knockback, GPUParticles2D or CPUParticles2D bursts.
 - Sound: synthesise short sounds with AudioStreamGenerator or AudioStreamWAV built in code (no sound files).
@@ -111,13 +112,14 @@ const STEP_NOTE = 'Godot is run headless on the project after this turn (import,
 
 // One stage of a Godot-first big game: the same stages as the web build, written in Godot
 export function godotStagePrompt(spec, i, { art = [], failed = '' } = {}) {
-  const st = BIG_STAGES[i]
-  const done = BIG_STAGES.slice(0, i).map(s => s.name).join(', ')
-  const head = `This is a big 2D game made in Godot 4, built in ${BIG_STAGES.length} stages; this is stage ${i + 1}: ${st.name}. GAME_SPEC.md in the project root is the whole spec; follow its names, numbers and content.`
+  const stages = stagesFor(spec)
+  const st = stages[i]
+  const done = stages.slice(0, i).map(s => s.name).join(', ')
+  const head = `This is a big 2D game made in Godot 4, built in ${stages.length} slices (the game playable after each); this is slice ${i + 1}: ${st.name}. GAME_SPEC.md in the project root is the whole spec; follow its names, numbers and content.`
   const body = `${failed ? `First: ${failed}\n\n` : ''}${done ? `Already built: ${done}. Keep all of it working; change it only where this stage needs to.\n\n` : ''}Build this stage now: ${st.what}
 
-Do only this stage; later stages add the rest, so leave clean places for them (a room type table, a boon list, a dialogue autoload) instead of building them now.
-${godotArtBrief(art)}
+Do only this slice; later slices add the rest, so leave clean places for them (a data table, a dialogue autoload) instead of building them now.
+${godotArtBrief(art, viewOf(spec))}
 ${GODOT_RULES}
 - ${STEP_NOTE}
 

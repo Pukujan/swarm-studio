@@ -36,3 +36,17 @@ test('a game with its own count of slices resumes against that count', () => {
     assert.equal(bigResumeAt([start, ...[0, 1, 2, 3, 4].map(i => s(i, 6))], dir), 5, 'five of six: one to go')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('a Godot-first game resumes from its Godot stages only', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'gr-'))
+  writeFileSync(join(dir, 'package.json'), '{}')
+  mkdirSync(join(dir, 'ports', 'godot'), { recursive: true })
+  writeFileSync(join(dir, 'ports', 'godot', '.godotfirst'), '')
+  const start = { type: 'app:start', fresh: true }
+  const web = i => ({ type: 'app:stage', big: { i, ok: true } }), gd = i => ({ type: 'app:stage', big: { i, ok: true, godot: true } })
+  assert.equal(bigResumeAt([start, web(0), web(1), web(2)], dir), 0)
+  assert.equal(bigResumeAt([start, gd(0), gd(1)], dir), 2)
+})

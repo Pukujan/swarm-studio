@@ -35,6 +35,8 @@ test('stage prompts say Godot 4 and keep work in ports/godot', () => {
   assert.match(p0, /sprite-hero\.png: the hero/)
   const p1 = godotStagePrompt({}, 1, { failed: 'Godot said no' })
   assert.match(p1, /^This is a big 2D game made in Godot 4/)
+  const own = godotStagePrompt({ stages: [{ name: 'core run', what: 'run' }, { name: 'relays', what: 'r' }, { name: 'home', what: 'h' }] }, 1)
+  assert.match(own, /3 slices.*slice 2: relays/)
   assert.match(p1, /First: Godot said no/)
   const sheet = godotArtBrief([{ file: 'art/sheet-hero-run.webp', what: 'run', kind: 'sheet', cell: [256, 256], count: 6, fps: 12, loop: true, frames: 'a' }])
   assert.match(sheet, /Rect2\(n\*256, 0, 256, 256\)/)

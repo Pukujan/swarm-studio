@@ -1291,8 +1291,10 @@ async function paintGame(runId, spec, items, appDir, step, signal = null) {
     return true
   }
   async function paintSheet(slot, it) {
-    const ref = raws.get(it.after)
-    if (!ref || !existsSync(ref)) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); return }
+    // the uncut picture of the figure, else (art kept from an older build) its cut-out sprite
+    const still = done.get(it.after)?.file
+    const ref = [raws.get(it.after), still && join(appDir, 'public', still)].find(f => f && existsSync(f))
+    if (!ref) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
     const pick = art.tierFor(choice, { hero: true })
     const go = strict => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout: it.layout })], 300000)
     let fixes = ''
@@ -2302,7 +2304,7 @@ const server = createServer((req, res) => {
         const spec = (readEvents(id) || []).findLast(e => e.type === 'game:spec')?.spec
         if (spec && !input.prompt && !a.state(id).hasApp) {
           const g = await gameMod()
-          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}) }
+          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}) }
         }
         return a.start(id, input)
       }).then(s => reply(200, s)).catch(fail)
