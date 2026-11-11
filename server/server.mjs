@@ -231,11 +231,14 @@ function paintNew(runId, send, page, layer, html, choice) {
   const gens = [...new Set([...String(html).matchAll(/<img\b[^>]*\bdata-gen="([^"]{3,300})"/g)].map(m => m[1]))].filter(g => !had.has(g)).slice(0, 2)
   for (const gen of gens) paintOne(send, runId, { page, layer, gen }, choice)
 }
+// Pictures are slow, so they are a step of their own: slots are noted as their sections land (the
+// canvas shows a stand-in photo in each), and painting starts once the layout pass is over
+// (start(), on run:done). Sections that land after that (a review fix) are painted at once.
 function imageQueue(run, emit, choice) {
   const jobs = []
-  let active = 0, n = 0
+  let active = 0, n = 0, held = true
   const pump = () => {
-    while (active < 2 && jobs.length) {
+    while (!held && active < 2 && jobs.length) {
       const job = jobs.shift()
       active++
       const sentBack = c => emit('image:sent-back', { page: job.page, layer: job.layer, gen: job.gen, problems: c.problems, model: c.model })
@@ -250,7 +253,7 @@ function imageQueue(run, emit, choice) {
         .finally(() => { active--; pump() })
     }
   }
-  return e => {
+  const add = e => {
     for (const m of String(e.html || '').matchAll(/<img\b[^>]*\bdata-gen="([^"]{3,300})"[^>]*>/g)) {
       if (n >= IMG_MAX || /\bsrc=/.test(m[0])) continue
       const box = String(e.html).slice(Math.max(0, m.index - 400), m.index)
@@ -260,6 +263,10 @@ function imageQueue(run, emit, choice) {
     }
     pump()
   }
+  add.start = () => { held = false; pump() }
+  // a build that stopped before its layout was done paints nothing: its waiting slots are let go
+  add.drop = message => { if (!held) return; for (const job of jobs.splice(0)) emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message }) }
+  return add
 }
 const host = url => { try { return new URL(url).host } catch { return '' } }
 const defaultAgents = Number(process.env.SWARM_AGENTS || 16)
@@ -319,6 +326,8 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     if (type !== 'layer:delta' && type !== 'plan:delta') appendFileSync(join(dir, 'events.jsonl'), JSON.stringify(event) + '\n')
     // a section carried over from the last version keeps its pictures: nothing is painted again
     if (type === 'layer:done' && images && !data.kept) images(event)
+    // the layout pass is over: now the pictures are painted
+    if (type === 'run:done' && images) images.start()
   }
 
   if (!models.planner.apiKey || !models.worker.apiKey) {
@@ -350,7 +359,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
       writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan, null, 2))
     })
   })
-    .catch(err => emit('error', { where: 'run', message: String(err.message || err) }))
+    .catch(err => { emit('error', { where: 'run', message: String(err.message || err) }); images?.drop('the build stopped before its pictures') })
   return run
 }
 

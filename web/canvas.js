@@ -3039,6 +3039,30 @@ function sketch(desc) {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
+// A stand-in photo for a slot whose real picture is still to come (or could not be painted): the
+// closest match from the stock library, earlier builds, Pexels or Openverse (/api/standin,
+// engine/standins.mjs). Finding one can take a while, so the sketch shows first and the photo
+// takes its place when it comes. It lives only here on the canvas: the saved build keeps the
+// empty slot, and the painted picture replaces the stand-in the moment it lands.
+const standins = new Map() // the picture's prompt -> its url, null (none found) or 'wait'
+function standinFor(gen) {
+  if (BOOT.hosted || WALL) return null // the hosted studio has no stand-in source
+  const had = standins.get(gen)
+  if (had !== undefined) return had === 'wait' ? null : had
+  standins.set(gen, 'wait')
+  const run = viewing && viewing !== 'new' ? viewing : S.run
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 60000)
+  api(`/api/standin?${new URLSearchParams({ q: gen, w: '768', h: '512', run: run || '' })}`, { signal: ac.signal })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null)
+    .then(j => {
+      clearTimeout(t)
+      const url = j?.url ? (/^https?:/.test(j.url) ? j.url : BASE + j.url) : null
+      standins.set(gen, url)
+      if (url) for (const l of S.layers.values()) if (l.status === 'done' && l.text.includes('data-sketch')) fillImages(l)
+    })
+  return null
+}
+
 function fillImages(l) {
   if (l.status !== 'done' || !/data-gen=/.test(l.text)) return
   const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
@@ -3047,8 +3071,10 @@ function fillImages(l) {
     const gen = img.getAttribute('data-gen')
     const src = S.images.get(`${l.key}|${gen}`)
     if (src === undefined || src === '') {
-      // waiting, or the photo failed: the sketch stays
-      if (!img.getAttribute('src')) { img.setAttribute('src', sketch(gen)); img.setAttribute('data-sketch', ''); changed = true }
+      // waiting, or the photo failed: a stand-in photo holds the slot, and the sketch until one is found
+      const hold = standinFor(gen)
+      if (hold) { if (img.getAttribute('src') !== hold) { img.setAttribute('src', hold); img.setAttribute('data-sketch', 'photo'); changed = true } }
+      else if (!img.getAttribute('src')) { img.setAttribute('src', sketch(gen)); img.setAttribute('data-sketch', ''); changed = true }
       continue
     }
     if (img.getAttribute('src') !== src) { img.setAttribute('src', src); img.removeAttribute('data-sketch'); changed = true }
