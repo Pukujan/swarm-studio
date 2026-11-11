@@ -86,6 +86,8 @@ export async function fillPictures(appDir, { pick, bytesOf, run = null, step = (
     if (chosen.has(gen)) continue
     let photo = null
     try { photo = await pick({ q: gen, run, avoid }) } catch {}
+    // every match already used on this build: a repeat beats an empty box
+    if (!photo?.url && avoid.size) try { photo = await pick({ q: gen, run }) } catch {}
     if (!photo?.url) continue
     let bytes = null
     try { bytes = await bytesOf(photo.publicUrl && !photo.url.startsWith('/') ? photo.publicUrl : photo.url) } catch {}
