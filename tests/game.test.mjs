@@ -149,3 +149,16 @@ test('sprites stand on magenta, or green when the character is pink', async () =
   assert.match(pink.find(a => a.id === 'sprite-hero').gen, /solid green \(#00FF00\)/)
   assert.match(sheetListOf({ ...big }).layout, /magenta \(#FF00FF\)/)
 })
+
+test('after a slice the build asks in the chat, and the answer goes into the next slice', async () => {
+  const { sliceAsk } = await import('../engine/game.mjs')
+  const a = sliceAsk(big, 0)
+  assert.match(a.ask, /Slice 1 of 4, the core run/)
+  assert.match(a.ask, /App window/)
+  assert.equal(a.next, 'the relays')
+  assert.match(a.ideas[0], /^Looks good, go on to the relays/)
+  assert.ok(a.ideas.some(x => /Mika bigger/.test(x)))
+  const p = bigStagePrompt(big, 1, { note: 'make the gaps wider' })
+  assert.match(p, /The person played the last slice and said: "make the gaps wider"/)
+  assert.doesNotMatch(bigStagePrompt(big, 1), /The person played/)
+})

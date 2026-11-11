@@ -1588,6 +1588,8 @@ els.form.addEventListener('submit', async e => {
   }
   // the chat follows the view: the app's next change, or an idea for the video
   const skip = () => { nextRoute?.done?.(null); nextRoute = null }
+  // a big game waiting after a slice: the answer goes into the next slice, from any view
+  if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
   if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
@@ -3980,6 +3982,7 @@ async function loadApp() {
     Object.assign(appv, { state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
+    if (st.state === 'paused' && st.slice) { appv.slice = st.slice; sliceCard(st.slice, run) }
     // the server knows whether the app is running: an address from the log may be a dev server
     // that stopped with a restart, so it opens again rather than showing a dead page
     appv.url = st.url || null
@@ -4086,7 +4089,7 @@ function renderApp() {
   // a build another Studio drives comes from the shared run log: the server says so
   const st = appv.state, working = st === 'working', elsewhere = !!appv.elsewhere
   appEls.state.className = `app-state pill ${st}`
-  appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : appv.hasApp ? 'built' : 'no app yet'
+  appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : st === 'paused' ? 'your turn' : appv.hasApp ? 'built' : 'no app yet'
   setText(appEls.stage, working ? appv.stage : appv.result ? `${appv.result.turns} turn${appv.result.turns === 1 ? '' : 's'} · ${appv.result.files} files · checks ${appv.result.gatesPassed ? 'passed' : 'not passed'}${appv.deployed ? ` · live at ${appv.deployed}` : ''}` : '')
   const stick = appEls.steps.scrollHeight - appEls.steps.scrollTop - appEls.steps.clientHeight < 60
   appEls.steps.innerHTML = stepsHtml()
@@ -4218,6 +4221,41 @@ async function appAsk(ask, extra = {}) {
     botMsg(`App: ${err.message}`)
   }
   renderApp()
+}
+
+// ---------- a big game, slice by slice, in the chat
+// After each slice the build waits: Hermia shows what the bots played (their filmed run and a
+// still), points at the live game in the App view, and asks what to change. A suggestion or
+// the person's own words start the next slice with that note.
+function sliceCard(s, run = shownRun()) {
+  if (!s || !run) return
+  const key = `${run}:${s.i}:${s.clip || ''}`
+  if (els.feed.querySelector(`.slice-card[data-key="${CSS.escape(key)}"]`)) return
+  const item = document.createElement('div')
+  item.className = 'item bot slice-card'
+  item.dataset.key = key
+  item.dataset.run = run
+  item.dataset.i = s.i
+  const vid = s.clip ? `<video class="sc-clip" src="${esc(BASE + s.clip)}" muted playsinline autoplay loop></video>` : ''
+  const pic = s.shot ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
+  item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${s.i + 1} of ${s.n}</small></b>`
+    + `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>`
+    + `<span class="txt"></span>`
+    + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
+    + `<div class="sc-ideas">${(s.ideas || []).map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
+  item.querySelector('.txt').textContent = s.ask || `Slice ${s.i + 1} is built. Anything to change?`
+  item.querySelector('.sc-live').onclick = () => setView('app')
+  for (const b of item.querySelectorAll('.sc-ideas button')) b.onclick = () => sliceGo(s.ideas[+b.dataset.j])
+  push(els.feed, item)
+}
+async function sliceGo(text) {
+  const s = appv.slice
+  if (appv.state !== 'paused' || !s) return botMsg('The game is not waiting on a slice right now.')
+  // the first suggestion is "go on": no note, the next slice as planned
+  const note = /^looks good/i.test(text) ? '' : String(text || '').trim()
+  feed(null, text, 'you')
+  for (const c of els.feed.querySelectorAll('.slice-card .sc-ideas')) c.remove()
+  await appAsk('', note ? { note } : {})
 }
 
 // ---------- the app advisor
@@ -4371,6 +4409,11 @@ function appEvent(e) {
     if (e.url && fresh_) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
     if (fresh_) feed(null, `🧩 the ${appv.kind === 'game' ? 'game' : 'app'} is ready (${e.result?.turns || 1} turn${e.result?.turns === 1 ? '' : 's'}, checks ${e.result?.gatesPassed ? 'passed' : 'not passed'}, ${Math.round((e.ms || 0) / 1000)}s). Open the App view to try it, or chat to change it.`, 'sys')
+  } else if (e.type === 'app:paused') {
+    // a big game stops after each slice and asks in the chat (sliceCard)
+    Object.assign(appv, { state: 'paused', result: e.result, slice: e.slice, stage: '' })
+    if (e.url && fresh_) appv.url = e.url
+    sliceCard(e.slice, e.run)
   } else if (e.type === 'app:failed') {
     Object.assign(appv, { state: 'failed', message: e.message })
     if (fresh_) feed(null, `🧩 app: ${e.message}`, 'err')
