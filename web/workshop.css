@@ -77,3 +77,26 @@
 .ws-wait { position: relative; overflow: hidden; }
 .ws-wait::before { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgb(var(--glass-rgb) / .08) 50%, transparent 70%); background-size: 200% 100%; animation: as-shine 1.4s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .ws-wait::before { animation: none } }
+/* Shape it as a card in the left chat: same steps, sized for the chat column */
+.feed .ws-pop.ws-inchat { position: static; inset: auto; z-index: auto; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 12.5px; }
+.ws-inchat .ws-top { padding: 8px 10px; gap: 8px; }
+.ws-inchat .ws-crumb { font-size: 12px; }
+.ws-inchat .ws-crumb span:first-child, .ws-inchat .ws-crumb span:nth-child(2) { display: none; }
+.ws-inchat .ws-ring, .ws-inchat .ws-ring svg { width: 30px; height: 30px; }
+.ws-inchat .ws-back, .ws-inchat .ws-x { width: 30px; height: 30px; }
+.ws-inchat .ws-next { min-width: 0; }
+.ws-inchat .ws-steps { top: 46px; right: 10px; }
+.ws-inchat { position: relative; }
+.ws-inchat .ws-body { flex-direction: column; }
+.ws-inchat .ws-stage { padding: 10px; overflow: visible; }
+.ws-inchat .ws-stage h3 { font-size: 15px; margin: 0 0 10px; }
+.ws-inchat .ws-grid, .ws-inchat .ws-grid.n3, .ws-inchat .ws-grid.n4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ws-inchat .ws-slice { padding: 6px; gap: 6px; border-radius: 10px; }
+.ws-inchat .ws-name { font-size: 12.5px; }
+.ws-inchat .ws-card-text { min-height: 90px; padding: 10px; }
+.ws-inchat .ws-card-text b { font-size: 13px; }
+.ws-inchat .ws-own { margin-top: 10px; }
+.ws-inchat .ws-input { height: 34px; }
+.ws-inchat .ws-insp { width: auto; border-left: 0; border-top: 1px solid var(--line); padding: 12px; }
+.ws-inchat .ws-insp h4 { font-size: 15px; }
+.ws-inchat .ws-insp dd { font-size: 12.5px; }

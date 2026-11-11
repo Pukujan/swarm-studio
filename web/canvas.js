@@ -4394,12 +4394,15 @@ async function openGame(idea = '', answers = null, build = false) {
   Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false, cast: null, from: site, brand: site ? (S.title || 'this site') : '', promo: !!site })
   game.el?.remove()
   game.el = document.createElement('div')
-  game.el.className = 'game-pop'
-  document.body.append(game.el)
+  // the questions and the spec are a card in the left chat: all guiding happens there
+  game.el.className = 'game-pop in-chat item'
+  push(els.feed, game.el)
   $('#game-btn').classList.add('on')
-  // closes with ×, Esc and a click outside it, except while the spec is being written
+  // Esc closes the card (not while the spec is being written, nor while typing in it)
   game.off?.()
-  game.off = window.SwarmUI?.layer(game.el, closeGame, { extra: [$('#game-btn')], canClose: () => !game.busy })
+  const onEsc = e => { if (e.key === 'Escape' && !game.busy && !e.target.closest?.('input, textarea, [contenteditable="true"]')) { e.preventDefault(); closeGame() } }
+  document.addEventListener('keydown', onEsc)
+  game.off = () => document.removeEventListener('keydown', onEsc)
   if (answers || build) return gameSpec(build)
   // an unfinished Shape it walk can be picked up from here
   game.resume = (await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null))?.workshops?.[0] || null
@@ -4794,7 +4797,7 @@ async function gameShape() {
   const open = await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null)
   const id = (open?.workshops || []).find(w => String(w.title || '').trim().toLowerCase() === key)?.id
   openWorkshop({
-    api, ico, spec, id,
+    api, ico, spec, id, mount: node => push(els.feed, node),
     onBuilt: async (run, built) => {
       await loadFiles()
       await openRun(run)

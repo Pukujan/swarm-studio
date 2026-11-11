@@ -7,16 +7,17 @@ const HEAD = { design: 'How does it play?', story: 'What is the story?', world: 
 const wsEsc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const POSES = ['idle', 'run', 'jump', 'attack', 'hurt', 'win']
 
-export function openWorkshop({ api, ico = () => '', spec, id, onBuilt, onClose }) {
+// `mount` puts the walk in the left chat as one card (all guiding lives there, RULES 4)
+export function openWorkshop({ api, ico = () => '', spec, id, onBuilt, onClose, mount }) {
   const W = { ws: null, sel: null, multi: new Set(), busy: '', err: '', models: null, voice: '', timers: [], audio: null, own: '' }
   const el = document.createElement('div')
-  el.className = 'ws-pop'
-  el.setAttribute('role', 'dialog')
+  el.className = mount ? 'ws-pop ws-inchat item' : 'ws-pop'
+  el.setAttribute('role', mount ? 'group' : 'dialog')
   el.setAttribute('aria-label', 'Shape the game')
-  document.body.append(el)
+  if (mount) mount(el); else document.body.append(el)
   const call = (path, body) => api(path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j })
-  const off = window.SwarmUI?.layer(el, close, { canClose: () => !W.busy })
+  const off = mount ? null : window.SwarmUI?.layer(el, close, { canClose: () => !W.busy })
   const onKey = e => {
     if (W.busy || document.activeElement?.matches('input, textarea')) return
     if (e.key === 'ArrowRight') next()
