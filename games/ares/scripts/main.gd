@@ -716,7 +716,10 @@ func on_boss_dead(b) -> void:
 	Game.shake(1.0)
 	for e in Game.enemies.duplicate():
 		if is_instance_valid(e) and not e.dead:
-			e.die(true)
+			if e is Enemy:
+				e.die(true)
+			else:
+				e.die()
 	Game.announce("CHAMPION FALLS", "%s — %s  ·  %.1f s" % [b.handle, b.title.to_upper(), secs], Fx.GOLD, 3.5)
 
 func _on_player_died() -> void:
