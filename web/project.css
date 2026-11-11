@@ -259,3 +259,6 @@ body.cosmos-project .pj-now:hover { border-color: var(--text); }
 .ab .ab-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 10px; font-size: 13px; font-weight: 700; color: #fff; background: linear-gradient(transparent, rgb(0 0 0 / .6)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .ab .ab-work ~ .ab-cap { padding-bottom: 13px; }
 .pj-pitch { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+
+/* Follow keeps its place in the dock and rests, greyed, while nobody is working */
+.pj-follow:disabled { opacity: .35; cursor: default; background: none; }
