@@ -1026,7 +1026,8 @@ async function chatterMake(text, voice) {
 async function tellBuilder(a, id, text) {
   const t = String(text || '').trim().slice(0, 1200)
   if (!t) throw new Error('say something to the crew')
-  const ask = (await import('../engine/appjob.mjs')).isQuestion(t)
+  const { isQuestion, processNotes } = await import('../engine/appjob.mjs')
+  const ask = isQuestion(t)
   const told = ask ? { queued: false, state: a.state(id).state } : a.tell(id, t)
   const j = a.jobs.get(id)
   const events = readEvents(id) || []
@@ -1034,6 +1035,10 @@ async function tellBuilder(a, id, text) {
   const steps = (j?.steps || []).filter(x => x.kind !== 'write').slice(-10).map(x => `- ${String(x.text).slice(0, 160)}`)
   const writes = (j?.steps || []).filter(x => x.kind === 'write').slice(-6).map(x => x.path || x.text).filter(Boolean)
   const spec = events.findLast(e => e.type === 'game:spec')?.spec
+  const st = j ? null : a.state(id)
+  const since = events.findLastIndex(e => e.type === 'app:start' && e.fresh)
+  const done = events.slice(since + 1).filter(e => e.type === 'app:stage' && e.big?.ok && e.big.name).map(e => `slice ${e.big.i + 1} ${e.big.name}${e.big.clip ? ', play test filmed' : ''}`)
+  const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage: j?.stage || st?.stage || '', done })
   const queued = told.queued ? 'Their words are queued: the crew reads them at the start of the next stage (a turn in flight cannot take new words).' : ''
   const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}${told.queued ? ' Got it: that goes to the crew at the start of the next stage.' : ''}`
   const model = modelFor('planner')
@@ -1043,7 +1048,7 @@ async function tellBuilder(a, id, text) {
       trace: { kind: 'tell' }, model, maxTokens: 220, temperature: 0.3, signal: AbortSignal.timeout(30000),
       extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
       messages: [
-        { role: 'system', content: `You are Hermia, the lead of the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
+        { role: 'system', content: `You are Hermia, the lead of the Swarm crew building ${spec?.title ? `the game "${spec.title}"` : 'this app'}. The person who owns it wrote to you while the crew works. Answer in one to three short plain sentences: what the crew is doing right now and what comes next, from the notes below. ${how} ${queued} Never say a change is done when it is only queued. No markdown, no lists.\n\nState: ${j?.state || 'idle'}. Stage: ${j?.stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}` },
         { role: 'user', content: t }
       ]
     })

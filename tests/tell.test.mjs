@@ -25,3 +25,12 @@ test('words told during a build are queued and kept with the run, only while it 
   assert.ok(kept.some(e => e.type === 'app:told' && e.text === 'make Mika bigger'))
   assert.equal(a.tell('r1', '   ').queued, false)
 })
+
+test('Hermia knows the play test runs by itself after each slice, and which slice it is on', async () => {
+  const { processNotes } = await import('../engine/appjob.mjs')
+  const n = processNotes({ kind: 'game', state: 'working', stage: 'stage 1 of 4: move, jump and climb' })
+  assert.match(n, /play test runs by itself/)
+  assert.match(n, /slice 1 of 4/)
+  assert.match(processNotes({ kind: 'game', state: 'paused', stage: 'stage 2 of 4', done: ['slice 1 the core run'] }), /paused.*go on/)
+  assert.doesNotMatch(processNotes({ kind: 'site' }), /play test/)
+})
