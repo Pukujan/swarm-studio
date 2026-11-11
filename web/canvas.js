@@ -43,6 +43,8 @@ const store = {
 // Lucide line icons (ISC, lucide.dev; licence in web/brand/LICENSE-lucide.txt), only the ones the studio uses.
 // Emoji stay in chat and agent messages; the chrome uses these.
 const LUCIDE = {
+  "box":"<path d=\"M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z\" /><path d=\"M3.3 7l8.7 5 8.7-5\" /><path d=\"M12 22V12\" />",
+  "refresh-cw":"<path d=\"M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8\" /><path d=\"M21 3v5h-5\" /><path d=\"M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16\" /><path d=\"M8 16H3v5\" />",
   "send":"<path d=\"M14.5 21.5a.5.5 0 00.9-.1L22 3.5a.5.5 0 00-.6-.6L3.6 9.6a.5.5 0 00-.1.9l7.4 3.2a2 2 0 011.1 1.1z\" /><path d=\"M21.9 2.1L11 13\" />",
   "sun":"<circle cx=\"12\" cy=\"12\" r=\"4\" /><path d=\"M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41\" />",
   "moon":"<path d=\"M12 3a6 6 0 009 9 9 9 0 11-9-9z\" />",
@@ -4347,6 +4349,37 @@ function openCast() {
   game.cast.open = true
   renderGame()
   castSearch()
+  ownArt()
+}
+// ---------- 🧊 the project's own art as a character (spec 20): made with Meshy when a key is set,
+// else the art itself as a 2.5D sprite. Meshy spends credits: the price is on the button.
+async function ownArt() {
+  const c = game.cast
+  if (c.meshy) return
+  const from = game.spec?.brand?.from || game.from || ''
+  c.meshy = { art: [] }
+  const out = await api(`/api/meshy?from=${encodeURIComponent(from)}`).then(r => r.json()).catch(() => ({}))
+  c.meshy = { ready: !!out.ready, cost: out.cost?.credits || 0, art: (out.art || []).map(a => a.src) }
+  c.own = {}
+  if (game.cast === c && c.meshy.art.length) renderGame()
+}
+async function meshyMake(r) {
+  const c = game.cast, o = c.own[r.id]
+  o.job = { state: 'running', stage: 'model', progress: 0 }
+  renderGame()
+  try {
+    const job = await api('/api/meshy', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: r.id, label: r.label, art: o.art, credits: c.meshy.cost }) }).then(x => x.json())
+    if (!job.id) throw new Error(job.error || 'Meshy did not start')
+    o.job = job
+    while (o.job.state === 'running') {
+      await new Promise(res => setTimeout(res, 3000))
+      o.job = await api(`/api/meshy/job?id=${job.id}`).then(x => x.json()).catch(() => o.job)
+      if (game.cast === c) renderGame()
+    }
+  } catch (err) {
+    o.job = { state: 'failed', error: err.message }
+  }
+  if (game.cast === c) renderGame()
 }
 async function castSearch() {
   const c = game.cast, r = c.roles[c.role]
@@ -4371,10 +4404,34 @@ function renderCast(el, head) {
       return `<button class="ccard${pick?.key === k ? ' on' : ''}${c.sel === k ? ' open' : ''}" data-pick="${esc(k)}" aria-label="${m.n}. ${esc(m.name)}"><span class="cn">${m.n}</span>${m.preview ? `<img src="${esc(m.preview)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<i></i>'}<b>${esc(m.name)}</b></button>`
     }).join('')}</div>`
     : `<div class="gbody"><span aria-hidden="true">⚠</span><span>${list.error ? 'No answer' : 'Nothing fits'}</span></div>`
+  // the project's own art: one more card, first in the grid
+  const m = c.meshy, o = m?.art.length ? (c.own[r.id] ||= { art: m.art[0], job: null }) : null
+  const ownCard = o ? `<button class="ccard own${pick?.key === 'own' ? ' on' : ''}${c.sel === 'own' ? ' open' : ''}" data-own aria-label="${m.ready ? 'Meshy' : 'Sprite'}"><span class="cn">${ico(m.ready ? 'box' : 'image')}</span><img src="${esc(o.job?.pick?.thumbSrc || o.art)}" alt=""><b>${m.ready ? 'Meshy' : 'Sprite'}</b></button>` : ''
+  const withOwn = ownCard ? (cards.startsWith('<div class="cgrid">') ? cards.replace('<div class="cgrid">', `<div class="cgrid">${ownCard}`) : `<div class="cgrid">${ownCard}</div>${list.busy ? '' : cards}`) : cards
+  const arts = o && m.art.length > 1 ? `<div class="cart">${m.art.map(a => `<button class="${a === o.art ? 'on' : ''}" data-art="${esc(a)}" aria-label="Picture"><img src="${esc(a)}" alt=""></button>`).join('')}</div>` : ''
+  const j = o?.job
+  const ownInfo = c.sel !== 'own' || !o ? ''
+    : !m.ready ? `<div class="cinfo"><b>Sprite</b>${arts}</div>`
+    : j?.state === 'running' ? `<div class="cinfo"><b>Meshy</b><div class="gbody"><div class="spin" aria-label="Making"></div><span>${esc(j.stage === 'rig' ? 'Rigging' : j.stage === 'download' ? 'Saving' : 'Modelling')} ${Number(j.progress) || 0}%</span></div></div>`
+    : j?.state === 'done' ? `<div class="cinfo"><b>Meshy</b><div class="cmade">${j.pick.thumbSrc ? `<img src="${esc(j.pick.thumbSrc)}" alt="">` : ''}</div><span class="cact"><button class="glink" data-make>${ico('refresh-cw')}Redo · ${m.cost} credits</button><button class="glink" data-accept>${pick?.key === 'own' ? ico('check') : ''}Accept</button></span></div>`
+    : `<div class="cinfo"><b>Meshy</b>${arts}${j?.state === 'failed' ? `<p><span aria-hidden="true">⚠</span> ${esc(j.error || '')}</p>` : ''}<span class="cact"><button class="glink" data-make>Make · ${m.cost} credits</button></span></div>`
   const info = sel ? `<div class="cinfo"><b>${esc(sel.name)}</b><dl><dt>By</dt><dd>${esc(sel.creator)}</dd><dt>Licence</dt><dd>${esc(sel.licence.credit)}${sel.licence.restyle ? '' : ' · own look kept'}</dd><dt>Triangles</dt><dd>${Number(sel.triangles).toLocaleString()}</dd></dl><a class="glink" href="${esc(sel.url)}" target="_blank" rel="noopener">${ico('external-link')}${sel.source === 'vroid' ? 'VRoid Hub' : 'Sketchfab'}</a></div>` : ''
-  el.innerHTML = `${head}<h3>${esc(r.name || r.label)}</h3>${tabs}${cards}${info}<div class="gfoot"><button class="glink" data-back>← Spec</button><span><button class="glink" data-skip>Skip</button><button class="big" data-build>Build the game</button></span></div>`
+  el.innerHTML = `${head}<h3>${esc(r.name || r.label)}</h3>${tabs}${withOwn}${ownInfo}${info}<div class="gfoot"><button class="glink" data-back>← Spec</button><span><button class="glink" data-skip>Skip</button><button class="big" data-build>Build the game</button></span></div>`
   for (const b of el.querySelectorAll('[data-role]')) b.onclick = () => { c.role = Number(b.dataset.role); c.sel = null; renderGame(); castSearch() }
-  for (const b of el.querySelectorAll('.ccard')) b.onclick = () => {
+  el.querySelector('[data-own]')?.addEventListener('click', () => {
+    c.sel = 'own'
+    // without a key the art is the pick at once (free); a Meshy model waits for Accept
+    if (!m.ready) c.picks[r.id] = { key: 'own', role: r.id, label: r.label, source: 'art', format: 'sprite', art: o.art, name: `${r.label} (sprite)`, creator: 'this project' }
+    renderGame()
+  })
+  for (const b of el.querySelectorAll('[data-art]')) b.onclick = () => {
+    o.art = b.dataset.art
+    if (!m.ready && c.picks[r.id]?.key === 'own') c.picks[r.id].art = o.art
+    renderGame()
+  }
+  el.querySelector('[data-make]')?.addEventListener('click', () => meshyMake(r))
+  el.querySelector('[data-accept]')?.addEventListener('click', () => { c.picks[r.id] = { key: 'own', ...o.job.pick }; renderGame() })
+  for (const b of el.querySelectorAll('.ccard[data-pick]')) b.onclick = () => {
     const m = list.models.find(x => `${x.source}:${x.id}` === b.dataset.pick)
     c.sel = b.dataset.pick
     c.picks[r.id] = { key: b.dataset.pick, role: r.id, label: r.label, ...m }
@@ -4415,7 +4472,7 @@ async function gameBuild() {
   // the card's edits go into the spec (a big spec's enemies stay objects unless that line changed)
   readSpecEdits()
   // the picked cast, one model per role
-  if (game.cast) game.spec.cast = Object.values(game.cast.picks).map(({ key, n, preview, ...m }) => m)
+  if (game.cast) game.spec.cast = Object.values(game.cast.picks).map(({ key, n, preview, thumbSrc, ...m }) => m)
   game.busy = 'Starting the build…'
   renderGame()
   try {

@@ -1001,6 +1001,48 @@ let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
 let castP = null
 const castMod = () => (castP ||= import('../engine/cast.mjs'))
+let meshyP = null
+const meshyMod = () => (meshyP ||= import('../engine/meshy.mjs'))
+
+// ---------- make a character with Meshy (spec 20)
+// The project's own pictures a character can be made from, people first (by the prompt they were painted from).
+const ART_FILE = /^(?:\d{1,3}|kept-\d{1,3}|game-[a-z0-9-]{1,48})\.(png|jpe?g|webp)$/
+const PERSONISH = /\b(girl|boy|woman|man|character|hero|heroine|portrait|person|warrior|courier|pilot|knight|mage|figure|full[- ]body)\b/i
+function meshyArt(from) {
+  if (!from || !RUN_ID.test(String(from))) return []
+  let files = []
+  try { files = readdirSync(join(runsDir, from, 'img')).filter(f => ART_FILE.test(f)) } catch { return [] }
+  const prompts = new Map()
+  for (const e of readEvents(from) || []) if (e.type === 'image' && e.src && e.prompt) prompts.set(basename(String(e.src)), String(e.prompt))
+  return files
+    .map(f => ({ src: `/img/${from}/${f}`, person: PERSONISH.test(prompts.get(f) || '') || f.startsWith('game-portrait') }))
+    .sort((a, b) => b.person - a.person)
+    .slice(0, 12)
+}
+const meshyJobs = new Map() // job id -> { id, role, state, stage, progress, pick, error }
+async function meshyStart(input = {}) {
+  const m = await meshyMod()
+  const key = m.meshyKey()
+  if (!key) throw Object.assign(new Error('no Meshy key'), { status: 409 })
+  // the person's yes is the price they were shown: a missing or different number spends nothing
+  const cost = m.meshyCost()
+  if (Number(input.credits) !== cost.credits) throw Object.assign(new Error(`confirm ${cost.credits} credits first`), { status: 402 })
+  const art = String(input.art || '').match(/^\/img\/([\w-]{1,64})\/([\w.-]{1,80})$/)
+  if (!art || !ART_FILE.test(art[2])) throw new Error('pick a picture from the project')
+  const image = join(runsDir, art[1], 'img', art[2])
+  if (!existsSync(image)) throw new Error('that picture is gone')
+  const role = String(input.role || 'hero').replace(/[^\w-]/g, '').slice(0, 40) || 'hero'
+  const label = String(input.label || role).slice(0, 40)
+  // one paid run per role at a time: a second click joins the first instead of paying twice
+  const running = [...meshyJobs.values()].find(j => j.role === role && j.state === 'running')
+  if (running) return running
+  const job = { id: randomBytes(6).toString('hex'), role, art: input.art, state: 'running', stage: 'model', progress: 0, credits: cost.credits, pick: null, error: null }
+  meshyJobs.set(job.id, job)
+  m.makeCharacter({ image, role, key, outDir: join(dataDir, 'models'), onStep: s => Object.assign(job, s) })
+    .then(r => Object.assign(job, { state: 'done', stage: 'done', progress: 100, pick: { ...m.meshyPick({ role, label, ...r }), thumbSrc: r.thumb ? `/models/${r.thumb}` : null } }))
+    .catch(err => Object.assign(job, { state: 'failed', error: String(err.message || err).slice(0, 240) }))
+  return job
+}
 // stand-ins load lazily; the vision tagger is the reviewer model; Octo's public lane when the studio has a key
 let standinP = null
 const standinsOf = () => (standinP ||= (() => {
@@ -1124,8 +1166,14 @@ async function startGame(spec) {
   const lib = join(dataDir, 'models')
   const models = g.gameModels(spec)
   const copy = Object.fromEntries(models.map(m => [`public/models/${m.file}`, join(lib, m.file)]))
+  // cast made from the project's art (spec 20): Meshy models from the library, sprites from the site's pictures
+  const cm = await castMod()
+  for (const c of cm.cleanCast(spec.cast)) {
+    if (c.source === 'meshy') for (const f of [c.file, ...Object.values(c.clips || {})]) { if (isGltf(join(lib, f))) copy[`public/models/${f}`] = join(lib, f) }
+    if (c.source === 'art') { const [, run, f] = c.art.match(/^\/img\/([^/]+)\/(.+)$/); if (existsSync(join(runsDir, run, 'img', f))) copy[`public/models/${cm.spriteFile(c)}`] = join(runsDir, run, 'img', f) }
+  }
   const a = await apps()
-  const credits = (await castMod()).castCredits(spec.cast)
+  const credits = cm.castCredits(spec.cast)
   await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec), ...(credits ? { 'CREDITS.md': credits } : {}) }, copy })
   // the site remembers its game, so each can open the other
   if (spec.brand?.from && existsSync(join(runsDir, spec.brand.from))) record(spec.brand.from, { type: 'game:linked', t, run: spec.brand.from, game: id, title: String(spec.title).slice(0, 80) })
@@ -1832,6 +1880,40 @@ const server = createServer((req, res) => {
       castMod().then(c => c.searchCast(role, { violent: input.violent !== false, n: 8 }))
         .then(out => reply(200, out)).catch(err => reply(500, { error: String(err.message || err) }))
     })
+    return
+  }
+
+  // Make with Meshy (spec 20). GET ?from=<site run> -> { ready, cost, art }: whether a key is set (never
+  // the key), the price of one character, and the project's pictures to make it from.
+  // POST { role, label, art, credits } spends credits, so it starts only when `credits` is the price the
+  // person was shown. GET /api/meshy/job?id= -> { state, stage, progress, pick, error }.
+  if (url.pathname === '/api/meshy' && req.method === 'GET') {
+    meshyMod().then(m => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ready: m.meshyReady(), cost: m.meshyCost(), art: meshyArt(url.searchParams.get('from')) })))
+      .catch(err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
+    return
+  }
+  if (url.pathname === '/api/meshy/job' && req.method === 'GET') {
+    const j = meshyJobs.get(String(url.searchParams.get('id') || ''))
+    res.writeHead(j ? 200 : 404, { 'content-type': 'application/json' }).end(JSON.stringify(j || { error: 'no such job' }))
+    return
+  }
+  if (url.pathname === '/api/meshy' && req.method === 'POST') {
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 4000) req.destroy() })
+    req.on('end', async () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      try { reply(200, await meshyStart(input)) } catch (err) { reply(err.status || 400, { error: String(err.message || err) }) }
+    })
+    return
+  }
+  const meshyThumb = url.pathname.match(/^\/models\/(meshy-[a-z0-9-]{1,64}\.png)$/)
+  if (meshyThumb) {
+    const file = join(dataDir, 'models', meshyThumb[1])
+    if (!existsSync(file)) return res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'max-age=31536000, immutable' })
+    res.end(readFileSync(file))
     return
   }
 

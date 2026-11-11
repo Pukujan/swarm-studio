@@ -1673,3 +1673,13 @@ body.view-video .video-pop .vmin { display: none; }
 .video-pop .vsrc-forget { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; color: inherit; cursor: pointer; }
 .video-pop .vsrc-pop .perr { flex-basis: 100%; color: var(--hot-text); }
 .video-pop .vsrc-pop .perr:empty { display: none; }
+/* the project's own art as a character (spec 20): a picture strip, the made model, its two actions */
+.game-pop .ccard.own .cn .ico { width: 14px; height: 14px; }
+.game-pop .cart { display: flex; gap: 8px; overflow-x: auto; margin: 8px 0; }
+.game-pop .cart button { flex: 0 0 56px; height: 72px; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--bg); cursor: pointer; }
+.game-pop .cart button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.game-pop .cart img, .game-pop .cmade img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.game-pop .cmade { width: 160px; aspect-ratio: 3 / 4; margin: 8px 0; border-radius: 12px; overflow: hidden; background: var(--bg); }
+.game-pop .cact { display: flex; gap: 12px; align-items: center; }
+.game-pop .cact .glink { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
+.game-pop .cinfo p { margin: 8px 0; color: var(--muted); font-size: 13px; }
