@@ -6,7 +6,8 @@
 // public-domain photos from Openverse (CC0 and the public domain mark, no key).
 // A vision model looks at each found photo once, rejects what isn't a clean
 // photo and tags the rest; the tags live in a local index. Credit is kept for
-// every photo. A stand-in is never saved into a build.
+// every photo. On the canvas a stand-in is never saved into a build; only a slot
+// still unpainted when an app is built gets one, with its credit (fillpics.mjs).
 //
 // Two lanes for the files: the local cache (served only to this studio, behind
 // its token) and, when the studio has an Octo key, Octo's public bucket, so a
@@ -79,11 +80,12 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
     return library
   }
 
-  function rank(want, aspect, exclude) {
+  function rank(want, aspect, exclude, avoid) {
     const stems = [...new Set(want.map(stem))]
     let best = null
     for (const x of [...libraryPhotos(), ...ownPictures(), ...index]) {
       if (exclude && x.run === exclude) continue // never a build's own picture as its own stand-in
+      if (avoid?.has(x.url)) continue // a photo already used elsewhere on the same build
       const keys = x.keys || (x.keys = new Map(x.tags.map(t => [stem(t), 1])))
       let hit = 0, w = 0
       for (const k of stems) { const v = keys.get(k); if (v) { w += v; if (v >= 1) hit++ } }
@@ -176,11 +178,11 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
   }
 
   // the best stand-in for one picture slot: from the index, else after one Openverse search
-  async function pick({ q, w, h, run } = {}) {
+  async function pick({ q, w, h, run, avoid } = {}) {
     const want = words(q).slice(0, 10)
     if (!want.length) return null
     const aspect = aspectOf(Number(w), Number(h))
-    let best = rank(want, aspect, run)
+    let best = rank(want, aspect, run, avoid)
     if (!best || best.hit < Math.min(3, want.length)) {
       for (const key of [want.slice(0, 3).join(' '), want.slice(0, 2).join(' ')]) {
       if (!searched.has(key)) {
@@ -188,7 +190,7 @@ export function standins({ dataDir, runsDir, provider = null, model = '', octo =
         if (!inflight.has(key)) inflight.set(key, search(key, aspect).then(ok => { if (!ok) searched.delete(key) }).finally(() => inflight.delete(key)))
       }
       if (inflight.has(key)) await inflight.get(key)
-      best = rank(want, aspect, run) || best
+      best = rank(want, aspect, run, avoid) || best
       if (best && best.src !== 'own') break
       }
     }
