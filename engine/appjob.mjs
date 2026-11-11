@@ -16,6 +16,7 @@ import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk } from './game.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
+import { godotFirst, isGodotFirst, seedGodot, godotStagePrompt, exportWeb, serveStatic, webBuild } from './godotfirst.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
@@ -280,7 +281,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       }
       // Godot, Unity or Unreal asked for: the same game written as that engine's project too
       const target = kind === 'game' ? portTarget(input.target ? input : spec || events.findLast(e => e.type === 'game:spec')?.spec) : null
-      if (target) j.result.port = await buildPort(dir, target, spec || events.findLast(e => e.type === 'game:spec')?.spec || {}, engineCall, step)
+      if (target && !(target === 'godot' && isGodotFirst(dir))) j.result.port = await buildPort(dir, target, spec || events.findLast(e => e.type === 'game:spec')?.spec || {}, engineCall, step)
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
@@ -347,6 +348,13 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (!art.length) throw new Error(`No art: ${art.stopped.model} is out of quota. ${art.stopped.missing} pictures not painted.`)
       step({ kind: 'setup', text: `${art.stopped.missing} of ${items.length} pictures missing: the game draws them in code`, ok: false })
     }
+    // Godot asked for and on this machine: the game is a Godot project from the start
+    const godot = godotFirst(input.target ? input : spec)
+    if (godot) {
+      const n = seedGodot(dir, spec)
+      j.result.godot = true
+      step({ kind: 'setup', text: `building it in Godot 4: ${n.length} pictures copied into the project` })
+    }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
     let failed = from ? 'the last build stopped partway through this stage: some of its changes may already be in the code (git status shows them). Finish them or redo them.' : '', last = null
     // the slices are the game's own, planned with its spec from the person's answers and picks
@@ -358,18 +366,22 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       step({ kind: 'setup', text: `stage ${i + 1} of ${stages.length}: ${st.name}` })
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { last = await engineCall(bigStagePrompt(spec, i, { art, failed, note: i === from ? input.note : '' }), input.turns || st.turns); break } catch (err) {
+        try { last = await engineCall((godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: i === from ? input.note : '' }), input.turns || st.turns); break } catch (err) {
           if (j.controller.signal.aborted) throw err
           step({ kind: 'setup', text: `stage ${i + 1} stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
           if (go >= 1) { last = { ok: false, error: String(err.message || err) }; break }
           failed = 'the last try at this stage stopped partway: some of its changes may already be in the code (git status shows them). Finish them or redo them.'
         }
       }
-      failed = last.ok ? '' : `the typecheck or build failed at the end of the last stage${last.error ? ` (${String(last.error).slice(0, 300)})` : ''}. Make it pass before anything else.`
+      if (godot) {
+        const g = await godotStage(id, j, dir, engineCall, step)
+        last = { ...last, ok: g.ok, error: g.error }
+        failed = g.ok ? '' : `Godot reported problems at the end of the last stage: ${String(g.error).slice(0, 600)}. Fix them before anything else.`
+      } else failed = last.ok ? '' : `the typecheck or build failed at the end of the last stage${last.error ? ` (${String(last.error).slice(0, 300)})` : ''}. Make it pass before anything else.`
       j.result.turns += last.turns || 0
       j.result.commits += last.commits || 0
       j.result.files = Math.max(j.result.files, last.files?.length || 0)
-      await serve(id, j, step)
+      if (!godot) await serve(id, j, step)
       const play = await playGame(j, dir, model(), step, brand)
       j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
       // each slice carries the bots' filmed play test, so the person sees it before the next one
@@ -386,10 +398,44 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     }
     if (!last?.ok) {
       step({ kind: 'test', text: 'the last stage did not pass its build: one fix turn', ok: false })
-      last = await engineCall(`This is a big browser game made from GAME_SPEC.md; keep what works. ${failed}\n\nFinish with a working build: the typecheck and build must pass.`, 3)
+      if (godot) {
+        await engineCall(`This is a big 2D game in Godot 4 in ports/godot/, made from GAME_SPEC.md; keep what works. ${failed}\n\nFinish with the project opening in Godot with no errors. Touch nothing outside ports/godot/.`, 3)
+        const g = await godotStage(id, j, dir, null, step)
+        last = { ...last, ok: g.ok, error: g.error }
+      } else last = await engineCall(`This is a big browser game made from GAME_SPEC.md; keep what works. ${failed}\n\nFinish with a working build: the typecheck and build must pass.`, 3)
     }
     Object.assign(j.result, { ok: !!last.ok, gatesPassed: last.gatesPassed, playtest: j.result.stages.at(-1)?.playtest })
     if (!last.ok) throw new Error(last.error || 'the engine could not finish the game')
+  }
+
+  // A Godot-first stage's checks: Godot opens the project headless (its errors get one
+  // fix turn), then the Web export is served for the play test. → { ok, error }
+  async function godotStage(id, j, dir, engineCall, step) {
+    step({ kind: 'test', text: 'opening the project in Godot' })
+    let opened = await checkGodot(dir)
+    if (opened && !opened.ok && engineCall) {
+      step({ kind: 'test', text: `Godot reports ${opened.errors.length} error${opened.errors.length === 1 ? '' : 's'}: fixing`, ok: false })
+      await engineCall(`Godot 4 opened ports/godot/ headless and reported these errors:\n${opened.errors.map(e => `- ${e}`).join('\n')}\n\nFix them in ports/godot/ (GDScript 4 syntax, node paths, resource paths). Touch nothing outside ports/godot/.`, 2)
+      opened = await checkGodot(dir)
+    }
+    if (opened) step({ kind: 'test', text: opened.ok ? 'Godot opens and runs the project with no errors' : `Godot still reports: ${opened.errors[0]}`, ok: opened.ok })
+    step({ kind: 'test', text: 'exporting the game to the web' })
+    const web = await exportWeb(dir)
+    step({ kind: 'test', text: web.ok ? 'web export ready' : `the web export failed: ${web.error}`, ok: web.ok })
+    if (web.ok) await serveGodot(id, j)
+    const ok = !!opened?.ok && web.ok
+    return { ok, error: ok ? '' : [...(opened?.errors || []).slice(0, 12), web.ok ? '' : `web export: ${web.error}`].filter(Boolean).join('\n') }
+  }
+
+  // The Godot export, served as files (Godot reads its .pck and .wasm from the same place)
+  async function serveGodot(id, j) {
+    j.godot = true
+    if (j.gsrv) return
+    if (j.proc && j.proc.exitCode === null) { await stopProc(j.proc); j.proc = null }
+    j.port = j.port && await portFree(j.port) ? j.port : await freePort()
+    j.gsrv = await serveStatic(webBuild(dirOf(id)), j.port)
+    j.url = j.gsrv.url
+    send(id, 'app:ready', { url: j.url })
   }
 
   // The promo game's brand, with the address its site has now: a site put online
@@ -427,7 +473,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     try { n = 1 + Math.max(0, ...readdirSync(join(runsDir, j.id, 'img')).map(f => +(f.match(/^playtest-(\d+)\.webm$/)?.[1] || 0))) } catch {}
     if (n > 999) n = 999
     const clip = join(runsDir, j.id, 'img', `playtest-${n}.webm`)
-    let t = await playtest(j.url, { shot, clip })
+    let t = await playtest(j.url, { shot, clip, secure: !!j.godot })
     const film = t.clip ? { clip: `/img/${j.id}/playtest-${n}.webm`, keys: t.keys || [] } : {}
     if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
     else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s`, ...film })
@@ -436,7 +482,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
     const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, links || ''].filter(Boolean).join('\n\n')
     try {
-      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. Finish with a working build: the typecheck and build must pass.`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+      const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
+      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+      if (j.godot) await exportWeb(dir)
     } catch (err) {
       step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
       return withClip({ ok: false, problem: problems })
@@ -487,11 +535,14 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   async function open(id) {
     const j = jobs.get(id)
+    if (j?.url && j.gsrv) return view(j)
     if (j?.url && j.proc?.exitCode === null && j.sig === serveSig(dirOf(id))) return view(j)
     if (!existsSync(join(dirOf(id), 'package.json'))) throw new Error('no app yet')
     const k = j || { id, kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
     jobs.set(id, k)
-    await serve(id, k)
+    // a Godot-first game plays from its Web export
+    if (isGodotFirst(dirOf(id)) && existsSync(join(webBuild(dirOf(id)), 'index.html'))) await serveGodot(id, k)
+    else await serve(id, k)
     k.state = k.state === 'working' ? 'working' : 'done'
     return view(k)
   }
