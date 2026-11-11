@@ -72,6 +72,7 @@ Only if the request asks to change something already on an existing page, one li
 {"type":"change","page":"<existing page id>","layer":"<existing section id>","ask":"<exactly what to change in that section>"}
 
 Rules:
+- A section named without its page ("the hero", "the headline") is the one on the first page.
 - Never re-plan, repeat or rename an existing page. Never plan the navigation or footer: the navigation is updated for you so every new page is linked.
 - New pages belong to the same site: same product, same voice, the same page type and theme. Give each one a memorable, unusual section.
 - If the request is about something the site doesn't cover yet ("add more about X"), that is a new page about X. Put two related asks on one page only when they are small.
