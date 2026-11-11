@@ -1350,8 +1350,24 @@ function frameLoop(now) {
     }
     if (S.t0 && !(viewing && !S.tEnd)) setText(els.timer, `${(((S.tEnd || Date.now()) - S.t0) / 1000).toFixed(1)}s`)
   }
-  requestAnimationFrame(frameLoop)
+  // nothing moving (camera settled, no cursor at work, no build running): a few frames a second
+  // is enough; any input wakes it at once (wakeLoops)
+  const still = Math.abs(cam.ts - cam.s) < 1e-4 && Math.abs(cam.tx - cam.x) < 0.2 && Math.abs(cam.ty - cam.y) < 0.2 &&
+    !S.frames.some(frameBusy) && ![...S.agents.values()].some(a => a.act || a.queued || now < (a.moving || 0) || now < (a.sayUntil || 0))
+  nextFrame(frameLoop, still)
 }
+
+// Per-frame loops run at the screen's rate only while something moves; at rest they tick a few
+// times a second, so a finished canvas stops costing a full 60 fps of DOM work.
+const sleepers = new Map()
+function nextFrame(fn, idle, ms = 200) {
+  if (!idle) return requestAnimationFrame(fn)
+  sleepers.set(fn, setTimeout(() => { sleepers.delete(fn); requestAnimationFrame(fn) }, ms))
+}
+function wakeLoops() {
+  for (const [fn, t] of sleepers) { clearTimeout(t); sleepers.delete(fn); requestAnimationFrame(fn) }
+}
+for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown']) addEventListener(ev, wakeLoops, { capture: true, passive: true })
 
 // ---------- input
 
@@ -3400,7 +3416,7 @@ commandOps.video = c => makeVideo({ idea: c.idea, style: c.style })
 const lite = { last: 0, busy: false, quiet: 0 }
 // Auto: on for small machines, and for everyone once the agents have been done
 // for half a minute (a finished build doesn't need every page live).
-const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 30000)))
+const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 5000)))
 
 const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
 const frameBusy = f => S.order.some(k => { const l = S.layers.get(k); return belongs(f, l) && l.status !== 'done' && l.status !== 'failed' })
@@ -4925,8 +4941,9 @@ function crewSpot(job, me) {
 }
 
 function crewTick(now) {
-  requestAnimationFrame(crewTick)
   const job = crewJob()
+  // no crew on screen: look again a few times a second instead of every frame
+  nextFrame(crewTick, !job && !crew.members.length, 300)
   const key = job ? job.key : ''
   if (key !== crew.key) {
     crew.key = key
@@ -6034,7 +6051,7 @@ function cwPin(i) {
   if (!r.width && !r.height) return null
   return { x: r.left + 2, y: r.top + 4, text: t.path.split('/').pop(), typing: t.shown < t.text.length }
 }
-;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } requestAnimationFrame(cwLoop) })()
+;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } nextFrame(cwLoop, !(view === 'app' && appv.state === 'working'), 400) })()
 
 // ---------- 🔌 sign-in connectors (Supabase), through Hermes: Connect opens the provider's
 // sign-in page; Hermes keeps the token, the canvas only learns who is connected.
