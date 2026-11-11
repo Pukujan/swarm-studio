@@ -29,7 +29,7 @@ const FXK = (() => {
   try { if (document.currentScript && document.currentScript.src) base = new URL('../assets/', document.currentScript.src).href } catch { }
   if (typeof FXK_BASE === 'string') base = FXK_BASE   // optional override, set before this script
   const STRIPS = ['slash-arc-gold', 'slash-arc-crimson', 'hit-spark', 'thunder-blade', 'smoke-puff']
-  const CUTS = ['messenger-eyes', 'messenger-pose', 'runner-eyes', 'runner-pose']
+  const CUTS = ['messenger-eyes', 'messenger-pose', 'messenger-coresunder-pose', 'runner-eyes', 'runner-pose']
   function loadAll(b) {
     if (b) base = b.endsWith('/') ? b : b + '/'
     if (typeof Image === 'undefined') return
@@ -388,12 +388,19 @@ const FXK = (() => {
     messenger: { a: '255,196,80', b: '200,16,40', hair: '110,60,40', eye: '150,85,40', face: [0.29, 0.23, 0.51, 0.215] },
     runner: { a: '255,206,120', b: '235,120,150', hair: '240,170,185', eye: '170,100,100', face: [0.335, 0.09, 0.43, 0.18] },
   }
+  // a sword can bring its own cut-in pose (the art shows the blade she is holding)
+  const POSE = { coresunder: { key: 'messenger-coresunder-pose', face: [0.37, 0.105, 0.24, 0.15] } }
+  function poseFor(h) {
+    try { if (h === 'messenger' && typeof WEAPON !== 'undefined' && POSE[WEAPON.id] && WEAPON.is(WEAPON.id)) return POSE[WEAPON.id] } catch { }
+    return { key: h + '-pose', face: HERO[h].face }
+  }
   let ult = null
   function ultPanel(hero, o) {
     const h = HERO[hero] ? hero : 'messenger'
     const lines = []
     for (let i = 0; i < 70; i++) lines.push([rnd(0, TAU), rnd(0.002, 0.012), rnd(0.35, 0.8)])
-    ult = { hero: h, name: (o && o.name) ? String(o.name).replace(/[^\x20-\x7E]/g, '').slice(0, 40) : '', k: 0, last: now(), dur: 1.4, lines }
+    const pf = poseFor(h)
+    ult = { hero: h, pose: pf.key, face: pf.face, name: (o && o.name) ? String(o.name).replace(/[^\x20-\x7E]/g, '').slice(0, 40) : '', k: 0, last: now(), dur: 1.4, lines }
     return 1.4
   }
   function cover(c, img, sx, sy, sw, sh, x, y, w, h) { // draw a source rect covering a box
@@ -459,7 +466,7 @@ const FXK = (() => {
     const c = C(), k = ult.k
     if (k >= ult.dur) { ult = null; return }
     const w = SW(), h = SH(), Hc = HERO[ult.hero]
-    const eyes = IMG[ult.hero + '-eyes'], pose = IMG[ult.hero + '-pose']
+    const eyes = IMG[ult.hero + '-eyes'], pose = IMG[ult.pose]
     const slam = (t0, d) => easeOut(cl((k - t0) / d, 0, 1))
     const out = cl((k - 1.12) / 0.2, 0, 1)
     // screen kick on each slam
@@ -520,7 +527,7 @@ const FXK = (() => {
       c.save(); para(c, bx, by, bw, bh, 40); c.clip()
       c.fillStyle = `rgb(${Hc.b})`; c.fillRect(bx - 60, by, bw + 120, bh)
       speedLines(c, bx + bw * 0.5, by + bh * 0.5, 1, ult.lines, 0.4, '255,230,200')
-      const f = Hc.face
+      const f = ult.face
       if (pose && pose.width) {
         const fr = [pose.width * f[0], pose.height * f[1], pose.width * f[2], pose.height * f[3]]
         const z = 1 + k * 0.04
