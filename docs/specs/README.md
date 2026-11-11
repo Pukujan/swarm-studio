@@ -19,6 +19,7 @@ These are the specs for what comes after Auto mode and the Supabase connector. E
 | 9 | [Prompt-driven films](15-prompt-films.md) | The Film studio makes trailers, calm films or ads from one prompt and an optional style reference, so Swarm can make its own trailer | ½ day |
 | 10 | [ARES flagship demo](16-ares-demo.md) | A fast first-person Godot boss rush on Windows with the Discord as bosses, played by Jev, plus its site, app, posts and a blockbuster trailer | 1 day |
 | 11 | [Release to stores, guided by the agent](17-release-to-stores.md) | After the hackathon: any developer's game goes to itch.io, then Steam. The Studio makes the builds, store art, copy, trailer and upload, and the agent talks the person through the steps only they can take | 2–3 days |
+| 12 | [One idea, one project, one name](18-projects.md) | A site, an app, a game and a film of one idea are one Studio project and one Feed post, named by the brand, never by a screen like "Sign in" | ½ day |
 
 Deadline: the hackathon closes on **2026-11-11 at 17:00 EST**. The demo video needs specs 1–5, so they come first: build 3 and 3a together, and keep 3b to the step transitions and the chatter if time runs short. Onboarding (6) comes next, because judges will open the studio fresh. The Arcade hosting (7) and 3D (8) are stretch goals. That is more than two days of work, so each spec's "Done when" is cut to what the video shows before anything else. Files are numbered in the order they were written, not the build order.
 

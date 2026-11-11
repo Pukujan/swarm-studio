@@ -15,8 +15,14 @@ This module is the plugin's only client for it.
 - ``/swarm login``: a one-time link that signs the browser in as you.
 
 Settings live in ``$HERMES_HOME/swarm-studio/feed.json`` (mode 0600): the
-token, who it belongs to, this install's id, a pending code, and which runs
-were posted or are remixes. The token is never printed.
+token, who it belongs to, this install's id, a pending code, which runs were
+posted or are remixes, and which Feed build each project lives in. The token
+is never printed.
+
+One idea is one Feed post (docs/specs/18-projects.md): the first run of a
+project posts a build with ``project: {name}`` and ``piece``; a later run of
+the same project sends its piece into that build (``into: <buildId>``). A
+Feed that does not know these fields yet gets today's single post instead.
 """
 
 from __future__ import annotations
@@ -398,13 +404,53 @@ def parse_post_args(args: list[str]) -> tuple[str, str, str, bool]:
     return ref, jam, " ".join(words).strip().strip('"“”'), again
 
 
-def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | None = None, unlisted: bool = False) -> dict:
+PIECES = ("site", "app", "game", "film")
+# never a project's or a post's name: these name a screen (engine/naming.mjs keeps the same list)
+SCREEN_WORDS = {"sign", "sign in", "signin", "sign up", "signup", "log in", "login", "log out", "logout", "register", "home", "homepage",
+                "dashboard", "welcome", "untitled", "index", "admin", "account", "profile", "settings", "overview", "landing page", "main page", "new project"}
+
+
+def is_screen_name(name: str) -> bool:
+    n = " ".join(re.sub(r"[^a-z0-9]+", " ", str(name or "").lower()).split())
+    while re.match(r"^(your|my|our|the) ", n):
+        n = n.split(" ", 1)[1]
+    if not n or n.isdigit():
+        return True
+    for w in SCREEN_WORDS:
+        if n == w:
+            return True
+        if n.startswith(w + " ") and n[len(w) + 1:].split(" ")[0] in ("to", "for", "page", "screen", "panel", "area", "view"):
+            return True
+    return False
+
+
+def project_of(r: dict) -> tuple[str, str]:
+    """(project id, project name) of a run, from the canvas's run list; a run alone is its own project."""
+    p = r.get("project") if isinstance(r.get("project"), dict) else {}
+    pid = str(p.get("id") or r["id"])[:120]
+    name = str(p.get("name") or "").strip()
+    if not name or is_screen_name(name):
+        title = str(r.get("title") or "").strip()
+        name = "" if is_screen_name(title) else re.split(r"\s[—–|:-]\s|:\s", title)[0].strip()
+    return pid, (name or "Swarm build")[:80]
+
+
+def piece_of(r: dict, url: str, poster: str) -> dict:
+    kind = r.get("piece") if r.get("piece") in PIECES else (r.get("kind") if r.get("kind") in PIECES else "site")
+    return {"kind": kind, "title": str(r.get("title") or "Untitled")[:80], "liveUrl": url, "poster": poster, "runId": str(r["id"])[:120]}
+
+
+def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | None = None, unlisted: bool = False,
+                  into: str | None = None) -> dict:
+    """The POST /api/feed/builds body. With the project fields (project, piece, and into for a later piece);
+    ``plain_payload`` takes them off again for a Feed that does not know them."""
     folder = run_dir(r["id"])
     url = live_url(r)
     if not url:
         raise FeedError(f"“{r['title']}” has no public link yet. Publish it first (/swarm publish), then post it.")
+    _, name = project_of(r)
     body = {
-        "title": str(r.get("title") or "Untitled")[:80],
+        "title": name,
         "kind": r.get("kind") if r.get("kind") in KINDS else "site",
         "prompt": (str(r.get("brief") or r.get("title") or "").strip() or "A Swarm Studio build")[:4000],
         "buildMs": max(0, int(r.get("ms") or 0)),
@@ -426,7 +472,26 @@ def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | No
     if unlisted:
         # off the feed and Browse; anyone with the link still sees it
         body["visibility"] = "unlisted"
+    body["piece"] = piece_of(r, url, body["poster"])
+    if into and BUILD_ID.match(into):
+        body["into"] = into
+    else:
+        body["project"] = {"name": name}
     return body
+
+
+PROJECT_FIELDS = ("project", "into", "piece")
+
+
+def plain_payload(body: dict) -> dict:
+    """Today's single post: the same body without the project fields (still titled by the project's name)."""
+    return {k: v for k, v in body.items() if k not in PROJECT_FIELDS}
+
+
+def _refused_fields(exc: FeedError) -> bool:
+    """The Feed does not take the project fields yet: a 400, or a code or message about an unknown field."""
+    text = f"{exc.code} {exc}".lower()
+    return exc.status in (400, 422) or "unknown" in text or "unrecognized" in text or "field" in text
 
 
 def post(r: dict, args: list[str], export) -> str:
@@ -444,14 +509,47 @@ def post_result(r: dict, args: list[str], export) -> dict:
     done = (cfg.get("posted") or {}).get(r["id"])
     if done and not again:
         return {"ok": True, "already": True, "url": f"{origin()}/b/{done}", "message": f"“{r['title']}” is already in the feed: {origin()}/b/{done}. /swarm post {r['id']} --again posts it once more."}
-    body = build_payload(r, jam=jam, caption=caption, parent=(cfg.get("remixes") or {}).get(r["id"]), unlisted=unlisted)
-    got = _call("/api/feed/builds", body, token=token, timeout=60)
+    pid, name = project_of(r)
+    # the project's Feed build, if one of its pieces was posted before: this piece goes into it
+    into = (cfg.get("projects") or {}).get(pid)
+    if again and done == into:
+        into = None  # --again on the head piece itself posts it once more, on its own
+    body = build_payload(r, jam=jam, caption=caption, parent=(cfg.get("remixes") or {}).get(r["id"]), unlisted=unlisted, into=into)
+    joined = False
+    try:
+        got = _call("/api/feed/builds", body, token=token, timeout=60)
+        joined = bool(into) and got.get("id") == into
+    except FeedError as exc:
+        if into and exc.status == 404:
+            # the project's build is gone from the Feed: this piece starts the project's post again
+            _update(lambda c: (c.get("projects") or {}).pop(pid, None))
+            into = None
+            body = build_payload(r, jam=jam, caption=caption, parent=body.get("parentId"), unlisted=unlisted)
+            try:
+                got = _call("/api/feed/builds", body, token=token, timeout=60)
+            except FeedError as again_exc:
+                if not _refused_fields(again_exc):
+                    raise
+                got = _call("/api/feed/builds", plain_payload(body), token=token, timeout=60)
+        elif _refused_fields(exc):
+            # a Feed without projects yet: today's single post, so posting never breaks
+            got = _call("/api/feed/builds", plain_payload(body), token=token, timeout=60)
+        else:
+            raise
     build_id = got["id"]
-    _update(lambda c: c.setdefault("posted", {}).__setitem__(r["id"], build_id))
+
+    def remember(c: dict) -> None:
+        c.setdefault("posted", {})[r["id"]] = build_id
+        # the project's first post is where its later pieces go
+        if not joined:
+            c.setdefault("projects", {}).setdefault(pid, build_id)
+    _update(remember)
     note = ""
     try:
         zip_path = export(r["id"])
-        if zip_path and Path(zip_path).is_file():
+        if zip_path and Path(zip_path).is_file() and not got.get("uploadUrl"):
+            note = "\nThe feed took no files for this piece; remixers start from the prompt."
+        elif zip_path and Path(zip_path).is_file():
             size = Path(zip_path).stat().st_size
             if size > MAX_BUNDLE:
                 note = f"\nThe files are {size // (1024 * 1024)} MB, over the feed's 50 MB, so remixers start from the prompt only."
@@ -464,7 +562,10 @@ def post_result(r: dict, args: list[str], export) -> dict:
     remix_line = f" Remix of {body['parentId']}." if body.get("parentId") else ""
     url = got.get("url") or origin() + "/b/" + build_id
     seen = " Unlisted: only people with the link see it." if unlisted else ""
-    return {"ok": True, "url": url, "unlisted": unlisted, "message": f"Posted “{r['title']}” to the Swarm Feed: {url}{remix_line}{jam_line}{seen}{note}"}
+    if joined:
+        return {"ok": True, "url": url, "unlisted": unlisted, "project": name, "joined": True,
+                "message": f"Added “{r['title']}” to “{name}” on the Swarm Feed: {url}{seen}{note}"}
+    return {"ok": True, "url": url, "unlisted": unlisted, "project": name, "message": f"Posted “{r['title']}” to the Swarm Feed: {url}{remix_line}{jam_line}{seen}{note}"}
 
 
 # ------------------------------------------------------------------- remix ---

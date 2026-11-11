@@ -8,6 +8,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameS
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
+import { deployName } from './naming.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
@@ -111,7 +112,8 @@ export function bigResumeAt(events, dir) {
 // painted by the server's art pipeline into the app's public/art/ (optional: without
 // it a big game draws everything in code)
 // fill(runId, appDir, step): fills picture slots the crew did not paint (optional)
-export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null }) {
+// nameFor(id) -> { name, kind }: the run's project name and piece (docs/specs/18-projects.md)
+export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
   const jobs = new Map() // run id -> job
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const dirOf = id => join(runsDir, id, 'app')
@@ -157,13 +159,13 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         if (!resumeAt) {
           // the game made before is moved aside, not deleted: one copy is kept (app-before/) so a wrong start over loses nothing
           if (existsSync(join(dir, 'package.json'))) { rmSync(`${dir}-before`, { recursive: true, force: true }); renameSync(dir, `${dir}-before`) }
-          seedProject(scaffoldDir, dir, input.title || 'game')
+          seedProject(scaffoldDir, dir, nameFor(id)?.name || input.title || 'game')
         }
         for (const [name, text] of Object.entries(input.files || {})) if (/^[\w.-]+$/.test(name)) writeFileSync(join(dir, name), String(text))
         copyModels(dir, input.copy)
         prompt = input.prompt
       } else {
-        const snap = snapshot(events, Array.isArray(input.sections) ? input.sections.slice(0, 80) : [])
+        const snap = snapshot(events, Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], { name: nameFor(id)?.name })
         if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
         dyadApp(snap, dir, { runId: id, runDir: join(runsDir, id), scaffold: scaffoldDir })
         const games = [...new Map(events.filter(e => e.type === 'game:linked' && e.title).map(e => [e.game, { title: e.title, slug: gameSlug(e.title) }])).values()]
@@ -447,9 +449,12 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const dir = dirOf(id)
     if (!existsSync(join(dir, 'package.json'))) throw new Error('no app yet')
     if (jobs.get(id)?.state === 'working') throw new Error('the app is still building')
-    const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm-app'
+    // <project>-<kind>, like ares-app: from the project's name, never a screen's ("sign-in-to-ares")
+    const named = nameFor(id)
+    const kind = named?.kind || (jobs.get(id)?.kind === 'game' || state(id).kind === 'game' ? 'game' : 'app')
+    const name = deployName(named?.name || JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm', kind)
     // the stages and Vercel's build log are saved with the run, so the Auto show's deploy shot replays too
-    const r = await publishVercel({ dir, name: `${name}-app`.slice(0, 80), creds, dataDir, build: true, env,
+    const r = await publishVercel({ dir, name, creds, dataDir, build: true, env,
       onStage: stage => send(id, 'app:stage', { stage: `deploy: ${stage}` }),
       onLog: lines => send(id, 'app:stage', { stage: 'deploy: building', log: lines.slice(-12) }) })
     send(id, 'app:deployed', { url: r.url, project: r.repo, pending: !!r.pending })

@@ -74,8 +74,17 @@ class StandIn(BaseHTTPRequestHandler):
         if self.path == "/api/feed/builds":
             if not self._authed():
                 return self._send(401, {"ok": False, "code": "UNAUTHORIZED", "message": "Send your token."})
+            if s.get("old_feed") and any(k in body for k in ("project", "into", "piece")):
+                return self._send(400, {"ok": False, "code": "BAD_REQUEST", "message": "unknown field"})
             s.setdefault("posts", []).append(body)
+            if body.get("into"):
+                into = body["into"]
+                if into not in s.get("heads", []):
+                    return self._send(404, {"ok": False, "code": "NOT_FOUND", "message": "There is no such build."})
+                s.setdefault("pieces", {}).setdefault(into, []).append(body["piece"])
+                return self._send(200, {"ok": True, "id": into, "url": f"{base}/b/{into}", "uploadUrl": f"{base}/upload/{into}/{body['piece']['kind']}"})
             n = len(s["posts"])
+            s.setdefault("heads", []).append(f"b_built0000{n}")
             return self._send(200, {"ok": True, "id": f"b_built0000{n}", "url": f"{base}/b/b_built0000{n}", "uploadUrl": f"{base}/upload/b_built0000{n}"})
         if self.path == "/api/feed/login-link":
             return self._send(200, {"ok": True, "url": f"{base}/link?login=sfl_x", "expiresIn": 600}) if self._authed() else self._send(401, {"ok": False, "code": "UNAUTHORIZED", "message": "no"})
@@ -175,6 +184,63 @@ class FeedClientTest(unittest.TestCase):
         feed.post(run, [], lambda rid: None)
         self.assertEqual(StandIn.state["posts"][-1]["parentId"], "b_original01")
         self.assertIn("not a feed build id", feed.remix(["nope"], lambda b: {}))
+
+    def _ares(self, rid, title, piece, url):
+        return {"id": rid, "title": title, "kind": "app", "piece": piece, "brief": f"{title} — x", "project": {"id": "p-ares", "name": "ARES"},
+                "sites": {"vercel": url}, "theme": {"colors": ["#000000", "#ff0000"]}}
+
+    def test_project_posts_once_and_pieces_join_it(self):
+        self._connect()
+        site = self._ares("2026-11-11T03-32-37-133Z", "ARES — Boss Rush", "site", "https://ares-site.vercel.app/")
+        out = feed.post(site, [], lambda rid: None)
+        self.assertIn("Posted", out)
+        first = StandIn.state["posts"][0]
+        self.assertEqual(first["title"], "ARES")
+        self.assertEqual(first["project"], {"name": "ARES"})
+        self.assertNotIn("into", first)
+        self.assertEqual(first["piece"]["kind"], "site")
+        self.assertEqual(first["piece"]["runId"], site["id"])
+        self.assertEqual(feed.load()["projects"], {"p-ares": "b_built00001"})
+        app = self._ares("2026-11-11T03-33-59-295Z", "ARES Player Hub", "app", "https://ares-app.vercel.app/")
+        got = feed.post_result(app, [], lambda rid: None)
+        self.assertTrue(got["joined"])
+        self.assertIn("Added “ARES Player Hub” to “ARES”", got["message"])
+        body = StandIn.state["posts"][1]
+        self.assertEqual(body["into"], "b_built00001")
+        self.assertNotIn("project", body)
+        self.assertEqual({k: body["piece"][k] for k in ("kind", "title", "liveUrl", "runId")},
+                         {"kind": "app", "title": "ARES Player Hub", "liveUrl": "https://ares-app.vercel.app/", "runId": app["id"]})
+        self.assertTrue(body["piece"]["poster"].startswith("data:image/"))
+        self.assertEqual(len(StandIn.state["heads"]), 1)  # one Feed post for the whole project
+        self.assertEqual(feed.load()["posted"][app["id"]], "b_built00001")
+
+    def test_old_feed_falls_back_to_a_single_post(self):
+        self._connect()
+        StandIn.state["old_feed"] = True
+        site = self._ares("2026-11-11T03-32-37-133Z", "ARES — Boss Rush", "site", "https://ares-site.vercel.app/")
+        self.assertIn("Posted", feed.post(site, [], lambda rid: None))
+        app = self._ares("2026-11-11T03-33-59-295Z", "ARES Player Hub", "app", "https://ares-app.vercel.app/")
+        self.assertIn("Posted", feed.post(app, [], lambda rid: None))
+        posts = StandIn.state["posts"]
+        self.assertEqual(len(posts), 2)
+        for body in posts:
+            self.assertFalse({"project", "into", "piece"} & set(body))
+            self.assertEqual(body["title"], "ARES")
+
+    def test_gone_project_build_starts_a_new_post(self):
+        self._connect()
+        feed._update(lambda c: c.setdefault("projects", {}).__setitem__("p-ares", "b_gone000001"))
+        app = self._ares("2026-11-11T03-33-59-295Z", "ARES Player Hub", "app", "https://ares-app.vercel.app/")
+        self.assertIn("Posted", feed.post(app, [], lambda rid: None))
+        self.assertEqual(StandIn.state["posts"][-1]["project"], {"name": "ARES"})
+        self.assertEqual(feed.load()["projects"]["p-ares"], "b_built00002")
+
+    def test_screen_titles_never_name_a_post(self):
+        self.assertTrue(feed.is_screen_name("Sign In to ARES"))
+        self.assertFalse(feed.is_screen_name("ARES"))
+        run = {"id": "r1", "title": "Sign In to ARES", "sites": {"vercel": "https://x.vercel.app/"}}
+        self.assertEqual(feed.project_of(run), ("r1", "Swarm build"))
+        self.assertEqual(feed.project_of({**run, "project": {"id": "p", "name": "ARES"}}), ("p", "ARES"))
 
     def test_login_link(self):
         with self.assertRaisesRegex(feed.FeedError, "/swarm connect"):
