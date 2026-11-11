@@ -123,7 +123,7 @@ export async function createCodexSubscriptionModel(
   // Calls without a chat get an isolated model-instance scope.
   const chatScope = context?.chatId ?? randomUUID();
   const provider = createOpenAI({
-    apiKey: "subscription-auth-managed-in-main",
+    apiKey: "managed-in-main",
     baseURL: "https://chatgpt.com/backend-api/codex",
     fetch: async (_url, init) => {
       const credentials = await getCodexSubscriptionCredentials();

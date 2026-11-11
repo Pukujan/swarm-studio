@@ -1009,8 +1009,8 @@ export function registerNeonHandlers() {
       "neon",
       () => {
         handleNeonOAuthReturn({
-          token: "fake-neon-access-token",
-          refreshToken: "fake-neon-refresh-token",
+          token: "test-neon-access",
+          refreshToken: "test-neon-refresh",
           expiresIn: 3600, // 1 hour
         });
       },

@@ -820,7 +820,7 @@ function getRegularModelClient(
         const provider = createOpenAICompatible({
           name: "azure-test",
           baseURL: testAzureBaseUrl,
-          apiKey: "fake-api-key-for-testing",
+          apiKey: "test-api-key",
           ...getModelClientFetchOption(),
         });
         return {

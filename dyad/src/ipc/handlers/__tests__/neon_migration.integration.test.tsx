@@ -50,8 +50,8 @@ describe("Neon migration actions (integration)", () => {
     writeSettings({
       isTestMode: true,
       neon: {
-        accessToken: { value: "fake-neon-access-token" },
-        refreshToken: { value: "fake-neon-refresh-token" },
+        accessToken: { value: "test-neon-access" },
+        refreshToken: { value: "test-neon-refresh" },
         expiresIn: 3600,
         tokenTimestamp: Math.floor(Date.now() / 1000),
       },

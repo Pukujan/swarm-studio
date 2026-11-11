@@ -1,12 +1,13 @@
 name: swarm-studio
-version: 0.1.0
-description: "A swarm of agents designs and builds a multi-page website live on a canvas: a planner sets the theme and pages, then a dozen-plus agents stream every section in parallel, with cursors, design tools, wires between pages and a clickable prototype."
+version: 0.2.0
+description: "A crew of agents builds a whole launch from one prompt, live on a canvas you can watch and steer: a multi-page website, a working web app with a database, a playable game (also as a Godot, Unity or Unreal project), a promo film and social posts. Builds go to Swarm Feed, where others remix them and every maker is credited."
 author: Pukujan
 kind: standalone
 requires_hermes: ">=0.23"
 provides_tools:
   - swarm_design
   - swarm_canvas
+  - swarm_studio
 requires_env:
   - name: SWARM_STUDIO_API_KEY
     description: "API key for an OpenAI-compatible chat endpoint (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"

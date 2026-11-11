@@ -118,7 +118,7 @@ function ensureBareRepoHeadTracksCreatedBranch(
 }
 
 // Mock data for testing
-const mockAccessToken = "fake_access_token_12345";
+const mockAccessToken = "fake_token_1";
 const mockDeviceCode = "fake_device_code_12345";
 const mockUserCode = "FAKE-CODE";
 const mockUser = {
