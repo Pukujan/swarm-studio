@@ -296,8 +296,8 @@ function on(e) {
     case 'crew:lead': {
       // the app engine's lead agent, speaking as Hermia: thinking out loud and giving orders
       radioEvent(e)
-      if (e.kind === 'reason') { feed(null, `🛰️ Hermia ${e.text}`, 'sys'); break } // her reasoning: the log only, no bubble or order
-      feed(null, `🛰️ Hermia${e.to ? ` → ${e.to}` : ''}: ${e.text}`, 'sys')
+      logSay(e)
+      if (e.kind === 'reason') break // her reasoning: the log only, no bubble or order
       const to = e.to && [...S.agents.values()].find(x => x.name === e.to)
       if (to && Date.now() - e.t < 5000) say(to, `Hermia: ${e.text.slice(0, 120)}`, 3200)
       break
@@ -1199,6 +1199,27 @@ function push(f, item) {
   f.append(item)
   while (f.children.length > 200) f.firstChild.remove()
   if (stick) f.scrollTop = f.scrollHeight
+}
+
+// Hermia in the Log, as a chat: each line a message from her, the newest at the bottom.
+// Her thinking out loud arrives in fragments; one joins her last thought while it is fresh,
+// so it reads as one message rather than a wall of lines.
+function logSay(e) {
+  const f = els.log, last = f.lastElementChild, t = e.t || Date.now(), reason = e.kind === 'reason'
+  const txt = last?.classList.contains('reason') ? last.querySelector('.txt') : null
+  if (reason && txt && t - Number(last.dataset.t) < 20000 && txt.textContent.length < 1400) {
+    const stick = f.scrollHeight - f.scrollTop - f.clientHeight < 80
+    txt.append(` ${e.text}`)
+    last.dataset.t = t
+    if (stick) f.scrollTop = f.scrollHeight
+    return
+  }
+  const item = document.createElement('div')
+  item.className = `item say${reason ? ' reason' : ''}`
+  item.dataset.t = t
+  item.innerHTML = `<b>${HERMIA}Hermia${e.to ? `<span class="to">→</span><span style="color:${Crew.color(e.to)}">${esc(e.to)}</span>` : ''}</b><span class="txt"></span>`
+  item.querySelector('.txt').textContent = e.text
+  push(f, item)
 }
 
 function botMsg(text, working = false) {
@@ -4204,6 +4225,16 @@ for (const b of document.querySelectorAll('#app-device button')) b.onclick = () 
   renderApp()
 }
 $('#app-reload').onclick = () => { if (appv.url) loadFrame() }
+// the steps column folds away, and stays folded the next time (this browser only)
+const stepsMin = on => {
+  appEls.view.classList.toggle('steps-min', on)
+  const b = $('#app-steps-btn')
+  b.setAttribute('aria-pressed', String(on))
+  b.setAttribute('aria-label', on ? 'Show the steps' : 'Hide the steps')
+  try { localStorage.setItem('swarm-steps-min', on ? '1' : '') } catch {}
+}
+try { if (localStorage.getItem('swarm-steps-min')) stepsMin(true) } catch {}
+$('#app-steps-btn').onclick = () => stepsMin(!appEls.view.classList.contains('steps-min'))
 appEls.stop.onclick = () => appApi('/stop', {}).catch(() => {})
 
 // The first build of the app, or one more change to it.
@@ -5852,8 +5883,8 @@ function wallNames() {
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
 const heardIn = (x, ms) => x && Date.now() - x.t < ms
-const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
-const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '', mode: '' }
+const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '' }
+const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '', mode: '', reads: null, readAt: 0 }
 // ---------- the art wall: while a game's art is painted, the wall is mostly pictures. Three
 // painters (the server's PAINTERS) each get a tile with the picture they are on: painting,
 // cut out, checked, sent back, done. The last tile stays code. When the code starts, the
@@ -5902,6 +5933,21 @@ function cwHighlight(text) {
   return out + esc(text.slice(last))
 }
 
+function cwZoom(i) {
+  cw.big = cw.big === i ? -1 : i
+  const g = cw.el?.querySelector('.cw-grid')
+  if (g) cwZoomShow(g)
+}
+function cwZoomShow(g) {
+  g.classList.toggle('zoom', cw.big >= 0)
+  ;[...g.children].forEach((d, i) => { d.classList.toggle('big', i === cw.big); d.setAttribute('aria-expanded', String(i === cw.big)) })
+}
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || cw.big < 0 || !cw.el || cw.el.hidden) return
+  e.stopImmediatePropagation()
+  cwZoom(cw.big)
+}, true)
+
 function codeWall() {
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
@@ -5915,6 +5961,10 @@ function codeWall() {
     cw.el.className = 'codewall'
     cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-radio" hidden></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
+    // a click on a tile makes it big, the others line up beside it; a second click (or Esc) puts it back
+    const g = cw.el.querySelector('.cw-grid')
+    g.onclick = ev => { const t = ev.target.closest('.cw-tile'); if (t) cwZoom([...g.children].indexOf(t)) }
+    g.onkeydown = ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList?.contains('cw-tile')) { ev.preventDefault(); cwZoom([...g.children].indexOf(ev.target)) } }
     appEls.preview.append(cw.el)
   }
   if (cw.run !== appv.run) {
@@ -5955,6 +6005,19 @@ function codeWall() {
     const tile = cw.tiles[i]
     appApi(`/files?path=${encodeURIComponent(path)}`).then(r => { tile.text = String(r.text || '').slice(0, 6000) }).catch(() => { tile.text = '' }).finally(() => { tile.loading = false; if (!tile.text) tile.doneAt = 0 })
   }
+  // nothing written yet (the crew is reading and planning): an empty code tile shows a file the
+  // app already has, scrolling slowly and marked as being read, so the wall is never blank
+  if (mode === 'code' && !cw.queue.length && !cw.reads?.length && now - cw.readAt > 20000) {
+    cw.readAt = now
+    appApi('/files').then(r => { if (cw.run === appv.run) cw.reads = (r.files || []).map(f => f.path).filter(p => /\.(tsx?|jsx?|css|md|gd)$/.test(p) && !/lock|tsbuildinfo|node_modules|\.d\.ts$/.test(p)) }).catch(() => {})
+  }
+  for (let i = 0; i < CW_TILES && cw.reads?.length && !cw.queue.length; i++) {
+    if (!codeTile(i) || cw.tiles[i]) continue
+    const up = new Set(cw.tiles.filter(Boolean).map(t => t.path)), pick = cw.reads.filter(p => !up.has(p))
+    if (!pick.length) break
+    const tile = cw.tiles[i] = { path: pick[(Math.random() * pick.length) | 0], text: '', shown: 0, loading: true, doneAt: 0, read: true, scroll: 0 }
+    appApi(`/files?path=${encodeURIComponent(tile.path)}`).then(r => { tile.text = String(r.text || '').slice(0, 6000); tile.shown = tile.text.length }).catch(() => {}).finally(() => { tile.loading = false })
+  }
   const grid = cw.el.querySelector('.cw-grid')
   const names = wallNames()
   // Hermia's strip: her newest line, and who it is for
@@ -5984,8 +6047,10 @@ function codeWall() {
       d.className = 'cw-tile'
       d.innerHTML = '<div class="cw-file"><span class="cw-path"></span><em class="cw-who"></em></div><pre class="cw-code"></pre>'
     }
+    d.tabIndex = 0
     grid.append(d)
   }
+  cwZoomShow(grid)
   if (mode === 'art') {
     cwAssets()
     for (let i = 0; i < CW_TILES - 1; i++) cwPaintTile(grid.children[i], i, names[i])
@@ -6000,8 +6065,17 @@ function codeWall() {
       writing++
     }
     d.classList.toggle('typing', !t.loading && t.shown < t.text.length)
+    d.classList.toggle('reading', !!t.read)
     setText(d.querySelector('.cw-path'), t.path)
     cwWho(d, names[i])
+    if (t.read) {
+      // a file being read: all of it, scrolling down slowly, then back to the top
+      const pre = d.querySelector('.cw-code')
+      if (d.dataset.path !== t.path || d.dataset.shown !== String(t.shown)) { d.dataset.path = t.path; d.dataset.shown = t.shown; pre.innerHTML = cwHighlight(t.text); t.scroll = 0 }
+      t.scroll = t.scroll + 0.6 > pre.scrollHeight - pre.clientHeight + 40 ? 0 : t.scroll + 0.6
+      pre.scrollTop = t.scroll | 0
+      return
+    }
     if (d.dataset.shown !== String(t.shown) || d.dataset.path !== t.path) {
       d.dataset.shown = t.shown; d.dataset.path = t.path
       // the last lines, so the caret stays in view
