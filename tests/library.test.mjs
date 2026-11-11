@@ -13,7 +13,10 @@ const rows = [
   row('storybook_gouache', 'icons', 'misc', 'signal_spark', 'a crackling spark of signal light'),
   row('pixel_32', 'icons', 'misc', 'spring_boots'),
   row('cel_shaded_anime', 'backgrounds', 'plate', 'city_rooftops_night', 'city rooftops under a night sky with antennas'),
-  row('cel_shaded_anime', 'backgrounds', 'parallax', 'city_rooftops_night_mid', 'parallax layer'),
+  row('cel_shaded_anime', 'backgrounds', 'parallax', 'neon_roofs_sky', 'sky layer'),
+  row('cel_shaded_anime', 'backgrounds', 'parallax', 'rooftop_city_far', 'far layer'),
+  row('cel_shaded_anime', 'icons', 'misc', 'signal_mirror', 'a mirror for signalling'),
+  row('cel_shaded_anime', 'icons', 'misc', 'iron_boots'),
   row('cel_shaded_anime', 'characters', 'humanoid', 'courier', 'a courier'),
   row('lowpoly_render', 'icons', 'misc', 'spring_boots')
 ]
@@ -28,9 +31,14 @@ test('the next close pack is tried, and an icon with no match gets nothing', () 
   assert.equal(pickRow(index, icon('Signal Spark'), 'anime-cel').pack, 'storybook_gouache')
   assert.equal(pickRow(index, icon('Grappling hook'), 'anime-cel'), null)
 })
-test('a backdrop is a whole plate, never a parallax layer', () => {
-  const r = pickRow(index, { kind: 'backdrop', what: 'backdrop for Rooftops', gen: 'night rooftops with antennas' }, 'anime-cel')
-  assert.equal(r.sub, 'plate')
+test('a backdrop can be a whole picture or a far layer, never a sky or near layer', () => {
+  assert.equal(pickRow(index, { kind: 'backdrop', what: 'backdrop for Rooftops', gen: 'night rooftops with antennas' }, 'anime-cel').sub, 'plate')
+  const used = new Set(['assets/cel_shaded_anime/backgrounds/plate/city_rooftops_night.png'])
+  assert.equal(pickRow(index, { kind: 'backdrop', what: 'backdrop for Neon roofs', gen: 'a rooftop city' }, 'anime-cel', used).slug, 'rooftop_city_far')
+})
+test('an icon sharing one word of a two-word name is not that thing', () => {
+  assert.equal(pickRow(index, icon('Signal Spark'), 'pixel'), null)
+  assert.equal(pickRow(index, icon('Rocket boots'), 'anime-cel'), null)
 })
 test('no library picture for characters, a style with no close pack, or one already used', () => {
   assert.equal(pickRow(index, { kind: 'sprite', what: 'sprite of courier' }, 'anime-cel'), null)

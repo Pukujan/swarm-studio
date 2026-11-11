@@ -30,13 +30,15 @@ export const PACKS = {
 }
 const CATEGORY = { icon: 'icons', backdrop: 'backgrounds', title: 'backgrounds' }
 const CATEGORY_SET = new Set(Object.values(CATEGORY))
-const FILLER = new Set(['icon', 'backdrop', 'emblem', 'single', 'bold', 'symbol', 'centred', 'centered', 'plain', 'dark', 'circle', 'readable', 'when', 'small', 'game', 'called', 'people', 'nobody', 'empty', 'figures', 'key', 'art', 'screen', 'title', 'mid', 'sky', 'front', 'back', 'png'])
-const terms = s => words(String(s || '').replace(/_/g, ' ')).filter(w => !FILLER.has(w))
+const FILLER = new Set(['far', 'near', 'wide', 'ornate', 'icon', 'backdrop', 'emblem', 'single', 'bold', 'symbol', 'centred', 'centered', 'plain', 'dark', 'circle', 'readable', 'when', 'small', 'game', 'called', 'people', 'nobody', 'empty', 'figures', 'key', 'art', 'screen', 'title', 'mid', 'sky', 'front', 'back', 'png'])
+// words, singular ("rooftops" finds rooftop_city), without the prompt's own filler
+const stem = w => (w.length > 4 && w.endsWith('ies') ? `${w.slice(0, -3)}y` : w.length > 3 && /[^s]s$/.test(w) ? w.slice(0, -1) : w)
+const terms = s => [...new Set(words(String(s || '').replace(/_/g, ' ')).filter(w => !FILLER.has(w)).map(stem))]
 
 // rows: the catalog's lines, parsed; → the few fields a pick needs
 export function indexRows(rows) {
   return rows.filter(r => r && r.path && CATEGORY_SET.has(r.category)).map(r => ({
-    path: r.path, cat: r.category, sub: r.subcategory || '', pack: r.style_pack,
+    path: r.path, slug: String(r.subject || ''), cat: r.category, sub: r.subcategory || '', pack: r.style_pack,
     subject: new Set(terms(r.subject)), more: new Set(terms(`${(r.tags || []).join(' ')} ${r.description || ''}`))
   }))
 }
@@ -51,13 +53,16 @@ export function pickRow(index, it, style, used = new Set()) {
     let best = null, top = 0
     for (const r of index) {
       if (r.pack !== pack || r.cat !== cat || used.has(r.path)) continue
-      if (cat === 'backgrounds' && r.sub === 'parallax') continue // a layer of a set, not a whole backdrop
-      let s = 0
-      for (const w of want) s += r.subject.has(w) ? 3 : r.more.has(w) ? 1 : 0
+      // a parallax set's far and mid layers are whole opaque pictures; its sky and near ones are not
+      if (cat === 'backgrounds' && r.sub === 'parallax' && /_(near|sky)$/.test(r.slug)) continue
+      let s = 0, hit = 0
+      for (const w of want) { const h = r.subject.has(w) ? 3 : r.more.has(w) ? 1 : 0; s += h; hit += h > 0 }
+      // an icon must be of the thing itself: most of its name, not one shared word ("signal mirror" is no Signal Spark)
+      if (cat === 'icons' && hit < Math.max(1, Math.ceil(want.length * 0.6))) continue
       for (const w of extra) s += r.subject.has(w) ? 1 : r.more.has(w) ? 0.5 : 0
       if (s > top) { top = s; best = r }
     }
-    // an icon must be of the thing itself; a backdrop only needs to share the place's mood
+    // a backdrop only needs to share something of the place
     if (best && top >= (cat === 'icons' ? 3 : 1)) return best
   }
   return null
