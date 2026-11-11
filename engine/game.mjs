@@ -10,6 +10,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { streamChat } from './llm.mjs'
+import { castPrompt, cleanCast } from './cast.mjs'
 
 const skillsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'gameskills')
 
@@ -249,7 +250,7 @@ export const gameModels = spec => (Array.isArray(spec?.models) ? spec.models : [
 // The app engine's first prompt for a game.
 export function gamePrompt(spec, assets = gameModels(spec)) {
   const engineHow = spec.engine === 'three.js'
-    ? (assets.length
+    ? (assets.length || cleanCast(spec.cast).length
         ? 'Add three (and its types) with add_dependency. The hero, the enemies and the set pieces are the 3D models listed below: load them with GLTFLoader (clone skinned ones with SkeletonUtils.clone), play their animations by name with an AnimationMixer, cross-fading between idle, run, attack, hit and death. Build only what the models do not cover (effects, pickups, floor) in code. Warm key light with soft shadows, a few point lights, light fog. Keep draw calls low (instancing for repeated props). Fixed three-quarter camera rig that follows the hero.'
         : 'Add three (and its types) with add_dependency. Build every model in code: group primitive geometries (boxes, spheres, cylinders, cones, tori, extruded shapes) into the hero, enemies and props; use MeshStandardMaterial with emissive colours, a few point lights, fog, and canvas-drawn textures. Keep draw calls low (instancing for repeated props). Fixed camera rig that follows the hero.')
     : spec.engine === 'PixiJS'
@@ -267,7 +268,7 @@ How to build it:
 - Fixed timestep update loop; works at 60 fps on a laptop; resizes with the window; no console errors.
 - Original content only: the names, characters, world and art in the spec are new. Never use names, characters or assets from existing games.
 ${spec.brand ? brandRules({ ...spec.brand, game: gameSlug(spec.title) }) : ''}
-${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader from /models/<file>, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
+${castPrompt(cleanCast(spec.cast))}${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader from /models/<file>, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
 Finish with a working build: the typecheck and build must pass, and the game must start and be playable to a win and a loss.
 
 Reference notes for this kind of game (use what helps, ignore the rest):
