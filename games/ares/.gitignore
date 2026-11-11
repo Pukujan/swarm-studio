@@ -1,0 +1,4 @@
+.godot/
+assets/models/*.glb
+assets/models/*.import
+assets/models/*.png

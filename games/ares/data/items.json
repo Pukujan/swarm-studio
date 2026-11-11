@@ -1,0 +1,15 @@
+{
+  "_note": "Cosmetic items shared with the ARES player app (the Armory and the Oracle). Cosmetic only: no item changes any stat. `equipped` lists the ids worn in game.",
+  "tiers": {"Bronze": "#b0703a", "Silver": "#d8cfc4", "Gold": "#ffc23a", "Crimson": "#e8281e"},
+  "items": [
+    {"id": "skin-bronze-repeater", "name": "Bronze Repeater", "tier": "Bronze", "slot": "weapon_skin", "color": "#c07a40"},
+    {"id": "skin-gilded-scatter", "name": "Gilded Scatter", "tier": "Gold", "slot": "weapon_skin", "color": "#ffc23a"},
+    {"id": "skin-ember-lance", "name": "Ember Lance", "tier": "Silver", "slot": "weapon_skin", "color": "#ff7a2a"},
+    {"id": "trail-dawn-feathers", "name": "Dawn Feathers", "tier": "Bronze", "slot": "sandal_trail", "color": "#ffd9a0"},
+    {"id": "trail-war-ember", "name": "War Ember", "tier": "Gold", "slot": "sandal_trail", "color": "#ff9a2a"},
+    {"id": "finisher-ink-bloom", "name": "Ink Bloom", "tier": "Silver", "slot": "finisher", "color": "#2a0d0a"},
+    {"id": "finisher-olympian-flare", "name": "Olympian Flare", "tier": "Gold", "slot": "finisher", "color": "#ffcf5a"},
+    {"id": "teknium-checkpoint-blade", "name": "Teknium's Checkpoint Blade", "tier": "Crimson", "slot": "finisher", "color": "#ff2a1a", "featured": true}
+  ],
+  "equipped": ["skin-gilded-scatter", "trail-war-ember", "teknium-checkpoint-blade"]
+}
