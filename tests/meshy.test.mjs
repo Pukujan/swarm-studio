@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { meshyCost, meshyKey, meshyJobs, BATCH_MAX,imageTo3dBody, rigBody, rigOutputs, classifyFailure, backoffMs, waitTask, download, makeCharacter, assetAllowed, meshyPick, spritePick, STYLE } from '../engine/meshy.mjs'
+import { meshyCost, meshyKey, meshyJobs, BATCH_MAX, imageTo3dBody, multiImageTo3dBody, MULTI_POLYCOUNT, ROUTES, rigBody, rigOutputs, classifyFailure, backoffMs, waitTask, download, makeCharacter, assetAllowed, meshyPick, spritePick, STYLE } from '../engine/meshy.mjs'
 import { cleanCast, castPrompt, castCredits, spriteFile } from '../engine/cast.mjs'
 
 const KEY = 'msy_test_not_a_real_key'
@@ -248,4 +248,65 @@ test('the full run through the job list on a mocked Meshy: two paid calls per ch
   assert.equal(job.state, 'done', job.error || '')
   assert.equal(calls.filter(c => c.method === 'POST').length, 2)
   assert.ok(existsSync(join(d, 'models', job.pick.file)))
+})
+
+// ---------- multi-view (spec 21): front, side and back in one paid call
+test('the multi-image ask: 1–4 pictures, the same cel fields, 40 000 triangles unless the plan says otherwise', () => {
+  const one = imageTo3dBody('data:a')
+  const b = multiImageTo3dBody(['data:a', 'data:b', 'data:c'])
+  assert.deepEqual(b.image_urls, ['data:a', 'data:b', 'data:c'])
+  assert.equal(b.image_url, undefined)
+  for (const k of ['ai_model', 'should_texture', 'enable_pbr', 'texture_prompt', 'pose_mode', 'should_remesh', 'topology', 'target_formats']) assert.deepEqual(b[k], one[k], k)
+  assert.equal(b.target_polycount, 40000)
+  assert.equal(MULTI_POLYCOUNT, 40000)
+  assert.equal(multiImageTo3dBody(['data:a'], { polycount: 60000 }).target_polycount, 60000)
+  assert.throws(() => multiImageTo3dBody([]), /1 to 4/)
+  assert.throws(() => multiImageTo3dBody(['1', '2', '3', '4', '5']), /1 to 4/)
+  assert.equal(ROUTES['multi-image-to-3d'], '/openapi/v1/multi-image-to-3d')
+})
+
+function fakeMulti() {
+  const calls = []
+  let polls = 0
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || 'GET', auth: opts.headers?.authorization, body: opts.body ? JSON.parse(opts.body) : null })
+    const u = new URL(url)
+    if (u.hostname === 'assets.meshy.ai') return new Response(GLB, { status: 200 })
+    if (u.pathname === '/openapi/v1/multi-image-to-3d' && opts.method === 'POST') return json({ result: 'mv-1' })
+    if (u.pathname === '/openapi/v1/multi-image-to-3d/mv-1') return json(++polls < 2 ? { id: 'mv-1', status: 'IN_PROGRESS', progress: 50 } : { id: 'mv-1', status: 'SUCCEEDED', progress: 100, model_urls: { glb: 'https://assets.meshy.ai/m/mv-1.glb' } })
+    if (u.pathname === '/openapi/v1/rigging' && opts.method === 'POST') return json({ result: 'rig-2' })
+    if (u.pathname === '/openapi/v1/rigging/rig-2') return json({ id: 'rig-2', status: 'SUCCEEDED', result: { rigged_character_glb_url: 'https://assets.meshy.ai/r/rig2.glb' } })
+    return json({ message: 'not found' }, 404)
+  }
+  return { fetchImpl, calls }
+}
+
+test('make a character from three views: the multi-image route, polled at its own path, then the rig', async () => {
+  const d = tmp()
+  const views = ['front', 'side', 'back'].map(v => { const f = join(d, `${v}.png`); writeFileSync(f, v); return f })
+  const { fetchImpl, calls } = fakeMulti()
+  const out = await makeCharacter({ images: views, polycount: 50000, role: 'Heroine 1', outDir: join(d, 'models'), key: KEY, fetchImpl, clock: clock(), stamp: 't2' })
+  assert.equal(out.file, 'meshy-heroine-1-t2.glb')
+  assert.deepEqual(out.tasks, { mesh: 'mv-1', rig: 'rig-2' })
+  const posts = calls.filter(c => c.method === 'POST')
+  assert.deepEqual(posts.map(c => new URL(c.url).pathname), ['/openapi/v1/multi-image-to-3d', '/openapi/v1/rigging'])
+  assert.equal(posts[0].body.image_urls.length, 3)
+  assert.ok(posts[0].body.image_urls.every(u => /^data:image\/png;base64,/.test(u)))
+  assert.equal(posts[0].body.target_polycount, 50000)
+  assert.ok(calls.some(c => new URL(c.url).pathname === '/openapi/v1/multi-image-to-3d/mv-1'))
+  for (const c of calls) assert.equal(!!c.auth, new URL(c.url).hostname === 'api.meshy.ai')
+})
+
+test('more than four views is refused before anything is called', async () => {
+  let called = false
+  await assert.rejects(makeCharacter({ images: ['a', 'b', 'c', 'd', 'e'], outDir: tmp(), key: KEY, fetchImpl: async () => { called = true } }), /1 to 4/)
+  assert.equal(called, false)
+})
+
+test('one view takes the single-image path', async () => {
+  const d = tmp()
+  const f = join(d, 'front.png'); writeFileSync(f, 'x')
+  const { fetchImpl, calls } = fakeMeshy()
+  await makeCharacter({ images: [f], outDir: join(d, 'models'), key: KEY, fetchImpl, clock: clock(), stamp: 't3' })
+  assert.equal(new URL(calls.find(c => c.method === 'POST').url).pathname, '/openapi/v1/image-to-3d')
 })

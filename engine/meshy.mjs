@@ -23,7 +23,7 @@ export const KEY = 'MESHY_API_KEY'
 const ASSET_HOSTS = new Set(['assets.meshy.ai'])
 const MAX_BYTES = 128 * 1024 * 1024 // a Meshy GLB with 2K textures is ~30 MB
 
-export const ROUTES = { 'image-to-3d': '/openapi/v1/image-to-3d', rigging: '/openapi/v1/rigging', balance: '/openapi/v1/balance' }
+export const ROUTES = { 'image-to-3d': '/openapi/v1/image-to-3d', 'multi-image-to-3d': '/openapi/v1/multi-image-to-3d', rigging: '/openapi/v1/rigging', balance: '/openapi/v1/balance' }
 
 // Prices (workflows.md, Meshy's pricing as of 2026-10-12). Image-to-3D with a
 // texture on meshy-6 is 30; the rig is 5 and includes the walk and run clips.
@@ -137,6 +137,15 @@ export function imageTo3dBody(imageUrl, { aiModel = AI_MODEL, polycount = 15000 
     target_formats: ['glb']
   }
 }
+// Multi-image-to-3D (spec 21): front, side and back of the same character (1–4 pictures), the same
+// cel fields, at a third-person hero's detail (40 000 triangles by default).
+export const MULTI_POLYCOUNT = 40000
+export function multiImageTo3dBody(imageUrls, { aiModel = AI_MODEL, polycount = MULTI_POLYCOUNT } = {}) {
+  const urls = (Array.isArray(imageUrls) ? imageUrls : []).filter(Boolean)
+  if (urls.length < 1 || urls.length > 4) throw new MeshyError('multi-image-to-3D takes 1 to 4 pictures')
+  const { image_url, ...same } = imageTo3dBody(urls[0], { aiModel, polycount })
+  return { image_urls: urls, ...same }
+}
 export const rigBody = (inputTaskId, heightMeters = 1.7) => ({ input_task_id: inputTaskId, height_meters: heightMeters })
 
 // The rigged character and its free clips (plugin_api._result_urls, rigging fields).
@@ -177,15 +186,24 @@ const slug = s => String(s || 'hero').toLowerCase().replace(/[^a-z0-9]+/g, '-').
 
 // The whole run for one role: art -> textured mesh -> rig -> files in outDir.
 // Returns { file, clips, thumb, tasks, credits }. Spends credits: call it only after the person said yes.
-export async function makeCharacter({ image, role = 'hero', outDir, key = meshyKey(), fetchImpl = fetch, clock, onStep = () => {}, stamp = Date.now().toString(36) }) {
+// With two or more views (images: front, side, back) it takes the multi-image path at the plan's polycount.
+export async function makeCharacter({ image, images, polycount, role = 'hero', outDir, key = meshyKey(), fetchImpl = fetch, clock, onStep = () => {}, stamp = Date.now().toString(36) }) {
   if (!key) throw new MeshyError('no Meshy key', 401)
   mkdirSync(outDir, { recursive: true })
   const cost = meshyCost()
   onStep({ stage: 'model', progress: 0 })
-  const made = await call(ROUTES['image-to-3d'], { key, method: 'POST', body: imageTo3dBody(image.startsWith('data:') ? image : dataUri(image)), fetchImpl })
+  const uri = x => (String(x).startsWith('data:') ? x : dataUri(x))
+  const views = (images || []).filter(Boolean)
+  if (views.length > 4) throw new MeshyError('multi-image-to-3D takes 1 to 4 pictures')
+  const multi = views.length >= 2
+  const route = multi ? 'multi-image-to-3d' : 'image-to-3d'
+  const one = image || views[0]
+  if (!one) throw new MeshyError('no picture')
+  const body = multi ? multiImageTo3dBody(views.map(uri), polycount ? { polycount } : {}) : imageTo3dBody(uri(one), polycount ? { polycount } : {})
+  const made = await call(ROUTES[route], { key, method: 'POST', body, fetchImpl })
   const meshId = made.result
   if (!meshId) throw new MeshyError('Meshy gave no task id')
-  const mesh = await waitTask('image-to-3d', meshId, { key, fetchImpl, clock, onProgress: t => onStep({ stage: 'model', progress: t.progress || 0 }) })
+  const mesh = await waitTask(route, meshId, { key, fetchImpl, clock, onProgress: t => onStep({ stage: 'model', progress: t.progress || 0 }) })
   onStep({ stage: 'rig', progress: 0 })
   const rigged = await call(ROUTES.rigging, { key, method: 'POST', body: rigBody(meshId), fetchImpl })
   const rigId = rigged.result

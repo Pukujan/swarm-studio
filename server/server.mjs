@@ -37,6 +37,7 @@ import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
+import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
@@ -1003,7 +1004,6 @@ let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
 let castP = null
 const castMod = () => (castP ||= import('../engine/cast.mjs'))
-// plans (spec 21): the board's routes; the paid steps are hooks that check the lock first
 // The Plan board's pictures (spec 21): sketches and mocks at medium, backdrops and close-up art at
 // high, through the same image login as the builds. Image runs only; no Meshy credits.
 async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', crop = '', refs = [] }) {
@@ -1015,7 +1015,8 @@ async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', cro
   return imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
 }
 planPaint.ready = async () => !!(await imageChoice())
-const plans = planRoutes({ dataDir, paint: planPaint })
+// The build (spec 21) spends Meshy credits only on a locked plan, inside the price it was locked at.
+const plans = planRoutes({ dataDir, paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() } })
 let meshyP = null
 const meshyMod = () => (meshyP ||= import('../engine/meshy.mjs'))
 

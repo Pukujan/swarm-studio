@@ -166,7 +166,7 @@ export function planPrice(plan) {
     mocks: Math.max(0, 5 - done(plan.mocks)),
     backdrops: Math.max(0, stages * Number(plan.settings?.backdropsPerStage ?? SETTINGS.backdropsPerStage) - done(plan.backdrops)),
     closeups: cast.reduce((n, r) => n + ['cutin', 'portrait'].filter(w => art.get(r.name)?.[w]?.state !== 'done').length, 0),
-    turnarounds: todo.length * 2
+    turnarounds: todo.reduce((n, r) => n + ['front', 'side', 'back'].filter(v => art.get(r.name)?.[v]?.state !== 'done').length, 0)
   }
   const images = Object.values(pics).reduce((s, n) => s + n, 0)
   const one = todo.length ? COST.model + COST.rig : 0
