@@ -3,7 +3,7 @@
 `index.html` loads classic scripts in this order: `game.js` (core: loop, input, player,
 camera, hit rules), `sfx.js` (sound effects; it wraps the others at window `load`), `fx.js` (the FXK effects kit, may be missing), `stage.js` (stages, kits,
 camera zoom, titan, boons, chant), `boss.js` (boss fights), `enemies.js`, `foe-fx.js`, `boss-spells.js`,
-`foe-casts.js`, `spells.js`, `hazards.js`, `personality.js`, `intro.js`, `moves.js`, `trails.js`, `thousand.js`, `skywave.js`, `weapons.js`, `quake.js`, `icons.js`, `drops.js`, `mood.js`, `heroine-status.js`, `look.js`, `pose-fit.js`, and then calls
+`foe-casts.js`, `spells.js`, `hazards.js`, `personality.js`, `intro.js`, `moves.js`, `trails.js`, `thousand.js`, `skywave.js`, `weapons.js`, `quake.js`, `icons.js`, `drops.js`, `mood.js`, `heroine-status.js`, `look.js`, `pose-fit.js`, `loadout.js`, and then calls
 `ARES_BOOT()`. The last fifteen layer on top of the core by reassigning its top-level functions (a classic
 script's `function` declaration is a writable `window` property), so the core never calls them
 directly. Top-level `const`/`let` such as `FXK`, `CFG` and `RUN` are not on `window`: test them
@@ -457,7 +457,7 @@ and it rides the core's `frame` (no loop of its own), so the clock is the frame 
 
 ## pose-fit.js
 
-Loaded last, after `look.js`, so its canvas transform covers the outline, rim and status layers. It wraps
+Loaded after `look.js`, so its canvas transform covers the outline, rim and status layers. It wraps
 `pickAnim` and `drawSprite` for the heroine only:
 
 - Idle breaks (`m-tease`, `m-breeze`, `m-win` and the Oracle's `o-` ones) are painted taller than the idle;
@@ -466,3 +466,12 @@ Loaded last, after `look.js`, so its canvas transform covers the outline, rim an
   frame nearest the break's last pose (`BACK`, measured from the default sheets).
 - The crouch (jump sheet frames 0-1 on the ground) is moved down so its lowest opaque row sits where the
   idle's does. It is measured from the loaded image, so every outfit gets its own offset.
+
+## loadout.js
+
+Baker wears what the player equipped in the ARES Player Hub. The Hub's "Equip and play" opens the
+game with `?hub=<origin>&player=<id>&loadout=<signed copy>`; at boot `loadout.js` asks
+`<hub>/api/loadout?player=<id>` (read-only, CORS) and applies the sword (`WEAPON.set`), the trail
+colours and the finisher colours (it recolours each new `TRAIL.swings` entry; trails.js is not
+edited). The Hub down: the link's copy, then the last loadout this browser saw, then defaults.
+`?loadout=0` turns it off. `LOADOUT` holds what was applied and where it came from (`src`).
