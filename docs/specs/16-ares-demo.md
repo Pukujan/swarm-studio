@@ -57,10 +57,25 @@ Each is one prompt in the studio, recorded live for the trailer.
 |---|---|---|
 | Game | ARES in Godot, playable on Windows | big-game mode, the Godot port, existing 3D models |
 | Website | A launch site: a hero with gameplay, the boss roster (one card per boss with art, handle and title), the trailer, download | multi-page design, painted art, stock fill, motion |
-| Player app | Sign-in; a leaderboard of the fastest clear per boss; "beat Jev's time" ghost runs; a skins shop with credits; an admin dashboard | a real app with a database, credits checkout, admin |
+| Player app | Sign-in; a leaderboard of the fastest clear per boss; "beat Jev's time" ghost runs; **the Armory** (a weapon and skin marketplace with rarity tiers, bought with credits); **the Oracle** (a gacha summon banner); an inventory; an admin dashboard | a real app with a database, credits checkout, gacha logic, admin |
 | Trailer | The blockbuster cut below, plus the studio's own film step | the film studio |
 | Posts | X and Discord posts with each boss's name card, so every boss can share their own | launch kit |
 | Feed | Published to Swarm Feed for remix, with credit | the community loop |
+
+## The Armory and the Oracle (in the player app)
+
+- **Credits:** bought through the studio's credits checkout (demo checkout, or Stripe test mode). No real money in the demo.
+- **Rarity tiers:** Bronze, Silver, Gold, Crimson (the top tier, flame-edged). They stay inside the palette, so no blue, purple or green rarity colours.
+- **The Armory:** browse and buy weapon skins, hero sandal trails and finisher effects directly, each with a price in credits. Looter-shooter style item cards with stats flavour text.
+- **The Oracle of Ares:** a gacha banner with 1x and 10x summons and a featured item per banner (e.g. "Teknium's Checkpoint Blade"). It follows good-practice rules:
+  - the odds are published on the banner;
+  - a pity counter guarantees a Crimson item by pull 50;
+  - duplicates turn into shards that buy items in the Armory;
+  - it is cosmetic only, never stronger weapons.
+- A summon plays a short reveal: a sealed bronze urn cracks, then gold or crimson light shows the tier.
+- **Inventory:** owned items, and the one equipped per slot.
+- **Admin:** banner setup (featured item, odds, dates), sales and summons per day, credits sold.
+- The item names are shared with the game through one `items.json`, so the trailer can show a skin bought in the app and worn in the game.
 
 ## The trailer: blockbuster, under 90 s
 
