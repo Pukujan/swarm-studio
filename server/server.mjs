@@ -999,6 +999,8 @@ async function chatterMake(text, voice) {
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
+let castP = null
+const castMod = () => (castP ||= import('../engine/cast.mjs'))
 // stand-ins load lazily; the vision tagger is the reviewer model; Octo's public lane when the studio has a key
 let standinP = null
 const standinsOf = () => (standinP ||= (() => {
@@ -1114,7 +1116,8 @@ async function startGame(spec) {
   const models = g.gameModels(spec)
   const copy = Object.fromEntries(models.map(m => [`public/models/${m.file}`, join(lib, m.file)]))
   const a = await apps()
-  await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, copy })
+  const credits = (await castMod()).castCredits(spec.cast)
+  await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec), ...(credits ? { 'CREDITS.md': credits } : {}) }, copy })
   // the site remembers its game, so each can open the other
   if (spec.brand?.from && existsSync(join(runsDir, spec.brand.from))) record(spec.brand.from, { type: 'game:linked', t, run: spec.brand.from, game: id, title: String(spec.title).slice(0, 80) })
   broadcast({ type: 'files:changed', t, run: id })
@@ -1806,6 +1809,23 @@ const server = createServer((req, res) => {
     return
   }
 
+  // Cast from real models (spec 19). The spec reply names the roles to cast;
+  // POST { role: { look, name } | { query }, violent } -> { models, dropped, errors }.
+  if (url.pathname === '/api/cast' && req.method === 'POST') {
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 2e4) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const r = input.role && typeof input.role === 'object' ? input.role : {}
+      const role = { look: String(r.look || '').slice(0, 400), name: String(r.name || '').slice(0, 80), ...(r.query ? { query: String(r.query).slice(0, 80) } : {}) }
+      castMod().then(c => c.searchCast(role, { violent: input.violent !== false, n: 8 }))
+        .then(out => reply(200, out)).catch(err => reply(500, { error: String(err.message || err) }))
+    })
+    return
+  }
+
   if (url.pathname === '/api/game' || url.pathname === '/api/game/spec') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method === 'GET') { gameMod().then(g => reply(200, { questions: g.QUESTIONS })).catch(err => reply(500, { error: String(err.message || err) })); return }
@@ -1815,7 +1835,12 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       const go = url.pathname === '/api/game/spec'
-        ? gameMod().then(g => g.writeSpec({ provider: provider('planner'), model: modelFor('planner'), idea: String(input.idea || '').slice(0, 600), answers: typeof input.answers === 'object' && input.answers ? input.answers : {}, brand: brandOf(input.from), big: input.big === true, signal: AbortSignal.timeout(input.big ? 180000 : 90000) })).then(spec => ({ spec }))
+        ? gameMod().then(g => g.writeSpec({ provider: provider('planner'), model: modelFor('planner'), idea: String(input.idea || '').slice(0, 600), answers: typeof input.answers === 'object' && input.answers ? input.answers : {}, brand: brandOf(input.from), big: input.big === true, signal: AbortSignal.timeout(input.big ? 180000 : 90000) }))
+          .then(async spec => {
+            // a 3D game with people in it is cast from real models before it is built
+            const c = await castMod()
+            return { spec, ...(c.needsCast(spec) ? { cast: { roles: c.castRoles(spec), violent: c.hasCombat(spec) } } : {}) }
+          })
         : startGame(input.spec)
       go.then(out => reply(200, out)).catch(err => reply(400, { error: String(err.message || err) }))
     })

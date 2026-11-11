@@ -4255,12 +4255,12 @@ commandOps.view = c => setView(c.view)
 // ---------- 🎮 game mode
 // A few questions, one at a time (chips or your own words; "Just build it"
 // fills the rest), then the spec card, then the build in the App view.
-const game = { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false }
+const game = { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false, cast: null }
 async function openGame(idea = '', answers = null, build = false) {
   if (!game.questions?.length) game.questions = (await api('/api/game').then(r => r.ok ? r.json() : {}).catch(() => ({}))).questions || []
   // a site build is open: the game can be its promo game, in its world and colours
   const site = S.kind !== 'game' && S.layers.size ? shownRun() : null
-  Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false, from: site, brand: site ? (S.title || 'this site') : '', promo: !!site })
+  Object.assign(game, { i: 0, answers: answers || {}, idea: String(idea || '').trim(), spec: null, busy: false, cast: null, from: site, brand: site ? (S.title || 'this site') : '', promo: !!site })
   game.el?.remove()
   game.el = document.createElement('div')
   game.el.className = 'game-pop'
@@ -4284,12 +4284,15 @@ function renderGame() {
     el.innerHTML = `${head}<div class="gbody"><p>Game mode isn't loaded on this server yet. Restart Swarm Studio (<code>hermes swarm</code>) and try again.</p></div>`
   } else if (game.busy) {
     el.innerHTML = `${head}<div class="gbody"><div class="spin"></div><p>${esc(game.busy)}</p></div>`
+  } else if (game.spec && game.cast?.open) {
+    renderCast(el, head)
+    return
   } else if (game.spec) {
     const s = game.spec, list = gameList
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
     el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
-    el.querySelector('[data-build]').onclick = () => gameBuild()
+    el.querySelector('[data-build]').onclick = () => (game.cast && !game.cast.done ? openCast() : gameBuild())
     el.querySelector('[data-online]')?.addEventListener('click', () => gameOnline())
   } else {
     const val = game.answers[q.id] || ''
@@ -4316,6 +4319,8 @@ async function gameSpec(build = false) {
     const out = await api('/api/game/spec', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idea: game.idea, answers: game.answers, from: game.promo ? game.from : null }) }).then(r => r.json())
     if (!out.spec) throw new Error(out.error || 'no spec')
     game.spec = out.spec
+    // a 3D game with people in it: cast from real models before the build
+    game.cast = out.cast?.roles?.length ? { ...out.cast, role: 0, lists: {}, picks: {}, open: false, done: false, sel: null } : null
   } catch (err) {
     game.busy = false
     botMsg(`Game: ${err.message}`)
@@ -4324,6 +4329,61 @@ async function gameSpec(build = false) {
   game.busy = false
   if (build) return gameBuild()
   renderGame()
+}
+
+// ---------- 🎭 cast from real models (spec 19)
+// A numbered picture shortlist per role, from VRoid Hub and Sketchfab, licence
+// checked by the server. At rest a card is its picture and name; the open card
+// shows the creator and the licence. One pick per role, then the build.
+function readSpecEdits() {
+  for (const x of game.el?.querySelectorAll('[data-k]') || []) {
+    const k = x.dataset.k, v = x.textContent.trim()
+    if (k === 'enemies') { if (v !== gameList(game.spec.enemies)) game.spec.enemies = v.split(/\s*,\s*/).filter(Boolean) }
+    else if (v) game.spec[k] = v
+  }
+}
+function openCast() {
+  readSpecEdits()
+  game.cast.open = true
+  renderGame()
+  castSearch()
+}
+async function castSearch() {
+  const c = game.cast, r = c.roles[c.role]
+  if (!r || c.lists[r.id]) return
+  c.lists[r.id] = { busy: true, models: [] }
+  try {
+    const out = await api('/api/cast', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: r, violent: c.violent }) }).then(x => x.json())
+    c.lists[r.id] = { models: out.models || [], error: out.error || (out.models?.length ? '' : (out.errors || []).join(' · ')) }
+  } catch (err) {
+    c.lists[r.id] = { models: [], error: err.message }
+  }
+  if (game.cast === c) renderGame()
+}
+function renderCast(el, head) {
+  const c = game.cast, r = c.roles[c.role], list = c.lists[r.id] || { busy: true, models: [] }
+  const pick = c.picks[r.id]
+  const tabs = c.roles.length > 1 ? `<div class="gchips ctabs" role="tablist">${c.roles.map((x, i) => `<button role="tab" aria-selected="${i === c.role}" class="${i === c.role ? 'on' : ''}" data-role="${i}">${c.picks[x.id] ? ico('check') : ''}${esc(x.label)}</button>`).join('')}</div>` : ''
+  const sel = list.models.find(m => `${m.source}:${m.id}` === c.sel)
+  const cards = list.busy ? '<div class="gbody"><div class="spin" aria-label="Searching"></div></div>'
+    : list.models.length ? `<div class="cgrid">${list.models.map(m => {
+      const k = `${m.source}:${m.id}`
+      return `<button class="ccard${pick?.key === k ? ' on' : ''}${c.sel === k ? ' open' : ''}" data-pick="${esc(k)}" aria-label="${m.n}. ${esc(m.name)}"><span class="cn">${m.n}</span>${m.preview ? `<img src="${esc(m.preview)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<i></i>'}<b>${esc(m.name)}</b></button>`
+    }).join('')}</div>`
+    : `<div class="gbody"><span aria-hidden="true">⚠</span><span>${list.error ? 'No answer' : 'Nothing fits'}</span></div>`
+  const info = sel ? `<div class="cinfo"><b>${esc(sel.name)}</b><dl><dt>By</dt><dd>${esc(sel.creator)}</dd><dt>Licence</dt><dd>${esc(sel.licence.credit)}${sel.licence.restyle ? '' : ' · own look kept'}</dd><dt>Triangles</dt><dd>${Number(sel.triangles).toLocaleString()}</dd></dl><a class="glink" href="${esc(sel.url)}" target="_blank" rel="noopener">${ico('external-link')}${sel.source === 'vroid' ? 'VRoid Hub' : 'Sketchfab'}</a></div>` : ''
+  el.innerHTML = `${head}<h3>${esc(r.name || r.label)}</h3>${tabs}${cards}${info}<div class="gfoot"><button class="glink" data-back>← Spec</button><span><button class="glink" data-skip>Skip</button><button class="big" data-build>Build the game</button></span></div>`
+  for (const b of el.querySelectorAll('[data-role]')) b.onclick = () => { c.role = Number(b.dataset.role); c.sel = null; renderGame(); castSearch() }
+  for (const b of el.querySelectorAll('.ccard')) b.onclick = () => {
+    const m = list.models.find(x => `${x.source}:${x.id}` === b.dataset.pick)
+    c.sel = b.dataset.pick
+    c.picks[r.id] = { key: b.dataset.pick, role: r.id, label: r.label, ...m }
+    renderGame()
+  }
+  el.querySelector('[data-back]').onclick = () => { c.open = false; c.sel = null; renderGame() }
+  el.querySelector('[data-skip]').onclick = () => { c.done = true; c.open = false; gameBuild() }
+  el.querySelector('[data-build]').onclick = () => { c.done = true; c.open = false; gameBuild() }
+  el.querySelector('.gclose').onclick = closeGame
 }
 
 // The promo game links back only to a real address: put the site online first
@@ -4352,13 +4412,10 @@ async function gameOnline() {
 const gameList = v => (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : x?.name || '')).join(', ') : v || '')
 
 async function gameBuild() {
-  // the card's edits go into the spec
-  for (const x of game.el?.querySelectorAll('[data-k]') || []) {
-    const k = x.dataset.k, v = x.textContent.trim()
-    // a big spec's enemies are objects: keep them unless the line was changed
-    if (k === 'enemies') { if (v !== gameList(game.spec.enemies)) game.spec.enemies = v.split(/\s*,\s*/).filter(Boolean) }
-    else if (v) game.spec[k] = v
-  }
+  // the card's edits go into the spec (a big spec's enemies stay objects unless that line changed)
+  readSpecEdits()
+  // the picked cast, one model per role
+  if (game.cast) game.spec.cast = Object.values(game.cast.picks).map(({ key, n, preview, ...m }) => m)
   game.busy = 'Starting the build…'
   renderGame()
   try {

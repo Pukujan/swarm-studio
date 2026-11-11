@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { delimiter, join, relative } from 'node:path'
 import { skillText } from './game.mjs'
+import { castPrompt, cleanCast } from './cast.mjs'
 
 export const TARGETS = {
   godot: {
@@ -63,7 +64,7 @@ Write ${t.layout}. Put every file under ports/${target}/ and nowhere else: do no
 - Copy the meaning, not the code: use ${t.label}'s own scene, input and physics systems.
 - Reuse the pictures in public/ (copy the paths you need into the project's art folder by listing them in a README if you cannot copy binaries).
 ${models.length ? `- The web game's 3D models are already copied to ports/${target}/${t.models}/ (${models.join(', ')}). Use the same model for each hero, enemy and prop as the web version: ${t.useModel('<file>')}, and play the same animation names.\n` : ''}
-- Add ports/${target}/README.md: how to open it in ${t.label}, what is done, and what still needs an editor pass (materials, animation, tuning).
+${castPrompt(cleanCast(spec.cast))}- Add ports/${target}/README.md: how to open it in ${t.label}, what is done, and what still needs an editor pass (materials, animation, tuning).
 - Keep files small and complete; no placeholders like "TODO: implement".
 
 The game spec:
