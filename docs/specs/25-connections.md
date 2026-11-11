@@ -92,7 +92,7 @@ does on your machine"):
 | Your builds, settings, keys and tokens | Stay on this computer (`$HERMES_HOME/swarm-studio/`, key files mode 0600) or with Hermes |
 | Your prompt, the plan, page screenshots for review | The model provider you picked in Hermes |
 | Picture and clip prompts | The image and video provider you picked |
-| Words from a picture prompt | Pexels and Openverse, to find a stand-in photo |
+| Words from a picture prompt | Pexels (with a key) and Openverse, to find a stand-in photo; the photos themselves load from files.design-bakery.com |
 | The canvas page | Loads Tailwind from cdn.tailwindcss.com and fonts from Google Fonts |
 | A site or app you publish | The host you connected (GitHub Pages makes a public repo); app data goes to your own Supabase |
 | Swarm Feed, when you connect | An install id and "Hermes on <computer name>" |
@@ -126,6 +126,9 @@ files or other credential stores. Today:
 - `plugin.yaml` declares only `SWARM_STUDIO_API_KEY` and `ELEVENLABS_API_KEY`. The other keys the engine uses
   (`FAL_KEY`, `PEXELS_API_KEY`, `MESHY_API_KEY`, `CKFF_API_KEY`, `STRIPE_SECRET_KEY`, `SUPABASE_URL`,
   `SUPABASE_SERVICE_ROLE_KEY`, `VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN`) are undeclared.
+
+Rule 13 (disclosure) has one gap too: the README's network list does not mention stand-in photos (the searches
+on Pexels and Openverse, and the photo files on files.design-bakery.com). It goes in the README with slice 1.
 
 Slice 5: declare them as optional secrets, have `launcher.py` read them with `get_secret` and pass them to the
 server (as it does for ElevenLabs), and delete both file reads. Pasted tokens in `connections.json` and
