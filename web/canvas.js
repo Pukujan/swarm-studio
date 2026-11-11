@@ -4003,7 +4003,7 @@ async function loadApp() {
   try {
     const st = await appApi()
     if (appv.run !== run) return
-    Object.assign(appv, { state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
+    Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
     if (st.state === 'paused' && st.slice) { appv.slice = st.slice; sliceCard(st.slice, run) }
@@ -4475,6 +4475,7 @@ function appEvent(e) {
   } else if (e.type === 'app:step') {
     appv.steps.push(e.step)
     if (e.step.kind !== 'write' && e.step.kind !== 'think') appv.stage = e.step.text
+    { const m = /^stage (\d+) of (\d+)/.exec(e.step.text || ''); if (m) appv.at = [+m[1], +m[2]] }
     if (e.step.kind === 'write') appv.files = null
   } else if (e.type === 'app:ready') {
     // only a live event: an old one from the log names a dev server that may be gone
@@ -6271,7 +6272,7 @@ function cwAssetTile(d, member, now, k = 0) {
   const ranked = cwRanked(), live = k === 1 ? cwLive() : null
   const a = cw.av[k] ||= { src: '', name: '' }
   // the slice from the status line, else the build's last "stage n of N" step (the line often reads "next step")
-  const slice = String(appv.stage || '').match(/stage (\d+) of (\d+)/) || String(appv.steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text || '').match(/stage (\d+) of (\d+)/)
+  const slice = appv.at ? [null, ...appv.at] : String(appv.stage || '').match(/stage (\d+) of (\d+)/) || String(appv.steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text || '').match(/stage (\d+) of (\d+)/)
   let pic = null, label = '', state = ''
   if (k === 0) {
     pic = ranked[0] || null
