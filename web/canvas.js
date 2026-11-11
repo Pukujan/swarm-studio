@@ -6251,11 +6251,23 @@ function cwAssets() {
     .catch(() => {})
     .finally(() => { cw.assetsLoading = false; cw.assetsAt = Date.now() })
 }
-// The code wall's three picture windows, newest first (never a loop through old pictures):
-// k 0 is the play test (the filmed clip covers it once a slice has one; before that, the
-// newest picture under a "plays after this slice" note); k 1 and 2 show what was made last.
-// A picture being painted right now (mid-build) takes window 1, in its painting state.
-const CW_NEW = 5 * 60e3
+// The code wall's three picture windows, newest first: each is a slow slideshow through the
+// latest few pictures only (never a loop through every old one), and a picture just made
+// jumps to the front. k 0 is the play test (the filmed clip covers it once a slice has one;
+// before that, the latest pictures under a "plays after this slice" note); k 1 and 2 share
+// the latest pictures between them. A picture being painted right now takes window 1.
+const CW_NEW = 5 * 60e3, CW_SHOW = 6, CW_EVERY = 5200
+// the picture window k shows now from the latest few, turning every CW_EVERY (staggered)
+function cwSlide(a, k, pool, now) {
+  if (!pool.length) return null
+  const top = pool[0].src
+  if (a.top !== top) { a.top = top; a.n = 0; a.turn = now + CW_EVERY + k * 1700 }
+  else if (now >= (a.turn || 0)) { a.n = (a.n || 0) + 1; a.turn = now + CW_EVERY }
+  // k 1 and 2 take turns over the pool (the newest on 1, the next on 2); k 0 walks all of it
+  const own = k === 0 ? pool : pool.filter((_, i) => i % 2 === (k === 1 ? 0 : 1))
+  const list = own.length ? own : pool
+  return list[(a.n || 0) % list.length]
+}
 function cwRanked() {
   const pics = cw.assets?.pics || []
   // newest first; pictures with no time keep the art plan's order, after the timed ones
@@ -6274,8 +6286,9 @@ function cwAssetTile(d, member, now, k = 0) {
   // the slice from the status line, else the build's last "stage n of N" step (the line often reads "next step")
   const slice = appv.at ? [null, ...appv.at] : String(appv.stage || '').match(/stage (\d+) of (\d+)/) || String(appv.steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text || '').match(/stage (\d+) of (\d+)/)
   let pic = null, label = '', state = ''
+  const pool = ranked.slice(0, CW_SHOW)
   if (k === 0) {
-    pic = ranked[0] || null
+    pic = cwSlide(a, 0, pool, now)
     label = d.classList.contains('has-play') ? 'Play test' : `Play test · plays after ${slice ? `slice ${slice[1]} of ${slice[2]}` : 'this slice'}`
     state = 'waiting'
   } else if (live) {
@@ -6283,8 +6296,8 @@ function cwAssetTile(d, member, now, k = 0) {
     label = live.what
     state = ART_STATE[live.state] || 'painting'
   } else {
-    // with something painting in window 1, window 2 shows the newest finished picture
-    pic = ranked[cwLive() ? 0 : k - 1] || null
+    // with something painting in window 1, window 2 has the latest finished pictures to itself
+    pic = cwSlide(a, cwLive() ? 0 : k, pool, now)
     label = pic?.name || cw.assets?.next?.[k - 1] || 'Art'
     state = pic && pic.t && Date.now() - pic.t < CW_NEW ? 'new' : ''
   }
