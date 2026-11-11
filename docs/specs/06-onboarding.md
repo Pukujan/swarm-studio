@@ -35,6 +35,9 @@ It opens on the first visit, and again from **More → Setup**. It has four shor
    - A one-line note on what each needs. For example: "Auto deploys only if Vercel is connected; everything else works now."
 
 ### 2. The Connections panel (anytime: More → Connections)
+
+> Replaced by [spec 25](25-connections.md) (2026-11-11): one Settings sheet from the Projects user menu.
+
 - It has the same rows as step 3. Each row offers **Disconnect** and shows which account is connected (an email or username from the provider, never a token).
 - Whenever a step needs a connection, it links here: Auto's data step, deploy step and 3D step all say "connect X", and Publish does too.
 
