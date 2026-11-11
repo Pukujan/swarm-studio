@@ -78,7 +78,7 @@ All limits are environment settings with these defaults:
 | Pages per build | 2 | `HOSTED_PAGES` |
 | Sections per page | 6 | `HOSTED_SECTIONS` |
 | Prompt length | 500 characters | `HOSTED_PROMPT_CHARS` |
-| API requests per IP | 60 a minute | `HOSTED_RPM` |
+| API requests per IP | 240 a minute (a build with its canvas open makes about 35) | `HOSTED_RPM` |
 | **Spend per day, whole studio** | **$3.00** at list price | `HOSTED_DAILY_USD` |
 
 Every model call reports its token usage (`streamChat` calls `provider.onUsage`); the server adds it to today's
