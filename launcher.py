@@ -169,7 +169,14 @@ def ensure_server() -> dict:
         return {"running": False, "error": "Node.js 20+ is required (no `node` on PATH)."}
 
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
-    env = {k: os.environ[k] for k in ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME") if k in os.environ}
+    # On Windows, Node also needs the system folders (SYSTEMROOT for its sockets and
+    # crypto, TEMP, APPDATA for npm and pnpm, PATHEXT for finding .cmd tools).
+    keep = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME")
+    if os.name == "nt":
+        keep += ("SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "USERPROFILE",
+                 "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",
+                 "HOMEDRIVE", "HOMEPATH", "NVM_HOME", "NVM_SYMLINK")
+    env = {k: os.environ[k] for k in keep if k in os.environ}
     env.update(SWARM_TOKEN=token(), SWARM_RUNS_DIR=str(data_dir() / "runs"), SWARM_DATA_DIR=str(data_dir()))
     # Images come from Hermes's own image providers (your Codex login, for one):
     # the server runs imagegen.py with this Python and these import paths.
@@ -199,7 +206,8 @@ def ensure_server() -> dict:
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=log,
-            start_new_session=True,
+            # the server outlives Hermes: its own session on POSIX, a detached process on Windows
+            **({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}),
         )
     except OSError as exc:
         return {"running": False, "error": f"could not start node: {exc}"}

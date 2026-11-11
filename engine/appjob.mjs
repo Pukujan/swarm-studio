@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, s
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
-import { runEngine, appFiles, scaffoldDir, engineReady } from './appbuild.mjs'
+import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
@@ -81,7 +81,7 @@ export function serveSig(dir) {
   return SERVE_FILES.map(f => { try { return `${f}:${statSync(join(dir, f)).mtimeMs}` } catch { return '' } }).join('|') + `|server:${existsSync(join(dir, 'server'))}`
 }
 
-const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
+const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
 
 // A big game stopped partway: the stage to go on from (0: start over). Only
 // stages since the last build from scratch count, and only with the app still there.
@@ -370,7 +370,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     j.sig = sig
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
     // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
-    const p = spawn(join(dir, 'node_modules', '.bin', 'vite'), ['--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } })
+    // vite's own script under this Node: .bin/vite is a shell shim (vite.cmd on Windows)
+    const p = spawn(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } })
     j.proc = p
     let log = ''
     p.stdout.on('data', b => { log = (log + b).slice(-4000) })
