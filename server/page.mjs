@@ -23,12 +23,13 @@ export function canvasPage(webDir, extra = {}) {
     // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
     .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
     .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
-    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${['route.js', 'canvas.js'].map(join1).join('\n')}</script>`)
+    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${['route.js', 'icons.js', 'workshop.js', 'canvas.js'].map(join1).join('\n')}</script>`)
     // the studio frame, Projects and a project's canvas
     .replace('<link rel="stylesheet" href="studio.css">', () => `<style>${read('studio.css')}</style>`)
     .replace('<link rel="stylesheet" href="home.css">', () => `<style>${read('home.css')}</style>`)
     .replace('<link rel="stylesheet" href="project.css">', () => `<style>${read('project.css')}</style>`)
     .replace('<link rel="stylesheet" href="plan.css">', () => `<style>${read('plan.css')}</style>`)
+    .replace('<link rel="stylesheet" href="workshop.css">', () => `<style>${read('workshop.css')}</style>`)
     // the studio controller, Projects and a project: its own modules joined into one, since the pane's frame has no origin to import from
     .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${['icons.js', 'route.js', 'home.js', 'project.js', 'work.js', 'plan.js', 'studio.js'].map(join1).join('\n')}</script>`)
 }

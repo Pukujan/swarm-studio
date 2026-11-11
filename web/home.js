@@ -62,8 +62,30 @@ export function makeHome({ sw, C, root }) {
     }
     // a game's plan (spec 21) is a project before its first build: it opens on the Plan board
     if (!hosted()) {
-      const plans = (await api('/api/plans').catch(() => null))?.plans || []
-      H.data.projects = [...H.data.projects.filter(p => !p.plan), ...plans.map(x => ({ id: x.id, plan: true, title: x.title, head: null, count: 1, made: Date.parse(x.updated), updated: Date.parse(x.updated), cover: x.cover, kinds: ['game'], state: { kind: 'Game', status: x.locked ? 'Locked' : 'Plan' }, versions: [] }))]
+      // a plan is part of the project of the same name (or that name plus more words): the project's
+      // menu opens it. Only a plan with no project yet is a card of its own, one per name.
+      const key = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim()
+      const real = H.data.projects.filter(p => !p.plan)
+      const home = k => real.find(p => { const n = key(p.title); return n && (n === k || k.startsWith(`${n} `) || n.startsWith(`${k} `)) })
+      const seen = new Set(), loose = []
+      const plans = ((await api('/api/plans').catch(() => null))?.plans || []).sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated))
+      for (const x of plans) {
+        const k = key(x.title), p = k && home(k)
+        if (p) { p.planId ||= x.id; continue }
+        if (!x.locked && seen.has(k)) continue
+        seen.add(k); loose.push(x)
+      }
+      H.data.projects = [...real, ...loose.map(x => ({ id: x.id, plan: true, title: x.title, head: null, count: 1, made: Date.parse(x.updated), updated: Date.parse(x.updated), cover: x.cover, kinds: ['game'], state: { kind: 'Game', status: x.locked ? 'Locked' : 'Plan' }, versions: [] }))]
+    }
+    // a version that failed and was built again is not shown: the project is its working versions
+    const dead = v => /failed/i.test(String(v?.state?.status || ''))
+    for (const p of H.data.projects) {
+      if (!Array.isArray(p.versions) || p.versions.length < 2) continue
+      const kept = p.versions.filter((v, i) => !(dead(v) && p.versions.slice(0, i).some(n => !dead(n))))
+      if (kept.length && kept.length < p.versions.length) { p.versions = kept; p.count = kept.length }
+      // a newest version that failed does not name the card when an older one works
+      const ok = dead(p) && p.versions.find(v => !dead(v))
+      if (ok?.state) p.state = ok.state
     }
     H.loaded = true
     if (H.view === 'assets') H.assets = await api('/api/assets').then(j => j.assets).catch(() => [])
@@ -378,6 +400,7 @@ export function makeHome({ sw, C, root }) {
       { k: 'trash', icon: 'trash', label: 'Delete', red: true, run: () => act('trash', ids) }
     ] : [
       { k: 'open', icon: 'ext', label: 'Open', run: () => open(id) },
+      ...(p.planId ? [{ k: 'plan', icon: 'layers', label: 'Open the plan', run: () => C.plan(p.planId) }] : []),
       { k: 'rename', icon: 'type', label: 'Rename', run: () => rename(id) },
       { k: 'dup', icon: 'layers', label: 'Duplicate', run: () => act('duplicate', [id]) },
       { k: 'move', icon: 'folder', label: 'Move to', sub: b => subMenu(b, moveItems(ids)) },

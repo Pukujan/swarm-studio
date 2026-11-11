@@ -35,6 +35,10 @@ Controls added, moved or removed after the 2026-11-09 snapshot. The raw inventor
 
 | When | Control | Change | Layer, lens |
 |---|---|---|---|
+| PR guided-game-maker | Game spec card: Shape it (.glink[data-shape]) | **Added**: next to Build the game; opens the guided walk (.ws-pop) with the step ring, Back, Build now and Next/Skip | Canvas, Game |
+| PR guided-game-maker | New game: Continue (.gresume) | **Added**, only when a walk is unfinished: reopens it at its step | Canvas, Game |
+| PR guided-game-maker | App view while a game builds (.art-sheet) | **Changed**: the empty state is the live art sheet, each cell landing as it is painted, the crew's cursor on the next one | Canvas, App |
+| PR guided-game-maker | Home: plan cards, same-name projects | **Changed**: a plan joins its project's card (menu: Open the plan); projects named the same, or that name plus more words, are one card | Home |
 | PR flow-calm | Sound: crew sound button (#crew-mute) | **Changed**: a click opens its popover, Crew sound (On / Muted / Quiet) and Volume; M still steps the modes. It keeps one width in every mode, and quiet swaps its icon instead of adding one. No second sound button | edge icon on every layer, all lenses |
 | PR flow-calm | Chatter dock (.sd-toggle, .sd-vol, bottom-left) | **Removed**: its on/off is the crew sound mode, its volume is in the crew button's popover | — |
 | PR flow-calm | Recentre (.gx-recentre on the galaxy, .ob-recentre in orbit) | **Added**, not at rest: appears only after you drag or zoom (rule 22), away from the nav and the primary button | 0 Galaxy, 2 Orbit, all lenses |

@@ -159,3 +159,19 @@ test('a retry of a game replaces a try that left nothing behind', () => {
     assert.equal(w.p.list().projects[0].count, 2)
   } finally { w.cleanup() }
 })
+
+test('one idea is one card: the same name, or that name plus more words, folds into the older project', () => {
+  const w = world()
+  try {
+    w.add('2026-11-11T12-29-35-444Z', { title: 'Rooftop Signal', brief: 'Rooftop Signal, a rain-soaked rooftop platformer', kind: 'game' })
+    w.add('2026-11-11T13-00-28-617Z', { title: 'Rooftop Signal Art Test', brief: 'Rooftop Signal Art Test: sprint across skylines', kind: 'game' }, { projectName: 'Rooftop Signal Art Test' })
+    w.add('2026-11-11T14-00-00-000Z', { title: 'Lantern Drift', brief: 'Lantern Drift, a night river game', kind: 'game' })
+    let { projects } = w.p.list()
+    assert.deepEqual(projects.map(x => x.name).sort(), ['Lantern Drift', 'Rooftop Signal'])
+    assert.equal(projects.find(x => x.name === 'Rooftop Signal').pieces[0].versions, 2)
+    // split off by the person: it stays its own
+    w.p.op({ op: 'split', id: '2026-11-11T12-29-35-444Z', run: '2026-11-11T13-00-28-617Z' })
+    projects = w.p.list().projects
+    assert.equal(projects.length, 3)
+  } finally { w.cleanup() }
+})

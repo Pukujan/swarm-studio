@@ -11,6 +11,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { streamChat } from './llm.mjs'
 import { castPrompt, cleanCast } from './cast.mjs'
+import { workshopMarkdown } from './workshop.mjs'
 
 const skillsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'gameskills')
 
@@ -199,7 +200,7 @@ ${spec.pitch}
 - **Sound:** ${spec.sound}
 - **Screens:** ${list(spec.screens)}
 - **Original:** ${spec.original}
-${spec.brand ? `- **Promo for:** ${spec.brand.name}${spec.brand.url ? ` (${spec.brand.url})` : ''}\n` : ''}${spec.big ? bigMarkdown(spec) : ''}`
+${spec.brand ? `- **Promo for:** ${spec.brand.name}${spec.brand.url ? ` (${spec.brand.url})` : ''}\n` : ''}${spec.big ? bigMarkdown(spec) : ''}${workshopMarkdown(spec)}`
 }
 
 // The big game's systems, in the spec file the build follows
@@ -261,7 +262,7 @@ export function gamePrompt(spec, assets = gameModels(spec)) {
 ${specMarkdown(spec)}
 How to build it:
 - ${engineHow}
-- The game lives in src/game/ (one module per system: scene setup, input, hero, enemies, spawning or rooms, combat, effects, audio, UI state). src/pages/Index.tsx mounts it full-screen in a React component and cleans up on unmount. Remove the starter page content.
+${spec.workshop?.art?.length ? `- The person painted the art in the studio: load the pictures listed under "Art" in GAME_SPEC.md from /art/ (they are in public/art/) and use them for those things; cut sprite sheets into frames by their grid and key out the flat grey; draw in code only what has no picture.\n` : ''}${spec.levels?.length ? '- Build the first stage from the level map in GAME_SPEC.md, one cell per tile.\n' : ''}- The game lives in src/game/ (one module per system: scene setup, input, hero, enemies, spawning or rooms, combat, effects, audio, UI state). src/pages/Index.tsx mounts it full-screen in a React component and cleans up on unmount. Remove the starter page content.
 - Title screen, pause (Esc / P), win and lose screens with restart, a HUD (health, score or room, timer) as React + shadcn/Tailwind over the canvas.
 - Sound with the Web Audio API, synthesised in code (hits, pickups, a simple music loop); starts after the first click or key.
 - Game feel: hit-stop, screen shake, knockback, particles, easing, juicy feedback on every action.

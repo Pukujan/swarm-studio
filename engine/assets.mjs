@@ -42,7 +42,10 @@ export function listAssets({ id, events = [], files = {}, plan = [], pieceName =
   const next = plan.filter(it => !painted.has(it.id)).map(it => artName(it.id))
   const done = new Set(events.filter(e => e.type === 'image' || e.type === 'image:failed').map(e => `${e.page}|${e.layer}|${e.gen}`))
   for (const e of events) if (e.type === 'image:queued' && !done.has(`${e.page}|${e.layer}|${e.gen}`)) next.push(pieceName(e, pageTitle))
-  return { assets, next: [...new Set(next)].slice(0, 12) }
+  // the whole art plan in order, painted or not: the App view's live sheet while a game builds
+  const fileOf = new Map((files.img || []).filter(f => /^game-[a-z0-9-]{1,48}\.(png|jpe?g|webp)$/.test(f)).map(f => [f.slice(5).replace(/\.[a-z]+$/, ''), f]))
+  const sheet = plan.map(it => ({ id: it.id, name: artName(it.id), kind: it.kind, aspect: it.aspect, src: fileOf.has(it.id) ? `/img/${id}/${fileOf.get(it.id)}` : null }))
+  return { assets, next: [...new Set(next)].slice(0, 12), sheet }
 }
 
 // the files listAssets reads, from a run's folder

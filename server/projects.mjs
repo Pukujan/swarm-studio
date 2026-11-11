@@ -174,6 +174,22 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       owner.set(id, pid)
       changed = true
     }
+    // one idea, one card: a project named the same as another, or as another plus more words
+    // ("Rooftop Signal Art Test" of "Rooftop Signal"), folds into the older one. A project the
+    // person split off or renamed themself stays apart.
+    const key = s => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim()
+    const open = Object.entries(data.projects).filter(([, p]) => !p.trashed && !p.own).map(([pid, p]) => ({ pid, p, k: key(nameOfProject(p)) })).filter(x => x.k)
+      .sort((a, b) => a.k.length - b.k.length || (a.p.made || 0) - (b.p.made || 0))
+    for (const child of open) {
+      if (!data.projects[child.pid]) continue
+      const parent = open.find(x => x !== child && data.projects[x.pid] && (x.k === child.k ? (x.p.made || 0) < (child.p.made || 0) || ((x.p.made || 0) === (child.p.made || 0) && x.pid < child.pid) : !child.p.title && child.k.startsWith(`${x.k} `)))
+      if (!parent) continue
+      parent.p.runs = [...new Set([...parent.p.runs, ...child.p.runs])].sort()
+      for (const id of child.p.runs) owner.set(id, parent.pid)
+      if (!parent.p.folder && child.p.folder) parent.p.folder = child.p.folder
+      delete data.projects[child.pid]
+      changed = true
+    }
     if (changed) write(data)
     return { data, owner }
   }
