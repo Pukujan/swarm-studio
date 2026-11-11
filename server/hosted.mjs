@@ -231,7 +231,9 @@ function runCard(id) {
   const pages = events.filter(e => e.type === 'page')
   const done = events.find(e => e.type === 'run:done')
   const theme = events.findLast(e => e.type === 'theme') || {}
-  const title = pages[0]?.title && theme.name ? theme.name : start.brief.slice(0, 60)
+  // the build's name, the same one the project's breadcrumb shows: the first page's title before any
+  // " — Shop Index". Never the theme's name ("Cool Counter" says nothing about a bakery).
+  const title = String(pages[0]?.title || '').split(/\s[—–|:-]\s/)[0].trim() || start.brief.slice(0, 60)
   return {
     id, title, autoTitle: title, kind: 'site', brief: start.brief, t: start.t, updated: events.at(-1)?.t || start.t,
     pages: pages.length, pageTitles: pages.map(p => p.title),
