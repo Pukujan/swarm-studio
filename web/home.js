@@ -627,8 +627,14 @@ export function makeHome({ sw, C, root }) {
     closePop()
     if (!run || hosted()) {
       input.value = ''
-      sw.submit(text)
-      return C.open(null)
+      // The project opens on the build this box started. The canvas may still hold the build before
+      // it (the server replays its last run to every canvas), and a project never lets a run that
+      // started elsewhere take it over, so the new run is handed to it by id.
+      const made = await sw.submit(text)
+      if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
+      C.open(null)
+      if (typeof made === 'string') C.projectView.show(made, null)
+      return
     }
     try {
       await post('/api/auto', { prompt: text, ...run })
