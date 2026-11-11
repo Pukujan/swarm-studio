@@ -1010,11 +1010,9 @@ const standinsOf = () => (standinP ||= (() => {
     octo: octoKey ? { baseUrl: octoBase, key: octoKey, workspaceId: hermesKey('OCTO_SWARM_WORKSPACE_ID') || '9aba6ef6-d196-412f-9344-0efb744b9c6c' } : null,
     pexels: pexelsKey ? { key: pexelsKey } : lease ? { key: lease, proxy: `${octoBase}/api/vault/proxy` } : null })
 })())
-// An app's empty picture slots get stand-in photos, copied into the app with their credit
-async function fillApp(id, dir, step) {
-  const { fillPictures } = await import('../engine/fillpics.mjs')
-  const st = standinsOf()
-  const bytesOf = async u => {
+// The bytes of a picture a stand-in pick names: this studio's own pictures and stand-ins, or a public https photo
+function standinBytes(st) {
+  return async u => {
     const own = u.match(/^\/img\/([\w:.-]+)\/([\w.-]+)$/)
     if (own) { const f = join(runsDir, own[1], 'img', own[2]); return existsSync(f) ? readFileSync(f) : null }
     const si = u.match(/^\/standin\/([0-9a-f]{16}\.(jpg|png|webp))$/)
@@ -1023,7 +1021,18 @@ async function fillApp(id, dir, step) {
     const r = await fetch(u, { headers: { 'user-agent': 'swarm-studio/1.0' }, signal: AbortSignal.timeout(20000) })
     return r.ok ? Buffer.from(await r.arrayBuffer()) : null
   }
-  return fillPictures(dir, { pick: st.pick, bytesOf, run: id, step })
+}
+// An app's empty picture slots get stand-in photos, copied into the app with their credit
+async function fillApp(id, dir, step) {
+  const { fillPictures } = await import('../engine/fillpics.mjs')
+  const st = standinsOf()
+  return fillPictures(dir, { pick: st.pick, bytesOf: standinBytes(st), run: id, step })
+}
+// A site's export gets the same stand-ins, in its static pages and its React copy
+const fillExport = id => async root => {
+  const { fillSite } = await import('../engine/fillpics.mjs')
+  const st = standinsOf()
+  return fillSite(root, { pick: st.pick, bytesOf: standinBytes(st), run: id })
 }
 // A promo game for a build: the site's name, brief, theme, copy and links, so the
 // game is set in the brand's world, wears its colours and points back to it.
@@ -1140,7 +1149,7 @@ async function publish(id, input = {}) {
   const creds = PROVIDERS[target] ? await credentials(dataDir, target) : null
   if (PROVIDERS[target] && !creds) throw new Error(`connect ${PROVIDERS[target].label} first: 🌐 Publish on the canvas, or set ${PROVIDERS[target].env}`)
   const named = nameFor(id)
-  const out = await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: named?.name })
+  const out = await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: named?.name, fill: fillExport(id) })
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const local = `http://127.0.0.1:${port}/site/${id}/`
   const job = { state: 'working', target, stage: 'export', t: Date.now(), local, pages: out.pages }
@@ -2009,7 +2018,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const events = readEvents(id)
       if (!events) return reply(404, { error: 'no such build' })
-      exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: nameFor(id)?.name })
+      exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: nameFor(id)?.name, fill: fillExport(id) })
         .then(out => {
           const copy = shelveExport(id, out.zip)
           record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections })

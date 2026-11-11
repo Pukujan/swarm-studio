@@ -8,7 +8,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameS
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
-import { deployName } from './naming.mjs'
+import { deployName, isScreenName, projectName } from './naming.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
@@ -19,7 +19,15 @@ import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot 
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
-const BACKEND = `Server code: call enable_nitro first, then put API routes in server/routes/api/ (Nitro file routes, e.g. server/routes/api/orders.post.ts, served at /api/orders) and keep data in a small typed server-side store module, so the same code runs here and deploys to Vercel. Never put secrets in client code.`
+// Sign-in is real or plainly a guest pass: never a form that lets anyone in, never a dead provider button.
+export const AUTH = `Sign-in (only where the design or the ask has sign-in, sign-up, accounts or players):
+- When the app's database is connected (process.env.SUPABASE_URL is set), use Supabase Auth through @supabase/supabase-js on the server: sign-up and sign-in with email and password, a session cookie (httpOnly), and the server checks the session on every route that needs it.
+- Otherwise it is a guest pass, labelled as one on the screen ("Guest pass: pick a name and a secret word; this is not a full account"): a visitor claims a display name with a secret; the server keeps only a salted hash of the secret (node:crypto scrypt) and compares with timingSafeEqual; a name already claimed needs its own secret; a wrong secret is refused with a clear message. Never accept any name with any password.
+- Only show a "Sign in with <provider>" button (Discord, Google, GitHub, Apple…) when that provider is really configured in the server environment (for Discord: DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET) and the button runs its real OAuth flow. Otherwise remove the button from the design: never ship a button that does nothing.`
+
+const BACKEND = `Server code: call enable_nitro first, then put API routes in server/routes/api/ (Nitro file routes, e.g. server/routes/api/orders.post.ts, served at /api/orders) and keep data in a small typed server-side store module, so the same code runs here and deploys to Vercel. Never put secrets in client code.
+
+${AUTH}`
 
 // What the design implies, made real: the default first turn for a website.
 // A site with promo games gets rewards: points from what visitors book or buy and
@@ -106,6 +114,22 @@ export function bigResumeAt(events, dir) {
   let next = 0
   for (const e of events.slice(startIdx)) if (e.type === 'app:stage' && e.big && e.big.ok && e.big.i === next) next++
   return next < BIG_STAGES.length ? next : 0
+}
+
+// An app's <title> is its project's name: a missing one, or one an engine turn took
+// from a screen ("Sign In to ARES"), becomes the project name. A real title stays.
+export function titleApp(dir, name) {
+  const file = join(dir, 'index.html')
+  if (!name || !existsSync(file)) return false
+  const html = readFileSync(file, 'utf8')
+  const m = html.match(/<title>([\s\S]*?)<\/title>/)
+  const now = m ? m[1].replace(/&amp;/g, '&').trim() : ''
+  if (now && !isScreenName(now) && !/^(vite|react|dyad|my[ -]app|swarm[ -]app)\b/i.test(now)) return false
+  const safe = String(name).replace(/&/g, '&amp;').replace(/</g, '&lt;').slice(0, 80)
+  const next = m ? html.replace(m[0], `<title>${safe}</title>`) : html.replace('</head>', `<title>${safe}</title>\n</head>`)
+  if (next === html) return false
+  writeFileSync(file, next)
+  return true
 }
 
 // paint(runId, spec, items, appDir, step) → [{ file, what, kind }]: a big game's art,
@@ -452,7 +476,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // <project>-<kind>, like ares-app: from the project's name, never a screen's ("sign-in-to-ares")
     const named = nameFor(id)
     const kind = named?.kind || (jobs.get(id)?.kind === 'game' || state(id).kind === 'game' ? 'game' : 'app')
-    const name = deployName(named?.name || JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm', kind)
+    const project = projectNameOf(id, named)
+    const name = deployName(project || JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm', kind)
+    // the tab title too: an engine turn may have named the page after its first screen
+    if (project) titleApp(dir, project)
     // the stages and Vercel's build log are saved with the run, so the Auto show's deploy shot replays too
     const r = await publishVercel({ dir, name, creds, dataDir, build: true, env,
       onStage: stage => send(id, 'app:stage', { stage: `deploy: ${stage}` }),
@@ -461,6 +488,15 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const j = jobs.get(id)
     if (j) j.deployed = r.url
     return { url: r.url, project: r.repo, pending: !!r.pending }
+  }
+
+  // the run's project name: the projects index, else the brief's brand (never a screen's title)
+  function projectNameOf(id, named = nameFor(id)) {
+    if (named?.name && !isScreenName(named.name)) return named.name
+    const start = (readEvents(id) || []).find(e => e.type === 'run:start')
+    if (!start) return ''
+    const n = projectName({ brief: start.brief, title: start.title })
+    return n === 'Swarm build' ? '' : n
   }
 
   function close() { for (const j of jobs.values()) { j.controller?.abort(); j.proc?.kill() } }

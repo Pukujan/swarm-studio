@@ -469,7 +469,8 @@ ${pageSpec}
 
 const zip = (cwd, name) => new Promise(ok => execFile('zip', ['-qr', `${name}.zip`, name], { cwd }, err => ok(err ? null : join(cwd, `${name}.zip`))))
 
-export async function exportRun({ events, runId, runDir, sections, name: given = '' }) {
+// fill(root): optional, fills empty picture slots in the export (html/ and react/) before it is zipped
+export async function exportRun({ events, runId, runDir, sections, name: given = '', fill = null }) {
   const snap = snapshot(events, sections, { name: given })
   if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
   const name = slug(snap.brand)
@@ -479,6 +480,8 @@ export async function exportRun({ events, runId, runDir, sections, name: given =
   const htmlFiles = staticSite(snap, join(root, 'html'), runId, runDir)
   const react = reactApp(snap, join(root, 'react'), runId, runDir, name)
   abaHandoff(snap, join(root, 'aba'))
+  // stand-in photos for the slots no picture was painted for: a site never ships grey boxes
+  if (fill) { try { await fill(root) } catch {} }
   writeFileSync(join(root, 'README.md'), `# ${snap.brand}
 
 Designed in Swarm Studio from the brief: ${snap.brief}
