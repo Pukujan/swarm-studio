@@ -1045,7 +1045,13 @@ async function tellBuilder(a, id, text, { who = '', on = '' } = {}) {
   const st = j ? null : a.state(id)
   const since = events.findLastIndex(e => e.type === 'app:start' && e.fresh)
   const done = events.slice(since + 1).filter(e => e.type === 'app:stage' && e.big?.ok && e.big.name).map(e => `slice ${e.big.i + 1} ${e.big.name}${e.big.clip ? ', play test filmed' : ''}`)
-  const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage: j?.stage || st?.stage || '', done })
+  // the status line often reads "next step" or a test: the slice comes from the last "stage n of N" said
+  const SLICE = /stage \d+ of \d+/
+  const stage = SLICE.test(j?.stage || st?.stage || '') ? (j?.stage || st?.stage)
+    : [...(j?.steps || st?.steps || []).map(x => ({ t: x.t || 0, s: x.text || '' })), ...events.filter(e => e.type === 'app:stage').map(e => ({ t: e.t || 0, s: e.stage || '' }))]
+      .filter(x => SLICE.test(x.s)).sort((x, y) => y.t - x.t)[0]?.s || ''
+  const slices = (spec?.stages || []).map(x => x?.name).filter(Boolean)
+  const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage, done, slices })
   const queued = told.queued ? 'Their words are queued: the crew reads them at the start of the next stage (a turn in flight cannot take new words).' : ''
   const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}${told.queued ? ' Got it: that goes to the crew at the start of the next stage.' : ''}`
   const model = modelFor('planner')
