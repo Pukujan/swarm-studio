@@ -238,10 +238,20 @@ ${spec.summary || ''}
 `
 }
 
+// 3D models a spec names ({ file, what }): files from the Studio's model library
+// (<data>/models/), copied into the app's public/models/ when the build starts.
+export const MODEL_FILE = /^[\w.-]{1,80}\.(glb|gltf)$/i
+export const gameModels = spec => (Array.isArray(spec?.models) ? spec.models : [])
+  .filter(m => m && MODEL_FILE.test(String(m.file || '')))
+  .map(m => ({ file: String(m.file), what: String(m.what || '').slice(0, 400) }))
+  .slice(0, 40)
+
 // The app engine's first prompt for a game.
-export function gamePrompt(spec, assets = []) {
+export function gamePrompt(spec, assets = gameModels(spec)) {
   const engineHow = spec.engine === 'three.js'
-    ? 'Add three (and its types) with add_dependency. Build every model in code: group primitive geometries (boxes, spheres, cylinders, cones, tori, extruded shapes) into the hero, enemies and props; use MeshStandardMaterial with emissive colours, a few point lights, fog, and canvas-drawn textures. Keep draw calls low (instancing for repeated props). Fixed camera rig that follows the hero.'
+    ? (assets.length
+        ? 'Add three (and its types) with add_dependency. The hero, the enemies and the set pieces are the 3D models listed below: load them with GLTFLoader (clone skinned ones with SkeletonUtils.clone), play their animations by name with an AnimationMixer, cross-fading between idle, run, attack, hit and death. Build only what the models do not cover (effects, pickups, floor) in code. Warm key light with soft shadows, a few point lights, light fog. Keep draw calls low (instancing for repeated props). Fixed three-quarter camera rig that follows the hero.'
+        : 'Add three (and its types) with add_dependency. Build every model in code: group primitive geometries (boxes, spheres, cylinders, cones, tori, extruded shapes) into the hero, enemies and props; use MeshStandardMaterial with emissive colours, a few point lights, fog, and canvas-drawn textures. Keep draw calls low (instancing for repeated props). Fixed camera rig that follows the hero.')
     : spec.engine === 'PixiJS'
       ? 'Add pixi.js with add_dependency. Draw sprites with Graphics or canvas-generated textures, use filters for glow.'
       : 'Add phaser with add_dependency. Generate textures in code (this.make.graphics → generateTexture) so no image files are needed; Arcade physics.'
@@ -257,7 +267,7 @@ How to build it:
 - Fixed timestep update loop; works at 60 fps on a laptop; resizes with the window; no console errors.
 - Original content only: the names, characters, world and art in the spec are new. Never use names, characters or assets from existing games.
 ${spec.brand ? brandRules({ ...spec.brand, game: gameSlug(spec.title) }) : ''}
-${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
+${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader from /models/<file>, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
 Finish with a working build: the typecheck and build must pass, and the game must start and be playable to a win and a loss.
 
 Reference notes for this kind of game (use what helps, ignore the rest):

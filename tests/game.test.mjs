@@ -82,3 +82,32 @@ test('the spec file lists a big game\'s systems; the mini prompt is unchanged', 
   assert.match(p, /^Build this browser game as the whole app/)
   assert.doesNotMatch(p, /stage/)
 })
+
+test('a spec with 3D models builds the game around them', async () => {
+  const { gamePrompt, gameModels } = await import('../engine/game.mjs')
+  const spec = { title: 'Bonelight', engine: 'three.js', models: [{ file: 'Knight.glb', what: 'the hero' }, { file: '../x.glb' }, { file: 'a.exe' }] }
+  assert.deepEqual(gameModels(spec).map(m => m.file), ['Knight.glb'])
+  const p = gamePrompt(spec)
+  assert.match(p, /public\/models\//)
+  assert.match(p, /Knight\.glb: the hero/)
+  assert.doesNotMatch(p, /Build every model in code/)
+  assert.match(gamePrompt({ title: 'X', engine: 'three.js' }), /Build every model in code/)
+})
+
+test("a game's models are copied into its app, and kept on a start over", async () => {
+  const { copyModels } = await import('../engine/appjob.mjs')
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const base = mkdtempSync(join(tmpdir(), 'models-'))
+  writeFileSync(join(base, 'Knight.glb'), 'glTF')
+  const dir = join(base, 'app')
+  assert.equal(copyModels(dir, { 'public/models/Knight.glb': join(base, 'Knight.glb'), 'src/evil.ts': join(base, 'Knight.glb') }), 1)
+  assert.ok(existsSync(join(dir, 'public', 'models', 'Knight.glb')))
+  assert.ok(!existsSync(join(dir, 'src')))
+  mkdirSync(join(`${dir}-before`, 'public', 'models'), { recursive: true })
+  writeFileSync(join(`${dir}-before`, 'public', 'models', 'Mage.glb'), 'glTF')
+  const again = join(base, 'app')
+  assert.equal(copyModels(again, {}), 1)
+  assert.ok(existsSync(join(again, 'public', 'models', 'Mage.glb')))
+})

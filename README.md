@@ -33,7 +33,7 @@ hermes swarm --models
 
 In Hermes Desktop, turn on **Swarm Studio** under Capabilities → Plugins.
 
-Requires Node.js 18 or newer on `PATH` (or set `SWARM_STUDIO_NODE`). There are no npm dependencies.
+Requires Node.js 18 or newer on `PATH` (or set `SWARM_STUDIO_NODE`). There are no npm dependencies. Works on macOS, Linux and native Windows.
 
 ## Models
 
@@ -80,7 +80,8 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
   - **Publish** to GitHub Pages runs your `gh` CLI: it creates a public repo under your account (its description says it was made with Swarm Studio, and it only ever updates repos marked that way) and pushes the static site. **Vercel** and **Cloudflare Pages** use an access token you connect once in the Publish menu (or `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`); it is checked with the provider and stored in `$HERMES_HOME/swarm-studio/connections.json` with mode `0600`, and never sent back to the canvas. You can paste an **Octo vault** grant (`octo_vault_…`) instead of a token: Swarm Studio finds the provider's item in your vault, keeps only a 30-day working key for that one item (renewed automatically, the grant itself is not stored), and every call goes through Octo's relay, so the provider token never leaves the vault. Both deploy through the provider's REST API (Cloudflare's direct upload, the same calls wrangler makes), with no extra tools to install. Publishing locally serves the site from the canvas server at `127.0.0.1:4319/site/<run>/`.
   - The first promo video installs `hyperframes` and ffmpeg from npm into `$HERMES_HOME/swarm-studio/video-tools/`. Rendering runs locally in headless Chrome.
   - The first **app** build installs the app engine (dyad's headless engine, vendored in `dyad/`, Apache-2.0 with `src/pro` under FSL) from npm into the plugin's `dyad/node_modules` (about 1.5 GB, once), and each app installs its own packages with `pnpm`. Apps run on a local Vite server on `127.0.0.1`. **App deploy** uploads the app's source to your Vercel account, which builds it.
-  - **Game mode** reads its game-dev notes from the plugin (`gameskills/`); games make their art and sound in code, so nothing is downloaded for them.
+  - **Game mode** reads its game-dev notes from the plugin (`gameskills/`); games make their art and sound in code, so nothing is downloaded for them. A game spec can also name 3D models (`"models": [{ "file": "Knight.glb", "what": "the hero" }]`) that you put in `$HERMES_HOME/swarm-studio/models/`; they are copied into the game and into its engine port.
+  - **Godot ports** are opened and run headless with your Godot 4 (`godot` on `PATH`, or `SWARM_GODOT` set to its executable) when it is installed, and Godot's errors get a fix turn.
   - **Swarm Feed** (only when you run `/swarm connect`, `post`, `remix` or `login`) talks to `https://swarm.design-bakery.com` (or `SWARM_FEED_URL`). `connect` sends a random install id and "Hermes on <computer name>"; `post` sends the build's title, brief, public link, page names, crew, a poster (a page shot or picture from the build) and caption, then its export zip; `remix` downloads the original's prompt and zip into `$HERMES_HOME/swarm-studio/remix/` (kept, never unpacked or run). The feed token is stored in `$HERMES_HOME/swarm-studio/feed.json` with mode `0600` and never printed.
   - Nothing else leaves the machine.
 - **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log`, the runs, `connections.json` if you connect a host, and `feed.json` and `remix/` if you use the Swarm Feed.

@@ -4,7 +4,7 @@
 // App tab, so a studio that never builds an app never loads it.
 
 import { spawn, execFile, execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
@@ -14,7 +14,7 @@ import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, BIG_STAGES, bigStagePrompt } from './game.mjs'
-import { TARGETS, portTarget, portPrompt, checkPort } from './port.mjs'
+import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
 
@@ -79,6 +79,19 @@ const stopProc = p => new Promise(ok => {
 const SERVE_FILES = ['package.json', 'vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'nitro.config.ts', 'nitro.config.js']
 export function serveSig(dir) {
   return SERVE_FILES.map(f => { try { return `${f}:${statSync(join(dir, f)).mtimeMs}` } catch { return '' } }).join('|') + `|server:${existsSync(join(dir, 'server'))}`
+}
+
+// A game's 3D models into its app: input.copy maps public/models/<file> to a file
+// on disk. A start over without them keeps the ones the game had (in app-before/).
+export function copyModels(dir, copy = {}) {
+  const to = join(dir, 'public', 'models')
+  const pairs = Object.entries(copy || {}).filter(([rel]) => /^public\/models\/[\w.-]{1,80}\.(glb|gltf)$/i.test(rel)).map(([rel, src]) => [rel.slice('public/models/'.length), src])
+  const before = join(`${dir}-before`, 'public', 'models')
+  if (!pairs.length && existsSync(before)) for (const f of readdirSync(before)) if (/\.(glb|gltf)$/i.test(f)) pairs.push([f, join(before, f)])
+  for (const [f, src] of pairs) {
+    try { mkdirSync(to, { recursive: true }); copyFileSync(src, join(to, f)) } catch {}
+  }
+  return pairs.length
 }
 
 const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
@@ -147,6 +160,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
           seedProject(scaffoldDir, dir, input.title || 'game')
         }
         for (const [name, text] of Object.entries(input.files || {})) if (/^[\w.-]+$/.test(name)) writeFileSync(join(dir, name), String(text))
+        copyModels(dir, input.copy)
         prompt = input.prompt
       } else {
         const snap = snapshot(events, Array.isArray(input.sections) ? input.sections.slice(0, 80) : [])
@@ -243,7 +257,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const t = TARGETS[target]
     step({ kind: 'setup', text: `writing the game as a ${t.label} project` })
     try {
-      await engineCall(portPrompt(spec, target), 3)
+      const models = copyPortModels(dir, target)
+      if (models.length) step({ kind: 'setup', text: `${models.length} 3D models copied into the ${t.label} project` })
+      await engineCall(portPrompt(spec, target, models), 3)
       let c = checkPort(dir, target)
       if (!c.ok) {
         step({ kind: 'test', text: `the ${t.label} project lacks ${c.missing.join(', ')}`, ok: false })
@@ -251,7 +267,19 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         c = checkPort(dir, target)
       }
       step({ kind: 'test', text: c.ok ? `${t.label} project written: ${c.files} files` : `the ${t.label} project still lacks ${c.missing.join(', ')}`, ok: c.ok })
-      return { target, label: t.label, ...c }
+      // with Godot on this machine, the project is opened and run headless, and its errors get a fix turn
+      let opened = null
+      if (c.ok && target === 'godot') {
+        step({ kind: 'test', text: 'opening the project in Godot' })
+        opened = await checkGodot(dir)
+        if (opened && !opened.ok) {
+          step({ kind: 'test', text: `Godot reports ${opened.errors.length} error${opened.errors.length === 1 ? '' : 's'}: fixing`, ok: false })
+          await engineCall(`Godot 4 opened ports/godot/ headless and reported these errors:\n${opened.errors.map(e => `- ${e}`).join('\n')}\n\nFix them in ports/godot/ (GDScript 4 syntax, node paths, resource paths). Touch nothing outside ports/godot/.`, 2)
+          opened = await checkGodot(dir)
+        }
+        if (opened) step({ kind: 'test', text: opened.ok ? 'Godot opens and runs the project with no errors' : `Godot still reports: ${opened.errors[0]}`, ok: opened.ok })
+      }
+      return { target, label: t.label, ...c, ...(opened ? { godot: opened } : {}) }
     } catch (err) {
       step({ kind: 'test', text: `the ${t.label} port stopped: ${String(err.message || err).slice(0, 160)}`, ok: false })
       return { target, label: t.label, ok: false, files: 0, missing: [], error: String(err.message || err).slice(0, 200) }

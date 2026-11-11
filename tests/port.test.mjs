@@ -41,3 +41,28 @@ test('checkPort says what the engine still needs to open the project', () => {
   assert.equal(c.ok, true)
   assert.equal(c.files, 3)
 })
+
+test('a port gets the app 3D models, and its prompt names them', async () => {
+  const { copyPortModels } = await import('../engine/port.mjs')
+  const dir = mkdtempSync(join(tmpdir(), 'port-models-'))
+  mkdirSync(join(dir, 'public', 'models'), { recursive: true })
+  writeFileSync(join(dir, 'public', 'models', 'Knight.glb'), 'glTF')
+  writeFileSync(join(dir, 'public', 'models', 'notes.txt'), 'x')
+  assert.deepEqual(copyPortModels(dir, 'godot'), ['Knight.glb'])
+  assert.ok(existsSync(join(dir, 'ports', 'godot', 'assets', 'models', 'Knight.glb')))
+  assert.deepEqual(copyPortModels(dir, 'unreal'), [])
+  const p = portPrompt({ title: 'Bellwake' }, 'godot', ['Knight.glb'])
+  assert.match(p, /ports\/godot\/assets\/models\/ \(Knight\.glb\)/)
+  assert.match(p, /res:\/\/assets\/models\/<file>/)
+  assert.doesNotMatch(portPrompt({ title: 'Bellwake' }, 'godot'), /assets\/models/)
+})
+
+test("Godot's errors are read from its output", async () => {
+  const { godotErrors, godotBin } = await import('../engine/port.mjs')
+  const out = 'Godot Engine v4.7.2\nSCRIPT ERROR: Parse Error: Identifier "hp" not declared.\n   at: GDScript::reload (res://scripts/hero.gd:12)\nERROR: Failed to load script "res://scripts/hero.gd" with error "Parse error".\nall fine'
+  const e = godotErrors(out)
+  assert.equal(e.length, 2)
+  assert.match(e[0], /hero\.gd:12/)
+  assert.deepEqual(godotErrors('Godot Engine v4.7.2\nok'), [])
+  assert.equal(godotBin({ PATH: '' }), null)
+})
