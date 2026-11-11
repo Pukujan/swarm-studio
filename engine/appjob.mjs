@@ -64,6 +64,22 @@ const freePort = () => new Promise((ok, fail) => {
   const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)) })
   s.on('error', fail)
 })
+const portFree = port => new Promise(ok => {
+  const s = createServer().once('error', () => ok(false)).listen(port, '127.0.0.1', () => s.close(() => ok(true)))
+})
+const stopProc = p => new Promise(ok => {
+  if (p.exitCode !== null) return ok()
+  const t = setTimeout(() => { p.kill('SIGKILL'); ok() }, 5000)
+  p.once('exit', () => { clearTimeout(t); ok() })
+  p.kill()
+})
+
+// What a running Vite dev server cannot take in without a restart: its
+// config, Nitro's, the packages, and a server/ folder appearing.
+const SERVE_FILES = ['package.json', 'vite.config.ts', 'vite.config.js', 'vite.config.mjs', 'nitro.config.ts', 'nitro.config.js']
+export function serveSig(dir) {
+  return SERVE_FILES.map(f => { try { return `${f}:${statSync(join(dir, f)).mtimeMs}` } catch { return '' } }).join('|') + `|server:${existsSync(join(dir, 'server'))}`
+}
 
 const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
 
@@ -334,13 +350,22 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).
   // Kept running between turns: Vite picks up the engine's next edits itself.
+  // Vite does not pick up a new plugin or package (a turn that adds Nitro, say):
+  // when these files change the dev server starts over, on the same port.
   async function serve(id, j, step = () => {}) {
     const dir = dirOf(id)
-    if (j.proc && j.proc.exitCode === null) return
+    const sig = serveSig(dir)
+    if (j.proc && j.proc.exitCode === null) {
+      if (j.sig === sig) return
+      step({ kind: 'serve', text: 'the app\'s setup changed: restarting it' })
+      await stopProc(j.proc)
+      j.url = null
+    }
     step({ kind: 'serve', text: 'installing the app\'s packages' })
     const inst = await sh('pnpm', ['install', '--prefer-offline'], dir)
     if (!inst.ok) throw new Error(`pnpm install failed: ${inst.out.slice(-300)}`)
-    j.port = await freePort()
+    j.port = j.port && await portFree(j.port) ? j.port : await freePort()
+    j.sig = sig
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
     // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
     const p = spawn(join(dir, 'node_modules', '.bin', 'vite'), ['--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } })
@@ -360,7 +385,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
 
   async function open(id) {
     const j = jobs.get(id)
-    if (j?.url && j.proc?.exitCode === null) return view(j)
+    if (j?.url && j.proc?.exitCode === null && j.sig === serveSig(dirOf(id))) return view(j)
     if (!existsSync(join(dirOf(id), 'package.json'))) throw new Error('no app yet')
     const k = j || { id, kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
     jobs.set(id, k)
