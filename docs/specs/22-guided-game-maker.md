@@ -236,7 +236,7 @@ server (env or vault lease), never in the browser (README rule).
 
 ## Done when
 
-- [ ] The spec (this file).
+- [x] The spec (this file).
 - [ ] (a) `engine/guide.mjs`: `applyPick`, `heroesDefaults`, `checkHeroes`, and Build writing `data/heroes.json`
   then running `skins.mjs`, `skins.mjs --fx` and `voice.mjs`.
 - [ ] (b) `loop.py` (strip → animated WebP, GIF on export) and `moveLoop` with effect levels.
@@ -244,6 +244,14 @@ server (env or vault lease), never in the browser (README rule).
 - [ ] (d) The guided view on the Plan board: Shape it, the ring, Back and Next, the seven steps' slices.
 - [ ] (e) References per step through `reference.mjs` with a focus.
 - [ ] (f) The clip library for the Game step.
+
+- [x] First cut shipped (PR task/guided-game-maker), on the game spec card rather than the Plan board:
+  `engine/workshop.mjs`, `server/workshops.mjs`, `web/workshop.js`. Shape it walks Game, Story, World, Hero,
+  Enemies, Levels and Sound; each step's options are painted (ckff gpt-image-2.5 when Hermes image models are out)
+  while the crew's cursors work over the slots; the hero gets a 3×2 sprite sheet that plays; 3D models come from
+  `/api/cast`; levels are 16×32 maps; sound plays a Web Audio loop and a Fish voice line. Next with nothing picked
+  skips the step, Build now skips the rest, and New game offers Continue for an unfinished walk.
+  (a)–(f) above stay open as the fuller version.
 
 ## Out of scope
 

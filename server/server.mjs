@@ -37,6 +37,8 @@ import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
+import { workshopRoutes } from './workshops.mjs'
+import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
@@ -1010,15 +1012,27 @@ const castMod = () => (castP ||= import('../engine/cast.mjs'))
 // high, through the same image login as the builds. Image runs only; no Meshy credits.
 async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', crop = '', refs = [] }) {
   const choice = await imageChoice()
-  if (!choice) return { ok: false, error: 'no image model' }
+  // ckff (engine/ckff.mjs) is the fallback when no Hermes image login works (Codex out of quota)
+  const fallback = () => (ckffCreds() && !crop ? ckffPaint({ prompt, aspect, refs }) : null)
+  if (!choice) return (await fallback()) || { ok: false, error: 'no image model' }
   const model = choice.provider === 'openai-codex' ? `gpt-image-2-${quality === 'high' ? 'high' : 'medium'}` : choice.model
   const args = ['--provider', choice.provider, ...(model ? ['--model', model] : []), '--aspect', aspect, ...(crop ? ['--crop', crop] : [])]
   for (const r of refs.slice(0, 4)) if (existsSync(r)) args.push('--ref', r)
-  return imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
+  const r = await imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
+  return r?.ok ? r : (await fallback()) || r
 }
-planPaint.ready = async () => !!(await imageChoice())
+planPaint.ready = async () => !!ckffCreds() || !!(await imageChoice())
 // The build (spec 21) spends Meshy credits only on a locked plan, inside the price it was locked at.
 const plans = planRoutes({ dataDir, builtInTemplates: [join(root, 'games', 'ares', 'plan.json')], paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() } })
+// Guided game making (engine/workshop.mjs): the spec walked one step at a time, with pictures
+const workshops = workshopRoutes({
+  dataDir,
+  paint: planPaint,
+  planner: () => ({ provider: provider('planner'), model: modelFor('planner') }),
+  voices: (() => { try { return JSON.parse(readFileSync(join(root, 'games', 'ares', 'data', 'heroes.json'), 'utf8')).voices || {} } catch { return {} } })(),
+  speak: (voice, text, out) => import('../engine/voice.mjs').then(v => v.speakLine(voice, text, out)),
+  build: (spec, copy) => startGame(spec, copy)
+})
 let meshyP = null
 const meshyMod = () => (meshyP ||= import('../engine/meshy.mjs'))
 
@@ -1342,7 +1356,7 @@ function isGltf(file) {
   } catch { return false }
 }
 
-async function startGame(spec) {
+async function startGame(spec, extraCopy = {}) {
   const g = await gameMod()
   if (!spec?.title || !spec?.loop) throw new Error('no game spec')
   if (spec.models) spec = { ...spec, models: g.gameModels(spec).filter(m => isGltf(join(dataDir, 'models', m.file))) }
@@ -1365,6 +1379,7 @@ async function startGame(spec) {
     if (c.source === 'meshy') for (const f of [c.file, ...Object.values(c.clips || {})]) { if (isGltf(join(lib, f))) copy[`public/models/${f}`] = join(lib, f) }
     if (c.source === 'art') { const [, run, f] = c.art.match(/^\/img\/([^/]+)\/(.+)$/); if (existsSync(join(runsDir, run, 'img', f))) copy[`public/models/${cm.spriteFile(c)}`] = join(runsDir, run, 'img', f) }
   }
+  Object.assign(copy, extraCopy)
   const a = await apps()
   const credits = cm.castCredits(spec.cast)
   await a.start(id, { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec), ...(credits ? { 'CREDITS.md': credits } : {}) }, copy })
@@ -2062,6 +2077,7 @@ const server = createServer((req, res) => {
 
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
+  if (workshops(req, res, url)) return
 
   // The Make box's showcases and its "grill me" interview (engine/intake.mjs); a Game gets the game interview
   if (url.pathname === '/api/intake' && req.method === 'GET') {

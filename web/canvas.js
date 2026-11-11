@@ -3,7 +3,8 @@
 // cursor move, tool and bubble comes from a real model stream.
 
 import { routeMessage } from './route.js'
-import { painterOf, REVIEWER } from './icons.js'
+import { openWorkshop } from './workshop.js'
+import { painterOf, REVIEWER, cursor } from './icons.js'
 
 const $ = s => document.querySelector(s)
 // Inlined by the server: the API token and the page-frame template. Frames are
@@ -4020,14 +4021,16 @@ function renderApp() {
   renderAppLink()
   renderBadges()
   if (view !== 'app') return
-  const st = appv.state, working = st === 'working'
+  // a build another Studio drives looks stopped here; recent steps say it is still going
+  const elsewhere = appv.state === 'stopped' && !appv.hasApp && (appv.steps[appv.steps.length - 1]?.t || 0) > Date.now() - 15 * 60e3
+  const st = elsewhere ? 'working' : appv.state, working = st === 'working'
   appEls.state.className = `app-state pill ${st}`
   appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : appv.hasApp ? 'built' : 'no app yet'
   setText(appEls.stage, working ? appv.stage : appv.result ? `${appv.result.turns} turn${appv.result.turns === 1 ? '' : 's'} · ${appv.result.files} files · checks ${appv.result.gatesPassed ? 'passed' : 'not passed'}${appv.deployed ? ` · live at ${appv.deployed}` : ''}` : '')
   const stick = appEls.steps.scrollHeight - appEls.steps.scrollTop - appEls.steps.clientHeight < 60
   appEls.steps.innerHTML = stepsHtml()
   if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
-  appEls.stop.hidden = !working
+  appEls.stop.hidden = !working || elsewhere
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
   // the same game as a Godot, Unity or Unreal project, when the job wrote one
   const port = appv.result?.port
@@ -4042,7 +4045,10 @@ function renderApp() {
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   const empty = !appv.url || (st === 'failed' && !appv.hasApp)
   appEls.empty.hidden = !empty
-  if (empty) {
+  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && (working || appv.steps.length)
+  if (!sheet) appEls.empty.classList.remove('sheet')
+  if (sheet) artSheet(shownRun())
+  else if (empty) {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
@@ -4071,6 +4077,30 @@ function renderApp() {
   appEls.shell.classList.toggle('dev', !!appv.w)
   appEls.shell.style.width = appv.w ? `${appv.w}px` : '100%'
   if (appv.mode === 'code') renderCode()
+}
+
+// A game being built: its whole art plan as one sheet, each picture landing in its cell as the
+// crew paints it, the cell being painted showing who is on it. Read again every 4 s while shown.
+const sheetv = { run: null, data: null, t: 0, busy: false }
+function artSheet(run) {
+  if (sheetv.run !== run) Object.assign(sheetv, { run, data: null, t: 0 })
+  if (!sheetv.busy && Date.now() - sheetv.t > 4000) {
+    sheetv.busy = true
+    api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => (r.ok ? r.json() : null)).then(d => { if (sheetv.run === run && d) sheetv.data = d }).catch(() => {})
+      .finally(() => { sheetv.busy = false; sheetv.t = Date.now(); if (sheetv.run === run && !appEls.empty.hidden) renderApp() })
+  }
+  const cells = sheetv.data?.sheet || []
+  const done = cells.filter(c => c.src).length
+  const next = cells.find(c => !c.src)
+  const last = appv.steps[appv.steps.length - 1]?.text || appv.stage || ''
+  const head = !cells.length ? 'Building the game' : done < cells.length ? `Painting the art · ${done}/${cells.length}` : 'Building the game'
+  const cell = c => {
+    const on = c === next
+    const who = on ? painterOf(c.id) : ''
+    return `<figure class="as-cell ${c.aspect || 'square'}${c.src ? ' done' : on ? ' on' : ''}">${c.src ? `<img src="${esc(BASE + c.src)}" alt="" loading="lazy">` : on ? `<span class="as-bot">${cursor(who)}</span>` : ''}<figcaption>${esc(c.name)}</figcaption></figure>`
+  }
+  appEls.empty.innerHTML = `<div class="art-sheet"><h2>${esc(head)}</h2>${last ? `<p class="as-line">${esc(last)}</p>` : ''}<div class="as-grid">${cells.map(cell).join('')}</div></div>`
+  appEls.empty.classList.add('sheet')
 }
 
 async function renderCode() {
@@ -4309,6 +4339,8 @@ async function openGame(idea = '', answers = null, build = false) {
   game.off?.()
   game.off = window.SwarmUI?.layer(game.el, closeGame, { extra: [$('#game-btn')], canClose: () => !game.busy })
   if (answers || build) return gameSpec(build)
+  // an unfinished Shape it walk can be picked up from here
+  game.resume = (await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null))?.workshops?.[0] || null
   renderGame()
 }
 const closeGame = () => { game.off?.(); game.off = null; game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
@@ -4329,13 +4361,16 @@ function renderGame() {
   } else if (game.spec) {
     const s = game.spec, list = gameList
     const rows = [['Setting', s.setting], ['Hero', s.hero], ['Enemies', list(s.enemies)], ['Loop', s.loop], ['Progression', s.progression], ['Controls', s.controls], ['Win', s.win], ['Lose', s.lose], ['Look', s.look], ['Sound', s.sound], ['Engine', s.engine]]
-    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><button class="big" data-build>Build the game</button></div>`
+    el.innerHTML = `${head}<div class="gspec"><h2 contenteditable="true" data-k="title">${esc(s.title)}</h2><p class="gpitch" contenteditable="true" data-k="pitch">${esc(s.pitch || '')}</p>${s.brand ? `<p class="gorig">🎮 A promo game for ${esc(s.brand.name)}, in its colours${s.brand.url ? `, linking to ${esc(s.brand.url)}` : ''}</p>${s.brand.url ? '' : `<button class="glink gonline" data-online>Put ${esc(s.brand.name)} online first</button>`}` : ''}${s.answers?.like && !/nothing/i.test(s.answers.like) ? `<p class="gorig">Feel of ${esc(s.answers.like)}, original world: ${esc(s.original || '')}</p>` : ''}<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd ${k === 'Engine' ? '' : `contenteditable="true" data-k="${k.toLowerCase()}"`}>${esc(v || '')}</dd>`).join('')}</dl><small>Click any line to change it.</small></div><div class="gfoot"><button class="glink" data-redo>← Change answers</button><span><button class="glink" data-shape>Shape it</button><button class="big" data-build>Build the game</button></span></div>`
     el.querySelector('[data-redo]').onclick = () => { game.spec = null; game.i = 0; renderGame() }
     el.querySelector('[data-build]').onclick = () => (game.cast && !game.cast.done ? openCast() : gameBuild())
+    el.querySelector('[data-shape]').onclick = () => gameShape()
     el.querySelector('[data-online]')?.addEventListener('click', () => gameOnline())
   } else {
     const val = game.answers[q.id] || ''
-    el.innerHTML = `${head}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
+    const W = game.i === 0 && game.resume
+    const STEPN = ['design', 'story', 'world', 'heroes', 'enemies', 'levels', 'sound']
+    el.innerHTML = `${head}${W ? `<button class="gresume" data-resume>${ico('rotate-ccw')}<span>Continue <b>${esc(W.title || 'the game')}</b></span><em>${Math.max(1, STEPN.indexOf(W.step) + 1)}/7</em></button>` : ''}<div class="gdots">${dots}</div>${game.i === 0 && game.from ? `<label class="gpromo"><input type="checkbox" ${game.promo ? 'checked' : ''}><span>A promo game for <b>${esc(game.brand)}</b>: set in its world, in its colours, with a button back to it</span></label>` : ''}${game.i === 0 ? `<input class="gidea" placeholder="Your idea in a line (optional): “a neon spirit eating its way through a night market”" value="${esc(game.idea)}">` : ''}<h3>${esc(q.q)}</h3><div class="gchips">${q.chips.map(c => `<button class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div><input class="gfree" placeholder="…or in your own words" value="${q.chips.includes(val) ? '' : esc(val)}"><div class="gfoot">${game.i ? '<button class="glink" data-back>← Back</button>' : '<span></span>'}<span><button class="glink" data-skip>Just build it</button><button class="big" data-next>${game.i === qs.length - 1 ? 'Write the spec' : 'Next'}</button></span></div>`
     const free = el.querySelector('.gfree')
     const take = v => { if (v) game.answers[q.id] = v; else delete game.answers[q.id] }
     const next = () => { take(free.value.trim() || game.answers[q.id]); if (game.i < qs.length - 1) { game.i++; renderGame() } else gameSpec() }
@@ -4344,6 +4379,11 @@ function renderGame() {
     el.querySelector('.gidea')?.addEventListener('input', e => { game.idea = e.target.value })
     el.querySelector('.gpromo input')?.addEventListener('change', e => { game.promo = e.target.checked })
     el.querySelector('[data-next]').onclick = next
+    el.querySelector('[data-resume]')?.addEventListener('click', () => {
+      const id = game.resume.id
+      closeGame()
+      openWorkshop({ api, ico, id, onBuilt: async (run, built) => { await loadFiles(); await openRun(run); setView('app'); botMsg(`🎮 Building “${built?.title || 'the game'}” with the art, story, levels and sound you picked.`) } })
+    })
     el.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || game.answers[q.id]); gameSpec() }
     el.querySelector('[data-back]')?.addEventListener('click', () => { game.i--; renderGame() })
     ;(game.i === 0 ? el.querySelector('.gidea') : free)?.focus()
@@ -4681,6 +4721,26 @@ async function gameOnline() {
 
 // names of a spec's list (a big spec's entries are objects with a name)
 const gameList = v => (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : x?.name || '')).join(', ') : v || '')
+
+// Shape it: the spec walked step by step with pictures (web/workshop.js), then the same build
+async function gameShape() {
+  readSpecEdits()
+  const spec = { ...game.spec }
+  closeGame()
+  // an unfinished walk of the same game opens where it was left
+  const key = String(spec.title || '').trim().toLowerCase()
+  const open = await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null)
+  const id = (open?.workshops || []).find(w => String(w.title || '').trim().toLowerCase() === key)?.id
+  openWorkshop({
+    api, ico, spec, id,
+    onBuilt: async (run, built) => {
+      await loadFiles()
+      await openRun(run)
+      setView('app')
+      botMsg(`🎮 Building “${built?.title || spec.title}” with the art, story, levels and sound you picked. The App view shows every file as it is written.`)
+    }
+  })
+}
 
 async function gameBuild() {
   // the card's edits go into the spec (a big spec's enemies stay objects unless that line changed)
