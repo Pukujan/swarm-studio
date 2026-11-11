@@ -91,7 +91,8 @@ export function makeProject({ sw, C, root }) {
     if (!run || run === 'new') { P.board = null; render(); return }
     P.run = run
     const [board, list] = await Promise.all([api(`/api/runs/${encodeURIComponent(run)}/board`).catch(() => null), hosted() ? null : api('/api/projects').catch(() => null)])
-    if (!P.on) return
+    // the view moved to another run while this one loaded: its answer is not drawn over the new one
+    if (!P.on || P.run !== run) return
     // a picture that was being made and now is there: it fades in over its stand-in
     const now = new Set((board?.painting || []).filter(w => w.state !== 'failed').map(w => `art:${w.page}/${w.layer}/${w.gen}`))
     for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k.split('/').slice(2).join('/')); if (P.on) renderStage() }, 1600) }
