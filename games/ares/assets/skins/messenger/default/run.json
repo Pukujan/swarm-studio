@@ -1,5 +1,5 @@
 {
- "frames": 6,
+ "frames": 12,
  "cell": [
   768,
   768
@@ -10,6 +10,6 @@
   "ok": true,
   "frames": 6,
   "edge": [],
-  "height_spread": 1.06
+  "height_spread": 1.04
  }
 }

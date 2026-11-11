@@ -23,7 +23,7 @@ const CLIPS := {
 }
 
 const HEROES := {
-	"messenger": {"name": "THE MESSENGER", "dress": Color(0.95, 0.9, 0.8), "cape": Color(0.72, 0.1, 0.06), "hair": Color(0.3, 0.16, 0.08), "laurel": true, "ponytail": false, "model": "res://assets/heroes/messenger.glb"},
+	"messenger": {"name": "BAKER", "dress": Color(0.95, 0.9, 0.8), "cape": Color(0.72, 0.1, 0.06), "hair": Color(0.3, 0.16, 0.08), "laurel": true, "ponytail": false, "model": "res://assets/heroes/messenger.glb"},
 	"runner": {"name": "THE RUNNER", "dress": Color(0.32, 0.18, 0.1), "cape": Color(0.58, 0.12, 0.06), "hair": Color(0.62, 0.24, 0.08), "laurel": false, "ponytail": true, "model": "res://assets/heroes/runner.glb"},
 }
 

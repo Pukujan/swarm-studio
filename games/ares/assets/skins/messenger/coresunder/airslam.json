@@ -1,0 +1,18 @@
+{
+ "frames": 6,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "mix",
+ "source": "airslam.png",
+ "qc": {
+  "ok": false,
+  "frames": 6,
+  "edge": [
+   3,
+   5
+  ],
+  "height_spread": 1.39
+ }
+}

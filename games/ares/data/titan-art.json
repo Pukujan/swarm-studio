@@ -1,0 +1,36 @@
+{
+ "sheet": {
+  "_note": "The contract every outfit pack follows: the same grid and layout rules for every sheet, so moves, sizes and timing match across outfits. Never change these between outfits.",
+  "grid": [
+   3,
+   2
+  ],
+  "aspect": "landscape",
+  "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every weapon, swing arc, hair strand, sleeve, ribbon and effect stays fully inside her own cell with a clear gap to the edges. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+  "fx_style": "2D game VFX sprite sheet, painted anime game effect style like a high-end gacha RPG, no character, effect only, on a pure solid black background for additive blending. Six frames in a 3 by 2 grid, read left to right, top to bottom, each effect centred in its own cell with wide empty black space around it, never touching the cell edges. No text, no borders, no grid lines. Palette: warm gold, white-gold and soft rose light."
+ },
+ "bosses": {
+  "asura": {
+   "art": {
+    "look": "Asura (阿修羅機), an original anime boss for a 2D action game: a colossal six-armed golden war automaton god, painted in the same high-end gacha anime painted style as the design picture, never 3D, never photo-real. Segmented polished gold armour plates with dark bronze joints, a faceless smooth gold mask-visor face with ONE single glowing red eye, a gold helm with a tall red plume, a spiked golden sun halo ring behind the head, a gold chest plate with a red gem, a crimson pleated armour skirt, and a long crimson cloth cape with gold laurel trim flowing to the ground. Six mechanical arms: upper arms hold a long-bladed golden spear (its left) and a golden greatsword (its right); middle arms hold a round red-and-gold sun shield (its left) and a golden great axe (its right); lower arms hold a spiked golden flail on a chain. Palette only gold, crimson, white-gold, dark bronze and red glow; no blue, no purple, no green. No human skin, no hair, no extra people.",
+    "personality": "It moves with heavy, slow, god-like mechanical weight, conducted from afar; its cape sways and its red eye glows in every frame.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame the whole automaton is small, about 50 percent of its grid cell height, centred and facing the viewer, with very wide empty space all around it so the plume, halo, all six arms, every weapon tip, the flail chain, the cape hem and the feet stay fully inside its own cell with a clear gap to the edges. Same figure, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/asura-design.png"
+     }
+    },
+    "sheets": {
+     "a-idle": "a looping heavy standing idle, facing the viewer, feet planted: 1 neutral stance, all six weapons held out like the design picture; 2 chest rising slightly, arms drifting up a little; 3 cape swaying left; 4 arms drifting down, eye glow pulsing; 5 cape swaying right; 6 back to the neutral stance. Small calm changes only, a seamless loop.",
+     "a-raise": "a telegraphed overhead strike wind-up, facing the viewer: 1 neutral stance; 2 the upper right arm starts lifting the greatsword; 3 the greatsword raised high above the head; 4 the sword held at its peak, the blade glowing bright red as a warning; 5 the red glow flaring stronger around the blade, the eye glowing; 6 holding the glowing sword high, poised to strike.",
+     "a-slam": "the greatsword slam, facing the viewer: 1 greatsword high and glowing red; 2 the sword swinging down; 3 the blade striking the ground in front of its feet, a small red shockwave; 4 the blade buried in the ground, red cracks and dust at its feet; 5 pulling the sword up; 6 back to the neutral stance.",
+     "a-sweep": "a low sideways sweep with the lower arms, facing the viewer: 1 neutral stance, crouching slightly; 2 the lower arms swing the spiked flail and the great axe out to its left side, low; 3 a wide low horizontal sweep across the front at ankle height, a short gold motion arc; 4 the flail and axe swept out to its right side, low; 5 the chain swinging back; 6 back to the neutral stance.",
+     "a-cast": "summoning spears of light, facing the viewer: 1 neutral stance; 2 all six arms spreading wide; 3 the sun halo flaring bright white-gold; 4 three glowing golden spear shapes forming in the air just above its head, inside the cell; 5 the spears glowing red-gold, pointing down, halo blazing; 6 arms still spread, spears hovering.",
+     "a-hurt": "recoiling from a hit, facing the viewer: 1 jolted back, arms flung outward; 2 a red crack glowing across the chest plate; 3 staggering, glowing red cracks on the arms and legs, sparks; 4 one knee bending, weapons lowered; 5 straightening up, cracks still glowing faintly; 6 back to the neutral stance, cracks fading.",
+     "a-roar": "a mode-change roar, facing the viewer: 1 neutral stance; 2 head tilting down, the eye dim; 3 head thrown back, the red eye blazing bright with a red beam of light upward; 4 all six arms raised wide, weapons up, cape lifting in a crimson wind; 5 the halo and the eye blazing; 6 head lowering, glaring at the viewer with the burning red eye."
+    }
+   }
+  }
+ }
+}

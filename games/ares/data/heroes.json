@@ -18,7 +18,7 @@
   },
   "heroes": {
     "messenger": {
-      "name": "THE MESSENGER",
+      "name": "BAKER",
       "role": "sword: brute close combat, long combos, launchers and air juggles",
       "personality": "playful, cocky and teasing. A brawler who loves the fight: grins, winks and taunts the bosses mid-combo.",
       "voice": "genki_woman",
@@ -29,33 +29,88 @@
       },
       "barks": {
         "start": {
-          "line": "よーし、かかってきなさい！"
+          "line": "よーし、かかってきなさい！",
+          "line_en": "Alright, bring it on!"
         },
         "kill": {
-          "line": "はい、おしまい♪"
+          "line": "はい、おしまい♪",
+          "line_en": "And done~"
         },
         "hurt": {
-          "line": "いったぁ！やったわね！"
+          "line": "いったぁ！やったわね！",
+          "line_en": "Ow! You'll pay for that!"
         },
         "win": {
-          "line": "ちょろいちょろい！"
+          "line": "ちょろいちょろい！",
+          "line_en": "Too easy, too easy!"
+        },
+        "tease-idle": {
+          "line": "ねえ、まだ？ 寝ちゃうよ〜？",
+          "line_en": "Hey, are we going? I'm gonna nap~"
+        },
+        "tease-idle2": {
+          "line": "ふふん、見とれてたでしょ？",
+          "line_en": "Heh, you were staring, weren't you?"
+        },
+        "tease-idle3": {
+          "line": "べーっだ！ 早く動かしてよ♪",
+          "line_en": "Bleh! Come on, move me~"
+        },
+        "tease-dodge": {
+          "line": "遅い遅い〜♪ こっちだよ！",
+          "line_en": "Too slow~ Over here!"
+        },
+        "tease-combo": {
+          "line": "見た見た？ 今の、かっこよかったでしょ！",
+          "line_en": "Did you see? Pretty cool, huh!"
+        },
+        "taunt": {
+          "line": "ほらほら、休んでる場合？",
+          "line_en": "Come on, taking a break already?"
+        },
+        "low": {
+          "line": "まだまだ、これからだもん！",
+          "line_en": "I'm just getting started!"
+        },
+        "reply": {
+          "line": "セリフ長〜い。さっさとやろ？",
+          "line_en": "So long-winded. Let's just go?"
+        },
+        "boon": {
+          "line": "これ、もらっちゃお♪",
+          "line_en": "I'll take this one~"
+        },
+        "stage": {
+          "line": "楽勝！ 次いこ、次！",
+          "line_en": "Easy! Next one, next!"
+        },
+        "swap-in": {
+          "line": "選手交代！ 私の番ね♪",
+          "line_en": "Tag in! My turn~"
+        },
+        "fall": {
+          "line": "わわっ、落ちる〜っ！",
+          "line_en": "Whoa, I'm falling!"
         }
       },
       "moves": {
         "slash1": {
           "name": "一閃",
+          "en": "First Flash",
           "reading": "いっせん",
           "input": "attack",
           "anim": "slash1"
         },
         "slash2": {
           "name": "二閃",
+          "en": "Second Flash",
           "reading": "にせん",
           "input": "attack attack",
           "anim": "slash2"
         },
         "slash3": {
           "name": "三閃・翼断",
+          "en": "Wing Sever",
           "reading": "さんせん・よくだん",
           "input": "attack attack attack",
           "anim": "slash3",
@@ -63,6 +118,7 @@
         },
         "spin": {
           "name": "旋風翼",
+          "en": "Wing Cyclone",
           "reading": "せんぷうよく",
           "input": "attack attack (pause) attack",
           "anim": "m-spin",
@@ -70,6 +126,7 @@
         },
         "launch": {
           "name": "昇翼",
+          "en": "Rising Wing",
           "reading": "しょうよく",
           "input": "up+attack",
           "anim": "launcher",
@@ -77,6 +134,7 @@
         },
         "air": {
           "name": "空舞",
+          "en": "Sky Dance",
           "reading": "くうぶ",
           "input": "air: attack attack attack",
           "anim": "air1+m-air2",
@@ -84,6 +142,7 @@
         },
         "slam": {
           "name": "墜天",
+          "en": "Fallen Sky",
           "reading": "ついてん",
           "input": "air: down+attack",
           "anim": "airslam",
@@ -91,12 +150,14 @@
         },
         "dash": {
           "name": "疾翼",
+          "en": "Swift Wing",
           "reading": "しつよく",
           "input": "dash attack",
           "anim": "dash"
         },
         "charge": {
           "name": "剛翼斬",
+          "en": "Mighty Wing Cut",
           "reading": "ごうよくざん",
           "input": "hold attack",
           "anim": "m-charge",
@@ -104,6 +165,7 @@
         },
         "counter": {
           "name": "月影返し",
+          "en": "Moonshade Return",
           "reading": "つきかげがえし",
           "input": "guard just before a hit",
           "anim": "m-counter",
@@ -111,22 +173,46 @@
         },
         "wave": {
           "name": "天裂波",
+          "en": "Sky Rend",
           "reading": "てんれっぱ",
           "input": "skill",
           "anim": "m-wave",
           "line": "てんれっぱ！"
         },
+        "flashcut": {
+          "name": "月閃",
+          "en": "Moon Flash",
+          "reading": "げっせん",
+          "input": "skill2 (E) + direction",
+          "anim": "dash"
+        },
+        "skywave": {
+          "name": "天衝濤",
+          "en": "Heavenpierce Tide",
+          "reading": "てんしょうとう",
+          "input": "skill3 (U)",
+          "anim": "airslam"
+        },
+        "quake": {
+          "name": "天地崩",
+          "en": "Worldfall Rupture",
+          "reading": "てんちほう",
+          "input": "ult (with the Coresunder)",
+          "anim": "airslam"
+        },
         "ult": {
-          "name": "神使・天翔断",
-          "reading": "しんし・てんしょうだん",
+          "name": "千閃",
+          "en": "Thousand Flash",
+          "reading": "せんせん",
           "input": "ult",
           "anim": "ult",
-          "line": "神々の使者の名において……ぜーんぶ斬っちゃえ！しんし、てんしょうだん！"
+          "line": "ぜーんぶ斬っちゃえ！せんせん！"
         }
       },
       "combos": [
         {
           "name": "地上三連",
+          "en": "Ground Triple",
           "chain": [
             "slash1",
             "slash2",
@@ -135,6 +221,7 @@
         },
         {
           "name": "旋風",
+          "en": "Whirlwind",
           "chain": [
             "slash1",
             "slash2",
@@ -143,6 +230,7 @@
         },
         {
           "name": "天舞",
+          "en": "Sky Waltz",
           "chain": [
             "slash1",
             "launch",
@@ -152,6 +240,7 @@
         },
         {
           "name": "疾風斬",
+          "en": "Gale Cut",
           "chain": [
             "dash",
             "slash2",
@@ -160,6 +249,7 @@
         },
         {
           "name": "返し刃",
+          "en": "Riposte",
           "chain": [
             "counter",
             "launch",
@@ -169,39 +259,50 @@
         }
       ],
       "art": {
-        "look": "2D sprite sheet of the woman in the first reference image (Messenger), painted in exactly the same soft painted anime illustration style: same face, long wavy brown hair, gold laurel crown, white Greek wrap dress with gold leaf belt, red cape with gold trim, gold armband, laced gold sandals with small white wings. Her weapons are exactly the ones in the second reference image: a huge white-and-gold greatsword with white angel wings on the crossguard, a red grip, a red tassel and a glowing gold laurel blade; and a white-and-gold winged revolver. Side view facing right unless the frames say otherwise. Dress, cape and hair swing naturally with the motion.",
-        "personality": "Her personality: playful, cocky and teasing, a brawler who loves a fight; her face always shows it: a smug grin, a wink, a tongue out, a fierce laugh mid-swing, never neutral.",
+        "look": "2D sprite sheet of the woman in the first reference image (Messenger), painted in exactly the same soft painted anime illustration style: same face, long wavy brown hair, gold laurel crown, white Greek wrap dress with gold leaf belt, red cape with gold trim, gold armband, laced gold sandals with small white wings. Her weapons are exactly the ones in the second reference image: a huge white-and-gold greatsword with white angel wings on the crossguard, a red grip, a red tassel and a glowing gold laurel blade; and a white-and-gold winged revolver. Side view facing right unless the frames say otherwise. Dress, cape and hair swing naturally with the motion. She is a beautiful adult woman in her mid-twenties with mature, elegant, long-limbed proportions: about 8 heads tall, a small head, slender neck, long legs, narrow waist, an adult face with defined cheekbones, almond eyes and a confident, playful expression exactly like the design picture. Never chibi, never childlike, never a big head or a short body, never a round baby face. The greatsword is in proportion to an adult woman. Clean, crisp line art and painting, the same quality as the design picture. Her wrap dress skirt is a normal mid-thigh length with no high thigh slit.",
+        "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 58 percent of her grid cell height, centred, with very wide empty space all around her so every weapon, swing arc, hair strand, sleeve, ribbon and effect stays fully inside her own cell with a clear gap to the edges. Same character, same size, feet on one shared baseline. On one perfectly flat, even magenta (#FF00FF) background: no gradient, no floor, no shadow, no scenery, nothing else in the picture, and no magenta anywhere on her, her sword or her effects. No text, no borders, no grid lines, no extra people. How she holds the greatsword, in every frame: her hand wraps around the red-wrapped GRIP, the handle between the winged crossguard and the laurel pommel; never the blade, never the crossguard wings. Resting on her shoulder: her hand holds the grip just in front of her shoulder, the winged crossguard sits by her shoulder, and the long blade lies back over that shoulder pointing behind her, its flat on the shoulder and its edge away from her neck; the pommel and red tassel hang low in front of her chest, never in front of her face. Picture direction: when she faces right, a sword on her shoulder has her hand, the grip and the pommel on the RIGHT, in front of her chest, and the whole blade goes to the LEFT, behind her back and behind her head, angled a little upward, with the blade tip at the far left; the blade never points forward past her face. In attacks one or both hands stay on the grip, one above the other, and the blade always extends away from her hands. Natural hands: fingers curled around the grip, the thumb wrapped over them, a relaxed wrist. The whole sword stays solid and fully visible in every frame, blade, crossguard and grip; a gold swing arc trails behind the blade and never hides or replaces it. Whenever she has the sword, the hand on its grip is clearly visible; the sword never floats, balances or rests on her without a hand on the grip. Smooth, evenly spaced in-between poses so the six frames animate fluidly; limbs never stretched, warped or melted; the same costume and the same sword in every frame; eye-level camera, modest framing. Size check: her whole figure together with the greatsword, cape and every gold arc, spark and dust cloud fits inside the middle 80 percent of her cell; nothing reaches or crosses the cell border, so draw the sword and arcs shorter rather than cutting them off. Modesty: her short skirt always covers her hips; no underwear showing in any frame; never show her bottom, never a view up her skirt, never seen from behind or below; in crouches, rolls and flips her cape and skirt cover her. Flowing hair and cloth in every frame: her long hair, cape and dress hem follow the motion with follow-through and overlapping action, strands lifting and trailing behind each movement. In the air they follow physics: rising, hair and cape trail downward and behind her; at the top they float loose; falling, her hair streams upward and the cape and skirt hem flare up and out like a bell while the skirt still covers her. Every gold swing arc is compact and hugs her body, no wider than her own height, and ends well before the cell border; the frames in the right column and in the left column keep an especially wide empty margin on the outer side.",
+        "personality": "Her charm: the beautiful, graceful heroine fans fall for. Confident and a little teasing, but beauty comes first: a pretty face in every frame, bright open almond eyes, a knowing closed-mouth smile or a small smirk, playful glances over the shoulder, poise like a film star. Her personality shows only in small touches, never in a goofy face: no gaping open-mouth laughs, no eyes squeezed shut, no grimaces, no derpy expressions. Clean, strong silhouettes with a readable line of action, polished like gacha splash art in every frame.",
         "refs": [
           "assets/art/heroes/weapons.jpg"
         ],
         "outfits": {
           "default": {
             "design": "assets/art/heroes/messenger-default.jpg"
+          },
+          "coresunder": {
+            "design": "assets/art/heroes/messenger-coresunder.jpg",
+            "weapon_ref": "assets/art/heroes/weapons-coresunder.jpg",
+            "weapon": "Coresunder",
+            "weapon_jp": "地核断",
+            "look": "In this outfit her sword is the Coresunder from the second reference image instead of the winged greatsword: a huge heavy two-handed earth-cleaver with a broad crimson stone-steel blade, heavy gold edges and a cracked, glowing molten-gold core, a square gold rock-plate crossguard with no wings, a long red-wrapped grip and a round gold pommel with an ember gem, no tassel. She never carries the winged greatsword in this outfit; the winged revolver stays the same."
           }
         },
         "sheets": {
-          "idle": "idle stance loop, greatsword held low in both hands, gentle breathing, cape and hair drifting softly in the wind; frame 6 flows back into frame 1.",
+          "idle": "poised elegant idle loop, side view facing right turned slightly toward the viewer: weight on one hip, the greatsword held low in one hand with its tip resting near the ground, her free hand on her hip, a closed-mouth confident smile, eyes open looking ahead. Small calm changes only: a slow continuous breeze sways her long hair, cape and dress hem a little further along the wave in each frame, gentle breathing; both feet planted on the same baseline in every frame; frame 6 flows back into frame 1. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and classy, never sexual, never a pin-up pose.",
           "run": "running cycle, greatsword held back low in one hand, cape streaming behind, six evenly spaced run poses that loop.",
           "slash1": "light attack 1, fast horizontal greatsword slash with a bright gold arc: ready, wind-up, swing, full arc, follow-through, recover.",
           "slash2": "light attack 2, rising upward diagonal greatsword slash from low to high with a bright gold crescent arc: ready, crouch, rising swing, full arc overhead, follow-through, recover.",
           "slash3": "heavy finisher, she leaps and brings the greatsword down overhead into the ground with a gold shockwave and dust burst: ready, leap, sword raised high, slam down, impact burst, recover.",
-          "dash": "forward dash thrust, she lunges low with the greatsword pointing forward, gold speed streaks behind her: ready, crouch, launch, long lunge, thrust, recover.",
-          "jump": "jump, greatsword in one hand: crouch, take off, rising, top of the jump with knees tucked, falling, landing crouch.",
+          "dash": "forward dash thrust, side view facing right in every frame, she lunges low with the greatsword pointing forward, gold speed streaks behind her: ready, crouch, launch, long lunge, thrust, recover. There is only ONE greatsword: in the thrust frames both her hands hold its grip and the blade points forward, so nothing is on her back; never a second sword. She never turns her back to the viewer.",
+          "jump": "platform jump, side view facing right, greatsword in one hand; frames 1-2 rising, 3 the top, 4-5 falling, 6 landing: 1 a light crouch to take off; 2 rising fast, hair and cape trailing downward and behind her; 3 top of the jump, knees tucked, hair and cape floating loose around her; 4 starting to fall, hair lifting upward; 5 falling fast, her hair streaming straight up, the cape and skirt hem flaring up and out like a bell, one hand pressing the skirt down gracefully; 6 landing on both feet in a light crouch. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and classy, never sexual, never a pin-up pose.",
           "shoot": "revolver shot, greatsword on her back: draw revolver, aim forward with arm extended, fire with a bright gold muzzle flash, recoil, second shot, lower the gun.",
           "hurt": "getting hit and knocked down, greatsword in hand: hit flinch, staggering back, falling, lying on the ground, pushing up, standing back up.",
-          "djump": "double jump in mid-air, greatsword in one hand: falling, small white wings flare from her sandals, push off the air with a gold burst ring under her feet, forward somersault flip, rising again, open to the top of the jump. All frames in the air.",
-          "roll": "dodge roll forward along the ground, greatsword held close: drop low, tuck, rolling ball with cape wrapped around, rolling, coming up, back to stance.",
+          "djump": "double jump in mid-air, side view facing right, greatsword held in one hand, all frames in the air, her dress always neat and covering her: 1 drifting down, her long hair lifting upward and her red cape billowing above her shoulders; 2 small white wings flare from her sandals; 3 she pushes off the air with a gold burst ring under her feet; 4 a graceful forward somersault, knees tucked, the red cape wrapped around her body; 5 rising again, hair and cape trailing downward behind her; 6 at the top, hair and cape floating loose. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and classy, never sexual, never a pin-up pose.",
+          "roll": "dodge roll forward along the ground, seen from the side, both hands on the sword grip and the blade held flat along her back: she stays upright on her feet the whole time: drop low, a deep forward crouch, a fast spinning crouch turn with her red cape swirled in a full circle around her body hiding her legs, the spin continuing forward, rising, back to stance. Never upside down, never on her back, never legs in the air.",
           "sprint": "full sprint cycle, leaning far forward, greatsword dragged behind in one hand trailing gold sparks, cape and hair streaming straight back, six run poses that loop.",
           "launcher": "launcher attack: a huge rising upward greatsword uppercut that lifts the enemy into the air, she jumps up with the swing: low crouch with sword down behind, swing starts, sword sweeping upward with a tall gold vertical arc, she rises off the ground following the arc, top of the arc in the air, hang in the air ready to combo.",
           "air1": "air combo, all frames in mid-air: quick horizontal greatsword slash, then a second reverse slash, each with a bright gold arc, cape and hair floating upward.",
           "airslam": "air finisher: in mid-air she flips, raises the greatsword overhead, dives straight down with the blade pointing down, slams into the ground with a big gold shockwave and dust ring, crouched landing.",
-          "m-loading": "six separate pretty loading-screen poses, three-quarter view, full of attitude: 1 sitting on the crossguard of her planted greatsword, swinging her legs, grinning; 2 greatsword over both shoulders, arms hooked over it, winking; 3 leaning on the huge sword with one hand on her hip, tongue out; 4 mid-jump with a fist pumped in the air, cape flaring; 5 pointing the sword tip at the viewer with a cocky smirk; 6 looking back over her shoulder with a peace sign, cape and hair lifting in the wind.",
-          "m-idle": "teasing idle loop facing right: greatsword resting on her shoulder, she bounces on her toes, rolls her shoulder, grins and beckons with two fingers come at me, taps the sword on her shoulder, cape and hair swinging; frame 6 flows back into frame 1.",
+          "m-loading": "six separate pretty loading-screen poses, three-quarter view, graceful and charming: 1 sitting sideways on the crossguard of her planted greatsword, knees together, a soft smile; 2 the greatsword resting on her right shoulder, both hands on its grip in front of her chest, the blade going back over her shoulder, a wink; 3 leaning on the planted sword with one hand on her hip, chin down, a knowing smile; 4 a light jump with one fist raised, cape flaring, skirt covering; 5 pointing the sword tip forward with a cool smirk; 6 looking back over her shoulder with a finger to her lips, hair lifting in the wind. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and classy, never sexual, never a pin-up pose.",
+          "m-idle": "glamorous idle loop with old-Hollywood film-star elegance, three-quarter view facing right, both feet planted on the same baseline: 1 hand on hip, greatsword resting on her shoulder, a chin-down knowing smile; 2 she glances back over her shoulder at the viewer; 3 her free hand lifts her long hair off her neck; 4 a small hair toss, hair fanning out; 5 the hand back on her hip, a little smirk; 6 back to the first pose. A slow breeze sways hair and cape throughout; frame 6 flows back into frame 1. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and classy, never sexual, never a pin-up pose.",
           "m-spin": "sword skill, side view facing right: a full spinning slash, she pivots on one foot and whirls the greatsword around her in a full gold circle: ready, wind-up, spin start, full gold ring of light around her, spin end, recover.",
           "m-charge": "sword skill, side view facing right: charged heavy slash, she draws the greatsword far back as gold light gathers on the blade, then cuts a huge horizontal crescent that leaves a wide gold arc: crouch and draw back, blade glowing, brighter, step and swing, full huge arc, recover.",
           "m-counter": "sword skill, side view facing right: parry and counter, she blocks with the flat of the greatsword held upright, a gold spark bursts, then she slides past and slashes: guard up, spark of the parry, slide forward, quick cut with a thin gold line, pause with her back turned, recover.",
           "m-wave": "sword skill, side view facing right: she swings the greatsword upward and sends a tall gold crescent wave of light flying forward along the ground: ready, low draw, upward swing, crescent wave leaves the blade, wave travels forward, recover.",
-          "m-air2": "air combo, side view facing right, she is in the air the whole time: fast mid-air slash, second mid-air slash in the other direction, a mid-air flip with the sword, a downward diagonal air slash, a mid-air spin slash with a gold ring, drifting down."
+          "m-air2": "air combo, side view facing right, she is in the air the whole time: fast mid-air slash, second mid-air slash in the other direction, an upright mid-air turn with the sword held out to the side, her red cape swirling around her legs, a downward diagonal air slash, a mid-air spin slash with a gold ring, drifting down.",
+          "m-tease": "idle tease loop, three-quarter view turned toward the viewer. Both feet stay planted flat on the same ground line in every frame, no hopping, no raised leg. Only the greatsword, held in her right hand in every frame: whenever it rests on her shoulder her right fist holds the red grip just in front of that shoulder, the crossguard just above her fist and the blade back over her shoulder; no revolver in this sheet, her left hand is empty: 1 hand on hip, relaxed stance facing right, a slow breeze in her hair, greatsword resting on her shoulder; 2 she turns her head and shoulders to the viewer with a sweet knowing smile; 3 a classic anime wink at the viewer: her left eye shut as a curved line, her right eye wide open and sparkling, a cute closed-mouth smile, a peace sign with her left hand held up beside her cheek; 4 still winking with one eye shut, she spins the greatsword in a small circle at her side with her right hand, a thin gold arc, feet still planted; 5 the sword back on her shoulder, a cute little smile with the tip of her tongue just peeking out; 6 settling back into the first relaxed stance facing right; frame 6 flows back into frame 1. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and playful, never sexual.",
+          "m-breeze": "environment pose loop, a gust of wind, three-quarter view facing right, both feet planted on the same baseline, greatsword resting on her shoulder in one hand: 1 standing poised as the gust arrives, hair starting to lift; 2 her hair and cape stream sideways to the left; 3 she tucks her hair back behind her ear with her free hand; 4 hair tucked, she smooths her dress down against her thigh with the same hand, the skirt kept down and covering; 5 hair and cape still streaming, a pleased little closed-mouth smile at the viewer; 6 the gust easing, hair settling back to the first pose; frame 6 flows back into frame 1. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and classy, never sexual, never a pin-up pose.",
+          "m-win": "victory pose, in this order. She holds the greatsword in every frame and never the revolver. Both feet stay on the ground line in every frame. 1 side view facing right, a fast sword flourish, the greatsword swinging in a wide gold arc in front of her; 2 a second flourish, spinning the sword overhead, cape swirling; 3 turning to three-quarter view toward the viewer, she plants the greatsword point down into the ground beside her with a small gold spark; 4 one hand resting on top of the grip of the planted sword, the other on her hip, chin up, cocky grin to the viewer; 5 the same proud pose with a big clear wink, one eye closed, and a peace sign with her free hand; 6 holding the cocky winking pose, cape and hair settling. Keep every swing arc small enough to stay well inside her own cell. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and playful, never sexual."
         }
       }
     },
@@ -217,36 +318,92 @@
       },
       "barks": {
         "start": {
-          "line": "……始めましょうか。"
+          "line": "……始めましょうか。",
+          "line_en": "...Shall we begin?"
         },
         "kill": {
-          "line": "終わり。"
+          "line": "終わり。",
+          "line_en": "Finished."
         },
         "dodge": {
-          "line": "遅い。"
+          "line": "遅い。",
+          "line_en": "Too slow."
         },
         "hurt": {
-          "line": "……っ。"
+          "line": "……っ。",
+          "line_en": "...Tch."
         },
         "win": {
-          "line": "退屈だったわ。"
+          "line": "退屈だったわ。",
+          "line_en": "That was boring."
+        },
+        "tease-idle": {
+          "line": "……見ているだけ？ 退屈ね。",
+          "line_en": "...Just watching? How dull."
+        },
+        "tease-idle2": {
+          "line": "私は待てるけれど、敵は待たないわよ。",
+          "line_en": "I can wait. The enemy won't."
+        },
+        "tease-idle3": {
+          "line": "ふふ、見とれるのは後にして。",
+          "line_en": "Admire me later, hm?"
+        },
+        "tease-dodge": {
+          "line": "かすりもしないわね。",
+          "line_en": "Not even close."
+        },
+        "tease-combo": {
+          "line": "数えるのも、飽きてきたわ。",
+          "line_en": "I've grown tired of counting."
+        },
+        "taunt": {
+          "line": "もうお疲れ？ 早いのね。",
+          "line_en": "Tired already? How quick."
+        },
+        "low": {
+          "line": "……この程度で、倒れはしない。",
+          "line_en": "...This won't bring me down."
+        },
+        "reply": {
+          "line": "前置きはいいわ。始めて。",
+          "line_en": "Skip the preamble. Begin."
+        },
+        "boon": {
+          "line": "悪くない選択ね。",
+          "line_en": "Not a bad choice."
+        },
+        "stage": {
+          "line": "次は、もう少し楽しませて。",
+          "line_en": "Next time, amuse me a little more."
+        },
+        "swap-in": {
+          "line": "交代よ。下がっていて。",
+          "line_en": "My turn. Step back."
+        },
+        "fall": {
+          "line": "……あら。足元が、ないわ。",
+          "line_en": "...Oh. No floor."
         }
       },
       "moves": {
         "shoot": {
           "name": "連射",
+          "en": "Rapid Fire",
           "reading": "れんしゃ",
           "input": "shoot (also while running)",
           "anim": "o-run"
         },
         "dodge": {
           "name": "宙返り撃ち",
+          "en": "Flip Shot",
           "reading": "ちゅうがえりうち",
           "input": "dash backward + shoot",
           "anim": "o-dodge"
         },
         "feather": {
           "name": "天翼連弾",
+          "en": "Feather Barrage",
           "reading": "てんよくれんだん",
           "input": "spell 1",
           "anim": "o-cast",
@@ -291,6 +448,7 @@
                 "shake": 1.5,
                 "cutin": true,
                 "name": "真・天翼連弾",
+                "en": "True Feather Barrage",
                 "reading": "しん・てんよくれんだん",
                 "line": "翼よ、すべてを覆え。しん、てんよくれんだん。"
               }
@@ -299,6 +457,7 @@
         },
         "sunlance": {
           "name": "日輪の槍",
+          "en": "Sun Lance",
           "reading": "にちりんのやり",
           "input": "spell 2",
           "anim": "o-cast",
@@ -306,6 +465,7 @@
         },
         "laurel": {
           "name": "月桂環",
+          "en": "Laurel Ring",
           "reading": "げっけいかん",
           "input": "spell 3",
           "anim": "o-cast",
@@ -313,6 +473,7 @@
         },
         "gale": {
           "name": "疾風翔",
+          "en": "Gale Flight",
           "reading": "しっぷうしょう",
           "input": "spell 4",
           "anim": "o-cast",
@@ -320,6 +481,7 @@
         },
         "halo": {
           "name": "天光柱",
+          "en": "Heaven Pillar",
           "reading": "てんこうちゅう",
           "input": "spell 5",
           "anim": "o-cast",
@@ -327,6 +489,7 @@
         },
         "wing": {
           "name": "白翼の盾",
+          "en": "White Wing Shield",
           "reading": "はくよくのたて",
           "input": "spell 6",
           "anim": "o-cast",
@@ -334,6 +497,7 @@
         },
         "sky": {
           "name": "天穹爆",
+          "en": "Zenith Burst",
           "reading": "てんきゅうばく",
           "input": "spell 7",
           "anim": "o-cast",
@@ -341,6 +505,7 @@
         },
         "comet": {
           "name": "流星墜",
+          "en": "Comet Fall",
           "reading": "りゅうせいつい",
           "input": "spell 8",
           "anim": "o-cast",
@@ -348,14 +513,234 @@
         },
         "ult": {
           "name": "星雨・千翼乱舞",
+          "en": "Starfall Thousand Wings",
           "reading": "せいう・せんよくらんぶ",
           "input": "ult",
           "anim": "ult",
           "line": "静かに眠りなさい。せいう、せんよくらんぶ。"
         }
       },
+      "spells": {
+        "verdict": {
+          "kind": "bolt_rain",
+          "name": "天譴雷霆",
+          "en": "Heaven's Verdict",
+          "romaji": "tenken raitei",
+          "chant": "天のとばりよ、裂けなさい。千の雷よ、わが声に従え。罪あるものに、静かな終わりを。",
+          "chant_en": "Part, veil of heaven. Thunder of a thousand, heed my voice. Grant the guilty a quiet end.",
+          "line": "てんけん、らいてい。",
+          "tier": 3,
+          "cd": 45,
+          "meter": 100,
+          "status": "shock",
+          "fx": [
+            "circle-grand",
+            "storm-cloud",
+            "bolt-strike"
+          ],
+          "zoom": 1.45
+        },
+        "spear": {
+          "kind": "thunder_spear",
+          "name": "金雷槍",
+          "en": "Gilded Thunderlance",
+          "romaji": "kinraisou",
+          "chant": "光よ、集いなさい。ひとすじの雷となりて、貫け。",
+          "chant_en": "Gather, light. Become a single bolt, and pierce.",
+          "line": "きんらいそう。",
+          "tier": 2,
+          "cd": 9,
+          "meter": 30,
+          "status": "shock",
+          "fx": [
+            "circle-gold",
+            "thunder-spear"
+          ],
+          "zoom": 1.2
+        },
+        "chain": {
+          "kind": "chain",
+          "name": "連雷華",
+          "en": "Chain Bloom",
+          "romaji": "renraika",
+          "chant": "咲いて、渡りなさい。",
+          "chant_en": "Bloom, and pass along.",
+          "line": "れんらいか。",
+          "tier": 1,
+          "cd": 5,
+          "meter": 15,
+          "status": "shock",
+          "fx": [
+            "circle-gold",
+            "chain-arc"
+          ],
+          "zoom": 1.05,
+          "pull": false
+        },
+        "field": {
+          "kind": "storm_field",
+          "name": "雷庭結界",
+          "en": "Thunder Garden",
+          "romaji": "raitei kekkai",
+          "chant": "ここは私の庭。踏み入れば、焼けるわ。",
+          "chant_en": "This is my garden. Step in, and burn.",
+          "line": "らいてい、けっかい。",
+          "tier": 2,
+          "cd": 16,
+          "meter": 35,
+          "status": "shock",
+          "fx": [
+            "circle-gold",
+            "storm-cloud",
+            "bolt-strike"
+          ],
+          "zoom": 1.15
+        },
+        "cross": {
+          "kind": "holy_cross",
+          "name": "白光十字",
+          "en": "White Light Cross",
+          "romaji": "byakkou juuji",
+          "chant": "光よ、交わりなさい。けがれを断て。",
+          "chant_en": "Cross, light. Sever the stain.",
+          "line": "びゃっこう、じゅうじ。",
+          "tier": 2,
+          "cd": 12,
+          "meter": 30,
+          "status": "char",
+          "fx": [
+            "circle-gold",
+            "holy-cross"
+          ],
+          "zoom": 1.2
+        },
+        "blades": {
+          "kind": "summon_blades",
+          "name": "金羽剣陣",
+          "en": "Golden Feather Array",
+          "romaji": "kin'u kenjin",
+          "chant": "羽よ、剣となりなさい。わたしの前に、並べ。",
+          "chant_en": "Feathers, become swords. Stand in rank before me.",
+          "line": "きんう、けんじん。",
+          "tier": 2,
+          "cd": 14,
+          "meter": 30,
+          "status": null,
+          "fx": [
+            "circle-gold",
+            "summon-blades"
+          ],
+          "zoom": 1.15
+        },
+        "frost": {
+          "kind": "ice_lance",
+          "name": "霜華の槍",
+          "en": "Frostbloom Spear",
+          "romaji": "souka no yari",
+          "chant": "凍りなさい。",
+          "chant_en": "Freeze.",
+          "line": "そうかのやり。",
+          "tier": 1,
+          "cd": 4,
+          "meter": 10,
+          "status": "freeze",
+          "fx": [
+            "ice-lance"
+          ],
+          "zoom": 1.0,
+          "pull": false
+        },
+        "dusk": {
+          "kind": "meteor",
+          "name": "落陽星",
+          "en": "Setting Star",
+          "romaji": "rakuyousei",
+          "chant": "空の果てより、来なさい。燃え尽きる星よ、すべてを灰に。",
+          "chant_en": "Come from the edge of the sky. Burning star, ash it all.",
+          "line": "らくよう、せい。",
+          "tier": 3,
+          "cd": 40,
+          "meter": 90,
+          "status": "burn",
+          "fx": [
+            "circle-grand",
+            "meteor"
+          ],
+          "zoom": 1.35
+        },
+        "wall": {
+          "kind": "pillar_wall",
+          "name": "聖焔列柱",
+          "en": "Sanctum Pillars",
+          "romaji": "seien resshuu",
+          "chant": "燃えなさい、清き炎。ここから先は、通さない。",
+          "chant_en": "Burn, pure flame. None pass beyond this line.",
+          "line": "せいえん、れっちゅう。",
+          "tier": 2,
+          "cd": 15,
+          "meter": 35,
+          "status": "burn",
+          "voice": false,
+          "fx": [
+            "circle-gold"
+          ],
+          "zoom": 1.1
+        },
+        "ray": {
+          "kind": "sun_beam",
+          "name": "天照光砲",
+          "en": "Heavenfire Ray",
+          "romaji": "amaterasu kouhou",
+          "chant": "光よ、満ちなさい。ひとつの流れとなって、すべてを焼き払え。",
+          "chant_en": "Fill me, light. Become one flood, and burn it all away.",
+          "line": "あまてらす、こうほう。",
+          "tier": 3,
+          "cd": 18,
+          "meter": 45,
+          "status": "burn",
+          "voice": false,
+          "fx": [
+            "circle-grand"
+          ],
+          "zoom": 1.15
+        },
+        "crescent": {
+          "kind": "great_crescent",
+          "name": "薔薇月輪",
+          "en": "Rosemoon Crescent",
+          "romaji": "bara getsurin",
+          "chant": "巡りなさい、薔薇の月。斬って、還って。",
+          "chant_en": "Circle, rose moon. Cut, and come home.",
+          "line": "ばら、げつりん。",
+          "tier": 2,
+          "cd": 9,
+          "meter": 25,
+          "voice": false,
+          "fx": [
+            "circle-gold"
+          ],
+          "zoom": 1.05
+        },
+        "gale": {
+          "kind": "petal_tornado",
+          "name": "花嵐",
+          "en": "Petal Gale",
+          "romaji": "hana arashi",
+          "chant": "舞いなさい、花の嵐。すべてを巻いて。",
+          "chant_en": "Dance, storm of petals. Take them all.",
+          "line": "はなあらし。",
+          "tier": 2,
+          "cd": 14,
+          "meter": 30,
+          "voice": false,
+          "fx": [
+            "circle-gold"
+          ],
+          "zoom": 1.1
+        }
+      },
       "art": {
-        "look": "2D sprite sheet of the woman in the first reference image (the Oracle), painted in exactly the same soft painted anime illustration style and the exact same design: same face, very long soft pastel pink hair in a low loose braid with gold pins, gold laurel circlet with a red jewel, a floating gold halo behind her head, layered sheer white and pale rose gown with long translucent sleeves, many trailing ribbons and tassels, gold laurel filigree, gold chains, high slit skirt, gold laced heeled sandals with tiny white wings. Her gun is the white-and-gold winged revolver in the second reference image; her free hand casts glowing gold magic. Personality: mature, elegant and deadpan; her face is expressionless in every frame, half-lidded eyes, eyes closed when casting, never smiling or straining; every pose graceful like a dancer. VERY FLOWY: her long hair, braid, sheer sleeves, skirt layers and ribbons are always in motion, flowing and rippling with a delay behind every movement, trailing in long soft curves, lifting in the air on jumps and spins.",
+        "look": "2D sprite sheet of the woman in the first reference image (the Oracle), painted in exactly the same soft painted anime illustration style, gacha splash-art quality, and the same design: same face, very long soft pastel pink hair in a low loose braid with gold pins, gold laurel circlet with a red jewel, a floating gold halo ring behind her head, layered sheer white and pale rose gown with long translucent sleeves, many trailing ribbons and tassels, gold laurel filigree, gold chains, gold laced heeled sandals with tiny white wings. MODEST OUTFIT, IMPORTANT, a change from the reference picture: the reference has a high leg slit, but here the front of the skirt is closed, the sheer layers overlap and are lined with an opaque pale rose underskirt, floor-length; no slit, no bare leg, no thigh and no knee ever show, in any pose; only the ankles and sandals show below the hem. Her gun is the white-and-gold winged revolver in the second reference image; her free hand casts glowing gold magic. She is a beautiful, elegant adult woman in her late twenties with mature, long-limbed proportions: about 8 heads tall, a small head, a long slender neck, a narrow waist, and an adult face with defined cheekbones and calm half-lidded almond eyes, exactly like the design picture. Never chibi, never childlike, never a big head or a short body, never a round baby face. BEAUTY FIRST: her face is pretty and composed in every frame, calm and deadpan, at most a faint closed-mouth smile where a frame asks for it; never an open-mouth laugh, never eyes squeezed shut, never straining; eyes gently closed only when casting. Poised, graceful dancer stances and clean, readable silhouettes. Old-Hollywood glamour, elegant and modest, an original character with no real person's likeness. DYNAMIC HAIR AND CLOTH: her long hair, braid, sheer sleeves, skirt layers and ribbons flow with every motion and follow through with a delay behind it, in long soft curves; when she rises they trail downward, when she falls the hair streams upward and the skirt billows up and out like a bell while still covering her legs. Clean, crisp line art and painting, the same quality as the design picture.",
         "personality": "",
         "refs": [
           "assets/art/heroes/weapons.jpg"
@@ -366,15 +751,19 @@
           }
         },
         "sheets": {
-          "o-loading": "six separate beautiful elegant loading-screen poses, three-quarter view: 1 standing tall, eyes closed, revolver held upright beside her cheek, a gold magic circle turning at her feet, hair and ribbons lifting; 2 floating above the ground, legs crossed at the ankle, cradling a glowing gold orb, sleeves and skirt pooling in the air; 3 looking back over her shoulder with a cold half-lidded gaze, braid and ribbons sweeping in a long curve; 4 a slow dancer turn on pointed toes, one arm extended trailing gold light, skirt layers flaring in a circle; 5 lowering the revolver after a shot, a thin wisp of smoke, sleeves drifting; 6 walking away calmly, hair, ribbons and sheer layers streaming in the wind, gold feathers drifting.",
-          "o-idle": "calm elegant idle loop facing right: poised, weight on one hip, revolver held loosely at her side, free hand turning slowly with a small gold light above the palm, breathing slowly, hair, braid, sleeves and ribbons drifting and rippling in a soft breeze, each frame the fabric a little further along its wave; frame 6 flows back into frame 1.",
+          "o-loading": "six separate beautiful elegant loading-screen poses, three-quarter view: 1 standing tall, eyes closed, revolver held upright beside her cheek, a gold magic circle turning at her feet, hair and ribbons lifting; 2 floating above the ground, the closed skirt hanging down and covering her legs, cradling a glowing gold orb, sleeves and skirt pooling in the air; 3 looking back over her shoulder with a cold half-lidded gaze, braid and ribbons sweeping in a long curve; 4 a slow dancer turn on pointed toes, one arm extended trailing gold light, skirt layers flaring in a circle; 5 lowering the revolver after a shot, a thin wisp of smoke, sleeves drifting; 6 walking away calmly, hair, ribbons and sheer layers streaming in the wind, gold feathers drifting.",
+          "o-idle": "calm elegant idle loop, three-quarter view facing right, both feet planted, weight on one hip, revolver held loosely at her side: a slow continuous breeze sways her the whole time, hair, braid, sleeves, skirt layers and ribbons drifting and rippling, each frame the fabric a little further along the same wave; 1 poised stance, small gold light above her free palm; 2 she glances back over her shoulder; 3 her free hand lifts a lock of hair from her neck; 4 the hand lets the hair fall, chin slightly down, a faint calm smile; 5 eyes forward again, palm light returns; 6 back to the poised stance; frame 6 flows back into frame 1.",
           "o-run": "run-and-gun cycle, side view facing right, graceful light gliding run: she runs with long light strides on her toes, firing the revolver forward with a gold muzzle flash, hair, braid, sleeves and ribbons streaming far behind her, six evenly spaced running poses that loop: contact, down, passing, up, flight, contact.",
           "o-cast": "spell cast, side view facing right, eyes closed throughout: a slow graceful spin with the skirt and sleeves flaring outward, a gold magic circle forms at her hand, she thrusts her palm forward, a burst of gold light feathers launches, she settles into a poised still pose as the fabric floats down.",
           "o-dodge": "dodge, side view facing right: she glides backward in a graceful backflip through the air, firing the revolver mid-flip with a gold muzzle flash, hair and ribbons tracing a long spiral, lands softly on her toes and fires once more: crouch, take off, upside down firing, coming over, soft landing, poised shot.",
-          "o-jump": "jump and double jump, side view facing right: crouch, take off, rising with hair and skirt trailing down, a second jump off a small gold magic circle under her feet, spinning gracefully at the top with sleeves fanned out, floating down slowly with fabric billowing upward like a flower.",
+          "o-jump": "jump and double jump, side view facing right, one clear arc: 1 crouch, knees bent, hair and skirt settling; 2 take off, rising fast, hair, braid and sleeves trailing straight down below her; 3 still rising, a second jump off a small gold magic circle under her feet, fabric trailing down; 4 apex, a graceful spin at the top with sleeves fanned out and hair floating weightless around her; 5 falling, hair streaming upward above her head, the skirt billowing up and out like a bell while still covering her legs; 6 falling lower toward the ground, feet pointed down, hair and skirt still lifted upward. Feet never touch the cell edge.",
           "o-shoot": "standing shots, side view facing right: she raises the revolver in one elegant line, fires with a gold muzzle flash, fires again with recoil, twirls the revolver once, fires a charged shot with a large gold flash, lowers it; sleeves and ribbons swing with each shot.",
-          "o-hurt": "getting hit, side view facing right, still expressionless: hit flinch with hair whipping forward, staggering back, falling gracefully with fabric billowing, lying on the ground with hair and skirt spread out, rising, standing poised again."
-        }
+          "o-hurt": "getting hit, side view facing right, still expressionless: hit flinch with hair whipping forward, staggering back, falling gracefully with fabric billowing, lying on the ground with hair and skirt spread out, rising, standing poised again.",
+          "o-tease": "glamour tease loop, three-quarter view, both feet planted, poised with weight on one hip, revolver held loosely at her side: 1 calm stance facing right; 2 she looks back over her shoulder at the viewer with a cool half-lidded glance; 3 her free hand lifts her long hair up off her shoulder; 4 chin slightly down, the hair spilling through her fingers, a faint closed-mouth smile; 5 lowering her hand, the smile fading to calm; 6 back to the calm stance facing right, hair and sleeves drifting; frame 6 flows back into frame 1. Eye-level camera, full body, modest framing, the skirt covers her; elegant and charming, never sexual.",
+          "o-win": "victory pose, three-quarter view toward the viewer. Both feet stay on the ground line in every frame, legs together, the closed floor-length skirt covering her legs, no raised leg, no kick: 1 she twirls the winged revolver around one finger, a thin gold light trail; 2 a slow graceful turn in place on both feet, sleeves, ribbons and skirt layers fanning out in long curves around her; 3 a graceful elegant bow, one hand over her heart, eyes closed, braid swinging forward; 4 rising from the bow, revolver held up beside her face, barrel pointing up; 5 an elegant still pose, standing tall, deadpan half-lidded look at the viewer, a small gold light above her free palm; 6 holding the same still pose, hair and ribbons settling softly. Eye-level camera, full body, modest framing in every frame: the camera is level with her chest, never below her, never looking up; the skirt hangs naturally and covers her; cute and playful, never sexual.",
+          "o-breeze": "a gust of wind loop, three-quarter view facing right, both feet planted, revolver held loosely at her side: 1 calm stance, the air still; 2 a gust hits her from the left, her hair, braid, sleeves and ribbons start to stream sideways to the right; 3 she raises one hand and holds her hair back from her face, everything streaming sideways; 4 the strongest gust, hand still holding her hair, a faint closed-mouth smile, the skirt pressed and fluttering but still covering her; 5 the gust easing, the hair and sleeves sinking back down in long curves; 6 the calm stance again, fabric settling; frame 6 flows back into frame 1."
+        },
+        "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 58 percent of her grid cell height, centred, with very wide empty space all around her so every gun, muzzle flash, hair strand, sleeve, ribbon and effect stays fully inside her own cell with a clear gap to the edges. Same character, same size, feet on one shared baseline at the same height in every cell. BACKGROUND: one pure flat chroma-key green (#00FF00) everywhere around her, perfectly even, no gradient, no texture, no floor, no shadow, and no green anywhere on her or her effects. No text, no borders, no grid lines, no extra people. Smooth, evenly spaced in-between poses so the six frames animate fluidly; limbs never stretched, warped or melted; the same gown and the same gun in every frame; eye-level camera, modest framing."
       }
     }
   },
@@ -392,33 +781,62 @@
     "_note": "Effect sheets, painted on black and drawn as light. A move's fx.levels picks the art and how big, bright and dense it is at each level; levels 1, 3 and 5 can use new art.",
     "sheets": {
       "feather-1": "a spell called Heaven Wing Barrage at level 1, simple: a small gold magic circle appears, three glowing gold light feathers form and fly to the right in a short volley, then fade; frames: circle appears, feathers form, launch, flying, hit sparks, fade.",
-      "feather-5": "the same spell Heaven Wing Barrage at max level, grand and ornate: a large intricate double gold magic circle with laurel runes and a halo, a storm of many glowing white-gold and rose light feathers spirals out and flies right in a wide fan with long light trails, ending in a big bloom of feathers and petals; frames: ornate circle unfolds, feathers spiral out, huge fan launch, streaming trails, bright burst of light and petals, glittering fade."
+      "feather-5": "the same spell Heaven Wing Barrage at max level, grand and ornate: a large intricate double gold magic circle with laurel runes and a halo, a storm of many glowing white-gold and rose light feathers spirals out and flies right in a wide fan with long light trails, ending in a big bloom of feathers and petals; frames: ornate circle unfolds, feathers spiral out, huge fan launch, streaming trails, bright burst of light and petals, glittering fade.",
+      "circle-gold": "a spell-casting magic circle seen flat from the front, gold and white-gold light with thin crimson rune accents: concentric rings of original geometric runes, laurel leaves and small feather marks, a six-pointed inner star; frames: a single thin ring sparks into being, the inner star draws itself, rune rings fill in and begin to turn, fully lit circle glowing brightly, circle flares with a white-gold pulse, circle breaks into drifting gold motes and fades.",
+      "circle-grand": "a huge ornate ultimate-spell magic circle seen flat from the front, very intricate, gold and white-gold light with crimson accents: three nested rotating rings of original runes, laurel wreaths, wing motifs, a halo and small orbiting satellite circles; frames: a faint central glyph, first ring unfolds outward, second and third rings appear and counter-rotate, satellite circles bloom around it, the whole circle blazes with a column of white-gold light at its centre, it shatters into a shower of gold shards and motes.",
+      "bolt-strike": "a single massive vertical lightning bolt striking down from the top of the cell to the bottom, golden-white core with crimson edge branches, jagged and bright; frames: thin leader crackle at the top, a branching jagged bolt reaching down, the full blinding thick bolt from top to bottom, bolt with a bright ground impact burst and sparks, bolt thinning with crackling branches, fading afterglow sparks and a smoke-gold glow.",
+      "storm-cloud": "a dark thundercloud seen from below, wide and flat, charcoal grey edges lit from inside by golden-white lightning with faint crimson glow; frames: thin dark mist gathers, the cloud swells and churns, gold lightning flickers inside it, a bright flash lights the whole cloud from within, crackling arcs spill along its underside, the cloud thins and drifts apart.",
+      "thunder-spear": "a long spear made of golden-white lightning, horizontal, pointing right, crimson crackle along its shaft, a sharp shining spearhead; frames: sparks gather into a short line, the lightning spear forms crackling, fully formed glowing spear, the spear in flight with a short streak trail, the spear tip hitting with a compact starburst of lightning, crackling remnant sparks fade. Every frame is compact and short, at most two thirds of its cell wide, trails included, with a wide black gap between frames.",
+      "chain-arc": "a jagged arc of chain lightning jumping horizontally from left to right between points, golden-white with crimson flickers, with small bright nodes where it hops; frames: a small spark node, a thin arc leaps right, a bright thick zigzag arc hopping across three nodes, the arc forks into two branches, the nodes burst into small flashes, flickering fading wisps.",
+      "holy-cross": "a tall glowing cross of white-gold holy light standing upright, elegant and slender, with a halo ring at its crossing and soft rose glow; frames: a thin vertical line of light, the horizontal beam extends, the full radiant cross with a halo ring, the cross flares with light rays shooting outward, the cross bursts into a burst of light and feathers, shimmering motes fade.",
+      "summon-blades": "a fan of many slender ornate swords made of gold light hovering in an arc, blades pointing right, feather-shaped crossguards, white-gold glow; frames: gold motes gather, outlines of three blades appear, seven glowing blades fan out in an arc, the blades tilt to aim right, the blades fire right with short streaks, scattered sparks and fading short trails. Every frame is compact, at most two thirds of its cell wide, streaks included, with a wide black gap between frames.",
+      "ice-lance": "a long sharp crystal ice lance pointing right, pale warm white ice with gold-tinted highlights and a faint peach glow, not blue, frost mist around it; frames: frost crystals gather, the lance grows from crystals, the full shining ice lance, the lance flies right with a short frosty trail, the lance shatters into glittering warm white shards, frost mist and sparkles fade. Every frame is compact, at most two thirds of its cell wide, trails included, with a wide black gap between frames.",
+      "meteor": "a burning meteor falling diagonally from the top left toward the bottom right, a molten gold and white-hot core with crimson and orange flames and a long fiery tail; frames: a distant small glowing star, the star grows with a short flame trail, the large blazing meteor with a long tail, the meteor close to the ground glowing white-hot, a fiery impact explosion with a round dome of flame that stays well inside its cell, embers and smoke-gold glow fading. Every frame is compact, the meteor and its tail and the explosion at most two thirds of the cell wide and tall, with a wide black gap between frames, nothing cut off at a cell edge."
     }
   },
   "bosses": {
     "teknium": {
       "name": "TEKNIUM",
       "role": "final boss",
-      "voice": "teknium",
+      "voice": {
+        "provider": "fish",
+        "voice": "1e4ccf2686b142a980d5160272781b01",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
       "personality": "A cool, calculating, smug mastermind who is enjoying himself and planning several moves ahead. Never sadistic, never frantic, never demonic.",
       "lines": {
         "enter": {
-          "line": "……来たか。退屈はさせないでくれよ。"
+          "line": "……来たか。退屈はさせないでくれよ。",
+          "line_en": "...So you came. Do try not to bore me."
         },
         "blade": {
-          "line": "では、少し本気を見せようか。"
+          "line": "では、少し本気を見せようか。",
+          "line_en": "Then let me show a little earnestness."
         },
         "lance": {
-          "line": "逃げ道も、計算のうちだ。"
+          "line": "逃げ道も、計算のうちだ。",
+          "line_en": "Even your escape routes are part of the calculation."
         },
         "chase": {
-          "line": "どこへ行く？ まだ終わっていないよ。"
+          "line": "どこへ行く？ まだ終わっていないよ。",
+          "line_en": "Where are you going? We're not finished."
         },
         "glare": {
-          "line": "見えているよ。すべて。"
+          "line": "見えているよ。すべて。",
+          "line_en": "I see it all. Everything."
         },
         "down": {
-          "line": "……ふふ。今日は君の勝ちにしておこう。"
+          "line": "……ふふ。今日は君の勝ちにしておこう。",
+          "line_en": "...Heh. I'll let you have today's victory."
+        },
+        "phase": {
+          "line": "なるほど。少しは計算を外れてくれる。",
+          "line_en": "I see. You do stray from my calculations, a little."
+        },
+        "laugh": {
+          "line": "ふふ……ははは。いいだろう、第二楽章だ。",
+          "line_en": "Heh... hahaha. Very well, the second movement."
         }
       },
       "art": {

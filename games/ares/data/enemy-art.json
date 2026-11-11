@@ -1,0 +1,102 @@
+{
+  "sheet": {
+    "layout": "This is a sprite sheet: SIX separate small copies of the automaton in a 3 by 2 grid, read left to right, top to bottom, never one big single figure. IMPORTANT LAYOUT: in every frame it is small, about 45 percent of its grid cell height, centred, with very wide empty space all around it so every blade, shield, crest, robe, spring and effect stays fully inside its own cell with a clear gap to the edges. Strict side view facing right in every frame. Same automaton, same size, feet on one shared baseline (or floating just above it), plain flat light grey background, no text, no borders, no grid lines, no extra figures, no floor shadow."
+  },
+  "enemies": {
+    "automaton-grunt": {
+      "name": "Automaton Grunt",
+      "art": {
+        "look": "An automaton grunt, a regular enemy for a 2D anime action game, painted in the same high-end painted anime gacha style as the design picture: a slim clockwork soldier of bronze-brown armour plates with gold Greek key trim, a Spartan bronze helmet with a tall crimson crest and a single glowing red visor slit, a glowing red core in its chest, visible brass gears at the joints, a white and crimson pleated skirt, red glowing lines on its limbs, and its right forearm ends in a long gold blade.",
+        "personality": "Stiff, mechanical, relentless marching motion; the red visor glare is always visible.",
+        "refs": [],
+        "outfits": {
+          "default": {
+            "design": "assets/art/enemies/automaton-grunt.png"
+          }
+        },
+        "sheets": {
+          "idle": "a looping guard idle, standing upright, blade arm held low in front: 1 neutral stance; 2 the head tilts slightly, the visor glows brighter; 3 the chest core pulses red; 4 the blade arm lifts a little; 5 the crest sways; 6 back to neutral. Small mechanical changes only, a seamless loop.",
+          "move": "a stiff marching walk cycle, side view facing right, body slightly forward, blade arm held ready in front, six evenly spaced walk poses that loop, metal feet striking the ground in turn.",
+          "attack": "a blade arm slash with a clear wind-up: 1 it plants its feet and pulls the blade arm far back behind its shoulder, visor flaring red; 2 crouches deeper, the blade glowing red, body coiled; 3 steps forward and swings the blade in a wide horizontal arc with a crimson trail; 4 the blade fully extended forward, follow-through; 5 recovering, blade lowering; 6 back to guard stance.",
+          "hurt": "taking a hit: 1 knocked back, head jerking up, sparks flying from its chest; 2 staggering a step backwards, the visor flickering; 3 bent forward, one hand on its chest plate; 4 a small burst of sparks from a shoulder gear; 5 straightening up stiffly; 6 back to guard stance, visor relit red."
+        }
+      }
+    },
+    "automaton-shield": {
+      "name": "Automaton Shieldbearer",
+      "art": {
+        "look": "An automaton shieldbearer, a heavy regular enemy for a 2D anime action game, painted in the same high-end painted anime gacha style as the design picture: a bulky broad-shouldered clockwork hoplite of bronze-brown armour with gold Greek key trim and laurel engravings, a Spartan bronze helmet with a tall crimson crest and a single glowing red visor slit, a glowing red gear core in its chest, gear knees, a white and crimson pleated skirt, and a huge round gold hoplite shield with a crimson Greek key rim held in front of it.",
+        "personality": "Slow, heavy, immovable; the big shield always faces forward toward the right, covering its front.",
+        "refs": [],
+        "outfits": {
+          "default": {
+            "design": "assets/art/enemies/automaton-shield.png"
+          }
+        },
+        "sheets": {
+          "idle": "a looping braced idle, standing heavily behind its big round shield held in front facing right: 1 neutral brace; 2 the shield shifts slightly; 3 the visor glows brighter above the shield rim; 4 shoulders rise with a mechanical breath; 5 the crest sways; 6 back to neutral. Small changes only, a seamless loop.",
+          "move": "a slow heavy stomping walk cycle, side view facing right, the huge round shield held up in front of its body the whole time, six evenly spaced heavy walk poses that loop, big metal feet stomping.",
+          "attack": "a shield bash with a clear wind-up: 1 it pulls the shield back toward its chest and crouches, visor flaring red; 2 leans back further, shield rim glowing crimson, weight on the back foot; 3 lunges forward, slamming the shield out in front with a crimson impact flash; 4 the shield fully extended at the end of the bash; 5 pulling the shield back; 6 back to braced stance behind the shield.",
+          "hurt": "taking a hit: 1 rocked backward, shield knocked aside, sparks from its chest; 2 staggering a heavy step back; 3 hunched, the visor flickering; 4 sparks burst from a knee gear; 5 hauling the shield back up in front; 6 back to braced stance."
+        }
+      }
+    },
+    "automaton-caster": {
+      "name": "Automaton Caster",
+      "art": {
+        "look": "An automaton caster, a floating regular enemy for a 2D anime action game, painted in the same high-end painted anime gacha style as the design picture: a slender elegant clockwork figure of bronze-brown plates with gold Greek key trim and laurel engravings, a smooth round head with a gold laurel band and one single large glowing red eye, a glowing red core in its chest, white cloth drapes hanging from its shoulders and hips, a body that tapers into a long pointed spike instead of legs, and a thin glowing gold halo ring with star points behind its head.",
+        "personality": "Weightless, eerie, gliding; it always floats above the ground with its drapes drifting.",
+        "refs": [],
+        "outfits": {
+          "default": {
+            "design": "assets/art/enemies/automaton-caster.png"
+          }
+        },
+        "sheets": {
+          "idle": "a looping hover idle, floating above the baseline, arms slightly out: 1 neutral float; 2 drifting a little higher, drapes lifting; 3 the red eye pulses; 4 the halo ring turns slightly; 5 drifting lower, drapes settling; 6 back to neutral. Small changes only, a seamless loop.",
+          "move": "a blink teleport: 1 floating, it folds its arms in; 2 its body breaks into crimson glitch slices; 3 only a thin crimson flicker and a few gold sparks remain where it was; 4 the crimson flicker reappears; 5 its body reassembles from crimson slices; 6 floating whole again, arms out.",
+          "attack": "casting a crimson spell with a clear wind-up: 1 it raises both hands above its head, a small crimson orb gathering between them, eye flaring; 2 the orb swells large and bright, the halo blazing, drapes blown back; 3 it thrusts both hands forward toward the right, firing a crimson beam; 4 the beam at full length streaming out to the right edge of its cell; 5 the beam fading to thin sparks; 6 arms lowering, back to float.",
+          "hurt": "taking a hit: 1 knocked sideways in the air, sparks from its chest core; 2 tumbling back, drapes whipping; 3 its body glitching with crimson slices; 4 the halo flickering; 5 righting itself; 6 back to neutral float."
+        }
+      }
+    },
+    "automaton-hound": {
+      "name": "Automaton Hound",
+      "art": {
+        "look": "An automaton hound, a fast four-legged regular enemy for a 2D anime action game, painted in the same high-end painted anime gacha style as the design picture: a lean long-legged clockwork war dog of bronze-brown armour plates with gold Greek key trim, big brass gears at its shoulders and hips, red glowing lines along its legs, a Spartan bronze helmet head with a tall crimson crest and a single glowing red visor slit, gold clawed paws and a long segmented bronze tail ending in a gold spike.",
+        "personality": "Twitchy, predatory, low to the ground; always on four legs, never standing upright.",
+        "refs": [],
+        "outfits": {
+          "default": {
+            "design": "assets/art/enemies/automaton-hound.png"
+          }
+        },
+        "sheets": {
+          "idle": "a looping prowling idle, standing on all four legs: 1 neutral stance; 2 head lowered, sniffing; 3 the tail flicks up; 4 the visor glows brighter; 5 a front paw scrapes the ground; 6 back to neutral. Small changes only, a seamless loop.",
+          "move": "a fast galloping run cycle on all four legs, side view facing right, body stretched low, crest streaming back, six evenly spaced gallop poses that loop: legs gathered under the body, then fully stretched front and back.",
+          "attack": "a charging rush with a clear wind-up: 1 it crouches low on all four legs, haunches raised, visor flaring red; 2 lower still, gears spinning, crimson steam venting from its hips, tail pointed straight back; 3 it launches forward in a long low lunge, body fully stretched, crimson speed streaks behind; 4 jaws open, head thrust forward at full extension; 5 skidding to a stop, front paws braced; 6 back to standing on all four legs.",
+          "hurt": "taking a hit: 1 knocked sideways, head jerking, sparks flying from a shoulder gear; 2 stumbling, one leg buckling; 3 crouched low, the visor flickering; 4 shaking its head, sparks from its chest; 5 rising back up; 6 back to neutral stance on four legs."
+        }
+      }
+    },
+    "automaton-hopper": {
+      "name": "Automaton Hopper",
+      "art": {
+        "look": "An automaton hopper, a springy jumping regular enemy for a 2D anime action game, painted in the same high-end painted anime gacha style as the design picture: a compact hunched clockwork robot of bronze-brown armour with gold Greek key trim, a Spartan bronze helmet with a tall crimson crest and a single glowing red visor slit, a small red glowing core in its chest, short strong arms with heavy gold fists, a short white and crimson pleated skirt, and two huge powerful bent legs with exposed coiled brass springs and pistons at the knees and red glowing lines.",
+        "personality": "Bouncy, coiled, restless; its springs compress and stretch in every frame.",
+        "refs": [],
+        "outfits": {
+          "default": {
+            "design": "assets/art/enemies/automaton-hopper.png"
+          }
+        },
+        "sheets": {
+          "idle": "a looping bouncy idle, crouched on its big spring legs: 1 neutral crouch; 2 springs compress, body dips; 3 springs extend, body bobs up slightly; 4 fists clench, visor glows brighter; 5 springs compress again; 6 back to neutral crouch. Feet stay on the ground, a seamless loop.",
+          "move": "a hopping jump between platforms: 1 a deep crouch, springs fully compressed; 2 launching off the ground, legs snapping straight; 3 rising in the air, legs trailing below; 4 top of the arc, knees tucked, fists out; 5 falling, legs reaching down; 6 landing in a crouch, springs absorbing the impact.",
+          "attack": "a leaping ground slam with a clear wind-up: 1 it squats very low, springs crushed tight, both fists raised, visor flaring red; 2 still crouched, springs glowing crimson and shaking, about to burst; 3 high in the air above the baseline, both fists raised overhead; 4 diving down fists first; 5 slamming both fists into the ground with a crimson shockwave ring and dust; 6 rising back to its crouch.",
+          "hurt": "taking a hit: 1 knocked backward, springs bouncing wildly, sparks from its chest; 2 tipping back off balance; 3 squashed down, the visor flickering; 4 a spring pops sparks at the knee; 5 bouncing back upright; 6 back to neutral crouch."
+        }
+      }
+    }
+  }
+}

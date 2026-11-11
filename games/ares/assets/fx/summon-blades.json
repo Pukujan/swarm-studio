@@ -1,0 +1,15 @@
+{
+ "frames": 6,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "add",
+ "source": "summon-blades.png",
+ "qc": {
+  "ok": true,
+  "frames": 6,
+  "edge": [],
+  "height_spread": 1.28
+ }
+}

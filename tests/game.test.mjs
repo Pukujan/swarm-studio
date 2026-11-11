@@ -44,7 +44,7 @@ test('the art list covers every kind and stays under its cap', () => {
   assert.ok(sprites.some(a => a.id === 'sprite-hero') && sprites.some(a => a.id === 'sprite-boss'))
   assert.ok(sprites.length >= 3, 'the hero, the boss and the enemies')
   assert.ok(all.filter(a => a.kind === 'backdrop').every(a => /No people/.test(a.gen)), 'backdrops hold no figures of their own')
-  assert.ok(sprites.every(a => a.cutout && a.aspect === 'square' && /flat pale grey background/.test(a.gen)))
+  assert.ok(sprites.every(a => a.cutout && a.aspect === 'square' && /flat, even (magenta|chroma green) \(#(FF00FF|00FF00)\) background/.test(a.gen)))
   assert.ok(all.some(a => a.id === 'portrait-the-cracked-tenor'), 'the boss gets a portrait')
   assert.ok(all.some(a => a.id === 'room-boss') && all.some(a => a.id === 'room-hub'))
   assert.equal(new Set(all.map(a => a.id)).size, all.length, 'ids are unique')

@@ -1,3 +1,4 @@
+import { keyGround } from './keycolor.mjs'
 // The art director: every build gets one named style for all of its pictures, so
 // a build looks like one person made it and the Feed looks like many people did.
 // It writes each picture's prompt from that style, asks for the high-quality tier
@@ -159,7 +160,7 @@ export function promptFor(gen, guide, { aspect = 'landscape', strict = '', cutou
     `${what}.`,
     guide?.guide || STYLES.photo.guide,
     cutout
-      ? 'No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on a perfectly flat plain pale grey background, with no floor, shadow, scenery or frame, so it can be cut out.'
+      ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone, so it can be cut out. ${keyGround(gen)}, and no frame.`
       : 'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
     avoid ? `Avoid: ${avoid}.` : '',
     strict ? `This is a second try. The first picture was sent back for: ${strict}. Make sure none of that is in this one.` : ''

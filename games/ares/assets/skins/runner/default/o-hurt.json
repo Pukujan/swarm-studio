@@ -1,5 +1,5 @@
 {
- "frames": 6,
+ "frames": 11,
  "cell": [
   768,
   768
@@ -10,6 +10,13 @@
   "ok": true,
   "frames": 6,
   "edge": [],
-  "height_spread": 2.47
+  "height_spread": 1.32,
+  "green_pools_px": 26688
+ },
+ "rife": {
+  "from": 6,
+  "model": "rife-v4.6",
+  "guard": 0.55,
+  "originals": "../default-6f/"
  }
 }

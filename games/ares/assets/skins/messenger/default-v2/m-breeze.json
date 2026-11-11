@@ -1,0 +1,20 @@
+{
+ "frames": 12,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "mix",
+ "source": "m-breeze.png",
+ "qc": {
+  "ok": true,
+  "frames": 12,
+  "edge": [],
+  "height_spread": 1.0
+ },
+ "rife": {
+  "from": 6,
+  "model": "rife-v4.6",
+  "originals": "../default-6f/"
+ }
+}

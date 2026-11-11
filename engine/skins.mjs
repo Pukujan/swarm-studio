@@ -27,8 +27,8 @@ const lastJson = s => { try { return JSON.parse(s.trim().split('\n').pop()) } ca
 
 // What to paint for one hero's outfit: one job per sheet, prompt and references ready.
 export function skinJobs(config, { root = '.', hero, outfit = 'default', only } = {}) {
-  const h = config.heroes?.[hero] || config.bosses?.[hero]
-  if (!h) throw new Error(`no hero or boss "${hero}"`)
+  const h = config.heroes?.[hero] || config.bosses?.[hero] || config.enemies?.[hero]
+  if (!h) throw new Error(`no hero, boss or enemy "${hero}"`)
   const art = h.art
   if (!art?.sheets) throw new Error(`${hero} has no art.sheets`)
   const o = art.outfits?.[outfit]

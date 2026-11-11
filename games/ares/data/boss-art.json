@@ -1,0 +1,299 @@
+{
+ "_note": "Boss sprite sheets for ARES, read by engine/skins.mjs and engine/paint-ckff.mjs (same shape as heroes.json). Designs come from ares-cast/v3; LocutusOfTheEye's design is a painted floating-eye form (its v3 woman design is kept as locutusoftheeye-host.png).",
+ "sheet": {
+  "grid": [
+   3,
+   2
+  ],
+  "aspect": "landscape",
+  "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow."
+ },
+ "bosses": {
+  "lokee": {
+   "name": "Lokee",
+   "art": {
+    "look": "Lokee, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A cabaret ringmaster: long silver-white hair with a crimson streak and one side braid, a white-gold half masquerade mask over one eye, a gold flower hairpin, a white halter crop top, an oversized black jacket with crimson lining worn off the shoulders, a black pleated mini skirt with a gold chain belt, black thigh-high stockings with garters and black heeled ankle boots. She carries a slim black-and-gold ringmaster cane.",
+    "personality": "She moves like a showgirl on stage: theatrical, twirling, playful bows; the jacket swings in every frame.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/lokee-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her black-and-gold cane; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her black-and-gold cane carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her black-and-gold cane: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a cane strike combo, side view facing right: 1 twirling the cane in one hand; 2 stepping in, cane pulled back; 3 a wide sweeping cane swing with a gold arc; 4 a thrust jab with the cane tip; 5 a spin, jacket flaring; 6 a showy bow, cane tipped to her mask.",
+     "cast": "a stage-show spotlight and confetti attack, side view facing right: 1 raising the cane high like a ringmaster; 2 the cane tip lighting up gold; 3 a cone of warm spotlight beam sweeping forward from the cane; 4 tossing a small round confetti bomb forward with her free hand; 5 the bomb bursting into a puff of red and gold confetti; 6 a curtsy with confetti falling around her.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "salt555": {
+   "name": "salt555",
+   "art": {
+    "look": "salt555, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A crystal duelist: very long straight silver-white hair with crown braids and small crystal pins, pale lilac eyes, a white satin sweetheart dress with sheer white sleeves, a crimson ribbon sash with a gold flower, a high-low ruffled white skirt with gold trim, white strappy heels. Clear white salt crystals glint on her outfit. She carries a small ornate silver-and-crystal salt shaker.",
+    "personality": "Cool, slightly pouty and salty; elegant fencer-like footwork, ruffles flowing in every frame.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/salt555-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her crystal salt shaker; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her crystal salt shaker carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her crystal salt shaker: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a crystal rapier duel strike, side view facing right: 1 a fencer's stance, a short blade of clear salt crystal growing from her hand; 2 a lunge forward; 3 a fast thrust with sparkling white crystal shards; 4 a slash upward; 5 a pirouette, ruffles flaring; 6 a haughty pose, the crystal blade crumbling into salt.",
+     "cast": "a salt-crystal volley, side view facing right: 1 lifting the salt shaker; 2 shaking it forward with a flick of the wrist; 3 a spray of sharp white salt crystals flying forward; 4 a second shake, more crystals in a fan; 5 holding the shaker overhead, white crystals raining down around her; 6 lowering it with a sulky pout.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "flownium": {
+   "name": "flownium",
+   "art": {
+    "look": "flownium, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A drill-sergeant sprinter: very long blonde twin tails tied with big crimson bows and gold laurel clips, amber eyes, a pink-and-white off-shoulder ruffled crop top with a black collar and crimson ribbon tie, a tiered white ruffled mini skirt with gold trim and a crimson bow, white thigh-high stockings and white heeled boots with gold trim. She carries a short gold flagpole with a crimson banner.",
+    "personality": "Loud, eager and energetic, always saluting; every motion is full speed, twin tails whipping.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/flownium-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her crimson banner flag; 2 hair and ribbons stirring left; 3 a small shift of weight and saluting; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her crimson banner flag carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her crimson banner flag: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a charging rush, side view facing right: 1 a sharp salute; 2 dropping into a sprinter's start, banner pointed forward like a lance; 3 a full-speed dash with speed lines, twin tails flat behind her; 4 ramming forward with the flagpole; 5 skidding to a stop, dust kicking up; 6 another salute, grinning.",
+     "cast": "a banner ground slam, side view facing right: 1 raising the banner high with both hands; 2 jumping up; 3 at the top, banner overhead; 4 slamming the flagpole down into the ground; 5 a gold shockwave ring bursting from the impact; 6 standing proudly beside the planted banner, saluting.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "mikemonty": {
+   "name": "MikeMonty",
+   "art": {
+    "look": "MikeMonty, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A tanky brawler: very long wavy crimson hair with one braid and a gold laurel hairpin, gold hoop earrings, a confident grin, a cream silk halter dress with a deep cutout, a gold armband, a crimson silk sash wrapped over the hips, gold strappy sandals. In fights she wears big gold-and-crimson armoured gauntlets on both fists.",
+    "personality": "Cocky, loves a proper fight; heavy, grounded, powerful motion, hair swinging with every punch.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/mikemonty-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her big gold gauntlets; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her big gold gauntlets carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her big gold gauntlets: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a haymaker combo, side view facing right: 1 a boxing guard, gauntlets raised; 2 a jab; 3 winding up a huge haymaker; 4 the haymaker landing forward with a gold impact flash; 5 follow-through, hair whipping; 6 cracking her knuckles with a grin.",
+     "cast": "a ground-pound slam, side view facing right: 1 both gauntlets raised overhead; 2 leaping up a little; 3 coming down with both fists; 4 smashing the ground, rocks and gold dust flying up; 5 a shockwave ring spreading across the floor; 6 rising from the crouch, rolling her shoulder.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "ghostbear": {
+   "name": "GhostBear",
+   "art": {
+    "look": "GhostBear, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A hooded phantom: very long wavy silver-white hair with two braids and a crimson ribbon pin, soft pink eyes, a fluffy white fur hoodie jacket with round bear ears on the hood, worn off the shoulders, a pink knit crop top, white shorts with gold chains, white thigh-high stockings with crimson bows, white fur-trimmed boots. She carries a small glowing white ghost lantern.",
+    "personality": "Quiet, sleepy and spooky-cute; she drifts more than walks, faint white wisps around her.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/ghostbear-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her glowing ghost lantern; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her glowing ghost lantern carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her glowing ghost lantern: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a phase-out backstab, side view facing right: 1 holding up the lantern; 2 her body turning translucent white; 3 almost vanished, only wisps left; 4 reappearing in a pounce, bear-claw swipe with white ghost claws; 5 follow-through, hood ears flopping; 6 a sleepy little wave.",
+     "cast": "a wisp volley, side view facing right: 1 opening the lantern; 2 three white ghost wisps drifting out; 3 thrusting the lantern forward, the wisps flying forward; 4 a second burst of wisps; 5 swinging the lantern in a circle, wisps spiralling; 6 closing the lantern with a yawn.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "hotdawg": {
+   "name": "HotDawg",
+   "art": {
+    "look": "HotDawg, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A flashy merchant: very long silver-white hair in a high ponytail with crimson-dyed ends, crimson ribbons and gold hairpins, a black-and-crimson qipao mini dress with gold dragon-like swirl embroidery and a keyhole cutout, side slits, red tassels, a gold armlet bracer on one forearm, black thigh-high stockings and black heeled boots. She carries a small red-and-gold SALE sign on a stick.",
+    "personality": "Pushy, grinning showy saleswoman; quick snappy poses, ponytail swishing.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/hotdawg-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her SALE sign; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her SALE sign carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her SALE sign: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a sign-whack combo, side view facing right: 1 holding up the SALE sign proudly; 2 swinging it back; 3 a wide horizontal whack with the sign; 4 an overhead bonk; 5 spinning the sign on its stick; 6 a wink, sign resting on her shoulder.",
+     "cast": "a price-tag volley, side view facing right: 1 fanning out a handful of red paper price tags; 2 flicking them forward; 3 a stream of red-and-gold tags flying forward like throwing cards; 4 a second throw; 5 pointing at the sign, coins and sparkles popping; 6 a cheeky bow.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "ukg": {
+   "name": "UKG",
+   "art": {
+    "look": "UKG, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A three-business tycoon: very long wavy blonde hair with a gold laurel crown braid, a gold necklace, a white-and-gold corset top with off-shoulder crimson sleeves, long white opera gloves, a crimson ruffled high-low skirt with gold leaf embroidery, white strappy heels. She carries a gold-trimmed crimson briefcase.",
+    "personality": "Composed, businesslike and elegant; efficient precise moves, as if always on a call.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/ukg-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her crimson briefcase; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her crimson briefcase carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her crimson briefcase: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a briefcase strike, side view facing right: 1 briefcase held at her side; 2 swinging it back; 3 a hard horizontal swing with a gold arc; 4 an upward swing; 5 tucking it under her arm; 6 adjusting her glove, unimpressed.",
+     "cast": "a split and coin volley, side view facing right: 1 snapping her fingers; 2 two faint translucent gold afterimage copies of herself appearing just behind her, inside the same cell; 3 opening the briefcase toward the right; 4 a spray of gold coins shooting out forward; 5 the afterimages fading; 6 closing the briefcase with a click.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "rahlquist": {
+   "name": "rahlquist",
+   "art": {
+    "look": "rahlquist, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A lovable clockwork knight: very long wavy silver-white hair with braids, a gold gear hairpin and a small moon ornament, a silver mechanical pauldron on one shoulder, a white halter crop top, a white-and-crimson pleated mini skirt with a gold gear belt buckle, silver armoured bracers and thigh-high silver armoured boots with red jewels, a large brass wind-up key on her back. She carries a big brass wrench.",
+    "personality": "Slow, sleepy and gentle like a wind-up toy; clunky deliberate motion, then sudden big power.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/rahlquist-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her big brass wrench; 2 hair and ribbons stirring left; 3 a small shift of weight with a slow tick of the wind-up key; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her big brass wrench carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her big brass wrench: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a very long wind-up then a huge hit, side view facing right: 1 the wind-up key on her back turning; 2 slowly lifting the wrench; 3 still winding, wrench raised high behind her, steam puffs; 4 fully wound, gears glowing gold; 5 a huge overhead wrench smash with a big impact burst; 6 a sleepy recovery, wrench resting on the ground.",
+     "cast": "a clockwork summon, side view facing right: 1 tapping the wrench on the ground; 2 small brass gears spinning up around her; 3 a gold gear sigil on the ground; 4 a small brass clockwork rhino pet bursting out and charging forward; 5 waving the wrench to cheer it on; 6 winding her key with one hand, smiling.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "adolan": {
+   "name": "Adolan",
+   "art": {
+    "look": "Adolan, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A late-night patcher: very long silver-white hair in a high ponytail with braids, crimson ribbons and white flowers, pink-red eyes, a white-and-black cropped military jacket with gold buttons and short sleeves, white gloves, a black pencil mini skirt with a side slit, a crimson stripe and a gold laurel pin, black thigh-high heeled boots. She carries a glowing rolled patch scroll.",
+    "personality": "Tired but sharp, a calm fixer; precise efficient gestures, ponytail swinging.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/adolan-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her rolled patch scroll; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her rolled patch scroll carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her rolled patch scroll: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a blink strike, side view facing right: 1 holding the scroll; 2 vanishing in a flicker of orange code glyphs; 3 reappearing forward mid-kick; 4 a high kick with a fiery orange arc; 5 a backflip; 6 landing, rolling up the scroll.",
+     "cast": "patch fire pillars, side view facing right: 1 unrolling the scroll in both hands; 2 orange glyphs lighting up on it; 3 slapping her palm forward, a glowing orange patch square appearing on the ground ahead; 4 a tall pillar of orange fire erupting from it; 5 a second pillar further ahead; 6 rolling the scroll back up, satisfied.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "nicho": {
+   "name": "Nicho",
+   "art": {
+    "look": "Nicho, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A synth wizard: very long silver-white hair with crimson-dyed ends and one braid, gold hairpins with crimson ribbons, a black halter crop top with a keyhole, sheer black detached bell sleeves with crimson cuffs, black shorts with a red belt and a crimson sash, garter straps, sheer black thigh-high stockings, black heeled ankle boots. She carries a small 25-key synthesizer keyboard with a strap.",
+    "personality": "A cool musician lost in the groove; rhythmic bobbing motion, playing keys like a keytar.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/nicho-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her small synthesizer keyboard on its strap; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her small synthesizer keyboard on its strap carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her small synthesizer keyboard on its strap: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a synth swing, side view facing right: 1 holding the keyboard like a keytar; 2 swinging it back by the strap; 3 a wide horizontal synth swing with crimson music notes trailing; 4 an upward strike; 5 a spin; 6 striking a pose, one hand on the keys.",
+     "cast": "synth sound waves, side view facing right: 1 fingers poised over the keys; 2 pressing a chord, crimson music notes popping up; 3 rings of crimson sound waves blasting forward; 4 a second chord, a row of glowing notes flying forward in a pattern; 5 a big ring of sound around her; 6 lifting her hands off the keys, eyes closed, grooving.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "suzu": {
+   "name": "Suzu",
+   "art": {
+    "look": "Suzu, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. A graceful bell dancer: very long silver-white hair with braids, white plum blossoms and crimson ribbons, a white-and-crimson shrine-maiden style crop top with a flower brooch, very long sheer white sleeves with plum blossom embroidery, a crimson pleated mini skirt with tassels and a gold chain, long crimson ribbons, white thigh-high stockings, tall crimson platform sandals. She carries a cluster of small gold bells on a crimson cord.",
+    "personality": "Calm, serene and graceful; flowing dance motion, long sleeves and ribbons trailing.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/suzu-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her gold bells on a crimson cord; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her gold bells on a crimson cord carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her gold bells on a crimson cord: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a ribbon-and-bell dance strike, side view facing right: 1 a dance pose, bells raised; 2 a turning step, sleeves flaring; 3 sweeping the bell cord forward in a wide arc; 4 a spinning strike, ribbons wrapped around her; 5 a high kick, sleeves trailing; 6 a calm bow, bells held to her chest.",
+     "cast": "bell chime shockwaves, side view facing right: 1 lifting the bells high; 2 ringing them, small gold chime glyphs appearing; 3 a ring of gold chime shockwave spreading outward from her; 4 ringing again, a second larger ring; 5 a third ring, sleeves floating up; 6 lowering the bells, eyes closed, serene.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "sovthpaw": {
+   "name": "sovthpaw",
+   "art": {
+    "look": "sovthpaw, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture, an adult young woman, stylized anime, never 3D, never realistic, never Disney-like. The arena's moderator: very long wavy blonde hair with crown braids, a gold tiara with a red jewel, crimson ribbons, a black-and-white double-breasted blazer mini dress with a deep lapel collar and gold buttons, a gold laurel MOD badge on the chest, a crimson sash with a gold chain, a sheer white shawl, sheer black thigh-high stockings, gold heeled sandals. She carries a big black-and-gold timeout hammer.",
+    "personality": "Stern, fair and composed like a judge; heavy deliberate hammer swings, shawl flowing.",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame she is small, about 45 percent of her grid cell height, centred, with very wide empty space all around her so every prop, swing arc, hair strand, ribbon and effect stays fully inside her own cell with a clear gap to the edges; frames never touch each other. Full body, side view facing right unless a frame says otherwise. Same character, same size, feet on one shared baseline, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/sovthpaw-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body figures of her, never one big portrait: a looping standing idle, both feet planted on the ground, side view facing right: 1 relaxed stance holding her big black-and-gold timeout hammer; 2 hair and ribbons stirring left; 3 a small shift of weight; 4 a faint confident smile; 5 hair stirring right; 6 back to the first pose. Small calm changes only, a seamless loop.",
+     "run": "running cycle, strict side view facing right, body in profile, leaning forward, her big black-and-gold timeout hammer carried, long hair streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground. Never facing the viewer.",
+     "jump": "a platform jump, side view facing right, holding her big black-and-gold timeout hammer: 1 a light crouch; 2 pushing off the ground; 3 rising, hair trailing below; 4 top of the jump, knees tucked; 5 falling, hair and skirt flaring upward; 6 landing in a low crouch.",
+     "attack": "a timeout hammer slam, side view facing right: 1 hammer resting on her shoulder; 2 raising it high overhead with both hands; 3 bringing it down; 4 the hammer smashing the ground with a pale blue frost burst; 5 ice crystals spreading forward along the ground; 6 lifting the hammer back onto her shoulder, unimpressed.",
+     "cast": "an on-topic shockwave, side view facing right: 1 pointing at the viewer with one hand, hammer in the other; 2 tapping the MOD badge on her chest, it glows gold; 3 striking the ground lightly with the hammer head; 4 a gold shockwave ring spreading outward from her; 5 a second wider ring, her shawl lifting; 6 arms crossed, stern.",
+     "hurt": "taking a hit, side view facing right: 1 knocked back a step, hair flaring; 2 flinching, one arm raised to guard; 3 staggering, one knee bending; 4 catching her balance; 5 straightening up, annoyed; 6 back in a ready stance."
+    }
+   }
+  },
+  "locutusoftheeye": {
+   "name": "LocutusOfTheEye",
+   "art": {
+    "look": "LocutusOfTheEye, an original anime boss for a 2D action game, painted in the same high-end gacha anime style as the design picture: a giant floating eye creature, not a person and with no body or limbs. One huge glossy eyeball with a molten gold iris and a crimson slit pupil, crowned by a black lace eyelid veil with gold filigree and white plum blossoms, long sheer black silk veils and silver-white ribbon strands trailing below, gold chains with red jewels and red tassels, a thin gold halo ring behind it. Never realistic, never gory, never 3D.",
+    "personality": "It floats with slow, regal, hypnotic motion; veils and ribbons drift below it in every frame. NOTE: unlike the other bosses it is a floating eye, so its sheets are idle, move, charge, beam, blink and hurt (no run, jump or attack).",
+    "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame it is small, about 45 percent of its grid cell height, centred, with very wide empty space all around its so every prop, swing arc, hair strand, ribbon and effect stays fully inside its own cell with a clear gap to the edges; frames never touch each other. Full body, floating in mid-air, side view facing right unless a frame says otherwise. Same character, same size, floating at one shared height, plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+    "refs": [],
+    "outfits": {
+     "default": {
+      "design": "assets/art/bosses/locutusoftheeye-default.png"
+     }
+    },
+    "sheets": {
+     "idle": "A SPRITE SHEET of six separate small full-body views of the floating eye, never one big portrait: a looping hover idle, facing right: 1 floating, iris centred; 2 bobbing slightly up, veils drifting left; 3 the iris glowing softly brighter, pulsing; 4 bobbing down; 5 veils drifting right; 6 back to the first pose. Small changes only, a seamless loop.",
+     "move": "drifting forward to the right through the air: six evenly spaced frames of the eye gliding forward, tilted slightly forward, veils and ribbons streaming straight back behind it, a seamless loop.",
+     "charge": "charging its gaze, facing right: 1 the pupil narrowing; 2 the gold iris starting to glow; 3 small gold sparks drawn inward to the iris; 4 a gold magic circle forming in front of the eye; 5 the iris blazing white-gold; 6 the eye trembling, fully charged.",
+     "beam": "firing a gaze beam to the right: 1 the iris blazing; 2 a thin gold beam starting from the pupil; 3 a thick gold-and-crimson beam firing forward, kept inside the cell; 4 the beam sweeping slightly downward; 5 the beam narrowing; 6 the beam fading, iris dimming, small smoke wisps.",
+     "blink": "a slow blink, facing right: 1 eye wide open; 2 the black lace eyelid lowering halfway; 3 fully closed, gold filigree eyelid shut; 4 still closed, veils drifting; 5 opening halfway; 6 wide open again, pupil a thin slit.",
+     "hurt": "taking a hit, facing right: 1 jolted backward, veils flaring; 2 the eye squeezed half shut; 3 a small crack of light across the iris; 4 wobbling in the air; 5 recovering, eye reopening; 6 glaring, pupil narrowed."
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "frames": 11,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "mix",
+ "source": "o-win.png",
+ "qc": {
+  "ok": true,
+  "frames": 11,
+  "edge": [],
+  "height_spread": 1.05,
+  "green_pools_px": 37744
+ },
+ "rife": {
+  "from": 6,
+  "model": "rife-v4.6",
+  "originals": "../default-6f/"
+ }
+}

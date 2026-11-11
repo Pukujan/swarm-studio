@@ -1,0 +1,150 @@
+{
+ "stage": "snow",
+ "tint": "#ffd8c4",
+ "haze": [
+  "rgba(255,236,226,0)",
+  "rgba(226,196,190,0.26)"
+ ],
+ "weather": "snow",
+ "flicker": 0.2,
+ "ground": {
+  "file": "ground.webp",
+  "top": 48,
+  "w": 1344,
+  "h": 374
+ },
+ "far": [
+  {
+   "file": "far-0.webp",
+   "w": 673,
+   "h": 460
+  },
+  {
+   "file": "far-1.webp",
+   "w": 726,
+   "h": 312
+  },
+  {
+   "file": "far-2.webp",
+   "w": 830,
+   "h": 319
+  },
+  {
+   "file": "far-3.webp",
+   "w": 601,
+   "h": 300
+  }
+ ],
+ "fore": [
+  {
+   "file": "fore-0.webp",
+   "w": 349,
+   "h": 708,
+   "at": "top"
+  },
+  {
+   "file": "fore-1.webp",
+   "w": 210,
+   "h": 761,
+   "at": "top"
+  },
+  {
+   "file": "fore-2.webp",
+   "w": 1472,
+   "h": 185,
+   "at": "bottom"
+  }
+ ],
+ "pieces": {
+  "bridge-0": {
+   "file": "pieces/bridge-0.webp",
+   "role": "bridge",
+   "w": 1435,
+   "h": 229,
+   "top": 13,
+   "l": 53,
+   "r": 1381
+  },
+  "ledge-0": {
+   "file": "pieces/ledge-0.webp",
+   "role": "ledge",
+   "w": 678,
+   "h": 211,
+   "top": 10,
+   "l": 35,
+   "r": 633
+  },
+  "ledge-1": {
+   "file": "pieces/ledge-1.webp",
+   "role": "ledge",
+   "w": 675,
+   "h": 211,
+   "top": 10,
+   "l": 45,
+   "r": 638
+  },
+  "step-0": {
+   "file": "pieces/step-0.webp",
+   "role": "step",
+   "w": 344,
+   "h": 181,
+   "top": 8,
+   "l": 51,
+   "r": 300
+  },
+  "step-1": {
+   "file": "pieces/step-1.webp",
+   "role": "step",
+   "w": 344,
+   "h": 181,
+   "top": 9,
+   "l": 31,
+   "r": 296
+  },
+  "stairs-0": {
+   "file": "pieces/stairs-0.webp",
+   "role": "stairs",
+   "w": 484,
+   "h": 259,
+   "top": 8,
+   "l": 6,
+   "r": 462
+  },
+  "column-0": {
+   "file": "pieces/column-0.webp",
+   "role": "column",
+   "w": 163,
+   "h": 620,
+   "top": 7,
+   "l": 25,
+   "r": 137
+  },
+  "wall-0": {
+   "file": "pieces/wall-0.webp",
+   "role": "wall",
+   "w": 250,
+   "h": 705,
+   "top": 10,
+   "l": 24,
+   "r": 218
+  },
+  "prop-0": {
+   "file": "pieces/prop-0.webp",
+   "role": "prop",
+   "w": 198,
+   "h": 464,
+   "top": 79,
+   "l": 91,
+   "r": 119
+  },
+  "prop-1": {
+   "file": "pieces/prop-1.webp",
+   "role": "prop",
+   "w": 293,
+   "h": 240,
+   "top": 25,
+   "l": 121,
+   "r": 233
+  }
+ }
+}

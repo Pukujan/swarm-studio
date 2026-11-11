@@ -14,6 +14,10 @@ Hand-coded, not studio-generated.
    - `--cards` tour of all 14 name cards, `--credits` the credits, `--skip-title`
 4. Record: `godot --path . --write-movie out.avi --fixed-fps 30 --quit-after 1800 --resolution 1920x1080 -- --jev --skip-title`
 
+## Credits
+
+See CREDITS.md. Icons: assetrizz by mojomast (Kyle Durepos), used with permission (the web build's boon cards, spell-pull cards and drops).
+
 ## Jev
 
 `jev/ares-jev.mjs` reads the game state from the bridge, asks Jev (`typesafe/jev-1.14`, OpenRouter Decisions API)

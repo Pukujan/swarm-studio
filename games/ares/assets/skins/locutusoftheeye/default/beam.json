@@ -1,0 +1,17 @@
+{
+ "frames": 6,
+ "cell": [
+  768,
+  768
+ ],
+ "blend": "mix",
+ "source": "beam.png",
+ "qc": {
+  "ok": false,
+  "frames": 6,
+  "edge": [
+   2
+  ],
+  "height_spread": 1.02
+ }
+}

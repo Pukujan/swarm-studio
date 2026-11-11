@@ -1,4 +1,6 @@
-// ARES · Sky Temple: one fast side-scrolling level.
+// ARES: the core (loop, input, player, bullets, effects, HUD). Stages, camera, chases, titans
+// and boons are in stage.js, bosses in boss.js, enemy behaviour in enemies.js, spells in spells.js,
+// effects art in fx.js. See ENGINE.md.
 // Two heroines on one body (Tab swaps): the Messenger's sword reflects bullets, the
 // Oracle shoots and casts spells that cancel bullets, shake the ground, break the
 // temple and leave enemies burning, shocked or charred. Ends with Teknium.
@@ -6,7 +8,8 @@
 // lines), assets/skins/<hero>/default (outfit pack), assets/level, assets/boss, voice.
 'use strict'
 
-const W = 1280, H = 720, GROUND = 640, WORLD = 3960, ARENA = WORLD - W
+const W = 1280, H = 720, GROUND = 640
+let WORLD = 3960, ARENA = WORLD - W, ARW = W
 const cv = document.getElementById('game'), ctx = cv.getContext('2d')
 const fit = () => { const s = Math.min(innerWidth / W, innerHeight / H); cv.style.width = W * s + 'px'; cv.style.height = H * s + 'px' }
 addEventListener('resize', fit); fit()
@@ -31,12 +34,52 @@ async function load() {
   ;[CFG, ANCH, BOSSMETA] = await Promise.all([getJSON('../data/heroes.json'), getJSON('anchors.json'), getJSON('../assets/boss/boss.json')])
   const jobs = []
   for (const h of HEROES) for (const name of Object.keys(ANCH.sheets[h]))
-    jobs.push(loadImg(`../assets/skins/${h}/default/${name}.webp`).then(i => { A.sheets[h][name] = { img: i, ...ANCH.sheets[h][name] } }))
+    jobs.push(loadImg(`../assets/skins/${h}/default/${name}.webp`).then(i => { A.sheets[h][name] = { img: i, ...ANCH.sheets[h][name] } }).catch(e => console.warn(String(e))))   // a sheet mid-repaint just stays out
   for (const k of Object.keys(ANCH.pieces)) jobs.push(loadImg(`../assets/level/${k}.webp`).then(i => { A.level[k] = i }))
   jobs.push(loadImg('../assets/level/sky.webp').then(i => { A.level.sky = i }))
   for (const k of Object.keys(BOSSMETA)) jobs.push(loadImg(`../assets/boss/${k}.webp`).then(i => { A.boss[k] = i }))
-  for (const k of ['feather-1', 'feather-5']) jobs.push(loadImg(`../assets/fx/${k}.webp`).then(i => { A.fx[k] = i }))
+  for (const k of ['feather-1', 'feather-5']) jobs.push(loadImg(`../assets/fx/${k}.webp`).then(i => { A.fx[k] = shrinkFx(i) }))
   await Promise.all(jobs)
+  for (const h of HEROES) shrinkHero(h)
+}
+
+// ---------------------------------------------------------------- memory and speed
+// The heroine sheets are painted with 768 px cells but she is drawn about 160 px tall, so a
+// full set decodes to ~300 MB. At load each hero's sheets are cut down to what the closest
+// camera needs (her figure at ~1.7x her normal size), the same factor for every sheet so they
+// stay in step; anchors shrink with them and fitScale() makes up the difference.
+// ?q=high keeps the painted size; ?q=low cuts deeper. PERF.low thins the effects at run time.
+const QUALITY = (location.search.match(/[?&]q=(high|low)\b/) || [])[1] || 'auto'
+const PERF = { ms: 16.7, slowT: 0, fastT: 0, low: QUALITY === 'low' }
+function shrinkHero(h) {
+  if (QUALITY === 'high') return
+  const S = A.sheets[h], idle = S[h === 'runner' ? 'o-idle' : 'm-idle'] || S.idle; if (!idle?.h) return
+  const want = (h === 'runner' ? 162 : 160) * (QUALITY === "low" ? 1.2 : 1.6)   // the canvas is 1280x720 whatever the screen
+  const f = Math.min(1, want / idle.h); if (f > 0.92) return
+  for (const name in S) {
+    const s = S[name], img = s.img, n = Math.max(1, Math.round(img.width / img.height)), cell = Math.round(img.height * f)
+    const c = document.createElement('canvas'); c.width = cell * n; c.height = cell
+    const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'
+    for (let i = 0; i < n; i++) g.drawImage(img, i * img.height, 0, img.height, img.height, i * cell, 0, cell, cell)
+    S[name] = { ...s, img: c, x: s.x * f, y: s.y * f, h: s.h * f, shrunk: f }
+  }
+}
+// effect strips: 768 px cells cut to 512 (384 on ?q=low). img.k0 = painted px per stored px, so
+// drawers that size by sheet pixels (fxStrip, spStripRot, slashArt) multiply it back in.
+function shrinkFx(img) {
+  const cell = QUALITY === 'high' ? 1e9 : QUALITY === 'low' ? 384 : 512
+  if (!img?.height || img.height <= cell * 1.1) return img
+  const n = Math.max(1, Math.round(img.width / img.height)), c = document.createElement('canvas'), g = c.getContext('2d')
+  c.width = cell * n; c.height = cell; g.imageSmoothingQuality = 'high'
+  for (let i = 0; i < n; i++) g.drawImage(img, i * img.height, 0, img.height, img.height, i * cell, 0, cell, cell)
+  c.k0 = img.height / cell; return c
+}
+// slow frames for 2 s: drop to light effects; quick frames for 6 s: back up
+function perfTick(rawMs) {
+  PERF.ms += (Math.min(rawMs, 100) - PERF.ms) * 0.05
+  if (QUALITY !== 'auto' || document.hidden) return
+  if (PERF.ms > 23) { PERF.slowT += rawMs / 1000; PERF.fastT = 0; if (PERF.slowT > 2) PERF.low = true }
+  else if (PERF.ms < 17.5) { PERF.fastT += rawMs / 1000; PERF.slowT = 0; if (PERF.fastT > 6) PERF.low = false }
 }
 
 // ---------------------------------------------------------------- input
@@ -89,20 +132,41 @@ const SFX = {
   hit: () => noise(0.06, 1400, 0.25, 1.5),
   dodge: () => tone('sine', 900, 1800, 0.2, 0.1),
 }
+// One voice at a time. A story line (force) waits for the one playing to finish, then
+// plays; if it waited too long it is dropped. Small barks only play into silence, after a
+// quiet gap, and the same bark not again for a while.
 const voices = {}
-let voiceBusy = 0
+let voiceBusy = 0, voiceNow = null, voiceQ = []
+const voiceAgain = {}
+const BARK_GAP = { 'bark-kill': 14, 'bark-hurt': 7, 'bark-dodge': 9, counter: 6 }
+const voicePlaying = () => voiceNow && !voiceNow.paused && !voiceNow.ended
 function say(hero, key, force = false) {
-  if (!force && voiceBusy > 0) return
   const src = `../assets/voice/${hero}/${key}.mp3`
+  if (!force && (voicePlaying() || voiceBusy > 0 || voiceQ.length || (voiceAgain[key] || 0) > T)) return
+  if (force && (voicePlaying() || voiceQ.length)) {
+    if (!voiceQ.some(q => q.src === src) && !(voiceNow && voiceNow.src.endsWith(src.slice(2)))) voiceQ.push({ src, at: T })
+    if (voiceQ.length > 2) voiceQ.shift()
+    return
+  }
+  playVoice(src, force)
+  voiceAgain[key] = T + (BARK_GAP[key] || 4)
+}
+function playVoice(src, force) {
   const a = voices[src] || (voices[src] = new Audio(src))
   try { a.currentTime = 0; a.volume = 0.9; a.play().catch(() => { }) } catch { }
-  voiceBusy = 1.3
+  voiceNow = a; voiceBusy = force ? 0.4 : 3.5
+}
+function voiceTick(dt) {
+  voiceBusy = Math.max(0, voiceBusy - dt)
+  if (voicePlaying() || !voiceQ.length) return
+  voiceQ = voiceQ.filter(q => T - q.at < 4)
+  const q = voiceQ.shift(); if (q) playVoice(q.src, true)
 }
 
 // ---------------------------------------------------------------- world state
-let mode = 'loading', sel = 0, T = 0
+let mode = 'loading', sel = /[?&]hero=(runner|oracle)\b/.test(location.search) ? 1 : 0, T = 0
 let shake = 0, stopT = 0, slowT = 0, flash = 0, flashColor = '255,240,210', dim = 0
-const cam = { x: 0, y: 0, min: 0, max: 1300 - W + 200, lock: false }
+const cam = { x: 0, y: 0, z: 1, min: 0, max: 1300 - W + 200, lock: false, focus: null, kick: 0 }
 let plats = [], enemies = [], bullets = [], fx = [], parts = [], decals = [], patches = [], timers = [], callouts = []
 let wave = 0, B = null, combo = 0, comboT = 0, gate = 1300
 const P = {}
@@ -159,7 +223,7 @@ function updateAim(dt) {
   const L = down('arrowleft', 'a'), Rt = down('arrowright', 'd'), U = down('arrowup', 'w'), D = down('arrowdown', 's')
   let want
   if (mouse.on && performance.now() - mouse.t < 4000) {
-    const h = handBase(); want = ang(h.x, h.y, mouse.x + cam.x, mouse.y + cam.y)
+    const h = handBase(); want = ang(h.x, h.y, mouse.x / cam.z + cam.x, mouse.y / cam.z + cam.y)
   } else {
     let dx = (Rt ? 1 : 0) - (L ? 1 : 0), dy = (D ? 1 : 0) - (U ? 1 : 0)
     if (dy > 0 && P.ground && !dx) dx = P.face          // on the ground, down aims low-forward
@@ -171,9 +235,17 @@ function updateAim(dt) {
   P.aim += clamp(d, -14 * dt, 14 * dt)
 }
 const hurtbox = () => ({ x: P.x - 22, y: P.y - 120, w: 44, h: 116 })
-const moveName = (hero, k) => CFG.heroes[hero]?.moves?.[k]?.name || ''
+const moveName = (hero, k) => CFG.heroes[hero]?.moves?.[k]?.en || ''
 
-function callout(text, x, y, big = false) { if (text) callouts.push({ text, x, y, t: 0, big }) }
+// No Japanese on screen: the voices are Japanese, every shown text is English. Anything with
+// Japanese characters in it is simply not drawn.
+const CJK = /[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]/
+function callout(text, x, y, big = false) {
+  if (!text || CJK.test(text)) return
+  // a new name sends any older one still nearby straight into its fade, so two names never stack
+  for (const c of callouts) if (Math.abs(c.x - x) < 420 && Math.abs(c.y - y) < 160) c.t = Math.max(c.t, 0.95)
+  callouts.push({ text, x, y, t: 0, big })
+}
 
 // moves: hit boxes are relative to the feet, x toward the facing side
 const MOVES = {
@@ -187,19 +259,57 @@ const MOVES = {
     slam: { sheet: 'airslam', dur: 3, air: true, slam: true, sfx: 'heavy', voice: 'slam', hits: [{ t0: 0, t1: 3, x: -50, y: -150, w: 140, h: 170, dmg: 6, spike: true, every: 0.12 }] },
     dashslash: { sheet: 'dash', dur: 0.34, cancel: 0.22, sfx: 'slash', lunge: 900, hits: [{ t0: 0.02, t1: 0.2, x: -20, y: -140, w: 200, h: 130, dmg: 12, kb: 300 }], arc: { r: 150, a0: -0.4, a1: 0.4, w: 20, at: 0.02, flat: true } },
     charge: { sheet: 'm-charge', dur: 0.6, cancel: 0.46, sfx: 'heavy', voice: 'charge', step: 460, hits: [{ t0: 0.12, t1: 0.3, x: -30, y: -230, w: 330, h: 250, dmg: 40, kb: 800, shake: 12, stop: 0.1 }], arc: { r: 220, a0: -2.7, a1: 1.4, w: 66, at: 0.12 } },
-    wave: { sheet: 'm-wave', dur: 0.46, cancel: 0.32, cd: 1.0, voice: 'wave', sfx: 'heavy', fire: 0.14 },
+    wave: { sheet: 'm-wave', dur: 0.46, cancel: 0.32, voice: 'wave', sfx: 'heavy', fire: 0.14 },
+    // heavy (K): slower, harder, and the third one calls lightning down the blade
+    heavy1: { sheet: 'slash3', dur: 0.44, cancel: 0.28, sfx: 'heavy', step: 220, hits: [{ t0: 0.1, t1: 0.24, x: -10, y: -190, w: 225, h: 190, dmg: 14, kb: 420, shake: 6, stop: 0.05 }], arc: { r: 160, a0: -2.4, a1: 1.1, w: 42, at: 0.1 } },
+    heavy2: { sheet: 'slash2', dur: 0.46, cancel: 0.3, sfx: 'heavy', step: 240, hits: [{ t0: 0.1, t1: 0.24, x: -10, y: -200, w: 235, h: 200, dmg: 16, kb: 460, shake: 7, stop: 0.06 }], arc: { r: 170, a0: 1.1, a1: -2.3, w: 46, at: 0.1 } },
+    thunder: { sheet: 'm-charge', dur: 0.66, cancel: 0.5, sfx: 'heavy', voice: 'charge', step: 380, thunder: true, hits: [{ t0: 0.14, t1: 0.32, x: -30, y: -240, w: 360, h: 260, dmg: 34, kb: 760, shake: 14, stop: 0.1, status: 'shock' }], arc: { r: 230, a0: -2.7, a1: 1.4, w: 66, at: 0.14, thunder: true } },
+    // special (L): cuts into anything; at the end of a string it hits harder and brings lightning
+    rend: { sheet: 'm-wave', dur: 0.5, cancel: 0.36, voice: 'wave', sfx: 'heavy', fire: 0.14, special: true },
     counter: { sheet: 'm-counter', dur: 0.4, cancel: 0.4, cd: 0.8, guard: 0.3 },
-    spin: { sheet: 'm-spin', dur: 0.72, cancel: 0.62, cd: 2.0, voice: 'spin', sfx: 'heavy', move: 0.7, hits: [{ t0: 0.05, t1: 0.68, x: -170, y: -190, w: 340, h: 200, dmg: 4, every: 0.08, kb: 60 }], spin: true },
+    spin: { sheet: 'm-spin', dur: 0.72, cancel: 0.62, cd: 1.0, voice: 'spin', sfx: 'heavy', move: 0.7, hits: [{ t0: 0.05, t1: 0.68, x: -170, y: -190, w: 340, h: 200, dmg: 4, every: 0.08, kb: 60 }], spin: true },
   },
   runner: {
-    feather: { sheet: 'o-cast', dur: 0.4, cancel: 0.3, cd: 0.7, voice: 'feather', fire: 0.12 },
-    sunlance: { sheet: 'o-cast', dur: 1.05, cancel: 1.0, cd: 3.0, voice: 'sunlance', fire: 0.18, move: 0 },
+    feather: { sheet: 'o-cast', dur: 0.4, cancel: 0.3, cd: 0.35, voice: 'feather', fire: 0.12 },
+    sunlance: { sheet: 'o-cast', dur: 1.05, cancel: 1.0, cd: 4.5, voice: 'sunlance', fire: 0.18, move: 0 },   // spells.js holds the beam while K stays down
     halo: { sheet: 'o-cast', dur: 0.45, cancel: 0.35, cd: 2.4, voice: 'halo', fire: 0.14 },
     comet: { sheet: 'o-cast', dur: 0.6, cancel: 0.5, cd: 6.0, voice: 'comet', fire: 0.2 },
     wing: { sheet: 'o-cast', dur: 0.35, cancel: 0.25, cd: 8.0, voice: 'wing', fire: 0.1 },
   },
 }
-const SKILL_KEYS = { messenger: { k: 'wave', l: 'counter', i: 'spin' }, runner: { k: 'feather', l: 'sunlance', i: 'halo', o: 'comet', u: 'wing' } }
+// Controls. J light and K heavy make strings; a string ending in K becomes a named finisher.
+// L is the special, which cancels out of anything (meter); I guards (counter / wing shield).
+//   Messenger: J J J  light chain   J K  Spin   J J K  Sword Wave   J J J K  Charged Slash
+//              K K K  heavy chain ending in a lightning blade   hold K  charged slash
+//   Oracle:    J      shoot (hold)  K    heavy feather          J J K  Halo   K K  Comet
+//              J J J K  Sun Lance   L    chant the chosen spell (E picks)
+const SKILL_KEYS = { messenger: { i: 'counter' }, runner: { i: 'wing' } }
+const FINISH = {
+  messenger: { H: 'heavy1', HH: 'heavy2', HHH: 'thunder', LH: 'spin', LLH: 'wave', LLLH: 'charge', LHH: 'heavy2', LLHH: 'thunder' },
+  runner: { H: 'feather', HH: 'comet', LH: 'feather', LLH: 'halo', LLLH: 'sunlance', HHH: 'sunlance' },
+}
+const SPECIAL_COST = 25
+function pushStr(c) { if (!P.str || (P.strT > 0.75 && !P.act)) P.str = []; P.str.push(c); if (P.str.length > 5) P.str.shift(); P.strT = 0 }
+function heavyPressed() {
+  pushStr('H')
+  const s = P.str.join(''), tbl = FINISH[P.hero]
+  let mv = tbl[s] || tbl[s.slice(-3)] || tbl[s.slice(-2)] || tbl.H
+  if (P.hero === 'messenger' && !P.ground) mv = 'slam'
+  if (MOVES[P.hero][mv]?.cd && P.cds[mv] > 0) mv = tbl.H
+  if (mv !== tbl.H && mv !== 'heavy2' && mv !== 'slam') P.str = []      // a finisher ends the string
+  if (P.act && P.act.t < P.act.m.cancel) { P.queueMove = mv; return }
+  if (P.act && P.act.m.air && mv !== 'slam') return
+  startMove(mv)
+}
+function specialPressed() {
+  if (P.hero === 'runner') { if (typeof startChant === 'function') { if (startChant()) P.str = [] } return }
+  const flourish = P.str.length >= 2 && P.act && !P.act.m.special
+  const cost = flourish ? SPECIAL_COST * 0.6 : SPECIAL_COST
+  if (P.meter < cost) return
+  P.meter -= cost; P.flourish = flourish; P.str = []; P.act = null; P.queueMove = null
+  startMove('rend')
+  if (flourish) { slowT = Math.max(slowT, 0.18); flash = 0.2; flashColor = '255,240,200' }
+}
 
 function startMove(name) {
   const m = MOVES[P.hero][name]
@@ -207,7 +317,8 @@ function startMove(name) {
   if (m.cd) { if (P.cds[name] > 0) return false; P.cds[name] = m.cd }
   P.act = { name, m, t: 0, hitLog: new Map(), fired: false, arcDone: false }
   P.queue = false
-  if (m.voice) say(P.hero, m.voice)
+  if (name !== 'rend') P.queueMove = null
+  if (m.voice) { say(P.hero, m.voice); if (!['slash1', 'slash2', 'slash3', 'launch', 'air1', 'air2', 'feather', 'dashslash'].includes(name)) nameSub(moveName(P.hero, name)) }
   if (m.sfx && !m.arc) SFX[m.sfx]()
   if (m.jump) { P.vy = m.jump; P.ground = false }
   if (m.step && P.ground) P.vx = P.face * m.step
@@ -215,7 +326,6 @@ function startMove(name) {
   if (m.slam) { P.vy = 400 }
   if (m.guard) P.guard = m.guard
   const nm = moveName(P.hero, name === 'air2' ? 'air' : name === 'air1' ? 'air' : name === 'dashslash' ? 'dash' : name)
-  if (nm && (m.voice || name === 'slash3' || m.cd)) callout(nm, P.x, P.y - 190, name === 'charge' || name === 'comet' || name === 'sunlance')
   return true
 }
 
@@ -232,7 +342,7 @@ function attackPressed() {
 }
 
 function startDash(dir) {
-  P.dashT = 0.19; P.dashDir = dir; P.dashCD = 0.32; P.iframe = Math.max(P.iframe, 0.26); P.perfect = 0.14
+  P.dashT = 0.19; P.dashDir = dir; P.dashCD = 0.32 * Math.pow(0.8, nB('swift')); P.iframe = Math.max(P.iframe, 0.26); P.perfect = 0.14
   P.vy = 0; P.act = null; P.guard = 0
   if (!P.ground) P.airDash--
   if (P.hero === 'runner') { P.face = -dir === 0 ? P.face : P.face } else P.face = dir
@@ -250,28 +360,36 @@ function swapHero() {
 
 function updatePlayer(dt) {
   const L = down('arrowleft', 'a'), Rt = down('arrowright', 'd'), U = down('arrowup', 'w'), D = down('arrowdown', 's')
-  for (const k of ['coyote', 'buffer', 'dashCD', 'iframe', 'hurtT', 'shootCD', 'drop', 'shield', 'postDash', 'perfect', 'guard']) P[k] = Math.max(0, (P[k] || 0) - dt)
+  for (const k of ['coyote', 'buffer', 'dashCD', 'iframe', 'hurtT', 'shootCD', 'drop', 'shield', 'postDash', 'perfect', 'guard', 'slow']) P[k] = Math.max(0, (P[k] || 0) - dt)
+  P.crouchT = P.ground && !P.act && Math.abs(P.vx) < 60 && down('arrowdown', 's') ? (P.crouchT || 0) + dt : 0
   for (const k in P.cds) P.cds[k] = Math.max(0, P.cds[k] - dt)
   P.animT += dt
   if (P.dead) { P.vy += 2600 * dt; P.y = Math.min(GROUND, P.y + P.vy * dt); return }
 
   if (P.hero === 'runner') updateAim(dt)
+  if (P.chant) updateChant(dt)
   if (tap('tab', 'q') && !P.cds.swap) swapHero()
   if (tap(' ')) P.buffer = 0.13
   const dirKey = (Rt ? 1 : 0) - (L ? 1 : 0)
   if (tap('shift', ';') && P.dashCD <= 0 && (P.ground || P.airDash > 0)) startDash(dirKey || (P.hero === 'runner' ? -P.face : P.face))
 
   // attacks and skills
-  if (P.hurtT <= 0) {
+  if (P.hurtT <= 0 && !P.chant) {
     if (P.hero === 'messenger') {
-      if (tap('j')) attackPressed()
-      if (down('j') && !P.act) P.holdJ += dt
-      if (released.has('j')) { if (P.holdJ > 0.42 && (!P.act || P.act.t > P.act.m.cancel)) startMove('charge'); P.holdJ = 0 }
-      if (!down('j')) P.holdJ = 0
+      if (tap('j')) { pushStr('L'); attackPressed() }
+      if (down('k')) P.holdJ += dt
+      if (tap('k')) heavyPressed()
+      if (released.has('k')) { if (P.holdJ > 0.42 && (!P.act || P.act.t > P.act.m.cancel)) { P.act = null; startMove('charge'); P.str = [] } P.holdJ = 0 }
+      if (!down('k')) P.holdJ = 0
     } else {
       P.holdJ = 0
+      if (tap('j')) pushStr('L')
       if (down('j') && P.shootCD <= 0 && (!P.act || P.act.m.move !== 0)) { P.shootCD = 0.085; fireFeather() }
+      if (tap('k')) heavyPressed()
+      if (tap('e') && typeof cycleSpell === 'function') cycleSpell()
     }
+    P.strT = (P.strT || 0) + dt
+    if (tap('l')) specialPressed()
     for (const [k, mv] of Object.entries(SKILL_KEYS[P.hero])) if (tap(k)) { if (!P.act || P.act.t >= P.act.m.cancel) startMove(mv) }
     if (tap('r') && P.meter >= 100) ultimate()
   }
@@ -281,10 +399,11 @@ function updatePlayer(dt) {
   if (act) {
     act.t += dt
     const m = act.m
-    if (m.fire && !act.fired && act.t >= m.fire) { act.fired = true; castSpell(act.name) }
+    if (m.fire && !act.fired && act.t >= m.fire) { act.fired = true; if (act.name === 'rend') rendFire(); else castSpell(act.name) }
     if (m.arc && !act.arcDone && act.t >= m.arc.at) { act.arcDone = true; slashArc(m.arc); SFX[m.sfx || 'slash']() }
     if (m.spin && Math.random() < 0.5) spinFx()
-    if (act.t >= m.cancel && P.queue && m.next) startMove(m.next)
+    if (act.t >= m.cancel && P.queueMove) { const q = P.queueMove; P.queueMove = null; P.act = null; startMove(q) }
+    else if (act.t >= m.cancel && P.queue && m.next) startMove(m.next)
     else if (!m.slam && act.t >= m.dur) P.act = null
     if (P.act && P.act.m.air && P.ground && !P.act.m.slam) P.act = null
   }
@@ -297,7 +416,7 @@ function updatePlayer(dt) {
     if (P.trail.length === 0 || T - P.trail[P.trail.length - 1].t > 0.025) P.trail.push(snap())
     if (P.dashT <= 0) { P.vx *= 0.5; P.sprint = P.ground; P.postDash = 0.18 }
   } else if (P.hurtT <= 0) {
-    const sp = P.sprint && dirKey ? 650 : 440
+    const sp = (P.sprint && dirKey ? 650 : 440) * (P.slow > 0 ? 0.5 : 1) * (P.chant ? 0 : 1) * (1 + 0.08 * nB('swift'))
     const mul = busy ? (P.act.m.move ?? 0.12) : 1
     P.vx += (dirKey * sp * mul - P.vx) * Math.min(1, dt * (P.ground ? (busy ? 7 : 16) : 8))
     if (dirKey && !busy && P.hero !== 'runner') P.face = dirKey
@@ -321,12 +440,22 @@ function updatePlayer(dt) {
 
   const prev = P.y
   P.x += P.vx * dt; P.y += P.vy * dt
-  P.x = clamp(P.x, cam.lock ? ARENA + 30 : 30, Math.min(gate, WORLD - 30))
-  P.wasGround = P.ground; P.ground = false; P.onPlat = false
-  if (P.y >= GROUND) { P.y = GROUND; land() }
-  else if (P.vy >= 0 && P.drop <= 0) {
-    for (const p of plats) if (!p.broken && p.walk && P.x > p.l && P.x < p.r && prev <= p.surf + 2 && P.y >= p.surf) { P.y = p.surf; land(); P.onPlat = true; break }
+  P.x = stage ? clamp(P.x, leftBound(), rightBound()) : clamp(P.x, 30, WORLD - 30)
+  // walls: solid sides, a walkable top; jump while sliding down one to kick off it
+  P.onWall = 0
+  for (const p of plats) if (p.kind === 'wall' && !p.broken && P.y > p.surf + 6 && P.x > p.l - 24 && P.x < p.r + 24) {
+    const side = P.x < (p.l + p.r) / 2 ? -1 : 1
+    P.x = side < 0 ? p.l - 24 : p.r + 24; P.vx = 0
+    if (!P.ground) { P.onWall = side; if (P.vy > 200) P.vy = 200 }
   }
+  if (P.onWall && P.buffer > 0 && P.y < GROUND - 4) { P.vy = -950; P.vx = P.onWall * 520; P.face = P.onWall; P.jumps = 1; P.airDash = 1; P.buffer = 0; dust(P.x, P.y - 40); SFX.dodge() }
+  P.wasGround = P.ground; P.ground = false; P.onPlat = false
+  const floor = inPit(P.x) ? Infinity : GROUND
+  if (P.y >= floor) { P.y = floor; land(); P.safeX = P.x }
+  else if (P.vy >= 0 && P.drop <= 0) {
+    for (const p of plats) if (!p.broken && p.walk && P.x > p.l && P.x < p.r && prev <= p.surf + 2 && P.y >= p.surf) { P.y = p.surf; land(); P.onPlat = true; if (p.kind === 'crumble') { if (!(p.fall > 0)) p.fall = 0.6 } else P.safeX = P.x; break }
+  }
+  if (P.y > GROUND + 360 && !P.dead) fellInPit()
   if (P.wasGround && !P.ground && P.vy >= 0) P.coyote = 0.1
   while (P.trail.length && T - P.trail[0].t > 0.3) P.trail.shift()
 
@@ -373,26 +502,25 @@ function slamImpact() {
   for (const e of targets()) if (boxHit(box, e.box())) damage(e, 22, { kb: Math.sign(e.x - P.x) * 500, launch: -500 })
   for (const b of bullets) if (b.enemy && circBox(b.x, b.y, b.r, box)) reflect(b)
   for (const p of plats) if (p.hp && !p.broken && boxHit(box, p)) hurtPlat(p, 30)
-  callout(moveName('messenger', 'slam'), P.x, P.y - 200, true)
 }
 
 function ultimate() {
   P.meter = 0; P.iframe = 2.2; slowT = 0.6; dim = 1.4
-  say(P.hero, 'ult', true)
-  callout(moveName(P.hero, 'ult'), cam.x + W / 2, 220, true)
+  say(P.hero, 'ult', true); nameSub(moveName(P.hero, 'ult'), 1.8)
+  if (fxk()?.ultPanel) { try { const d = FXK.ultPanel(P.hero, { name: moveName(P.hero, 'ult') }); slowT = Math.max(slowT, (d || 1.4) * 0.8) } catch (e) { console.warn('ultPanel', e) } }
   flash = 0.5; flashColor = '255,245,225'
   if (P.hero === 'messenger') {
     for (let i = 0; i < 10; i++) later(0.12 + i * 0.09, () => {
-      const x = cam.x + R(150, W - 150), y = R(180, 560)
+      const x = cam.x + R(150, VW() - 150), y = cam.y + R(0.25, 0.8) * VH()
       fx.push(bigSlash(x, y, R(0, Math.PI), R(260, 420)))
       SFX.slash(); shake = Math.max(shake, 8)
-      for (const e of targets()) if (Math.abs(e.x - cam.x - W / 2) < W / 2 + 40) damage(e, 14, { x: e.x, y: e.y })
+      for (const e of targets()) if (Math.abs(e.x - cam.x - VW() / 2) < VW() / 2 + 40) damage(e, 14, { x: e.x, y: e.y })
     })
   } else {
     fx.push(fxStrip('feather-5', P.x, P.y - 160, 1.2, 1.1))
     for (let i = 0; i < 70; i++) later(i * 0.025, () => {
-      const x = cam.x + R(40, W - 40)
-      bullets.push(pbullet(x, -20, Math.PI / 2 + R(-0.25, 0.25), R(900, 1300), { dmg: 5, feather: true, status: Math.random() < 0.5 ? 'shock' : 'burn', pierce: true }))
+      const x = cam.x + R(40, VW() - 40)
+      bullets.push(pbullet(x, cam.y - 20, Math.PI / 2 + R(-0.25, 0.25), R(900, 1300), { dmg: 5, feather: true, status: Math.random() < 0.5 ? 'shock' : 'burn', pierce: true }))
     })
   }
   for (const b of bullets) if (b.enemy) cancel(b)
@@ -430,7 +558,7 @@ function castSpell(name) {
     const near = targets().filter(e => aimed(e, 1.0)), h0 = handBase(), dir = Math.cos(P.aim) >= 0 ? 1 : -1
     for (let i = 0; i < 8; i++) later(0.15 + i * 0.16, () => {
       const t = near.length ? near[i % near.length] : null
-      const x = t ? t.x + R(-120, 120) : clamp(h0.x + dir * (160 + i * 110) + R(-40, 40), cam.x + 60, cam.x + W - 60)
+      const x = t ? t.x + R(-120, 120) : clamp(h0.x + dir * (160 + i * 110) + R(-40, 40), cam.x + 60, cam.x + VW() - 60)
       fx.push(comet(x))
     })
   } else if (name === 'wing') {
@@ -440,7 +568,16 @@ function castSpell(name) {
 }
 
 // ---------------------------------------------------------------- bullets
-function ebullet(x, y, a, spd, o = {}) { return { x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, r: o.r || 9, enemy: true, dmg: o.dmg || 12, life: o.life || 7, t: 0, cancelable: o.cancelable !== false, reflectable: o.reflectable !== false, kind: o.kind || 'orb', accel: o.accel || 0 } }
+// Enemy bullets come in three colours, and the colour says what you can do about it:
+//   red    'orb'    slash it back, cancel it with a spell, or dash through it
+//   gold   'heavy'  too heavy to reflect or cancel; dash through it
+//   black  'doom'   a black core in a crimson rim: nothing stops it and dashing doesn't help; jump or run
+function ebullet(x, y, a, spd, o = {}) {
+  const type = o.type || 'orb', hard = type !== 'orb'
+  return { x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, r: o.r || (type === 'orb' ? 9 : type === 'heavy' ? 15 : 13), enemy: true, type,
+    dmg: o.dmg || (type === 'doom' ? 18 : type === 'heavy' ? 15 : 12), life: o.life || 7, t: 0,
+    cancelable: !hard && o.cancelable !== false, reflectable: !hard && o.reflectable !== false, kind: o.kind || 'orb', accel: o.accel || 0, roll: o.roll }
+}
 function pbullet(x, y, a, spd, o = {}) { return { x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, r: o.big ? 12 : 8, enemy: false, dmg: o.dmg || 3, life: o.life || 1.2, t: 0, feather: o.feather, home: o.home || 0, status: o.status, pierce: o.pierce, cancels: o.cancels, reflected: o.reflected, hitSet: new Set() } }
 
 function reflect(b) {
@@ -448,7 +585,7 @@ function reflect(b) {
   b.dead = true
   const t = nearestTarget(b.x, b.y)
   const a = t ? ang(b.x, b.y, t.x, t.y - 20) : (P.face > 0 ? 0 : Math.PI)
-  bullets.push(pbullet(b.x, b.y, a, 1100, { dmg: t === B ? 5 : 10, reflected: true, life: 2, big: true }))
+  bullets.push(pbullet(b.x, b.y, a, 1100, { dmg: (t === B ? 5 : 10) * (1 + 0.35 * nB('mirror')), reflected: true, life: 2, big: true }))
   SFX.reflect(); stopT = Math.max(stopT, 0.02)
   P.meter = Math.min(100, P.meter + 1.5)
   sparks(b.x, b.y, 8, '255,220,140')
@@ -472,12 +609,13 @@ function updateBullets(dt) {
     }
     if (b.accel) { const sp = Math.hypot(b.vx, b.vy), k = (sp + b.accel * dt) / sp; b.vx *= k; b.vy *= k }
     b.x += b.vx * dt; b.y += b.vy * dt
-    if (b.t > b.life || b.x < cam.x - 200 || b.x > cam.x + W + 200 || b.y < -300 || b.y > H + 100) { b.dead = true; continue }
+    if (b.roll) { const g = typeof groundAt === 'function' ? groundAt(b.x, b.y - b.r - 4) : GROUND; b.y = g === Infinity ? b.y + 400 * dt : g - b.r }
+    if (b.t > b.life || b.x < cam.x - 200 || b.x > cam.x + VW() + 200 || b.y < cam.y - 400 || b.y > GROUND + 500) { b.dead = true; continue }
     if (b.enemy) {
       if (P.shield > 0 && (b.x - P.x) ** 2 + (b.y - P.y + 70) ** 2 < 125 ** 2 && cancel(b)) continue
-      if (P.act && P.act.name === 'counter' && P.guard > 0 && circBox(b.x, b.y, b.r + 30, hb)) { counterHit(b); continue }
+      if (P.act && P.act.name === 'counter' && P.guard > 0 && b.reflectable && circBox(b.x, b.y, b.r + 30, hb)) { counterHit(b); continue }
       if (circBox(b.x, b.y, b.r, hb)) {
-        if (P.iframe > 0) { if (P.perfect > 0) perfectDodge(); continue }
+        if (P.iframe > 0 && !(b.type === 'doom' && T - (P.hurtAt || -9) > 1)) { if (P.perfect > 0) perfectDodge(); continue }
         b.dead = true; hurtPlayer(b.dmg, Math.sign(b.vx) || 1)
       }
     } else {
@@ -499,12 +637,11 @@ function updateBullets(dt) {
 function counterHit(b) {
   b.dead = true; P.guard = 0
   slowT = 0.45; P.iframe = 0.6; flash = 0.25; flashColor = '255,235,200'
-  say('messenger', 'counter', true)
-  callout(moveName('messenger', 'counter'), P.x, P.y - 200, true)
+  say('messenger', 'counter'); nameSub(moveName('messenger', 'counter'))
   const t = nearestTarget(P.x, P.y)
   if (t && Math.abs(t.x - P.x) < 700) {
     const from = P.x
-    P.x = clamp(t.x - P.face * 90, cam.x + 40, cam.x + W - 40); P.face = Math.sign(t.x - P.x) || 1
+    P.x = clamp(t.x - P.face * 90, cam.x + 40, cam.x + VW() - 40); P.face = Math.sign(t.x - P.x) || 1
     trailLine(from, P.x, P.y)
     damage(t, 30, { x: t.x, y: t.y, kb: P.face * 300 })
   }
@@ -524,7 +661,8 @@ function perfectDodge() {
 
 function hurtPlayer(dmg, dir) {
   if (P.dead) return
-  P.hp -= dmg; P.iframe = 1.0; P.hurtT = 0.32; P.act = null; P.dashT = 0
+  if (P.chant) { P.hp -= dmg * 0.7; P.iframe = 0.5; P.hurtAt = T; flash = 0.15; flashColor = '255,70,60'; SFX.hurt(); if (P.hp <= 0) { P.hp = 0; P.dead = true; P.chant = null; later(1.6, () => { mode = 'dead' }) } return }
+  P.hp -= dmg; P.iframe = 1.0; P.hurtAt = T; P.hurtT = 0.32; P.act = null; P.dashT = 0
   P.vx = dir * 380; P.vy = -380; P.ground = false
   shake = Math.max(shake, 8); flash = 0.2; flashColor = '255,70,60'; SFX.hurt()
   combo = 0
@@ -533,32 +671,10 @@ function hurtPlayer(dmg, dir) {
 }
 
 // ---------------------------------------------------------------- enemies
-function targets() { const t = enemies.filter(e => !e.dead); if (B && !B.dead && B.active) t.push(B); return t }
+// fx.js declares FXK with const, so it is not on window; it may also be missing
+const fxk = () => (typeof FXK !== 'undefined' ? FXK : null)
+function targets() { const t = enemies.filter(e => !e.dead && !e.untargetable); if (B && !B.dead && B.active && !B.chaser) t.push(B); return t }
 function nearestTarget(x, y) { let best = null, d = Infinity; for (const e of targets()) { const dd = (e.x - x) ** 2 + (e.y - y) ** 2; if (dd < d) { d = dd; best = e } } return best }
-
-function makeEnemy(type, x, y) {
-  const e = {
-    type, x, y, hx: x, hy: y, vx: 0, vy: 0, t: R(0, 3), fire: R(0.8, 1.8), hp: type === 'sentry' ? 60 : 32, max: 0, dead: false, flash: 0,
-    burn: 0, shock: 0, charred: 0, charredHits: 0, stun: 0, air: 0, tick: 0, r: type === 'sentry' ? 40 : 32,
-    box() { return { x: this.x - this.r, y: this.y - this.r, w: this.r * 2, h: this.r * 2 } },
-  }
-  e.max = e.hp
-  enemies.push(e); return e
-}
-
-function spawnWave(n) {
-  wave = n
-  if (n === 1) {
-    for (const [x, y] of [[700, 300], [980, 220], [1150, 320], [880, 470]]) makeEnemy('drone', x, y)
-    gate = 1300
-  } else if (n === 2) {
-    for (const [x, y] of [[1700, 280], [2000, 200], [2350, 260], [1850, 520]]) makeEnemy('drone', x, y)
-    makeEnemy('sentry', 1700, 460 - 40)
-    makeEnemy('sentry', 2400, 430 - 40)
-    gate = ARENA
-  }
-  for (const e of enemies) { e.spawn = 0.6; ring(e.x, e.y, 70, '255,120,100') }
-}
 
 function applyStatus(e, s) {
   if (s === 'burn') { e.burn = Math.max(e.burn, 4); if (e.burn > 0 && e.charredHits++ > 4) e.charred = 5 }
@@ -567,14 +683,16 @@ function applyStatus(e, s) {
 }
 
 function damage(e, dmg, o = {}) {
-  if (e.dead || (e === B && !B.active)) return
-  let m = 1
+  if (e.dead || (e === B && (!B.active || B.chaser))) return
+  if (e.def?.base === 'shield' && typeof ENEMY_BASES !== 'undefined' && ENEMY_BASES.shield.blocks?.(e, o.x ?? P.x)) return
+  let m = 1 + 0.25 * nB('edge')
+  if (!o.status) { if (Math.random() < 0.12 * nB('ember')) o = { ...o, status: 'burn' }; else if (Math.random() < 0.12 * nB('storm')) o = { ...o, status: 'shock' } }
   if (e.charred > 0) m *= 1.3
   if (e === B && B.window > 0) m *= 1.6
   if (e === B && B.guard) m *= 0.5
   const d = dmg * m
   e.hp -= d; e.flash = 0.08
-  if (!o.small) SFX.hit()
+  if (!o.small) { SFX.hit(); if (fxk()?.hit) try { FXK.hit(o.x ?? e.x, o.y ?? e.y - 40, (o.x ?? P.x) < e.x ? 1 : -1, Math.min(3, Math.round(dmg / 12))) } catch (err) {} }
   sparks(o.x ?? e.x, o.y ?? e.y, o.small ? 3 : 8, e.charred > 0 ? '255,170,110' : '255,235,190')
   if (o.status) applyStatus(e, o.status)
   if (e !== B) {
@@ -584,7 +702,7 @@ function damage(e, dmg, o = {}) {
     if (o.spike && e.air > 0) e.vy = 900
   }
   combo++; comboT = 1.6
-  P.meter = Math.min(100, P.meter + d * 0.35)
+  P.meter = Math.min(100, P.meter + d * 0.35 * (1 + 0.3 * nB('zeal')))
   if (e.hp <= 0) kill(e)
 }
 
@@ -594,50 +712,9 @@ function kill(e) {
   shake = Math.max(shake, 6); SFX.boom()
   for (let i = 0; i < 22; i++) parts.push({ x: e.x, y: e.y, vx: R(-420, 420), vy: R(-480, 200), life: R(0.4, 1.0), t: 0, size: R(3, 8), color: i % 3 ? '210,40,40' : '255,200,140', g: 900, add: i % 3 === 0 })
   ring(e.x, e.y, 120, '255,140,110')
-  if (Math.random() < 0.5) say(P.hero, 'bark-kill')
-}
-
-function updateEnemies(dt) {
-  for (const e of enemies) {
-    if (e.dead) continue
-    e.t += dt; e.flash = Math.max(0, e.flash - dt)
-    if (e.spawn > 0) { e.spawn -= dt; continue }
-    statusTick(e, dt)
-    if (e.dead) continue
-    e.vx *= Math.pow(0.02, dt)
-    if (e.air > 0) {
-      e.air -= dt; e.vy += 1500 * dt
-      e.x += e.vx * dt; e.y += e.vy * dt
-      if (e.y > GROUND - e.r) { e.y = GROUND - e.r; e.vy = 0; if (e.air > 0.2) e.air = 0.2 }
-      continue
-    }
-    if (e.stun > 0) { e.stun -= dt; e.x += e.vx * dt; continue }
-    if (e.type === 'drone') {
-      const tx = e.hx + Math.sin(e.t * 0.7) * 80, ty = e.hy + Math.sin(e.t * 1.3) * 34
-      e.x += (tx - e.x) * Math.min(1, dt * 2) + e.vx * dt; e.y += (ty - e.y) * Math.min(1, dt * 2)
-      e.fire -= dt
-      if (e.fire <= 0 && Math.abs(e.x - P.x) < 900 && !P.dead) {
-        e.fire = R(1.5, 2.3)
-        const a = ang(e.x, e.y, P.x, P.y - 60)
-        for (let i = -1; i <= 1; i++) bullets.push(ebullet(e.x, e.y, a + i * 0.2, 330))
-      }
-    } else {
-      e.x += e.vx * dt
-      e.fire -= dt
-      if (e.fire <= 0 && Math.abs(e.x - P.x) < 900 && !P.dead) {
-        e.fire = 2.6
-        const off = R(0, 1)
-        for (let i = 0; i < 14; i++) bullets.push(ebullet(e.x, e.y, (i + off) / 14 * Math.PI * 2, 230, { r: 8 }))
-      }
-    }
-    // touching a drone hurts
-    if (!P.dead && P.iframe <= 0 && circBox(e.x, e.y, e.r * 0.7, hurtbox())) hurtPlayer(10, Math.sign(P.x - e.x) || 1)
-  }
-  enemies = enemies.filter(e => !e.dead)
-  if (wave === 1 && !enemies.length) { gate = 2680; later(0.2, () => { if (wave === 1) arrow() }); wave = 1.5 }
-  if (wave === 1.5 && P.x > 1350) spawnWave(2)
-  if (wave === 2 && !enemies.length) { gate = WORLD; wave = 2.5; arrow() }
-  if (wave === 2.5 && P.x > ARENA + 260) startBoss()
+  if (Math.random() < 0.25) say(P.hero, 'bark-kill')
+  if (nB('leech')) P.hp = Math.min(P.max, P.hp + 2 * nB('leech'))
+  if (fxk()?.smoke) FXK.smoke(e.x, e.y, 6, { color: 'dark' })
 }
 
 function statusTick(e, dt) {
@@ -694,128 +771,6 @@ function updateWorld(dt) {
   patches = patches.filter(f => f.t > 0)
 }
 
-// ---------------------------------------------------------------- the boss
-const POSES = { enter: 'teknium-smug1-0', fan: 'teknium-smug1-2', ring: 'teknium-smug1-1', sweep: 'teknium-smug2-1', pillars: 'teknium-smug1-2', glare: 'teknium-smug1-0', spiral: 'teknium-smug2-2', rain: 'teknium-smug1-1', rest: 'teknium-smug2-0' }
-const BOSS_LINES = {
-  enter: '……来たか。退屈はさせないでくれよ。',
-  phase: 'なるほど。少しは計算を外れてくれる。',
-  glare: '見えているよ。すべて。',
-  down: '……ふふ。今日は君の勝ちにしておこう。',
-}
-
-function startBoss() {
-  wave = 3; cam.lock = true
-  B = {
-    x: ARENA + 980, y: GROUND - 150, tx: ARENA + 980, ty: GROUND - 150, hp: 3000, max: 3000, phase: 1, step: 0, active: false, dead: false,
-    window: 0, pose: 'enter', flash: 0, burn: 0, shock: 0, charred: 0, stun: 0, tick: 0, charredHits: 0, r: 70, t: 0, glare: 0, face: -1,
-    box() { const h = bossH(); return { x: this.x - 70, y: this.y - h * 0.92, w: 140, h: h * 0.9 } },
-  }
-  B.y = -500
-  later(0.1, () => { B.ty = GROUND - 150 })
-  later(1.4, () => { subtitle(BOSS_LINES.enter, 3); B.glare = 1; SFX.glare() })
-  later(3.4, () => { B.active = true; bossNext() }, 'boss')
-}
-const bossH = () => (B && B.pose === 'rest' ? 300 : 380)
-
-function bossNext() {
-  if (!B || B.dead) return
-  const list = B.phase === 1 ? ['fan', 'ring', 'sweep', 'pillars', 'glare'] : ['spiral', 'rain', 'sweep', 'glare', 'ring', 'pillars', 'fan']
-  const name = list[B.step++ % list.length]
-  B.pose = name
-  const dur = PATTERNS[name]()
-  later(dur, openWindow, 'boss')
-}
-function openWindow() {
-  if (!B || B.dead) return
-  B.pose = 'rest'; B.window = B.phase === 1 ? 2.4 : 1.7
-  B.ty = GROUND - 60; B.tx = clamp(P.x + (P.x < ARENA + W / 2 ? 380 : -380), ARENA + 160, ARENA + W - 160)
-  later(B.window, bossNext, 'boss')
-}
-
-const sp = (v) => v * (B && B.phase === 2 ? 1.25 : 1)
-const PATTERNS = {
-  fan() {
-    B.tx = ARENA + W - 200; B.ty = GROUND - 170
-    for (let v = 0; v < 6; v++) later(0.3 + v * 0.42, () => {
-      const a = ang(B.x, B.y - 300, P.x, P.y - 60)
-      for (let i = -3; i <= 3; i++) bullets.push(ebullet(B.x - 30, B.y - bossH() * 0.6, a + i * 0.13, sp(380)))
-      SFX.shot()
-    }, 'boss')
-    return 3.1
-  },
-  ring() {
-    B.tx = ARENA + W / 2; B.ty = GROUND - 230
-    for (let v = 0; v < 5; v++) later(0.3 + v * 0.45, () => {
-      const n = 22, off = v * 0.5
-      for (let i = 0; i < n; i++) bullets.push(ebullet(B.x, B.y - bossH() * 0.55, off + i / n * Math.PI * 2, sp(v % 2 ? 210 : 260), { r: 10 }))
-    }, 'boss')
-    return 3.0
-  },
-  sweep() {
-    // a wall along the floor: jump over it or stand on a platform
-    B.tx = ARENA + W / 2; B.ty = GROUND - 250
-    const go = (side, at) => {
-      later(at, () => fx.push(sweepWarn(side)), 'boss')
-      later(at + 0.75, () => fx.push(sweepWave(side)), 'boss')
-    }
-    go(-1, 0.3); go(1, 1.6)
-    if (B.phase === 2) go(-1, 2.6)
-    return B.phase === 2 ? 3.8 : 2.8
-  },
-  pillars() {
-    B.tx = ARENA + W - 180; B.ty = GROUND - 140
-    const n = B.phase === 2 ? 6 : 4
-    for (let i = 0; i < n; i++) later(0.2 + i * 0.32, () => fx.push(laser(clamp(P.x + R(-40, 40), ARENA + 40, ARENA + W - 40))), 'boss')
-    return 0.2 + n * 0.32 + 1.0
-  },
-  glare() {
-    // the one you cannot outrun: dash through it (i-frames) or counter it
-    B.tx = ARENA + W / 2; B.ty = GROUND - 200
-    subtitle(BOSS_LINES.glare, 1.8)
-    later(0.2, () => { B.glare = 2; SFX.glare(); dim = 1.8; fx.push(glareLock(1.15)) }, 'boss')
-    return 2.4
-  },
-  spiral() {
-    B.tx = ARENA + W / 2; B.ty = GROUND - 220
-    let a = 0
-    for (let i = 0; i < 50; i++) later(0.2 + i * 0.055, () => { a += 0.23; for (let k = 0; k < 3; k++) bullets.push(ebullet(B.x, B.y - bossH() * 0.55, a + k * Math.PI * 2 / 3, 250, { r: 8 })) }, 'boss')
-    return 3.3
-  },
-  rain() {
-    B.tx = ARENA + 200; B.ty = GROUND - 160
-    for (let v = 0; v < 7; v++) later(0.2 + v * 0.35, () => {
-      const gap = R(ARENA + 150, ARENA + W - 150)
-      for (let x = ARENA + 20; x < ARENA + W; x += 64) if (Math.abs(x - gap) > 110) bullets.push(ebullet(x + R(-8, 8), -10, Math.PI / 2, 300, { r: 8, accel: 120 }))
-    }, 'boss')
-    return 3.0
-  },
-}
-
-function updateBoss(dt) {
-  if (!B) return
-  B.t += dt; B.flash = Math.max(0, B.flash - dt); B.window = Math.max(0, B.window - dt); B.glare = Math.max(0, B.glare - dt)
-  B.x = lerp(B.x, B.tx, Math.min(1, dt * 2.2)); B.y = lerp(B.y, B.ty + Math.sin(B.t * 1.6) * 10, Math.min(1, dt * 2.5))
-  B.face = P.x < B.x ? -1 : 1
-  if (B.dead) return
-  if (B.active) statusTick(B, dt)
-  if (B.active && B.phase === 1 && B.hp < B.max * 0.5) {
-    B.phase = 2; timers = timers.filter(t => t.tag !== 'boss'); bullets.forEach(b => b.enemy && cancel(b))
-    subtitle(BOSS_LINES.phase, 2.6); flash = 0.4; flashColor = '255,60,60'; shake = 14; B.glare = 2
-    later(1.6, bossNext, 'boss')
-  }
-}
-
-function bossDown() {
-  B.dead = true; B.active = false
-  timers = timers.filter(t => t.tag !== 'boss')
-  for (const b of bullets) if (b.enemy) b.dead = true
-  slowT = 1.6; flash = 0.8; flashColor = '255,250,240'; shake = 18
-  subtitle(BOSS_LINES.down, 3.2)
-  B.pose = 'rest'; B.ty = -600
-  say(P.hero, 'bark-win', true)
-  later(3.6, () => { mode = 'win' })
-}
-
 // ---------------------------------------------------------------- effects
 function sparks(x, y, n, color) { for (let i = 0; i < n; i++) { const a = R(0, Math.PI * 2), s = R(150, 520); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: R(0.12, 0.3), t: 0, size: R(2, 4), color, add: true, streak: true }) } }
 function burst(x, y, n, color, s) { for (let i = 0; i < n; i++) { const a = R(0, Math.PI * 2); parts.push({ x, y, vx: Math.cos(a) * R(s * 0.3, s), vy: Math.sin(a) * R(s * 0.3, s), life: R(0.3, 0.6), t: 0, size: R(2, 5), color, add: true, feather: Math.random() < 0.5 }) } }
@@ -829,6 +784,12 @@ function trailLine(x0, x1, y) { fx.push({ t: 0, dur: 0.3, draw(k) { ctx.globalCo
 
 // a sword arc in front of the Messenger: drawn as a tapered crescent, gold to white
 function slashArc(a) {
+  if (fxk()?.slash) {
+    const mid = (a.a0 + a.a1) / 2, ang_ = P.face > 0 ? mid : Math.PI - mid
+    try { FXK.slash(P.x + P.face * 40, P.y - 95, ang_, a.r * 2, { color: a.thunder ? 'white' : a.w > 40 ? 'crimson' : 'gold', heavy: a.w > 40, thunder: a.thunder, face: P.face, a0: a.a0, a1: a.a1, r: a.r }) } catch (e) { console.warn('FXK.slash', e) }
+    if (a.thunder && FXK.thunderBlade) FXK.thunderBlade(P.x + P.face * 40, P.y - 95, P.face > 0 ? 0 : Math.PI, a.r * 1.6)
+    return
+  }
   const x = P.x + P.face * 40, y = P.y - 95, face = P.face
   fx.push({ t: 0, dur: 0.2, follow: true, draw(k) {
     ctx.save(); ctx.translate(P.x + face * 40, P.y - 95); ctx.scale(face, 1)
@@ -856,11 +817,21 @@ function bigSlash(x, y, rot, len) {
 }
 function spinFx() { const a = R(0, Math.PI * 2); parts.push({ x: P.x + Math.cos(a) * 150, y: P.y - 90 + Math.sin(a) * 70, vx: -Math.sin(a) * 600, vy: Math.cos(a) * 280, life: 0.18, t: 0, size: 3, color: '255,225,170', add: true, streak: true }) }
 function fxStrip(name, x, y, dur, s) {
-  const img = A.fx[name]; const n = 6, slot = img.width / n
+  const img = A.fx[name]; const n = Math.max(1, Math.round(img.width / img.height)), slot = img.width / n; s *= img.k0 || 1
   return { t: 0, dur, draw(k) { const f = Math.min(n - 1, k * n | 0); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - Math.max(0, k - 0.7) / 0.3; ctx.drawImage(img, f * slot, 0, slot, img.height, x - slot * s / 2, y - img.height * s / 2, slot * s, img.height * s); ctx.globalAlpha = 1 } }
 }
 
 // Messenger's 天裂波: a crescent that travels, cuts and sends bullets back
+// Special: a double crescent; after a string, lightning also strikes the nearest three.
+function rendFire() {
+  const fl = P.flourish
+  waveShot(); later(0.09, waveShot)
+  if (fxk()?.thunderBlade) FXK.thunderBlade(P.x + P.face * 60, P.y - 100, P.face > 0 ? 0 : Math.PI, fl ? 520 : 340)
+  if (!fl) return
+  const ts = targets().filter(e => Math.abs(e.x - P.x) < 900).sort((a, b) => Math.abs(a.x - P.x) - Math.abs(b.x - P.x)).slice(0, 3)
+  ts.forEach((e, i) => later(0.12 + i * 0.08, () => { if (e.dead) return; zapFx(e.x, e.y - 40); damage(e, 22, { x: e.x, y: e.y, status: 'shock' }); SFX.zap(); shake = Math.max(shake, 6) }))
+  P.flourish = false
+}
 function waveShot() {
   const face = P.face, y = P.y - 90
   const o = { t: 0, dur: 1.2, x: P.x + face * 60, hit: new Set(), update(dt) {
@@ -947,80 +918,47 @@ function comet(x) {
 }
 
 // Teknium: the floor wall you have to jump
-function sweepWarn(side) {
-  return { t: 0, dur: 0.75, draw(k) {
-    ctx.globalCompositeOperation = 'lighter'
-    const x0 = side < 0 ? ARENA : ARENA + W - 60
-    ctx.fillStyle = `rgba(255,40,40,${0.25 + 0.35 * Math.abs(Math.sin(k * 20))})`
-    ctx.fillRect(x0, GROUND - 74, 60, 74)
-    ctx.fillStyle = `rgba(255,40,40,${0.12 * (1 - k)})`; ctx.fillRect(ARENA, GROUND - 4, W, 4)
-  } }
-}
-function sweepWave(side) {
-  SFX.heavy()
-  return { kind: 'sweep', side, t: 0, dur: 1.6, x: side < 0 ? ARENA - 40 : ARENA + W + 40, update(dt) {
-    this.x -= side * 1000 * dt
-    const box = { x: this.x - 30, y: GROUND - 74, w: 60, h: 74 }
-    if (!P.dead && boxHit(box, hurtbox())) { if (P.iframe > 0) { if (P.perfect > 0) perfectDodge() } else hurtPlayer(18, -side) }
-  }, draw() {
-    ctx.globalCompositeOperation = 'lighter'
-    const g = ctx.createLinearGradient(0, GROUND - 90, 0, GROUND); g.addColorStop(0, 'rgba(255,60,50,0)'); g.addColorStop(1, 'rgba(255,90,70,0.95)')
-    ctx.fillStyle = g
-    ctx.beginPath(); ctx.moveTo(this.x - 40, GROUND); for (let i = 0; i <= 8; i++) ctx.lineTo(this.x - 40 + i * 10, GROUND - 74 - Math.sin(T * 30 + i) * 10); ctx.lineTo(this.x + 40, GROUND); ctx.fill()
-    ctx.fillStyle = 'rgba(255,230,220,0.9)'; ctx.fillRect(this.x - 3, GROUND - 70, 6, 70)
-  } }
-}
-// Teknium: a vertical beam on where you stand
-function laser(x) {
-  return { kind: 'laser', x, t: 0, dur: 1.05, update() {
-    if (this.t > 0.7 && this.t < 0.95 && !P.dead && Math.abs(P.x - x) < 40) { if (P.iframe > 0) { if (P.perfect > 0) perfectDodge() } else hurtPlayer(16, Math.sign(P.x - x) || 1) }
-    if (this.t > 0.7 && !this.boomed) { this.boomed = true; shake = Math.max(shake, 5); SFX.zap() }
-  }, draw(k) {
-    ctx.globalCompositeOperation = 'lighter'
-    if (this.t < 0.7) { ctx.fillStyle = `rgba(255,50,50,${0.15 + 0.2 * Math.sin(this.t * 40)})`; ctx.fillRect(x - 2, 0, 4, GROUND); ctx.fillRect(x - 40, GROUND - 3, 80, 3) }
-    else { const a = 1 - (this.t - 0.7) / 0.35; ctx.fillStyle = `rgba(255,70,60,${0.5 * a})`; ctx.fillRect(x - 44, 0, 88, GROUND); ctx.fillStyle = `rgba(255,235,225,${a})`; ctx.fillRect(x - 12, 0, 24, GROUND) }
-  } }
-}
-// Teknium: the red glare. A ring closes on you; when it meets you, dash or counter.
-function glareLock(dur) {
-  return { kind: 'glare', t: 0, dur: dur + 0.35, struck: false, update() {
-    if (this.t >= dur && !this.struck) {
-      this.struck = true
-      flash = 0.45; flashColor = '255,40,40'; shake = 16; SFX.boom()
-      if (P.dead) return
-      if (P.act && P.act.name === 'counter' && P.guard > 0) counterHit({ dead: false })
-      else if (P.iframe > 0) perfectDodge()
-      else hurtPlayer(28, -B.face)
-    }
-  }, draw(k) {
-    const t = this.t
-    if (t < dur) {
-      const r = lerp(380, 46, t / dur)
-      ctx.globalCompositeOperation = 'lighter'
-      ctx.strokeStyle = `rgba(255,40,40,${0.5 + 0.5 * t / dur})`; ctx.lineWidth = 3 + 6 * t / dur
-      ctx.beginPath(); ctx.arc(P.x, P.y - 60, r, 0, Math.PI * 2); ctx.stroke()
-      ctx.strokeStyle = 'rgba(255,200,190,0.6)'; ctx.lineWidth = 1.5
-      ctx.beginPath(); ctx.arc(P.x, P.y - 60, 46, 0, Math.PI * 2); ctx.stroke()
-    } else {
-      const a = 1 - (t - dur) / 0.35
-      ctx.globalCompositeOperation = 'lighter'
-      ctx.fillStyle = `rgba(255,60,50,${0.5 * a})`
-      ctx.save(); ctx.translate(P.x, P.y - 60); ctx.rotate(-0.5); ctx.fillRect(-W, -10 * a, W * 2, 20 * a); ctx.restore()
-    }
-  } }
-}
-
-function arrow() { fx.push({ t: 0, dur: 2.5, draw(k) { const x = cam.x + W - 80 + Math.sin(T * 8) * 10; ctx.fillStyle = `rgba(255,230,190,${Math.sin(k * Math.PI)})`; ctx.beginPath(); ctx.moveTo(x, 330); ctx.lineTo(x + 30, 360); ctx.lineTo(x, 390); ctx.fill() }, screen: false }) }
+function arrow() { fx.push({ t: 0, dur: 2.5, draw(k) { const x = cam.x + VW() - 80 + Math.sin(T * 8) * 10, y = cam.y + VH() * 0.5; ctx.fillStyle = `rgba(255,230,190,${Math.sin(k * Math.PI)})`; ctx.beginPath(); ctx.moveTo(x, y - 30); ctx.lineTo(x + 30, y); ctx.lineTo(x, y + 30); ctx.fill() }, screen: false }) }
 
 let sub = null
-function subtitle(text, t) { sub = { text, t, max: t } }
+function subtitle(text, t) { if (text && CJK.test(text)) return; sub = { text, t, max: t } }
+// the move name under the Japanese voice: small, low, short; boss dialogue keeps the main subtitle line
+let nsub = null
+const NSUB_SEEN = {}
+function nameSub(text, t = 1.3) {
+  if (!text || CJK.test(text) || T - (NSUB_SEEN[text] ?? -99) < 6) return
+  NSUB_SEEN[text] = T; nsub = { text, t, max: t }
+}
 
 // ---------------------------------------------------------------- animation pick
+// How long each of the 6 frames is held, as weights. Attacks: a held wind-up, a fast swing, a
+// long impact frame, then recovery. Loops: rest on the key poses. heroes.json `holds` overrides.
+const HOLDS = { attack: [1.5, 0.7, 0.6, 2.0, 1.2, 1.0], cast: [1.2, 1.4, 0.8, 2.0, 1.0, 1.0], hurt: [2, 1, 1, 1, 1, 1], loop: [1.6, 1, 0.9, 1.6, 1, 0.9], run: [1, 1, 1, 1, 1, 1] }
+// a sheet doubled with RIFE in-betweens has 2n (loop) or 2n-1 frames: split each hold across its pair
+function holdsOf(hero, name, looping) {
+  const w = holdsBase(hero, name, looping), n = A.sheets?.[hero]?.[name]?.n || w.length
+  if (n <= w.length) return w
+  if (n > w.length * 2) return Array(n).fill(1)   // frames sampled from video are evenly timed
+  const out = []; for (let i = 0; i < n; i++) out.push(w[Math.min(w.length - 1, i >> 1)] / 2)
+  return out
+}
+function holdsBase(hero, name, looping) {
+  const own = CFG.heroes[hero]?.holds?.[name]
+  if (own) return own
+  if (/hurt/.test(name)) return HOLDS.hurt
+  if (looping) return /run|sprint|spin|shoot/.test(name) ? HOLDS.run : HOLDS.loop
+  return /cast|charge|counter/.test(name) ? HOLDS.cast : /jump|dodge|roll|dash/.test(name) ? HOLDS.run : HOLDS.attack
+}
+function frameAt(k, w) {
+  let sum = 0; for (const x of w) sum += x
+  let acc = 0; for (let i = 0; i < w.length; i++) { acc += w[i] / sum; if (k < acc) return i }
+  return w.length - 1
+}
 function pickAnim() {
   const h = P.hero
   const S = A.sheets[h]
-  const loop = (name, fps) => ({ sheet: name, frame: Math.floor(P.animT * fps) % (S[name]?.n || 6) })
-  const over = (name, t, dur) => ({ sheet: name, frame: Math.min(5, Math.floor(t / Math.max(dur, 0.36) * 6)) })
+  const loop = (name, fps) => { const w = holdsOf(h, name, true); return { sheet: name, frame: frameAt((P.animT * fps / 6) % 1, w) } }   // fps of the 6 painted frames: a RIFE-doubled sheet keeps the same tempo
+  const over = (name, t, dur) => ({ sheet: name, frame: frameAt(Math.min(0.999, t / Math.max(dur, 0.36)), holdsOf(h, name, false)) })
   if (P.dead || P.hurtT > 0) return over(h === 'messenger' ? 'hurt' : 'o-hurt', 0.2, 0.4)
   if (P.act) {
     const m = P.act.m
@@ -1030,21 +968,29 @@ function pickAnim() {
     return over(m.sheet, P.act.t, m.sheet === 'o-cast' ? Math.max(m.dur, 0.6) : m.dur)
   }
   if (P.dashT > 0) return h === 'messenger' ? over(P.ground ? 'dash' : 'roll', 0.19 - P.dashT, 0.19) : over('o-dodge', 0.19 - P.dashT, 0.22)
+  // crouch: Down while standing still shows the take-off crouch from the jump sheet; a drop through a
+  // platform keeps it for a moment as she sinks, so the move reads
+  const crouchSheet = h === 'messenger' ? 'jump' : 'o-jump'
+  if (!P.ground && P.drop > 0.13 && S?.[crouchSheet]) return { sheet: crouchSheet, frame: 0 }
+  if (P.ground && Math.abs(P.vx) < 60 && down('arrowdown', 's') && !(h === 'runner' && down('j')) && S?.[crouchSheet]) return { sheet: crouchSheet, frame: P.crouchT > 0.06 ? 0 : 1 }
   if (!P.ground) {
-    if (h === 'messenger') { if (P.jumpAnim === 'djump') return over('djump', P.animT, 0.45); return { sheet: 'jump', frame: P.vy < -300 ? 1 : P.vy < 200 ? 2 : 4 } }
-    return { sheet: 'o-jump', frame: P.vy < -300 ? 1 : P.vy < 200 ? 2 : 4 }
+    if (h === 'messenger') { if (P.jumpAnim === 'djump') return over('djump', P.animT, 0.45); { const f = P.vy < -650 ? 0 : P.vy < -250 ? 1 : P.vy < 180 ? 2 : P.vy < 650 ? 3 : 4; return { sheet: 'jump', frame: (A.sheets.messenger?.jump?.n || 6) > 6 ? f * 2 : f } } }   // 3-4: falling, hair and hem lift
+    { const n = A.sheets.runner?.['o-jump']?.n || 6, f = P.vy < -650 ? 1 : P.vy < -200 ? 1 + (P.vy + 650) / 450 : P.vy < 220 ? 2 + (P.vy + 200) / 420 : P.vy < 650 ? 3 + (P.vy - 220) / 430 : Math.min(5, 4 + (P.vy - 650) / 400)
+      return { sheet: 'o-jump', frame: n > 6 ? Math.round(f * 2) : Math.ceil(f) } }   // painted 1-2 rising, 3 apex, 4-5 falling; a RIFE sheet adds the in-betweens
   }
   const moving = Math.abs(P.vx) > 60
   if (h === 'runner') {
     if (down('j')) return moving ? loop('o-run', 9) : loop('o-shoot', 8)
     if (moving) return loop('o-run', 9)
-    return loop('o-idle', 4)
+    return loop('o-idle', (A.sheets.runner?.['o-idle']?.n || 6) > 12 ? 6 / 2.79 : 4)   // the Veo idle runs at its real 2.79 s
   }
   if (P.holdJ > 0.42) return { sheet: 'm-charge', frame: 0 }
   if (moving) return P.sprint ? loop('sprint', 11) : loop('run', 9.5)
-  return loop('m-idle', 4)
+  return loop('m-idle', (A.sheets.messenger?.['m-idle']?.n || 6) > 12 ? 6 / 2.85 : 4)   // the Veo idle runs at its real 2.85 s
 }
 
+// how tall the current heroine stands on screen (world px); bosses are drawn to match
+function heroHeight() { const h = P?.hero || 'messenger', s = A.sheets?.[h]?.[h === 'runner' ? 'o-idle' : 'm-idle'] || A.sheets?.messenger?.idle; return s ? Math.round(s.h * SCALE[s === A.sheets?.messenger?.idle ? 'messenger' : h]) : 165 }
 function drawSprite(hero, sheet, frame, x, y, face, alpha = 1, scale = 1) {
   const s = A.sheets[hero][sheet]; if (!s) return
   const k = SCALE[hero] * scale, slot = s.img.height
@@ -1062,12 +1008,21 @@ const TACTICS = {
   pressure: 'Attack the nearest enemy or the boss and keep moving.',
   punish: 'The boss is resting (attack window, takes more damage): go all in with the strongest moves.',
   evade: 'Get out of the bullets: dash through them (invincible while dashing) or jump to another platform.',
-  reflect: 'Messenger: swing or spin into the bullets to send them back at the boss.',
+  reflect: 'Baker: swing or spin into the bullets to send them back at the boss.',
   cast: 'Oracle: cast the spell that fits (beam, feathers, halo, comets or wing shield).',
   swap: 'Switch to the other heroine.',
   ult: 'Use the ultimate now (meter is full).',
 }
 const GOAL = 'Clear the drones, then beat the boss Teknium without dying. Dash makes you invincible; the red glare can only be dashed or countered; jump over floor sweeps; hit hardest while the boss rests.'
+function goalNow() {
+  const s = stage && curSection()
+  if (!s) return GOAL
+  const tail = ' Red orbs can be reflected or dashed; gold ones only dashed; black ones must be jumped or avoided.'
+  if (s.kind === 'chase') return 'Run right ahead of the wall; jump the pits; crumbling stones fall soon after you land.' + tail
+  if (s.kind === 'titan') return 'Stand on each glowing seal until it fills to bring the titan down, while fighting off its waves.' + tail
+  if (s.kind === 'arena') return `Beat the boss ${s.boss || ''} without dying; hit hardest while it rests.` + tail
+  return 'Clear the enemies and move right to the next gate.' + tail
+}
 const nearBullets = r => bullets.filter(b => b.enemy && (b.x - P.x) ** 2 + (b.y - P.y + 60) ** 2 < r * r)
 function tacticsNow() {
   if (mode !== 'play' || P.dead) return {}
@@ -1076,14 +1031,21 @@ function tacticsNow() {
   if (nearBullets(220).length >= 3) t.evade = TACTICS.evade
   if (P.hero === 'messenger' && nearBullets(260).length >= 2) t.reflect = TACTICS.reflect
   if (P.hero === 'runner' && targets().length && Object.values(SKILL_KEYS.runner).some(m => !(P.cds[m] > 0))) t.cast = TACTICS.cast
-  if (!(P.cds.swap > 0)) t.swap = TACTICS.swap
+  if (!(P.cds.swap > 0) && (P.hp < P.max * 0.35 || (P.hero === 'runner' && enemies.filter(e => !e.dead && Math.abs(e.x - P.x) < 200).length >= 2))) t.swap = TACTICS.swap
   if (P.meter >= 100) t.ult = TACTICS.ult
   return t
 }
 function playState() {
   const tg = targets()
   return {
-    mode, t: +T.toFixed(1), goal: GOAL, hero: P.hero, hp: Math.round(P.hp), max: P.max, meter: Math.round(P.meter), ground: P.ground,
+    mode, t: +T.toFixed(1), goal: goalNow(), stage: stage ? { index: stageIdx, id: stage.id, name: stage.name, section: curSection()?.kind } : null,
+    threats: bullets.filter(b => b.enemy && b.type !== 'orb' && Math.abs(b.x - P.x) < 500).slice(0, 8).map(b => ({ kind: b.type, side: b.x < P.x ? 'left' : 'right', dy: Math.round(b.y - P.y), in: +(Math.abs(b.x - P.x) / Math.max(60, Math.abs(b.vx))).toFixed(2), clear: b.type === 'doom' ? 'jump or move' : 'dash or move' })),
+    hazards: typeof HZ !== 'undefined' ? HZ.slice(0, 8).map(h => ({ kind: h.kind, dx: Math.round(h.x - P.x), live: h.t >= h.tell, in: +Math.max(0, h.tell - h.t).toFixed(2), clear: h.kind === 'crack' ? 'jump' : 'move away' })) : [],
+    pit_ahead: !!(typeof inPit === 'function' && (inPit(P.x + P.face * 120) || inPit(P.x + P.face * 220))),
+    chase: typeof chase !== 'undefined' && chase ? { wall_dx: Math.round(chase.x - P.x) } : null,
+    titan: typeof TI !== 'undefined' && TI ? { seals_left: TI.s.seals.filter(z => !z.done).map(z => Math.round(z.x - P.x)) } : null,
+    result: mode === 'win' || mode === 'dead' ? { mode, seconds: +T.toFixed(1) } : null,
+    cds: Object.fromEntries(Object.entries(P.cds || {}).filter(([, v]) => v > 0).map(([k, v]) => [k, +v.toFixed(1)])), hero: P.hero, hp: Math.round(P.hp), max: P.max, meter: Math.round(P.meter), ground: P.ground,
     ready: Object.entries(SKILL_KEYS[P.hero] || {}).filter(([, m]) => !(P.cds[m] > 0)).map(([, m]) => m),
     wave, boss: B ? { hp: Math.round(B.hp), max: B.max, phase: B.phase, doing: B.pose, resting: B.window > 0, active: B.active } : null,
     enemies: tg.filter(e => e !== B).map(e => ({ kind: e.type, dx: Math.round(e.x - P.x), dy: Math.round(e.y - P.y), hp: Math.round(e.hp), burning: e.burn > 0, shocked: e.shock > 0, charred: e.charred > 0 })),
@@ -1096,6 +1058,13 @@ window.SWARM_PLAY = {
   act(name, why = '') { if (TACTICS[name]) { AUTO.tactic = name; AUTO.why = why; AUTO.at = T; AUTO.src = 'jev'; AUTO.count[name] = (AUTO.count[name] || 0) + 1 } },
   start(hero) { AUTO.on = true; if (hero) sel = Math.max(0, HEROES.indexOf(hero)); if (mode !== 'play') startGame() },
   auto(on = true) { AUTO.on = on },
+}
+// plays strings the way a person would: the next key once the current swing can be cancelled
+const AUTO_STRINGS = [['j', 'j', 'j'], ['j', 'j', 'k'], ['j', 'k'], ['k', 'k', 'k'], ['j', 'j', 'j', 'k']]
+function autoString() {
+  if (P.act && P.act.t < P.act.m.cancel * 0.7) return
+  if (!AUTO.seq || AUTO.si >= AUTO.seq.length) { if (P.act) return; AUTO.seq = AUTO_STRINGS[(Math.random() * AUTO_STRINGS.length) | 0]; AUTO.si = 0 }
+  vtap(AUTO.seq[AUTO.si++])
 }
 function vkey(k) { keys.add(k); AUTO.held.add(k) }
 function vtap(k) { if (!keys.has(k)) pressed.add(k); vkey(k) }
@@ -1119,10 +1088,49 @@ function autopilot() {
   let tac = AUTO.tactic
   if (!tacticsNow()[tac]) tac = 'pressure'
   const tgt = (B && B.active) ? B : nearestTarget(P.x, P.y)
-  const tx = tgt ? tgt.x : (cam.lock ? ARENA + W / 2 : P.x + 400), ty = tgt ? (tgt === B ? B.y - bossH() * 0.5 : tgt.y) : P.y - 60
+  const tx = tgt ? tgt.x : (cam.lock ? ARENA + ARW / 2 : P.x + 400), ty = tgt ? (tgt === B ? B.y - (B.h || 280) * 0.5 : tgt.y) : P.y - 60
   const dx = tx - P.x, dy = ty - (P.y - 80)
   const go = d => vkey(d > 0 ? 'arrowright' : 'arrowleft')
   const canDash = P.dashCD <= 0 && (P.ground || P.airDash > 0)
+
+  // the ground: jump pits and walls, kick off walls, keep moving over a hole
+  const fwd = P.face
+  if (P.ground && !inPit(P.x) && (inPit(P.x + fwd * 80) || inPit(P.x + fwd * 140))) { vtap(' '); vkey(fwd > 0 ? 'arrowright' : 'arrowleft') }
+  if (!P.ground && inPit(P.x)) { go(fwd); if (P.jumps > 0 && P.vy > 120) vtap(' ') }
+  for (const p of plats) if (p.kind === 'wall' && !p.broken && P.ground && (fwd > 0 ? p.l - P.x : P.x - p.r) > 0 && (fwd > 0 ? p.l - P.x : P.x - p.r) < 110) { vtap(' '); break }
+  if (P.onWall) { vtap(' '); vkey(P.onWall < 0 ? 'arrowleft' : 'arrowright') }
+  // black orbs: nothing stops them, so get over them or into the gap
+  const dooms = bullets.filter(b => b.enemy && b.type === 'doom' && Math.abs(b.x - P.x) < 360 && (b.x - P.x) * b.vx < 0)
+  if (dooms.length) {
+    const near = dooms.reduce((a, b) => Math.abs(b.x - P.x) < Math.abs(a.x - P.x) ? b : a)
+    const col = dooms.filter(b => Math.abs(b.x - near.x) < 30).map(b => b.y).sort((a, b) => b - a)
+    let gap = null
+    for (let i = 0; i < col.length - 1; i++) if (col[i] - col[i + 1] > 100) { gap = (col[i] + col[i + 1]) / 2; break }
+    const tth = Math.abs(near.x - P.x) / Math.max(60, Math.abs(near.vx))
+    const low = near.y > P.y - 110 && near.y > GROUND - 60
+    if (gap !== null) { if (gap < P.y - 120 && tth < 0.6) { if (P.ground) vtap(' '); else if (P.vy > 0 && P.jumps > 0 && gap < P.y - 60) vtap(' '); vkey(' ') } }
+    else if (low && tth < 0.38) { if (P.ground) vtap(' '); vkey(' ') }
+    else if (!low && Math.abs(near.y - (P.y - 60)) < 80 && tth < 0.5) { go(P.x > near.x ? 1 : -1) }
+  }
+  // what attacks leave behind: step out of fire and live floor, out from under falling rock, jump the crack
+  if (typeof HZ !== 'undefined') for (const h of HZ) {
+    if (h.kind === 'debris' && !h.hit && Math.abs(P.x - h.x) < h.size + 60) { go(P.x > h.x ? 1 : -1); return }
+    if (h.kind === 'crack' && h.t > h.tell - 0.15 && h.t < h.tell + 0.5 && P.ground && Math.abs(P.x - h.x) < h.len / 2 + 20) vtap(' ')
+    if (P.ground && ((h.kind === 'fire' && P.x > h.l - 30 && P.x < h.r + 30) || (h.kind === 'shock' && Math.abs(P.x - h.x) < h.r + 30))) { go(P.x > (h.l + h.r) / 2 ? 1 : -1); return }
+  }
+  // the chase: run
+  if (typeof chase !== 'undefined' && chase && !B?.active) { vkey('arrowright'); if (P.ground && Math.random() < 0.02) vtap(' '); if (Math.abs(dx) < 200 && tgt && tgt !== B) autoString(); return }
+  // a titan: stand on the next seal and fight from there
+  if (typeof TI !== 'undefined' && TI && !TI.down && !(B && B.active)) {
+    const z = TI.s.seals.filter(z => !z.done).sort((a, b) => Math.abs(a.x - P.x) - Math.abs(b.x - P.x))[0]
+    if (z) {
+      const zy = z.surf || GROUND
+      if (Math.abs(z.x - P.x) > 40) go(z.x - P.x)
+      if (zy < P.y - 20 && P.ground && Math.abs(z.x - P.x) < 260) vtap(' ')
+      if (tgt && Math.abs(dx) < 220) autoString()
+      return
+    }
+  }
 
   // reflexes first
   for (const f of fx) {
@@ -1144,17 +1152,17 @@ function autopilot() {
     return
   }
   if (P.hero === 'messenger') {
-    if (tac === 'reflect') { const n = nearBullets(260); if (n.length) { P.face = Math.sign(n[0].x - P.x) || P.face; if (!(P.cds.spin > 0) && n.length > 3) vtap('i'); else vtap('j') } return }
+    if (tac === 'reflect') { const n = nearBullets(260); if (n.length) { P.face = Math.sign(n[0].x - P.x) || P.face; if (n.length > 3) { AUTO.seq = ['j', 'k']; AUTO.si = 0 } autoString() } return }
     // close in; jump to whatever floats above
     if (Math.abs(dx) > 120) go(dx)
     else if (Math.abs(dx) < 50) go(-dx)
     if (dy < -140 && P.ground) vtap(' ')
     else if (dy < -60 && !P.ground && P.vy > 0 && P.jumps > 0) vtap(' ')
     if (Math.abs(dx) < 220 && Math.abs(dy) < 160) {
-      if (tac === 'punish' && !(P.cds.wave > 0)) vtap('k')
+      if (tac === 'punish' && P.meter >= SPECIAL_COST && P.str?.length >= 2) vtap('l')
       else if (P.ground && dy < -80 && !P.act) { vkey('arrowup'); vtap('j') }
-      else if (T * 7 % 1 < 0.5) vtap('j')
-    } else if (Math.abs(dx) < 900 && Math.abs(dy) < 120 && !(P.cds.wave > 0) && Math.random() < 0.02) vtap('k')
+      else autoString()
+    } else if (Math.abs(dx) < 900 && Math.abs(dy) < 120 && Math.random() < 0.02) { AUTO.seq = ['j', 'j', 'k']; AUTO.si = 0; autoString() }
     return
   }
   // Oracle: keep her distance, aim at the target, shoot, cast
@@ -1162,12 +1170,13 @@ function autopilot() {
   if (!tgt) { go(1); if (P.ground && Math.random() < 0.03) vtap(' ') }   // nothing in view: walk on to the next gate
   else if (Math.abs(dx) > want + 120) go(dx)
   else if (Math.abs(dx) < want - 120) go(-dx)
-  mouse.on = true; mouse.t = performance.now(); mouse.x = tx - cam.x; mouse.y = ty - cam.y
+  mouse.on = true; mouse.t = performance.now(); mouse.x = (tx - cam.x) * cam.z; mouse.y = (ty - cam.y) * cam.z
   vkey('j')
   if (tac === 'cast' || tac === 'punish') {
     const r = m => !(P.cds[m] > 0)
-    const k = r('wing') && nearBullets(260).length > 5 ? 'u' : r('comet') && (tac === 'punish' || targets().length >= 3) ? 'o' : r('sunlance') ? 'l' : r('halo') ? 'i' : r('feather') ? 'k' : null
-    if (k && (!P.act || P.act.t >= P.act.m.cancel)) vtap(k)
+    if (r('wing') && nearBullets(260).length > 5) vtap('i')
+    else if (typeof spellReady === 'function' && RUN.spells.length && spellReady(RUN.spells[RUN.spell]) && !P.chant && Math.random() < 0.05) vtap('l')
+    else if (!P.act || P.act.t >= P.act.m.cancel) { if (!AUTO.seq || AUTO.si >= AUTO.seq.length) { AUTO.seq = r('comet') && (tac === 'punish' || targets().length >= 3) ? ['k', 'k'] : r('halo') ? ['j', 'j', 'k'] : ['k']; AUTO.si = 0 } autoString() }
   }
   if (dy < -200 && P.ground && Math.random() < 0.05) vtap(' ')
 }
@@ -1175,10 +1184,12 @@ function autopilot() {
 // ---------------------------------------------------------------- main loop
 function update(rdt) {
   T += rdt
-  voiceBusy = Math.max(0, voiceBusy - rdt)
+  voiceTick(rdt)
   shake = Math.max(0, shake - rdt * 40)
   flash = Math.max(0, flash - rdt * 2); dim = Math.max(0, dim - rdt)
   if (sub) { sub.t -= rdt; if (sub.t <= 0) sub = null }
+  if (nsub) { nsub.t -= rdt; if (nsub.t <= 0) nsub = null }
+  if (typeof INTRO !== 'undefined' && INTRO) { introTick(rdt); updateCamera(rdt); return }   // a boss intro holds the fight
   if (stopT > 0) { stopT -= rdt; return }
   let dt = rdt
   if (slowT > 0) { slowT -= rdt; dt *= 0.3 }
@@ -1187,101 +1198,42 @@ function update(rdt) {
   const due = timers.filter(t => t.t <= 0); timers = timers.filter(t => t.t > 0)
   for (const t of due) t.fn()
   updatePlayer(dt)
+  if (stage) updateStage(dt)
+  if (typeof updateHazards === 'function') updateHazards(dt)
+  if (typeof persTick === 'function') persTick(dt)
   updateEnemies(dt)
-  updateBoss(dt)
+  if (B) updateBoss(dt)
   updateBullets(dt)
   updateWorld(dt)
   for (const f of fx) { f.t += dt; f.update && f.update(dt) }
   fx = fx.filter(f => f.t < f.dur)
   for (const p of parts) { p.t += dt; p.vy += (p.g || 0) * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.chunk) p.rot += p.vr * dt; if (p.smoke) { p.vx *= 0.96; p.vy *= 0.96 } }
   parts = parts.filter(p => p.t < p.life)
+  if (parts.length > (PERF.low ? 160 : 420)) parts.splice(0, parts.length - (PERF.low ? 160 : 420))
   for (const c of callouts) c.t += dt
   callouts = callouts.filter(c => c.t < 1.1)
-  // camera
-  const tx = clamp(P.x - W * 0.42 + P.face * 70, 0, WORLD - W)
-  cam.x = cam.lock ? lerp(cam.x, ARENA, Math.min(1, dt * 4)) : lerp(cam.x, Math.min(tx, Math.max(0, gate - W + 60)), Math.min(1, dt * 6))
-  cam.y = lerp(cam.y, clamp((P.y - 420) * 0.25, -80, 0), Math.min(1, dt * 4))
-}
-
-function drawWorld() {
-  const sx = shake ? R(-shake, shake) : 0, sy = shake ? R(-shake, shake) : 0
-  // sky
-  const sky = A.level.sky, ss = H / sky.height, sw = sky.width * ss
-  const off = -(cam.x * 0.08) % sw
-  for (let x = off; x < W; x += sw) ctx.drawImage(sky, x, 0, sw, H)
-  // far islands
-  ctx.save(); ctx.translate(-cam.x * 0.3 + sx * 0.3, -cam.y * 0.3)
-  for (const [k, x, y, s] of ISLANDS) { const i = A.level[k]; ctx.globalAlpha = 0.85; ctx.drawImage(i, x, y + Math.sin(T * 0.6 + x) * 6, i.width * s, i.height * s) }
-  ctx.globalAlpha = 1; ctx.restore()
-  // warm haze
-  const hz = ctx.createLinearGradient(0, 300, 0, H); hz.addColorStop(0, 'rgba(255,170,120,0)'); hz.addColorStop(1, 'rgba(120,40,40,0.35)'); ctx.fillStyle = hz; ctx.fillRect(0, 0, W, H)
-
-  ctx.save(); ctx.translate(-cam.x + sx, -cam.y + sy)
-  // ground
-  const g = A.level['ground-0'], gs = 0.6, gw = g.width * gs
-  for (let x = Math.floor(cam.x / gw) * gw; x < cam.x + W + gw; x += gw) ctx.drawImage(g, x, GROUND - 8, gw, g.height * gs)
-  // platforms
-  for (const p of plats) {
-    if (p.broken) continue
-    ctx.globalAlpha = p.reform ? 1 - p.reform : 1
-    const j = p.hit ? R(-3, 3) : 0
-    ctx.drawImage(p.img, p.x + j, p.y, p.w, p.h)
-    if (p.max && p.hp < p.max) { ctx.globalCompositeOperation = 'source-atop' }
-    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
-    if (p.kind === 'brazier') for (let i = 0; i < 2; i++) parts.push({ x: p.x + p.w / 2 + R(-8, 8), y: p.y + 14, vx: R(-15, 15), vy: R(-140, -60), life: 0.4, t: 0, size: R(3, 7), color: '255,160,70', add: true })
-  }
-  // scorched marks: the temple goes black where it burned, then fades back
-  for (const d of decals) {
-    const a = Math.min(1, d.t / d.max * 1.5) * 0.75
-    const gr = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r); gr.addColorStop(0, `rgba(20,8,6,${a})`); gr.addColorStop(1, 'rgba(20,8,6,0)')
-    ctx.fillStyle = gr; ctx.fillRect(d.x - d.r, d.y - d.r * 0.5, d.r * 2, d.r * 0.6)
-  }
-  for (const f of patches) if (f.kind === 'fire') { ctx.globalCompositeOperation = 'lighter'; const gr = ctx.createLinearGradient(0, f.y - 50, 0, f.y); gr.addColorStop(0, 'rgba(255,120,40,0)'); gr.addColorStop(1, `rgba(255,140,50,${0.5 * Math.min(1, f.t)})`); ctx.fillStyle = gr; ctx.fillRect(f.l, f.y - 50, f.r - f.l, 50); ctx.globalCompositeOperation = 'source-over' }
-
-  // boss
-  if (B) drawBoss()
-  // enemies
-  for (const e of enemies) drawEnemy(e)
-  // player shadow
-  let gy = GROUND
-  for (const p of plats) if (!p.broken && p.walk && P.x > p.l && P.x < p.r && p.surf >= P.y - 2 && p.surf < gy) gy = p.surf
-  const hgt = Math.min(1, (gy - P.y) / 400)
-  ctx.fillStyle = `rgba(30,10,10,${0.35 * (1 - hgt)})`; ctx.beginPath(); ctx.ellipse(P.x, gy - 2, 46 * (1 - hgt * 0.5), 10 * (1 - hgt * 0.5), 0, 0, Math.PI * 2); ctx.fill()
-  // afterimages
-  for (const t of P.trail) { const a = 0.35 * (1 - (T - t.t) / 0.3); ctx.globalCompositeOperation = 'lighter'; drawSprite(t.hero, t.sheet, t.frame, t.x, t.y, t.face, a * 0.6); ctx.globalCompositeOperation = 'source-over' }
-  // player
-  if (mode === 'play') {
-    const a = pickAnim()
-    const blink = P.iframe > 0 && P.hurtT <= 0 && P.dashT <= 0 ? (Math.sin(T * 40) > 0 ? 0.55 : 1) : 1
-    if (P.holdJ > 0.42) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,210,140,${0.15 + 0.1 * Math.sin(T * 30)})`; ctx.beginPath(); ctx.arc(P.x, P.y - 70, 90, 0, Math.PI * 2); ctx.fill(); ctx.globalCompositeOperation = 'source-over' }
-    drawSprite(P.hero, a.sheet, a.frame, P.x, P.y, P.face, blink)
-    if (P.hero === 'runner' && !P.dead) { const h = handPos(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,236,200,0.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(h.x + Math.cos(P.aim) * 40, h.y + Math.sin(P.aim) * 40, 7, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(h.x + Math.cos(P.aim) * 16, h.y + Math.sin(P.aim) * 16); ctx.lineTo(h.x + Math.cos(P.aim) * 30, h.y + Math.sin(P.aim) * 30); ctx.stroke(); ctx.globalCompositeOperation = 'source-over' }
-    if (P.shield > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,240,220,${0.35 + 0.2 * Math.sin(T * 10)})`; ctx.lineWidth = 3; for (let i = 0; i < 6; i++) { const aa = T * 2 + i * Math.PI / 3; ctx.beginPath(); ctx.ellipse(P.x + Math.cos(aa) * 110, P.y - 70 + Math.sin(aa) * 60, 14, 6, aa, 0, Math.PI * 2); ctx.stroke() } ctx.globalCompositeOperation = 'source-over' }
-    if (P.act && P.act.name === 'counter' && P.guard > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,240,210,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(P.x, P.y - 70, 80, 0, Math.PI * 2); ctx.stroke(); ctx.globalCompositeOperation = 'source-over' }
-  }
-  // bullets
-  ctx.globalCompositeOperation = 'lighter'
-  for (const b of bullets) drawBullet(b)
-  ctx.globalCompositeOperation = 'source-over'
-  // effects and particles
-  for (const f of fx) { ctx.save(); f.draw(f.t / f.dur); ctx.restore() }
-  for (const p of parts) drawPart(p)
-  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
-  for (const c of callouts) drawCallout(c)
-  ctx.restore()
-
-  // foreground vines and rocks
-  ctx.save(); ctx.translate(-cam.x * 1.15 + sx, -cam.y)
-  for (const [k, x, y, s] of FORE) { const i = A.level[k]; ctx.drawImage(i, x, y, i.width * s, i.height * s) }
-  ctx.restore()
+  if (fxk()?.update) try { FXK.update(dt) } catch (e) { console.warn('FXK', e) }
+  updateCamera(rdt)
 }
 
 function drawBullet(b) {
   if (b.enemy) {
     const r = b.r
-    const red = b.cancelable ? '255,60,60' : '200,20,30'
-    ctx.fillStyle = `rgba(${red},0.35)`; ctx.beginPath(); ctx.arc(b.x, b.y, r * 2, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = `rgba(${red},0.9)`; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill()
+    if (b.type === 'doom') {   // drawn over normally, not added, so the black reads on any sky
+      ctx.globalCompositeOperation = 'source-over'
+      const a = Math.atan2(b.vy, b.vx), sp = Math.hypot(b.vx, b.vy)
+      ctx.fillStyle = 'rgba(40,0,6,0.35)'; for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.arc(b.x - Math.cos(a) * i * r * 0.9 * Math.min(1, sp / 300), b.y - Math.sin(a) * i * r * 0.9 * Math.min(1, sp / 300), r * (1 - i * 0.2), 0, Math.PI * 2); ctx.fill() }
+      ctx.fillStyle = `rgba(200,20,36,${0.55 + 0.3 * Math.sin(T * 20 + b.x)})`; ctx.beginPath(); ctx.arc(b.x, b.y, r * 1.45, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#12020a'; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = 'rgba(255,90,90,0.95)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y, r * 1.05, 0, Math.PI * 2); ctx.stroke()
+      if (b.roll) { ctx.strokeStyle = 'rgba(255,60,60,0.8)'; ctx.beginPath(); const sp_ = b.t * 12 * Math.sign(b.vx); ctx.moveTo(b.x + Math.cos(sp_) * r * 0.8, b.y + Math.sin(sp_) * r * 0.8); ctx.lineTo(b.x - Math.cos(sp_) * r * 0.8, b.y - Math.sin(sp_) * r * 0.8); ctx.stroke() }
+      ctx.globalCompositeOperation = 'lighter'
+      return
+    }
+    const col = b.type === 'heavy' ? '255,190,70' : b.cancelable ? '255,60,60' : '200,20,30'
+    ctx.fillStyle = `rgba(${col},0.35)`; ctx.beginPath(); ctx.arc(b.x, b.y, r * 2, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = `rgba(${col},0.9)`; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill()
+    if (b.type === 'heavy') { ctx.strokeStyle = 'rgba(255,250,225,0.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(b.x, b.y, r * 1.3, 0, Math.PI * 2); ctx.stroke() }
     ctx.fillStyle = 'rgba(255,235,230,1)'; ctx.beginPath(); ctx.arc(b.x, b.y, r * 0.45, 0, Math.PI * 2); ctx.fill()
   } else if (b.feather) {
     const a = Math.atan2(b.vy, b.vx)
@@ -1350,31 +1302,6 @@ function drawEnemy(e) {
   ctx.restore()
 }
 
-function drawBoss() {
-  const key = POSES[B.pose] || POSES.rest, img = A.boss[key], meta = BOSSMETA[key]
-  const h = bossH(), s = h / img.height, w = img.width * s
-  const face = -B.face  // the paintings look a little to their left
-  // shadow
-  ctx.fillStyle = 'rgba(30,8,8,0.3)'; ctx.beginPath(); ctx.ellipse(B.x, GROUND - 2, 90, 14, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.save(); ctx.translate(B.x, B.y); ctx.scale(face < 0 ? -1 : 1, 1)
-  if (B.window > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(255,220,150,${0.12 + 0.08 * Math.sin(T * 8)})`; ctx.beginPath(); ctx.ellipse(0, -h / 2, w * 0.7, h * 0.6, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalCompositeOperation = 'source-over' }
-  if (B.charred > 0) ctx.filter = 'brightness(0.55) sepia(0.4)'
-  ctx.drawImage(img, -w / 2, -h, w, h)
-  ctx.filter = 'none'
-  if (B.flash > 0) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35; ctx.drawImage(img, -w / 2, -h, w, h); ctx.globalAlpha = 1 }
-  // the red glare: one eye, anime lens streak
-  if (meta.eye) {
-    const ex = -w / 2 + meta.eye[0] * w, ey = -h + Math.max(0.04, meta.eye[1]) * h
-    const gl = 0.5 + 0.5 * Math.min(1, B.glare) + 0.15 * Math.sin(T * 6)
-    ctx.globalCompositeOperation = 'lighter'
-    const gr = ctx.createRadialGradient(ex, ey, 0, ex, ey, 26 + 20 * gl); gr.addColorStop(0, `rgba(255,70,60,${0.9 * gl})`); gr.addColorStop(1, 'rgba(255,30,30,0)')
-    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(ex, ey, 26 + 20 * gl, 0, Math.PI * 2); ctx.fill()
-    ctx.fillStyle = `rgba(255,120,110,${0.7 * gl})`; ctx.fillRect(ex - 60 * gl - 10, ey - 1, 120 * gl + 20, 2)
-    ctx.fillStyle = `rgba(255,240,235,${gl})`; ctx.beginPath(); ctx.arc(ex, ey, 2.5, 0, Math.PI * 2); ctx.fill()
-  }
-  ctx.restore()
-}
-
 function drawHUD() {
   // the heroine: name, health, meter, skills
   const name = CFG.heroes[P.hero].name
@@ -1393,6 +1320,10 @@ function drawHUD() {
     ctx.fillStyle = cd > 0 ? 'rgba(255,241,220,0.4)' : '#fff1dc'; ctx.fillText(k.toUpperCase(), x + 12, 96)
     x += 32
   }
+  { const ok = P.hero === 'runner' ? (typeof spellReady === 'function' && RUN.spells.length && spellReady(RUN.spells[RUN.spell])) : P.meter >= SPECIAL_COST
+    ctx.fillStyle = 'rgba(30,10,10,0.55)'; ctx.beginPath(); ctx.arc(x + 12, 92, 12, 0, Math.PI * 2); ctx.fill()
+    ctx.strokeStyle = ok ? '#e8b860' : 'rgba(232,184,96,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x + 12, 92, 12, 0, Math.PI * 2); ctx.stroke()
+    ctx.fillStyle = ok ? '#fff1dc' : 'rgba(255,241,220,0.4)'; ctx.fillText('L', x + 12, 96) }
   if (AUTO.on) { ctx.textAlign = 'right'; ctx.font = '700 12px Cinzel, serif'; ctx.fillStyle = 'rgba(255,241,220,0.7)'; ctx.fillText((AUTO.src === 'jev' ? 'JEV · ' : 'AUTO · ') + AUTO.tactic.toUpperCase(), W - 32, 44) }
   if (combo > 2) {
     ctx.textAlign = 'right'; ctx.font = '800 44px "Shippori Mincho", serif'; ctx.fillStyle = '#fff1dc'
@@ -1400,7 +1331,7 @@ function drawHUD() {
   }
   // the boss
   if (B && B.active) {
-    ctx.textAlign = 'center'; ctx.font = '700 16px Cinzel, serif'; ctx.fillStyle = '#fff1dc'; ctx.fillText('TEKNIUM', W / 2, 40)
+    ctx.textAlign = 'center'; ctx.font = '700 16px Cinzel, serif'; ctx.fillStyle = '#fff1dc'; ctx.fillText((B.f?.en || B.handle || 'TEKNIUM').toString().toUpperCase(), W / 2, 40)
     ctx.fillStyle = 'rgba(30,10,10,0.6)'; ctx.fillRect(W / 2 - 300, 50, 600, 6)
     ctx.fillStyle = B.window > 0 ? '#ffe2a8' : '#c8282e'; ctx.fillRect(W / 2 - 300, 50, 600 * Math.max(0, B.hp / B.max), 6)
   }
@@ -1409,6 +1340,12 @@ function drawHUD() {
     ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.font = '600 26px "Shippori Mincho", serif'
     ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(20,5,5,0.8)'; ctx.strokeText(sub.text, W / 2, H - 50)
     ctx.fillStyle = '#fff1dc'; ctx.fillText(sub.text, W / 2, H - 50); ctx.globalAlpha = 1
+  }
+  if (nsub) {
+    const a = Math.min(1, nsub.t * 3, (nsub.max - nsub.t) * 6), y = sub ? H - 88 : H - 46
+    ctx.globalAlpha = a * 0.92; ctx.textAlign = 'center'; ctx.font = 'italic 500 17px "Shippori Mincho", serif'
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(20,5,5,0.7)'; ctx.strokeText(nsub.text, W / 2, y)
+    ctx.fillStyle = '#f4e6d0'; ctx.fillText(nsub.text, W / 2, y); ctx.globalAlpha = 1
   }
   ctx.restore()
 }
@@ -1428,30 +1365,23 @@ function drawTitle(dt) {
   ctx.fillStyle = 'rgba(20,6,6,0.55)'; ctx.fillRect(0, 0, W, H)
   ctx.textAlign = 'center'; ctx.fillStyle = '#fff1dc'
   ctx.font = '700 64px Cinzel, serif'; ctx.fillText('ARES', W / 2, 110)
-  ctx.font = '600 22px "Shippori Mincho", serif'; ctx.fillStyle = '#e8b860'; ctx.fillText('天空神殿', W / 2, 146)
+  ctx.font = '600 22px "Shippori Mincho", serif'; ctx.fillStyle = '#e8b860'; ctx.fillText('SKY TEMPLE', W / 2, 146)
   const opts = [['messenger', 'm-loading', W / 2 - 250], ['runner', 'o-loading', W / 2 + 250]]
   for (const [h, sheet, x] of opts) {
     const on = HEROES[sel] === h
-    const f = Math.floor(titleT * 4.5) % 6
+    const n = A.sheets?.[h]?.[sheet]?.n || 6, f = Math.floor(titleT * 4.5 * n / 6) % n
     if (on) { const g = ctx.createRadialGradient(x, 470, 10, x, 470, 240); g.addColorStop(0, 'rgba(255,210,150,0.35)'); g.addColorStop(1, 'rgba(255,210,150,0)'); ctx.fillStyle = g; ctx.fillRect(x - 260, 220, 520, 440) }
     drawSprite(h, sheet, on ? f : 0, x, 600, h === 'runner' ? -1 : 1, on ? 1 : 0.45, 0.95)
     ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = on ? '#fff1dc' : 'rgba(255,241,220,0.4)'; ctx.fillText(CFG.heroes[h].name, x, 650)
   }
   ctx.font = '600 13px Cinzel, serif'; ctx.fillStyle = 'rgba(255,241,220,0.7)'
-  ctx.fillText('←→ move   ↑↓ / mouse aim   SPACE jump   SHIFT dash   J attack   K L I O U skills   R ultimate   TAB swap', W / 2, H - 28)
+  ctx.fillText('←→ move   ↑↓ / mouse aim   SPACE jump   ↓SPACE drop   SHIFT dash   J light   K heavy   L special   ↑L petal dance   E moon flash   U sky tide   I guard   R ultimate   TAB swap', W / 2, H - 28)
   if (tap('arrowleft', 'a')) sel = 0
   if (tap('arrowright', 'd')) sel = 1
   if (tap('j', 'enter', ' ')) startGame()
 }
 
-function startGame() {
-  mode = 'play'
-  buildLevel(); enemies = []; bullets = []; fx = []; parts = []; decals = []; patches = []; timers = []; callouts = []
-  B = null; combo = 0; cam.x = 0; cam.lock = false; gate = 1300
-  resetPlayer()
-  say(P.hero, 'bark-start', true)
-  later(0.8, () => spawnWave(1))
-}
+function startGame() { startRun() }
 
 function drawEnd(win) {
   drawWorld(); drawOverlay()
@@ -1464,18 +1394,31 @@ function drawEnd(win) {
 
 let last = performance.now()
 function frame(now) {
+  perfTick(now - last)
   const dt = Math.min(0.033, (now - last) / 1000); last = now
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.imageSmoothingQuality = 'high'
   autopilot()
   if (mode === 'loading') { ctx.fillStyle = '#1a0f0f'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#e8b860'; ctx.font = '600 18px Cinzel, serif'; ctx.textAlign = 'center'; ctx.fillText('ARES', W / 2, H / 2) }
   else if (mode === 'title') drawTitle(dt)
-  else if (mode === 'play') { if (tap('p') && !AUTO.on) { AUTO.on = true; pressed.delete('p') } update(dt); drawWorld(); drawOverlay(); drawHUD() }
+  else if (mode === 'play') { if (tap('p') && !AUTO.on) { AUTO.on = true; pressed.delete('p') } update(dt); drawWorld(); drawOverlay(); if (!(typeof INTRO !== 'undefined' && INTRO)) drawHUD(); if (typeof drawIntro === 'function') drawIntro() }
+  else if (mode === 'boon') { drawBoon(dt) }
+  if (fxk()?.drawScreen && (mode === 'play' || mode === 'boon')) try { ctx.setTransform(1, 0, 0, 1, 0, 0); FXK.drawScreen() } catch (e) { console.warn('FXK', e) }
   else if (mode === 'win' || mode === 'dead') drawEnd(mode === 'win')
   pressed.clear(); released.clear()
   requestAnimationFrame(frame)
 }
 
-load().then(() => { buildLevel(); resetPlayer(); mode = 'title' }).catch(e => { mode = 'error'; console.error(e); ctx.fillStyle = '#fff'; ctx.fillText(String(e), 40, 40) })
-requestAnimationFrame(frame)
+// index.html calls ARES_BOOT() once every script has loaded
+// both heroines stand about this tall in world px, whatever size their sheets were painted at
+const HERO_PX = { messenger: 160, runner: 162 }
+function fitScale() {
+  for (const [h, idle] of [['messenger', 'm-idle'], ['runner', 'o-idle']]) { const s = A.sheets?.[h]?.[idle] || A.sheets?.[h]?.idle; if (s?.h) SCALE[h] = HERO_PX[h] / s.h }
+}
+function ARES_BOOT() {
+  load().then(loadData).then(() => { fitScale(); buildLevel(); resetPlayer(); kit = KITS.temple; mode = 'title'; loadKit(STAGES?.[0]?.kit).then(k => { if (mode === 'title' && k) kit = k }).catch(() => {}); if (/[?&]stage=/.test(location.search) && AUTO.on) startGame() })
+    .catch(e => { mode = 'error'; console.error(e); ctx.fillStyle = '#fff'; ctx.fillText(String(e), 40, 40) })
+  requestAnimationFrame(frame)
+}
 // test hook: lets the browser test drive the game
-window.ARES = { P, get B() { return B }, get enemies() { return enemies }, get bullets() { return bullets }, startGame, startBoss: () => { wave = 2.5; gate = WORLD; P.x = ARENA + 300; startBoss() }, get mode() { return mode } }
+window.ARES = { P, get B() { return B }, get enemies() { return enemies }, get bullets() { return bullets }, startGame, get mode() { return mode }, get stage() { return stage }, get stageIdx() { return stageIdx }, get cam() { return cam }, get RUN() { return RUN },
+  goStage: i => startStage(i), goTo: x => { for (const s of stage.sections) if (s.to <= x) s.cleared = true; P.x = x; P.y = GROUND - 200 } }

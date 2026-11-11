@@ -13,6 +13,12 @@ test('every ARES heroine has a known voice and her lines become jobs', () => {
   assert.equal(jobs.filter(j => j.hero === 'runner').length, voiceJobs(heroes, { hero: 'runner' }).length)
 })
 
+test('boss lines become jobs with an inline voice', () => {
+  const jobs = voiceJobs(heroes, { root: 'games/ares', hero: 'teknium' })
+  assert.deepEqual(jobs.map(j => j.key).sort(), ['blade', 'chase', 'down', 'enter', 'glare', 'lance', 'laugh', 'phase'])
+  assert.ok(jobs.every(j => j.out === `games/ares/assets/voice/teknium/${j.key}.mp3` && j.voice.provider === 'fish'))
+})
+
 test('moves without a line are not recorded', () => {
   const jobs = voiceJobs(heroes)
   assert.ok(!jobs.some(j => j.key === 'slash1'))
@@ -31,4 +37,9 @@ test('fish and elevenlabs requests carry the voice and model', () => {
   const e = ttsRequest({ provider: 'elevenlabs', voice: 'v1' }, 'はい')
   assert.match(e.target, /text-to-speech\/v1/)
   assert.equal(JSON.parse(e.body).model_id, 'eleven_multilingual_v2')
+})
+
+test('spells record their chant and their shouted name', () => {
+  const jobs = voiceJobs({ voices: { v: { provider: 'fish' } }, heroes: { a: { voice: 'v', spells: { bolt: { chant: '雷よ。', line: 'らい。' }, quiet: { kind: 'chain' } } } } }, { root: 'g' })
+  assert.deepEqual(jobs.map(j => [j.key, j.text, j.out]), [['spell-bolt-chant', '雷よ。', 'g/assets/voice/a/spell-bolt-chant.mp3'], ['spell-bolt', 'らい。', 'g/assets/voice/a/spell-bolt.mp3']])
 })

@@ -11,6 +11,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { streamChat } from './llm.mjs'
 import { castPrompt, cleanCast } from './cast.mjs'
+import { keyGround } from './keycolor.mjs'
 
 const skillsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'gameskills')
 
@@ -294,7 +295,7 @@ export function artList(spec, { max = 26 } = {}) {
   if (spec.hub?.name) items.push({ id: 'room-hub', kind: 'backdrop', aspect: 'landscape', what: `backdrop for the hub, ${spec.hub.name}`, gen: `Top-down three-quarter view of ${spec.hub.name}: ${spec.hub.what || ''}. An empty floor with walls around the edges, open space in the middle for characters. ${NO_PEOPLE}` })
   for (const r of (spec.rooms || []).slice(0, 5)) items.push({ id: `room-${slug(r.type)}`, kind: 'backdrop', aspect: 'landscape', what: `backdrop for ${r.type} rooms`, gen: `Top-down three-quarter view of an arena floor in ${where}: ${r.what || r.type}. Walls and props at the edges, open floor in the middle. ${NO_PEOPLE}` })
   // the fighters as sprites: one full figure each, cut out of a flat background after painting
-  const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. Standing, facing the viewer, head to feet in frame with space around, bold clean outline. ${SPRITE_GROUND}` })
+  const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. Standing, facing the viewer, head to feet in frame with space around, bold clean outline. ${keyGround(look || who)}.` })
   if (spec.hero) sprite('hero', String(spec.hero).split(/[,—.]/)[0].trim(), String(spec.hero))
   for (const e of (spec.enemies || []).slice(0, 5)) if (e?.name) sprite(slug(e.name), e.name, e.look)
   if (spec.boss?.name) sprite('boss', spec.boss.name, spec.boss.look)
@@ -310,8 +311,9 @@ export function artList(spec, { max = 26 } = {}) {
 // The fighters stand on the backdrops, so a backdrop holds no figures of its own.
 export const NO_PEOPLE = 'No people, creatures, figures, statues or faces anywhere in the picture: an empty place waiting for its characters'
 
-// Sprites are painted on one flat colour and cut out (scripts/cutout.py).
-export const SPRITE_GROUND = 'On a perfectly plain flat pale grey background: no floor, no shadow, no scenery, nothing else in the picture'
+// Sprites are painted on one flat key colour and cut out (scripts/cutout.py): magenta,
+// or green for a pink or purple subject (engine/keycolor.mjs).
+export const SPRITE_GROUND = keyGround()
 
 // How figures move on screen, for every game: the art is drawn upright, facing the viewer.
 export const FIGURE_RULES = `- Characters (hero, enemies, boss) are upright figures seen from the front: never rotate a character to face where it aims or walks, so it never looks fallen over. Flip it left or right (flipX) to face its way, and show the aim with the weapon, a reticle or the attack itself. Give them life with tweens: a bob while walking, a squash on a hit, a lean on a dash, a white tint flash when hurt.

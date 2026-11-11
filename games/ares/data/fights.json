@@ -1,0 +1,1436 @@
+{
+  "_note": "One entry per boss in bosses.json. HP climbs along the ladder; rests get shorter. Teknium uses the \"teknium\" skin whose sheets carry the \"t-\" prefix (t-idle, t-run, t-jump, ...).",
+  "fights": {
+    "Lokee": {
+      "body": "platform",
+      "sprite": "lokee",
+      "scale": 0.5,
+      "hp": 1600,
+      "modes": [
+        {
+          "from": 1,
+          "name": "第一幕「開演」",
+          "en": "Act One: Curtain Up",
+          "weapon": "cane",
+          "line": "さあ、ショータイムの始まりだ！",
+          "line_en": "Now, let the show begin!",
+          "patterns": [
+            "spot_sweep",
+            "volley",
+            "rush"
+          ],
+          "rest": 2.4
+        },
+        {
+          "from": 0.5,
+          "name": "終幕「喝采」",
+          "en": "Final Act: Applause",
+          "weapon": "confetti",
+          "line": "拍手をどうぞ！ フィナーレだ！",
+          "line_en": "Take a bow! It's the finale!",
+          "patterns": [
+            "fan",
+            "rain",
+            "summon",
+            "spot_sweep",
+            "doom_wall"
+          ],
+          "rest": 2,
+          "stage": "dark"
+        }
+      ],
+      "personality": "A flamboyant ringmaster who treats every fight as a show and the player as his star act.",
+      "barks": {
+        "enter": {
+          "line": "紳士淑女の皆様、お待たせしました！",
+          "line_en": "Ladies and gentlemen, thank you for waiting!"
+        },
+        "hurt": {
+          "line": "おっと、アドリブかい？",
+          "line_en": "Oho, improvising, are we?"
+        },
+        "rest": {
+          "line": "幕間だ。拍手の準備を。",
+          "line_en": "Intermission. Ready your applause."
+        },
+        "taunt": {
+          "line": "主役は私だよ、お嬢さん。",
+          "line_en": "I'm the star here, miss."
+        },
+        "down": {
+          "line": "ブラボー……見事な千秋楽だ。",
+          "line_en": "Bravo... a splendid closing night."
+        },
+        "win": {
+          "line": "本日の公演、これにて終了！",
+          "line_en": "That concludes today's show!"
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "おや、今宵の主演女優はずいぶん美しい。",
+          "line_en": "Oh my, tonight's leading lady is quite the beauty."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "でしょ？ でもスポットライトは私のものだよ♪",
+            "line_en": "Right? But the spotlight's mine~"
+          },
+          "runner": {
+            "line": "お世辞は結構。照明係は下がって。",
+            "line_en": "Spare the flattery. Lighting crew, step aside."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "よろしい！ では、共演といこう！",
+          "line_en": "Splendid! Then let's share the stage!"
+        }
+      ]
+    },
+    "flownium": {
+      "body": "platform",
+      "sprite": "flownium",
+      "scale": 0.5,
+      "hp": 1700,
+      "modes": [
+        {
+          "from": 1,
+          "name": "号令「前へ」",
+          "en": "Order: Forward",
+          "weapon": "flag",
+          "line": "イエッサー！ 全速力で参ります！",
+          "line_en": "Yes, sir! Full speed ahead!",
+          "patterns": [
+            "rush",
+            "slam",
+            "sweep"
+          ],
+          "rest": 2.3
+        },
+        {
+          "from": 0.5,
+          "name": "号令「突撃」",
+          "en": "Order: Charge",
+          "weapon": "flag",
+          "line": "命令了解！ 止まりません！",
+          "line_en": "Orders received! I won't stop!",
+          "patterns": [
+            "rush",
+            "rush",
+            "slam",
+            "lances",
+            "doom_wall"
+          ],
+          "rest": 1.9,
+          "stage": "storm"
+        }
+      ],
+      "personality": "An eager drill-sergeant sprinter who answers everything at full volume and full speed.",
+      "barks": {
+        "enter": {
+          "line": "フロウニウム、ただいま到着！",
+          "line_en": "Flownium, reporting for duty!"
+        },
+        "hurt": {
+          "line": "被弾！ しかし前進！",
+          "line_en": "Hit taken! Still advancing!"
+        },
+        "rest": {
+          "line": "小休止！ 三秒だけ！",
+          "line_en": "Short break! Three seconds!"
+        },
+        "taunt": {
+          "line": "遅れるな！ ついて来い！",
+          "line_en": "Don't fall behind! Keep up!"
+        },
+        "down": {
+          "line": "任務……失敗、であります……",
+          "line_en": "Mission... failed, sir..."
+        },
+        "win": {
+          "line": "任務完了！ イエッサー！",
+          "line_en": "Mission complete! Yes, sir!"
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "報告！ 前方に美人一名、確認！",
+          "line_en": "Report! One beauty spotted ahead!"
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "わかってるじゃん！ 敬礼してもいいよ？",
+            "line_en": "You get it! You may salute me~"
+          },
+          "runner": {
+            "line": "声が大きいわ。耳が痛い。",
+            "line_en": "You're loud. My ears hurt."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "失礼しました！ 全力で参ります！",
+          "line_en": "My apologies! Coming at full speed!"
+        }
+      ]
+    },
+    "Adolan": {
+      "body": "platform",
+      "sprite": "adolan",
+      "scale": 0.5,
+      "hp": 1900,
+      "modes": [
+        {
+          "from": 1,
+          "name": "初版「修正一」",
+          "en": "First Release: Fix One",
+          "weapon": "scroll",
+          "line": "徹夜明けだ、パッチを当てるぞ。",
+          "line_en": "After an all-nighter. Time to apply the patch.",
+          "patterns": [
+            "blink",
+            "pillars",
+            "volley"
+          ],
+          "rest": 2.2
+        },
+        {
+          "from": 0.6,
+          "name": "改版「緊急修正」",
+          "en": "Revision: Hotfix",
+          "weapon": "scroll",
+          "line": "この足場、仕様変更だ。",
+          "line_en": "This footing? Spec change.",
+          "patterns": [
+            "pillars",
+            "clones",
+            "ring",
+            "boulders"
+          ],
+          "rest": 2
+        },
+        {
+          "from": 0.3,
+          "name": "終版「本番反映」",
+          "en": "Final Release: Push to Prod",
+          "weapon": "fire scroll",
+          "line": "本番に直接反映する！",
+          "line_en": "Pushing straight to production!",
+          "patterns": [
+            "pillars",
+            "rain",
+            "blink",
+            "fan",
+            "gold_fall"
+          ],
+          "rest": 1.7,
+          "stage": "red_moon"
+        }
+      ],
+      "personality": "A sleep-deprived night-shift coder who patches the arena mid-fight and blames you for the bugs.",
+      "barks": {
+        "enter": {
+          "line": "……バグ報告って、君か。",
+          "line_en": "...So you're the bug report."
+        },
+        "hurt": {
+          "line": "うわ、リグレッションだ。",
+          "line_en": "Ugh, a regression."
+        },
+        "rest": {
+          "line": "コーヒー……ちょっと待って。",
+          "line_en": "Coffee... hold on a sec."
+        },
+        "taunt": {
+          "line": "その動き、仕様外だぞ。",
+          "line_en": "That move isn't in the spec."
+        },
+        "down": {
+          "line": "ロールバック……するしか……",
+          "line_en": "Guess I... have to roll back..."
+        },
+        "win": {
+          "line": "修正完了。もう寝る。",
+          "line_en": "Fixed. Going to bed."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "徹夜明けの目にも、君は眩しいな。",
+          "line_en": "Even to my all-nighter eyes, you're dazzling."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "ふふん、寝ぼけてても分かるんだ？",
+            "line_en": "Heh, you can tell even half asleep?"
+          },
+          "runner": {
+            "line": "目の下のクマ、隠したら？",
+            "line_en": "Maybe hide those dark circles first."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "……その態度、修正させてもらう。",
+          "line_en": "...I'll be patching that attitude."
+        }
+      ]
+    },
+    "salt555": {
+      "body": "platform",
+      "sprite": "salt555",
+      "scale": 0.5,
+      "hp": 1900,
+      "modes": [
+        {
+          "from": 1,
+          "name": "塩の型「一閃」",
+          "en": "Salt Form: Flash",
+          "weapon": "crystal rapier",
+          "line": "ふん、しょっぱい腕前だな。",
+          "line_en": "Hmph, what salty skills.",
+          "patterns": [
+            "volley",
+            "rush",
+            "ring"
+          ],
+          "rest": 2.2
+        },
+        {
+          "from": 0.5,
+          "name": "塩の型「結晶雨」",
+          "en": "Salt Form: Crystal Rain",
+          "weapon": "shaker",
+          "line": "塩を撒いてやる。清めの雨だ。",
+          "line_en": "I'll scatter salt. A purifying rain.",
+          "patterns": [
+            "rain",
+            "fan",
+            "spiral",
+            "volley",
+            "doom_wall"
+          ],
+          "rest": 1.9,
+          "stage": "storm"
+        }
+      ],
+      "personality": "A proud crystal-armoured duelist who is always a little salty, even when winning.",
+      "barks": {
+        "enter": {
+          "line": "また挑戦者か。しょっぱいな。",
+          "line_en": "Another challenger? How salty."
+        },
+        "hurt": {
+          "line": "……ちっ、今のは無効だ。",
+          "line_en": "...Tch, that one doesn't count."
+        },
+        "rest": {
+          "line": "別に、疲れてなどいない。",
+          "line_en": "I'm not tired. At all."
+        },
+        "taunt": {
+          "line": "その剣、塩味が足りないな。",
+          "line_en": "Your blade needs more salt."
+        },
+        "down": {
+          "line": "くそっ……覚えておけよ。",
+          "line_en": "Damn it... I'll remember this."
+        },
+        "win": {
+          "line": "当然の結果だ。ふん。",
+          "line_en": "Naturally. Hmph."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "その剣筋、まあ……悪くない。",
+          "line_en": "That sword form... isn't bad. I guess."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "素直に褒めればいいのに〜♪",
+            "line_en": "You could just say it's great~"
+          },
+          "runner": {
+            "line": "褒め言葉まで、しょっぱいのね。",
+            "line_en": "Even your compliments are salty."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "ふん。この結晶の輝きには敵わんがな。",
+          "line_en": "Hmph. Still no match for my crystal's shine."
+        }
+      ]
+    },
+    "HotDawg": {
+      "body": "platform",
+      "sprite": "hotdawg",
+      "scale": 0.5,
+      "hp": 2000,
+      "modes": [
+        {
+          "from": 1,
+          "name": "開店「大売り出し」",
+          "en": "Opening: Grand Sale",
+          "weapon": "price gun",
+          "line": "いらっしゃい！ 全品八割引だよ！",
+          "line_en": "Welcome! Everything's eighty percent off!",
+          "patterns": [
+            "volley",
+            "fan",
+            "summon"
+          ],
+          "rest": 2.1
+        },
+        {
+          "from": 0.5,
+          "name": "閉店「在庫一掃」",
+          "en": "Closing: Clearance",
+          "weapon": "SALE sign",
+          "line": "閉店間際だ、全部持っていけ！",
+          "line_en": "Closing time! Take it all!",
+          "patterns": [
+            "rush",
+            "rain",
+            "volley",
+            "summon",
+            "boulders"
+          ],
+          "rest": 1.8,
+          "stage": "dark"
+        }
+      ],
+      "chase": {
+        "patterns": [
+          "volley",
+          "rush"
+        ]
+      },
+      "personality": "A loud, flashy merchant who sells everything, including your defeat, at eighty percent off.",
+      "barks": {
+        "enter": {
+          "line": "いらっしゃいませ！ 本日限定セール！",
+          "line_en": "Welcome! One-day-only sale!"
+        },
+        "hurt": {
+          "line": "痛っ！ 返品はお断り！",
+          "line_en": "Ow! No returns!"
+        },
+        "rest": {
+          "line": "ただいま在庫補充中！",
+          "line_en": "Restocking, one moment!"
+        },
+        "taunt": {
+          "line": "今なら敗北、半額だよ！",
+          "line_en": "Defeat's half off today!"
+        },
+        "down": {
+          "line": "閉店……セール……",
+          "line_en": "Closing... sale..."
+        },
+        "win": {
+          "line": "毎度ありぃ！",
+          "line_en": "Thanks for your business!"
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "お嬢さん、その美貌は非売品かい？",
+          "line_en": "Miss, is that beauty not for sale?"
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "もちろん！ プライスレスだよ♪",
+            "line_en": "Of course! It's priceless~"
+          },
+          "runner": {
+            "line": "値札を付けても、あなたには買えないわ。",
+            "line_en": "Price it, and you still couldn't afford it."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "なら力ずくで、在庫一掃だ！",
+          "line_en": "Then I'll clear you out by force!"
+        }
+      ]
+    },
+    "UKG": {
+      "body": "platform",
+      "sprite": "ukg",
+      "scale": 0.5,
+      "hp": 2200,
+      "modes": [
+        {
+          "from": 1,
+          "name": "第一事業「創業」",
+          "en": "First Venture: Founding",
+          "weapon": "briefcase",
+          "line": "三つの事業、同時に回してみせよう。",
+          "line_en": "Three businesses, all running at once. Watch me.",
+          "patterns": [
+            "clones",
+            "volley",
+            "rush"
+          ],
+          "rest": 2.1
+        },
+        {
+          "from": 0.65,
+          "name": "第二事業「拡大」",
+          "en": "Second Venture: Expansion",
+          "weapon": "coin",
+          "line": "投資の時間だ。利回りは保証しない。",
+          "line_en": "Time to invest. Returns not guaranteed.",
+          "patterns": [
+            "clones",
+            "fan",
+            "rain",
+            "boulders"
+          ],
+          "rest": 1.9
+        },
+        {
+          "from": 0.3,
+          "name": "第三事業「独占」",
+          "en": "Third Venture: Monopoly",
+          "weapon": "golden ledger",
+          "line": "市場はすべて私のものだ。",
+          "line_en": "The whole market is mine.",
+          "patterns": [
+            "clones",
+            "spiral",
+            "summon",
+            "rush",
+            "gold_fall"
+          ],
+          "rest": 1.6,
+          "stage": "red_moon"
+        }
+      ],
+      "personality": "A calm, confident tycoon who runs three ventures at once and treats the fight as a hostile takeover.",
+      "barks": {
+        "enter": {
+          "line": "君の時間、買い取らせてもらう。",
+          "line_en": "I'll be buying up your time."
+        },
+        "hurt": {
+          "line": "想定内の損失だ。",
+          "line_en": "An expected loss."
+        },
+        "rest": {
+          "line": "役員会議だ。少し待て。",
+          "line_en": "Board meeting. Wait a moment."
+        },
+        "taunt": {
+          "line": "君の株価、下がっているぞ。",
+          "line_en": "Your stock is falling."
+        },
+        "down": {
+          "line": "……倒産、か。",
+          "line_en": "...Bankruptcy, then."
+        },
+        "win": {
+          "line": "交渉成立だ。",
+          "line_en": "Deal closed."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "君の美しさ、投資する価値があるな。",
+          "line_en": "Your beauty is a worthy investment."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "株主優待は、ウインクだけね♪",
+            "line_en": "Shareholder perks: one wink only~"
+          },
+          "runner": {
+            "line": "私は非上場よ。諦めて。",
+            "line_en": "I'm not publicly traded. Give up."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "買収は得意分野だ。始めよう。",
+          "line_en": "Takeovers are my specialty. Let's begin."
+        }
+      ]
+    },
+    "MikeMonty": {
+      "body": "platform",
+      "sprite": "mikemonty",
+      "scale": 0.6,
+      "hp": 2300,
+      "modes": [
+        {
+          "from": 1,
+          "name": "第一ラウンド",
+          "en": "Round One",
+          "weapon": "gauntlets",
+          "line": "いいね、ちゃんと殴り合おうぜ！",
+          "line_en": "Nice, let's really throw hands!",
+          "patterns": [
+            "slam",
+            "rush",
+            "sweep"
+          ],
+          "rest": 2.1
+        },
+        {
+          "from": 0.5,
+          "name": "最終ラウンド",
+          "en": "Final Round",
+          "weapon": "iron gauntlets",
+          "line": "まだ立てるか？ 最高だ！",
+          "line_en": "Still standing? Awesome!",
+          "patterns": [
+            "slam",
+            "lances",
+            "ring",
+            "rush",
+            "doom_wall"
+          ],
+          "rest": 1.7,
+          "stage": "storm"
+        }
+      ],
+      "chase": {
+        "patterns": [
+          "slam",
+          "rush"
+        ]
+      },
+      "personality": "A big, friendly brawler who just wants a proper fight and cheers when you hit him back.",
+      "barks": {
+        "enter": {
+          "line": "よっしゃ、殴り合いの時間だ！",
+          "line_en": "Alright, time to throw hands!"
+        },
+        "hurt": {
+          "line": "いいパンチだ！ もっと来い！",
+          "line_en": "Good punch! Give me more!"
+        },
+        "rest": {
+          "line": "ふぅ……ちょっと休憩な！",
+          "line_en": "Phew... quick break!"
+        },
+        "taunt": {
+          "line": "かかってこいよ、遠慮すんな！",
+          "line_en": "Come at me, don't hold back!"
+        },
+        "down": {
+          "line": "最高の喧嘩だった……！",
+          "line_en": "Best fight ever...!"
+        },
+        "win": {
+          "line": "またやろうぜ、な！",
+          "line_en": "Let's do this again, yeah?"
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "おっ、可愛い顔して強そうだな！",
+          "line_en": "Oh, cute face, but you look tough!"
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "可愛いし強いよ！ 両方ね♪",
+            "line_en": "Cute and tough! Both~"
+          },
+          "runner": {
+            "line": "顔で戦うつもりはないわ。",
+            "line_en": "I don't fight with my face."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "いいね！ 拳で語り合おうぜ！",
+          "line_en": "Nice! Let our fists do the talking!"
+        }
+      ]
+    },
+    "Nicho": {
+      "body": "platform",
+      "sprite": "nicho",
+      "scale": 0.5,
+      "hp": 2300,
+      "modes": [
+        {
+          "from": 1,
+          "name": "前奏",
+          "en": "Prelude",
+          "weapon": "synth",
+          "line": "二十五鍵で十分だ。聴いていけ。",
+          "line_en": "Twenty-five keys are enough. Listen up.",
+          "patterns": [
+            "fan",
+            "ring",
+            "sweep"
+          ],
+          "rest": 2
+        },
+        {
+          "from": 0.6,
+          "name": "間奏",
+          "en": "Interlude",
+          "weapon": "synth",
+          "line": "テンポを上げるぞ。ついて来い。",
+          "line_en": "Picking up the tempo. Keep up.",
+          "patterns": [
+            "spiral",
+            "pillars",
+            "ring",
+            "boulders"
+          ],
+          "rest": 1.8
+        },
+        {
+          "from": 0.3,
+          "name": "終奏",
+          "en": "Finale",
+          "weapon": "feedback",
+          "line": "フィードバック全開だ！",
+          "line_en": "Feedback, full blast!",
+          "patterns": [
+            "spiral",
+            "rain",
+            "spot_sweep",
+            "sweep",
+            "gold_fall"
+          ],
+          "rest": 1.5,
+          "stage": "storm"
+        }
+      ],
+      "personality": "A cool, laid-back synth wizard who hears the fight as music and you as an off-beat note.",
+      "barks": {
+        "enter": {
+          "line": "サウンドチェック、ワン、ツー。",
+          "line_en": "Sound check, one, two."
+        },
+        "hurt": {
+          "line": "おい、音が外れたぞ。",
+          "line_en": "Hey, that was off-key."
+        },
+        "rest": {
+          "line": "チューニング中だ。",
+          "line_en": "Tuning up."
+        },
+        "taunt": {
+          "line": "リズム感、ゼロだな。",
+          "line_en": "Zero sense of rhythm."
+        },
+        "down": {
+          "line": "……フェードアウト、か。",
+          "line_en": "...Fade out, huh."
+        },
+        "win": {
+          "line": "アンコールはなしだ。",
+          "line_en": "No encore."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "君の足音、いいビートだ。",
+          "line_en": "Your footsteps have a good beat."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "でしょ？ 一緒に踊っちゃう？",
+            "line_en": "Right? Wanna dance with me?"
+          },
+          "runner": {
+            "line": "あなたの曲には、合わせないわ。",
+            "line_en": "I won't dance to your tune."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "なら、ついて来られるか試そう。",
+          "line_en": "Then let's see if you can keep up."
+        }
+      ]
+    },
+    "sovthpaw": {
+      "body": "platform",
+      "sprite": "sovthpaw",
+      "scale": 0.6,
+      "hp": 2600,
+      "modes": [
+        {
+          "from": 1,
+          "name": "警告",
+          "en": "Warning",
+          "weapon": "timeout hammer",
+          "line": "話題から外れていますよ。",
+          "line_en": "You're off topic.",
+          "patterns": [
+            "slam",
+            "freeze",
+            "ring"
+          ],
+          "rest": 2
+        },
+        {
+          "from": 0.6,
+          "name": "一時停止",
+          "en": "Timeout",
+          "weapon": "timeout hammer",
+          "line": "タイムアウトです。少し頭を冷やして。",
+          "line_en": "Timeout. Cool your head a little.",
+          "patterns": [
+            "freeze",
+            "slam",
+            "summon",
+            "sweep",
+            "boulders"
+          ],
+          "rest": 1.8
+        },
+        {
+          "from": 0.3,
+          "name": "永久追放",
+          "en": "Permanent Ban",
+          "weapon": "gavel",
+          "line": "これ以上は、退場処分です。",
+          "line_en": "Any further, and you're removed.",
+          "patterns": [
+            "slam",
+            "lances",
+            "freeze",
+            "rain",
+            "gold_fall"
+          ],
+          "rest": 1.5,
+          "stage": "dark"
+        }
+      ],
+      "personality": "The arena's polite but firm moderator who keeps every fight on topic and hands out timeouts.",
+      "barks": {
+        "enter": {
+          "line": "まずはルールを確認しましょう。",
+          "line_en": "Let's review the rules first."
+        },
+        "hurt": {
+          "line": "それは規約違反です。",
+          "line_en": "That violates the rules."
+        },
+        "rest": {
+          "line": "一旦、休憩を挟みます。",
+          "line_en": "We'll take a short recess."
+        },
+        "taunt": {
+          "line": "警告、二回目ですよ。",
+          "line_en": "That's your second warning."
+        },
+        "down": {
+          "line": "……本日の議論は、終了です。",
+          "line_en": "...This discussion is closed."
+        },
+        "win": {
+          "line": "以上です。ミュートします。",
+          "line_en": "That's all. You're muted."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "その美しさは、規約違反ではありませんね。",
+          "line_en": "Looking that good isn't against the rules."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "やった！ じゃあ私の勝ちでいい？",
+            "line_en": "Yay! So I win, right?"
+          },
+          "runner": {
+            "line": "当然よ。規約を変える必要もないわ。",
+            "line_en": "Naturally. No need to amend the rules."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "それとこれとは別です。始めましょう。",
+          "line_en": "That's a separate matter. Let's begin."
+        }
+      ]
+    },
+    "GhostBear": {
+      "body": "platform",
+      "sprite": "ghostbear",
+      "scale": 0.5,
+      "hp": 2400,
+      "modes": [
+        {
+          "from": 1,
+          "name": "幽明",
+          "en": "Twilight Veil",
+          "weapon": "lantern",
+          "line": "……後ろだよ。",
+          "line_en": "...Behind you.",
+          "patterns": [
+            "blink",
+            "volley",
+            "slam"
+          ],
+          "rest": 2
+        },
+        {
+          "from": 0.5,
+          "name": "百鬼夜行",
+          "en": "Night Parade",
+          "weapon": "ghost lantern",
+          "line": "灯りが消えたら、おしまい。",
+          "line_en": "When the lights go out, it's over.",
+          "patterns": [
+            "blink",
+            "clones",
+            "ring",
+            "volley",
+            "doom_wall"
+          ],
+          "rest": 1.6,
+          "stage": "dark"
+        }
+      ],
+      "chase": {
+        "patterns": [
+          "blink",
+          "volley"
+        ]
+      },
+      "personality": "A shy, spooky bear-eared phantom who speaks in whispers and loves a good jump scare.",
+      "barks": {
+        "enter": {
+          "line": "……ずっと、そばにいたよ。",
+          "line_en": "...I've been here all along."
+        },
+        "hurt": {
+          "line": "……痛くないもん。",
+          "line_en": "...That didn't hurt. Much."
+        },
+        "rest": {
+          "line": "……ちょっと、消えちゃおうかな。",
+          "line_en": "...Maybe I'll vanish a while."
+        },
+        "taunt": {
+          "line": "……うしろ、見てごらん。",
+          "line_en": "...Take a look behind you."
+        },
+        "down": {
+          "line": "……また、化けて出るね。",
+          "line_en": "...I'll haunt you again."
+        },
+        "win": {
+          "line": "……ばあっ。おどろいた？",
+          "line_en": "...Boo. Scared you?"
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "……きれいな人。ずっと見てたよ。",
+          "line_en": "...You're pretty. I've been watching."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "えへへ、ファンなら握手してあげる♪",
+            "line_en": "Hehe, fans get a handshake~"
+          },
+          "runner": {
+            "line": "覗き見は、感心しないわね。",
+            "line_en": "Peeping isn't very polite."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "……じゃあ、一緒に遊ぼ。",
+          "line_en": "...Then let's play together."
+        }
+      ]
+    },
+    "rahlquist": {
+      "body": "platform",
+      "sprite": "rahlquist",
+      "scale": 0.62,
+      "hp": 2700,
+      "modes": [
+        {
+          "from": 1,
+          "name": "ゼンマイ巻き",
+          "en": "Winding Up",
+          "weapon": "wrench",
+          "line": "ちょっと待ってね……今、巻いてるから。",
+          "line_en": "Hold on a sec... I'm winding up.",
+          "patterns": [
+            "slam",
+            "summon",
+            "sweep"
+          ],
+          "rest": 2.8
+        },
+        {
+          "from": 0.55,
+          "name": "全力駆動",
+          "en": "Full Drive",
+          "weapon": "big wrench",
+          "line": "巻き終わった！ いっくよー！",
+          "line_en": "All wound up! Here I come!",
+          "patterns": [
+            "slam",
+            "rush",
+            "lances",
+            "summon",
+            "boulders"
+          ],
+          "rest": 2.2,
+          "stage": "storm"
+        }
+      ],
+      "personality": "A lovable, very slow robot who takes forever to wind up and is very polite about it.",
+      "barks": {
+        "enter": {
+          "line": "ピピ……起動中……少々、お待ちを。",
+          "line_en": "Beep... booting... please wait."
+        },
+        "hurt": {
+          "line": "ガガッ！ 痛い、デス。",
+          "line_en": "Clank! That hurts."
+        },
+        "rest": {
+          "line": "ゼンマイ、巻き直し中……",
+          "line_en": "Rewinding... my spring..."
+        },
+        "taunt": {
+          "line": "次の一撃、すごい、デス。たぶん。",
+          "line_en": "My next hit is huge. Probably."
+        },
+        "down": {
+          "line": "電池……切れ……おやすみ……",
+          "line_en": "Battery... empty... good night..."
+        },
+        "win": {
+          "line": "勝利……やっと、デス。",
+          "line_en": "Victory... finally."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "ピピ……美人、検出。処理、中……",
+          "line_en": "Beep... beauty detected. Processing..."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "処理落ちしないでよね♪",
+            "line_en": "Don't crash on me now~"
+          },
+          "runner": {
+            "line": "処理が終わる前に、片付けるわ。",
+            "line_en": "I'll be done before you finish processing."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "処理、完了。かかって、来なさい、デス。",
+          "line_en": "Processed. Please, come at me."
+        }
+      ]
+    },
+    "Suzu": {
+      "body": "platform",
+      "sprite": "suzu",
+      "scale": 0.5,
+      "hp": 2800,
+      "modes": [
+        {
+          "from": 1,
+          "name": "一の鈴",
+          "en": "First Bell",
+          "weapon": "bells",
+          "line": "鈴の音を、お聴きなさい。",
+          "line_en": "Listen to the sound of the bell.",
+          "patterns": [
+            "bells",
+            "volley",
+            "ring"
+          ],
+          "rest": 1.9
+        },
+        {
+          "from": 0.6,
+          "name": "二の鈴",
+          "en": "Second Bell",
+          "weapon": "bells",
+          "line": "静かに。心まで凍るほどに。",
+          "line_en": "Quietly. Until even your heart freezes.",
+          "patterns": [
+            "bells",
+            "freeze",
+            "spiral",
+            "boulders"
+          ],
+          "rest": 1.7
+        },
+        {
+          "from": 0.3,
+          "name": "三の鈴",
+          "en": "Third Bell",
+          "weapon": "temple bell",
+          "line": "最後の一打、受けてごらんなさい。",
+          "line_en": "Take this final strike, if you can.",
+          "patterns": [
+            "bells",
+            "spiral",
+            "rain",
+            "blink",
+            "gold_fall"
+          ],
+          "rest": 1.4,
+          "stage": "red_moon"
+        }
+      ],
+      "personality": "A calm, graceful bell dancer who speaks softly and moves to the rhythm of her bells.",
+      "barks": {
+        "enter": {
+          "line": "一曲、お相手願えますか。",
+          "line_en": "May I have this dance?"
+        },
+        "hurt": {
+          "line": "あら……拍子が乱れました。",
+          "line_en": "Oh... I lost my rhythm."
+        },
+        "rest": {
+          "line": "少し、息を整えますね。",
+          "line_en": "Let me catch my breath."
+        },
+        "taunt": {
+          "line": "足運びが、まだ硬いですよ。",
+          "line_en": "Your footwork is still stiff."
+        },
+        "down": {
+          "line": "見事な……舞でした。",
+          "line_en": "What a lovely... dance."
+        },
+        "win": {
+          "line": "お粗末さまでした。",
+          "line_en": "Thank you for the dance."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "美しい方。鈴も、喜んでおります。",
+          "line_en": "What a lovely one. Even my bells rejoice."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "でしょ？ 私、何着ても似合うから♪",
+            "line_en": "Right? I look good in anything~"
+          },
+          "runner": {
+            "line": "あなたの舞も、悪くないわ。",
+            "line_en": "Your dance isn't bad either."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "では、どちらが美しいか、舞で決めましょう。",
+          "line_en": "Then let our dance decide who's lovelier."
+        }
+      ]
+    },
+    "LocutusOfTheEye": {
+      "body": "float",
+      "sprite": "locutusoftheeye",
+      "scale": 0.8,
+      "hp": 2900,
+      "modes": [
+        {
+          "from": 1,
+          "name": "凝視",
+          "en": "Gaze",
+          "weapon": "gaze",
+          "line": "すべて、見ている。",
+          "line_en": "I see everything.",
+          "patterns": [
+            "spot_sweep",
+            "volley",
+            "fan"
+          ],
+          "rest": 1.8
+        },
+        {
+          "from": 0.6,
+          "name": "全視",
+          "en": "All-Seeing",
+          "weapon": "iris beam",
+          "line": "逃げ場など、視界のどこにもない。",
+          "line_en": "There is nowhere to run in my sight.",
+          "patterns": [
+            "pillars",
+            "spot_sweep",
+            "summon",
+            "ring",
+            "boulders"
+          ],
+          "rest": 1.6
+        },
+        {
+          "from": 0.3,
+          "name": "神眼",
+          "en": "Divine Eye",
+          "weapon": "gaze",
+          "line": "瞬きひとつ、許さない。",
+          "line_en": "Not even a blink is allowed.",
+          "patterns": [
+            "glare",
+            "spot_sweep",
+            "spiral",
+            "rain",
+            "gold_fall"
+          ],
+          "rest": 1.4,
+          "stage": "dark"
+        }
+      ],
+      "personality": "A vast, unblinking eye that sees everything and speaks like an ancient, mildly bored oracle.",
+      "barks": {
+        "enter": {
+          "line": "我が視界へ、ようこそ。",
+          "line_en": "Welcome to my sight."
+        },
+        "hurt": {
+          "line": "……目に、しみる。",
+          "line_en": "...That stings my eye."
+        },
+        "rest": {
+          "line": "……まばたきでは、ない。",
+          "line_en": "...That was not a blink."
+        },
+        "taunt": {
+          "line": "お前の次の一手、見えているぞ。",
+          "line_en": "I see your next move."
+        },
+        "down": {
+          "line": "視界が……暗く……",
+          "line_en": "My sight... grows dark..."
+        },
+        "win": {
+          "line": "すべて、見届けた。",
+          "line_en": "I have seen it all through."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "我が目に映る中で、最も眩い者よ。",
+          "line_en": "The brightest thing my eye has ever seen."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "ずーっと見てていいよ♪ 見物料はとるけど！",
+            "line_en": "You can stare all day~ For a fee!"
+          },
+          "runner": {
+            "line": "見つめすぎよ。まばたきくらいしたら？",
+            "line_en": "You're staring. Try blinking."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "瞬きなど不要。すべてを見届ける。",
+          "line_en": "I need no blinking. I will see it all."
+        }
+      ]
+    },
+    "Teknium": {
+      "body": "platform",
+      "sprite": "teknium",
+      "scale": 0.55,
+      "hp": 3600,
+      "_note": "skin \"teknium\", sheets prefixed \"t-\" (t-idle, t-run, t-jump, t-blade, t-conduct, ...). He runs, jumps and wall-kicks; he never floats.",
+      "modes": [
+        {
+          "from": 1,
+          "name": "第一楽章「指揮」",
+          "en": "First Movement: Conduct",
+          "weapon": "conductor orbs",
+          "line": "……来たか。退屈はさせないでくれよ。",
+          "line_en": "...So you came. Do try not to bore me.",
+          "patterns": [
+            "fan",
+            "ring",
+            "spiral",
+            "glare"
+          ],
+          "rest": 2
+        },
+        {
+          "from": 0.7,
+          "name": "第二楽章「居合」",
+          "en": "Second Movement: Iaido",
+          "weapon": "crimson katana",
+          "line": "では、少し本気を見せようか。",
+          "line_en": "Then let me show a little earnestness.",
+          "patterns": [
+            "iaido",
+            "blink",
+            "rush",
+            "wallkick",
+            "boulders"
+          ],
+          "rest": 1.7
+        },
+        {
+          "from": 0.45,
+          "name": "第三楽章「追走」",
+          "en": "Third Movement: Pursuit",
+          "weapon": "crimson katana",
+          "line": "どこへ行く？ まだ終わっていないよ。",
+          "line_en": "Where are you going? We're not finished.",
+          "patterns": [
+            "lances",
+            "rush"
+          ],
+          "rest": 1.5
+        },
+        {
+          "from": 0.25,
+          "name": "終楽章「玉座」",
+          "en": "Final Movement: Throne",
+          "weapon": "throne of checkpoints",
+          "line": "逃げ道も、計算のうちだ。",
+          "line_en": "Even your escape routes are part of the calculation.",
+          "patterns": [
+            "spiral",
+            "lances",
+            "glare",
+            "rain",
+            "summon",
+            "doom_wall"
+          ],
+          "rest": 1.3,
+          "stage": "red_moon"
+        }
+      ],
+      "chase": {
+        "patterns": [
+          "lances",
+          "rush"
+        ]
+      },
+      "personality": "A cool, calculating, smug mastermind who enjoys himself and plans several moves ahead; never sadistic or frantic.",
+      "barks": {
+        "enter": {
+          "line": "ようこそ、私の計算の中へ。",
+          "line_en": "Welcome, into my calculations."
+        },
+        "hurt": {
+          "line": "ほう、今のは予想外だ。",
+          "line_en": "Oh? That one I didn't predict."
+        },
+        "rest": {
+          "line": "少し、考える時間をあげよう。",
+          "line_en": "Let me give you time to think."
+        },
+        "taunt": {
+          "line": "焦らなくていい。結果は同じだ。",
+          "line_en": "No need to rush. The result is the same."
+        },
+        "down": {
+          "line": "……見事だ。認めよう。",
+          "line_en": "...Splendid. I'll admit it."
+        },
+        "win": {
+          "line": "予定通りだ。ふふ。",
+          "line_en": "Right on schedule. Heh."
+        }
+      },
+      "intro": [
+        {
+          "by": "boss",
+          "line": "ようやく会えたね。噂以上に、美しい。",
+          "line_en": "At last we meet. Lovelier than the rumors."
+        },
+        {
+          "by": "hero",
+          "messenger": {
+            "line": "知ってる♪ でも、あんたのものにはならないよ！",
+            "line_en": "I know~ But I'll never be yours!"
+          },
+          "runner": {
+            "line": "美しさだけは、計算できないでしょう？",
+            "line_en": "Beauty is the one thing you can't calculate."
+          }
+        },
+        {
+          "by": "boss",
+          "line": "ふふ……では、その輝き、砕いてみせよう。",
+          "line_en": "Heh... then I'll shatter that brilliance."
+        }
+      ]
+    },
+    "Asura": {
+      "titan": true,
+      "sprite": "asura",
+      "hp": 1,
+      "attacks": [
+        "slam",
+        "sweep",
+        "spears",
+        "beam",
+        "summon"
+      ],
+      "every": 3.4,
+      "en": "Asura, the Six-Armed",
+      "jp": "阿修羅機",
+      "line": "我は神殿の守り手なり。",
+      "line_en": "I am the temple's last guardian.",
+      "downLine": "……封印が……砕ける……",
+      "downLine_en": "The seals... are broken...",
+      "barks": {
+        "enter": {
+          "line": "我が眠りを妨げるは、誰ぞ。",
+          "line_en": "Who dares disturb my slumber?"
+        },
+        "attack": {
+          "line": "ひれ伏せ、小さき者よ！",
+          "line_en": "Kneel, little one!"
+        },
+        "seal": {
+          "line": "封印が……揺らぐ……！",
+          "line_en": "The seal... wavers...!"
+        },
+        "down": {
+          "line": "……見事なり、小さき者よ。",
+          "line_en": "...Well done, little one."
+        }
+      }
+    }
+  }
+}

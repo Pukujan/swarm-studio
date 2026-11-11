@@ -1,0 +1,900 @@
+{
+  "_note": "Voices for bosses, enemies, the titan and the heroines' boss-intro lines; record with: node engine/voice.mjs games/ares/data/cast-voices.json. Lines mirror fights.json (barks, intro) and enemies.json (barks): edit there, then copy here. Output assets/voice/<id>/<key>.mp3. Ids: lower-case fight handle (bark-<key>, intro-<n>), enemy-<type> (bark-<key>), asura (bark-<key>), messenger/runner (intro-<handle>-<n>).",
+  "voices": {
+    "machine_male": {
+      "provider": "fish",
+      "voice": "cb1e140f06124248bfd2538425092924",
+      "model": "s2.1-pro-free",
+      "vault": "fish_audio_api",
+      "about": "機械音声: processed, deep mechanical male"
+    },
+    "machine_female": {
+      "provider": "fish",
+      "voice": "ac25d546d2c646a68fd59fef71809ed4",
+      "model": "s2.1-pro-free",
+      "vault": "fish_audio_api",
+      "about": "ロボット調女性: clear, mechanical young female"
+    },
+    "machine_elite": {
+      "provider": "fish",
+      "voice": "3a9b8847ce1347a3bd4a88fe24e0e6d2",
+      "model": "s2.1-pro-free",
+      "vault": "fish_audio_api",
+      "about": "機械的音声: distorted young male, a touch smug"
+    },
+    "genki_woman": {
+      "provider": "fish",
+      "voice": "5161d41404314212af1254556477c17d",
+      "model": "s2.1-pro-free",
+      "vault": "fish_audio_api",
+      "about": "元気な女性: bright, quick, cheeky"
+    },
+    "calm_woman": {
+      "provider": "fish",
+      "voice": "0089dce5fefb4c6ba9b9f2f0debe1ddc",
+      "model": "s2.1-pro-free",
+      "vault": "fish_audio_api",
+      "about": "落ち着いた女性: low, composed, cool"
+    }
+  },
+  "bosses": {
+    "lokee": {
+      "voice": {
+        "provider": "fish",
+        "voice": "d63813486dcd48fb820454c72555e47c",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "紳士淑女の皆様、お待たせしました！"
+        },
+        "bark-hurt": {
+          "line": "おっと、アドリブかい？"
+        },
+        "bark-rest": {
+          "line": "幕間だ。拍手の準備を。"
+        },
+        "bark-taunt": {
+          "line": "主役は私だよ、お嬢さん。"
+        },
+        "bark-down": {
+          "line": "ブラボー……見事な千秋楽だ。"
+        },
+        "bark-win": {
+          "line": "本日の公演、これにて終了！"
+        },
+        "intro-1": {
+          "line": "おや、今宵の主演女優はずいぶん美しい。"
+        },
+        "intro-3": {
+          "line": "よろしい！ では、共演といこう！"
+        }
+      }
+    },
+    "flownium": {
+      "voice": {
+        "provider": "fish",
+        "voice": "f787e74f89d84b148bb5355fda204641",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "フロウニウム、ただいま到着！"
+        },
+        "bark-hurt": {
+          "line": "被弾！ しかし前進！"
+        },
+        "bark-rest": {
+          "line": "小休止！ 三秒だけ！"
+        },
+        "bark-taunt": {
+          "line": "遅れるな！ ついて来い！"
+        },
+        "bark-down": {
+          "line": "任務……失敗、であります……"
+        },
+        "bark-win": {
+          "line": "任務完了！ イエッサー！"
+        },
+        "intro-1": {
+          "line": "報告！ 前方に美人一名、確認！"
+        },
+        "intro-3": {
+          "line": "失礼しました！ 全力で参ります！"
+        }
+      }
+    },
+    "adolan": {
+      "voice": {
+        "provider": "fish",
+        "voice": "c6ebf65e219e46e4aec9d8c717bc747d",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "……バグ報告って、君か。"
+        },
+        "bark-hurt": {
+          "line": "うわ、リグレッションだ。"
+        },
+        "bark-rest": {
+          "line": "コーヒー……ちょっと待って。"
+        },
+        "bark-taunt": {
+          "line": "その動き、仕様外だぞ。"
+        },
+        "bark-down": {
+          "line": "ロールバック……するしか……"
+        },
+        "bark-win": {
+          "line": "修正完了。もう寝る。"
+        },
+        "intro-1": {
+          "line": "徹夜明けの目にも、君は眩しいな。"
+        },
+        "intro-3": {
+          "line": "……その態度、修正させてもらう。"
+        }
+      }
+    },
+    "salt555": {
+      "voice": {
+        "provider": "fish",
+        "voice": "6f5ccc8c93374f7c829915ffe6a1e544",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "また挑戦者か。しょっぱいな。"
+        },
+        "bark-hurt": {
+          "line": "……ちっ、今のは無効だ。"
+        },
+        "bark-rest": {
+          "line": "別に、疲れてなどいない。"
+        },
+        "bark-taunt": {
+          "line": "その剣、塩味が足りないな。"
+        },
+        "bark-down": {
+          "line": "くそっ……覚えておけよ。"
+        },
+        "bark-win": {
+          "line": "当然の結果だ。ふん。"
+        },
+        "intro-1": {
+          "line": "その剣筋、まあ……悪くない。"
+        },
+        "intro-3": {
+          "line": "ふん。この結晶の輝きには敵わんがな。"
+        }
+      }
+    },
+    "hotdawg": {
+      "voice": {
+        "provider": "fish",
+        "voice": "825c9e9870494118ad93b6853a22d5e7",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "いらっしゃいませ！ 本日限定セール！"
+        },
+        "bark-hurt": {
+          "line": "痛っ！ 返品はお断り！"
+        },
+        "bark-rest": {
+          "line": "ただいま在庫補充中！"
+        },
+        "bark-taunt": {
+          "line": "今なら敗北、半額だよ！"
+        },
+        "bark-down": {
+          "line": "閉店……セール……"
+        },
+        "bark-win": {
+          "line": "毎度ありぃ！"
+        },
+        "intro-1": {
+          "line": "お嬢さん、その美貌は非売品かい？"
+        },
+        "intro-3": {
+          "line": "なら力ずくで、在庫一掃だ！"
+        }
+      }
+    },
+    "ukg": {
+      "voice": {
+        "provider": "fish",
+        "voice": "51c5a74b545542e895ee1d861d59939f",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "君の時間、買い取らせてもらう。"
+        },
+        "bark-hurt": {
+          "line": "想定内の損失だ。"
+        },
+        "bark-rest": {
+          "line": "役員会議だ。少し待て。"
+        },
+        "bark-taunt": {
+          "line": "君の株価、下がっているぞ。"
+        },
+        "bark-down": {
+          "line": "……倒産、か。"
+        },
+        "bark-win": {
+          "line": "交渉成立だ。"
+        },
+        "intro-1": {
+          "line": "君の美しさ、投資する価値があるな。"
+        },
+        "intro-3": {
+          "line": "買収は得意分野だ。始めよう。"
+        }
+      }
+    },
+    "mikemonty": {
+      "voice": {
+        "provider": "fish",
+        "voice": "34d29f836f4a4da9a1d13619dc35574a",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "よっしゃ、殴り合いの時間だ！"
+        },
+        "bark-hurt": {
+          "line": "いいパンチだ！ もっと来い！"
+        },
+        "bark-rest": {
+          "line": "ふぅ……ちょっと休憩な！"
+        },
+        "bark-taunt": {
+          "line": "かかってこいよ、遠慮すんな！"
+        },
+        "bark-down": {
+          "line": "最高の喧嘩だった……！"
+        },
+        "bark-win": {
+          "line": "またやろうぜ、な！"
+        },
+        "intro-1": {
+          "line": "おっ、可愛い顔して強そうだな！"
+        },
+        "intro-3": {
+          "line": "いいね！ 拳で語り合おうぜ！"
+        }
+      }
+    },
+    "nicho": {
+      "voice": {
+        "provider": "fish",
+        "voice": "5da7f24e9e274f91b2b677669c818ce9",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "サウンドチェック、ワン、ツー。"
+        },
+        "bark-hurt": {
+          "line": "おい、音が外れたぞ。"
+        },
+        "bark-rest": {
+          "line": "チューニング中だ。"
+        },
+        "bark-taunt": {
+          "line": "リズム感、ゼロだな。"
+        },
+        "bark-down": {
+          "line": "……フェードアウト、か。"
+        },
+        "bark-win": {
+          "line": "アンコールはなしだ。"
+        },
+        "intro-1": {
+          "line": "君の足音、いいビートだ。"
+        },
+        "intro-3": {
+          "line": "なら、ついて来られるか試そう。"
+        }
+      }
+    },
+    "sovthpaw": {
+      "voice": {
+        "provider": "fish",
+        "voice": "35c8e5ae5239435f8d9c26c86802b86d",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "まずはルールを確認しましょう。"
+        },
+        "bark-hurt": {
+          "line": "それは規約違反です。"
+        },
+        "bark-rest": {
+          "line": "一旦、休憩を挟みます。"
+        },
+        "bark-taunt": {
+          "line": "警告、二回目ですよ。"
+        },
+        "bark-down": {
+          "line": "……本日の議論は、終了です。"
+        },
+        "bark-win": {
+          "line": "以上です。ミュートします。"
+        },
+        "intro-1": {
+          "line": "その美しさは、規約違反ではありませんね。"
+        },
+        "intro-3": {
+          "line": "それとこれとは別です。始めましょう。"
+        }
+      }
+    },
+    "ghostbear": {
+      "voice": {
+        "provider": "fish",
+        "voice": "33d29b258cfa4bdd81e5e02942fdc01e",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "……ずっと、そばにいたよ。"
+        },
+        "bark-hurt": {
+          "line": "……痛くないもん。"
+        },
+        "bark-rest": {
+          "line": "……ちょっと、消えちゃおうかな。"
+        },
+        "bark-taunt": {
+          "line": "……うしろ、見てごらん。"
+        },
+        "bark-down": {
+          "line": "……また、化けて出るね。"
+        },
+        "bark-win": {
+          "line": "……ばあっ。おどろいた？"
+        },
+        "intro-1": {
+          "line": "……きれいな人。ずっと見てたよ。"
+        },
+        "intro-3": {
+          "line": "……じゃあ、一緒に遊ぼ。"
+        }
+      }
+    },
+    "rahlquist": {
+      "voice": {
+        "provider": "fish",
+        "voice": "7bcd8078cfbc496cb50bf8d8ef137df4",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "ピピ……起動中……少々、お待ちを。"
+        },
+        "bark-hurt": {
+          "line": "ガガッ！ 痛い、デス。"
+        },
+        "bark-rest": {
+          "line": "ゼンマイ、巻き直し中……"
+        },
+        "bark-taunt": {
+          "line": "次の一撃、すごい、デス。たぶん。"
+        },
+        "bark-down": {
+          "line": "電池……切れ……おやすみ……"
+        },
+        "bark-win": {
+          "line": "勝利……やっと、デス。"
+        },
+        "intro-1": {
+          "line": "ピピ……美人、検出。処理、中……"
+        },
+        "intro-3": {
+          "line": "処理、完了。かかって、来なさい、デス。"
+        }
+      }
+    },
+    "suzu": {
+      "voice": {
+        "provider": "fish",
+        "voice": "781a473267ef45f9a72ce57d512d6b1b",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "一曲、お相手願えますか。"
+        },
+        "bark-hurt": {
+          "line": "あら……拍子が乱れました。"
+        },
+        "bark-rest": {
+          "line": "少し、息を整えますね。"
+        },
+        "bark-taunt": {
+          "line": "足運びが、まだ硬いですよ。"
+        },
+        "bark-down": {
+          "line": "見事な……舞でした。"
+        },
+        "bark-win": {
+          "line": "お粗末さまでした。"
+        },
+        "intro-1": {
+          "line": "美しい方。鈴も、喜んでおります。"
+        },
+        "intro-3": {
+          "line": "では、どちらが美しいか、舞で決めましょう。"
+        }
+      }
+    },
+    "locutusoftheeye": {
+      "voice": {
+        "provider": "fish",
+        "voice": "302375f37b904dd9bfc5c829de1acf0c",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "我が視界へ、ようこそ。"
+        },
+        "bark-hurt": {
+          "line": "……目に、しみる。"
+        },
+        "bark-rest": {
+          "line": "……まばたきでは、ない。"
+        },
+        "bark-taunt": {
+          "line": "お前の次の一手、見えているぞ。"
+        },
+        "bark-down": {
+          "line": "視界が……暗く……"
+        },
+        "bark-win": {
+          "line": "すべて、見届けた。"
+        },
+        "intro-1": {
+          "line": "我が目に映る中で、最も眩い者よ。"
+        },
+        "intro-3": {
+          "line": "瞬きなど不要。すべてを見届ける。"
+        }
+      }
+    },
+    "teknium": {
+      "voice": {
+        "provider": "fish",
+        "voice": "1e4ccf2686b142a980d5160272781b01",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "ようこそ、私の計算の中へ。"
+        },
+        "bark-hurt": {
+          "line": "ほう、今のは予想外だ。"
+        },
+        "bark-rest": {
+          "line": "少し、考える時間をあげよう。"
+        },
+        "bark-taunt": {
+          "line": "焦らなくていい。結果は同じだ。"
+        },
+        "bark-down": {
+          "line": "……見事だ。認めよう。"
+        },
+        "bark-win": {
+          "line": "予定通りだ。ふふ。"
+        },
+        "intro-1": {
+          "line": "ようやく会えたね。噂以上に、美しい。"
+        },
+        "intro-3": {
+          "line": "ふふ……では、その輝き、砕いてみせよう。"
+        }
+      }
+    },
+    "asura": {
+      "voice": {
+        "provider": "fish",
+        "voice": "0d1918217c9a45ff87314bc7445f50fa",
+        "model": "s2.1-pro-free",
+        "vault": "fish_audio_api"
+      },
+      "lines": {
+        "bark-enter": {
+          "line": "我が眠りを妨げるは、誰ぞ。"
+        },
+        "bark-attack": {
+          "line": "ひれ伏せ、小さき者よ！"
+        },
+        "bark-seal": {
+          "line": "封印が……揺らぐ……！"
+        },
+        "bark-down": {
+          "line": "……見事なり、小さき者よ。"
+        }
+      }
+    },
+    "enemy-grunt": {
+      "voice": "machine_male",
+      "lines": {
+        "bark-spawn": {
+          "line": "目標、確認。"
+        },
+        "bark-attack": {
+          "line": "排除する。"
+        },
+        "bark-death": {
+          "line": "機能……停止……"
+        }
+      }
+    },
+    "enemy-gunner": {
+      "voice": "machine_male",
+      "lines": {
+        "bark-spawn": {
+          "line": "照準、固定。"
+        },
+        "bark-attack": {
+          "line": "射撃開始。"
+        },
+        "bark-death": {
+          "line": "弾……切れ……"
+        }
+      }
+    },
+    "enemy-grunt_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "上位機体、出撃。愚か者め。"
+        },
+        "bark-attack": {
+          "line": "遅いな、人間。"
+        },
+        "bark-death": {
+          "line": "ありえない……計算外……"
+        }
+      }
+    },
+    "enemy-gunner_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "外さない。私は上位機だ。"
+        },
+        "bark-attack": {
+          "line": "狙い撃つ。"
+        },
+        "bark-death": {
+          "line": "照準……誤差……"
+        }
+      }
+    },
+    "enemy-shield": {
+      "voice": "machine_male",
+      "lines": {
+        "bark-spawn": {
+          "line": "防壁、展開。"
+        },
+        "bark-attack": {
+          "line": "押し潰す。"
+        },
+        "bark-death": {
+          "line": "装甲、破損……"
+        }
+      }
+    },
+    "enemy-shield_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "突破は、不可能だ。"
+        },
+        "bark-attack": {
+          "line": "無駄な抵抗だ。"
+        },
+        "bark-death": {
+          "line": "防御……失敗……"
+        }
+      }
+    },
+    "enemy-caster": {
+      "voice": "machine_female",
+      "lines": {
+        "bark-spawn": {
+          "line": "演算、開始。"
+        },
+        "bark-attack": {
+          "line": "照射します。"
+        },
+        "bark-death": {
+          "line": "演算……中断……"
+        }
+      }
+    },
+    "enemy-caster_ring": {
+      "voice": "machine_female",
+      "lines": {
+        "bark-spawn": {
+          "line": "波形、展開。"
+        },
+        "bark-attack": {
+          "line": "全方位、拡散。"
+        },
+        "bark-death": {
+          "line": "波形……消失……"
+        }
+      }
+    },
+    "enemy-caster_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "テクニウム様の、御心のままに。"
+        },
+        "bark-attack": {
+          "line": "無意味な抵抗ですね。"
+        },
+        "bark-death": {
+          "line": "主よ……申し訳……"
+        }
+      }
+    },
+    "enemy-hound": {
+      "voice": "machine_male",
+      "lines": {
+        "bark-spawn": {
+          "line": "追跡、開始。"
+        },
+        "bark-attack": {
+          "line": "突撃。"
+        },
+        "bark-death": {
+          "line": "追跡……終了……"
+        }
+      }
+    },
+    "enemy-hound_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "獲物を、確認した。"
+        },
+        "bark-attack": {
+          "line": "逃げられないぞ。"
+        },
+        "bark-death": {
+          "line": "牙が……折れた……"
+        }
+      }
+    },
+    "enemy-hopper": {
+      "voice": "machine_male",
+      "lines": {
+        "bark-spawn": {
+          "line": "跳躍、準備。"
+        },
+        "bark-attack": {
+          "line": "落下する。"
+        },
+        "bark-death": {
+          "line": "着地……失敗……"
+        }
+      }
+    },
+    "enemy-hopper_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "上から、失礼。"
+        },
+        "bark-attack": {
+          "line": "潰れろ。"
+        },
+        "bark-death": {
+          "line": "高度……喪失……"
+        }
+      }
+    },
+    "enemy-drone": {
+      "voice": "machine_female",
+      "lines": {
+        "bark-spawn": {
+          "line": "ドローン、展開。"
+        },
+        "bark-attack": {
+          "line": "掃射します。"
+        },
+        "bark-death": {
+          "line": "墜落……"
+        }
+      }
+    },
+    "enemy-drone_ring": {
+      "voice": "machine_female",
+      "lines": {
+        "bark-spawn": {
+          "line": "包囲、開始。"
+        },
+        "bark-attack": {
+          "line": "全方位、射撃。"
+        },
+        "bark-death": {
+          "line": "信号……途絶……"
+        }
+      }
+    },
+    "enemy-drone_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "空は、我らのものだ。"
+        },
+        "bark-attack": {
+          "line": "見下ろしてやる。"
+        },
+        "bark-death": {
+          "line": "制空権……喪失……"
+        }
+      }
+    },
+    "enemy-sentry": {
+      "voice": "machine_female",
+      "lines": {
+        "bark-spawn": {
+          "line": "監視、開始。"
+        },
+        "bark-attack": {
+          "line": "警告射撃。"
+        },
+        "bark-death": {
+          "line": "監視……終了……"
+        }
+      }
+    },
+    "enemy-sentry_spiral": {
+      "voice": "machine_female",
+      "lines": {
+        "bark-spawn": {
+          "line": "螺旋、起動。"
+        },
+        "bark-attack": {
+          "line": "回転、射撃。"
+        },
+        "bark-death": {
+          "line": "回転……停止……"
+        }
+      }
+    },
+    "enemy-sentry_elite": {
+      "voice": "machine_elite",
+      "lines": {
+        "bark-spawn": {
+          "line": "侵入者は、すべて記録する。"
+        },
+        "bark-attack": {
+          "line": "記録完了。消去する。"
+        },
+        "bark-death": {
+          "line": "ログ……消失……"
+        }
+      }
+    },
+    "messenger": {
+      "voice": "genki_woman",
+      "lines": {
+        "intro-lokee-2": {
+          "line": "でしょ？ でもスポットライトは私のものだよ♪"
+        },
+        "intro-flownium-2": {
+          "line": "わかってるじゃん！ 敬礼してもいいよ？"
+        },
+        "intro-adolan-2": {
+          "line": "ふふん、寝ぼけてても分かるんだ？"
+        },
+        "intro-salt555-2": {
+          "line": "素直に褒めればいいのに〜♪"
+        },
+        "intro-hotdawg-2": {
+          "line": "もちろん！ プライスレスだよ♪"
+        },
+        "intro-ukg-2": {
+          "line": "株主優待は、ウインクだけね♪"
+        },
+        "intro-mikemonty-2": {
+          "line": "可愛いし強いよ！ 両方ね♪"
+        },
+        "intro-nicho-2": {
+          "line": "でしょ？ 一緒に踊っちゃう？"
+        },
+        "intro-sovthpaw-2": {
+          "line": "やった！ じゃあ私の勝ちでいい？"
+        },
+        "intro-ghostbear-2": {
+          "line": "えへへ、ファンなら握手してあげる♪"
+        },
+        "intro-rahlquist-2": {
+          "line": "処理落ちしないでよね♪"
+        },
+        "intro-suzu-2": {
+          "line": "でしょ？ 私、何着ても似合うから♪"
+        },
+        "intro-locutusoftheeye-2": {
+          "line": "ずーっと見てていいよ♪ 見物料はとるけど！"
+        },
+        "intro-teknium-2": {
+          "line": "知ってる♪ でも、あんたのものにはならないよ！"
+        }
+      }
+    },
+    "runner": {
+      "voice": "calm_woman",
+      "lines": {
+        "intro-lokee-2": {
+          "line": "お世辞は結構。照明係は下がって。"
+        },
+        "intro-flownium-2": {
+          "line": "声が大きいわ。耳が痛い。"
+        },
+        "intro-adolan-2": {
+          "line": "目の下のクマ、隠したら？"
+        },
+        "intro-salt555-2": {
+          "line": "褒め言葉まで、しょっぱいのね。"
+        },
+        "intro-hotdawg-2": {
+          "line": "値札を付けても、あなたには買えないわ。"
+        },
+        "intro-ukg-2": {
+          "line": "私は非上場よ。諦めて。"
+        },
+        "intro-mikemonty-2": {
+          "line": "顔で戦うつもりはないわ。"
+        },
+        "intro-nicho-2": {
+          "line": "あなたの曲には、合わせないわ。"
+        },
+        "intro-sovthpaw-2": {
+          "line": "当然よ。規約を変える必要もないわ。"
+        },
+        "intro-ghostbear-2": {
+          "line": "覗き見は、感心しないわね。"
+        },
+        "intro-rahlquist-2": {
+          "line": "処理が終わる前に、片付けるわ。"
+        },
+        "intro-suzu-2": {
+          "line": "あなたの舞も、悪くないわ。"
+        },
+        "intro-locutusoftheeye-2": {
+          "line": "見つめすぎよ。まばたきくらいしたら？"
+        },
+        "intro-teknium-2": {
+          "line": "美しさだけは、計算できないでしょう？"
+        }
+      }
+    }
+  }
+}

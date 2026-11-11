@@ -29,6 +29,25 @@ class CutoutTest(unittest.TestCase):
             # the pale face is enclosed by the figure, so it is kept
             self.assertGreater(a.getpixel((cx, 50 - 30 + 6 + 15)), 200)
 
+    def test_magenta_key_clears_pockets_and_keeps_white_cloth(self):
+        with tempfile.TemporaryDirectory() as d:
+            src, dst = os.path.join(d, "in.png"), os.path.join(d, "out.png")
+            im = Image.new("RGB", (200, 200), (255, 0, 255))
+            g = ImageDraw.Draw(im)
+            g.ellipse((50, 20, 150, 190), fill=(250, 250, 248), outline=(60, 30, 20), width=5)  # a white dress
+            g.ellipse((85, 60, 115, 90), fill=(255, 0, 255))   # a pocket of background between hair locks
+            g.ellipse((90, 130, 110, 150), fill=(240, 240, 240))  # pale cloth inside
+            im.save(src)
+            cutout(src, dst, keep_size=True)
+            out = Image.open(dst)
+            a = out.getchannel("A")
+            ox, oy = 50 - 6, 20 - 6   # the crop starts 6 px before the figure
+            self.assertEqual(a.getpixel((100 - ox, 75 - oy)), 0, "the enclosed magenta pocket is cleared")
+            self.assertEqual(a.getpixel((100 - ox, 140 - oy)), 255, "white cloth stays solid")
+            self.assertEqual(a.getpixel((100 - ox, 110 - oy)), 255, "the dress stays solid")
+            r, g_, b, _ = out.getpixel((100 - ox, 24 - oy))
+            self.assertFalse(r > 200 and b > 200 and g_ < 120, "no magenta fringe on the edge")
+
     def test_a_busy_picture_is_refused(self):
         with tempfile.TemporaryDirectory() as d:
             src, dst = os.path.join(d, "in.png"), os.path.join(d, "out.png")
