@@ -50,3 +50,10 @@ test('unpersist turns off IndexedDB paths in the export', () => {
   unpersist(f)
   assert.equal(readFileSync(f, 'utf8').match(/persistentPaths/g).length, 1)
 })
+
+test('a Godot slice puts the person\'s words from the last slice first', async () => {
+  const { godotStagePrompt } = await import('../engine/godotfirst.mjs')
+  const p = godotStagePrompt({ title: 'T', pitch: 'a rooftop runner' }, 1, { note: 'make Mika bigger' })
+  assert.match(p, /played the last slice and said: "make Mika bigger"/)
+  assert.doesNotMatch(godotStagePrompt({ title: 'T', pitch: 'a rooftop runner' }, 1), /played the last slice/)
+})

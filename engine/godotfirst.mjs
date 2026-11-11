@@ -111,12 +111,13 @@ export const GODOT_RULES = `- Godot 4 (4.7) with GDScript 2: typed variables, @e
 const STEP_NOTE = 'Godot is run headless on the project after this turn (import, then the main scene for a few hundred frames); its script and parse errors come back as the next turn\'s first job, so keep the scripts parse-clean.'
 
 // One stage of a Godot-first big game: the same stages as the web build, written in Godot
-export function godotStagePrompt(spec, i, { art = [], failed = '' } = {}) {
+export function godotStagePrompt(spec, i, { art = [], failed = '', note = '' } = {}) {
   const stages = stagesFor(spec)
   const st = stages[i]
   const done = stages.slice(0, i).map(s => s.name).join(', ')
   const head = `This is a big 2D game made in Godot 4, built in ${stages.length} slices (the game playable after each); this is slice ${i + 1}: ${st.name}. GAME_SPEC.md in the project root is the whole spec; follow its names, numbers and content.`
-  const body = `${failed ? `First: ${failed}\n\n` : ''}${done ? `Already built: ${done}. Keep all of it working; change it only where this stage needs to.\n\n` : ''}Build this stage now: ${st.what}
+  const said = String(note || '').replace(/\s+/g, ' ').trim().slice(0, 1200)
+  const body = `${said ? `The person played the last slice and said: "${said}". Do what they ask first (it may change what is already built), then build this slice in that spirit.\n\n` : ''}${failed ? `First: ${failed}\n\n` : ''}${done ? `Already built: ${done}. Keep all of it working; change it only where this stage needs to.\n\n` : ''}Build this stage now: ${st.what}
 
 Do only this slice; later slices add the rest, so leave clean places for them (a data table, a dialogue autoload) instead of building them now.
 ${godotArtBrief(art, viewOf(spec))}
