@@ -62,3 +62,12 @@ test('a build whose Studio process is gone reads as stopped at once, not as buil
     assert.equal(jobs2.state('r1').elsewhere, true)
   } finally { rmSync(runsDir, { recursive: true, force: true }) }
 })
+
+test('a build read from the log says which slice it is on, even once the status line moved on', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'runs-'))
+  try {
+    const events = [...log(0), { type: 'app:step', t: now, step: { kind: 'think', text: 'next step', t: now } }]
+    const jobs = appJobs({ runsDir, record() {}, broadcast() {}, readEvents: () => events, provider: () => ({}), modelFor: () => '' })
+    assert.deepEqual(jobs.state('r1').at, [4, 5])
+  } finally { rmSync(runsDir, { recursive: true, force: true }) }
+})
