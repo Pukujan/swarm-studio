@@ -32,11 +32,12 @@ Why this one: the earlier demos (the Atelier Nord portal and the Tempo launch) p
   | 6 | HotDawg | The Discount | fires 80%-off price tags |
   | 7 | UKG | Three-Business Tycoon | splits into three copies |
   | 8 | rahlquist | The Slow Clanker | a robot with a long wind-up and a huge hit |
-  | 9 | Nicho | The Microfreak | 25-key synth; sound waves fire in key patterns |
-  | 10 | Suzu | The Bell | chime shockwaves in rings, calm and graceful |
-  | 11 | LocutusOfTheEye | The Eye | a giant floating eye with sweeping gaze beams |
-  | 12 | sovthpaw | The Moderator | a timeout hammer freezes the player; an on-topic shockwave |
-  | 13 | **Teknium** | **The Hermes Architect** | the final boss: a winged messenger who summons glowing model checkpoints; the biggest, most flattering fight |
+  | 9 | Adolan | (theme picked in build) | |
+  | 10 | Nicho | The Microfreak | 25-key synth; sound waves fire in key patterns |
+  | 11 | Suzu | The Bell | chime shockwaves in rings, calm and graceful |
+  | 12 | LocutusOfTheEye | The Eye | a giant floating eye with sweeping gaze beams |
+  | 13 | sovthpaw | The Moderator | a timeout hammer freezes the player; an on-topic shockwave |
+  | 14 | **Teknium** | **The Hermes Architect** | the final boss: a winged messenger who summons glowing model checkpoints; the biggest, most flattering fight |
 
 - **Boss craft:**
   - **Phases:** each boss changes at 66% and 33% health.
