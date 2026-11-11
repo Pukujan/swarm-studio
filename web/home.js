@@ -774,6 +774,21 @@ export function makeHome({ sw, C, root }) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !e.target.closest('input, textarea')) { e.preventDefault(); H.searching = true; render() }
   })
 
+  // START on the Feed's /studio page hands its prompt over as ?prompt=. That press was the go:
+  // the build starts here at once, with no second Make and no questions. The prompt leaves the
+  // address so a reload does not spend another build. A studio that is closed for the day keeps it in the box.
+  let given = hosted() ? (new URLSearchParams(location.search).get('prompt') || '').trim().slice(0, window.SWARM?.hosted?.limits?.promptChars || 500) : ''
+  function handover() {
+    const text = given
+    given = ''
+    if (!text) return
+    const u = new URL(location.href)
+    u.searchParams.delete('prompt')
+    history.replaceState(history.state, '', u)
+    if (window.SWARM?.hosted?.open === false) { input.value = text; return }
+    start(text, null)
+  }
+
   return {
     el: root,
     get data() { return H.data },
@@ -783,6 +798,7 @@ export function makeHome({ sw, C, root }) {
       H.on = true
       if (!H.me) loadMe()
       refresh()
+      if (given) setTimeout(handover, 0) // after this view change has finished
       setTimeout(() => { if (H.on && innerWidth > 760 && !document.activeElement?.closest('input, textarea')) input.focus({ preventScroll: true }) }, 60)
     },
     hide() { H.on = false; clearTimeout(H.timer); closeMenu(); closePop(); drawer(false); root.hidden = true }
