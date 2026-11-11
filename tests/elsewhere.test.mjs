@@ -1,0 +1,36 @@
+// A build another Swarm Studio drives: this one reads it from the shared run log and
+// shows it building, with the live address, instead of "stopped".
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { appJobs } from '../engine/appjob.mjs'
+
+const now = Date.now()
+const log = (age) => [
+  { type: 'app:start', t: now - 60e3 - age, kind: 'game' },
+  { type: 'app:ready', t: now - 50e3 - age, url: 'http://127.0.0.1:52768/' },
+  { type: 'app:step', t: now - 40e3 - age, step: { kind: 'setup', text: 'stage 4 of 5: the hub', t: now - 40e3 - age } },
+  { type: 'app:step', t: now - age, step: { kind: 'turn', text: 'turn 1: building', t: now - age } },
+]
+
+test('a recent build from another Studio shows as working, with its address', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'runs-'))
+  try {
+    const jobs = appJobs({ runsDir, record() {}, broadcast() {}, readEvents: () => log(0), provider: () => ({}), modelFor: () => '' })
+    const s = jobs.state('r1')
+    assert.equal(s.state, 'working')
+    assert.equal(s.elsewhere, true)
+    assert.equal(s.url, 'http://127.0.0.1:52768/')
+    assert.match(s.stage, /^stage 4 of 5/)
+  } finally { rmSync(runsDir, { recursive: true, force: true }) }
+})
+
+test('a build whose log went quiet long ago is not taken for running', () => {
+  const runsDir = mkdtempSync(join(tmpdir(), 'runs-'))
+  try {
+    const jobs = appJobs({ runsDir, record() {}, broadcast() {}, readEvents: () => log(30 * 60e3), provider: () => ({}), modelFor: () => '' })
+    assert.notEqual(jobs.state('r1').elsewhere, true)
+  } finally { rmSync(runsDir, { recursive: true, force: true }) }
+})

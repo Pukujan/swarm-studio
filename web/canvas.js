@@ -3977,7 +3977,7 @@ async function loadApp() {
   try {
     const st = await appApi()
     if (appv.run !== run) return
-    Object.assign(appv, { state: st.state, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
+    Object.assign(appv, { state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
     // the server knows whether the app is running: an address from the log may be a dev server
@@ -3991,6 +3991,38 @@ async function loadApp() {
     }
   } catch (err) { appv.message = err.message }
   renderApp()
+}
+
+// a build another Studio drives has no live feed here: read the shared log again every few seconds
+setInterval(() => { if (view === 'app' && appv.elsewhere && !document.hidden) loadApp() }, 4000)
+
+// the latest play test, filmed: the clip loops from the first key, with the key it pressed
+const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
+function playClip() {
+  const s = appv.run === shownRun() ? appv.steps.findLast(x => x.clip) : null
+  if (!s || clip.shut === s.clip) { if (clip.el) clip.el.hidden = true; return }
+  if (!clip.el) {
+    clip.el = document.createElement('div')
+    clip.el.className = 'playclip'
+    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline autoplay></video>`
+    clip.el.querySelector('.pc-x').onclick = () => { clip.shut = clip.src; clip.el.hidden = true }
+    const v = clip.el.querySelector('video')
+    v.addEventListener('loadedmetadata', () => { v.currentTime = clip.at })
+    v.addEventListener('ended', () => { v.currentTime = clip.at; v.play().catch(() => {}) })
+    v.addEventListener('timeupdate', () => {
+      const k = clip.keys.findLast(x => x.t <= v.currentTime + 0.05)
+      setText(clip.el.querySelector('.pc-key'), k ? k.k : '')
+    })
+    appEls.preview.append(clip.el)
+  }
+  clip.el.hidden = false
+  clip.el.classList.toggle('failed', s.ok === false)
+  if (clip.src !== s.clip) {
+    clip.src = s.clip
+    clip.keys = (s.keys || []).filter(x => typeof x.t === 'number')
+    clip.at = Math.max(0, (clip.keys[0]?.t || 0) - 1)
+    clip.el.querySelector('video').src = BASE + s.clip
+  }
 }
 
 const STEP_ICON = { setup: '⚙︎', turn: '▸', write: '✎', render: '👁', think: '·', tokens: 'Σ', serve: '▶', gate: '✓', ask: '💬' }
@@ -4051,9 +4083,8 @@ function renderApp() {
   renderAppLink()
   renderBadges()
   if (view !== 'app') return
-  // a build another Studio drives looks stopped here; recent steps say it is still going
-  const elsewhere = appv.state === 'stopped' && !appv.hasApp && (appv.steps[appv.steps.length - 1]?.t || 0) > Date.now() - 15 * 60e3
-  const st = elsewhere ? 'working' : appv.state, working = st === 'working'
+  // a build another Studio drives comes from the shared run log: the server says so
+  const st = appv.state, working = st === 'working', elsewhere = !!appv.elsewhere
   appEls.state.className = `app-state pill ${st}`
   appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : appv.hasApp ? 'built' : 'no app yet'
   setText(appEls.stage, working ? appv.stage : appv.result ? `${appv.result.turns} turn${appv.result.turns === 1 ? '' : 's'} · ${appv.result.files} files · checks ${appv.result.gatesPassed ? 'passed' : 'not passed'}${appv.deployed ? ` · live at ${appv.deployed}` : ''}` : '')
@@ -4102,6 +4133,7 @@ function renderApp() {
     appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { appv.message = ''; loadApp() })
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
+  playClip()
   appEls.preview.hidden = appv.mode !== 'preview'
   appEls.code.hidden = appv.mode !== 'code'
   appEls.shell.classList.toggle('dev', !!appv.w)
@@ -5767,7 +5799,7 @@ function radioEvent(e) {
 const radioOn = () => radio.run && radio.run === appv.run
 // the wall's crew: the helpers the radio has heard from first, then the build's agents
 function wallNames() {
-  if (cw.mode === 'art') return [...PAINTERS.map(n => [n, Crew.color(n)]), ...crewMembers(4).filter(([n]) => !PAINTERS.includes(n))].slice(0, CW_TILES)
+  if (cw.mode === 'art') return [...ART_TILES.map(n => [n, Crew.color(n)]), ...crewMembers(4).filter(([n]) => !ART_TILES.includes(n))].slice(0, CW_TILES)
   const heard = radioOn() ? radio.order.slice(0, CW_TILES).map(n => [n, Crew.color(n)]) : []
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
@@ -5778,7 +5810,7 @@ const CW_FRESH = { assets: null, assetsAt: 0, ai: -1, aiAt: 0, assetName: '', mo
 // painters (the server's PAINTERS) each get a tile with the picture they are on: painting,
 // cut out, checked, sent back, done. The last tile stays code. When the code starts, the
 // wall turns back to three code tiles and the asset pane.
-const PAINTERS = ['Kiki', 'Juno', 'Tofu']
+const ART_TILES = ['Kiki', 'Juno', 'Tofu']
 const ART_STATE = { painting: 'painting', cutting: 'cutting', checking: 'checking', 'sent back': 'again', done: 'done', failed: 'failed' }
 const paintv = { run: null, slots: [] }
 function artEvent(e) {
