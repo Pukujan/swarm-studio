@@ -146,6 +146,20 @@ export function titleApp(dir, name) {
 const QUESTION = /\?\s*$|^(what|what's|whats|why|how|when|where|who|which|is|are|was|were|can|could|does|did|do|will|status)\b/i
 // is a process still running (a Studio server that started a build)
 export const alive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
+// How a build runs, for Hermia's answers in the chat: without it she only sees the crew's last
+// lines and guesses (she once said the play test "isn't in the notes, so it isn't built").
+export function processNotes({ kind = 'site', state = 'idle', stage = '', done = [] } = {}) {
+  const game = kind === 'game'
+  const at = String(stage).match(/stage (\d+) of (\d+)/)
+  const where = at ? `The build is on slice ${at[1]} of ${at[2]}${done.length ? ` (done: ${done.join('; ')})` : ''}.` : ''
+  return [
+    game
+      ? 'How the Studio builds a game: the art is painted first, then the game is built in slices (stages), one at a time. Each slice: the crew writes the code in turns, the Studio checks the build (Godot: a headless run, then a web export), then the play test runs by itself: a bot plays the exported game and films it, and that clip fills the Play test window. The play test is the "autoplay"; nobody has to ask for it or add it to the notes. After the clip the build pauses so the owner can watch it and say go on or what to change, then the next slice starts. Words sent while the crew works are read at the start of the next slice.'
+      : 'How the Studio builds an app: the crew writes the code in turns, the Studio runs its checks, then serves the app in the preview. Words sent while the crew works are read at the start of the next stage.',
+    where,
+    state === 'paused' ? 'Right now the build is paused, waiting for the owner to watch the slice\'s play test and say go on.' : ''
+  ].filter(Boolean).join(' ')
+}
 export const isQuestion = text => QUESTION.test(String(text || '').trim())
 
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
