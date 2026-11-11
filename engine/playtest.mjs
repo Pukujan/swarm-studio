@@ -13,7 +13,7 @@ import { dyadDir } from './appbuild.mjs'
 const START = /^(play|start|begin|go|new game|tap to (play|start)|press .* to (play|start))|\b(play|start|begin)\b/i
 const ENDED = /\b(game over|you (lost|died|fell|crashed|slipped)|try again|play again|retry|gate closed|out of lives|run over)\b/i
 
-async function loadPlaywright() {
+export async function loadPlaywright() {
   try { return await import('playwright') } catch {}
   for (const dir of [process.env.PLAYWRIGHT_DIR, dyadDir].filter(Boolean)) {
     try { return createRequire(join(dir, 'package.json'))('playwright') } catch {}
@@ -22,7 +22,7 @@ async function loadPlaywright() {
 }
 
 // Playwright's own browser, else installed Chrome, else any headless shell Playwright downloaded before
-async function launch(chromium) {
+export async function launch(chromium) {
   const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || join(homedir(), process.platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright')
   const shells = []
   try {

@@ -34,12 +34,29 @@ def key_alpha(a: np.ndarray) -> np.ndarray:
     d = np.sqrt(((a - bg) ** 2).sum(2))
     al = np.asarray(Image.fromarray(np.clip((d - 10) * 12, 0, 255).astype(np.uint8)).filter(ImageFilter.MinFilter(3)))
     body = nd.binary_closing(al > 40, iterations=2)
-    # fill holes inside the body (pale cloth close to the grey), but not gaps that show the
-    # plain background, like the inside of a halo or the space under an arm
+    # Fill holes inside the body (pale cloth close to the grey), but judge each enclosed gap
+    # as a whole: if much of it is the plain background (between hair strands, inside a halo,
+    # under an arm, between a wing and a cape) it stays see-through, whatever its shading.
     holes = nd.binary_fill_holes(body) & ~body
-    solid = body | (holes & (d > 6))
+    lab, n = nd.label(holes)
+    solid = body.copy()
+    if n:
+        idx = np.arange(1, n + 1)
+        near_bg = nd.mean(d < 14, lab, idx)
+        fill = np.zeros(n + 1, bool)
+        fill[1:] = near_bg < 0.25
+        solid |= fill[lab]
     core = nd.binary_erosion(solid, iterations=2)
     return np.where(core, 255, al).astype(np.uint8)
+
+
+def despill(a: np.ndarray, al: np.ndarray) -> np.ndarray:
+    """Take the grey back out of soft edge pixels, so strands don't carry a grey fringe."""
+    bg = np.median(a[:20, :20].reshape(-1, 3), 0)
+    f = al[..., None] / 255.0
+    soft = (al > 0) & (al < 250)
+    un = (a - bg * (1 - f)) / np.maximum(f, 0.25)
+    return np.where(soft[..., None], np.clip(un, 0, 255), a)
 
 
 def cut(path: str, fx: bool = False):
@@ -47,6 +64,8 @@ def cut(path: str, fx: bool = False):
     H, W = a.shape[:2]
     cw, ch = W // COLS, H // ROWS
     al = np.clip(a.max(2) * 2, 0, 255).astype(np.uint8) if fx else key_alpha(a)
+    if not fx:
+        a = despill(a, al).astype(int)
     lab, n = nd.label(al > 8, structure=np.ones((3, 3)))
     idx = np.arange(1, n + 1)
     if n:

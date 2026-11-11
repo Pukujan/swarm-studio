@@ -394,5 +394,57 @@
       "feather-1": "a spell called Heaven Wing Barrage at level 1, simple: a small gold magic circle appears, three glowing gold light feathers form and fly to the right in a short volley, then fade; frames: circle appears, feathers form, launch, flying, hit sparks, fade.",
       "feather-5": "the same spell Heaven Wing Barrage at max level, grand and ornate: a large intricate double gold magic circle with laurel runes and a halo, a storm of many glowing white-gold and rose light feathers spirals out and flies right in a wide fan with long light trails, ending in a big bloom of feathers and petals; frames: ornate circle unfolds, feathers spiral out, huge fan launch, streaming trails, bright burst of light and petals, glittering fade."
     }
+  },
+  "bosses": {
+    "teknium": {
+      "name": "TEKNIUM",
+      "role": "final boss",
+      "voice": "teknium",
+      "personality": "A cool, calculating, smug mastermind who is enjoying himself and planning several moves ahead. Never sadistic, never frantic, never demonic.",
+      "lines": {
+        "enter": {
+          "line": "……来たか。退屈はさせないでくれよ。"
+        },
+        "blade": {
+          "line": "では、少し本気を見せようか。"
+        },
+        "lance": {
+          "line": "逃げ道も、計算のうちだ。"
+        },
+        "chase": {
+          "line": "どこへ行く？ まだ終わっていないよ。"
+        },
+        "glare": {
+          "line": "見えているよ。すべて。"
+        },
+        "down": {
+          "line": "……ふふ。今日は君の勝ちにしておこう。"
+        }
+      },
+      "art": {
+        "look": "Teknium, an original anime villain for a 2D action game, painted in the same high-end gacha anime style as the design picture: a tall slim young man, swept-back dark brown hair with a loose strand, a thin gold laurel circlet, calm half-lidded eyes with a faint smile, one eye glowing anime red as the only sign of possession, a long crimson-and-black coat with gold laurel embroidery and long flowing tails, a gold sash, black high-collar shirt, dark trousers and brown boots. Not muscular, not shirtless, no veins, no runes, no horns.",
+        "personality": "He moves with calm, minimal, elegant motion like a conductor; his coat tails and sash flow and trail in every frame.",
+        "layout": "Six frames in a 3 by 2 grid, read left to right, top to bottom. IMPORTANT LAYOUT: in every frame he is small, about 45 percent of his grid cell height, centred, with very wide empty space all around him so every blade, coat tail, sash, chain and effect stays fully inside his own cell with a clear gap to the edges. Same character, same size, feet on one shared baseline (or floating just above it), plain flat light grey background, no text, no borders, no grid lines, no extra people, no floor shadow.",
+        "refs": [],
+        "outfits": {
+          "default": {
+            "design": "assets/art/heroes/teknium-default.jpg"
+          }
+        },
+        "sheets": {
+          "t-idle": "a looping standing idle, feet planted firmly on the ground, boots touching the floor, weight on one leg: 1 arms folded, chin slightly raised, smug; 2 coat tails stirring left; 3 one hand rising to his chin, thinking; 4 a faint smile, eyes half-closed; 5 coat tails stirring right; 6 back to arms folded. Small calm changes only, a seamless loop.",
+          "t-run": "running cycle, side view facing right, body in profile, leaning forward, one hand on the sheathed crimson katana at his hip, coat tails streaming straight back, six evenly spaced side-view run poses that loop, feet striking the ground.",
+          "t-jump": "an elegant platform jump: 1 a light crouch; 2 pushing off the ground; 3 rising, coat tails trailing below; 4 top of the jump, knees tucked, one hand on the katana hilt; 5 falling, coat flaring upward; 6 landing in a low crouch, one hand touching the ground.",
+          "t-wallkick": "a wall kick and air spin: 1 one boot planted against a wall, crouched sideways; 2 kicking off the wall; 3 a horizontal spin in the air, coat wrapping around him; 4 drawing the katana mid-air; 5 a downward plunge, blade pointed down; 6 landing on one knee, blade planted in the ground, red crack beneath.",
+          "t-conduct": "conducting crimson energy orbs like an orchestra: 1 right hand raised, fingers poised; 2 hand sweeps left, three small crimson orbs appear; 3 a finger snap with a small red spark; 4 both hands open outward, a ring of crimson orbs around him; 5 one finger points forward at the viewer; 6 lowering the hand calmly.",
+          "t-blade": "a crimson katana iaido sequence: 1 hand on a sheathed crimson katana at his hip; 2 a low draw, the blade half out with a red glint; 3 a wide horizontal slash with a long crimson arc; 4 follow-through, coat tails whipping; 5 a flourish, the blade rotated behind his back; 6 slowly sheathing it with a smile.",
+          "t-dash": "a teleport dash strike with the crimson katana: 1 crouched, about to vanish, red afterimage starting; 2 a horizontal blur of crimson afterimages; 3 lunging forward with the blade extended; 4 a rising upward slash; 5 landing lightly, coat tails settling; 6 standing upright, blade held low and relaxed.",
+          "t-lance": "summoning crimson spears: 1 an open palm turned upward at his chest; 2 a crimson magic circle on the ground beneath him; 3 palm thrust upward, two crimson spears rising beside him; 4 a gesture to the side, a crimson spear forming in the air; 5 hand closing into a fist, chains of red light wrapping the spears; 6 calm, hands behind his back.",
+          "t-hurt": "taking a hit with composure: 1 knocked back a step, coat flaring; 2 a hand to his chest, still smiling; 3 brushing dust off his shoulder; 4 a small laugh, eyes closed; 5 straightening his coat; 6 back to a calm smug stance.",
+          "t-laugh": "a mode-change laugh: 1 head tilted down; 2 a hand covering half his face, the red eye glowing between his fingers; 3 head tilted back, laughing quietly; 4 sweeping his hair back with one hand; 5 arms spread wide, coat tails lifting in a crimson wind; 6 a calm bow.",
+          "t-throne": "seated in mid-air on an invisible throne: 1 sitting with legs crossed, chin on his hand; 2 tapping the armrest of the air with one finger, a crimson sigil glowing beneath; 3 a lazy wave of the hand; 4 leaning back, smiling; 5 standing up from the air, coat falling; 6 standing, hand extended in invitation."
+        }
+      }
+    }
   }
 }
