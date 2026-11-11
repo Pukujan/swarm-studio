@@ -634,6 +634,10 @@ export function makeHome({ sw, C, root }) {
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
       C.open(null)
       if (typeof made === 'string') C.projectView.show(made, null)
+      // A website the crew has just started opens in the Design deck, the one room where the swarm
+      // can be watched at work (its Follow camera is on for a new build). Back shows the project's
+      // canvas, as from any room. The hosted studio keeps its project canvas.
+      if (typeof made === 'string' && !hosted()) C.go('station', 'canvas')
       return
     }
     try {
