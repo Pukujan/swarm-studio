@@ -8,11 +8,10 @@ provides_tools:
   - swarm_design
   - swarm_canvas
   - swarm_studio
-requires_env:
-  - name: SWARM_STUDIO_API_KEY
-    description: "API key for an OpenAI-compatible chat endpoint (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"
-    secret: true
 optional_env:
+  - name: SWARM_STUDIO_API_KEY
+    description: "Optional: a key for an OpenAI-compatible chat endpoint, used only when Hermes cannot run the crew's model calls (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"
+    secret: true
   - name: ELEVENLABS_API_KEY
     description: "Optional: ElevenLabs key for the Film studio's music and sound effects (without it the studio writes its own score)"
     secret: true
