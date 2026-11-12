@@ -1,5 +1,5 @@
 name: swarm-studio
-version: 0.3.0
+version: 0.3.1
 description: "A crew of agents builds a whole launch from one prompt, live on a canvas you can watch and steer: a multi-page website, a working web app with a database, a playable game (also as a Godot, Unity or Unreal project), a promo film and social posts. Builds go to Swarm Feed, where others remix them and every maker is credited."
 author: Pukujan
 kind: standalone
