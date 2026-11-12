@@ -458,7 +458,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     emit('run:stopped', result)
     return { plan, result }
   }
-  const result = { ms: elapsed(), ...stats, pages: plan.pages.length, ...(base ? { extend: true, kept, added: added.map(p => ({ id: p.id, title: p.title })), changed: changed.map(c => c.layer.id) } : {}) }
+  const result = { ms: elapsed(), ...stats, pages: plan.pages.length, ...(base ? { extend: true, kept, added: added.map(p => ({ id: p.id, title: p.title })), changed: changed.map(c => c.layer.id) } : {}), ...(base && resume ? { resume: true } : {}) }
   emit('run:done', result)
   return { plan, result }
 }

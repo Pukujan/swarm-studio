@@ -379,7 +379,8 @@ function on(e) {
     case 'run:stopped': {
       // Stop (the top bar): what is built is kept; a section caught half way is let go
       S.tEnd = e.t
-      els.planState.textContent = 'stopped'
+      // the pill names the cause: stopped (by you), no Hermes, model, timed out
+      els.planState.textContent = STOP_PILL[e.reason?.code] || 'stopped'
       for (const a of S.agents.values()) { a.idle = true; a.layer = null; a.tool = 'move'; a.painting = null }
       for (const l of S.layers.values()) if (l.status === 'assigned' || l.status === 'streaming') { l.status = 'planned'; l.agent = null; l.text = '' }
       S.treeDirty = true
@@ -1320,23 +1321,83 @@ function logSay(e) {
 
 // Stopped: what is kept, and the way on (say what to change in the dock, or Resume)
 const STOPPED = { pictures: 'pictures', review: 'review', fixes: 'fixes', film: 'film', app: 'app build', game: 'game build', auto: 'auto run' }
+// Every stop names its cause (server/server.mjs, engine/stopreason.mjs): e.reason is {code, message, action}
+// with code person | replaced | hermes | model | timeout. Stopped by the person reads as before; any other
+// cause says what happened and the one thing to do. A build Hermes stopped goes on by itself when it is back.
+const STOP_PILL = { person: 'stopped', replaced: 'stopped', hermes: 'stopped: no Hermes', model: 'stopped: model', timeout: 'stopped: timed out' }
+let hermesResume = null
 function stoppedMsg(e) {
   const built = [...S.layers.values()].filter(l => l.status === 'done').length, total = S.layers.size
+  const why = e.reason && e.reason.code !== 'person' ? e.reason : null
   window.swarmCosmos?.chat?.(true)
-  const item = botMsg(total ? `Stopped. ${built} of ${total} sections are built and kept. Say what to change, or Resume.` : 'Stopped before any page was planned.')
-  if (!total || built >= total || hosted) return
+  const kept = total ? `${built} of ${total} sections are built and kept.` : ''
+  const item = botMsg(why ? [why.message, kept].filter(Boolean).join(' ') : total ? `Stopped. ${kept} Say what to change, or Resume.` : 'Stopped before any page was planned.')
+  if (why?.action) item.querySelector('.txt').append(document.createElement('br'), actionLine(why.action))
   const run = S.run
+  const canResume = total && built < total && !hosted
+  // Hermes closed mid-build: Resume happens by itself once a Hermes attaches (hermes:back)
+  if (why?.code === 'hermes' && canResume) hermesResume = run
   const acts = document.createElement('div')
   acts.className = 'chips'
-  acts.innerHTML = '<button class="primary">Resume</button>'
+  if (canResume) {
+    acts.innerHTML = '<button class="primary">Resume</button>'
+    acts.firstChild.onclick = () => { acts.remove(); resumeRun(run) }
+  } else if (why?.code === 'hermes') {
+    // nothing to resume: say whether Hermes is there now, so Make can be pressed again
+    acts.innerHTML = '<button>Check again</button>'
+    acts.firstChild.onclick = async () => {
+      const h = await hermesReady()
+      acts.remove()
+      if (!h) return botMsg('Hermes is connected. Send the message again to build.')
+      hermesSays(h)
+    }
+  } else return
+  item.append(acts)
+}
+async function resumeRun(run) {
+  if (hermesResume === run) hermesResume = null
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/resume`, { method: 'POST' }).catch(() => null)
+  const j = res ? await res.json().catch(() => ({})) : {}
+  if (res?.status === 503 && j.hermes) { hermesResume = run; return hermesSays(j) }
+  if (!res?.ok) return feed(null, `Couldn't resume: ${j.error || res?.status || 'no server'}`, 'err')
+  if (viewing && window.swarmCosmos?.nav) showRun(j.run, { started: true })
+}
+// an action with `commands` in it: the commands set as code
+function actionLine(text) {
+  const span = document.createElement('span')
+  span.className = 'act'
+  String(text).split('`').forEach((part, i) => {
+    if (!part) return
+    const n = i % 2 ? document.createElement('code') : document.createTextNode(part)
+    if (i % 2) n.textContent = part
+    span.append(n)
+  })
+  return span
+}
+// Before a build or a talk: is Hermes there to answer? null when it is (or not needed), else {message, action}.
+// A Hermes that is starting up gets a few seconds to attach first (GET /api/hermes?ready=1).
+async function hermesReady() {
+  const j = await api('/api/hermes?ready=1').then(r => (r.ok ? r.json() : null)).catch(() => null)
+  if (!j || !j.needed || !j.health || j.health.ok) return null
+  return { message: j.health.message, action: j.health.action, code: j.health.code }
+}
+// one calm line in the chat with the one thing to do, and a way to look again
+function hermesSays(h) {
+  window.swarmCosmos?.chat?.(true)
+  const item = botMsg(h.message)
+  if (h.action) item.querySelector('.txt').append(document.createElement('br'), actionLine(h.action))
+  item.classList.add('hermes-off')
+  const acts = document.createElement('div')
+  acts.className = 'chips'
+  acts.innerHTML = '<button>Check again</button>'
   acts.firstChild.onclick = async () => {
+    const again = await hermesReady()
     acts.remove()
-    const res = await api(`/api/runs/${encodeURIComponent(run)}/resume`, { method: 'POST' }).catch(() => null)
-    const j = res ? await res.json().catch(() => ({})) : {}
-    if (!res?.ok) return feed(null, `Couldn't resume: ${j.error || res?.status || 'no server'}`, 'err')
-    if (viewing && window.swarmCosmos?.nav) showRun(j.run, { started: true })
+    if (!again) return botMsg('Hermes is connected. Send the message again to build.')
+    hermesSays(again)
   }
   item.append(acts)
+  return item
 }
 
 function botMsg(text, working = false) {
@@ -1350,6 +1411,8 @@ function botMsg(text, working = false) {
 
 // a follow-up's reply: what was added or changed, and that the rest is as it was
 function extendSummary(e, secs) {
+  // a resumed build (after Stop, or Hermes closing) finished the sections that were left
+  if (e.resume) return `Finished the build: ${e.done} section${e.done === 1 ? '' : 's'} in ${secs}s${e.failed ? ` (${e.failed} failed)` : ''}. All ${e.pages} page${e.pages === 1 ? '' : 's'} are built.`
   const names = (e.added || []).map(p => p.title)
   const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]
   const fixed = (e.changed || []).filter(id => id !== 'nav').length
@@ -1783,6 +1846,11 @@ async function sendDock() {
       return read === 'talk' ? talkStart({ text: brief, build, from }) : talkAsk(brief, () => build(brief), () => talkStart({ text: brief, build, from }))
     }
   }
+  // no Hermes to answer the model: say so at once, before anything starts "planning"
+  if (!hosted) {
+    const off = await hermesReady()
+    if (off) { to.done?.(null); return void hermesSays(off) }
+  }
   setAuto(true)
   const media = links.take('ref')
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief: refLines(brief, media), agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
@@ -1793,6 +1861,7 @@ async function sendDock() {
   // the build the person just started is the one the canvas shows
   if (res?.ok && j.run && j.run !== shownRun()) showRun(j.run, { started: true })
   else if (res?.status === 409) feed(null, 'The crew are still on the last change.', 'err')
+  else if (res?.status === 503 && j.hermes) hermesSays(j)
   else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
 }
@@ -5838,6 +5907,8 @@ commandOps.game = c => openGame(c.idea || '', c.answers || null, !!c.build)
 
 function hermesWait(e) {
   let bar = document.getElementById('hermes-wait')
+  // a Hermes attached again: a build it stopped goes on from where it was
+  if (e.type === 'hermes:back' && e.attached && hermesResume && !hosted) { const run = hermesResume; hermesResume = null; botMsg('Hermes is back. Going on with the build.'); resumeRun(run) }
   if (e.type === 'hermes:back') return bar?.remove()
   if (!bar) {
     bar = document.createElement('div')
@@ -7321,7 +7392,7 @@ window.swarm = {
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
   // the planner's one line in the left chat (the Studio's "start with…", docs/specs/37-studio-first.md)
   say: text => botMsg(String(text || '')),
-  readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, lock: () => (talk.on && talk.kind === 'game' ? gameLock() : null), get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },
+  readTalk, hermesReady, hermesSays, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, lock: () => (talk.on && talk.kind === 'game' ? gameLock() : null), get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },
   // a replay started from ☰ → Replay ends when the deck is left
   stopReplay,
   // the project's canvas is being zoomed or panned: page swaps and screenshots here wait for it too

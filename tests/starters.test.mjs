@@ -123,17 +123,65 @@ test('the strategy starter assembles into a Godot project with its add-on, and n
   } finally { rmSync(dest, { recursive: true, force: true }) }
 })
 
-test('every add-on a starter carries says where it came from, its licence and its files, and is small', async () => {
-  const { ADDONS_DIR } = await import('../engine/starters.mjs')
-  const { statSync } = await import('node:fs')
-  for (const s of starters()) for (const a of s.addons || []) {
-    const meta = JSON.parse(readFileSync(join(ADDONS_DIR, a, 'addon.json'), 'utf8'))
-    assert.ok(['ours', 'pinned', 'brought'].includes(meta.source), `${a}: source`)
-    assert.ok(meta.version && meta.licence && meta.credits, `${a}: version, licence, credits`)
-    if (meta.source === 'pinned') assert.ok(/^[0-9a-f]{64}$/.test(meta.sha256) && meta.url, `${a}: a pinned add-on records its sha256 and url`)
-    const bytes = meta.files.reduce((n, f) => n + statSync(join(ADDONS_DIR, a, f)).size, 0)
-    assert.ok(bytes < 200_000, `${a}: ${bytes} bytes`)
-  }
+test('every add-on a starter carries is what its addon.json says, and small', async () => {
+  const { ADDONS_DIR, checkAddon } = await import('../engine/starters.mjs')
+  for (const s of starters()) for (const a of s.addons || []) assert.deepEqual(checkAddon(join(ADDONS_DIR, a)), { ok: true, problems: [] }, a)
+})
+
+test('a pinned add-on is held to its version, url and checksum', async () => {
+  const { checkAddon, addonSum } = await import('../engine/starters.mjs')
+  const { writeFileSync, mkdirSync } = await import('node:fs')
+  const dir = mkdtempSync(join(tmpdir(), 'pinned-'))
+  try {
+    mkdirSync(join(dir, 'src'))
+    writeFileSync(join(dir, 'plugin.cfg'), '[plugin]\nname="X"\n')
+    writeFileSync(join(dir, 'src/x.gd'), 'extends Node\n')
+    const meta = { name: 'X', version: '2.1.0', source: 'pinned', licence: 'MIT', credits: 'Someone', url: 'https://example.org/x', web: true, native: false, files: ['plugin.cfg', 'src/x.gd'] }
+    writeFileSync(join(dir, 'addon.json'), JSON.stringify({ ...meta, sha256: addonSum(dir) }))
+    assert.equal(checkAddon(dir).ok, true)
+    writeFileSync(join(dir, 'src/x.gd'), 'extends Node # changed\n')
+    assert.match(checkAddon(dir).problems.join(), /sha256 does not match/)
+    writeFileSync(join(dir, 'addon.json'), JSON.stringify({ ...meta, version: 'latest', url: 'http://x', sha256: addonSum(dir) }))
+    assert.match(checkAddon(dir).problems.join(), /https url.*exact version|exact version/)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('an add-on the person brings is copied into the project with where it came from; native ones leave the Web', async () => {
+  const { bringAddon, checkAddon } = await import('../engine/starters.mjs')
+  const { writeFileSync, mkdirSync, existsSync } = await import('node:fs')
+  const tmp = mkdtempSync(join(tmpdir(), 'brought-'))
+  try {
+    const plain = join(tmp, 'Dialogue Box'), native = join(tmp, 'fast_noise'), proj = join(tmp, 'proj')
+    mkdirSync(plain); mkdirSync(join(native, 'bin'), { recursive: true })
+    writeFileSync(join(plain, 'plugin.cfg'), '[plugin]\n'); writeFileSync(join(plain, 'box.gd'), 'extends Control\n')
+    writeFileSync(join(native, 'noise.gdextension'), '[configuration]\n'); writeFileSync(join(native, 'bin/noise.dll'), 'MZ')
+    const a = bringAddon(plain, proj, { licence: 'MIT', credits: 'Ana' })
+    assert.equal(a.id, 'dialogue_box')
+    assert.equal(a.source, 'brought')
+    assert.equal(a.web, true)
+    assert.ok(existsSync(join(proj, 'addons/dialogue_box/box.gd')))
+    assert.equal(checkAddon(join(proj, 'addons/dialogue_box')).ok, true)
+    const n = bringAddon(native, proj)
+    assert.equal(n.native, true)
+    assert.equal(n.web, false, 'the Web preview cannot run it: Open in Godot')
+    assert.equal(checkAddon(join(proj, 'addons/fast_noise')).ok, true)
+    writeFileSync(join(tmp, 'notes.txt'), 'x')
+    assert.throws(() => bringAddon(join(tmp, 'notes.txt'), proj), /a folder/)
+    mkdirSync(join(tmp, 'pics')); writeFileSync(join(tmp, 'pics/a.png'), 'x')
+    assert.throws(() => bringAddon(join(tmp, 'pics'), proj), /not a Godot add-on/)
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
+
+test('a platformer gets the side-view starter, with its jump feel built in', async () => {
+  const { assembleStarter } = await import('../engine/starters.mjs')
+  const plan = planFromAnswers({ idea: 'a platformer about a fox', answers: {}, force: { family: 'platformer', size: 'tiny', art: '2d', engine: 'godot' } })
+  assert.equal(plan.starter.template.value, 'platformer-side')
+  assert.deepEqual(starterSpec(plan).systems, ['jump', 'corners', 'platforms', 'camera'])
+  const dest = mkdtempSync(join(tmpdir(), 'plat-'))
+  try {
+    const w = assembleStarter('platformer-side', dest)
+    for (const f of ['scripts/feel_test.gd', 'scripts/level.gd', 'addons/feel_platform/platformer_body.gd']) assert.ok(w.includes(f), f)
+  } finally { rmSync(dest, { recursive: true, force: true }) }
 })
 
 test('a Godot build seeds the locked starter first and tells the crew to build on it', async () => {

@@ -1,0 +1,19 @@
+{
+  "id": "platformer-side",
+  "name": "Side-view platformer",
+  "version": "1.0.0",
+  "engines": ["godot"],
+  "families": ["platformer"],
+  "why": "a jump that feels right from the first press, where Godot's own body feels stiff",
+  "systems": [
+    { "id": "jump", "name": "Jump feel", "why": "hold for higher, a frame early or late still jumps, a heavier fall", "required": true },
+    { "id": "corners", "name": "Corner correction", "why": "the head slides around a ceiling corner instead of stopping dead", "required": true },
+    { "id": "platforms", "name": "One-way and moving platforms", "why": "jump up through ledges, drop down through them, ride lifts" },
+    { "id": "camera", "name": "Lookahead camera", "why": "shows more of where you run, steady through a jump" }
+  ],
+  "assets": [
+    { "id": "placeholder", "name": "Placeholder hero", "why": "a level you can run and jump in before any art is painted, free" }
+  ],
+  "addons": ["feel_platform"],
+  "web": "the Web export plays in the Studio; it runs everything in this starter"
+}

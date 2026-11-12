@@ -8,7 +8,7 @@
 //   ├─ draft                     a new project talked through on the Design deck, nothing built yet
 //   ├─ plan                      a game plan (or the one a game talk is drafting)
 //   ├─ brand                     the brand sheet (context.from: where it was opened from)
-//   ├─ studio                    a Studio project's scaffold (spec 37), context.project; one step in view:
+//   ├─ studio                    a project's scaffold before its first build (spec 37): context.project, context.step
 //   │  └─ brand · references · assets · plan · proposal
 //   └─ build                     a version is open
 //      ├─ video
@@ -17,14 +17,15 @@
 import { setup, createActor, assign } from './vendor/xstate/xstate.mjs'
 
 export const ROOMS = ['home', 'draft', 'overview', 'deck', 'app', 'game', 'video', 'plan', 'brand', 'studio']
-export const STUDIO_STEPS = ['brand', 'references', 'assets', 'plan', 'proposal']
+// the Studio's steps, in order (spec 37); Esc goes up one, and from the first to Projects
+export const STEPS = ['brand', 'references', 'assets', 'plan', 'proposal']
 const BUILD_ROOMS = ['overview', 'deck', 'app', 'video']
 const PLAYABLE = ['overview', 'deck', 'app']
 // a run or project id as the address or a caller gives it: a short plain string, or nothing
 const id = v => (typeof v === 'string' && /^[\w.:-]{1,80}$/.test(v) ? v : null)
 
 const START_CONTEXT = { project: null, version: null, run: null, plan: null, page: null, pending: null, from: null, step: null }
-const stepOf = v => (STUDIO_STEPS.includes(v) ? v : null)
+const stepOf = v => (STEPS.includes(v) ? v : null)
 const target = room => (room === 'video' || room === 'game' ? `#nav.build.${room}` : `#nav.build.playable.room.${room}`)
 
 // The screen a snapshot shows, as one plain record every consumer and the address read
@@ -34,8 +35,7 @@ export function view(snap) {
     : m({ build: { playable: { room: 'deck' } } }) ? 'deck' : m({ build: { playable: { room: 'app' } } }) ? 'app' : 'overview'
   const player = m({ build: { playable: { player: 'visitor' } } }) ? 'visitor' : m({ build: { playable: { player: 'prototype' } } }) ? 'prototype' : 'closed'
   const replay = m({ build: { playable: { room: { deck: 'replay' } } } })
-  const step = STUDIO_STEPS.find(x => m({ studio: x })) || null
-  return { room, player, replay, ...snap.context, page: player === 'closed' ? null : snap.context.page, step: room === 'studio' || (room === 'brand' && snap.context.from === 'studio') ? step || snap.context.step : null }
+  return { room, player, replay, ...snap.context, page: player === 'closed' ? null : snap.context.page, step: room === 'studio' || (room === 'brand' && snap.context.from === 'studio') ? snap.context.step : null }
 }
 
 // Every room move: to a room of the open version, or to its game
@@ -64,6 +64,13 @@ export const navMachine = setup({}).createMachine({
       reenter: true,
       actions: assign({ project: ({ event }) => id(event.project), version: ({ event }) => id(event.version), run: ({ event }) => id(event.version), plan: null, page: null })
     },
+    // a project's Studio, on the step asked for (else its first)
+    studio: {
+      guard: ({ event }) => !!id(event.project),
+      target: '.studio',
+      reenter: true,
+      actions: assign({ project: ({ event }) => id(event.project), step: ({ event }) => stepOf(event.step) || STEPS[0], version: null, run: null, plan: null, page: null, pending: null })
+    },
     started: [
       ...['overview', 'deck', 'app', 'video'].map(room => ({
         guard: ({ event }) => !!id(event.run) && (event.room || 'deck') === room,
@@ -80,18 +87,27 @@ export const navMachine = setup({}).createMachine({
     // a plan by id, or none yet while a game talk drafts one
     plan: { target: '.plan', actions: assign({ plan: ({ event }) => id(event.plan), page: null }) },
     brand: { target: '.brand', actions: assign({ from: ({ self }) => view(self.getSnapshot()).room }) },
-    // a Studio project's scaffold, on a step (the planner's start when none is named)
-    studio: {
-      guard: ({ event }) => !!id(event.project),
-      target: '.studio',
-      reenter: true,
-      actions: assign({ project: ({ event }) => id(event.project), step: ({ event }) => stepOf(event.step), version: null, run: null, plan: null, page: null })
-    },
     streamed: { actions: assign({ pending: ({ context, event }) => (context.pending && event.run === context.pending ? null : context.pending) }) }
   },
   states: {
     home: {},
     draft: {},
+    studio: {
+      on: {
+        'studio.step': { guard: ({ event }) => !!stepOf(event.step), actions: assign({ step: ({ event }) => stepOf(event.step) }) },
+        back: [
+          { guard: ({ context }) => STEPS.indexOf(context.step) > 0, actions: assign({ step: ({ context }) => STEPS[STEPS.indexOf(context.step) - 1] }) },
+          { target: 'home' }
+        ],
+        // the person's Build: the build opens as any started one does (on the deck unless a room is named)
+        'studio.built': BUILD_ROOMS.map(room => ({
+          guard: ({ event }) => !!id(event.run) && (event.room || 'deck') === room,
+          target: target(room),
+          actions: assign({ version: ({ event }) => event.run, run: ({ event }) => event.run, pending: ({ event }) => event.run, page: null })
+        }))
+      }
+      // the step stays in the context while the brand sheet is open from here, so Back lands on it
+    },
     plan: {},
     brand: {
       // the sheet is open already: a second brand is not a move, and it keeps where it came from
@@ -107,17 +123,6 @@ export const navMachine = setup({}).createMachine({
         ]
       },
       exit: assign({ from: null })
-    },
-    studio: {
-      initial: 'enter',
-      on: {
-        'studio.step': STUDIO_STEPS.map(x => ({ guard: ({ event }) => event.step === x, target: `.${x}`, actions: assign({ step: x }) }))
-      },
-      states: {
-        // the step the event (or the address) named; with none, the first, until the scaffold names its start
-        enter: { always: [...STUDIO_STEPS.map(x => ({ guard: ({ context }) => context.step === x, target: x })), { target: 'brand' }] },
-        ...Object.fromEntries(STUDIO_STEPS.map(x => [x, {}]))
-      }
     },
     build: {
       initial: 'playable',
@@ -167,7 +172,6 @@ export const navMachine = setup({}).createMachine({
 
 // The address names the same state and nothing else (spec 34):
 //   ?project=<id>&version=<run>&room=<room>&run=<game run>&plan=<id>&play=<prototype|visitor>&page=<id>
-//   ?room=studio&project=<id>&step=<step>   a Studio project's scaffold (spec 37)
 // ?run=<id> alone (the old form) opens that build's Overview; ?replay=<id> replays it in the deck.
 export function toAddress(v) {
   const q = new URLSearchParams()

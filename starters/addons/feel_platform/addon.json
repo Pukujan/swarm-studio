@@ -1,0 +1,11 @@
+{
+  "name": "Feel Platform",
+  "version": "1.0.0",
+  "source": "ours",
+  "licence": "MIT",
+  "credits": "Swarm Studio",
+  "engine": "godot 4.3+",
+  "web": true,
+  "native": false,
+  "files": ["platformer_body.gd", "moving_platform.gd", "lookahead_camera.gd", "plugin.cfg", "plugin.gd", "README.md"]
+}

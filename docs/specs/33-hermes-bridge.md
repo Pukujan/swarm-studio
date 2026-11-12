@@ -130,15 +130,47 @@ live bridge, with the bridge token, which never leaves the server. The bridge an
 The server is detached, so it keeps running after the Hermes process that started it exits. When no
 bridge is attached:
 
-- **Model calls.**
-  - If the person set `SWARM_STUDIO_API_KEY` (the one key the plugin may hand to Node), calls go
-    straight to `SWARM_STUDIO_BASE_URL` with it.
-  - Otherwise each model call waits, and the canvas shows "Waiting for Hermes: open Hermes, or run
-    `hermes swarm`, to continue". When a bridge attaches, the waiting calls go on and the build
-    continues. A call that waits longer than its own timeout fails; Resume (#284) then picks the
-    build up where it stopped.
+- **Before a build or a talk** (`/api/run`, `/api/auto`, resume, `/api/discuss`), the server asks
+  `engine/hermeshealth.mjs` whether Hermes is there, but only when a role goes through Hermes. If it is
+  not, the request is refused at once with 503 `{error, code, message, action, hermes: true}`, and the
+  build never starts "planning". The canvas and the Make box ask first (`GET /api/hermes?ready=1`) and
+  show one calm line with the one thing to do and **Check again**. `hermes swarm` and `/swarm` print the
+  same words. The two cases are told apart:
+  - `hermes_closed`: no Hermes process is running. "Hermes isn't connected." Open Hermes Desktop, or run
+    `hermes swarm`.
+  - `hermes_updated`: Hermes is running on an older copy of the plugin. "Swarm Studio was updated. Restart
+    Hermes to finish." Run `hermes gateway restart`, or quit Hermes Desktop and open it again. A copy from
+    before the bridge never attaches at all; a newer one sends `code` (the newest mtime of the plugin's
+    root `*.py` when it loaded) with every attach, and the server compares it with the files on disk.
+  A Hermes that is running but has not attached yet gets 8 seconds to do so before it is called outdated.
+- **Re-attach.** Every Hermes process with the plugin loaded keeps looking for a server every 5 seconds
+  until one answers (`bridge.start_later`), then attaches every 5 seconds. So a server it did not start,
+  or one restarted by another process, is found without anyone doing anything.
+- **Hermes closes mid-build.** A model call waits 20 seconds for a bridge (the canvas shows "Waiting for
+  Hermes"), then fails with Hermes's reason and stops the build: `run:stopped` with
+  `reason: {code: 'hermes', message, action}`. What was built is kept. When a bridge attaches again the
+  server sends `hermes:back` with `attached: true`, and the canvas resumes that build by itself.
+- **If the person set `SWARM_STUDIO_API_KEY`** (the one key the plugin may hand to Node), calls go
+  straight to `SWARM_STUDIO_BASE_URL` with it, and none of the above applies.
 - **Pictures, clips and MCP** fail softly, as a signed-out provider did before. Pictures fall back
   to `ckff` if it is set, then to stock photos or drawn art.
+
+### Every stop names its cause
+
+`run:stopped` carries `reason: {code, message, action}` (`engine/stopreason.mjs`). The chat says the
+message and the action; the status pill says the cause.
+
+| code | When | Pill |
+|---|---|---|
+| `person` | the person pressed Stop | stopped |
+| `replaced` | a newer build started | stopped |
+| `hermes` | Hermes closed, or is outdated | stopped: no Hermes |
+| `model` | the provider refused or failed; its own words are kept (a 402 budget cap, a 429) | stopped: model |
+| `timeout` | the model took too long | stopped: timed out |
+
+A build that ends with nothing planned because the planner failed is a stop with the model's reason,
+not a `run:done` with 0 sections. In Auto, a design step whose build stopped for any cause but the
+person fails with that reason.
 
 ## `hermes swarm` from the command line
 

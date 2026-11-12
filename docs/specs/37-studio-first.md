@@ -235,8 +235,9 @@ nav
 - **Events:**
   - `studio { project, step? }` enters the scaffold, on the suggested step when there is no `step`;
   - `studio.step { step }` moves between steps;
-  - a build started from the Studio goes to `build` through today's `started`.
-- **The address:** `?room=studio&project=<pid>&step=<step>`, like every other room's.
+  - `studio.built { run }` goes to `build`, the same as `started`.
+- **The address:** `?room=studio&project=<pid>&step=<step>`, the form the machine's other addresses
+  take (spec 34). In `web/nav.js`, with `back` (Esc) and `STEPS`.
 - **Esc** goes up a step and then to Home. The breadcrumb reads `Projects › name › step`.
 - **Today's `brand` and `plan` states** stay as they are until their boards move behind kits. Then they
   become `studio.brand` and `studio.plan`.

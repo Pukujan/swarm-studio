@@ -17,7 +17,8 @@ export const CRITIC = {
   onBeat: 0.09, // seconds a cut may sit from the beat
   onBeatShare: 0.7, // share of cuts that should be on the beat
   matchCut: 0.3, // seconds a found cut may sit from a planned one
-  voiceRecall: 0.6 // share of the script's words that should be heard
+  voiceRecall: 0.6, // share of the script's words that should be heard
+  lengthOff: 0.25 // share a film may run off the length that was locked
 }
 
 const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`
@@ -35,6 +36,8 @@ const overlaps = (a, b) => a[0] < b[1] && b[0] < a[1]
 // The checks, from what was measured. Pure, so it is tested without ffmpeg.
 //   m: { seconds, lufs, peak, silences, blacks, hasSound }   cuts: found cut times   beats: the music's beat times
 //   board: { lengths, voice, scenes, cues }   heard: transcript text or null   look: { broken: [] } or null
+const norm = t => String(t || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+
 export function filmChecks({ m, cuts = [], beats = [], beatSure = false, board = {}, heard = null, look = null, music = true }) {
   const out = []
   const seconds = m.seconds || 0
@@ -75,6 +78,14 @@ export function filmChecks({ m, cuts = [], beats = [], beatSure = false, board =
       const r = recall(script, heard)
       add('voice', r >= CRITIC.voiceRecall, `${Math.round(r * 100)}% of the script's words were heard`, 'heard by the media model')
     }
+  }
+  // what was locked (spec 40): the length asked for, and every line of the script on screen
+  const L = board.locked
+  if (L?.seconds && seconds) add('length', Math.abs(seconds - L.seconds) <= Math.max(3, L.seconds * CRITIC.lengthOff), `${Math.round(seconds)} s of the ${Math.round(L.seconds)} s asked for`, 'against the locked spec')
+  if (L?.script?.length) {
+    const shown = (board.scenes || []).map(s => norm(`${s.headline || ''} ${s.sub || ''} ${s.say || ''}`)).join(' ')
+    const lost = L.script.filter(t => !shown.includes(norm(t)))
+    add('script', !lost.length, lost.length ? `${lost.length} of ${L.script.length} lines left out: ${lost.slice(0, 2).map(t => `“${t}”`).join(', ')}` : `all ${L.script.length} lines are in`, 'against the locked spec')
   }
   if (look) add('look', !look.broken?.length, look.broken?.length ? look.broken.map(b => `at ${fmt(b.t)}: ${b.why}`).join('; ') : 'no broken frames seen', look.by)
   return out

@@ -140,6 +140,10 @@ export function autoJob(d) {
       const err = run.events.find(e => e.type === 'error')
       if (err) throw new Error(err.message)
       if (d.current() !== run) throw new Error('another build replaced it')
+      // a build that stopped without the person's Stop (Hermes closed, the model refused) fails this step
+      // with the stop's own reason, instead of counting as a design with nothing in it
+      const stop = run.done && run.stopped && !job.stopped && run.events.findLast(e => e.type === 'run:stopped')?.reason
+      if (stop && stop.code !== 'person') throw new Error([stop.message, stop.action].filter(Boolean).join(' '))
       return run.done
     }, { ms: 15 * 60000, stop: () => run.controller.abort() })
     // the pictures paint after the sections land: wait for the queue to empty
