@@ -424,6 +424,10 @@ export function makePlan({ sw, C, root }) {
     get drafting() { return P.draft },
     // the plan the board is showing has loaded
     get ready() { return P.ready || Promise.resolve() },
+    // the plan as the board shows it (the game kit reads it: web/kit-game.js)
+    get plan() { return P.plan },
+    // the top bar's button: the Lock dialog with the price, or Build once locked
+    gate,
     // bring a section ('cards', 'sheets', 'build', 'mocks', 'world', 'close') or an artboard (its key) into view
     focus: (target, animate = true) => bd.focus(target, animate)
   }
