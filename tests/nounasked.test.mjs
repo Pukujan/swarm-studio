@@ -5,6 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { canvasSource } from './canvas-source.mjs'
 
 const src = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
 
@@ -20,7 +21,7 @@ test('an example from the lightbulb only fills the box; it never starts a build 
 })
 
 test('the talk shows a given brief with its Build button', () => {
-  const canvas = src('web/canvas.js')
+  const canvas = canvasSource()
   assert.match(canvas, /brief = ''/)
   assert.match(canvas, /talkBrief\(brief, '', what, sheet\)/)
 })

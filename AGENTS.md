@@ -20,7 +20,8 @@ The real constraints that come with a dependency:
 
 Checks before a PR: `bash scripts/check.sh`; for code in `web/`, also `npm ci --prefix tools/dev` once, then
 `npm run --prefix tools/dev typecheck` (files that start with `// @ts-check`; a new web file starts with it) and
-`npm run --prefix tools/dev deps` (no cycles; an area under `web/canvas/` is used only through its `index.js`).
+`npm run --prefix tools/dev deps` (no new cycles beyond `.dependency-cruiser-known-violations.json`; an area
+folder under `web/canvas/` is used only through its `index.js`).
 CI's `motion-check` compares the Studio's motion before and after (docs/ux/MOTION.md).
 
 Before changing anything a person sees (anything in `web/`, the Feed's screens, dialogs, menus, copy), read:
@@ -38,7 +39,8 @@ Before changing anything a person sees (anything in `web/`, the Feed's screens, 
 
 Two names, used the same way in code, copy and docs (owner, 2026-11-11): the **Overview** is a project's pages
 and files (`web/project.js`); the **Design deck** ("Canvas" in the mode menu) is where the crew is watched at work
-and a page is designed (`web/canvas.js`). Never call the Overview a canvas.
+and a page is designed (`web/canvas/`, one file per area; [web/canvas/README.md](web/canvas/README.md) says which;
+`web/canvas.js` only loads them). Never call the Overview a canvas.
 
 Specs for individual features live in [docs/specs/](docs/specs/README.md).
 

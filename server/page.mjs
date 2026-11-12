@@ -31,7 +31,7 @@ export function joinModules(webDir, files) {
         for (const [name, local] of pairs(names)) used.set(local || name, name)
         return ''
       })
-      .replace(/^import .* from '\.\/.*'$/gm, '').replace(/^export /gm, '')
+      .replace(/^import (?:.* from )?'\.\.?\/.*'$/gm, '').replace(/^export /gm, '')
     // a Studio kit (web/kit-<kind>.js, docs/specs/37-studio-first.md) keeps its own names: it is its own
     // closure, and only its export, <kind>Kit, reaches web/kits.js
     const kit = f.match(/^kit-([a-z]+)\.js$/)
@@ -63,7 +63,7 @@ export function canvasPage(webDir, extra = {}) {
     // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
     .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
     .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
-    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${joinModules(webDir, ['route.js', 'icons.js', 'data.js', 'workshop.js', 'seo.js', 'layerlink.js', 'clean.js', 'canvas/core.js', 'canvas.js'])}</script>`)
+    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${joinModules(webDir, ['route.js', 'icons.js', 'data.js', 'workshop.js', 'seo.js', 'layerlink.js', 'clean.js', 'canvas/core.js', 'canvas/base.js', 'canvas/events.js', 'canvas/deck.js', 'canvas/panels.js', 'canvas/loop.js', 'canvas/talk.js', 'canvas/player.js', 'canvas/design.js', 'canvas/publish.js', 'canvas/marks.js', 'canvas/film.js', 'canvas/settings.js', 'canvas/replay.js', 'canvas/rooms.js', 'canvas/start.js', 'canvas/auto.js', 'canvas/dock.js', 'canvas/hook.js', 'canvas/hosted.js', 'canvas.js'])}</script>`)
     // the studio frame, Projects and a project's canvas
     .replace('<link rel="stylesheet" href="studio.css">', () => `<style>${read('studio.css')}</style>`)
     .replace('<link rel="stylesheet" href="home.css">', () => `<style>${read('home.css')}</style>`)

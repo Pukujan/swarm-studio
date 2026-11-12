@@ -4,13 +4,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { canvasSource, canvasFiles } from './canvas-source.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const read = f => readFileSync(`${root}${f}`, 'utf8')
-const web = readdirSync(`${root}web`).filter(f => /\.(js|html)$/.test(f))
+const web = [...readdirSync(`${root}web`).filter(f => /\.(js|html)$/.test(f)), ...canvasFiles.filter(f => f.includes('/'))]
 
 test('every frame that shows a generated page is sandboxed without allow-same-origin', () => {
-  const canvas = read('web/canvas.js')
+  const canvas = canvasSource()
   assert.match(canvas, /const FRAME_SANDBOX = 'allow-scripts'\n/)
   // each frame the canvas makes gets its sandbox before it loads
   const made = canvas.split("document.createElement('iframe')").slice(1)
@@ -28,7 +29,8 @@ test('every frame that shows a generated page is sandboxed without allow-same-or
   }
   // allow-same-origin is granted in one place (a string, not a comment): the app preview, only while it is another origin
   const same = web.flatMap(f => (read(`web/${f}`).match(/['"`][^'"`\n]*allow-same-origin/g) || []).map(() => f))
-  assert.deepEqual(same, ['canvas.js'])
+  assert.equal(same.length, 1)
+  assert.match(same[0], /^canvas\//)
   assert.match(canvas, /new URL\(src, location\.href\)\.origin === location\.origin/)
 })
 
@@ -38,8 +40,8 @@ test('clean() works on the parsed DOM, not on regexes over the text', () => {
   assert.match(clean, /querySelectorAll\('script'\)/)
   assert.match(clean, /name\.startsWith\('on'\)/)
   assert.doesNotMatch(clean, /replace\(\/<script/)
-  const canvas = read('web/canvas.js')
-  assert.match(canvas, /import \{ clean \} from '\.\/clean\.js'/)
+  const canvas = canvasSource()
+  assert.match(canvas, /import \{[^}]*\bclean\b[^}]*\} from '\.\.\/clean\.js'/)
   assert.doesNotMatch(canvas, /function clean\(/)
   assert.match(read('server/page.mjs'), /'clean\.js', ('canvas\/[\w.-]+', )*'canvas\.js'/, 'the inlined studio carries clean.js before canvas.js')
 })
