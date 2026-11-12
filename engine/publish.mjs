@@ -52,29 +52,38 @@ async function pickRepo(login, name) {
   throw new Error(`every repo name for ${name} is taken`)
 }
 
-export async function publishGitHub({ dir, name, title, onStage = () => {} }) {
+// rebase(url): writes the site's address into its pages (canonical, share tags, sitemap,
+// robots: engine/seo.mjs) before the files go up; called again if the host answers elsewhere.
+export async function publishGitHub({ dir, name, title, rebase = null, onStage = () => {} }) {
   const login = await githubLogin()
   if (!login) throw new Error('GitHub CLI is not signed in (run `gh auth login`), so the site is hosted on this computer only')
   onStage('repo')
   const { repo, fresh } = await pickRepo(login, name)
   const full = `${login}/${repo}`
   if (fresh) await gh(['repo', 'create', full, '--public', '--description', `${title} · ${MARK}`.slice(0, 340)])
+  // a project site lives at <login>.github.io/<repo>/ unless the account has its own domain
+  const guess = repo.toLowerCase() === `${login.toLowerCase()}.github.io` ? `https://${repo.toLowerCase()}/` : `https://${login.toLowerCase()}.github.io/${repo}/`
+  if (rebase) rebase(guess)
 
   onStage('push')
-  const pushed = Date.now()
-  const work = mkdtempSync(join(tmpdir(), 'swarm-publish-'))
-  try {
-    cpSync(dir, work, { recursive: true })
-    writeFileSync(join(work, '.nojekyll'), '')
-    const git = args => run('git', ['-c', `user.name=${login}`, '-c', `user.email=${login}@users.noreply.github.com`, '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', ...args], { cwd: work, timeout: 120000 })
-    await git(['init', '-q', '-b', 'main'])
-    await git(['add', '-A'])
-    await git(['commit', '-q', '-m', `Publish ${title} from Swarm Studio`])
-    // the repo holds only the published site, so each publish replaces it
-    await git(['push', '-q', '-f', `https://github.com/${full}.git`, 'main'])
-  } finally {
-    rmSync(work, { recursive: true, force: true })
+  let pushed = Date.now()
+  const push = async () => {
+    pushed = Date.now()
+    const work = mkdtempSync(join(tmpdir(), 'swarm-publish-'))
+    try {
+      cpSync(dir, work, { recursive: true })
+      writeFileSync(join(work, '.nojekyll'), '')
+      const git = args => run('git', ['-c', `user.name=${login}`, '-c', `user.email=${login}@users.noreply.github.com`, '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', ...args], { cwd: work, timeout: 120000 })
+      await git(['init', '-q', '-b', 'main'])
+      await git(['add', '-A'])
+      await git(['commit', '-q', '-m', `Publish ${title} from Swarm Studio`])
+      // the repo holds only the published site, so each publish replaces it
+      await git(['push', '-q', '-f', `https://github.com/${full}.git`, 'main'])
+    } finally {
+      rmSync(work, { recursive: true, force: true })
+    }
   }
+  await push()
 
   onStage('pages')
   try {
@@ -84,6 +93,7 @@ export async function publishGitHub({ dir, name, title, onStage = () => {} }) {
   }
   const url = (await gh(['api', `repos/${full}/pages`, '--jq', '.html_url'])).replace(/\/?$/, '/')
   if (fresh) gh(['repo', 'edit', full, '--homepage', url]).catch(() => {})
+  if (rebase && url !== guess) { rebase(url); await push() }
 
   // GitHub builds the site, then its CDN starts answering: wait for both
   onStage('building')
@@ -141,7 +151,7 @@ async function rest(base, token, path, init = {}) {
 // the files are the finished static site.
 const SKIP = /(^|\/)(node_modules|\.git|dist|\.output|\.vercel|\.engine)(\/|$)|\.DS_Store$/
 
-export async function publishVercel({ dir, name, creds, dataDir, build = false, env = null, onStage = () => {}, onLog = null }) {
+export async function publishVercel({ dir, name, creds, dataDir, build = false, env = null, rebase = null, guessed = null, onStage = () => {}, onLog = null }) {
   const api = (path, init) => rest(creds.base || 'https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
   onStage('project')
   const own = ownProjects(dataDir, 'vercel')
@@ -154,6 +164,9 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
   }
   if (!project) throw new Error(`every Vercel project name for ${name} is taken`)
 
+  // the address it will most likely have; checked once it is live
+  const guess = guessed || `https://${project}.vercel.app/`
+  if (rebase && !guessed) rebase(guess)
   onStage('upload')
   const list = files(dir).filter(f => !build || !SKIP.test(f.rel)).map(f => {
     const data = readFileSync(f.path)
@@ -218,7 +231,10 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
   const ordered = [...new Set([...names.filter(a => a.endsWith('.vercel.app')).sort((a, b) => a.length - b.length), ...names, d.url].filter(Boolean))]
   let url = null
   for (const n of ordered) if (await live(`https://${n}/`, 15000)) { url = `https://${n}/`; break }
-  return { url: url || (ordered[0] ? `https://${ordered[0]}/` : null), repo: `vercel:${project}`, pending: !url, ...(envSaved === null ? {} : { envSaved }) }
+  const final = url || (ordered[0] ? `https://${ordered[0]}/` : null)
+  // a static site that answers at another address goes up once more with that one written in
+  if (rebase && !build && final && final !== guess && !guessed) { rebase(final); return publishVercel({ dir, name, creds, dataDir, build, env, rebase, guessed: final, onStage, onLog }) }
+  return { url: final, repo: `vercel:${project}`, pending: !url, ...(envSaved === null ? {} : { envSaved }) }
 }
 
 // ---------- Cloudflare Pages: direct upload, the way wrangler does it, without wrangler.
@@ -229,7 +245,7 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
 const CF = 'https://api.cloudflare.com/client/v4'
 const TYPES = { html: 'text/html', css: 'text/css', js: 'application/javascript', mjs: 'application/javascript', json: 'application/json', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', ico: 'image/x-icon', txt: 'text/plain', woff2: 'font/woff2' }
 
-export async function publishCloudflare({ dir, name, creds, dataDir, onStage = () => {} }) {
+export async function publishCloudflare({ dir, name, creds, dataDir, rebase = null, onStage = () => {} }) {
   const api = (path, init) => rest(creds.base || CF, creds.token, `/accounts/${creds.accountId}/pages/projects${path}`, init)
   const why = r => r.body.errors?.[0]?.message || r.status
   onStage('project')
@@ -248,6 +264,8 @@ export async function publishCloudflare({ dir, name, creds, dataDir, onStage = (
   }
   if (!project) throw new Error(`every Cloudflare Pages name for ${name} is taken`)
 
+  if (!sub) sub = (await api(`/${project}`)).body?.result?.subdomain || null
+  if (rebase && sub) rebase(`https://${sub}/`)
   onStage('upload')
   const tok = await api(`/${project}/upload-token`)
   const jwt = tok.body.result?.jwt

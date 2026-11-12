@@ -23,7 +23,7 @@ export function canvasPage(webDir, extra = {}) {
     // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
     .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
     .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
-    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${['route.js', 'icons.js', 'store.js', 'workshop.js', 'canvas.js'].map(join1).join('\n')}</script>`)
+    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${['route.js', 'icons.js', 'store.js', 'workshop.js', 'seo.js', 'canvas.js'].map(join1).join('\n')}</script>`)
     // the studio frame, Projects and a project's canvas
     .replace('<link rel="stylesheet" href="studio.css">', () => `<style>${read('studio.css')}</style>`)
     .replace('<link rel="stylesheet" href="home.css">', () => `<style>${read('home.css')}</style>`)

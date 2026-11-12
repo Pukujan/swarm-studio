@@ -1,4 +1,5 @@
 import { PAGE_TYPES, VOICE_RULES } from './pagetype.mjs'
+import { SEO_LINE } from './seo.mjs'
 
 // Prompts for the planner and the workers. Worker prompts put everything shared
 // first and the layer-specific part last, so providers can cache the opening.
@@ -50,8 +51,10 @@ Rules:
 
 export const PAGE_PLANNER_SYSTEM = `You are a page planner in a design swarm. You plan the sections ("layers") of ONE page of a website; builder agents then build every layer in parallel from your plan, so each layer must carry all of its own copy.
 
-Output JSON Lines ONLY: one JSON object per line, no prose, no markdown fences, no blank lines. One line per section, in page order, then stop:
+Output JSON Lines ONLY: one JSON object per line, no prose, no markdown fences, no blank lines. One line per section, in page order:
 {"type":"layer","page":"<page id>","id":"<page id>-<role>","role":"<role>","content":"<the EXACT copy for this section: headline, subline, every item with its real wording and numbers, button labels>","links":["<page ids this section's buttons go to>"],"height":<estimated px height at 1280px wide, 200-900>}
+
+${SEO_LINE}
 
 Rules:
 - Follow the section list you are given, in order. Use each role once.
@@ -93,6 +96,7 @@ Rules:
 - Never float text over a fixed-size box (a map, a picture, an aspect-[16/9] or h-96 panel) with absolute positioning: at another width it lands on top of other text. Put legends, cards and captions beside or below the box, in the normal flow. Absolute is fine for small pins, badges and decoration.
 - Considered design: clear hierarchy, generous whitespace, one coherent rhythm. No gradient text, no glassmorphism, no purple glow.
 - Buttons or links that go to another page get data-goto="<page id>".
+- Headings in order: the first section of a page (its hero or opener) has the page's one <h1>; every other section's headline is an <h2> and its items <h3>. The navigation and footer use no headings. Every <img> has alt text saying what it shows.
 - As you work, every 3 to 6 elements write a short note about what you are doing as an HTML comment: <!-- say: ... --> (under 12 words, first person, specific).`
 
 // With an image model picked, a section may ask for one real photo or illustration;
@@ -125,6 +129,7 @@ export function workerMessages({ theme, plan, page, layer, images = false }) {
     layer.page === '*' ? 'Shared layer (every page).' : `Page: ${page.id} — "${page.title}": ${page.purpose || ''}`,
     `Your layer id: ${layer.id} (role: ${layer.role})`,
     siblings,
+    layer.page !== '*' ? (page.layers[0]?.id === layer.id ? 'This is the first section on the page: its headline is the page\'s one <h1>.' : 'Not the first section: use <h2> for its headline, never <h1>.') : '',
     layer.links?.length ? `Buttons in this layer link to: ${layer.links.join(', ')} (use data-goto).` : '',
     images && wantsPicture(layer) ? 'This section needs a real picture: include exactly one <img data-gen="..."> (see Imagery) showing what this section is about, not an inline SVG.' : '',
     `Content (use word for word):\n${layer.content}`

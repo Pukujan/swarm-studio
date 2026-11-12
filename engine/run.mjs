@@ -8,6 +8,8 @@ import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme } from './paget
 import { tidyFragment } from './tidy.mjs'
 import { fixSection } from './review.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
+import { cleanSeo, reviewSeo } from './seo.mjs'
+import { projectName } from './naming.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
 
@@ -138,8 +140,16 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     queue.push({ kind: 'build', layer })
   }
 
+  // the page's search title, description and facts, written with its copy (engine/seo.mjs)
+  function addSeo(obj, page) {
+    const seo = cleanSeo(obj)
+    if (!Object.keys(seo).length) return
+    page.seo = { ...(page.seo || {}), ...seo }
+    emit('seo', { page: page.id, ...seo, by: 'planner' })
+  }
+
   function planPage(page, attempt = 1) {
-    const parser = lineParser(obj => addLayer(obj, page.id))
+    const parser = lineParser(obj => (obj.type === 'seo' ? addSeo(obj, page) : addLayer(obj, page.id)))
     return new Promise(r => setTimeout(r, attempt === 1 ? Math.max(0, page.index - kept) * STAGGER_MS : 0))
       .then(() => {
         if (signal?.aborted) throw new Error('stopped')
@@ -148,7 +158,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
           trace: { kind: 'plan', page: page.id },
           model: plannerModel,
           messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page }),
-          maxTokens: 3000,
+          maxTokens: 3400,
           temperature: 0.8,
           extra: NO_THINKING,
           signal,
@@ -366,6 +376,22 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
   }
 
   await Promise.all([planning, ...pool.map(work)])
+  // the reviewer checks every page's title, description, headings and alt text and fixes
+  // what fails, without another model round (engine/seo.mjs)
+  if (!signal?.aborted && plan.pages.some(p => p.layers.some(l => l.html))) {
+    try {
+      const shared = plan.shared.map(l => l.html || '').join('\n')
+      const review = reviewSeo(plan.pages.map(p => ({ id: p.id, title: p.title, purpose: p.purpose, seo: p.seo, html: `${shared}\n${p.layers.map(l => l.html || '').join('\n')}` })), { brand: projectName({ brief }) })
+      for (const id of review.changed) {
+        const page = plan.pages.find(p => p.id === id), s = review.seo.get(id)
+        page.seo = s
+        emit('seo', { page: id, title: s.title, description: s.description, by: 'reviewer' })
+      }
+      emit('seo:review', { pages: plan.pages.length, issues: review.issues.length, fixed: review.notes.map(n => n.text).slice(0, 24) })
+    } catch (err) {
+      emit('error', { where: 'seo', message: String(err.message || err) })
+    }
+  }
   // stopped: the last word is run:stopped (what was built is kept); no run:done, so nothing more starts
   if (signal?.aborted) {
     const result = { ms: elapsed(), ...stats, pages: plan.pages.length, stopped: true }

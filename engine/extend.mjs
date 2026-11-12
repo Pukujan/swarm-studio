@@ -2,6 +2,7 @@
 // built (theme, art style, pages, sections, edits, pictures) and the crew builds
 // only what the message asks for: new pages, or changes to named sections.
 import { PAGE_TYPES } from './pagetype.mjs'
+import { seoFromEvents } from './seo.mjs'
 
 // The brief a build was started with, without what later versions or uploads added
 export const baseBrief = brief => String(brief || '').split('\n\nThe owner uploaded these pictures.')[0].split('\n\nFor this version: ')[0].trim()
@@ -11,7 +12,7 @@ export const baseBrief = brief => String(brief || '').split('\n\nThe owner uploa
 // or a restore wins over the first build), edits and the newest picture per slot.
 // Order matters: a class edit restyles the sections finished before it, and a fix was
 // written from the edited section, so the events keep their original positions.
-const CARRY = new Set(['pagetype', 'theme', 'art', 'page', 'layer:plan', 'layer:done', 'edit', 'image'])
+const CARRY = new Set(['pagetype', 'theme', 'art', 'page', 'layer:plan', 'layer:done', 'edit', 'image', 'seo'])
 const OMIT = new Set(['type', 't', 'run', 'agent', 'ms', 'done', 'planned'])
 export function carryEvents(events) {
   const last = new Map()
@@ -46,13 +47,14 @@ export function extendBase(events, savedPlan = null) {
   for (const l of [...(savedPlan?.shared || []), ...(savedPlan?.pages || []).flatMap(p => p.layers || [])]) content.set(`${l.page}/${l.id}`, l.content || '')
   const layer = e => ({ id: e.id, page: e.page, role: e.role, links: e.links || [], height: e.height || 360, content: content.get(`${e.page}/${e.id}`) || '', html: html.get(`${e.page}/${e.id}`) || '' })
   const plans = events.filter(e => e.type === 'layer:plan')
+  const seoNow = seoFromEvents(events)
   return {
     brief: baseBrief(start.brief),
     pageType: events.findLast(e => e.type === 'pagetype')?.key || savedPlan?.pageType || '',
     theme: Object.fromEntries(Object.entries(theme).filter(([k]) => !['t', 'run'].includes(k))),
     art: events.findLast(e => e.type === 'art') || null,
     pages: pages.map((p, i) => ({
-      id: p.id, title: p.title, purpose: p.purpose || '', index: i,
+      id: p.id, title: p.title, purpose: p.purpose || '', index: i, seo: seoNow.get(p.id) || null,
       sections: plans.filter(l => l.page === p.id).map(l => l.role).join(', '),
       layers: plans.filter(l => l.page === p.id).map(layer)
     })),

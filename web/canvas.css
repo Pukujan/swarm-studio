@@ -1948,3 +1948,20 @@ body.side-min .tabs .chats-btn { display: none; }
 .chats-pop .cp-row:hover, .chats-pop .cp-row:focus-visible, .chats-pop .cp-row.on { background: var(--ui-muted, rgb(127 127 127 / .14)); outline: none; }
 .chats-pop .cp-new { margin-top: 4px; border-top: 1px solid var(--ui-border); border-radius: 0 0 8px 8px; color: var(--ui-muted-foreground); }
 .chats-pop .cp-new .ico { width: 14px; height: 14px; }
+/* Search & share: the page's title, description and share picture (web/seo.js) */
+.dseo-f { display: grid; gap: 4px; margin-bottom: 10px; font-size: 11px; color: var(--muted); }
+.dseo-f input, .dseo-f textarea { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); font: 12px/1.4 var(--font); padding: 6px 8px; resize: vertical; }
+.dseo-f input:focus, .dseo-f textarea:focus { outline: none; border-color: var(--accent); }
+.dseo-f small { justify-self: end; font-variant-numeric: tabular-nums; }
+.dseo-f small.over { color: var(--hot-text); }
+.dseo-pics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.dseo-pic { padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--panel-2); cursor: pointer; aspect-ratio: 1200 / 630; overflow: hidden; min-height: 40px; }
+.dseo-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dseo-pic.on { border-color: var(--accent); }
+/* the Publish menu's thumbnail (web/seo.js): the picked one, and the build's other pictures to swap it for */
+.publish-pop .pthumb { display: grid; gap: 6px; margin-top: 6px; }
+.publish-pop .pthumb-main { width: 100%; aspect-ratio: 1200 / 630; object-fit: cover; border-radius: 9px; border: 1px solid var(--line); display: block; }
+.publish-pop .pthumb-alt { display: flex; gap: 6px; }
+.publish-pop .pthumb-alt button { padding: 0; width: 44px; height: 30px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: none; cursor: pointer; }
+.publish-pop .pthumb-alt button:hover, .publish-pop .pthumb-alt button:focus-visible { border-color: var(--accent); }
+.publish-pop .pthumb-alt img { width: 100%; height: 100%; object-fit: cover; display: block; }

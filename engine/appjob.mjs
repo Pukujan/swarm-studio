@@ -8,6 +8,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameS
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
+import { seoFromEvents, shareApp } from './seo.mjs'
 import { deployName, isScreenName, projectName } from './naming.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
@@ -706,14 +707,30 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const name = deployName(project || JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm', kind)
     // the tab title too: an engine turn may have named the page after its first screen
     if (project) titleApp(dir, project)
+    // a description and a share picture, so a shared link shows a card (engine/seo.mjs)
+    const share = shareMeta(id, project || name, kind)
     // the stages and Vercel's build log are saved with the run, so the Auto show's deploy shot replays too
-    const r = await publishVercel({ dir, name, creds, dataDir, build: true, env,
+    const r = await publishVercel({ dir, name, creds, dataDir, build: true, env, rebase: base => { try { shareApp(dir, { ...share, base }) } catch {} },
       onStage: stage => send(id, 'app:stage', { stage: `deploy: ${stage}` }),
       onLog: lines => send(id, 'app:stage', { stage: 'deploy: building', log: lines.slice(-12) }) })
     send(id, 'app:deployed', { url: r.url, project: r.repo, pending: !!r.pending })
     const j = jobs.get(id)
     if (j) j.deployed = r.url
     return { url: r.url, project: r.repo, pending: !!r.pending }
+  }
+
+  // what a shared link to the app or game says: the site's home description when it came from
+  // one, else the brief's first sentence; its picture: the game's title art, else the first picture
+  function shareMeta(id, name, kind) {
+    const events = readEvents(id) || []
+    const start = events.find(e => e.type === 'run:start') || {}
+    const home = events.find(e => e.type === 'page')?.id
+    const desc = seoFromEvents(events).get(home)?.description || String(start.brief || '').split('\n')[0].split(/(?<=[.!?])\s/)[0]
+    const img = join(runsDir, id, 'img')
+    let files = []
+    try { files = readdirSync(img) } catch {}
+    const pick = files.find(f => /^game-title\.(webp|png|jpe?g)$/.test(f)) || files.find(f => /^\d{1,3}\.(png|jpe?g|webp)$/.test(f))
+    return { name, description: desc, picture: pick ? join(img, pick) : null, kind }
   }
 
   // the run's project name: the projects index, else the brief's brand (never a screen's title)

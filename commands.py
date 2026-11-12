@@ -35,6 +35,7 @@ HELP = """Swarm Studio commands
   /swarm play                     play the open build as a clickable prototype
   /swarm review [n|id]            a vision model checks every page; agents fix what it finds
   /swarm fix <what to change>     an agent reworks the selected section (or the planner finds which)
+  /swarm seo [n|id] [what]        search titles, descriptions and share pictures: "target people searching for X"
   /swarm export [n|id]            files: static HTML, a React + Tailwind project, an ABA handoff
   /swarm publish [n|id] [github|vercel|cloudflare|local]   a live link (GitHub Pages by default)
   /swarm hosts                    where you can publish, and how to connect Vercel or Cloudflare
@@ -64,7 +65,7 @@ HELP = """Swarm Studio commands
 
 TARGETS = ("github", "vercel", "cloudflare", "local")
 
-SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall", "connect", "post", "remix", "login", "stop"}
+SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "seo", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall", "connect", "post", "remix", "login", "stop"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -309,6 +310,10 @@ def _dispatch(cmd: str, args: list[str]) -> str:
     if cmd == "fix":
         return _fix(" ".join(args).strip().strip('"“”'), "")
 
+    if cmd == "seo":
+        ref = args[0] if args and (args[0].isdigit() or args[0].startswith("20")) else ""
+        return _seo(ref, " ".join(args[1:] if ref else args).strip().strip('"“”'))
+
     if cmd == "app":
         ref = args[0] if args and (args[0].isdigit() or args[0].startswith("20")) else ""
         return _app(ref, " ".join(args[1:] if ref else args).strip().strip('"“”'))
@@ -451,6 +456,20 @@ def _fix(text: str, ref: str) -> str:
     got = _api(f"/api/runs/{r['id']}/comment", {"text": text}, timeout=60)
     where = ", ".join(got.get("sections") or []) or "the right section"
     return f"On it in “{r['title']}”: reworking {where}." + (f" ({got['reply']})" if got.get("reply") else "")
+
+
+def _seo(ref: str, text: str) -> str:
+    r = _pick_run(ref)
+    if not r:
+        return "No such build. See /swarm files."
+    ask = text if text and "seo" in text.lower() else f"SEO: {text or 'improve the search titles, descriptions and share pictures of every page'}"
+    got = _api(f"/api/runs/{r['id']}/comment", {"text": ask}, timeout=90)
+    lines = [f"SEO for “{r.get('title') or r['id']}”: {got.get('reply') or 'done'}"]
+    for c in got.get("seo") or []:
+        lines.append(f"- {c.get('name') or c.get('page')}: " + "; ".join(x for x in [f"title “{c['title']}”" if c.get("title") else "", f"description “{c['description']}”" if c.get("description") else ""] if x))
+    if got.get("sections"):
+        lines.append("Copy being reworked: " + ", ".join(got["sections"]))
+    return "\n".join(lines)
 
 
 def _publish(ref: str, target: str) -> str:
@@ -614,12 +633,12 @@ def _video(ref: str, wait: bool, voice: str = "", music: bool = True, style: str
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, file builds in folders, read the trace of every model call an agent made (the prompt and raw answer, to see why a section came out as it did), show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, set the models, image generation and lite mode. `app` turns a build into a working full-stack app (React + shadcn, server routes, an admin page) or, with text, changes the app; it waits until the app runs and returns its local URL. For a game: call `game_questions`, ask the person those questions one at a time in chat (offer the chips, keep their words), then `game` with `answers` and `text` (their idea); it writes an original spec and builds a playable game. `deploy` puts the app on Vercel. The Swarm Feed (the community site): `connect` links this Hermes to the person's feed account (it returns a code and a link they approve in their browser; call it again, or with text 'status', to see if they did), `post` shares a published build in the feed with its files (text: a caption; jam: a jam id to enter), `remix` starts a new build from a feed build (build: its b_… id; text: what to change), `login` opens a one-time link that signs their browser in. `stop` stops everything the crew are doing (or one build's project, with build): the build, pictures, review and fixes, a film, an app or game build, Auto; what is built is kept. Use it when the person asks to stop.",
+    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, file builds in folders, read the trace of every model call an agent made (the prompt and raw answer, to see why a section came out as it did), show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, `seo`: the crew's SEO pass on a build (text: what the person wants, e.g. 'target people searching for ramen in Porto' or 'a better description for the menu page'; it edits each page's search title, description and copy where needed and says what changed; every build already ships titles, descriptions, share cards, JSON-LD, robots.txt and sitemap.xml), export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, set the models, image generation and lite mode. `app` turns a build into a working full-stack app (React + shadcn, server routes, an admin page) or, with text, changes the app; it waits until the app runs and returns its local URL. For a game: call `game_questions`, ask the person those questions one at a time in chat (offer the chips, keep their words), then `game` with `answers` and `text` (their idea); it writes an original spec and builds a playable game. `deploy` puts the app on Vercel. The Swarm Feed (the community site): `connect` links this Hermes to the person's feed account (it returns a code and a link they approve in their browser; call it again, or with text 'status', to see if they did), `post` shares a published build in the feed with its files (text: a caption; jam: a jam id to enter), `remix` starts a new build from a feed build (build: its b_… id; text: what to change), `login` opens a one-time link that signs their browser in. `stop` stops everything the crew are doing (or one build's project, with build): the build, pictures, review and fixes, a film, an app or game build, Auto; what is built is kept. Use it when the person asks to stop.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game_questions", "game", "deploy", "connect", "post", "remix", "login", "stop", "help"]},
-            "build": {"type": "string", "description": "for open/info/review/fix/export/publish/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
+            "action": {"type": "string", "enum": ["files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "seo", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game_questions", "game", "deploy", "connect", "post", "remix", "login", "stop", "help"]},
+            "build": {"type": "string", "description": "for open/info/review/fix/seo/export/publish/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
             "text": {"type": "string", "description": "for app: what to change in the app (omit for the first build); for game: the person's game idea; for folder: the folder name ('none' to take it out); for trace: words to filter calls (a layer, page, agent or kind like build/fix/review), or 'call <id>' for one call in full, or on/off; for files: search words (tag:x, folder:x, on:vercel, has:video work too); for video: the person's idea for it; for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
             "model": {"type": "string", "description": "for models: a model id, 'off' (reviewer only) or 'reset'; for images: the image model"},
@@ -642,7 +661,7 @@ TOOL_SCHEMA = {
 def tool(args: dict | None = None, **_: object) -> str:
     a = args or {}
     action = str(a.get("action") or "help")
-    if action in ("video", "fix", "publish", "app", "game", "game_questions", "deploy"):
+    if action in ("video", "fix", "seo", "publish", "app", "game", "game_questions", "deploy"):
         try:
             if action == "game_questions":
                 qs = _api("/api/game")["questions"]
@@ -665,6 +684,8 @@ def tool(args: dict | None = None, **_: object) -> str:
                 return _publish(str(a.get("build") or ""), a.get("target") if a.get("target") in TARGETS else "github")
             if action == "fix":
                 return _fix(str(a.get("text") or "").strip(), str(a.get("build") or ""))
+            if action == "seo":
+                return _seo(str(a.get("build") or ""), str(a.get("text") or "").strip())
             return _video(str(a.get("build") or ""), wait=True, voice=str(a.get("voice") or ""), music=a.get("music") is not False,
                           style=str(a.get("style") or ""), idea=str(a.get("text") or ""), transition=str(a.get("transition") or ""))
         except RuntimeError as exc:
