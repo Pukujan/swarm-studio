@@ -22,7 +22,7 @@ export function brandRoutes({ chats, model = () => null }) {
     req.on('end', () => { try { resolve(JSON.parse(b || '{}')) } catch { resolve({}) } })
   })
   // the pack cards are made per view from the brief (data and the shipped photo library: no model call)
-  const view = chat => ({ chat: chat.id, brand: chat.brand || null, theme: chat.brand ? brandTheme(chat.brand) : null, packs: chat.brand ? packCards(chat.brand.brief, chat.brand.suggest) : [] })
+  const view = chat => ({ chat: chat.id, brand: chat.brand || null, theme: chat.brand ? brandTheme(chat.brand) : null, packs: chat.brand ? packCards(chat.brand.brief, chat.brand.suggest, chat.brand.pack) : [] })
   const bad = msg => Object.assign(new Error(msg), { status: 400 })
   // any change to a locked sheet opens it again
   const change = (id, fn) => chats.update(id, chat => {
