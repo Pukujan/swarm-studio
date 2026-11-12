@@ -22,7 +22,7 @@ test('a showcase opens a chat with its brief; it never starts a build on the cli
 test('the talk shows a given brief with its Build button', () => {
   const canvas = src('web/canvas.js')
   assert.match(canvas, /brief = ''/)
-  assert.match(canvas, /talkBrief\(brief, '', what\)/)
+  assert.match(canvas, /talkBrief\(brief, '', what, sheet\)/)
 })
 
 test('Stop ends an auto run as stopped, not failed', () => {

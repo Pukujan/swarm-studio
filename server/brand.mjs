@@ -1,0 +1,122 @@
+// The brand sheet's routes (docs/specs/31-brand-sheet.md, engine/brand.mjs). The sheet is the chat
+// record's `brand` field (engine/chats.mjs); every write goes through the store's per-chat queue.
+//   POST /api/brand { chat?, brief, kind }            -> { chat, brand }  options made (a chat is made when none)
+//   GET  /api/brand/:chat                             -> { chat, brand, theme }
+//   POST /api/brand/:chat/pick { part, id | words }   -> { chat, brand, theme }  words: one more option, picked
+//   POST /api/brand/:chat/edit { part, id, values }   -> { chat, brand, theme }  an option's colours, fonts or the story
+//   POST /api/brand/:chat/lock | /unlock              -> { chat, brand, theme }
+import { CHAT_ID } from '../engine/chats.mjs'
+import { brandOptions, brandTheme, brandBrief, fixPalette, paletteFromWords } from '../engine/brand.mjs'
+
+const HEXC = /^#[0-9a-f]{6}$/i
+const FONT = /^[A-Za-z][\w ]{1,38}$/
+
+// chats: the shared store; model() -> (messages -> text) or null
+export function brandRoutes({ chats, model = () => null }) {
+  const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+  const body = req => new Promise(resolve => {
+    let b = ''
+    req.on('data', c => { b += c; if (b.length > 5e4) req.destroy() })
+    req.on('end', () => { try { resolve(JSON.parse(b || '{}')) } catch { resolve({}) } })
+  })
+  const view = chat => ({ chat: chat.id, brand: chat.brand || null, theme: chat.brand ? brandTheme(chat.brand) : null })
+  const bad = msg => Object.assign(new Error(msg), { status: 400 })
+  // any change to a locked sheet opens it again
+  const change = (id, fn) => chats.update(id, chat => {
+    if (!chat.brand) throw bad('no brand sheet yet')
+    fn(chat.brand, chat)
+    chat.brand.lockedAt = null
+  }).then(view)
+
+  async function make(input) {
+    const brief = String(input.brief || '').trim().slice(0, 4000)
+    if (!brief) throw bad('a brief is needed')
+    let id = typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat) ? input.chat : null
+    if (!id) id = chats.create({ kind: input.kind === 'app' ? 'app' : 'site', text: brief }).id
+    const have = chats.get(id)?.brand
+    // the same brief keeps the sheet; a new brief makes new options, and what was locked stays only until then
+    if (have && have.brief === brief) return view(chats.get(id))
+    const opts = await brandOptions({ brief, chat: model() })
+    return chats.update(id, chat => {
+      chat.brand = { brief, story: opts.story, palettes: opts.palettes, types: opts.types, pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null }
+    }).then(view)
+  }
+
+  function pick(id, input) {
+    const part = input.part === 'type' ? 'type' : input.part === 'palette' ? 'palette' : null
+    if (!part) throw bad('part is palette or type')
+    const words = String(input.words || '').trim().slice(0, 300)
+    return change(id, b => {
+      const list = part === 'palette' ? b.palettes : b.types
+      if (words) {
+        let opt = null
+        if (part === 'palette') { const p = paletteFromWords(words, words.slice(0, 40)); if (!p) throw bad('name a colour or two'); opt = p }
+        else {
+          // "Fraunces and Inter", "Fraunces / Inter", or one family for both
+          const [h, bd] = words.split(/\s*(?:\/|,|\band\b|\bwith\b|\+)\s*/i).map(x => x.trim()).filter(Boolean)
+          if (!FONT.test(h || '')) throw bad('name a font')
+          opt = { name: words.slice(0, 30), heading: h, body: FONT.test(bd || '') ? bd : h }
+        }
+        opt.id = `${part === 'palette' ? 'p' : 't'}w${list.filter(x => /w\d+$/.test(x.id)).length + 1}`
+        opt.by = 'person'
+        list.push(opt)
+        b.pick[part] = opt.id
+        return
+      }
+      if (!list.some(x => x.id === input.id)) throw bad('no such option')
+      b.pick[part] = input.id
+    })
+  }
+
+  function edit(id, input) {
+    const v = input.values || {}
+    return change(id, b => {
+      if (input.part === 'story') {
+        const s = b.story || (b.story = { what: '', who: '', pages: [] })
+        if (typeof v.what === 'string') s.what = v.what.slice(0, 200)
+        if (typeof v.who === 'string') s.who = v.who.slice(0, 200)
+        if (v.pages != null) s.pages = (Array.isArray(v.pages) ? v.pages : String(v.pages).split(',')).map(x => String(x).trim().slice(0, 40)).filter(Boolean).slice(0, 8)
+        return
+      }
+      const list = input.part === 'type' ? b.types : input.part === 'palette' ? b.palettes : null
+      const o = list?.find(x => x.id === input.id)
+      if (!o) throw bad('no such option')
+      if (input.part === 'palette') {
+        const next = { ...o }
+        for (const k of ['bg', 'text', 'accent', 'link']) if (HEXC.test(String(v[k] || ''))) next[k] = String(v[k]).toLowerCase()
+        Object.assign(o, fixPalette(next))
+      } else for (const k of ['heading', 'body']) if (FONT.test(String(v[k] || ''))) o[k] = String(v[k]).trim()
+      b.pick[input.part] = o.id
+    })
+  }
+
+  const lock = id => chats.update(id, chat => {
+    if (!brandTheme(chat.brand)) throw bad('pick a palette and a type first')
+    chat.brand.lockedAt = Date.now()
+  }).then(view)
+  const unlock = id => chats.update(id, chat => { if (chat.brand) chat.brand.lockedAt = null }).then(view)
+
+  const routes = function handle(req, res, url) {
+    if (url.pathname === '/api/brand') {
+      if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
+      body(req).then(make).then(v => json(res, 200, v)).catch(err => json(res, err.status || 502, { error: String(err.message || err) }))
+      return true
+    }
+    const m = url.pathname.match(/^\/api\/brand\/([^/]+)(?:\/(pick|edit|lock|unlock))?$/)
+    if (!m) return false
+    if (!CHAT_ID.test(m[1]) || !chats.get(m[1])) { json(res, 404, { error: 'no such chat' }); return true }
+    if (req.method === 'GET' && !m[2]) { json(res, 200, view(chats.get(m[1]))); return true }
+    if (req.method !== 'POST' || !m[2]) { json(res, 405, { error: 'POST' }); return true }
+    body(req).then(input => (m[2] === 'pick' ? pick(m[1], input) : m[2] === 'edit' ? edit(m[1], input) : m[2] === 'lock' ? lock(m[1]) : unlock(m[1])))
+      .then(v => json(res, 200, v)).catch(err => json(res, err.status || 400, { error: String(err.message || err) }))
+    return true
+  }
+  return routes
+}
+
+// the locked sheet of a chat, as runSwarm takes it; null when there is none or it is open
+export function lockedBrand(chats, id) {
+  const b = id && chats.get(id)?.brand
+  const theme = b?.lockedAt ? brandTheme(b) : null
+  return theme ? { theme, brief: brandBrief(b) } : null
+}

@@ -5,6 +5,7 @@ import { makeHome } from './home.js'
 import { makeProject } from './project.js'
 import { makeWork } from './work.js'
 import { makePlan } from './plan.js'
+import { makeBrand } from './brand.js'
 import { projectRun } from './route.js'
 const sw = window.swarm
 const W = window
@@ -43,7 +44,7 @@ const STATIONS = { canvas: 'Design deck', video: 'Film studio', app: 'Engine roo
 C.STATIONS = STATIONS
 
 function setMode(m) {
-  for (const x of ['home', 'project', 'station', 'plan']) body.classList.toggle(`cosmos-${x}`, m === x)
+  for (const x of ['home', 'project', 'station', 'plan', 'brand']) body.classList.toggle(`cosmos-${x}`, m === x)
 }
 
 C.go = (m, v) => {
@@ -57,7 +58,14 @@ C.go = (m, v) => {
   queueMicrotask(() => C.work?.paint?.())
   setMode(m)
   if (m !== 'plan') C.planView?.hide()
-  if (m === 'plan') {
+  if (m !== 'brand') C.brandView?.hide()
+  if (m === 'brand') {
+    // a website's or app's brand sheet (spec 31), beside the chat it came from
+    C.homeView.hide()
+    C.projectView.hide()
+    body.classList.add('cosmos-chat')
+    C.brandView.show()
+  } else if (m === 'plan') {
     // a game's plan before anything costly is made (spec 21): its own board
     C.homeView.hide()
     C.projectView.hide()
@@ -92,9 +100,11 @@ function renderBack() {
 // The way home, from any view: the logo always lands on Projects,
 // and Esc climbs one level, room → project → Projects, when no panel is open.
 C.home = () => { if (sw.wall) return; C.go('home') }
-C.up = () => { if (sw.wall) return false; if (C.mode === 'station') { C.go('project'); return true } if (C.mode === 'project' || C.mode === 'plan') { C.go('home'); return true } return false }
+C.up = () => { if (sw.wall) return false; if (C.mode === 'brand') { C.go('station', 'canvas'); return true } if (C.mode === 'station') { C.go('project'); return true } if (C.mode === 'project' || C.mode === 'plan') { C.go('home'); return true } return false }
 // open a plan (spec 21); fresh: the crew write its cards in
 C.plan = (id, fresh = false) => { C.planFresh = fresh; C.go('plan', id) }
+// open the brand sheet for a talk's brief (spec 31): { chat, brief, kind, done(chat, locked) }
+C.brand = opts => { C.go('brand'); return C.brandView.open(opts) }
 // open a project: its newest build (or the one asked for); with no run, the build just started
 C.open = (run, pid) => {
   C.project = pid || null
@@ -250,6 +260,9 @@ function start() {
   const plroot = document.createElement('div')
   body.append(plroot)
   C.planView = makePlan({ sw, C, root: plroot })
+  const broot = document.createElement('div')
+  body.append(broot)
+  C.brandView = makeBrand({ sw, C, root: broot })
   chrome()
   C.work = makeWork({ sw, C })
   sw.on(e => {

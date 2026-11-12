@@ -87,7 +87,7 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   assert.match(canvas, /els\.brief\.placeholder = 'Tell Hermia…'; dockBtn\.textContent = 'Send'/)
   // the brief's buttons: Build (or, inside a project, New project / Start over with Add here), then Keep talking
   assert.match(canvas, /<button class="primary" data-go="add">Build<\/button>/)
-  assert.match(canvas, /\$\{acts\}<button data-more>Keep talking<\/button>/)
+  assert.match(canvas, /\$\{acts\}\$\{sheetHtml\}<button data-more>Keep talking<\/button>/)
   assert.match(project, /const read = [^\n]*sw\.readTalk\(text\)\n\s*if \(read === 'build'\) return send\(text\)/)
 })
 
