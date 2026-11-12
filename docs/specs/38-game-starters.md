@@ -150,3 +150,52 @@ unchanged:
 
 `web/plan.js` now also exposes `plan` and `gate`. The kit is listed in `web/kits.js` when that file
 exists (spec 37).
+
+## Slice 4, built: the platformer starter and the other add-on sources
+
+**Why a platformer.** It is the genre where Godot's defaults let people down soonest. The stock
+`CharacterBody2D` jump:
+- is the same height however long you hold it;
+- ignores a press a frame early or a frame after the ledge;
+- stops dead on every ceiling corner.
+
+One-way and moving platforms need wiring by hand.
+
+**`starters/platformer-side/`** is a code-built level with ground, a pit, one-way ledges, a lift and a low
+corner, plus a placeholder hero and a lookahead camera. Its add-on is `starters/addons/feel_platform/`
+(ours, MIT):
+- **`PlatformerBody`**: the jump is given by its height and time. It has coyote time, a jump buffer, a
+  short hop on release, a slower apex, a heavier fall, corner correction, down + jump through ledges
+  (physics layer 3), and riding lifts.
+- **`MovingPlatform`**.
+- **`LookaheadCamera`**: it holds its height through a jump.
+
+**The proof.** `node bench/starter-feel.mjs --ssh windows --out bench/platformer-feel.json` runs
+`scripts/feel_test.gd` headless at one physics step a frame. `tests/starter-bench.test.mjs` holds the
+result:
+
+| Check | Measured |
+|---|---|
+| Held jump | 105.7 px (aim 110) |
+| Tap | 44.2 px |
+| Jump 3 frames after the ledge | jumps |
+| Jump 15 frames after the ledge | does not |
+| Press just before landing | jumps on landing |
+| Lift moves 103 px | the hero rides 102.3 |
+| Drop through a ledge | yes |
+| Corner 4 px over the head | slides past |
+
+**Add-ons from every source** (`engine/starters.mjs`):
+- **`checkAddon(dir)`** checks any add-on against its `addon.json`:
+  - the source and fields;
+  - the listed files are there;
+  - the size limit: 200 KB for ours, 2 MB for pinned, 5 MB for brought;
+  - native files force `native: true` and `web: false`;
+  - a pinned add-on needs an https `url`, an exact version, and a `sha256` (`addonSum`: paths and bytes,
+    sorted) that matches the vendored files.
+- **`bringAddon(folder, project, {name, url, licence, credits})`** copies a folder the person dropped in
+  into `addons/<id>/`. It must have a `plugin.cfg`, a script or a `.gdextension`. It writes the record with
+  `source: 'brought'` and the checksum, and marks native files so **Open in Godot** takes over from the
+  preview.
+
+No pinned add-on ships yet. The first one goes in through `checkAddon`, with its licence and credits.

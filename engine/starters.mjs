@@ -1,4 +1,4 @@
-// Game starters (docs/specs/37-game-starters.md): a starter is a folder that ships inside the plugin
+// Game starters (docs/specs/38-game-starters.md): a starter is a folder that ships inside the plugin
 // (starters/<id>/starter.json and its project files), holding the systems a genre needs already working,
 // so a generated game holds up at scale and the crew builds the game's own scenes on top of them.
 // Nothing is downloaded at build time: add-ons live in starters/addons/<id>/ with where they came from.
@@ -7,8 +7,9 @@
 //   plan.starter = { engine: {value, why, by}, template: {value, why, by}, assets: {value, why, by},
 //                    systems: { [id]: {on, by} } }
 // The planner suggests; the person keeps or removes; a person's choice is never overwritten.
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const STARTERS_DIR = fileURLToPath(new URL('../starters/', import.meta.url))
@@ -159,4 +160,68 @@ export function crewBrief(id, list = starters()) {
   const t = starterById(id, list)
   if (!t) return ''
   try { return readFileSync(join(STARTERS_DIR, t.id, 'CREW.md'), 'utf8').trim() } catch { return '' }
+}
+
+// ---------- add-ons, in order of trust (spec 38): ours, pinned (vendored at an exact version), brought
+export const SOURCES = ['ours', 'pinned', 'brought']
+export const ADDON_LIMIT = { ours: 200_000, pinned: 2_000_000, brought: 5_000_000 } // bytes
+const NATIVE = /\.(dll|so|dylib|gdextension|framework|wasm)$/i
+
+// every file under an add-on folder, as sorted relative paths
+export function addonFiles(dir, rel = '') {
+  const out = []
+  for (const n of readdirSync(join(dir, rel))) {
+    if (n.startsWith('.')) continue
+    const r = rel ? `${rel}/${n}` : n
+    if (statSync(join(dir, r)).isDirectory()) out.push(...addonFiles(dir, r))
+    else out.push(r)
+  }
+  return out.sort()
+}
+// one sha256 over the files' paths and bytes (addon.json itself left out): what a pinned add-on records
+export function addonSum(dir, files = addonFiles(dir).filter(f => f !== 'addon.json')) {
+  const h = createHash('sha256')
+  for (const f of [...files].sort()) { h.update(f); h.update('\0'); h.update(readFileSync(join(dir, f))); h.update('\0') }
+  return h.digest('hex')
+}
+
+// Whether an add-on folder is what its addon.json says. → { ok, problems: [text] }
+export function checkAddon(dir) {
+  const a = readJson(join(dir, 'addon.json'))
+  if (!a) return { ok: false, problems: ['no addon.json'] }
+  const problems = []
+  if (!SOURCES.includes(a.source)) problems.push(`source is ${a.source}: ours, pinned or brought`)
+  for (const k of ['name', 'version', 'licence', 'credits']) if (!a[k]) problems.push(`no ${k}`)
+  const files = addonFiles(dir).filter(f => f !== 'addon.json')
+  for (const f of a.files || []) if (!files.includes(f)) problems.push(`${f} is listed but missing`)
+  const bytes = files.reduce((n, f) => n + statSync(join(dir, f)).size, 0)
+  if (bytes > (ADDON_LIMIT[a.source] || 0)) problems.push(`${bytes} bytes, over the ${ADDON_LIMIT[a.source]} for ${a.source}`)
+  const native = files.some(f => NATIVE.test(f))
+  if (native && !a.native) problems.push('has native files (GDExtension) but says native: false')
+  if (native && a.web) problems.push('native files cannot run in the Web export (web must be false)')
+  if (a.source === 'pinned') {
+    if (!/^https:\/\//.test(a.url || '')) problems.push('a pinned add-on records its https url')
+    if (!/^\d+\.\d+(\.\d+)?/.test(a.version || '')) problems.push('a pinned add-on is pinned to an exact version')
+    if (a.sha256 !== addonSum(dir, files)) problems.push('sha256 does not match the vendored files')
+  }
+  return { ok: !problems.length, problems }
+}
+
+// An add-on the person brings (dropped in like an asset): copied into the project's addons/<id>/ with
+// where it came from. Native files mark it native, so the Web preview gives way to Open in Godot.
+// → its addon.json record
+export function bringAddon(from, project, { name, url = '', licence = 'unknown', credits = 'the person' } = {}) {
+  const id = String(name || basename(from)).toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
+  if (!ID.test(id)) throw Object.assign(new Error('name the add-on'), { status: 400 })
+  if (!existsSync(from) || !statSync(from).isDirectory()) throw Object.assign(new Error('an add-on is a folder'), { status: 400 })
+  const files = addonFiles(from).filter(f => f !== 'addon.json')
+  if (!files.some(f => /(^|\/)plugin\.cfg$|\.gd$|\.gdextension$/.test(f))) throw Object.assign(new Error('not a Godot add-on: no plugin.cfg, script or GDExtension'), { status: 400 })
+  const bytes = files.reduce((n, f) => n + statSync(join(from, f)).size, 0)
+  if (bytes > ADDON_LIMIT.brought) throw Object.assign(new Error(`too big: ${Math.round(bytes / 1e6)} MB, the limit is 5 MB`), { status: 413 })
+  const to = join(project, 'addons', id)
+  for (const f of files) { mkdirSync(join(to, f, '..'), { recursive: true }); copyFileSync(join(from, f), join(to, f)) }
+  const native = files.some(f => NATIVE.test(f))
+  const meta = { name: name || id, version: readJson(join(from, 'addon.json'))?.version || 'as brought', source: 'brought', licence, credits, ...(url ? { url } : {}), web: !native, native, sha256: addonSum(to, files), files }
+  writeFileSync(join(to, 'addon.json'), JSON.stringify(meta, null, 1) + '\n')
+  return { id, ...meta }
 }
