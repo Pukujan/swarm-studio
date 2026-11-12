@@ -25,11 +25,14 @@ export function childEnv(extra = {}, from = process.env, platform = process.plat
 // Variables named here are read from the server's environment and handed to that child by name.
 export const pick = (names, from = process.env) => Object.fromEntries(names.filter(k => from[k]).map(k => [k, from[k]]))
 
-// What a generated app is given: its database (Supabase) and a Stripe test key, nothing else. A live
-// Stripe key is never handed over.
-export function appEnv(from = process.env) {
+// What a generated app is given: its database (Supabase), a Stripe test key, and the declared keys its
+// locked App kit uses (`keys`, names from engine/appkit.mjs kitPlan), nothing else. A live Stripe key is
+// never handed over; a name not declared in plugin.yaml is never read.
+export const APP_KEYS = ['RESEND_API_KEY']
+export function appEnv(from = process.env, keys = []) {
   const out = pick(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY'], from)
   if (/^(sk|rk)_test_/.test(from.STRIPE_SECRET_KEY || '')) out.STRIPE_SECRET_KEY = from.STRIPE_SECRET_KEY
+  Object.assign(out, pick(APP_KEYS.filter(k => Array.isArray(keys) && keys.includes(k)), from))
   return out
 }
 

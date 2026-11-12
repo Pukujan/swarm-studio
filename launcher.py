@@ -42,6 +42,7 @@ PASSED_KEYS = (
     "OCTO_SWARM_WS", "OCTO_SWARM_WORKSPACE_ID", "OCTO_BASE_URL",  # public copies of stand-in photos
     "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",                # a generated app's data
     "STRIPE_SECRET_KEY",                                        # a generated app's checkout (test keys only)
+    "RESEND_API_KEY",                                           # a generated app's email (only when its App kit chose Resend)
     "VERCEL_TOKEN", "CLOUDFLARE_API_TOKEN",                     # publishing
 )
 # role -> the Hermes auxiliary slot it uses (registered in __init__.py)

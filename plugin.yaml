@@ -46,6 +46,9 @@ optional_env:
   - name: STRIPE_SECRET_KEY
     description: "Optional: a Stripe test key (sk_test_ or rk_test_) for generated apps' checkout; live keys are refused"
     secret: true
+  - name: RESEND_API_KEY
+    description: "Optional: a Resend key for a generated app's email (sign-in links, receipts), handed only to an app whose locked plan chose Resend; without it, emails go to the app's Outbox"
+    secret: true
   - name: VERCEL_TOKEN
     description: "Optional: Vercel token for Publish and app deploys"
     secret: true
