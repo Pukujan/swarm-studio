@@ -1760,13 +1760,16 @@ function talkDock(on) {
 }
 const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, answerTo, kind }) })
   .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')
-function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null }) {
+// brief: nothing to talk about yet, the brief is shown at once to read, edit and Build (a showcase, or a
+// Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
+function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '' }) {
   if (blank) { viewing = 'new'; fresh(null) }
   Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from })
   talkDock(true)
   els.feed.querySelector('.empty-chat')?.remove()
   let last = null
   for (const m of said) { talk.said.push(m); last = m.who === 'hermia' ? botMsg(m.text) : feed(null, m.text, 'you') }
+  if (brief) { talk.said.push({ who: 'you', text: brief }); return talkBrief(brief, '', what) }
   if (text) return talkSay(text)
   // an old chat reopened: its words are back, and the dock goes on from them
   if (last && said.at(-1)?.who === 'hermia') talkActs(last)
@@ -1802,8 +1805,8 @@ function talkActs(item) {
 // Inside a project the planner says which way it goes (engine/talkplan.mjs routeFor): more for this
 // project (Build), a different product (New project, with Add here for when it is not), or this one
 // from scratch (Start over: new pages and look, the old version stays in the project).
-function talkBrief(text, route = '') {
-  const item = botMsg('The brief')
+function talkBrief(text, route = '', what = '') {
+  const item = botMsg(what || 'The brief')
   item.classList.add('talk-brief')
   const inProject = !!talk.from
   const acts = inProject && route === 'new' ? '<button class="primary" data-go="new">New project</button><button data-go="add">Add here</button>'

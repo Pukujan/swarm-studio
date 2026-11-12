@@ -198,8 +198,9 @@ export function makeHome({ sw, C, root }) {
       ${H.layout === 'list' ? `<span class="meta">${p.count > 1 ? `<span aria-label="${p.count} versions">${ic('layers', 13)}${p.count}</span>` : ''}${p.folder && H.view !== 'folder' ? `<span>${ic('folder', 13)}${esc(p.folder)}</span>` : ''}<span>${ago(seen(p))}</span></span>` : ''}
     </div>`
   }
-  // a stack opened: each version is a card of its own
-  const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `${p.title} ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, state: v.state || null, count: 1, live: v.live, work: v.work || null, progress: v.work?.pct ?? null, updated: v.updated || v.t, made: v.t }))
+  // a stack opened: each version is a card of its own, named Version n (as in the breadcrumb's menu):
+  // "Night Runner 3, 2, 1" read as three projects
+  const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `Version ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, state: v.state || null, count: 1, live: v.live, work: v.work || null, progress: v.work?.pct ?? null, updated: v.updated || v.t, made: v.t }))
   function renderCards() {
     let list
     if (H.stack) { const p = H.data.projects.find(x => x.id === H.stack); list = p ? versionCards(p) : [] }
@@ -734,7 +735,7 @@ export function makeHome({ sw, C, root }) {
     if (make.k === 'game' && !hosted()) return grill(text)
     // "don't build yet, let's talk", "grill me first" or a question for the crew: the planner reads
     // the prompt (engine/talkplan.mjs) and a talk opens instead of a build; not sure, one choice
-    const go = () => (grillOn ? guide(text) : start(text))
+    const go = () => (grillOn ? guide(text) : confirmBuild(text))
     const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text, '', guideKind())
     if (read === 'talk') return talkFirst(text)
     if (read === 'unsure') return askTalk(text, go)
@@ -745,6 +746,20 @@ export function makeHome({ sw, C, root }) {
   // ---------- talk first: a new project with nothing built opens in the Design deck, and Hermia
   // (the planner) talks it through in its chat. The person's words are the first message; Build
   // there writes the brief to read and edit, and only its Build starts the crew.
+  // Before a build spends tokens: what it is about to make, in its own words, with Build and Keep
+  // talking (the deck's chat, engine/talkplan.mjs for the talk). Nothing starts until Build.
+  // The hosted studio's guests are limited already, and build as they always did.
+  function confirmBuild(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}, steps = null) {
+    if (hosted() || !sw.talk) return start(text, run, sets)
+    closePop()
+    input.value = ''
+    C.project = null
+    C.go('station', 'canvas')
+    C.chat(true)
+    const kind = !run ? 'site' : run.games === 'big' ? 'game' : guideKind() === 'film' ? 'film' : 'app'
+    const what = steps?.length ? steps.join(' · ') : { site: 'Website', app: 'App', game: 'Game', film: 'Video' }[kind]
+    sw.talk.start({ kind, blank: true, brief: text, what, build: (brief, chat) => start(brief, run, sets, chat) })
+  }
   function talkFirst(text) {
     const run = make.k === 'site' ? null : { games: make.games, only: make.only }
     const sets = G.guided ? guideSets(G.answers, G.qs) : {}
@@ -804,11 +819,11 @@ export function makeHome({ sw, C, root }) {
         b.disabled = true
         return api(`/api/templates/${encodeURIComponent(b.dataset.tpl)}/remix`, { method: 'POST' }).then(p => { closePop(); C.plan(p.id) }).catch(() => { b.disabled = false })
       }
-      // a starting prompt goes in the box and its questions begin; a showcase builds at once
+      // a starting prompt goes in the box and its questions begin; a showcase opens a chat with its brief
       const st = starters.find(x => x.id === b.dataset.st)
       if (st) { input.value = st.prompt; closePop(); return form.requestSubmit() }
       const s = list.find(x => x.id === b.dataset.id)
-      start(s.prompt, s.run || null)
+      confirmBuild(s.prompt, s.run || null, {}, s.steps)
     }
   }
   ideasBtn.onclick = () => showcases()
@@ -820,7 +835,7 @@ export function makeHome({ sw, C, root }) {
   async function guide(text) {
     const d = await intake()
     const qs = guidePending(d.guides?.[guideKind()] || [], text)
-    if (!qs.length) return start(text)
+    if (!qs.length) return confirmBuild(text)
     Object.assign(G, { text, qs, i: 0, answers: {}, plan: false, guided: true })
     drawGrill()
   }
@@ -848,7 +863,7 @@ export function makeHome({ sw, C, root }) {
     const d = await intake()
     const plan = make.k === 'game' && d.plan?.length && !hosted()
     const qs = plan ? d.plan : make.k === 'game' && d.game?.length ? d.game : d.questions || []
-    if (!qs.length) return start(text)
+    if (!qs.length) return confirmBuild(text)
     Object.assign(G, { text, qs, i: 0, answers: {}, plan, guided: false })
     drawGrill()
   }

@@ -149,6 +149,14 @@ running work; a different product's brief offers **New project** (and **Add here
 become the theme, checked against it; Stop covers every build of the project on screen and says Stopped at once;
 one Enter is one message. **New chat** heads the Chats list on Studio home.
 
+**Nothing builds until the person says so**
+> so we dont waste tokens on something we dontwant
+
+Said on 2026-11-12, after one click on the showcase "Shop with checkout" built a whole App unasked. Now a showcase,
+and a Make box idea with no questions, opens a chat with the brief in plain words and the steps it will take; it
+builds only on **Build**, and **Keep talking** is there. Stop ends an automatic run as Stopped, not failed. An
+opened project shows its builds as **Version 3, 2, 1**, not as projects of their own.
+
 **Stop the crew**
 > anyway to stop an ongoing swarm or agents? wish there was ? lol i cant stop them once they start
 
