@@ -412,13 +412,13 @@
    ]
   },
   "make-empty": {
-   "sev": "confusing",
+   "sev": "block",
    "verdict": "Make with nothing typed opens the same ideas list, so a newcomer who presses the one primary button lands in samples, not in a question.",
    "faults": [
     {
      "note": "Make with an empty box opens samples instead of asking what to make",
      "rule": "Owner: “do i have to type in prompt i dont get the flow at all”",
-     "sev": "confusing",
+     "sev": "block",
      "box": [
       466,
       95,
