@@ -8,13 +8,16 @@ import { openWorkshop } from './workshop.js'
 import { stateSlice } from './store.js'
 import { painterOf, REVIEWER, cursor } from './icons.js'
 import { layerLink, layerDrag } from './layerlink.js'
+import { clean } from './clean.js'
 
 const $ = s => document.querySelector(s)
-// Inlined by the server: the API token and the page-frame template. Frames are
-// built from srcdoc so they share this document's origin even when it is opaque
-// (inside the Desktop pane's sandboxed frame).
+// Inlined by the server: the API token and the page-frame template. Every frame that shows
+// model-written HTML is sandboxed with allow-scripts and no allow-same-origin (Nous catalog
+// review, point 4): its origin is opaque, so it cannot read the studio, its token or its storage.
+// The canvas and the frames talk only by postMessage (frame.html).
 const BOOT = window.SWARM || {}
 const FRAME_W = 1280
+const FRAME_SANDBOX = 'allow-scripts'
 const GAP = 260
 const els = {
   viewport: $('#viewport'), world: $('#world'), wires: $('#wires'), cursors: $('#cursors'), toolbar: $('#toolbar'),
@@ -602,11 +605,12 @@ function addFrame(p) {
   el.className = 'frame'
   const x = p.index * (FRAME_W + GAP)
   el.style.left = `${x}px`
-  el.innerHTML = `<div class="frame-label"></div><iframe></iframe>`
+  el.innerHTML = `<div class="frame-label"></div><iframe sandbox="allow-scripts"></iframe>`
   el.querySelector('.frame-label').textContent = `Page ${p.index + 1} · ${p.title}`
   el.querySelector('.frame-label').insertAdjacentHTML('beforeend', `<small>/${p.id}</small>`)
   const iframe = el.querySelector('iframe')
   iframe.setAttribute('aria-label', p.title || 'Page')
+  iframe.setAttribute('sandbox', FRAME_SANDBOX)
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
   else iframe.src = 'frame.html'
   const frame = { id: p.id, title: p.title, index: p.index, x, h: 700, el, iframe, ready: false, slots: new Map(), geo: { slots: {}, gotos: [] } }
@@ -663,15 +667,6 @@ function ensureSlot(f, l) {
 
 function applyTheme(f) {
   if (f.ready && S.theme) post(f, { type: 'theme', theme: { vars: S.theme.vars, fonts: S.theme.fonts, radius: S.theme.radius } })
-}
-
-function clean(t) {
-  return t
-    .replace(/^\s*```[a-z]*\s*/i, '')
-    .replace(/```\s*$/, '')
-    .replace(/<script[\s\S]*?(<\/script>|$)/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/javascript:/gi, '')
 }
 
 function syncSlots(now) {
@@ -3644,6 +3639,7 @@ function checkPage(id, width, snap) {
   parent.postMessage(out, '*')
 })<\/script>`
   const iframe = document.createElement('iframe')
+  iframe.setAttribute('sandbox', FRAME_SANDBOX)
   iframe.setAttribute('aria-hidden', 'true')
   iframe.style.cssText = `position:fixed;left:-20000px;top:0;width:${width}px;height:900px;border:0;pointer-events:none`
   return new Promise(resolve => {
@@ -3705,6 +3701,7 @@ function hiddenCopy(id, run, { body = null, timeout = 30000 } = {}) {
   parent.postMessage({ ...out, type: 'check', seq: ${JSON.stringify(seq)} }, '*')
 })<\/script>`
   const iframe = document.createElement('iframe')
+  iframe.setAttribute('sandbox', FRAME_SANDBOX)
   iframe.setAttribute('aria-hidden', 'true')
   iframe.style.cssText = 'position:fixed;left:-20000px;top:0;width:1280px;height:900px;border:0;pointer-events:none'
   return new Promise(resolve => {
@@ -3886,7 +3883,7 @@ function renderVideo() {
   const body = video.src && !video.busy
     ? `${cuts}<video src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
-      ? `${liveOn ? `<div class="vlive"><iframe src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
+      ? `${liveOn ? `<div class="vlive"><iframe sandbox="allow-scripts" src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
         ? `<div class="vstage err">${esc(video.message)}</div><div class="vfoot"><span></span><button class="vagain">Try again</button></div>`
         : `${opts}<div class="vfoot"><span></span><button class="vagain">Make the film</button></div>`
@@ -4076,6 +4073,7 @@ function thaw(f) {
   if (!f.frozen) return
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-label', f.title || 'Page')
+  iframe.setAttribute('sandbox', FRAME_SANDBOX)
   iframe.style.height = `${f.h}px`
   if (BOOT.frameHtml) iframe.srcdoc = BOOT.frameHtml
   else iframe.src = 'frame.html'
@@ -4782,7 +4780,9 @@ function loadFrame() {
   const old = appEls.frame, f = old.cloneNode(false)
   f.dataset.src = old.dataset.src || ''
   f.addEventListener('load', frameLoad)
-  f.src = frameUrl(appv.url)
+  const src = frameUrl(appv.url)
+  f.setAttribute('sandbox', appSandbox(src)) // before the address, so the first load is sandboxed too
+  f.src = src
   old.replaceWith(f)
   appEls.frame = f
 }
@@ -4794,6 +4794,14 @@ function frameUrl(u) {
     if (loop.test(x.hostname) && loop.test(location.hostname)) x.hostname = location.hostname
     return x.href
   } catch { return u }
+}
+// The app and the game run on their own port, so their origin is never the studio's: they keep their own
+// storage (an app's sign-in needs it) but cannot steer the studio's tab. Should the address ever be the
+// studio's own origin, the frame gets an opaque one instead (Nous catalog review, point 4).
+function appSandbox(src) {
+  let same = true
+  try { same = new URL(src, location.href).origin === location.origin } catch {}
+  return same ? 'allow-scripts allow-forms' : 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals'
 }
 function frameLoaded() { clearTimeout(frameWait); const el = $('#app-loading'); if (el) el.hidden = true }
 function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && appEls.frame.src !== 'about:blank') { clearTimeout(frameWait); frameWait = setTimeout(frameLoaded, 700) } }
@@ -6360,8 +6368,8 @@ function dsLive(url) {
   ds.el.className = 'deployshot live'
   ds.el.innerHTML = `<div class="ds-head"><b class="pop-title">It's <em>live</em></b><span class="ds-sub">the crew is trying it</span><button class="ds-x" aria-label="Close">${ico('x')}</button></div>
     <div class="ds-stage"><div class="ds-laptop"><div class="ds-lid"><div class="ds-bar"><span class="ds-dots"><i></i><i></i><i></i></span><span class="ds-url">${esc(url)}</span><button class="ds-copy" aria-label="Copy the link">Copy</button><a class="ds-open" href="${esc(url)}" target="_blank" rel="noopener" aria-label="Open it in a new tab">${ico('external-link')}</a></div>
-      <div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe></div><i class="ds-click"></i></div></div><div class="ds-base"></div></div>
-    <div class="ds-phone"><div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site on a phone" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms"></iframe></div><i class="ds-click"></i></div></div>
+      <div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-forms"></iframe></div><i class="ds-click"></i></div></div><div class="ds-base"></div></div>
+    <div class="ds-phone"><div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site on a phone" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-forms"></iframe></div><i class="ds-click"></i></div></div>
     <div class="ds-curs">${crew3.map(([n, c]) => dsCursor(n, c)).join('')}</div></div>`
   ds.el.querySelector('.ds-x').onclick = dsClose
   ds.el.querySelector('.ds-copy').onclick = ev => { navigator.clipboard?.writeText(url).then(() => { ev.target.textContent = 'Copied' }, () => { ev.target.textContent = 'Copy failed' }) }
