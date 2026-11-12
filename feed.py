@@ -242,7 +242,11 @@ def connect(args: list[str]) -> str:
                 return "The feed no longer takes this computer's token (revoked?). /swarm connect forget, then /swarm connect."
             return f"Connected as {_who(cfg)}, but the feed did not answer now: {exc}"
         v = me.get("viewer") or {}
-        return f"Connected to the Swarm Feed as {v.get('name')} (@{v.get('handle')}), {v.get('credits', 0)} credits. Your page: {origin()}/me"
+        # connected by a browser that was not signed in: the profile has a made-up name and no
+        # sign-in but this computer's, so nothing else (Google, GitHub) reaches it yet
+        own = [i for i in (me.get("identities") or []) if i.get("provider") != "hermes"]
+        hint = "" if own else "\nThis profile has no sign-in of its own yet. /swarm login opens it in your browser: add Google or GitHub on your page and it is your account everywhere."
+        return f"Connected to the Swarm Feed as {v.get('name')} (@{v.get('handle')}), {v.get('credits', 0)} credits. Your page: {origin()}/me{hint}"
     if sub == "status":
         return "Not connected to the Swarm Feed. /swarm connect starts it."
 

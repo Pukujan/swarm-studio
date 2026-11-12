@@ -53,7 +53,7 @@ class StandIn(BaseHTTPRequestHandler):
     def do_GET(self):
         s, base = self.state, f"http://127.0.0.1:{self.server.server_port}"
         if self.path == "/api/feed/me":
-            return self._send(200, {"ok": True, "viewer": {"name": "Comet Otter", "handle": "comet-otter-42", "credits": 100}}) if self._authed() \
+            return self._send(200, {"ok": True, "viewer": {"name": "Comet Otter", "handle": "comet-otter-42", "credits": 100}, "identities": StandIn.state.get("identities", [{"provider": "hermes"}])}) if self._authed() \
                 else self._send(401, {"ok": False, "code": "UNAUTHORIZED", "message": "Sign in."})
         if self.path == "/api/feed/builds/b_original01/bundle":
             return self._send(200, {"ok": True, "id": "b_original01", "title": "Tidebreak", "prompt": "a tide game", "maker": "maya", "bundleUrl": f"{base}/zip"})
@@ -132,6 +132,15 @@ class FeedClientTest(unittest.TestCase):
         cfg = feed.load()
         self.assertEqual(cfg["token"], "sfp_test")
         self.assertNotIn("pending", cfg)
+
+    def test_connected_status_says_when_the_profile_has_no_sign_in_of_its_own(self):
+        self._connect()
+        self.assertIn("/swarm login", feed.connect(["status"]))
+        StandIn.state["identities"] = [{"provider": "hermes"}, {"provider": "google"}]
+        try:
+            self.assertNotIn("/swarm login", feed.connect(["status"]))
+        finally:
+            StandIn.state.pop("identities", None)
         self.assertEqual(oct(feed._settings_path().stat().st_mode & 0o777), "0o600")
         self.assertIn("100 credits", feed.connect([]))
         self.assertNotIn("sfp_test", feed.connect([]))  # the token is never shown
