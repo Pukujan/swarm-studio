@@ -100,7 +100,8 @@ nav.subscribe(v => sw.followPlayer?.(v))
 // and a reload rebuild the state from the address alone. Other keys (wall, chatter, the hosted
 // studio's prompt) are kept as they are.
 const NAV_KEYS = ['project', 'version', 'room', 'run', 'plan', 'play', 'page', 'replay']
-const place = v => [v.room === 'brand' ? v.from : v.room, v.project, v.version, v.run, v.plan].join('|')
+// a version is one project's, so a project learned for the version shown is not a new place
+const place = v => [v.room === 'brand' ? v.from : v.room, v.version, v.run, v.plan].join('|')
 let restoring = false
 let written = nav.view
 function writeAddress(v) {

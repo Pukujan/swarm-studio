@@ -69,7 +69,7 @@ The events are the named actions. Any event the current state does not take is i
 |---|---|---|
 | `home` | every state | `home`; replay ends |
 | `open.project { project, version }` | every state | `build.playable`, Overview, player `closed` |
-| `open.version { version }` | `build` | the same room on that version; `game` goes to the Overview; player `closed` |
+| `open.version { version, project? }` | `build` | the same room on that version (and its project, when it names one); `game` goes to the Overview; player `closed` |
 | `started { run, project?, room? }` | every state | the run's deck (the Overview in the hosted studio); `pending` = run |
 | `room { room, run? }` | `build` | that room. `game` needs `run`. In `playable` the player region also takes `room` and goes to `closed` |
 | `draft` | every state | `draft`: the deck with no project or build, for a new project's talk. A reload shows Projects |

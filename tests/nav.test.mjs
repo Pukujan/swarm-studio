@@ -44,6 +44,13 @@ test('a version opens inside the open project, in the same room, and closes the 
   no([A], { type: 'open.version' })
 })
 
+test('a version keeps its project, or takes the one it names', () => {
+  assert.equal(v(A, { type: 'open.version', version: 'ra0' }).project, 'pa')
+  const loose = { type: 'open.project', version: 'rx' }
+  assert.equal(v(loose).project, null)
+  assert.deepEqual(pick(v(loose, { type: 'open.version', version: 'ry', project: 'px' }), ['project', 'version']), ['px', 'ry'])
+})
+
 test('a build the person started is shown and waited for; the stream only clears the wait', () => {
   const a = at(A, { type: 'started', run: 'rn', project: 'pa' })
   assert.deepEqual(pick(view(a.getSnapshot()), ['room', 'run', 'version', 'pending']), ['deck', 'rn', 'rn', 'rn'])
