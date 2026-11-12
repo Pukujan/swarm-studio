@@ -32,7 +32,7 @@ import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
 import { runBoard as boardOf } from './board.mjs'
-import { listAssets, assetFiles } from '../engine/assets.mjs'
+import { listAssets, assetFiles, lostPictures } from '../engine/assets.mjs'
 import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
@@ -309,6 +309,7 @@ function broadcast(event) {
   for (const res of clients) res.write(line)
 }
 
+const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
 function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '' }) {
   setModels(given)
   current?.controller.abort()
@@ -333,7 +334,10 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
   let images = null
 
   const emit = (type, data) => {
-    if (current !== run) return
+    // A newer build has started. This one's layout stops there, but a picture it was already having
+    // painted still belongs to it: it goes into this build's own file (and to anyone looking at it).
+    // Before, these were dropped and a finished build sat at "0 of 8" with its pictures on disk.
+    if (current !== run) { if (LATE_PICTURE.has(type)) record(id, { type, t: Date.now(), run: id, ...data }); return }
     const event = { type, t: Date.now(), run: id, ...data }
     run.events.push(event)
     if (type === 'agent:assign') run.working.add(data.agent)
@@ -387,12 +391,22 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
 
 // Saved runs are the studio's files: each one reopens as its own canvas.
 const RUN_ID = /^[\w-]{1,64}$/
+const picturesChecked = new Set()
 function readEvents(id) {
   const file = join(runsDir, id, 'events.jsonl')
   if (!RUN_ID.test(id) || !existsSync(file)) return null
-  return readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap(line => {
+  const events = readFileSync(file, 'utf8').split('\n').filter(Boolean).flatMap(line => {
     try { return [JSON.parse(line)] } catch { return [] }
   })
+  // once per run: pictures that were painted but lost their event get it back (engine/assets.mjs)
+  if (!picturesChecked.has(id) && current?.id !== id) {
+    picturesChecked.add(id)
+    let img = []
+    try { img = readdirSync(join(runsDir, id, 'img')) } catch {}
+    const lost = lostPictures({ id, events, img, max: IMG_MAX })
+    for (const e of lost) { appendFileSync(file, JSON.stringify(e) + '\n'); events.push(e) }
+  }
+  return events
 }
 
 // Add an event to a saved run (an edit, a review, an image): written to its file,

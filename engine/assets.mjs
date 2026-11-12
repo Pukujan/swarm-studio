@@ -57,3 +57,22 @@ export function assetFiles(runDir) {
   for (const f of img) if (/^game-/.test(f)) try { times[f] = Math.round(statSync(join(runDir, 'img', f)).mtimeMs) } catch {}
   return { img, models: ls(join(runDir, 'app', 'public', 'models')), times }
 }
+
+// Pictures that were painted but never recorded. Until a build's late picture events were kept
+// (server.mjs, emit), a newer build starting made the server drop them: the files 1.png, 2.png…
+// sat in the run's img/ while the build still said "0 of 8". The build's own queue names its files
+// by the order its slots were noted, so the n-th image:queued event owns file n. Returns the image
+// events to add, for slots that have a file and no picture or failure on record.
+export function lostPictures({ id, events = [], img = [], max = 8, now = Date.now() } = {}) {
+  const queued = events.filter(e => e.type === 'image:queued').slice(0, max)
+  const key = e => `${e.page}|${e.layer}|${e.gen}`
+  const settled = new Set(events.filter(e => e.type === 'image' || e.type === 'image:failed').map(key))
+  const out = []
+  queued.forEach((q, i) => {
+    const file = img.find(f => new RegExp(`^${i + 1}\\.(png|jpe?g|webp)$`).test(f))
+    if (!file || settled.has(key(q))) return
+    out.push({ type: 'image', t: now, run: id, page: q.page, layer: q.layer, gen: q.gen, src: `/img/${id}/${file}`, model: q.model || undefined, recovered: true })
+  })
+  return out
+}
+
