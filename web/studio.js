@@ -6,12 +6,11 @@ import { makeProject } from './project.js'
 import { makeWork } from './work.js'
 import { makePlan } from './plan.js'
 import { makeBrand } from './brand.js'
-import { projectRun } from './route.js'
+import { makeNav } from './nav.js'
 const sw = window.swarm
 const W = window
 const body = document.body
 const $ = s => document.querySelector(s)
-const Q = new URLSearchParams(location.search)
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const store = {
   get(k, d) { try { const v = localStorage.getItem(`swarm.${k}`); return v == null ? d : JSON.parse(v) } catch { return d } },
@@ -33,7 +32,6 @@ const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="curre
 // the controller: Projects (home), a project, or a room (Canvas, Video, App)
 // =====================================================================================
 const C = W.swarmCosmos = {
-  mode: 'off',
   ico, esc, reduced,
   // the canvas asks this before it opens the latest file behind an empty canvas
   atHome: () => C.mode === 'home'
@@ -47,46 +45,92 @@ function setMode(m) {
   for (const x of ['home', 'project', 'station', 'plan', 'brand']) body.classList.toggle(`cosmos-${x}`, m === x)
 }
 
+// Where the person is: one machine (web/nav.js, docs/specs/34-navigation-state.md). C.mode, the pill
+// and the back button are read from it; C.go turns the old (mode, view) calls into its events.
+const nav = C.nav = makeNav({ search: sw && !sw.wall ? location.search : '' })
+const MODE_OF = { home: 'home', overview: 'project', plan: 'plan', brand: 'brand', draft: 'station', deck: 'station', video: 'station', app: 'station', game: 'station' }
+Object.defineProperty(C, 'mode', { get: () => (!sw || sw.wall ? 'off' : MODE_OF[nav.view.room]), enumerable: true })
+const inBuild = () => nav.actor.getSnapshot().matches('build')
+// the build a room asks for when none is open: the one loading, else the one the canvas holds
+const loadingRun = () => C.opening || sw.viewing || sw.S?.run || null
+const ROOM_OF = { canvas: 'deck', video: 'video', app: 'app' }
+
+function eventsFor(m, v) {
+  const at = nav.view
+  if (m === 'home') return [{ type: 'home' }]
+  if (m === 'brand') return [{ type: 'brand' }]
+  if (m === 'plan') return [{ type: 'plan', plan: v || C.planView?.id || null }]
+  if (m === 'game') return [{ type: 'room', room: 'game', run: v }]
+  if (m === 'project') {
+    if (inBuild() && (!v || v === at.version)) return [{ type: 'room', room: 'overview' }]
+    const version = v || at.version || loadingRun()
+    return [{ type: 'open.project', project: C.project ?? (version === at.version ? at.project : null), version }]
+  }
+  if (m === 'station') {
+    const room = ROOM_OF[v] || (inBuild() ? null : 'deck')
+    const back = at.room === 'brand' ? [{ type: 'back' }] : []
+    if (!room) return back
+    // the brand sheet goes back where it came from, then the room
+    const from = back.length ? at.from : at.room
+    if (['overview', 'deck', 'video', 'app', 'game'].includes(from) || (!back.length && inBuild())) return [...back, { type: 'room', room }]
+    const version = loadingRun()
+    if (version) return [...back, { type: 'open.project', project: C.project, version }, { type: 'room', room }]
+    // a new project talked through on the deck, nothing built yet
+    return room === 'deck' ? [...back, { type: 'draft' }] : back
+  }
+  return []
+}
+
+let going = false
 C.go = (m, v) => {
   if (sw.wall) return
+  going = true
+  try { for (const e of eventsFor(m, v)) nav.go(e) } finally { going = false }
+  draw(m === 'plan' ? v : undefined)
+}
+// a move another part sends straight to the machine is drawn the same way
+nav.subscribe(() => { if (!going) draw() })
+
+function draw(planId) {
+  const { room, version, project, plan } = nav.view
+  const m = MODE_OF[room]
   body.classList.add('cosmos')
   // the side panel's own small-chat mode does not apply here
   body.classList.remove('side-min')
   // a replay started from the menu plays in the Design deck: leaving the deck ends it
-  if (m !== 'station' || (v && v !== 'canvas')) sw.stopReplay?.()
+  if (room !== 'deck' && room !== 'draft') sw.stopReplay?.()
   // the player plays the open build: Projects, a plan or a brand sheet shows none, so it closes
   // (left open it sat hidden behind Projects and covered the next project opened)
-  if (m === 'home' || m === 'plan' || m === 'brand') sw.closePlayer?.()
-  C.mode = m
+  if (room === 'home' || room === 'plan' || room === 'brand') sw.closePlayer?.()
   queueMicrotask(() => C.work?.paint?.())
   setMode(m)
-  if (m !== 'plan') C.planView?.hide()
-  if (m !== 'brand') C.brandView?.hide()
-  if (m === 'brand') {
+  if (room !== 'plan') C.planView?.hide()
+  if (room !== 'brand') C.brandView?.hide()
+  if (room === 'brand') {
     // a website's or app's brand sheet (spec 31), beside the chat it came from
     C.homeView.hide()
     C.projectView.hide()
     body.classList.add('cosmos-chat')
     C.brandView.show()
-  } else if (m === 'plan') {
+  } else if (room === 'plan') {
     // a game's plan before anything costly is made (spec 21): its own board
     C.homeView.hide()
     C.projectView.hide()
-    C.planView.show(v || C.planView.id, { fresh: !!C.planFresh })
+    C.planView.show(planId || plan || C.planView.id, { fresh: !!C.planFresh })
     C.planFresh = false
-  } else if (m === 'home') {
+  } else if (room === 'home') {
     body.classList.remove('cosmos-chat')
     C.homeView.show()
     C.projectView.hide()
-  } else if (m === 'project') {
+  } else if (room === 'overview') {
     if (sw.view !== 'canvas') sw.setView('canvas')
-    // v: the run that was asked for (a card, a version, the address); see projectRun in route.js
-    C.projectView.show(projectRun({ asked: v, opening: C.opening, viewing: sw.viewing, live: sw.S?.run }), C.project)
+    C.projectView.show(version, project)
     C.homeView.hide()
-  } else if (m === 'station') {
+  } else {
     C.projectView.hide()
     C.homeView.hide()
-    if (v && sw.view !== v) sw.setView(v)
+    const want = room === 'deck' || room === 'draft' ? 'canvas' : room === 'game' ? 'app' : room
+    if (sw.view !== want) sw.setView(want)
   }
   renderBack()
   renderMode()
@@ -95,7 +139,7 @@ C.go = (m, v) => {
 function renderBack() {
   const b = $('.cosmos-back')
   if (!b) return
-  const toProject = C.mode === 'station'
+  const toProject = inBuild() && nav.view.room !== 'overview'
   b.innerHTML = `${ico('back')}<span class="t">${toProject ? 'Overview' : 'Projects'}</span>`
   b.setAttribute('aria-label', toProject ? 'Back to the Overview' : 'Back to Projects')
 }
@@ -103,7 +147,14 @@ function renderBack() {
 // The way home, from any view: the logo always lands on Projects,
 // and Esc climbs one level, room → project → Projects, when no panel is open.
 C.home = () => { if (sw.wall) return; C.go('home') }
-C.up = () => { if (sw.wall) return false; if (C.mode === 'brand') { C.go('station', 'canvas'); return true } if (C.mode === 'station') { C.go('project'); return true } if (C.mode === 'project' || C.mode === 'plan') { C.go('home'); return true } return false }
+C.up = () => {
+  if (sw.wall) return false
+  const room = nav.view.room
+  if (room === 'brand') { nav.go({ type: 'back' }); return true }
+  if (room === 'home') return false
+  C.go(inBuild() && room !== 'overview' ? 'project' : 'home')
+  return true
+}
 // open a plan (spec 21); fresh: the crew write its cards in
 C.plan = (id, fresh = false) => { C.planFresh = fresh; C.go('plan', id) }
 // a part of a plan, from the chat's "where to start" (spec 27): the board on that plan, the part in view and selected
@@ -164,7 +215,7 @@ function chrome() {
   // the back button: Projects from a project, the project from a room
   const back = document.createElement('button')
   back.className = 'toggle cosmos-back'
-  back.onclick = () => C.go(C.mode === 'station' ? 'project' : 'home')
+  back.onclick = () => C.go(inBuild() && nav.view.room !== 'overview' ? 'project' : 'home')
   $('.topbar').prepend(back)
   renderBack()
   // ☰: what the lean top bar folds away
@@ -204,12 +255,13 @@ function chrome() {
 // game's room, or the wizard that makes one.
 const MODES = [['overview', 'Overview'], ['canvas', 'Canvas'], ['video', 'Video'], ['app', 'App'], ['game', 'Game']]
 // the game's own room is the App view on the game's run: the menu calls it Game
-const onGame = () => !!C.pair?.game && sw.viewing === C.pair.game
-const modeNow = () => (C.mode === 'project' ? 'overview' : sw.view === 'app' && onGame() ? 'game' : sw.view)
+const onGame = () => nav.view.room === 'game'
+const PILL = { overview: 'overview', deck: 'canvas', draft: 'canvas', video: 'video', app: 'app', game: 'game' }
+const modeNow = () => PILL[nav.view.room] || 'overview'
 // the game's room: the App view on the game's run (the label says Game once that run is open)
-C.toGame = () => {
-  C.go('station', 'app')
-  return C.load(C.pair.game).then(renderMode)
+C.toGame = (run = C.pair.game) => {
+  C.go('game', run)
+  return C.load(run).then(renderMode)
 }
 function renderMode() {
   const b = $('.mode-btn')
@@ -289,8 +341,8 @@ function start() {
   sw.on(e => {
     if (e.type === 'run:start' || e.type === 'run:done' || e.type === 'reset') setTimeout(() => C.mode === 'home' && C.homeView.refresh(), 600)
   })
-  // a build opened by its address shows that build, whatever the server is streaming
-  C.go(Q.get('replay') || Q.get('run') ? 'project' : 'home', Q.get('run') || Q.get('replay') || undefined)
+  // the screen the address names (the machine was made from it), whatever the server is streaming
+  draw()
 }
 // fold-button style lives here: it is the only rule that needs the side panel's tab bar
 const style = document.createElement('style')
@@ -298,8 +350,7 @@ style.textContent = 'body:not(.cosmos) .cosmos-fold{display:none}.cosmos-fold{ba
 document.head.append(style)
 
 if (sw && !sw.wall) {
-  // the mode is known before the canvas's own start-up timers run
-  C.mode = Q.get('replay') || Q.get('run') ? 'project' : 'home'
+  // the mode (C.mode, read from the machine) is known before the canvas's own start-up timers run
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
   else setTimeout(start)
 }

@@ -849,7 +849,7 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'page' || x.kind === 'art') { C.go('station', 'canvas'); setTimeout(() => sw.focusPage(x.page || x.art?.page), 60); return }
     if (x.kind === 'film') return C.go('station', 'video')
     // a game made from this site lives in its own run: open that one's App room
-    if (x.kind === 'game' && x.run && x.run !== P.run) { C.go('station', 'app'); return C.load(x.run).then(() => C.go('station', 'app')) }
+    if (x.kind === 'game' && x.run && x.run !== P.run) return C.toGame(x.run)
     if (x.kind === 'game' || x.kind === 'app' || x.kind === 'code') return C.go('station', 'app')
     if (x.kind === 'upload' && x.src) window.open(base() + x.src, '_blank', 'noopener')
     if (x.kind === 'ref') window.open(x.ref.kind === 'link' ? x.ref.url : base() + x.ref.src, '_blank', 'noopener')

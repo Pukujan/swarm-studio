@@ -23,11 +23,3 @@ export function routeMessage({ text = '', run = null, site = true, selected = fa
   return 'extend'
 }
 
-// Which run a project's view shows. The canvas loads a run in the background, so for a moment it
-// still holds the build that was open before (or the one the server is streaming). A view that took
-// its run from the canvas at that moment showed one project's name over another project's pages.
-// So the run that was asked for wins, then one still being loaded, and only then what the canvas holds.
-export function projectRun({ asked = null, opening = null, viewing = null, live = null } = {}) {
-  return asked || opening || viewing || live || null
-}
-

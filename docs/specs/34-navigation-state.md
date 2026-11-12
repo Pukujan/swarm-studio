@@ -34,7 +34,8 @@ Zustand's vanilla store and `@xstate/store` would each be a second package. XSta
 ```
 nav
 ├─ home                      Projects
-├─ plan                      a game plan
+├─ draft                     a new project talked through on the Design deck, nothing built yet
+├─ plan                      a game plan (none yet while a game talk drafts one)
 ├─ brand                     the brand sheet (context.from says where it was opened from)
 └─ build                     a version is open (context.version)
    ├─ video
@@ -71,7 +72,8 @@ The events are the named actions. Any event the current state does not take is i
 | `open.version { version }` | `build` | the same room on that version; `game` goes to the Overview; player `closed` |
 | `started { run, project?, room? }` | every state | the run's deck (the Overview in the hosted studio); `pending` = run |
 | `room { room, run? }` | `build` | that room. `game` needs `run`. In `playable` the player region also takes `room` and goes to `closed` |
-| `plan { plan }` | every state | `plan` |
+| `draft` | every state | `draft`: the deck with no project or build, for a new project's talk. A reload shows Projects |
+| `plan { plan? }` | every state | `plan`; with no id while a game talk drafts it |
 | `brand` | every state | `brand`, `from` = the room before |
 | `back` | `brand` | `from`, or `home` when that room has no build any more |
 | `play { page? }` | `playable`, if the run has pages | player `prototype` |
