@@ -4,9 +4,13 @@
 // is on screen. A sent turn and a crew reply about a layer keep their layers: hovering one draws its
 // lines again. A layer off screen gets a line to the screen's edge.
 //
-//   layerLink({ form, feed, rect, open }) -> { take(), count(), mark(item, keys) }
+// Media in the chat (spec 29, "Media in and out") shares the chip row: a picture, clip or sound dropped
+// or pasted on the chat is handed to `files`, and the caller adds its chip (kind 'ref', no line).
+//
+//   layerLink({ form, feed, rect, open, files }) -> { add, take(kind?), count(kind?), mark(item, keys) }
 //     rect(key): the layer's box on screen, { left, top, width, height }, or null when it is not drawn
 //     open(): show the left chat (a drag that starts while it is shut)
+//     files(list): files dropped or pasted on the chat
 export const LAYER_TYPE = 'application/x-swarm-layer'
 const LL_NS = 'http://www.w3.org/2000/svg'
 const llEsc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -19,7 +23,7 @@ export function layerDrag(e, key, name) {
   document.dispatchEvent(new CustomEvent('swarm:layerdrag'))
 }
 
-export function layerLink({ form, feed, rect, open = () => {} }) {
+export function layerLink({ form, feed, rect, open = () => {}, files = null }) {
   const chips = []
   let hover = null, hot = null, raf = 0
   const box = document.createElement('div')
@@ -33,12 +37,12 @@ export function layerLink({ form, feed, rect, open = () => {} }) {
 
   function paint() {
     box.hidden = !chips.length
-    box.innerHTML = chips.map(c => `<span class="lchip" data-key="${llEsc(c.key)}"><span>${llEsc(c.name)}</span><button type="button" aria-label="Remove ${llEsc(c.name)}">×</button></span>`).join('')
+    box.innerHTML = chips.map(c => `<span class="lchip${c.kind === 'ref' ? ' ref' : ''}" data-key="${llEsc(c.key)}">${c.thumb ? `<img src="${llEsc(c.thumb)}" alt="">` : ''}<span>${llEsc(c.name)}</span><button type="button" aria-label="Remove ${llEsc(c.name)}">×</button></span>`).join('')
     wake()
   }
   function add(c) {
     if (!c?.key || chips.some(x => x.key === c.key) || chips.length >= 12) return
-    chips.push({ key: String(c.key), name: String(c.name || c.key.split('/').pop()).slice(0, 60) })
+    chips.push({ key: String(c.key), name: String(c.name || c.key.split('/').pop()).slice(0, 60), kind: c.kind === 'ref' ? 'ref' : 'layer', thumb: c.thumb || null, data: c.data || null })
     paint()
   }
   box.addEventListener('click', e => {
@@ -54,15 +58,23 @@ export function layerLink({ form, feed, rect, open = () => {} }) {
 
   // the drop: anywhere on the left chat
   const side = form.closest('.side') || form
-  const ours = e => [...(e.dataTransfer?.types || [])].includes(LAYER_TYPE)
+  const ours = e => { const t = [...(e.dataTransfer?.types || [])]; return t.includes(LAYER_TYPE) || (!!files && t.includes('Files')) }
   side.addEventListener('dragover', e => { if (!ours(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; side.classList.add('ldrop') })
   side.addEventListener('dragleave', e => { if (!side.contains(e.relatedTarget)) side.classList.remove('ldrop') })
   side.addEventListener('drop', e => {
     side.classList.remove('ldrop')
     if (!ours(e)) return
     e.preventDefault()
-    try { add(JSON.parse(e.dataTransfer.getData(LAYER_TYPE))) } catch {}
+    if (e.dataTransfer.files?.length && files) files([...e.dataTransfer.files])
+    else try { add(JSON.parse(e.dataTransfer.getData(LAYER_TYPE))) } catch {}
     form.querySelector('textarea')?.focus()
+  })
+  // a picture pasted into the message box
+  form.querySelector('textarea')?.addEventListener('paste', e => {
+    const list = [...(e.clipboardData?.files || [])]
+    if (!list.length || !files) return
+    e.preventDefault()
+    files(list)
   })
   // a layer drag that starts while the chat is shut opens it, so there is somewhere to drop
   document.addEventListener('swarm:layerdrag', () => { if (!side.offsetParent) setTimeout(open, 0) })
@@ -76,7 +88,7 @@ export function layerLink({ form, feed, rect, open = () => {} }) {
   // layer's left edge, a gentle curve; a layer off screen ends at the edge of the screen
   function lines() {
     const out = []
-    for (const el of box.querySelectorAll('.lchip')) out.push({ from: el, key: el.dataset.key, hot: el.dataset.key === hot })
+    for (const el of box.querySelectorAll('.lchip:not(.ref)')) out.push({ from: el, key: el.dataset.key, hot: el.dataset.key === hot })
     if (hover?.isConnected) for (const key of hover.dataset.layers.split(' ').filter(Boolean)) out.push({ from: hover, key, hot: true })
     return out
   }
@@ -117,9 +129,9 @@ export function layerLink({ form, feed, rect, open = () => {} }) {
 
   return {
     add,
-    count: () => chips.length,
-    // the chips, for a send: the box empties and its lines go
-    take() { const out = chips.splice(0); hot = null; paint(); return out },
+    count: kind => chips.filter(c => !kind || c.kind === kind).length,
+    // the chips, for a send (only one kind when asked): those leave the box and their lines go
+    take(kind) { const out = chips.filter(c => !kind || c.kind === kind); for (const c of out) chips.splice(chips.indexOf(c), 1); hot = null; paint(); return out },
     // a feed item about these layers: hovering it draws their lines
     mark(item, keys) { const k = (keys || []).filter(Boolean); if (k.length) { item.dataset.layers = k.join(' '); item.classList.add('has-layers') } }
   }

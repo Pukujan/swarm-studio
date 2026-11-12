@@ -119,6 +119,8 @@ button { font: inherit; color: inherit; }
 .lchips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
 .lchip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 2px 2px 2px 8px; border: 1px solid var(--line-2); border-radius: 999px; font: 12px/18px var(--font); color: var(--text); background: var(--panel); }
 .lchip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lchip > img { width: 18px; height: 18px; margin-left: -6px; border-radius: 50%; object-fit: cover; }
+.lchip.busy { opacity: .6; }
 .composer .lchip button { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 400 14px/1 var(--font); cursor: pointer; }
 .composer .lchip button:hover { color: var(--text); background: var(--line); }
 .side.ldrop .composer { border-color: var(--text); }
