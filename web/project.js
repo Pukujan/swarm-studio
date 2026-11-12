@@ -15,7 +15,8 @@
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
 
-const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['code', 'Code']]
+const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
+const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
 const fmtTime = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : ''
 
 export function makeProject({ sw, C, root }) {
@@ -23,7 +24,7 @@ export function makeProject({ sw, C, root }) {
   const base = () => sw.base || ''
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
-    on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
+    on: false, pid: null, run: null, proj: null, board: null, uploads: [], refs: [], sending: new Map(),
     sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(),
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0
   }
@@ -35,6 +36,7 @@ export function makeProject({ sw, C, root }) {
       <div class="pj-tabs" role="tablist"><button class="pj-tab on" data-tab="files" role="tab">Files</button><button class="pj-tab" data-tab="layers" role="tab">Layers</button>
         <button class="ib sm pj-find" aria-label="Search">${ic('search', 16)}</button><button class="ib sm pj-add" aria-label="Add" aria-haspopup="menu">${ic('plus', 16)}</button></div>
       <label class="pj-search" hidden><input type="search" placeholder="Search" aria-label="Search files"></label>
+      <form class="pj-search pj-link" hidden autocomplete="off"><input type="text" inputmode="url" name="u" placeholder="Paste a link" aria-label="Reference link" maxlength="1000"></form>
       <div class="pj-list" role="tree"></div>
       <div class="pj-layers" hidden></div>
     </aside>
@@ -54,7 +56,8 @@ export function makeProject({ sw, C, root }) {
       <button class="ib" data-tool="comment" aria-label="Chat">${ic('msg')}</button>
       <form class="pj-ask" autocomplete="off"><button type="button" class="pj-scope" hidden aria-label="Talk to the crew about the whole project"><span></span>${ic('x', 12)}</button><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
     </div>
-    <input type="file" class="pj-file" multiple hidden>`
+    <input type="file" class="pj-file" multiple hidden>
+    <input type="file" class="pj-reffile" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md">`
   const $ = s => root.querySelector(s)
   const listEl = $('.pj-list'), layersEl = $('.pj-layers'), stage = $('.pj-stage'), world = $('.pj-world'), insp = $('.pj-insp'), curEl = $('.pj-cursors')
   const ask = $('.pj-ask'), input = ask.q, fileIn = $('.pj-file')
@@ -113,6 +116,7 @@ export function makeProject({ sw, C, root }) {
     if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0; C.load(up); return load() }
     if (P.proj) P.pid = P.proj.id
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
+    P.refs = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/refs`).catch(() => ({ refs: [] }))).refs : []
     render()
     clearTimeout(P.timer)
     P.timer = setTimeout(() => P.on && load(), board?.busy ? 2000 : board?.live ? 3000 : 15000)
@@ -138,6 +142,8 @@ export function makeProject({ sw, C, root }) {
     const ups = [...P.uploads.map(u => ({ key: `up:${u.name}`, kind: 'upload', name: u.name, src: /^image\//.test(u.type) ? u.src : null, type: u.type, size: u.size })),
       ...[...P.sending.values()].map(s => ({ key: `up:${s.name}`, kind: 'upload', name: s.name, sending: s.pct, src: s.preview }))]
     if (ups.length) g.uploads = ups
+    // the References store (spec 29): pictures, clips and links kept for what they show
+    if (P.refs.length) g.refs = P.refs.map(r => ({ key: `rf:${r.id}`, kind: 'ref', name: r.name, src: r.kind === 'image' ? r.src : null, ref: r }))
     if (b.code) g.code = [{ key: 'code', kind: 'code', name: 'App code' }]
     if (P.q) for (const k of Object.keys(g)) { g[k] = g[k].filter(x => x.name.toLowerCase().includes(P.q.toLowerCase())); if (!g[k].length) delete g[k] }
     return g
@@ -157,7 +163,7 @@ export function makeProject({ sw, C, root }) {
   }
   const thumbHtml = x => x.src ? `<span class="t" style="background-image:url('${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}')"></span>`
     : x.kind === 'page' && P.board?.theme?.colors?.length ? `<span class="t tcs" style="--tc-bg:${esc(P.board.theme.colors[0])};--tc-pr:${esc(P.board.theme.colors[1] || P.board.theme.colors[0])}"></span>`
-    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image' }[x.kind] || 'file', 14)}</span>`
+    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
   function renderList() {
     const g = groups()
     listEl.innerHTML = SECTIONS.filter(([k]) => g[k]).map(([k, label]) => {
@@ -182,7 +188,7 @@ export function makeProject({ sw, C, root }) {
     const sel = P.sel === x.key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
     const full = x.src ? (x.src.startsWith('data:') ? x.src : base() + x.src) : ''
     const img = x.src ? `<img src="${esc(picNow(full))}" data-full="${esc(full)}" alt="" draggable="false" loading="lazy" decoding="async">`
-      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code' }[x.kind] || 'file', 26)}</span>`
+      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
@@ -318,9 +324,9 @@ export function makeProject({ sw, C, root }) {
   }
   function renderStage() {
     const g = groups()
-    if (!P.board && !P.uploads.length) { world.innerHTML = ''; return }
+    if (!P.board && !P.uploads.length && !P.refs.length) { world.innerHTML = ''; return }
     const sec = (k, label) => g[k] ? `<section class="pj-sec ${k}"><span class="al">${label}</span><div class="abs">${g[k].map(board).join('')}</div></section>` : ''
-    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
+    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
     applyCam()
     measurePages()
     if (!P.framed && world.offsetWidth) { P.framed = true; frameAll(false) }
@@ -341,7 +347,10 @@ export function makeProject({ sw, C, root }) {
       x.style && ['Style', x.style],
       x.used && ['Used on', x.used],
       x.kind === 'film' && x.seconds && ['Length', fmtTime(x.seconds)],
-      x.kind === 'upload' && x.size && ['File', `${(x.size / 1024 / 1024).toFixed(x.size > 1048576 ? 1 : 2)} MB`]
+      x.kind === 'upload' && x.size && ['File', `${(x.size / 1024 / 1024).toFixed(x.size > 1048576 ? 1 : 2)} MB`],
+      x.kind === 'ref' && ['From', REF_FROM[x.ref.source] || x.ref.source],
+      x.kind === 'ref' && x.ref.use && ['Use', x.ref.use],
+      x.kind === 'ref' && x.ref.kind === 'link' && ['Link', x.ref.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)]
     ].filter(Boolean)
     const pv = x.kind === 'film' && x.video ? `<video src="${esc(base() + x.video)}" poster="${x.src ? esc(base() + x.src) : ''}" controls preload="none"></video>`
       : x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="">` : typeCover(x) ? `<div class="pv-tc">${typeCover(x)}</div>` : `<span class="blank">${ic('file', 28)}</span>`
@@ -349,12 +358,16 @@ export function makeProject({ sw, C, root }) {
       ['page', 'game', 'app', 'code', 'film', 'art'].includes(x.kind) && `<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button>`,
       (x.kind === 'art' || (x.kind === 'upload' && x.sending == null) || x.kind === 'film') && `<button class="btn ghost" data-act="export">${ic('download', 15)}Export</button>`,
       x.kind === 'page' && `<button class="btn ghost" data-act="zip">${ic('download', 15)}Export</button>`,
-      (x.kind === 'art' || (x.kind === 'upload' && x.sending == null)) && !hosted() && `<button class="btn ghost" data-act="replace">${ic('upload', 15)}Replace</button>`
+      (x.kind === 'art' || (x.kind === 'upload' && x.sending == null)) && !hosted() && `<button class="btn ghost" data-act="replace">${ic('upload', 15)}Replace</button>`,
+      x.kind === 'ref' && `<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button>`,
+      x.kind === 'ref' && !hosted() && `<button class="btn ghost" data-act="ref-remove">${ic('trash', 15)}Remove</button>`
     ].filter(Boolean).join('')
+    // Use for…: the crew get the reference and the part it is for, like a comment on that section
+    const useFor = x.kind === 'ref' && !hosted() && P.board ? `<form class="pj-use" autocomplete="off"><input name="u" placeholder="Use for…" aria-label="Use for" maxlength="80" value="${esc(x.ref.use || '')}"><button class="btn" type="submit">Send</button></form>` : ''
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
     const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
     insp.innerHTML = `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
-      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}<div class="btns">${btns}</div>`
+      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}<div class="btns">${btns}</div>`
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
   }
@@ -686,6 +699,7 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'game' && x.run && x.run !== P.run) { C.go('station', 'app'); return C.load(x.run).then(() => C.go('station', 'app')) }
     if (x.kind === 'game' || x.kind === 'app' || x.kind === 'code') return C.go('station', 'app')
     if (x.kind === 'upload' && x.src) window.open(base() + x.src, '_blank', 'noopener')
+    if (x.kind === 'ref') window.open(x.ref.kind === 'link' ? x.ref.url : base() + x.ref.src, '_blank', 'noopener')
   }
   // an artboard the inspector would slide over: wait out a double-click, then select and pan it clear
   let clickT = 0
@@ -748,6 +762,16 @@ export function makeProject({ sw, C, root }) {
     if (act === 'export') saveFile(x)
     if (act === 'zip') exportZip()
     if (act === 'replace') replace(x)
+    if (act === 'ref-remove') removeRef(x)
+  })
+  insp.addEventListener('submit', e => {
+    const f = e.target.closest('.pj-use'), x = find(P.sel)
+    if (!f || x?.kind !== 'ref') return
+    e.preventDefault()
+    const use = f.u.value.trim()
+    if (!use) return f.u.focus()
+    f.querySelector('button').disabled = true
+    refPost(`${x.ref.id}/use`, { use, send: true }).then(out => { if (out) toast(`${ic('check', 15)}<span>Sent to the crew</span>`) }).finally(() => { const b = f.querySelector('button'); if (b) b.disabled = false })
   })
 
   // ---------- the file menu
@@ -934,9 +958,48 @@ export function makeProject({ sw, C, root }) {
   sInput.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); search.hidden = true; P.q = ''; sInput.value = ''; render() } }
   $('.pj-add').onclick = e => showMenu([
     { k: 'page', icon: 'file', label: 'New page', run: newPage },
-    ...(hosted() ? [] : [{ k: 'up', icon: 'upload', label: 'Upload files', run: () => fileIn.click() }])
+    ...(hosted() ? [] : [{ k: 'up', icon: 'upload', label: 'Upload files', run: () => fileIn.click() },
+      { k: 'ref', icon: 'image', label: 'Reference', run: () => refIn.click() },
+      { k: 'link', icon: 'ext', label: 'Link', run: () => { linkEl.hidden = false; linkEl.u.focus() } }])
   ], e.currentTarget)
   function newPage() { select(null); input.value = 'Add a page: '; input.focus() }
+
+  // ---------- References (spec 29): + → Reference or Link; Remove, and Undo in its toast
+  const refIn = $('.pj-reffile'), linkEl = $('.pj-link')
+  async function refPost(path, body, raw = null) {
+    if (!P.pid || hosted()) { toast(`<span>References need a saved project</span>`); return null }
+    try {
+      const out = raw ? await api(`/api/projects/${encodeURIComponent(P.pid)}/refs?name=${encodeURIComponent(raw.name)}`, { method: 'POST', body: raw })
+        : await post(`/api/projects/${encodeURIComponent(P.pid)}/refs${path ? `/${path}` : ''}`, body)
+      P.refs = out.refs || P.refs
+      P.open.refs = true
+      render()
+      return out
+    } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`); return null }
+  }
+  refIn.onchange = async () => {
+    const fs = [...refIn.files]
+    refIn.value = ''
+    let last = null
+    for (const f of fs) last = (await refPost('', null, f))?.ref || last
+    if (last) select(`rf:${last.id}`)
+  }
+  linkEl.onsubmit = async e => {
+    e.preventDefault()
+    const u = linkEl.u.value.trim()
+    if (!u) return
+    const out = await refPost('link', { url: /^https?:\/\//i.test(u) ? u : `https://${u}` })
+    if (out) { linkEl.u.value = ''; linkEl.hidden = true; select(`rf:${out.ref.id}`) }
+  }
+  linkEl.u.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); linkEl.hidden = true } }
+  function removeRef(x) {
+    refPost(`${x.ref.id}/remove`).then(out => {
+      if (!out) return
+      if (P.sel === x.key) select(null)
+      toast(`${ic('trash', 15)}<span>Removed</span><button class="btn sm ghost pj-undo">Undo</button>`)
+      toastEl?.querySelector('.pj-undo')?.addEventListener('click', () => { toastEl?.remove(); refPost(`${x.ref.id}/restore`).then(o => o && select(x.key)) })
+    })
+  }
 
   // ---------- the dock
   $('.pj-dock').addEventListener('click', e => {
@@ -1136,6 +1199,7 @@ export function makeProject({ sw, C, root }) {
     if (e.key === 'Escape' && P.sel) { e.preventDefault(); e.stopPropagation(); select(null) }
     if (e.key === 'Enter' && P.sel) { e.preventDefault(); openItem(find(P.sel)) }
     if (e.key === 'f' && !e.metaKey && !e.ctrlKey) frameAll()
+    if ((e.key === 'Delete' || e.key === 'Backspace') && P.sel?.startsWith('rf:')) { const x = find(P.sel); if (x) { e.preventDefault(); removeRef(x) } }
     if ((e.key === 'Delete' || e.key === 'Backspace') && P.sel?.startsWith('up:')) { const x = find(P.sel); if (x) { e.preventDefault(); fileOp({ op: 'delete', name: x.name }).then(() => select(null)) } }
   }, true)
   addEventListener('resize', () => { if (P.on) crewAtWork() })
