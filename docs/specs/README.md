@@ -13,7 +13,7 @@ These are the specs for what comes after Auto mode and the Supabase connector. E
 | 3b | [The Auto show: visuals, chatter, launch kit](07-auto-show.md) | Every step is fun to watch and hear, and a launch kit posts only when you click | 1½ days |
 | 4 | [Two demo modes and Pro packs](09-demo-modes.md) | Make for everyone, Pro packs that bring four markets into Hermes, and the Swarm Wall: four runs at once | 1½ days |
 | 5 | [Swarm Feed](10-swarm-feed.md) | Swipe live builds, try them in place, save references, remix and post back with credit. It extends the Arcade. | 1½ days |
-| 6 | [Onboarding and Connections](06-onboarding.md) | New people connect Supabase, Vercel and Stripe by signing in, or skip and add them later | ½–1 day |
+| 6 | [Onboarding: one setup screen and a guided prompt](06-onboarding.md) | Setup shown once (Account, Models, Pictures, each with a default), then a few chip questions per mode before a build; everything else asked when it is needed. Agreed 2026-11-11 | 2–3 days in 5 slices |
 | 7 | [Swarm Arcade](03-arcade.md) | Hosting and the public listing behind the Feed | 1–1½ days |
 | 8 | [3D models](04-3d.md) | Free CC0 models plus one generated hero model, on pages, the canvas and in games | 1 day |
 | 9 | [Prompt-driven films](15-prompt-films.md) | The Film studio makes trailers, calm films or ads from one prompt and an optional style reference, so Swarm can make its own trailer | ½ day |

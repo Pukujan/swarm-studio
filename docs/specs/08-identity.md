@@ -73,7 +73,7 @@ A small "Built for Hermes Agent" line in the footer and the README is fine.
   1. **The planner's seat:** at the top of the canvas when a build starts. She "draws" the sitemap, and the page frames fly out from her baton.
   2. **Orders:** each `agent:assign` is a speech bubble from her ("Ada, hero section, go!"), and a dotted line runs from her to the agent's cursor.
   3. **Auto narrator:** the step transition cards from [07-auto-show.md](07-auto-show.md) show her pointing to the next view.
-  4. **Onboarding host:** she greets people in [06-onboarding.md](06-onboarding.md), one line per step.
+  4. **Onboarding host:** she speaks her short orders during a first build ([06-onboarding.md](06-onboarding.md)); there is no welcome wizard.
   5. **Logo and avatar:** her helmeted face in a circle is the app icon, the favicon, the README hero, the catalog listing and the Arcade avatar.
 - **Voice:** in the chatter system she has a warmer, lower voice than the crew, and her TTS lines are rarer and sound like commands ("Launch!", "Good work, crew.").
 
