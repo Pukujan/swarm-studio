@@ -42,6 +42,8 @@ import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
+import { refRoutes } from './refs.mjs'
+import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes } from './setup.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
@@ -1325,6 +1327,9 @@ const talks = talkRoutes({
 // each get a chat that points at them (the plan files stay where they are).
 const chats = talks.chats
 // The brand sheet (docs/specs/31-brand-sheet.md): a website's or app's story, palette and type, locked before it is designed
+// A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
+const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
+const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input) })
 const brands = brandRoutes({
   chats,
   model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
@@ -2267,6 +2272,9 @@ const server = createServer((req, res) => {
       if (typeof input.project === 'string') {
         const ups = projects.uploadsOf(input.project).filter(u => /^image\//.test(u.type)).slice(0, 12)
         if (ups.length) input.brief = `${String(input.brief).trim()}\n\nThe owner uploaded these pictures. Use them where they fit, as they are (<img src="…">, no data-gen), and make every new picture match their look:\n${ups.map(u => `- ${u.name}: ${u.src}`).join('\n')}`
+        // the project's References store: pictures with what each is for, and links
+        const rb = refs.brief(input.project)
+        if (rb) input.brief = `${String(input.brief).trim()}\n\n${rb}`
       }
       // A message inside an open build (from: its run) is that project's next version: the
       // last version is kept as it stands and the crew adds only what the message asks for
@@ -2454,6 +2462,8 @@ const server = createServer((req, res) => {
         if (existsSync(join(runsDir, v.id, 'video', 'promo.mp4'))) out.push({ project: p.id, run: v.id, kind: 'film', name: 'Promo film', src: `/video/${v.id}/promo.mp4`, poster: existsSync(join(runsDir, v.id, 'video', 'p1.webp')) ? `/video/${v.id}/live/p1.webp` : null, t: v.updated })
       }
       for (const u of projects.uploadsOf(p.id)) out.push({ project: p.id, kind: 'upload', name: u.name, src: u.src, type: u.type, t: u.t })
+      // the References store: its pictures beside the uploads
+      for (const r of refs.list(p.id).filter(r => r.kind === 'image')) out.push({ project: p.id, kind: 'upload', name: r.name, src: r.src, type: 'image/*', t: r.added })
     }
     return json(200, { assets: out.sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 600) })
   }
@@ -2916,6 +2926,7 @@ const server = createServer((req, res) => {
   if (plans(req, res, url)) return
   if (talks(req, res, url)) return
   if (brands(req, res, url)) return
+  if (refsRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 

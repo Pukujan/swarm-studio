@@ -231,6 +231,27 @@ The Overview's Files panel gets a **References** group after Uploads:
 - A reference can be removed, and undo brings it back.
 - **Use for…** picks a section ("the hero", "the menu"). That sends the crew the reference and the section as a chat message, like a comment pin.
 
+### References, built (2026-11-12)
+
+- `engine/refs.mjs` is the store: `refStore({ projectsDir, uploadsOf, known })` with `list`, `all`, `addFile`, `addLink`,
+  `remove`, `restore`, `setUse`, `file`, `brief` and `useText`. A picture's size is read from its header.
+- `server/refs.mjs` serves it:
+  - `GET /api/projects/:pid/refs`;
+  - `POST /api/projects/:pid/refs?name=` with the file's bytes, and `POST …/refs/link { url }`;
+  - `POST …/refs/:id/remove`, `…/restore` and `…/use { use, send }`. With `send`, the line goes to the project's newest
+    build through the comment route; with no build yet it answers 409;
+  - `GET /ref/:pid/:file`, sandboxed like `/up/`. A removed reference's file is not served.
+- The Overview has a **References** group after Uploads, in the Files panel and on the stage. **+** offers
+  **Reference** (files) and **Link**. The inspector shows where it came from, its size and its use, with **Use for…**
+  and **Send**, **Open** and **Remove**. Remove's toast has **Undo**, and Delete removes the selected one.
+- The crew's brief lists the store's pictures and links, with their use. Home › Assets lists the pictures.
+- Uploads stay in `uploads/` and in their own group: `all()` reads them as references with source `upload`.
+  Dropping a file on the Overview still uploads it.
+- Not yet:
+  - `plan.style.refs`, the film refs and the Feed writing to the store (their sessions' files);
+  - pictures and links in a chat read by the vision model, and the mood board (the media-in-chat slice);
+  - Lock copying a chat's refs into the store.
+
 ## Scribble: marks the agent can read
 
 Ported from kresilo, which is the owner's own code (`~/dev/projects/kresilo`, `src/creative/canvasMarks.ts`, `canvasDraft.ts`, `server/creative/canvasVector.ts`):

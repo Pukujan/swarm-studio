@@ -64,7 +64,7 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .pj-sec .abs { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
 .pj-sec.site .abs { max-width: 760px; }
 .pj-sec.art .abs { max-width: 760px; gap: 14px; }
-.pj-sec.uploads .abs { max-width: 760px; gap: 14px; }
+.pj-sec.uploads .abs, .pj-sec.refs .abs { max-width: 760px; gap: 14px; }
 .ab { position: relative; flex: none; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; outline: none; }
 .ab img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 3px; pointer-events: none; }
 .ab .tc { position: absolute; inset: 0; border-radius: 3px; overflow: hidden; background: var(--tc-bg); color: var(--tc-fg); padding: 22% 10% 0; display: flex; flex-direction: column; gap: 9px; pointer-events: none; }
@@ -79,6 +79,8 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab.film { width: 142px; height: 80px; }
 .ab.art { width: 112px; height: 112px; }
 .ab.upload { width: 112px; height: 112px; }
+.ab.ref { width: 112px; height: 112px; }
+.ab.ref .blank { padding-bottom: 18px; }
 .ab .play { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: rgb(var(--void-rgb) / .7); }
 .ab .play::after { content: ''; position: absolute; left: 13px; top: 10px; border-left: 11px solid var(--text); border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
 .ab.film .play { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
@@ -264,3 +266,7 @@ body.cosmos-project .pj-now:hover { border-color: var(--text); }
 
 /* Follow keeps its place in the dock and rests, greyed, while nobody is working */
 .pj-follow:disabled { opacity: .35; cursor: default; background: none; }
+/* References (spec 29): Use for… under the inspector's rows */
+.pj-use { display: flex; gap: 6px; margin: 4px 0 10px; }
+.pj-use input { flex: 1; min-width: 0; height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 12.5px var(--sans, inherit); padding: 0 10px; outline: none; }
+.pj-use input:focus { border-color: var(--line-2); }
