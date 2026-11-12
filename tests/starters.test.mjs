@@ -106,3 +106,46 @@ test('the board shows the Starter and Systems groups, and the person changes the
   assert.match(web, /act\('starter', \{ key: st\.dataset\.st/)
   assert.doesNotMatch(web, /title=/)
 })
+
+test('the strategy starter assembles into a Godot project with its add-on, and never over the crew\'s files', async () => {
+  const { assembleStarter, crewBrief } = await import('../engine/starters.mjs')
+  const { existsSync, writeFileSync } = await import('node:fs')
+  const dest = mkdtempSync(join(tmpdir(), 'starter-'))
+  try {
+    const written = assembleStarter('strategy-topdown', dest)
+    for (const f of ['project.godot', 'scenes/main.tscn', 'scripts/main.gd', 'scripts/bench.gd', 'addons/swarm_rts/swarm.gd', 'addons/swarm_rts/flow_field.gd', 'addons/swarm_rts/addon.json'])
+      assert.ok(written.includes(f), f)
+    writeFileSync(join(dest, 'scripts/main.gd'), '# theirs\n')
+    assert.ok(!assembleStarter('strategy-topdown', dest).includes('scripts/main.gd'))
+    assert.equal(readFileSync(join(dest, 'scripts/main.gd'), 'utf8'), '# theirs\n')
+    assert.ok(!existsSync(join(dest, 'CREW.md')), 'the brief is for the crew, not the game')
+    assert.match(crewBrief('strategy-topdown'), /never a node/)
+  } finally { rmSync(dest, { recursive: true, force: true }) }
+})
+
+test('every add-on a starter carries says where it came from, its licence and its files, and is small', async () => {
+  const { ADDONS_DIR } = await import('../engine/starters.mjs')
+  const { statSync } = await import('node:fs')
+  for (const s of starters()) for (const a of s.addons || []) {
+    const meta = JSON.parse(readFileSync(join(ADDONS_DIR, a, 'addon.json'), 'utf8'))
+    assert.ok(['ours', 'pinned', 'brought'].includes(meta.source), `${a}: source`)
+    assert.ok(meta.version && meta.licence && meta.credits, `${a}: version, licence, credits`)
+    if (meta.source === 'pinned') assert.ok(/^[0-9a-f]{64}$/.test(meta.sha256) && meta.url, `${a}: a pinned add-on records its sha256 and url`)
+    const bytes = meta.files.reduce((n, f) => n + statSync(join(ADDONS_DIR, a, f)).size, 0)
+    assert.ok(bytes < 200_000, `${a}: ${bytes} bytes`)
+  }
+})
+
+test('a Godot build seeds the locked starter first and tells the crew to build on it', async () => {
+  const { seedGodot, godotStagePrompt } = await import('../engine/godotfirst.mjs')
+  const { existsSync } = await import('node:fs')
+  const dir = mkdtempSync(join(tmpdir(), 'seed-'))
+  const spec = { title: 'Army of Ants', loop: 'command ants', starter: { engine: 'godot', template: { id: 'strategy-topdown', version: '1.0.0' }, assets: 'placeholder', systems: ['pool', 'flowfield', 'select', 'camera'], addons: [] } }
+  try {
+    seedGodot(dir, spec)
+    assert.ok(existsSync(join(dir, 'ports/godot/addons/swarm_rts/swarm.gd')))
+    assert.match(readFileSync(join(dir, 'ports/godot/project.godot'), 'utf8'), /res:\/\/scenes\/main\.tscn/)
+    assert.match(godotStagePrompt(spec, 0), /build on it, never around it/)
+    assert.doesNotMatch(godotStagePrompt({ ...spec, starter: null }, 0), /never around it/)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
