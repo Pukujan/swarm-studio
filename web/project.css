@@ -288,3 +288,15 @@ body.cosmos-project .pj-now:hover { border-color: var(--text); }
 .ab.draft.pending .blank { animation: mk-pulse 1.4s ease-in-out infinite; }
 @keyframes mk-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .ab.draft.pending .blank { animation: none; } }
+/* manual edit (spec 29): a picked section's parts, and one part's fields */
+.pj-parts { display: flex; flex-direction: column; gap: 1px; max-height: 240px; overflow: auto; margin: 0 -4px; }
+.pj-part { display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px calc(8px + var(--d, 0) * 12px); border: 0; border-radius: 6px; background: none; color: var(--muted); font: 12px var(--body); text-align: left; cursor: pointer; }
+.pj-part span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-part:hover, .pj-part:focus-visible { color: var(--text); background: rgb(var(--glass-rgb) / .06); }
+.pj-insp .pj-eback { margin-left: -6px; }
+.pj-estyle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+.pj-epic { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.pj-epic img { display: block; width: 100%; max-height: 140px; object-fit: contain; }
+.pj-eattr { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
+.pj-eattr input { min-width: 0; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 12.5px/1.35 var(--body); }
+.pj-eattr input:focus { outline: none; border-color: var(--text); }

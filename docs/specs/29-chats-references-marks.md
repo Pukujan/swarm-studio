@@ -432,6 +432,17 @@ Ids:
 - **Kept apart.** A person's edits and the crew's edits are separate versions with who made them. The crew's next rework of that section starts from the person's version, and its prompt says what the person changed so it is not undone.
 - `USER_TOOLS` gets a tool only when it really works end to end. Today it has move, text and comment; Scribble and Edit join when their slices land.
 
+### Manual edit, built (2026-11-12)
+
+- **The port.** `web/edit/patches.js` adapts `source-patches.ts` and `types.ts` (Open Design commit 6147958) to plain JS, wrapped in one name (`swEdit`) because the studio's modules are joined into one script. The Apache LICENSE and a NOTICE (what was taken, what changed) sit beside it. Kinds: `set-text`, `set-link`, `set-image`, `set-style`, `set-attributes`, `remove-element`, and our own `move-element` (up or down among siblings). Guards kept: words inside nested markup go to Code, the section's only element can't be removed. Added: `javascript:` links, `on…` attributes, the canvas's own `data-layer`/`data-gen` and style values with `<>{};"` are refused. `set-outer-html` was left out: Code already edits the whole section.
+- **Ids are index paths**, `path-0-2` inside the section's fragment, the same path the point-to-element reader (`ANCHOR_JS`) returns. No `data-sw-id` stamping: it would need every builder prompt changed, and a path is enough while the panel re-reads the part after each change (a move hands back the part's new path).
+- **The panel** is the Overview inspector. A picked section lists its **Parts** (indented; boxes named Section, Box, Form, List…; words and pictures by their words or alt). A part opens **Content** (words, link, picture address and alt, Replace), **Style** (size, weight, line, letters, colour, align, width, height, padding, margin, fill, corners, opacity), **Attributes** (each one, plus name/value Add), and Up, Down, Remove, Code. Clicking inside the picked section on the page picks the part under the pointer.
+- **Replace** uploads the picture to the project's References and points the part at its `/ref/…` address, the same address the crew is given for reference pictures.
+- **Saving** goes through `swarm.layers.save`, so each change is a section version (`layer:done`, `restored`, `by` the canvas, `why` "hand: words" / "hand: style" / …), with undo, redo and Versions as for Code.
+- **The crew keeps it.** `engine/handedit.mjs` collects the hand changes made since the crew last wrote that section; a comment, a dragged layer, a Scribble draft or an SEO rewrite of it tells the builder "The person changed this section by hand (words, style)… Keep them". The HTML it gets already has them.
+- Tests: `tests/handedit.test.mjs` (the crew note, and every patch kind in a real browser; skips without Playwright).
+- **Not yet:** the left Layers list opening to parts, dropping a picture straight onto a part, resize handles on the canvas, an outline on the picked part, and `USER_TOOLS` (the old canvas rail; the Overview is where editing lives). There is no separate catalog scan in CI; `scripts/check.sh` passes with `web/edit/` in.
+
 ## Slices
 
 1. **Chat store.** The record, routes, the Make box opening a chat, the home **Chats** entry, a project's chats by category, the move into a project on build, clean-up, and the old plans brought in. Spec 27's `/api/talk` writes to it. Refs, marks and made items stay empty for now. 1 day.

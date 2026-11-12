@@ -8,7 +8,8 @@ import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 
 // Changes whenever a canvas file does. An open canvas compares it with its own and
 // reloads itself when idle, because Hermes's pane keeps a page open indefinitely.
-export const webVersion = webDir => String(Math.max(...readdirSync(webDir).map(f => statSync(join(webDir, f)).mtimeMs)) | 0)
+// (web/edit/ too: its files are joined in like the rest)
+export const webVersion = webDir => String(Math.max(...readdirSync(webDir, { recursive: true }).map(f => statSync(join(webDir, f)).mtimeMs)) | 0)
 
 export function canvasPage(webDir, extra = {}) {
   const read = f => readFileSync(join(webDir, f), 'utf8')
@@ -33,5 +34,5 @@ export function canvasPage(webDir, extra = {}) {
     .replace('<link rel="stylesheet" href="brand.css">', () => `<style>${read('brand.css')}</style>`)
     .replace('<link rel="stylesheet" href="workshop.css">', () => `<style>${read('workshop.css')}</style>`)
     // the studio controller, Projects and a project: its own modules joined into one, since the pane's frame has no origin to import from
-    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', 'studio.js'].map(join1).join('\n')}</script>`)
+    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'edit/patches.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', 'studio.js'].map(join1).join('\n')}</script>`)
 }

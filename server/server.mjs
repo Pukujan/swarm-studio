@@ -19,6 +19,7 @@ import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixText, markLine } from '../engine/marks.mjs'
+import { handChanges, keepHand } from '../engine/handedit.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
 import { seoPass, currentSeo, cleanSeo, thumbOf } from '../engine/seo.mjs'
 import { seoAsk } from '../web/route.js'
@@ -2175,7 +2176,8 @@ async function commentNow(id, input) {
     const s = sections.find(x => x.key === k)
     const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
     send('comment:take', { text, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply : '' })
-    rework(id, send, s, agent, theme, { comment: text })
+    // a section the person changed by hand (web/edit/patches.js): its builder keeps those changes
+    rework(id, send, s, agent, theme, { comment: keepHand(text, handChanges(events, k.split('/')[0], k.split('/').pop())) })
   })
   return { sections: keys, reply }
 }
@@ -2237,7 +2239,7 @@ async function markRequest(id, { events, start, theme, sections, text, input, se
     const s = known.get(k), list = bySection.get(k)
     const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
     send('comment:take', { text: text || `${list.length} mark${list.length > 1 ? 's' : ''}`, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply.slice(0, 90) : '', marks: list.map(m => m.id) })
-    rework(id, send, s, agent, theme, { comment: fixText({ text, marks: list, reads, role: s.role }) }, { draft: { marks: list.map(m => m.id) } })
+    rework(id, send, s, agent, theme, { comment: keepHand(fixText({ text, marks: list, reads, role: s.role }), handChanges(events, k.split('/')[0], k.split('/').pop())) }, { draft: { marks: list.map(m => m.id) } })
   })
   if (!keys.length && !asked.size) send('comment:none', { text })
   return { sections: keys, reply, reads, ids }
@@ -2283,7 +2285,7 @@ async function seoRequest(id, { events, start, theme, given, text, send }) {
     if (!s) return
     const who = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
     send('comment:take', { text, page: c.key.split('/')[0], layer: c.key.split('/').pop(), role: s.role, agent: who, reply: i === 0 ? c.ask.slice(0, 90) : '' })
-    rework(id, send, s, who, theme, { comment: c.ask })
+    rework(id, send, s, who, theme, { comment: keepHand(c.ask, handChanges(events, c.key.split('/')[0], c.key.split('/').pop())) })
   })
   return { sections: r.copy.map(c => c.key), reply: r.reply, seo: r.changes }
 }
