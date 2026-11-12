@@ -96,3 +96,23 @@ test('the critic holds the film to what was locked: its length and every line of
   // a film with nothing locked has neither check
   assert.ok(!filmChecks({ m, board: { lengths: [] }, music: false }).some(c => ['length', 'script'].includes(c.id)))
 })
+
+test('the Video kit draft is kept per project, checked on the way in', async () => {
+  const f = fixture()
+  const handle = filmRoutes({ projectsDir: f.projectsDir, refs: f.refs, known: p => p === 'p1', makeRun: () => 'x', startFilm: async () => ({}) })
+  const ask = (method, path, body) => new Promise(resolve => {
+    const req = new EventEmitter(); req.method = method; req.destroy = () => {}
+    const res = { writeHead: code => ({ end: s => resolve({ code, data: JSON.parse(s) }) }) }
+    assert.equal(handle(req, res, new URL(`http://x${path}`)), true)
+    if (method !== 'GET') { req.emit('data', JSON.stringify(body)); req.emit('end') }
+  })
+  assert.deepEqual((await ask('GET', '/api/kit/video/p1')).data, { kit: null })
+  assert.equal((await ask('GET', '/api/kit/video/nope')).code, 404)
+  const put = await ask('PUT', '/api/kit/video/p1', { kit: { beats: [{ text: 'One', frame: { item: 'r1' } }, { text: '' }, { text: 'Two', frame: { evil: 1 } }], shape: 'cinema', seconds: 500 } })
+  assert.equal(put.code, 200)
+  assert.deepEqual(put.data.kit.beats.map(b => [b.text, b.frame]), [['One', { item: 'r1' }], ['Two', null]])
+  assert.equal(put.data.kit.shape, 'wide')
+  assert.equal(put.data.kit.seconds, 90)
+  assert.deepEqual((await ask('GET', '/api/kit/video/p1')).data, put.data)
+  rmSync(f.root, { recursive: true, force: true })
+})

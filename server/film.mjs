@@ -1,6 +1,7 @@
 // Films with no website (docs/specs/40-video-kit.md): a project's brand, References and Assets become a
 // film run, and the film job (server.mjs videoNow) cuts it with the same director, music cut and critic.
 //   POST /api/projects/:pid/film { kit?, story?, shapes? }  -> { run, state }   the Video kit's Build press
+//   GET|PUT /api/kit/video/:pid { kit }                     the Video kit's draft (projects/<pid>/kit-video.json)
 // The run is a folder like any build's: events.jsonl starts with run:start { kind: 'film' } and a
 // film:source event (what engine/filmkit.mjs brandSource made, its files copied into the run's img/).
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs'
@@ -61,6 +62,20 @@ export function filmRoutes({ projectsDir, refs, known = () => true, makeRun, sta
     req.on('end', () => { try { resolve(JSON.parse(b || '{}')) } catch { resolve({}) } })
   })
   return function handle(req, res, url) {
+    const d = url.pathname.match(/^\/api\/kit\/video\/([\w-]{1,64})$/)
+    if (d) {
+      const pid = d[1], file = join(projectsDir, pid, 'kit-video.json')
+      if (!known(pid)) { json(res, 404, { error: 'no such project' }); return true }
+      if (req.method === 'GET') { let kit = null; try { kit = checkKit(JSON.parse(readFileSync(file, 'utf8'))) } catch {} json(res, 200, { kit }); return true }
+      if (req.method !== 'PUT' && req.method !== 'POST') { json(res, 405, { error: 'GET or PUT' }); return true }
+      body(req).then(input => {
+        const kit = checkKit(input.kit || {})
+        mkdirSync(join(projectsDir, pid), { recursive: true })
+        writeFileSync(file, JSON.stringify(kit, null, 2))
+        json(res, 200, { kit })
+      }).catch(err => json(res, 400, { error: String(err.message || err) }))
+      return true
+    }
     const m = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/film$/)
     if (!m) return false
     if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
