@@ -1,8 +1,126 @@
-# Swarm Studio
+<p align="center">
+  <img src="web/brand/hermia-mark.svg" width="88" alt="Swarm Studio mark: Hermia's helmeted face in a graphite circle">
+</p>
 
-A whole creative studio, inside [Hermes Agent](https://github.com/NousResearch/hermes-agent). One prompt, and a crew of agents you can watch and steer builds the whole launch: a multi-page site, a live app with a database, a playable game, a promo film and the posts.
+<h1 align="center">Swarm Studio</h1>
 
-You give it a one-line brief. Commander Hermia, the planner, picks the theme and the pages. Then a dozen or more agents take sections off a shared queue and stream them onto a Figma-like canvas at the same time. You see their cursors, short chat bubbles about what they're doing, wires between linked pages, and a clickable prototype at the end. A typical run builds 4 pages and 30–40 sections in 30–60 seconds. Builds post to [Swarm Feed](https://swarm.design-bakery.com/studio), where people try them live and remix them with credit.
+<p align="center"><b>Built for Hermes Agent.</b></p>
+
+<p align="center">
+  <img src="docs/readme/crew-building.webp" width="960" alt="The crew building a record label's site on the Design deck: agent cursors, notes about what each is doing, sections landing on five pages at once">
+</p>
+
+<p align="center"><i>A real build, sped up: Wildflower Records, 5 pages and 28 sections by 16 agents in 27 seconds.</i></p>
+
+A plugin for [Hermes Agent](https://github.com/NousResearch/hermes-agent). You describe a product, talk it through with a planner, and a crew of agents builds the site, the app, the game or the film on a canvas where you can watch and steer them.
+
+```bash
+hermes plugins install Pukujan/swarm-studio --force
+hermes plugins enable swarm-studio
+```
+
+(Why `--force`, and what the plugin does on your computer, are [further down](#install).)
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/readme/overview.jpg" alt="The Overview: a project's pages and pictures on one canvas, with the file list on the left"></td>
+    <td width="33%"><img src="docs/readme/brand-sheet.jpg" alt="A brand sheet for a New York rat-care community: five packs, the story, palettes, type pairings, voice and pictures"></td>
+    <td width="33%"><img src="docs/readme/finished-site.jpg" alt="The finished Wildflower Records site playing as a prototype"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Overview</b>: every page and picture of a project</td>
+    <td align="center"><b>Brand sheet</b>: story, palette and type before the design</td>
+    <td align="center"><b>Play</b>: the finished site as a working prototype</td>
+  </tr>
+</table>
+
+## Who it's for
+
+- **A founder who needs a launch this week.** One brief gets you a multi-page site with copy and pictures, a promo film and a share picture, online on your own GitHub, Vercel or Cloudflare account.
+- **A designer who wants a first pass to react to.** A brand sheet with palettes and type to choose from, then a full design you can scribble on, comment on or change by hand, with every version kept.
+- **A developer who needs the front end and an app shell.** Clean HTML and Tailwind, a React + Vite export, and a working app with server routes, forms that save and an admin table.
+- **A game maker.** A plan that follows the genre and size you ask for, painted sprites cut out to transparent PNGs, and a browser game the crew play-tests before you see it.
+- **A marketer who needs the site, film and posts to match.** One brand drives the pages, the promo film and the share pictures, and posts go to Swarm Feed.
+- **Someone new to all of it.** You can just talk. The planner asks what it needs, and nothing builds until you say so.
+
+## What it does
+
+| Area | What you get | Status |
+|---|---|---|
+| **Talk before building** | Talk the idea through with the planner. It asks only what your prompt left out, and **Lock** turns the talk into the spec the crew builds from. Nothing builds unasked. | works |
+| **Brand sheet and packs** | The story, palettes, type pairings, voice and pictures side by side before anything is designed. Five ready-made packs to use whole or mix by part. Locking it makes it the build's theme. | works |
+| **The crew** | 8 agents by default (2 to 24) build sections on one canvas at the same time. Each has a cursor, a name and a note about what it is doing. | works |
+| **Chats** | Each talk with the planner is its own chat, and moves into the project when it builds. | works |
+| **References** | A project's own store of pictures, clips and links. **Use for…** sends one to the crew for a part of the site. | works |
+| **Scribble** | Draw on a page. A vision model reads each mark and the area it covers, and the crew answers with a draft beside the original to accept or dismiss. | works |
+| **Drag a layer into the chat** | Drag a section into the chat and a line joins it to the message. The crew changes just that section. | works |
+| **Manual edit** | Pick any part of a section and change its words, link, picture, style or attributes, or move or remove it. Each change is a version you can undo, and the crew keeps it when it reworks that section. | works |
+| **Media reader** | Pictures you give it are looked at, links are read as pages, and clips and sounds are watched and listened to when you pick a media model. The chat says how each one was read. | works |
+| **Review** | Every page is checked at desktop and phone width, by measuring the page and by a vision model, and the crew fixes what it finds. | works |
+| **Play and Watch a visitor** | Every page wired into a clickable prototype on desktop or phone. **Watch a visitor** plays 3 or 4 people with different goals using the site. | works |
+| **Stop** | One button stops the crew. What is built is kept, and Resume finishes it. | works |
+| **Search and share** | Every page gets its own search title, description and share picture. Every site gets its own favicon and app icon, `robots.txt`, `sitemap.xml` and a 404 page. | works |
+| **Publish** | GitHub Pages (each version of a project gets its own link), Vercel, Cloudflare Pages, or this computer. | works |
+| **Working app** | The design becomes a full-stack app (React, server routes, sign-in, forms, an admin page) and deploys to Vercel. | works |
+| **Film director** | A promo film from the site's own copy and pictures. There are six kinds of film, each with its own acts, and the cuts land on the music. | works |
+| **Games** | Plans that follow the genre, the size and the engine. Browser games in three.js, Phaser or PixiJS, play-tested by the crew. Painted art, cut out cleanly. A Godot 4 project when Godot is installed. | works (Unity and Unreal ports are source only) |
+| **Swarm Feed** | Post a build, let others try it and remix it with credit. | works |
+| **Swarm Jams** | Jam events: a theme, a deadline, entries and votes. | first version |
+
+Every feature, with its canvas button and `/swarm` command: [FEATURES.md](FEATURES.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+  A[Your idea] --> B[Talk with the planner]
+  B --> C[Lock the spec and the brand]
+  C --> D[The crew builds on the canvas]
+  D --> E[Review and fix]
+  E --> F[Publish]
+  F --> G[Share on Swarm Feed]
+  D -. scribble, comment, edit by hand .-> D
+```
+
+1. **Idea.** Type what you want to make: a website, an app, a game or a film.
+2. **Talk.** The planner asks what it needs to know and suggests a brand sheet.
+3. **Lock.** You pick the look and lock the spec. Nothing is built before this.
+4. **Build.** The planner splits the pages into sections, and the crew builds them on one canvas at once. You can scribble, comment, drag a section into the chat or edit by hand while it works.
+5. **Review.** Each page is checked at desktop and phone width, and problems are fixed.
+6. **Publish.** One click puts it online on your own account.
+7. **Share.** Post it to Swarm Feed, where others can try it and remix it.
+
+## How Swarm Studio and Swarm Feed fit together
+
+- **Swarm Studio** is a Hermes Agent plugin. It builds on your computer, with the models you picked in Hermes.
+- **[Swarm Feed](https://swarm.design-bakery.com)** is the community site where builds are shared.
+- `/swarm connect` links the Studio to your Feed account (a code you approve in your browser).
+- **Post to Feed** publishes a build's pictures, story and links there.
+- On the Feed, people browse builds, try them live, save them as references and remix them. A remix credits the original.
+- Nothing goes to the Feed unless you connect, post, remix or log in.
+
+```mermaid
+flowchart LR
+  subgraph You["Your computer"]
+    H[Hermes Agent] --> S[Swarm Studio plugin]
+  end
+  S -- "/swarm connect, Post to Feed" --> F[Swarm Feed]
+  F -- "Remix (credited)" --> S
+  F --> P[People browse, try, save references]
+```
+
+## More coming
+
+Not built yet, unless a line says otherwise. No dates.
+
+- **Studio mode:** a kit for each kind of thing you make (site, app, game, film, deck).
+- **Brand as the project's foundation:** one brand that every build in a project starts from.
+- **Decks:** slides from the same brand and story.
+- **Video straight from a brand,** without a site first.
+- **Game starters:** ready-made beginnings for common genres.
+- **One navigation state machine** for the whole Studio. The first part is in; the rest is coming.
+- **App stores and Steam:** publishing apps and games beyond the web.
+- **Shared boards and events:** boards where a team pins notes for the crew, and online or in-person events.
 
 The pitch, brand, market numbers and stories live in [docs/brand](docs/brand/): [PITCH.md](docs/brand/PITCH.md), [BRAND.md](docs/brand/BRAND.md), [MARKET.md](docs/brand/MARKET.md) and [stories-swarm-studio.md](docs/brand/stories-swarm-studio.md).
 
@@ -63,10 +181,10 @@ Optional. Setting `SWARM_STUDIO_API_KEY` bypasses the Hermes slots and uses that
 | `SWARM_STUDIO_BASE_URL` | `https://api.inferhub.dev/v1` | Any OpenAI-compatible `/chat/completions` endpoint. |
 | `SWARM_STUDIO_PLANNER_MODEL` | the slot's model | Model for the sitemap and page planners. |
 | `SWARM_STUDIO_WORKER_MODEL` | the slot's model | Model for the section agents. A fast model matters more than a big one. |
-| `SWARM_STUDIO_AGENTS` | `16` | Swarm size, 2–24. |
+| `SWARM_STUDIO_AGENTS` | `8` | Crew size, 2–24. |
 | `SWARM_STUDIO_PORT` | `4319` | Port of the local canvas server. |
 
-## How it works
+## How a build runs, in detail
 
 1. **Sitemap.** One streamed call writes the theme (colours, fonts, radius), the shared nav and footer, and the pages with their section lists.
 2. **Page planners.** One planner per page runs in parallel and breaks its page into layers. Each layer is queued the moment its JSON is complete, so agents start before planning finishes.
