@@ -256,7 +256,10 @@ export const videoKit = (() => {
       if (pidOf(ctx) && ctx.sw?.api) d = (await api(ctx, `/api/kit/video/${encodeURIComponent(pid)}`).catch(() => null))?.kit || null
       if (!d) {
         d = blank()
-        const told = ctx.story?.beats || ctx.studio?.beats || []
+        // the build's story (spec 39): as passed, else the newest build's runs/<id>/story.json
+        let told = ctx.story?.beats || ctx.studio?.beats || []
+        const head = typeof ctx.project === 'object' ? ctx.project?.head : null
+        if (!told.length && head && ctx.sw?.api) told = (await api(ctx, `/api/runs/${encodeURIComponent(head)}/story`).catch(() => null))?.story?.beats || []
         d.beats = told.map(b => ({ text: clip(b.headline ?? b.text, 90), say: clip(b.say, 140), frame: null, seconds: num(b.seconds, 0.6, 9) })).filter(b => b.text).slice(0, 16)
       }
       drafts.set(pid, fill(d))
