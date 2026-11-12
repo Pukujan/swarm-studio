@@ -615,7 +615,7 @@ export function makeHome({ sw, C, root }) {
   const showKind = () => { kindBtn.innerHTML = `${ic(make.icon, 16)}<span>${make.label}</span>${ic('chd', 14)}` }
   showKind()
   if (hosted()) kindBtn.hidden = true  // the hosted studio makes websites only
-  // the kind menu also holds the one Grill me switch: on, a vague prompt gets a few questions first
+  // the kind menu also holds the one Grill me switch: on, a prompt gets the questions it has not answered
   let grillOn = store.get('home.grill', true)
   kindBtn.onclick = () => showMenu([
     ...MAKES.map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })),
@@ -628,14 +628,14 @@ export function makeHome({ sw, C, root }) {
   const intake = () => (intakeP ||= api('/api/intake').catch(() => { intakeP = null; return { showcases: [], questions: [], words: 12 } }))
 
   // start a build: a website builds live on the canvas; App, Game and Video run their steps in order
-  async function start(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }) {
+  async function start(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}) {
     closePop()
     if (!run || hosted()) {
       input.value = ''
       // The project opens on the build this box started. The canvas may still hold the build before
       // it (the server replays its last run to every canvas), and a project never lets a run that
       // started elsewhere take it over, so the new run is handed to it by id.
-      const made = await sw.submit(text)
+      const made = await sw.submit(text, false, null, null, sets)
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
       C.open(null)
       if (typeof made === 'string') C.projectView.show(made, null)
@@ -656,10 +656,10 @@ export function makeHome({ sw, C, root }) {
     e.preventDefault()
     const text = input.value.trim()
     if (!text) return showcases()
-    const words = (await intake()).words || 12
     // a game is planned before anything costly is made (spec 21): its questions, then the Plan board
     if (make.k === 'game' && !hosted()) return grill(text)
-    if (grillOn && text.split(/\s+/).length < words) return grill(text)
+    // Website, App and Video: the questions the prompt has not answered yet (spec 6); none, it builds
+    if (grillOn) return guide(text)
     start(text)
   }
 
@@ -680,11 +680,14 @@ export function makeHome({ sw, C, root }) {
   // the showcases: a name, the steps the crew will take, and one click runs it
   async function showcases() {
     if (!pop.hidden && pop.classList.contains('show')) return closePop()
-    const list = (await intake()).showcases || []
+    const d = await intake(), kind = guideKind()
+    // the 💡 lists what fits the picked mode: a few starting prompts, the showcases of that kind
+    const starters = (d.starters?.[kind] || []).map((p, i) => ({ id: `starter-${i}`, prompt: p, starter: true }))
+    const list = (d.showcases || []).filter(s => !s.kind || s.kind === kind)
     // game templates to remix (spec 21): a new plan from one, straight to its price
-    const tpls = hosted() ? [] : await api('/api/templates').then(r => r.templates || []).catch(() => [])
-    if (!list.length && !tpls.length) return input.focus()
-    openPop('show', `<div class="hm-show" role="list" aria-label="Showcase builds">${list.map(s => `<button type="button" class="hm-sc" role="listitem" data-id="${esc(s.id)}" aria-label="Build ${esc(s.name)}">${ic(s.icon, 18)}<span class="nm">${esc(s.name)}</span><span class="st">${s.steps.map(x => `<i>${esc(x)}</i>`).join('')}</span>${ic('up', 15)}</button>`).join('')}${tpls.map(t => `<button type="button" class="hm-sc" role="listitem" data-tpl="${esc(t.id)}" aria-label="Remix ${esc(t.name)}">${ic('remix', 18)}<span class="nm">${esc(t.name)}</span><span class="st"><i>Remix</i><i>${t.price} credits</i></span>${ic('up', 15)}</button>`).join('')}</div>`)
+    const tpls = hosted() || kind !== 'game' ? [] : await api('/api/templates').then(r => r.templates || []).catch(() => [])
+    if (!list.length && !tpls.length && !starters.length) return input.focus()
+    openPop('show', `<div class="hm-show" role="list" aria-label="Showcase builds">${starters.map(s => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${esc(s.id)}" aria-label="Start from ${esc(s.prompt)}">${ic('idea', 18)}<span class="nm">${esc(s.prompt)}</span>${ic('chr', 15)}</button>`).join('')}${list.map(s => `<button type="button" class="hm-sc" role="listitem" data-id="${esc(s.id)}" aria-label="Build ${esc(s.name)}">${ic(s.icon, 18)}<span class="nm">${esc(s.name)}</span><span class="st">${s.steps.map(x => `<i>${esc(x)}</i>`).join('')}</span>${ic('up', 15)}</button>`).join('')}${tpls.map(t => `<button type="button" class="hm-sc" role="listitem" data-tpl="${esc(t.id)}" aria-label="Remix ${esc(t.name)}">${ic('remix', 18)}<span class="nm">${esc(t.name)}</span><span class="st"><i>Remix</i><i>${t.price} credits</i></span>${ic('up', 15)}</button>`).join('')}</div>`)
     ideasBtn.classList.add('on')
     pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
     for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
@@ -692,21 +695,52 @@ export function makeHome({ sw, C, root }) {
         b.disabled = true
         return api(`/api/templates/${encodeURIComponent(b.dataset.tpl)}/remix`, { method: 'POST' }).then(p => { closePop(); C.plan(p.id) }).catch(() => { b.disabled = false })
       }
+      // a starting prompt goes in the box and its questions begin; a showcase builds at once
+      const st = starters.find(x => x.id === b.dataset.st)
+      if (st) { input.value = st.prompt; closePop(); return form.requestSubmit() }
       const s = list.find(x => x.id === b.dataset.id)
       start(s.prompt, s.run || null)
     }
   }
   ideasBtn.onclick = () => showcases()
 
-  // the grill: one question at a time (chips or your own words), then it builds from the locked answers.
-  // The same shape as the game interview (QUESTIONS in engine/game.mjs), which a Game uses.
-  const G = { text: '', qs: [], i: 0, answers: {}, plan: false }
+  // the guided prompt (docs/specs/06-onboarding.md): the questions the prompt has not answered, one at a
+  // time (chips or your own words), then the brief, one short paragraph to edit, then the build.
+  // A Game asks the game interview in the same pop (QUESTIONS in engine/game.mjs), then its Plan board.
+  const guideKind = () => (hosted() ? 'site' : { site: 'site', app: 'app', video: 'film', game: 'game' }[make.k] || 'site')
+  async function guide(text) {
+    const d = await intake()
+    const qs = guidePending(d.guides?.[guideKind()] || [], text)
+    if (!qs.length) return start(text)
+    Object.assign(G, { text, qs, i: 0, answers: {}, plan: false, guided: true })
+    drawGrill()
+  }
+  // guide:start: the same as pending, guideBrief and guideSets in engine/intake.mjs (tests/intake.test.mjs runs both)
+  function guidePending(qs, text) {
+    const left = qs.filter(q => !(q.covers && new RegExp(q.covers, 'i').test(String(text || ''))))
+    return left.some(q => !q.sets) ? left : []
+  }
+  function guideBrief(prompt, answers, qs) {
+    const base = String(prompt || '').trim()
+    const said = qs.filter(q => !q.sets)
+      .map(q => [q.label || q.q.replace(/\s*\(.*\)\s*$/, '').replace(/\?$/, ''), String(answers[q.id] || '').trim()])
+      .filter(([, v]) => v && !/^(surprise me|nothing in particular)$/i.test(v))
+      .map(([k, v]) => `${k}: ${v.replace(/[.\s]+$/, '')}.`)
+    return [base && !/[.!?]$/.test(base) && said.length ? `${base}.` : base, ...said].filter(Boolean).join(' ')
+  }
+  function guideSets(answers, qs) {
+    const chips = { Painted: 'painted', 'Stock photos': 'stock', Drawn: 'drawn' }, out = {}
+    for (const q of qs) if (q.sets === 'pictures' && chips[answers[q.id]]) out.pictures = chips[answers[q.id]]
+    return out
+  }
+  // guide:end
+  const G = { text: '', qs: [], i: 0, answers: {}, plan: false, guided: false }
   async function grill(text) {
     const d = await intake()
     const plan = make.k === 'game' && d.plan?.length && !hosted()
     const qs = plan ? d.plan : make.k === 'game' && d.game?.length ? d.game : d.questions || []
     if (!qs.length) return start(text)
-    Object.assign(G, { text, qs, i: 0, answers: {}, plan })
+    Object.assign(G, { text, qs, i: 0, answers: {}, plan, guided: false })
     drawGrill()
   }
   function brief() {
@@ -720,17 +754,34 @@ export function makeHome({ sw, C, root }) {
       <h3>${esc(q.q)}</h3>
       <div class="hm-chips">${q.chips.map(c => `<button type="button" class="${val === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div>
       <input class="hm-free" aria-label="Your own words" placeholder="Or in your own words" maxlength="300" value="${q.chips.includes(val) ? '' : esc(val)}">
-      <div class="hm-gfoot">${G.i ? `<button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button>` : '<span></span>'}<span><button type="button" class="btn ghost" data-skip>${G.plan ? 'Just plan' : 'Just build'}</button><button type="button" class="btn pri" data-next>${last ? (G.plan ? 'Plan' : 'Build') : 'Next'}</button></span></div>`)
+      <div class="hm-gfoot">${G.i ? `<button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button>` : '<span></span>'}<span><button type="button" class="btn ghost" data-skip>${G.plan ? 'Just plan' : 'Just build'}</button><button type="button" class="btn pri" data-next>${last && !G.guided ? (G.plan ? 'Plan' : 'Build') : 'Next'}</button></span></div>`)
     const free = pop.querySelector('.hm-free')
     const take = v => { if (v) G.answers[q.id] = v; else delete G.answers[q.id] }
-    const done = () => (G.plan ? toPlan() : start(brief()))
+    const done = () => (G.plan ? toPlan() : G.guided ? drawBrief() : start(brief()))
     const next = () => { take(free.value.trim() || G.answers[q.id]); if (!last) { G.i++; drawGrill() } else done() }
     for (const b of pop.querySelectorAll('[data-c]')) b.onclick = () => { take(b.dataset.c); free.value = ''; next() }
     free.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); next() } }
     pop.querySelector('[data-next]').onclick = next
-    pop.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || G.answers[q.id]); done() }
+    // Just build means now: no brief step, the unanswered questions take their defaults
+    pop.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || G.answers[q.id]); G.guided ? build(guideBrief(G.text, G.answers, G.qs)) : done() }
     pop.querySelector('[data-back]')?.addEventListener('click', () => { G.i--; drawGrill() })
     free.focus({ preventScroll: true })
+  }
+
+  // the brief before the build: one short paragraph, editable; Build starts it
+  const build = text => start(text, undefined, guideSets(G.answers, G.qs))
+  function drawBrief() {
+    const text = guideBrief(G.text, G.answers, G.qs)
+    openPop('grill', `<div class="hm-dots" aria-label="The brief">${G.qs.map(() => '<i class="done"></i>').join('')}<i class="on"></i></div>
+      <h3>The brief</h3>
+      <textarea class="hm-free hm-brief" aria-label="The brief" maxlength="4000" rows="4">${esc(text)}</textarea>
+      <div class="hm-gfoot"><button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button><span><button type="button" class="btn pri" data-go>${ic('up', 16)}Build</button></span></div>`)
+    const box = pop.querySelector('.hm-brief')
+    const go = () => { const t = box.value.trim(); if (t) build(t) }
+    pop.querySelector('[data-go]').onclick = go
+    box.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); go() } }
+    pop.querySelector('[data-back]').onclick = () => { G.i = G.qs.length - 1; drawGrill() }
+    box.focus({ preventScroll: true })
   }
 
   // the answers become a plan, and the Plan board opens with the crew writing its cards (spec 21)

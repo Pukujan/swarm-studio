@@ -1638,7 +1638,7 @@ els.form.addEventListener('submit', async e => {
   const route = to.fresh ? 'new' : to.route || routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
   if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); to.done?.(null); return commandOps.fix({ text: brief }) }
   setAuto(true)
-  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}) }) }).catch(() => null)
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}), ...(to.pictures ? { pictures: to.pictures } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
   to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
@@ -6731,10 +6731,11 @@ window.swarm = {
   // start a build from Projects or a project's dock (the second argument, once Auto, is ignored).
   // Without a project (Projects home) it is a new project; with one, `from` is the open version it extends
   // It resolves to the new run's id (null when none started, { busy } while the last turn still builds)
-  submit(text, auto = false, project = null, from = null) {
+  // `opts.pictures` (painted, stock or drawn) is this build's own pick (docs/specs/06-onboarding.md)
+  submit(text, auto = false, project = null, from = null, opts = {}) {
     return new Promise(done => {
       els.brief.value = text
-      nextRoute = project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done } : { fresh: true, done }
+      nextRoute = project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done } : { fresh: true, done, pictures: opts.pictures }
       if (view !== 'canvas') setView('canvas')
       els.form.requestSubmit()
     })
