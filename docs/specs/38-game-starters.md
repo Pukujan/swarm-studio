@@ -80,3 +80,19 @@ Each add-on lives in `starters/addons/<id>/`. Its `addon.json` says where it cam
    the Web export and in Godot itself. Plus a note on what the Web preview cannot run (native add-ons), with
    **Open in Godot** as the main way to play in that case.
 4. **A second starter**, where the engine's defaults fail soonest, and the pinned and brought add-on paths.
+
+## Slice 2, built
+
+- `starters/strategy-topdown/godot/` is a playable Godot 4 project. It is a 96 × 96 map with rocks and a
+  nest, and opens with 40 placeholder ants. Rival waves march on the nest every 25 s.
+- `starters/addons/swarm_rts/` is the add-on (source `ours`, MIT). Every unit is a slot in packed arrays in
+  one `Swarm` node, and one MultiMesh draws them all. The selection rings are a second MultiMesh.
+  - `FlowField` gives one field per goal, cached, so a thousand units share one path search.
+  - `BoxSelect` handles the mouse and touch.
+  - `RtsCamera` handles edge, keys, drag, wheel and pinch.
+  - `FogOfWar` refreshes over 8 frames.
+  - `PlaceholderArt` paints the ant and the ring in code.
+- `seedGodot` copies the locked starter into `ports/godot/` before anything else. It never copies over a
+  file that is already there. `godotStagePrompt` adds the starter's `CREW.md`, the API and the rules the crew
+  builds on.
+- `engine/godotfirst.mjs` also reads the engine from `spec.starter.engine`.
