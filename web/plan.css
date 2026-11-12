@@ -7,7 +7,7 @@
 body.cosmos-plan .pl-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
 body.cosmos-plan .pl-primary { display: inline-flex !important; align-items: center; justify-content: center; min-width: 168px; }
 body.cosmos-plan .pl-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-body.cosmos-plan .brand, body.cosmos-plan .file-name, body.cosmos-plan #play-btn, body.cosmos-plan .pubwrap, body.cosmos-plan .mode-wrap { display: none !important; }
+body.cosmos-plan .brand, body.cosmos-plan .file-name, body.cosmos-plan .playwrap, body.cosmos-plan .pubwrap, body.cosmos-plan .mode-wrap { display: none !important; }
 body.cosmos-plan .cosmos-back { display: inline-flex; }
 body.cosmos-plan .cosmos-back .t { display: none; }
 body.cosmos-plan .topbar { background: var(--void); backdrop-filter: none; }

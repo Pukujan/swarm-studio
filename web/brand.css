@@ -6,7 +6,7 @@
 body.cosmos-brand .br-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
 body.cosmos-brand .br-primary { display: inline-flex !important; align-items: center; justify-content: center; min-width: 120px; }
 body.cosmos-brand .br-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-body.cosmos-brand .brand, body.cosmos-brand .file-name, body.cosmos-brand #play-btn, body.cosmos-brand .pubwrap, body.cosmos-brand .mode-wrap, body.cosmos-brand .pl-crumb, body.cosmos-brand .pl-primary { display: none !important; }
+body.cosmos-brand .brand, body.cosmos-brand .file-name, body.cosmos-brand .playwrap, body.cosmos-brand .pubwrap, body.cosmos-brand .mode-wrap, body.cosmos-brand .pl-crumb, body.cosmos-brand .pl-primary { display: none !important; }
 body.cosmos-brand .topbar { background: var(--void); backdrop-filter: none; }
 body.cosmos-brand .viewport, body.cosmos-brand .appview { visibility: hidden; }
 body.cosmos-brand .crew-layer, body.cosmos-brand .cbox { display: none; }

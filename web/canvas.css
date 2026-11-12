@@ -1987,3 +1987,21 @@ body.side-min .tabs .chats-btn { display: none; }
 .publish-pop .pthumb-alt button { padding: 0; width: 44px; height: 30px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: none; cursor: pointer; }
 .publish-pop .pthumb-alt button:hover, .publish-pop .pthumb-alt button:focus-visible { border-color: var(--accent); }
 .publish-pop .pthumb-alt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Play: one split button. A plain click plays the prototype; the caret offers Play prototype and
+   Watch a visitor (web/canvas.js) */
+.playwrap { display: inline-flex; align-items: stretch; }
+.playwrap #play-btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.playwrap .play-caret { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding-left: 6px; padding-right: 6px; }
+.play-menu { min-width: 190px; }
+/* Watch a visitor in the player bar: the eye starts the next visitor, the square stops them, a
+   spinner while they are written */
+.pl-btn.tours .tw-ico { display: inline-grid; width: 16px; height: 16px; place-items: center; }
+.pl-btn.tours .tw-ico > * { grid-area: 1 / 1; }
+.pl-btn.tours .tw-stop, .pl-btn.tours .tw-spin { display: none; }
+.pl-btn.tours.on .tw-ico > .ico:first-child, .pl-btn.tours.busy .tw-ico > .ico:first-child { display: none; }
+.pl-btn.tours.on .tw-stop { display: block; }
+.pl-btn.tours.busy .tw-spin { display: block; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--text); animation: spin .8s linear infinite; }
+.pl-btn.tours.on { background: var(--frame); border-color: var(--line-2); }
+.tour-pick { display: inline-flex; gap: 4px; align-items: center; }
+@media (max-width: 600px) { .pl-btn.tours .t { display: none; } .pl-btn.tours { padding: 0; width: 34px; height: 34px; justify-content: center; } }

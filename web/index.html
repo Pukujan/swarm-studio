@@ -33,7 +33,14 @@
     <div class="spacer"></div>
     <button class="toggle crew-mute" id="crew-mute" data-mode="muted" aria-haspopup="dialog" aria-expanded="false" aria-label="Crew sound: muted"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><g class="cm-on"><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/></g><path class="cm-off" d="m22 9-6 6M16 9l6 6"/></svg><svg class="ico cm-quiet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12.5a7.5 6 0 0 1-10.7 5.4L4 19.5l1.4-3.6A6 6 0 0 1 4.5 12.5 7.8 6 0 0 1 12.3 6.5"/><path d="M3 3l18 18"/></svg><span class="t">Muted</span></button>
     <div class="undo-redo"><button class="toggle" id="undo-btn" aria-label="Undo" disabled><i data-i="undo-2"></i></button><button class="toggle" id="redo-btn" aria-label="Redo" disabled><i data-i="redo-2"></i></button></div>
-    <button class="toggle play" id="play-btn" aria-label="Play" disabled><i data-i="play"></i><span class="t">Play</span></button>
+    <div class="more playwrap">
+      <button class="toggle play" id="play-btn" aria-label="Play" disabled><i data-i="play"></i><span class="t">Play</span></button>
+      <button class="toggle play play-caret" id="play-more" aria-label="Play options" aria-haspopup="menu" aria-expanded="false" disabled><i data-i="chevron-down"></i></button>
+      <div class="more-menu play-menu" id="play-menu" role="menu" hidden>
+        <button class="toggle" role="menuitem" data-play="prototype"><i data-i="play"></i>Play prototype</button>
+        <button class="toggle" role="menuitem" data-play="visitor"><i data-i="eye"></i>Watch a visitor</button>
+      </div>
+    </div>
     <div class="more pubwrap">
       <button class="toggle" id="publish-btn" aria-label="Publish" aria-haspopup="true" disabled><i data-i="rocket"></i><span class="t">Publish</span><i data-i="chevron-down" class="caret"></i></button>
       <div class="more-menu pub-menu" id="pub-menu" hidden>
@@ -154,7 +161,8 @@
       <button class="pl-btn icon" id="pl-back" aria-label="Back"><i data-i="arrow-left"></i></button>
       <button class="pl-btn icon" id="pl-restart" aria-label="Restart"><i data-i="rotate-ccw"></i></button>
       <div class="tour-pick">
-        <button class="pl-btn tours icon" id="pl-tours" aria-label="Watch a visitor"><i data-i="eye"></i></button>
+        <button class="pl-btn tours" id="pl-tours" aria-label="Watch a visitor"><span class="tw-ico"><i data-i="eye"></i><i data-i="square-stop" class="tw-stop"></i><span class="tw-spin" aria-hidden="true"></span></span><span class="t">Watch a visitor</span></button>
+        <button class="pl-btn icon" id="pl-tour-list" aria-label="Visitors" aria-haspopup="menu" aria-expanded="false"><i data-i="chevron-down"></i></button>
         <div class="tour-menu" id="pl-tour-menu" hidden></div>
       </div>
       <div class="spacer"></div>

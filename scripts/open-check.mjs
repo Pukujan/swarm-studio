@@ -61,6 +61,9 @@ function build(run, brief, name, t) {
 build(A1, 'Alpha Tea, a tea subscription for night-shift workers', 'Alpha Tea', T0)
 build(B1, 'Bravo Bikes, a bike repair shop', 'Bravo Bikes', T0 + 3600e3)
 build(B2, 'Bravo Bikes, a bike repair shop with rentals', 'Bravo Bikes', T0 + 7200e3)
+// one visitor already written for Alpha (they are kept with the run), so Watch a visitor needs no model
+writeFileSync(join(runs, A1, 'tours.json'), JSON.stringify({ tours: [{ name: 'Mia', who: 'night nurse', emoji: '🙂', goal: 'a tea for after shifts', end: 'okay, that works', steps: [
+  { page: 'home', do: 'look', el: 'l0', think: ['hm, tea'] }, { page: 'home', do: 'hover', el: 'l1', think: ['what is this'] }, { page: 'more', do: 'look', el: 'l0', think: ['more of it'] }] }] }))
 const proj = (runIds, name, made) => ({ runs: runIds, name, title: null, folder: null, trashed: null, made, own: true })
 writeFileSync(join(runs, 'folders.json'), JSON.stringify({ v: 2, folders: [], projects: { [A1]: proj([A1], 'Alpha Tea', T0), [B1]: proj([B1, B2], 'Bravo Bikes', T0 + 3600e3) } }))
 
@@ -166,6 +169,34 @@ try {
   await page.click('.home .card[aria-label="Alpha Tea"]')
   await settle(A1)
   await shows(A1, 'Alpha Tea', 'Alpha opened after p')
+
+  console.log('Play and Watch a visitor')
+  const watch = () => page.evaluate(() => ({ label: document.getElementById('pl-tours').getAttribute('aria-label'), text: document.querySelector('#pl-tours .t').textContent, walking: !document.getElementById('pl-persona').hidden, player: !document.getElementById('player').hidden }))
+  await page.click('#play-more')
+  const items = await page.locator('#play-menu [data-play]').allTextContents()
+  const shot = name => process.env.SHOTS ? page.screenshot({ path: join(process.env.SHOTS, `${name}.png`) }) : null
+  await wait(400)
+  await shot('play-menu')
+  ok(items.map(t => t.trim()).join(' | ') === 'Play prototype | Watch a visitor', `Play's caret offers Play prototype and Watch a visitor (${items.join(' | ')})`)
+  await page.click('#play-menu [data-play="visitor"]')
+  await page.waitForFunction(() => !document.getElementById('pl-persona').hidden, null, { timeout: 8000 }).catch(() => {})
+  await wait(1500)
+  await shot('watching')
+  let w = await watch()
+  ok(w.player && w.walking, 'Watch a visitor opens the player and a visitor walks the page')
+  ok(w.label === 'Stop watching' && w.text === 'Stop watching', `while one walks, the bar's control reads Stop watching (${w.text})`)
+  await page.click('#pl-tours')
+  w = await watch()
+  ok(!w.walking && w.label === 'Watch a visitor', `Stop watching stops them (${w.text})`)
+  await page.click('#pl-tours')
+  await page.waitForFunction(() => !document.getElementById('pl-persona').hidden, null, { timeout: 8000 }).catch(() => {})
+  ok((await watch()).walking, 'Watch a visitor in the bar starts one again')
+  await page.click('#pl-close')
+  await page.click('#play-btn')
+  await wait(800)
+  w = await watch()
+  ok(w.player && !w.walking && w.label === 'Watch a visitor', 'a plain click on Play plays the prototype, no visitor')
+  await page.click('#pl-close')
   void C1
 } finally {
   await browser.close()

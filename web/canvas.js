@@ -24,7 +24,7 @@ const els = {
   fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
   plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'), plMotion: $('#pl-motion'),
   dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), exportBtn: $('#export-btn'), replayBtn: $('#replay-btn'), publishBtn: $('#publish-btn'), modelsBtn: $('#models-btn'),
-  plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
+  plTours: $('#pl-tours'), plTourList: $('#pl-tour-list'), playMore: $('#play-more'), playMenu: $('#play-menu'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
 const commandOps = {}
@@ -1376,7 +1376,7 @@ function summarize(e) {
   play.onclick = () => openPlayer()
   const watch = document.createElement('button')
   watch.textContent = '👀 Watch a visitor'
-  watch.onclick = e => { e.stopPropagation(); openPlayer(); toggleTourMenu(true) }
+  watch.onclick = e => { e.stopPropagation(); openPlayer(); watchVisitor() }
   chips.append(play, watch)
   for (const f of S.frames) {
     const b = document.createElement('button')
@@ -1493,7 +1493,7 @@ function frameLoop(now) {
     renderStatus(working, done)
     const busyPages = new Set([...S.agents.values()].map(a => a.layer && S.layers.get(a.layer)?.page).filter(Boolean))
     for (const f of S.frames) f.el.classList.toggle('active', busyPages.has(f.id))
-    els.play.disabled = !S.frames.length
+    els.play.disabled = els.playMore.disabled = !S.frames.length
     // with no reviewer model yet, Review opens Models to pick one instead of sitting greyed out
     els.reviewBtn.disabled = review.busy || !S.done
     setLabel(els.reviewBtn, review.busy ? 'Reviewing…' : 'Review')
@@ -1593,7 +1593,7 @@ els.viewport.addEventListener('wheel', e => {
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !els.player.hidden) return tour.on ? stopTour() : closePlayer()
   if (e.key === 'Escape' && S.sel) { S.sel = null; design.last = ''; return }
-  if (e.key === 'v' && !els.player.hidden) return toggleTourMenu()
+  if (e.key === 'v' && !els.player.hidden && !e.target.closest('input, select, textarea')) return watchVisitor()
   if (e.key === 'm' && !els.player.hidden && !e.target.closest('input, select, textarea')) return setMotion()
   if (e.target.closest('input, select, textarea')) return
   if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -2231,7 +2231,7 @@ function setDevice(name, reload = true) {
 // scrolls it into view, and the thought bubble cycles through the phrasings
 // while they decide, so it reads like someone muttering while they browse.
 
-const tour = { list: null, loading: null, error: '', on: false, id: 0, seq: 0, waiting: new Map(), x: 0, y: 0 }
+const tour = { list: null, loading: null, error: '', on: false, id: 0, seq: 0, waiting: new Map(), x: 0, y: 0, starting: 0, next: 0 }
 
 function loadTours(fresh = false) {
   if (tour.run !== S.run) Object.assign(tour, { run: S.run, list: null, error: '' })
@@ -2287,6 +2287,7 @@ function renderTourMenu() {
 
 function toggleTourMenu(open = els.plTourMenu.hidden) {
   els.plTourMenu.hidden = !open
+  els.plTourList.setAttribute('aria-expanded', String(open))
   if (open) { loadTours(); renderTourMenu() }
 }
 
@@ -2371,6 +2372,31 @@ function personaBar(t, at, text) {
   p.querySelector('button').onclick = stopTour
 }
 
+// Watch a visitor: the player bar's one start and stop. It starts the next visitor (writing them
+// first if there are none yet); while one is on the page it stops them.
+async function watchVisitor() {
+  if (tour.on || tour.starting) return stopTour()
+  const id = tour.starting = ++tour.id
+  paintWatch()
+  await loadTours()
+  if (tour.starting !== id) return
+  tour.starting = 0
+  paintWatch()
+  if (els.player.hidden) return
+  if (tour.list?.length) return playTour(tour.next % tour.list.length)
+  // none could be written: the visitor list says why, with Try again
+  toggleTourMenu(true)
+}
+function paintWatch() {
+  const b = els.plTours, on = tour.on, busy = !!tour.starting
+  b.classList.toggle('on', on)
+  b.classList.toggle('busy', busy)
+  b.setAttribute('aria-busy', String(busy))
+  const name = on || busy ? 'Stop watching' : 'Watch a visitor'
+  b.querySelector('.t').textContent = name
+  b.setAttribute('aria-label', name)
+}
+
 async function playTour(index) {
   const t = tour.list?.[index]
   if (!t) return
@@ -2378,6 +2404,8 @@ async function playTour(index) {
   const id = ++tour.id
   const live = () => tour.on && tour.id === id
   tour.on = true
+  tour.next = index + 1
+  paintWatch()
   player.history = []
   showPage(t.steps[0].page, false)
   await player.loaded
@@ -2426,20 +2454,48 @@ async function playTour(index) {
   bar.querySelector('button').textContent = `Next: ${next.emoji} ${next.name} →`
   bar.querySelector('button').onclick = () => playTour((index + 1) % tour.list.length)
   tour.on = false
+  paintWatch()
 }
 
 function stopTour() {
   tour.on = false
+  tour.starting = 0
   tour.id++
+  paintWatch()
   els.plCursor.hidden = true
   els.plThink.innerHTML = ''
   els.plPersona.hidden = true
 }
 
-els.plTours.onclick = e => { e.stopPropagation(); toggleTourMenu() }
+els.plTours.onclick = e => { e.stopPropagation(); toggleTourMenu(false); watchVisitor() }
+els.plTourList.onclick = e => { e.stopPropagation(); toggleTourMenu() }
 document.addEventListener('click', e => { if (!els.plTourMenu.hidden && !e.target.closest('.tour-pick')) toggleTourMenu(false) })
 
+// Play: a plain click plays the prototype; its caret also offers a visitor who walks through it
 els.play.onclick = () => openPlayer()
+const closePlayMenu = (focus = false) => { els.playMenu.hidden = true; els.playMore.setAttribute('aria-expanded', 'false'); playMenuOff?.(); playMenuOff = null; if (focus) els.playMore.focus() }
+let playMenuOff = null
+els.playMore.onclick = e => {
+  e.stopPropagation()
+  if (!els.playMenu.hidden) return closePlayMenu()
+  els.playMenu.hidden = false
+  els.playMore.setAttribute('aria-expanded', 'true')
+  playMenuOff = closeable(els.playMenu, () => closePlayMenu(), { extra: [els.playMore] })
+  els.playMenu.querySelector('[data-play]').focus()
+}
+els.playMenu.onclick = e => {
+  const b = e.target.closest('[data-play]')
+  if (!b) return
+  closePlayMenu()
+  openPlayer()
+  if (b.dataset.play === 'visitor') watchVisitor()
+}
+els.playMenu.onkeydown = e => {
+  const all = [...els.playMenu.querySelectorAll('[data-play]')], i = all.indexOf(document.activeElement)
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); all[(i + (e.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length].focus() }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePlayMenu(true) }
+  else if (e.key === 'Tab') closePlayMenu()
+}
 $('#pl-close').onclick = closePlayer
 els.plBack.onclick = () => player.history.length && showPage(player.history.pop(), false)
 $('#pl-restart').onclick = () => { player.history = []; showPage(S.frames[0].id, false) }
