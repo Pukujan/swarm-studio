@@ -138,7 +138,7 @@ export function shapeOf({ idea = '', given = {}, answers = {}, title = '', note 
   const subject = clean(hint?.subject, 30).toLowerCase() || subjectFrom(text)
   return {
     family, label: f.label, size, art, engine,
-    view: clean(hint?.view, 120) || f.view,
+    view: clean(hint?.view, 120) || (family === 'action' && art === '2d' ? 'Side view' : f.view),
     subject,
     setting: clean(hint?.setting, 160) || settingFrom(text),
     title: clean(title, 80) || titleFrom(idea) || clean(hint?.title, 60) || '',
@@ -351,7 +351,8 @@ export function planSummary(plan) {
   const items = id => String(c(id).list || '').split(';').map(x => clean(x)).filter(Boolean)
   const cast = (c('cast').roster || []).filter(r => r?.name)
   const engine = plan.engine?.target && plan.engine.target !== 'web' ? `for ${plan.engine.label}` : 'for the browser'
-  const lines = [`${plan.title || 'This game'}: a ${s.size && s.size !== 'normal' ? `${s.size} ` : ''}${f.label} ${engine}.`]
+  const what = `${s.size && s.size !== 'normal' ? `${s.size} ` : ''}${f.label}`
+  const lines = [`${plan.title || 'This game'}: ${/^[aeiou]/i.test(what) ? 'an' : 'a'} ${what} ${engine}.`]
   if (cast.length) lines.push(`${count(cast.length, (f.cast || 'Cast').toLowerCase().replace(/s$/, ''))}: ${cast.map(r => r.name).join(', ')}.`)
   if (s.family === 'rts') lines.push(`${count(items('buildings').length, 'building')}, ${count(items('resources').length, 'resource')}, ${count(Number(c('world').maps) || 1, 'map')} with fog of war, seen ${String(s.view || '').toLowerCase()}.`, `Enemy: ${String(c('enemies').faction || 'none').toLowerCase()}${c('enemies').waves ? `; ${String(c('enemies').waves).split(',')[0].toLowerCase()}` : ''}.`)
   else if (s.family === 'platformer') lines.push(`Moves: ${['run', 'jump', 'crouch', 'slide'].filter(k => c('moves')[k]).join(', ')}${c('moves').more ? `, ${String(c('moves').more).toLowerCase()}` : ''}. Seen from the side.`, `Dangers: ${String(c('enemies').list || 'none')}.`)

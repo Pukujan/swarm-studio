@@ -290,6 +290,7 @@ export function gameBrief(plan) {
     return `${c.name}: ${Object.entries(b).filter(([, v]) => v && String(v).trim()).map(([k, v]) => `${k} ${String(v).trim()}`).join('; ')}`
   })
   const engine = plan.engine?.target === 'godot' ? 'Engine: Godot 4. Build it as a Godot 4 project (GDScript, scenes in res://), not a web page.' : plan.engine?.target && plan.engine.target !== 'web' ? `Engine asked for: ${plan.engine.label}.` : ''
-  const kind = plan.shape ? `Kind: a ${plan.shape.size === 'normal' ? '' : `${plan.shape.size} `}${plan.shape.label}, ${is3d(plan) ? '3D' : '2D'}, camera ${clean(plan.shape.view, 120).toLowerCase()}.` : ''
+  const sized = plan.shape ? `${plan.shape.size === 'normal' ? '' : `${plan.shape.size} `}${plan.shape.label}` : ''
+  const kind = plan.shape ? `Kind: ${/^[aeiou]/i.test(sized) ? 'an' : 'a'} ${sized}, ${is3d(plan) ? '3D' : '2D'}, camera ${clean(plan.shape.view, 120).toLowerCase()}.` : ''
   return [`Make the game "${clean(plan.title, 80)}"${plan.idea ? `: ${clean(plan.idea, 400)}` : ''}.`, [kind, engine].filter(Boolean).join('\n'), `The plan:\n${lines.join('\n')}`, systemsAsk(plan), artBrief(plan)].filter(Boolean).join('\n\n')
 }
