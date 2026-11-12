@@ -21,7 +21,7 @@ const els = {
   form: $('#brief-form'), brief: $('#brief'), agentsSel: $('#agents'), dock: $('#dock'),
   fileName: $('#file-name'), log: $('#log'), play: $('#play-btn'), player: $('#player'), plFrame: $('#pl-frame'),
   plShell: $('#pl-shell'), plStage: $('#pl-stage'), plPage: $('#pl-page'), plBack: $('#pl-back'), plMotion: $('#pl-motion'),
-  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), exportBtn: $('#export-btn'), publishBtn: $('#publish-btn'), modelsBtn: $('#models-btn'),
+  dDesign: $('#d-design'), dVars: $('#d-vars'), reviewBtn: $('#review-btn'), videoBtn: $('#video-btn'), exportBtn: $('#export-btn'), replayBtn: $('#replay-btn'), publishBtn: $('#publish-btn'), modelsBtn: $('#models-btn'),
   plTours: $('#pl-tours'), plTourMenu: $('#pl-tour-menu'), plPersona: $('#pl-persona'), plCursor: $('#pl-cursor'), plThink: $('#pl-think')
 }
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
@@ -29,6 +29,8 @@ const commandOps = {}
 // ?run=<id> opens a file, ?replay=<id>&speed=N replays it on a timer (no live stream),
 // and wall=1 is the compact tile the Swarm Wall (web/wall.html) shows
 const Q = new URLSearchParams(location.search)
+// the run being replayed: from the address (?replay=, the Wall and capture scripts) or from ☰ → Replay
+let replayId = Q.get('replay') || ''
 const WALL = Q.get('wall') === '1'
 if (WALL) document.documentElement.classList.add('wall')
 // the hosted studio lives under a path (/studio/app); the local one at the root
@@ -387,7 +389,7 @@ function on(e) {
       break
     case 'auto':
       // a replay moves between views as the live run did
-      autoEvent(e, Q.get('replay') ? true : undefined)
+      autoEvent(e, replayId ? true : undefined)
       break
     case 'game:spec':
       S.spec = e.spec
@@ -646,7 +648,7 @@ function agentTarget(a, now) {
 // drawn in world space in the agent's colour, then it goes back to the caret.
 
 // a replay (?replay=) plays a saved run as if it were live: bubbles, sparks and gestures included
-const live = e => (!viewing || !!Q.get('replay')) && (!e.t || Date.now() - e.t < 5000)
+const live = e => (!viewing || !!replayId) && (!e.t || Date.now() - e.t < 5000)
 const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 const lerp = (a, b, t) => a + (b - a) * t
 const rand = (a, b) => a + Math.random() * (b - a)
@@ -1381,6 +1383,7 @@ function frameLoop(now) {
     els.reviewBtn.disabled = review.busy || !S.done
     setLabel(els.reviewBtn, review.busy ? 'Reviewing…' : 'Review')
     els.exportBtn.disabled = !S.done || exp.busy
+    paintReplay()
     const pubbing = pub.run === shownRun() && pub.state === 'working'
     const deploying = appv.deploying && appv.run === shownRun()
     els.publishBtn.disabled = (!S.done && !pubbing) || deploying
@@ -4008,9 +4011,12 @@ function withTyping(events) {
 
 // Replay a saved run on its own clock, sped up: the Swarm Wall plays four of these side by side.
 // Long quiet gaps (a model thinking) are cut to 1.5 s of real time so the tile never looks stuck.
+let replaySeq = 0, replayAsked = false
 async function replayRun(id, speed = 8) {
+  const seq = ++replaySeq
   const res = await api(`/api/runs/${encodeURIComponent(id)}/events`).catch(() => null)
-  if (!res?.ok) return botMsg('That run could not be loaded.')
+  if (!res?.ok) { if (replayAsked) endReplay(); return botMsg('That run could not be loaded.') }
+  if (seq !== replaySeq) return
   const events = withTyping((await res.json()).filter(e => e.type !== 'cmd'))
   viewing = id
   fresh(id)
@@ -4022,12 +4028,48 @@ async function replayRun(id, speed = 8) {
     prev = e.t || prev
     const wait = clock - (performance.now() - start)
     if (wait > 4) await new Promise(r => setTimeout(r, wait))
+    if (seq !== replaySeq) return // stopped, or another replay started
     // stamped now, so the canvas treats it as happening (a saved time would mute the crew)
     try { on({ ...e, t: Date.now() }) } catch (err) { console.error(err) }
     if (i % 25 === 0) parent.postMessage?.({ wall: 'tick', run: id, i, of: events.length, t: e.t - events[0].t }, '*')
   }
   parent.postMessage?.({ wall: 'done', run: id, ms: (events.at(-1)?.t || 0) - (events[0]?.t || 0) }, '*')
+  // a replay asked for from the menu ends on the finished build it started from
+  if (replayAsked) endReplay()
 }
+
+// ☰ → Replay: watch a finished build again exactly as it was built, from its saved run (no model,
+// no pictures painted). It plays in the Design deck, where the crew can be watched, with the camera
+// following, at the speed it happened. The same menu item stops it, and so does leaving the deck;
+// both put the finished build back. A replay from the address (?replay=) is not touched by this.
+function paintReplay() {
+  const b = els.replayBtn
+  if (!b) return
+  const on = replayAsked
+  if (b.dataset.on !== String(on)) { b.dataset.on = String(on); b.innerHTML = `${ico(on ? 'square-stop' : 'rotate-ccw')}${on ? 'Stop replay' : 'Replay'}` }
+  b.disabled = !on && (!S.done || review.busy || !shownRun())
+}
+function endReplay() { replayAsked = false; replayId = Q.get('replay') || ''; paintReplay() }
+function startReplay() {
+  const id = shownRun()
+  if (!id || replayAsked) return
+  replayAsked = true
+  replayId = id
+  paintReplay()
+  window.swarmCosmos?.go('station', 'canvas')
+  replayRun(id, 1)
+  // the camera follows the crew (the replay's own reset comes a moment later, so once more then)
+  setAuto(true)
+  setTimeout(() => { if (replayAsked) setAuto(true) }, 700)
+}
+function stopReplay() {
+  if (!replayAsked) return
+  const id = replayId
+  replaySeq++
+  endReplay()
+  if (id) openRun(id) // the finished build, whole
+}
+if (els.replayBtn) els.replayBtn.onclick = () => (replayAsked ? stopReplay() : startReplay())
 
 // ---------- views: Canvas | Video | App
 // Each view keeps working while you look at another; a dot on its tab says how
@@ -5549,9 +5591,8 @@ if (!Q.get('replay')) api('/api/auto').then(r => r.ok ? r.json() : null).then(e 
 // the launch kit and the crew's chatter. All of it only watches: none of it changes a build.
 const Chatter = window.SwarmChatter || null
 const Show = window.SwarmShow || null
-const REPLAY = Q.get('replay')
-// live, or a replay being watched (?replay=): the show plays for both, a reopened file stays quiet
-const showLive = e => live(e) || (!!REPLAY && viewing === REPLAY && !WALL)
+// live, or a replay being watched (?replay= or ☰ → Replay): the show plays for both, a reopened file stays quiet
+const showLive = e => live(e) || (!!replayId && viewing === replayId && !WALL)
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const STEP_SHOW = {
   design: ['Designing the', 'site', 'palette'], review: ['Reviewing every', 'page', 'search-check'], app: ['Building the', 'app', 'server'],
@@ -6578,6 +6619,8 @@ window.swarm = {
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer,
+  // a replay started from ☰ → Replay ends when the deck is left
+  stopReplay,
   // the project's canvas is being zoomed or panned: page swaps and screenshots here wait for it too
   moved() { cam.movedAt = performance.now() },
   // the crew's sound: 'on', 'muted' or 'quiet' (☰ → Sound in the studio)
