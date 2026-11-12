@@ -6,7 +6,9 @@ Hermes may do:
 
 - ``POST /image``: one picture through Hermes's own ``image_generate`` tool (``ctx.dispatch_tool``);
 - ``POST /video``: one clip through Hermes's own ``video_generate`` tool;
-- ``GET /media``: whether pictures and clips are available.
+- ``GET /media``: whether pictures and clips are available;
+- ``POST /mcp``: one MCP tool call through ``ctx.call_mcp``;
+- ``POST /v1/chat/completions`` and ``GET /v1/models``: model calls through ``ctx.llm`` (bridge_llm.py).
 
 Hermes picks the provider, the model and the keys for each from its own config. None of them leaves
 this process.
@@ -34,7 +36,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import launcher
+from . import bridge_llm, launcher
 
 CTX = None  # the plugin context, set by register()
 ATTACH_EVERY = 15.0  # seconds; the canvas server drops a bridge silent for 45
@@ -287,7 +289,14 @@ def mcp(body: dict) -> dict:
     return got if isinstance(got, dict) else {"ok": True, "result": got}
 
 
-ROUTES = {("POST", "/image"): image, ("POST", "/video"): video, ("GET", "/media"): media, ("POST", "/mcp"): mcp}
+def chat(body: dict, timeout_s: float | None = None) -> dict:
+    return bridge_llm.complete(CTX, body, timeout_s)
+
+
+ROUTES = {("POST", "/image"): image, ("POST", "/video"): video, ("GET", "/media"): media, ("POST", "/mcp"): mcp,
+          ("POST", "/v1/chat/completions"): chat, ("GET", "/v1/models"): bridge_llm.models}
+CHAT = ("POST", "/v1/chat/completions")
+BIG = 48 << 20  # a reviewer's call carries page screenshots
 
 
 # ---------- the HTTP side
@@ -323,17 +332,46 @@ class _Handler(BaseHTTPRequestHandler):
         route = ROUTES.get((method, self.path.split("?", 1)[0]))
         if not route:
             return self._send(404, {"ok": False, "error": "no such route"})
+        key = (method, self.path.split("?", 1)[0])
         body: dict = {}
         if method == "POST":
             try:
                 size = int(self.headers.get("content-length") or 0)
-                body = json.loads(self.rfile.read(size) or b"{}") if 0 < size <= 4 << 20 else {}
+                body = json.loads(self.rfile.read(size) or b"{}") if 0 < size <= (BIG if key == CHAT else 4 << 20) else {}
             except (ValueError, OSError):
                 return self._send(400, {"ok": False, "error": "bad request"})
+        body = body if isinstance(body, dict) else {}
+        if key == CHAT:
+            return self._chat(body)
         try:
-            self._send(200, route(body if isinstance(body, dict) else {}))
+            self._send(200, route(body))
         except Exception as exc:  # a tool that raises comes back as an error, never a crash
             self._send(200, {"ok": False, "error": str(exc)[:300]})
+
+    def _chat(self, body: dict) -> None:
+        """OpenAI-shaped: an error is an HTTP error with {error: {message}}, as a provider answers."""
+        try:
+            timeout = max(5.0, min(1800.0, float(self.headers.get("x-swarm-timeout") or 0) / 1000)) if self.headers.get("x-swarm-timeout") else None
+        except ValueError:
+            timeout = None
+        try:
+            done = chat(body, timeout)
+        except Exception as exc:  # the provider's own error, as Hermes reports it
+            msg = str(exc)[:500]
+            code = 429 if re.search(r"\b429\b|rate.?limit", msg, re.I) else 503 if re.search(r"\b50[23]\b|overloaded|capacity", msg, re.I) else 502
+            return self._send(code, {"error": {"message": msg, "type": type(exc).__name__}})
+        if not body.get("stream"):
+            return self._send(200, done)
+        self.send_response(200)
+        self.send_header("content-type", "text/event-stream")
+        self.send_header("cache-control", "no-cache")
+        self.end_headers()
+        try:
+            for line in bridge_llm.sse(done):
+                self.wfile.write(line)
+            self.wfile.flush()
+        except OSError:  # the caller gave up; the answer is dropped
+            pass
 
     def do_GET(self) -> None:  # noqa: N802
         self._handle("GET")

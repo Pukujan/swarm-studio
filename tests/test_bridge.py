@@ -161,8 +161,6 @@ class Bridge(unittest.TestCase):
         self.assertFalse((ROOT / "engine" / "hermes_mcp.py").exists())
         private = re.compile(r"^\s*(from|import)\s+(tools|hermes_cli)\b", re.M)
         for f in [*ROOT.glob("*.py"), *(ROOT / "engine").glob("*.py")]:
-            if f.name == "launcher.py":  # point 2 removes its model-key lookup
-                continue
             self.assertIsNone(private.search(f.read_text("utf-8")), f.name)
         for f in [*(ROOT / "engine").glob("*.mjs"), ROOT / "server" / "server.mjs", *ROOT.glob("*.py")]:
             src = f.read_text("utf-8")

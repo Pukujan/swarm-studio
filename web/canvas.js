@@ -5755,6 +5755,18 @@ commandOps.game = c => openGame(c.idea || '', c.answers || null, !!c.build)
 
 // ---------- start
 
+function hermesWait(e) {
+  let bar = document.getElementById('hermes-wait')
+  if (e.type === 'hermes:back') return bar?.remove()
+  if (!bar) {
+    bar = document.createElement('div')
+    bar.id = 'hermes-wait'
+    bar.setAttribute('role', 'status')
+    document.body.append(bar)
+  }
+  bar.textContent = e.message || 'Waiting for Hermes'
+}
+
 let es = null
 function connect() {
   es?.close()
@@ -5767,6 +5779,8 @@ function connect() {
       if (e.type === 'cmd') return WALL ? null : command(e)
       // a sign-in belongs to no file
       if (e.type === 'connector') return connectorEvent(e)
+      // model calls wait for Hermes (engine/hermesllm.mjs): the build goes on once it is open
+      if (e.type === 'hermes:waiting' || e.type === 'hermes:back') return hermesWait(e)
       if (e.type === 'reset' || e.type === 'run:start') {
         liveId = e.run
         // a talk before building keeps the canvas: a build started elsewhere waits in Projects

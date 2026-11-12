@@ -2011,3 +2011,11 @@ body.side-min .tabs .chats-btn { display: none; }
 .mcp-allow code { flex: 1 1 100%; overflow-wrap: anywhere; padding: 6px 8px; border-radius: 6px; background: var(--panel-2, rgba(127,127,127,.12)); color: var(--ink, inherit); font-size: 11px; user-select: all; }
 .mcp-allow button { border: 0; border-radius: 6px; padding: 4px 10px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
 .mcp-allow .mcp-again { background: transparent; color: inherit; border: 1px solid currentColor; }
+
+/* model calls wait for Hermes to be open (engine/hermesllm.mjs) */
+#hermes-wait {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60;
+  max-width: calc(100vw - 32px); padding: 8px 14px; border-radius: 8px;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
+  font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 4px 18px rgba(0,0,0,.25);
+}
