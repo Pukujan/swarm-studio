@@ -1387,14 +1387,20 @@ function summarize(e) {
 
 let lastPanels = 0
 // The crew's cursors don't need the screen's 60-120 Hz: 24 fps while a build runs (20 with a big
-// crew), full rate only while the camera itself moves, so a drag or zoom stays smooth.
+// crew), full rate only while the camera itself moves, so a drag or zoom stays smooth. Behind the
+// Overview or Projects this canvas is hidden: 10 fps keeps its pages and crew current (spec 36).
 const loopAt = { last: 0, dt: 16.7 }
+const behind = () => document.body.classList.contains('cosmos-project') || document.body.classList.contains('cosmos-home')
 function frameLoop(now) {
   const moving = Math.abs(cam.ts - cam.s) > 1e-3 || Math.abs(cam.tx - cam.x) > 1 || Math.abs(cam.ty - cam.y) > 1
-  const fps = moving ? 120 : S.agents.size > 8 ? 20 : 24
-  if (now - loopAt.last < 1000 / fps - 2) return requestAnimationFrame(frameLoop)
+  const hid = behind(), fps = hid ? 10 : moving ? 120 : S.agents.size > 8 ? 20 : 24
+  if (now - loopAt.last < 1000 / fps - 2) {
+    // the pages still take their sections at 24 fps: the Overview photographs them
+    if (hid && now - (loopAt.sync || 0) > 40) { loopAt.sync = now; syncSlots(now) }
+    return requestAnimationFrame(frameLoop)
+  }
   loopAt.dt = Math.min(100, now - (loopAt.last || now - 16.7))
-  loopAt.last = now
+  loopAt.last = loopAt.sync = now
   syncSlots(now)
 
   if (cam.auto && now > cam.nextFit) {

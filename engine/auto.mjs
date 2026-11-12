@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { loadPack, intakeValues, packBrief, packAsk, runTools, runChecks } from './packs.mjs'
+import { cleanKit, kitPlan, kitWords, kitChecks, haveOf } from './appkit.mjs'
 
 export const GAMES_ASK = `Add a 🎮 Play page at /play, linked in the nav, with three small original mini games set in this brand's world and wearing the site's theme (its CSS variables and fonts). Each game is a canvas game in its own module under src/games/, works with keyboard and touch, and one round takes under a minute:
 1. A tiny roguelike: one room at a time, move, dodge and hit; between rooms pick one of two upgrades; three rooms, then a boss.
@@ -239,6 +240,16 @@ export function autoJob(d) {
     set('checks', bad.length ? 'failed' : 'done', bad.length ? `${r.length - bad.length}/${r.length} passed; failing: ${bad.map(c => `${c.label} (${c.path} → ${c.status})`).join(', ')}` : `${r.length}/${r.length} passed: ${r.map(c => c.label).join(', ')}`)
   }
 
+  // the App kit's locked plan, checked on the built app's source (engine/appkit.mjs kitChecks)
+  async function spec() {
+    set('spec', 'working', 'checking the app against its plan')
+    const r = kitChecks(job.kit, join(d.runsDir, job.run, 'app'))
+    job.checks = r.map(c => ({ label: c.part, ok: c.ok, note: c.note }))
+    d.record(job.run, { type: 'appkit:checks', t: Date.now(), checks: r })
+    const bad = r.filter(c => !c.ok)
+    set('spec', bad.length ? 'failed' : 'done', bad.length ? `${r.length - bad.length}/${r.length} match the plan; missing: ${bad.map(c => c.note).join(', ')}` : `${r.length}/${r.length} match the plan`)
+  }
+
   async function data() {
     let env = supabaseEnv()
     // no keys: the person's Supabase sign-in through Hermes (🔌 Connect on the canvas)
@@ -276,11 +287,12 @@ export function autoJob(d) {
   async function go() {
     const plan = [
       ['design', design, true], ['review', review, false],
-      ['app', () => appTurn('app', job.pack ? { ask: packAsk(job.pack, 'app', job.intake) } : {}, 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
+      ['app', () => appTurn('app', job.pack ? { ask: packAsk(job.pack, 'app', job.intake) } : job.kit ? { plan: kitPlan(job.kit, haveOf()) } : {}, job.kit ? 'the app engine is building the locked screens, data and connections' : 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
       ...(job.pack ? [['tools', tools, false]] : []),
       ...(job.games !== 'none' ? [['games', games, false]] : []),
       ...(job.games !== 'none' ? [['shop', shop, false]] : []),
       ['data', data, false],
+      ...(job.kit ? [['spec', spec, false]] : []),
       ...(job.pack ? [['checks', checks, false]] : []),
       ['video', video, false]
     ]
@@ -319,7 +331,7 @@ export function autoJob(d) {
     push()
   }
 
-  function start({ prompt, games, pack, intake, launch, only, project, piece, brand }) {
+  function start({ prompt, games, pack, intake, launch, only, project, piece, brand, appkit }) {
     prompt = String(prompt || '').trim().slice(0, 1200)
     if (!prompt) throw new Error('say what to make')
     if (job?.state === 'working') throw new Error('auto mode is already running')
@@ -334,10 +346,14 @@ export function autoJob(d) {
       steps.splice(steps.findIndex(([id]) => id === 'video'), 0, ['checks', `✅ Check it works: ${(p.checks || []).map(c => c.label.toLowerCase()).join(', ')}`])
     }
     if (launch) steps.push(['launch', '📣 Write the launch kit'])
-    job = { state: 'working', brand: brand || null, launch: !!launch, prompt, brief: p ? packBrief(p, prompt, iv) : prompt, pack: p, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
+    // an app locked in the Studio's App kit (docs/specs/37-studio-first.md): built from its plan, then checked against it
+    const kit = !p && appkit && typeof appkit === 'object' ? cleanKit(appkit) : null
+    if (kit && !kit.screens.length) throw new Error('the app plan has no screens')
+    if (kit) steps.splice(steps.findIndex(([id]) => id === 'video'), 0, ['spec', '✅ Check it against the plan'])
+    job = { state: 'working', brand: brand || null, launch: !!launch, prompt, brief: p ? packBrief(p, prompt, iv) : kit ? `${prompt}\n\nThe locked app plan:\n${kitWords(kit)}` : prompt, pack: p, kit, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
       // the project this run joins, by id or name (docs/specs/18-projects.md)
       project: typeof project === 'string' ? project.slice(0, 64) : null, piece: typeof piece === 'string' ? piece : null,
-      steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none') && (!Array.isArray(only) || id === 'design' || only.includes(id))).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
+      steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none') && (!Array.isArray(only) || id === 'design' || id === 'spec' || only.includes(id))).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
     go().catch(err => { Object.assign(job, { state: job.stopped ? 'stopped' : 'failed', message: job.stopped ? 'stopped' : String(err.message || err), end: Date.now() }); push() })
     return view()

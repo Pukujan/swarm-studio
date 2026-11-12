@@ -13,6 +13,7 @@ import { extname, join, normalize } from 'node:path'
 import { stagesFor, viewOf, skillText, kitBrief } from './game.mjs'
 import { portDir, godotBin, godotErrors } from './port.mjs'
 import { probeBrief } from './playcheck.mjs'
+import { assembleStarter, crewBrief, starterById } from './starters.mjs'
 
 export const GODOT_SKILLS = ['gamedev/godot-gdscript', 'gamedev/godot-nodes-scenes', 'gamedev/godot-2d-movement', 'gamedev/godot-signals-groups']
 
@@ -21,7 +22,7 @@ export const webBuild = dir => join(portDir(dir, 'godot'), 'build', 'web')
 
 // Godot-first when the spec (or the owner's answer) names Godot and a binary is found
 export function godotFirst(spec, env = process.env) {
-  const s = String(spec?.target ?? spec?.answers?.target ?? spec?.engine ?? '').toLowerCase()
+  const s = String(spec?.target ?? spec?.answers?.target ?? spec?.engine ?? spec?.starter?.engine ?? '').toLowerCase()
   return s.includes('godot') && !!godotBin(env)
 }
 
@@ -69,11 +70,22 @@ html/experimental_virtual_keyboard=false
 progressive_web_app/enabled=false
 `
 
-// The project skeleton and the painted art: project.godot (only when missing),
-// the Web preset (always ours), the app's public/art/ copied into assets/art/.
+// The starter the plan locked (docs/specs/38-game-starters.md): its Godot project and add-ons,
+// copied once into ports/godot/ before anything else (never over a file already there).
+// → the starter's id, or null when the spec has none
+export function seedStarter(dir, spec) {
+  const id = spec?.starter?.template?.id
+  if (!id || !starterById(id)) return null
+  assembleStarter(id, portDir(dir, 'godot'))
+  return id
+}
+
+// The project skeleton and the painted art: the locked starter first, then project.godot
+// (only when missing), the Web preset (always ours), the app's public/art/ copied into assets/art/.
 // → the art file names copied
 export function seedGodot(dir, spec) {
   const root = portDir(dir, 'godot')
+  seedStarter(dir, spec)
   for (const d of ['scenes', 'scripts', 'assets/art']) mkdirSync(join(root, d), { recursive: true })
   if (!existsSync(join(root, 'project.godot'))) writeFileSync(join(root, 'project.godot'), PROJECT(spec?.title || spec?.name))
   writeFileSync(join(root, 'export_presets.cfg'), WEB_PRESET)
@@ -136,6 +148,13 @@ export const GODOT_RULES = `- Godot 4 (4.7) with GDScript 2: typed variables, @e
 
 const STEP_NOTE = 'Godot is run headless on the project after this turn (import, then the main scene for a few hundred frames); its script and parse errors come back as the next turn\'s first job, so keep the scripts parse-clean.'
 
+// the locked starter's crew brief (starters/<id>/CREW.md), when the game has one
+function starterBrief(spec) {
+  const id = spec?.starter?.template?.id
+  const text = id ? crewBrief(id) : ''
+  return text ? `\n\nThis game starts from a starter that is already in the project; build on it, never around it:\n${text.slice(0, 6000)}` : ''
+}
+
 // One stage of a Godot-first big game: the same stages as the web build, written in Godot
 export function godotStagePrompt(spec, i, { art = [], failed = '', note = '' } = {}) {
   const stages = stagesFor(spec)
@@ -148,7 +167,7 @@ export function godotStagePrompt(spec, i, { art = [], failed = '', note = '' } =
 Do only this slice; later slices add the rest, so leave clean places for them (a data table, a dialogue autoload) instead of building them now.
 ${godotArtBrief(art, viewOf(spec))}
 ${GODOT_RULES}
-${probeBrief(spec, { godot: true })}
+${probeBrief(spec, { godot: true })}${starterBrief(spec)}
 - ${STEP_NOTE}
 
 Finish with the project opening in Godot with no errors and the game playable from the title.`

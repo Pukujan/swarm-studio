@@ -46,7 +46,10 @@ import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
+import { appKitRoutes } from './appkit.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
+import { storyRoutes } from './story.mjs'
+import { deckRoutes } from './deck.mjs'
 import { refRoutes } from './refs.mjs'
 import { studioRoutes } from './studio.mjs'
 import { studioStore } from '../engine/studio.mjs'
@@ -1368,6 +1371,15 @@ const talks = talkRoutes({
 // their project when they build. On start: empty old chats go, and game plans made before chats existed
 // each get a chat that points at them (the plan files stay where they are).
 const chats = talks.chats
+// the Studio's App kit (docs/specs/37-studio-first.md): the app's users, screens, data and connections
+const appKit = appKitRoutes({
+  dataDir,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'app-kit' }, model: modelFor('planner'), maxTokens: 2400, temperature: 0.3, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null,
+  supabase: async () => !!(await connectors.list())?.supabase?.signed_in
+})
 // The brand sheet (docs/specs/31-brand-sheet.md): a website's or app's story, palette and type, locked before it is designed
 // A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
 const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
@@ -1443,6 +1455,45 @@ const brands = brandRoutes({
   projectBrands: studios.brands,
   model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
     trace: { kind: 'brand' }, model: modelFor('planner'), maxTokens: 900, temperature: 0.6, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null
+})
+// The story (docs/specs/37-story.md): beats written from the project's brand and what was built, drawn
+// as cards in three shapes. The brand is the locked sheet of the chat that built this run.
+// The project's brand (spec 37: <data>/projects/<pid>/brand.json) first, then the chat's (spec 31).
+function brandOfRun(id) {
+  const pid = projects.projectOf(id)
+  if (pid && /^[\w-]{1,80}$/.test(pid)) { try { const b = JSON.parse(readFileSync(join(dataDir, 'projects', pid, 'brand.json'), 'utf8')); if (b?.story) return b } catch {} }
+  const ids = pid ? chats.forProject(pid).groups.flatMap(g => g.chats.map(c => c.id)) : []
+  const list = ids.map(c => chats.get(c)).filter(Boolean)
+  return (list.find(c => c.run === id && c.brand) || list.find(c => c.brand?.lockedAt) || list.find(c => c.brand))?.brand || null
+}
+const storyRoute = storyRoutes({
+  runsDir, dataDir, readEvents, brandOf: brandOfRun,
+  pitchOf: async id => writePitch(readEvents(id) || [], id),
+  chat: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'story' }, model: modelFor('planner'), maxTokens: 1400, temperature: 0.5, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null,
+  // the page shots a beat's screen uses: a fresh export, every page at desktop and phone size
+  shots: async id => {
+    const events = readEvents(id)
+    if (!events) return []
+    // the newest export on disk when there is one (Post to Feed and ⬇ Export leave one); else a fresh one
+    const changed = events.findLast(e => e.type === 'layer:done' || e.type === 'theme' || e.type === 'image')?.t || 0
+    const last = events.findLast(e => e.type === 'export' && e.t >= changed && e.dir && Array.isArray(e.html) && existsSync(join(e.dir, 'html', e.html[0] || '')))
+    const out = last ? { dir: last.dir, html: last.html } : await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: [], name: nameFor(id)?.name, fill: fillExport(id) })
+    const { pageShots } = await import('../engine/pageshots.mjs')
+    const got = await pageShots({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir })
+    const pages = snapshot(events, [], { name: nameFor(id)?.name }).pages
+    return out.html.map((file, i) => { const s = got.shots.find(x => x.file === file) || {}; return { page: pages[i]?.id, desktop: s.shot, phone: s.phoneShot } }).filter(s => s.page)
+  }
+})
+// the Deck kit (docs/specs/35-open-design.md section 7): its slides written by the planner, through Hermes
+const decks = deckRoutes({
+  dataDir, runsDir, chats,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'deck' }, model: modelFor('planner'), maxTokens: 2500, temperature: 0.5, signal: AbortSignal.timeout(90000),
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
   })).text : null
 })
@@ -3225,7 +3276,10 @@ const server = createServer((req, res) => {
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
   if (talks(req, res, url)) return
+  if (appKit(req, res, url)) return
   if (brands(req, res, url)) return
+  if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute(req, res, url); return }
+  if (decks(req, res, url)) return
   if (refsRoute(req, res, url)) return
   if (studioRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
@@ -3501,7 +3555,7 @@ const server = createServer((req, res) => {
       exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: nameFor(id)?.name, fill: fillExport(id) })
         .then(out => {
           const copy = shelveExport(id, out.zip)
-          record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections })
+          record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections, html: out.html })
           reply(200, { ...out, copy })
         })
         .catch(err => reply(400, { error: String(err.message || err) }))
@@ -3520,7 +3574,7 @@ const server = createServer((req, res) => {
     exportRun({ events, runId: id, runDir: join(runsDir, id), sections: [], name: nameFor(id)?.name, fill: fillExport(id) })
       .then(async out => {
         const copy = shelveExport(id, out.zip)
-        record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections })
+        record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections, html: out.html })
         const { pageShots } = await import('../engine/pageshots.mjs')
         const got = await pageShots({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir }).catch(err => ({ shots: [], note: String(err.message || err).slice(0, 200) }))
         const pages = out.html.map((file, i) => ({ file, path: i === 0 ? '/' : `/${file}`, ...(got.shots.find(s => s.file === file) || {}) }))

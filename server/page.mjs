@@ -45,7 +45,8 @@ export function joinModules(webDir, files) {
     const names = [...used].map(([local, name]) => (local === name ? name : `${name}: ${local}`)).join(', ')
     return `const ${vendorVar(path)} = (() => {\n${src.slice(0, end.index)}\nreturn { ${fields} }\n})()\nconst { ${names} } = ${vendorVar(path)}`
   })
-  return [...vendored, ...body].join('\n')
+  // inlined in a <script>: a "</script" in the code (a deck's frame, say) would end it early; "<\/script" is the same string
+  return [...vendored, ...body].join('\n').replace(/<\/script/gi, '<\\/script')
 }
 
 // every Studio kit there is (web/kit-<kind>.js): web/kits.js names the ones it lists

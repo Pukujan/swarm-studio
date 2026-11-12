@@ -21,3 +21,24 @@ Changes made for Swarm Studio (scripts/import-od-systems.mjs):
 - Who each look is for, the words that suggest it, the voice, the picture style and the storyboard
   were written for Swarm Studio; they are not from either source.
 - Systems named after a real company, product, person or game were not imported.
+
+----
+
+Swarm Studio, deck looks (engine/opendesign/decks.json) and the deck slide styles (engine/deck.mjs)
+
+decks.json is derived from html-ppt as shipped inside Open Design
+Repository: https://github.com/nexu-io/open-design, path design-templates/html-ppt/
+(commit bc06128813c99fa63f5af53ad2c903c27db057f2); upstream lewislulu/html-ppt-skill.
+Copyright (c) 2026 lewis. License: MIT (see LICENSE.html-ppt in this folder).
+
+Changes made for Swarm Studio (scripts/import-od-decks.mjs):
+- From each theme in assets/themes/, only the shape tokens (radius, shadow, letter spacing), the colour
+  tokens and the decoration rules are kept; colours in the rules that equal a theme token are pointed at
+  that token, and page-background rules are moved onto the slide. Comments, @import and @font-face
+  rules, the theme's font stacks and its animation and runtime files are dropped.
+- 25 of the 36 themes are kept: those with a look of their own. The eleven that differ only in colour are
+  left out, since a project's brand replaces the colours. Each kept look's one-line description is ours.
+- The slide styles in engine/deck.mjs reuse html-ppt's class names and the sizes of its type, grid,
+  card, pill and divider rules from assets/base.css, rescaled to a fixed 1920 x 1080 slide. The present
+  mode script, the layouts and the PDF route are ours; html-ppt's runtime.js, animations, presenter
+  window and templates are not used.

@@ -117,3 +117,25 @@ a time:
 | pictures taken during a build | 34 | 30 |
 | pictures taken while panning, during a build | 8 | 0 |
 | panning at rest / during a build | 60 / 58 fps | 60 / 60 fps |
+
+## 4. Slower cursors behind the Overview
+
+- **The canvas behind.** While the Overview or Projects is up, the Design deck's canvas is hidden
+  but its loop kept running at 24 frames a second, and at 120 whenever its own camera eased (it
+  re-frames the build every 0.7 s). It now runs at 10 behind them: the crew, the panels and the
+  camera step ten times a second. The pages still take their sections at 24 a second, since the
+  Overview photographs them. The Design deck itself is unchanged: 24, and 120 while its camera moves.
+- **The Overview's cursors.** They wander from spot to spot every 1.4 to 2.3 s, eased by CSS, as
+  before. While the camera moves they now keep to their spots, re-placed about ten times a second
+  with a 0.1 s CSS ease each step (`.cur.track`); before, they stayed where they were on screen until
+  their next move.
+
+Measured with the Mac under heavy load from other apps (load average 10 to 30), so the two sides were
+run one after the other, three times each. The timings vary by seconds between runs and are left out.
+
+| | before (PR 3) | after PR 4 |
+|---|---|---|
+| main thread busy during a build | 39% (35 to 41) | 35% (27 to 39) |
+| each Overview cursor's moves a second, panning during a build | 0.3 | 10 |
+| panning at rest / during a build | 60 / 60 fps | 60 / 60 fps |
+| pictures taken while panning, during a build | 0 | 0 |

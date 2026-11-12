@@ -244,8 +244,9 @@ export function makeScaffold({ sw, C, root }) {
     A.talked = A.pid
     const k = kit()
     sw.talk.start({ kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat, blank: true, said: [{ who: 'you', text: d.studio.idea }], build: brief => (k.build ? build(brief) : openBrand()) })
-    const st = startOf()
-    if (st) sw.say?.(`Start with ${st.name}: ${st.why}.`)
+    // a kit with prepare() posts its own planner line
+    const st = k.prepare ? null : startOf()
+    if (st) sw.say?.(st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`)
   }
 
   // ---------- Build: the person's press, through the kit
