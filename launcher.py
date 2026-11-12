@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import signal
 import shutil
 import subprocess
 import sys
@@ -167,9 +168,49 @@ def state() -> dict | None:
     return got if got.get("app") == "swarm-studio" else None
 
 
+def code_stamp() -> float:
+    """When the server's own code last changed on disk (the newest file under server/ and engine/)."""
+    newest = 0.0
+    for folder in ("server", "engine"):
+        for f in (ROOT / folder).glob("*.mjs"):
+            try:
+                newest = max(newest, f.stat().st_mtime)
+            except OSError:
+                pass
+    return newest
+
+
+def stale(st: dict, stamp: float | None = None) -> bool:
+    """True when the running server was started before its code on disk last changed: the plugin was
+    updated under it. A server too old to say when it started is left alone (it cannot be asked to stop)."""
+    booted = st.get("booted")
+    if not isinstance(booted, (int, float)) or not st.get("pid"):
+        return False
+    return (code_stamp() if stamp is None else stamp) > booted / 1000 + 1
+
+
+def _retire(st: dict) -> bool:
+    """Stop an idle, outdated server so the next one runs the code now on disk. Never a busy one."""
+    if st.get("busy"):
+        return False
+    try:
+        os.kill(int(st["pid"]), signal.SIGTERM)
+    except (OSError, ValueError, KeyError):
+        return False
+    for _ in range(50):  # ~5s for the port to come free
+        if not state():
+            return True
+        time.sleep(0.1)
+    return False
+
+
 def ensure_server() -> dict:
-    """Start the canvas server if it is not already up. Returns {url} or {error}."""
-    if state():
+    """Start the canvas server if it is not already up. Returns {url} or {error}.
+
+    A server left running from before a plugin update is replaced when it is idle, so an update
+    takes effect without the person finding and stopping a background process."""
+    st = state()
+    if st and not (stale(st) and _retire(st)):
         return {"running": True, "started": False, "url": canvas_url()}
 
     models = resolve_models()
@@ -233,7 +274,9 @@ def ensure_server() -> dict:
             try:
                 subprocess.Popen(
                     [node, str(ROOT / "server" / "server.mjs"), "--port", str(port())],
-                    cwd=str(ROOT),
+                    # Not the plugin's folder: Windows locks a running program's working folder, and
+                    # `hermes plugins install --force` / update must be able to replace that folder.
+                    cwd=str(data_dir()),
                     env=env,
                     stdin=subprocess.DEVNULL,
                     stdout=log,
