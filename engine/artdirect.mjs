@@ -5,8 +5,8 @@
 // look (glow, teal and gold, neon fantasy, symmetrical "epic" shots).
 //
 // Pure functions; the server owns the image calls and the vision check's model.
-import { keyBackground } from './keycolor.mjs'
-export { keyTrouble, keyOf, swapKey } from './keycolor.mjs'
+import { keyBackground, keyNamed, keyOf } from './keycolor.mjs'
+export { keyTrouble, keyOf, swapKey, keyClash, otherKey, measureKey } from './keycolor.mjs'
 
 // The styles. Photo is the default; the brief picks another by naming it.
 export const STYLES = {
@@ -167,7 +167,7 @@ export function promptFor(gen, guide, { aspect = 'landscape', strict = '', cutou
     `${what}.`,
     empty ? style.replace(/,?\s*an? (everyday )?(slice-of-life )?moment\b/gi, '').replace(/\b(original )?characters?( and original designs)? only\.?/gi, '').trim() : style,
     cutout
-      ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on ${keyBackground(what)}, with no floor, shadow, scenery or frame, so it can be cut out.`
+      ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on ${keyBackground(what, /#(FF00FF|00FF00|0000FF)/i.test(what) ? keyNamed(keyOf(what)) : undefined)}, with no floor, shadow, scenery or frame, so it can be cut out.`
       : 'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
     avoid ? `Avoid: ${avoid}.` : '',
     empty ? EMPTY_PLACE : '',
@@ -235,7 +235,7 @@ Send it back only for a clear, visible problem:
 - a frame shows a different character, outfit or colours than the others
 - the figure changes size a lot between frames, or a frame is empty
 - a head, hand, foot or hair cut off at a frame's edge, or two figures in one frame
-- leftover background: magenta, green, grey or white patches, specks or a coloured rim around the figure
+- leftover background: magenta, green, blue, grey or white patches, specks or a coloured rim around the figure
 - the frames do not show the moves asked for
 
 Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. If in doubt, it is ok.`
@@ -250,7 +250,7 @@ export function cutoutMessages(what, image) {
       content: `You check one game sprite before it goes into the game: ${clip(what, 80)}. It was cut out of a flat key-colour background and is shown twice, on dark and on light grey.
 
 Send it back only for a clear, visible problem:
-- leftover background: magenta, green, grey or white patches, specks or a coloured rim inside or around the figure (between hair strands, inside loops, under arms)
+- leftover background: magenta, green, blue, grey or white patches, specks or a coloured rim inside or around the figure (between hair strands, inside loops, under arms)
 - a hole through the figure where it should be solid
 - a head, hand, foot, tail or weapon cut off by the edge of the picture
 - more than one figure, or a scene instead of one figure

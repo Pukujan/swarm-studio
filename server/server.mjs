@@ -1285,13 +1285,16 @@ async function cutAndCheck(src, it, guide) {
   if (!c.ok || !existsSync(cut)) return { ok: false, cutFailed: true, problems: [c.why.split('\n').pop().slice(0, 120) || 'the cut failed'] }
   let report = {}
   try { report = JSON.parse(c.out.trim().split('\n').pop()) } catch {}
-  const looksOff = report.clipped || report.halo > 0.004
+  // measured from the painted picture: the figure sits close to the key it was painted on, and
+  // another key is further from its colours (the second try is painted on that one)
+  const clash = art.keyClash(report)
+  const looksOff = report.clipped || report.halo > 0.004 || !!clash
   // with a reviewer, every sprite is looked at; without one, the numbers decide
   const check = existsSync(view) ? await checkArt(view, guide, (_, image) => art.cutoutMessages(it.what, image)) : { ok: true, skipped: true, problems: [] }
-  const problems = check.skipped
+  const problems = [...(check.skipped
     ? [...(report.clipped ? ['cut off by the edge'] : []), ...(report.halo > 0.004 ? ['background left around the figure'] : [])]
-    : check.problems
-  return { ok: check.skipped ? !looksOff : check.ok, path: cut, view, problems, report }
+    : check.problems), ...(clash ? [clash.problem] : [])]
+  return { ok: (check.skipped ? !looksOff : check.ok) && !clash, path: cut, view, problems, report, clash }
 }
 // The sheet cutter needs numpy and scipy, which the Python first on the PATH may lack (a
 // venv's): the first of SWARM_CUT_PY, python3 and the system Python that has them.
@@ -1491,8 +1494,9 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
         if (!c.cutFailed) live(slot, it, 'checking', { src: peek(it, c.view, 'check') })
         if (!c.ok) {
           live(slot, it, 'sent back', { problems: c.problems })
-          // the key colour was the trouble: paint it again on the other key (magenta ↔ green)
-          const swap = art.keyTrouble(c.problems), gen = swap ? art.swapKey(it.gen) : it.gen
+          // the key colour was the trouble: paint it again on another key, the one measured as
+          // furthest from the figure's own colours (else magenta ↔ green)
+          const swap = art.keyTrouble(c.problems), gen = swap ? art.swapKey(it.gen, c.clash?.to || (c.report?.best !== c.report?.key ? c.report?.best : undefined)) : it.gen
           step({ kind: 'setup', text: `sent back the ${it.what}: ${c.problems.join(', ') || 'the cut'}${swap ? `; painting it again on ${art.keyOf(gen)}` : ''}` })
           const again = await paintArt(choice, guide, { gen: `${gen}. ${art.SPRITE_RETRY}; fix: ${c.problems.join('; ')}`, aspect: it.aspect, cutout: true, ref }).catch(() => null)
           if (again?.ok && again.path && existsSync(again.path)) {
@@ -1526,7 +1530,11 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     const ref = [raws.get(it.after), still && join(appDir, 'public', still)].find(f => f && existsSync(f))
     if (!ref) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
     const pick = art.tierFor(choice, { hero: true })
-    let layout = it.layout
+    // the key the sheet is painted on comes from the figure's own picture: the key colour
+    // furthest from its colours (the layout's key, guessed from the words, is the fallback)
+    const measured = await art.measureKey(ref)
+    let layout = measured && measured.pick !== art.keyOf(it.layout) ? art.swapKey(it.layout, measured.pick) : it.layout
+    if (layout !== it.layout) step({ kind: 'setup', text: `the ${it.what} is painted on ${art.keyOf(layout)}: the furthest key from the figure's colours` })
     // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
     const go = strict => paintWithBackup(() => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout })], 300000), { choice: pick, quota: OUT_OF_QUOTA, exists: existsSync })
     let fixes = ''
@@ -1555,14 +1563,16 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       await new Promise(ok => execFile(py, [join(root, 'scripts', 'cutout.py'), '--preview-only', strip, view], { timeout: 60000 }, () => ok()))
       if (existsSync(view)) live(slot, it, 'checking', { src: peek(it, view, go2 ? 'check2' : 'check') })
       const qc = meta.qc || {}
-      const numbers = [...(qc.edge?.length ? [`frame ${qc.edge.map(n => n + 1).join(', ')} cut off at the edge`] : []), ...(qc.ok === false && !qc.edge?.length ? ['frames differ in size'] : [])]
+      // the cut measures the painted sheet too: figures close to the key they stand on
+      const clash = go2 === 0 ? art.keyClash(meta.key) : null
+      const numbers = [...(qc.edge?.length ? [`frame ${qc.edge.map(n => n + 1).join(', ')} cut off at the edge`] : []), ...(qc.ok === false && !qc.edge?.length ? ['frames differ in size'] : []), ...(clash ? [clash.problem] : [])]
       const look = existsSync(view) ? await checkArt(view, guide, (_, image) => art.sheetMessages(it.what, image, it.frames)) : { ok: true, skipped: true, problems: [] }
       const problems = [...numbers, ...(look.skipped ? [] : look.problems)]
       if (problems.length && go2 === 0) {
         fixes = problems.join('; ')
         // the key colour was the trouble: the second sheet is painted on the other key
         const swap = art.keyTrouble(problems)
-        if (swap) layout = art.swapKey(layout)
+        if (swap) layout = art.swapKey(layout, clash?.to || art.otherKey(meta.key?.scores || measured?.scores, art.keyOf(layout)))
         step({ kind: 'setup', text: `sent back the ${it.what}: ${problems.join(', ')}${swap ? `; painting it again on ${art.keyOf(layout)}` : ''}` })
         continue
       }

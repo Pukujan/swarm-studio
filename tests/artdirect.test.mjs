@@ -112,6 +112,19 @@ test('a key-colour problem swaps the key for the second try', async () => {
   assert.equal(keyOf(swapKey(swapKey(sheetLayout()))), 'magenta')
   assert.match(swapKey('A figure'), /#00FF00/)
   assert.doesNotMatch(swapKey(spriteGround()), /\bmagenta\b/)
+  // the key can be named (the one measured from the picture), and blue is the third key
+  assert.equal(keyOf(swapKey(spriteGround(), 'blue')), 'blue')
+  assert.match(swapKey(spriteGround(), 'blue'), /solid blue \(#0000FF\).*no blue anywhere/)
+  assert.equal(keyOf(swapKey(swapKey(spriteGround(), 'blue'))), 'magenta')
+  // only the key's own words change: the figure keeps its green cloak
+  const cloak = swapKey(`A ranger in a green cloak. ${swapKey(spriteGround())}`, 'magenta')
+  assert.match(cloak, /green cloak/)
+  assert.equal(keyOf(cloak), 'magenta')
+  assert.doesNotMatch(cloak, /no green|green \(/)
+  // a second try on another key is said once, not fought by the prompt's own key
+  const { promptFor } = await import('../engine/artdirect.mjs')
+  const again = promptFor(swapKey(spriteGround(), 'blue'), {}, { aspect: 'square', cutout: true })
+  assert.doesNotMatch(again, /#FF00FF|#00FF00/)
 })
 
 test('a backdrop with no people says so up front and at the end, without the style\'s "moment"', async () => {
