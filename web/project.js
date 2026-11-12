@@ -953,7 +953,7 @@ export function makeProject({ sw, C, root }) {
   // "Tell the crew…": an edit of the selected page rewrites its section (/fix); about a picture, it is
   // painted again with those words; otherwise the project's next version keeps every page and adds
   // what was asked (web/route.js).
-  ask.onsubmit = e => {
+  ask.onsubmit = async e => {
     e.preventDefault()
     const text = input.value.trim()
     if (!text) return input.focus()
@@ -967,11 +967,20 @@ export function makeProject({ sw, C, root }) {
     // no pages yet (its build failed) is still this project's: the server builds on its brief.
     // Each turn extends the one before it: the open version becomes the run that starts.
     const from = route === 'extend' || (route === 'new' && P.run && P.board?.kind !== 'game' && !hosted()) ? P.run : null
-    Promise.resolve(sw.submit(text, false, P.pid, from)).then(r => {
+    const send = t => Promise.resolve(sw.submit(t, false, P.pid, from)).then(r => {
       if (r?.busy) { if (!input.value) input.value = text; toast(`${ic('msg', 15)}<span>Still on the last change</span>`); return }
       if (typeof r === 'string' && r !== P.run) { P.run = r; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
       load()
     })
+    // "don't build yet, let's talk" or a question for the crew: the planner answers in the Design
+    // deck's chat and nothing is built until the person says build there (engine/discuss.mjs)
+    const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text)
+    if (read === 'build') return send(text)
+    C.go('station', 'canvas')
+    C.chat(true)
+    const build = t => { C.go('project'); send(t) }
+    if (read === 'talk') sw.talk.start({ text, build })
+    else sw.talk.ask(text, () => build(text), () => sw.talk.start({ text, build }))
   }
 
   // the section the dock is talking about; its × goes back to the whole project

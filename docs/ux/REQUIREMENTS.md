@@ -108,3 +108,14 @@ Said on 2026-11-11 of an App started with Make, which stayed on the project's pa
 the mode menu reading Canvas on both places. The project's pages and files are the **Overview**; the Design deck
 keeps **Canvas** in the mode menu. Every kind that starts with page design (Website, App, Video) opens in the deck.
 
+**Talk before building**
+> i asked it not to develop yet and have discussion with me but it built it instea dand started designing
+
+Said on 2026-11-11 of an App whose prompt asked "do u wanna grill me first?" and whose answer read "dont build yet
+lets talk about specifications". A stop or a wish to talk, in the prompt, in an answer or in a dock, never starts a
+build: the planner model reads every message first (engine/discuss.mjs; a clear stop phrase is never read as a
+build). A talk opens in the Design deck's chat on a new project with nothing built; Hermia answers there and the
+dock reads Send. When unsure, one choice: Build now or talk first. A question typed into an answer is answered, not
+added to the brief. The last step is always the brief to read and edit, with Build and Keep talking. `hermes swarm`,
+`/swarm auto` and `swarm_design` refuse a brief that says to talk first and say why.
+

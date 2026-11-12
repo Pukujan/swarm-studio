@@ -1625,6 +1625,9 @@ els.form.addEventListener('submit', async e => {
   }
   // the chat follows the view: the app's next change, or an idea for the video
   const skip = () => { nextRoute?.done?.(null); nextRoute = null }
+  // a talk with the planner before anything is built: the message is part of it
+  // while Hermia is answering, the words wait in the box
+  if (talk.on) { skip(); if (talk.busy) return; els.brief.value = ''; talkSay(brief); return }
   // a big game waiting after a slice: the answer goes into the next slice, from any view
   if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
@@ -1637,6 +1640,17 @@ els.form.addEventListener('submit', async e => {
   // extend, whatever run this canvas happens to be showing
   const route = to.fresh ? 'new' : to.route || routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
   if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); to.done?.(null); return commandOps.fix({ text: brief }) }
+  // "don't build yet, let's talk" or a question for the crew, typed into a project's dock: the
+  // planner answers here and nothing is built until the person says build (engine/discuss.mjs)
+  if (route === 'extend' && !hosted && !to.done) {
+    const read = await readTalk(brief)
+    if (read !== 'build') {
+      els.brief.value = ''
+      const from = to.from
+      const build = text => { nextRoute = { from, route: 'extend', selected: false }; els.brief.value = text; els.form.requestSubmit() }
+      return read === 'talk' ? talkStart({ text: brief, build }) : talkAsk(brief, () => build(brief), () => talkStart({ text: brief, build }))
+    }
+  }
   setAuto(true)
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}), ...(to.pictures ? { pictures: to.pictures } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
@@ -1646,6 +1660,81 @@ els.form.addEventListener('submit', async e => {
   else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
 })
+
+// ---------- talk first (engine/discuss.mjs): the person asked not to build yet, or asked the crew
+// a question. Hermia answers here in the chat, the conversation goes on in this dock, and nothing is
+// built until they say build. Then the brief she writes from the talk shows here, editable, with
+// Build and Keep talking; only Build starts anything. From the Make box the canvas is empty: a new
+// project with nothing built yet. From a project's dock its pages stay and Build extends it.
+const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null }
+const dockBtn = els.form.querySelector('button[type="submit"]')
+// while talking, the dock sends to Hermia: its button says Send, not Build
+function talkDock(on) {
+  if (on && !talk.dock) { talk.dock = { ph: els.brief.placeholder, btn: dockBtn.textContent }; els.brief.placeholder = 'Tell Hermia…'; dockBtn.textContent = 'Send' }
+  if (!on && talk.dock) { els.brief.placeholder = talk.dock.ph; dockBtn.textContent = talk.dock.btn; talk.dock = null }
+}
+const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, answerTo, kind }) })
+  .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')
+function talkStart({ text, kind = 'site', build, blank = false, said = [] }) {
+  if (blank) { viewing = 'new'; fresh(null) }
+  Object.assign(talk, { on: true, busy: false, said: [], kind, build })
+  talkDock(true)
+  els.feed.querySelector('.empty-chat')?.remove()
+  for (const m of said) { talk.said.push(m); m.who === 'hermia' ? botMsg(m.text) : feed(null, m.text, 'you') }
+  talkSay(text)
+}
+const talkEnd = () => { talk.on = false; talk.busy = false; talkDock(false); els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove()) }
+async function talkSay(text, brief = false) {
+  if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
+  els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
+  const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
+  talk.busy = true
+  const res = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: talk.said, kind: talk.kind, brief }) }).catch(() => null)
+  const j = res ? await res.json().catch(() => ({})) : {}
+  talk.busy = false
+  wait.remove()
+  if (!talk.on) return
+  if (!res?.ok) return talkActs(botMsg(j.error || 'Hermia did not answer. Say it again.'))
+  if (j.brief) return talkBrief(j.brief)
+  talk.said.push({ who: 'hermia', text: j.reply })
+  talkActs(botMsg(j.reply))
+}
+// under Hermia's latest answer: Build, which writes the brief first (nothing starts yet)
+function talkActs(item) {
+  const acts = document.createElement('div')
+  acts.className = 'chips talk-acts'
+  acts.innerHTML = '<button class="primary">Build</button>'
+  acts.firstChild.onclick = () => { if (!talk.busy) talkSay('', true) }
+  item.append(acts)
+}
+function talkBrief(text) {
+  const item = botMsg('The brief')
+  item.classList.add('talk-brief')
+  item.insertAdjacentHTML('beforeend', '<textarea aria-label="The brief" rows="6" maxlength="4000"></textarea><div class="chips talk-acts"><button class="primary" data-go>Build</button><button data-more>Keep talking</button></div>')
+  const box = item.querySelector('textarea')
+  box.value = text
+  item.querySelector('[data-go]').onclick = () => {
+    const t = box.value.trim()
+    if (!t) return
+    const go = talk.build
+    talkEnd()
+    box.disabled = true
+    go?.(t)
+  }
+  item.querySelector('[data-more]').onclick = () => { item.querySelector('.talk-acts').remove(); els.brief.focus() }
+  box.focus({ preventScroll: true })
+}
+// not sure whether to build: one choice, here in the chat
+function talkAsk(text, now, first) {
+  const item = botMsg('Build now or talk first?')
+  const acts = document.createElement('div')
+  acts.className = 'chips'
+  acts.innerHTML = '<button class="primary" data-now>Build now</button><button data-first>Talk first</button>'
+  acts.querySelector('[data-now]').onclick = () => { acts.remove(); now() }
+  acts.querySelector('[data-first]').onclick = () => { acts.remove(); first() }
+  item.append(acts)
+}
+
 els.brief.addEventListener('keydown', e => {
   if (!slashPop.hidden) {
     const m = slashMatches()
@@ -3969,6 +4058,7 @@ function fileInfo(f) {
 let openSeq = 0
 async function openRun(id) {
   const seq = ++openSeq
+  talkEnd()
   if (id === liveId && files.find(f => f.id === id)?.live) {
     viewing = null
     connect()
@@ -5200,6 +5290,8 @@ function connect() {
       if (e.type === 'connector') return connectorEvent(e)
       if (e.type === 'reset' || e.type === 'run:start') {
         liveId = e.run
+        // a talk before building keeps the canvas: a build started elsewhere waits in Projects
+        if (talk.on) return
         if (viewing) { viewing = null; fresh(e.run) }
       }
       // following the live build: an event of another build (a late picture of the build before,
@@ -6627,6 +6719,9 @@ window.swarm = {
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer,
+  // talk first (engine/discuss.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
+  // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
+  readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, get on() { return talk.on } },
   // a replay started from ☰ → Replay ends when the deck is left
   stopReplay,
   // the project's canvas is being zoomed or panned: page swaps and screenshots here wait for it too
@@ -6734,6 +6829,7 @@ window.swarm = {
   // It resolves to the new run's id (null when none started, { busy } while the last turn still builds)
   // `opts.pictures` (painted, stock or drawn) is this build's own pick (docs/specs/06-onboarding.md)
   submit(text, auto = false, project = null, from = null, opts = {}) {
+    talkEnd()
     return new Promise(done => {
       els.brief.value = text
       nextRoute = project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done } : { fresh: true, done, pictures: opts.pictures }

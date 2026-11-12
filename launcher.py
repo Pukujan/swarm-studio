@@ -254,10 +254,25 @@ def ensure_server() -> dict:
     return {"running": False, "error": f"server did not answer on {base_url()}; see {data_dir() / 'server.log'}"}
 
 
-def start_run(brief: str, agents: int | None = None) -> dict:
+TALK_FIRST = ("Not started: the brief asks to talk before anything is built. Talk it through first, then send the "
+              "agreed brief without that line (or add --build). In the studio, the Make box opens that talk with the planner.")
+
+
+def talk_first(brief: str) -> bool:
+    """True when the brief says not to build yet (the planner model reads it; engine/discuss.mjs)."""
+    try:
+        got = _request("/api/discuss/read", method="POST", body={"text": brief, "kind": "site"}, timeout=12)
+    except (OSError, urllib.error.URLError, ValueError):
+        return False
+    return got.get("intent") == "talk"
+
+
+def start_run(brief: str, agents: int | None = None, force: bool = False) -> dict:
     up = ensure_server()
     if not up.get("running"):
         return up
+    if not force and talk_first(brief):
+        return {"running": True, "talk": True, "error": TALK_FIRST, "url": up["url"]}
     models = resolve_models()
     body: dict = {"brief": brief, "models": {r: m for r, m in models.items() if "error" not in m}}
     if agents:
