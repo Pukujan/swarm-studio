@@ -469,7 +469,7 @@ function on(e) {
     case 'comment:none':
       chatAgent(null, 'Not sure which section that is about. Select one on the canvas and comment there.')
       break
-    case 'video:start': case 'video:story': case 'video:progress': case 'video:done': case 'video:failed':
+    case 'video:start': case 'video:story': case 'video:progress': case 'video:done': case 'video:failed': case 'video:review':
       videoEvent(e)
       break
     case 'trace':
@@ -3830,11 +3830,16 @@ function videoEvent(e) {
     if (fresh) feed(null, `🎬 ${e.by} animated ${e.made} stills`, 'sys')
   } else if (e.type === 'video:note') {
     if (fresh) feed(null, `🎬 ${e.message}`, 'err')
+  } else if (e.type === 'video:review') {
+    // the critic (spec 32) watched and listened to the finished film: one line with what it found
+    if (fresh && e.state === 'done' && e.says) feed(null, `🎬 checked by watching and listening: ${e.says}`, e.ok ? 'sys' : 'err')
+    if (fresh && e.state === 'failed') feed(null, `🎬 the film was not checked: ${e.message || 'the check failed'}`, 'err')
+    video.review = e.state === 'done' ? { ok: e.ok, says: e.says } : null
   } else if (e.type === 'video:failed') {
     Object.assign(video, { busy: false, message: e.message, stage: 'failed' })
     if (fresh) feed(null, `🎬 video: ${e.message}`, 'err')
   }
-  if (fresh && !video.el && e.type !== 'video:progress' && !(autoM.last?.state === 'working' && view !== 'video')) toggleVideo(true)
+  if (fresh && !video.el && e.type !== 'video:progress' && e.type !== 'video:review' && !(autoM.last?.state === 'working' && view !== 'video')) toggleVideo(true)
   renderVideo()
 }
 

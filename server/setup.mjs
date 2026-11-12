@@ -1,6 +1,6 @@
 // Routes for the one-time Setup sheet (docs/specs/06-onboarding.md; engine/setup.mjs).
 //
-//   GET  /api/setup                    -> { seen, models: { planner, worker }, test, pictures }
+//   GET  /api/setup                    -> { seen, models: { planner, worker, media }, test, pictures }
 //   POST /api/setup { seen, pictures } -> the same; pictures: 'painted' | 'stock' | 'drawn' | null (the default again)
 //   POST /api/setup/models { again }   -> one tiny call to the planner and the builders: { ok, planner, worker }
 //   POST /api/setup/hermes             -> "Let Hermes set this up": opens `hermes model` in a terminal
@@ -19,7 +19,7 @@ import { pictureState, isPictures, modelTester, paintNote } from '../engine/setu
 
 // roles() -> { planner: { model, baseUrl, apiKey }, worker }; call(provider, model) throws when it
 // does not answer; image() -> { providers, imagePick, pick }; setPictures(mode | null) saves the pick.
-export function setupRoutes({ dataDir, roles, call, image, setPictures, feed = null, hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile }) {
+export function setupRoutes({ dataDir, roles, call, image, media = async () => null, setPictures, feed = null, hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile }) {
   const file = join(dataDir, 'setup.json')
   let state = {}
   try { state = JSON.parse(readFileSync(file, 'utf8')) } catch {}
@@ -32,7 +32,9 @@ export function setupRoutes({ dataDir, roles, call, image, setPictures, feed = n
   const view = async () => {
     const r = roles()
     const row = x => ({ model: x?.model || '', host: host(x?.baseUrl), key: !!x?.apiKey })
-    return { seen: !!state.seen, account: account(), models: { planner: row(r.planner), worker: row(r.worker) }, test: lastTest, pictures: await pictures() }
+    // the media reader (spec 32): its model and what it can take; it is not part of the tiny call test
+    const md = await media().catch(() => null)
+    return { seen: !!state.seen, account: account(), models: { planner: row(r.planner), worker: row(r.worker), media: md ? { model: md.model || '', takes: md.takes || '', off: md.pick === 'off' } : null }, test: lastTest, pictures: await pictures() }
   }
   // who this install posts as, from feed.json (written by feed.py); never the token
   const account = () => {

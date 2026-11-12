@@ -89,7 +89,13 @@ It runs after every film, once `video:done` has handed the film over, so it neve
 | voice | the media model transcribes the film's sound; that is compared with the script's words | under 60% of the script's words heard. "Not checked" with no model that hears |
 | look | 8 frames to the media or vision model: blank, words cut off or too small, squashed pictures | any frame named |
 
-## Not in this slice
+## Where a person sees it (slice 2)
+
+- **Settings › Crew › Media reader**: the model, or Off or None. Opened, it says where the media goes and what the model can take ("hears sound, sees frames of a clip"; "as its provider lists it, not tested here" for a model only the endpoint vouches for).
+- **Setup › Models**: a Media line under Planner and Builders, with one note on what it takes. It has no test mark, because Setup's tiny call does not send media.
+- **The film's chat**: after a film, one line, "checked by watching and listening: it plays clean" or "… N things to fix: …". It does not open the video panel.
+
+## Not done yet
 
 - **Fixing what the critic finds.** It names faults; it does not re-cut yet. The next slice: drop a black beat that is too long, raise or lower the mix to the level band, and re-cut once.
 - **A game's sound.** `reviewFilm`'s measures work on any audio file, but `engine/game.mjs` belongs to the game session.

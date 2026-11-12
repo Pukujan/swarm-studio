@@ -3,7 +3,8 @@
 // default already picked, so Start works at once. Shown once on Projects; later from the user menu.
 //
 //   Account   Swarm Feed: sign in with Google, GitHub or Discord, then this install is linked to it
-//   Models    the planner and builder models Hermes passed, tested with one tiny call each
+//   Models    the planner and builder models Hermes passed, tested with one tiny call each, and the
+//             media reader's model with what it can take (spec 32)
 //   Pictures  what builds use for pictures: Painted, Stock photos or Drawn
 import { ic } from './icons.js'
 
@@ -34,7 +35,10 @@ export function makeSetup({ sw }) {
     const fix = t && !t.ok
       ? `${why ? `<p class="su-why">${why}</p>` : ''}<div class="su-acts"><button type="button" class="ui-btn ui-btn-outline ui-btn-sm" data-hermes>Let Hermes set this up</button><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-again>Test again</button></div>${S.hermes && !S.hermes.ok ? `<div class="su-cmd"><code>${esc(S.hermes.command)}</code><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-copy="${esc(S.hermes.command)}">Copy</button></div>` : ''}`
       : ''
-    return row('models', 'Models', `<span class="su-val">${esc(short(m.worker.model))}</span>${state}`, `${line('Planner', 'planner')}${line('Builders', 'worker')}${fix}`)
+    // the media reader: no test mark (it is not called here), its model and, below, what it can take
+    const md = m.media
+    const media = md ? `<div class="su-line"><span>Media</span><b>${esc(md.off ? 'Off' : short(md.model) || 'None')}</b></div><p class="su-note">${esc(md.off ? 'Clips and sounds are kept, not read.' : md.model ? (/^nothing/.test(md.takes || '') ? 'It is not known to hear or watch: clips and sounds are kept, not read.' : `It ${md.takes}.`) : 'No model here hears or watches: clips are kept, not read.')}</p>` : ''
+    return row('models', 'Models', `<span class="su-val">${esc(short(m.worker.model))}</span>${state}`, `${line('Planner', 'planner')}${line('Builders', 'worker')}${media}${fix}`)
   }
 
   // Account: Swarm Feed, signed in first (Google, GitHub or Discord), then this install is linked to
