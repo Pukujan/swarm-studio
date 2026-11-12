@@ -1,168 +1,205 @@
-// Where the person is (docs/specs/34-navigation-state.md): one slice, changed only by the actions
-// below. step(state, action) is pure: it returns { state } (the next state) or { refused } (why not),
-// and a refused action changes nothing, so a mixed screen (one project's name over another's pages,
-// a player over Projects) is never drawn. The stream never picks the build: it can only say that a
-// build the person started has begun (streamed).
-import { stateSlice } from './store.js'
+// Where the person is (docs/specs/34-navigation-state.md): an XState v5 machine. A move it has no
+// transition for does not happen, so a mixed screen (one project's name over another's pages, a
+// player over Projects) is never drawn. The stream never picks the build: `streamed` only clears
+// the wait for a build the person started.
+//
+//   nav
+//   ├─ home                      Projects
+//   ├─ plan                      a game plan
+//   ├─ brand                     the brand sheet (context.from: where it was opened from)
+//   └─ build                     a version is open
+//      ├─ video
+//      ├─ game                   context.run is the version's game run
+//      └─ playable               parallel: room (overview · deck live|replay · app) and player (closed · prototype · visitor)
+import { setup, createActor, assign } from './vendor/xstate/xstate.mjs'
 
 export const ROOMS = ['home', 'overview', 'deck', 'app', 'game', 'video', 'plan', 'brand']
-// the rooms that show a build
-const BUILD_ROOMS = new Set(['overview', 'deck', 'app', 'video'])
-// where the player can open over the build
-const PLAY_ROOMS = new Set(['overview', 'deck', 'app'])
-const PLAYER = new Set(['prototype', 'visitor'])
-
-export const START = Object.freeze({ room: 'home', project: null, version: null, run: null, plan: null, player: 'closed', page: null, replay: false, pending: null, from: null })
-
-const closed = { player: 'closed', page: null }
-const no = why => ({ refused: why })
-const ok = (s, patch) => ({ state: { ...s, ...patch } })
+const BUILD_ROOMS = ['overview', 'deck', 'app', 'video']
+const PLAYABLE = ['overview', 'deck', 'app']
 // a run or project id as the address or a caller gives it: a short plain string, or nothing
 const id = v => (typeof v === 'string' && /^[\w.:-]{1,80}$/.test(v) ? v : null)
 
-export function step(s, a = {}) {
-  switch (a.type) {
-    case 'home':
-      return ok(s, { room: 'home', ...closed, replay: false, from: null })
+const START_CONTEXT = { project: null, version: null, run: null, plan: null, page: null, pending: null, from: null }
+const target = room => (room === 'video' || room === 'game' ? `#nav.build.${room}` : `#nav.build.playable.room.${room}`)
 
-    case 'openProject': {
-      const version = id(a.version), project = id(a.project)
-      if (!version && !project) return no('no project or version named')
-      return ok(s, { room: 'overview', project, version, run: version, plan: null, ...closed, replay: false, from: null })
-    }
-
-    case 'openVersion': {
-      const version = id(a.version)
-      if (!version) return no('no version named')
-      if (!s.project && !s.version) return no('no project is open')
-      const room = BUILD_ROOMS.has(s.room) ? s.room : 'overview'
-      return ok(s, { room, version, run: version, ...closed, replay: false, from: null })
-    }
-
-    case 'started': {
-      const run = id(a.run), room = a.room || 'deck'
-      if (!run) return no('a started build needs its run')
-      if (!BUILD_ROOMS.has(room)) return no(`a build cannot start in ${room}`)
-      return ok(s, { room, project: a.project === undefined ? s.project : id(a.project), version: run, run, plan: null, pending: run, ...closed, replay: false, from: null })
-    }
-
-    case 'enterRoom': {
-      const room = a.room
-      if (room === 'game') {
-        const game = id(a.run)
-        if (!game) return no('the game room needs the game run')
-        if (!s.version) return no('no version is open')
-        return ok(s, { room, run: game, ...closed, replay: false, from: null })
-      }
-      if (!BUILD_ROOMS.has(room)) return no(`${room} is not a room of a build`)
-      if (!s.version) return no(`no build is open for ${room}`)
-      // the other rooms show the version itself, not its game
-      return ok(s, { room, run: s.version, ...closed, replay: room === 'deck' && s.room === 'deck' ? s.replay : false, from: null })
-    }
-
-    case 'openPlan': {
-      const plan = id(a.plan)
-      if (!plan) return no('no plan named')
-      return ok(s, { room: 'plan', plan, ...closed, replay: false, from: null })
-    }
-
-    case 'openBrand':
-      return ok(s, { room: 'brand', ...closed, replay: false, from: s.room === 'brand' ? s.from : s.room })
-
-    case 'leaveBrand': {
-      if (s.room !== 'brand') return no('no brand sheet is open')
-      const back = s.from && (s.from === 'home' || s.from === 'plan' || s.version) ? s.from : 'home'
-      return ok(s, { room: back, from: null })
-    }
-
-    case 'play': {
-      const mode = a.mode || 'prototype'
-      if (!PLAYER.has(mode)) return no(`no player mode ${mode}`)
-      if (!PLAY_ROOMS.has(s.room)) return no(`the player does not open in ${s.room}`)
-      if (!s.run) return no('no build to play')
-      if (a.pages === 0) return no('the build has no pages yet')
-      return ok(s, { player: mode, page: id(a.page) || s.page })
-    }
-
-    case 'playPage':
-      if (s.player === 'closed') return no('the player is closed')
-      return ok(s, { page: id(a.page) })
-
-    case 'stopVisitor':
-      if (s.player !== 'visitor') return no('no visitor is walking')
-      return ok(s, { player: 'prototype' })
-
-    case 'closePlayer':
-      return ok(s, closed)
-
-    case 'replay':
-      if (a.on && s.room !== 'deck') return no('a replay plays in the Design deck')
-      return ok(s, { replay: !!a.on })
-
-    case 'streamed':
-      // news from the stream: a build the person started has begun. Nothing else here changes
-      return ok(s, s.pending && a.run === s.pending ? { pending: null } : {})
-
-    case 'fromAddress':
-      return fromAddress(a.search)
-
-    default:
-      return no(`no action ${a.type}`)
-  }
+// The screen a snapshot shows, as one plain record every consumer and the address read
+export function view(snap) {
+  const m = s => snap.matches(s)
+  const room = m('home') ? 'home' : m('plan') ? 'plan' : m('brand') ? 'brand' : m({ build: 'video' }) ? 'video' : m({ build: 'game' }) ? 'game'
+    : m({ build: { playable: { room: 'deck' } } }) ? 'deck' : m({ build: { playable: { room: 'app' } } }) ? 'app' : 'overview'
+  const player = m({ build: { playable: { player: 'visitor' } } }) ? 'visitor' : m({ build: { playable: { player: 'prototype' } } }) ? 'prototype' : 'closed'
+  const replay = m({ build: { playable: { room: { deck: 'replay' } } } })
+  return { room, player, replay, ...snap.context, page: player === 'closed' ? null : snap.context.page }
 }
+
+// Every room move: to a room of the open version, or to its game
+const toRoom = [
+  ...BUILD_ROOMS.map(room => ({ guard: ({ event }) => event.room === room, target: target(room), reenter: true, actions: assign({ run: ({ context }) => context.version, page: null }) })),
+  { guard: ({ event }) => event.room === 'game' && !!id(event.run), target: target('game'), actions: assign({ run: ({ event }) => id(event.run), page: null }) }
+]
+const opened = room => ({ target: target(room), reenter: true, actions: assign({ version: ({ event }) => id(event.version), run: ({ event }) => id(event.version), page: null }) })
+const playerMoves = {
+  close: { target: 'closed' },
+  page: { actions: assign({ page: ({ event }) => id(event.page) }) }
+}
+const playGuard = ({ event }) => event.pages !== 0
+const pageOf = ({ context, event }) => id(event.page) || context.page
+
+export const navMachine = setup({}).createMachine({
+  id: 'nav',
+  context: { ...START_CONTEXT },
+  initial: 'home',
+  on: {
+    home: { target: '.home' },
+    'open.project': {
+      guard: ({ event }) => !!(id(event.version) || id(event.project)),
+      target: '.build.playable',
+      reenter: true,
+      actions: assign({ project: ({ event }) => id(event.project), version: ({ event }) => id(event.version), run: ({ event }) => id(event.version), plan: null, page: null })
+    },
+    started: [
+      ...['overview', 'deck', 'app', 'video'].map(room => ({
+        guard: ({ event }) => !!id(event.run) && (event.room || 'deck') === room,
+        target: target(room),
+        reenter: true,
+        actions: assign({
+          project: ({ context, event }) => (event.project === undefined ? context.project : id(event.project)),
+          version: ({ event }) => event.run, run: ({ event }) => event.run, pending: ({ event }) => event.run, plan: null, page: null
+        })
+      }))
+    ],
+    plan: { guard: ({ event }) => !!id(event.plan), target: '.plan', actions: assign({ plan: ({ event }) => id(event.plan), page: null }) },
+    brand: { target: '.brand', actions: assign({ from: ({ self }) => view(self.getSnapshot()).room }) },
+    streamed: { actions: assign({ pending: ({ context, event }) => (context.pending && event.run === context.pending ? null : context.pending) }) }
+  },
+  states: {
+    home: {},
+    plan: {},
+    brand: {
+      // the sheet is open already: a second brand is not a move, and it keeps where it came from
+      on: {
+        brand: {},
+        back: [
+          { guard: ({ context }) => context.from === 'plan' && !!context.plan, target: 'plan' },
+          { guard: ({ context }) => context.from === 'game' && !!context.version && !!context.run, target: target('game') },
+          ...BUILD_ROOMS.map(room => ({ guard: ({ context }) => context.from === room && !!context.version, target: target(room) })),
+          { target: 'home' }
+        ]
+      },
+      exit: assign({ from: null })
+    },
+    build: {
+      initial: 'playable',
+      on: { room: toRoom },
+      states: {
+        video: { on: { 'open.version': { guard: ({ event }) => !!id(event.version), ...opened('video') } } },
+        game: { on: { 'open.version': { guard: ({ event }) => !!id(event.version), ...opened('overview') } } },
+        playable: {
+          type: 'parallel',
+          states: {
+            room: {
+              initial: 'overview',
+              states: {
+                overview: { on: { 'open.version': { guard: ({ event }) => !!id(event.version), ...opened('overview') } } },
+                deck: {
+                  initial: 'live',
+                  on: { 'open.version': { guard: ({ event }) => !!id(event.version), ...opened('deck') } },
+                  states: {
+                    live: { on: { replay: { guard: ({ event }) => !!event.on, target: 'replay' } } },
+                    replay: { on: { replay: { guard: ({ event }) => !event.on, target: 'live' } } }
+                  }
+                },
+                app: { on: { 'open.version': { guard: ({ event }) => !!id(event.version), ...opened('app') } } }
+              }
+            },
+            player: {
+              initial: 'closed',
+              // another version of the build closes the player (the room region keeps the room)
+              on: { 'open.version': { guard: ({ event }) => !!id(event.version), target: '.closed' } },
+              states: {
+                closed: {
+                  on: {
+                    play: { guard: playGuard, target: 'prototype', actions: assign({ page: pageOf }) },
+                    watch: { guard: playGuard, target: 'visitor', actions: assign({ page: pageOf }) }
+                  }
+                },
+                prototype: { on: { ...playerMoves, watch: { target: 'visitor', actions: assign({ page: pageOf }) }, play: { actions: assign({ page: pageOf }) } } },
+                visitor: { on: { ...playerMoves, stop: { target: 'prototype' }, play: { target: 'prototype', actions: assign({ page: pageOf }) } } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+})
 
 // The address names the same state and nothing else (spec 34):
 //   ?project=<id>&version=<run>&room=<room>&run=<game run>&plan=<id>&play=<prototype|visitor>&page=<id>
 // ?run=<id> alone (the old form) opens that build's Overview; ?replay=<id> replays it in the deck.
-export function toAddress(s) {
+export function toAddress(v) {
   const q = new URLSearchParams()
-  const room = s.room === 'brand' ? s.from || 'home' : s.room
-  if (room === 'plan' && s.plan) { q.set('room', 'plan'); q.set('plan', s.plan) }
-  else if (room !== 'home' && s.version) {
-    if (s.project) q.set('project', s.project)
-    q.set('version', s.version)
+  const room = v.room === 'brand' ? v.from || 'home' : v.room
+  if (room === 'plan' && v.plan) { q.set('room', 'plan'); q.set('plan', v.plan) }
+  else if (room !== 'home' && room !== 'plan' && v.version) {
+    if (v.project) q.set('project', v.project)
+    q.set('version', v.version)
     if (room !== 'overview') q.set('room', room)
-    if (room === 'game' && s.run) q.set('run', s.run)
-    if (s.player !== 'closed') { q.set('play', s.player); if (s.page) q.set('page', s.page) }
+    if (room === 'game' && v.run) q.set('run', v.run)
+    if (v.player !== 'closed') { q.set('play', v.player); if (v.page) q.set('page', v.page) }
   }
   const t = q.toString()
   return t ? `?${t}` : ''
 }
 
-// What an address asks for, checked by the same rules: anything that does not fit is dropped and
-// the rest stands (a play= on Projects opens Projects, a room for no build opens nothing).
+// The events that rebuild what an address names. They go to the machine like any other, so
+// whatever it does not take is dropped and the rest stands (a play= on Projects opens Projects).
 export function fromAddress(search = '') {
   const q = new URLSearchParams(search)
   const get = k => id(q.get(k))
-  let s = { ...START }
-  const apply = a => { const r = step(s, a); if (r.state) s = r.state; return !!r.state }
-  if (q.get('replay') && get('replay')) {
-    apply({ type: 'openProject', version: get('replay') })
-    apply({ type: 'enterRoom', room: 'deck' })
-    apply({ type: 'replay', on: true })
-    return { state: s }
-  }
-  if (q.get('room') === 'plan') { apply({ type: 'openPlan', plan: get('plan') }); return { state: s } }
+  const replay = get('replay')
+  if (replay) return [{ type: 'home' }, { type: 'open.project', version: replay }, { type: 'room', room: 'deck' }, { type: 'replay', on: true }]
+  if (q.get('room') === 'plan') return [{ type: 'home' }, { type: 'plan', plan: get('plan') }]
   const version = get('version') || get('run')
-  if (!version && !get('project')) return { state: s }
-  apply({ type: 'openProject', project: get('project'), version: version })
+  if (!version && !get('project')) return [{ type: 'home' }]
+  const events = [{ type: 'home' }, { type: 'open.project', project: get('project'), version }]
   const room = q.get('room')
-  if (room === 'game') apply({ type: 'enterRoom', room, run: get('version') ? get('run') : null })
-  else if (room && room !== 'overview') apply({ type: 'enterRoom', room })
-  if (q.get('play')) apply({ type: 'play', mode: q.get('play'), page: get('page') })
-  return { state: s }
+  if (room === 'game') events.push({ type: 'room', room, run: get('version') ? get('run') : null })
+  else if (room && room !== 'overview') events.push({ type: 'room', room })
+  const play = q.get('play')
+  if (play === 'prototype') events.push({ type: 'play', page: get('page') })
+  if (play === 'visitor') events.push({ type: 'watch', page: get('page') })
+  return events
 }
 
-// The slice and its one door. dispatch(action) → the new state, or null when it was refused
-// (logged, so an impossible transition shows in the console instead of on screen).
-export function makeNav({ log = (...m) => console.warn(...m) } = {}) {
-  const slice = stateSlice('nav', { ...START })
-  const dispatch = a => {
-    const r = step({ ...slice.state }, a)
-    if (r.refused) { log(`nav: refused ${a?.type}: ${r.refused}`); return null }
-    const changed = Object.keys(r.state).some(k => r.state[k] !== slice.state[k])
-    if (changed) slice.set(r.state)
-    return slice.state
+const same = (a, b) => Object.keys(a).every(k => a[k] === b[k])
+
+// The running machine and its one door. go(event) → the new view, or null when the machine has no
+// such move from here (logged, so an impossible move shows in the console instead of on screen).
+// Listeners run only when the view changed.
+export function makeNav({ log = (...m) => console.warn(...m), search = '' } = {}) {
+  const actor = createActor(navMachine).start()
+  for (const e of fromAddress(search)) actor.send(e)
+  let last = view(actor.getSnapshot())
+  const subs = new Set()
+  actor.subscribe(snap => {
+    const next = view(snap)
+    if (same(next, last)) return
+    last = next
+    for (const f of subs) { try { f(next) } catch (err) { console.error('nav:', err) } }
+  })
+  const go = e => {
+    if (!actor.getSnapshot().can(e)) { log(`nav: no ${e?.type} from ${last.room}`); return null }
+    actor.send(e)
+    return last
   }
-  return { get state() { return slice.state }, dispatch, on: slice.on, address: () => toAddress(slice.state) }
+  return {
+    actor,
+    get view() { return last },
+    go,
+    // Back, Forward and a reload: the address's events, from Projects
+    restore: s => { for (const e of fromAddress(s)) actor.send(e); return last },
+    subscribe(f) { subs.add(f); return () => subs.delete(f) },
+    address: () => toAddress(last)
+  }
 }
