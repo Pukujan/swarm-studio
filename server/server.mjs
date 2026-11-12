@@ -2775,6 +2775,27 @@ const server = createServer((req, res) => {
       .catch(err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
     return
   }
+  // A stock-library photo, by its file id, from this server. The library's CDN sends no CORS
+  // header, so a page holding one of its photos could not be photographed (the page snapshot,
+  // its thumbnail, the reviewer's screenshot all read their pictures back). Fetched once, kept
+  // in the data dir. The host is fixed and the id is a UUID: nothing else can be asked for.
+  const lib = url.pathname.match(/^\/standin\/lib\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/)
+  if (lib) {
+    const dir = join(dataDir, 'standins', 'lib'), file = join(dir, lib[1])
+    const send = buf => { res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' }); res.end(buf) }
+    if (existsSync(file)) return send(readFileSync(file))
+    fetch(`https://files.design-bakery.com/${lib[1]}`, { signal: AbortSignal.timeout(20000) })
+      .then(async r => {
+        if (!r.ok || !/^image\//.test(r.headers.get('content-type') || '')) throw new Error(`HTTP ${r.status}`)
+        const buf = Buffer.from(await r.arrayBuffer())
+        if (buf.length > 12 * 1024 * 1024) throw new Error('too large')
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(file, buf)
+        send(buf)
+      })
+      .catch(() => res.writeHead(502).end('not found'))
+    return
+  }
   const sti = url.pathname.match(/^\/standin\/([0-9a-f]{16}\.(jpg|png|webp))$/)
   if (sti) {
     const file = standinsOf().file(sti[1])

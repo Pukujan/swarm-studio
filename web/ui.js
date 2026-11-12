@@ -119,6 +119,8 @@
   // a canvas zoomed out, or a row of thumbnails, never holds full-size pictures. Returns the copy's
   // url, or null until it is ready; `ready` is called with it then.
   const smalls = new Map()
+  // one copy is made at a time: each decodes a full picture, and a dozen at once stalls the page
+  let smallQueue = Promise.resolve()
   function small(src, max = 256, { by = 'long', ready } = {}) {
     if (!src) return null
     const k = `${max}|${by}|${src}`
@@ -126,7 +128,9 @@
     if (typeof have === 'string') return have
     if (ready) (smalls.get(`${k}|wait`) || smalls.set(`${k}|wait`, []).get(`${k}|wait`)).push(ready)
     if (have) return null
-    smalls.set(k, (async () => {
+    smalls.set(k, (smallQueue = smallQueue.catch(() => {}).then(async () => {
+      // not while a canvas is being zoomed or panned (its world carries .moving): the copy can wait
+      while (document.querySelector('.world.moving, .pj-world.moving')) await new Promise(r => setTimeout(r, 150))
       const im = new Image()
       im.decoding = 'async'
       im.src = src
@@ -144,7 +148,7 @@
       const blob = await new Promise(ok => cv.toBlob(ok, 'image/webp', 0.86))
       cv.width = cv.height = 0
       return blob ? URL.createObjectURL(blob) : src
-    })().catch(() => src).then(url => {
+    })).catch(() => src).then(url => {
       smalls.set(k, url)
       for (const fn of smalls.get(`${k}|wait`) || []) try { fn(url) } catch {}
       smalls.delete(`${k}|wait`)
