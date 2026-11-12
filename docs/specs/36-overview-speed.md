@@ -64,3 +64,28 @@ would. Headless Chromium, on a MacBook Air (M-series).
 Opening a project again no longer waits for the canvas: the pictures come from disk. A cold open and
 a build cost a little more, because the full-size picture is now taken and sent too. PR 3 moves that
 work into idle time.
+
+## 2. Skeleton tiles
+
+The board (`server/board.mjs`) gives each page its `plan`: `[{ id, role, h, done }]`, one entry per
+planned section (from `layer:plan`), its height in pixels (60 to 4000, else 480), and whether it is
+built (`layer:done`). Shared (`'*'`) sections are left out.
+
+A page without a picture is drawn as its skeleton: a block per section, in the section's proportions,
+coloured from the project's theme. The hero block shows the build's cover picture when there is one.
+The tile's shape is the plan's (at least 1.25 tall for 1 wide), so the stage does not jump when the
+picture comes. A page with a picture keeps a pulsing skeleton block over each section not yet built.
+Without a plan, the blocks come from the canvas's laid-out sections, else from the usual three.
+
+| | before (PR 1) | after PR 2 |
+|---|---|---|
+| pages on the stage, opened cold | 640 ms | 298 ms |
+| first picture, opened cold | 1027 ms | 867 ms |
+| all 14 pictures, opened cold | 3564 ms | 3155 ms |
+| first picture, opened again | 547 ms | 174 ms |
+| all 14 pictures, opened again | 567 ms | 274 ms |
+| main thread busy during a build | 29% | 31% |
+| panning at rest / during a build | 60 / 58 fps | 60 / 58 fps |
+
+Every page is on the stage, in its shape and colours, in under a third of a second. The runs vary by
+a few hundred milliseconds (a second run of PR 1 opened cold in 898 to 1405 ms).

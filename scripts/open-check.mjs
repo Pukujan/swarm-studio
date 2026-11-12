@@ -134,6 +134,10 @@ try {
 
   console.log('open A, play, home, open B')
   await page.click('.home .card[aria-label="Alpha Tea"]')
+  // before its picture, a page is a block per planned section: never a title card or a thin strip
+  await page.waitForSelector('.pj-stage[aria-label="Overview"] .ab.page', { timeout: 5000 }).catch(() => {})
+  const tiles = await page.evaluate(() => [...document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page')].map(a => ({ sk: a.querySelectorAll('.sk:not(.over) i').length, img: !!a.querySelector(':scope > img'), tc: !!a.querySelector('.tc'), ratio: a.offsetHeight / a.offsetWidth })))
+  ok(tiles.length === 2 && tiles.every(t => (t.sk || t.img) && !t.tc && t.ratio >= 1.2), `before their pictures, pages are skeletons from the plan (${JSON.stringify(tiles)})`)
   await settle(A1)
   await shows(A1, 'Alpha Tea', 'Alpha opened')
   // the Overview photographs each page once and keeps both sizes in the run's folder (spec 36)
