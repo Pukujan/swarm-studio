@@ -299,11 +299,13 @@ export function autoJob(d) {
     else set('deploy', 'skipped', 'stopped')
     // the optional launch kit: posts written from the run's facts, never posted from here
     if (step('launch')) {
-      if (job.stopped || !d.writeLaunch) set('launch', 'skipped', job.stopped ? 'stopped' : 'no launch kit writer')
+      // nothing is announced before it is there: no live link and no video, no kit
+      const nothing = !job.url && !job.steps.some(s => s.id === 'video' && s.state === 'done')
+      if (job.stopped || !d.writeLaunch || nothing) set('launch', 'skipped', job.stopped ? 'stopped' : nothing ? 'nothing to launch yet: no live link' : 'no launch kit writer')
       else {
         try {
           set('launch', 'working', 'writing the posts from what was built')
-          const kit = d.writeLaunch(job.run)
+          const kit = await d.writeLaunch(job.run)
           set('launch', 'done', `${kit.posts.length} posts ready in the launch kit. Nothing is posted until you press Post on each one.`)
         } catch (err) { set('launch', 'failed', String(err.message || err)) }
       }

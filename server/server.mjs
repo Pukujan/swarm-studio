@@ -1049,8 +1049,32 @@ async function mediaNow() {
   ])
   return mediaSources({ env: process.env, keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
 }
+// The launch kit's pitch (engine/launch.mjs): one line on what the product is and who it is for,
+// written by the planner from the pages the crew planned. Never the person's words to the crew.
+async function writePitch(events, id) {
+  const model = modelFor('planner')
+  if (!model || !models.planner.apiKey) return ''
+  const f = runFacts(events, id)
+  const pages = events.filter(e => e.type === 'page').map(p => `- ${p.title}${p.purpose ? `: ${p.purpose}` : ''}`).join('\n')
+  const r = await streamChat(provider('planner'), {
+    trace: { kind: 'launch-pitch' }, model, maxTokens: 80, temperature: 0.4, signal: AbortSignal.timeout(20000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
+    messages: [{ role: 'system', content: 'Write one plain line, under 110 characters, for a launch post: what this product is and who it is for. No hype words, no emoji, no hashtags, no quotes. Never mention AI, prompts, a crew or a build, and never repeat instructions the person gave.' },
+      { role: 'user', content: `Product: ${f.name}\nPages:\n${pages}\nWhat the person asked for: ${f.prompt}` }]
+  })
+  return String(r.text || '').split('\n')[0].replace(/^["'“]+|["'”]+$/g, '').trim().slice(0, 150)
+}
+// nothing to launch yet: no live link and no video. A design alone is not a launch.
+const launchable = f => !!(f.url || f.video)
+async function launchKit(id) {
+  const events = readEvents(id) || []
+  if (!launchable(runFacts(events, id))) throw Object.assign(new Error('Nothing to launch yet: publish it first.'), { code: 409 })
+  let pitch = ''
+  try { pitch = await writePitch(events, id) } catch {}
+  return writeLaunch(join(runsDir, id), events, id, { pitch })
+}
 const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, connectors,
-  writeLaunch: id => writeLaunch(join(runsDir, id), readEvents(id), id) })
+  writeLaunch: launchKit })
 
 // ---------- the Auto show (spec 07): the summary card's numbers, the launch kit, chatter lines
 
@@ -2711,7 +2735,8 @@ const server = createServer((req, res) => {
     const dir = join(runsDir, id)
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (!existsSync(join(dir, 'events.jsonl'))) return reply(404, { error: 'no such run' })
-    if (req.method === 'GET' && !sub) { const kit = readLaunch(dir); return kit ? reply(200, kit) : reply(404, { error: 'no launch kit yet' }) }
+    // a kit written before it knew the product's name and whether anything was live is written again
+    if (req.method === 'GET' && !sub) { const kit = readLaunch(dir); return kit?.v >= 2 ? reply(200, kit) : reply(404, { error: 'no launch kit yet' }) }
     if (req.method !== 'POST') return reply(405, { error: 'POST' })
     let body = ''
     req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
@@ -2719,7 +2744,7 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       try {
-        if (!sub) return reply(200, writeLaunch(dir, readEvents(id), id))
+        if (!sub) return reply(200, await launchKit(id))
         if (sub === 'mark') return reply(200, markLaunch(dir, input))
         // send: one post, one platform, confirmed by the person in the canvas's confirm box
         const kit = readLaunch(dir)
@@ -2738,7 +2763,7 @@ const server = createServer((req, res) => {
           if (err) return reply(502, { error: String(errOut || err.message).split('\n').filter(Boolean).at(-1)?.slice(0, 300) || 'the send failed' })
           reply(200, markLaunch(dir, { post: post.id, action: 'sent', target }))
         })
-      } catch (err) { reply(400, { error: String(err.message || err) }) }
+      } catch (err) { reply(err.code === 409 ? 409 : 400, { error: String(err.message || err) }) }
     })
     return
   }

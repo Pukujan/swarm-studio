@@ -8,6 +8,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { navBrand, projectName } from './naming.mjs'
 
 export const NETWORKS = [
   { id: 'x', label: 'X', how: 'intent', limit: 280 },
@@ -27,19 +28,34 @@ const hash = s => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^
 const clip = (s, n) => s.length <= n ? s : s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…'
 const tag = s => '#' + clean(s).replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').map(w => w[0]?.toUpperCase() + w.slice(1)).join('').slice(0, 30)
 
+// The person's words to the crew are not a pitch: "do u wanna grill me first?", "dont build yet",
+// "i need an air booking api or something?". Only the clauses that say what the product is are kept.
+const TO_CREW = /\?|\b(grill|don'?t|dont|do not|let'?s|lets|talk|discuss|build|make me|i need|i want|can you|could you|please|u |wanna|gonna|something|first|yet|accounts?:|the admin sees)\b/i
+export function pitchOf(prompt) {
+  const parts = String(prompt || '').split(/(?<=[.!?])\s+|,\s+|\s+-\s+/).map(x => x.trim()).filter(Boolean)
+  const keep = parts.filter(x => !TO_CREW.test(x) && /\p{L}{3}/u.test(x))
+  const line = clip((keep[0] || '').replace(/[.!?]+$/, ''), 150)
+  return line.charAt(0).toUpperCase() + line.slice(1)
+}
+
 // What happened in the run, from its events: the same numbers the summary card shows.
-export function runFacts(events, id) {
+// pitch: one line on what the product is and who it is for (the planner writes it from the
+// pages, server/server.mjs); without it, the clauses of the prompt that describe the product.
+export function runFacts(events, id, { pitch: given = '' } = {}) {
   const ev = events || []
   const start = ev.find(e => e.type === 'run:start') || {}
   const auto = ev.findLast(e => e.type === 'auto') || null
   const pages = ev.filter(e => e.type === 'page')
   const sections = new Set(ev.filter(e => e.type === 'layer:done' && !e.restored).map(e => `${e.page}/${e.layer}`))
   const images = ev.filter(e => e.type === 'image')
-  const first = pages.find(p => p.index === 0) || pages[0]
-  const name = clean((first?.title || start.brief || 'Our new site').split(/\s+[—–|:-]\s+/)[0]).slice(0, 60) || 'Our new site'
   const prompt = clean(auto?.prompt || start.brief || '')
-  // the pitch: the prompt's first clause, minus the name it may start with
-  let pitch = prompt.split(/(?<=[.!?])\s/)[0].replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[—–:,-]?\\s*`, 'i'), '')
+  // the product's one name (engine/naming.mjs): the brief's brand, else the wordmark the crew put in
+  // the nav ("SkyLedger"); never the first page's title ("Flight Search" names a screen)
+  const nav = ev.findLast(e => e.type === 'layer:done' && e.page === '*' && e.layer === 'nav' && e.html)
+  const name = clean(projectName({ brief: prompt, brand: navBrand(nav?.html), title: start.title })).slice(0, 60)
+  // the pitch, minus the name it may start with
+  let pitch = clean(given) || pitchOf(prompt)
+  pitch = pitch.replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(is\\s+)?[—–:,-]?\\s*`, 'i'), '')
   pitch = clip(pitch.replace(/[.!?]+$/, ''), 150)
   pitch = pitch.charAt(0).toUpperCase() + pitch.slice(1)
   const steps = Object.fromEntries((auto?.steps || []).map(s => [s.id, s]))
@@ -48,7 +64,7 @@ export function runFacts(events, id) {
   const games = steps.games?.state === 'done' ? (auto.games === 'big' ? 'big' : 'mini') : null
   return {
     run: id, name, pitch, prompt: clip(prompt, 600), url: url && /^https:\/\//.test(url) ? url : null,
-    pages: pages.length, sections: sections.size, images: images.length, agents: (start.agents || []).length,
+    pages: pages.length, titles: pages.sort((a, b) => (a.index ?? 0) - (b.index ?? 0)).map(p => clean(p.title)).filter(Boolean).slice(0, 6), sections: sections.size, images: images.length, agents: (start.agents || []).length,
     minutes: auto?.ms ? Math.max(1, Math.round(auto.ms / 60000)) : start.t && ev.at(-1)?.t ? Math.max(1, Math.round((ev.at(-1).t - start.t) / 60000)) : null,
     games, shop: steps.shop?.state === 'done', data: steps.data?.state === 'done', pack: auto?.pack?.name || null,
     video: video ? `/video/${id}/promo.mp4` : null,
@@ -62,8 +78,10 @@ export function writePosts(f) {
   const play = f.url && f.games ? `${f.url.replace(/\/?$/, '/')}play` : ''
   const h = hash(f.name + f.pitch)
   const pick = list => list[h % list.length]
+  // what is inside, by name (no counts: "0 images" sells nothing)
+  const titles = (f.titles || []).slice(0, 4)
   const built = [
-    `${f.pages} page${f.pages === 1 ? '' : 's'}`,
+    titles.length ? (titles.length > 1 ? `${titles.slice(0, -1).join(', ')} and ${titles.at(-1)}` : titles[0]) : f.pages ? `${f.pages} page${f.pages === 1 ? '' : 's'}` : '',
     f.games === 'big' ? 'a playable game on /play' : f.games === 'mini' ? 'three mini games on /play' : '',
     f.shop ? 'a $2 credit pack (demo checkout)' : '',
     f.video ? 'a promo video' : ''
@@ -72,8 +90,9 @@ export function writePosts(f) {
   const how = f.minutes && f.agents ? `Built in about ${f.minutes} minute${f.minutes === 1 ? '' : 's'} by a swarm of ${f.agents} AI agents in Swarm Studio, from one prompt.` : 'Built by a swarm of AI agents in Swarm Studio, from one prompt.'
   const feature = f.games === 'big' ? pick(['The trial on /play is a full run: fight, pick upgrades, beat the boss. Post your score.', 'Jump into /play: one full run, rooms, upgrades and a boss fight. Can you top the board?'])
     : f.games === 'mini' ? pick(['Three quick games on /play, each under a minute, with a leaderboard.', '/play has three tiny games. Beat my best score.'])
-      : `${f.sections} sections, ${f.images} images, every page designed and checked.`
-  const hook = pick([`${f.name} is live.`, `Say hello to ${f.name}.`, `Just launched: ${f.name}.`])
+      : ''
+  // "is live" only with a live link to go with it
+  const hook = link ? pick([`${f.name} is live.`, `Say hello to ${f.name}.`, `Just launched: ${f.name}.`]) : pick([`Say hello to ${f.name}.`, `Meet ${f.name}.`])
   const tags = [tag(f.name), f.games ? '#indiegame' : '#webdesign', f.games ? '#gamedev' : '#buildinpublic', '#madewithAI'].filter(t => t.length > 1)
   const posts = []
   const add = (network, text, extra = {}) => {
@@ -83,7 +102,7 @@ export function writePosts(f) {
   // X: a thread of 3–5 posts (hook, what it is, a gameplay or feature line, the link)
   const thread = [
     `${hook} ${f.pitch ? `${f.pitch}.` : ''}`.trim(),
-    `What's inside: ${list}.`,
+    built.length ? `What's inside: ${list}.` : '',
     feature,
     how,
     link ? `Try it: ${play || link}` : ''
@@ -97,12 +116,12 @@ export function writePosts(f) {
     link ? `Have a look: ${link}` : '',
     tags.slice(0, 3).join(' ')
   ].filter(Boolean).join('\n\n'))
-  add('threads', clip(`${hook} ${f.pitch ? `${f.pitch}. ` : ''}${feature}${link ? ` ${play || link}` : ''}`, 490))
+  add('threads', clip([hook, f.pitch ? `${f.pitch}.` : '', feature, link ? play || link : ''].filter(Boolean).join(' '), 490))
   add('bluesky', clip(`${hook} ${f.pitch ? `${f.pitch}.` : ''}${link ? ` ${play || link}` : ''}`, 295))
-  const caption = `${hook} ${f.pitch ? `${f.pitch}. ` : ''}${feature}${link ? `\n\nLink in bio.` : ''}\n\n${tags.join(' ')}`
+  const caption = `${hook} ${f.pitch ? `${f.pitch}. ` : ''}${feature}`.trim() + `${link ? `\n\nLink in bio.` : ''}\n\n${tags.join(' ')}`
   add('instagram', caption)
-  add('tiktok', clip(`${hook} ${feature} ${tags.join(' ')}`, 300))
-  const announce = `**${f.name} is live!**\n${f.pitch ? `${f.pitch}.\n` : ''}${list[0].toUpperCase() + list.slice(1)}.${play ? `\n🎮 Play: ${play}` : ''}${link ? `\n🔗 ${link}` : ''}`
+  add('tiktok', clip([hook, feature, tags.join(' ')].filter(Boolean).join(' '), 300))
+  const announce = `**${link ? `${f.name} is live!` : `Meet ${f.name}`}**\n${f.pitch ? `${f.pitch}.\n` : ''}${list[0].toUpperCase() + list.slice(1)}.${play ? `\n🎮 Play: ${play}` : ''}${link ? `\n🔗 ${link}` : ''}`
   add('discord', announce)
   add('slack', announce.replace(/\*\*(.+?)\*\*/g, '*$1*'))
   add('telegram', announce.replace(/\*\*(.+?)\*\*/g, '$1'))
@@ -117,9 +136,9 @@ const mediaOf = f => [
   ...(f.url ? [{ kind: 'link', label: 'Live link', src: f.url }] : [])
 ]
 
-export function writeLaunch(runDir, events, id) {
-  const facts = runFacts(events, id)
-  const kit = { t: Date.now(), run: id, facts, media: mediaOf(facts), posts: writePosts(facts), log: [] }
+export function writeLaunch(runDir, events, id, opts = {}) {
+  const facts = runFacts(events, id, opts)
+  const kit = { v: 2, t: Date.now(), run: id, facts, media: mediaOf(facts), posts: writePosts(facts), log: [] }
   writeFileSync(join(runDir, 'launch.json'), JSON.stringify(kit, null, 2))
   return kit
 }
