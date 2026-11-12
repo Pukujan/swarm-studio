@@ -46,7 +46,8 @@ function site(runs, run, { brief, name, t, kind, pages, done = true, extra = [] 
 
 // noHermes: no model of its own and an empty Hermes home, so every role goes through a Hermes that is not
 // running (the "no Hermes" screens)
-export async function studio({ quiet = true, noHermes = false } = {}) {
+// root: the tree whose server and web/ to run (the motion check runs the base branch's too)
+export async function studio({ quiet = true, noHermes = false, root = ROOT, setup } = {}) {
   const data = mkdtempSync(join(tmpdir(), 'swarm-walk-'))
   const runs = join(data, 'runs')
   mkdirSync(runs)
@@ -70,6 +71,7 @@ export async function studio({ quiet = true, noHermes = false } = {}) {
     [ids.old]: { ...proj([ids.old], 'Old Pier', T0 + 6 * 3600e3), trashed: T0 + 7 * 3600e3 }
   } }))
 
+  setup?.({ runs, site, T0, rid })
   const fake = createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"no model here"}')) })
   const fakePort = await freePort()
   await new Promise(r => fake.listen(fakePort, '127.0.0.1', r))
@@ -78,7 +80,7 @@ export async function studio({ quiet = true, noHermes = false } = {}) {
   const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
   if (noHermes) { delete env.SWARM_BASE_URL; delete env.SWARM_API_KEY; env.HERMES_HOME = join(data, 'hermes'); mkdirSync(env.HERMES_HOME) }
   for (const k of ['SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
-  const server = spawn(process.execPath, [join(ROOT, 'server/server.mjs')], { env, stdio: ['ignore', quiet ? 'ignore' : 'inherit', quiet ? 'ignore' : 'inherit'] })
+  const server = spawn(process.execPath, [join(root, 'server/server.mjs')], { env, stdio: ['ignore', quiet ? 'ignore' : 'inherit', quiet ? 'ignore' : 'inherit'] })
   const api = (path, body) => fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json())
   for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r.ok, () => false)) break; await wait(150) }
   const stop = () => { server.kill(); fake.close(); rmSync(data, { recursive: true, force: true }) }
