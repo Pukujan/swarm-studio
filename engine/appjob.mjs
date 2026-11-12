@@ -730,7 +730,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     let files = []
     try { files = readdirSync(img) } catch {}
     const pick = files.find(f => /^game-title\.(webp|png|jpe?g)$/.test(f)) || files.find(f => /^\d{1,3}\.(png|jpe?g|webp)$/.test(f))
-    return { name, description: desc, picture: pick ? join(img, pick) : null, kind }
+    const theme = events.findLast(e => e.type === 'theme') || null
+    return { name, description: desc, picture: pick ? join(img, pick) : null, kind, theme }
   }
 
   // the run's project name: the projects index, else the brief's brand (never a screen's title)

@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process'
 import { MOTION_CSS, motionPreset, motionSource, swarmMotion } from './motion.mjs'
 import { layoutSource, swarmLayout } from './layout.mjs'
 import { isScreenName, packageName, projectName } from './naming.mjs'
-import { seoFromEvents, seoSite, applyHead } from './seo.mjs'
+import { seoFromEvents, seoSite, applyHead, ownAppBrand } from './seo.mjs'
 
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const text = html => String(html || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()
@@ -311,16 +311,18 @@ const toHsl = html => html.replace(new RegExp(`(?<!hsl\\()var\\(--(${SHADCN.join
 
 // pnpm 10+ skips build scripts unless a project allows them, and Vite needs
 // esbuild's: without this the app never starts and dyad can't screenshot it.
-export function seedProject(scaffold, dir, name) {
+export function seedProject(scaffold, dir, name, theme = null) {
   rmSync(dir, { recursive: true, force: true })
   cpSync(scaffold, dir, { recursive: true, filter: f => !/[\\/](node_modules|\.git)([\\/]|$)/.test(f) })
   writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'onlyBuiltDependencies:\n  - "@swc/core"\n  - esbuild\nallowBuilds:\n  "@swc/core": true\n  esbuild: true\n')
   const pkg = join(dir, 'package.json'), json = JSON.parse(readFileSync(pkg, 'utf8'))
   writeFileSync(pkg, JSON.stringify({ ...json, name: packageName(name, json.name), pnpm: { ...json.pnpm, onlyBuiltDependencies: ['@swc/core', 'esbuild'] } }, null, 2) + '\n')
+  // the app is the person's: its own icons and title, no Dyad marks for its visitors
+  ownAppBrand(dir, { name, theme })
 }
 
 export function dyadApp(snap, dir, { runId, runDir, scaffold }) {
-  seedProject(scaffold, dir, snap.brand)
+  seedProject(scaffold, dir, snap.brand, snap.theme)
   const src = join(dir, 'src'), secDir = join(src, 'components', 'swarm'), pageDir = join(src, 'pages')
   mkdirSync(secDir, { recursive: true })
   rmSync(join(src, 'pages', 'Index.tsx'), { force: true })

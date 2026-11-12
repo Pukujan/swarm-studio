@@ -36,6 +36,15 @@ The site's thumbnail is the home page's pick. Export keeps it next to the run (`
 - An app or game deployed to Vercel gets the same head tags on its `index.html` (its own title kept), a `share.jpg` (a game's title picture, else the first picture) and a favicon.
 - A build with a promo film (60 MB or less) exports `film.html`: the film with its poster, its own title and description, `og:video` and a `Movie` JSON-LD.
 
+## Its own icon, nothing of Dyad's
+
+- Every app and game gets its own icon in `public/`: `favicon.svg`, `favicon.ico` (16, 32, 48), `apple-touch-icon.png` (180) and `icon-512.png`, in the theme's primary colour with the name's first letter, linked from `index.html`. A manifest already there gets the icons too.
+- No name yet: a plain grey square. Never Dyad's icon, never Swarm's.
+- A visitor sees nothing of Dyad: the title is the app's name, not `dyad-generated-app`; "Made with Dyad" renders nothing; `placeholder.svg` is a plain grey square; the README is the app's. The Apache-2.0 notices in `dyad/` stay.
+- This runs when the project is made and again at every deploy, so an older app is fixed by deploying it again.
+- An exported site links its own `favicon.svg` and ships no Dyad file. It has no `/favicon.ico`, so a browser asking for one gets a 404, not someone else's icon.
+- Test: `tests/appicons.test.mjs` (no file identical to Dyad's favicon, no "dyad" in the served HTML).
+
 ## Builds made before this
 
 - A saved build: export it again (⬇ Export, or `node scripts/seo.mjs <run id> [--base https://…/]`). The crew's fields are filled from the page copy.

@@ -522,10 +522,91 @@ export function shareCard(dst, { bg = '#111111', fg = '#ffffff', title = '', sub
   } catch { return false }
 }
 
+// The site's or app's own mark: its first letter in its colours. With no name it is a plain
+// neutral square: never Dyad's mark, and never Swarm's (people's builds carry no one's brand).
+const initialOf = brand => (squash(brand).match(/[\p{L}\d]/u) || [''])[0].toUpperCase()
 export function faviconSvg({ brand = '', bg = '#111111', fg = '#ffffff' } = {}) {
-  const letter = attr((squash(brand).match(/[\p{L}\d]/u) || ['S'])[0].toUpperCase())
+  const letter = attr(initialOf(brand))
   const c = v => (/^#[0-9a-f]{3,8}$/i.test(v || '') ? v : null)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${c(bg) || '#111111'}"/><text x="32" y="44" text-anchor="middle" font-family="Georgia, serif" font-size="38" font-weight="700" fill="${c(fg) || '#ffffff'}">${letter}</text></svg>\n`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${c(bg) || '#111111'}"/>${letter ? `<text x="32" y="44" text-anchor="middle" font-family="Georgia, serif" font-size="38" font-weight="700" fill="${c(fg) || '#ffffff'}">${letter}</text>` : ''}</svg>\n`
+}
+
+// Dyad's own favicon, as its app template ships it (dyad/scaffold/public/favicon.ico)
+export const DYAD_FAVICON_SHA1 = 'e0c147468e1acc0ea49ce18d9ac79f18ef905001'
+const sha1Of = f => { try { return createHash('sha1').update(readFileSync(f)).digest('hex') } catch { return '' } }
+
+const PY_ICONS = `import sys
+from PIL import Image, ImageDraw, ImageFont
+ico, png, big, bg, fg, letter = sys.argv[1:7]
+def font(n):
+    for f in ['/System/Library/Fonts/Supplemental/Georgia Bold.ttf', '/System/Library/Fonts/Helvetica.ttc', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf']:
+        try: return ImageFont.truetype(f, n)
+        except Exception: pass
+    return ImageFont.load_default()
+def draw(n, round_=True):
+    im = Image.new('RGBA', (n, n), (0, 0, 0, 0) if round_ else bg)
+    d = ImageDraw.Draw(im)
+    if round_: d.rounded_rectangle((0, 0, n - 1, n - 1), radius=round(n * 0.22), fill=bg)
+    if letter: d.text((n / 2, n / 2), letter, fill=fg, font=font(round(n * 0.6)), anchor='mm')
+    return im
+draw(256).save(ico, sizes=[(16, 16), (32, 32), (48, 48)])
+draw(180, False).convert('RGB').save(png)
+draw(512, False).convert('RGB').save(big)
+`
+
+// An app's own icons in public/: favicon.svg, favicon.ico (16/32/48), apple-touch-icon.png
+// (180) and icon-512.png, from its name's first letter and its colours; a web manifest, when
+// the app has one, lists them. Dyad's favicon is replaced wherever it is found.
+export function appIcons(dir, { name = '', theme = null } = {}) {
+  const pub = join(dir, 'public')
+  mkdirSync(pub, { recursive: true })
+  const v = theme?.vars || {}
+  const hex = c => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : null)
+  const bg = hex(v['--primary']) || hex(v['--foreground']) || (name ? '#1f1f1f' : '#8a8a8a')
+  const fg = hex(v['--primary-foreground']) || hex(v['--background']) || '#ffffff'
+  writeFileSync(join(pub, 'favicon.svg'), faviconSvg({ brand: name, bg, fg }))
+  let raster = false
+  if (toolsNow().python) { try { py(PY_ICONS, [join(pub, 'favicon.ico'), join(pub, 'apple-touch-icon.png'), join(pub, 'icon-512.png'), bg, fg, initialOf(name)]); raster = true } catch {} }
+  // no image tool here: Dyad's .ico goes, and browsers use the SVG
+  if (!raster) for (const f of ['favicon.ico', 'apple-touch-icon.png', 'icon-512.png']) if (existsSync(join(pub, f)) && (f !== 'favicon.ico' || sha1Of(join(pub, f)) === DYAD_FAVICON_SHA1)) rmSync(join(pub, f), { force: true })
+  for (const m of ['manifest.webmanifest', 'site.webmanifest', 'manifest.json']) {
+    const f = join(pub, m)
+    if (!existsSync(f)) continue
+    try {
+      const j = JSON.parse(readFileSync(f, 'utf8'))
+      j.icons = [{ src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' }, ...(raster ? [{ src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }, { src: '/icon-512.png', sizes: '512x512', type: 'image/png' }] : [])]
+      if (name && !j.name) j.name = name
+      writeFileSync(f, JSON.stringify(j, null, 2) + '\n')
+    } catch {}
+  }
+  return { raster }
+}
+
+// What a built app shows a visitor carries no Dyad branding: its own icons, its own title,
+// no "Made with Dyad" line, no Dyad placeholder picture. The engine's licence notices stay in
+// the vendored source; this is only the generated app. Safe to run again (seed and deploy).
+const ICON_LINKS = '<link rel="icon" href="/favicon.svg" type="image/svg+xml" />\n    <link rel="icon" href="/favicon.ico" sizes="any" />\n    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />'
+export function ownAppBrand(dir, { name = '', theme = null } = {}) {
+  const { raster } = appIcons(dir, { name, theme })
+  const pub = join(dir, 'public')
+  const placeholder = join(pub, 'placeholder.svg')
+  if (existsSync(placeholder) && /#EAEAEA/.test(readFileSync(placeholder, 'utf8').slice(0, 300))) {
+    // a neutral grey box in its place, so a page that still points at it shows no Dyad mark
+    writeFileSync(placeholder, '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200"><rect width="1200" height="1200" fill="#e7e7e7"/></svg>\n')
+  }
+  const made = join(dir, 'src', 'components', 'made-with-dyad.tsx')
+  if (existsSync(made)) writeFileSync(made, '// The app shows no builder credit to its visitors.\nexport const MadeWithDyad = () => null;\n')
+  const index = join(dir, 'index.html')
+  if (existsSync(index)) {
+    let html = readFileSync(index, 'utf8')
+    if (!name || /<title>\s*dyad[\w-]*\s*<\/title>/i.test(html)) html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${attr(name || 'App')}</title>`)
+    html = html.replace(/\s*<link rel="(?:icon|shortcut icon|apple-touch-icon)"[^>]*>/gi, '')
+    const links = raster ? ICON_LINKS : ICON_LINKS.split('\n')[0]
+    html = html.replace(/<\/title>/i, `</title>\n    ${links}`)
+    writeFileSync(index, html)
+  }
+  const readme = join(dir, 'README.md')
+  if (existsSync(readme) && /Dyad app/i.test(readFileSync(readme, 'utf8'))) writeFileSync(readme, `# ${name || 'App'}\n\nReact, Vite, Tailwind and shadcn/ui. \`pnpm install\`, then \`pnpm dev\`.\n`)
 }
 
 // ---------- the whole site: every page's head, robots.txt, sitemap.xml, 404.html
@@ -770,7 +851,7 @@ export function currentSeo(snap) {
 
 // An app's or a game's page (its index.html): a title, a description and a share picture,
 // so a link shared on X or Discord shows a proper card. base: the address it deploys to.
-export function shareApp(dir, { name = '', description = '', picture = null, base = null, kind = 'app', lang = 'en' } = {}) {
+export function shareApp(dir, { name = '', description = '', picture = null, base = null, kind = 'app', lang = 'en', theme = null } = {}) {
   const file = join(dir, 'index.html')
   if (!existsSync(file)) return false
   const pub = join(dir, 'public')
@@ -780,8 +861,8 @@ export function shareApp(dir, { name = '', description = '', picture = null, bas
     if (existsSync(join(pub, 'share.jpg')) || shareCrop(picture, join(pub, 'share.jpg'))) image = { image: '/share.jpg', imageSize: [1200, 630] }
     else { const ext = extname(picture).toLowerCase(); copyFileSync(picture, join(pub, `share${ext}`)); image = { image: `/share${ext}` } }
   }
-  if (!existsSync(join(pub, 'favicon.svg')) && !existsSync(join(pub, 'favicon.ico'))) writeFileSync(join(pub, 'favicon.svg'), faviconSvg({ brand: name }))
-  const favicon = existsSync(join(pub, 'favicon.svg')) ? '/favicon.svg' : null
+  ownAppBrand(dir, { name, theme })
+  const favicon = null // ownAppBrand linked the icons in index.html
   const entry = { id: 'home', path: './', pageTitle: name, title: name, description: clipText(description || name, DESC_MAX - 5), schema: kind === 'game' ? 'VideoGame' : kind === 'film' ? 'Movie' : 'SoftwareApplication', lang, favicon, imageAlt: name, ...(image || {}) }
   // a page that is the app's own keeps its title; only the tags are added
   const html = readFileSync(file, 'utf8')
