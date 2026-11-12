@@ -5,7 +5,7 @@
 // plays in the Studio; the port is source to open in that engine, checked for
 // the files the engine needs to open it, not compiled here.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { delimiter, join, relative } from 'node:path'
 import { skillText } from './game.mjs'

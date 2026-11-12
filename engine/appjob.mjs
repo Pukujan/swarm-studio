@@ -3,7 +3,7 @@
 // tab can show it. The server imports this file only when someone opens the
 // App tab, so a studio that never builds an app never loads it.
 
-import { spawn, execFile, execFileSync } from 'node:child_process'
+import { spawn, execFile, execFileSync, appEnv } from './proc.mjs'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
@@ -107,7 +107,7 @@ export function copyModels(dir, copy = {}) {
   return pairs.length
 }
 
-const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
+const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
 
 // A big game stopped partway: the stage to go on from (0: start over). Only
 // stages since the last build from scratch count, and only with the app still there.
@@ -625,7 +625,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
     // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
     // vite's own script under this Node: .bin/vite is a shell shim (vite.cmd on Windows)
-    const p = spawn(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } })
+    const p = spawn(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { BROWSER: 'none', ...appEnv() } })
     j.proc = p
     let log = ''
     p.stdout.on('data', b => { log = (log + b).slice(-4000) })

@@ -6,7 +6,7 @@
 // The engine is built once on first use (pnpm install, then a vite bundle) and
 // reused after that. Its log lines become steps the App tab shows as it works.
 
-import { spawn, execFileSync } from 'node:child_process'
+import { spawn, execFileSync, appEnv } from './proc.mjs'
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, statSync, watch } from 'node:fs'
 import { join, dirname, relative, delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -71,7 +71,7 @@ let setting = null
 export function setupEngine(onStage = () => {}) {
   if (engineReady()) return Promise.resolve()
   return setting ??= (async () => {
-    const env = { ...process.env, ELECTRON_SKIP_BINARY_DOWNLOAD: '1', CI: '1' }
+    const env = { ELECTRON_SKIP_BINARY_DOWNLOAD: '1', CI: '1' }
     onStage('installing the app engine (once, about a minute)')
     await run('pnpm', ['install', '--frozen-lockfile'], { cwd: dyadDir, env })
     onStage('bundling the app engine')
@@ -117,7 +117,8 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
   // engine's pnpm probe fail, and it then falls back to npm on a pnpm project
   const p = spawn(engineNode(), args, {
     cwd: meta,
-    env: { ...process.env, ...gitEnv(), ABA_API_KEY: provider.apiKey || '', ELECTRON_RUN_AS_NODE: '1' },
+    // the engine's own model key, and the app's keys: the engine starts the app to look at it
+    env: { ...gitEnv(), ...appEnv(), ABA_API_KEY: provider.apiKey || '', ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   signal?.addEventListener('abort', () => p.kill('SIGTERM'), { once: true })

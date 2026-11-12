@@ -5,7 +5,7 @@
 // play-tested in the browser like any other game, so the Studio still shows a
 // playable slice after every stage.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'

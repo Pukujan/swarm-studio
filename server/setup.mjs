@@ -12,7 +12,7 @@
 // last real paint went ({ provider, ok, error }), which is how the Pictures row knows an image
 // model is out of quota without painting a test picture.
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
-import { execFile } from 'node:child_process'
+import { execFile } from '../engine/proc.mjs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pictureState, isPictures, modelTester, paintNote } from '../engine/setup.mjs'

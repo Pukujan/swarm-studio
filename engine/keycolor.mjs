@@ -7,7 +7,7 @@
 // the key measured from its figure's sprite; a sprite whose cut shows it sits close to its key
 // is painted again on the measured one). Before any picture exists, `keyFor` guesses from the
 // words: green when the description says pink or purple, else magenta.
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 

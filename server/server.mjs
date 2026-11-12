@@ -9,7 +9,7 @@
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
-import { execFile } from 'node:child_process'
+import { execFile, hermesEnv, pick } from '../engine/proc.mjs'
 import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -136,7 +136,8 @@ const pyCommand = (call, timeout) => new Promise(resolve => {
 // ---------- images, from Hermes's own image providers (a Codex login, xAI, FAL…)
 // imagegen.py runs in Hermes's Python, so the provider tokens never reach this server.
 const PY = process.env.SWARM_HERMES_PY || ''
-const pyEnv = { ...process.env, PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '' }
+// Hermes's Python finds Hermes by HERMES_HOME and its import paths; a FAL key from the secret scope switches on its FAL providers
+const pyEnv = hermesEnv({ PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '', ...pick(['FAL_KEY']) })
 // keys pasted in the Film panel (engine/media.mjs): a FAL key switches on Hermes's own FAL providers
 const mediaKeyStore = mediaKeys(dataDir)
 const hermesPy = (script, what) => (args, timeout) => new Promise(resolve => {
@@ -1015,7 +1016,7 @@ async function videoNow(id, input = {}) {
       const f = c.clips.find(x => x.n === sc.clip)
       const name = `c${sc.clip}x${sc.speed}-${fast++}.mp4`
       try {
-        await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-ss', String(sc.from || 0), '-i', f.file, '-t', String(Math.min(60, (sc.seconds + 0.5) * sc.speed)), '-an', '-vf', `setpts=PTS/${sc.speed},fps=30`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', join(dir, name)], { env: { ...process.env, PATH: t.path } }, err => (err ? fail(err) : ok())))
+        await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-ss', String(sc.from || 0), '-i', f.file, '-t', String(Math.min(60, (sc.seconds + 0.5) * sc.speed)), '-an', '-vf', `setpts=PTS/${sc.speed},fps=30`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', join(dir, name)], { env: { PATH: t.path } }, err => (err ? fail(err) : ok())))
         sc.speedName = name
       } catch { sc.speed = 1 }
     }
@@ -1035,7 +1036,7 @@ async function videoNow(id, input = {}) {
     // measured, and every cut moves onto its beats, hits, drop and quiet passages
     const planned = planLengths(scenes, voices, VOICE_LEAD)
     let lengths = planned, musicFile = null, fx = [], scoredBy = null, musicCut = null
-    const tenv = { ...process.env, PATH: t.path }
+    const tenv = { PATH: t.path }
     if (input.music !== false) {
       progress(2, 'scoring')
       const seconds0 = planned.reduce((a, b) => a + b, 0), cues0 = cueSheet(scenes, planned)
@@ -1103,7 +1104,7 @@ async function videoNow(id, input = {}) {
     // the phone cut takes the wide cut's finished sound as it is (same scenes, same timing)
     if (tall) {
       try {
-        if (sound) await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-i', tallSilent, '-i', out, '-map', '0:v', '-map', '1:a?', '-c', 'copy', '-shortest', '-movflags', '+faststart', tallOut], { env: { ...process.env, PATH: t.path } }, err => (err ? fail(err) : ok())))
+        if (sound) await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-i', tallSilent, '-i', out, '-map', '0:v', '-map', '1:a?', '-c', 'copy', '-shortest', '-movflags', '+faststart', tallOut], { env: { PATH: t.path } }, err => (err ? fail(err) : ok())))
         else copyFileSync(tallSilent, tallOut)
       } catch (err) {
         copyFileSync(tallSilent, tallOut)
@@ -1138,7 +1139,7 @@ async function mediaNow() {
     loadImageProviders(), loadVideoProviders(),
     Promise.all(ELEVEN_MCP.map(n => connectors.status(n).then(st => [n, st], () => [n, {}]))).then(Object.fromEntries),
   ])
-  return mediaSources({ env: process.env, keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
+  return mediaSources({ env: pick(['SWARM_ELEVENLABS_KEY', 'FAL_KEY']), keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
 }
 // The launch kit's pitch (engine/launch.mjs): one line on what the product is and who it is for,
 // written by the planner from the pages the crew planned. Never the person's words to the crew.
