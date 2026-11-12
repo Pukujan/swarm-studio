@@ -40,7 +40,7 @@ export function makeWork({ sw, C }) {
   function open(j) {
     pop?.close()
     C.project = j.project
-    if (ROOM[j.what] === 'app') { if (j.run !== sw.viewing) sw.openRun(j.run); return C.go('station', 'app') }
+    if (ROOM[j.what] === 'app') { C.load(j.run); return C.go('station', 'app') }
     C.open(j.head, j.project)
     if (ROOM[j.what] === 'video') setTimeout(() => C.go('station', 'video'), 50)
   }

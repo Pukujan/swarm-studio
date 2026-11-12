@@ -3966,7 +3966,9 @@ function fileInfo(f) {
   $q('.fi-title').focus()
 }
 
+let openSeq = 0
 async function openRun(id) {
+  const seq = ++openSeq
   if (id === liveId && files.find(f => f.id === id)?.live) {
     viewing = null
     connect()
@@ -3974,6 +3976,8 @@ async function openRun(id) {
     const res = await api(`/api/runs/${encodeURIComponent(id)}/events`).catch(() => null)
     if (!res?.ok) return
     const events = await res.json()
+    // another build was opened while this one loaded: the newer one stands
+    if (seq !== openSeq) return
     viewing = id
     fresh(id)
     for (const e of events) {
