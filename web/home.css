@@ -226,6 +226,9 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .hm-chips button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .hm-free { width: 100%; height: 40px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 0 12px; font: 13.5px var(--mono); outline: none; box-sizing: border-box; }
 .hm-free:focus { border-color: var(--line-2); }
+.hm-brief { display: block; height: auto; min-height: 96px; padding: 10px 12px; resize: vertical; font: 13.5px/1.5 var(--mono); }
+.hm-sc.hm-st { grid-template-columns: 22px 1fr 18px; }
+.hm-sc.hm-st .nm { font-weight: 500; }
 .hm-gfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
 .hm-gfoot > span { display: flex; gap: 8px; }
 @media (max-width: 760px) { .hm-pop { width: calc(100% - 32px); } }
