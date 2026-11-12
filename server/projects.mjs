@@ -413,13 +413,15 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     return RUN_ID.test(pid) && UP_NAME.test(name) && existsSync(p) ? { file: p, type: UP_TYPES[extname(name).slice(1).toLowerCase()] || 'application/octet-stream' } : null
   }
 
-  // run id -> { project, name, piece } for every run (the run list, the Feed and deploy names read it)
+  // run id -> { project, name, piece, version (1 for the first build) } for every run (the run list, the Feed and deploy names read it)
   function runIndex() {
     const { data } = load()
     const out = new Map()
     for (const [pid, p] of Object.entries(data.projects)) {
       const name = nameOfProject(p)
-      for (const id of p.runs) { const c = runCard(id); out.set(id, { project: pid, name, piece: c ? pieceOfCard(c) : 'site' }) }
+      // version: the build's number among the project's builds of the same piece (its sites, its apps)
+      const seen = {}
+      for (const id of p.runs) { const c = runCard(id), piece = c ? pieceOfCard(c) : 'site'; seen[piece] = (seen[piece] || 0) + 1; out.set(id, { project: pid, name, piece, version: seen[piece] }) }
     }
     return out
   }

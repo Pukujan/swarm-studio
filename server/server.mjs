@@ -742,6 +742,8 @@ function listRuns() {
   })
 }
 // the project's name and the run's piece, for package and deploy names
+// a build's version in its project: 1 for the first, 2 for the next…
+const versionOf = id => { try { return projects.runIndex().get(id)?.version || 1 } catch { return 1 } }
 const nameFor = id => { try { const at = projects.runIndex().get(id); return at ? { name: at.name, kind: at.piece } : null } catch { return null } }
 
 // Visitor tours for a finished run, written once and kept with the run. The
@@ -2063,7 +2065,9 @@ async function publish(id, input = {}) {
   const rebase = base => { try { out.rebase(base) } catch (err) { send('error', { where: 'seo', message: String(err.message || err) }) } }
   const go = target === 'vercel' ? publishVercel({ dir, name: hostName, creds, dataDir, rebase, onStage })
     : target === 'cloudflare' ? publishCloudflare({ dir, name: hostName, creds, dataDir, rebase, onStage })
-    : publishGitHub({ dir, name: out.name, title, rebase, onStage })
+    // each version of a project is its own site: Bot Wiki at <login>.github.io/bot-wiki, its version 2
+    // at …/bot-wiki-2, so publishing one never replaces another (owner, 2026-11-12)
+    : publishGitHub({ dir, name: versionOf(id) > 1 ? `${out.name}-${versionOf(id)}` : out.name, title, key: id, dataDir, rebase, onStage })
   go.then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
     .catch(err => {
       // said out loud, never swapped for the local link: the person asked for a public one

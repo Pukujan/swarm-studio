@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto'
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { ownProjects, rememberProject } from './connect.mjs'
+import { claimRepo, ownProjects, rememberProject, siteRepos } from './connect.mjs'
 
 // Repos this makes say so in their description; a repo without it is never touched.
 const MARK = 'made with Swarm Studio'
@@ -38,11 +38,15 @@ export async function githubLogin() {
   return login
 }
 
-// The repo for this site: its own name if free or already ours, otherwise a variant.
-async function pickRepo(login, name) {
-  for (const cand of [name, `${name}-site`, ...[2, 3, 4, 5].map(n => `${name}-${n}`)]) {
+// The repo for this site: the one this build published to before, else its own name if free, else a
+// variant. A repo another build already publishes to is skipped (two projects named Bot Wiki get
+// bot-wiki and bot-wiki-site), and a repo this studio didn't make is never touched.
+export async function pickRepo(login, name, { mine = '', taken = new Set(), check = repo => gh(['api', `repos/${login}/${repo}`, '--jq', '.description // ""'], { timeout: 15000 }) } = {}) {
+  const was = mine.split('/')[0].toLowerCase() === login.toLowerCase() ? mine.split('/')[1] : ''
+  for (const cand of [...(was ? [was] : []), name, `${name}-site`, ...[2, 3, 4, 5].map(n => `${name}-${n}`)]) {
+    if (cand !== was && taken.has(cand.toLowerCase())) continue
     try {
-      const desc = await gh(['api', `repos/${login}/${cand}`, '--jq', '.description // ""'], { timeout: 15000 })
+      const desc = await check(cand)
       if (desc.includes(MARK)) return { repo: cand, fresh: false }
     } catch (err) {
       if (/404|Not Found/i.test(err.message + err.stderr)) return { repo: cand, fresh: true }
@@ -54,12 +58,16 @@ async function pickRepo(login, name) {
 
 // rebase(url): writes the site's address into its pages (canonical, share tags, sitemap,
 // robots: engine/seo.mjs) before the files go up; called again if the host answers elsewhere.
-export async function publishGitHub({ dir, name, title, rebase = null, onStage = () => {} }) {
+// key: the build (its run id), so publishing it again goes back to the same repo.
+export async function publishGitHub({ dir, name, title, key = '', dataDir = '', rebase = null, onStage = () => {} }) {
   const login = await githubLogin()
   if (!login) throw new Error('GitHub CLI is not signed in (run `gh auth login`), so the site is hosted on this computer only')
   onStage('repo')
-  const { repo, fresh } = await pickRepo(login, name)
+  const claims = dataDir ? siteRepos(dataDir) : {}
+  const taken = new Set(Object.entries(claims).filter(([k, r]) => k !== key && r.split('/')[0].toLowerCase() === login.toLowerCase()).map(([, r]) => r.split('/')[1].toLowerCase()))
+  const { repo, fresh } = await pickRepo(login, name, { mine: claims[key] || '', taken })
   const full = `${login}/${repo}`
+  if (dataDir && key) claimRepo(dataDir, key, full)
   if (fresh) await gh(['repo', 'create', full, '--public', '--description', `${title} · ${MARK}`.slice(0, 340)])
   // a project site lives at <login>.github.io/<repo>/ unless the account has its own domain
   const guess = repo.toLowerCase() === `${login.toLowerCase()}.github.io` ? `https://${repo.toLowerCase()}/` : `https://${login.toLowerCase()}.github.io/${repo}/`
