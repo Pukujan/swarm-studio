@@ -17,9 +17,10 @@ import { checkLook, lookPrompt, lookCss, paletteVars, paletteCss, textureLayer, 
 
 const HYPERFRAMES = 'hyperframes@0.9.26'
 const FPS = 30
-// The film's shapes: the wide one for desktop and the tall one for phones, from the same storyboard.
-// The tall one is laid out again for its frame (stacked pictures and words), not cropped.
-export const SHAPES = { wide: { W: 1920, H: 1080, file: 'promo.mp4' }, tall: { W: 1080, H: 1920, file: 'promo-tall.mp4' } }
+// The film's shapes: the wide one for desktop, the tall one for phones and the square one for feeds,
+// from the same storyboard. The tall one is laid out again for its frame (stacked pictures and words),
+// not cropped; the square one keeps the wide layout with its type scaled to the narrower frame.
+export const SHAPES = { wide: { W: 1920, H: 1080, file: 'promo.mp4' }, tall: { W: 1080, H: 1920, file: 'promo-tall.mp4' }, square: { W: 1080, H: 1080, file: 'promo-square.mp4' } }
 const KINDS = new Set(['open', 'image', 'split', 'list', 'quote', 'cta', 'stat', 'mosaic', 'clip', 'title', 'black'])
 const LENGTH = { open: 3.2, image: 3.4, split: 3.6, list: 4.2, quote: 3.4, cta: 3.6, stat: 3.2, mosaic: 3.8, clip: 4.4, title: 1.6, black: 1 }
 
@@ -382,7 +383,7 @@ export const sceneLength = (s, voice, pace = 1) => Math.max(Number(((LENGTH[s.ki
 export const VOICE_LEAD = 0.35
 
 export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn = scenes.look, { shape = 'wide' } = {}) {
-  const { W, H } = SHAPES[shape] || SHAPES.wide, tall = H > W
+  const { W, H } = SHAPES[shape] || SHAPES.wide, tall = H > W, square = W === H
   // a plan's cut, when the person picked one, leads; otherwise the look's own cuts
   const look = lookIn || checkLook({ layout: 'classic', cuts: [transition] }, 1)
   const cuts = lookIn && !look.pinned ? look.cuts : [transition]
@@ -400,7 +401,7 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700;800`
   const img = n => c.images.find(i => i.n === n)
   const clipOf = n => (c.clips || []).find(x => x.n === n)
-  const sz = (s, big) => size(s, big) * look.scale * (tall ? 0.72 : 1) | 0
+  const sz = (s, big) => size(s, big) * look.scale * (tall ? 0.72 : square ? 0.6 : 1) | 0
   let t = 0, splits = 0
   const html = [], tl = []
   scenes.forEach((s, i) => {
@@ -512,7 +513,7 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
   return {
     seconds: total,
     look,
-    shape: tall ? 'tall' : 'wide',
+    shape: tall ? 'tall' : square ? 'square' : 'wide',
     html: `<!doctype html>
 <html><head><meta charset="utf-8">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
