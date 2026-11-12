@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -26,12 +26,13 @@ test('each vendored file is pinned and is the one SOURCE.json records', () => {
   }
 })
 
-test('xstate imports in node, and joined into a page script it works the same', async () => {
+test('xstate imports in node, and joined into a page script it works the same', async t => {
   const lib = VENDORED.find(l => l.name === 'xstate')
   const direct = await import(pathToFileURL(join(root, lib.out)))
   for (const name of lib.exports) assert.equal(typeof direct[name], 'function', name)
 
   const web = mkdtempSync(join(tmpdir(), 'vendor-page-'))
+  t.after(() => rmSync(web, { recursive: true, force: true }))
   mkdirSync(join(web, 'vendor', 'xstate'), { recursive: true })
   copyFileSync(join(root, lib.out), join(web, 'vendor', 'xstate', 'xstate.mjs'))
   writeFileSync(join(web, 'a.js'), "import { createActor, fromTransition as reducer } from './vendor/xstate/xstate.mjs'\nexport const count = createActor(reducer((n, e) => n + e.by, 1)).start()\n")

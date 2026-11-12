@@ -5801,7 +5801,11 @@ function connect() {
         // Only the build the person asked for, or the one already followed, takes the canvas. Any
         // other (the server's current run replayed on a reconnect, a build from another window) is
         // only news: Projects lists it, and the open build stays as it is.
-        const followed = !viewing && (!S.run || S.run === e.run)
+        // In the studio the navigation machine names the build (spec 34): a canvas holding nothing takes
+        // only that one, and the stream itself only tells the machine that a build has begun.
+        const nav = window.swarmCosmos?.nav
+        if (e.type === 'run:start') nav?.go({ type: 'streamed', run: e.run })
+        const followed = !viewing && (S.run === e.run || (!S.run && (!nav || e.run === nav.view.run)))
         if (!followed && e.run !== claimed) {
           if (!viewing && S.run) viewing = S.run
           if (e.type === 'run:start') for (const fn of cosmosHooks) try { fn(e) } catch (err) { console.error(err) }
@@ -5848,15 +5852,8 @@ renderPanels()
 showTab(['chat', 'log'].includes(store.get('tab')) ? store.get('tab') : 'chat')
 if (Q.get('replay')) replayRun(Q.get('replay'), Number(Q.get('speed')) || 8)
 else connect()
-if (Q.get('run') && !Q.get('replay')) setTimeout(() => openRun(Q.get('run')), 300)
-// Nothing live to replay: open the latest saved file rather than an empty canvas.
-setTimeout(async () => {
-  if (S.run || viewing || Q.get('run') || Q.get('replay')) return
-  if (window.swarmCosmos?.atHome?.()) return // studio hook: Projects opens nothing behind it
-  await loadFiles()
-  const latest = files.find(f => f.preview)
-  if (latest && !S.run && !viewing) openRun(latest.id)
-}, 700)
+// the studio loads the build its address names (web/studio.js); without it, ?run= opens that build
+if (Q.get('run') && !Q.get('replay')) setTimeout(() => { if (!window.swarmCosmos?.nav) openRun(Q.get('run')) }, 300)
 requestAnimationFrame(frameLoop)
 
 // ---------- resizable side panels: drag the inner edge, double-click to reset
@@ -7245,7 +7242,7 @@ function connectorEvent(e) {
 window.swarm = {
   // a drag source for a layer (the Overview's section list and outline): it drops into the left chat
   layerDrag,
-  get S() { return S }, get view() { return view }, get viewing() { return viewing }, get liveId() { return liveId }, get files() { return files },
+  get S() { return S }, get view() { return view }, get viewing() { return viewing }, get claimed() { return claimed }, get liveId() { return liveId }, get files() { return files },
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer, closePlayer,
