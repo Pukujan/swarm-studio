@@ -5202,6 +5202,9 @@ function connect() {
         liveId = e.run
         if (viewing) { viewing = null; fresh(e.run) }
       }
+      // following the live build: an event of another build (a late picture of the build before,
+      // an edit made to a saved one in another window) is not this canvas's
+      if (!viewing && e.run && S.run && e.run !== S.run) return
       // events for the open file (a review or edit while viewing it) apply too
       if (!viewing || (e.run === viewing && e.type !== 'run:start')) on(e)
     } catch (err) {
