@@ -48,11 +48,47 @@ export function readAppFile(dir, path, max = 6000) {
 }
 
 // the model's reply → one action; a reply that is not JSON is taken as the answer itself
+// every {...} in the text that stands on its own as JSON, in order (braces inside strings are skipped)
+function jsonObjects(s) {
+  const out = []
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== '{') continue
+    let depth = 0, str = false, esc = false
+    for (let j = i; j < s.length; j++) {
+      const c = s[j]
+      if (str) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') str = false; continue }
+      if (c === '"') str = true
+      else if (c === '{') depth++
+      else if (c === '}' && --depth === 0) {
+        try { const o = JSON.parse(s.slice(i, j + 1)); if (o && typeof o === 'object' && !Array.isArray(o)) { out.push(o); i = j } } catch {}
+        break
+      }
+    }
+  }
+  return out
+}
+// Some models answer in their own tool-call markup instead of the JSON asked for (DeepSeek's
+// <｜DSML｜invoke name="read"><｜DSML｜parameter name="path">…). Read as the same action.
+const MARKUP = /<[^<>]*DSML[^<>]*>/g
+function markupCall(s) {
+  const call = s.match(/<[^<>]*DSML[^<>]*invoke\s+name="([^"]+)"[^<>]*>/)
+  if (!call) return null
+  const a = { tool: call[1] }
+  for (const m of s.matchAll(/<[^<>]*DSML[^<>]*parameter\s+name="([^"]+)"[^<>]*>([\s\S]*?)<\/[^<>]*DSML[^<>]*parameter\s*>/g)) a[m[1]] = m[2].trim()
+  return a
+}
+// One action from a model's reply. The reply should be one JSON object; in practice it can be
+// prose around it, several tool calls at once (the first is taken, the loop asks again), or the
+// model's own markup. What is left with no action in it is the answer, with no markup shown.
 export function parseAction(text) {
   const s = String(text || '').trim()
-  const m = s.match(/\{[\s\S]*\}/)
-  if (m) { try { const o = JSON.parse(m[0]); if (o && typeof o === 'object') return o } catch {} }
-  return { say: s.replace(/^```\w*|```$/g, '').trim() }
+  const found = jsonObjects(s)
+  const act = found.find(o => typeof o.tool === 'string' || o.say !== undefined)
+  if (act) return act
+  const call = markupCall(s)
+  if (call) return call
+  if (found.length === 1 && !s.replace(/^[^{]*/, '').replace(/\}[^}]*$/, '}').includes('\n\n')) return found[0]
+  return { say: s.replace(MARKUP, ' ').replace(/^```\w*|```$/g, '').replace(/[ \t]+/g, ' ').trim() }
 }
 
 export function talkPrompt({ who = '', on = '', title = '', notes = '', media = { pics: [], clips: [] }, files = [], building = true }) {
