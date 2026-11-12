@@ -6,7 +6,7 @@ import { makeProject } from './project.js'
 import { makeWork } from './work.js'
 import { makePlan } from './plan.js'
 import { makeBrand } from './brand.js'
-import { makeNav } from './nav.js'
+import { makeNav, toAddress } from './nav.js'
 const sw = window.swarm
 const W = window
 const body = document.body
@@ -33,8 +33,9 @@ const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="curre
 // =====================================================================================
 const C = W.swarmCosmos = {
   ico, esc, reduced,
-  // the canvas asks this before it opens the latest file behind an empty canvas
-  atHome: () => C.mode === 'home'
+  // the canvas asks this before it opens the latest file behind an empty canvas: in the studio the
+  // machine and the address decide what is open, so it never does
+  atHome: () => C.mode !== 'off'
 }
 // the old one-screen layout ("Classic view") is gone; forget a browser's old choice
 try { localStorage.removeItem('swarm.classic') } catch {}
@@ -90,6 +91,38 @@ C.go = (m, v) => {
 }
 // a move another part sends straight to the machine is drawn the same way
 nav.subscribe(() => { if (!going) draw() })
+
+// The address carries the machine's state and nothing else (spec 34). A new place (room, project,
+// version, plan) is a history entry; the player and its page replace the current one. Back, Forward
+// and a reload rebuild the state from the address alone. Other keys (wall, chatter, the hosted
+// studio's prompt) are kept as they are.
+const NAV_KEYS = ['project', 'version', 'room', 'run', 'plan', 'play', 'page', 'replay']
+const place = v => [v.room === 'brand' ? v.from : v.room, v.project, v.version, v.run, v.plan].join('|')
+let restoring = false
+let written = nav.view
+function writeAddress(v) {
+  const q = new URLSearchParams(toAddress(v))
+  for (const [k, x] of new URLSearchParams(location.search)) if (!NAV_KEYS.includes(k)) q.append(k, x)
+  const search = q.toString() ? `?${q}` : ''
+  const before = written
+  written = v
+  if (search === location.search) return
+  const url = `${location.pathname}${search}${location.hash}`
+  if (place(v) !== place(before)) history.pushState(null, '', url)
+  else history.replaceState(history.state, '', url)
+}
+nav.subscribe(v => { if (!restoring) writeAddress(v) })
+// the build the machine names, in the canvas (a reload, Back or Forward)
+const loadNamed = () => { const { run } = nav.view; if (inBuild() && run && run !== sw.viewing) C.load(run) }
+addEventListener('popstate', () => {
+  if (sw.wall) return
+  restoring = going = true
+  try { nav.restore(location.search) } finally { restoring = going = false }
+  written = nav.view
+  C.project = nav.view.project
+  loadNamed()
+  draw()
+})
 
 function draw(planId) {
   const { room, version, project, plan } = nav.view
@@ -342,6 +375,8 @@ function start() {
     if (e.type === 'run:start' || e.type === 'run:done' || e.type === 'reset') setTimeout(() => C.mode === 'home' && C.homeView.refresh(), 600)
   })
   // the screen the address names (the machine was made from it), whatever the server is streaming
+  C.project = nav.view.project
+  loadNamed()
   draw()
 }
 // fold-button style lives here: it is the only rule that needs the side panel's tab bar

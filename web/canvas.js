@@ -2180,8 +2180,8 @@ function showPage(id, push = true) {
   els.plBack.disabled = !player.history.length
   els.plFrame.style.opacity = 0
   player.loaded = new Promise(resolve => setTimeout(() => {
-    els.plFrame.srcdoc = pageDoc(id)
-    els.plFrame.onload = () => { els.plFrame.style.opacity = 1; resolve() }
+    const frame = playerDoc(pageDoc(id))
+    frame.onload = () => { frame.style.opacity = 1; resolve() }
   }, 120))
 }
 
@@ -2202,12 +2202,25 @@ function openPlayer(page) {
   if (S.tEnd) loadTours()
 }
 
+// A new document in the player's frame, without a history entry. Navigating a frame that already has
+// a document adds an entry to the page's own history, so Back stepped through the player's pages
+// before the studio's and a closed player cut off Forward. A fresh frame's first document adds none,
+// so the frame is swapped for a fresh one.
+function playerDoc(html) {
+  const old = els.plFrame
+  const frame = old.cloneNode(false)
+  if (html) frame.srcdoc = html
+  else frame.removeAttribute('srcdoc')
+  old.replaceWith(frame)
+  els.plFrame = frame
+  return frame
+}
 function closePlayer() {
   stopTour()
   toggleTourMenu(false)
   els.player.hidden = true
   els.viewport.classList.remove('behind')
-  els.plFrame.srcdoc = ''
+  if (els.plFrame.hasAttribute('srcdoc')) playerDoc('')
 }
 
 function setDevice(name, reload = true) {

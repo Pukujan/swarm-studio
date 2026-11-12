@@ -13,6 +13,7 @@
 //   4. the p key on Projects opens no player behind it
 //   5. Play and Watch a visitor
 //   6. in every room the navigation machine, the pill and the back button agree, and Esc climbs
+//   7. the address: Back and Forward, and a reload in each room
 // It never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
@@ -98,6 +99,8 @@ const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePa
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   page.on('pageerror', e => console.log('  page error:', e.message))
+  // a move the navigation machine does not have is logged as nav: no …
+  page.on('console', m => { if (m.text().startsWith('nav:')) console.log(`  ${m.text()}`) })
   await page.goto(`${BASE}/`)
   await page.waitForSelector('.home .card[aria-label="Alpha Tea"]', { timeout: 15000 })
 
@@ -115,7 +118,8 @@ try {
   const home = async () => {
     await page.click('.pj-crumb .pj-up')
     await page.waitForSelector('.home .card', { timeout: 10000 })
-    // Projects comes back on the versions it showed last: up to every project
+    // Projects comes back on the versions it showed last (drawn a moment later): up to every project
+    await wait(400)
     if (await page.locator('.home .hm-back').isVisible()) await page.click('.home .hm-back')
     await page.waitForSelector('.home .card[aria-label="Bravo Bikes"]', { timeout: 10000 })
   }
@@ -233,6 +237,56 @@ try {
   await wait(700)
   up = await screen()
   ok(up.room === 'home' && up.mode === 'home' && up.home && !up.project, `Esc on the Overview goes to Projects (${up.room})`)
+
+  console.log('Back, Forward and a reload')
+  const pickRoom = async mode => { await page.click('.mode-btn'); await page.click(`.mode-menu [data-mode="${mode}"]`); await wait(700) }
+  const where = async () => ({ ...(await screen()), address: await page.evaluate(() => location.search), run: await page.evaluate(() => window.swarm.S?.run || null) })
+  await page.click('.home .card[aria-label="Alpha Tea"]')
+  await settle(A1)
+  let at = await where()
+  ok(at.address === `?project=${at.address.match(/project=([^&]*)/)?.[1]}&version=${A1}` && at.room === 'overview', `opening a project writes it to the address (${at.address})`)
+  // the player's pages and closing it add nothing to Back (a frame's navigations used to)
+  const len0 = await page.evaluate(() => history.length)
+  await page.click('#play-btn'); await wait(900)
+  await page.selectOption('#pl-page', { index: 1 }); await wait(700)
+  await page.click('#pl-close'); await wait(300)
+  const len1 = await page.evaluate(() => history.length)
+  ok(len1 === len0, `playing two pages and closing the player add nothing to Back (${len0} → ${len1})`)
+  await pickRoom('canvas')
+  await pickRoom('video')
+  at = await where()
+  ok(at.address.endsWith('&room=video'), `a room is in the address (${at.address})`)
+  await page.goBack(); await wait(700)
+  at = await where()
+  ok(at.room === 'deck' && at.pill === 'Canvas' && at.address.endsWith('&room=deck'), `Back from the Film studio is the Design deck (${at.room}, ${at.pill})`)
+  await page.goBack(); await wait(700)
+  at = await where()
+  ok(at.room === 'overview' && at.pill === 'Overview' && at.project && at.crumb === 'Alpha Tea', `Back again is Alpha's Overview (${at.room}, ${at.crumb})`)
+  await page.goBack(); await wait(900)
+  at = await where()
+  ok(at.room === 'home' && at.home && !at.project && at.address === '', `Back again is Projects (${at.room}, '${at.address}')`)
+  await page.goForward(); await wait(900)
+  at = await where()
+  ok(at.room === 'overview' && at.version === A1 && at.crumb === 'Alpha Tea', `Forward is Alpha's Overview again (${at.room}, ${at.crumb})`)
+  // a reload in each room shows exactly that room, on that build
+  await home()
+  await page.click('.home .card[aria-label="Bravo Bikes"]')
+  await page.waitForSelector('.home .card[aria-label="Version 2"]', { timeout: 5000 })
+  await page.click('.home .card[aria-label="Version 2"]')
+  await settle(B2)
+  at = await where()
+  ok(at.room === 'overview' && at.version === B2, `Bravo opens on its Overview (${at.room}, ${at.version === B2 ? 'Bravo' : at.version})`)
+  for (const [mode, room, label] of ROOMS) {
+    if (room !== 'overview') await pickRoom(mode)
+    const before = await page.evaluate(() => location.search)
+    await page.reload()
+    await page.waitForFunction(() => window.swarmCosmos?.nav && window.swarm?.S, null, { timeout: 15000 })
+    await settle(B2)
+    at = await where()
+    ok(at.room === room && at.pill === label && at.version === B2 && at.run === B2 && at.address === before, `a reload in ${label} shows ${label} on Bravo's build (${at.room}, ${at.pill}, ${at.run === B2 ? 'Bravo' : at.run})`)
+    if (room === 'overview') ok(at.crumb === 'Bravo Bikes' && at.project, `a reload on the Overview shows Bravo's Overview (${at.crumb})`)
+    if (room !== 'overview') await pickRoom('overview')
+  }
   void C1
 } finally {
   await browser.close()
