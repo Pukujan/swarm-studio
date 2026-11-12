@@ -166,7 +166,7 @@ loaded, and the studio's model calls go through that copy. Run `hermes gateway r
 Desktop and open it again. Until then the studio says "Swarm Studio was updated. Restart Hermes to finish."
 and does not start a build. With no Hermes open at all it says "Hermes isn't connected." instead.
 
-Requires Node.js 18 or newer on `PATH` (or set `SWARM_STUDIO_NODE`). There are no npm dependencies. Works on macOS, Linux and native Windows.
+Requires Node.js 18 or newer on `PATH` (or set `SWARM_STUDIO_NODE`). Today it installs no npm packages: the libraries it uses are vendored in `web/vendor/`. Works on macOS, Linux and native Windows.
 
 ## Models
 
