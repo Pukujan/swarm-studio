@@ -123,18 +123,19 @@ export function foesFrom(idea) {
 }
 
 // ---------- the shape: family, size, title, engine, subject, setting (the model's hint first)
-export function shapeOf({ idea = '', given = {}, answers = {}, title = '', note = '' } = {}, env = {}, hint = null) {
+// force: what a planner conversation decided (engine/talkplan.mjs): { family, size, art, engine } win over the words
+export function shapeOf({ idea = '', given = {}, answers = {}, title = '', note = '', force = {} } = {}, env = {}, hint = null) {
   const text = [idea, note].filter(Boolean).join('. ')
   const fromAnswer = familyOf(given.genre)
-  const family = fromAnswer || (FAMILY_IDS.includes(hint?.family) ? hint.family : '') || familyOf(text) || familyOf(answers.genre) || 'action'
+  const family = (FAMILY_IDS.includes(force.family) ? force.family : '') || fromAnswer || (FAMILY_IDS.includes(hint?.family) ? hint.family : '') || familyOf(text) || familyOf(answers.genre) || 'action'
   const f = FAMILIES[family]
-  const size = sizeOf(text) !== 'normal' ? sizeOf(text) : (SIZES.includes(hint?.size) ? hint.size : 'normal')
-  const engine = engineFrom(`${text} ${given.engine || ''} ${given.target || ''}`)
+  const size = SIZES.includes(force.size) ? force.size : sizeOf(text) !== 'normal' ? sizeOf(text) : (SIZES.includes(hint?.size) ? hint.size : 'normal')
+  const engine = ENGINES[force.engine] ? engineFrom(force.engine) : engineFrom(`${text} ${given.engine || ''} ${given.target || ''}`)
   if (engine.target === 'godot') engine.installed = env.godot === undefined ? null : !!env.godot
   const said3d = has(`${text} ${given.look || ''}`, /\b3d\b|three.?d|low.?poly|toon.?shaded 3d/i)
   const said2d = has(`${text} ${given.look || ''}`, /\b2d\b|pixel|flat|sprite|hand.?drawn|paper/i)
   // Meshy (3D models, rigs, clips, weapons) only when the person said 3D: every game is painted 2D otherwise
-  const art = said3d && !said2d ? '3d' : '2d'
+  const art = ['2d', '3d'].includes(force.art) ? force.art : said3d && !said2d ? '3d' : '2d'
   const subject = clean(hint?.subject, 30).toLowerCase() || subjectFrom(text)
   return {
     family, label: f.label, size, art, engine,

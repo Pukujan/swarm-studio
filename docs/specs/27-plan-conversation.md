@@ -180,6 +180,24 @@ board itself is unchanged.
 Lock opens the Plan board with the RTS cards, a gate that reads **Lock · 15 pictures**, and a first
 picture of the Ant worker on magenta.
 
+
+### Slice 1, built (2026-11-11)
+
+- `engine/talkplan.mjs` (discuss.mjs renamed; its tests kept) holds the game turn: `say`, `lock`, `unlock`,
+  `planInput`, `openQuestions`, `wordsDecide` and `readTurn`. A planner model, when there is one, answers the
+  person's questions and may decide what their words clearly said. It never overrides a decision the person
+  made, and its options are validated.
+- Without a model, the open questions are asked in order: the kind of game (only when the idea names none),
+  Godot when it is asked for and not installed, how the fights come (fighting families only), and drawn or
+  modelled with the price of each.
+- `engine/chats.mjs` is the part of spec 29's store that this needs: `c-` ids, `chat.json` written to a tmp
+  file and renamed, and one writer per chat. A person turn picked from a chip carries `pick` (the chip id).
+- `server/talk.mjs` serves `/api/talk`, `/api/talk/:id`, `/lock` and `/unlock`. A game lock makes the plan
+  through the Plan board's routes (`fromTalk`), or re-plans the chat's plan in place.
+  `planFromAnswers({ force })` lets the decisions (family, size, art, engine) win over the idea's words, and
+  the plan keeps them as `decided`.
+- The left-chat UI (slice 2) is not built yet, and `/api/discuss` still serves the web side.
+
 ## Slices
 
 1. `engine/talkplan.mjs` and the routes, with the game ending into `planStore.create`. Tests: the ants talk

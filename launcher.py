@@ -259,7 +259,7 @@ TALK_FIRST = ("Not started: the brief asks to talk before anything is built. Tal
 
 
 def talk_first(brief: str) -> bool:
-    """True when the brief says not to build yet (the planner model reads it; engine/discuss.mjs)."""
+    """True when the brief says not to build yet (the planner model reads it; engine/talkplan.mjs)."""
     try:
         got = _request("/api/discuss/read", method="POST", body={"text": brief, "kind": "site"}, timeout=12)
     except (OSError, urllib.error.URLError, ValueError):
