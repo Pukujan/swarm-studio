@@ -169,5 +169,26 @@ class DespillTest(unittest.TestCase):
                 self.assertLess(sum(max(0, v) for v in edge) / len(edge), 8)
 
 
+class KitSplitTest(unittest.TestCase):
+    def test_a_strip_of_pieces_becomes_one_trimmed_file_each(self):
+        from kit_split import split
+        with tempfile.TemporaryDirectory() as d:
+            strip = Image.new("RGBA", (600, 100), (0, 0, 0, 0))
+            g = ImageDraw.Draw(strip)
+            for i in range(6):
+                if i != 4:  # the fifth cell came out empty
+                    g.rectangle((i * 100 + 30, 20, i * 100 + 70 + i, 80), fill=(200, 150, 40, 255))
+            src = os.path.join(d, "kit.png")
+            strip.save(src)
+            names = ["ui-panel", "ui-button", "ui-button-down", "ui-bar", "ui-bar-fill", "ui-slot"]
+            r = split(src, d, names)
+            self.assertEqual([p["name"] for p in r["pieces"]], [n for n in names if n != "ui-bar-fill"])
+            self.assertEqual(r["empty"], ["ui-bar-fill"])
+            out = Image.open(os.path.join(d, "ui-slot.png"))
+            self.assertEqual(out.mode, "RGBA")
+            self.assertEqual(out.size, (46 + 8, 61 + 8), "trimmed to the piece, with a small margin")
+            self.assertEqual(out.getpixel((0, 0))[3], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

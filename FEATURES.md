@@ -14,7 +14,7 @@ One prompt in the Hermes app, and a crew of agents does the work on a canvas you
 | **One-click deploy** | A live site on GitHub Pages, Vercel or Cloudflare Pages, on your own account | works |
 | **Design to full-stack app** | The design becomes a working app with a server, sign-in, payments and an admin page, deployed to Vercel | works |
 | **Image to motion, video** | A promo film from the site's own copy and pictures: stills animated by a video model, voice and music added, one click | works |
-| **Game and asset design** | Original games with painted sprites, backdrops and icons; 3D characters through Meshy | works |
+| **Game and asset design** | Original games with painted sprites, backdrops, icons, repeating tiles, a UI kit, props and effect animations, scaled to the game's size; the chroma key is measured from the painted picture; 3D characters through Meshy | works |
 | **Game development** | Browser games in three.js, Phaser or PixiJS, written and play-tested by the crew; Godot 4 project when Godot is installed; Unity and Unreal ports as source | works (Unity and Unreal are source only) |
 | **Swarm Feed** | Publish a build, let others try it, remix with credit | works |
 | **Swarm Jams** | Jam events and hackathons: a theme, a deadline, entries and votes | first version |

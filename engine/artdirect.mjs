@@ -224,6 +224,41 @@ export function sheetPrompt({ look = '', frames = '' }, guide, { strict = '', la
   ].filter(Boolean).join(' '), 1400)
 }
 
+// A kit sheet (six UI pieces or six props) or an effect sheet (six frames of light on black):
+// the layout and the six things first, then what they belong to, then the style's look.
+export function kitPrompt({ look = '', frames = '', fx = false }, guide, { strict = '', layout = '' } = {}) {
+  const style = String(guide?.guide || '').split(/(?<=\.)\s+/).map(x => x.replace(/\.$/, '').split(/,\s*/).filter(c => !/composition|moment|background|scene|framing|shot|character/i.test(c)).join(', ')).filter(Boolean).join('. ')
+  const avoid = [guide?.avoid, ...(guide?.bans || []).map(id => banOf(id).label)].filter(Boolean).join('; ')
+  return clip([
+    fx ? 'A 2D game effect animation sheet: exactly six frames of ONE effect, in a 3 by 2 grid, one frame per cell.' : 'A 2D game asset sheet: exactly six separate objects, in a 3 by 2 grid, one object per cell.',
+    fx ? `The effect, from its first frame to its last: ${frames}.` : `The six objects, left to right, top to bottom: ${frames}.`,
+    layout && `${layout.replace(/\.$/, '')}.`,
+    look && `They are ${look}.`,
+    style && `${style}.`,
+    'No text, letters or numbers anywhere.',
+    avoid ? `Avoid: ${avoid}.` : '',
+    strict ? `This is a second try. The first sheet was sent back for: ${strict}. Make sure none of that is in this one.` : ''
+  ].filter(Boolean).join(' '), 1400)
+}
+export function kitMessages(what, image, frames = '', fx = false) {
+  return [
+    {
+      role: 'system',
+      content: `You check one sheet of game art before it goes into a game: ${clip(what, 80)}. ${fx ? 'Its six frames are one effect, painted as light on black, shown side by side.' : 'Its six pieces were cut out of a painted sheet and are shown side by side, once on dark and once on light grey.'} They should show: ${clip(frames, 400)}
+
+Send it back only for a clear, visible problem:
+- a piece is missing, or two pieces are joined or overlap
+- a piece is cut off at its frame's edge
+- letters, words or numbers on any piece
+- a person or character where an object should be${fx ? '' : `
+- leftover background: magenta, green, blue, grey or white patches, specks or a coloured rim around a piece`}
+
+Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. If in doubt, it is ok.`
+    },
+    { role: 'user', content: [{ type: 'text', text: 'Check this sheet.' }, { type: 'image_url', image_url: { url: image } }] }
+  ]
+}
+
 // A sprite sheet's frames, cut out and laid side by side, shown on dark and on magenta.
 export function sheetMessages(what, image, frames = '') {
   return [
