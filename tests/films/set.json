@@ -1,0 +1,57 @@
+{
+  "note": "The film regression set (spec 26): 20 prompts over five fixture builds. `expect` names the kinds of film a prompt should come out as. Run with `node scripts/film-set.mjs`.",
+  "builds": {
+    "shop": {
+      "brand": "Lume Roasters", "brief": "a small-batch coffee roaster in Porto with a subscription", "theme": { "direction": "warm editorial, cream paper, terracotta, slow mornings" },
+      "copy": "PAGE home \"Lume Roasters — Home\": the roaster and its subscription\n  [hero] Roasted on Tuesdays / In your cup by Friday — Small batches from three farms, roasted to order in Porto.\n  [plans] Two bags a month, 18 euros — Pause or skip any time.\nPAGE beans \"Lume Roasters — Beans\": the three coffees\n  [list] Three farms, three tastes — Yirgacheffe, Huila and Cerrado, each roasted light.\nPAGE classes \"Lume Roasters — Classes\": Saturday brewing classes\n  [hero] Learn to pour — Saturday mornings at the roastery, eight seats.",
+      "images": ["a hand pouring water over a V60 in morning light", "burlap sacks of green coffee in a tiled Porto warehouse", "a roaster drum with beans tumbling", "two friends at a wooden counter with cups", "a paper bag of coffee on a doorstep"],
+      "clips": []
+    },
+    "event": {
+      "brand": "Harbor Jam", "brief": "a weekend game jam in a harbour hall, 2027-03-20 to 21, 200 seats", "theme": { "direction": "riso zine, two inks, loud type, hand-cut shapes" },
+      "copy": "PAGE home \"Harbor Jam — Home\": the jam and how to join\n  [hero] 48 hours, one hall, 200 makers — March 20 to 21 at Harbor Hall, doors at nine.\n  [how] Bring a laptop / Find a team / Ship by Sunday — Food and coffee all weekend.\nPAGE schedule \"Harbor Jam — Schedule\": the weekend hour by hour\n  [list] Theme at ten / Playtests at midnight / Showcase Sunday at six\nPAGE tickets \"Harbor Jam — Tickets\": tickets\n  [price] 25 dollars, students free — 200 seats, 61 left.",
+      "images": ["a crowded hall of people at laptops under string lights, riso print", "a hand-drawn map of a harbour hall", "a team of four laughing at a screen, two-ink print", "a stage with a big countdown clock"],
+      "clips": []
+    },
+    "game": {
+      "brand": "Rooftop Signal", "brief": "a free rooftop runner: repair a relay on every stage and get home before the storm", "theme": { "direction": "90s VHS anime, dusk rooftops, amber and ink blue" },
+      "copy": "PAGE home \"Rooftop Signal — Home\": the game and its play button\n  [hero] Run the roofs / Fix the signal — Six stages across the city, a relay to repair on each.\n  [how] Jump, slide, grapple — One button each, a storm on your heels.\nPAGE play \"Rooftop Signal — Play\": the game itself\n  [hero] Stage 1: Laundry Lines",
+      "images": ["a courier girl mid-leap between rooftops at dusk, cel anime", "a rusted relay tower with sparking wires", "storm clouds rolling over a city skyline, VHS grain", "the courier catching her breath by a water tank, city lights below"],
+      "clips": [{ "what": "gameplay: the runner jumps rooftops, slides under pipes and repairs a relay", "label": "Gameplay", "seconds": 42 }, { "what": "gameplay: the storm stage, lightning and a grapple swing", "label": "Stage 4", "seconds": 28 }]
+    },
+    "app": {
+      "brand": "Ledgerleaf", "brief": "a budgeting app for freelancers: invoices in, tax set aside, what is safe to spend", "theme": { "direction": "swiss grid, off-white, one ink green, big numerals" },
+      "copy": "PAGE home \"Ledgerleaf — Home\": what the app does\n  [hero] Know what is safe to spend — Ledgerleaf sets tax aside the moment an invoice is paid.\n  [stats] 31 percent set aside on average / 4 minutes a week\nPAGE app \"Ledgerleaf — Dashboard\": the dashboard\n  [list] Invoices / Tax pot / Safe to spend\nPAGE pricing \"Ledgerleaf — Pricing\": pricing\n  [price] 9 dollars a month — First two months free.",
+      "images": ["a freelancer at a kitchen table with a laptop and a shoebox of receipts", "a close view of a hand holding a paid invoice"],
+      "clips": [{ "what": "a scroll through the dashboard: invoices, the tax pot filling, safe to spend", "label": "Live", "seconds": 24 }]
+    },
+    "folio": {
+      "brand": "Mara Okoye", "brief": "the portfolio of an illustrator who paints night markets", "theme": { "direction": "ink and watercolour, deep indigo, paper grain, quiet" },
+      "copy": "PAGE home \"Mara Okoye — Work\": selected paintings\n  [hero] Night markets, painted from memory — Lagos, Taipei, Oaxaca.\nPAGE about \"Mara Okoye — About\": the artist\n  [bio] I draw the hour after closing — Fifteen years of sketchbooks, one stall at a time.\nPAGE prints \"Mara Okoye — Prints\": prints for sale\n  [list] Giclée prints / Signed, 50 each / Ships rolled",
+      "images": ["a watercolour night market stall with paper lanterns unlit, indigo sky", "an ink sketch of a noodle vendor's hands", "a woman painting at a folding table by a window", "a wall of small framed market paintings", "a sketchbook open on a tiled floor", "a rain-wet street after the stalls have closed, watercolour"],
+      "clips": []
+    }
+  },
+  "prompts": [
+    { "id": "shop-plain", "build": "shop", "prompt": "", "expect": ["demo"] },
+    { "id": "shop-calm", "build": "shop", "prompt": "a calm, slow film of a quiet morning at the roastery, almost no words", "expect": ["mood"] },
+    { "id": "shop-story", "build": "shop", "prompt": "tell it as one customer's story: Ines, who gave up on supermarket coffee", "template": "story", "expect": ["character"] },
+    { "id": "shop-beat", "build": "shop", "prompt": "cut it to the beat, big type, no talking, for a reel", "template": "kinetic", "expect": ["music"] },
+    { "id": "shop-ad", "build": "shop", "prompt": "a 20 second ad for the subscription with a narrator", "template": "promo", "expect": ["demo"] },
+    { "id": "event-announce", "build": "event", "prompt": "announce the jam: the date, the place, how to get a ticket", "expect": ["announce"] },
+    { "id": "event-hype", "build": "event", "prompt": "a hype reel for the jam, fast, loud, cut on the drums", "expect": ["music", "announce"] },
+    { "id": "event-teaser", "build": "event", "prompt": "", "template": "teaser", "expect": ["announce"] },
+    { "id": "event-story", "build": "event", "prompt": "follow one nervous first-timer through the weekend, from walking in alone to the showcase", "expect": ["character"] },
+    { "id": "game-trailer", "build": "game", "prompt": "a fast-paced gameplay trailer", "expect": ["gameplay"] },
+    { "id": "game-plain", "build": "game", "prompt": "", "expect": ["gameplay"] },
+    { "id": "game-mood", "build": "game", "prompt": "a quiet, lonely mood piece about the city before the storm, slow and dreamy", "expect": ["mood"] },
+    { "id": "game-hero", "build": "game", "prompt": "the courier's story: why she runs, told in her own words", "expect": ["character"] },
+    { "id": "game-teaser", "build": "game", "prompt": "a 15 second teaser that hides almost everything", "template": "teaser", "expect": ["gameplay", "announce"] },
+    { "id": "app-demo", "build": "app", "prompt": "show how it works in thirty seconds, with a voice explaining", "expect": ["demo"] },
+    { "id": "app-plain", "build": "app", "prompt": "", "template": "promo", "expect": ["demo"] },
+    { "id": "app-type", "build": "app", "prompt": "only numbers and words, punchy, on the beat", "template": "kinetic", "expect": ["music"] },
+    { "id": "folio-mood", "build": "folio", "prompt": "", "template": "slideshow", "expect": ["mood"] },
+    { "id": "folio-artist", "build": "folio", "prompt": "a short portrait of the artist, in her voice, the hour after the market closes", "expect": ["character", "mood"] },
+    { "id": "folio-launch", "build": "folio", "prompt": "the print shop opens on December 1st, tell people", "expect": ["announce"] }
+  ]
+}
