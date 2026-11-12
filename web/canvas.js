@@ -175,6 +175,7 @@ function on(e) {
     case 'run:start':
       fresh(e.run)
       S.t0 = e.t
+      S.paint = e.paint !== false // older builds don't say: their pictures were painted
       // a game has no canvas build: its spec and the App view are the whole file
       if (e.kind === 'game') { S.kind = 'game'; if (e.from) S.link = { run: e.from, label: `↔ ${e.fromName || 'the site'}` }; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
       if (!viewing) els.agentsSel.value = String(e.agents.length)
@@ -3320,13 +3321,21 @@ function fillImages(l) {
     const gen = img.getAttribute('data-gen')
     const src = S.images.get(`${l.key}|${gen}`)
     if (src === undefined || src === '') {
-      // waiting, or the photo failed: a stand-in photo holds the slot, and the sketch until one is found
+      // waiting, or the photo failed: a stand-in photo holds the slot, and the sketch until one is found.
+      // The frame marks it with the painter's name and "real picture coming" (web/frame.html), so a
+      // stand-in never passes for the finished site.
+      // A stock-photo build keeps its stand-ins for good, so they get no tag.
+      if (S.paint !== false) {
+        const who = painterOf(`${l.key}/${gen}`), state = src === '' ? 'failed' : 'coming'
+        if (img.getAttribute('data-painter') !== who) { img.setAttribute('data-painter', who); changed = true }
+        if (img.getAttribute('data-pt') !== state) { img.setAttribute('data-pt', state); changed = true }
+      }
       const hold = standinFor(gen)
       if (hold) { if (img.getAttribute('src') !== hold) { img.setAttribute('src', hold); img.setAttribute('data-sketch', 'photo'); changed = true } }
       else if (!img.getAttribute('src')) { img.setAttribute('src', sketch(gen)); img.setAttribute('data-sketch', ''); changed = true }
       continue
     }
-    if (img.getAttribute('src') !== src) { img.setAttribute('src', src); img.removeAttribute('data-sketch'); changed = true }
+    if (img.getAttribute('src') !== src || img.hasAttribute('data-pt')) { img.setAttribute('src', src); for (const a of ['data-sketch', 'data-painter', 'data-pt']) img.removeAttribute(a); changed = true }
   }
   if (changed) { l.text = doc.body.innerHTML; l.ver++ }
 }

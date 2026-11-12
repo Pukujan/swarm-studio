@@ -377,7 +377,8 @@ function startRun({ brief, agents, models: given, base = null, ask = '', resume 
     if (current !== run) { if (LATE_PICTURE.has(type)) record(id, { type, t: Date.now(), run: id, ...data }); return }
     // stopped before its pictures: the slots keep their stand-ins, and run:stopped stays the last word
     if (type === 'run:stopped') images?.drop('stopped')
-    const event = { type, t: Date.now(), run: id, ...data }
+    // run:start says whether the pictures will be painted: the deck tags a stand-in "real picture coming" only then
+    const event = { type, t: Date.now(), run: id, ...data, ...(type === 'run:start' ? { paint: !!run.paint } : {}) }
     run.events.push(event)
     if (type === 'agent:assign') run.working.add(data.agent)
     if (type === 'layer:done' || type === 'layer:failed') run.working.delete(data.agent)
@@ -404,6 +405,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', resume 
     if (current !== run) return
     if (run.controller.signal.aborted) return emit('run:stopped', { ms: 0, planned: 0, done: 0, failed: 0, pages: 0, stopped: true })
     // painted: the slots are painted; stock: stand-in photos keep them; drawn: no slots at all
+    run.paint = pic.paint
     if (pic.paint) run.images = images = imageQueue(run, emit, pic.choice)
     return withTrace(id, () => runSwarm({
     images: pic.images,
