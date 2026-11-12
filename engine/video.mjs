@@ -4,11 +4,12 @@
 // HyperFrames renders to MP4 in headless Chrome.
 //
 // HyperFrames and ffmpeg are fetched from npm into the plugin's data folder the
-// first time a video is made, unless they are already on PATH.
+// first time a video is made, unless they are already on PATH: exact versions, and
+// the ffmpeg and ffprobe binaries are checked against recorded SHA-256 sums first.
 
 import { spawn, execFile } from 'node:child_process'
 import { CAST, MOODS } from './sound.mjs'
-import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
 import { dirname, join, extname, basename } from 'node:path'
 import { streamChat } from './llm.mjs'
@@ -594,29 +595,63 @@ let tools = null
 const run = (cmd, args, opts = {}) => new Promise((ok, fail) => execFile(cmd, args, { maxBuffer: 1 << 24, ...opts }, (err, out) => (err ? fail(err) : ok(out))))
 const which = name => run('/usr/bin/which', [name]).then(p => p.trim()).catch(() => '')
 
+// ffmpeg and ffprobe, when they are not on PATH: exact npm versions, and the binary each one unpacks is
+// checked against the SHA-256 recorded here (from those exact packages) before it is ever run. A platform
+// not listed here needs ffmpeg and ffprobe on PATH.
+export const FF_PACKAGES = { ffmpeg: '@ffmpeg-installer/ffmpeg@1.1.0', ffprobe: '@ffprobe-installer/ffprobe@2.1.2' }
+export const FF_SHA256 = {
+  'darwin-arm64': { ffmpeg: 'a2ad6f0fc42a3c8f5183ef1d53e906d6bb35478d14a6b67175c30ce6c17e9214', ffprobe: 'c846d5db9d3b5bc33f987725e21f3ea14953931221c191575918e907ad6c18ff' },
+  'darwin-x64': { ffmpeg: '69bddbabda0d4fbedf98fb01b6f964ee1c8346987ef7f6e70055b95339a78b17', ffprobe: '424ce5e9271085240e90bd27f9e3f0ce280d388ea4379a211f76b64fcc07ce33' },
+  'linux-arm': { ffmpeg: 'a3ff69b5959ed713e3316dbe2ad5b219e230312d7092339ac0be7e20d35dd2ee', ffprobe: '548df496bc5113e01658a84b5f504e3c59e00101c641416d146f21bbf6cc73fd' },
+  'linux-arm64': { ffmpeg: '115a825e246078acf820ea2afcaf1b3ff87f1b93f7035ecad38d3223cca55297', ffprobe: '9b63a1715f87c0c476dacf237a4adcb0bf26de29854b137dae4e79f69a98b624' },
+  'linux-ia32': { ffmpeg: '885628c27d97f5a7a74d2e8184d799ec7f1ef963b3fa755070f2cbfa28712e12', ffprobe: '9d3bae5ec09f1a492f6eac8e3e1de543738c8a87e622271b80a0c05fca8138da' },
+  'linux-x64': { ffmpeg: '6d0c625dbd3f604ed2618981ba6fee7e29678855ab741d654cfc9effb0226624', ffprobe: '576c21674291ec1948d507ea8ab0d78eb6621a0be8c6f1a6db0f50c5fcb1e0f9' },
+  'win32-ia32': { ffmpeg: '2d07c49c4b3a77e69cff16605411d3be14aec709ac96797f2206dc856d657700', ffprobe: 'a6526c753e607ab1780e1465fe64ed07374b5273958cb258ff5c5cc7a9fc8545' },
+  'win32-x64': { ffmpeg: 'c8abc49e7be62dde8e12972af373959e0076a7b8dc8040eb45978e0608f8781e', ffprobe: 'f28c4751e7367205267025aaf0fcfc921e34d9b7edaa46bd9c8abaf367fc9051' },
+}
+
+// Where npm unpacks the binary for this platform (read from the folder, not by loading the package's code).
+export function ffBinary(dir, name, plat = `${process.platform}-${process.arch}`) {
+  return join(dir, 'node_modules', `@${name}-installer`, plat, process.platform === 'win32' ? `${name}.exe` : name)
+}
+
+// Throws unless `file` is exactly the binary recorded for this platform.
+export function checkFf(file, name, plat = `${process.platform}-${process.arch}`) {
+  const want = FF_SHA256[plat]?.[name]
+  if (!want) throw new Error(`no checked ${name} for ${plat}: install ffmpeg and ffprobe on PATH to make films`)
+  if (!existsSync(file)) throw new Error(`${name} is missing at ${file}`)
+  const got = createHash('sha256').update(readFileSync(file)).digest('hex')
+  if (got !== want) throw new Error(`${name} at ${file} does not match its recorded checksum; not running it`)
+  return file
+}
+
 export function videoTools(dataDir, onStage = () => {}) {
   return (tools ||= (async () => {
     const dir = join(dataDir, 'video-tools'), bin = join(dir, 'bin')
     const hf = join(dir, 'node_modules', '.bin', 'hyperframes')
-    let ffmpeg = await which('ffmpeg'), ffprobe = await which('ffprobe')
-    if (!existsSync(hf) || ((!ffmpeg || !ffprobe) && !existsSync(join(bin, 'ffprobe')))) {
+    const ffmpeg = await which('ffmpeg'), ffprobe = await which('ffprobe')
+    const system = !!(ffmpeg && ffprobe) // both on PATH: those are used, nothing is fetched for them
+    const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
+    const install = pkgs => {
       onStage('setting up the video renderer (first time only)')
       mkdirSync(dir, { recursive: true })
       if (!existsSync(join(dir, 'package.json'))) writeFileSync(join(dir, 'package.json'), '{"private":true}\n')
-      const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
-      await run(npm, ['install', '--no-audit', '--no-fund', HYPERFRAMES, '@ffmpeg-installer/ffmpeg', '@ffprobe-installer/ffprobe'], { cwd: dir, timeout: 600000 })
+      return run(npm, ['install', '--no-audit', '--no-fund', '--save-exact', ...pkgs], { cwd: dir, timeout: 600000 })
     }
-    if (!ffmpeg || !ffprobe) {
-      const req = createRequire(join(dir, 'package.json'))
+    const checked = () => { try { for (const name of ['ffmpeg', 'ffprobe']) checkFf(ffBinary(dir, name), name); return true } catch { return false } }
+    if (!existsSync(hf)) await install(system ? [HYPERFRAMES] : [HYPERFRAMES, FF_PACKAGES.ffmpeg, FF_PACKAGES.ffprobe])
+    if (!system) {
+      // an earlier, unpinned copy (or a changed one) is replaced by the pinned packages, then checked again
+      if (!checked()) await install([FF_PACKAGES.ffmpeg, FF_PACKAGES.ffprobe])
       mkdirSync(bin, { recursive: true })
-      for (const [name, pkg] of [['ffmpeg', '@ffmpeg-installer/ffmpeg'], ['ffprobe', '@ffprobe-installer/ffprobe']]) {
-        const target = req(pkg).path, link = join(bin, name)
+      for (const name of ['ffmpeg', 'ffprobe']) {
+        const target = checkFf(ffBinary(dir, name), name), link = join(bin, name)
         chmodSync(target, 0o755) // npm may skip the package's own chmod script
         rmSync(link, { force: true })
         symlinkSync(target, link)
       }
     }
-    return { hf, path: `${bin}:${process.env.PATH || '/usr/bin:/bin'}`, ffmpeg: ffmpeg || join(bin, 'ffmpeg') }
+    return { hf, path: system ? (process.env.PATH || '/usr/bin:/bin') : `${bin}:${process.env.PATH || '/usr/bin:/bin'}`, ffmpeg: system ? ffmpeg : join(bin, 'ffmpeg') }
   })().catch(err => { tools = null; throw err }))
 }
 
