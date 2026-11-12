@@ -1,0 +1,35 @@
+/* Setup (web/setup.js; docs/specs/06-onboarding.md): a grouped list in a kit dialog. Rows are a
+   name and one state; a tap opens the row. Tokens only, so it follows light and dark. */
+.ui-dialog.su { width: min(480px, 100%); }
+.su-list { border: 1px solid var(--ui-border); border-radius: var(--ui-radius); overflow: hidden; }
+.su-row + .su-row { border-top: 1px solid var(--ui-border); }
+.su-head {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 14px;
+  border: 0; background: transparent; color: var(--ui-foreground); cursor: pointer; text-align: left;
+  font: 600 14px/1 var(--ui-head); letter-spacing: .08em; text-transform: uppercase;
+}
+.su-head:hover { background: var(--ui-muted); }
+.su-head:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: -2px; }
+.su-head > .i { flex: none; color: var(--ui-muted-foreground); transition: transform .16s; }
+.su-row.open > .su-head > .i { transform: rotate(180deg); }
+.su-name { flex: none; }
+.su-state { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.su-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ui-muted-foreground); font: 13px/1.2 var(--ui-font); letter-spacing: 0; text-transform: none; }
+.su-mark { display: inline-flex; flex: none; color: var(--ui-foreground); }
+.su-mark.warn { color: var(--ui-destructive); }
+.su-mark .i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.su-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ui-border); border-top-color: var(--ui-foreground); animation: su-spin .8s linear infinite; }
+@keyframes su-spin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .su-spin { animation: none; } .su-head > .i { transition: none; } }
+.su-body { display: flex; flex-direction: column; gap: 10px; padding: 2px 14px 14px; }
+.su-line { display: flex; align-items: center; gap: 10px; min-height: 28px; font: 13px/1.2 var(--ui-font); color: var(--ui-muted-foreground); }
+.su-line > :first-child { margin-right: auto; }
+.su-line b { font-weight: 500; color: var(--ui-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.su-line .fg { color: var(--ui-foreground); }
+.su-note, .su-why { margin: 0; font: 12.5px/1.4 var(--ui-font); color: var(--ui-muted-foreground); }
+.su-why { color: var(--ui-destructive); overflow-wrap: anywhere; }
+.su-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.su-cmd { display: flex; align-items: center; gap: 8px; }
+.su-cmd code { flex: 1; min-width: 0; padding: 10px 12px; border-radius: calc(var(--ui-radius) - 4px); border: 1px solid var(--ui-border); font: 13px/1 var(--ui-font); color: var(--ui-foreground); }
+.su .ui-dialog-footer .su-start { min-width: 96px; }
+@media (max-width: 480px) { .su .ui-toggle { padding: 0 8px; font-size: 12.5px; } }
