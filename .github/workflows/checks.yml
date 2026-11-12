@@ -36,7 +36,7 @@ jobs:
       # model-written pages cannot reach the studio (scripts/sandbox-check.mjs, catalog review point 4)
       - run: node scripts/sandbox-check.mjs
   # the Studio moves the same before and after (docs/ux/MOTION.md, scripts/motion-check.mjs): the base
-  # and the head are each recorded twice in this runner and compared; skipped when web/ and server/ are untouched
+  # and the head are each recorded twice in this runner and compared; skipped when web/, server/ and the check itself are untouched
   motion-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
       - id: touched
         run: |
           base=${{ github.event.pull_request.base.sha }}
-          if git diff --quiet "$base" HEAD -- web server; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'web/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
+          if git diff --quiet "$base" HEAD -- web server scripts/motion-check.mjs scripts/walkthrough-fixtures.mjs; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'web/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
       - if: steps.touched.outputs.run == 'yes'
         run: npm install --no-save --no-package-lock playwright@1.64.1 && npx playwright install --with-deps chromium-headless-shell
       - if: steps.touched.outputs.run == 'yes'
