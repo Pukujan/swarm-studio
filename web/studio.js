@@ -5,6 +5,7 @@ import { makeHome } from './home.js'
 import { makeProject } from './project.js'
 import { makeWork } from './work.js'
 import { makePlan } from './plan.js'
+import { projectRun } from './route.js'
 const sw = window.swarm
 const W = window
 const body = document.body
@@ -67,7 +68,8 @@ C.go = (m, v) => {
     C.projectView.hide()
   } else if (m === 'project') {
     if (sw.view !== 'canvas') sw.setView('canvas')
-    C.projectView.show(sw.viewing || sw.S?.run || null, C.project)
+    // v: the run that was asked for (a card, a version, the address); see projectRun in route.js
+    C.projectView.show(projectRun({ asked: v, opening: C.opening, viewing: sw.viewing, live: sw.S?.run }), C.project)
     C.homeView.hide()
   } else if (m === 'station') {
     C.projectView.hide()
@@ -95,8 +97,16 @@ C.plan = (id, fresh = false) => { C.planFresh = fresh; C.go('plan', id) }
 // open a project: its newest build (or the one asked for); with no run, the build just started
 C.open = (run, pid) => {
   C.project = pid || null
-  if (run && run !== sw.viewing) sw.openRun(run)
-  C.go('project')
+  C.load(run)
+  C.go('project', run || undefined)
+}
+// Load a run into the canvas and remember it until it is there: whoever asks "which run is open"
+// in between gets this one, not the one the canvas still holds.
+C.opening = null
+C.load = run => {
+  if (!run || run === sw.viewing) return Promise.resolve()
+  C.opening = run
+  return Promise.resolve(sw.openRun(run)).finally(() => { if (C.opening === run) C.opening = null })
 }
 // anything that answers Esc itself (a panel, a menu, the player, a selection) goes first
 const OPEN = '.game-pop, .models-pop, .export-pop, .show-sum, .fmenu, .ui-overlay, .ui-popover, .combo-list, .player:not([hidden]), .slash-pop:not([hidden]), .hm-menu, #more-menu:not([hidden]), #pub-menu:not([hidden]), .dpick, .finfo-wrap, .video-big, .cbox.open'
@@ -166,7 +176,7 @@ const modeNow = () => (sw.view === 'app' && onGame() ? 'game' : sw.view)
 // the game's room: the App view on the game's run (the label says Game once that run is open)
 C.toGame = () => {
   C.go('station', 'app')
-  return Promise.resolve(sw.viewing !== C.pair.game && sw.openRun(C.pair.game)).then(renderMode)
+  return C.load(C.pair.game).then(renderMode)
 }
 function renderMode() {
   const b = $('.mode-btn')
@@ -206,7 +216,7 @@ function modeMenu() {
       return C.toGame()
     }
     // the other rooms show the site's run, not the game's (which has no pages or film)
-    if (onGame() && C.pair.site) Promise.resolve(sw.openRun(C.pair.site)).then(() => { if (sw.view !== id) sw.setView(id); renderMode() })
+    if (onGame() && C.pair.site) C.load(C.pair.site).then(() => { if (sw.view !== id) sw.setView(id); renderMode() })
     C.go('station', id)
     renderMode()
   }
@@ -242,7 +252,8 @@ function start() {
   sw.on(e => {
     if (e.type === 'run:start' || e.type === 'run:done' || e.type === 'reset') setTimeout(() => C.mode === 'home' && C.homeView.refresh(), 600)
   })
-  C.go(Q.get('replay') || Q.get('run') ? 'project' : 'home')
+  // a build opened by its address shows that build, whatever the server is streaming
+  C.go(Q.get('replay') || Q.get('run') ? 'project' : 'home', Q.get('run') || Q.get('replay') || undefined)
 }
 // fold-button style lives here: it is the only rule that needs the side panel's tab bar
 const style = document.createElement('style')

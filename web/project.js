@@ -105,10 +105,12 @@ export function makeProject({ sw, C, root }) {
     const building = board?.kind === 'game' ? board.work || board.busy : board?.game?.work
     if (building && C.pair.game && !P.toGame.has(run) && C.mode === 'project') { P.toGame.add(run); C.toGame(); return }
     P.toGame.add(run)
-    P.proj = list?.projects.find(p => p.id === P.pid) || list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || null
+    // the project is the one this run belongs to; the one it was opened from only when the run is
+    // too new to be listed (so a name never sits over another project's pages)
+    P.proj = list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || list?.projects.find(p => p.id === P.pid) || null
     // back from a site's game: the project shows the site's version, which holds the game
     const up = P.proj?.parts?.[run]
-    if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); if (sw.viewing !== up) sw.openRun(up); return load() }
+    if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); C.load(up); return load() }
     if (P.proj) P.pid = P.proj.id
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
     render()
@@ -676,7 +678,7 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'page' || x.kind === 'art') { C.go('station', 'canvas'); setTimeout(() => sw.focusPage(x.page || x.art?.page), 60); return }
     if (x.kind === 'film') return C.go('station', 'video')
     // a game made from this site lives in its own run: open that one's App room
-    if (x.kind === 'game' && x.run && x.run !== P.run) { C.go('station', 'app'); return Promise.resolve(sw.openRun(x.run)).then(() => C.go('station', 'app')) }
+    if (x.kind === 'game' && x.run && x.run !== P.run) { C.go('station', 'app'); return C.load(x.run).then(() => C.go('station', 'app')) }
     if (x.kind === 'game' || x.kind === 'app' || x.kind === 'code') return C.go('station', 'app')
     if (x.kind === 'upload' && x.src) window.open(base() + x.src, '_blank', 'noopener')
   }
