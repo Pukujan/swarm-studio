@@ -98,7 +98,7 @@ export async function reviewFilm({ ffmpeg, file, board, tmp, caps = {}, vision =
   const cuts = await sceneTimes(ffmpeg, file, { threshold: 0.25 })
   let beats = [], beatSure = false
   if (m.hasSound) {
-    try { const d = await decode(ffmpeg, file, { env: { PATH: process.env.PATH || '/usr/bin:/bin' } }); const a = analyse(d.samples, d.rate, { bpm: board.music?.bpm }); beats = a.beats || []; beatSure = a.confidence >= SURE } catch {}
+    try { const d = await decode(ffmpeg, file); const a = analyse(d.samples, d.rate, { bpm: board.music?.bpm }); beats = a.beats || []; beatSure = a.confidence >= SURE } catch {}
   }
   let heard = null, look = null
   const script = (board.scenes || []).some(s => s.say)

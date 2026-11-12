@@ -9,7 +9,7 @@
 // Every read says what happened ("saw 9 frames, could not hear it"); "not read" is never silent.
 // The person's media goes only to the model they chose: the media pick, else the reviewer's vision model.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { mkdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -42,9 +42,8 @@ export const MEDIA_PREFER = ['mimotp/mimo-v2.6-flash', 'ali/qwen3.8-omni-flash',
 export const defaultMedia = (offered = []) => MEDIA_PREFER.find(m => offered.includes(m)) || null
 
 const clean = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
-// child processes get only what they need (catalog review point 3)
-const childEnv = () => ({ PATH: process.env.PATH || '/usr/bin:/bin', HOME: process.env.HOME || '', TMPDIR: process.env.TMPDIR || '/tmp', LANG: process.env.LANG || 'C' })
-const ff = (ffmpeg, args, { timeout = 120000, buffer = false } = {}) => new Promise(resolve => execFile(ffmpeg, args, { env: childEnv(), timeout, maxBuffer: 1 << 26, encoding: buffer ? 'buffer' : 'utf8' }, (err, stdout, stderr) => resolve({ err, stdout, stderr: String(stderr || '') })))
+// proc.mjs gives ffmpeg only the minimal environment (catalog review point 3)
+const ff = (ffmpeg, args, { timeout = 120000, buffer = false } = {}) => new Promise(resolve => execFile(ffmpeg, args, { timeout, maxBuffer: 1 << 26, encoding: buffer ? 'buffer' : 'utf8' }, (err, stdout, stderr) => resolve({ err, stdout, stderr: String(stderr || '') })))
 
 // ---------- what a file is: its length, picture size and whether it has sound
 export function parseInfo(stderr) {
