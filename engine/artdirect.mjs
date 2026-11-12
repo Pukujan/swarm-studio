@@ -5,8 +5,8 @@
 // look (glow, teal and gold, neon fantasy, symmetrical "epic" shots).
 //
 // Pure functions; the server owns the image calls and the vision check's model.
-import { keyBackground } from './keycolor.mjs'
-export { keyTrouble, keyOf, swapKey } from './keycolor.mjs'
+import { keyBackground, keyNamed, keyOf } from './keycolor.mjs'
+export { keyTrouble, keyOf, swapKey, keyClash, otherKey, measureKey } from './keycolor.mjs'
 
 // The styles. Photo is the default; the brief picks another by naming it.
 export const STYLES = {
@@ -167,7 +167,7 @@ export function promptFor(gen, guide, { aspect = 'landscape', strict = '', cutou
     `${what}.`,
     empty ? style.replace(/,?\s*an? (everyday )?(slice-of-life )?moment\b/gi, '').replace(/\b(original )?characters?( and original designs)? only\.?/gi, '').trim() : style,
     cutout
-      ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on ${keyBackground(what)}, with no floor, shadow, scenery or frame, so it can be cut out.`
+      ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on ${keyBackground(what, /#(FF00FF|00FF00|0000FF)/i.test(what) ? keyNamed(keyOf(what)) : undefined)}, with no floor, shadow, scenery or frame, so it can be cut out.`
       : 'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',
     avoid ? `Avoid: ${avoid}.` : '',
     empty ? EMPTY_PLACE : '',
@@ -224,6 +224,41 @@ export function sheetPrompt({ look = '', frames = '' }, guide, { strict = '', la
   ].filter(Boolean).join(' '), 1400)
 }
 
+// A kit sheet (six UI pieces or six props) or an effect sheet (six frames of light on black):
+// the layout and the six things first, then what they belong to, then the style's look.
+export function kitPrompt({ look = '', frames = '', fx = false }, guide, { strict = '', layout = '' } = {}) {
+  const style = String(guide?.guide || '').split(/(?<=\.)\s+/).map(x => x.replace(/\.$/, '').split(/,\s*/).filter(c => !/composition|moment|background|scene|framing|shot|character/i.test(c)).join(', ')).filter(Boolean).join('. ')
+  const avoid = [guide?.avoid, ...(guide?.bans || []).map(id => banOf(id).label)].filter(Boolean).join('; ')
+  return clip([
+    fx ? 'A 2D game effect animation sheet: exactly six frames of ONE effect, in a 3 by 2 grid, one frame per cell.' : 'A 2D game asset sheet: exactly six separate objects, in a 3 by 2 grid, one object per cell.',
+    fx ? `The effect, from its first frame to its last: ${frames}.` : `The six objects, left to right, top to bottom: ${frames}.`,
+    layout && `${layout.replace(/\.$/, '')}.`,
+    look && `They are ${look}.`,
+    style && `${style}.`,
+    'No text, letters or numbers anywhere.',
+    avoid ? `Avoid: ${avoid}.` : '',
+    strict ? `This is a second try. The first sheet was sent back for: ${strict}. Make sure none of that is in this one.` : ''
+  ].filter(Boolean).join(' '), 1400)
+}
+export function kitMessages(what, image, frames = '', fx = false) {
+  return [
+    {
+      role: 'system',
+      content: `You check one sheet of game art before it goes into a game: ${clip(what, 80)}. ${fx ? 'Its six frames are one effect, painted as light on black, shown side by side.' : 'Its six pieces were cut out of a painted sheet and are shown side by side, once on dark and once on light grey.'} They should show: ${clip(frames, 400)}
+
+Send it back only for a clear, visible problem:
+- a piece is missing, or two pieces are joined or overlap
+- a piece is cut off at its frame's edge
+- letters, words or numbers on any piece
+- a person or character where an object should be${fx ? '' : `
+- leftover background: magenta, green, blue, grey or white patches, specks or a coloured rim around a piece`}
+
+Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. If in doubt, it is ok.`
+    },
+    { role: 'user', content: [{ type: 'text', text: 'Check this sheet.' }, { type: 'image_url', image_url: { url: image } }] }
+  ]
+}
+
 // A sprite sheet's frames, cut out and laid side by side, shown on dark and on magenta.
 export function sheetMessages(what, image, frames = '') {
   return [
@@ -235,7 +270,7 @@ Send it back only for a clear, visible problem:
 - a frame shows a different character, outfit or colours than the others
 - the figure changes size a lot between frames, or a frame is empty
 - a head, hand, foot or hair cut off at a frame's edge, or two figures in one frame
-- leftover background: magenta, green, grey or white patches, specks or a coloured rim around the figure
+- leftover background: magenta, green, blue, grey or white patches, specks or a coloured rim around the figure
 - the frames do not show the moves asked for
 
 Return JSON only: {"ok":true} or {"ok":false,"problems":["what is wrong, under 10 words"]}. At most 3 problems. If in doubt, it is ok.`
@@ -250,7 +285,7 @@ export function cutoutMessages(what, image) {
       content: `You check one game sprite before it goes into the game: ${clip(what, 80)}. It was cut out of a flat key-colour background and is shown twice, on dark and on light grey.
 
 Send it back only for a clear, visible problem:
-- leftover background: magenta, green, grey or white patches, specks or a coloured rim inside or around the figure (between hair strands, inside loops, under arms)
+- leftover background: magenta, green, blue, grey or white patches, specks or a coloured rim inside or around the figure (between hair strands, inside loops, under arms)
 - a hole through the figure where it should be solid
 - a head, hand, foot, tail or weapon cut off by the edge of the picture
 - more than one figure, or a scene instead of one figure

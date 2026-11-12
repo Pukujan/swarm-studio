@@ -38,6 +38,8 @@ import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { workshopRoutes } from './workshops.mjs'
+import { setupRoutes } from './setup.mjs'
+import { pictureRun, isPictures } from '../engine/setup.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
 import { library } from '../engine/library.mjs'
@@ -163,6 +165,22 @@ async function imageChoice() {
   return chooseImage(await loadImageProviders(), picks.image)
 }
 
+// The one-time Setup sheet (docs/specs/06-onboarding.md): what builds use for pictures (the
+// `pictures` pick: painted, stock or drawn) and whether the planner and the builders answer.
+const setup = setupRoutes({
+  dataDir,
+  roles: () => ({ planner: { ...models.planner, model: modelFor('planner') }, worker: { ...models.worker, model: modelFor('worker') } }),
+  call: (p, model) => streamChat({ baseUrl: p.baseUrl.replace(/\/$/, ''), apiKey: p.apiKey }, { trace: { kind: 'setup-test' }, model, maxTokens: 16, temperature: 0, messages: [{ role: 'user', content: 'Say ok' }], signal: AbortSignal.timeout(30000) }),
+  image: async () => ({ providers: await loadImageProviders(), imagePick: picks.image || null, pick: picks.pictures || null }),
+  setPictures: mode => { if (mode) picks.pictures = mode; else delete picks.pictures; try { writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {} }
+})
+// What one build does for pictures: its own `pictures`, else the Setup pick, else the default
+async function picturesFor(own) {
+  const choice = await imageChoice()
+  const mode = isPictures(own) ? own : (await setup.pictures()).mode
+  return { choice, mode, ...pictureRun(mode, choice) }
+}
+
 const IMG_MAX = 8
 
 // ---------- the art director (engine/artdirect.mjs): one named style per build,
@@ -266,6 +284,7 @@ function imageQueue(run, emit, choice) {
       const sentBack = c => emit('image:sent-back', { page: job.page, layer: job.layer, gen: job.gen, problems: c.problems, model: c.model })
       paintArt(choice, run.art || art.styleGuide({ brief: run.brief }), { gen: job.gen, aspect: job.aspect, hero: art.isHero({ layer: job.layer, n: job.n }) }, sentBack)
         .then(r => {
+          setup.notePaint(choice, r)
           if (!r.ok || !r.path || !existsSync(r.path)) return emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message: r.error || 'no image' })
           const file = `${job.n}${extname(r.path) || '.png'}`
           mkdirSync(join(run.dir, 'img'), { recursive: true })
@@ -310,7 +329,7 @@ function broadcast(event) {
 }
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
-function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '' }) {
+function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '', pictures = '' }) {
   setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
@@ -360,11 +379,12 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     queueMicrotask(() => emit('error', { where: 'models', message: 'No model key yet. Start a build from Hermes once (/swarm, the chat tool or `hermes swarm`) so it can pass its model settings, or set SWARM_STUDIO_API_KEY.' }))
     return run
   }
-  imageChoice().then(choice => {
+  picturesFor(pictures).then(pic => {
     if (current !== run) return
-    if (choice) images = imageQueue(run, emit, choice)
+    // painted: the slots are painted; stock: stand-in photos keep them; drawn: no slots at all
+    if (pic.paint) images = imageQueue(run, emit, pic.choice)
     return withTrace(id, () => runSwarm({
-    images: !!choice,
+    images: pic.images,
     provider: provider('planner'),
     workerProvider: provider('worker'),
     brief,
@@ -893,7 +913,7 @@ async function videoNow(id, input = {}) {
     scenes.fx = fxFor(scenes.fx, prompt)
     const agents = c.agents
     const picOf = s => { const n = s.image || s.images?.[0]; const f = n && c.images.find(x => x.n === n); return f ? `/img/${id}/${basename(f.file)}` : null }
-    send('video:story', { look: scenes.look, plan: scenes.plan, title: scenes.title, pace: scenes.pace, clips: c.clips.length, fx: scenes.fx, music: scenes.music, fixes: scenes.fixes, notes, scenes: scenes.map((s, i) => ({ kind: s.kind, layer: s.layer, seconds: s.seconds, camera: s.camera, cut: s.cut, cue: s.cue, sfx: s.sfx, headline: s.headline, accent: s.accent, speed: s.speed, image: picOf(s), agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
+    send('video:story', { look: scenes.look, plan: scenes.plan, film: scenes.film || null, title: scenes.title, pace: scenes.pace, clips: c.clips.length, fx: scenes.fx, music: scenes.music, fixes: scenes.fixes, notes, scenes: scenes.map((s, i) => ({ kind: s.kind, layer: s.layer, seconds: s.seconds, camera: s.camera, cut: s.cut, cue: s.cue, sfx: s.sfx, headline: s.headline, accent: s.accent, speed: s.speed, image: picOf(s), agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
     stagePictures(c, dir)
     const t = await tools
     // a long take sped up for its beat: the footage itself is sped up, and the beat wears the 8× chip
@@ -930,7 +950,7 @@ async function videoNow(id, input = {}) {
     writeFileSync(join(tallDir, 'index.html'), tallComp.html)
     const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
     const cues = cueSheet(scenes, lengths)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, scenes }, null, 2))
     // the stills and motion lines for Flow (Veo): the flow-video skill animates them into <run>/flow/<still>.mp4,
     // and the next cut plays those clips instead of the stills
     writeFileSync(join(dir, 'flow-prompts.json'), JSON.stringify(scenes.filter(s => s.layer === 'story' && s.image).map(s => { const f = c.images.find(x => x.n === s.image); return { still: f.file, clip: join(runsDir, id, 'flow', `${basename(f.file).replace(/\.[^.]+$/, '')}.mp4`), camera: s.camera, seconds: s.seconds, action: `${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape` } }), null, 2))
@@ -1285,13 +1305,16 @@ async function cutAndCheck(src, it, guide) {
   if (!c.ok || !existsSync(cut)) return { ok: false, cutFailed: true, problems: [c.why.split('\n').pop().slice(0, 120) || 'the cut failed'] }
   let report = {}
   try { report = JSON.parse(c.out.trim().split('\n').pop()) } catch {}
-  const looksOff = report.clipped || report.halo > 0.004
+  // measured from the painted picture: the figure sits close to the key it was painted on, and
+  // another key is further from its colours (the second try is painted on that one)
+  const clash = art.keyClash(report)
+  const looksOff = report.clipped || report.halo > 0.004 || !!clash
   // with a reviewer, every sprite is looked at; without one, the numbers decide
   const check = existsSync(view) ? await checkArt(view, guide, (_, image) => art.cutoutMessages(it.what, image)) : { ok: true, skipped: true, problems: [] }
-  const problems = check.skipped
+  const problems = [...(check.skipped
     ? [...(report.clipped ? ['cut off by the edge'] : []), ...(report.halo > 0.004 ? ['background left around the figure'] : [])]
-    : check.problems
-  return { ok: check.skipped ? !looksOff : check.ok, path: cut, view, problems, report }
+    : check.problems), ...(clash ? [clash.problem] : [])]
+  return { ok: (check.skipped ? !looksOff : check.ok) && !clash, path: cut, view, problems, report, clash }
 }
 // The sheet cutter needs numpy and scipy, which the Python first on the PATH may lack (a
 // venv's): the first of SWARM_CUT_PY, python3 and the system Python that has them.
@@ -1305,7 +1328,7 @@ const cutPy = () => (cutPyP ||= (async () => {
   return null
 })())
 // what a stage is told about a sheet: its frame size and timing, from the cut
-const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: meta.fps || it.fps, loop: meta.loop ?? it.loop, frames: meta.video ? IDLE_FRAMES : it.frames } : {})
+const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: meta.fps || it.fps, loop: meta.loop ?? it.loop, frames: meta.video ? IDLE_FRAMES : it.frames, ...(meta.blend === 'add' ? { blend: 'add' } : {}) } : {})
 const IDLE_FRAMES = 'a looping idle from a video clip: breathing, a small sway of weight, a blink'
 // The animated idle's go-ahead (engine/idle.mjs). With a video model signed in, the chat asks once,
 // with the picked model's price on the button and the other video models Hermes offers beside it
@@ -1387,7 +1410,11 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}), ...sheetInfo(it, meta) })
     return true
   }
-  for (const it of [...queue]) if (reuse(it)) queue.splice(queue.indexOf(it), 1)
+  // a kit sheet (a UI kit, a set of props) is cut into single files, each a picture of its own
+  // in the art the game is told about; the sheet itself is not
+  for (const kit of items.filter(i => i.parts)) for (const p of kit.parts) if (!items.some(i => i.id === p.id)) items.push({ ...p, part: kit.id })
+  const reuseParts = kit => { for (const p of kit.parts || []) reuse(p) }
+  for (const it of [...queue]) if (reuse(it)) { queue.splice(queue.indexOf(it), 1); reuseParts(it) }
   // the hero's idle from a video clip (engine/idle.mjs): asked for at the clip's price while the
   // rest paints; a yes adds the painted idle (its first frame is animated) and the video one
   let idleWait = null
@@ -1491,8 +1518,9 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
         if (!c.cutFailed) live(slot, it, 'checking', { src: peek(it, c.view, 'check') })
         if (!c.ok) {
           live(slot, it, 'sent back', { problems: c.problems })
-          // the key colour was the trouble: paint it again on the other key (magenta ↔ green)
-          const swap = art.keyTrouble(c.problems), gen = swap ? art.swapKey(it.gen) : it.gen
+          // the key colour was the trouble: paint it again on another key, the one measured as
+          // furthest from the figure's own colours (else magenta ↔ green)
+          const swap = art.keyTrouble(c.problems), gen = swap ? art.swapKey(it.gen, c.clash?.to || (c.report?.best !== c.report?.key ? c.report?.best : undefined)) : it.gen
           step({ kind: 'setup', text: `sent back the ${it.what}: ${c.problems.join(', ') || 'the cut'}${swap ? `; painting it again on ${art.keyOf(gen)}` : ''}` })
           const again = await paintArt(choice, guide, { gen: `${gen}. ${art.SPRITE_RETRY}; fix: ${c.problems.join('; ')}`, aspect: it.aspect, cutout: true, ref }).catch(() => null)
           if (again?.ok && again.path && existsSync(again.path)) {
@@ -1522,13 +1550,18 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   }
   async function paintSheet(slot, it) {
     // the uncut picture of the figure, else (art kept from an older build) its cut-out sprite
-    const still = done.get(it.after)?.file
-    const ref = [raws.get(it.after), still && join(appDir, 'public', still)].find(f => f && existsSync(f))
-    if (!ref) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
+    // a kit or an effect sheet has no figure: the hero's picture (else the title) is its style reference
+    const kit = !!(it.kit || it.fx), from = kit ? ['sprite-hero', 'title'] : [it.after]
+    const ref = from.flatMap(id => [raws.get(id), done.get(id)?.file && join(appDir, 'public', done.get(id).file)]).find(f => f && existsSync(f))
+    if (!ref && !kit) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
     const pick = art.tierFor(choice, { hero: true })
-    let layout = it.layout
+    // the key the sheet is painted on comes from the figure's own picture: the key colour
+    // furthest from its colours (the layout's key, guessed from the words, is the fallback)
+    const measured = kit ? null : await art.measureKey(ref)
+    let layout = measured && measured.pick !== art.keyOf(it.layout) ? art.swapKey(it.layout, measured.pick) : it.layout
+    if (layout !== it.layout) step({ kind: 'setup', text: `the ${it.what} is painted on ${art.keyOf(layout)}: the furthest key from the figure's colours` })
     // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
-    const go = strict => paintWithBackup(() => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout })], 300000), { choice: pick, quota: OUT_OF_QUOTA, exists: existsSync })
+    const go = strict => paintWithBackup(() => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', ...(kit ? (ref ? ['--ref', ref] : []) : ['--ref', ref, '--edit']), kit ? art.kitPrompt(it, guide, { strict, layout }) : art.sheetPrompt(it, guide, { strict, layout })], 300000), { choice: pick, quota: OUT_OF_QUOTA, exists: existsSync })
     let fixes = ''
     for (let go2 = 0; go2 < 2; go2++) {
       live(slot, it, go2 ? 'sent back' : 'painting', go2 ? { problems: fixes.split('; ') } : {})
@@ -1544,7 +1577,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       const strip = join(dirname(r.path), `${it.id}-strip.webp`), view = join(dirname(r.path), `${it.id}-check.png`)
       const py = await cutPy()
       if (!py) { live(slot, it, 'failed', { problems: ['cutting sheets needs numpy and scipy'] }); step({ kind: 'setup', text: `could not cut the ${it.what}: no Python with numpy and scipy (set SWARM_CUT_PY)`, ok: false }); return }
-      const cut = await new Promise(ok => execFile(py, [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), r.path, strip], { timeout: 120000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
+      const cut = await new Promise(ok => execFile(py, [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), r.path, strip, ...(it.fx ? ['--fx'] : [])], { timeout: 120000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
       let meta = null
       try { meta = JSON.parse(cut.out.trim().split('\n').pop()) } catch {}
       if (!cut.ok || !meta || !existsSync(strip)) {
@@ -1555,28 +1588,44 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       await new Promise(ok => execFile(py, [join(root, 'scripts', 'cutout.py'), '--preview-only', strip, view], { timeout: 60000 }, () => ok()))
       if (existsSync(view)) live(slot, it, 'checking', { src: peek(it, view, go2 ? 'check2' : 'check') })
       const qc = meta.qc || {}
-      const numbers = [...(qc.edge?.length ? [`frame ${qc.edge.map(n => n + 1).join(', ')} cut off at the edge`] : []), ...(qc.ok === false && !qc.edge?.length ? ['frames differ in size'] : [])]
-      const look = existsSync(view) ? await checkArt(view, guide, (_, image) => art.sheetMessages(it.what, image, it.frames)) : { ok: true, skipped: true, problems: [] }
+      // the cut measures the painted sheet too: figures close to the key they stand on
+      const clash = go2 === 0 ? art.keyClash(meta.key) : null
+      const numbers = [...(qc.edge?.length ? [`frame ${qc.edge.map(n => n + 1).join(', ')} cut off at the edge`] : []), ...(qc.ok === false && !qc.edge?.length && !it.fx ? [kit ? `only ${qc.frames} of the six pieces are there` : 'frames differ in size'] : []), ...(clash ? [clash.problem] : [])]
+      const look = existsSync(view) ? await checkArt(view, guide, (_, image) => (kit ? art.kitMessages(it.what, image, it.frames, !!it.fx) : art.sheetMessages(it.what, image, it.frames))) : { ok: true, skipped: true, problems: [] }
       const problems = [...numbers, ...(look.skipped ? [] : look.problems)]
       if (problems.length && go2 === 0) {
         fixes = problems.join('; ')
         // the key colour was the trouble: the second sheet is painted on the other key
         const swap = art.keyTrouble(problems)
-        if (swap) layout = art.swapKey(layout)
+        if (swap) layout = art.swapKey(layout, clash?.to || art.otherKey(meta.key?.scores || measured?.scores, art.keyOf(layout)))
         step({ kind: 'setup', text: `sent back the ${it.what}: ${problems.join(', ')}${swap ? `; painting it again on ${art.keyOf(layout)}` : ''}` })
         continue
       }
       // the reviewer still sees a wrong sheet after the second try: the game keeps the still sprite
       if (!look.skipped && look.problems.length) {
         live(slot, it, 'failed', { problems: look.problems })
-        step({ kind: 'setup', text: `left out the ${it.what}: ${look.problems[0]}; the game uses the still sprite`, ok: false })
+        step({ kind: 'setup', text: `left out the ${it.what}: ${look.problems[0]}${kit ? '' : '; the game uses the still sprite'}`, ok: false })
         return
       }
       const { file, name } = keep(it, strip)
       writeFileSync(join(runsDir, runId, 'img', name.replace(/\.[a-z]+$/i, '.json')), JSON.stringify(meta))
       done.set(it.id, { file, what: it.what, kind: it.kind, ...sheetInfo(it, meta) })
+      // a kit: each piece becomes a trimmed picture of its own (scripts/kit_split.py)
+      let pieces = 0
+      if (it.parts) {
+        const parts = join(dirname(r.path), `${it.id}-parts`)
+        mkdirSync(parts, { recursive: true })
+        const sp = await new Promise(ok => execFile(py, [join(root, 'scripts', 'kit_split.py'), strip, parts, ...it.parts.map(p => p.id)], { timeout: 60000 }, (err, out) => { try { ok(err ? null : JSON.parse(String(out).trim().split('\n').pop())) } catch { ok(null) } }))
+        for (const p of sp?.pieces || []) {
+          const part = it.parts.find(x => x.id === p.name)
+          if (!part || !existsSync(p.file)) continue
+          done.set(part.id, { file: keep(part, p.file).file, what: part.what, kind: part.kind })
+          pieces++
+        }
+        if (sp?.empty?.length) step({ kind: 'setup', text: `the ${it.what} came out without: ${sp.empty.join(', ')}`, ok: false })
+      }
       live(slot, it, 'done', { src: img(name), ...(problems.length ? { problems } : {}) })
-      step({ kind: 'setup', text: `painted the ${it.what}: ${meta.frames} frames${problems.length ? ` (kept after a second try: ${problems[0]})` : ''}` })
+      step({ kind: 'setup', text: `painted the ${it.what}: ${it.parts ? `${pieces} pieces` : `${meta.frames} frames`}${problems.length ? ` (kept after a second try: ${problems[0]})` : ''}` })
       return
     }
   }
@@ -1670,9 +1719,11 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   }
   await Promise.all(PAINTERS.map((_, i) => worker(i)))
   artJobs.delete(runId)
-  const out = items.filter(i => !i.keys).map(i => done.get(i.id)).filter(Boolean)
+  // (a kit's sheet is not handed to the game: its pieces are)
+  const wanted = items.filter(i => !i.keys && !i.parts)
+  const out = wanted.map(i => done.get(i.id)).filter(Boolean)
   // out of quota: the build is told which pictures are missing and which model ran out
-  if (stopped) out.stopped = { ...stopped, painted: out.length, missing: items.length - out.length }
+  if (stopped) out.stopped = { ...stopped, painted: out.length, missing: wanted.length - out.length }
   return out
 }
 
@@ -2407,6 +2458,7 @@ const server = createServer((req, res) => {
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
   if (workshops(req, res, url)) return
+  if (setup(req, res, url)) return
 
   // The Make box's showcases and its "grill me" interview (engine/intake.mjs); a Game gets the game interview
   if (url.pathname === '/api/intake' && req.method === 'GET') {

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sheetList as sheetListAll } from '../engine/game.mjs'
 const sheetListOf = s => sheetListAll(s)[0]
-import { QUESTIONS, plan, isBig, bigGaps, artList, artBrief, stagesFor, bigStagePrompt, gamePrompt, specMarkdown } from '../engine/game.mjs'
+import { QUESTIONS, plan, isBig, bigGaps, artList, artBrief, stagesFor, bigStagePrompt, gamePrompt, specMarkdown, artPlan, artScale, ART_PLANS, kitBrief, sheetList } from '../engine/game.mjs'
 
 const big = {
   title: 'Rooftop Signal', pitch: 'A free rooftop runner: jump the gaps and fix the relays home.', genre: 'Platformer', view: 'side',
@@ -44,7 +44,7 @@ test('the art list follows the game: side view for a runner, places, items, unde
   const all = artList(big)
   const kinds = new Set(all.map(a => a.kind))
   for (const k of ['title', 'sprite', 'icon', 'backdrop']) assert.ok(kinds.has(k), k)
-  assert.ok(all.length <= 26)
+  assert.ok(all.length <= artPlan(big).max)
   const backs = all.filter(a => a.kind === 'backdrop')
   assert.deepEqual(backs.map(a => a.id), ['place-harbour-roofs', 'place-neon-market', 'place-home-tower'])
   assert.ok(backs.every(a => /Side-on view/.test(a.gen) && !/Top-down/.test(a.gen) && /No people/.test(a.gen)))
@@ -58,9 +58,57 @@ test('the art list follows the game: side view for a runner, places, items, unde
   const arena = artList({ ...big, view: 'top-down', boss: { name: 'The Tenor', look: 'a bell' } })
   assert.ok(arena.filter(a => a.kind === 'backdrop').every(a => /Top-down/.test(a.gen)))
   assert.ok(arena.some(a => a.id === 'sprite-boss') && arena.some(a => a.id === 'portrait-the-tenor'))
-  const few = artList(big, { max: 4 })
-  assert.equal(few.length, 4)
+  const few = artList(big, { max: 7 })
+  assert.equal(few.length, 7)
   assert.deepEqual(new Set(few.map(a => a.kind)), kinds, 'a tight cap still keeps one of each kind')
+})
+
+test('the art plan scales with the game and paints tiles, a UI kit, props and effects', () => {
+  const many = n => Array.from({ length: n }, (_, i) => ({ name: `Thing ${i + 1}`, what: 'x', effect: 'x', look: 'x', role: 'x' }))
+  const stuffed = { ...big, places: many(12), items: many(20), enemies: many(12), characters: many(10), boss: { name: 'The Tenor', look: 'a bell' } }
+  const short = { ...stuffed, art: 'compact' }, long = { ...stuffed, art: 'full' }
+  // the scale comes from the spec's own size unless it says
+  assert.equal(artScale({ ...big, stages: big.stages.slice(0, 3) }), 'compact')
+  assert.equal(artScale({ ...big, places: many(5) }), 'full')
+  assert.equal(artScale({ ...big, stages: many(5).map(x => ({ name: x.name, what: 'build it' })) }), 'full')
+  const count = (list, f) => list.filter(f).length
+  for (const [spec, plan] of [[short, ART_PLANS.compact], [long, ART_PLANS.full]]) {
+    const all = artList(spec)
+    assert.ok(all.length <= plan.max, `${all.length} pictures`)
+    assert.equal(new Set(all.map(a => a.id)).size, all.length)
+    assert.equal(count(all, a => a.kind === 'backdrop'), plan.backdrops)
+    assert.equal(count(all, a => a.kind === 'icon'), plan.icons)
+    assert.equal(count(all, a => a.kind === 'tile'), plan.tiles)
+    assert.equal(count(all, a => a.kit === 'ui'), plan.ui)
+    assert.equal(count(all, a => a.kit === 'prop'), plan.props)
+    assert.equal(count(all, a => a.fx), plan.fx)
+    assert.equal(count(sheetList(spec), s => /-move$/.test(s.id)), plan.enemySheets)
+    assert.equal(count(sheetList(spec), s => s.id === 'sheet-boss-attack'), plan.bossSheets)
+  }
+  assert.ok(artList(long).length > artList(short).length + 15, 'a long game gets clearly more')
+  const all = artList(long)
+  // a kit is one painted sheet of six pieces, each cut into a file of its own
+  const ui = all.find(a => a.id === 'kit-ui')
+  assert.equal(ui.kind, 'sheet'); assert.equal(ui.parts.length, 6)
+  assert.deepEqual(ui.parts.map(p => p.id).slice(0, 3), ['ui-panel', 'ui-button', 'ui-button-down'])
+  assert.match(ui.layout, /3 by 2 grid.*magenta \(#FF00FF\)/)
+  assert.ok(!ui.after && ui.ref === 'sprite-hero', 'no figure to wait for, the hero is its style reference')
+  // props the spec names come first, the stock kinds fill the sheet
+  const props = artList({ ...long, props: [{ name: 'Water Tower', what: 'rusty, on stilts' }] }).find(a => a.id === 'kit-props')
+  assert.equal(props.parts[0].id, 'prop-water-tower'); assert.match(props.frames, /Water Tower: rusty/)
+  assert.equal(props.parts.length, 6)
+  // effects are light on black, six frames, played once
+  const hit = all.find(a => a.id === 'fx-hit')
+  assert.ok(hit.fx && !hit.loop && !hit.parts); assert.match(hit.layout, /pure black/)
+  assert.ok(all.some(a => a.id === 'fx-dust'), 'a side-view game gets landing dust')
+  assert.ok(artList({ ...long, view: 'front' }).some(a => a.id === 'fx-glow' ) && artList({ ...long, view: 'front' }).some(a => a.id === 'tile-table'))
+  // tiles repeat
+  assert.match(all.find(a => a.id === 'tile-ground').gen, /seamless repeating/i)
+  // the build is told how to use each new kind, and only the kinds that were painted
+  const brief = artBrief([{ file: 'art/tile-ground.png', what: 'ground tile', kind: 'tile' }, { file: 'art/ui-panel.png', what: 'UI piece: panel', kind: 'ui' }, { file: 'art/fx-hit.webp', kind: 'sheet', what: 'hit effect', cell: [300, 300], count: 6, fps: 14, loop: false, frames: 'x', blend: 'add' }])
+  assert.match(brief, /TileSprite/); assert.match(brief, /nine-slices/); assert.match(brief, /additive blending/)
+  assert.doesNotMatch(brief, /Props \(prop-/); assert.doesNotMatch(brief, /The hero's sheets/)
+  assert.equal(kitBrief([{ file: 'art/title.png' }]), '')
 })
 
 test('the stages go one system group at a time and name the painted files', () => {

@@ -82,6 +82,7 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
 - **A background process.** The plugin starts a small Node server (`server/server.mjs`) the first time you use it. It listens on `127.0.0.1` only, and keeps running after Hermes closes. It refuses requests whose `Host` isn't `127.0.0.1` or `localhost`. Starting a run and reading the event stream both need a random token that is made per install and stored with mode `0600`.
 - **Network calls.**
   - The server calls the chat endpoint you configure (InferHub by default) with your brief and the plan.
+  - The **Setup** sheet (shown once, then in your menu on Projects) sends the words "Say ok" to your planner and builder models to check they answer. "Let Hermes set this up" opens `hermes model` in a terminal.
   - The canvas and page frames load Tailwind from `cdn.tailwindcss.com` and fonts from Google Fonts.
   - Generated images go through the Hermes image provider you pick (your Codex login by default); the visual review sends page screenshots to your vision model.
   - While a picture is being painted its slot shows a stock photo: the picture's prompt words are searched on Openverse (and Pexels, with a key), and photos from the studio's own library are fetched from `files.design-bakery.com` by the local server and kept in `$HERMES_HOME/swarm-studio/standins/`.
@@ -92,7 +93,7 @@ Runs are saved under `$HERMES_HOME/swarm-studio/runs/<run>/` (`plan.json` plus e
   - **Godot ports** are opened and run headless with your Godot 4 (`godot` on `PATH`, or `SWARM_GODOT` set to its executable) when it is installed, and Godot's errors get a fix turn.
   - **Swarm Feed** (only when you run `/swarm connect`, `post`, `remix` or `login`) talks to `https://swarm.design-bakery.com` (or `SWARM_FEED_URL`). `connect` sends a random install id and "Hermes on <computer name>"; `post` sends the build's title, brief, public link, page names, crew, a poster (a page shot or picture from the build) and caption, then its export zip; `remix` downloads the original's prompt and zip into `$HERMES_HOME/swarm-studio/remix/` (kept, never unpacked or run). The feed token is stored in `$HERMES_HOME/swarm-studio/feed.json` with mode `0600` and never printed.
   - Nothing else leaves the machine.
-- **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log`, the runs, `connections.json` if you connect a host, and `feed.json` and `remix/` if you use the Swarm Feed.
+- **Files.** It writes only under `$HERMES_HOME/swarm-studio/`: the token, `server.log`, the runs, your picks (`models.json`, `setup.json`), `connections.json` if you connect a host, and `feed.json` and `remix/` if you use the Swarm Feed.
 - **Secrets.** Keys come from Hermes (the model slots or its secret store). It is passed to the server process through its environment and is never written to disk or logs. Optional keys (ckff, FAL, Meshy, Pexels, Supabase, a Stripe test key, Vercel, Cloudflare; the names are in `plugin.yaml`) are read the same way, through Hermes's secret store, when the studio's server starts: put them where Hermes keeps its secrets and start the studio again. The studio reads no `.env` file of its own.
 
 ## Known issues
