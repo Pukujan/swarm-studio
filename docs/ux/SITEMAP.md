@@ -193,6 +193,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   PROJ[Projects: a file browser] --> MB["Recent, All projects"]
+  PROJ --> CH["Chats: talks with the planner that built nothing yet; one opens in the Design deck's chat"]
   PROJ --> AS[Assets]
   PROJ --> TR[Trash]
   PROJ --> FO["Folders +"]

@@ -1697,12 +1697,12 @@ els.form.addEventListener('submit', async e => {
     if (read !== 'build') {
       els.brief.value = ''
       const from = to.from
-      const build = text => { nextRoute = { from, route: 'extend', selected: false }; els.brief.value = text; els.form.requestSubmit() }
-      return read === 'talk' ? talkStart({ text: brief, build }) : talkAsk(brief, () => build(brief), () => talkStart({ text: brief, build }))
+      const build = (text, chat) => { nextRoute = { from, route: 'extend', selected: false, chat }; els.brief.value = text; els.form.requestSubmit() }
+      return read === 'talk' ? talkStart({ text: brief, build, from }) : talkAsk(brief, () => build(brief), () => talkStart({ text: brief, build, from }))
     }
   }
   setAuto(true)
-  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}), ...(to.pictures ? { pictures: to.pictures } : {}) }) }).catch(() => null)
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
   to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
@@ -1716,7 +1716,9 @@ els.form.addEventListener('submit', async e => {
 // built until they say build. Then the brief she writes from the talk shows here, editable, with
 // Build and Keep talking; only Build starts anything. From the Make box the canvas is empty: a new
 // project with nothing built yet. From a project's dock its pages stay and Build extends it.
-const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null }
+// The talk is kept in a chat (spec 29, engine/chats.mjs): the server makes it on the first turn and
+// answers with its id; an old chat opened from Studio home or a project's chats comes back here.
+const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null }
 const dockBtn = els.form.querySelector('button[type="submit"]')
 // while talking, the dock sends to Hermia: its button says Send, not Build
 function talkDock(on) {
@@ -1725,22 +1727,29 @@ function talkDock(on) {
 }
 const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, answerTo, kind }) })
   .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')
-function talkStart({ text, kind = 'site', build, blank = false, said = [] }) {
+function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null }) {
   if (blank) { viewing = 'new'; fresh(null) }
-  Object.assign(talk, { on: true, busy: false, said: [], kind, build })
+  Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from })
   talkDock(true)
   els.feed.querySelector('.empty-chat')?.remove()
-  for (const m of said) { talk.said.push(m); m.who === 'hermia' ? botMsg(m.text) : feed(null, m.text, 'you') }
-  talkSay(text)
+  let last = null
+  for (const m of said) { talk.said.push(m); last = m.who === 'hermia' ? botMsg(m.text) : feed(null, m.text, 'you') }
+  if (text) return talkSay(text)
+  // an old chat reopened: its words are back, and the dock goes on from them
+  if (last && said.at(-1)?.who === 'hermia') talkActs(last)
+  els.brief.focus({ preventScroll: true })
 }
+// a chat from the store, as the talk keeps it: the person is 'you', the planner 'hermia'
+const saidOf = chat => (chat?.turns || []).filter(t => t.who !== 'crew').map(t => ({ who: t.who === 'planner' ? 'hermia' : 'you', text: t.text }))
 const talkEnd = () => { talk.on = false; talk.busy = false; talkDock(false); els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove()) }
 async function talkSay(text, brief = false) {
   if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
   els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
   const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
   talk.busy = true
-  const res = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: talk.said, kind: talk.kind, brief }) }).catch(() => null)
+  const res = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: talk.said, kind: talk.kind, brief, ...(talk.chat ? { chat: talk.chat } : talk.from ? { from: talk.from } : {}) }) }).catch(() => null)
   const j = res ? await res.json().catch(() => ({})) : {}
+  if (j.chat && talk.on) talk.chat = j.chat
   talk.busy = false
   wait.remove()
   if (!talk.on) return
@@ -1766,14 +1775,66 @@ function talkBrief(text) {
   item.querySelector('[data-go]').onclick = () => {
     const t = box.value.trim()
     if (!t) return
-    const go = talk.build
+    const go = talk.build, chat = talk.chat
     talkEnd()
     box.disabled = true
-    go?.(t)
+    go?.(t, chat)
   }
   item.querySelector('[data-more]').onclick = () => { item.querySelector('.talk-acts').remove(); els.brief.focus() }
   box.focus({ preventScroll: true })
 }
+// ---------- Chats (spec 29): the project's talks, grouped Design, App, Game, Video; outside a
+// project, the loose ones. One opens here where it left off; a row dragged onto another group moves
+// it there. New chat starts an empty talk (in the project when one is open).
+const chatsBtn = $('#chats-btn')
+let chatsPop = null
+const projectNow = () => window.swarmCosmos?.project || null
+// Build from a chat: inside a project it is the project's next version; outside one, a new project
+function chatBuild(run) {
+  return (text, chat) => { nextRoute = run ? { from: run, route: 'extend', selected: false, chat } : { fresh: true, chat }; els.brief.value = text; els.form.requestSubmit() }
+}
+async function openChatHere(id) {
+  const chat = await api(`/api/chats/${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).catch(() => null)
+  if (!chat?.id) return
+  // a loose chat that is not a website opens from Studio home, which knows how each kind builds
+  if (!chat.project && chat.kind !== 'site' && window.swarmCosmos?.openChat) return window.swarmCosmos.openChat(id)
+  const run = chat.project ? shownRun() : null
+  talkStart({ kind: chat.kind, chat: chat.id, said: saidOf(chat), blank: !chat.project, from: run, build: chatBuild(run) })
+}
+if (chatsBtn) chatsBtn.onclick = async () => {
+  if (chatsPop && !chatsPop.closed) return chatsPop.close()
+  const run = shownRun(), known = projectNow()
+  const j = await api(known ? `/api/projects/${encodeURIComponent(known)}/chats` : `/api/chats${run ? `?run=${encodeURIComponent(run)}` : ''}`).then(r => r.json()).catch(() => ({}))
+  const pid = known || j.project || null
+  const groups = pid ? (j.groups || []) : [{ name: '', chats: j.chats || [] }]
+  const row = c => `<button type="button" class="cp-row${talk.on && talk.chat === c.id ? ' on' : ''}" data-chat="${esc(c.id)}" draggable="${!!pid}"><span>${esc(c.title)}</span>${c.state === 'locked' ? '<small>Locked</small>' : ''}</button>`
+  // every group is a place to drop a chat, so the four always show while dragging
+  const names = pid ? ['Design', 'App', 'Game', 'Video'] : ['']
+  const html = names.map(n => { const g = groups.find(x => x.name === n); return `<section class="cp-group${g ? '' : ' empty'}" data-group="${n}">${n ? `<h4>${n}</h4>` : ''}${(g?.chats || []).map(row).join('')}</section>` }).join('') +
+    `<button type="button" class="cp-row cp-new" data-new>${ico('plus')}<span>New chat</span></button>`
+  chatsPop = window.SwarmUI.popover(chatsBtn, html, { className: 'chats-pop', align: 'start' })
+  const el = chatsPop.el
+  el.onclick = e => {
+    const b = e.target.closest('.cp-row')
+    if (!b) return
+    chatsPop.close()
+    if (b.dataset.new != null) { const run = pid ? shownRun() : null; return talkStart({ from: run, blank: !pid, build: chatBuild(run) }) }
+    openChatHere(b.dataset.chat)
+  }
+  el.addEventListener('dragstart', e => { const b = e.target.closest('.cp-row[data-chat]'); if (!b) return; e.dataTransfer.setData('text/x-swarm-chat', b.dataset.chat); el.classList.add('dragging') })
+  el.addEventListener('dragend', () => el.classList.remove('dragging'))
+  el.addEventListener('dragover', e => { const g = e.target.closest('.cp-group'); if (g && e.dataTransfer.types.includes('text/x-swarm-chat')) e.preventDefault() })
+  el.addEventListener('drop', async e => {
+    const g = e.target.closest('.cp-group'), id = e.dataTransfer.getData('text/x-swarm-chat')
+    if (!g || !id || !g.dataset.group) return
+    e.preventDefault()
+    const row = el.querySelector(`.cp-row[data-chat="${CSS.escape(id)}"]`)
+    if (row && row.parentElement !== g) { g.append(row); g.classList.remove('empty') }
+    el.querySelectorAll('.cp-group').forEach(x => x.classList.toggle('empty', !x.querySelector('.cp-row')))
+    await api(`/api/chats/${encodeURIComponent(id)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ category: g.dataset.group }) }).catch(() => null)
+  })
+}
+
 // not sure whether to build: one choice, here in the chat
 function talkAsk(text, now, first) {
   const item = botMsg('Build now or talk first?')
@@ -6772,7 +6833,7 @@ window.swarm = {
   openRun, setView, loadFiles, focusPage, openPlayer,
   // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
-  readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, get on() { return talk.on } },
+  readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },
   // a replay started from ☰ → Replay ends when the deck is left
   stopReplay,
   // the project's canvas is being zoomed or panned: page swaps and screenshots here wait for it too
@@ -6883,7 +6944,7 @@ window.swarm = {
     talkEnd()
     return new Promise(done => {
       els.brief.value = text
-      nextRoute = project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done } : { fresh: true, done, pictures: opts.pictures }
+      nextRoute = project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done, chat: opts.chat } : { fresh: true, done, pictures: opts.pictures, chat: opts.chat }
       if (view !== 'canvas') setView('canvas')
       els.form.requestSubmit()
     })

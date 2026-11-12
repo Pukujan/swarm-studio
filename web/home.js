@@ -96,6 +96,7 @@ export function makeHome({ sw, C, root }) {
     }
     H.loaded = true
     if (H.view === 'assets') H.assets = await api('/api/assets').then(j => j.assets).catch(() => [])
+    if (H.view === 'chats') loadChats()
     if (H.view === 'folder' && !H.data.folders.some(f => f.name === H.folder)) go('recent')
     render()
     clearTimeout(H.timer)
@@ -130,20 +131,21 @@ export function makeHome({ sw, C, root }) {
     return t === 'k' ? p.state?.kind === v : p.state?.status === v
   }
   const filterName = () => H.filter.slice(2)
-  const titleOf = () => H.stack ? (H.data.projects.find(p => p.id === H.stack)?.title || 'Versions') : H.view === 'folder' ? H.folder : { recent: 'Recent', all: 'All projects', assets: 'Assets', trash: 'Trash' }[H.view]
+  const titleOf = () => H.stack ? (H.data.projects.find(p => p.id === H.stack)?.title || 'Versions') : H.view === 'folder' ? H.folder : { recent: 'Recent', all: 'All projects', chats: 'Chats', assets: 'Assets', trash: 'Trash' }[H.view]
 
   // ---------- render
   function render() {
     renderSide()
     renderBar()
     if (H.view === 'assets' && !H.stack) renderAssets()
+    else if (H.view === 'chats' && !H.stack) renderChats()
     else renderCards()
     renderSelbar()
   }
   function renderSide() {
     const n = live().length, t = H.data.projects.filter(p => p.trashed).length
     const item = (v, icon, label, count) => `<button class="nv${H.view === v && !H.stack ? ' on' : ''}" data-v="${v}">${ic(icon)}<span>${label}</span>${count ? `<span class="n" aria-label="${count} projects">${count}</span>` : ''}</button>`
-    nav.innerHTML = item('recent', 'clock', 'Recent') + item('all', 'grid', 'All projects', n) + (hosted() ? '' : item('assets', 'image', 'Assets') + item('trash', 'trash', 'Trash', t))
+    nav.innerHTML = item('recent', 'clock', 'Recent') + item('all', 'grid', 'All projects', n) + (hosted() ? '' : item('chats', 'msg', 'Chats') + item('assets', 'image', 'Assets') + item('trash', 'trash', 'Trash', t))
     foldersEl.innerHTML = H.data.folders.map(f => `<button class="nv${H.view === 'folder' && H.folder === f.name && !H.stack ? ' on' : ''}" data-folder="${esc(f.name)}">${ic('folder')}<span>${esc(f.name)}</span>${f.count ? `<span class="n" aria-label="${f.count} projects">${f.count}</span>` : ''}</button>`).join('')
     root.classList.toggle('no-folders', hosted())
   }
@@ -154,12 +156,12 @@ export function makeHome({ sw, C, root }) {
       ${trash && shown().length ? `<button class="btn ghost hm-empty">${ic('trash', 15)}Empty</button>` : ''}
       <button class="ib hm-find${H.searching || H.q ? ' on' : ''}" aria-label="Search">${ic('search')}</button>
       ${H.filter && !H.stack ? `<button class="hm-chip" aria-label="Clear filter ${esc(filterName())}">${esc(filterName())}${ic('x', 13)}</button>` : ''}
-      ${H.stack ? '' : `<button class="ib hm-filter${H.filter ? ' on' : ''}" aria-label="Filter" aria-haspopup="menu">${ic('filter')}</button>`}
+      ${H.view === 'chats' && !H.stack ? '' : `${H.stack ? '' : `<button class="ib hm-filter${H.filter ? ' on' : ''}" aria-label="Filter" aria-haspopup="menu">${ic('filter')}</button>`}
       <button class="ib hm-sort" aria-label="Sort" aria-haspopup="menu">${ic('sort')}</button>
       <button class="ib hm-grid${H.layout === 'grid' ? ' on' : ''}" aria-label="Grid view">${ic('grid')}</button>
-      <button class="ib hm-list${H.layout === 'list' ? ' on' : ''}" aria-label="List view">${ic('list')}</button>`
+      <button class="ib hm-list${H.layout === 'list' ? ' on' : ''}" aria-label="List view">${ic('list')}</button>`}`
     const s = bar.querySelector('.hm-search input')
-    s.oninput = () => { H.q = s.value.trim(); H.view === 'assets' && !H.stack ? renderAssets() : renderCards() }
+    s.oninput = () => { H.q = s.value.trim(); H.view === 'assets' && !H.stack ? renderAssets() : H.view === 'chats' && !H.stack ? renderChats() : renderCards() }
     s.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); H.q = ''; H.searching = false; render() } }
     if (H.searching) setTimeout(() => s.focus(), 0)
   }
@@ -242,6 +244,53 @@ export function makeHome({ sw, C, root }) {
     bodyEl.innerHTML = html
     H.assetList = flat
   }
+  // Chats (spec 29): talks with the planner that have not built anything, newest first. One opens in
+  // the Design deck's chat where it left off; a chat that builds moves into its project.
+  const CHAT_ICON = { site: 'site', app: 'code', game: 'game', film: 'film' }
+  function loadChats() { api('/api/chats').then(j => { H.chats = j.chats || []; if (H.view === 'chats' && !H.stack) renderChats() }).catch(() => {}) }
+  function renderChats() {
+    let list = H.chats || []
+    if (H.q) { const q = H.q.toLowerCase(); list = list.filter(c => c.title.toLowerCase().includes(q)) }
+    bodyEl.className = 'hm-body chats'
+    bodyEl.innerHTML = list.map(c => `<div class="chat-row" data-chat="${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.title)}">
+      ${ic(CHAT_ICON[c.kind] || 'msg', 16)}<b class="cr-nm">${esc(c.title)}</b>${c.state === 'locked' ? `<span class="cr-st">Locked</span>` : ''}<span class="cr-t">${ago(c.updated)}</span>
+      <button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button></div>`).join('')
+  }
+  async function openChat(id) {
+    const chat = await api(`/api/chats/${encodeURIComponent(id)}`).catch(() => null)
+    if (!chat?.id) { loadChats(); return }
+    // a game chat that already has its plan opens on the Plan board (spec 21)
+    if (chat.plan) return C.plan(chat.plan)
+    const m = MAKES.find(x => x.k === ({ film: 'video' }[chat.kind] || chat.kind)) || MAKES[0]
+    const run = m.k === 'site' ? null : { games: m.games, only: m.only }
+    C.project = null
+    C.go('station', 'canvas')
+    C.chat(true)
+    sw.talk.start({ kind: chat.kind, blank: true, chat: chat.id, said: sw.talk.saidOf(chat), build: (brief, c) => start(brief, run, {}, c) })
+  }
+  C.openChat = openChat
+  function renameChat(id) {
+    const b = bodyEl.querySelector(`.chat-row[data-chat="${CSS.escape(id)}"] .cr-nm`)
+    const c = (H.chats || []).find(x => x.id === id)
+    if (b && c) inlineName(b, c.title, v => post(`/api/chats/${encodeURIComponent(id)}`, { title: v }).then(loadChats).catch(err => toast(`<span>${esc(err.message)}</span>`)))
+  }
+  const deleteChat = id => api(`/api/chats/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(loadChats).catch(err => toast(`<span>${esc(err.message)}</span>`))
+  bodyEl.addEventListener('click', e => {
+    const r = e.target.closest('.chat-row')
+    if (!r || e.target.closest('.hm-rename')) return
+    e.stopImmediatePropagation()
+    const id = r.dataset.chat
+    if (e.target.closest('.more')) return showMenu([{ k: 'rename', icon: 'pencil', label: 'Rename', run: () => renameChat(id) }, { k: 'del', icon: 'trash', label: 'Delete', red: true, run: () => deleteChat(id) }], e.target.closest('.more'))
+    openChat(id)
+  }, true)
+  bodyEl.addEventListener('dblclick', e => { const n = e.target.closest('.chat-row .cr-nm'); if (n) { e.preventDefault(); renameChat(n.closest('.chat-row').dataset.chat) } })
+  bodyEl.addEventListener('keydown', e => {
+    const r = e.target.closest('.chat-row')
+    if (!r || e.target.closest('input')) return
+    if (e.key === 'Enter') { e.preventDefault(); openChat(r.dataset.chat) }
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteChat(r.dataset.chat) }
+  }, true)
+
   // the crew at work on a live build's cover: named cursors that drift between spots
   function wander(box) {
     for (const c of box.querySelectorAll('.cur')) {
@@ -265,6 +314,7 @@ export function makeHome({ sw, C, root }) {
     store.set('home.view', view); store.set('home.folder', folder)
     drawer(false)
     if (view === 'assets') { H.assets = H.assets || []; api('/api/assets').then(j => { H.assets = j.assets; if (H.view === 'assets') render() }).catch(() => {}) }
+    if (view === 'chats') loadChats()
     render()
     bodyEl.scrollTop = 0
   }
@@ -630,14 +680,14 @@ export function makeHome({ sw, C, root }) {
   const intake = () => (intakeP ||= api('/api/intake').catch(() => { intakeP = null; return { showcases: [], questions: [], words: 12 } }))
 
   // start a build: a website builds live on the canvas; App, Game and Video run their steps in order
-  async function start(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}) {
+  async function start(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}, chat = null) {
     closePop()
     if (!run || hosted()) {
       input.value = ''
       // The project opens on the build this box started. The canvas may still hold the build before
       // it (the server replays its last run to every canvas), and a project never lets a run that
       // started elsewhere take it over, so the new run is handed to it by id.
-      const made = await sw.submit(text, false, null, null, sets)
+      const made = await sw.submit(text, false, null, null, chat ? { ...sets, chat } : sets)
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
       C.open(null)
       if (typeof made === 'string') C.projectView.show(made, null)
@@ -652,7 +702,7 @@ export function makeHome({ sw, C, root }) {
       // they open the same way: the new build's project, then the Design deck while the crew designs.
       // The reply names that build's run; without it the project would show the build before it.
       sw.talk?.end()
-      const job = await post('/api/auto', { prompt: text, ...run })
+      const job = await post('/api/auto', { prompt: text, ...run, ...(chat ? { chat } : {}) })
       input.value = ''
       C.open(null)
       if (job?.run) { C.projectView.show(job.run, null); C.go('station', 'canvas') }
@@ -686,7 +736,7 @@ export function makeHome({ sw, C, root }) {
     C.project = null
     C.go('station', 'canvas')
     C.chat(true)
-    sw.talk.start({ text, kind: guideKind(), blank: true, build: brief => start(brief, run, sets) })
+    sw.talk.start({ text, kind: guideKind(), blank: true, build: (brief, chat) => start(brief, run, sets, chat) })
   }
   function askTalk(text, go) {
     openPop('grill', `<h3>Build now or talk first?</h3>
