@@ -189,3 +189,34 @@ test('the door: go() moves it, a move it does not have is logged and changes not
   assert.equal(nav.restore('?project=pb&version=rb1&room=app').room, 'app')
   assert.equal(nav.view.project, 'pb')
 })
+
+test('the Studio opens a project on a step, moves between steps, and Esc goes up one then home (spec 37)', () => {
+  const S = { type: 'studio', project: 'pn' }
+  assert.deepEqual(pick(v(S), ['room', 'project', 'step', 'version', 'run']), ['studio', 'pn', 'brand', null, null])
+  assert.equal(v({ ...S, step: 'assets' }).step, 'assets')
+  assert.equal(v({ ...S, step: 'nope' }).step, 'brand')
+  assert.equal(v(A, S).version, null, 'the Studio is not a build: none stays open')
+  no([], { type: 'studio' })
+  assert.equal(v(S, { type: 'studio.step', step: 'plan' }).step, 'plan')
+  no([S], { type: 'studio.step', step: 'nope' })
+  no([], { type: 'studio.step', step: 'plan' })
+  const up = v({ ...S, step: 'references' }, { type: 'back' })
+  assert.deepEqual(pick(up, ['room', 'step']), ['studio', 'brand'])
+  assert.deepEqual(pick(v(S, { type: 'back' }), ['room', 'step', 'project']), ['home', null, 'pn'])
+  assert.equal(v(S, { type: 'home' }).step, null)
+})
+
+test("the Studio's Build opens the build on the deck, as a started build does", () => {
+  const s = v({ type: 'studio', project: 'pn', step: 'proposal' }, { type: 'studio.built', run: 'rn1' })
+  assert.deepEqual(pick(s, ['room', 'project', 'version', 'run', 'pending', 'step']), ['deck', 'pn', 'rn1', 'rn1', 'rn1', null])
+  assert.equal(v({ type: 'studio', project: 'pn' }, { type: 'studio.built', run: 'rn1', room: 'overview' }).room, 'overview')
+  no([{ type: 'studio', project: 'pn' }], { type: 'studio.built' })
+  no([A], { type: 'studio.built', run: 'rn1' })
+})
+
+test("the Studio's address names its project and step", () => {
+  const s = v({ type: 'studio', project: 'pn', step: 'assets' })
+  assert.equal(toAddress(s), '?room=studio&project=pn&step=assets')
+  const back = makeNav({ search: '?room=studio&project=pn&step=assets' }).view
+  assert.deepEqual(pick(back, ['room', 'project', 'step']), ['studio', 'pn', 'assets'])
+})

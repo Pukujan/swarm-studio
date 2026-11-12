@@ -75,6 +75,10 @@ The events are the named actions. Any event the current state does not take is i
 | `draft` | every state | `draft`: the deck with no project or build, for a new project's talk. A reload shows Projects |
 | `plan { plan? }` | every state | `plan`; with no id while a game talk drafts it |
 | `brand` | every state | `brand`, `from` = the room before |
+| `studio { project, step? }` | every state | `studio` (spec 37), on `step` or the first; nothing built is open |
+| `studio.step { step }` | `studio` | the step |
+| `back` | `studio` | the step before; from the first, Projects |
+| `studio.built { run, room? }` | `studio` | the run's deck (or `room`), as `started` |
 | `back` | `brand` | `from`, or `home` when that room has no build any more |
 | `play { page? }` | `playable`, if the run has pages | player `prototype` |
 | `watch { page? }` | `playable`, if the run has pages | player `visitor` |
