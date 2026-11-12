@@ -14,6 +14,7 @@
 // reaches anyone else on the same build (room for working together later).
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
+import { swEdit } from './edit/patches.js'
 
 const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
 const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
@@ -25,7 +26,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], refs: [], sending: new Map(),
-    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(),
+    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(),
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
     // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
     marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
@@ -394,6 +395,7 @@ export function makeProject({ sw, C, root }) {
     if (!x) return
     // never redraw under someone typing in it
     if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return
+    if (x.kind === 'page' && P.layer && P.el && sw.layers?.get(P.layer)?.done && !hosted()) { const r = renderElement(x); if (r !== false) return r }
     if (x.kind === 'page' && P.layer && sw.layers?.get(P.layer)) return renderLayer(x)
     P.layer = null
     if (dims.has(x.key)) x.dims = dims.get(x.key)
@@ -449,8 +451,91 @@ export function makeProject({ sw, C, root }) {
       ${edit ? g('Type', `${cur.hsize ? stepper('hsize', 'Heading', cur.hsize) : ''}${['heading', 'body'].map(r => `<label class="pj-f row"><span>${r === 'heading' ? 'Heading' : 'Body'}</span><select data-font="${r}" aria-label="${r === 'heading' ? 'Heading' : 'Body'} font, every page">${[...new Set([th.fonts?.[r], ...sc.fonts].filter(Boolean))].map(f => `<option${f === th.fonts?.[r] ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>`).join('')}`) : ''}
       ${edit ? g('Spacing', `${stepper('pad', 'Padding', px(cur.py))}${cur.gap != null ? stepper('gap', 'Gap', px(cur.gap)) : ''}${cur.radius != null ? `<label class="pj-f row"><span>Corners</span><select data-radius aria-label="Corners">${sc.radius.map(r => `<option value="${r}"${r === (cur.radius || '') ? ' selected' : ''}>${r === 'theme' ? 'Theme' : r || 'base'}</option>`).join('')}</select></label>` : ''}`) : ''}
       ${edit && l.gens.length ? g('Pictures', l.gens.map((p, i) => `<div class="pj-pic" data-pic="${i}">${p.src ? `<img src="${esc(p.src.startsWith('data:') ? p.src : base() + p.src)}" alt="">` : standinOf(p.gen) ? `<img class="sb" src="${esc(standinOf(p.gen).url)}" alt="">` : `<span class="blank">${ic('image', 20)}</span>`}<textarea rows="2" aria-label="What the picture shows">${esc(p.gen)}</textarea>${!p.src && standinOf(p.gen) ? `<small class="pj-credit">Stand-in · ${esc(standinOf(p.gen).credit || 'from an earlier build')}</small>` : ''}<button class="btn ghost" data-paint="${i}"${p.busy ? ' disabled' : ''}>${ic('image', 15)}${p.busy ? 'Painting' : 'Paint'}</button></div>`).join('')) : ''}
+      ${edit ? g('Parts', partsList(l.html)) : ''}
       <div class="btns">${edit ? `<button class="btn ghost" data-act="code">${ic('code', 15)}Code</button>` : ''}<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button></div>
       ${edit ? `<form class="pj-ask pj-lask" autocomplete="off"><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew about ${esc(l.role)}" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>` : ''}`
+  }
+  // ---------- one part of a section, changed by hand (spec 29, "Manual edit"; web/edit/patches.js). Each
+  // change is a section version (undo, redo, Versions), and the crew is told to keep it on a rework.
+  const PART_IC = { image: 'image', link: 'link', container: 'frame', graphic: 'image', text: 'type' }
+  const STYLE_F = { fontSize: ['Size', '18px'], fontWeight: ['Weight', '600'], lineHeight: ['Line', '1.4'], letterSpacing: ['Letters', '0.02em'], color: ['Colour', '#1c1917'], textAlign: ['Align', 'center'], width: ['Width', '100%'], height: ['Height', 'auto'], padding: ['Padding', '12px 20px'], margin: ['Margin', '0 auto'], backgroundColor: ['Fill', '#ffffff'], borderRadius: ['Corners', '8px'], opacity: ['Opacity', '0.9'] }
+  function partsList(html) {
+    const rows = swEdit.tree(html, 60)
+    return rows.length ? `<div class="pj-parts" role="list" aria-label="Parts">${rows.map(r => `<button class="pj-part" role="listitem" data-el="${esc(r.id)}" style="--d:${Math.min(r.depth, 5)}">${ic(PART_IC[r.kind] || 'type', 13)}<span>${esc(r.label)}</span></button>`).join('')}</div>` : ''
+  }
+  function renderElement(x) {
+    const l = sw.layers.get(P.layer), e = swEdit.read(l.html, P.el)
+    if (!e) { P.el = null; return false }
+    const field = (k, label, v, long) => long ? `<label class="pj-f"><span>${label}</span><textarea rows="${Math.min(5, Math.ceil(v.length / 34) || 2)}" data-ef="${k}">${esc(v)}</textarea></label>` : `<label class="pj-f"><span>${label}</span><input data-ef="${k}" value="${esc(v)}"></label>`
+    const g = (title, body) => body ? `<div class="pj-g"><h4>${title}</h4>${body}</div>` : ''
+    const F = e.fields
+    const pic = e.kind === 'image' && F.src ? `<div class="pj-epic"><img src="${esc(/^(https?:|data:)/.test(F.src) ? F.src : base() + F.src)}" alt=""></div>` : ''
+    const content = [
+      e.wordsEditable ? field('text', 'Words', F.text, F.text.length > 40) : '',
+      e.kind === 'link' ? field('href', 'Link', F.href) : '',
+      e.kind === 'image' ? `${pic}${field('src', 'Address', F.src)}${field('alt', 'Alt text', F.alt)}<button class="btn ghost" data-eact="replace">${ic('upload', 15)}Replace</button>` : ''
+    ].join('')
+    const styles = `<div class="pj-estyle">${Object.entries(STYLE_F).map(([k, [label, ph]]) => `<label class="pj-f"><span>${label}</span><input data-es="${k}" value="${esc(e.styles[k] || '')}" placeholder="${esc(ph)}" spellcheck="false"></label>`).join('')}</div>`
+    const attrs = `${Object.entries(e.attributes).map(([k, v]) => `<label class="pj-f"><span>${esc(k)}</span><input data-ea="${esc(k)}" value="${esc(v)}" spellcheck="false"></label>`).join('')}<div class="pj-eattr"><input name="an" placeholder="name" aria-label="New attribute name" spellcheck="false"><input name="av" placeholder="value" aria-label="New attribute value" spellcheck="false"><button class="btn ghost" data-eact="attr">Add</button></div>`
+    insp.innerHTML = `<h3><button class="ib sm pj-eback" aria-label="Back to ${esc(l.role)}">${ic('chl', 16)}</button><span>${esc(e.label)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>
+      <div class="kv"><span>${esc(e.tag)}</span><b>${esc(l.role)}</b></div>
+      ${g('Content', content)}${g('Style', styles)}${g('Attributes', attrs)}
+      <div class="btns"><button class="btn ghost" data-eact="up"${e.canUp ? '' : ' disabled'}>Up</button><button class="btn ghost" data-eact="down"${e.canDown ? '' : ' disabled'}>Down</button><button class="btn ghost" data-eact="remove"${e.canRemove ? '' : ' disabled'}>${ic('trash', 15)}Remove</button><button class="btn ghost" data-act="code">${ic('code', 15)}Code</button></div>`
+  }
+  // a hand change to the picked part: patched, saved as a section version, the panel follows the part
+  async function handEdit(x, patch, why) {
+    const key = P.layer, l = key && sw.layers.get(key)
+    if (!l?.done) return
+    const r = swEdit.apply(l.html, { id: P.el, ...patch })
+    if (!r.ok) { toast(`<span>${esc(r.error)}</span>`); renderInsp(); return }
+    if (r.html === l.html) return
+    P.el = r.id
+    if (await sw.layers.save(key, r.html, `hand: ${why}`)) edited(x.page)
+    else renderInsp()
+  }
+  function handChange(x, t) {
+    const v = n => insp.querySelector(`[data-ef="${n}"]`)?.value
+    if (t.dataset.es) return handEdit(x, { kind: 'set-style', styles: { [t.dataset.es]: t.value } }, 'style')
+    if (t.dataset.ea) return handEdit(x, { kind: 'set-attributes', attributes: { [t.dataset.ea]: t.value } }, 'attribute')
+    const kind = swEdit.read(sw.layers.get(P.layer).html, P.el)?.kind
+    if (kind === 'link') return handEdit(x, { kind: 'set-link', text: v('text'), href: v('href') }, 'link')
+    if (kind === 'image') return handEdit(x, { kind: 'set-image', src: v('src'), alt: v('alt') }, 'picture')
+    return handEdit(x, { kind: 'set-text', value: t.value }, 'words')
+  }
+  function partClick(e, x) {
+    const pt = e.target.closest('[data-el]')
+    if (pt) { P.el = pt.dataset.el; renderInsp(); return true }
+    if (e.target.closest('.pj-eback')) { P.el = null; renderInsp(); return true }
+    const b = e.target.closest('[data-eact]')
+    if (!b || !P.el) return false
+    const a = b.dataset.eact
+    if (a === 'up' || a === 'down') handEdit(x, { kind: 'move-element', dir: a === 'up' ? -1 : 1 }, 'move')
+    if (a === 'remove') handEdit(x, { kind: 'remove-element' }, 'remove')
+    if (a === 'attr') {
+      const n = insp.querySelector('[name="an"]').value.trim(), val = insp.querySelector('[name="av"]').value
+      if (n) handEdit(x, { kind: 'set-attributes', attributes: { [n]: val } }, 'attribute')
+    }
+    if (a === 'replace') {
+      // the new picture joins the project's References, and the part points at it
+      const fi = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' })
+      fi.onchange = async () => { const f = fi.files[0]; const out = f && await refPost('', null, f); if (out?.ref?.src) handEdit(x, { kind: 'set-image', src: out.ref.src }, 'picture') }
+      fi.click()
+    }
+    return true
+  }
+  // a click inside the picked section on the page picks the part under it (the canvas reads the page)
+  function pointPick(a, e) {
+    const x = find(a.dataset.key), l = sw.layers.get(P.layer)
+    if (!x || !l?.done || hosted() || !sw.marks?.anchor) return false
+    const r = a.getBoundingClientRect(), ratio = P.aspect.get(x.page)
+    const fx = (e.clientX - r.left) / (r.width || 1), fy = (e.clientY - r.top) / (r.height || 1) * a.offsetHeight / (124 * ratio)
+    const key = P.layer
+    Promise.resolve(sw.marks.anchor(x.page, { x: Math.max(0, fx - 0.002), y: Math.max(0, fy - 0.0005), w: 0.004, h: 0.001 })).then(t => {
+      if (P.layer !== key || t?.section !== key) return
+      const id = swEdit.pathId(t.path), el = id && swEdit.read(sw.layers.get(key).html, id)
+      if (el && (!t.tag || el.tag === t.tag)) { P.el = id; renderInsp() }
+    }).catch(() => {})
+    return true
   }
   // narrow panes: the dock sits under the inspector sheet, so a picked section has its own line
   insp.addEventListener('submit', e => {
@@ -463,6 +548,7 @@ export function makeProject({ sw, C, root }) {
   })
   function pickLayer(key) {
     P.layer = key || null
+    P.el = null
     sw.layers?.select(P.layer)
     renderInsp()
     drawOutline()
@@ -485,11 +571,16 @@ export function makeProject({ sw, C, root }) {
     const x = find(P.sel), L = sw.layers
     if (!x || !P.layer || !L) return
     const t = e.target
+    if (P.el && (t.dataset.ef || t.dataset.es || t.dataset.ea)) { handChange(x, t); return }
     if (t.dataset.text != null) L.setText(P.layer, Number(t.dataset.text), t.value).then(ok => ok && edited(x.page))
     if (t.dataset.font) { L.token('font', t.dataset.font, t.value); edited(x.page) }
     if (t.hasAttribute('data-radius')) { L.edit(P.layer, 'radius', t.value); edited(x.page) }
   })
-  insp.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input[data-text]')) { e.preventDefault(); e.target.blur() } })
+  insp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return
+    if (e.target.matches('.pj-eattr input')) { e.preventDefault(); insp.querySelector('[data-eact="attr"]')?.click(); return }
+    if (e.target.matches('[data-text], [data-ef], [data-es], [data-ea]')) { e.preventDefault(); e.target.blur() }
+  })
   function layerClick(e) {
     const x = find(P.sel), L = sw.layers
     if (!x || !L) return false
@@ -497,6 +588,7 @@ export function makeProject({ sw, C, root }) {
     if (ly) { pickLayer(ly.dataset.layer); return true }
     if (e.target.closest('.pj-back')) { pickLayer(null); return true }
     if (!P.layer) return false
+    if (partClick(e, x)) return true
     const bg = e.target.closest('[data-bg]')
     if (bg) { L.edit(P.layer, 'bg', bg.dataset.bg); edited(x.page); return true }
     const st = e.target.closest('[data-step]')
@@ -729,7 +821,7 @@ export function makeProject({ sw, C, root }) {
 
   // ---------- selecting and opening
   function select(key, { pan = false } = {}) {
-    if (key !== P.sel && P.layer) { P.layer = null; sw.layers?.select(null); scope() }
+    if (key !== P.sel && P.layer) { P.layer = null; P.el = null; sw.layers?.select(null); scope() }
     P.sel = key
     // in place: re-rendering would reload every picture on the stage
     for (const r of listEl.querySelectorAll('.row')) r.classList.toggle('on', r.dataset.key === key)
@@ -776,7 +868,7 @@ export function makeProject({ sw, C, root }) {
     // (not the second click of a double-click, which opens the page's room)
     if (a.classList.contains('page') && e.detail < 2 && (a.dataset.key === P.sel || e.metaKey || e.ctrlKey)) {
       const l = sectionAt(a, e)
-      if (l) { if (a.dataset.key !== P.sel) select(a.dataset.key); return pickLayer(l.key) }
+      if (l) { if (a.dataset.key !== P.sel) select(a.dataset.key); if (l.key === P.layer && pointPick(a, e)) return; return pickLayer(l.key) }
     }
     const r = a.getBoundingClientRect(), s = stage.getBoundingClientRect()
     if (insp.hidden && r.right > s.right - 292) clickT = setTimeout(() => select(a.dataset.key, { pan: true }), 280)
