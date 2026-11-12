@@ -76,7 +76,7 @@ export function scoreSet(results) {
       opens: b[0].kind, closes: b.at(-1).kind,
       shot: round(mean(lengths)), voice: !!b.voice,
       type: round(lengths.reduce((a, d, i) => a + (b[i].layer === 'type' ? d : 0), 0) / lengths.reduce((a, x) => a + x, 0)),
-      onBeat: round(beat.beat), onHalf: round(beat.half),
+      onBeat: round(beat.beat), onGrid: round(beat.half),
       repairs: (b.fixes || []).length, floor: !!r.floor,
       shape: structure(b).map(k => k[0]).join(''),
       _s: structure(b), _r: rhythm(b, lengths),
@@ -99,6 +99,8 @@ export function scoreSet(results) {
     repairs: round(mean(done.map(f => f.repairs))),
     floors: done.filter(f => f.floor).length,
     onBeat: round(mean(done.map(f => f.onBeat))),
+    // whole beats, or half beats where the cut is that fast: the music's own grid
+    onGrid: round(mean(done.map(f => f.onGrid))),
     onBeatVoiced: done.some(f => f.voice) ? round(mean(done.filter(f => f.voice).map(f => f.onBeat))) : null,
   }
   for (const f of films) { delete f._s; delete f._r }
