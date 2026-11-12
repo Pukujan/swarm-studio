@@ -202,6 +202,26 @@ This is in spec 6's Setup sheet (web/setup.js). That session owns it, and it get
 - Lock copies the chat's live refs and the made items the person picked into the project's References store, with `use` filled in (for example "hero mood", "palette").
 - The crew's brief lists them, the same way uploads are listed today.
 
+### Media in a chat, built (2026-11-12)
+
+- `engine/chatmedia.mjs` and `server/chatmedia.mjs`.
+- **Dropping or pasting files.** A picture, clip or sound dropped or pasted on the left chat becomes a chip in the message box, in the same row as the layer chips.
+  - In a website or app talk, the file is kept in the chat's `media/` and listed in `refs`. `POST /api/chats/:id/media` takes the file; the id `new` makes the chat first. `/chatmedia/:id/:file` serves it, sandboxed.
+  - A picture of 5 MB or less is read on the way in by the reviewer's vision model, with reasoning off and the vision fallbacks after it.
+  - A clip or a sound is kept and marked `by: 'none'`.
+- **Links in a talk message.** Each one is read as a page: its title, description and words. The reader only opens public addresses. Every address a link resolves to is checked, and again after each redirect, so a link never reaches the machine's own services, the tailnet or a private network. Only ports 80 and 443 are allowed.
+- **Telling the planner.** `/api/discuss` adds to the person's newest turn one honest line per attachment, for example "The vision model looked at it…", "Its page was read (not seen)…" or "kept but not read". It also lists what was attached earlier, and tells the planner to say how it read each one. The person's turn keeps its `refs`.
+- **In a project.** The file joins the project's References with source `chat`. The message names it for the crew, and the crew's brief lists it.
+- **Checked live on a test server:**
+  - In a talk, a screenshot of the booking form was described by the vision model, and the planner answered "I looked at the picture: a clean booking form in deep teal…".
+  - For example.com, the planner answered "I only read the words on the link you sent".
+  - In a project, the dropped picture showed as a chip, joined References, and was named in the build's brief.
+- **Not yet:**
+  - a game talk (server/talk.mjs belongs to the game session);
+  - the omni model row in Setup (spec 6's file), and sampled frames or a transcript for clips;
+  - the mood board and painted options (they need jobs on the art queue);
+  - Lock copying a chat's refs into the project's References.
+
 ## References
 
 One store per project, at `projects/<pid>/refs/`:

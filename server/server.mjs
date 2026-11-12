@@ -44,6 +44,8 @@ import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
 import { refRoutes } from './refs.mjs'
+import { chatMediaRoutes } from './chatmedia.mjs'
+import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes } from './setup.mjs'
@@ -1333,6 +1335,20 @@ const chats = talks.chats
 // A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
 const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
 const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input) })
+// Media in a chat (spec 29, server/chatmedia.mjs): a picture is read by the reviewer's vision model, with
+// reasoning off and the vision fallbacks after it, the same way Scribble's marks are read
+async function seePicture(image) {
+  const first = models.reviewer.apiKey && modelFor('reviewer')
+  if (!first) return null
+  for (const m of [first, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? REVIEW_FALLBACKS.filter(x => x !== first) : [])]) {
+    try {
+      const res = await streamChat(provider('reviewer'), { trace: { kind: 'chat-media' }, model: m, messages: pictureMessages(image), maxTokens: 300, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(45000) })
+      if (String(res.text || '').trim()) return res.text
+    } catch {}
+  }
+  return null
+}
+const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture })
 const brands = brandRoutes({
   chats,
   model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
@@ -2485,15 +2501,33 @@ const server = createServer((req, res) => {
         const said = Array.isArray(input.said) ? input.said.slice(-40) : []
         const inRun = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
         const inPid = typeof input.project === 'string' ? input.project : inRun ? projects.projectOf(inRun) : null
-        const out = await (input.brief ? d.writeBrief : d.discuss)({ said, kind, chat: talk, project: projectState(inPid || (chats.get(input.chat)?.project ?? null)) })
+        // media (spec 29): the pictures attached to this turn, and its links read as pages; the planner is
+        // told how each one was read, and the ones from earlier turns stay in view
+        const had = (typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat)?.refs) || []
+        const ids = Array.isArray(input.refs) ? input.refs.filter(x => typeof x === 'string').slice(0, 8) : []
+        const now = had.filter(r => ids.includes(r.id))
+        const last = said.at(-1)
+        const fresh = []
+        if (!input.brief && last && last.who !== 'hermia') {
+          for (const u of linksIn(last.text)) {
+            const known = had.find(r => r.kind === 'link' && r.url === u)
+            if (known) { now.push(known); continue }
+            const read = await readPage(u).then(pageRead).catch(err => ({ by: 'none', text: String(err.message || err).slice(0, 120) }))
+            const ref = { id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, kind: 'link', name: u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 80), file: null, url: u, src: null, read, at: Date.now() }
+            now.push(ref); fresh.push(ref)
+          }
+        }
+        const before = had.filter(r => !now.includes(r)).slice(-6)
+        const told = now.length || before.length ? said.map((t, i) => i === said.length - 1 && t.who !== 'hermia' ? { ...t, text: withRefs(t.text, now) + (before.length ? `\n[Attached earlier in this talk]\n${before.map(r => `- ${r.kind === 'link' ? r.url : r.name}: ${r.read?.by === 'none' ? 'not read' : (r.read?.text || '').slice(0, 200)}`).join('\n')}` : '') } : t) : said
+        const out = await (input.brief ? d.writeBrief : d.discuss)({ said: told, kind, chat: talk, project: projectState(inPid || (chats.get(input.chat)?.project ?? null)) })
         // the talk is kept in its chat (spec 29): made on the first turn, inside the project when it
         // started in one; the person's newest words and Hermia's answer are added, a brief is the spec's
         let id = typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat) ? input.chat : null
         try {
-          const last = said.at(-1)
           const pid = typeof input.project === 'string' ? input.project : typeof input.from === 'string' && RUN_ID.test(input.from) ? projects.projectOf(input.from) : null
           if (!id) id = chats.create({ kind, project: pid }).id
-          if (!input.brief && last && last.who !== 'hermia') await chats.say(id, { who: 'person', text: last.text })
+          if (fresh.length) await chats.update(id, c => { c.refs = [...(c.refs || []), ...fresh].slice(-60) })
+          if (!input.brief && last && last.who !== 'hermia') await chats.say(id, { who: 'person', text: last.text, refs: now.map(r => r.id) })
           if (out.reply) await chats.say(id, { who: 'planner', text: out.reply })
           if (out.brief) await chats.update(id, c => { c.spec = { brief: String(out.brief).slice(0, 8000), open: [], art: [], engine: null, time: null, cost: null, lockedAt: null, ...(c.spec || {}), ...{ brief: String(out.brief).slice(0, 8000) } } })
         } catch (err) { console.warn('chat:', err.message) }
@@ -3039,6 +3073,7 @@ const server = createServer((req, res) => {
   if (talks(req, res, url)) return
   if (brands(req, res, url)) return
   if (refsRoute(req, res, url)) return
+  if (chatMediaRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 

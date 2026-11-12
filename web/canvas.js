@@ -29,7 +29,27 @@ const els = {
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
 const commandOps = {}
 // layers dragged into the left chat: chips, and lines from each chip to its layer (web/layerlink.js)
-const links = layerLink({ form: els.form, feed: els.feed, rect: layerRect, open: () => window.swarmCosmos?.chat(true) })
+const links = layerLink({ form: els.form, feed: els.feed, rect: layerRect, open: () => window.swarmCosmos?.chat(true), files: list => chatFiles(list) })
+// Media in the chat (spec 29, server/chatmedia.mjs): in a talk, a picture goes to the chat and the vision
+// model reads it now; in a project, it joins the project's References. Either way it is a chip until sent.
+async function chatFiles(list) {
+  const talking = talk.on && talk.kind !== 'game'
+  const pid = !talk.on && shownRun() ? window.swarmCosmos?.projectView?.pid : null
+  if (!talking && !pid) return feed(null, talk.on ? 'Pictures in a game talk come later.' : 'Open a project or start a talk first.', 'err')
+  for (const f of list.slice(0, 6)) {
+    const name = encodeURIComponent(f.name || 'picture.png')
+    const wait = talking && /^image\//.test(f.type) ? botMsg('Looking at it…', true) : null
+    const path = talking ? `/api/chats/${talk.chat || 'new'}/media?name=${name}&kind=${talk.kind}${talk.from ? `&from=${encodeURIComponent(talk.from)}` : ''}` : `/api/projects/${encodeURIComponent(pid)}/refs?name=${name}&source=chat`
+    const res = await api(path, { method: 'POST', body: f }).catch(() => null)
+    const j = res ? await res.json().catch(() => ({})) : {}
+    wait?.remove()
+    if (!res?.ok || !j.ref) { feed(null, j.error || `${f.name} did not come through.`, 'err'); continue }
+    if (talking && j.chat) talk.chat = j.chat
+    links.add({ kind: 'ref', key: j.ref.id, name: j.ref.name, thumb: j.ref.kind === 'image' ? `${BASE}${j.ref.src}` : null, data: { kind: j.ref.kind, src: j.ref.src, read: j.ref.read || null } })
+  }
+}
+// a project message's attached references, named for the crew (the brief lists the store with its links)
+const refLines = (text, media) => media.length ? `${text}\n${media.map(m => `Use the reference ${m.data?.kind === 'image' ? 'picture' : 'file'} "${m.name}" (${m.data?.src || ''}).`).join('\n')}` : text
 // where a layer is on screen: the Overview's artboard when it shows, else the Design deck's frame
 function layerRect(key) {
   const o = window.swarm?.overviewRect?.(key)
@@ -1738,7 +1758,7 @@ async function sendDock() {
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
   if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
   // layers dragged into the chat: the words go to just those sections, like a comment on them
-  if (links.count() && shownRun() && !nextRoute?.fresh) { skip(); return sendLayers(brief) }
+  if (links.count('layer') && shownRun() && !nextRoute?.fresh) { skip(); return sendLayers(brief) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
   if (hosted && !(await hosted.ready())) return skip()
   const to = nextRoute || { from: shownRun(), selected: !!S.sel }
@@ -1759,9 +1779,11 @@ async function sendDock() {
     }
   }
   setAuto(true)
-  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
+  const media = links.take('ref')
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief: refLines(brief, media), agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
   to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
+  if (!res?.ok) for (const m of media) links.add(m)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
   else if (res?.status === 409) feed(null, 'The crew are still on the last change.', 'err')
   else if (hosted && res) hosted.refuse(j)
@@ -1806,11 +1828,12 @@ const saidOf = chat => (chat?.turns || []).filter(t => t.who !== 'crew').map(t =
 const talkEnd = () => { talk.on = false; talk.busy = false; talkDock(false); els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove()) }
 async function talkSay(text, brief = false) {
   if (talk.kind === 'game') return gameSay({ said: text })
-  if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
+  const media = brief ? [] : links.take('ref')
+  if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you', media.map(m => m.name).join(', ')) }
   els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
   const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
   talk.busy = true
-  const res = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: talk.said, kind: talk.kind, brief, ...(talk.chat ? { chat: talk.chat } : talk.from ? { from: talk.from } : {}) }) }).catch(() => null)
+  const res = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: talk.said, kind: talk.kind, brief, ...(media.length ? { refs: media.map(m => m.key) } : {}), ...(talk.chat ? { chat: talk.chat } : talk.from ? { from: talk.from } : {}) }) }).catch(() => null)
   const j = res ? await res.json().catch(() => ({})) : {}
   if (j.chat && talk.on) talk.chat = j.chat
   talk.busy = false
@@ -3369,14 +3392,15 @@ async function sendComment(text, target = null) {
 
 // the message with its layer chips: the crew rework those sections; the turn keeps the layers
 async function sendLayers(text) {
-  const run = shownRun(), chips = links.take()
+  const run = shownRun(), chips = links.take('layer'), media = links.take('ref')
+  text = refLines(text, media)
   els.brief.value = ''
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, role: l.role, html: l.text }))
   const res = await api(`/api/runs/${encodeURIComponent(run)}/comment`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, targets: chips.map(c => c.key), sections }) }).catch(() => null)
   if (res?.ok) return
   const out = await res?.json().catch(() => ({}))
-  for (const c of chips) links.add(c)
-  if (!els.brief.value) els.brief.value = text
+  for (const c of [...chips, ...media]) links.add(c)
+  if (!els.brief.value) els.brief.value = text.split('\n')[0]
   feed(null, out?.error || 'The canvas server is not answering.', 'err')
 }
 
