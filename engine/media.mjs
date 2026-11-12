@@ -73,7 +73,7 @@ export function mediaKeys(dataDir) {
 // Where each service comes from right now. Pure: the server passes what it found.
 //   env         the server's environment (SWARM_ELEVENLABS_KEY comes from Hermes's secret scope)
 //   keys        mediaKeys(dataDir)
-//   mcp         { name: {installed, allowed} } for the ElevenLabs MCP names
+//   mcp         { name: {installed, allowed, allow} } for the ElevenLabs MCP names (allow: the grant command)
 //   images      the image sources (Hermes through the bridge, ckff), videos: the clip sources
 //   picks       the image pick (picks.image), so "off" stays off
 export function mediaSources({ env = {}, keys, mcp = {}, images = [], videos = [], imagePick = null }) {
@@ -84,7 +84,7 @@ export function mediaSources({ env = {}, keys, mcp = {}, images = [], videos = [
   if (env.SWARM_ELEVENLABS_KEY) out.music = { on: true, via: 'hermes', by: 'ElevenLabs' }
   else if (server && mcp[server].allowed) out.music = { on: true, via: 'hermes-mcp', by: 'ElevenLabs', server }
   else if (pasted('elevenlabs')) out.music = { on: true, via: 'key', by: 'ElevenLabs' }
-  else out.music = { on: false, via: 'built-in', by: 'Studio score', ...(server ? { server, grant: true } : {}) }
+  else out.music = { on: false, via: 'built-in', by: 'Studio score', ...(server ? { server, grant: true, allow: mcp[server].allow || '' } : {}) }
   // clips: Hermes's video_generate, when Hermes has a video backend
   const video = videos.find(v => v.available)
   if (video) out.clips = { on: true, via: 'hermes', by: /veo/i.test(video.model || '') ? 'Veo' : video.label || nameOf(video.provider), provider: video.provider }

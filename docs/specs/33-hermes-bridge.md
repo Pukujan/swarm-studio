@@ -93,9 +93,16 @@ plugin's auxiliary task: `swarm_studio_planner`, `swarm_studio_builder` or `swar
 
 **MCP (point 5).** `call_mcp` raises `PermissionError` unless the server is in
 `plugins.entries.swarm-studio.mcp_allowlist`. The studio never writes that list itself.
-- The bridge answers `{ok:false, error:"not allowed", allow:"hermes config set plugins.entries.swarm-studio.mcp_allowlist '[…]'"}`.
-- The canvas shows that command.
-- `/swarm connect` asks with `ask_choice` before it runs `hermes mcp install`.
+- The bridge answers `{ok:false, allowed:false, error, allow:"hermes config set plugins.entries.swarm-studio.mcp_allowlist '[…]'"}`.
+  Node rebuilds the command from the current list, so running it keeps every server already granted.
+- The canvas shows that command, with Copy and Check again; it never runs it.
+- What is installed, granted and signed in comes from the public CLI: `hermes config get mcp_servers --json`
+  (its keys; values stay masked), `hermes config get plugins.entries.swarm-studio.mcp_allowlist --json`, and
+  whether `HERMES_HOME/mcp-tokens/<server>.json` exists. Cached for 5 seconds.
+- Connect runs `hermes mcp install <name>` only after the person confirms it on the canvas
+  (`POST /api/connectors/connect {name, confirm:true}`); without `confirm` the server answers with the question.
+  `/swarm connect` is the Swarm Feed sign-in, not an MCP connector, so it has nothing to ask.
+- `engine/hermes_mcp.py`, which used Hermes internals, is gone.
 
 ## When Hermes is not there
 

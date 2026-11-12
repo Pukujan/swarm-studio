@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import hmac
 import json
+import re
 import mimetypes
 import os
 import secrets
@@ -254,7 +255,39 @@ def media(_body: dict | None = None) -> dict:
     return {"image": {"available": not _missing["image"]}, "video": {"available": not _missing["video"]}}
 
 
-ROUTES = {("POST", "/image"): image, ("POST", "/video"): video, ("GET", "/media"): media}
+PLUGIN = "swarm-studio"
+NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+
+
+def allow_command(server: str, granted: list | None = None) -> str:
+    """The one command the person runs to let Swarm Studio use an MCP server. The studio never runs it:
+    which servers a plugin may call is the person's grant (Nous catalog review, point 5)."""
+    names = sorted({*(granted or []), server})
+    return f"hermes config set plugins.entries.{PLUGIN}.mcp_allowlist '{json.dumps(names)}'"
+
+
+def mcp(body: dict) -> dict:
+    """One MCP tool call through Hermes's own client (ctx.call_mcp): its allowlist, trust gates and
+    sign-in tokens. A server not granted comes back with the command that grants it."""
+    server, tool = str(body.get("server") or ""), str(body.get("tool") or "")
+    if not NAME.match(server) or not NAME.match(tool):
+        return {"ok": False, "error": "an MCP server and tool name are needed"}
+    args = body.get("args") if isinstance(body.get("args"), dict) else {}
+    try:
+        timeout = float(body.get("timeout") or 120)
+    except (TypeError, ValueError):
+        timeout = 120.0
+    try:
+        got = CTX.call_mcp(server, tool, args, timeout=timeout)
+    except PermissionError:
+        granted = body.get("granted") if isinstance(body.get("granted"), list) else []
+        return {"ok": False, "allowed": False, "error": f"Swarm Studio may not use {server} yet", "allow": allow_command(server, [str(g) for g in granted if NAME.match(str(g))])}
+    except Exception as exc:  # a dead connector is an answer, not a crash
+        return {"ok": False, "error": str(exc)[:300]}
+    return got if isinstance(got, dict) else {"ok": True, "result": got}
+
+
+ROUTES = {("POST", "/image"): image, ("POST", "/video"): video, ("GET", "/media"): media, ("POST", "/mcp"): mcp}
 
 
 # ---------- the HTTP side

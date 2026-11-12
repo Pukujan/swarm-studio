@@ -139,6 +139,37 @@ class Bridge(unittest.TestCase):
             if f.is_file():
                 self.assertNotIn(token.encode(), f.read_bytes(), f)
 
+    def test_mcp_calls_go_through_ctx_call_mcp_and_a_missing_grant_gives_the_command(self):
+        class Ctx:
+            calls = []
+
+            def call_mcp(self, server, tool, args=None, timeout=30):
+                self.calls.append((server, tool, args, timeout))
+                if server != "supabase":
+                    raise PermissionError("not in mcp_allowlist")
+                return {"ok": True, "result": "[]"}
+        self.b.CTX = Ctx()
+        self.assertEqual(self.b.mcp({"server": "supabase", "tool": "list_projects", "args": {"a": 1}, "timeout": 60}), {"ok": True, "result": "[]"})
+        self.assertEqual(Ctx.calls[-1], ("supabase", "list_projects", {"a": 1}, 60.0))
+        got = self.b.mcp({"server": "elevenlabs", "tool": "x", "granted": ["supabase"]})
+        self.assertEqual((got["ok"], got["allowed"]), (False, False))
+        self.assertEqual(got["allow"], "hermes config set plugins.entries.swarm-studio.mcp_allowlist '[\"elevenlabs\", \"supabase\"]'")
+        self.assertFalse(self.b.mcp({"server": "a b", "tool": "x"})["ok"])
+
+    def test_no_hermes_internals_and_no_allowlist_writes(self):
+        """Point 5: the plugin uses only Hermes's public plugin API and CLI."""
+        self.assertFalse((ROOT / "engine" / "hermes_mcp.py").exists())
+        private = re.compile(r"^\s*(from|import)\s+(tools|hermes_cli)\b", re.M)
+        for f in [*ROOT.glob("*.py"), *(ROOT / "engine").glob("*.py")]:
+            if f.name == "launcher.py":  # point 2 removes its model-key lookup
+                continue
+            self.assertIsNone(private.search(f.read_text("utf-8")), f.name)
+        for f in [*(ROOT / "engine").glob("*.mjs"), ROOT / "server" / "server.mjs", *ROOT.glob("*.py")]:
+            src = f.read_text("utf-8")
+            self.assertIsNone(re.search(r"\[\s*'config'\s*,\s*'set'", src), f.name)
+            self.assertNotIn("_mcp_envelope", src, f.name)
+            self.assertNotIn("discover_mcp_tools", src, f.name)
+
     def test_register_wires_the_bridge(self):
         src = (ROOT / "__init__.py").read_text("utf-8")
         self.assertIn("bridge.CTX = ctx", src)

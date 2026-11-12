@@ -29,8 +29,8 @@ test('what Hermes already has is used first, with no setup', () => {
   const viaMcp = mediaSources({ env: {}, keys, mcp: { elevenlabs: { installed: true, allowed: true } } }).music
   assert.deepEqual([viaMcp.on, viaMcp.via, viaMcp.server], [true, 'hermes-mcp', 'elevenlabs'])
   // installed but not granted to the studio yet: one press, no key
-  const grant = mediaSources({ env: {}, keys, mcp: { elevenlabs: { installed: true, allowed: false } } }).music
-  assert.deepEqual([grant.on, grant.grant], [false, true])
+  const grant = mediaSources({ env: {}, keys, mcp: { elevenlabs: { installed: true, allowed: false, allow: 'hermes config set …' } } }).music
+  assert.deepEqual([grant.on, grant.grant, grant.allow], [false, true, 'hermes config set …'], 'the grant is a command for the person, never one the studio runs')
   // Hermes's own video and image tools, through the bridge
   const m = mediaSources({ env: {}, keys, videos: [{ provider: 'hermes', label: 'Hermes', available: true }], images: [{ provider: 'hermes', available: true }] })
   assert.deepEqual([m.clips.on, m.clips.via, m.clips.by, m.clips.provider], [true, 'hermes', 'Hermes', 'hermes'])

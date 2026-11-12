@@ -1829,7 +1829,7 @@ body.view-video .video-pop .vmin { display: none; }
 .video-pop .vsrc-pop a { color: var(--accent); }
 .video-pop .vsrc-form { display: flex; gap: 6px; flex: 1; min-width: 200px; }
 .video-pop .vsrc-form input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: rgb(var(--shade-rgb) / .27); color: var(--text); font: 12px var(--mono); }
-.video-pop .vsrc-form button, .video-pop .vsrc-allow { border: 0; border-radius: 6px; padding: 5px 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.video-pop .vsrc-form button { border: 0; border-radius: 6px; padding: 5px 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
 .video-pop .vsrc-forget { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; color: inherit; cursor: pointer; }
 .video-pop .vsrc-pop .perr { flex-basis: 100%; color: var(--hot-text); }
 .video-pop .vsrc-pop .perr:empty { display: none; }
@@ -2005,3 +2005,9 @@ body.side-min .tabs .chats-btn { display: none; }
 .pl-btn.tours.on { background: var(--frame); border-color: var(--line-2); }
 .tour-pick { display: inline-flex; gap: 4px; align-items: center; }
 @media (max-width: 600px) { .pl-btn.tours .t { display: none; } .pl-btn.tours { padding: 0; width: 34px; height: 34px; justify-content: center; } }
+
+/* the MCP grant command the person runs in Hermes (Nous catalog review, point 5) */
+.mcp-allow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.mcp-allow code { flex: 1 1 100%; overflow-wrap: anywhere; padding: 6px 8px; border-radius: 6px; background: var(--panel-2, rgba(127,127,127,.12)); color: var(--ink, inherit); font-size: 11px; user-select: all; }
+.mcp-allow button { border: 0; border-radius: 6px; padding: 4px 10px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.mcp-allow .mcp-again { background: transparent; color: inherit; border: 1px solid currentColor; }
