@@ -39,13 +39,9 @@ test('one character costs 35 credits: a textured model and a rig', () => {
   assert.equal(meshyCost({ rig: false }).credits, 30)
 })
 
-test('the key comes from the environment, else the env files; none is empty', () => {
-  const d = tmp()
-  const f = join(d, '.env')
-  writeFileSync(f, `OTHER=1\nexport MESHY_API_KEY="${KEY}"\n`)
-  assert.equal(meshyKey({ env: { MESHY_API_KEY: 'from-env' }, files: [f] }), 'from-env')
-  assert.equal(meshyKey({ env: {}, files: [join(d, 'missing'), f] }), KEY)
-  assert.equal(meshyKey({ env: {}, files: [join(d, 'missing')] }), '')
+test('the key comes from the environment only; none is empty', () => {
+  assert.equal(meshyKey({ env: { MESHY_API_KEY: ' from-env ' } }), 'from-env')
+  assert.equal(meshyKey({ env: {} }), '')
 })
 
 test('the image-to-3D ask is anime cel, flat colours, A-pose, one GLB', () => {

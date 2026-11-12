@@ -1,21 +1,15 @@
 // One picture through ckff's OpenAI-shaped image API (gpt-image-2.5 by default): the studio's
 // fallback when no Hermes image provider is signed in or the signed-in one fails (Codex out of
-// quota). The key comes from CKFF_API_KEY / CKFF_IMAGE_KEY in the environment, else from
-// ~/Documents/projects/.env. It stays in this process and is never printed or logged.
+// quota). The key is CKFF_API_KEY (or CKFF_IMAGE_KEY) in this process's environment, which
+// launcher.py fills from Hermes's secret scope. No file is read for it. It stays in this process
+// and is never printed or logged.
 import { readFileSync, writeFileSync, existsSync, mkdtempSync } from 'node:fs'
 import { extname, join } from 'node:path'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 
-function envFile() {
-  const f = join(homedir(), 'Documents', 'projects', '.env'), out = {}
-  if (!existsSync(f)) return out
-  for (const l of readFileSync(f, 'utf8').split('\n')) { const m = l.match(/^([A-Za-z_]\w*)=(.*)$/); if (m) out[m[1]] = m[2].trim().replace(/^["']|["']$/g, '') }
-  return out
-}
 export function ckffCreds(env = process.env) {
-  const file = env.CKFF_API_KEY || env.CKFF_IMAGE_KEY ? {} : envFile()
-  const key = env.CKFF_API_KEY || env.CKFF_IMAGE_KEY || file.CKFF_API_KEY || file.CKFF_IMAGE_KEY || ''
-  const base = (env.CKFF_BASE_URL || file.CKFF_BASE_URL || 'https://ckffai.com/v1').replace(/\/$/, '')
+  const key = env.CKFF_API_KEY || env.CKFF_IMAGE_KEY || ''
+  const base = (env.CKFF_BASE_URL || 'https://ckffai.com/v1').replace(/\/$/, '')
   return key ? { key, base } : null
 }
 

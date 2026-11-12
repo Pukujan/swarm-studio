@@ -16,4 +16,44 @@ optional_env:
   - name: ELEVENLABS_API_KEY
     description: "Optional: ElevenLabs key for the Film studio's music and sound effects (without it the studio writes its own score)"
     secret: true
+  - name: CKFF_API_KEY
+    description: "Optional: ckff image key, used for pictures when no Hermes image login can paint"
+    secret: true
+  - name: CKFF_BASE_URL
+    description: "Optional: ckff endpoint (default https://ckffai.com/v1)"
+  - name: CKFF_MODEL
+    description: "Optional: ckff image model"
+  - name: FAL_KEY
+    description: "Optional: FAL key for Hermes's FAL image and video providers"
+    secret: true
+  - name: MESHY_API_KEY
+    description: "Optional: Meshy key for 3D characters (the studio asks before spending credits)"
+    secret: true
+  - name: PEXELS_API_KEY
+    description: "Optional: Pexels key for stand-in photos while pictures are painted"
+    secret: true
+  - name: PEXELS_OCTO_LEASE
+    description: "Optional: an Octo vault lease that reaches Pexels without holding its key"
+    secret: true
+  - name: OCTO_SWARM_WS
+    description: "Optional: Octo workspace key for public copies of stand-in photos"
+    secret: true
+  - name: OCTO_SWARM_WORKSPACE_ID
+    description: "Optional: the Octo workspace those copies go to"
+  - name: OCTO_BASE_URL
+    description: "Optional: Octo address (default https://octodb.design-bakery.com)"
+  - name: SUPABASE_URL
+    description: "Optional: a Supabase project for generated apps' data (or connect Supabase through Hermes)"
+  - name: SUPABASE_SERVICE_ROLE_KEY
+    description: "Optional: that Supabase project's service role key"
+    secret: true
+  - name: STRIPE_SECRET_KEY
+    description: "Optional: a Stripe test key (sk_test_ or rk_test_) for generated apps' checkout; live keys are refused"
+    secret: true
+  - name: VERCEL_TOKEN
+    description: "Optional: Vercel token for Publish and app deploys"
+    secret: true
+  - name: CLOUDFLARE_API_TOKEN
+    description: "Optional: Cloudflare token for Publish to Cloudflare Pages"
+    secret: true
 license: FSL-1.1-ALv2

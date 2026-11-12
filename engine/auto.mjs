@@ -8,9 +8,8 @@
 // The server passes in what it already has (the swarm, the video job, the App
 // tab's jobs, the publisher), so this file only orders the steps and keeps score.
 
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { loadPack, intakeValues, packBrief, packAsk, runTools, runChecks } from './packs.mjs'
 
 export const GAMES_ASK = `Add a 🎮 Play page at /play, linked in the nav, with three small original mini games set in this brand's world and wearing the site's theme (its CSS variables and fonts). Each game is a canvas game in its own module under src/games/, works with keyboard and touch, and one round takes under a minute:
@@ -61,20 +60,13 @@ export const supabaseAsk = app => `Keep the app's data in Supabase. Add @supabas
 // The table Supabase needs once, shown to the person when it is missing.
 export const SUPABASE_SQL = `create table swarm_records (id uuid primary key default gen_random_uuid(), app text not null, kind text not null, data jsonb not null, created_at timestamptz not null default now()); create index on swarm_records (app, kind, created_at desc);`
 
-// Keys from the server's own environment, or from ~/.hermes/.env (where Hermes
-// keeps the others).
+// Keys from the server's own environment. launcher.py puts them there from Hermes's secret scope
+// (the names are declared in plugin.yaml); the engine reads no .env file of its own.
 function keys(want) {
   const out = Object.fromEntries(want.filter(k => process.env[k]).map(k => [k, process.env[k]]))
-  const file = join(homedir(), '.hermes', '.env')
-  if (Object.keys(out).length < want.length && existsSync(file)) {
-    for (const line of readFileSync(file, 'utf8').split('\n')) {
-      const m = /^\s*(?:export\s+)?([A-Z_]+)\s*=\s*(.*)$/.exec(line)
-      if (m && want.includes(m[1]) && !out[m[1]]) out[m[1]] = m[2].trim().replace(/^(['"])(.*)\1$/, '$2')
-    }
-  }
   return want.every(k => out[k]) ? out : null
 }
-// one key from the environment or ~/.hermes/.env
+// one key from the environment
 export const hermesKey = k => keys([k])?.[k] || ''
 export const supabaseEnv = () => keys(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
 // Made through the person's Supabase sign-in, the app holds a publishable key, so the table lets
@@ -251,7 +243,7 @@ export function autoJob(d) {
     let env = supabaseEnv()
     // no keys: the person's Supabase sign-in through Hermes (🔌 Connect on the canvas)
     if (!env && d.connectors) env = await d.connectors.supabaseProject({ sql: SUPABASE_CONNECTOR_SQL, say: note => set('data', 'working', note) })
-    if (!env) return set('data', 'skipped', 'connect Supabase (🔌 in the Auto window) or add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to ~/.hermes/.env to keep the data in Supabase')
+    if (!env) return set('data', 'skipped', 'connect Supabase (🔌 in the Auto window) or put SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the Hermes secret store and start the studio again to keep the data in Supabase')
     const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY
     const probe = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/swarm_records?select=id&limit=1`, { headers: { apikey: key, authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) }).catch(err => ({ ok: false, status: String(err.message || err) }))
     if (!probe.ok) return set('data', 'skipped', `Supabase has no swarm_records table yet (${probe.status}); run this once in its SQL editor: ${SUPABASE_SQL}`)
