@@ -324,6 +324,12 @@ def start_run(brief: str, agents: int | None = None, force: bool = False) -> dic
         got = _request("/api/run", method="POST", body=body, timeout=5)
     except (OSError, urllib.error.URLError, ValueError) as exc:
         return {"running": True, "error": f"could not start the run: {exc}"}
+    # the person started it here: an open canvas shows it (a canvas never switches builds by itself)
+    if got.get("run"):
+        try:
+            _request("/api/cmd", method="POST", body={"op": "open", "run": got["run"]}, timeout=5)
+        except (OSError, urllib.error.URLError, ValueError):
+            pass
     return {"running": True, "run": got.get("run"), "url": up["url"]}
 
 

@@ -19,3 +19,15 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --quiet pillow
       - run: bash scripts/check.sh
+  # the Studio shows the build that was clicked, in a real browser (scripts/open-check.mjs)
+  open-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-save --no-package-lock playwright@1.64.1
+      - run: npx playwright install --with-deps chromium-headless-shell
+      - run: node scripts/open-check.mjs

@@ -160,6 +160,8 @@ const cosmosHooks = new Set()
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
 function fresh(run = null) {
+  // the player plays one build: another build on the canvas closes it (it never carries over)
+  if (S && run !== S.run && !els.player.hidden) closePlayer()
   S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null, images: new Map(), imgQueued: 0, imgSettled: 0, seo: new Map() }
   banter.queue = []
   history.undo = []; history.redo = []; renderUndo()
@@ -1597,7 +1599,8 @@ window.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return
   // the Design panel belongs to the Canvas room; a project has its own Layers inspector
   if (e.key === 'd') return document.body.classList.contains('cosmos-project') || document.body.classList.contains('cosmos-home') ? undefined : togglePanel('design')
-  if (e.key === 'p' && S.frames.length) return els.player.hidden ? openPlayer() : closePlayer()
+  // the player plays the open build, so not over Projects or a plan, where no build shows
+  if (e.key === 'p' && S.frames.length && !/\bcosmos-(home|plan|brand)\b/.test(document.body.className)) return els.player.hidden ? openPlayer() : closePlayer()
   if (!els.player.hidden) return
   if (e.key === 'v' || e.key === 't' || e.key === 'c') return els.toolbar.querySelector(`[data-tool="${{ v: 'move', t: 'text', c: 'comment' }[e.key]}"]`)?.click()
   if (e.key === 'a') setAuto(true)
@@ -1785,6 +1788,8 @@ async function sendDock() {
   to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
   if (!res?.ok) for (const m of media) links.add(m)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
+  // the build the person just started is the one the canvas shows
+  if (res?.ok && j.run && j.run !== shownRun()) openRun(j.run)
   else if (res?.status === 409) feed(null, 'The crew are still on the last change.', 'err')
   else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
@@ -4282,11 +4287,15 @@ for (const b of document.querySelectorAll('.dtabs button')) b.onclick = () => { 
 
 // ---------- files: every saved run is a file with its own canvas
 // `viewing` is null while following the live stream, or the id of a saved run
-// (or 'new' for an empty canvas). The live stream is ignored while viewing one,
-// until a new run starts.
+// (or 'new' for an empty canvas). The live stream is ignored while viewing one.
+// Which build the canvas shows is the person's choice alone: a build they opened (openRun) or one
+// they started. The stream never changes it by itself: the server replays its current run to every
+// new or reconnected canvas, and a build started elsewhere waits in Projects (see connect).
 
 let viewing = null
 let liveId = null
+// the build the person last asked for: when it starts streaming, the canvas follows it
+let claimed = null
 let files = []
 
 async function loadFiles() {
@@ -4450,8 +4459,10 @@ function fileInfo(f) {
 let openSeq = 0
 async function openRun(id) {
   const seq = ++openSeq
+  claimed = id
   talkEnd()
-  if (id === liveId && files.find(f => f.id === id)?.live) {
+  // the live build: followed on the stream (one too new for the file list is the live one too)
+  if (id === liveId && (files.find(f => f.id === id)?.live || !files.some(f => f.id === id))) {
     viewing = null
     connect()
   } else {
@@ -5684,6 +5695,15 @@ function connect() {
         liveId = e.run
         // a talk before building keeps the canvas: a build started elsewhere waits in Projects
         if (talk.on) return
+        // Only the build the person asked for, or the one already followed, takes the canvas. Any
+        // other (the server's current run replayed on a reconnect, a build from another window) is
+        // only news: Projects lists it, and the open build stays as it is.
+        const followed = !viewing && (!S.run || S.run === e.run)
+        if (!followed && e.run !== claimed) {
+          if (!viewing && S.run) viewing = S.run
+          if (e.type === 'run:start') for (const fn of cosmosHooks) try { fn(e) } catch (err) { console.error(err) }
+          return
+        }
         if (viewing) { viewing = null; fresh(e.run) }
       }
       // following the live build: an event of another build (a late picture of the build before,
@@ -5700,8 +5720,11 @@ function connect() {
 
 // Commands sent from Hermes (/swarm review, the swarm_studio tool).
 async function command(c) {
-  const open = c.run && c.run !== (viewing && viewing !== 'new' ? viewing : S.run)
-  if (open) { await openRun(c.run); await new Promise(r => setTimeout(r, 4000)) }
+  const open = c.run && c.run !== shownRun()
+  // open and play show the build: in the studio, its project (never a player hidden behind Projects)
+  const studio = window.swarmCosmos
+  if (studio?.open && (c.op === 'open' || c.op === 'play') && (open || !['project', 'station'].includes(studio.mode))) { await studio.open(c.run || shownRun()); await new Promise(r => setTimeout(r, 4000)) }
+  else if (open) { await openRun(c.run); await new Promise(r => setTimeout(r, 4000)) }
   if (c.op === 'play') openPlayer()
   if (c.op === 'review') reviewRun()
   if (c.op in commandOps) commandOps[c.op](c)
@@ -7113,7 +7136,7 @@ window.swarm = {
   get S() { return S }, get view() { return view }, get viewing() { return viewing }, get liveId() { return liveId }, get files() { return files },
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
-  openRun, setView, loadFiles, focusPage, openPlayer,
+  openRun, setView, loadFiles, focusPage, openPlayer, closePlayer,
   // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
   readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, lock: () => (talk.on && talk.kind === 'game' ? gameLock() : null), get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },

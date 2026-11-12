@@ -84,8 +84,9 @@ export function makeHome({ sw, C, root }) {
       }
       H.data.projects = [...real, ...loose.map(x => ({ id: x.id, plan: true, title: x.title, head: null, count: 1, made: Date.parse(x.updated), updated: Date.parse(x.updated), cover: x.cover, kinds: ['game'], state: { kind: 'Game', status: x.locked ? 'Locked' : 'Plan' }, versions: [] }))]
     }
-    // a version that failed and was built again is not shown: the project is its working versions
-    const dead = v => /failed/i.test(String(v?.state?.status || ''))
+    // a version that failed, or a Draft that never got a section (an empty tile), is not shown once
+    // a newer one works: the project is its working versions
+    const dead = v => /failed|^Draft$/i.test(String(v?.state?.status || ''))
     for (const p of H.data.projects) {
       if (!Array.isArray(p.versions) || p.versions.length < 2) continue
       const kept = p.versions.filter((v, i) => !(dead(v) && p.versions.slice(0, i).some(n => !dead(n))))
@@ -722,8 +723,9 @@ export function makeHome({ sw, C, root }) {
       sw.talk?.end()
       const job = await post('/api/auto', { prompt: text, ...run, ...(chat ? { chat } : {}) })
       input.value = ''
-      C.open(null)
-      if (job?.run) { C.projectView.show(job.run, null); C.go('station', 'canvas') }
+      // the canvas is handed the new build by id, so it follows that build when it starts streaming
+      C.open(job?.run || null)
+      if (job?.run) C.go('station', 'canvas')
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 

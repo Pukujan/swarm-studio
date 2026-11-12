@@ -95,7 +95,8 @@ export function makeProject({ sw, C, root }) {
   const post = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
   async function load() {
-    const run = P.run || sw.viewing || sw.S?.run || sw.liveId
+    // never the server's current run: an Overview shows the build that was opened or started here
+    const run = P.run || sw.viewing || sw.S?.run
     if (!run || run === 'new') { P.board = null; render(); return }
     P.run = run
     const [board, list] = await Promise.all([api(`/api/runs/${encodeURIComponent(run)}/board`).catch(() => null), hosted() ? null : api('/api/projects').catch(() => null)])
