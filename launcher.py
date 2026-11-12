@@ -30,6 +30,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DEFAULT_PORT = 4319
 KEY_ENV = "SWARM_STUDIO_API_KEY"
+# Optional keys and addresses, declared in plugin.yaml and read through Hermes's secret scope when the
+# server starts (start()). Nothing here is required: each one switches a service on.
+PASSED_KEYS = (
+    "CKFF_API_KEY", "CKFF_BASE_URL", "CKFF_MODEL",              # pictures when no Hermes image login can paint
+    "FAL_KEY",                                                  # Hermes's FAL image and video providers
+    "MESHY_API_KEY",                                            # 3D characters (asks before spending credits)
+    "PEXELS_API_KEY", "PEXELS_OCTO_LEASE",                      # stand-in photos
+    "OCTO_SWARM_WS", "OCTO_SWARM_WORKSPACE_ID", "OCTO_BASE_URL",  # public copies of stand-in photos
+    "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",                # a generated app's data
+    "STRIPE_SECRET_KEY",                                        # a generated app's checkout (test keys only)
+    "VERCEL_TOKEN", "CLOUDFLARE_API_TOKEN",                     # publishing
+)
 DEFAULT_ENDPOINT = "https://api.inferhub.dev/v1"
 DEFAULT_MODEL = "cb/deepseek-v4.1-flash"
 # role -> (Hermes auxiliary slot, model override variable)
@@ -194,6 +206,16 @@ def ensure_server() -> dict:
         eleven = None
     if eleven:
         env["SWARM_ELEVENLABS_KEY"] = eleven
+    # Every other optional key the studio can use (plugin.yaml, optional_env) reaches the server the
+    # same way: read here through Hermes's secret scope and handed over in its environment. The
+    # server and the engine read no .env file and no other credential store (catalog rule 11).
+    for name in PASSED_KEYS:
+        try:
+            value = _secret(name)
+        except Exception:  # an unscoped read under multiplexing: that service is simply not connected
+            value = None
+        if value:
+            env[name] = value
     if os.environ.get("SWARM_STUDIO_AGENTS"):
         env["SWARM_AGENTS"] = os.environ["SWARM_STUDIO_AGENTS"]
 

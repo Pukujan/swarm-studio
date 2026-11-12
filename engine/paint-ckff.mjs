@@ -8,28 +8,21 @@
 //   node engine/paint-ckff.mjs one "<prompt>" <out.png> [--ref a.png --ref b.jpg] [--size 1536x1024]
 //
 // Existing outputs are kept (delete one to repaint it). --jobs N paints N at a time (default 2).
-// Key: CKFF_IMAGE_KEY, else the Octo vault item "ckff-cortex-image-generation" read with
-// OCTO_AGENT_KEY from ~/Documents/projects/.env. The key is never printed.
+// Key: CKFF_IMAGE_KEY in the environment, else the Octo vault item "ckff-cortex-image-generation"
+// read with OCTO_AGENT_KEY from the environment. No file is read for a key; it is never printed.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { extname, join, dirname, resolve } from 'node:path'
-import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { skinJobs } from './skins.mjs'
 
 const BASE = process.env.CKFF_BASE || 'https://ckffai.com/v1'
 const VAULT = process.env.OCTO_URL || 'https://octodb.design-bakery.com'
 
-function envFile() {
-  const f = join(homedir(), 'Documents', 'projects', '.env'), out = {}
-  if (!existsSync(f)) return out
-  for (const l of readFileSync(f, 'utf8').split('\n')) { const m = l.match(/^([A-Za-z_][\w]*)=(.*)$/); if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, '') }
-  return out
-}
 let keyP = null
 export function ckffKey() {
   return keyP ||= (async () => {
     if (process.env.CKFF_IMAGE_KEY) return process.env.CKFF_IMAGE_KEY
-    const agent = process.env.OCTO_AGENT_KEY || envFile().OCTO_AGENT_KEY
+    const agent = process.env.OCTO_AGENT_KEY
     if (!agent) throw new Error('no CKFF_IMAGE_KEY and no OCTO_AGENT_KEY to read the vault')
     const h = { authorization: `Bearer ${agent}`, 'user-agent': 'octo-env-pull/1' }
     const { items } = await (await fetch(`${VAULT}/api/vault/items`, { headers: h })).json()

@@ -117,6 +117,9 @@ Google sign-in means a Google OAuth client set up in the person's own Supabase p
 
 ## Catalog rule 11: three things to fix before the next pin
 
+> Fixed (PR secrets-through-hermes): the engine reads no `.env` file, `launcher.py` hands the keys over from
+> Hermes's secret scope, and `plugin.yaml` declares them. What follows is the state the spec found.
+
 Rule 11 of the Hermes plugin catalog: a plugin gets secrets only through Hermes's routes and never reads `.env`
 files or other credential stores. Today:
 

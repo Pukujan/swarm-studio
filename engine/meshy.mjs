@@ -13,9 +13,8 @@
 // MIT). That plugin talks to Meshy through an MCP server the Studio does not run,
 // so the few calls this flow needs are made here the same way.
 
-import { existsSync, readFileSync, mkdirSync, writeFileSync, renameSync } from 'node:fs'
+import { readFileSync, mkdirSync, writeFileSync, renameSync } from 'node:fs'
 import { join, extname } from 'node:path'
-import { homedir } from 'node:os'
 
 export const API = 'https://api.meshy.ai'
 export const KEY = 'MESHY_API_KEY'
@@ -40,18 +39,10 @@ export function meshyCost({ aiModel = AI_MODEL, rig = true } = {}) {
   return { credits: parts.reduce((n, p) => n + p.credits, 0), parts, aiModel }
 }
 
-// The key, from the server's environment, ~/.hermes/.env, or ~/Documents/projects/.env.
+// The key, from the server's environment (launcher.py puts it there from Hermes's secret scope).
 // It is only ever put in an Authorization header: never logged, returned or sent to the browser.
-export function meshyKey({ env = process.env, files = [join(homedir(), '.hermes', '.env'), join(homedir(), 'Documents', 'projects', '.env')] } = {}) {
-  if (env[KEY]) return String(env[KEY]).trim()
-  for (const f of files) {
-    if (!existsSync(f)) continue
-    for (const line of readFileSync(f, 'utf8').split('\n')) {
-      const m = /^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line)
-      if (m && m[1] === KEY && m[2].trim()) return m[2].trim().replace(/^(['"])(.*)\1$/, '$2')
-    }
-  }
-  return ''
+export function meshyKey({ env = process.env } = {}) {
+  return env[KEY] ? String(env[KEY]).trim() : ''
 }
 export const meshyReady = opts => !!meshyKey(opts)
 
