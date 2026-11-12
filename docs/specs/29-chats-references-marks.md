@@ -330,6 +330,25 @@ The planner's `reads` keep those lines.
 - Undo after Clear brings the marks back, and the next request holds them.
 - Accepting or dismissing a draft closes its marks.
 
+### Scribble, built (2026-11-12)
+
+- `engine/marks.mjs` cleans the marks, writes each mark's line, keeps the open ones and builds the reader's
+  request. `web/canvas.js` `swarm.marks` finds what a mark points at in the page's hidden copy (kresilo's
+  rule) and draws a section for a draft.
+- The Overview's dock has **Scribble** (S) and **Eraser** (E); Escape goes back to Move. Shift draws a box,
+  a closed loop is a ring, and a note field opens after each mark. The message box shows "N marks"; clicking
+  it clears them, with Undo, and ⌘Z brings back erased or cleared marks until they are sent.
+- Sending: one picture per page with the marks drawn on it and a crop per mark go to the reviewer model,
+  with reasoning off and the vision fallbacks after it (it read nothing with thinking on). Its read of each
+  mark comes back as the reply; the builder gets the lines and the reads as text, never the pictures.
+- Each marked section is rebuilt as a **draft** beside its page, level with the section. Its inspector has
+  **Accept** (the draft becomes the section) and **Dismiss**; either closes its marks.
+- Checked live on a test server: a ring on the booking form's PARTY SIZE label, noted "bigger, and on one
+  line". The reader named that label, asked whether the other labels the ring touched should change, and the
+  draft came back beside the page; Accept closed the mark.
+- Not yet: marks on references, pins that carry a draft, Scribble in the page editor's toolbar, and sketch to
+  layout.
+
 ## Drag a layer into the chat
 
 Comes after Scribble.

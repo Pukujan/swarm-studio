@@ -26,7 +26,9 @@ export function makeProject({ sw, C, root }) {
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], refs: [], sending: new Map(),
     sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(),
-    standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0
+    standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
+    // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
+    marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
   }
 
   root.className = 'project'
@@ -49,12 +51,14 @@ export function makeProject({ sw, C, root }) {
     <div class="pj-dock">
       <button class="ib pj-files-btn" data-tool="files" aria-label="Files" aria-expanded="false">${ic('folder')}</button>
       <button class="ib on" data-tool="move" aria-label="Move">${ic('move')}</button>
+      <button class="ib pj-mk" data-tool="scribble" aria-label="Scribble" aria-pressed="false">${ic('pencil')}</button>
+      <button class="ib pj-mk" data-tool="eraser" aria-label="Eraser" aria-pressed="false">${ic('eraser')}</button>
       <button class="ib" data-tool="frame" aria-label="Frame all">${ic('frame')}</button>
       <button class="ib pj-follow" data-tool="follow" aria-label="Follow the crew" aria-pressed="true" disabled>${ic('users')}</button>
       <button class="ib" data-tool="text" aria-label="New page">${ic('type')}</button>
       <button class="ib" data-tool="image" aria-label="Upload files">${ic('image')}</button>
       <button class="ib" data-tool="comment" aria-label="Chat">${ic('msg')}</button>
-      <form class="pj-ask" autocomplete="off"><button type="button" class="pj-scope" hidden aria-label="Talk to the crew about the whole project"><span></span>${ic('x', 12)}</button><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
+      <form class="pj-ask" autocomplete="off"><button type="button" class="pj-scope" hidden aria-label="Talk to the crew about the whole project"><span></span>${ic('x', 12)}</button><button type="button" class="pj-scope pj-mkchip" hidden aria-label="Clear the marks"><span></span>${ic('x', 12)}</button><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
     </div>
     <input type="file" class="pj-file" multiple hidden>
     <input type="file" class="pj-reffile" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md">`
@@ -126,7 +130,7 @@ export function makeProject({ sw, C, root }) {
   function groups() {
     const b = P.board || {}
     const g = {}
-    if (b.pages?.length) g.site = b.pages.map(p => ({ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id) }))
+    if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id) }, ...draftsOf(p.id)])
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, pitch: b.game.pitch || '', src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
@@ -149,6 +153,15 @@ export function makeProject({ sw, C, root }) {
     return g
   }
   const find = key => Object.values(groups()).flat().find(x => x.key === key)
+  // a page's drafts (Scribble): beside it, each level with the section it redoes; one being written shows as pending
+  function draftsOf(page) {
+    const run = P.run
+    const done = [...P.drafts.values()].filter(d => d.page === page && d.run === run)
+      .map(d => ({ key: `dr:${d.id}`, kind: 'draft', name: `Draft · ${d.role || d.layer}`, page, src: d.image || null, draft: d }))
+    const busy = [...P.drafting.values()].filter(d => d.page === page && d.run === run && !done.some(x => x.draft.layer === d.layer))
+      .map(d => ({ key: `dr:~${d.page}/${d.layer}`, kind: 'draft', name: `Draft · ${d.role || d.layer}`, page, pending: true, draft: d }))
+    return [...done, ...busy]
+  }
 
   // ---------- render
   function render() {
@@ -163,7 +176,7 @@ export function makeProject({ sw, C, root }) {
   }
   const thumbHtml = x => x.src ? `<span class="t" style="background-image:url('${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}')"></span>`
     : x.kind === 'page' && P.board?.theme?.colors?.length ? `<span class="t tcs" style="--tc-bg:${esc(P.board.theme.colors[0])};--tc-pr:${esc(P.board.theme.colors[1] || P.board.theme.colors[0])}"></span>`
-    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
+    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', draft: 'pencil', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
   function renderList() {
     const g = groups()
     listEl.innerHTML = SECTIONS.filter(([k]) => g[k]).map(([k, label]) => {
@@ -193,10 +206,51 @@ export function makeProject({ sw, C, root }) {
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
     const tall = x.kind === 'page' && x.snap && P.aspect.get(x.page)
+    if (x.kind === 'draft') return draftBoard(x, sel, img)
     const rv = x.kind === 'page' ? reviewOf(x) : null
     const work = x.kind === 'art' && (x.pending || P.landed.has(x.key)) ? painting(x) : ''
-    return `<div class="ab ${x.kind}${x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}` : ''}${sel}</div>`
+    return `<div class="ab ${x.kind}${x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}<svg class="mk" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${markPaths(x.page)}</svg>` : ''}${sel}</div>`
   }
+  // ---------- Scribble (spec 29): marks on a page's artboard, kept as fractions of the page
+  // a page's artboard shows at most 9 widths of it: y on the artboard = y on the page × this
+  const pageK = page => { const r = P.aspect.get(page); return r ? Math.max(1, (124 * r) / pageH(r)) : 1 }
+  const ptsPath = (pts, k) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${(x * 1000).toFixed(1)} ${(y * k * 1000).toFixed(1)}`).join('')
+  function markD(m) {
+    const k = pageK(m.page)
+    if (m.kind === 'box') { const b = m.box, x0 = b.x * 1000, y0 = b.y * k * 1000, x1 = (b.x + b.w) * 1000, y1 = (b.y + b.h) * k * 1000; return `M${x0} ${y0}H${x1}V${y1}H${x0}Z` }
+    return ptsPath(m.pts, k)
+  }
+  function markPaths(page) {
+    const mine = P.marks.filter(m => m.page === page && m.run === P.run)
+    const sent = [...P.sent.values()].filter(m => m.page === page && m.run === P.run && m.status === 'open')
+    return [...sent.map(m => [m, 'sent']), ...mine.map(m => [m, ''])].map(([m, cls]) => { const d = markD(m); return `<g data-mk="${esc(m.id)}" data-sent="${cls ? 1 : ''}" class="${cls}"><path class="hit" d="${d}"/><path class="halo" d="${d}"/><path class="ln" d="${d}"/></g>` }).join('')
+  }
+  function drawMarks() {
+    for (const a of world.querySelectorAll('.ab.page')) { const x = find(a.dataset.key), svg = a.querySelector('.mk'); if (x && svg) svg.innerHTML = markPaths(x.page) }
+    const n = P.marks.filter(m => m.run === P.run).length, chip = $('.pj-mkchip')
+    chip.hidden = !n
+    if (n) chip.querySelector('span').textContent = `${n} mark${n > 1 ? 's' : ''}`
+  }
+  function setTool(t) {
+    P.tool = P.tool === t && t !== 'move' ? 'move' : t
+    for (const b of root.querySelectorAll('.pj-dock [data-tool="move"], .pj-dock .pj-mk')) { const on = b.dataset.tool === P.tool; b.classList.toggle('on', on); if (b.classList.contains('pj-mk')) b.setAttribute('aria-pressed', String(on)) }
+    root.classList.toggle('scribbling', P.tool === 'scribble')
+    root.classList.toggle('erasing', P.tool === 'eraser')
+  }
+  // a draft beside its page, level with the section it redoes, drawn at the page's scale
+  function draftBoard(x, sel, img) {
+    const d = x.draft, r = P.aspect.get(x.page)
+    const sec = sw.layers?.list(x.page).find(l => l.key === `${d.page}/${d.layer}` || l.id === d.layer)
+    const top = sec?.box && r ? Math.min(pageH(r) - 40, sec.box.top * 124 * r) : 0
+    const h = x.pending || !d.height ? Math.max(40, (sec?.box?.height || 0.1) * 124 * (r || 1.9)) : d.height / 1280 * 124
+    if (!x.pending && !d.image && !P.rendering.has(d.id) && sw.marks) {
+      P.rendering.add(d.id)
+      sw.marks.render(d.page, d.html).then(out => { const now = P.drafts.get(d.id); if (now && out) { now.image = out.image; now.height = out.height; if (P.on) { renderStage(); renderList(); if (P.sel === x.key) renderInsp() } } }).finally(() => P.rendering.delete(d.id))
+    }
+    const inner = x.src ? img : `<span class="blank">${ic('pencil', 18)}</span>`
+    return `<div class="ab draft${x.pending ? ' pending' : ''}" data-key="${esc(x.key)}" tabindex="-1" style="margin-top:${top.toFixed(1)}px;height:${h.toFixed(1)}px">${inner}${sel}</div>`
+  }
+
   // ---------- pictures being made: a stand-in (a found picture, tinted toward the theme) or a drawn
   // sketch, the painter's name and "real picture coming", a slim bar; the real one fades in over it.
   // The stand-in is only ever shown here: it is never saved into the build, its cover, export or publish.
@@ -331,6 +385,7 @@ export function makeProject({ sw, C, root }) {
     measurePages()
     if (!P.framed && world.offsetWidth) { P.framed = true; frameAll(false) }
     crewAtWork()
+    drawMarks()
   }
   function renderInsp() {
     const x = P.sel && find(P.sel)
@@ -348,6 +403,9 @@ export function makeProject({ sw, C, root }) {
       x.used && ['Used on', x.used],
       x.kind === 'film' && x.seconds && ['Length', fmtTime(x.seconds)],
       x.kind === 'upload' && x.size && ['File', `${(x.size / 1024 / 1024).toFixed(x.size > 1048576 ? 1 : 2)} MB`],
+      x.kind === 'draft' && ['Section', x.draft.role || x.draft.layer],
+      x.kind === 'draft' && x.draft.marks?.length && ['Marks', x.draft.marks.join(', ')],
+      ...(x.kind === 'draft' ? (x.draft.marks || []).map(id => P.reads.get(id)).filter(Boolean).map(r => [r.mark, r.read]) : []),
       x.kind === 'ref' && ['From', REF_FROM[x.ref.source] || x.ref.source],
       x.kind === 'ref' && x.ref.use && ['Use', x.ref.use],
       x.kind === 'ref' && x.ref.kind === 'link' && ['Link', x.ref.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)]
@@ -359,6 +417,8 @@ export function makeProject({ sw, C, root }) {
       (x.kind === 'art' || (x.kind === 'upload' && x.sending == null) || x.kind === 'film') && `<button class="btn ghost" data-act="export">${ic('download', 15)}Export</button>`,
       x.kind === 'page' && `<button class="btn ghost" data-act="zip">${ic('download', 15)}Export</button>`,
       (x.kind === 'art' || (x.kind === 'upload' && x.sending == null)) && !hosted() && `<button class="btn ghost" data-act="replace">${ic('upload', 15)}Replace</button>`,
+      x.kind === 'draft' && !x.pending && `<button class="btn" data-act="draft-accept">${ic('check', 15)}Accept</button>`,
+      x.kind === 'draft' && !x.pending && `<button class="btn ghost" data-act="draft-dismiss">${ic('x', 15)}Dismiss</button>`,
       x.kind === 'ref' && `<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button>`,
       x.kind === 'ref' && !hosted() && `<button class="btn ghost" data-act="ref-remove">${ic('trash', 15)}Remove</button>`
     ].filter(Boolean).join('')
@@ -711,6 +771,7 @@ export function makeProject({ sw, C, root }) {
   }
   world.addEventListener('click', e => {
     const a = e.target.closest('.ab'); if (!a) return
+    if (P.tool !== 'move' && a.classList.contains('page')) return
     clearTimeout(clickT)
     // (not the second click of a double-click, which opens the page's room)
     if (a.classList.contains('page') && e.detail < 2 && (a.dataset.key === P.sel || e.metaKey || e.ctrlKey)) {
@@ -763,6 +824,10 @@ export function makeProject({ sw, C, root }) {
     if (act === 'zip') exportZip()
     if (act === 'replace') replace(x)
     if (act === 'ref-remove') removeRef(x)
+    if (act === 'draft-accept' || act === 'draft-dismiss') {
+      e.target.closest('button').disabled = true
+      sw.marks.close(x.draft.id, act === 'draft-accept').then(ok => toast(ok ? `${ic('check', 15)}<span>${act === 'draft-accept' ? 'Accepted' : 'Dismissed'}</span>` : '<span>That draft could not close</span>'))
+    }
   })
   insp.addEventListener('submit', e => {
     const f = e.target.closest('.pj-use'), x = find(P.sel)
@@ -1007,6 +1072,7 @@ export function makeProject({ sw, C, root }) {
     if (!b) return
     const t = b.dataset.tool
     if (t === 'files') return sheet(!root.classList.contains('files-on'))
+    if (t === 'move' || t === 'scribble' || t === 'eraser') return setTool(t)
     if (t === 'frame') { setFollow(false); return frameAll() }
     if (t === 'follow') return setFollow(!P.follow)
     if (t === 'text') return newPage()
@@ -1019,6 +1085,8 @@ export function makeProject({ sw, C, root }) {
   ask.onsubmit = async e => {
     e.preventDefault()
     const text = input.value.trim()
+    const marked = P.marks.filter(m => m.run === P.run)
+    if (marked.length) return sendMarks(text, marked)
     if (!text) return input.focus()
     const x = P.sel && find(P.sel)
     if (x?.kind === 'art') return replace(x)
@@ -1182,6 +1250,172 @@ export function makeProject({ sw, C, root }) {
   const scanAt = () => ((Date.now() / 4000) % 1) * 0.9 + 0.05
 
   let toastEl = null
+  // ---------- Scribble: draw on a page's artboard (a stroke, a ring, or with Shift a box), a note at its end
+  const clamp01 = v => Math.max(0, Math.min(1, v))
+  world.addEventListener('pointerdown', e => {
+    if (P.tool === 'move' || e.button !== 0 || hosted()) return
+    const a = e.target.closest('.ab.page'), x = a && find(a.dataset.key)
+    if (!x) return
+    e.preventDefault(); e.stopPropagation()
+    if (P.tool === 'eraser') { const g = e.target.closest('[data-mk]'); if (g) eraseMark(g.dataset.mk, !!g.dataset.sent); return }
+    if (!P.run) return toast('<span>Build it first</span>')
+    const r = a.getBoundingClientRect(), k = pageK(x.page)
+    const at = ev => [clamp01((ev.clientX - r.left) / r.width), clamp01((ev.clientY - r.top) / r.height / k)]
+    const d = { page: x.page, pts: [at(e)], shift: e.shiftKey }
+    const svg = a.querySelector('.mk'), live = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+    live.innerHTML = '<path class="halo"/><path class="ln"/>'
+    svg?.append(live)
+    a.setPointerCapture(e.pointerId)
+    const move = ev => {
+      const p = at(ev), q = d.pts.at(-1)
+      if (Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) < 0.002) return
+      d.pts.push(p)
+      const path = d.shift ? markD({ kind: 'box', page: x.page, box: boxOf([d.pts[0], p]) }) : ptsPath(d.pts, k)
+      for (const el of live.children) el.setAttribute('d', path)
+    }
+    const up = ev => {
+      a.removeEventListener('pointermove', move); a.removeEventListener('pointerup', up); a.removeEventListener('pointercancel', up)
+      live.remove()
+      if (ev.type === 'pointerup') finishMark(d, ev)
+    }
+    a.addEventListener('pointermove', move); a.addEventListener('pointerup', up); a.addEventListener('pointercancel', up)
+  }, true)
+  function boxOf(pts) {
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
+    const x0 = Math.min(...xs), y0 = Math.min(...ys)
+    return { x: x0, y: y0, w: Math.max(...xs) - x0, h: Math.max(...ys) - y0 }
+  }
+  function finishMark(d, ev) {
+    const pts = d.shift ? [d.pts[0], d.pts.at(-1)] : d.pts
+    const box = boxOf(pts)
+    if (box.w + box.h < 0.01) return
+    if (P.marks.length >= 40) return toast('<span>40 marks at most: send these first</span>')
+    const [a, b] = [pts[0], pts.at(-1)]
+    const closed = pts.length > 8 && Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.3 * Math.hypot(box.w, box.h)
+    const m = { id: `k${++P.mkN}`, run: P.run, page: d.page, kind: d.shift ? 'box' : closed ? 'ring' : 'stroke', pts: d.shift ? [] : pts, box, note: '', target: null }
+    P.marks.push(m)
+    drawMarks()
+    Promise.resolve(sw.marks?.anchor(m.page, box)).then(t => { if (t) m.target = t }).catch(() => {})
+    noteAt(m, ev.clientX, ev.clientY)
+  }
+  // the optional note, at the end of the mark; Enter or a click away closes it
+  function noteAt(m, x, y) {
+    root.querySelector('.mk-note')?.remove()
+    const f = document.createElement('input')
+    f.className = 'mk-note'
+    f.placeholder = 'Note'
+    f.setAttribute('aria-label', 'Note for this mark')
+    f.maxLength = 200
+    f.style.left = `${Math.min(innerWidth - 230, x + 10)}px`
+    f.style.top = `${Math.min(innerHeight - 44, y + 6)}px`
+    let shut = false
+    const done = () => { if (shut) return; shut = true; m.note = f.value.trim(); f.remove() }
+    f.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); done() } }
+    f.onblur = done
+    root.append(f)
+    setTimeout(() => f.focus(), 0)
+  }
+  // Eraser: an unsent mark goes (⌘Z brings it back); a sent one is closed on the run, so it is never sent again
+  function eraseMark(id, sent) {
+    if (sent) { sw.marks?.erase(id).then(ok => { if (!ok) toast('<span>That mark could not be erased</span>') }); return }
+    const m = P.marks.find(x => x.id === id)
+    if (!m) return
+    P.marks = P.marks.filter(x => x !== m)
+    P.mkUndo.push([m])
+    drawMarks()
+  }
+  function clearMarks() {
+    const gone = P.marks.filter(m => m.run === P.run)
+    if (!gone.length) return
+    P.marks = P.marks.filter(m => !gone.includes(m))
+    P.mkUndo.push(gone)
+    drawMarks()
+    toast(`${ic('trash', 15)}<span>Marks cleared</span><button class="btn sm ghost pj-undo">Undo</button>`)
+    toastEl?.querySelector('.pj-undo')?.addEventListener('click', () => { toastEl?.remove(); undoMarks() })
+  }
+  function undoMarks() {
+    const back = P.mkUndo.pop()
+    if (!back) return false
+    P.marks.push(...back)
+    drawMarks()
+    return true
+  }
+  $('.pj-mkchip').onclick = () => clearMarks()
+  // ⌘Z while Scribble or Eraser is out brings back what Eraser or Clear took, until the marks are sent
+  addEventListener('keydown', e => {
+    if (!P.on || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || P.tool === 'move' || !P.mkUndo.length) return
+    if (e.target.closest?.('input, textarea')) return
+    e.preventDefault(); e.stopImmediatePropagation()
+    undoMarks()
+  }, true)
+
+  // Sending: each page's picture with its marks drawn on it, a crop round each mark (its box and a quarter
+  // more, at least 256 px), the data and the words. The crew answer with drafts beside the original.
+  const loadImg = src => new Promise(ok => { if (!src) return ok(null); const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src })
+  function inkMark(g, m, W, H, lw) {
+    g.lineCap = g.lineJoin = 'round'
+    const path = () => {
+      g.beginPath()
+      if (m.kind === 'box') g.rect(m.box.x * W, m.box.y * H, m.box.w * W, m.box.h * H)
+      else m.pts.forEach(([x, y], i) => (i ? g.lineTo(x * W, y * H) : g.moveTo(x * W, y * H)))
+    }
+    path(); g.strokeStyle = 'rgba(11,11,12,.55)'; g.lineWidth = lw * 2; g.stroke()
+    path(); g.strokeStyle = '#ff5a36'; g.lineWidth = lw; g.stroke()
+  }
+  async function sendMarks(text, list) {
+    if (P.markBusy || !sw.marks) return
+    P.markBusy = true
+    root.querySelector('.mk-note')?.blur()
+    try {
+      const shots = {}, crops = {}
+      for (const page of new Set(list.map(m => m.page))) {
+        const im = await loadImg(await Promise.resolve(sw.thumb?.(page, 0.6)).catch(() => null) || (P.thumbs.get(page)?.startsWith('data:') ? P.thumbs.get(page) : null))
+        if (!im) continue
+        const W = im.naturalWidth, H = im.naturalHeight, c = document.createElement('canvas')
+        c.width = W; c.height = H
+        const g = c.getContext('2d')
+        g.drawImage(im, 0, 0)
+        for (const m of list.filter(m => m.page === page)) inkMark(g, m, W, H, Math.max(3, W / 240))
+        const s = Math.min(1, 1024 / W), o = document.createElement('canvas')
+        o.width = Math.round(W * s); o.height = Math.round(Math.min(H * s, 4000))
+        o.getContext('2d').drawImage(c, 0, 0, W * s, H * s)
+        shots[page] = o.toDataURL('image/jpeg', 0.8)
+        for (const m of list.filter(m => m.page === page)) {
+          const b = m.box, side = 256 * W / 1280
+          let w = Math.max(side, b.w * W * 1.5), h = Math.max(side, b.h * H * 1.5)
+          w = Math.min(w, W); h = Math.min(h, H)
+          const x0 = Math.max(0, Math.min(W - w, (b.x + b.w / 2) * W - w / 2)), y0 = Math.max(0, Math.min(H - h, (b.y + b.h / 2) * H - h / 2))
+          const cc = document.createElement('canvas'), z = Math.min(2, 768 / Math.max(w, h))
+          cc.width = Math.round(w * z); cc.height = Math.round(h * z)
+          cc.getContext('2d').drawImage(c, x0, y0, w, h, 0, 0, cc.width, cc.height)
+          crops[m.id] = cc.toDataURL('image/jpeg', 0.85)
+        }
+      }
+      const out = await sw.marks.send({ text, marks: list.map(({ id, kind, page, box, pts, note, target }) => ({ id, kind, page, box, pts, note, target })), shots, crops })
+      P.marks = P.marks.filter(m => !list.includes(m))
+      P.mkUndo = []
+      input.value = ''
+      drawMarks()
+      toast(`${ic('msg', 15)}<span>${esc((out.reply || 'On it').slice(0, 160))}</span>`)
+    } catch (err) { toast(`<span>${esc(err.message || 'The marks did not go')}</span>`) } finally { P.markBusy = false }
+  }
+  // what the run says about its marks and drafts (live, and replayed when it opens)
+  sw.on(e => {
+    if (e.type === 'reset') { P.sent.clear(); P.drafts.clear(); P.drafting.clear(); P.reads.clear(); return }
+    const run = e.run || sw.viewing
+    if (e.type === 'marks') for (const m of e.marks || []) P.sent.set(m.id, { ...m, run, status: 'open' })
+    else if (e.type === 'mark:status') { for (const id of e.ids || []) { const m = P.sent.get(id); if (m) m.status = e.status } }
+    else if (e.type === 'marks:read') { for (const r of e.reads || []) P.reads.set(r.mark, r) }
+    else if (e.type === 'draft:start') P.drafting.set(`${e.page}/${e.layer}`, { page: e.page, layer: e.layer, role: e.role, run })
+    else if (e.type === 'draft') { P.drafting.delete(`${e.page}/${e.layer}`); P.drafts.set(e.id, { id: e.id, page: e.page, layer: e.layer, role: e.role, html: e.html, marks: e.marks || [], run, image: null }) }
+    else if (e.type === 'draft:failed') { P.drafting.delete(`${e.page}/${e.layer}`); if (P.on && e.message !== 'stopped') toast(`<span>The draft did not come: ${esc(String(e.message || '').slice(0, 80))}</span>`) }
+    else if (e.type === 'draft:closed') P.drafts.delete(e.id)
+    else return
+    if (!P.on) return
+    clearTimeout(P.mkSoon)
+    P.mkSoon = setTimeout(() => { renderStage(); renderList(); if (P.sel && !find(P.sel)) select(null); else renderInsp() }, 120)
+  })
+
   function toast(html) {
     toastEl?.remove()
     const t = toastEl = document.createElement('div')
@@ -1195,6 +1429,8 @@ export function makeProject({ sw, C, root }) {
   addEventListener('keydown', e => {
     if (!P.on || e.defaultPrevented || e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return
     if (window.SwarmUI?.open?.() || document.querySelector('.hm-menu')) return
+    if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 's' || e.key === 'e') && !hosted()) { e.preventDefault(); return setTool(e.key === 's' ? 'scribble' : 'eraser') }
+    if (e.key === 'Escape' && P.tool !== 'move') { e.preventDefault(); e.stopPropagation(); return setTool('move') }
     if (e.key === 'Escape' && P.layer) { e.preventDefault(); e.stopPropagation(); pickLayer(null); return }
     if (e.key === 'Escape' && P.sel) { e.preventDefault(); e.stopPropagation(); select(null) }
     if (e.key === 'Enter' && P.sel) { e.preventDefault(); openItem(find(P.sel)) }
