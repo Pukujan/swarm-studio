@@ -1,6 +1,6 @@
 # 27. The plan is a conversation
 
-Status: proposal (2026-11-11). Built so far: spec 21, `engine/planshape.mjs` (PR 280) and `engine/discuss.mjs`
+Status: agreed (2026-11-11, owner: "ok go"). Built so far: spec 21, `engine/planshape.mjs` (PR 280) and `engine/discuss.mjs`
 (PR 281: read intent, one turn, write a brief). This spec grows `discuss.mjs` into `engine/talkplan.mjs`. The chat
 store, references, media and marks are spec 29 (`29-chats-references-marks.md`), which uses the turn logic here.
 
