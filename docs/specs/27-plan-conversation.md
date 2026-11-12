@@ -1,6 +1,8 @@
 # 27. The plan is a conversation
 
-Status: proposal (2026-11-11). Nothing in it is built yet beyond what spec 21 and `engine/planshape.mjs` hold.
+Status: proposal (2026-11-11). Built so far: spec 21, `engine/planshape.mjs` (PR 280) and `engine/discuss.mjs`
+(PR 281: read intent, one turn, write a brief). This spec grows `discuss.mjs` into `engine/talkplan.mjs`. The chat
+store, references, media and marks are spec 29 (`29-chats-references-marks.md`), which uses the turn logic here.
 
 ## The problem, in plain words
 
@@ -14,7 +16,7 @@ predetermined pipeline. The owner's words:
 
 So, before anything is built, painted or paid for, the planner agent and the person **decide together** in the
 left chat. The plan is what that conversation decided. The pipeline (which cards exist, what art is painted,
-which engine, whether Meshy is involved, the price) is worked out from the approved plan, not chosen ahead of it.
+which engine, whether Meshy is involved, the price) is worked out from the locked spec, not chosen ahead of it.
 
 ## The loop
 
@@ -24,12 +26,12 @@ idea ─► planner reads it ─► one question that matters, with options and 
            └───────────────────────────── decisions so far ◄────────────────────────────────┘
                                      │  enough decided
                                      ▼
-                     the plan in plain words  ─►  Approve  ─►  the plan is made from the decisions
+                     the plan in plain words  ─►  Lock  ─►  the plan is made from the decisions
                                      │                         (cards, art list, engine, price), then the
                                      └─ Keep talking            cheap previews; nothing costly before Lock
 ```
 
-1. **Read.** The planner reads the idea and says back, in one sentence, what it understood ("A tiny real-time
+1. **Read.** `readIntent` (from `discuss.mjs`) first decides build, talk or unsure. Then the planner reads the idea and says back, in one sentence, what it understood ("A tiny real-time
    strategy game about an ant colony, for Godot 4.").
 2. **Ask only what matters.** At most one question at a time, and only those this idea leaves open. There is
    no fixed list of eight. "Army of ants, rts" already answers the genre and the cast. The open questions are
@@ -40,13 +42,18 @@ idea ─► planner reads it ─► one question that matters, with options and 
    planner marks the option it recommends and says why in one short clause.
 4. **Questions both ways.** The person can ask anything ("what is fog of war?", "can it run in the browser
    too?"). The planner answers, then goes back to the open question.
-5. **The plan in plain words.** Once nothing important is open, the planner writes the plan as a short
-   paragraph, the same `planSummary` the Plan board shows. Two buttons: **Approve** and **Keep talking**.
-6. **Approve is the only start.** Approving turns the decisions into the plan (below) and opens the Plan
-   board. Nothing is painted or built before it.
-7. **Change anything by saying so.** "Make it 3D" or "no queen" in the chat later reopens that decision. The
-   planner says what it changes, including the new price, and the plan is re-planned in place. This is the
-   same `replan` as **Not what I asked for** on the first picture.
+5. **Either side leads.** The person can lead ("units first, here is a picture of the ants I mean") and the
+   planner follows, or say "you decide" and the planner leads with its recommendations. A picture, link,
+   video or sound the person adds is read as a reference for the open decision (spec 29). The planner can
+   show a mood board back.
+6. **The spec in plain words.** Once nothing important is open, the planner writes the spec as a short
+   paragraph, the same `planSummary` the Plan board shows. The spec is **Open** while it is being talked about.
+   Two chips: **Lock** and **Keep talking**.
+7. **Only a locked spec builds.** Locking turns the decisions into the plan (below) and opens the Plan board.
+   Nothing is painted or built from an open spec.
+8. **Change anything by saying so.** "Make it 3D" or "no queen" later reopens that decision and **unlocks**
+   the spec. The planner says what changes, including the new price. Locking again re-plans the same plan in
+   place, with the same `replan` as **Not what I asked for** on the first picture.
 
 ## Decisions, not answers
 
@@ -84,10 +91,10 @@ the decisions, and editing a card is the same as saying that decision in the cha
 ## Where to start: the planner suggests, the panel shows
 
 The game Plan board stays (owner: "i did like that panel a lot"). Only the source of its content changes: the
-conversation and the approved plan. Its card set fits the game, so an RTS shows Units, Buildings, Resources and
+conversation and the locked spec. Its card set fits the game, so an RTS shows Units, Buildings, Resources and
 Map, not Cast with heroes and weapons.
 
-After Approve, in game mode, the planner suggests **where to start**, with one line on why, and the person
+After Lock, in game mode, the planner suggests **where to start**, with one line on why, and the person
 picks. The suggestions are chips, never the only way: the person can say something else.
 
 | Start | Opens in the panel | Suggested when |
@@ -109,18 +116,23 @@ are in, so the map next, or a tiny slice to try them?").
 The Make box's "don't build yet, let's talk" (a site or an app: grill deeper, then a brief with **Build** and
 **Keep talking**) is the same loop with a different ending. There is one mechanism, not two:
 
-- `engine/talkplan.mjs`: `start({ kind, idea })`, `say(talk, text)` → `{ turns, decisions, brief, state }`,
-  `approve(talk)`. One planner call per turn, through `streamChat` and the planner role, with a JSON reply
-  `{ say, ask?: { key, q, options: [{ label, gets, costs, time, recommended? }] }, decide?: {…}, brief? }`
-  that is validated like `readShape`.
-- Routes: `POST /api/talk { kind, idea }` → a talk; `POST /api/talk/:id { say }` → the next turn;
-  `POST /api/talk/:id/approve`. A site or app approve starts the build from the brief. A game approve calls
-  `planStore.create` with the decisions and opens the Plan board.
+- `engine/talkplan.mjs` is `engine/discuss.mjs` renamed and grown, with its tests kept passing.
+  `readIntent`, `discuss` and `writeBrief` stay. New: `say(chat, input)` → the next turn plus any decisions,
+  `lock(chat)` and `unlock(chat, key)`. One planner call per turn, through `streamChat` and the planner role,
+  with a JSON reply `{ say, ask?: { key, q, options: [{ label, gets, costs, time, recommended? }] }, decide?:
+  {…}, spec? }` that is validated like `readShape`.
+- The talk is the **chat record** of spec 29 §Store (turns, decisions, spec, refs, marks, state `open | locked`),
+  kept in `$HERMES_HOME/swarm-studio/chats/<id>/`. Its id is the chat id. This spec writes only its turns,
+  decisions, spec and state.
+- Routes: `POST /api/talk { kind, said }` → a chat; `POST /api/talk/:id { said, refs? }` → the next turn;
+  `POST /api/talk/:id/lock` and `/unlock`. These replace `/api/discuss/read` and `/api/discuss`, which stay as
+  aliases until the web side moves. A site or app lock starts the build from the spec. A game lock calls
+  `planStore.create` (or `replan`, when the chat already has a plan) and opens the Plan board.
 - The fixed question lists (`engine/intake.mjs` GUIDES, `PLAN_QUESTIONS`) become the fallback when no planner
   model answers, so the studio still works offline.
-- Where the talk lives (the Make-box session's chat store): the first text opens a chat-only session, which
-  moves into the project when a build starts. Chats are grouped by Design, App, Game and Video. A game talk is
-  in the Game group and is joined to its plan id after Approve.
+- Where the chat lives (spec 29): the first text opens a chat of its own, not a run, not a plan and not listed
+  in Projects. On build it moves into the project (`<project>/chats/`), grouped by Design, App, Game and
+  Video. A game chat holds its plan id after the first lock.
 - Owners: the left-chat UI and the site and app briefs belong to the Make-box session ("catalog PR and UX
   fixes"). `talkplan.mjs`, the game decisions → plan mapping and this spec belong to the game-planner session.
 
@@ -128,7 +140,7 @@ The Make box's "don't build yet, let's talk" (a site or an app: grill deeper, th
 
 All of it is in the left chat: the planner's line, the options as chips (the recommended one first), and a
 free-text reply. Names only, no tooltips, no helper sentence at rest. A chip's trade-off is its second line,
-shown only on the open question. Approve and Keep talking are the two chips under the plan paragraph. The Plan
+shown only on the open question. Lock and Keep talking are the two chips under the plan paragraph. The Plan
 board itself is unchanged.
 
 ## Worked example: Army of Ants
@@ -153,9 +165,9 @@ board itself is unchanged.
 > **Planner:** Army of Ants: a tiny real-time strategy (RTS) game for the browser, Godot later. 4 units (Ant
 > worker, Ant soldier, Ant scout, Ant queen), 3 buildings, 2 resources, 1 map with fog of war, seen top-down.
 > Enemy: endless waves of red fire ants. Fights are bites and charges, no guns. Art: 2D sprites on a magenta
-> key, about 15 pictures, no credits. *Approve* · *Keep talking*
+> key, about 15 pictures, no credits. *Lock* · *Keep talking*
 
-Approve opens the Plan board with the RTS cards, a gate that reads **Lock · 15 pictures**, and a first
+Lock opens the Plan board with the RTS cards, a gate that reads **Lock · 15 pictures**, and a first
 picture of the Ant worker on magenta.
 
 ## Slices
@@ -165,5 +177,5 @@ picture of the Ant worker on magenta.
 2. The left-chat turns and chips for a game, behind the Game kind (a day).
 3. The Make box's site and app endings on the same talk (Make-box session).
 4. "Change X" in the chat re-plans an existing plan in place (half a day).
-5. Where to start: the planner's suggestion chips after Approve, each opening its part of the Plan board
+5. Where to start: the planner's suggestion chips after Lock, each opening its part of the Plan board
    (the unit or cast sheet, map tiles, a tiny slice build) (a day).
