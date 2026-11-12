@@ -137,3 +137,16 @@ preview is not the way to play:
 
 The **Open in Godot** action itself (open `ports/godot/` in the person's own Godot) is not built yet. It
 comes with the first starter or add-on that needs it.
+
+## The game kit
+
+`web/kit-game.js` exports `gameKit`, the Plan board behind spec 37's kit contract. The board itself is
+unchanged:
+- **`plan.sections`**: the board's Starter, Systems and Plan artboards. The board draws them
+  (`render: null`), and `inspect` selects them there.
+- **`proposal`**: the Lock price.
+- **`lock`**: the plan's gate and its starter. It is null until the plan is locked.
+- **`build`**: the board's own gate. It shows Lock with the price first, then Build.
+
+`web/plan.js` now also exposes `plan` and `gate`. The kit is listed in `web/kits.js` when that file
+exists (spec 37).
