@@ -293,3 +293,31 @@ test('/api/talk: the ants talk over HTTP, locked into a plan; locking again re-p
     assert.equal((await fetch(`${base}/api/talk/c-0000000000`)).status, 404)
   } finally { srv.close(); rmSync(dir, { recursive: true, force: true }) }
 })
+
+test('nothing changed: a question after the spec gets an answer, not the spec again', async () => {
+  const { chat } = await talkAnts()
+  const offline = await say(chat, { said: 'what is fog of war?' }, { env: NO_GODOT })
+  assert.match(offline.text, /A planner model answers questions/)
+  assert.deepEqual(offline.options.map(o => o.id), ['lock', 'talk'])
+  lock(chat, { env: NO_GODOT })
+  const model = async () => JSON.stringify({ say: 'Fog of war hides what your ants have not seen.', decide: {}, ask: null })
+  const t = await say(chat, { said: 'what is fog of war?' }, { env: NO_GODOT, model })
+  assert.equal(t.text, 'Fog of war hides what your ants have not seen.')
+  assert.equal(t.options, undefined)
+  assert.equal(chat.state, 'locked')
+})
+
+test('the web side: a game idea opens the talk beside a draft board, and Lock is the chat\'s', () => {
+  const read = f => readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8')
+  assert.match(read('home.js'), /make\.k === 'game' && !hosted\(\)\) \{ closePop\(\); input\.value = ''; return C\.talkGame\(\{ text \}\) \}/)
+  assert.match(read('home.js'), /chat\.kind === 'game'\) return C\.talkGame\(/)
+  const canvas = read('canvas.js')
+  assert.match(canvas, /if \(talk\.kind === 'game'\) return gameSay\(\{ said: text \}\)/)
+  assert.match(canvas, /talkPost\('\/api\/talk', \{ kind: 'game', said \}\)/)
+  assert.match(canvas, /\/lock`\)/)
+  assert.match(canvas, /<small>\$\{esc\(o\.why\)\}<\/small>/, 'the trade-off is the second line')
+  const plan = read('plan.js')
+  assert.match(plan, /primary\.onclick = \(\) => \(P\.draft \? sw\.talk\?\.lock\?\.\(\) : gate\(\)\)/)
+  assert.match(plan, /bd\.inspector\(!P\.draft && /, 'a draft has no inspector')
+  assert.match(read('studio.js'), /C\.talkGame = /)
+})

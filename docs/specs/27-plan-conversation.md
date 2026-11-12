@@ -198,6 +198,20 @@ picture of the Ant worker on magenta.
   the plan keeps them as `decided`.
 - The left-chat UI (slice 2) is not built yet, and `/api/discuss` still serves the web side.
 
+### Slice 2, built (2026-11-12)
+
+- A game idea from the Make box opens the talk in the left chat. The Plan board beside it shows the plan as
+  it stands, read-only, and each game turn from `/api/talk` carries it as `draft`. Before, the idea opened a
+  popup of fixed questions.
+- The open question's options are one per row, with the trade-off as the second line. The spec ends with
+  **Lock** and **Keep talking**, and the board's top-bar button reads **Lock** and does the same.
+- Locking makes the plan, or re-plans the same plan, and the board opens on it with its gate
+  (**Lock · 15 pictures**).
+- After that, a change said in the chat ("make it 3d") reopens the spec and gives the new price. A question
+  that changes nothing gets the answer alone. Without a planner model it gets "A planner model answers
+  questions".
+- A game chat reopened from Chats comes back beside its board: the plan once it has one, the draft before.
+
 ## Slices
 
 1. `engine/talkplan.mjs` and the routes, with the game ending into `planStore.create`. Tests: the ants talk

@@ -1771,6 +1771,8 @@ function talkStart({ text = '', kind = 'site', build, blank = false, said = [], 
   for (const m of said) { talk.said.push(m); last = m.who === 'hermia' ? botMsg(m.text) : feed(null, m.text, 'you') }
   if (brief) { talk.said.push({ who: 'you', text: brief }); return talkBrief(brief, '', what, sheet) }
   if (text) return talkSay(text)
+  // a game chat reopened: its open question's chips come back under the planner's last words
+  if (kind === 'game' && chat) return gameResume(last)
   // an old chat reopened: its words are back, and the dock goes on from them
   if (last && said.at(-1)?.who === 'hermia') talkActs(last)
   els.brief.focus({ preventScroll: true })
@@ -1779,6 +1781,7 @@ function talkStart({ text = '', kind = 'site', build, blank = false, said = [], 
 const saidOf = chat => (chat?.turns || []).filter(t => t.who !== 'crew').map(t => ({ who: t.who === 'planner' ? 'hermia' : 'you', text: t.text }))
 const talkEnd = () => { talk.on = false; talk.busy = false; talkDock(false); els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove()) }
 async function talkSay(text, brief = false) {
+  if (talk.kind === 'game') return gameSay({ said: text })
   if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
   els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
   const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
@@ -1793,6 +1796,64 @@ async function talkSay(text, brief = false) {
   if (j.brief) return talkBrief(j.brief, j.route)
   talk.said.push({ who: 'hermia', text: j.reply })
   talkActs(botMsg(j.reply))
+}
+// ---------- a game talk (docs/specs/27-plan-conversation.md, server/talk.mjs): the planner asks only
+// what the idea leaves open, each option with what it gets, costs and takes (its second line, on the
+// open question only); the plan takes shape on the board beside the chat. Lock makes the plan, or
+// re-plans it in place, and opens it; saying a change later ("make it 3d") reopens the spec.
+const talkPost = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })
+  .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j })
+async function gameSay({ said = '', pick = '', label = '' }) {
+  if (talk.busy) return
+  const text = said || label
+  if (text) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
+  els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
+  const wait = botMsg('…', true)
+  talk.busy = true
+  try {
+    const j = talk.chat ? await talkPost(`/api/talk/${encodeURIComponent(talk.chat)}`, { said, pick }) : await talkPost('/api/talk', { kind: 'game', said })
+    if (!talk.on) return
+    talk.chat = j.chat.id
+    talk.said.push({ who: 'hermia', text: j.turn.text })
+    gameActs(botMsg(j.turn.text), j.turn)
+    if (j.draft) window.swarmCosmos?.planDraft?.(j.draft)
+  } catch (err) { if (talk.on) botMsg(err.message || 'Hermia did not answer. Say it again.') } finally { talk.busy = false; wait.remove() }
+}
+// the open question's options, or Lock and Keep talking under the spec
+function gameActs(item, turn) {
+  const opts = turn?.options || []
+  if (!item || !opts.length) return
+  const spec = opts.some(o => o.id === 'lock')
+  const acts = document.createElement('div')
+  acts.className = spec ? 'chips talk-acts' : 'talk-acts talk-opts'
+  acts.innerHTML = opts.map((o, i) => `<button type="button" data-pick="${esc(o.id)}"${spec && !i ? ' class="primary"' : ''}>${esc(o.label)}${!spec && o.why ? `<small>${esc(o.why)}</small>` : ''}</button>`).join('')
+  acts.onclick = e => {
+    const b = e.target.closest('[data-pick]')
+    const o = b && opts.find(x => x.id === b.dataset.pick)
+    if (!o || talk.busy) return
+    if (o.id === 'lock') return gameLock()
+    gameSay({ pick: o.id, label: o.label })
+  }
+  item.append(acts)
+}
+async function gameResume(last) {
+  const j = await api(`/api/talk/${encodeURIComponent(talk.chat)}`).then(r => r.ok ? r.json() : null).catch(() => null)
+  if (!j?.chat || !talk.on) return
+  const turn = j.chat.turns.at(-1)
+  if (turn?.who === 'planner' && j.chat.state !== 'locked') gameActs(last, turn)
+  if (j.draft && !j.chat.plan) window.swarmCosmos?.planDraft?.(j.draft)
+  els.brief.focus({ preventScroll: true })
+}
+// only a locked spec builds: the plan is made (or re-planned, the same plan) and the board opens on it
+async function gameLock() {
+  if (talk.busy || !talk.chat) return
+  els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
+  talk.busy = true
+  try {
+    const j = await talkPost(`/api/talk/${encodeURIComponent(talk.chat)}/lock`)
+    botMsg('Locked')
+    if (j.plan?.id) window.swarmCosmos?.plan?.(j.plan.id, true)
+  } catch (err) { botMsg(err.message) } finally { talk.busy = false }
 }
 // under Hermia's latest answer: Build, which writes the brief first (nothing starts yet)
 function talkActs(item) {
@@ -6911,7 +6972,7 @@ window.swarm = {
   openRun, setView, loadFiles, focusPage, openPlayer,
   // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
-  readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },
+  readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, lock: () => (talk.on && talk.kind === 'game' ? gameLock() : null), get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },
   // a replay started from ☰ → Replay ends when the deck is left
   stopReplay,
   // the project's canvas is being zoomed or panned: page swaps and screenshots here wait for it too

@@ -9,7 +9,7 @@ import { makeBoard } from './board.js'
 export function makePlan({ sw, C, root }) {
   const esc = sw.esc
   const base = () => sw.base || ''
-  const P = { on: false, id: null, plan: null, sel: null, framed: false, writing: null, saving: null, poll: null, cell: null }
+  const P = { on: false, id: null, plan: null, sel: null, framed: false, writing: null, saving: null, poll: null, cell: null, draft: false }
 
   // the stage, camera, inspector, Esc and toast are the shared board (web/board.js)
   const bd = makeBoard({ root, cls: 'project plan', label: 'Plan', fit: [0.3, 1.25], on: () => P.on, selected: () => !!P.sel, clear: () => select(null) })
@@ -48,7 +48,8 @@ export function makePlan({ sw, C, root }) {
   primary.className = 'toggle pl-primary'
   primary.innerHTML = '<span class="t"></span>'
   bar?.querySelector('.spacer')?.after(primary)
-  primary.onclick = () => gate()
+  // while the plan is still a talk (spec 27), Lock is the chat's Lock
+  primary.onclick = () => (P.draft ? sw.talk?.lock?.() : gate())
 
   // ---------- data
   const api = (path, opts) => sw.api(path, opts).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j })
@@ -125,17 +126,17 @@ export function makePlan({ sw, C, root }) {
       ${closeups ? `<section class="pj-sec pl-close" data-sec="close"><span class="al">Close-ups</span><div class="abs">${closeups}</div></section>` : ''}</div>`}`
     applyCam()
     const firstKey = p.first && (p.art?.sprites?.length ? `sp:${p.first.name}` : `vw:${p.first.name}:front`)
-    if (firstKey && P.checked !== `${p.id}:${p.first.src}` && !P.sel) { P.checked = `${p.id}:${p.first.src}`; P.sel = firstKey }
+    if (!P.draft && firstKey && P.checked !== `${p.id}:${p.first.src}` && !P.sel) { P.checked = `${p.id}:${p.first.src}`; P.sel = firstKey }
     if (!P.framed && world.offsetWidth && !writing) { P.framed = true; frameAll(false) }
     renderInsp()
     // while the crew paint, look again every few seconds
     clearTimeout(P.poll)
-    if (P.on && painting(p)) P.poll = setTimeout(load, 3000)
+    if (P.on && !P.draft && painting(p)) P.poll = setTimeout(load, 3000)
   }
   function renderPrimary() {
     const p = P.plan, pr = price()
     const busy = p?.build?.state === 'building'
-    const label = !p ? '' : busy ? 'Building' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${cost(pr.credits, pr)}`
+    const label = !p ? '' : P.draft ? 'Lock' : busy ? 'Building' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${cost(pr.credits, pr)}`
     primary.disabled = busy
     primary.querySelector('.t').textContent = label
     primary.classList.toggle('pri', !!p)
@@ -160,8 +161,9 @@ export function makePlan({ sw, C, root }) {
   function renderInsp() {
     const p = P.plan
     const c = P.sel?.startsWith('card:') && p?.cards.find(x => `card:${x.id}` === P.sel)
-    const pic = !c && P.sel && p ? picInsp(p, P.sel) : ''
-    bd.inspector(!!(c || pic))
+    const pic = !c && P.sel && p && !P.draft ? picInsp(p, P.sel) : ''
+    // a draft is changed by saying so in the chat: no inspector until it is locked
+    bd.inspector(!P.draft && !!(c || pic))
     if (insp.hidden) return
     if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea')) return
     if (pic) { insp.innerHTML = pic; return }
@@ -377,6 +379,7 @@ export function makePlan({ sw, C, root }) {
     get selected() { return !!P.sel },
     async show(id, { fresh = false } = {}) {
       if (id && id !== P.id) { P.id = id; P.plan = null; P.sel = null; P.cell = null; P.framed = false }
+      if (id) P.draft = false
       P.on = true
       root.hidden = false
       crumb.hidden = false
@@ -390,6 +393,10 @@ export function makePlan({ sw, C, root }) {
       return plan.id
     },
     select,
+    // a game talk (spec 27): the board is the plan as it stands, read-only, until the chat locks it
+    talk() { Object.assign(P, { id: null, plan: null, sel: null, cell: null, framed: false, draft: true }); render() },
+    draft(plan) { if (!P.draft || !plan) return; P.plan = plan; if (P.on) render() },
+    get drafting() { return P.draft },
     // bring a section ('cards', 'sheets', 'build', 'mocks', 'world', 'close') or an artboard (its key) into view
     focus: (target, animate = true) => bd.focus(target, animate)
   }
