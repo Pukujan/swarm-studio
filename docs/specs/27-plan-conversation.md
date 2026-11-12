@@ -119,11 +119,21 @@ The Make box's "don't build yet, let's talk" (a site or an app: grill deeper, th
 - `engine/talkplan.mjs` is `engine/discuss.mjs` renamed and grown, with its tests kept passing.
   `readIntent`, `discuss` and `writeBrief` stay. New: `say(chat, input)` → the next turn plus any decisions,
   `lock(chat)` and `unlock(chat, key)`. One planner call per turn, through `streamChat` and the planner role,
-  with a JSON reply `{ say, ask?: { key, q, options: [{ label, gets, costs, time, recommended? }] }, decide?:
-  {…}, spec? }` that is validated like `readShape`.
-- The talk is the **chat record** of spec 29 §Store (turns, decisions, spec, refs, marks, state `open | locked`),
-  kept in `$HERMES_HOME/swarm-studio/chats/<id>/`. Its id is the chat id. This spec writes only its turns,
-  decisions, spec and state.
+  with a JSON reply `{ say, ask?: { key, options: [{ id, label, why, made }] }, decide?: {…}, spec? }` that is
+  validated like `readShape`. An option's `why` is its trade-off line (what you get, what it costs, how long it
+  takes). The recommended option comes first and says so in its `why`.
+- The talk is the **chat record** of spec 29 §Store: `chats/<id>/chat.json`, where the id is `c-<10 hex>` and
+  is also the talk id. This spec writes five of its fields, and spec 29 writes the rest (`refs`, `made`,
+  `marks`, media, `category`, `project`):
+  - `turns[]`: `{ id: 't1', who: 'person' | 'planner' | 'crew', at, text, options? }`. A planner turn's question
+    is its `text`, and its `options` are the chips;
+  - `decisions`: `{ key: { value, why, by: 'person' | 'planner', turn } }`;
+  - `spec`: `{ brief, open[], art[{ what, ref }], engine, time, cost, lockedAt }`;
+  - `state`: `open | locked`;
+  - `lead`: `person | planner`. "You decide" sets it to the planner, and the person picking or saying
+    something of their own sets it back.
+  Any change to a decision or a ref sets `state` back to `open` and clears `spec.lockedAt`. A game chat's
+  `plan` field holds its plan id after the first lock. Writes go through spec 29's per-chat queue.
 - Routes: `POST /api/talk { kind, said }` → a chat; `POST /api/talk/:id { said, refs? }` → the next turn;
   `POST /api/talk/:id/lock` and `/unlock`. These replace `/api/discuss/read` and `/api/discuss`, which stay as
   aliases until the web side moves. A site or app lock starts the build from the spec. A game lock calls
