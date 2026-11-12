@@ -119,3 +119,14 @@ dock reads Send. When unsure, one choice: Build now or talk first. A question ty
 added to the brief. The last step is always the brief to read and edit, with Build and Keep talking. `hermes swarm`,
 `/swarm auto` and `swarm_design` refuse a brief that says to talk first and say why.
 
+**Launch only what is there**
+> launch kit before i even build the app thats weird
+
+Said on 2026-11-11 of an App whose app step failed after the page design: the Auto summary popped up and its launch
+kit said "Flight Search is live." with the prompt pasted in as the pitch and "0 images" as a feature. The summary
+opens by itself only for a finished build with a live link; a failed or stopped one says so in the Auto panel. The
+Launch kit is offered (Auto panel, summary) only with a live link or a finished video, and the server refuses to
+write one otherwise. Its copy names the product by its brand (the nav's wordmark, "SkyLedger"), pitches it in one
+line the planner writes from the pages, lists the pages by name, never counts zeros and says "is live" only beside
+the live link. The Design deck's title is that name too, not the first page's title.
+

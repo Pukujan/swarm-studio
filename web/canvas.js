@@ -144,6 +144,18 @@ function fresh(run = null) {
   setTitle('')
 }
 
+// navbrand:start (the same lines as engine/naming.mjs; tests/naming.test.mjs runs both)
+function navBrand(html) {
+  const s = String(html || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<svg\b[\s\S]*?<\/svg>/gi, '')
+  const a = s.match(/<a\b([^>]*)>([\s\S]*?)<\/a>/i)
+  if (!a) return ''
+  const label = (a[1].match(/aria-label="([^"]{2,60})"/i) || [])[1]?.replace(/\s+(home|homepage|logo)$/i, '').trim()
+  const bits = (label ? [label] : []).concat(a[2].split(/<[^>]+>/).map(t => t.replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()))
+  const ok = bits.filter(t => (t.match(/\p{L}/gu) || []).length >= 2 && t.length <= 40 && t.split(' ').length <= 4)
+  return (ok.sort((x, y) => y.length - x.length)[0] || '').replace(/[\s—–|:·-]+$/, '')
+}
+// navbrand:end
+
 function setTitle(t) {
   S.title = t
   els.fileName.textContent = t || 'Untitled'
@@ -204,7 +216,8 @@ function on(e) {
       break
     case 'page':
       addFrame(e)
-      if (e.index === 0) setTitle(e.title)
+      // the first page's title stands in until the nav's wordmark names the product
+      if (e.index === 0 && !S.brand) setTitle(e.title)
       break
     case 'layer:plan':
       addLayer(e)
@@ -259,6 +272,8 @@ function on(e) {
       l.ms = e.ms
       // saved runs carry the finished HTML, so a file can be reopened without the stream
       if (e.html) { l.text = e.html; l.ver++ }
+      // the shared nav's wordmark is the product's name ("SkyLedger"), not the first page's title
+      if (e.page === '*' && e.layer === 'nav' && e.html && S.kind !== 'game') { const b = navBrand(e.html); if (b) { S.brand = b; setTitle(b) } }
       // whole-site edits made earlier (bigger headings, more spacing) apply to late sections too;
       // a reviewer's fix was written from the edited section, so it has them already
       if (!e.fixed && !e.kept) for (const ce of S.classEdits) restyle(l, ce)
@@ -5638,7 +5653,7 @@ function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
     if (dep?.state === 'working' && e.run) dsOpen(e.run)
     if (dep?.state === 'done' && e.url && ds.run === e.run) { ds.games = e.steps.some(s => s.id === 'games' && s.state === 'done'); setTimeout(() => dsLive(e.url), 600) }
     // the run is over: the summary card, after the live site has had a moment on screen
-    if (prev?.state === 'working' && e.state !== 'working' && prev.run === e.run) setTimeout(() => showSummary(autoM.last), ds.el && e.url ? 9000 : 1200)
+    if (prev?.state === 'working' && e.state === 'done' && e.url && prev.run === e.run) setTimeout(() => showSummary(autoM.last), ds.el ? 9000 : 1200)
   }
   renderAutoPanel()
 }
@@ -5669,7 +5684,7 @@ function renderAutoPanel() {
     <div class="ap-prompt">${esc(e.prompt || '')}</div>
     <ol>${e.steps.map(s => { const note = live(s), long = note && note.length > 90; return `<li class="${s.state}${autoM.open.has(s.id) ? ' open' : ''}" data-step="${esc(s.id)}"><i>${AUTO_ICON[s.state] || AUTO_ICON.wait}</i><span>${esc(s.label)}${note ? `<small>${linkify(note)}</small>${long ? `<button class="ap-more">${autoM.open.has(s.id) ? 'Less' : 'More'}</button>` : ''}` : ''}</span><em>${s.state === 'working' && s.t0 ? secs(Date.now() - s.t0) : s.ms ? secs(s.ms) : ''}</em></li>` }).join('')}</ol>
     ${e.url ? `<a class="ap-live" href="${esc(e.url)}" target="_blank" rel="noopener">${ico('globe')}Open the live app</a>` : e.state === 'failed' && e.message ? `<div class="ap-msg">${esc(e.message)}</div>` : ''}
-    ${e.state !== 'working' && e.run ? `<div class="ap-show"><button class="ap-sum">${ico('sparkles')}Summary</button><button class="ap-kit">${ico('message-square')}Launch kit</button></div>` : ''}`
+    ${e.state !== 'working' && e.run ? `<div class="ap-show"><button class="ap-sum">${ico('sparkles')}Summary</button>${launchable(e) ? `<button class="ap-kit">${ico('message-square')}Launch kit</button>` : ''}</div>` : ''}`
   for (const b of p.querySelectorAll('.ap-more')) b.onclick = ev => { ev.stopPropagation(); const id = b.closest('li').dataset.step; autoM.open.has(id) ? autoM.open.delete(id) : autoM.open.add(id); renderAutoPanel() }
   p.querySelector('.ap-stop')?.addEventListener('click', ev => { ev.stopPropagation(); api('/api/auto/stop', { method: 'POST' }) })
   // the header folds it to one line, out of the way of what it is showing
@@ -5682,6 +5697,8 @@ function renderAutoPanel() {
   p.querySelector('.ap-sum')?.addEventListener('click', ev => { ev.stopPropagation(); showSummary(e) })
   p.querySelector('.ap-kit')?.addEventListener('click', ev => { ev.stopPropagation(); openLaunch(e.run) })
 }
+// something to launch: a live link, or a finished promo video (a design alone is not a launch)
+const launchable = e => !!(e?.url || e?.steps?.some(s => s.id === 'video' && s.state === 'done'))
 const linkify = t => esc(t).replace(/https?:\/\/[^\s<"]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
 // the clocks tick between events
 setInterval(() => { if (autoM.last?.state === 'working' && autoM.panel && !autoM.panel.hidden) renderAutoPanel() }, 1000)
@@ -5974,14 +5991,14 @@ async function showSummary(e) {
     <div class="ss-counts">${counts.map(([k, n]) => `<div><b>${Number(n).toLocaleString()}</b><span>${k}</span></div>`).join('')}</div>
     <div class="ss-crew">${HERMIA}${crewNames.map(([n]) => Crew.avatar(n, 24)).join('')}<span>Hermia and ${f.agents || crewNames.length} crew</span></div>
     ${url ? `<div class="ss-live"><div class="ss-qr">${qr}</div><div class="ss-link"><small>Live at</small><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a><button class="ss-copy">Copy link</button></div></div>` : ''}
-    <div class="ss-actions">${url && games ? `<a class="primary ss-play" href="${esc(url.replace(/\/?$/, '/'))}play" target="_blank" rel="noopener">${ico('gamepad-2')}Play the game</a>` : ''}${url ? `<a class="ss-open" href="${esc(url)}" target="_blank" rel="noopener">${ico('globe')}Open the site</a>` : ''}<button class="ss-launch">${ico('message-square')}Open the launch kit</button></div></div>`
+    <div class="ss-actions">${url && games ? `<a class="primary ss-play" href="${esc(url.replace(/\/?$/, '/'))}play" target="_blank" rel="noopener">${ico('gamepad-2')}Play the game</a>` : ''}${url ? `<a class="ss-open" href="${esc(url)}" target="_blank" rel="noopener">${ico('globe')}Open the site</a>` : ''}${launchable({ ...e, url }) ? `<button class="ss-launch">${ico('message-square')}Open the launch kit</button>` : ''}</div></div>`
   document.body.append(el)
   const close = () => el.remove()
   el.querySelector('.ss-x').onclick = close
   closeable(el.querySelector('.ss-card'), close)
   el.onclick = ev => { if (ev.target === el) close() }
   el.querySelector('.ss-copy')?.addEventListener('click', ev => navigator.clipboard?.writeText(url).then(() => { ev.target.textContent = 'Copied' }, () => {}))
-  el.querySelector('.ss-launch').onclick = () => { close(); openLaunch(e.run) }
+  el.querySelector('.ss-launch')?.addEventListener('click', () => { close(); openLaunch(e.run) })
 }
 
 // C. The launch kit: a card per network with Post / Edit / Skip. Post opens the network's own
@@ -6001,7 +6018,7 @@ async function openLaunch(run) {
   let res = await api(`/api/runs/${encodeURIComponent(run)}/launch`).catch(() => null)
   if (res?.status === 404) res = await api(`/api/runs/${encodeURIComponent(run)}/launch`, { method: 'POST' }).catch(() => null)
   const kit = res?.ok ? await res.json() : null
-  if (!kit) { el.querySelector('.lk-wait').textContent = 'The launch kit could not be written.'; return }
+  if (!kit) { el.querySelector('.lk-wait').textContent = (res && (await res.json().catch(() => ({}))).error) || 'The launch kit could not be written.'; return }
   const gw = (await api('/api/gateway').then(r => r.json()).catch(() => ({}))).platforms || {}
   renderLaunch(el, run, kit, gw)
 }
