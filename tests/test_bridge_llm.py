@@ -109,6 +109,22 @@ class ModelCalls(unittest.TestCase):
         self.assertEqual(self.m.tool_calls(mixed)[0], "")
         self.assertEqual(self.m.tool_calls("<\uff5cDSML\uff5c note> is just text"), ("<\uff5cDSML\uff5c note> is just text", []))
 
+    def test_calls_wrapped_twice_or_in_both_formats_count_once_with_their_real_arguments(self):
+        # seen live: read_file got {} or {"arguments": …} and failed dyad's schema, a wasted turn each
+        args = lambda text: [(c["function"]["name"], json.loads(c["function"]["arguments"])) for c in self.m.tool_calls(text)[1]]
+        nested = '<tool_call>{"name": "read_file", "arguments": {"name": "read_file", "arguments": {"path": "src/App.tsx"}}}</tool_call>'
+        self.assertEqual(args(nested), [("read_file", {"path": "src/App.tsx"})])
+        as_string = '<tool_call>{"name": "read_file", "arguments": {"arguments": "{\\"path\\": \\"a.tsx\\"}"}}</tool_call>'
+        self.assertEqual(args(as_string), [("read_file", {"path": "a.tsx"})])
+        dsml_param = '<\uff5cDSML\uff5cinvoke name="read_file"><\uff5cDSML\uff5cparameter name="arguments" string="true">{"path": "b.tsx"}</\uff5cDSML\uff5cparameter></\uff5cDSML\uff5cinvoke>'
+        self.assertEqual(args(dsml_param), [("read_file", {"path": "b.tsx"})])
+        both = ('<\uff5cDSML\uff5cinvoke name="read_file">\n<tool_call>{"name": "read_file", "arguments": {"path": "c.tsx"}}</tool_call>\n'
+                '</\uff5cDSML\uff5cinvoke>\n<\uff5cDSML\uff5cinvoke name="restart_app"></\uff5cDSML\uff5cinvoke>')
+        self.assertEqual(args(both), [("restart_app", {}), ("read_file", {"path": "c.tsx"})])
+        self.assertEqual(self.m.tool_calls(both)[0], "")
+        # a real argument that happens to be called "name" is left alone
+        self.assertEqual(args('<tool_call>{"name": "rename", "arguments": {"name": "x", "to": "y"}}</tool_call>'), [("rename", {"name": "x", "to": "y"})])
+
     def test_a_stream_is_one_delta_then_usage_then_done(self):
         done = self.m.complete(Ctx(Llm('<tool_call>{"name": "run", "arguments": {"a": 1}}</tool_call>')), {"model": "worker", "tools": [{"type": "function", "function": {"name": "run"}}], "messages": []})
         lines = [x.decode() for x in self.m.sse(done)]

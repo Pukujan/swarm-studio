@@ -108,14 +108,36 @@ _DSML_PARAM = re.compile(rf'<\s*{_DSML}parameter\s+name="([^"]+)"(?:\s+string="(
 _DSML_TAG = re.compile(rf'</?\s*{_DSML}\w+[^>]*>')  # a stray tag, left when the model mixes both formats
 
 
+def _unwrap(name: str, args):
+    """Arguments the model wrapped once more ({"name": …, "arguments": {…}} or {"arguments": "<json>"}, seen
+    live) -> the arguments themselves."""
+    for _ in range(3):
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except ValueError:
+                return args
+        inner = args.get("arguments", args.get("parameters")) if isinstance(args, dict) else None
+        if inner is None or not set(args) <= {"name", "arguments", "parameters"} or args.get("name", name) != name:
+            return args
+        args = inner
+    return args
+
+
 def _call(name: str, args) -> dict:
+    args = _unwrap(name, args)
     return {"id": "call_" + uuid.uuid4().hex[:24], "type": "function",
             "function": {"name": name, "arguments": args if isinstance(args, str) else json.dumps(args)}}
 
 
 def _dsml_calls(text: str) -> tuple[str, list]:
+    """DSML invokes -> calls, and the text without them. An invoke that wraps a <tool_call> block (both
+    formats at once, seen live) is unwrapped for the JSON pass instead of counted twice."""
     calls = []
-    for m in _DSML_INVOKE.finditer(text):
+
+    def one(m):
+        if OPEN in m.group(2):
+            return m.group(2)
         args = {}
         for p in _DSML_PARAM.finditer(m.group(2)):
             value = p.group(3)
@@ -126,15 +148,17 @@ def _dsml_calls(text: str) -> tuple[str, list]:
                     pass
             args[p.group(1)] = value
         calls.append(_call(m.group(1), args))
-    return _DSML_INVOKE.sub("", text), calls
+        return ""
+    return _DSML_INVOKE.sub(one, text), calls
 
 
 def tool_calls(text: str) -> tuple[str, list]:
     """The model's answer -> (its plain text, OpenAI tool_calls). Each block's JSON is read as JSON, so a
     "</tool_call>" inside an argument (a file that mentions it) does not end the block. A block that is not
     JSON stays text; a last block with no closing tag still counts. DeepSeek's native DSML calls count too."""
-    text = text or ""
-    calls, keep, at, pos = [], [], 0, 0
+    original = text = text or ""
+    text, native = _dsml_calls(text)
+    calls, keep, at, pos = list(native), [], 0, 0
     decoder = json.JSONDecoder()
     while (start := text.find(OPEN, pos)) >= 0:
         body = start + len(OPEN)
@@ -155,9 +179,7 @@ def tool_calls(text: str) -> tuple[str, list]:
         at = pos = end
         calls.append(_call(got["name"], args))
     keep.append(text[at:])
-    rest, native = _dsml_calls("".join(keep))
-    calls += native
-    return (_DSML_TAG.sub("", rest).strip() if calls else text), calls
+    return (_DSML_TAG.sub("", "".join(keep)).strip() if calls else original), calls
 
 
 def complete(ctx, body: dict, timeout_s: float | None = None) -> dict:
