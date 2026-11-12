@@ -37,6 +37,7 @@ There is one slice in the existing store (`web/store.js`, `stateSlice`), named `
 | `page` | page id · `null` | the player's page |
 | `replay` | `false` · `true` | the deck is replaying the build as it was made |
 | `pending` | run id · `null` | a build the person started that has not streamed yet. When its `run:start` arrives, the canvas follows it |
+| `from` | a room · `null` | where the brand sheet was opened from |
 
 ### The actions
 
@@ -51,7 +52,8 @@ They live in `web/nav.js`. `step(state, action)` is pure: it returns the next st
 | `enterRoom(room)`, room `overview` `deck` `app` `video` | a run is open | room; player `closed`; replay off unless the room is `deck` |
 | `enterRoom('game', gameRun)` | the version has a game | room `game`, run = gameRun, version unchanged |
 | `openPlan(plan)` | always | room `plan`, plan; player `closed` |
-| `openBrand()` | always | room `brand`; player `closed`. Leaving it goes back to where it was opened from |
+| `openBrand()` | always | room `brand`, `from` = the room before; player `closed` |
+| `leaveBrand()` | room `brand` | back to `from`, or to `home` when that room has no build any more |
 | `play(mode, page)` | room `overview` `deck` `app`, and the run has pages | player `prototype` or `visitor`; page |
 | `playPage(page)` | the player is open | page |
 | `stopVisitor()` | player `visitor` | player `prototype` |
