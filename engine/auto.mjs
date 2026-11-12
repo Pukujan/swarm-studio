@@ -288,6 +288,8 @@ export function autoJob(d) {
       if (!step(id)) continue  // a kind picked on Projects (App, Game, Video) runs only its own steps
       if (job.stopped) { set(id, 'skipped', 'stopped'); continue }
       try { await fn() } catch (err) {
+        // the step Stop caught part way is stopped, not failed
+        if (job.stopped) { set(id, 'skipped', 'stopped'); continue }
         set(id, 'failed', String(err.message || err))
         if (needed) { job.fatal = true; break }
       }
@@ -311,8 +313,9 @@ export function autoJob(d) {
       }
     }
     job.end = Date.now()
-    job.state = job.url ? 'done' : 'failed'
-    job.message = job.url ? `live at ${job.url}` : (job.steps.find(s => s.state === 'failed')?.note || 'nothing deployed')
+    // Stop ends it as stopped: what was built is kept, and nothing failed
+    job.state = job.stopped ? 'stopped' : job.url ? 'done' : 'failed'
+    job.message = job.stopped ? 'stopped' : job.url ? `live at ${job.url}` : (job.steps.find(s => s.state === 'failed')?.note || 'nothing deployed')
     push()
   }
 
@@ -336,7 +339,7 @@ export function autoJob(d) {
       project: typeof project === 'string' ? project.slice(0, 64) : null, piece: typeof piece === 'string' ? piece : null,
       steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none') && (!Array.isArray(only) || id === 'design' || only.includes(id))).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
-    go().catch(err => { Object.assign(job, { state: 'failed', message: String(err.message || err), end: Date.now() }); push() })
+    go().catch(err => { Object.assign(job, { state: job.stopped ? 'stopped' : 'failed', message: job.stopped ? 'stopped' : String(err.message || err), end: Date.now() }); push() })
     return view()
   }
 
