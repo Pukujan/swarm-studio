@@ -25,12 +25,17 @@ def load_api():
 
 class StudioPageAttaches(unittest.TestCase):
     def setUp(self):
+        # other suites load the real bridge.py with a context; this process should hold only the fake one
+        self.held = {n: m for n, m in list(sys.modules.items()) if getattr(m, "__file__", None) and Path(m.__file__).resolve() == ROOT / "bridge.py"}
+        for n in self.held:
+            del sys.modules[n]
         self.api = load_api()
         self.calls = []
         self.api.launcher.ensure_server = lambda: (self.calls.append("ensure"), self.api.launcher._bridged({"running": True}))[1]
 
     def tearDown(self):
         sys.modules.pop("swarm_studio_fake_bridge", None)
+        sys.modules.update(self.held)
 
     def fake_bridge(self, ctx):
         b = types.ModuleType("swarm_studio_fake_bridge")
