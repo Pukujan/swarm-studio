@@ -602,9 +602,10 @@ def _send_build(body: dict, token: str) -> dict:
 
 
 def _refused_fields(exc: FeedError) -> bool:
-    """The Feed does not take the project fields yet: a 400, or a code or message about an unknown field."""
+    """The Feed does not take the newer fields yet: a 400, or a code or message about an unknown field;
+    or a 413, a body over its limit (page shots make a post bigger), so the post goes again without them."""
     text = f"{exc.code} {exc}".lower()
-    return exc.status in (400, 422) or "unknown" in text or "unrecognized" in text or "field" in text
+    return exc.status in (400, 413, 422) or "unknown" in text or "unrecognized" in text or "field" in text
 
 
 def post(r: dict, args: list[str], export, shots=None) -> str:
