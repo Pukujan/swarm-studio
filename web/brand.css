@@ -54,3 +54,31 @@ body.cosmos-brand .crew-layer, body.cosmos-brand .cbox { display: none; }
   body.cosmos-brand .br-primary { min-width: 0; padding: 0 14px; }
   .br-crumb .br-up, .br-crumb .i { display: none; }
 }
+
+/* the packs (slice 2): each card is its own ground, type, photos, voice line and button */
+.brand-sheet .br-packs { padding-bottom: 46px; }
+.brand-sheet .br-packs .abs { max-width: 1160px; gap: 34px 16px; align-items: flex-start; }
+.ab.br-pack { width: 214px; height: 262px; padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 7px; border-radius: var(--r, 8px); overflow: visible; }
+.br-pk-pics { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 4px; height: 112px; flex: none; overflow: hidden; }
+.br-pk-pics img { width: 100%; height: 100%; min-height: 0; object-fit: cover; border-radius: calc(var(--r, 8px) / 2); display: block; pointer-events: none; }
+.br-pk-pics img:first-child { grid-row: span 2; }
+.ab.br-pack b { font-size: 19px; line-height: 1.1; font-weight: 700; }
+.ab.br-pack span { font-size: 12px; line-height: 1.4; opacity: .85; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.br-pk-row { margin-top: auto; display: flex; align-items: center; gap: 10px; font-size: 11px; }
+.br-pack .br-btn { border-radius: var(--r, 6px); }
+.brand-sheet .ab.br-pack > em { white-space: normal; width: 214px; line-height: 1.35; }
+.brand-sheet .ab.br-pack.sug > em { color: var(--text); }
+
+/* what a pack brought: its voice, its pictures, its storyboard */
+.ab.br-voice { width: 420px; min-height: 120px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.ab.br-voice b { font-size: 20px; line-height: 1.2; font-weight: 600; }
+.ab.br-pics { width: 560px; height: 180px; padding: 0; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; background: transparent; border: 0; }
+.ab.br-pics img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; display: block; pointer-events: none; }
+.ab.br-frame { width: 200px; height: 140px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.ab.br-frame i { height: 46px; border-radius: 4px; background: color-mix(in srgb, currentColor 10%, transparent); }
+.ab.br-frame b { font-size: 13px; line-height: 1.25; font-weight: 600; }
+.ab.br-frame u { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, currentColor 14%, transparent); }
+.ab.br-frame u:last-of-type { width: 60%; background: var(--a); opacity: .7; }
+.br-parts { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }
+.br-parts .btn { height: 32px; font-size: 12px; }
+.br-parts .btn:first-child { flex-basis: 100%; justify-content: center; }
