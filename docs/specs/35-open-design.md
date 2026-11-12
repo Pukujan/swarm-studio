@@ -341,3 +341,38 @@ Swarm must never drive its runs (section 1).
    `node --test tests/brandpacks.test.mjs`.
 
 Locked brands are copies, so a re-sync changes only new picks, never a brand someone has already locked.
+
+## 7. Built: the Deck kind, data and engine (2026-11-12)
+
+A deck is 16:9 slides made from the project's brand and its story. This part is the data and the engine; the
+kit on the board (`web/kit-deck.js`) comes next, on the spec 37 contract.
+
+- **The looks (`engine/opendesign/decks.json`, 24 KB):** html-ppt's themes (MIT, Copyright (c) 2026 lewis,
+  shipped in Open Design under `design-templates/html-ppt/`) converted by `scripts/import-od-decks.mjs`.
+  - The brand gives the colours and fonts. A look gives the shape: corners, shadows, letter spacing and its
+    decoration (a twelve-column grid, a glow, thick borders). Colours in the decoration that were the theme's
+    own tokens now point at the brand's.
+  - 25 of the 36 themes are kept. The eleven left out (Dracula, Nord, Catppuccin and the like) differ only in
+    colour, which the brand replaces. The plain one (Minimal White) is first and takes the brand's corners;
+    the others keep their own, so a Bauhaus deck stays square.
+  - Each look carries its source path; the commit and licence are in the file's header, `NOTICE`,
+    `CREDITS.md` and `LICENSE.html-ppt`.
+- **The engine (`engine/deck.mjs`):**
+  - The outline, one line per slide, starts from the film storyboard's beats when there are any, else the
+    brand sheet's storyboard frames, else the brief. A title slide is always first and the call to act last.
+  - Nine layouts in html-ppt's class names: title, section, points, steps, stats, two columns, quote,
+    picture, end. Text is escaped; a picture must be `https://` or one of the project's files.
+  - The HTML export is one file: styles and the present-mode script inline, fonts from Google Fonts (the
+    only thing it fetches, like a built site). Keys: arrows, space, Page Up/Down, Home/End, F for full
+    screen, Esc. The slide number is in the address, so a link opens on that slide.
+  - The PDF is the same file printed by the headless Chrome that `engine/seo.mjs` finds for page shots: one
+    1920 × 1080 page a slide, no new download. No Chrome, no PDF button; nothing breaks.
+- **Left out: PowerPoint.** A clean `.pptx` needs a zip writer and a shape-by-shape slide model. A `.pptx`
+  made of slide pictures would be easy, but it cannot be edited, which is the only reason to want one. The
+  PDF and the HTML cover showing and sending.
+- **Not taken from html-ppt:** its runtime (`runtime.js`), animations, presenter window, theme switcher and its
+  31 single-page and 15 full-deck templates. The templates are mostly Chinese demo text; our layouts are
+  written fresh in the same class names, so the looks' decoration still applies.
+
+Re-syncing is the same as for the packs: sparse-checkout `/design-templates/html-ppt/` too, run
+`node scripts/import-od-decks.mjs <checkout>`, read the diff, and run `node --test tests/deck.test.mjs`.
