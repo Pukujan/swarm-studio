@@ -87,7 +87,7 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   // one page type per build, away from the last builds' types and colours
@@ -108,7 +108,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     color: AGENT_COLORS[i]
   }))
 
-  emit('run:start', { brief, agents: pool, plannerModel, workerModel, ...(base ? { extend: true, ask, kept } : {}) })
+  emit('run:start', { brief, agents: pool, plannerModel, workerModel, ...(base ? { extend: true, ask, kept } : {}), ...(base && resume ? { resume: true } : {}) })
   // the last version as it stands, put back on the canvas as it was: nothing is rebuilt
   if (base) for (const c of base.carry) emit(c.type, c.data)
   else emit('pagetype', { key: type, name: PAGE_TYPES[type].name })
@@ -140,8 +140,9 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
 
   function planPage(page, attempt = 1) {
     const parser = lineParser(obj => addLayer(obj, page.id))
-    return new Promise(r => setTimeout(r, attempt === 1 ? (page.index - kept) * STAGGER_MS : 0))
+    return new Promise(r => setTimeout(r, attempt === 1 ? Math.max(0, page.index - kept) * STAGGER_MS : 0))
       .then(() => {
+        if (signal?.aborted) throw new Error('stopped')
         emit('page:planning', { page: page.id })
         return streamChat(provider, {
           trace: { kind: 'plan', page: page.id },
@@ -165,7 +166,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         }
         emit('page:planned', { page: page.id, layers: page.layers.length, ms: elapsed() })
       })
-      .catch(err => emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }))
+      .catch(err => { if (!signal?.aborted) emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }) })
   }
 
   const onSitemap = obj => {
@@ -262,24 +263,36 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     }
   }
 
-  const planning = (base ? extendPlan() : sitemap())
+  // Resume (a build that was stopped): no planner call; the sections it did not finish are built
+  // now, and a page stopped before it was planned is planned. Everything finished stays as it is.
+  async function resumePlan() {
+    for (const layer of [...plan.shared, ...plan.pages.flatMap(p => p.layers)]) {
+      if (layer.html) continue
+      stats.planned++
+      queue.push({ kind: 'build', layer })
+    }
+  }
+  const unplanned = () => resume ? plan.pages.filter(p => !p.layers.length) : []
+  const planning = (base ? (resume ? resumePlan() : extendPlan()) : sitemap())
     .then(() => {
       emit('sitemap:done', { ms: elapsed(), pages: plan.pages.length })
       // page planners need the whole page list (for links), so they start here
-      for (const page of plan.pages.slice(kept)) pagePlanners.push(planPage(page))
+      for (const page of [...unplanned(), ...plan.pages.slice(kept)]) pagePlanners.push(planPage(page))
       return Promise.all(pagePlanners)
     })
     .then(() => emit('plan:done', { ms: elapsed(), pages: plan.pages.length, layers: stats.planned }))
     .catch(err => {
-      emit('error', { where: 'planner', message: String(err.message || err) })
+      if (!signal?.aborted) emit('error', { where: 'planner', message: String(err.message || err) })
     })
     .finally(() => queue.close())
 
   // --- workers: each agent loops over the queue until the plan is finished and drained
   async function work(agent) {
     for (;;) {
+      // stopped: no more sections are taken
+      if (signal?.aborted) break
       const task = await queue.next()
-      if (!task) break
+      if (!task || signal?.aborted) break
       await (task.kind === 'fix' ? fixLayer(agent, task.layer, task.ask) : buildLayer(agent, task.layer))
     }
     emit('agent:idle', { agent: agent.id, reason: 'done' })
@@ -324,6 +337,8 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         html: text
       })
     } catch (err) {
+      // stopped: the section is left unbuilt (Resume builds it), not failed
+      if (signal?.aborted) return
       stats.failed++
       emit('layer:failed', { page: layer.page, layer: layer.id, agent: agent.id, message: String(err.message || err) })
     }
@@ -346,11 +361,17 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       emit('layer:done', { page, layer: layer.id, agent: agent.id, ms: Math.round(performance.now() - started), done: stats.done, planned: stats.planned, html: layer.html, fixed: true })
     } catch (err) {
       stats.failed++
-      emit('layer:failed', { page, layer: layer.id, agent: agent.id, message: String(err.message || err), keep: layer.html })
+      emit('layer:failed', { page, layer: layer.id, agent: agent.id, message: signal?.aborted ? 'stopped' : String(err.message || err), keep: layer.html })
     }
   }
 
   await Promise.all([planning, ...pool.map(work)])
+  // stopped: the last word is run:stopped (what was built is kept); no run:done, so nothing more starts
+  if (signal?.aborted) {
+    const result = { ms: elapsed(), ...stats, pages: plan.pages.length, stopped: true }
+    emit('run:stopped', result)
+    return { plan, result }
+  }
   const result = { ms: elapsed(), ...stats, pages: plan.pages.length, ...(base ? { extend: true, kept, added: added.map(p => ({ id: p.id, title: p.title })), changed: changed.map(c => c.layer.id) } : {}) }
   emit('run:done', result)
   return { plan, result }

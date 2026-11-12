@@ -130,3 +130,15 @@ write one otherwise. Its copy names the product by its brand (the nav's wordmark
 line the planner writes from the pages, lists the pages by name, never counts zeros and says "is live" only beside
 the live link. The Design deck's title is that name too, not the first page's title.
 
+**Stop the crew**
+> anyway to stop an ongoing swarm or agents? wish there was ? lol i cant stop them once they start
+
+Said on 2026-11-11. One **Stop**, in the top bar beside the work chip, the same place in Projects, the Overview, the
+Design deck and the other rooms, shown whenever agents work. Inside a project it stops everything in flight for that
+project (the layout pass, pictures not started yet, review and fix passes, a film, an app or game build, Auto); on
+Projects it stops all of it. No confirmation. Builders take no more sections and the model calls in flight are
+aborted; what is built is kept and the build ends with `run:stopped`. The deck's chat says how much is kept, offers
+**Resume** (the next version builds only what was left) and takes a change in the dock. A picture already with the
+image model is kept when it lands (painting cannot be cut off half way); a single agent or section cannot be stopped
+on its own. `hermes swarm --stop`, `/swarm stop [n]` and the `swarm_studio` tool's `stop` do the same.
+

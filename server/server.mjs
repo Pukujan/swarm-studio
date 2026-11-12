@@ -14,7 +14,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
-import { followUp, rehomeImages } from '../engine/extend.mjs'
+import { extendBase, followUp, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
@@ -310,6 +310,9 @@ function imageQueue(run, emit, choice) {
   add.start = () => { held = false; pump() }
   // a build that stopped before its layout was done paints nothing: its waiting slots are let go
   add.drop = message => { if (!held) return; for (const job of jobs.splice(0)) emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message }) }
+  // Stop: pictures not started are let go; one already with the image model is kept when it lands
+  add.stop = () => { held = true; for (const job of jobs.splice(0)) emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message: 'stopped' }) }
+  add.busy = () => active > 0 || (!held && jobs.length > 0)
   return add
 }
 const host = url => { try { return new URL(url).host } catch { return '' } }
@@ -324,6 +327,14 @@ const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
 
 let current = null // { id, events: [], controller, done, result, working }
+
+// Stop: one switch per build. The review and fix passes and the film started for a build listen
+// to its signal; Stop aborts it (their model calls and renders end there), and work started
+// afterwards gets a fresh one. The build itself stops through its own controller.
+const stops = new Map()
+const stopSignal = id => { let c = stops.get(id); if (!c || c.signal.aborted) stops.set(id, c = new AbortController()); return c.signal }
+const stopOr = (sig, ms) => AbortSignal.any([sig, AbortSignal.timeout(ms)])
+const fixing = new Map() // run id -> sections being rewritten after a review or a comment
 const clients = new Set()
 
 function broadcast(event) {
@@ -332,7 +343,7 @@ function broadcast(event) {
 }
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
-function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '', pictures = '' }) {
+function startRun({ brief, agents, models: given, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '' }) {
   setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
@@ -360,6 +371,8 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     // painted still belongs to it: it goes into this build's own file (and to anyone looking at it).
     // Before, these were dropped and a finished build sat at "0 of 8" with its pictures on disk.
     if (current !== run) { if (LATE_PICTURE.has(type)) record(id, { type, t: Date.now(), run: id, ...data }); return }
+    // stopped before its pictures: the slots keep their stand-ins, and run:stopped stays the last word
+    if (type === 'run:stopped') images?.drop('stopped')
     const event = { type, t: Date.now(), run: id, ...data }
     run.events.push(event)
     if (type === 'agent:assign') run.working.add(data.agent)
@@ -376,6 +389,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     if (type === 'layer:done' && images && !data.kept) images(event)
     // the layout pass is over: now the pictures are painted
     if (type === 'run:done' && images) images.start()
+    if (type === 'run:stopped') { run.done = true; run.stopped = true; run.working.clear() }
   }
 
   if (!models.planner.apiKey || !models.worker.apiKey) {
@@ -384,8 +398,9 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
   }
   picturesFor(pictures).then(pic => {
     if (current !== run) return
+    if (run.controller.signal.aborted) return emit('run:stopped', { ms: 0, planned: 0, done: 0, failed: 0, pages: 0, stopped: true })
     // painted: the slots are painted; stock: stand-in photos keep them; drawn: no slots at all
-    if (pic.paint) images = imageQueue(run, emit, pic.choice)
+    if (pic.paint) run.images = images = imageQueue(run, emit, pic.choice)
     return withTrace(id, () => runSwarm({
     images: pic.images,
     provider: provider('planner'),
@@ -393,6 +408,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     brief,
     base,
     ask,
+    resume: !!base && resume === true,
     // the last builds' page types and colours, so this one looks different
     recent: recentLooks(runsDir),
     // a page type the request names (PAGE_TYPES key) wins over the pick
@@ -408,7 +424,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
       writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan, null, 2))
     })
   })
-    .catch(err => { emit('error', { where: 'run', message: String(err.message || err) }); images?.drop('the build stopped before its pictures') })
+    .catch(err => { if (run.controller.signal.aborted) return emit('run:stopped', { stopped: true }); emit('error', { where: 'run', message: String(err.message || err) }); images?.drop('the build stopped before its pictures') })
   return run
 }
 
@@ -464,6 +480,50 @@ const traceScope = id => ({
 })
 const withTrace = (id, fn) => traced(traceScope(id), fn)
 
+// Stop one build's work: its layout pass (workers take no more sections, the model calls in flight
+// are aborted), the pictures not started yet, review and fix passes, a film, an app or game build.
+// What is built is kept. Answers what was stopped; a build that was working gets a stop event.
+async function stopRun(id) {
+  const what = []
+  if (current?.id === id && !current.done && !current.controller.signal.aborted) { current.controller.abort(); what.push('build') }
+  if (current?.id === id && current.images?.busy()) { current.images.stop(); what.push('pictures') }
+  const halt = stops.get(id)
+  if (halt && !halt.signal.aborted) {
+    if ([...reviewing].some(t => t.startsWith(`${id}/`))) what.push('review')
+    if (fixing.get(id) > 0) what.push('fixes')
+    if (videos.get(id)?.state === 'working') what.push('film')
+    halt.abort()
+  }
+  const a = appsNow?.jobs?.get(id)
+  if (a?.state === 'working') { await (await apps()).stop(id); what.push(a.kind === 'game' ? 'game' : 'app') }
+  // the build's own run:stopped comes from the engine; the rest say so here
+  const rest = what.filter(w => w !== 'build')
+  if (rest.length) record(id, { type: 'work:stopped', t: Date.now(), run: id, what: rest })
+  return what
+}
+// Stop everything in flight for a build's project (run or project named), or, with neither, all of it
+async function stopWork({ run, project } = {}) {
+  const ids = new Set()
+  if (RUN_ID.test(String(run || ''))) ids.add(run)
+  const pid = typeof project === 'string' && project ? project : run && RUN_ID.test(run) ? projects.projectOf(run) : null
+  const p = pid ? projects.get(pid) : null
+  if (p) for (const id of [...p.versions.map(v => v.id), ...Object.keys(p.parts || {})]) ids.add(id)
+  const all = !ids.size && !pid
+  if (all) {
+    if (current) ids.add(current.id)
+    for (const id of stops.keys()) ids.add(id)
+    for (const [id, a] of appsNow?.jobs || []) if (a.state === 'working') ids.add(id)
+  }
+  const stopped = []
+  const au = auto.state()
+  if (au?.state === 'working' && (all || ids.has(au.run))) { auto.stop(); stopped.push({ run: au.run, what: ['auto'] }); if (au.run) ids.add(au.run) }
+  for (const id of ids) {
+    const what = await stopRun(id)
+    if (what.length) stopped.push({ run: id, what })
+  }
+  return { stopped }
+}
+
 // What a run is working on right now, if anything: the site build, an app or game build, a film.
 // { what: site | app | game | film, stage, pct (0..1, or null when the job cannot say) }
 let appsNow = null // the app jobs, once loaded, so this can stay synchronous
@@ -474,6 +534,10 @@ function workOf(id) {
     const plan = current.events.filter(e => e.type === 'layer:plan').length
     return { what: 'site', stage: plan ? 'building pages' : 'planning', pct: Math.min(1, current.events.filter(e => e.type === 'layer:done').length / Math.max(1, plan || 12)) }
   }
+  if (current?.id === id && current.images?.busy()) return { what: 'site', stage: 'painting pictures', pct: null }
+  if ([...reviewing].some(t => t.startsWith(`${id}/`)) || fixing.get(id) > 0) return { what: 'site', stage: 'reviewing', pct: null }
+  const au = auto.state()
+  if (au?.state === 'working' && au.run === id && !au.steps.some(s => s.state === 'working' && ['app', 'video'].includes(s.id))) return { what: 'site', stage: au.steps.find(s => s.state === 'working')?.label || 'auto', pct: null }
   const a = appsNow?.jobs?.get(id)
   if (a?.state === 'working') return { what: a.kind === 'game' ? 'game' : 'app', stage: clipStage(a.stage), pct: null, steps: a.steps?.length || 0, ...(a.kind === 'game' ? { progress: gameProgress(a.steps) } : {}) }
   const v = videos.get(id)
@@ -714,6 +778,7 @@ async function reviewNow(id, input) {
   if (reviewing.has(tag)) throw new Error('this page is already being reviewed')
   reviewing.add(tag)
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  const halt = stopSignal(id)
   try {
     const page = sections.map(s => ({ key: s.key, role: String(s.role || s.key), top: Math.round(s.top) || 0, height: Math.round(s.height) || 0 }))
     send('review:start', { page: input.page, model })
@@ -722,9 +787,9 @@ async function reviewNow(id, input) {
     const look = async (img, secs, label) => {
       for (const m of chain) {
         try {
-          return { ...(await reviewPage({ provider: provider('reviewer'), model: m, brief: start.brief, page: label, sections: secs, image: img, signal: AbortSignal.timeout(60000) })), model: m }
+          return { ...(await reviewPage({ provider: provider('reviewer'), model: m, brief: start.brief, page: label, sections: secs, image: img, signal: stopOr(halt, 60000) })), model: m }
         } catch (err) {
-          if (m === chain.at(-1)) throw err
+          if (m === chain.at(-1) || halt.aborted) throw err
         }
       }
     }
@@ -733,6 +798,7 @@ async function reviewNow(id, input) {
     try {
       ;[result] = await Promise.all([look(image, page, title), phone?.sections.length ? look(phone.image, phone.sections, `${title} (on a phone, 390px wide)`).then(r => { phone.result = r }, err => { phone.error = String(err.message || err).slice(0, 160) }) : null])
     } catch (err) {
+      if (halt.aborted) { send('review:done', { page: input.page, model, verdict: 'stopped', issues: [], stopped: true }); return { verdict: 'stopped', issues: [] } }
       if (!measured.length) { send('review:done', { page: input.page, model, verdict: `review failed: ${String(err.message || err).slice(0, 120)}`, issues: [] }); throw err }
       result = { verdict: 'the reviewer model failed; fixing the measured overlaps', issues: [], ms: 0, model }
     }
@@ -831,10 +897,12 @@ async function videoNow(id, input = {}) {
   const events = readEvents(id)
   if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
   if (videos.get(id)?.state === 'working') return videos.get(id)
+  const halt = stopSignal(id)
   const job = { state: 'working', pct: 0, stage: 'storyboard', t: Date.now() }
   videos.set(id, job)
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const progress = (pct, stage) => {
+    if (halt.aborted) return
     Object.assign(job, { pct, stage })
     broadcast({ type: 'video:progress', t: Date.now(), run: id, pct, stage })
   }
@@ -889,7 +957,8 @@ async function videoNow(id, input = {}) {
       if (!model || !models.planner.apiKey) throw new Error('no planner model')
       // with an image model, the storyboard may ask for new story stills
       const shooter = await imageChoice().catch(() => null)
-      scenes = await writeBoard({ provider: provider('planner'), model, c, prompt, template, notes, shots: !!shooter, seed, signal: AbortSignal.timeout(120000) })
+      scenes = await writeBoard({ provider: provider('planner'), model, c, prompt, template, notes, shots: !!shooter, seed, signal: stopOr(halt, 120000) })
+      if (halt.aborted) throw new Error('stopped')
       if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress, notes)
     } catch (err) {
       scenes = fallbackBoard(c, { prompt, notes, seed, template, fixes: [`no writer this time: ${String(err.message || err).slice(0, 80)}`] })
@@ -993,10 +1062,11 @@ async function videoNow(id, input = {}) {
     const silent = join(dir, 'promo-silent.mp4'), out = join(dir, SHAPES.wide.file)
     const tallSilent = join(dir, 'promo-tall-silent.mp4'), tallOut = join(dir, SHAPES.tall.file)
     rmSync(tallOut, { force: true }) // an older tall cut never sits beside a newer wide one
-    await render({ tools: t, dir, out: silent, quality, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'assemble' ? 'assembling' : 'rendering') })
+    if (halt.aborted) throw new Error('stopped')
+    await render({ tools: t, dir, out: silent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'assemble' ? 'assembling' : 'rendering') })
     let tall = true
     try {
-      await render({ tools: t, dir: tallDir, out: tallSilent, quality, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
+      await render({ tools: t, dir: tallDir, out: tallSilent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
     } catch (err) {
       tall = false
       send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
@@ -1026,7 +1096,7 @@ async function videoNow(id, input = {}) {
     Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
     send('video:done', { src: job.src, tall: tallSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound, scoredBy })
   })().catch(err => {
-    Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
+    Object.assign(job, { state: halt.aborted ? 'stopped' : 'failed', message: halt.aborted ? 'stopped' : String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })
   })
   return job
@@ -1922,10 +1992,14 @@ async function rework(runId, send, s, agent, theme, args) {
   send('layer:reset', { page, layer, agent })
   // with an image model, a rewrite may add a photo ("add a picture of…"), painted once it is done
   const choice = await imageChoice().catch(() => null)
-  return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, images: !!choice, ...args,
+  const halt = stopSignal(runId)
+  if (halt.aborted) return
+  fixing.set(runId, (fixing.get(runId) || 0) + 1)
+  return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, images: !!choice, ...args, signal: halt,
     onDelta: d => send('layer:delta', { page, layer, agent, text: d }) }))
     .then(html => { send('layer:done', { page, layer, agent, ms: Date.now() - t0, html, fixed: true }); if (choice) paintNew(runId, send, page, layer, html, choice) })
-    .catch(err => send('layer:failed', { page, layer, agent, message: String(err.message || err), keep: s.html }))
+    .catch(err => send('layer:failed', { page, layer, agent, message: halt.aborted ? 'stopped' : String(err.message || err), keep: s.html }))
+    .finally(() => fixing.set(runId, fixing.get(runId) - 1))
 }
 
 // The finished sections of a saved run, as the last event left each one.
@@ -2270,6 +2344,27 @@ const server = createServer((req, res) => {
     gameMod().then(g => spec ? g.artList(spec) : []).catch(() => []).then(plan => json(200, { ...listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan, pieceName }), painting: (artJobs.get(id) || []).filter(Boolean) }))
     return
   }
+  // Stop: everything in flight for a build's project ({run} or {project}), or all of it ({})
+  if (url.pathname === '/api/stop' && req.method === 'POST') {
+    readJson(4096, input => stopWork(input || {}).then(r => json(200, r), err => json(400, { error: String(err.message || err) })))
+    return
+  }
+  // Resume a stopped website build: the next version keeps every finished section and builds the rest
+  const runResume = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/resume$/)
+  if (runResume && req.method === 'POST') {
+    const id = runResume[1], events = readEvents(id)
+    if (!events) return json(404, { error: 'no such build' })
+    if (current?.id === id && !current.done) return json(409, { error: 'busy', run: id })
+    let plan = null
+    try { plan = JSON.parse(readFileSync(join(runsDir, id, 'plan.json'), 'utf8')) } catch {}
+    const base = extendBase(events, plan)
+    if (!base) return json(400, { error: 'nothing to resume: no pages were planned yet' })
+    const pid = projects.projectOf(id)
+    const run = startRun({ brief: base.brief, base, resume: true, ask: '' })
+    if (pid) projects.claim(run.id, pid)
+    broadcast({ type: 'reset', run: run.id })
+    return json(200, { run: run.id, from: id })
+  }
   // what the crew are working on right now, across projects: the Studio's queue
   if (url.pathname === '/api/work' && req.method === 'GET') {
     const jobs = []
@@ -2574,7 +2669,8 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/auto' || url.pathname === '/api/auto/stop') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method === 'GET') return reply(200, auto.state() || { state: 'idle' })
-    if (url.pathname === '/api/auto/stop') return reply(200, auto.stop() || { state: 'idle' })
+    // the Auto run's step stops too (the build, pictures, review, film, app), not only the steps after it
+    if (url.pathname === '/api/auto/stop') { const au = auto.state(); return void (au?.state === 'working' && au.run ? stopWork({ run: au.run }) : Promise.resolve(auto.stop())).then(() => reply(200, auto.state() || { state: 'idle' }), () => reply(200, auto.stop() || { state: 'idle' })) }
     let body = ''
     req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
     req.on('end', () => {

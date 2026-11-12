@@ -54,6 +54,7 @@ C.go = (m, v) => {
   // a replay started from the menu plays in the Design deck: leaving the deck ends it
   if (m !== 'station' || (v && v !== 'canvas')) sw.stopReplay?.()
   C.mode = m
+  queueMicrotask(() => C.work?.paint?.())
   setMode(m)
   if (m !== 'plan') C.planView?.hide()
   if (m === 'plan') {

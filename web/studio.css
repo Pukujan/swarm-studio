@@ -93,6 +93,8 @@ body.cosmos-home #more-menu [data-panel], body.cosmos-project #more-menu [data-p
 .work-chip[hidden] { display: none; }
 .work-chip .wk-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text); animation: wk-pulse 1.4s ease-in-out infinite; }
 .work-chip .wk-bar { width: 44px; }
+.work-stop { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; }
+.work-stop[hidden] { display: none; }
 .wk-bar { display: block; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--text) 16%, transparent); overflow: hidden; }
 .wk-bar i { display: block; height: 100%; background: var(--text); transition: width .6s ease; }
 .wk-bar.ind i { width: 30%; animation: wk-slide 1.6s ease-in-out infinite; }

@@ -73,6 +73,7 @@ def _setup_cli(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--wait", action="store_true", help="wait for the build and print its summary")
     parser.add_argument("--models", action="store_true", help="show which models the swarm will use, then exit")
     parser.add_argument("--build", action="store_true", help="build even when the brief says to talk first")
+    parser.add_argument("--stop", action="store_true", help="stop the crew: the build, pictures, review, film, app (kept as built)")
 
 
 def _run_cli(args: argparse.Namespace) -> int:
@@ -81,6 +82,9 @@ def _run_cli(args: argparse.Namespace) -> int:
             name = {"planner": "planner ", "worker": "builders", "reviewer": "reviewer"}[role]
             print(f"{name}  {m['model']}  at {m['base_url']}  ({m['source']})" if "error" not in m else f"{name}  unavailable: {m['error']}")
         print("Change them with `hermes model` (Swarm Studio planner / builders) or SWARM_STUDIO_* variables.")
+        return 0
+    if getattr(args, "stop", False):
+        print(commands.stop(" ".join(args.brief).strip()))
         return 0
     brief = " ".join(args.brief).strip()
     if commands.is_command(brief):

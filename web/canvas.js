@@ -298,7 +298,7 @@ function on(e) {
       const l = S.layers.get(key(e.page, e.layer))
       if (l) { l.status = 'failed'; S.treeDirty = true }
       // a failed fix puts the section back as it was
-      if (l && e.keep) { l.text = e.keep; l.ver++; l.status = 'done'; chatAgent(S.agents.get(e.agent), `Couldn't make that change: ${e.message}. Try again, or ask for less at once.`, e.layer) }
+      if (l && e.keep) { l.text = e.keep; l.ver++; l.status = 'done'; if (e.message !== 'stopped') chatAgent(S.agents.get(e.agent), `Couldn't make that change: ${e.message}. Try again, or ask for less at once.`, e.layer) }
       const a = S.agents.get(e.agent)
       if (a) a.layer = null
       feed(a, `failed ${e.layer}: ${e.message}`, 'err')
@@ -335,6 +335,19 @@ function on(e) {
       if (!viewing) { S.cheerUntil = performance.now() + 9000; banter.next = 0; loadFiles() }
       if (live(e)) autoReview()
       break
+    case 'run:stopped': {
+      // Stop (the top bar): what is built is kept; a section caught half way is let go
+      S.tEnd = e.t
+      els.planState.textContent = 'stopped'
+      for (const a of S.agents.values()) { a.idle = true; a.layer = null; a.tool = 'move'; a.painting = null }
+      for (const l of S.layers.values()) if (l.status === 'assigned' || l.status === 'streaming') { l.status = 'planned'; l.agent = null; l.text = '' }
+      S.treeDirty = true
+      if (live(e)) stoppedMsg(e)
+      break
+    }
+    case 'work:stopped':
+      if (live(e)) botMsg(`Stopped the ${e.what.map(w => STOPPED[w] || w).join(' and ')}. Everything finished is kept.`)
+      break
     case 'error':
       feed(null, `${e.where}: ${e.message}`, 'err')
       break
@@ -357,7 +370,7 @@ function on(e) {
       if (l) fillImages(l)
       // the agent who asked for it stops painting
       for (const a of S.agents.values()) if (a.painting?.key === `${key(e.page, e.layer)}|${e.gen}`) { a.painting = null; if (live(e) && e.type === 'image') say(a, '🖼 photo’s in') }
-      if (e.type === 'image:failed') feed(null, `image for ${e.layer} failed: ${e.message}`, 'err')
+      if (e.type === 'image:failed' && e.message !== 'stopped') feed(null, `image for ${e.layer} failed: ${e.message}`, 'err')
       break
     }
     case 'review:start':
@@ -1241,6 +1254,27 @@ function logSay(e) {
   item.innerHTML = `<b>${HERMIA}Hermia${e.to ? `<span class="to">→</span><span style="color:${Crew.color(e.to)}">${esc(e.to)}</span>` : ''}</b><span class="txt"></span>`
   item.querySelector('.txt').textContent = e.text
   push(f, item)
+}
+
+// Stopped: what is kept, and the way on (say what to change in the dock, or Resume)
+const STOPPED = { pictures: 'pictures', review: 'review', fixes: 'fixes', film: 'film', app: 'app build', game: 'game build', auto: 'auto run' }
+function stoppedMsg(e) {
+  const built = [...S.layers.values()].filter(l => l.status === 'done').length, total = S.layers.size
+  window.swarmCosmos?.chat?.(true)
+  const item = botMsg(total ? `Stopped. ${built} of ${total} sections are built and kept. Say what to change, or Resume.` : 'Stopped before any page was planned.')
+  if (!total || built >= total || hosted) return
+  const run = S.run
+  const acts = document.createElement('div')
+  acts.className = 'chips'
+  acts.innerHTML = '<button class="primary">Resume</button>'
+  acts.firstChild.onclick = async () => {
+    acts.remove()
+    const res = await api(`/api/runs/${encodeURIComponent(run)}/resume`, { method: 'POST' }).catch(() => null)
+    const j = res ? await res.json().catch(() => ({})) : {}
+    if (!res?.ok) return feed(null, `Couldn't resume: ${j.error || res?.status || 'no server'}`, 'err')
+    if (viewing) window.swarmCosmos?.open?.(j.run, window.swarmCosmos.project)
+  }
+  item.append(acts)
 }
 
 function botMsg(text, working = false) {
@@ -5679,14 +5713,13 @@ function renderAutoPanel() {
   const nowLabel = cur ? cur.label : e.state === 'done' ? 'done' : e.state === 'failed' ? 'stopped on a step' : e.state
   p.innerHTML = autoM.min
     ? `<div class="ap-head" role="button" tabindex="0" aria-label="Expand the Auto panel"><b>${ico('zap')}Auto</b><span class="ap-dot">·</span><span class="ap-now">${esc(nowLabel)}</span><span class="ap-dot">·</span><span class="ap-time">${secs(total || 0)}</span></div><div class="ap-meter"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>`
-    : `<div class="ap-head"><b>${ico('zap')}Auto</b><span class="ap-time">${secs(total || 0)}</span>${e.state === 'working' ? '<button class="ap-stop">Stop</button>' : `<button class="ap-close" aria-label="Hide">${ico('x')}</button>`}<button class="ap-min" aria-label="Minimise">${ico('minus')}</button></div>
+    : `<div class="ap-head"><b>${ico('zap')}Auto</b><span class="ap-time">${secs(total || 0)}</span><button class="ap-close" aria-label="Hide">${ico('x')}</button><button class="ap-min" aria-label="Minimise">${ico('minus')}</button></div>
     <div class="ap-meter"><i style="width:${(doneN / e.steps.length * 100).toFixed(1)}%"></i></div>
     <div class="ap-prompt">${esc(e.prompt || '')}</div>
     <ol>${e.steps.map(s => { const note = live(s), long = note && note.length > 90; return `<li class="${s.state}${autoM.open.has(s.id) ? ' open' : ''}" data-step="${esc(s.id)}"><i>${AUTO_ICON[s.state] || AUTO_ICON.wait}</i><span>${esc(s.label)}${note ? `<small>${linkify(note)}</small>${long ? `<button class="ap-more">${autoM.open.has(s.id) ? 'Less' : 'More'}</button>` : ''}` : ''}</span><em>${s.state === 'working' && s.t0 ? secs(Date.now() - s.t0) : s.ms ? secs(s.ms) : ''}</em></li>` }).join('')}</ol>
     ${e.url ? `<a class="ap-live" href="${esc(e.url)}" target="_blank" rel="noopener">${ico('globe')}Open the live app</a>` : e.state === 'failed' && e.message ? `<div class="ap-msg">${esc(e.message)}</div>` : ''}
     ${e.state !== 'working' && e.run ? `<div class="ap-show"><button class="ap-sum">${ico('sparkles')}Summary</button>${launchable(e) ? `<button class="ap-kit">${ico('message-square')}Launch kit</button>` : ''}</div>` : ''}`
   for (const b of p.querySelectorAll('.ap-more')) b.onclick = ev => { ev.stopPropagation(); const id = b.closest('li').dataset.step; autoM.open.has(id) ? autoM.open.delete(id) : autoM.open.add(id); renderAutoPanel() }
-  p.querySelector('.ap-stop')?.addEventListener('click', ev => { ev.stopPropagation(); api('/api/auto/stop', { method: 'POST' }) })
   // the header folds it to one line, out of the way of what it is showing
   const head = p.querySelector('.ap-head')
   head.onclick = ev => { if (ev.target.closest('button:not(.ap-min)')) return; setAutoMin(!autoM.min) }
