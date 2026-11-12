@@ -1855,7 +1855,7 @@ async function sendDock() {
   const media = links.take('ref')
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief: refLines(brief, media), agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
-  to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
+  to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true, run: j.run || null } : null)
   if (!res?.ok) for (const m of media) links.add(m)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
   // the build the person just started is the one the canvas shows

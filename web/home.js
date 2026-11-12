@@ -725,8 +725,11 @@ export function makeHome({ sw, C, root }) {
       // A website the crew has just started opens in the Design deck, the one room where the swarm
       // can be watched at work (its Follow camera is on for a new build). Back shows the project's
       // Overview, as from any room. The hosted studio keeps its Overview.
-      if (typeof made === 'string') C.started(made)
-      else C.open(null)
+      if (typeof made === 'string') return C.started(made)
+      // Not started: Projects stays, with the words back in the box. Another build running is
+      // shown on the deck on request; anything else has said why in the chat (Hermes, a talk)
+      if (!input.value) input.value = text
+      if (made?.busy) toast('<span>A build is running. Yours can start when it ends.</span>', made.run ? 'Watch it' : null, made.run ? () => C.started(made.run, { room: 'deck' }) : null)
       return
     }
     try {
