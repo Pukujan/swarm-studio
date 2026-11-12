@@ -26,7 +26,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, seen: null, shown: '', proj: null, board: null, uploads: [], refs: [], sending: new Map(),
-    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(), shot: new Map(),
+    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), sharp: new Map(), stale: new Set(), shot: new Map(), want: { s: new Map(), f: new Map() }, failed: new Set(), camAt: 0,
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
     // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
     marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
@@ -39,7 +39,7 @@ export function makeProject({ sw, C, root }) {
     run: { get: () => nav.view.version || P.seen },
     pid: { get: () => nav.view.project || P.proj?.id || null }
   })
-  const forget = () => { P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.shot.clear(); P.thumbTries = 0 }
+  const forget = () => { P.sel = null; P.framed = false; P.thumbs.clear(); P.sharp.clear(); P.stale.clear(); P.shot.clear(); P.want.s.clear(); P.want.f.clear(); P.failed.clear(); P.thumbTries = 0 }
 
   root.className = 'project'
   root.hidden = true
@@ -142,7 +142,7 @@ export function makeProject({ sw, C, root }) {
   function groups() {
     const b = P.board || {}
     const g = {}
-    if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id), cover: p.cover, plan: p.plan }, ...draftsOf(p.id)])
+    if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, sharp: P.sharp.get(p.id), snap: P.thumbs.has(p.id), cover: p.cover, plan: p.plan }, ...draftsOf(p.id)])
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, pitch: b.game.pitch || '', src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
@@ -239,9 +239,11 @@ export function makeProject({ sw, C, root }) {
   }
   function board(x) {
     const sel = P.sel === x.key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
-    const full = x.src ? (x.src.startsWith('data:') ? x.src : base() + x.src) : ''
+    const at = u => u ? (u.startsWith('data:') ? u : base() + u) : ''
+    // a page shows its small picture first and its full one once the camera comes close (sizePics)
+    const low = at(x.src), full = at(x.sharp) || low
     const img = x.kind === 'page' && !x.snap ? skeleton(x)
-      : x.src ? `<img src="${esc(picNow(full))}" data-full="${esc(full)}" alt="" draggable="false" loading="lazy" decoding="async">${x.kind === 'page' ? skeleton(x, true) : ''}`
+      : x.src ? `<img src="${esc(picNow(full, low))}" data-full="${esc(full)}"${low !== full ? ` data-low="${esc(low)}"` : ''} alt="" draggable="false" loading="lazy" decoding="async">${x.kind === 'page' ? skeleton(x, true) : ''}`
       : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
@@ -696,6 +698,7 @@ export function makeProject({ sw, C, root }) {
       const d = disk?.pages?.[p.id]
       if (!d?.s) continue
       if (P.thumbs.get(p.id) !== d.s) { P.thumbs.set(p.id, d.s); changed = true }
+      if (d.f && P.sharp.get(p.id) !== d.f) { P.sharp.set(p.id, d.f); changed = true } else if (!d.f) P.sharp.delete(p.id)
       P.stale.delete(p.id)
     }
     return changed
@@ -712,45 +715,90 @@ export function makeProject({ sw, C, root }) {
     return c.toDataURL('image/jpeg', q)
   }
   const keep = (run, page, v, size, src) => jpeg(src).then(image => image && sw.api(`/api/runs/${encodeURIComponent(run)}/snaps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page, v, size, image }) })).catch(() => null)
+  // Which pages need a picture: the saved ones paint at once; a page with none of its current version
+  // waits in P.want for its small picture, then its full one (spec 36, PR 3)
   async function thumbs() {
     if (P.thumbBusy || !P.board?.pages?.length) return
     P.thumbBusy = true
     const run = P.run
     try {
-      // the saved pictures first; a page whose content changed since has none of its version
       const disk = await sw.api(`/api/runs/${encodeURIComponent(run)}/snaps`).then(r => (r.ok ? r.json() : null)).catch(() => null)
       if (run !== P.run || !P.on) return
       if (fromDisk(disk)) { renderList(); renderStage() }
-      // every page's small picture first; the full ones after, so none waits behind another's full one
-      const fulls = []
       for (const p of P.board.pages) {
         const d = disk?.pages?.[p.id]
-        if (d?.s) continue
+        if (d?.s) { P.want.s.delete(p.id); if (d.f) P.want.f.delete(p.id); else P.want.f.set(p.id, d.v); continue }
         // photographed for this version already (its picture was not kept: the page moved on meanwhile)
         if (P.thumbs.has(p.id) && !P.stale.has(p.id) && P.shot.get(p.id) === d?.v) continue
-        P.stale.delete(p.id)
-        const src = await sw.thumb(p.id).catch(() => null)
-        // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
-        const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
-        if (run !== P.run || !P.on) return
-        // a page that changed keeps its last picture until a new one comes (no blank artboard meanwhile)
-        if (!ok) { if (P.thumbs.has(p.id)) P.stale.add(p.id); continue }
-        P.thumbs.set(p.id, src); renderList(); renderStage()
-        if (!d?.v) continue
-        P.shot.set(p.id, d.v)
-        keep(run, p.id, d.v, 's', src)
-        fulls.push([p.id, d.v])
-      }
-      for (const [id, v] of fulls) {
-        if (run !== P.run || !P.on) return
-        const full = await sw.thumb(id, 0.6).catch(() => null)
-        if (full) await keep(run, id, v, 'f', full)
+        P.want.s.set(p.id, d?.v || '')
       }
     } finally { P.thumbBusy = false }
-    // a page without a picture yet (its frame was still laying out) is tried again a few times;
-    // the count starts over whenever the crew finishes a section (layer:done) or the build reloads
-    if (P.on && P.board.pages.some(p => !P.thumbs.has(p.id) || P.stale.has(p.id)) && (P.thumbTries = (P.thumbTries || 0) + 1) < 8) setTimeout(thumbs, 2500)
+    pump()
   }
+  // One page at a time: every small picture in view first, then the full ones. Nothing
+  // while the camera moves (it picks up when it rests), for a tile out of view, or in a hidden tab.
+  let pumpT = 0, pumping = false
+  const idle = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 1500 }) : setTimeout(f, 50))
+  // a page with no picture at all is taken straight away; a page that changed, and the full pictures, wait for idle time
+  function pump(wait = 0) {
+    clearTimeout(pumpT)
+    pumpT = setTimeout(() => ([...P.want.s.keys()].some(id => !P.thumbs.has(id)) ? shootNext() : idle(shootNext)), wait)
+  }
+  const inView = id => {
+    const el = world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"]`)
+    if (!el) return false
+    const r = el.getBoundingClientRect(), v = stage.getBoundingClientRect()
+    return r.width > 0 && r.right > v.left && r.left < v.right && r.bottom > v.top && r.top < v.bottom
+  }
+  async function shootNext() {
+    if (pumping || !P.on || !P.board || document.hidden) return
+    const rest = performance.now() - P.camAt
+    if (rest < 400) return pump(400 - rest)
+    const pick = size => [...P.want[size]].find(([id]) => inView(id))
+    const size = pick('s') ? 's' : 'f', job = pick(size)
+    if (!job) return retry()
+    const [id, v] = job, run = P.run
+    P.want[size].delete(id)
+    pumping = true
+    try { await (size === 's' ? shootSmall(run, id, v) : shootFull(run, id, v)) } finally { pumping = false }
+    if (run === P.run && P.on) pump()
+  }
+  async function shootSmall(run, id, v) {
+    P.stale.delete(id)
+    const src = await sw.thumb(id).catch(() => null)
+    // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
+    const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
+    if (run !== P.run || !P.on) return
+    // a page that changed keeps its last picture until a new one comes (no blank artboard meanwhile)
+    if (!ok) { if (P.thumbs.has(id)) P.stale.add(id); P.failed.add(id); return }
+    const had = P.thumbs.has(id)
+    P.thumbs.set(id, src); P.sharp.delete(id)
+    const im = had && world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"] img[data-full]`)
+    if (im) { im.removeAttribute('data-low'); im.dataset.full = src; im.src = src } else { renderList(); renderStage() }
+    if (!v) return
+    P.shot.set(id, v)
+    keep(run, id, v, 's', src)
+    P.want.f.set(id, v)
+  }
+  async function shootFull(run, id, v) {
+    const full = await sw.thumb(id, 0.6).catch(() => null)
+    if (!full || run !== P.run || !P.on) return
+    await keep(run, id, v, 'f', full)
+    // the page changed again meanwhile: its new small picture comes first
+    const low = P.thumbs.get(id)
+    if (!low || P.want.s.has(id) || P.stale.has(id)) return
+    P.sharp.set(id, full)
+    const im = world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"] img[data-full]`)
+    if (im) { im.dataset.low = low.startsWith('data:') ? low : base() + low; im.dataset.full = full; sizePics() }
+  }
+  // a page without a picture yet (its frame was still laying out) is tried again a few times;
+  // the count starts over whenever the crew finishes a section (layer:done) or the build reloads
+  function retry() {
+    if (!P.failed.size || (P.thumbTries = (P.thumbTries || 0) + 1) >= 8) return
+    P.failed.clear()
+    clearTimeout(P.retryT); P.retryT = setTimeout(thumbs, 2500)
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && P.on) pump() })
 
   // ---------- the stage: pan (drag empty space, wheel), zoom (pinch, ⌘ wheel), Frame fits all
   // narrow panes (a phone, Hermes Desktop's side pane): the canvas stays; Files and Layers are a sheet
@@ -766,12 +814,15 @@ export function makeProject({ sw, C, root }) {
   // the pictures keep the copies they show; both are put right once it rests, in one go. The canvas
   // behind is told too, so it does not swap a page or take a screenshot in the middle of a gesture.
   let restT = 0
-  function applyCam() {
-    world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})`
+  // moving: a pan, pinch, wheel or glide (the camera's own framing jumps, and does not hold the pictures back)
+  function applyCam(moving = false) {
+    const t = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})`
+    if (moving) P.camAt = performance.now()
+    world.style.transform = t
     world.classList.add('moving')
     sw.moved?.()
     clearTimeout(restT)
-    restT = setTimeout(() => { world.classList.remove('moving'); sizePics() }, 280)
+    restT = setTimeout(() => { world.classList.remove('moving'); sizePics(); pump() }, 280)
   }
   // Pictures at the size they are drawn: zoomed out, an artboard shows a 256 or 512 px wide copy
   // (web/ui.js small) instead of its full picture, so a whole project on screen holds a few MB of
@@ -779,7 +830,8 @@ export function makeProject({ sw, C, root }) {
   const TIERS = [256, 512]
   const picTier = new Map() // full src -> the tier last shown
   const tierFor = im => TIERS.find(t => im.offsetWidth * P.cam.k * (devicePixelRatio || 1) <= t * 0.9) || 0
-  const picNow = full => { const t = picTier.get(full); return (t && window.SwarmUI?.small?.(full, t, { by: 'width' })) || full }
+  // the small saved picture (320 px wide) stands for the 256 tier, and is shown until a sharper copy is ready
+  const picNow = (full, low) => { const t = picTier.get(full); return (t === 256 && low) || (t && window.SwarmUI?.small?.(full, t, { by: 'width' })) || low || full }
   function sizePics() {
     const small = window.SwarmUI?.small
     if (!small) return
@@ -787,6 +839,7 @@ export function makeProject({ sw, C, root }) {
       const full = im.dataset.full, t = tierFor(im)
       if (!im.offsetWidth) continue
       picTier.set(full, t)
+      if (t === 256 && im.dataset.low) { if (im.getAttribute('src') !== im.dataset.low) im.src = im.dataset.low; continue }
       if (!t) { if (im.getAttribute('src') !== full) im.src = full; continue }
       const url = small(full, t, { by: 'width', ready: u => { if (im.isConnected && picTier.get(full) === t && im.getAttribute('src') !== u) im.src = u } })
       if (url && im.getAttribute('src') !== url) im.src = url
@@ -859,14 +912,14 @@ export function makeProject({ sw, C, root }) {
       const k = Math.min(3, Math.max(0.15, pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d))
       const px = pinch.mx - r.left, py = pinch.my - r.top
       P.cam = { k, x: px - (px - pinch.cx) * k / pinch.k + ((a.x + b.x) / 2 - pinch.mx), y: py - (py - pinch.cy) * k / pinch.k + ((a.y + b.y) / 2 - pinch.my) }
-      applyCam()
+      applyCam(true)
       setFollow(false)
       return
     }
     if (!drag) return
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y
     if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true
-    if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(); stage.classList.add('panning'); setFollow(false) }
+    if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(true); stage.classList.add('panning'); setFollow(false) }
   })
   const endDrag = e => {
     touches.delete(e.pointerId)
@@ -885,7 +938,7 @@ export function makeProject({ sw, C, root }) {
       const k = Math.min(3, Math.max(0.15, P.cam.k * Math.exp(-e.deltaY * 0.01)))
       P.cam.x = px - (px - P.cam.x) * k / P.cam.k; P.cam.y = py - (py - P.cam.y) * k / P.cam.k; P.cam.k = k
     } else { P.cam.x -= e.deltaX; P.cam.y -= e.deltaY }
-    applyCam()
+    applyCam(true)
     setFollow(false)
   }, { passive: false })
 
@@ -908,7 +961,7 @@ export function makeProject({ sw, C, root }) {
         const vw = s.width - (insp.hidden ? 0 : 272)
         if (r.left < s.left + 20 || r.right > s.left + vw - 20 || r.top < s.top + 20 || r.bottom > s.bottom - 100) {
           P.cam.x += s.left + vw / 2 - (r.left + r.width / 2); P.cam.y += s.top + (s.height - 90) / 2 - (r.top + r.height / 2)
-          world.classList.add('ease'); applyCam(); setTimeout(() => world.classList.remove('ease'), 300)
+          world.classList.add('ease'); applyCam(true); setTimeout(() => world.classList.remove('ease'), 300)
         }
       }
     }

@@ -164,6 +164,9 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('.pj-stage .ab.page img').length >= 2, null, { timeout: 5000 }).catch(() => {})
   const srcs = await page.evaluate(() => [...document.querySelectorAll('.pj-stage .ab.page img')].map(im => im.getAttribute('src')))
   ok(srcs.length === 2 && srcs.every(x => x.includes(`/snaps/`)), `opened again, Alpha's pages paint from their saved snapshots (${srcs.map(x => x.split('/').pop()).join(', ')})`)
+  // the small picture first, the full one for when the camera comes close
+  const sizes = await page.evaluate(() => [...document.querySelectorAll('.pj-stage .ab.page img')].map(im => [im.dataset.low, im.dataset.full].map(u => String(u).split('.').slice(-2, -1)[0]).join('')))
+  ok(sizes.length === 2 && sizes.every(x => x === 'sf'), `each page has its small picture first and its full one after (${sizes.join(', ')})`)
   await settle(A1)
   await home()
   await page.click('.home .card[aria-label="Bravo Bikes"]')

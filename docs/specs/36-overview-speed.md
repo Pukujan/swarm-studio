@@ -89,3 +89,31 @@ Without a plan, the blocks come from the canvas's laid-out sections, else from t
 
 Every page is on the stage, in its shape and colours, in under a third of a second. The runs vary by
 a few hundred milliseconds (a second run of PR 1 opened cold in 898 to 1405 ms).
+
+## 3. Low resolution first, one page at a time
+
+A page's tile shows its small picture first. Its full picture is used once the camera comes close
+enough to need more than 256 pixels across (the tiers in `sizePics`); before PR 3 a zoomed-in tile
+stretched the small one.
+
+Pages to photograph wait in a queue (`P.want`), small pictures before full ones, and are taken one at
+a time:
+
+- A page with no picture at all is taken straight away. A page that changed, and every full picture,
+  waits for idle time (`requestIdleCallback`).
+- Nothing is taken while the camera moves: a pan, pinch, wheel or glide holds the queue until it has
+  rested for 400 ms. The camera's own framing jumps do not count.
+- Only tiles in view are taken. The others wait until the camera brings them into view.
+- A hidden tab takes nothing; the queue starts again when the tab shows.
+- A new picture replaces the tile's picture in place; the stage is drawn again only when a skeleton
+  becomes a picture.
+
+| | before (PR 2) | after PR 3 |
+|---|---|---|
+| first picture, opened cold | 933 ms | 973 ms |
+| all 14 pictures, opened cold | 3547 ms | 3540 ms |
+| first picture, opened again | 237 ms | 234 ms |
+| main thread busy during a build | 30% | 30% |
+| pictures taken during a build | 34 | 30 |
+| pictures taken while panning, during a build | 8 | 0 |
+| panning at rest / during a build | 60 / 58 fps | 60 / 60 fps |
