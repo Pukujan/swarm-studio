@@ -125,8 +125,9 @@ export function pickKind(prompt = '', c = {}, template = '') {
   if (lean) score[lean] += 1.5
   if (facts.game && facts.clips) score.gameplay += 1
   else score.demo += 0.5
-  // a gameplay trailer needs footage of a game
+  // a gameplay trailer needs footage of a game; a mood piece needs pictures
   if (!facts.clips) score.gameplay = Math.min(score.gameplay, 0)
+  if (!facts.pictures && !facts.clips) score.mood = Math.min(score.mood, 0)
   const best = KIND_IDS.reduce((a, k) => (score[k] > score[a] ? k : a), 'demo')
   return { kind: best, score }
 }
@@ -194,7 +195,7 @@ export function checkTreatment(raw = {}, c, { prompt = '', template = '' } = {})
   const facts = buildFacts(c)
   // with no prompt and no plan, a film still has to say what the build is: a mood piece or a music cut is the person's call
   if (!String(prompt).trim() && !PLAN_LEANS[template] && (raw?.kind === 'mood' || raw?.kind === 'music')) return { ...directByRules(c, { prompt, template }), fell: `the director wanted a ${FILM_KINDS[raw.kind].label.toLowerCase()} with no prompt asking for one` }
-  if (!FILM_KINDS[raw?.kind] || (raw.kind === 'gameplay' && !facts.clips)) return { ...directByRules(c, { prompt, template }), fell: raw?.kind ? `the director asked for ${clip(raw.kind, 20)}, which this build cannot make` : 'the director gave no kind' }
+  if (!FILM_KINDS[raw?.kind] || (raw.kind === 'gameplay' && !facts.clips) || (raw.kind === 'mood' && !facts.pictures && !facts.clips)) return { ...directByRules(c, { prompt, template }), fell: raw?.kind ? `the director asked for ${clip(raw.kind, 20)}, which this build cannot make` : 'the director gave no kind' }
   const intents = {}
   for (const a of Array.isArray(raw.acts) ? raw.acts : []) if (a?.name && a.intent) intents[String(a.name).toLowerCase().trim()] = a.intent
   return treatment(raw.kind, { prompt, c, why: raw.why, logline: raw.logline, intents, seconds: raw.seconds, voice: raw.voice === true, by: 'model' })

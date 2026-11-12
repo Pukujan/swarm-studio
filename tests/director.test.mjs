@@ -137,3 +137,14 @@ test('with no model, every kind cuts a film that plays, on every build', () => {
   assert.equal(plain[0].kind, 'open')
   assert.equal(plain.at(-1).kind, 'cta')
 })
+
+test('floors: a build with no pictures never gets a mood piece, and a film never ends on two closing cards', () => {
+  const bare = { ...shop, images: [], clips: [] }
+  assert.notEqual(pickKind('a calm, slow, quiet film', bare).kind, 'mood')
+  assert.notEqual(checkTreatment({ kind: 'mood' }, bare, { prompt: 'calm' }).kind, 'mood')
+  const film = directByRules(shop, { prompt: 'announce the opening on March 20' })
+  const b = checkBoard({ beats: [{ kind: 'title', headline: 'March 20' }, { kind: 'image', image: 1, headline: 'x' }, { kind: 'image', image: 2, headline: 'y' }, { kind: 'cta', headline: 'Lume Roasters', sub: 'Book' }, { kind: 'cta', headline: 'See you there', sub: 'Book' }] }, shop, { prompt: 'announce', seed: 1, film })
+  assert.equal(b.at(-1).kind, 'cta')
+  assert.notEqual(b.at(-2).kind, 'cta')
+  assert.match(b.at(-1).headline, /Lume/)
+})
