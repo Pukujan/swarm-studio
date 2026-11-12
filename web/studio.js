@@ -6,6 +6,7 @@ import { makeProject } from './project.js'
 import { makeWork } from './work.js'
 import { makePlan } from './plan.js'
 import { makeBrand } from './brand.js'
+import { makeScaffold } from './scaffold.js'
 import { makeNav, toAddress } from './nav.js'
 const sw = window.swarm
 const W = window
@@ -42,13 +43,13 @@ const STATIONS = { canvas: 'Design deck', video: 'Film studio', app: 'Engine roo
 C.STATIONS = STATIONS
 
 function setMode(m) {
-  for (const x of ['home', 'project', 'station', 'plan', 'brand']) body.classList.toggle(`cosmos-${x}`, m === x)
+  for (const x of ['home', 'project', 'station', 'plan', 'brand', 'studio']) body.classList.toggle(`cosmos-${x}`, m === x)
 }
 
 // Where the person is: one machine (web/nav.js, docs/specs/34-navigation-state.md). C.mode, the pill
 // and the back button are read from it; C.go turns the old (mode, view) calls into its events.
 const nav = C.nav = makeNav({ search: sw && !sw.wall ? location.search : '' })
-const MODE_OF = { home: 'home', overview: 'project', plan: 'plan', brand: 'brand', draft: 'station', deck: 'station', video: 'station', app: 'station', game: 'station' }
+const MODE_OF = { home: 'home', overview: 'project', plan: 'plan', brand: 'brand', studio: 'studio', draft: 'station', deck: 'station', video: 'station', app: 'station', game: 'station' }
 Object.defineProperty(C, 'mode', { get: () => (!sw || sw.wall ? 'off' : MODE_OF[nav.view.room]), enumerable: true })
 const inBuild = () => nav.actor.getSnapshot().matches('build')
 // the build a room asks for when none is open: the one loading, else the one the canvas holds
@@ -59,6 +60,7 @@ function eventsFor(m, v) {
   const at = nav.view
   if (m === 'home') return [{ type: 'home' }]
   if (m === 'brand') return [{ type: 'brand' }]
+  if (m === 'studio') return [{ type: 'studio', project: v?.project, step: v?.step }]
   if (m === 'plan') return [{ type: 'plan', plan: v || C.planView?.id || null }]
   if (m === 'game') return [{ type: 'room', room: 'game', run: v }]
   if (m === 'project') {
@@ -99,9 +101,10 @@ nav.subscribe(v => sw.followPlayer?.(v))
 // version, plan) is a history entry; the player and its page replace the current one. Back, Forward
 // and a reload rebuild the state from the address alone. Other keys (wall, chatter, the hosted
 // studio's prompt) are kept as they are.
-const NAV_KEYS = ['project', 'version', 'room', 'run', 'plan', 'play', 'page', 'replay']
+const NAV_KEYS = ['project', 'version', 'room', 'run', 'plan', 'play', 'page', 'replay', 'step']
 // a version is one project's, so a project learned for the version shown is not a new place
-const place = v => [v.room === 'brand' ? v.from : v.room, v.version, v.run, v.plan].join('|')
+// (a Studio's step is not a new place either: moving between steps replaces the entry)
+const place = v => [v.room === 'brand' ? v.from : v.room, v.version, v.run, v.plan, v.room === 'studio' ? v.project : ''].join('|')
 let restoring = false
 let written = nav.view
 function writeAddress(v) {
@@ -143,7 +146,15 @@ function draw(planId) {
   setMode(m)
   if (room !== 'plan') C.planView?.hide()
   if (room !== 'brand') C.brandView?.hide()
-  if (room === 'brand') {
+  if (room !== 'studio') C.scaffoldView?.hide()
+  if (room === 'studio') {
+    // a Studio project before anything is built (spec 37): its scaffold beside the chat, on the step the
+    // address or the caller named (none: the planner's start)
+    C.homeView.hide()
+    C.projectView.hide()
+    C.chat(true)
+    C.scaffoldView.show(project, nav.actor.getSnapshot().context.step)
+  } else if (room === 'brand') {
     // a website's or app's brand sheet (spec 31), beside the chat it came from
     C.homeView.hide()
     C.projectView.hide()
@@ -188,6 +199,7 @@ C.up = () => {
   if (sw.wall) return false
   const room = nav.view.room
   if (room === 'brand') { nav.go({ type: 'back' }); return true }
+  if (room === 'studio') { C.go('home'); return true }
   if (room === 'home') return false
   C.go(inBuild() && room !== 'overview' ? 'project' : 'home')
   return true
@@ -211,7 +223,10 @@ C.talkGame = ({ text = '', chat = null, said = [], plan = null } = {}) => {
   sw.talk.start({ kind: 'game', text, chat, said, blank: true })
 }
 C.planDraft = plan => C.planView.draft(plan)
-// open the brand sheet for a talk's brief (spec 31): { chat, brief, kind, done(chat, locked) }
+// a Studio project's scaffold (spec 37), on a step or the planner's start
+C.studio = (project, step = null) => { C.project = project; C.go('studio', { project, step }) }
+// open the brand sheet for a talk's brief (spec 31): { chat, brief, kind, done(chat, locked) }; with
+// { project }, that project's own brand (spec 37)
 C.brand = opts => { C.go('brand'); return C.brandView.open(opts) }
 // open a project: its newest build (or the one asked for); with no run, the build just started
 C.open = (run, pid) => {
@@ -382,6 +397,9 @@ function start() {
   const broot = document.createElement('div')
   body.append(broot)
   C.brandView = makeBrand({ sw, C, root: broot })
+  const sroot = document.createElement('div')
+  body.append(sroot)
+  C.scaffoldView = makeScaffold({ sw, C, root: sroot })
   chrome()
   C.work = makeWork({ sw, C })
   sw.on(e => {

@@ -66,30 +66,45 @@ One module per kind, so sessions don't collide in `web/home.js`, `web/board.js` 
 `web/kit-site.js`, `web/kit-app.js`, `web/kit-game.js`, `web/kit-video.js`, `web/kit-deck.js` and
 `web/kit-brand.js`.
 
-- Each module exports one `kit` object.
-- `web/kits.js` lists them, one import line per kind. That line is the only shared edit a kit makes.
-- The modules are joined into one script (`server/page.mjs`), so a kit keeps its helpers inside its own
-  closure or prefixes them with its kind.
+- Each module exports one object named `<kind>Kit` (`siteKit`, `appKit`, `gameKit`, `videoKit`,
+  `deckKit`, `brandKit`).
+- `web/kits.js` lists them: one import line per kind (`import { appKit } from './kit-app.js'`) and its
+  name in the list. That is the only shared edit a kit makes.
+- `server/page.mjs` joins every `web/kit-<kind>.js` in its own closure, and only `<kind>Kit` leaves it,
+  so a kit's helpers stay its own.
 
 ```js
 // web/kit-app.js
-export const kit = {
+export const appKit = {
   kind: 'app',                     // site · app · game · video · deck · brand
   name: 'App',
   icon: 'code',                    // a name from web/icons.js
   steps: ['brand', 'references', 'assets', 'plan'],   // which scaffold steps it shows (Lock always shows)
   // "where to start": 2–4 choices, the planner pre-selects one and says why in the chat
-  starts: [{ id: 'screens', name: 'Screens' }, { id: 'data', name: 'Data' }, { id: 'brand', name: 'Brand' }],
+  starts: [{ id: 'plan', name: 'Screens', why: '…' }, { id: 'brand', name: 'Brand', why: '…' }],
+  // optional: which of `starts` the planner picks, from what the project has so far
+  suggest: ctx => 'brand',
   // which parts of the project's brand it uses
   reads: ['palette', 'type', 'voice', 'pictures'],
+  // optional, async: loads its saved state or drafts one from ctx.studio.idea, once, before its cards
+  prepare: async ctx => {},
   // its Plan step: sections of artboards on the shared board
   plan: {
-    sections: ctx => [{ sec: 'Screens', cards: [{ key, name, render(el, ctx), inspect(el, ctx) }] }],
-    // the chat's questions for this kind (Studio talk, below)
+    // a card: cls (its look) or the flags add (a + card) and wide; render(el), with null meaning the
+    // kit's own board draws it (the scaffold shows its name); inspect(box) for the inspector, or press()
+    sections: ctx => [{ sec: 'Screens', cards: [{ key, name, cls, add, wide, render(el), inspect(box), press() }] }],
+    // the chat's questions for this kind (Studio talk, below); [] when the planner asks them (a game)
     questions: ctx => [{ id, q, options: [{ id, name, picture? }], free: true }],
+    // a picked option or a typed line in the left chat, back to the kit (wired with the Studio talk)
+    answer: (ctx, { id, option } | { text }) => ({ say, options, left }),
+    left: ctx => 0,                    // the decisions still open ("N left")
     done: ctx => true | false          // whether the Plan step's dot is "done"
   },
+  // minutes 0: not known (a game has no estimate)
   proposal: ctx => ({ items: [{ what, order }], minutes, credits }),
+  // optional: a kit with its own gate (the game's priced confirm, checked again by the server); Lock
+  // calls it instead of writing the spec itself, and lock(ctx) returns null until it has locked
+  gate: async ctx => {},
   // what it writes into the locked spec, under spec.kits[kind]; plain JSON
   lock: ctx => ({ /* its own fields */ }),
   // starts its build from the locked spec; called only from the person's Build press
@@ -100,9 +115,13 @@ export const kit = {
 ```
 
 `ctx` is what the scaffold hands every kit:
-- `{ project, studio, brand, refs, assets, chat, sw, C, board }`;
+- `{ project, studio, brand, refs, assets, chat, sw, C, board, state, look, save, select, say }`;
 - `board` is the `makeBoard` instance;
-- `sw.say(text)` posts in the left chat.
+- `state` is the kit's own saved working state (`studio.kit`), and `save(fields)` merges into it
+  (`POST /api/studio/:pid/kit`; `null` drops a field) and redraws;
+- `look` is the brand's colours and fonts to draw cards in, or null;
+- `refresh()` redraws the sections; a kit calls it whenever its cards change;
+- `select(key)` selects a card, and `say(text)` (also `sw.say`) posts in the left chat.
 
 A kit never builds the chat, the top bar or the board shell itself.
 
@@ -113,6 +132,38 @@ spec 21):
 - its lock is the plan's lock.
 
 The game session moves it behind this contract without changing what the board does.
+- It brings its own board (`web/plan.js` makes its own `makeBoard`), so its cards have `render: null`
+  and `inspect` selects the card there.
+- Its Lock is its own gate (`gate(ctx)`), and its questions come from the planner in the chat (spec 27).
+
+### A game's starter
+
+A game's Plan step starts with three choices and a set of systems (the game kit, `engine/starters.mjs`,
+the `starters/` folder):
+
+- **A choice carries its reason and its owner:** `{ value, why, by: 'planner' | 'person', turn? }`, the
+  same shape as spec 27's decisions. The planner suggests; the person keeps or removes. The planner never
+  overwrites a choice the person made.
+- **The three choices are Plan choices, not Brand:**
+  - `engine`: `'web'` (the browser) or `'godot'`;
+  - `template`: a starter id, such as `'strategy-topdown'`;
+  - `assets`: a pack id, or `'paint'` (paint my own).
+- **Systems are switchable parts of a starter:** `{ id, name, why, on, by, required? }`. A required one
+  can't be removed.
+- **Lock writes the starter into the locked spec:**
+  `spec.starter = { engine, template, assets, systems: [ids on], addons: [{ id, version, source }] }`.
+  The build reads only that. Changing a starter choice reopens the spec, as any decision does.
+- **A starter is a folder that ships inside the plugin:** `starter.json` (id, name, engine, families,
+  systems, assets) and its files. The build copies it in before the crew writes. Nothing is downloaded at
+  build time (the Nous review).
+- **Add-ons say where they came from:** `source: 'ours' | 'pinned' | 'brought'`, an exact version, the
+  licence and credits, and a sha256 and url for pinned ones. One the person brings is dropped in like an
+  asset and kept with the project.
+- **A pack is an asset with the role `pack`.** It is "use this as given": it skips painting and is never
+  redrawn. Its record keeps `pack: { id, source, version, licence, credits, sha256, url, engines, native }`.
+  `native: true` means the web preview can't run it, and **Open in Godot** is the main action (spec 38).
+- **The crew builds on the starter.** The build prompt names the starter's APIs. The crew adds the game's
+  own scenes and scripts and doesn't rewrite the systems.
 
 ## The project's brand
 
@@ -134,7 +185,7 @@ There is one brand per project. Every kit and every output reads it: colours, ty
 |---|---|---|
 | Means | "like this": mood, examples, inspiration | "use this as given": a logo, product photos, a game's starter pack |
 | The crew | reads them and makes its own | puts them in as they are, never redrawn or recoloured |
-| Store | `projects/<pid>/refs/` (spec 29, `engine/refs.mjs`) | `projects/<pid>/assets/` (new, `engine/assets.mjs`) |
+| Store | `projects/<pid>/refs/` (spec 29, `engine/refs.mjs`) | `projects/<pid>/assets/` (new, `engine/assetstore.mjs`) |
 | Index | `refs/index.json` | `assets/index.json`: `[{ id, kind, name, file, w, h, source, role, added, removed }]` |
 
 - `role` says what an asset is: `logo`, `product`, `photo`, `font`, `pack` or `other`.
@@ -220,7 +271,7 @@ and a rough first frame.
 
 | Part | Session | Files |
 |---|---|---|
-| This spec, the question, the scaffold, the Website kit, the proposal and Lock, the lightbulb, the Studio talk | Studio first (this one) | `web/scaffold.js` (beside the studio controller `web/studio.js`), `web/kits.js`, `web/kit-site.js`, `web/kit-brand.js`, `server/studio.mjs`, `engine/assets.mjs` |
+| This spec, the question, the scaffold, the Website kit, the proposal and Lock, the lightbulb, the Studio talk | Studio first (this one) | `web/scaffold.js` (beside the studio controller `web/studio.js`), `web/kits.js`, `web/kit-site.js`, `web/kit-brand.js`, `server/studio.mjs`, `engine/assetstore.mjs`, `engine/studio.mjs` |
 | The `studio` states in the machine | Onboarding (`local_433b12aa-bfec-4733-a7fc-799ca3c525cd`) with Studio first | `web/nav.js` |
 | App kit | game-art-pipeline (`local_d942daf3-5e93-4b16-859f-19350f268328`) | `web/kit-app.js` |
 | Video kit, Story film | video-director (`local_6e540b29-6ca4-46c0-a129-924b821f037a`) | `web/kit-video.js` |

@@ -337,6 +337,8 @@ export function makeHome({ sw, C, root }) {
     if (!p) return
     if (p.plan) return C.plan(p.id)
     opened[p.id] = Date.now()
+    // a Studio project with nothing built yet opens on its scaffold (spec 37)
+    if (p.studio && !p.head) { store.set('home.opened', opened); return C.studio(p.id) }
     store.set('home.opened', opened)
     C.open(version || p.head, p.id)
   }
@@ -806,9 +808,18 @@ export function makeHome({ sw, C, root }) {
   }
   // the Studio, until the scaffold (spec 37, slice 2) opens it: the game's Plan board, the brand sheet
   // beside the talk, or the talk; Thorough asks the questions the prompt has not answered first
-  function studioFirst(text) {
+  async function studioFirst(text) {
     closePop()
     if (make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
+    // a kind with a Studio kit (spec 37): its project is made now, and its scaffold opens beside the chat
+    if (!hosted() && window.swarmKits?.[make.k]) {
+      try {
+        const kit = window.swarmKits[make.k]
+        const j = await post('/api/studio', { kind: make.k, idea: text, depth, steps: kit.steps })
+        input.value = ''
+        return C.studio(j.project.id)
+      } catch (err) { return toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
+    }
     if (make.k === 'brand') { input.value = ''; return window.swarmCosmos?.brand?.({ brief: text, kind: 'site' }) }
     if (make.k === 'video') return talkFirst(text)
     if (depth === 'thorough') { G.sheet = true; return guide(text) }

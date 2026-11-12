@@ -35,7 +35,7 @@ export function view(snap) {
     : m({ build: { playable: { room: 'deck' } } }) ? 'deck' : m({ build: { playable: { room: 'app' } } }) ? 'app' : 'overview'
   const player = m({ build: { playable: { player: 'visitor' } } }) ? 'visitor' : m({ build: { playable: { player: 'prototype' } } }) ? 'prototype' : 'closed'
   const replay = m({ build: { playable: { room: { deck: 'replay' } } } })
-  return { room, player, replay, ...snap.context, page: player === 'closed' ? null : snap.context.page, step: room === 'studio' ? snap.context.step : null }
+  return { room, player, replay, ...snap.context, page: player === 'closed' ? null : snap.context.page, step: room === 'studio' || (room === 'brand' && snap.context.from === 'studio') ? snap.context.step : null }
 }
 
 // Every room move: to a room of the open version, or to its game
@@ -105,8 +105,8 @@ export const navMachine = setup({}).createMachine({
           target: target(room),
           actions: assign({ version: ({ event }) => event.run, run: ({ event }) => event.run, pending: ({ event }) => event.run, page: null })
         }))
-      },
-      exit: assign({ step: null })
+      }
+      // the step stays in the context while the brand sheet is open from here, so Back lands on it
     },
     plan: {},
     brand: {
@@ -116,6 +116,7 @@ export const navMachine = setup({}).createMachine({
         back: [
           { guard: ({ context }) => context.from === 'plan', target: 'plan' },
           { guard: ({ context }) => context.from === 'draft', target: 'draft' },
+          { guard: ({ context }) => context.from === 'studio' && !!context.project, target: 'studio' },
           { guard: ({ context }) => context.from === 'game' && !!context.version && !!context.run, target: target('game') },
           ...BUILD_ROOMS.map(room => ({ guard: ({ context }) => context.from === room && !!context.version, target: target(room) })),
           { target: 'home' }

@@ -6,6 +6,10 @@
 //   POST /api/brand/:chat/pick { part: 'pack', id, parts? } -> a pack fills the sheet (or only the parts named)
 //   POST /api/brand/:chat/edit { part, id, values }   -> { chat, brand, theme }  an option's colours, fonts or the story
 //   POST /api/brand/:chat/lock | /unlock              -> { chat, brand, theme }
+// One brand per project (docs/specs/37-studio-first.md): the same routes answer for a project's
+// brand.json, with `chat` in the answer being the project's id:
+//   GET  /api/projects/:pid/brand                     POST /api/projects/:pid/brand { brief, kind }
+//   POST /api/projects/:pid/brand/pick | edit | lock | unlock
 import { CHAT_ID } from '../engine/chats.mjs'
 import { brandOptions, brandTheme, brandBrief, fixPalette, paletteFromWords } from '../engine/brand.mjs'
 import { packCards, applyPack, packOf, PARTS } from '../engine/brandpacks.mjs'
@@ -13,8 +17,9 @@ import { packCards, applyPack, packOf, PARTS } from '../engine/brandpacks.mjs'
 const HEXC = /^#[0-9a-f]{6}$/i
 const FONT = /^[A-Za-z][\w ]{1,38}$/
 
-// chats: the shared store; model() -> (messages -> text) or null
-export function brandRoutes({ chats, model = () => null }) {
+// chats: the shared store; model() -> (messages -> text) or null; projectBrands: engine/studio.mjs's
+// `brands` (get(pid) -> { id, brand }, update(pid, fn)), or none
+export function brandRoutes({ chats, model = () => null, projectBrands = null }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const body = req => new Promise(resolve => {
     let b = ''
@@ -24,8 +29,9 @@ export function brandRoutes({ chats, model = () => null }) {
   // the pack cards are made per view from the brief (data and the shipped photo library: no model call)
   const view = chat => ({ chat: chat.id, brand: chat.brand || null, theme: chat.brand ? brandTheme(chat.brand) : null, packs: chat.brand ? packCards(chat.brand.brief, chat.brand.suggest, chat.brand.pack) : [] })
   const bad = msg => Object.assign(new Error(msg), { status: 400 })
+  // the store a call writes to (`S`): the chats, or the projects' brand.json (records are both { id, brand })
   // any change to a locked sheet opens it again
-  const change = (id, fn) => chats.update(id, chat => {
+  const change = (id, fn, S = chats) => S.update(id, chat => {
     if (!chat.brand) throw bad('no brand sheet yet')
     fn(chat.brand, chat)
     chat.brand.lockedAt = null
@@ -36,21 +42,25 @@ export function brandRoutes({ chats, model = () => null }) {
     if (!brief) throw bad('a brief is needed')
     let id = typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat) ? input.chat : null
     if (!id) id = chats.create({ kind: input.kind === 'app' ? 'app' : 'site', text: brief }).id
-    const have = chats.get(id)?.brand
-    // the same brief keeps the sheet; a new brief makes new options, and what was locked stays only until then
-    if (have && have.brief === brief) return view(chats.get(id))
+    return fill(chats, id, brief)
+  }
+  // options for a brief, into a record of the store; the same brief keeps the sheet, a new brief makes
+  // new options, and what was locked stays only until then
+  async function fill(store, id, brief) {
+    const have = store.get(id)?.brand
+    if (have && have.brief === brief) return view(store.get(id))
     const opts = await brandOptions({ brief, chat: model() })
-    return chats.update(id, chat => {
+    return store.update(id, chat => {
       chat.brand = { brief, story: opts.story, palettes: opts.palettes, types: opts.types, suggest: opts.suggest || [], pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null }
     }).then(view)
   }
 
-  function pick(id, input) {
+  function pick(id, input, S = chats) {
     if (input.part === 'pack') {
       if (!packOf(String(input.id || ''))) throw bad('no such pack')
       const parts = Array.isArray(input.parts) ? input.parts.filter(p => PARTS.includes(p)) : PARTS
       if (!parts.length) throw bad('name a part')
-      return change(id, b => { applyPack(b, input.id, parts) })
+      return change(id, b => { applyPack(b, input.id, parts) }, S)
     }
     const part = input.part === 'type' ? 'type' : input.part === 'palette' ? 'palette' : null
     if (!part) throw bad('part is palette, type or pack')
@@ -74,10 +84,10 @@ export function brandRoutes({ chats, model = () => null }) {
       }
       if (!list.some(x => x.id === input.id)) throw bad('no such option')
       b.pick[part] = input.id
-    })
+    }, S)
   }
 
-  function edit(id, input) {
+  function edit(id, input, S = chats) {
     const v = input.values || {}
     return change(id, b => {
       if (input.part === 'story') {
@@ -96,14 +106,15 @@ export function brandRoutes({ chats, model = () => null }) {
         Object.assign(o, fixPalette(next))
       } else for (const k of ['heading', 'body']) if (FONT.test(String(v[k] || ''))) o[k] = String(v[k]).trim()
       b.pick[input.part] = o.id
-    })
+    }, S)
   }
 
-  const lock = id => chats.update(id, chat => {
+  const lock = (id, S = chats) => S.update(id, chat => {
     if (!brandTheme(chat.brand)) throw bad('pick a palette and a type first')
     chat.brand.lockedAt = Date.now()
   }).then(view)
-  const unlock = id => chats.update(id, chat => { if (chat.brand) chat.brand.lockedAt = null }).then(view)
+  const unlock = (id, S = chats) => S.update(id, chat => { if (chat.brand) chat.brand.lockedAt = null }).then(view)
+  const op = (what, id, input, S = chats) => (what === 'pick' ? pick(id, input, S) : what === 'edit' ? edit(id, input, S) : what === 'lock' ? lock(id, S) : unlock(id, S))
 
   const routes = function handle(req, res, url) {
     if (url.pathname === '/api/brand') {
@@ -111,21 +122,38 @@ export function brandRoutes({ chats, model = () => null }) {
       body(req).then(make).then(v => json(res, 200, v)).catch(err => json(res, err.status || 502, { error: String(err.message || err) }))
       return true
     }
+    const pm = projectBrands && url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/brand(?:\/(pick|edit|lock|unlock))?$/)
+    if (pm) {
+      const rec = projectBrands.get(pm[1])
+      if (!rec) { json(res, 404, { error: 'no such project' }); return true }
+      if (req.method === 'GET' && !pm[2]) { json(res, 200, view(rec)); return true }
+      if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
+      body(req).then(input => {
+        if (!pm[2]) {
+          const brief = String(input.brief || '').trim().slice(0, 4000)
+          if (!brief) throw bad('a brief is needed')
+          return fill(projectBrands, pm[1], brief)
+        }
+        return op(pm[2], pm[1], input, projectBrands)
+      }).then(v => json(res, 200, v)).catch(err => json(res, err.status || 400, { error: String(err.message || err) }))
+      return true
+    }
     const m = url.pathname.match(/^\/api\/brand\/([^/]+)(?:\/(pick|edit|lock|unlock))?$/)
     if (!m) return false
     if (!CHAT_ID.test(m[1]) || !chats.get(m[1])) { json(res, 404, { error: 'no such chat' }); return true }
     if (req.method === 'GET' && !m[2]) { json(res, 200, view(chats.get(m[1]))); return true }
     if (req.method !== 'POST' || !m[2]) { json(res, 405, { error: 'POST' }); return true }
-    body(req).then(input => (m[2] === 'pick' ? pick(m[1], input) : m[2] === 'edit' ? edit(m[1], input) : m[2] === 'lock' ? lock(m[1]) : unlock(m[1])))
+    body(req).then(input => op(m[2], m[1], input))
       .then(v => json(res, 200, v)).catch(err => json(res, err.status || 400, { error: String(err.message || err) }))
     return true
   }
   return routes
 }
 
-// the locked sheet of a chat, as runSwarm takes it; null when there is none or it is open
+// the locked sheet of a chat (or of a project, with its brands store), as runSwarm takes it; null when
+// there is none or it is open
 export function lockedBrand(chats, id) {
-  const b = id && chats.get(id)?.brand
+  const b = id && chats?.get(id)?.brand
   const theme = b?.lockedAt ? brandTheme(b) : null
   return theme ? { theme, brief: brandBrief(b) } : null
 }

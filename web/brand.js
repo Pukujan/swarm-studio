@@ -7,7 +7,7 @@ import { makeBoard } from './board.js'
 
 export function makeBrand({ sw, C, root }) {
   const esc = sw.esc
-  const B = { on: false, chat: null, brand: null, theme: null, packs: [], sel: null, framed: false, done: null, busy: false }
+  const B = { on: false, chat: null, project: null, brand: null, theme: null, packs: [], sel: null, framed: false, done: null, busy: false }
 
   // the stage, camera, inspector, Esc and toast are the shared board (web/board.js)
   const bd = makeBoard({ root, cls: 'project plan brand-sheet', label: 'Brand sheet', fit: [0.35, 1], on: () => B.on, selected: () => !!B.sel, clear: () => select(null) })
@@ -31,14 +31,17 @@ export function makeBrand({ sw, C, root }) {
   const api = (path, opts) => sw.api(path, opts).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j })
   const post = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })
   const take = v => { B.chat = v.chat; B.brand = v.brand; B.theme = v.theme; B.packs = v.packs || []; fonts(); render() }
-  const call = (what, body) => post(`/api/brand/${encodeURIComponent(B.chat)}/${what}`, body).then(take).catch(err => toast(err.message))
+  // a chat's sheet, or a Studio project's own brand (spec 37), on the same routes
+  const base = () => (B.project ? `/api/projects/${encodeURIComponent(B.project)}/brand` : `/api/brand/${encodeURIComponent(B.chat)}`)
+  const call = (what, body) => post(`${base()}/${what}`, body).then(take).catch(err => toast(err.message))
   async function lock() {
     await call('lock')
     if (!B.brand?.lockedAt) return
     B.done?.(B.chat, true)
     back()
   }
-  function back() { C.go('station', 'canvas') }
+  // back to the chat it came from, or to the Studio's scaffold
+  function back() { if (B.project) C.up(); else C.go('station', 'canvas') }
 
   // the type options' fonts, so each pairing shows as itself
   const loaded = new Set()
@@ -72,7 +75,7 @@ export function makeBrand({ sw, C, root }) {
 
   function render() {
     const b = B.brand
-    if (!b) { world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Brand sheet</span><div class="abs"><div class="ab pcard wait-in"><b>Story</b><span></span></div></div></section></div>'; return }
+    if (!b) { primary.disabled = B.busy; world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Brand sheet</span><div class="abs"><div class="ab pcard wait-in"><b>Story</b><span></span></div></div></section></div>'; return }
     const locked = !!b.lockedAt
     primary.querySelector('.t').textContent = locked ? 'Unlock' : 'Lock'
     primary.classList.toggle('pri', !locked)
@@ -189,14 +192,20 @@ export function makeBrand({ sw, C, root }) {
     el: root,
     get chat() { return B.chat },
     // open the sheet for a talk's brief: made once per brief, kept on the chat
-    async open({ chat = null, brief = '', kind = 'site', done = null } = {}) {
+    async open({ chat = null, project = null, brief = '', kind = 'site', done = null } = {}) {
       B.done = done
       B.sel = null
       B.framed = false
-      if (chat !== B.chat) { B.brand = null; B.chat = chat }
-      render()
+      if (chat !== B.chat || project !== B.project) { B.brand = null; B.chat = chat; B.project = project }
+      crumb.querySelector('.br-up').textContent = project ? 'Studio' : 'Chat'
+      // Lock waits until the options are there
       B.busy = true
-      try { take(await post('/api/brand', { chat, brief, kind })) } catch (err) { toast(err.message) } finally { B.busy = false; render() }
+      render()
+      try {
+        const v = await post(project ? base() : '/api/brand', project ? { brief, kind } : { chat, brief, kind })
+        if (project) v.chat = null
+        take(v)
+      } catch (err) { toast(err.message) } finally { B.busy = false; render() }
       B.done?.(B.chat, !!B.brand?.lockedAt)
     },
     show() { B.on = true; root.hidden = false; crumb.hidden = false; if (B.brand) { B.framed = false; render() } },
