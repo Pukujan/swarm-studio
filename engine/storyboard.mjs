@@ -346,8 +346,9 @@ function openFilm(beats, c, film, fixes) {
 function closeFilm(beats, c, film, fixes) {
   const named = b => !!b && new RegExp(escapeRe(c.brand), 'i').test(`${b.headline} ${b.kicker} ${b.sub}`)
   const last = () => beats.at(-1), tail = () => beats.slice(-2).some(named)
-  // no film ends on an empty frame
+  // no film ends on an empty frame, or on the same closing card twice
   while (beats.length > 1 && last().kind === 'black') beats.pop()
+  while (beats.length > 2 && last().kind === 'cta' && beats.at(-2).kind === 'cta') { const l = beats.pop(); if (!named(last()) && named(l)) beats[beats.length - 1] = l }
   if (film.closing === 'cta') {
     if (!(['cta', 'open', 'title'].includes(last().kind) && named(last()))) { beats.push(card(c, 'cta', { sub: clip(c.cta || 'Made with Swarm Studio', 60) })); fixes.push('added the closing card with the name') }
     else if (last().kind !== 'cta') last().kind = 'cta'

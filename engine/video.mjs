@@ -9,7 +9,7 @@
 import { spawn, execFile } from 'node:child_process'
 import { CAST, MOODS } from './sound.mjs'
 import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
 import { dirname, join, extname, basename } from 'node:path'
 import { streamChat } from './llm.mjs'
 import { checkLook, lookPrompt, lookCss, paletteVars, paletteCss, textureLayer, revealTween, cutTween, cutLayer, cutCss, rng, hash, MOTIONS, CUTS } from './look.mjs'
@@ -59,6 +59,13 @@ export function collect(events, runDir) {
     if (e.type !== 'image' || !e.src) continue
     const file = join(runDir, 'img', e.src.split('/').pop())
     if (existsSync(file) && !images.some(i => i.file === file)) images.push({ n: images.length + 1, gen: clip(e.gen, 160), page: e.page, file })
+  }
+  // a build whose pictures were placed without image events (a seeded or imported build): its picture folder
+  if (!images.length) {
+    try {
+      for (const f of readdirSync(join(runDir, 'img')).filter(f => /\.(png|webp|jpe?g)$/i.test(f) && !/^video-/.test(f)).sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)).slice(0, 24))
+        images.push({ n: images.length + 1, gen: clip(`${start.brief || ''}`, 120) || 'a picture from the build', page: pages[0]?.id || 'home', file: join(runDir, 'img', f) })
+    } catch {}
   }
   const brand = clip((pages[0]?.title || start.brief || 'Our site').split(/\s[—–|:-]\s/)[0], 40)
   // footage recorded from the running app (gameplay, a scroll through the site), when there is some

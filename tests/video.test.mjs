@@ -58,3 +58,15 @@ test('every layout family has a tall frame that composes', () => {
     assert.ok(!/NaN|undefined/.test(html.replace(/<script[\s\S]*?<\/script>/g, '')), `${layout} has NaN or undefined in its markup`)
   }
 })
+
+test('a build whose pictures were never logged as events still gives the film its pictures', async () => {
+  const { collect } = await import('../engine/video.mjs')
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const d = mkdtempSync(join(tmpdir(), 'collect-'))
+  mkdirSync(join(d, 'img'))
+  for (const f of ['2.png', '10.png', '1.png', 'video-x.png', 'notes.txt']) writeFileSync(join(d, 'img', f), 'x')
+  const c = collect([{ type: 'run:start', brief: 'a wine bar' }, { type: 'page', id: 'home', title: 'Tidepool' }], d)
+  assert.deepEqual(c.images.map(i => i.file.split('/').pop()), ['1.png', '2.png', '10.png'])
+})
