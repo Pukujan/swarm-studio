@@ -261,8 +261,8 @@ export function makeHome({ sw, C, root }) {
   async function openChat(id) {
     const chat = await api(`/api/chats/${encodeURIComponent(id)}`).catch(() => null)
     if (!chat?.id) { loadChats(); return }
-    // a game chat that already has its plan opens on the Plan board (spec 21)
-    if (chat.plan) return C.plan(chat.plan)
+    // a game chat opens beside its board: the plan when it has one, else the draft (spec 27)
+    if (chat.kind === 'game') return C.talkGame({ chat: chat.id, said: sw.talk.saidOf(chat), plan: chat.plan })
     const m = MAKES.find(x => x.k === ({ film: 'video' }[chat.kind] || chat.kind)) || MAKES[0]
     const run = m.k === 'site' ? null : { games: m.games, only: m.only }
     C.project = null
@@ -731,8 +731,9 @@ export function makeHome({ sw, C, root }) {
     e.preventDefault()
     const text = input.value.trim()
     if (!text) return showcases()
-    // a game is planned before anything costly is made (spec 21): its questions, then the Plan board
-    if (make.k === 'game' && !hosted()) return grill(text)
+    // a game is planned before anything costly is made (spec 21), by talking it through with the
+    // planner in the left chat while the Plan board takes shape beside it (spec 27)
+    if (make.k === 'game' && !hosted()) { closePop(); input.value = ''; return C.talkGame({ text }) }
     // "don't build yet, let's talk", "grill me first" or a question for the crew: the planner reads
     // the prompt (engine/talkplan.mjs) and a talk opens instead of a build; not sure, one choice
     const go = () => (grillOn ? guide(text) : confirmBuild(text))

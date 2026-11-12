@@ -103,6 +103,16 @@ C.home = () => { if (sw.wall) return; C.go('home') }
 C.up = () => { if (sw.wall) return false; if (C.mode === 'brand') { C.go('station', 'canvas'); return true } if (C.mode === 'station') { C.go('project'); return true } if (C.mode === 'project' || C.mode === 'plan') { C.go('home'); return true } return false }
 // open a plan (spec 21); fresh: the crew write its cards in
 C.plan = (id, fresh = false) => { C.planFresh = fresh; C.go('plan', id) }
+// a game talk (spec 27): the chat on the left, the plan taking shape on the board; a chat that already
+// has its plan opens on it. { text, chat, said, plan }
+C.talkGame = ({ text = '', chat = null, said = [], plan = null } = {}) => {
+  C.project = null
+  if (plan) C.plan(plan)
+  else { C.planView.talk(); C.go('plan') }
+  C.chat(true)
+  sw.talk.start({ kind: 'game', text, chat, said, blank: true })
+}
+C.planDraft = plan => C.planView.draft(plan)
 // open the brand sheet for a talk's brief (spec 31): { chat, brief, kind, done(chat, locked) }
 C.brand = opts => { C.go('brand'); return C.brandView.open(opts) }
 // open a project: its newest build (or the one asked for); with no run, the build just started

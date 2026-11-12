@@ -314,15 +314,15 @@ export async function say(chat, { said = '', pick = '' } = {}, { model = null, e
   else if (chat.turns.filter(t => t.who === 'person').length > 1) chat.lead = 'person'
   // any change to a decision reopens a locked spec
   if (changed && chat.state === 'locked') { chat.state = 'open'; if (chat.spec) chat.spec.lockedAt = null }
-  return plannerSays(chat, { model, env, now, first: chat.turns.filter(t => t.who === 'person').length === 1 })
+  return plannerSays(chat, { model, env, now, changed, asked: /\?\s*$/.test(text) && !option, first: chat.turns.filter(t => t.who === 'person').length === 1 })
 }
 
-async function plannerSays(chat, { model, env, now, first }) {
+async function plannerSays(chat, { model, env, now, first, changed = true, asked: question = false }) {
   // the planner leads: it takes its own recommendation on everything still open
   if (chat.lead === 'planner') for (const q of openQuestions(chat, env)) { const [k, ...v] = q.options[0].id.split(':'); setDecision(chat, k, v.join(':'), 'planner', `t${chat.turns.length}`, q.options[0].why) }
   let open = openQuestions(chat, env)
   const ai = await plannerTurn(chat, env, model, open[0])
-  if (ai) for (const [k, v] of Object.entries(ai.decide)) setDecision(chat, k, v, 'planner', `t${chat.turns.length}`, 'the planner read it')
+  if (ai) for (const [k, v] of Object.entries(ai.decide)) changed = setDecision(chat, k, v, 'planner', `t${chat.turns.length}`, 'the planner read it') || changed
   open = openQuestions(chat, env)
   const draft = draftOf(chat, env)
   const lead = first ? `${firstSentence(planSummary(draft))} ` : ''
@@ -332,10 +332,16 @@ async function plannerSays(chat, { model, env, now, first }) {
   else if (open[0] && chat.lead !== 'planner') q = open[0]
   const turn = { id: nextId(chat), who: 'planner', at: now, text: '', refs: [], marks: [], layers: [], made: [], reads: [] }
   if (q) Object.assign(turn, { text: clean(`${first ? lead : said}${q.text}`, 900), options: q.options })
-  else {
-    chat.spec = specOf(chat, env)
+  else if (chat.spec && !changed) {
+    // nothing changed: the answer alone (offline, a question waits for a planner model), and the spec stands
+    const text = said || (question && !model ? 'A planner model answers questions: pick one in Models. Nothing changed.' : 'Nothing changed.')
+    Object.assign(turn, { text: clean(text, 900) }, chat.state === 'locked' ? {} : { options: [{ id: 'lock', label: 'Lock', why: '', made: [] }, { id: 'talk', label: 'Keep talking', why: '', made: [] }] })
+  } else {
+    chat.spec = { ...specOf(chat, env), lockedAt: chat.state === 'locked' ? chat.spec?.lockedAt ?? null : null }
     chat.title ||= draft.title
-    Object.assign(turn, { text: clean(`${said}${chat.spec.brief}`, 1400), options: [{ id: 'lock', label: 'Lock', why: '', made: [] }, { id: 'talk', label: 'Keep talking', why: '', made: [] }] })
+    const { pictures, credits } = chat.spec.cost || {}
+    const priceLine = pictures == null ? '' : ` Price: about ${pictures} pictures${credits ? ` and ${credits} Meshy credits` : ', no credits'}.`
+    Object.assign(turn, { text: clean(`${said}${chat.spec.brief}${priceLine}`, 1500), options: [{ id: 'lock', label: 'Lock', why: '', made: [] }, { id: 'talk', label: 'Keep talking', why: '', made: [] }] })
   }
   chat.turns.push(turn)
   return turn
