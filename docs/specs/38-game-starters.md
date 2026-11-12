@@ -96,3 +96,44 @@ Each add-on lives in `starters/addons/<id>/`. Its `addon.json` says where it cam
   file that is already there. `godotStagePrompt` adds the starter's `CREW.md`, the API and the rules the crew
   builds on.
 - `engine/godotfirst.mjs` also reads the engine from `spec.starter.engine`.
+
+## Slice 3, built: the proof
+
+`node bench/starter-strategy.mjs --ssh windows --window --web --out bench/strategy-500.json` puts the strategy
+starter together in a temporary folder and measures 500 units: two teams, every unit ordered to the far
+corner every 4 s, 900 frames after 90 to warm up.
+- Godot runs on the Windows PC (`bench/godot-run.ps1`). Without `--ssh` it uses the local `SWARM_GODOT`.
+- The Web export comes back to this Mac and is served on 127.0.0.1. It is measured in a headless Chromium
+  (`bench/browser.mjs`, over the DevTools protocol, with no npm packages).
+- Every folder the run makes is deleted, here and on the PC.
+
+| Where | Frame avg | Frame p95 | fps | Swarm update |
+|---|---|---|---|---|
+| Godot 4.7.2, headless (Windows) | 6.9 ms | 8.3 ms | 145 | 3.4 ms |
+| Godot 4.7.2, window (RTX 4060 Laptop) | 2.6 ms | 3.5 ms | 379 | 1.8 ms |
+| Web export, Chromium (Apple M1, ANGLE Metal) | 16.7 ms | 19.1 ms | 60 (vsync) | 5.2 ms |
+
+`tests/starter-bench.test.mjs` holds `bench/strategy-500.json` to the bar: all 500 units alive at the end,
+an average frame of 20 ms or less, and a p95 of 25 ms or less. It measures again when `SWARM_GODOT` is set.
+
+The first Web run reached 45 fps, with a p95 of 37 ms. Three changes brought it to 60 fps:
+- the selection rings became a second MultiMesh (before, `_draw` drew one arc per unit each frame);
+- the fog refresh is spread over 8 frames, and stamps each cell once;
+- every loop stops at the highest slot in use.
+
+### What the Web preview cannot run
+
+The Web export is Godot's single-threaded WebAssembly build. It cannot load:
+- **native add-ons** (GDExtension: `.dll`, `.so`, `.dylib` or `.framework` files);
+- anything that needs threads;
+- C#.
+
+When a starter or a brought add-on has `"native": true` in its `addon.json`, or `"web": false`, the
+preview is not the way to play:
+- the board's Template card says so with the starter's `web` note;
+- the project is played with **Open in Godot**, as the main action where Play would be.
+
+`swarm_rts` is plain GDScript (`"native": false`), so the strategy starter plays in the preview.
+
+The **Open in Godot** action itself (open `ports/godot/` in the person's own Godot) is not built yet. It
+comes with the first starter or add-on that needs it.

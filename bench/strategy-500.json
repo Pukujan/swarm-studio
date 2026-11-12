@@ -1,0 +1,68 @@
+{
+ "at": "2026-11-12T21:03:04.357Z",
+ "units": 500,
+ "headless": {
+  "alive": 500,
+  "fps_avg": 144.9,
+  "frame_ms": {
+   "avg": 6.9,
+   "max": 10.24,
+   "p95": 8.34
+  },
+  "frames": 900,
+  "godot": "4.7.2-stable (official)",
+  "headless": true,
+  "off": "",
+  "renderer": "gl_compatibility",
+  "swarm_ms": {
+   "avg": 3.38,
+   "max": 5.03,
+   "p95": 4.66
+  },
+  "units": 500,
+  "web": false
+ },
+ "window": {
+  "alive": 500,
+  "fps_avg": 378.8,
+  "frame_ms": {
+   "avg": 2.64,
+   "max": 6.97,
+   "p95": 3.47
+  },
+  "frames": 900,
+  "godot": "4.7.2-stable (official)",
+  "headless": false,
+  "off": "",
+  "renderer": "gl_compatibility",
+  "swarm_ms": {
+   "avg": 1.8,
+   "max": 5.53,
+   "p95": 2.48
+  },
+  "units": 500,
+  "web": false
+ },
+ "web": {
+  "alive": 500,
+  "fps_avg": 60,
+  "frame_ms": {
+   "avg": 16.66,
+   "max": 27.3,
+   "p95": 19.1
+  },
+  "frames": 900,
+  "godot": "4.7.2-stable (official)",
+  "headless": false,
+  "off": "",
+  "renderer": "gl_compatibility",
+  "swarm_ms": {
+   "avg": 5.16,
+   "max": 7.7,
+   "p95": 6.4
+  },
+  "units": 500,
+  "web": true,
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)"
+ }
+}
