@@ -49,6 +49,7 @@ import { talkRoutes } from './talk.mjs'
 import { appKitRoutes } from './appkit.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
 import { storyRoutes } from './story.mjs'
+import { deckRoutes } from './deck.mjs'
 import { refRoutes } from './refs.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
@@ -1479,6 +1480,14 @@ const storyRoute = storyRoutes({
     const pages = snapshot(events, [], { name: nameFor(id)?.name }).pages
     return out.html.map((file, i) => { const s = got.shots.find(x => x.file === file) || {}; return { page: pages[i]?.id, desktop: s.shot, phone: s.phoneShot } }).filter(s => s.page)
   }
+})
+// the Deck kit (docs/specs/35-open-design.md section 7): its slides written by the planner, through Hermes
+const decks = deckRoutes({
+  dataDir, runsDir, chats,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'deck' }, model: modelFor('planner'), maxTokens: 2500, temperature: 0.5, signal: AbortSignal.timeout(90000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null
 })
 try {
   chats.cleanup()
@@ -3258,6 +3267,7 @@ const server = createServer((req, res) => {
   if (appKit(req, res, url)) return
   if (brands(req, res, url)) return
   if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute(req, res, url); return }
+  if (decks(req, res, url)) return
   if (refsRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
   if (workshops(req, res, url)) return
