@@ -8,29 +8,34 @@
 //   ├─ draft                     a new project talked through on the Design deck, nothing built yet
 //   ├─ plan                      a game plan (or the one a game talk is drafting)
 //   ├─ brand                     the brand sheet (context.from: where it was opened from)
+//   ├─ studio                    a project's scaffold before its first build (spec 37): context.project, context.step
+//   │  └─ brand · references · assets · plan · proposal
 //   └─ build                     a version is open
 //      ├─ video
 //      ├─ game                   context.run is the version's game run
 //      └─ playable               parallel: room (overview · deck live|replay · app) and player (closed · prototype · visitor)
 import { setup, createActor, assign } from './vendor/xstate/xstate.mjs'
 
-export const ROOMS = ['home', 'draft', 'overview', 'deck', 'app', 'game', 'video', 'plan', 'brand']
+export const ROOMS = ['home', 'draft', 'overview', 'deck', 'app', 'game', 'video', 'plan', 'brand', 'studio']
+// the Studio's steps, in order (spec 37); Esc goes up one, and from the first to Projects
+export const STEPS = ['brand', 'references', 'assets', 'plan', 'proposal']
 const BUILD_ROOMS = ['overview', 'deck', 'app', 'video']
 const PLAYABLE = ['overview', 'deck', 'app']
 // a run or project id as the address or a caller gives it: a short plain string, or nothing
 const id = v => (typeof v === 'string' && /^[\w.:-]{1,80}$/.test(v) ? v : null)
 
-const START_CONTEXT = { project: null, version: null, run: null, plan: null, page: null, pending: null, from: null }
+const START_CONTEXT = { project: null, version: null, run: null, plan: null, page: null, pending: null, from: null, step: null }
+const stepOf = v => (STEPS.includes(v) ? v : null)
 const target = room => (room === 'video' || room === 'game' ? `#nav.build.${room}` : `#nav.build.playable.room.${room}`)
 
 // The screen a snapshot shows, as one plain record every consumer and the address read
 export function view(snap) {
   const m = s => snap.matches(s)
-  const room = m('home') ? 'home' : m('draft') ? 'draft' : m('plan') ? 'plan' : m('brand') ? 'brand' : m({ build: 'video' }) ? 'video' : m({ build: 'game' }) ? 'game'
+  const room = m('home') ? 'home' : m('draft') ? 'draft' : m('plan') ? 'plan' : m('brand') ? 'brand' : m('studio') ? 'studio' : m({ build: 'video' }) ? 'video' : m({ build: 'game' }) ? 'game'
     : m({ build: { playable: { room: 'deck' } } }) ? 'deck' : m({ build: { playable: { room: 'app' } } }) ? 'app' : 'overview'
   const player = m({ build: { playable: { player: 'visitor' } } }) ? 'visitor' : m({ build: { playable: { player: 'prototype' } } }) ? 'prototype' : 'closed'
   const replay = m({ build: { playable: { room: { deck: 'replay' } } } })
-  return { room, player, replay, ...snap.context, page: player === 'closed' ? null : snap.context.page }
+  return { room, player, replay, ...snap.context, page: player === 'closed' ? null : snap.context.page, step: room === 'studio' ? snap.context.step : null }
 }
 
 // Every room move: to a room of the open version, or to its game
@@ -59,6 +64,13 @@ export const navMachine = setup({}).createMachine({
       reenter: true,
       actions: assign({ project: ({ event }) => id(event.project), version: ({ event }) => id(event.version), run: ({ event }) => id(event.version), plan: null, page: null })
     },
+    // a project's Studio, on the step asked for (else its first)
+    studio: {
+      guard: ({ event }) => !!id(event.project),
+      target: '.studio',
+      reenter: true,
+      actions: assign({ project: ({ event }) => id(event.project), step: ({ event }) => stepOf(event.step) || STEPS[0], version: null, run: null, plan: null, page: null, pending: null })
+    },
     started: [
       ...['overview', 'deck', 'app', 'video'].map(room => ({
         guard: ({ event }) => !!id(event.run) && (event.room || 'deck') === room,
@@ -80,6 +92,22 @@ export const navMachine = setup({}).createMachine({
   states: {
     home: {},
     draft: {},
+    studio: {
+      on: {
+        'studio.step': { guard: ({ event }) => !!stepOf(event.step), actions: assign({ step: ({ event }) => stepOf(event.step) }) },
+        back: [
+          { guard: ({ context }) => STEPS.indexOf(context.step) > 0, actions: assign({ step: ({ context }) => STEPS[STEPS.indexOf(context.step) - 1] }) },
+          { target: 'home' }
+        ],
+        // the person's Build: the build opens as any started one does (on the deck unless a room is named)
+        'studio.built': BUILD_ROOMS.map(room => ({
+          guard: ({ event }) => !!id(event.run) && (event.room || 'deck') === room,
+          target: target(room),
+          actions: assign({ version: ({ event }) => event.run, run: ({ event }) => event.run, pending: ({ event }) => event.run, page: null })
+        }))
+      },
+      exit: assign({ step: null })
+    },
     plan: {},
     brand: {
       // the sheet is open already: a second brand is not a move, and it keeps where it came from
@@ -148,6 +176,7 @@ export function toAddress(v) {
   const q = new URLSearchParams()
   const room = v.room === 'brand' ? v.from || 'home' : v.room
   if (room === 'plan' && v.plan) { q.set('room', 'plan'); q.set('plan', v.plan) }
+  else if (room === 'studio' && v.project) { q.set('room', 'studio'); q.set('project', v.project); if (v.step) q.set('step', v.step) }
   else if (room !== 'home' && room !== 'plan' && v.version) {
     if (v.project) q.set('project', v.project)
     q.set('version', v.version)
@@ -167,6 +196,7 @@ export function fromAddress(search = '') {
   const replay = get('replay')
   if (replay) return [{ type: 'home' }, { type: 'open.project', version: replay }, { type: 'room', room: 'deck' }, { type: 'replay', on: true }]
   if (q.get('room') === 'plan') return [{ type: 'home' }, { type: 'plan', plan: get('plan') }]
+  if (q.get('room') === 'studio') return [{ type: 'home' }, { type: 'studio', project: get('project'), step: q.get('step') }]
   const version = get('version') || get('run')
   if (!version && !get('project')) return [{ type: 'home' }]
   const events = [{ type: 'home' }, { type: 'open.project', project: get('project'), version }]
