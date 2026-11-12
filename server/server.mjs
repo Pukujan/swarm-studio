@@ -2130,7 +2130,7 @@ async function commentNow(id, input) {
   const marked = Array.isArray(input.marks) && input.marks.length > 0
   if (!text && !marked) throw new Error('say what to change')
   // the same comment from two open canvases (a /swarm fix reaches every one) is taken once
-  const seen = `${id}|${text}`
+  const seen = `${id}|${text}|${Array.isArray(input.targets) ? input.targets.join(',') : ''}`
   if (!marked && recentComments.get(seen) > Date.now() - 8000) return { sections: [], reply: '', duplicate: true }
   recentComments.set(seen, Date.now())
   const theme = events.findLast(e => e.type === 'theme')
@@ -2142,9 +2142,11 @@ async function commentNow(id, input) {
   if (marked) return markRequest(id, { events, start, theme, sections, text, input, send })
   // "improve the SEO", "a better description for the menu page": the crew's SEO pass
   if (seoAsk(text)) return seoRequest(id, { events, start, theme, given, text, send })
-  let keys = typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
+  // layers dragged into the chat (web/layerlink.js): just those sections, and the turn keeps them
+  const dragged = Array.isArray(input.targets) ? [...new Set(input.targets.filter(k => typeof k === 'string' && sections.some(s => s.key === k)))].slice(0, 12) : []
+  let keys = dragged.length ? dragged : typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
   let reply = ''
-  send('comment', { text, target: keys?.[0] || null })
+  send('comment', { text, target: keys?.[0] || null, ...(dragged.length ? { layers: dragged.map(k => ({ run: id, page: k.split('/')[0], layer: k.split('/').pop() })) } : {}) })
   if (!keys) {
     const heads = sections.map(s => ({ key: s.key, role: s.role, head: (/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(s.html)?.[1] || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) }))
     const routed = await routeComment({ provider: provider('planner'), model: modelFor('planner'), text, sections: heads, signal: AbortSignal.timeout(45000) })

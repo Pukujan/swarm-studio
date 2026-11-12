@@ -361,6 +361,19 @@ Comes after Scribble.
 - A crew reply about a layer (`comment:take`, or a draft) draws the same line from the reply to the layer.
 - Lines are drawn only for layers in view. A layer off screen shows a short line to the screen edge.
 
+### Drag a layer, built (2026-11-12)
+
+- `web/layerlink.js`. A layer drags from three places: the Layers list, the Overview inspector's section list, and a picked section's outline on its page.
+- Dropping it anywhere on the left chat adds a chip, at most 12. A drag that starts while the chat is shut opens it.
+- Each chip has a thin line to its layer, drawn on a fixed overlay.
+  - The line ends at the layer's band on the Overview's artboard, or at its frame in the Design deck.
+  - A layer off screen ends at the screen's edge with a dashed line.
+  - Hovering a chip highlights its line. Removing a chip removes its line.
+- Sending with chips posts the words as a comment on just those sections (`targets`). The `comment` event keeps `layers: [{run, page, layer}]`.
+- That turn, the crew's `comment:take` replies and a new `draft` note in the chat all carry their layers. Hovering any of them draws the lines again.
+- I did not reuse the deck's `linkWires` and `drawWires`. They draw page-to-page links inside the deck's own coordinates. These lines go from the chat to either view, so they are drawn in screen coordinates.
+- Checked live on a test server. I dragged search-panel from the inspector and results from the Layers list. Both lines ended on their bands. "make this one warmer" sent `targets: ["book/book-search-panel"]`, the turn kept the layer, and hovering it drew the line again.
+
 ## Manual editing
 
 The model is Open Design's manual edit mode (`nexu-io/open-design`, Apache-2.0: `specs/current/manual-edit-mode-requirements.md`, PR #1448 and #1516). It has four ways in:

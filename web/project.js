@@ -355,7 +355,7 @@ export function makeProject({ sw, C, root }) {
     const ratio = P.aspect.get(x.page)
     if (!l?.box || !ratio || !x.snap) return ''
     const h = 124 * ratio
-    return `<div class="lsel" style="top:${(l.box.top * h).toFixed(1)}px;height:${Math.max(4, l.box.height * h).toFixed(1)}px"></div>`
+    return `<div class="lsel" draggable="true" data-layer="${esc(l.key)}" data-name="${esc(l.role)}" style="top:${(l.box.top * h).toFixed(1)}px;height:${Math.max(4, l.box.height * h).toFixed(1)}px"></div>`
   }
   function drawOutline() {
     for (const a of world.querySelectorAll('.ab.page')) { const lys = a.querySelector('.lys'); if (lys) lys.innerHTML = outline(find(a.dataset.key) || {}) }
@@ -425,7 +425,7 @@ export function makeProject({ sw, C, root }) {
     // Use for…: the crew get the reference and the part it is for, like a comment on that section
     const useFor = x.kind === 'ref' && !hosted() && P.board ? `<form class="pj-use" autocomplete="off"><input name="u" placeholder="Use for…" aria-label="Use for" maxlength="80" value="${esc(x.ref.use || '')}"><button class="btn" type="submit">Send</button></form>` : ''
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
-    const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
+    const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}" draggable="true">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
     insp.innerHTML = `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
       ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}<div class="btns">${btns}</div>`
     const im = insp.querySelector('.pv img')
@@ -1461,6 +1461,29 @@ export function makeProject({ sw, C, root }) {
     // a finished section changes its page (a shared one, '*', every page): those are taken again
     if (e.type === 'layer:done') { for (const p of P.board?.pages || []) if (!e.page || e.page === '*' || e.page === p.id) P.stale.add(p.id); P.thumbTries = 0; clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
   })
+
+  // Drag a layer into the chat (spec 29, web/layerlink.js): a section in the inspector's list, or a
+  // picked section's outline on its page, drags into the left chat as a chip
+  root.addEventListener('dragstart', e => {
+    const b = e.target.closest?.('.pj-ly[data-layer], .lsel[data-layer]')
+    if (!b) return
+    e.stopPropagation()
+    sw.layerDrag?.(e, b.dataset.layer, b.dataset.name || b.textContent.trim())
+  })
+  // where a layer is on screen while the Overview shows (false when it does not): its page's
+  // artboard, cut to the layer's band; a shared layer (nav, footer) on the selected page or the first
+  sw.overviewRect = key => {
+    if (!P.on || root.hidden) return false
+    const [pg] = String(key).split('/')
+    const page = pg === '*' ? (find(P.sel)?.page || P.board?.pages?.[0]?.id) : pg
+    const a = page && world.querySelector(`.ab[data-key="${CSS.escape(`page:${page}`)}"]`)
+    if (!a) return null
+    const r = a.getBoundingClientRect()
+    const l = sw.layers?.list(page).find(y => y.key === key), ratio = P.aspect.get(page)
+    if (!l?.box || !ratio) return { left: r.left, top: r.top, width: r.width, height: Math.min(r.height, 40) }
+    const full = r.width * ratio, top = Math.min(r.bottom - 4, r.top + l.box.top * full)
+    return { left: r.left, top, width: r.width, height: Math.max(4, Math.min(l.box.height * full, r.bottom - top)) }
+  }
 
   return {
     el: root,

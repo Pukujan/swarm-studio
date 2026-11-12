@@ -115,6 +115,20 @@ button { font: inherit; color: inherit; }
 .composer:focus-within { border-color: var(--line-2); }
 .composer textarea { width: 100%; resize: none; background: none; border: 0; outline: 0; color: var(--text); font: 13px/1.45 var(--font); padding: 2px 4px; }
 .composer .row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+/* Drag a layer into the chat (web/layerlink.js): the chips in the message box and the lines to the layers */
+.lchips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
+.lchip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 2px 2px 2px 8px; border: 1px solid var(--line-2); border-radius: 999px; font: 12px/18px var(--font); color: var(--text); background: var(--panel); }
+.lchip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer .lchip button { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 400 14px/1 var(--font); cursor: pointer; }
+.composer .lchip button:hover { color: var(--text); background: var(--line); }
+.side.ldrop .composer { border-color: var(--text); }
+.lwires { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 70; overflow: visible; }
+.lwires path { fill: none; stroke: var(--muted); stroke-width: 1.25; opacity: .7; }
+.lwires circle { fill: var(--muted); opacity: .8; }
+.lwires .edge path { stroke-dasharray: 3 3; }
+.lwires .hot path { stroke: var(--text); stroke-width: 1.75; opacity: 1; }
+.lwires .hot circle { fill: var(--text); opacity: 1; }
+.feed .item.has-layers { cursor: default; }
 .composer .size { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; margin-right: auto; }
 .composer select { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 2px 4px; font: inherit; }
 .composer button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 6px 16px; font-weight: 600; cursor: pointer; }

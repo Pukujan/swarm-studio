@@ -7,6 +7,7 @@ import { pageSeoHtml, wirePageSeo, fillThumbRow } from './seo.js'
 import { openWorkshop } from './workshop.js'
 import { stateSlice } from './store.js'
 import { painterOf, REVIEWER, cursor } from './icons.js'
+import { layerLink, layerDrag } from './layerlink.js'
 
 const $ = s => document.querySelector(s)
 // Inlined by the server: the API token and the page-frame template. Frames are
@@ -27,6 +28,17 @@ const els = {
 }
 // what /swarm commands and the swarm_studio tool can ask the open canvas to do; features add themselves
 const commandOps = {}
+// layers dragged into the left chat: chips, and lines from each chip to its layer (web/layerlink.js)
+const links = layerLink({ form: els.form, feed: els.feed, rect: layerRect, open: () => window.swarmCosmos?.chat(true) })
+// where a layer is on screen: the Overview's artboard when it shows, else the Design deck's frame
+function layerRect(key) {
+  const o = window.swarm?.overviewRect?.(key)
+  if (o !== false && o !== undefined) return o
+  const l = S.layers.get(key), s = l && slotFor(l)
+  if (!s || !els.viewport.offsetParent) return null
+  const v = els.viewport.getBoundingClientRect(), p = toScreen(s.f.x + s.box.left, s.box.top)
+  return { left: v.left + p.x, top: v.top + p.y, width: s.box.width * cam.s, height: s.box.height * cam.s }
+}
 // ?run=<id> opens a file, ?replay=<id>&speed=N replays it on a timer (no live stream),
 // and wall=1 is the compact tile the Swarm Wall (web/wall.html) shows
 const Q = new URLSearchParams(location.search)
@@ -419,15 +431,19 @@ function on(e) {
       publishEvent(e)
       break
     case 'comment':
-      feed(null, `💬 ${e.text}`, 'you')
+      // a turn sent with layers dragged in keeps them: hovering it draws their lines again
+      links.mark(feed(null, `💬 ${e.text}`, 'you'), (e.layers || []).map(x => `${x.page}/${x.layer}`))
       break
     case 'comment:take': {
       const a = S.agents.get(e.agent)
       const what = e.reply || `On it, reworking the ${e.role || e.layer}.`
       if (a && Date.now() - e.t < 8000) say(a, what)
-      chatAgent(a, what, e.layer)
+      chatAgent(a, what, e.layer, [`${e.page}/${e.layer}`])
       break
     }
+    case 'draft':
+      chatAgent(S.agents.get(e.agent), `A draft of the ${e.role || e.layer} is beside the page.`, e.layer, [`${e.page}/${e.layer}`])
+      break
     case 'comment:none':
       chatAgent(null, 'Not sure which section that is about. Select one on the canvas and comment there.')
       break
@@ -1131,6 +1147,8 @@ function renderTree() {
       const row = document.createElement('div')
       row.className = `ly ${l.status}${S.sel === l.key ? ' sel' : ''}${hid ? ' hid' : ''}`
       row.dataset.key = l.key
+      row.draggable = true
+      row.ondragstart = e => layerDrag(e, l.key, l.role || l.id)
       row.innerHTML = `<span class="tw">${l.status === 'done' ? (open ? '▼' : '▶') : ''}</span><span class="dot"></span><span></span><span class="who"></span><button class="eye" aria-label="${hid ? 'Show' : 'Hide'} on the canvas">${hid ? '◌' : '👁'}</button>`
       row.children[2].textContent = l.role
       if (a) {
@@ -1238,15 +1256,19 @@ function feed(a, text, kind = '', where = '') {
     item.append(w)
   }
   push(box, item)
+  return item
 }
 
 // An agent answering in the Chat tab (a comment it picked up).
-function chatAgent(a, text, where = '') {
+// keys: the layers the reply is about; hovering it draws their lines (web/layerlink.js)
+function chatAgent(a, text, where = '', keys = null) {
   const item = document.createElement('div')
   item.className = 'item reply'
   item.style.setProperty('--c', a?.color || 'var(--accent)')
   item.innerHTML = `<b>${a ? `<span class="av">${Crew.avatar(a.name, 18)}</span>` : HERMIA}${esc(a?.name || 'SWARM')}</b>${esc(text)}${where ? `<span class="where">${esc(where)}</span>` : ''}`
+  if (keys) links.mark(item, keys)
   push(els.feed, item)
+  return item
 }
 
 function push(f, item) {
@@ -1715,6 +1737,8 @@ async function sendDock() {
   if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
   if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }
+  // layers dragged into the chat: the words go to just those sections, like a comment on them
+  if (links.count() && shownRun() && !nextRoute?.fresh) { skip(); return sendLayers(brief) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
   if (hosted && !(await hosted.ready())) return skip()
   const to = nextRoute || { from: shownRun(), selected: !!S.sel }
@@ -3341,6 +3365,19 @@ async function sendComment(text, target = null) {
     const out = await res?.json().catch(() => ({}))
     if (!/which section/.test(out?.error || '')) feed(null, `comment: ${out?.error || 'the canvas server is not answering'}`, 'err')
   }
+}
+
+// the message with its layer chips: the crew rework those sections; the turn keeps the layers
+async function sendLayers(text) {
+  const run = shownRun(), chips = links.take()
+  els.brief.value = ''
+  const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, role: l.role, html: l.text }))
+  const res = await api(`/api/runs/${encodeURIComponent(run)}/comment`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, targets: chips.map(c => c.key), sections }) }).catch(() => null)
+  if (res?.ok) return
+  const out = await res?.json().catch(() => ({}))
+  for (const c of chips) links.add(c)
+  if (!els.brief.value) els.brief.value = text
+  feed(null, out?.error || 'The canvas server is not answering.', 'err')
 }
 
 commandOps.fix = c => {
@@ -7047,6 +7084,8 @@ function connectorEvent(e) {
 // ---------- studio hook: what web/studio.js, web/home.js and web/project.js may read and call.
 // Kept to this one block so the canvas and the studio views merge cleanly.
 window.swarm = {
+  // a drag source for a layer (the Overview's section list and outline): it drops into the left chat
+  layerDrag,
   get S() { return S }, get view() { return view }, get viewing() { return viewing }, get liveId() { return liveId }, get files() { return files },
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
