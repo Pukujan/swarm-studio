@@ -181,6 +181,8 @@ flowchart LR
   PB --> LOCK["Lock · N credits"]
   LOCK --> GATE["Gate: price by part, runs, pictures, Test one first"]
   GATE --> BUILD["Build / Build one"]
+  PB --> ST["Starter: Engine, Template, Assets (options with why)"]
+  PB --> SY["Systems: one card per system, On or Off"]
   PB --> SK["Sketches: Cast, Weapons (pick cells, a note each)"]
   PB --> MK["Mocks: five in-game frames"]
   PB --> WD["World: backdrops, after Lock style"]
