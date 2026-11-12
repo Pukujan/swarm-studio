@@ -188,6 +188,17 @@ try {
   await settle(A1)
   await shows(A1, 'Alpha Tea', 'Alpha opened after p')
 
+  console.log('Hermes plays a build while Projects shows')
+  await home()
+  await api('/api/cmd', { op: 'play', run: B2 })
+  await page.waitForSelector('#player:not([hidden])', { timeout: 10000 }).catch(() => {})
+  const hp = await page.evaluate(() => ({ room: window.swarmCosmos.nav.view.room, version: window.swarmCosmos.nav.view.version, player: window.swarmCosmos.nav.view.player, shown: !document.getElementById('player').hidden, home: !!document.querySelector('.home .card')?.checkVisibility?.(), pages: [...document.querySelectorAll('#pl-page option')].map(o => o.textContent) }))
+  ok(hp.room === 'overview' && hp.version === B2 && hp.player === 'prototype' && hp.shown && !hp.home && hp.pages.length && hp.pages.every(t => t.includes('Bravo')), `a Hermes play at Projects opens Bravo and plays it, not behind Projects (${hp.room}, ${hp.player}, ${hp.pages.join(', ')})`)
+  await page.click('#pl-close')
+  await home()
+  await page.click('.home .card[aria-label="Alpha Tea"]')
+  await settle(A1)
+
   console.log('Play and Watch a visitor')
   const watch = () => page.evaluate(() => ({ label: document.getElementById('pl-tours').getAttribute('aria-label'), text: document.querySelector('#pl-tours .t').textContent, walking: !document.getElementById('pl-persona').hidden, player: !document.getElementById('player').hidden }))
   await page.click('#play-more')

@@ -1334,7 +1334,7 @@ function stoppedMsg(e) {
     const res = await api(`/api/runs/${encodeURIComponent(run)}/resume`, { method: 'POST' }).catch(() => null)
     const j = res ? await res.json().catch(() => ({})) : {}
     if (!res?.ok) return feed(null, `Couldn't resume: ${j.error || res?.status || 'no server'}`, 'err')
-    if (viewing) window.swarmCosmos?.open?.(j.run, window.swarmCosmos.project)
+    if (viewing && window.swarmCosmos?.nav) showRun(j.run, { started: true })
   }
   item.append(acts)
 }
@@ -1661,7 +1661,7 @@ async function runSlash(text) {
       if (!files.length) await loadFiles()
       const f = /^\d+$/.test(arg) ? files[Number(arg) - 1] : files.find(x => fileMatch(x, arg.toLowerCase()))
       if (!f) return botMsg(`No build matches “${arg}”. Find it on Projects.`)
-      return openRun(f.id)
+      return showRun(f.id)
     }
     case 'info': {
       if (!files.length) await loadFiles()
@@ -1760,7 +1760,7 @@ async function sendDock() {
   if (links.count('layer') && shownRun() && !nextRoute?.fresh) { skip(); return sendLayers(brief) }
   // a guest names themself before the first build (docs/specs/13-hosted-studio.md)
   if (hosted && !(await hosted.ready())) return skip()
-  const to = nextRoute || { from: shownRun(), selected: !!S.sel }
+  const to = nextRoute || { from: runNow(), selected: !!S.sel }
   nextRoute = null
   // a project's dock has already decided (web/project.js): its open version is what the words
   // extend, whatever run this canvas happens to be showing
@@ -1785,7 +1785,7 @@ async function sendDock() {
   if (!res?.ok) for (const m of media) links.add(m)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
   // the build the person just started is the one the canvas shows
-  if (res?.ok && j.run && j.run !== shownRun()) openRun(j.run)
+  if (res?.ok && j.run && j.run !== shownRun()) showRun(j.run, { started: true })
   else if (res?.status === 409) feed(null, 'The crew are still on the last change.', 'err')
   else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
@@ -1975,7 +1975,7 @@ async function openChatHere(id) {
   if (!chat?.id) return
   // a loose chat that is not a website opens from Studio home, which knows how each kind builds
   if (!chat.project && chat.kind !== 'site' && window.swarmCosmos?.openChat) return window.swarmCosmos.openChat(id)
-  const run = chat.project ? shownRun() : null
+  const run = chat.project ? runNow() : null
   talkStart({ kind: chat.kind, chat: chat.id, said: saidOf(chat), blank: !chat.project, from: run, build: chatBuild(run) })
 }
 if (chatsBtn) chatsBtn.onclick = async () => {
@@ -1995,7 +1995,7 @@ if (chatsBtn) chatsBtn.onclick = async () => {
     const b = e.target.closest('.cp-row')
     if (!b) return
     chatsPop.close()
-    if (b.dataset.new != null) { const run = pid ? shownRun() : null; return talkStart({ from: run, blank: !pid, build: chatBuild(run) }) }
+    if (b.dataset.new != null) { const run = pid ? runNow() : null; return talkStart({ from: run, blank: !pid, build: chatBuild(run) }) }
     openChatHere(b.dataset.chat)
   }
   el.addEventListener('dragstart', e => { const b = e.target.closest('.cp-row[data-chat]'); if (!b) return; e.dataTransfer.setData('text/x-swarm-chat', b.dataset.chat); el.classList.add('dragging') })
@@ -3851,6 +3851,26 @@ els.reviewBtn.onclick = e => { if (!reviewerOn()) { e.stopPropagation(); return 
 // storyboard, the render, then the video.
 const video = { run: null, busy: false, pct: 0, stage: '', story: [], board: null, notes: null, notesOpen: false, src: '', file: '', message: '', el: null, cuts: [], pick: -1, next: null }
 const shownRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
+// The build the left chat and Hermes's commands work on. In the studio it is the navigation machine's
+// (spec 34): its run in a build's room, none on Projects, a plan or a new talk. Without the studio
+// it is the one shown.
+const BUILD_ROOMS = ['overview', 'deck', 'video', 'app', 'game']
+function runNow() {
+  const v = window.swarmCosmos?.nav?.view
+  if (!v) return shownRun()
+  return BUILD_ROOMS.includes(v.room === 'brand' ? v.from : v.room) ? v.run : null
+}
+// Show a build. In the studio the machine is told and the canvas follows it: a build the person just
+// started is `started` (it stays in the room it was started from), any other opens its project.
+function showRun(id, { started = false, room } = {}) {
+  const studio = window.swarmCosmos
+  if (!studio?.nav) return openRun(id)
+  if (!started) return studio.open(id)
+  const v = studio.nav.view, here = v.room === 'brand' ? v.from : v.room
+  return studio.started(id, { project: BUILD_ROOMS.includes(here) ? v.project : null, room: room || (['overview', 'deck', 'app', 'video'].includes(here) ? here : undefined) })
+}
+// the canvas holds this build already, or asked for it and is not on a blank talk
+const holds = run => run === shownRun() || (run === claimed && viewing !== 'new')
 
 function videoEvent(e) {
   if (video.run !== e.run) Object.assign(video, { run: e.run, busy: false, pct: 0, stage: '', story: [], board: null, notes: null, src: '', file: '', message: '', cuts: [], pick: -1, next: null })
@@ -4817,7 +4837,7 @@ function renderAppLink() {
   const b = $('#app-link')
   if (!b) return
   b.hidden = !S.link
-  if (S.link) { b.textContent = S.link.label; b.onclick = () => openRun(S.link.run) }
+  if (S.link) { b.textContent = S.link.label; b.onclick = () => showRun(S.link.run) }
 }
 
 // The preview loads in the background: a loading screen covers the frame until the app inside
@@ -5775,7 +5795,7 @@ async function gameShape() {
     api, ico, spec, id,
     onBuilt: async (run, built) => {
       await loadFiles()
-      await openRun(run)
+      await showRun(run, { started: true, room: 'app' })
       setView('app')
       botMsg(`🎮 Building “${built?.title || spec.title}” with the art, story, levels and sound you picked. The App view shows every file as it is written.`)
     }
@@ -5794,7 +5814,7 @@ async function gameBuild() {
     if (!out.run) throw new Error(out.error || 'could not start')
     closeGame()
     await loadFiles()
-    await openRun(out.run)
+    await showRun(out.run, { started: true, room: 'app' })
     setView('app')
     botMsg(`🎮 Building “${game.spec.title}” (${game.spec.engine}). The App view shows every file as it is written; the game opens there when it builds. Chat here to change it after.`)
   } catch (err) {
@@ -5869,11 +5889,14 @@ function connect() {
 
 // Commands sent from Hermes (/swarm review, the swarm_studio tool).
 async function command(c) {
-  const open = c.run && c.run !== shownRun()
-  // open and play show the build: in the studio, its project (never a player hidden behind Projects)
   const studio = window.swarmCosmos
-  if (studio?.open && (c.op === 'open' || c.op === 'play') && (open || !['project', 'station'].includes(studio.mode))) { await studio.open(c.run || shownRun()); await new Promise(r => setTimeout(r, 4000)) }
-  else if (open) { await openRun(c.run); await new Promise(r => setTimeout(r, 4000)) }
+  if (studio?.nav && (c.op === 'open' || c.op === 'play')) {
+    // open and play show the build: the machine opens its project unless a room of it is open, and
+    // the player plays once its pages are here (never a player hidden behind Projects)
+    const run = c.run || runNow() || shownRun()
+    if (run && run !== runNow()) await studio.open(run)
+    for (let i = 0; i < 40 && c.op === 'play' && !S.frames.length; i++) await sleep(100)
+  } else if (c.run && c.run !== shownRun()) { await openRun(c.run); await new Promise(r => setTimeout(r, 4000)) }
   if (c.op === 'play') openPlayer()
   if (c.op === 'review') reviewRun()
   if (c.op in commandOps) commandOps[c.op](c)
@@ -7284,7 +7307,7 @@ function connectorEvent(e) {
 window.swarm = {
   // a drag source for a layer (the Overview's section list and outline): it drops into the left chat
   layerDrag,
-  get S() { return S }, get view() { return view }, get viewing() { return viewing }, get claimed() { return claimed }, get liveId() { return liveId }, get files() { return files },
+  get S() { return S }, get view() { return view }, get viewing() { return viewing }, holds, get files() { return files },
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer, closePlayer, followPlayer,

@@ -117,9 +117,8 @@ function writeAddress(v) {
 }
 nav.subscribe(v => { if (!restoring) writeAddress(v) })
 // The canvas loads the build the machine names, whenever that changes (a click, a reload, Back or
-// Forward). It holds it already when it shows it, or asked for it and is not on a blank talk.
-const holds = run => run === (sw.viewing && sw.viewing !== 'new' ? sw.viewing : sw.S?.run) || (run === sw.claimed && sw.viewing !== 'new')
-const loadNamed = () => { const { run } = nav.view; if (inBuild() && run && run !== C.opening && !holds(run)) C.load(run) }
+// Forward), unless it holds it already (canvas.js holds)
+const loadNamed = () => { const { run } = nav.view; if (inBuild() && run && run !== C.opening && !sw.holds(run)) C.load(run) }
 nav.subscribe(() => { if (!restoring) loadNamed() })
 addEventListener('popstate', () => {
   if (sw.wall) return
