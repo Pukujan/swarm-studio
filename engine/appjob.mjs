@@ -253,6 +253,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       prompt = `${kind === 'game' ? 'This is a browser game made from a spec in GAME_SPEC.md. Keep what works.' : KEEP}\n\nDo this: ${ask}\n\n${kind === 'game' ? '' : `${BACKEND}\n\n`}Finish with a working build: the typecheck and build must pass.`
     }
     j ||= { id, kind, steps: [], asks: [], proc: null, url: null, port: null }
+    // a locked App kit's keys (names only), kept for every later serve of this app, restarts included
+    if (Array.isArray(input.plan?.keys)) { j.keys = input.plan.keys.filter(n => typeof n === 'string').slice(0, 8); try { mkdirSync(join(runsDir, id), { recursive: true }); writeFileSync(join(runsDir, id, 'app-keys.json'), JSON.stringify(j.keys)) } catch {} }
     Object.assign(j, { kind, state: 'working', stage: 'starting', result: null, message: null, controller: new AbortController(), t: Date.now() })
     j.asks.push(ask || (kind === 'game' ? 'build the game' : 'make it a working app'))
     jobs.set(id, j)
@@ -608,6 +610,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // Kept running between turns: Vite picks up the engine's next edits itself.
   // Vite does not pick up a new plugin or package (a turn that adds Nitro, say):
   // when these files change the dev server starts over, on the same port.
+  const keysOf = (id, j) => { if (!j.keys) { try { j.keys = JSON.parse(readFileSync(join(runsDir, id, 'app-keys.json'), 'utf8')) } catch { j.keys = [] } } return j.keys }
   async function serve(id, j, step = () => {}) {
     const dir = dirOf(id)
     const sig = serveSig(dir)
@@ -625,7 +628,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
     // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
     // vite's own script under this Node: .bin/vite is a shell shim (vite.cmd on Windows)
-    const p = spawn(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { BROWSER: 'none', ...appEnv() } })
+    const p = spawn(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { BROWSER: 'none', ...appEnv(process.env, keysOf(id, j)) } })
     j.proc = p
     let log = ''
     p.stdout.on('data', b => { log = (log + b).slice(-4000) })
