@@ -5,13 +5,6 @@
 
 import { traceCall } from './trace.mjs'
 
-export function providerFromEnv(env = process.env) {
-  const baseUrl = env.SWARM_BASE_URL || 'https://api.inferhub.dev/v1'
-  const apiKey = env.SWARM_API_KEY || env.HERMES_CUSTOM_INFERHUB_API_KEY
-  if (!apiKey) throw new Error('No API key: set SWARM_API_KEY (or HERMES_CUSTOM_INFERHUB_API_KEY)')
-  return { baseUrl: baseUrl.replace(/\/$/, ''), apiKey }
-}
-
 /**
  * Stream one chat completion. Calls onDelta(text) for every content chunk.
  * Resolves with { text, ttftMs, totalMs, outputTokens, tokPerSec, usage }.
@@ -57,11 +50,12 @@ function routesFor(provider, model) {
   return [...routes.filter(r => !cold(r)), ...routes.filter(cold)].slice(0, 5)
 }
 
-async function chat(provider, { model, messages, maxTokens = 2048, temperature = 0.7, extra = {}, signal, onDelta }, started) {
+async function chat(provider, { model, messages, maxTokens = 2048, temperature = 0.7, extra = {}, signal, onDelta, timeoutMs }, started) {
   const send = withExtra => fetch(`${provider.baseUrl}/chat/completions`, {
     method: 'POST',
     signal,
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${provider.apiKey}` },
+    // through Hermes (engine/hermesllm.mjs) the bridge passes this call's timeout on to ctx.llm
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${provider.apiKey}`, ...(provider.hermes ? { 'x-swarm-timeout': String(timeoutMs || 300000) } : {}) },
     body: JSON.stringify({
       model,
       messages,
@@ -74,6 +68,7 @@ async function chat(provider, { model, messages, maxTokens = 2048, temperature =
   })
   // Hints like "no reasoning" are not part of every provider's API. A provider
   // that rejects them gets plain requests from then on.
+  if (provider.hermes) extra = {} // ctx.llm takes no provider hints
   let res = await send(Object.keys(extra).length > 0 && !provider.plain)
   if ((res.status === 400 || res.status === 422) && Object.keys(extra).length && !provider.plain) {
     await res.text().catch(() => '')

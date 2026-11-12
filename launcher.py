@@ -4,14 +4,16 @@ Self-contained on purpose: the agent half (``__init__.py``) imports it as a
 package module, and the dashboard route (``dashboard/plugin_api.py``) loads it
 by path, because the dashboard loader imports that file standalone.
 
-The server is a Node process bound to 127.0.0.1. It holds model API keys in
-memory only (never on disk) and accepts runs only with a per-install token kept
-in ``$HERMES_HOME/swarm-studio/token``.
+The server is a Node process bound to 127.0.0.1. It accepts runs only with a
+per-install token kept in ``$HERMES_HOME/swarm-studio/token``.
 
-Models come from Hermes: the plugin registers two auxiliary model slots
-(``swarm_studio_planner`` and ``swarm_studio_builder``), so they show up in
-Hermes's model picker, and each run resolves them through Hermes's own provider
-routing. ``SWARM_STUDIO_*`` environment variables override that.
+Models stay in Hermes: the plugin registers three auxiliary model slots
+(``swarm_studio_planner``, ``swarm_studio_builder`` and ``swarm_studio_reviewer``),
+so they show up in Hermes's model picker, and the server's model calls go back
+to Hermes through the bridge (bridge.py, bridge_llm.py), which answers them with
+``ctx.llm``. No provider key reaches the server. The one key it may get is the
+plugin's own ``SWARM_STUDIO_API_KEY``, when the person set it (Nous catalog
+review, point 2).
 """
 
 from __future__ import annotations
@@ -42,16 +44,10 @@ PASSED_KEYS = (
     "STRIPE_SECRET_KEY",                                        # a generated app's checkout (test keys only)
     "VERCEL_TOKEN", "CLOUDFLARE_API_TOKEN",                     # publishing
 )
-DEFAULT_ENDPOINT = "https://api.inferhub.dev/v1"
-DEFAULT_MODEL = "cb/deepseek-v4.1-flash"
-# role -> (Hermes auxiliary slot, model override variable)
-SLOTS = {
-    "planner": ("swarm_studio_planner", "SWARM_STUDIO_PLANNER_MODEL"),
-    "worker": ("swarm_studio_builder", "SWARM_STUDIO_WORKER_MODEL"),
-    # looks at screenshots of the finished pages; follows Hermes's vision model
-    "reviewer": ("swarm_studio_reviewer", "SWARM_STUDIO_REVIEWER_MODEL"),
-}
-OPTIONAL = {"reviewer"}
+# role -> the Hermes auxiliary slot it uses (registered in __init__.py)
+SLOTS = {"planner": "swarm_studio_planner", "worker": "swarm_studio_builder", "reviewer": "swarm_studio_reviewer"}
+# With SWARM_STUDIO_API_KEY set, the server calls this endpoint and these models with it, not Hermes.
+KEY_SETTINGS = ("SWARM_STUDIO_BASE_URL", "SWARM_STUDIO_PLANNER_MODEL", "SWARM_STUDIO_WORKER_MODEL", "SWARM_STUDIO_REVIEWER_MODEL")
 
 
 def data_dir() -> Path:
@@ -88,50 +84,12 @@ def _secret(name: str) -> str | None:
     return get_secret(name)
 
 
-def _from_hermes(slot: str) -> dict:
-    """Resolve one auxiliary slot through Hermes's provider routing.
-
-    The swarm streams chat completions from its own process, so only providers
-    with an OpenAI-compatible endpoint work; others report why instead."""
-    try:
-        from agent.auxiliary_client import get_text_auxiliary_client
-    except ImportError:
-        return {"error": "not running inside Hermes"}
-    try:
-        client, model = get_text_auxiliary_client(slot)
-    except Exception as exc:  # provider setup errors come back as messages, not crashes
-        return {"error": f"Hermes could not resolve a model: {exc}"}
-    if client is None or not model:
-        return {"error": "no model is configured in Hermes"}
-    endpoint = str(getattr(client, "base_url", "") or "").rstrip("/")
-    key = getattr(client, "api_key", None)
-    if not endpoint.startswith("http") or not isinstance(key, str) or not key or type(client).__module__.split(".")[0] != "openai":
-        return {"error": f"{type(client).__name__} has no OpenAI-compatible endpoint; pick a chat-completions provider for {slot}"}
-    return {"base_url": endpoint, "api_key": key, "model": model, "source": f"Hermes auxiliary.{slot}"}
-
-
-def resolve_models() -> dict:
-    """{role: {base_url, api_key, model, source} | {error}} for the planner and the builders.
-
-    Precedence: SWARM_STUDIO_API_KEY (with its base URL and models) when set, then
-    the Hermes slot, with SWARM_STUDIO_*_MODEL overriding the model either way."""
-    key = _secret(KEY_ENV)
-    out = {}
-    for role, (slot, model_env) in SLOTS.items():
-        if key:
-            got = {"base_url": (os.environ.get("SWARM_STUDIO_BASE_URL") or DEFAULT_ENDPOINT).rstrip("/"),
-                   "api_key": key, "model": DEFAULT_MODEL, "source": KEY_ENV}
-        else:
-            got = _from_hermes(slot)
-        if "error" not in got and os.environ.get(model_env):
-            got["model"] = os.environ[model_env]
-        out[role] = got
-    return out
-
-
 def describe_models() -> dict:
-    """resolve_models() without keys, for people and logs."""
-    return {role: {k: v for k, v in m.items() if k != "api_key"} for role, m in resolve_models().items()}
+    """Where each role's model calls go, for people and logs. Never a key."""
+    if _secret(KEY_ENV):
+        base = (os.environ.get("SWARM_STUDIO_BASE_URL") or "https://api.inferhub.dev/v1").rstrip("/")
+        return {role: {"base_url": base, "model": os.environ.get(f"SWARM_STUDIO_{role.upper()}_MODEL") or "cb/deepseek-v4.1-flash", "source": KEY_ENV} for role in SLOTS}
+    return {role: {"base_url": "Hermes (ctx.llm)", "model": f"auxiliary.{slot}", "source": "Hermes"} for role, slot in SLOTS.items()}
 
 
 def token() -> str:
@@ -231,10 +189,6 @@ def _ensure_server() -> dict:
     if st and not (stale(st) and _retire(st)):
         return {"running": True, "started": False, "url": canvas_url()}
 
-    models = resolve_models()
-    problems = [f"{role}: {m['error']}" for role, m in models.items() if "error" in m and role not in OPTIONAL]
-    if problems:
-        return {"running": False, "error": "Swarm Studio has no usable model. " + "; ".join(problems)}
     node = os.environ.get("SWARM_STUDIO_NODE") or shutil.which("node")
     if not node:
         return {"running": False, "error": "Node.js 20+ is required (no `node` on PATH)."}
@@ -253,12 +207,12 @@ def _ensure_server() -> dict:
     # which attaches itself once the server is up. The Python and its import paths are for the Feed and
     # connector helpers.
     env.update(SWARM_HERMES_BIN=shutil.which("hermes") or "", SWARM_HERMES_PY=sys.executable, SWARM_HERMES_PYTHONPATH=os.pathsep.join(p for p in sys.path if p and os.path.isdir(p)))
-    # Defaults for builds started from the canvas itself; Hermes sends fresh ones with each run.
-    for role, m in models.items():
-        if "error" in m:
-            continue
-        prefix = f"SWARM_{role.upper()}_"
-        env.update({prefix + "BASE_URL": m["base_url"], prefix + "API_KEY": m["api_key"], prefix + "MODEL": m["model"]})
+    # Model calls go back to Hermes through the bridge, so no provider key is handed over. The one
+    # exception is the plugin's own key, when the person set it (Nous catalog review, point 2).
+    own = _secret(KEY_ENV)
+    if own:
+        env[KEY_ENV] = own
+        env.update({k: os.environ[k] for k in KEY_SETTINGS if os.environ.get(k)})
     # Optional: ElevenLabs music and sound effects for the Film studio, from Hermes's secret scope.
     try:
         eleven = _secret("ELEVENLABS_API_KEY")
@@ -335,8 +289,7 @@ def start_run(brief: str, agents: int | None = None, force: bool = False) -> dic
         return up
     if not force and talk_first(brief):
         return {"running": True, "talk": True, "error": TALK_FIRST, "url": up["url"]}
-    models = resolve_models()
-    body: dict = {"brief": brief, "models": {r: m for r, m in models.items() if "error" not in m}}
+    body: dict = {"brief": brief}
     if agents:
         body["agents"] = max(2, min(24, int(agents)))
     try:

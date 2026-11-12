@@ -198,13 +198,14 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
   }
 
   // The sitemap is the one call everything waits on. A provider that stalls (no
-  // text for 20s) or returns nothing usable gets one more try.
+  // text for 20s) or returns nothing usable gets one more try. Hermes's ctx.llm sends the
+  // whole answer at once (engine/hermesllm.mjs), so through Hermes the first text may take longer.
   async function sitemap(attempt = 0) {
     const parser = lineParser(onSitemap)
     const stall = new AbortController()
     const onAbort = () => stall.abort()
     signal?.addEventListener('abort', onAbort)
-    let timer = setTimeout(() => stall.abort(), 20000)
+    let timer = setTimeout(() => stall.abort(), provider?.hermes ? 180000 : 20000)
     try {
       await streamChat(provider, {
         trace: { kind: 'sitemap' },

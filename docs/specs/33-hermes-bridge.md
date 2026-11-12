@@ -26,6 +26,7 @@ Hermes process (Desktop, gateway, CLI chat, `hermes swarm`)
                                ▲
 Node server (detached)         │ Bearer <bridge token>
   engine/bridge.mjs ───────────┘   attaches with POST /api/hermes/attach {url, token, pid}
+  engine/hermesllm.mjs: /llm/v1 ◄── planner, builders, reviewer, app engine (Bearer <studio llm key>)
 ```
 
 - **Where it lives.** `bridge.py` is in the plugin's Python half. It runs as one daemon thread per
@@ -69,27 +70,47 @@ source, "Hermes", plus its own `ckff` key when that is set.
 - The pasted FAL key in the Film panel is gone. Hermes reads its own `FAL_KEY`. The panel now says
   "Set FAL_KEY in Hermes" instead.
 
-**Model calls (point 2).** `model` names the role: `planner`, `worker` or `reviewer`. It maps to the
-plugin's auxiliary task: `swarm_studio_planner`, `swarm_studio_builder` or `swarm_studio_reviewer`.
-- A model the person picked in the studio is passed as `model=` only when the operator has granted
-  `allow_model_override`. Without that grant, the slot's own model answers. `/api/state` says so.
+**Model calls (point 2).** The studio holds no provider key. Every role calls the studio's own
+loopback endpoint `/llm/v1` (`engine/hermesllm.mjs`) with a key made fresh for each server process.
+That key opens only `/llm/v1`, and never from a web page. The server forwards each call to the newest
+live bridge, with the bridge token, which never leaves the server. The bridge answers with `ctx.llm`
+(`bridge_llm.py`).
+- `model` names the role: `planner`, `worker` or `reviewer`. It maps to the plugin's auxiliary task:
+  `swarm_studio_planner`, `swarm_studio_builder` or `swarm_studio_reviewer`.
+- A model the person picked in the studio rides along as `role:model` and is passed as `model=` only
+  when the operator has granted `plugins.entries.swarm-studio.llm.allow_model_override`. Without that
+  grant, `ctx.llm` refuses the override and the bridge asks again without it, so the slot's own model
+  answers. The studio's model lists are empty through Hermes: Hermes's slot is the model.
 - **Streaming.** `ctx.llm` does not stream. With `stream: true`, the bridge waits for the full
-  answer and then sends it as a single SSE delta, a usage chunk and `[DONE]`. The server's
-  `streamChat` reads that unchanged.
+  answer and then sends it as a single SSE delta, the finish, a usage chunk and `[DONE]`. The
+  server's `streamChat` reads that unchanged.
   - Builders write one section per call, and the canvas shows sections as they finish, so builds
     keep their pace.
   - The talk pane shows the answer when it is complete instead of word by word.
+  - The sitemap's 20-second "no text yet" retry allows 180 seconds through Hermes.
+  - `ctx.llm` takes no provider hints, so the studio's "no reasoning" hint cannot ride on the call.
+    Instead the three slots register with `defaults={"reasoning_effort": "none"}`
+    (`register_auxiliary_task`, `MODEL_SLOTS` in `__init__.py`). Hermes translates that for each
+    provider and drops it for one that refuses the field. The person's own
+    `auxiliary.<slot>.reasoning_effort` wins. Without it the same model thinks before every section,
+    and a small website build took 114 s instead of 56 s; with it, 58 s.
 - **Tools.** `ctx.llm` has no tool calls, but the app engine (dyad, local-agent mode) needs them.
   The bridge works around this in the prompt:
   - the request's `tools` are listed in the system prompt, and the model answers with
     `<tool_call>{"name":…,"arguments":{…}}</tool_call>` blocks;
-  - the bridge parses those blocks back into OpenAI `tool_calls`;
+  - the bridge reads each block's JSON as JSON (so a `</tool_call>` inside an argument does not end
+    it) and turns the blocks into OpenAI `tool_calls`;
   - earlier assistant tool calls in the history go back to the model as the same text, and tool
     results go back as user messages that say which call they answer.
-  The app engine's gateway is the bridge, and the bridge token is its API key.
-- **Timeouts.** Node sends its own timeout in `x-swarm-timeout` (ms). The bridge passes it to
-  `ctx.llm` as `timeout`. Node's fetch waits that long plus 15 seconds. An abort in Node cannot
-  cancel the Python call already in flight: the bridge finishes it and drops the result.
+  The app engine's gateway is `/llm/v1`, and the studio's `/llm/v1` key is its API key. The engine
+  also gets `ABA_ENV_FILE` naming a file that does not exist: left alone it loads the first `.env`
+  above its bundle, which in an installed plugin is Hermes's own `$HERMES_HOME/.env`.
+- **Timeouts.** Node sends its own timeout in `x-swarm-timeout` (ms; 300 s when the caller gives
+  none, 600 s for the app engine). The bridge passes it to `ctx.llm` as `timeout`; Hermes's default
+  for an auxiliary task is 30 s. Node's fetch waits that long plus 15 seconds. An abort in Node
+  cannot cancel the Python call already in flight: the bridge finishes it and drops the result.
+- **Errors** come back OpenAI-shaped: `{error: {message}}` with 429 for a rate limit, 503 for a
+  provider at capacity, 502 otherwise.
 
 **MCP (point 5).** `call_mcp` raises `PermissionError` unless the server is in
 `plugins.entries.swarm-studio.mcp_allowlist`. The studio never writes that list itself.
@@ -112,8 +133,10 @@ bridge is attached:
 - **Model calls.**
   - If the person set `SWARM_STUDIO_API_KEY` (the one key the plugin may hand to Node), calls go
     straight to `SWARM_STUDIO_BASE_URL` with it.
-  - Otherwise the build pauses at its next call with "Open Hermes, or run `hermes swarm`, to
-    continue". When a bridge attaches again, Resume (#284) picks the build up where it stopped.
+  - Otherwise each model call waits, and the canvas shows "Waiting for Hermes: open Hermes, or run
+    `hermes swarm`, to continue". When a bridge attaches, the waiting calls go on and the build
+    continues. A call that waits longer than its own timeout fails; Resume (#284) then picks the
+    build up where it stopped.
 - **Pictures, clips and MCP** fail softly, as a signed-out provider did before. Pictures fall back
   to `ckff` if it is set, then to stock photos or drawn art.
 

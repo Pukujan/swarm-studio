@@ -26,10 +26,11 @@ class StaleServer(unittest.TestCase):
         with mock.patch.object(launcher, "state", side_effect=lambda: next(states, None)), \
                 mock.patch.object(launcher, "code_stamp", return_value=9e9), \
                 mock.patch.object(launcher.os, "kill") as kill, \
-                mock.patch.object(launcher, "resolve_models", return_value={"planner": {"error": "none"}}):
+                mock.patch.object(launcher.shutil, "which", return_value=None), \
+                mock.patch.dict(launcher.os.environ, {"SWARM_STUDIO_NODE": ""}):
             out = launcher.ensure_server()
         kill.assert_called_once()
-        self.assertFalse(out["running"])  # stopped the old one, then went on to start a new one (no model here)
+        self.assertFalse(out["running"])  # stopped the old one, then went on to start a new one (no node here)
 
     def test_the_server_does_not_run_inside_the_plugin_folder(self):
         src = open(os.path.join(os.path.dirname(__file__), "..", "launcher.py"), encoding="utf-8").read()

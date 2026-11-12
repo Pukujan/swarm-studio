@@ -16,6 +16,8 @@ export const scaffoldDir = join(dyadDir, 'scaffold')
 const bundle = join(dyadDir, '.vite', 'build', 'aba_headless.cjs')
 
 export const engineReady = () => existsSync(bundle)
+// a path that is never a file: the engine reads no .env (see runEngine)
+export const NO_ENV_FILE = join(dyadDir, '.no-env', 'none.env')
 
 // npm-installed tools (pnpm, npx) are .cmd shims on Windows, and Node runs a
 // .cmd only through a shell. The arguments passed this way are plain words.
@@ -117,8 +119,11 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
   // engine's pnpm probe fail, and it then falls back to npm on a pnpm project
   const p = spawn(engineNode(), args, {
     cwd: meta,
-    // the engine's own model key, and the app's keys: the engine starts the app to look at it
-    env: { ...gitEnv(), ...appEnv(), ABA_API_KEY: provider.apiKey || '', ELECTRON_RUN_AS_NODE: '1' },
+    // The engine's model key is the studio's own /llm/v1 key (engine/hermesllm.mjs), never a provider's;
+    // the app's keys are there because the engine starts the app to look at it. ABA_ENV_FILE names a file
+    // that does not exist, so the engine loads no .env: left alone it walks up from its bundle and, in an
+    // installed plugin, the first .env it meets is Hermes's own ($HERMES_HOME/.env, every provider key).
+    env: { ...gitEnv(), ...appEnv(), ABA_API_KEY: provider.apiKey || '', ABA_ENV_FILE: NO_ENV_FILE, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   signal?.addEventListener('abort', () => p.kill('SIGTERM'), { once: true })

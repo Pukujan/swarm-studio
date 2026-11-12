@@ -1,6 +1,6 @@
 // The Hermes bridge, the server's side (docs/specs/33-hermes-bridge.md). A Hermes process with the plugin
 // loaded runs a small loopback server (bridge.py) and attaches it here: POST /api/hermes/attach
-// {url, token, pid}, again every 15 s. Pictures and clips (and, later, model and MCP calls) are asked of
+// {url, token, pid}, again every 15 s. Pictures, clips, model calls (engine/hermesllm.mjs) and MCP calls are asked of
 // the newest live bridge, which does them with Hermes's own tools, so the provider keys stay in Hermes.
 //
 // Up to 4 bridges are kept, newest first. One silent for 45 s, or one that refuses a connection, is
@@ -44,12 +44,29 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
     if (passed) return passed
     return { ok: false, absent: true, error: 'Hermes is not open: open Hermes, or run `hermes swarm`, to use its picture and clip tools' }
   }
+  // The raw answer of the newest bridge that takes the request (a model call streams through as it is),
+  // or null when none does. A bridge that refuses the connection or the token is dropped.
+  async function send(path, init = {}) {
+    for (const b of live().slice()) {
+      try {
+        const res = await fetcher(b.url + path, { ...init, headers: { ...(init.headers || {}), authorization: `Bearer ${b.token}` } })
+        if (res.status === 403) { drop(b); continue }
+        return res
+      } catch (err) {
+        if (init.signal?.aborted) throw err
+        if (refused(err)) { drop(b); continue }
+        throw err
+      }
+    }
+    return null
+  }
   const drop = b => { bridges = bridges.filter(x => x !== b) }
   const refused = err => /ECONNREFUSED|ECONNRESET|EHOSTUNREACH|fetch failed/i.test(String(err?.cause?.code || err?.code || err?.message || ''))
 
   return {
     attach,
     call,
+    send,
     // for /api/state and the canvas: whether Hermes is there, never a token or an address
     status: () => ({ attached: live().length > 0, pids: live().map(b => b.pid).filter(Boolean) })
   }

@@ -3,7 +3,8 @@
 // engine event to the canvas over Server-Sent Events. Binds to 127.0.0.1 only.
 //
 //   node server/server.mjs [--port 4319]
-//   env: SWARM_API_KEY / SWARM_BASE_URL (or HERMES_CUSTOM_INFERHUB_API_KEY),
+//   Model calls go to Hermes through its bridge (engine/hermesllm.mjs). Without Hermes:
+//   env: SWARM_STUDIO_API_KEY or SWARM_API_KEY, SWARM_BASE_URL,
 //        SWARM_PLANNER_MODEL, SWARM_WORKER_MODEL, SWARM_AGENTS
 
 import { createServer } from 'node:http'
@@ -11,6 +12,7 @@ import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
 import { execFile, hermesEnv, pick } from '../engine/proc.mjs'
 import { hermesBridge, imageBody, videoBody } from '../engine/bridge.mjs'
+import { hermesLlm, roleModel } from '../engine/hermesllm.mjs'
 import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -77,33 +79,30 @@ const dataDir = process.env.SWARM_DATA_DIR || root
 const argPort = process.argv.indexOf('--port')
 const port = Number(argPort >= 0 ? process.argv[argPort + 1] : process.env.SWARM_PORT || 4319)
 
-// Endpoint and model per role. Hermes resolves them from its own model slots and
-// sends them with each run (see launcher.py); the environment gives the defaults
-// that the canvas's own Build button uses before the first such run. Keys stay in
-// memory: they are never written to a run's files or sent back out.
+// Endpoint and model per role (Nous catalog review, point 2). By default every model call goes to Hermes:
+// the studio's own loopback endpoint /llm/v1 (engine/hermesllm.mjs) forwards it to the Hermes bridge, and
+// Hermes answers with its own provider, model and key, so no provider key ever reaches this process.
+// The one exception is the plugin's own SWARM_STUDIO_API_KEY, when the person set it: then the roles call
+// SWARM_STUDIO_BASE_URL with it directly. (SWARM_API_KEY / SWARM_<ROLE>_API_KEY do the same for running
+// the server by hand, without Hermes.) Keys stay in memory: they are never written to a run's files.
 const DEFAULT_BASE = 'https://api.inferhub.dev/v1'
 const DEFAULT_MODEL = 'cb/deepseek-v4.1-flash'
-const envRole = (role, fallback = DEFAULT_MODEL) => ({
-  baseUrl: process.env[`SWARM_${role}_BASE_URL`] || process.env.SWARM_BASE_URL || DEFAULT_BASE,
-  apiKey: process.env[`SWARM_${role}_API_KEY`] || process.env.SWARM_API_KEY || process.env.HERMES_CUSTOM_INFERHUB_API_KEY || '',
-  model: process.env[`SWARM_${role}_MODEL`] || fallback
-})
-// the reviewer follows Hermes's vision model; it has no default of its own
-let models = { planner: envRole('PLANNER'), worker: envRole('WORKER'), reviewer: envRole('REVIEWER', '') }
-const ROLES = ['planner', 'worker', 'reviewer']
-
-function setModels(given) {
-  const next = { ...models }
-  for (const role of ROLES) {
-    const m = given?.[role]
-    if (!m || typeof m !== 'object') continue
-    const baseUrl = String(m.base_url || '').replace(/\/$/, '')
-    if (!/^https?:\/\//.test(baseUrl) || !m.api_key || !m.model) continue
-    next[role] = { baseUrl, apiKey: String(m.api_key), model: String(m.model) }
+const hermes = hermesBridge()
+const llm = hermesLlm({ bridge: hermes, port: () => port, broadcast: e => broadcast(e) })
+const envRole = (role, fallback = DEFAULT_MODEL) => {
+  const apiKey = process.env[`SWARM_${role}_API_KEY`] || process.env.SWARM_API_KEY || process.env.SWARM_STUDIO_API_KEY || ''
+  if (!apiKey) return { ...llm.provider(), model: role.toLowerCase() }
+  return {
+    baseUrl: process.env[`SWARM_${role}_BASE_URL`] || process.env.SWARM_BASE_URL || process.env.SWARM_STUDIO_BASE_URL || DEFAULT_BASE,
+    apiKey,
+    model: process.env[`SWARM_${role}_MODEL`] || process.env[`SWARM_STUDIO_${role}_MODEL`] || fallback
   }
-  models = next
 }
-const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), apiKey: models[role].apiKey })
+// the reviewer follows Hermes's vision model; with a key of its own it has no default
+const models = { planner: envRole('PLANNER'), worker: envRole('WORKER'), reviewer: envRole('REVIEWER', '') }
+const ROLES = ['planner', 'worker', 'reviewer']
+const viaHermes = role => models[role].hermes === true
+const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), apiKey: models[role].apiKey, ...(viaHermes(role) ? { hermes: true } : {}) })
 
 // Picks made in the canvas's Models menu. Model names only (each role keeps the
 // endpoint and key Hermes gave it), kept in the plugin's data dir, never in
@@ -111,7 +110,7 @@ const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), ap
 const picksFile = join(dataDir, 'models.json')
 let picks = {}
 try { picks = JSON.parse(readFileSync(picksFile, 'utf8')) } catch {}
-const modelFor = role => (picks[role] === 'off' ? '' : picks[role] || models[role].model)
+const modelFor = role => (picks[role] === 'off' ? '' : viaHermes(role) ? roleModel(role, picks[role]) : picks[role] || models[role].model)
 
 // Model ids each endpoint offers, for the pickers. Fetched once per endpoint.
 const modelLists = new Map()
@@ -119,7 +118,8 @@ const modelLists = new Map()
 const modelRows = new Map()
 function listModels(role) {
   const m = models[role]
-  if (!m.apiKey) return Promise.resolve([])
+  // through Hermes the model is Hermes's slot; there is no list to pick from
+  if (!m.apiKey || viaHermes(role)) return Promise.resolve([])
   if (!modelLists.has(m.baseUrl)) {
     modelLists.set(m.baseUrl, fetch(`${m.baseUrl.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${m.apiKey}` }, signal: AbortSignal.timeout(15000) })
       .then(r => r.json())
@@ -148,7 +148,6 @@ const PY = process.env.SWARM_HERMES_PY || ''
 const pyEnv = hermesEnv({ PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '' })
 // the ElevenLabs key pasted in the Film panel (engine/media.mjs)
 const mediaKeyStore = mediaKeys(dataDir)
-const hermes = hermesBridge()
 // Generated pages served from this origin (/site/, /video/…/live/) run in an opaque origin (Nous catalog review, point 4)
 const SITE_CSP = 'sandbox allow-scripts'
 const HERMES_IMAGE = { provider: 'hermes', available: true, models: [], default: '' }
@@ -206,7 +205,7 @@ async function imageChoice() {
 const setup = setupRoutes({
   dataDir,
   roles: () => ({ planner: { ...models.planner, model: modelFor('planner') }, worker: { ...models.worker, model: modelFor('worker') } }),
-  call: (p, model) => streamChat({ baseUrl: p.baseUrl.replace(/\/$/, ''), apiKey: p.apiKey }, { trace: { kind: 'setup-test' }, model, maxTokens: 16, temperature: 0, messages: [{ role: 'user', content: 'Say ok' }], signal: AbortSignal.timeout(30000) }),
+  call: (p, model) => streamChat({ baseUrl: p.baseUrl.replace(/\/$/, ''), apiKey: p.apiKey, ...(p.hermes ? { hermes: true } : {}) }, { trace: { kind: 'setup-test' }, model, maxTokens: 16, temperature: 0, messages: [{ role: 'user', content: 'Say ok' }], signal: AbortSignal.timeout(30000) }),
   image: async () => ({ providers: await loadImageProviders(), imagePick: picks.image || null, pick: picks.pictures || null }),
   media: () => mediaState(),
   feed: PY ? call => pyCommand(call, 60000) : null,
@@ -379,8 +378,7 @@ function broadcast(event) {
 }
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
-function startRun({ brief, agents, models: given, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '', brand = null }) {
-  setModels(given)
+function startRun({ brief, agents, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '', brand = null }) {
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
@@ -2396,6 +2394,8 @@ const server = createServer((req, res) => {
     res.writeHead(421).end('wrong host')
     return
   }
+  // model calls, forwarded to Hermes (engine/hermesllm.mjs); its own key, never a provider's
+  if (llm.handle(req, res)) return
 
   // The API answers any origin (the Desktop pane's is opaque) but needs the token.
   const api = url.pathname === '/events' || url.pathname.startsWith('/api/')

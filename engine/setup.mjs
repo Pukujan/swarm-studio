@@ -61,7 +61,7 @@ export function modelTester({ call, keepMs = 10 * 60e3, now = Date.now } = {}) {
     if (had && now() - had.at < keepMs) return had.result
     const t = now()
     let result
-    try { await call({ baseUrl: r.baseUrl, apiKey: r.apiKey }, r.model); result = { model: r.model, ok: true, ms: Math.round(now() - t) } }
+    try { await call({ baseUrl: r.baseUrl, apiKey: r.apiKey, hermes: r.hermes }, r.model); result = { model: r.model, ok: true, ms: Math.round(now() - t) } }
     catch (err) { result = { model: r.model, ok: false, error: modelError(err) } }
     kept.set(key, { at: now(), result })
     return result
