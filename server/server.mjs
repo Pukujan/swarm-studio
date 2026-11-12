@@ -38,6 +38,8 @@ import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { workshopRoutes } from './workshops.mjs'
+import { setupRoutes } from './setup.mjs'
+import { pictureRun, isPictures } from '../engine/setup.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
 import { library } from '../engine/library.mjs'
@@ -163,6 +165,22 @@ async function imageChoice() {
   return chooseImage(await loadImageProviders(), picks.image)
 }
 
+// The one-time Setup sheet (docs/specs/06-onboarding.md): what builds use for pictures (the
+// `pictures` pick: painted, stock or drawn) and whether the planner and the builders answer.
+const setup = setupRoutes({
+  dataDir,
+  roles: () => ({ planner: { ...models.planner, model: modelFor('planner') }, worker: { ...models.worker, model: modelFor('worker') } }),
+  call: (p, model) => streamChat({ baseUrl: p.baseUrl.replace(/\/$/, ''), apiKey: p.apiKey }, { trace: { kind: 'setup-test' }, model, maxTokens: 16, temperature: 0, messages: [{ role: 'user', content: 'Say ok' }], signal: AbortSignal.timeout(30000) }),
+  image: async () => ({ providers: await loadImageProviders(), imagePick: picks.image || null, pick: picks.pictures || null }),
+  setPictures: mode => { if (mode) picks.pictures = mode; else delete picks.pictures; try { writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {} }
+})
+// What one build does for pictures: its own `pictures`, else the Setup pick, else the default
+async function picturesFor(own) {
+  const choice = await imageChoice()
+  const mode = isPictures(own) ? own : (await setup.pictures()).mode
+  return { choice, mode, ...pictureRun(mode, choice) }
+}
+
 const IMG_MAX = 8
 
 // ---------- the art director (engine/artdirect.mjs): one named style per build,
@@ -266,6 +284,7 @@ function imageQueue(run, emit, choice) {
       const sentBack = c => emit('image:sent-back', { page: job.page, layer: job.layer, gen: job.gen, problems: c.problems, model: c.model })
       paintArt(choice, run.art || art.styleGuide({ brief: run.brief }), { gen: job.gen, aspect: job.aspect, hero: art.isHero({ layer: job.layer, n: job.n }) }, sentBack)
         .then(r => {
+          setup.notePaint(choice, r)
           if (!r.ok || !r.path || !existsSync(r.path)) return emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message: r.error || 'no image' })
           const file = `${job.n}${extname(r.path) || '.png'}`
           mkdirSync(join(run.dir, 'img'), { recursive: true })
@@ -310,7 +329,7 @@ function broadcast(event) {
 }
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
-function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '' }) {
+function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '', pictures = '' }) {
   setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
@@ -360,11 +379,12 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     queueMicrotask(() => emit('error', { where: 'models', message: 'No model key yet. Start a build from Hermes once (/swarm, the chat tool or `hermes swarm`) so it can pass its model settings, or set SWARM_STUDIO_API_KEY.' }))
     return run
   }
-  imageChoice().then(choice => {
+  picturesFor(pictures).then(pic => {
     if (current !== run) return
-    if (choice) images = imageQueue(run, emit, choice)
+    // painted: the slots are painted; stock: stand-in photos keep them; drawn: no slots at all
+    if (pic.paint) images = imageQueue(run, emit, pic.choice)
     return withTrace(id, () => runSwarm({
-    images: !!choice,
+    images: pic.images,
     provider: provider('planner'),
     workerProvider: provider('worker'),
     brief,
@@ -2407,6 +2427,7 @@ const server = createServer((req, res) => {
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
   if (workshops(req, res, url)) return
+  if (setup(req, res, url)) return
 
   // The Make box's showcases and its "grill me" interview (engine/intake.mjs); a Game gets the game interview
   if (url.pathname === '/api/intake' && req.method === 'GET') {
