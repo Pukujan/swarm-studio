@@ -1,0 +1,78 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { pictureState, pictureRun, modelTester, modelError } from '../engine/setup.mjs'
+
+const codex = { provider: 'openai-codex', available: true, models: ['gpt-image-2-low'], default: 'gpt-image-2-low' }
+const xai = { provider: 'xai', available: false, models: ['grok-image'], default: 'grok-image' }
+
+test('the default is painted when an image model is ready, else drawn', () => {
+  assert.equal(pictureState({ providers: [codex] }).mode, 'painted')
+  assert.equal(pictureState({ providers: [xai] }).mode, 'drawn')
+  assert.equal(pictureState({ providers: [] }).mode, 'drawn')
+})
+
+test('an image model whose last paint was refused is not ready', () => {
+  const s = pictureState({ providers: [codex], last: { provider: 'openai-codex', ok: false, error: 'HTTP 429 usage limit has been reached' } })
+  assert.equal(s.mode, 'drawn')
+  assert.equal(s.painted.ready, false)
+  assert.match(s.painted.error, /usage limit/)
+  // another provider's refusal says nothing about this one
+  assert.equal(pictureState({ providers: [codex], last: { provider: 'xai', ok: false } }).mode, 'painted')
+  assert.equal(pictureState({ providers: [codex], last: { provider: 'openai-codex', ok: true } }).mode, 'painted')
+})
+
+test('a pick is kept, whatever the image model is doing', () => {
+  assert.equal(pictureState({ providers: [], pick: 'stock' }).mode, 'stock')
+  assert.equal(pictureState({ providers: [codex], pick: 'drawn' }).mode, 'drawn')
+  const s = pictureState({ providers: [], pick: 'painted' })
+  assert.equal(s.mode, 'painted')
+  assert.equal(s.painted.ready, false)
+  assert.equal(pictureState({ providers: [codex], pick: 'sideways' }).mode, 'painted')
+})
+
+test('the Models menu\'s "off" means drawn until a Pictures pick is made', () => {
+  assert.equal(pictureState({ providers: [codex], imagePick: 'off' }).mode, 'drawn')
+  assert.equal(pictureState({ providers: [codex], imagePick: 'off', pick: 'stock' }).mode, 'stock')
+})
+
+test('what a build does with each mode', () => {
+  const choice = { provider: 'openai-codex', model: 'gpt-image-2-low' }
+  assert.deepEqual(pictureRun('drawn', choice), { images: false, paint: false })
+  assert.deepEqual(pictureRun('stock', choice), { images: true, paint: false })
+  assert.deepEqual(pictureRun('painted', choice), { images: true, paint: true })
+  // painted with no image model: the slots stay and stock photos fill them, never empty
+  assert.deepEqual(pictureRun('painted', null), { images: true, paint: false })
+})
+
+test('the model test calls each role once and keeps the answer', async () => {
+  let calls = 0, t = 1000
+  const tester = modelTester({ call: async (p, m) => { calls++; if (m === 'bad') throw new Error('bad: HTTP 401 {"error":{"message":"Invalid API key"}}') }, now: () => t })
+  const roles = { planner: { model: 'plan', baseUrl: 'https://a', apiKey: 'k' }, worker: { model: 'build', baseUrl: 'https://a', apiKey: 'k' } }
+  const r = await tester.test(roles)
+  assert.equal(r.ok, true)
+  assert.equal(calls, 2)
+  await tester.test(roles)
+  assert.equal(calls, 2)
+  t += 11 * 60e3
+  await tester.test(roles)
+  assert.equal(calls, 4)
+  await tester.test(roles, { again: true })
+  assert.equal(calls, 6)
+  const bad = await tester.test({ ...roles, worker: { ...roles.worker, model: 'bad' } })
+  assert.equal(bad.ok, false)
+  assert.equal(bad.worker.error, '401: Invalid API key')
+  assert.equal(bad.planner.ok, true)
+})
+
+test('no key is a failed test, with no call made', async () => {
+  let calls = 0
+  const r = await modelTester({ call: async () => { calls++ } }).test({ planner: { model: 'x', baseUrl: 'https://a', apiKey: '' }, worker: null })
+  assert.equal(r.ok, false)
+  assert.equal(calls, 0)
+  assert.equal(r.planner.error, 'No model yet')
+})
+
+test('a model error never carries a key', () => {
+  assert.doesNotMatch(modelError(new Error('refused for Bearer sk-abcdefghijklmnop1234')), /abcdefghijklmnop/)
+  assert.equal(modelError(''), 'No answer')
+})

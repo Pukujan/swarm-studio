@@ -4,6 +4,7 @@
 // Right-click or … manages a project; drag a card onto a folder; Shift/⌘-click picks several.
 // Re-runs of one idea stack on one card (server/projects.mjs groups them).
 import { ic, cursor, logo, CREW } from './icons.js'
+import { makeSetup } from './setup.js'
 import { openSettings } from './settings.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
@@ -25,6 +26,9 @@ export function makeHome({ sw, C, root }) {
     sel: new Set(), last: null, data: { folders: [], projects: [] }, assets: null, me: null, loaded: false
   }
   const opened = store.get('home.opened', {})
+  // the one-time Setup sheet (docs/specs/06-onboarding.md); the plugin only
+  const setup = makeSetup({ sw })
+  let setupAsked = false
 
   root.className = 'home'
   root.hidden = true
@@ -746,7 +750,7 @@ export function makeHome({ sw, C, root }) {
     showMenu([
       { k: 'theme', icon: light ? 'moon' : 'sun', label: light ? 'Dark' : 'Light', run: () => document.querySelector('#theme-btn')?.click() },
       { k: 'sound', icon: 'sound', label: sound === 'on' ? 'Mute' : 'Sound on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
-      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => document.querySelector('#models-btn')?.click() },
+      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => document.querySelector('#models-btn')?.click() }, { k: 'setup', icon: 'check', label: 'Setup', run: () => setup.open() },
         // what the studio is connected to and where its data goes (docs/specs/25-connections.md)
         { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }])
     ], e.currentTarget)
@@ -812,6 +816,7 @@ export function makeHome({ sw, C, root }) {
       if (!H.me) loadMe()
       refresh()
       if (given) setTimeout(handover, 0) // after this view change has finished
+      if (!setupAsked && !hosted()) { setupAsked = true; setup.first() }
       setTimeout(() => { if (H.on && innerWidth > 760 && !document.activeElement?.closest('input, textarea')) input.focus({ preventScroll: true }) }, 60)
     },
     hide() { H.on = false; clearTimeout(H.timer); closeMenu(); closePop(); drawer(false); root.hidden = true }

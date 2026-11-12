@@ -13,6 +13,7 @@ import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbu
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
+import { checklist, checkLine, testDodges, dodgeProblem } from './playcheck.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk, artBrief, viewOf } from './game.mjs'
 import { takeAsks, askedBefore, keepAsked, askBrief, ASKS_PER_STAGE } from './artask.mjs'
@@ -322,7 +323,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
         if (fill && kind !== 'game') try { j.result.standins = (await fill(id, dir, step)).filled } catch (err) { step({ kind: 'setup', text: `empty picture slots could not be filled: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
         await serve(id, j, step)
-        if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events))
+        // a new game was told about the play checks in its prompt; an older one being edited was not
+        if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events), fresh ? events.findLast(e => e.type === 'game:spec')?.spec : null)
       }
       // Godot, Unity or Unreal asked for: the same game written as that engine's project too
       const target = kind === 'game' ? portTarget(input.target ? input : spec || events.findLast(e => e.type === 'game:spec')?.spec) : null
@@ -475,7 +477,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result.commits += last.commits || 0
       j.result.files = Math.max(j.result.files, last.files?.length || 0)
       if (!godot) await serve(id, j, step)
-      const play = await playGame(j, dir, model(), step, brand)
+      const play = await playGame(j, dir, model(), step, brand, spec)
       j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
       // each slice carries the bots' filmed play test, so the person sees it before the next one
       send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}), ...(godot ? { godot: true } : {}) } })
@@ -546,7 +548,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // domain, which is someone else's), and a few seconds of play (the typecheck
   // and build pass a game whose run ends the moment it starts). Problems get one
   // fix turn with them spelled out, then a second check. Vite reloads the fix.
-  async function playGame(j, dir, model, step, brand) {
+  // spec: the game's spec, when its builder was told about the play checks (engine/playcheck.mjs):
+  // each control it names is held and the game's state read, enemies are watched, companions counted
+  async function playGame(j, dir, model, step, brand, spec = null) {
+    const checks = spec ? checklist(spec) : []
+    const dodge = () => (spec ? dodgeProblem(testDodges(dir, { godot: !!j.godot })) : '')
     const allowed = brand?.url ? [brand.url] : []
     const linkProblem = () => {
       const bad = strangeLinks(dir, allowed)
@@ -566,14 +572,16 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     try { n = 1 + Math.max(0, ...readdirSync(join(runsDir, j.id, 'img')).map(f => +(f.match(/^playtest-(\d+)\.webm$/)?.[1] || 0))) } catch {}
     if (n > 999) n = 999
     const clip = join(runsDir, j.id, 'img', `playtest-${n}.webm`)
-    let t = await playtest(j.url, { shot, clip, secure: !!j.godot })
+    let t = await playtest(j.url, { shot, clip, secure: !!j.godot, checks })
+    let dodged = dodge()
+    if (dodged) step({ kind: 'test', text: 'the game plays differently when it is being tested', ok: false })
     const film = t.clip ? { clip: `/img/${j.id}/playtest-${n}.webm`, keys: t.keys || [] } : {}
     if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
-    else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s`, ...film })
-    else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false, ...film })
-    const withClip = o => (film.clip ? { ...o, clip: film.clip } : o)
-    if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
-    const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, links || ''].filter(Boolean).join('\n\n')
+    else if (t.ok) step({ kind: 'test', text: `play test passed: ${t.checks?.length ? checkLine(t.checks) : `still playing after ${t.seconds.toFixed(1)} s`}`, ...film })
+    else step({ kind: 'test', text: `play test failed: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : t.problem.split('. ')[0]}`, ok: false, ...film })
+    const withClip = o => ({ ...o, ...(film.clip ? { clip: film.clip } : {}), ...(t.checks ? { checks: t.checks } : {}) })
+    if (!links && !dodged && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
+    const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, dodged, links || ''].filter(Boolean).join('\n\n')
     try {
       const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
       await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
@@ -584,10 +592,12 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     }
     await new Promise(r => setTimeout(r, 2500))
     links = linkProblem()
-    if (!t.ok) t = await playtest(j.url)
-    const ok = !links && t.ok
-    step({ kind: 'test', text: ok ? 'the game passes its checks after the fix' : `still wrong after the fix: ${(links || t.problem || '').split('. ')[0]}`, ok })
-    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, links || ''].filter(Boolean).join(' ') })
+    // played again the same way (a Godot export only starts in a secure frame)
+    if (!t.ok || dodged) t = await playtest(j.url, { secure: !!j.godot, checks })
+    dodged = dodge()
+    const ok = !links && !dodged && t.ok
+    step({ kind: 'test', text: ok ? `the game passes its checks after the fix${t.checks?.length ? `: ${checkLine(t.checks)}` : ''}` : `still wrong after the fix: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : (links || dodged || t.problem || '').split('. ')[0]}`, ok })
+    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, dodged, links || ''].filter(Boolean).join(' ') })
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).
