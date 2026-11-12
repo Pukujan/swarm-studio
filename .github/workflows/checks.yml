@@ -31,3 +31,5 @@ jobs:
       - run: npm install --no-save --no-package-lock playwright@1.64.1
       - run: npx playwright install --with-deps chromium-headless-shell
       - run: node scripts/open-check.mjs
+      # model-written pages cannot reach the studio (scripts/sandbox-check.mjs, catalog review point 4)
+      - run: node scripts/sandbox-check.mjs

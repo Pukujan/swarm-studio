@@ -149,6 +149,8 @@ const pyEnv = hermesEnv({ PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '' 
 // the ElevenLabs key pasted in the Film panel (engine/media.mjs)
 const mediaKeyStore = mediaKeys(dataDir)
 const hermes = hermesBridge()
+// Generated pages served from this origin (/site/, /video/…/live/) run in an opaque origin (Nous catalog review, point 4)
+const SITE_CSP = 'sandbox allow-scripts'
 const HERMES_IMAGE = { provider: 'hermes', available: true, models: [], default: '' }
 const imagegenHermes = async (args, timeout) => {
   if (args[0] === '--list') {
@@ -3656,7 +3658,9 @@ const server = createServer((req, res) => {
     const file = join(base, name, 'html', rel)
     if (!existsSync(file) || !statSync(file).isFile()) return res.writeHead(404).end('not found')
     const types = { html: 'text/html; charset=utf-8', css: 'text/css', js: 'text/javascript', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', json: 'application/json' }
-    res.writeHead(200, { 'content-type': types[rel.split('.').pop()] || 'application/octet-stream', 'cache-control': 'no-cache' })
+    // model-written pages on the studio's own origin: sandboxed (scripts run, the origin is opaque, so
+    // they cannot read the studio or its token), and open to that opaque origin for their own files
+    res.writeHead(200, { 'content-type': types[rel.split('.').pop()] || 'application/octet-stream', 'cache-control': 'no-cache', 'content-security-policy': SITE_CSP, 'access-control-allow-origin': '*' })
     createReadStream(file).pipe(res)
     return
   }
@@ -3671,7 +3675,7 @@ const server = createServer((req, res) => {
     // HyperFrames shows each clip only between its data-start and its end; here a
     // tiny stand-in does the same on every frame of the looping timeline
     const loop = `<script>addEventListener('load',()=>{const tl=window.__timelines&&window.__timelines.promo;if(!tl)return;const clips=[...document.querySelectorAll('.clip[data-start]')].map(el=>({el,a:+el.dataset.start,b:+el.dataset.start+ +el.dataset.duration}));const show=()=>{const t=tl.time();for(const c of clips)c.el.style.visibility=t>=c.a&&t<c.b?'visible':'hidden'};tl.eventCallback('onUpdate',show);tl.repeat(-1);tl.play(0);show()})</script>`
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': SITE_CSP })
     return res.end(readFileSync(file, 'utf8').replace(/<\/body>/i, () => `${loop}</body>`))
   }
 
