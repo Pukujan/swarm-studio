@@ -1,5 +1,21 @@
 # Instructions for coding agents in this repository
 
+## Dependencies: use mature ones (owner, 2026-11-12)
+
+Use a mature, maintained, widely adopted dependency wherever one solves the problem. Don't reinvent what a
+library already does well. Build something custom only when nothing fits, and say why in the PR.
+
+"No npm dependencies", "no build step" and "no framework" describe how the first version was built. They are
+not goals, and they are no reason to hand-roll something.
+
+The real constraints that come with a dependency:
+
+- **Pinned, bundled or disclosed.** Anything the plugin downloads or runs on a person's machine is pinned to
+  an exact version, bundled, or disclosed (the Nous catalog rules). When you add one, update `plugin.yaml` and
+  the README's "What it does on your machine".
+- **Size and licence.** Mind the install size and the licence.
+- **Nothing new downloaded at build time.** A build may not fetch a new runtime download.
+
 Before changing anything a person sees (anything in `web/`, the Feed's screens, dialogs, menus, copy), read:
 
 1. [docs/ux/RULES.md](docs/ux/RULES.md): the UI and UX rules, and the checklist to run before a UI PR.
