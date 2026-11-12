@@ -1,0 +1,1668 @@
+{
+ "intro": "The real Studio (main at fd29e7d), screen by screen in the order a newcomer meets it, at 1440 and 390 wide. It ran on its own port with a throwaway data folder: six small projects (a two-version site with a visitor, an app, a game, a film whose footage failed, a site left half built, one in Trash), a model that always fails, and no Hermes. Each picture is checked against docs/ux/RULES.md, PATTERNS.md, REQUIREMENTS.md and the owner's rules. Faults I saw are listed first. Faults marked 'measured' come from scripts/walkthrough-audit.js, which looks for tooltips, targets under 40 px (44 on touch), blue, purple or green chrome, raw errors, internal words and sentences at rest. The steps after the Make box pretend Hermes is on, so the screens a person with Hermes sees are shown. Targets under 40 px were found on every screen (sidebar rows, menu items, chips) and are noted once, on Projects, rather than on each picture. Nothing was fixed. Regenerate the page with: node scripts/walkthrough.mjs, then node scripts/walkthrough-page.mjs.",
+ "screens": {
+  "setup": {
+   "sev": "block",
+   "verdict": "Setup opens by itself on first visit. Its first visible line is a raw model error, and nothing tells a newcomer whether they can carry on.",
+   "faults": [
+    {
+     "note": "Opens by itself before the person has done anything",
+     "rule": "Owner: nothing opens by itself",
+     "sev": "confusing",
+     "box": [
+      480,
+      189,
+      480,
+      576
+     ]
+    },
+    {
+     "note": "The model test's raw reply, “cb/deepseek-v4.1-flash: HTTP 500 {\"error\":…}”, is shown in red",
+     "rule": "Rule 10: a marker first; raw errors only behind Details",
+     "sev": "block",
+     "find": "HTTP 500"
+    },
+    {
+     "note": "Model ids (“deepseek-v4.1-flash”) as the names of Planner and Builders; “Planner” and “Builders” are internal roles",
+     "rule": "No internal names shown to a person",
+     "sev": "confusing",
+     "box": [
+      720,
+      331,
+      148,
+      16
+     ]
+    },
+    {
+     "note": "“No model here hears or watches: clips are kept, not read.” A helper sentence a newcomer cannot act on",
+     "rule": "Rule 8: names only at rest",
+     "sev": "cosmetic",
+     "box": [
+      518,
+      481,
+      404,
+      35
+     ]
+    },
+    {
+     "note": "It never says what to do next when the models fail: Start is still the primary button",
+     "rule": "Every failure says why and what to do",
+     "sev": "block",
+     "box": [
+      840,
+      712,
+      98,
+      42
+     ]
+    }
+   ],
+   "drop": [
+    "raw",
+    "internal",
+    "sentences",
+    "phone:small",
+    "small"
+   ]
+  },
+  "setup-models": {
+   "skip": true,
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "setup-account": {
+   "verdict": "The Account row: three sign-in buttons and a sentence. Clear enough; “Skipped” reads like an error.",
+   "faults": [
+    {
+     "note": "“Skipped” is shown as the state of an account nobody was asked about",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      830,
+      355,
+      95,
+      24
+     ]
+    },
+    {
+     "note": "“Builds stay on this computer. Publish and Post make them public.” A sentence at rest",
+     "rule": "Rule 8",
+     "sev": "cosmetic",
+     "find": "Builds stay"
+    }
+   ],
+   "drop": [
+    "sentences",
+    "phone:small",
+    "small"
+   ]
+  },
+  "home": {
+   "verdict": "Projects is calm: one input, one primary (Make), cards of a picture and a name. But every card's kind is wrong for an app or a film, and each name is printed twice.",
+   "faults": [
+    {
+     "note": "Shift Log (an App) and River Hours (a Video) are labelled “Website · Designed”. The label is App only once an app is built, and Video only when there are no pages",
+     "rule": "The plain test: the card says what the thing is (server/projects.mjs:75)",
+     "sev": "confusing",
+     "box": [
+      1138,
+      378,
+      130,
+      16
+     ]
+    },
+    {
+     "note": "The name shows twice: big on the picture and again in capitals under it",
+     "rule": "Rule 8: minimal text",
+     "sev": "cosmetic",
+     "box": [
+      288,
+      355,
+      160,
+      40
+     ]
+    },
+    {
+     "note": "No pictures on the cards: the covers stay as skeletons until a project is opened once",
+     "rule": "Spec 36: covers come from saved snapshots",
+     "sev": "cosmetic",
+     "box": [
+      288,
+      178,
+      262,
+      162
+     ]
+    },
+    {
+     "note": "The sidebar items are 32 px tall",
+     "rule": "Rule 16: targets at least 40 px",
+     "sev": "cosmetic",
+     "box": [
+      14,
+      84,
+      220,
+      28
+     ]
+    },
+    {
+     "width": "phone",
+     "note": "The one question, “What should the crew build?”, is cut to “What should th”, and the kind button shows only an icon",
+     "rule": "B8: placeholders ≤ 6 words that fit; the plain test",
+     "sev": "confusing",
+     "box": [
+      95,
+      75,
+      150,
+      28
+     ]
+    },
+    {
+     "width": "phone",
+     "note": "A Delete button sits on every card at rest",
+     "rule": "C17: one primary action; destructive actions behind the card's menu",
+     "sev": "cosmetic",
+     "box": [
+      150,
+      200,
+      30,
+      30
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "drawer": {
+   "verdict": "The phone's sidebar drawer.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "all": {
+   "verdict": "All projects: the same grid. Fine.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "chats": {
+   "verdict": "Chats with none yet: only “New chat”. Fine, though a newcomer is not told what a chat is for.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "assets": {
+   "verdict": "Assets with nothing in it is a blank page: no state, no way forward.",
+   "faults": [
+    {
+     "note": "An empty view shows nothing at all, not even “No assets” with Upload",
+     "rule": "Rule 12: states, not prose (an empty state still needs a name and one action)",
+     "sev": "confusing",
+     "box": [
+      288,
+      170,
+      860,
+      300
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "trash": {
+   "verdict": "Trash: the trashed card and Empty. Fine.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "purge": {
+   "verdict": "Empty Trash asks to type “delete”. Right for a step that cannot be undone.",
+   "drop": [
+    "small",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "folder": {
+   "verdict": "A folder. Fine.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "new-folder": {
+   "verdict": "New folder puts an empty field in the sidebar with no name in it.",
+   "faults": [
+    {
+     "note": "The new field is blank: no placeholder such as “Folder name”",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      54,
+      352,
+      170,
+      26
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "card-menu": {
+   "verdict": "A card's menu: seven plain items, Delete in red. Fine (Finder's pattern).",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "versions": {
+   "verdict": "A project with two versions opens a stack: Version 2, Version 1. Clear.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "search": {
+   "verdict": "Search opens a field beside the icon. Fine.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "list": {
+   "verdict": "List view. “11d” has no unit a newcomer would read; the kind is wrong as on the grid. A phone has no List view.",
+   "faults": [
+    {
+     "note": "“11d” and a bare “2” on the row: a number with no unit or source",
+     "rule": "A number always has its unit and source",
+     "sev": "cosmetic",
+     "box": [
+      1180,
+      205,
+      215,
+      20
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "user-menu": {
+   "verdict": "The user menu mixes two quick settings with three ways into configuration: Models, Setup and Settings.",
+   "faults": [
+    {
+     "note": "Models, Setup and Settings are three doors to overlapping things (models appear in all three)",
+     "rule": "A1: one front door; A5: settings never share a list with actions",
+     "sev": "confusing",
+     "box": [
+      12,
+      650,
+      196,
+      182
+     ]
+    },
+    {
+     "note": "“Setup” carries a tick, which reads as a checkbox",
+     "rule": "C15: things look like what they do",
+     "sev": "cosmetic",
+     "box": [
+      12,
+      764,
+      196,
+      26
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "settings": {
+   "verdict": "Settings: four grouped rows (iOS Settings). “3 of 8” and “0 of 5” have no unit.",
+   "faults": [
+    {
+     "note": "“3 of 8” beside Crew and “0 of 5” beside Publish: of what?",
+     "rule": "A number always has its unit",
+     "sev": "cosmetic",
+     "box": [
+      860,
+      465,
+      110,
+      70
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "kind-menu": {
+   "sev": "confusing",
+   "verdict": "What to make: Website, App, Game, Video, Brand, and then Pictures, which is a setting, not a thing to make.",
+   "faults": [
+    {
+     "note": "“Pictures” (Painted / Stock photos / Drawn) is a setting in the list of things to make",
+     "rule": "A5: a setting never sits in a list of things to make (the front-door session is removing it)",
+     "sev": "confusing",
+     "box": [
+      410,
+      278,
+      180,
+      26
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "kind-pics": {
+   "skip": true,
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "ideas": {
+   "sev": "confusing",
+   "verdict": "The lightbulb mixes three plain ideas with two “launch” rows whose chips are internal step names, offered even for a website.",
+   "faults": [
+    {
+     "note": "“Full launch” and “Festival tickets” rows carry chips of internal steps (Design, App, Games, Checkout, Film, Posts, Live)",
+     "rule": "No internal or step names shown to a person (the front-door session is removing these)",
+     "sev": "confusing",
+     "box": [
+      470,
+      270,
+      690,
+      90
+     ]
+    },
+    {
+     "note": "The ideas are not marked as examples; a newcomer can't tell whether picking one builds it",
+     "rule": "The plain test",
+     "sev": "confusing",
+     "box": [
+      470,
+      120,
+      690,
+      140
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "phone:small"
+   ]
+  },
+  "make-empty": {
+   "sev": "confusing",
+   "verdict": "Make with nothing typed opens the same ideas list, so a newcomer who presses the one primary button lands in samples, not in a question.",
+   "faults": [
+    {
+     "note": "Make with an empty box opens samples instead of asking what to make",
+     "rule": "Owner: “do i have to type in prompt i dont get the flow at all”",
+     "sev": "confusing",
+     "box": [
+      466,
+      95,
+      760,
+      290
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "phone:small"
+   ]
+  },
+  "no-hermes": {
+   "verdict": "With Hermes off, Make shows a toast saying why and what to do, with Check again. Good; it is the one failure in the walkthrough that says both.",
+   "faults": [
+    {
+     "note": "“hermes swarm” is a command line in a sentence; fine for the plugin's users, opaque to a newcomer",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      384,
+      832,
+      675,
+      42
+     ]
+    },
+    {
+     "width": "phone",
+     "note": "The toast wraps one word per line in a narrow column",
+     "rule": "E25: 390 works",
+     "sev": "confusing",
+     "box": [
+      85,
+      628,
+      220,
+      190
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "studio-first": {
+   "sev": "confusing",
+   "verdict": "Make asks “Studio first?” with Studio first and Build now. Two clear choices, but “Studio” is not explained anywhere and Light / Thorough means nothing yet.",
+   "faults": [
+    {
+     "note": "“Studio first” names a place the person has never seen (and the Studio scaffold is still empty, see below)",
+     "rule": "The plain test",
+     "sev": "confusing",
+     "box": [
+      480,
+      150,
+      360,
+      95
+     ]
+    },
+    {
+     "note": "Light and Thorough: two depths with no hint of what changes",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      480,
+      258,
+      182,
+      30
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "thorough": {
+   "verdict": "Studio first, Thorough: the first question, “Who is it for?”, with chips, own words, Just build and Next. Clear and short.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "build-now": {
+   "sev": "confusing",
+   "verdict": "Build now lands in an Untitled Design deck with the brief in the chat and Build / Brand sheet / Keep talking. It works, but the chat's composer shows an agent count and a model menu, and the status says Ready over an empty canvas.",
+   "faults": [
+    {
+     "note": "“8 AGENTS” and “DEEPSEEK…” pickers under the chat: model and crew settings up front",
+     "rule": "PATTERNS: + Create leaves out model pickers and settings up front",
+     "sev": "confusing",
+     "box": [
+      20,
+      850,
+      260,
+      34
+     ]
+    },
+    {
+     "note": "“Hermia PLANNER”: the role name of the model shown on every message",
+     "rule": "No internal names shown to a person",
+     "sev": "cosmetic",
+     "box": [
+      28,
+      110,
+      150,
+      14
+     ]
+    },
+    {
+     "note": "Three buttons under the brief look the same: which one is the primary?",
+     "rule": "C17: one primary action",
+     "sev": "cosmetic",
+     "box": [
+      28,
+      297,
+      248,
+      22
+     ]
+    },
+    {
+     "note": "The deck is called “Untitled”",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      210,
+      14,
+      60,
+      24
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "phone:small"
+   ]
+  },
+  "make-app": {
+   "verdict": "Make with App asks the same “Studio first?”, and remembers Thorough from the last time.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "make-game": {
+   "sev": "confusing",
+   "verdict": "Make with Game opens the Plan board and a chat question. The board's cells are filled from a guess at the words: “Characters: I”, cut-off text.",
+   "faults": [
+    {
+     "note": "The plan reads “Characters: I” and “Systems: I”: a word split from the prompt, not a plan",
+     "rule": "The plain test",
+     "sev": "confusing",
+     "box": [
+      445,
+      100,
+      125,
+      60
+     ]
+    },
+    {
+     "note": "Text cut off mid-word: “Finish a level to open the n”",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      580,
+      195,
+      125,
+      45
+     ]
+    },
+    {
+     "note": "The board's labels are 6 px capitals: unreadable at 1440",
+     "rule": "E26: contrast and legibility",
+     "sev": "cosmetic",
+     "box": [
+      445,
+      75,
+      380,
+      20
+     ]
+    },
+    {
+     "note": "“Lock” is the one primary, with no hint of what it locks",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      1214,
+      10,
+      170,
+      30
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "make-video": {
+   "verdict": "Make with Video asks “Studio first?” too, with Build now picked.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "make-brand": {
+   "sev": "confusing",
+   "verdict": "Make with Brand opens the brand sheet: sample packs with real photos, the story, palettes and type. The chat beside it starts with an empty-state paragraph about planners and swarms.",
+   "faults": [
+    {
+     "note": "“Describe a product below. A planner picks the pages, then a swarm of agents builds them on the canvas.” A paragraph at rest, with internal words",
+     "rule": "Rule 8 and no internal names",
+     "sev": "confusing",
+     "find": "Describe a product below"
+    },
+    {
+     "note": "The breadcrumb reads “Chat › Brand sheet”, with no back arrow",
+     "rule": "A7: a way home",
+     "sev": "cosmetic",
+     "box": [
+      0,
+      0,
+      300,
+      52
+     ]
+    },
+    {
+     "note": "The left column has two inputs' worth of controls (agents, model, Build) on a sheet whose primary is Lock",
+     "rule": "C17: one primary action",
+     "sev": "cosmetic",
+     "box": [
+      20,
+      850,
+      260,
+      34
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "studio": {
+   "sev": "block",
+   "verdict": "The Studio scaffold (spec 37) has a working address but no screen: it draws an empty Design deck that says Ready. “Studio first” leads a newcomer toward a place that isn't built yet.",
+   "faults": [
+    {
+     "note": "?room=studio draws an empty station: no steps, no brand, no plan. studio.js's draw() has no branch for it and no kit is loaded",
+     "rule": "The plain test; A7 a way home",
+     "sev": "block",
+     "box": [
+      360,
+      120,
+      1000,
+      600
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "overview": {
+   "verdict": "A project's Overview is close to the frame: Files on the left, pages on a dotted stage, the dock with Tell the crew. Play and Publish are both outlined, so there is no one primary.",
+   "faults": [
+    {
+     "note": "Play and Publish look the same; neither is the primary",
+     "rule": "C17: one primary action",
+     "sev": "cosmetic",
+     "box": [
+      1165,
+      10,
+      220,
+      32
+     ]
+    },
+    {
+     "note": "The Follow button in the dock is shown greyed out with no reason",
+     "rule": "Every stop says why",
+     "sev": "cosmetic",
+     "box": [
+      693,
+      840,
+      28,
+      32
+     ]
+    },
+    {
+     "note": "The dock's nine tools carry no names at rest; a newcomer has to guess Scribble from Eraser from Frame",
+     "rule": "C15: clickable things look like what they do (icons need names when there is no hover)",
+     "sev": "cosmetic",
+     "box": [
+      520,
+      835,
+      340,
+      42
+     ]
+    },
+    {
+     "width": "phone",
+     "note": "The dock's input, “Tell the crew…”, is squeezed to one word between nine icons",
+     "rule": "E25: 390 works; the input is the screen's front door",
+     "sev": "confusing",
+     "box": [
+      285,
+      795,
+      50,
+      34
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "layers": {
+   "verdict": "Layers lists every section by its role (hero, features, footer) and the agent who wrote it with seconds.",
+   "faults": [
+    {
+     "note": "Section roles (“hero”, “features”, “footer”) and agent names with build times (“Ada 0.4s”) are internal",
+     "rule": "No internal or step names shown",
+     "sev": "cosmetic",
+     "box": [
+      14,
+      100,
+      235,
+      305
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "add": {
+   "verdict": "Add: New page, Upload files, Reference, Link. Clear.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "inspector": {
+   "verdict": "A page selected: the inspector shows the page, its size, its sections, Open and Export. Clear; the section names are roles again.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "scribble": {
+   "verdict": "Scribble is picked but the stage gives no sign of what it does.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "version-menu": {
+   "verdict": "The name menu: Rename, Duplicate, Version 2 ✓, Version 1. Clear.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "ov-chat": {
+   "sev": "confusing",
+   "verdict": "The chat opens as a second left column beside Files. It has its own composer (“Describe a product”, agents, model, Build) while the dock has “Tell the crew…”: two inputs on one screen.",
+   "faults": [
+    {
+     "note": "Two inputs: the chat's “Describe a product” + Build and the dock's “Tell the crew…”",
+     "rule": "PATTERNS, the frame: one input per screen",
+     "sev": "confusing",
+     "box": [
+      12,
+      770,
+      270,
+      115
+     ]
+    },
+    {
+     "note": "Inside a project the chat still says “Describe a product”, as if starting a new one",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      12,
+      770,
+      270,
+      50
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "ov-log": {
+   "verdict": "Log: two lines, “Plan finished: 3 pages, 9 layers in 0.1s”. “Layers” is the internal word for sections.",
+   "faults": [
+    {
+     "note": "“9 layers”: the engine's word; the rest of the Studio says sections",
+     "rule": "No internal names",
+     "sev": "cosmetic",
+     "box": [
+      10,
+      805,
+      260,
+      85
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "chats-pop": {
+   "verdict": "Chats: only “New chat”, with this project's chat not listed in it.",
+   "faults": [
+    {
+     "note": "The open chat is not in the Chats list, so a newcomer can't see where it lives",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      120,
+      100,
+      280,
+      65
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "no-hermes-chat": {
+   "verdict": "Tell the crew with Hermes off: the Studio moves to the Design deck by itself and says “Hermes isn't connected” with what to do and Check again. The message is right; the jump is not.",
+   "faults": [
+    {
+     "note": "Typing in the Overview's dock moves to the Design deck by itself, before anything can be built",
+     "rule": "Owner: nothing opens by itself",
+     "sev": "confusing",
+     "box": [
+      540,
+      60,
+      900,
+      820
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "deck": {
+   "verdict": "The Design deck: three pages at full length, the build pill, Follow, the toolbar. Most toolbar tools look clickable but only light up when agents use them.",
+   "faults": [
+    {
+     "note": "Frame, Shape, Image and Connect are drawn as tools but do nothing when pressed",
+     "rule": "C15: clickable things look clickable, and only they",
+     "sev": "confusing",
+     "box": [
+      610,
+      840,
+      230,
+      40
+     ]
+    },
+    {
+     "note": "Its top bar differs from the Overview's: “← Overview  SWARM  Alpha Tea  Canvas” against “← Projects › Alpha Tea  Overview”",
+     "rule": "F29: buttons don't move; F31 borrow, don't invent",
+     "sev": "cosmetic",
+     "box": [
+      0,
+      0,
+      380,
+      52
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "mode-menu": {
+   "verdict": "The mode menu: Overview, Canvas, Video, App, Game, in 9 px capitals.",
+   "faults": [
+    {
+     "note": "The items are tiny capitals, about 24 px tall",
+     "rule": "Rule 16: targets at least 40 px",
+     "sev": "cosmetic",
+     "box": [
+      280,
+      52,
+      150,
+      135
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "design-panel": {
+   "verdict": "The Design panel's first tab is search and share fields for the page (Title, Description), not design properties as in Figma. On a phone it was not reached: the D key opens it, and the ☰ menu was not tried.",
+   "faults": [
+    {
+     "note": "“Search & share” Title and Description fields under Design",
+     "rule": "F32: the Design deck follows Figma (Design shows the selection's properties)",
+     "sev": "cosmetic",
+     "box": [
+      1180,
+      95,
+      255,
+      205
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "vars": {
+   "verdict": "Variables: colours, type, scale, radius. Close to Figma. On a phone it was not reached: the D key opens it, and the ☰ menu was not tried.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "comment": {
+   "verdict": "Comment mode: a click on a section asks “Tell an agent what to change in hero…”, and the Design panel opens beside it on its own.",
+   "faults": [
+    {
+     "note": "“hero”: the section's internal role in the prompt",
+     "rule": "No internal names",
+     "sev": "cosmetic",
+     "box": [
+      494,
+      245,
+      310,
+      100
+     ]
+    },
+    {
+     "note": "“Click a value to change this section. Variables change every page.” and “Enter to send · Esc to close”: helper sentences",
+     "rule": "Rule 8",
+     "sev": "cosmetic",
+     "box": [
+      1185,
+      160,
+      255,
+      30
+     ]
+    },
+    {
+     "width": "phone",
+     "note": "The comment box opens off the left edge of the screen",
+     "rule": "E25: 390 works",
+     "sev": "confusing",
+     "box": [
+      0,
+      355,
+      126,
+      120
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "text-edit": {
+   "verdict": "Editing by hand: a dialog with Heading and Text and Save. Works; it is a dialog where Figma edits in place.",
+   "faults": [
+    {
+     "note": "“Tip: ⌘Z undoes it after saving.” A tip at rest",
+     "rule": "Standing rule 1 and rule 8",
+     "sev": "cosmetic",
+     "box": [
+      720,
+      518,
+      235,
+      22
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "follow": {
+   "verdict": "Follow off: the button dims. Fine.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "more-menu": {
+   "sev": "confusing",
+   "verdict": "The ☰ menu holds ten items: actions (Review, Video, Export, Replay), panels (Design, Planner, Agents) and settings (Models, Light, Sound) in one list.",
+   "faults": [
+    {
+     "note": "Actions, panels and settings share one menu of ten",
+     "rule": "A5: places, actions and settings never share a menu; A3: at most 4 choices",
+     "sev": "confusing",
+     "box": [
+      1228,
+      48,
+      200,
+      365
+     ]
+    },
+    {
+     "note": "“Planner” and “Agents” name internal parts",
+     "rule": "No internal names",
+     "sev": "cosmetic",
+     "find": "Planner"
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "phone:small"
+   ]
+  },
+  "models": {
+   "sev": "confusing",
+   "verdict": "Models: a long sheet of model ids, a local port, and sentences, opened over the ☰ menu, which stays open behind it.",
+   "faults": [
+    {
+     "note": "Model ids, “from Hermes · 127.0.0.1:63385”, “Codex login, gpt-image-2-low”: internal details at rest",
+     "rule": "No internal names",
+     "sev": "confusing",
+     "box": [
+      1018,
+      300,
+      400,
+      330
+     ]
+    },
+    {
+     "note": "Eight lines of explanation (“every agent that writes a section”, “for machines short on memory…”)",
+     "rule": "Rule 8 and F30: at most 15 words at rest",
+     "sev": "cosmetic",
+     "box": [
+      1018,
+      420,
+      400,
+      470
+     ]
+    },
+    {
+     "note": "The ☰ menu stays open on top of it",
+     "rule": "Sheets: one at a time",
+     "sev": "cosmetic",
+     "box": [
+      1230,
+      50,
+      195,
+      360
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "review": {
+   "verdict": "Review with no reviewer model opens Models without saying why.",
+   "faults": [
+    {
+     "note": "Pressing Review opens Models silently: nothing says Review needs a reviewer model",
+     "rule": "Every stop says why and what to do",
+     "sev": "confusing",
+     "box": [
+      1240,
+      55,
+      185,
+      30
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "sound": {
+   "verdict": "Sound toggles from the ☰ menu with no sign on screen. Fine.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "mid-build": {
+   "sev": "block",
+   "verdict": "A build that never finished (as after a crash or a restart) still says “2 agents building 5/9”, with agents “planning” forever. Nothing says it stopped or what to do.",
+   "faults": [
+    {
+     "note": "“2 AGENTS BUILDING” on a build nobody is running; cursors stay on “planning features”",
+     "rule": "Every stop or failure says why and what to do",
+     "sev": "block",
+     "box": [
+      14,
+      70,
+      250,
+      30
+     ]
+    },
+    {
+     "note": "No Resume or Build the rest for the four missing sections",
+     "rule": "REQUIREMENTS 2026-11-11: Stop offers Resume",
+     "sev": "confusing",
+     "box": [
+      400,
+      55,
+      640,
+      665
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "replay": {
+   "verdict": "Replay plays the first version back, with a crew joke about renaming a div, and the pill reads “Stopped” while it plays.",
+   "faults": [
+    {
+     "note": "The pill says “Stopped” while the replay runs",
+     "rule": "C19: progress is honest",
+     "sev": "confusing",
+     "box": [
+      14,
+      70,
+      250,
+      30
+     ]
+    },
+    {
+     "note": "“someone renamed my div “div2””: a developer joke about markup",
+     "rule": "No internal names",
+     "sev": "cosmetic",
+     "box": [
+      757,
+      795,
+      230,
+      40
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "stop-chip": {
+   "verdict": "Not reachable without a live build: the throwaway model fails at once, so the Stop beside the work chip never shows.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "play": {
+   "verdict": "Play: the page full size, with the page picker, Watch a visitor and Desktop / Mobile. Clear.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "play-menu": {
+   "verdict": "Play's menu: Play prototype, Watch a visitor. Clear.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "visitor": {
+   "verdict": "Watch a visitor: Mia's thought bubbles over the page, her bar at the bottom with Stop. Clear, and Stop is where you'd look.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "visitor-list": {
+   "verdict": "The visitor list button with one visitor shows no list; the page under it went blank white for a moment.",
+   "faults": [
+    {
+     "note": "The page goes white while the visitor moves between pages",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      80,
+      120,
+      1280,
+      744
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "publish": {
+   "verdict": "Publish: Website, Working app (greyed, with the reason), Swarm Feed. It says why Working app is off.",
+   "faults": [
+    {
+     "note": "“Build the app first (App mode).”: “App mode” is an internal name",
+     "rule": "No internal names",
+     "sev": "cosmetic",
+     "box": [
+      1195,
+      185,
+      170,
+      40
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "publish-site": {
+   "sev": "confusing",
+   "verdict": "Publish the website: GitHub Pages, Connect Vercel, Connect Cloudflare, This computer. GitHub Pages publishes on one click with no confirmation, and “Get a token” assumes the person knows what a token is.",
+   "faults": [
+    {
+     "note": "One click on GitHub Pages makes the site public, with no confirmation",
+     "rule": "The Publish menu and its confirmations",
+     "sev": "confusing",
+     "box": [
+      1018,
+      115,
+      395,
+      58
+     ]
+    },
+    {
+     "note": "“Get a token” links for Vercel and Cloudflare",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      1018,
+      185,
+      395,
+      130
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "feed": {
+   "verdict": "Post to the Feed: Public / Unlisted and Post to Feed. Short. There was no sign-in step to see: this Studio's Feed address goes nowhere.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "export": {
+   "verdict": "Export from the ☰ menu: nothing visible happened in this pass. A download may have been blocked by the headless browser, but the Studio showed no feedback either.",
+   "faults": [
+    {
+     "note": "No toast or sheet after Export",
+     "rule": "Toasts: one spot, 4 s after something finishes",
+     "sev": "cosmetic",
+     "box": [
+      540,
+      830,
+      360,
+      60
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "app-room": {
+   "verdict": "The App room for a designed app with no app yet: a heading, a paragraph, Build the app. A step reads “undefined”, and an empty column sits on the left with nothing in it.",
+   "faults": [
+    {
+     "note": "A paragraph at rest that names “the engine”",
+     "rule": "Rule 8 and no internal names",
+     "sev": "cosmetic",
+     "find": "The design stays"
+    },
+    {
+     "note": "An empty left column with no name or content",
+     "rule": "The plain test",
+     "sev": "cosmetic",
+     "box": [
+      0,
+      104,
+      276,
+      786
+     ]
+    },
+    {
+     "note": "“no app yet” chip in lower case beside the sidebar toggle",
+     "rule": "Rule 12: states, not prose",
+     "sev": "cosmetic",
+     "box": [
+      66,
+      68,
+      86,
+      20
+     ]
+    },
+    {
+     "note": "“· undefined” is printed where the app's step should be",
+     "rule": "Rule 10: no raw values",
+     "sev": "confusing",
+     "find": "undefined"
+    },
+    {
+     "width": "phone",
+     "note": "“· undefined” again, above the heading",
+     "rule": "Rule 10: no raw values",
+     "sev": "confusing",
+     "box": [
+      8,
+      438,
+      90,
+      20
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "raw",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "app-code": {
+   "verdict": "The App room's Code: “no files yet”. Fine.",
+   "drop": [
+    "small",
+    "raw",
+    "phone:small"
+   ]
+  },
+  "game-room": {
+   "verdict": "The game's address opens the Overview with the game's artboard and a play button, not the Game room. Fine for a person; the address is not a front door.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "film-room": {
+   "sev": "confusing",
+   "verdict": "The film's room opens on “The promo video” form. The film's footage failed, and nothing here says so.",
+   "faults": [
+    {
+     "note": "The failed film (“no footage model”) is not mentioned: the form looks like a fresh start",
+     "rule": "Every failure says why and what to do",
+     "sev": "confusing",
+     "box": [
+      20,
+      70,
+      1395,
+      220
+     ]
+    },
+    {
+     "note": "“Kokoro · fits the theme”: a voice model's name",
+     "rule": "No internal names",
+     "sev": "cosmetic",
+     "box": [
+      314,
+      180,
+      170,
+      24
+     ]
+    },
+    {
+     "width": "phone",
+     "note": "The Music checkbox is cut off at the right edge",
+     "rule": "E25: 390 works",
+     "sev": "cosmetic",
+     "box": [
+      350,
+      175,
+      40,
+      40
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "plan": {
+   "skip": true,
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  },
+  "brand": {
+   "sev": "confusing",
+   "verdict": "The brand sheet opened from Projects carries the last project's chat: a raw planner error, then “Nothing was added… The 3 pages already here are kept” with that project's page buttons.",
+   "faults": [
+    {
+     "note": "“planner: cb/deepseek-v4.1-flash: HTTP 500 {\"error\":…}” at the top of the chat",
+     "rule": "Rule 10: raw errors only behind Details",
+     "sev": "confusing",
+     "find": "HTTP 500"
+    },
+    {
+     "note": "The chat belongs to the project opened before (its pages and Play buttons), not to this brand sheet",
+     "rule": "The plain test",
+     "sev": "confusing",
+     "box": [
+      12,
+      160,
+      272,
+      160
+     ]
+    }
+   ],
+   "drop": [
+    "small",
+    "raw",
+    "internal",
+    "sentences",
+    "phone:small"
+   ]
+  },
+  "launch-kit": {
+   "verdict": "Not reachable: the Launch kit is offered only after a finished App, Game or Video run with a live link, and the throwaway model can't finish one.",
+   "drop": [
+    "small",
+    "phone:small"
+   ]
+  }
+ },
+ "fixes": [
+  {
+   "owner": "Front door: Projects and the Make box (web/home.js, server/projects.mjs). Session: Swarm Studio: catalog PR and UX fixes",
+   "items": [
+    {
+     "sev": "block",
+     "text": "Make with nothing typed: ask what to make (the kind, then one line) instead of opening samples. This is the owner's “do i have to type in prompt”."
+    },
+    {
+     "sev": "confusing",
+     "text": "Card kind: label by the project's kind (start.kind), so a designed App says App and a film with pages says Video (server/projects.mjs:75)."
+    },
+    {
+     "sev": "confusing",
+     "text": "At 390: the Make box's question fits (a shorter placeholder or the input on its own row), the kind button keeps its name, and the toast wraps as a sentence."
+    },
+    {
+     "sev": "confusing",
+     "text": "Studio first? Hide “Studio first” until the scaffold draws something, or make it open the brand sheet that exists. Give Light / Thorough a one-word result."
+    },
+    {
+     "sev": "confusing",
+     "text": "Remove Pictures from What to make; remove the launch rows and their step chips; label the ideas as examples (already in hand)."
+    },
+    {
+     "sev": "confusing",
+     "text": "User menu: one door to configuration. Fold Models and Setup into Settings; keep Light and Sound as quick toggles."
+    },
+    {
+     "sev": "confusing",
+     "text": "Assets empty: a name and one action (Upload)."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "Cards: drop the second copy of the name under the picture, or the one on the skeleton."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "Sidebar rows and the mode menu to 40 px; New folder field gets a placeholder; units on “11d”, “3 of 8”, “0 of 5”."
+    }
+   ]
+  },
+  {
+   "owner": "Setup (web/setup.js)",
+   "items": [
+    {
+     "sev": "block",
+     "text": "A failed model test: a marker and one line (“Models not answering”) with one action; the raw reply behind Details; Start says what will and won't work."
+    },
+    {
+     "sev": "confusing",
+     "text": "Don't open by itself; or open only when nothing at all can build, and say that in one line."
+    },
+    {
+     "sev": "confusing",
+     "text": "Name the roles in plain words (Writes the plan / Builds the pages) and hide model ids behind the row."
+    }
+   ]
+  },
+  {
+   "owner": "Studio scaffold (spec 37: web/studio.js, the kits)",
+   "items": [
+    {
+     "sev": "block",
+     "text": "?room=studio draws an empty deck: draw the scaffold (brand, references, assets, plan, proposal) or send the address to the brand sheet until it exists."
+    }
+   ]
+  },
+  {
+   "owner": "Design deck and its chat (web/canvas.js, web/index.html)",
+   "items": [
+    {
+     "sev": "block",
+     "text": "A build left half done after a restart: say Stopped, how much is kept, and offer Resume; never “2 agents building” with nobody running."
+    },
+    {
+     "sev": "confusing",
+     "text": "One input per screen: in a project, drop the chat's own composer (agents, model, Build) and use the dock's “Tell the crew…”; inside a project never say “Describe a product”."
+    },
+    {
+     "sev": "confusing",
+     "text": "At 390: the dock's “Tell the crew…” gets its own row; the comment box opens on screen."
+    },
+    {
+     "sev": "confusing",
+     "text": "Split the ☰ menu: actions in it (Review, Video, Export, Replay); Design / Planner / Agents as panels; Models, Light and Sound in Settings."
+    },
+    {
+     "sev": "confusing",
+     "text": "Review without a reviewer: say so in one line with Pick a model, instead of opening Models silently."
+    },
+    {
+     "sev": "confusing",
+     "text": "Toolbar: show only tools that work when pressed (Move, Text, Comment), or make the others work."
+    },
+    {
+     "sev": "confusing",
+     "text": "Tell the crew from the Overview with Hermes off: say it in place, don't jump to the deck."
+    },
+    {
+     "sev": "confusing",
+     "text": "Replay: the pill reads Replay, not Stopped."
+    },
+    {
+     "sev": "confusing",
+     "text": "A brand sheet or plan opened from Projects starts its own empty chat, not the last project's."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "Models sheet: plain role names, no ids, ports or sentences at rest; close the ☰ menu when it opens."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "“Hermia PLANNER”, “hero”, “9 layers”, “App mode”, “div2”, “Kokoro”: plain names everywhere a person reads them."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "One top bar for the Overview and the deck (back, breadcrumb, mode, one primary)."
+    }
+   ]
+  },
+  {
+   "owner": "Plan board and brand sheet (web/plan.js, web/brand.js)",
+   "items": [
+    {
+     "sev": "confusing",
+     "text": "Plan cells from a failed or missing planner: leave them empty with a name, never “Characters: I” from split words."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "Labels at a readable size; Lock says what it locks (Lock the plan); the brand sheet gets a back arrow."
+    }
+   ]
+  },
+  {
+   "owner": "Rooms and Publish (web/canvas.js: film, app, publish)",
+   "items": [
+    {
+     "sev": "confusing",
+     "text": "App room: the step chip prints “undefined” for a designed app with no app run."
+    },
+    {
+     "sev": "confusing",
+     "text": "A failed film says so in the Film room (what failed, Try again) instead of showing a fresh form."
+    },
+    {
+     "sev": "confusing",
+     "text": "GitHub Pages: confirm before the first public publish (where it goes, Publish / Cancel)."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "App room: no empty left column; the paragraph becomes a name and the button."
+    },
+    {
+     "sev": "cosmetic",
+     "text": "Export: a toast when the file is saved."
+    }
+   ]
+  }
+ ],
+ "unreached": [
+  "Stop beside the work chip, and a build stopped by it: the throwaway model fails at once, so no build stays in flight long enough.",
+  "The Launch kit and the Auto summary: offered only after a finished App, Game or Video run with a live link.",
+  "Post to Feed's sign-in (Connect Hermes with a code): the throwaway Studio's Feed address goes nowhere, and Post to Feed showed Public / Unlisted directly.",
+  "The Studio scaffold's steps (brand, references, assets, plan, proposal): the address works, but no screen is drawn for it yet.",
+  "The Game room itself (pause menu, Report a bug, Tweak): the game fixture has no built game, so its address shows the Overview.",
+  "A finished film in the Film room, and the App room with a running app: both need a real model.",
+  "⌘K: not in this build (only chat slash commands).",
+  "Hermes Desktop's narrow side pane: only the 390 phone width was captured."
+ ]
+}
