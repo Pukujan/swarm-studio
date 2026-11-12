@@ -46,7 +46,7 @@ export function makeHome({ sw, C, root }) {
     <main class="hm-main">
       <div class="hm-top"><button class="ib hm-burger" aria-label="Menu">${ic('menu')}</button>${logo()}</div>
       <form class="hm-ask" autocomplete="off"><button type="button" class="hm-kind" aria-label="What to make" aria-haspopup="menu"></button><input name="q" placeholder="What should the crew build?" aria-label="What should the crew build?" maxlength="4000">
-        <button type="button" class="ib hm-ideas" aria-label="Showcase builds" aria-haspopup="dialog">${ic('idea', 18)}</button><button type="submit" class="btn pri hm-make">${ic('up', 16)}Make</button></form>
+        <button type="button" class="ib hm-ideas" aria-label="Examples" aria-haspopup="dialog">${ic('idea', 18)}</button><button type="submit" class="btn pri hm-make">${ic('up', 16)}Make</button></form>
       <div class="hm-pop" hidden></div>
       <div class="hm-bar"></div>
       <div class="hm-body"></div>
@@ -685,29 +685,14 @@ export function makeHome({ sw, C, root }) {
   const showKind = () => { kindBtn.innerHTML = `${ic(make.icon, 16)}<span>${make.label}</span>${ic('chd', 14)}` }
   showKind()
   if (hosted()) kindBtn.hidden = true  // the hosted studio makes websites only
-  // Studio first or Build now (spec 37): remembered per kind; three Build now in a row and the question
-  // stops for that kind, with Studio first in the kind menu as the way back. The Studio's depth (what
-  // Grill me was) is Light or Thorough.
+  // Studio first or Build now (spec 37): asked on every Make, the last choice per kind pre-selected.
+  // The Studio's depth (what Grill me was) is Light or Thorough.
   const modeOf = k => store.get(`home.mode.${k}`, null)
   const nowRun = k => Number(store.get(`home.now.${k}`, 0)) || 0
   let depth = store.get('home.depth', 'light') === 'thorough' ? 'thorough' : 'light'
-  // and Pictures: the same pick as Setup → Pictures (POST /api/setup), so builds can be drawn in SVG
-  // without the image model. Not for a Game: its art has its own steps (the Plan board).
-  const PICS = [{ k: 'painted', icon: 'image', label: 'Painted' }, { k: 'stock', icon: 'search', label: 'Stock photos' }, { k: 'drawn', icon: 'pencil', label: 'Drawn' }]
-  let picMode = null
-  const loadPics = () => api('/api/setup').then(v => { picMode = v?.pictures?.mode || picMode }).catch(() => {})
-  if (!hosted()) loadPics()
-  const picItems = () => PICS.map(p => ({ ...p, k: `pic:${p.k}`, on: picMode === p.k, run: () => { picMode = p.k; post('/api/setup', { pictures: p.k }).catch(err => toast(`<span>${esc(err.message)}</span>`)); input.focus() } }))
-  kindBtn.onclick = () => { if (!hosted()) loadPics(); showKind(); return showMenu([
-    ...offered().map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })),
-    '-',
-    ...(make.k === 'game' || make.studioOnly ? [] : [{ k: 'pics', icon: 'image', label: 'Pictures', sub: b => subMenu(b, picItems()) }]),
-    // the quiet way back once the question stopped for this kind
-    ...(!make.studioOnly && nowRun(make.k) >= 3 ? [{ k: 'studio', icon: 'grid', label: 'Studio first', run: () => {
-      store.set(`home.now.${make.k}`, 0); store.set(`home.mode.${make.k}`, 'studio')
-      const text = input.value.trim()
-      if (text) studioFirst(text); else input.focus()
-    } }] : [])
+  kindBtn.onclick = () => { showKind(); return showMenu([
+    // only things to make (how pictures are made is Setup's, not a kind)
+    ...offered().map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); closePop(); showIdeas(); input.focus() } })),
   ], kindBtn) }
 
   // what the Make box asks the server for once: the showcases and the interview (engine/intake.mjs)
@@ -750,7 +735,8 @@ export function makeHome({ sw, C, root }) {
   form.onsubmit = async e => {
     e.preventDefault()
     const text = input.value.trim()
-    if (!text) return showcases()
+    // an empty box opens nothing: the lightbulb is the one way to the examples
+    if (!text) return input.focus()
     // no Hermes to answer the model: one calm line and what to do, before anything starts (the words stay)
     const off = hosted() || !sw.hermesReady ? null : await sw.hermesReady()
     if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => form.requestSubmit())
@@ -761,8 +747,6 @@ export function makeHome({ sw, C, root }) {
     if (hosted()) return confirmBuild(text)
     // a brand (or a deck) is made in the Studio only
     if (make.studioOnly) return studioFirst(text)
-    // three Build now in a row: the question has stopped for this kind (the kind menu has the way back)
-    if (nowRun(make.k) >= 3) return buildNow(text)
     // the planner reads the prompt (engine/talkplan.mjs): "let's talk first" or a vague idea leans Studio
     // (at most 2.5 s: then the words alone decide which choice is pre-selected)
     const read = !sw.readTalk ? 'build' : await Promise.race([Promise.resolve().then(() => sw.readTalk(text, '', guideKind())).catch(() => 'build'), new Promise(r => setTimeout(() => r('build'), 2500))])
@@ -877,29 +861,26 @@ export function makeHome({ sw, C, root }) {
   }
   function closePop() { popOff?.(); popOff = null; pop.hidden = true; pop.innerHTML = ''; ideasBtn.classList.remove('on') }
 
-  // the showcases: a name, the steps the crew will take, and one click runs it
+  // the lightbulb's examples (only when it is pressed): a few for the kind picked, headed Examples, one
+  // click puts the words in the box to edit. No packs, no samples by name, no prices, no step chips.
+  const EXAMPLES = { site: 'site', app: 'app', game: 'game', video: 'film', brand: 'brand' }
+  const exampleKey = () => (hosted() ? 'site' : EXAMPLES[make.k] || null)
+  // a kind with no examples has no lightbulb
+  function showIdeas() { ideasBtn.hidden = !exampleKey() }
+  showIdeas()
   async function showcases() {
     if (!pop.hidden && pop.classList.contains('show')) return closePop()
-    const d = await intake(), kind = guideKind()
-    // the 💡 lists what fits the picked mode: a few starting prompts, the showcases of that kind
-    const starters = (d.starters?.[kind] || []).map((p, i) => ({ id: `starter-${i}`, prompt: p, starter: true }))
-    const list = (d.showcases || []).filter(s => !s.kind || s.kind === kind)
-    // game templates to remix (spec 21): a new plan from one, straight to its price
-    const tpls = hosted() || kind !== 'game' ? [] : await api('/api/templates').then(r => r.templates || []).catch(() => [])
-    if (!list.length && !tpls.length && !starters.length) return input.focus()
-    openPop('show', `<div class="hm-show" role="list" aria-label="Showcase builds">${starters.map(s => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${esc(s.id)}" aria-label="Start from ${esc(s.prompt)}">${ic('idea', 18)}<span class="nm">${esc(s.prompt)}</span>${ic('chr', 15)}</button>`).join('')}${list.map(s => `<button type="button" class="hm-sc" role="listitem" data-id="${esc(s.id)}" aria-label="Build ${esc(s.name)}">${ic(s.icon, 18)}<span class="nm">${esc(s.name)}</span><span class="st">${s.steps.map(x => `<i>${esc(x)}</i>`).join('')}</span>${ic('up', 15)}</button>`).join('')}${tpls.map(t => `<button type="button" class="hm-sc" role="listitem" data-tpl="${esc(t.id)}" aria-label="Remix ${esc(t.name)}">${ic('remix', 18)}<span class="nm">${esc(t.name)}</span><span class="st"><i>Remix</i>${t.price ? `<i>${t.price} credits</i>` : ''}</span>${ic('up', 15)}</button>`).join('')}</div>`)
+    const key = exampleKey()
+    const list = key ? ((await intake()).starters?.[key] || []).slice(0, 4) : []
+    if (!list.length) return input.focus()
+    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>`)
     ideasBtn.classList.add('on')
     pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
     for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
-      if (b.dataset.tpl) {
-        b.disabled = true
-        return api(`/api/templates/${encodeURIComponent(b.dataset.tpl)}/remix`, { method: 'POST' }).then(p => { closePop(); C.plan(p.id) }).catch(() => { b.disabled = false })
-      }
-      // a starting prompt goes in the box and its questions begin; a showcase opens a chat with its brief
-      const st = starters.find(x => x.id === b.dataset.st)
-      if (st) { input.value = st.prompt; closePop(); return form.requestSubmit() }
-      const s = list.find(x => x.id === b.dataset.id)
-      confirmBuild(s.prompt, s.run || null, {}, s.steps)
+      input.value = list[Number(b.dataset.st)]
+      closePop()
+      input.focus()
+      input.setSelectionRange?.(input.value.length, input.value.length)
     }
   }
   ideasBtn.onclick = () => showcases()

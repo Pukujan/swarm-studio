@@ -8,10 +8,10 @@ import { readFileSync } from 'node:fs'
 
 const src = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
 
-test('a showcase opens a chat with its brief; it never starts a build on the click', () => {
+test('an example from the lightbulb only fills the box; it never starts a build on the click', () => {
   const home = src('web/home.js')
   assert.doesNotMatch(home, /start\(s\.prompt/)
-  assert.match(home, /confirmBuild\(s\.prompt/)
+  assert.match(home, /input\.value = list\[Number\(b\.dataset\.st\)\]/)
   assert.match(home, /function confirmBuild\(/)
   assert.match(home, /brief: text/)
   // the Make box without questions confirms too
