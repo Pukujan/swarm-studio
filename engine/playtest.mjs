@@ -10,6 +10,7 @@ import { createRequire } from 'node:module'
 import { homedir, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { dyadDir } from './appbuild.mjs'
+import { runChecks, waitProbe } from './playcheck.mjs'
 
 const START = /^(play|start|begin|go|new game|tap to (play|start)|press .* to (play|start))|\b(play|start|begin)\b/i
 const ENDED = /\b(game over|you (lost|died|fell|crashed|slipped)|try again|play again|retry|gate closed|out of lives|run over)\b/i
@@ -134,13 +135,17 @@ function mux(ffmpeg, video, audio, delayMs, out) {
 // { ok, skipped?, problem?, seconds } — `problem` is one sentence for a fix turn
 // shot: a file to save the title screen to (the game's cover), as a JPEG
 // clip: a path to film the test to (.webm); the result then has clip and the keys pressed, in order
+// checks: the spec's play checks (engine/playcheck.mjs checklist): each control is held and the game's
+// own state (window.__swarm) read to see the move happen; the result then has checks, and what
+// failed is in problem as asks for the builder
 export async function playtest(url, opts = {}) {
   const box = {}
   const r = await playtestRun(url, opts, box)
-  return { ...r, ...(box.filmed || {}) }
+  return { ...r, ...(box.filmed || {}), ...(box.checks ? { checks: box.checks } : {}) }
 }
-async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false, ffmpeg = undefined } = {}, box = {}) {
+async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false, ffmpeg = undefined, checks = null, probeWait = 25000 } = {}, box = {}) {
   let film = async () => ({}), vdir = null, g = null
+  const kept = box // (the canvas's own box takes the name further down)
   const pw = await loadPlaywright()
   if (!pw) return { ok: true, skipped: 'no browser for the play test' }
   let browser
@@ -188,6 +193,9 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     const why = () => [...new Set([...errors, ...blocked])].slice(0, 3).join(' | ')
     const canvas = await g.waitForSelector('canvas', { timeout: 15000 }).catch(() => null)
     if (!canvas) return { ok: false, problem: `No game canvas appeared within 15 s of opening the page inside a sandboxed frame (allow-scripts, no same origin), the way Hermes shows it.${why() ? ` Errors: ${why()}` : ''}${blocked.length ? ' Storage (localStorage, sessionStorage, IndexedDB) throws in a sandboxed frame: wrap every use in try/catch and fall back to memory.' : ''}` }
+    // a game with play checks says when it is up (a Godot export boots for seconds: without this the
+    // test pressed its keys at the loading screen and passed)
+    const probed = checks?.length ? await waitProbe(page, g, probeWait) : false
     await page.waitForTimeout(1200)
     // a Godot export that cannot start shows its own notice over the canvas
     const notice = await g.evaluate(() => { const n = document.getElementById('status-notice'); return n && n.offsetParent !== null ? n.innerText.trim() : '' }).catch(() => '')
@@ -214,7 +222,17 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     const cx = box ? box.x + box.width / 2 : 640, cy = box ? box.y + box.height * 0.7 : 500
     if (!started) { await page.mouse.click(cx, cy); await page.keyboard.press('Enter'); await page.keyboard.press('Space'); press('Click'); press('Enter'); press('Space') }
 
+    // the spec's checks: each control held, the state read
+    let checked = null
+    if (checks?.length) {
+      checked = probed
+        ? await runChecks({ page, frame: g, checks, press })
+        : { probe: false, checks: checks.map(c => ({ ...c, ok: null, saw: 'the game publishes no state' })), problems: ['The game does not publish window.__swarm, so the play test could not check a single control. Add the play-test hook: { scene, hero: { x, y, w, h, ground }, actors: [{ id, kind, name, x, y }] }, refreshed as the game runs (a Godot game: JavaScriptBridge.eval("window.__swarm=" + JSON.stringify(state), true) about ten times a second in the web build).'] }
+      kept.checks = checked.checks.map(({ id, kind, name, say, ok, saw }) => ({ id, kind, ...(name ? { name } : {}), say, ok, saw }))
+    }
+
     // keep playing with the usual controls: tap, hold-and-release, space, arrows
+    if (checked?.probe) seconds = Math.min(seconds, 2)
     const t0 = Date.now()
     let endedAt = 0
     const keys = ['Space', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'KeyW', 'KeyD']
@@ -229,7 +247,8 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     }
     const lasted = ((endedAt || Date.now()) - t0) / 1000
     if (errors.length) return { ok: false, seconds: lasted, problem: `The game threw errors while playing: ${why()}` }
-    if (endedAt && lasted < 2.5) return { ok: false, seconds: lasted, problem: `The run ends about ${lasted.toFixed(1)} s after pressing start, before the player can do anything (the end screen appears with nothing achieved). Find why a fresh run is lost straight away: the player spawning off a platform, a camera or bounds check that already counts as a fall, a timer or health that starts at zero, or a lose condition checked before the first frame. Fix it so a new run starts safely and lasts until the player makes a mistake.` }
+    if (endedAt && lasted < 2.5 && !checked?.probe) return { ok: false, seconds: lasted, problem: `The run ends about ${lasted.toFixed(1)} s after pressing start, before the player can do anything (the end screen appears with nothing achieved). Find why a fresh run is lost straight away: the player spawning off a platform, a camera or bounds check that already counts as a fall, a timer or health that starts at zero, or a lose condition checked before the first frame. Fix it so a new run starts safely and lasts until the player makes a mistake.` }
+    if (checked?.problems.length) return { ok: false, seconds: lasted, problem: checked.problems.length === 1 ? checked.problems[0] : `The play test held each control and read the game's state; ${checked.problems.length} things are wrong:\n${checked.problems.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
     return { ok: true, seconds: lasted, ended: !!endedAt }
   } catch (e) {
     return { ok: true, skipped: `the play test could not run: ${String(e.message).slice(0, 160)}` }

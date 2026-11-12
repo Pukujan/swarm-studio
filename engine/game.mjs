@@ -14,6 +14,7 @@ import { idleItems, keyItems } from './idle.mjs'
 import { streamChat } from './llm.mjs'
 import { castPrompt, cleanCast } from './cast.mjs'
 import { workshopMarkdown } from './workshop.mjs'
+import { probeBrief } from './playcheck.mjs'
 
 const skillsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'gameskills')
 
@@ -237,6 +238,7 @@ ${spec.workshop?.art?.length ? `- The person painted the art in the studio: load
 - Sound with the Web Audio API, synthesised in code (hits, pickups, a simple music loop); starts after the first click or key.
 - Game feel: hit-stop, screen shake, knockback, particles, easing, juicy feedback on every action.
 - Fixed timestep update loop; works at 60 fps on a laptop; resizes with the window; no console errors.
+${probeBrief(spec)}
 - Original content only: the names, characters, world and art in the spec are new. Never use names, characters or assets from existing games.
 ${spec.brand ? brandRules({ ...spec.brand, game: gameSlug(spec.title) }) : ''}
 ${castPrompt(cleanCast(spec.cast))}${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader from /models/<file>, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
@@ -416,7 +418,7 @@ export function bigStagePrompt(spec, i, { art = [], failed = '', note = '' } = {
 
 Do only this slice; later slices add the rest (see "Build slices" in GAME_SPEC.md), so leave clean places for them instead of building them now.
 ${artBrief(art)}
-${FIGURE_RULES}
+${FIGURE_RULES}${i > 0 ? `\n${probeBrief(spec)}` : ''}
 - Keep the code in src/game/ with one module per system; no file over about 400 lines.
 - Original content only: the names, characters, world and art in the spec are new.
 

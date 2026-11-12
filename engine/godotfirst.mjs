@@ -12,6 +12,7 @@ import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
 import { stagesFor, viewOf, skillText } from './game.mjs'
 import { portDir, godotBin, godotErrors } from './port.mjs'
+import { probeBrief } from './playcheck.mjs'
 
 export const GODOT_SKILLS = ['gamedev/godot-gdscript', 'gamedev/godot-nodes-scenes', 'gamedev/godot-2d-movement', 'gamedev/godot-signals-groups']
 
@@ -147,6 +148,7 @@ export function godotStagePrompt(spec, i, { art = [], failed = '', note = '' } =
 Do only this slice; later slices add the rest, so leave clean places for them (a data table, a dialogue autoload) instead of building them now.
 ${godotArtBrief(art, viewOf(spec))}
 ${GODOT_RULES}
+${probeBrief(spec, { godot: true })}
 - ${STEP_NOTE}
 
 Finish with the project opening in Godot with no errors and the game playable from the title.`
