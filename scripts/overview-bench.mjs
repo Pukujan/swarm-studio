@@ -70,7 +70,7 @@ for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r
 await api('/api/setup', { seen: true }).catch(() => {})
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
-const out = { drawn: [], cold: [], all: [], warm: [], warmAll: [], cpu: [], fpsRest: [], fpsBuild: [], shots: [], panShots: [] }
+const out = { drawn: [], cold: [], all: [], warm: [], warmAll: [], cpu: [], fpsRest: [], fpsBuild: [], shots: [], panShots: [], curHz: [] }
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   // the stream, as the canvas hears it: the bench hands it the build's sections
@@ -120,6 +120,15 @@ try {
     await page.mouse.up()
     return Math.round((await page.evaluate(() => window.__frames) - f0) / ((Date.now() - w0) / 1000))
   }
+  // moves a second of each Overview cursor (a move writes left and top), over ms
+  const writes = (sel, ms) => page.evaluate(([sel, ms]) => new Promise(r => {
+    const root = document.querySelector(sel)
+    if (!root) return r(0)
+    let n = 0
+    const mo = new MutationObserver(m => { n += m.length })
+    mo.observe(root, { attributes: true, attributeFilter: ['style'], subtree: true })
+    setTimeout(() => { mo.disconnect(); r(Math.round(n / 2 / Math.max(1, root.children.length) / (ms / 1000) * 10) / 10) }, ms)
+  }), [sel, ms])
   for (let r = 0; r < RUNS; r++) {
     // a fresh start: no saved pictures yet
     rmSync(join(runs, RUN, 'snaps'), { recursive: true, force: true })
@@ -151,8 +160,9 @@ try {
       }
     })()
     await wait(4000)
-    const s0 = shots
+    const s0 = shots, cur = writes('.pj-cursors', 3000)
     out.fpsBuild.push(await fps(3000))
+    out.curHz.push(await cur)
     out.panShots.push(shots - s0)
     await play
     const left = 14000 - (Date.now() - w0)
@@ -176,4 +186,5 @@ console.log(`  first picture, opened again     ${ms(median(out.warm))}   all 14:
 console.log(`  main thread busy during a build ${median(out.cpu)}%   pictures sent: ${median(out.shots)}`)
 console.log(`  frame rate panning, at rest     ${median(out.fpsRest)} fps`)
 console.log(`  frame rate panning, building    ${median(out.fpsBuild)} fps   pictures sent while panning: ${median(out.panShots)}`)
+console.log(`  each cursor's moves a second, panning during a build  ${median(out.curHz)}`)
 console.log(JSON.stringify(out))

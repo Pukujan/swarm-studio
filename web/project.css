@@ -105,6 +105,8 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab .sel i:nth-of-type(1) { left: -5px; top: -5px } .ab .sel i:nth-of-type(2) { right: -5px; top: -5px }
 .ab .sel i:nth-of-type(3) { left: -5px; bottom: -5px } .ab .sel i:nth-of-type(4) { right: -5px; bottom: -5px }
 .pj-cursors { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.pj-cursors .cur.track { transition: left .1s linear, top .1s linear; }
+@media (prefers-reduced-motion: reduce) { .pj-cursors .cur.track { transition: none; } }
 .pj-drop { position: absolute; inset: 10px; z-index: 30; border: 1.5px dashed var(--text); border-radius: 14px; display: grid; place-items: center; pointer-events: none; background: rgb(var(--void-rgb) / .4); }
 .pj-drop[hidden] { display: none; }
 .pj-drop span { width: 54px; height: 54px; border-radius: 50%; background: var(--text); color: var(--void); display: grid; place-items: center; }
