@@ -126,6 +126,20 @@ draft's storyboard renders as the final.
   finish or the floors fall below their marks. With a model key the script runs the real writer, and
   `--render` renders drafts on a heavy machine.
 
+## Where it stands (2026-11-11)
+
+| | finishes | fit | sameness | closings | cuts on a beat | on the music's grid | voiced films on a beat |
+|---|---|---|---|---|---|---|---|
+| before, rules only | 20/20 | - | 0.63 | 1 | 0.72 | - | - |
+| before, the writer | 20/20 | - | 0.38 | 3 | 0.42 | - | 0.21 |
+| after steps 1–3, rules only | 20/20 | 20/20 | 0.43 | 5 | 0.93 | 1.0 | - |
+| after steps 1–3, the writer | 20/20 | 20/20 | 0.35 | 4 | 0.95 | 1.0 | 1.0 |
+
+Saved as `tests/films/baseline-*.json` and `after-*.json`. The music analyser needs a confidence of 8
+before it moves a cut (steady noise scores 4 to 5, the studio's scores 16 to 30); below that the
+storyboard's lengths stand. It has been checked on the studio's own score; a generated ElevenLabs track
+has not been measured yet (no key on the dev Mac).
+
 ## Build order
 
 1. The regression set and its scorer, with today's numbers as the baseline.

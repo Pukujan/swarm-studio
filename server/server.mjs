@@ -46,6 +46,7 @@ import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
 import { scoreWav, elevenScore } from '../engine/score.mjs'
+import { decode, analyse, cutToMusic, planLengths, leastLengths, retime } from '../engine/musiccut.mjs'
 import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
 import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idleMessages, IDLE_SAY } from '../engine/idle.mjs'
@@ -918,7 +919,38 @@ async function videoNow(id, input = {}) {
         send('video:note', { message: `no voiceover this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
-    const lengths = scenes.map((s, i) => Number(Math.max(s.seconds || 2, voices[i]?.seconds ? voices[i].seconds + 0.6 : 0).toFixed(3)))
+    // the music first, then the cuts on it (spec 26): the track is made to the planned lengths,
+    // measured, and every cut moves onto its beats, hits, drop and quiet passages
+    const planned = planLengths(scenes, voices, VOICE_LEAD)
+    let lengths = planned, musicFile = null, fx = [], scoredBy = null, musicCut = null
+    const tenv = { ...process.env, PATH: t.path }
+    if (input.music !== false) {
+      progress(2, 'scoring')
+      const seconds0 = planned.reduce((a, b) => a + b, 0), cues0 = cueSheet(scenes, planned)
+      // Hermes's secret, else Hermes's ElevenLabs connector, else a pasted key
+      const key = process.env.SWARM_ELEVENLABS_KEY || mediaKeyStore.get('elevenlabs')
+      const via = media?.music.via
+      if (input.eleven !== false && (key || via === 'hermes-mcp')) {
+        try {
+          progress(2, 'ElevenLabs is scoring the film')
+          const e = via === 'hermes-mcp' && !process.env.SWARM_ELEVENLABS_KEY
+            ? await mcpScore({ call: connectors.call, server: media.music.server, music: scenes.music, cues: cues0, seconds: seconds0, dir })
+            : await elevenScore({ key, music: scenes.music, cues: cues0, seconds: seconds0, dir })
+          musicFile = e.music; fx = e.sfx; scoredBy = 'elevenlabs'
+        } catch (err) { send('video:note', { message: `ElevenLabs did not score it, so the studio did: ${String(err.message || err).slice(0, 100)}` }) }
+      }
+      if (!musicFile) { musicFile = join(dir, 'music.wav'); scoreWav({ seconds: seconds0, music: scenes.music, cues: cues0, file: musicFile, seed }); scoredBy = 'studio' }
+      try {
+        progress(2, 'cutting to the music')
+        const { samples, rate } = await decode(t.ffmpeg, musicFile, { env: tenv })
+        const a = analyse(samples, rate, { bpm: scenes.music?.bpm })
+        const r = cutToMusic(scenes, planned, a, { min: leastLengths(scenes, voices, VOICE_LEAD), maxEnd: scoredBy === 'elevenlabs' ? a.seconds : null })
+        lengths = r.lengths; musicCut = r.report
+        // the studio's own score is written again to the final cuts, so its booms sit on them; a generated track stays as it is
+        if (scoredBy === 'studio') scoreWav({ seconds: lengths.reduce((x, y) => x + y, 0), music: scenes.music, cues: cueSheet(scenes, lengths), file: musicFile, seed })
+        else fx = fx.map(x => ({ ...x, at: retime(x.at, planned, lengths) }))
+      } catch (err) { musicCut = { kept: `the track could not be measured: ${String(err.message || err).split('\n')[0].slice(0, 100)}` } }
+    }
     const comp = composition(scenes, c, lengths, transition)
     // the tall cut for phones: the same storyboard, look and timing, laid out again for a 9:16 frame
     const tallComp = composition(scenes, c, lengths, transition, comp.look, { shape: 'tall' })
@@ -930,7 +962,7 @@ async function videoNow(id, input = {}) {
     writeFileSync(join(tallDir, 'index.html'), tallComp.html)
     const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
     const cues = cueSheet(scenes, lengths)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, planned, musicCut, scoredBy, scenes }, null, 2))
     // the stills and motion lines for Flow (Veo): the flow-video skill animates them into <run>/flow/<still>.mp4,
     // and the next cut plays those clips instead of the stills
     writeFileSync(join(dir, 'flow-prompts.json'), JSON.stringify(scenes.filter(s => s.layer === 'story' && s.image).map(s => { const f = c.images.find(x => x.n === s.image); return { still: f.file, clip: join(runsDir, id, 'flow', `${basename(f.file).replace(/\.[^.]+$/, '')}.mp4`), camera: s.camera, seconds: s.seconds, action: `${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape` } }), null, 2))
@@ -947,28 +979,10 @@ async function videoNow(id, input = {}) {
       tall = false
       send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
-    // the score to the storyboard's cue sheet: ElevenLabs when the studio has a key, else written here
-    progress(97, 'scoring')
-    let sound = false, scoredBy = null
+    let sound = false
     try {
-      let musicFile = null, fx = []
-      if (input.music !== false) {
-        // Hermes's secret, else Hermes's ElevenLabs connector, else a pasted key
-        const key = process.env.SWARM_ELEVENLABS_KEY || mediaKeyStore.get('elevenlabs')
-        const via = media?.music.via
-        if (input.eleven !== false && (key || via === 'hermes-mcp')) {
-          try {
-            progress(97, 'ElevenLabs is scoring the film')
-            const e = via === 'hermes-mcp' && !process.env.SWARM_ELEVENLABS_KEY
-              ? await mcpScore({ call: connectors.call, server: media.music.server, music: scenes.music, cues, seconds: comp.seconds, dir })
-              : await elevenScore({ key, music: scenes.music, cues, seconds: comp.seconds, dir })
-            musicFile = e.music; fx = e.sfx; scoredBy = 'elevenlabs'
-          } catch (err) { send('video:note', { message: `ElevenLabs did not score it, so the studio did: ${String(err.message || err).slice(0, 100)}` }) }
-        }
-        if (!musicFile) { musicFile = join(dir, 'music.wav'); scoreWav({ seconds: comp.seconds, music: scenes.music, cues, file: musicFile, seed }); scoredBy = 'studio' }
-      }
       progress(98, 'mixing the sound')
-      sound = await mix({ ffmpeg: t.ffmpeg, env: { ...process.env, PATH: t.path }, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: (cues.cuts[i - 1] || 0) + VOICE_LEAD }), fx, silence: cues.silence, out })
+      sound = await mix({ ffmpeg: t.ffmpeg, env: tenv, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: (cues.cuts[i - 1] || 0) + VOICE_LEAD }), fx, silence: cues.silence, out })
     } catch (err) {
       send('video:note', { message: `sound failed, the video is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
