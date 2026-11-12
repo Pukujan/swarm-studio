@@ -1,3 +1,4 @@
+// @ts-check
 // The Video kit (docs/specs/40-video-kit.md, against spec 37's kit contract): a film planned on the
 // shared board from the project's brand, References and Assets, with no website needed.
 //   Script        the film as beats, one line each

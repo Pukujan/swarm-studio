@@ -1,3 +1,4 @@
+// @ts-check
 // The game kit (docs/specs/37-studio-first.md, "The kit contract"): today's Plan board (web/plan.js,
 // spec 21) behind the contract, unchanged. Its cards are the Plan step, its price is the proposal's cost,
 // and its lock is the plan's lock (the board's own gate, with the same price the server checks again).

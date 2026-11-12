@@ -18,6 +18,11 @@ The real constraints that come with a dependency:
 - **Size and licence.** Mind the install size and the licence.
 - **Nothing new downloaded at build time.** A build may not fetch a new runtime download.
 
+Checks before a PR: `bash scripts/check.sh`; for code in `web/`, also `npm ci --prefix tools/dev` once, then
+`npm run --prefix tools/dev typecheck` (files that start with `// @ts-check`; a new web file starts with it) and
+`npm run --prefix tools/dev deps` (no cycles; an area under `web/canvas/` is used only through its `index.js`).
+CI's `motion-check` compares the Studio's motion before and after (docs/ux/MOTION.md).
+
 Before changing anything a person sees (anything in `web/`, the Feed's screens, dialogs, menus, copy), read:
 
 1. [docs/ux/RULES.md](docs/ux/RULES.md): the UI and UX rules, and the checklist to run before a UI PR.

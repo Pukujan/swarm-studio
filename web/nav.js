@@ -1,3 +1,4 @@
+// @ts-check
 // Where the person is (docs/specs/34-navigation-state.md): an XState v5 machine. A move it has no
 // transition for does not happen, so a mixed screen (one project's name over another's pages, a
 // player over Projects) is never drawn. The stream never picks the build: `streamed` only clears
@@ -14,7 +15,7 @@
 //      ├─ video
 //      ├─ game                   context.run is the version's game run
 //      └─ playable               parallel: room (overview · deck live|replay · app) and player (closed · prototype · visitor)
-import { setup, createActor, assign } from './vendor/xstate/xstate.mjs'
+import { setup, createActor, assign as xassign } from './vendor/xstate/xstate.mjs'
 
 export const ROOMS = ['home', 'draft', 'overview', 'deck', 'app', 'game', 'video', 'plan', 'brand', 'studio']
 // the Studio's steps, in order (spec 37); Esc goes up one, and from the first to Projects
@@ -24,6 +25,14 @@ const PLAYABLE = ['overview', 'deck', 'app']
 // a run or project id as the address or a caller gives it: a short plain string, or nothing
 const id = v => (typeof v === 'string' && /^[\w.:-]{1,80}$/.test(v) ? v : null)
 
+/** @typedef {{ project: string | null, version: string | null, run: string | null, plan: string | null, page: string | null, pending: string | null, from: string | null, step: string | null }} NavContext */
+/** @typedef {{ type: string, [k: string]: any }} NavEvent */
+
+// assign, bound to the machine's context and events for the type check (the same function at run time)
+/** @type {typeof xassign<NavContext, NavEvent, undefined, NavEvent, never>} */
+const assign = xassign
+
+/** @type {NavContext} */
 const START_CONTEXT = { project: null, version: null, run: null, plan: null, page: null, pending: null, from: null, step: null }
 const stepOf = v => (STEPS.includes(v) ? v : null)
 const target = room => (room === 'video' || room === 'game' ? `#nav.build.${room}` : `#nav.build.playable.room.${room}`)
@@ -52,7 +61,8 @@ const playerMoves = {
 const playGuard = ({ event }) => event.pages !== 0
 const pageOf = ({ context, event }) => id(event.page) || context.page
 
-export const navMachine = setup({}).createMachine({
+// `types` is read by the type check only (XState ignores it at run time)
+export const navMachine = setup({ types: /** @type {{ context: NavContext, events: NavEvent }} */ ({}) }).createMachine({
   id: 'nav',
   context: { ...START_CONTEXT },
   initial: 'home',
@@ -200,6 +210,7 @@ export function fromAddress(search = '') {
   if (q.get('room') === 'studio') return [{ type: 'home' }, { type: 'studio', project: get('project'), step: q.get('step') }]
   const version = get('version') || get('run')
   if (!version && !get('project')) return [{ type: 'home' }]
+  /** @type {NavEvent[]} */
   const events = [{ type: 'home' }, { type: 'open.project', project: get('project'), version }]
   const room = q.get('room')
   if (room === 'game') events.push({ type: 'room', room, run: get('version') ? get('run') : null })

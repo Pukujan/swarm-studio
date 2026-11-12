@@ -1,3 +1,4 @@
+// @ts-check
 // The Website kit (docs/specs/37-studio-first.md): its Plan step is a storyboard strip of the pages, drawn
 // in the project's brand (the brand sheet is the Brand step). Its build is today's website build, inside
 // the Studio's project. server/page.mjs joins this file in its own closure, so its names stay its own.
