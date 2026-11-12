@@ -973,7 +973,7 @@ export function makeProject({ sw, C, root }) {
       load()
     })
     // "don't build yet, let's talk" or a question for the crew: the planner answers in the Design
-    // deck's chat and nothing is built until the person says build there (engine/discuss.mjs)
+    // deck's chat and nothing is built until the person says build there (engine/talkplan.mjs)
     const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text)
     if (read === 'build') return send(text)
     C.go('station', 'canvas')

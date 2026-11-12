@@ -113,7 +113,7 @@ keeps **Canvas** in the mode menu. Every kind that starts with page design (Webs
 
 Said on 2026-11-11 of an App whose prompt asked "do u wanna grill me first?" and whose answer read "dont build yet
 lets talk about specifications". A stop or a wish to talk, in the prompt, in an answer or in a dock, never starts a
-build: the planner model reads every message first (engine/discuss.mjs; a clear stop phrase is never read as a
+build: the planner model reads every message first (engine/talkplan.mjs; a clear stop phrase is never read as a
 build). A talk opens in the Design deck's chat on a new project with nothing built; Hermia answers there and the
 dock reads Send. When unsure, one choice: Build now or talk first. A question typed into an answer is answered, not
 added to the brief. The last step is always the brief to read and edit, with Build and Keep talking. `hermes swarm`,

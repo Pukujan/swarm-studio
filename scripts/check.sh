@@ -49,8 +49,12 @@ curl -sf -H 'x-swarm-token: ci' http://127.0.0.1:$port/api/plans/$plan_id/brief 
 # Stop with nothing running answers what it stopped: nothing
 curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{}' http://127.0.0.1:$port/api/stop > "$tmp/reply"; has '"stopped":\[\]'
 get /api/packs; has '"events"'
-# talk first (engine/discuss.mjs): the owner's "don't build yet" brief is a talk, never a build
+# talk first (engine/talkplan.mjs): the owner's "don't build yet" brief is a talk, never a build
 curl -sf -H 'x-swarm-token: ci' -d '{"kind":"app","text":"full stack saas app for ticket booking, do u wanna grill me first? Accounts: Email sign-in. dont build yet lets talk about specifications, i need an air booking api or something?"}' http://127.0.0.1:$port/api/discuss/read > "$tmp/reply"; has '"intent":"talk"'
+# the plan is a conversation (spec 27): the ants idea asks about Godot first and cannot lock yet
+curl -sf -H 'x-swarm-token: ci' -d '{"kind":"game","said":"a tiny game called army of ants , rts game in godots"}' http://127.0.0.1:$port/api/talk > "$tmp/reply"; has '"id":"c-'; has 'Army of Ants: a tiny real-time strategy'
+chat_id=$(grep -oE '"id":"c-[0-9a-f]{10}"' "$tmp/reply" | head -1 | cut -d'"' -f4)
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/talk/$chat_id/lock)" = 409 ] || { echo 'an open spec locked'; exit 1; }
 # the Setup sheet (spec 6): with no model key the test fails without a call, and the pictures pick is kept
 get /api/setup; has '"seen":false'; has '"pictures"'; has '"account":{"connected":false'
 curl -sf -H 'x-swarm-token: ci' -d '{"seen":true,"pictures":"drawn"}' http://127.0.0.1:$port/api/setup > "$tmp/reply"; has '"seen":true'; has '"mode":"drawn"'

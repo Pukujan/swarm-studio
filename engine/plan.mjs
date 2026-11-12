@@ -75,16 +75,17 @@ function scrub(cards, a) {
 // ---------- answers -> cards
 // env: { godot } whether a Godot binary is on this machine (undefined: not checked);
 // hint: the planner model's reading of the idea (engine/planshape.mjs askShape), or null.
-export function planFromAnswers({ idea = '', answers = {}, title = '', note = '' } = {}, env = {}, hint = null) {
+export function planFromAnswers({ idea = '', answers = {}, title = '', note = '', force = null } = {}, env = {}, hint = null) {
   const given = Object.fromEntries(Object.entries(answers || {}).map(([k, v]) => [k, clean(v)]).filter(([k, v]) => v && PLAN_QUESTIONS.some(q => q.id === k)))
   const a = { ...DEFAULTS, ...given }
-  const shape = shapeOf({ idea, given, answers: a, title, note }, env, hint)
+  const shape = shapeOf({ idea, given, answers: a, title, note, force: force || {} }, env, hint)
   const key = keyFor(`${a.look} ${idea}`)
   const base = {
     title: shape.title || 'New game',
     idea: clean(idea, 600),
     answers: a,
     given,
+    ...(force ? { decided: force, note: clean(note, 600) } : {}),
     shape,
     engine: shape.engine,
     key,
@@ -164,11 +165,12 @@ export function planFromAnswers({ idea = '', answers = {}, title = '', note = ''
 // ---------- re-plan in place: the same plan id, a fresh shape from the idea, the answers and a note
 // ("this is not what I asked for"). Pictures and the build of the old shape are dropped (their files
 // stay on disk); nothing is spent. A title the person typed is kept.
-export function replan(plan, { note = '' } = {}, env = {}, hint = null) {
+// A planner conversation locked again (engine/talkplan.mjs) hands in its idea, answers and decisions.
+export function replan(plan, { note = '', idea, answers, force, title } = {}, env = {}, hint = null) {
   if (plan.build?.state === 'building') throw Object.assign(new Error('the build is running'), { status: 409 })
   // plans made before the fix kept only the answers merged with the defaults: a default is not an answer
   const given = plan.given || Object.fromEntries(Object.entries(plan.answers || {}).filter(([k, v]) => DEFAULTS[k] !== v))
-  const fresh = planFromAnswers({ idea: plan.idea, answers: given, title: plan.titleSet ? plan.title : '', note }, env, hint)
+  const fresh = planFromAnswers({ idea: idea ?? plan.idea, answers: answers ?? given, title: plan.titleSet ? plan.title : (title || ''), note, force: force ?? plan.decided ?? null }, env, hint)
   const was = plan.shape?.family || 'action'
   const keep = { id: plan.id, v: plan.v, kind: plan.kind, created: plan.created, from: plan.from ?? null, titleSet: plan.titleSet }
   for (const k of Object.keys(plan)) delete plan[k]

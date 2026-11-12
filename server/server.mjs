@@ -37,6 +37,7 @@ import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
+import { talkRoutes } from './talk.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes } from './setup.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
@@ -1297,6 +1298,15 @@ const plans = planRoutes({
   planner: () => models.planner.apiKey ? { provider: provider('planner'), model: modelFor('planner') } : null,
   godot: () => godotHere
 })
+// The planner conversation (docs/specs/27-plan-conversation.md): decide together in the left chat, then lock.
+// A locked game chat makes its plan through the Plan board's routes above.
+const talks = talkRoutes({
+  dataDir, plans, env: () => ({ godot: godotHere }),
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'talk' }, model: modelFor('planner'), maxTokens: 700, temperature: 0.3, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null
+})
 // Guided game making (engine/workshop.mjs): the spec walked one step at a time, with pictures
 const workshops = workshopRoutes({
   dataDir,
@@ -2202,10 +2212,11 @@ const server = createServer((req, res) => {
     if (req.method !== 'POST') return json(200, projects.list())
     return readJson(1e5, input => json(200, projects.op(input)))
   }
-  // Talk first (engine/discuss.mjs): the Make box asks whether a message means build, talk or unsure,
+  // Talk first (engine/talkplan.mjs): the Make box asks whether a message means build, talk or unsure,
   // and a talk with the planner runs in the Design deck's chat with nothing built.
   // POST /api/discuss/read { text, kind, answerTo? } -> { intent, by }
   // POST /api/discuss { said: [{ who: 'you' | 'hermia', text }], kind, brief? } -> { reply } | { brief }
+  // These stay until the web side moves onto /api/talk (server/talk.mjs), which saves the chat.
   if ((url.pathname === '/api/discuss/read' || url.pathname === '/api/discuss') && req.method === 'POST') {
     const model = modelFor('planner')
     const chat = (maxTokens, ms) => model && models.planner.apiKey ? async messages => (await streamChat(provider('planner'), {
@@ -2214,7 +2225,7 @@ const server = createServer((req, res) => {
     })).text : null
     return readJson(1e5, input => {
       const kind = ['site', 'app', 'film', 'game'].includes(input.kind) ? input.kind : 'site'
-      import('../engine/discuss.mjs').then(async d => {
+      import('../engine/talkplan.mjs').then(async d => {
         if (url.pathname === '/api/discuss/read') return json(200, await d.readIntent({ text: String(input.text || '').slice(0, 4000), answerTo: String(input.answerTo || '').slice(0, 300), kind, chat: chat(8, 9000) }))
         const talk = chat(input.brief ? 400 : 600, 60000)
         if (!talk) return json(503, { error: 'No planner model yet: pick one in Models.' })
@@ -2705,6 +2716,7 @@ const server = createServer((req, res) => {
 
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
+  if (talks(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 

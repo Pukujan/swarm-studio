@@ -1930,6 +1930,6 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .item .tell-change.sent div { display: none; }
 .feed .item .tell-change.sent p { opacity: .6; margin: 0; }
 
-/* talk first (engine/discuss.mjs): the brief Hermia writes from the talk, to read and edit before Build */
+/* talk first (engine/talkplan.mjs): the brief Hermia writes from the talk, to read and edit before Build */
 .feed .item.talk-brief textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .feed .item.talk-brief textarea:focus { outline: none; border-color: var(--accent); }

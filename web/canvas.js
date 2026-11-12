@@ -1691,7 +1691,7 @@ els.form.addEventListener('submit', async e => {
   const route = to.fresh ? 'new' : to.route || routeMessage({ text: brief, run: to.from, site: S.kind !== 'game' && S.frames.length > 0, selected: to.selected, hosted: !!hosted })
   if (route === 'fix') { els.brief.value = ''; feed(null, `› ${brief}`, 'you'); to.done?.(null); return commandOps.fix({ text: brief }) }
   // "don't build yet, let's talk" or a question for the crew, typed into a project's dock: the
-  // planner answers here and nothing is built until the person says build (engine/discuss.mjs)
+  // planner answers here and nothing is built until the person says build (engine/talkplan.mjs)
   if (route === 'extend' && !hosted && !to.done) {
     const read = await readTalk(brief)
     if (read !== 'build') {
@@ -1711,7 +1711,7 @@ els.form.addEventListener('submit', async e => {
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
 })
 
-// ---------- talk first (engine/discuss.mjs): the person asked not to build yet, or asked the crew
+// ---------- talk first (engine/talkplan.mjs): the person asked not to build yet, or asked the crew
 // a question. Hermia answers here in the chat, the conversation goes on in this dock, and nothing is
 // built until they say build. Then the brief she writes from the talk shows here, editable, with
 // Build and Keep talking; only Build starts anything. From the Make box the canvas is empty: a new
@@ -6770,7 +6770,7 @@ window.swarm = {
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer,
-  // talk first (engine/discuss.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
+  // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
   readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, get on() { return talk.on } },
   // a replay started from ☰ → Replay ends when the deck is left

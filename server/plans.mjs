@@ -177,8 +177,22 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     return store.save(plan)
   }
 
+  // A locked planner conversation (engine/talkplan.mjs) makes its plan, or re-plans the one it already has
+  // in place (the same id; refused while that plan's build runs). input: planInput(chat).
+  async function fromTalk(input, planId = null) {
+    const hint = await hintFor(input.idea, input.answers || {})
+    const was = planId && store.get(planId)
+    if (!was) return view(store.create(input, env(), hint))
+    if (building.has(was.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
+    queues.delete(was.id)
+    replan(was, input, env(), hint)
+    return view(store.save(was))
+  }
+
   // true when the request was a plan route (and has been answered)
-  return function handle(req, res, url) {
+  handle.fromTalk = fromTalk
+  return handle
+  function handle(req, res, url) {
     if (servePicture(req, res, url)) return true
     if (url.pathname === '/api/plans') {
       if (req.method === 'GET') { json(res, 200, { plans: store.list() }); return true }

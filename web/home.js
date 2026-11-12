@@ -666,7 +666,7 @@ export function makeHome({ sw, C, root }) {
     // a game is planned before anything costly is made (spec 21): its questions, then the Plan board
     if (make.k === 'game' && !hosted()) return grill(text)
     // "don't build yet, let's talk", "grill me first" or a question for the crew: the planner reads
-    // the prompt (engine/discuss.mjs) and a talk opens instead of a build; not sure, one choice
+    // the prompt (engine/talkplan.mjs) and a talk opens instead of a build; not sure, one choice
     const go = () => (grillOn ? guide(text) : start(text))
     const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text, '', guideKind())
     if (read === 'talk') return talkFirst(text)
