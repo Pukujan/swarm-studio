@@ -5203,8 +5203,9 @@ function connect() {
         if (viewing) { viewing = null; fresh(e.run) }
       }
       // following the live build: an event of another build (a late picture of the build before,
-      // an edit made to a saved one in another window) is not this canvas's
-      if (!viewing && e.run && S.run && e.run !== S.run) return
+      // an edit made to a saved one in another window) is not this canvas's. A new build's start is:
+      // it takes the canvas over (an App's design step, a build started with hermes swarm)
+      if (!viewing && e.run && S.run && e.run !== S.run && e.type !== 'run:start' && e.type !== 'reset') return
       // events for the open file (a review or edit while viewing it) apply too
       if (!viewing || (e.run === viewing && e.type !== 'run:start')) on(e)
     } catch (err) {

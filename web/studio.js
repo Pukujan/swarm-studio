@@ -84,8 +84,8 @@ function renderBack() {
   const b = $('.cosmos-back')
   if (!b) return
   const toProject = C.mode === 'station'
-  b.innerHTML = `${ico('back')}<span class="t">${toProject ? 'Project' : 'Projects'}</span>`
-  b.setAttribute('aria-label', toProject ? 'Back to the project' : 'Back to Projects')
+  b.innerHTML = `${ico('back')}<span class="t">${toProject ? 'Overview' : 'Projects'}</span>`
+  b.setAttribute('aria-label', toProject ? 'Back to the Overview' : 'Back to Projects')
 }
 
 // The way home, from any view: the logo always lands on Projects,
@@ -167,12 +167,13 @@ function chrome() {
     tabs.append(x)
   }
 }
-// The mode: one menu button in a build's top bar, Canvas, Video, App or Game. Each option does what
-// its old button did: the first three open that room, Game opens the game wizard.
-const MODES = [['canvas', 'Canvas'], ['video', 'Video'], ['app', 'App'], ['game', 'Game']]
+// The mode: one menu button in a build's top bar, Overview, Canvas, Video, App or Game. Overview is the
+// project's pages and files (web/project.js); Canvas, Video and App open that room; Game opens the
+// game's room, or the wizard that makes one.
+const MODES = [['overview', 'Overview'], ['canvas', 'Canvas'], ['video', 'Video'], ['app', 'App'], ['game', 'Game']]
 // the game's own room is the App view on the game's run: the menu calls it Game
 const onGame = () => !!C.pair?.game && sw.viewing === C.pair.game
-const modeNow = () => (sw.view === 'app' && onGame() ? 'game' : sw.view)
+const modeNow = () => (C.mode === 'project' ? 'overview' : sw.view === 'app' && onGame() ? 'game' : sw.view)
 // the game's room: the App view on the game's run (the label says Game once that run is open)
 C.toGame = () => {
   C.go('station', 'app')
@@ -210,6 +211,7 @@ function modeMenu() {
   }
   const pick = id => {
     close()
+    if (id === 'overview') return C.go('project')
     // Game: the project's game, when it has one; else the wizard that makes one
     if (id === 'game') {
       if (!C.pair?.game) return $('#game-btn')?.click()

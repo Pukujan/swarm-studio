@@ -13,6 +13,10 @@ Before changing anything a person sees (anything in `web/`, the Feed's screens, 
 6. [docs/ux/REQUIREMENTS.md](docs/ux/REQUIREMENTS.md): the owner's own words. They win over any spec that
    disagrees.
 
+Two names, used the same way in code, copy and docs (owner, 2026-11-11): the **Overview** is a project's pages
+and files (`web/project.js`); the **Design deck** ("Canvas" in the mode menu) is where the crew is watched at work
+and a page is designed (`web/canvas.js`). Never call the Overview a canvas.
+
 Specs for individual features live in [docs/specs/](docs/specs/README.md).
 
 <!-- oio:issue-log-guidance:start -->

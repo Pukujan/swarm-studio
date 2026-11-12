@@ -40,7 +40,7 @@ panel, a dock or a strip (rules 27 and 28).
 |---|---|---|
 | Nav | Five slots: Home, Discover, + Create, Projects, Me. A left rail on desktop, a bottom bar on a phone | Always (in the Design deck it folds into the logo menu, as in Figma) |
 | Top bar | The breadcrumb on the left, the one primary button on the right | Always, except on Home, where the build fills the screen |
-| Stage | The content: the project grid, a project's canvas, a page, a game, a clip | Always |
+| Stage | The content: the project grid, a project's Overview, a page, a game, a clip | Always |
 | Inspector | Whatever is selected, on the right | Only while something is selected. It slides over the stage instead of shrinking it, and a phone shows it as a half sheet |
 | Sheet | One sheet: peek, half, full | When you open something. One at a time |
 | Input | The one input: "What should the crew build?" on Projects, "Tell the crew…" in the dock of a project and the rooms | In + Create, Projects, a project and the rooms |

@@ -1,5 +1,5 @@
 // The Plan board (docs/specs/21-plan-before-spend.md): a game's plan before anything costly is made.
-// It follows a project's canvas (Figma's, docs/ux/PATTERNS.md): sections of artboards on a dotted
+// It follows a project's Overview (Figma's, docs/ux/PATTERNS.md): sections of artboards on a dotted
 // stage that pans and zooms, the inspector on the right only while something is selected, and the
 // top bar's one primary button, which carries the price: "Lock · 324 credits". Nothing expensive
 // runs before that click; the server checks the same number again (engine/plan.mjs lockPlan).
@@ -343,7 +343,7 @@ export function makePlan({ sw, C, root }) {
     try { take(await post(url('build'))) } catch (err) { toast(err.message) }
   }
 
-  // ---------- the stage: pan, zoom, select (the project canvas's gestures)
+  // ---------- the stage: pan, zoom, select (the Overview's gestures)
   function applyCam() { world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})` }
   function frameAll(animate = true) {
     const sw_ = stage.clientWidth - (insp.hidden ? 0 : 272), sh = stage.clientHeight - 40

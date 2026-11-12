@@ -24,7 +24,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
-    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(),
+    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(),
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0
   }
 
@@ -38,7 +38,7 @@ export function makeProject({ sw, C, root }) {
       <div class="pj-list" role="tree"></div>
       <div class="pj-layers" hidden></div>
     </aside>
-    <div class="pj-stage" tabindex="-1" aria-label="Canvas">
+    <div class="pj-stage" tabindex="-1" aria-label="Overview">
       <div class="pj-world"></div>
       <div class="pj-cursors" aria-hidden="true"></div>
       <div class="pj-drop" hidden><span>${ic('upload', 22)}</span></div>
@@ -110,7 +110,7 @@ export function makeProject({ sw, C, root }) {
     P.proj = list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || list?.projects.find(p => p.id === P.pid) || null
     // back from a site's game: the project shows the site's version, which holds the game
     const up = P.proj?.parts?.[run]
-    if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); C.load(up); return load() }
+    if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0; C.load(up); return load() }
     if (P.proj) P.pid = P.proj.id
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
     render()
@@ -502,14 +502,19 @@ export function makeProject({ sw, C, root }) {
       for (const p of P.board.pages) {
         // the build's card on Projects: the first page's picture, else its snapshot (once per build)
         if (p === P.board.pages[0] && (p.cover || P.thumbs.has(p.id))) saveCover(p.cover ? base() + p.cover : P.thumbs.get(p.id))
-        if (P.thumbs.has(p.id)) continue
+        if (P.thumbs.has(p.id) && !P.stale.has(p.id)) continue
+        P.stale.delete(p.id)
         const src = await sw.thumb(p.id).catch(() => null)
         // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
         const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
+        // a page that changed keeps its last picture until a new one comes (no blank artboard meanwhile)
         if (ok && P.on) { P.thumbs.set(p.id, src); renderList(); renderStage(); if (p === P.board.pages[0]) saveCover(await sw.thumb(p.id, 0.6).catch(() => null) || src) }
+        else if (P.thumbs.has(p.id)) P.stale.add(p.id)
       }
     } finally { P.thumbBusy = false }
-    if (P.on && P.board.pages.some(p => !P.thumbs.has(p.id)) && (P.thumbTries = (P.thumbTries || 0) + 1) < 8) setTimeout(thumbs, 2500)
+    // a page without a picture yet (its frame was still laying out) is tried again a few times;
+    // the count starts over whenever the crew finishes a section (layer:done) or the build reloads
+    if (P.on && P.board.pages.some(p => !P.thumbs.has(p.id) || P.stale.has(p.id)) && (P.thumbTries = (P.thumbTries || 0) + 1) < 8) setTimeout(thumbs, 2500)
   }
 
   // ---------- the stage: pan (drag empty space, wheel), zoom (pinch, ⌘ wheel), Frame fits all
@@ -964,7 +969,7 @@ export function makeProject({ sw, C, root }) {
     const from = route === 'extend' || (route === 'new' && P.run && P.board?.kind !== 'game' && !hosted()) ? P.run : null
     Promise.resolve(sw.submit(text, false, P.pid, from)).then(r => {
       if (r?.busy) { if (!input.value) input.value = text; toast(`${ic('msg', 15)}<span>Still on the last change</span>`); return }
-      if (typeof r === 'string' && r !== P.run) { P.run = r; P.sel = null; P.framed = false; P.thumbs.clear() }
+      if (typeof r === 'string' && r !== P.run) { P.run = r; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
       load()
     })
   }
@@ -1142,16 +1147,17 @@ export function makeProject({ sw, C, root }) {
     if (/^(image|review)(:|$)/.test(e.type) && (!e.run || e.run === P.run)) { clearTimeout(P.soonP); P.soonP = setTimeout(load, 350) }
     // a run starting elsewhere (another project, another window) does not take over this one;
     // the dock's own turns switch to their run when it starts (above)
-    if (e.type === 'run:start' || e.type === 'reset') { if (e.run && !P.run) P.run = e.run; if (!e.run || e.run === P.run) { P.thumbs.clear(); setTimeout(load, 600) } }
+    if (e.type === 'run:start' || e.type === 'reset') { if (e.run && !P.run) P.run = e.run; if (!e.run || e.run === P.run) { P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0; setTimeout(load, 600) } }
     if (e.type === 'image' || e.type === 'page' || e.type === 'video:done' || e.type === 'run:done') { clearTimeout(P.soon); P.soon = setTimeout(load, 800) }
-    if (e.type === 'layer:done') { P.thumbs.clear(); clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
+    // a finished section changes its page (a shared one, '*', every page): those are taken again
+    if (e.type === 'layer:done') { for (const p of P.board?.pages || []) if (!e.page || e.page === '*' || e.page === p.id) P.stale.add(p.id); P.thumbTries = 0; clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
   })
 
   return {
     el: root,
     show(run, pid) {
-      if (pid !== undefined && pid !== P.pid) { P.pid = pid; P.sel = null; P.framed = false; P.thumbs.clear() }
-      if (run && run !== P.run) { P.run = run; P.sel = null; P.framed = false; P.thumbs.clear() }
+      if (pid !== undefined && pid !== P.pid) { P.pid = pid; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
+      if (run && run !== P.run) { P.run = run; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
       if (!run && pid === null) { P.run = null; P.framed = false }
       root.hidden = false
       P.on = true
