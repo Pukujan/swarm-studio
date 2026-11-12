@@ -1695,7 +1695,7 @@ body.crew-quiet .cursor .bubble, body.crew-quiet .cw-radio, body.crew-quiet .cw-
 
 /* ---------- the hosted studio (docs/specs/13-hosted-studio.md): what needs the plugin is hidden,
    and a guest bar says who is building and how many builds are left today. Theme tokens only. */
-body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn, #game-btn, .pubwrap, #review-btn, #video-btn, #export-btn, #models-btn, #build-model, .gx-auto) { display: none !important; }
+body.hosted :is(#views [data-view="video"], #views [data-view="app"], #auto-btn, #game-btn, .pubwrap, #review-btn, #video-btn, #export-btn, #replay-btn, #models-btn, #build-model, .gx-auto) { display: none !important; }
 .guest-bar { display: flex; align-items: center; gap: 8px; margin-right: 8px; font: 600 12.5px/1 var(--label, sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .guest-bar .g-name { color: var(--text); max-width: 14ch; overflow: hidden; text-overflow: ellipsis; }
 .g-form .g-err { color: var(--ui-destructive, #ff6b6b); margin: 4px 0 0; font-size: 13px; }

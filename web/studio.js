@@ -50,6 +50,8 @@ C.go = (m, v) => {
   body.classList.add('cosmos')
   // the side panel's own small-chat mode does not apply here
   body.classList.remove('side-min')
+  // a replay started from the menu plays in the Design deck: leaving the deck ends it
+  if (m !== 'station' || (v && v !== 'canvas')) sw.stopReplay?.()
   C.mode = m
   setMode(m)
   if (m !== 'plan') C.planView?.hide()
