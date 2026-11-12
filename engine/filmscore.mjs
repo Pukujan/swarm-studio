@@ -14,8 +14,7 @@ export function fixtureBuild(b) {
   }
 }
 
-// How long a spoken line runs, near enough for timing without a voice model.
-export const spokenSeconds = say => (say ? Math.max(0.8, String(say).trim().split(/\s+/).length / 2.7) : 0)
+export { spokenSeconds } from './storyboard.mjs'
 
 // The film's structure as tokens: what each beat is, and how long it holds.
 const hold = s => (s < 1.2 ? 'short' : s <= 3.5 ? 'mid' : 'long')

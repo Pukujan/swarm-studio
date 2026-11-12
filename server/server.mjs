@@ -893,7 +893,7 @@ async function videoNow(id, input = {}) {
     scenes.fx = fxFor(scenes.fx, prompt)
     const agents = c.agents
     const picOf = s => { const n = s.image || s.images?.[0]; const f = n && c.images.find(x => x.n === n); return f ? `/img/${id}/${basename(f.file)}` : null }
-    send('video:story', { look: scenes.look, plan: scenes.plan, title: scenes.title, pace: scenes.pace, clips: c.clips.length, fx: scenes.fx, music: scenes.music, fixes: scenes.fixes, notes, scenes: scenes.map((s, i) => ({ kind: s.kind, layer: s.layer, seconds: s.seconds, camera: s.camera, cut: s.cut, cue: s.cue, sfx: s.sfx, headline: s.headline, accent: s.accent, speed: s.speed, image: picOf(s), agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
+    send('video:story', { look: scenes.look, plan: scenes.plan, film: scenes.film || null, title: scenes.title, pace: scenes.pace, clips: c.clips.length, fx: scenes.fx, music: scenes.music, fixes: scenes.fixes, notes, scenes: scenes.map((s, i) => ({ kind: s.kind, layer: s.layer, seconds: s.seconds, camera: s.camera, cut: s.cut, cue: s.cue, sfx: s.sfx, headline: s.headline, accent: s.accent, speed: s.speed, image: picOf(s), agent: agents[(i * 3 + 1) % Math.max(1, agents.length)]?.id })) })
     stagePictures(c, dir)
     const t = await tools
     // a long take sped up for its beat: the footage itself is sped up, and the beat wears the 8× chip
@@ -930,7 +930,7 @@ async function videoNow(id, input = {}) {
     writeFileSync(join(tallDir, 'index.html'), tallComp.html)
     const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
     const cues = cueSheet(scenes, lengths)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, scenes }, null, 2))
     // the stills and motion lines for Flow (Veo): the flow-video skill animates them into <run>/flow/<still>.mp4,
     // and the next cut plays those clips instead of the stills
     writeFileSync(join(dir, 'flow-prompts.json'), JSON.stringify(scenes.filter(s => s.layer === 'story' && s.image).map(s => { const f = c.images.find(x => x.n === s.image); return { still: f.file, clip: join(runsDir, id, 'flow', `${basename(f.file).replace(/\.[^.]+$/, '')}.mp4`), camera: s.camera, seconds: s.seconds, action: `${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape` } }), null, 2))

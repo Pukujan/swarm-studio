@@ -28,6 +28,11 @@ test('with no model, every film in the set finishes', async () => {
   assert.equal(out.summary.films, 20)
   assert.equal(out.summary.finishes, 20, out.films.filter(f => !f.finished).map(f => f.id).join(', '))
   for (const r of out.results) assert.ok(timed(r.board).every(d => d >= 0.3 && d <= 12), r.id)
+  // the floors (spec 26): with rules alone the set is every kind, each prompt its expected kind, and no longer one shape
+  assert.equal(out.summary.fit, 1, out.films.filter(f => !f.fit).map(f => `${f.id}=${f.kind}`).join(', '))
+  assert.equal(out.summary.kinds, 6)
+  assert.ok(out.summary.closings >= 4, `closings ${out.summary.closings}`)
+  assert.ok(out.summary.sameness <= 0.5, `sameness ${out.summary.sameness} (was 0.63 before the director)`)
 })
 
 test('a film the renderer cannot play does not count as finished', () => {
