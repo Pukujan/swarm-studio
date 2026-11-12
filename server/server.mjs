@@ -1308,7 +1308,7 @@ const cutPy = () => (cutPyP ||= (async () => {
   return null
 })())
 // what a stage is told about a sheet: its frame size and timing, from the cut
-const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: meta.fps || it.fps, loop: meta.loop ?? it.loop, frames: meta.video ? IDLE_FRAMES : it.frames } : {})
+const sheetInfo = (it, meta) => (it.kind === 'sheet' && meta ? { count: meta.frames, cell: meta.cell, fps: meta.fps || it.fps, loop: meta.loop ?? it.loop, frames: meta.video ? IDLE_FRAMES : it.frames, ...(meta.blend === 'add' ? { blend: 'add' } : {}) } : {})
 const IDLE_FRAMES = 'a looping idle from a video clip: breathing, a small sway of weight, a blink'
 // The animated idle's go-ahead (engine/idle.mjs). With a video model signed in, the chat asks once,
 // with the picked model's price on the button and the other video models Hermes offers beside it
@@ -1390,7 +1390,11 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     done.set(it.id, { file, what: it.what, kind: it.kind, ...(it.look ? { look: it.look } : {}), ...(it.companion ? { companion: true } : {}), ...sheetInfo(it, meta) })
     return true
   }
-  for (const it of [...queue]) if (reuse(it)) queue.splice(queue.indexOf(it), 1)
+  // a kit sheet (a UI kit, a set of props) is cut into single files, each a picture of its own
+  // in the art the game is told about; the sheet itself is not
+  for (const kit of items.filter(i => i.parts)) for (const p of kit.parts) if (!items.some(i => i.id === p.id)) items.push({ ...p, part: kit.id })
+  const reuseParts = kit => { for (const p of kit.parts || []) reuse(p) }
+  for (const it of [...queue]) if (reuse(it)) { queue.splice(queue.indexOf(it), 1); reuseParts(it) }
   // the hero's idle from a video clip (engine/idle.mjs): asked for at the clip's price while the
   // rest paints; a yes adds the painted idle (its first frame is animated) and the video one
   let idleWait = null
@@ -1526,17 +1530,18 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   }
   async function paintSheet(slot, it) {
     // the uncut picture of the figure, else (art kept from an older build) its cut-out sprite
-    const still = done.get(it.after)?.file
-    const ref = [raws.get(it.after), still && join(appDir, 'public', still)].find(f => f && existsSync(f))
-    if (!ref) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
+    // a kit or an effect sheet has no figure: the hero's picture (else the title) is its style reference
+    const kit = !!(it.kit || it.fx), from = kit ? ['sprite-hero', 'title'] : [it.after]
+    const ref = from.flatMap(id => [raws.get(id), done.get(id)?.file && join(appDir, 'public', done.get(id).file)]).find(f => f && existsSync(f))
+    if (!ref && !kit) { live(slot, it, 'failed', { problems: ['no picture of the figure to paint from'] }); step({ kind: 'setup', text: `left out the ${it.what}: no picture of the figure to paint from`, ok: false }); return }
     const pick = art.tierFor(choice, { hero: true })
     // the key the sheet is painted on comes from the figure's own picture: the key colour
     // furthest from its colours (the layout's key, guessed from the words, is the fallback)
-    const measured = await art.measureKey(ref)
+    const measured = kit ? null : await art.measureKey(ref)
     let layout = measured && measured.pick !== art.keyOf(it.layout) ? art.swapKey(it.layout, measured.pick) : it.layout
     if (layout !== it.layout) step({ kind: 'setup', text: `the ${it.what} is painted on ${art.keyOf(layout)}: the furthest key from the figure's colours` })
     // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
-    const go = strict => paintWithBackup(() => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', '--ref', ref, '--edit', art.sheetPrompt(it, guide, { strict, layout })], 300000), { choice: pick, quota: OUT_OF_QUOTA, exists: existsSync })
+    const go = strict => paintWithBackup(() => imagegen(['--provider', pick.provider, ...(pick.model ? ['--model', pick.model] : []), '--aspect', 'landscape', ...(kit ? (ref ? ['--ref', ref] : []) : ['--ref', ref, '--edit']), kit ? art.kitPrompt(it, guide, { strict, layout }) : art.sheetPrompt(it, guide, { strict, layout })], 300000), { choice: pick, quota: OUT_OF_QUOTA, exists: existsSync })
     let fixes = ''
     for (let go2 = 0; go2 < 2; go2++) {
       live(slot, it, go2 ? 'sent back' : 'painting', go2 ? { problems: fixes.split('; ') } : {})
@@ -1552,7 +1557,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       const strip = join(dirname(r.path), `${it.id}-strip.webp`), view = join(dirname(r.path), `${it.id}-check.png`)
       const py = await cutPy()
       if (!py) { live(slot, it, 'failed', { problems: ['cutting sheets needs numpy and scipy'] }); step({ kind: 'setup', text: `could not cut the ${it.what}: no Python with numpy and scipy (set SWARM_CUT_PY)`, ok: false }); return }
-      const cut = await new Promise(ok => execFile(py, [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), r.path, strip], { timeout: 120000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
+      const cut = await new Promise(ok => execFile(py, [join(root, 'games', 'ares', 'tools', 'sheets', 'cut.py'), r.path, strip, ...(it.fx ? ['--fx'] : [])], { timeout: 120000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
       let meta = null
       try { meta = JSON.parse(cut.out.trim().split('\n').pop()) } catch {}
       if (!cut.ok || !meta || !existsSync(strip)) {
@@ -1565,8 +1570,8 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       const qc = meta.qc || {}
       // the cut measures the painted sheet too: figures close to the key they stand on
       const clash = go2 === 0 ? art.keyClash(meta.key) : null
-      const numbers = [...(qc.edge?.length ? [`frame ${qc.edge.map(n => n + 1).join(', ')} cut off at the edge`] : []), ...(qc.ok === false && !qc.edge?.length ? ['frames differ in size'] : []), ...(clash ? [clash.problem] : [])]
-      const look = existsSync(view) ? await checkArt(view, guide, (_, image) => art.sheetMessages(it.what, image, it.frames)) : { ok: true, skipped: true, problems: [] }
+      const numbers = [...(qc.edge?.length ? [`frame ${qc.edge.map(n => n + 1).join(', ')} cut off at the edge`] : []), ...(qc.ok === false && !qc.edge?.length && !it.fx ? [kit ? `only ${qc.frames} of the six pieces are there` : 'frames differ in size'] : []), ...(clash ? [clash.problem] : [])]
+      const look = existsSync(view) ? await checkArt(view, guide, (_, image) => (kit ? art.kitMessages(it.what, image, it.frames, !!it.fx) : art.sheetMessages(it.what, image, it.frames))) : { ok: true, skipped: true, problems: [] }
       const problems = [...numbers, ...(look.skipped ? [] : look.problems)]
       if (problems.length && go2 === 0) {
         fixes = problems.join('; ')
@@ -1579,14 +1584,28 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       // the reviewer still sees a wrong sheet after the second try: the game keeps the still sprite
       if (!look.skipped && look.problems.length) {
         live(slot, it, 'failed', { problems: look.problems })
-        step({ kind: 'setup', text: `left out the ${it.what}: ${look.problems[0]}; the game uses the still sprite`, ok: false })
+        step({ kind: 'setup', text: `left out the ${it.what}: ${look.problems[0]}${kit ? '' : '; the game uses the still sprite'}`, ok: false })
         return
       }
       const { file, name } = keep(it, strip)
       writeFileSync(join(runsDir, runId, 'img', name.replace(/\.[a-z]+$/i, '.json')), JSON.stringify(meta))
       done.set(it.id, { file, what: it.what, kind: it.kind, ...sheetInfo(it, meta) })
+      // a kit: each piece becomes a trimmed picture of its own (scripts/kit_split.py)
+      let pieces = 0
+      if (it.parts) {
+        const parts = join(dirname(r.path), `${it.id}-parts`)
+        mkdirSync(parts, { recursive: true })
+        const sp = await new Promise(ok => execFile(py, [join(root, 'scripts', 'kit_split.py'), strip, parts, ...it.parts.map(p => p.id)], { timeout: 60000 }, (err, out) => { try { ok(err ? null : JSON.parse(String(out).trim().split('\n').pop())) } catch { ok(null) } }))
+        for (const p of sp?.pieces || []) {
+          const part = it.parts.find(x => x.id === p.name)
+          if (!part || !existsSync(p.file)) continue
+          done.set(part.id, { file: keep(part, p.file).file, what: part.what, kind: part.kind })
+          pieces++
+        }
+        if (sp?.empty?.length) step({ kind: 'setup', text: `the ${it.what} came out without: ${sp.empty.join(', ')}`, ok: false })
+      }
       live(slot, it, 'done', { src: img(name), ...(problems.length ? { problems } : {}) })
-      step({ kind: 'setup', text: `painted the ${it.what}: ${meta.frames} frames${problems.length ? ` (kept after a second try: ${problems[0]})` : ''}` })
+      step({ kind: 'setup', text: `painted the ${it.what}: ${it.parts ? `${pieces} pieces` : `${meta.frames} frames`}${problems.length ? ` (kept after a second try: ${problems[0]})` : ''}` })
       return
     }
   }
@@ -1680,9 +1699,11 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   }
   await Promise.all(PAINTERS.map((_, i) => worker(i)))
   artJobs.delete(runId)
-  const out = items.filter(i => !i.keys).map(i => done.get(i.id)).filter(Boolean)
+  // (a kit's sheet is not handed to the game: its pieces are)
+  const wanted = items.filter(i => !i.keys && !i.parts)
+  const out = wanted.map(i => done.get(i.id)).filter(Boolean)
   // out of quota: the build is told which pictures are missing and which model ran out
-  if (stopped) out.stopped = { ...stopped, painted: out.length, missing: items.length - out.length }
+  if (stopped) out.stopped = { ...stopped, painted: out.length, missing: wanted.length - out.length }
   return out
 }
 

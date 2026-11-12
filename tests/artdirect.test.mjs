@@ -134,3 +134,19 @@ test('a backdrop with no people says so up front and at the end, without the sty
   assert.doesNotMatch(p, /slice-of-life moment|Original characters/)
   assert.doesNotMatch(promptFor('A girl reading on a rooftop', STYLES['anime-cel']), /An empty place/)
 })
+
+test('a kit sheet says its six pieces and its layout; an effect sheet is light on black', async () => {
+  const { kitPrompt, kitMessages } = await import('../engine/artdirect.mjs')
+  const { artList } = await import('../engine/game.mjs')
+  const all = artList({ title: 'T', hero: 'Mika, a courier', setting: 'a rainy city of rooftops', view: 'side' })
+  const ui = all.find(a => a.id === 'kit-ui'), hit = all.find(a => a.id === 'fx-hit')
+  const guide = { guide: 'Cel-shaded anime, clean line art, flat colours. A character moment, cinematic framing.' }
+  const p = kitPrompt(ui, guide, { layout: ui.layout })
+  assert.match(p, /exactly six separate objects/); assert.match(p, /dialogue panel frame/); assert.match(p, /#FF00FF/); assert.match(p, /Cel-shaded anime/)
+  assert.doesNotMatch(p, /character moment|cinematic framing/)
+  assert.ok(p.length <= 1400)
+  const f = kitPrompt(hit, guide, { layout: hit.layout, strict: 'a frame is cut off' })
+  assert.match(f, /six frames of ONE effect/); assert.match(f, /pure black/); assert.match(f, /second try/)
+  assert.match(kitMessages('UI kit', 'data:x', ui.frames)[0].content, /leftover background/)
+  assert.doesNotMatch(kitMessages('hit effect', 'data:x', hit.frames, true)[0].content, /leftover background/)
+})
