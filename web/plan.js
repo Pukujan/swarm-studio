@@ -74,9 +74,13 @@ export function makePlan({ sw, C, root }) {
     return first ? first.split(/[,.]/)[0].slice(0, 28) : ''
   }
   // ---------- the pictures: sheets, mocks, backdrops, close-ups (engine/planart.mjs)
+  // the sheets and shots follow the plan's genre family (engine/planshape.mjs); the action RPG's by default
   const SHEETS = [['cast', 'Cast'], ['weapons', 'Weapons']]
   const SHOTS = [['combat', 'Combat'], ['boss', 'Boss'], ['ult', 'Ult'], ['levelup', 'Level-up'], ['select', 'Select']]
-  const painting = p => p.build?.state === 'building' || [...(p.sheets || []), ...(p.mocks || []), ...(p.backdrops || []), ...(p.build?.characters || []).flatMap(c => [c.cutin, c.portrait, c.front, c.side, c.back])].some(e => e?.state === 'painting')
+  const named = k => k.replace(/^\w/, c => c.toUpperCase())
+  const sheetsOf = p => p?.art?.sheets ? p.art.sheets.slice(0, p.shape?.size === 'tiny' ? 2 : 4).map(k => [k, named(k)]) : SHEETS
+  const shotsOf = p => p?.art?.shots ? p.art.shots.map(([k]) => [k, named(k)]) : SHOTS
+  const painting = p => p.build?.state === 'building' || [...(p.sheets || []), ...(p.mocks || []), ...(p.backdrops || []), ...(p.build?.sprites || []), ...(p.build?.characters || []).flatMap(c => [c.cutin, c.portrait, c.front, c.side, c.back])].some(e => e?.state === 'painting')
   const sel = key => P.sel === key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
   // one picture slot: the picture when done, the crew at work while painting, an empty frame before
   function slot(key, cls, name, e, extra = '') {
@@ -105,22 +109,26 @@ export function makePlan({ sw, C, root }) {
     const cards = p.cards.map((c, i) => `<div class="ab pcard${P.writing != null && i >= P.writing ? ' wait' : ''}" data-key="card:${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.name)}">
       <b>${esc(c.name)}</b><span>${esc(cardValue(c))}</span>${sel(`card:${c.id}`)}${P.writing != null && i === P.writing - 1 ? cursor(CREW[i % CREW.length]) : ''}</div>`).join('')
     const writing = P.writing != null
-    const sheets = SHEETS.map(([k, n]) => { const s = (p.sheets || []).find(x => x.kind === k); return slot(`sheet:${k}`, 'sheet', n, s, s?.state === 'done' ? rings(s) : '') }).join('')
-    const mocks = SHOTS.map(([k, n]) => slot(`mock:${k}`, 'mock', n, (p.mocks || []).find(x => x.shot === k))).join('')
+    const sheets = sheetsOf(p).map(([k, n]) => { const s = (p.sheets || []).find(x => x.kind === k); return slot(`sheet:${k}`, 'sheet', n, s, s?.state === 'done' ? rings(s) : '') }).join('')
+    const mocks = shotsOf(p).map(([k, n]) => slot(`mock:${k}`, 'mock', n, (p.mocks || []).find(x => x.shot === k))).join('')
     const bds = (p.backdrops || []).slice().sort((a, b) => a.stage - b.stage || a.n - b.n)
     const worldSec = bds.length ? bds.map(b => slot(`bd:${b.id}`, `bd ${b.shape}`, b.n === 1 ? b.name : '', b)).join('') : slot('bd:new', 'bd equirect', 'Backdrops', null)
     const cast = (p.cards.find(c => c.id === 'cast')?.body.roster || []).filter(r => r?.name)
     const chars = new Map((p.build?.characters || []).map(c => [c.name, c]))
     const shown = p.gate?.locked || (p.build?.characters || []).length
-    const views = shown ? cast.map(r => { const c = chars.get(r.name) || {}; return `<div class="pl-grp">${['front', 'side', 'back'].map((v, i) => slot(`vw:${r.name}:${v}`, 'view', i ? '' : r.name, c[v])).join('')}${modelSlot(r, c.model)}</div>` }).join('') : ''
-    const closeups = shown ? cast.map(r => '<div class="pl-grp">' + slot(`cu:${r.name}:cutin`, 'cutin', r.name, chars.get(r.name)?.cutin) + slot(`cu:${r.name}:portrait`, 'portrait', '', chars.get(r.name)?.portrait) + '</div>').join('') : ''
+    const flat = !!p.art?.sprites?.length
+    const made = new Map((p.build?.sprites || []).map(x => [x.name, x]))
+    const views = flat ? (shown || made.size ? p.art.sprites.map(x => slot(`sp:${x.name}`, 'view', x.name, made.get(x.name))).join('') : '') : shown ? cast.map(r => { const c = chars.get(r.name) || {}; return `<div class="pl-grp">${['front', 'side', 'back'].map((v, i) => slot(`vw:${r.name}:${v}`, 'view', i ? '' : r.name, c[v])).join('')}${modelSlot(r, c.model)}</div>` }).join('') : ''
+    const closeups = shown && p.shape?.closeups !== false ? cast.map(r => '<div class="pl-grp">' + slot(`cu:${r.name}:cutin`, 'cutin', r.name, chars.get(r.name)?.cutin) + slot(`cu:${r.name}:portrait`, 'portrait', '', chars.get(r.name)?.portrait) + '</div>').join('') : ''
     world.innerHTML = `<div class="col"><section class="pj-sec plan-cards"><span class="al">Plan</span><div class="abs">${cards}</div></section>
       ${writing ? '' : `<section class="pj-sec pl-sheets"><span class="al">Sketches</span><div class="abs">${sheets}</div></section>`}
       ${views && !writing ? `<section class="pj-sec pl-build"><span class="al">Build</span><div class="abs">${views}</div></section>` : ''}</div>
       ${writing ? '' : `<div class="col"><section class="pj-sec pl-mocks"><span class="al">Mocks</span><div class="abs">${mocks}</div></section>
-      <section class="pj-sec pl-world"><span class="al">World</span><div class="abs">${worldSec}</div></section>
+      ${p.shape?.backdrops === false ? '' : `<section class="pj-sec pl-world"><span class="al">World</span><div class="abs">${worldSec}</div></section>`}
       ${closeups ? `<section class="pj-sec pl-close"><span class="al">Close-ups</span><div class="abs">${closeups}</div></section>` : ''}</div>`}`
     applyCam()
+    const firstKey = p.first && (p.art?.sprites?.length ? `sp:${p.first.name}` : `vw:${p.first.name}:front`)
+    if (firstKey && P.checked !== `${p.id}:${p.first.src}` && !P.sel) { P.checked = `${p.id}:${p.first.src}`; P.sel = firstKey }
     if (!P.framed && world.offsetWidth && !writing) { P.framed = true; frameAll(false) }
     renderInsp()
     // while the crew paint, look again every few seconds
@@ -130,7 +138,7 @@ export function makePlan({ sw, C, root }) {
   function renderPrimary() {
     const p = P.plan, pr = price()
     const busy = p?.build?.state === 'building'
-    const label = !p ? '' : busy ? 'Building' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${pr.credits} credits`
+    const label = !p ? '' : busy ? 'Building' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${cost(pr.credits, pr)}`
     primary.disabled = busy
     primary.querySelector('.t').textContent = label
     primary.classList.toggle('pri', !!p)
@@ -188,7 +196,7 @@ export function makePlan({ sw, C, root }) {
     const id = rest.join(':')
     if (kind === 'sheet') {
       const s = (p.sheets || []).find(x => x.kind === id)
-      const name = SHEETS.find(x => x[0] === id)?.[1] || id
+      const name = sheetsOf(p).find(x => x[0] === id)?.[1] || id
       const picks = s?.picks || []
       const cell = P.cell != null && picks.includes(P.cell) ? P.cell : null
       return head(name) + (picks.length ? `<div class="pl-picks">${picks.map(c => `<button class="pl-pick${c === cell ? ' on' : ''}" data-cell="${c}">${c + 1}</button>`).join('')}</div>` : '') +
@@ -198,7 +206,7 @@ export function makePlan({ sw, C, root }) {
     if (kind === 'mock') {
       const m = (p.mocks || []).find(x => x.shot === id)
       const any = (p.mocks || []).length
-      return head(SHOTS.find(x => x[0] === id)?.[1] || id) + (any ? again(`mock:${id}`, m) : again('mocks', null, 'Draw all'))
+      return head(shotsOf(p).find(x => x[0] === id)?.[1] || id) + (any ? again(`mock:${id}`, m) : again('mocks', null, 'Draw all'))
     }
     if (kind === 'bd') {
       const b = (p.backdrops || []).find(x => x.id === id)
@@ -208,8 +216,9 @@ export function makePlan({ sw, C, root }) {
     if (kind === 'vw') {
       const [name, v] = [rest.slice(0, -1).join(':'), rest.at(-1)]
       const c = (p.build?.characters || []).find(x => x.name === name)
-      return head(name) + (p.gate?.locked && p.build?.state !== 'building' ? again(`vw:${name}:${v}`, c?.[v]) : '')
+      return head(name) + check(p, name) + (p.gate?.locked && p.build?.state !== 'building' ? again(`vw:${name}:${v}`, c?.[v]) : '')
     }
+    if (kind === 'sp') return head(id) + check(p, id)
     if (kind === 'md') {
       const m = (p.build?.characters || []).find(x => x.name === id)?.model
       return head(id) + (m?.state === 'done' ? `<a class="btn ghost pl-paint" href="${esc(base() + m.src)}" download>Download</a>` : m?.error ? `<p class="pl-err">${esc(m.error)}</p>` : '')
@@ -221,6 +230,10 @@ export function makePlan({ sw, C, root }) {
     }
     return ''
   }
+  // the first picture is a cheap check of direction: the plan in plain words, and one step back
+  const check = (p, name) => p.first?.name !== name ? '' : `<p class="pl-sum">${esc(p.summary || '')}</p>
+    <label class="pl-f"><span>What should it be?</span><input data-replan-note maxlength="300"></label>
+    <button class="btn ghost pl-paint" data-replan>Not what I asked for</button>`
   const label = k => ({ levelUp: 'Level-ups', ngPlus: 'New Game+', enemyAI: 'Enemy AI' }[k] || k.replace(/([A-Z])/g, ' $1').replace(/^\w/, s => s.toUpperCase()))
   function readCard() {
     const c = P.plan?.cards.find(x => `card:${x.id}` === P.sel)
@@ -260,6 +273,7 @@ export function makePlan({ sw, C, root }) {
     if (e.target.closest('.pj-x')) return select(null)
     const pk = e.target.closest('[data-cell]')
     if (pk) { P.cell = Number(pk.dataset.cell); insp.innerHTML = ''; return render() }
+    if (e.target.closest('[data-replan]')) { const n = insp.querySelector('[data-replan-note]'); P.sel = null; return act('replan', { note: n?.value || '' }) }
     const pt = e.target.closest('[data-paint]')
     if (pt) return paintIt(pt.dataset.paint, pt)
     const del = e.target.closest('[data-del]')
@@ -307,23 +321,26 @@ export function makePlan({ sw, C, root }) {
     noting = setTimeout(() => post(url('pick'), { sheet: s.id, cell: Number(input.dataset.note), note: input.value }).then(p => { P.plan = p }).catch(err => toast(err.message)), 450)
   }
 
-  // ---------- the gate: the parts, the total, Test one first, and one confirm carrying the price
+  // ---------- the gate: the parts, the total, Test one first, and one confirm carrying the price.
+  // A plan with no Meshy parts (every 2D plan) costs no credits, so its gate counts pictures instead.
+  const cost = (credits, pr) => pr.credits ? `${credits} credits` : `${pr.images} pictures`
   function gate() {
     const p = P.plan
     if (!p) return
     if (p.gate?.locked) return build()
     const pr = price()
     let first = false
+    const flat = !pr.credits
     const rows = pr.parts.filter(x => x.n).map(x => `<div class="pl-row"><span>${esc(x.what)}</span><i>${x.n} × ${x.each}</i><b>${x.credits}</b></div>`).join('')
     const d = window.SwarmUI.dialog({
-      title: `Lock · ${pr.credits} credits`,
+      title: `Lock · ${cost(pr.credits, pr)}`,
       className: 'pl-gate',
       body: `<div class="pl-rows">${rows}<div class="pl-row"><span>Coding runs</span><i></i><b>${pr.runs}</b></div><div class="pl-row"><span>Pictures</span><i></i><b>${pr.images}</b></div></div>
-        <label class="pl-sw"><input type="checkbox" class="pl-first" ${pr.first.credits && pr.first.credits < pr.credits ? '' : 'disabled'}><span>Test one first</span></label>`,
+        <label class="pl-sw"><input type="checkbox" class="pl-first" ${(flat ? pr.images > 1 : pr.first.credits && pr.first.credits < pr.credits) ? '' : 'disabled'}><span>Test one first</span></label>`,
       footer: '<button class="btn pri pl-go"></button>'
     })
     const go = d.footer.querySelector('.pl-go')
-    const paint = () => { go.textContent = `Lock · ${first ? pr.first.credits : pr.credits} credits` }
+    const paint = () => { go.textContent = flat ? `Lock · ${first ? 1 : pr.images} ${first ? 'picture' : 'pictures'}` : `Lock · ${first ? pr.first.credits : pr.credits} credits` }
     paint()
     d.body.querySelector('.pl-first').onchange = e => { first = e.target.checked; paint() }
     go.onclick = async () => {

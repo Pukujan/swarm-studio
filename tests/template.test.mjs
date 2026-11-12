@@ -25,7 +25,7 @@ test('the built-in ARES template remixes into a plan at the gate: 324 credits, 8
 })
 
 test('a template keeps the cards, the picked cells and the made characters, not the build state', () => {
-  const p = planFromAnswers({ idea: 'Nova, a test', answers: { size: '2' } })
+  const p = planFromAnswers({ idea: 'Nova, a 3D test', answers: { size: '2' } })
   editCard(p, 'story', { premise: 'A changed premise' })
   p.sheets = [{ id: 's-1', kind: 'cast', grid: [5, 4], picks: [3], notes: { 3: 'heels' }, file: 's-1.webp', state: 'done' }, { id: 's-2', kind: 'weapons', grid: [5, 4], picks: [], file: 's-2.webp', state: 'done' }]
   p.build.characters = [{ name: 'Hero 1', state: 'done', model: { state: 'done', file: 'meshy-hero-1-t.glb' }, front: { state: 'done', file: 'v-1.webp' } }, { name: 'Hero 2', state: 'failed' }]
@@ -52,7 +52,7 @@ test('routes: save as a template, list it beside ARES, remix it with its files',
   const base = `http://127.0.0.1:${srv.address().port}`
   const post = (path, body) => fetch(base + path, { method: 'POST', body: JSON.stringify(body || {}) }).then(async r => ({ status: r.status, data: await r.json() }))
   try {
-    const { data: plan } = await post('/api/plans', { idea: 'Nova, a test', answers: { size: '2' } })
+    const { data: plan } = await post('/api/plans', { idea: 'Nova, a 3D test', answers: { size: '2' } })
     // a made character and a picked sheet, as a finished build would leave them
     const pdir = join(dir, 'plans', plan.id)
     mkdirSync(join(pdir, 'models'), { recursive: true })

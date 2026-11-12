@@ -404,6 +404,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const n = seedGodot(dir, spec)
       j.result.godot = true
       step({ kind: 'setup', text: `building it in Godot 4: ${n.length} pictures copied into the project` })
+    } else if (/godot/i.test(String((input.target ? input : spec)?.target ?? spec?.answers?.target ?? spec?.engine ?? ''))) {
+      // asked for, not here: say so instead of quietly building for the browser
+      step({ kind: 'setup', text: 'Godot 4 was asked for but is not installed on this machine: building it for the browser instead', ok: false })
     }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
     // art asked for mid-build (engine/artask.mjs): only with painting on and the image model not out of quota

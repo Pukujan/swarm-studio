@@ -41,7 +41,7 @@ get /api/game; has '"questions"'
 get /api/meshy; has '"ready"'; has '"credits":35'
 get /api/intake; has '"showcases"'; has '"game"'; has '"plan"'; has '"guides"'; has '"starters"'
 # plan before spend (spec 21): a plan is free; a lock at a stale price and a build before the lock are refused
-curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"idea":"Check, a test game","answers":{"size":"2"}}' http://127.0.0.1:$port/api/plans > "$tmp/reply"; has '"credits"'
+curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"idea":"Check, a 3D test game","answers":{"size":"2"}}' http://127.0.0.1:$port/api/plans > "$tmp/reply"; has '"credits"'
 plan_id=$(sed -E 's/^\{"id":"(p-[a-z0-9]+)".*/\1/' "$tmp/reply")
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{"credits":1}' http://127.0.0.1:$port/api/plans/$plan_id/lock)" = 402 ] || { echo 'a stale price locked the plan'; exit 1; }
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/plans/$plan_id/build)" = 409 ] || { echo 'an unlocked plan started a build'; exit 1; }

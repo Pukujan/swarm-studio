@@ -1194,7 +1194,15 @@ async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', cro
 }
 planPaint.ready = async () => !!ckffCreds() || !!(await imageChoice())
 // The build (spec 21) spends Meshy credits only on a locked plan, inside the price it was locked at.
-const plans = planRoutes({ dataDir, builtInTemplates: [join(root, 'games', 'ares', 'plan.json')], paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() } })
+// whether Godot 4 is on this machine (engine/port.mjs loads the game modules, so it is read once, late)
+let godotHere
+import('../engine/port.mjs').then(m => { godotHere = !!m.godotBin() }).catch(() => {})
+const plans = planRoutes({
+  dataDir, builtInTemplates: [join(root, 'games', 'ares', 'plan.json')], paint: planPaint, make: { character: planMakeCharacter, key: () => planMeshyKey() },
+  // the planner reads the idea's genre family; Godot asked for is said in the plan, and so is a missing Godot
+  planner: () => models.planner.apiKey ? { provider: provider('planner'), model: modelFor('planner') } : null,
+  godot: () => godotHere
+})
 // Guided game making (engine/workshop.mjs): the spec walked one step at a time, with pictures
 const workshops = workshopRoutes({
   dataDir,

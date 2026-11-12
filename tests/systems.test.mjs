@@ -39,7 +39,7 @@ test('money stays in test mode or a labelled demo', () => {
 })
 
 test('the game brief carries the cards, the systems and the close-up rule', () => {
-  const p = setSystems(planFromAnswers({ idea: 'ARES, a test', answers: { size: '2' } }), { ...none, leaderboard: true })
+  const p = setSystems(planFromAnswers({ idea: 'ARES, a 3D test', answers: { size: '2' } }), { ...none, leaderboard: true })
   const b = gameBrief(p)
   assert.match(b, /Cast: /)
   assert.match(b, /Hero 1/)
