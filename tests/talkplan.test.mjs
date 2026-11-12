@@ -75,9 +75,11 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   const home = readFileSync(new URL('../web/home.js', import.meta.url), 'utf8')
   const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
   const project = readFileSync(new URL('../web/project.js', import.meta.url), 'utf8')
-  // the Make box reads the prompt before any question or build, and asks one choice when unsure
-  assert.match(home, /const read = [^\n]*sw\.readTalk\(text, '', guideKind\(\)\)\n\s*if \(read === 'talk'\) return talkFirst\(text\)\n\s*if \(read === 'unsure'\) return askTalk\(text, go\)/)
-  assert.match(home, /Build now or talk first\?/)
+  // the Make box reads the prompt before the question (spec 37), and the reading pre-selects Studio first
+  // or Build now: "let's talk first" or a vague idea leans Studio
+  assert.match(home, /const read = [^\n]*sw\.readTalk\(text, '', guideKind\(\)\)[^\n]*\n\s*askStart\(text, modeOf\(make\.k\) \|\| \(studioFits\(text, read\) \? 'studio' : 'now'\)\)/)
+  assert.match(home, /if \(make\.k === 'game' \|\| read === 'talk'\) return true/)
+  assert.match(home, /<span>Studio first<\/span>[\s\S]*<span>Build now<\/span>/)
   // an answer typed in your own words is checked before it becomes brief text (Next and Just build)
   assert.equal((home.match(/if \(await answerTalks\(v, q\)\) return/g) || []).length, 2)
   // the brief step has Keep talking beside Build

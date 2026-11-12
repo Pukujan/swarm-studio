@@ -219,7 +219,7 @@ and a rough first frame.
 
 | Part | Session | Files |
 |---|---|---|
-| This spec, the question, the scaffold, the Website kit, the proposal and Lock, the lightbulb, the Studio talk | Studio first (this one) | `web/studio.js`, `web/kits.js`, `web/kit-site.js`, `web/kit-brand.js`, `server/studio.mjs`, `engine/assets.mjs` |
+| This spec, the question, the scaffold, the Website kit, the proposal and Lock, the lightbulb, the Studio talk | Studio first (this one) | `web/scaffold.js` (beside the studio controller `web/studio.js`), `web/kits.js`, `web/kit-site.js`, `web/kit-brand.js`, `server/studio.mjs`, `engine/assets.mjs` |
 | The `studio` states in the machine | Onboarding (`local_433b12aa-bfec-4733-a7fc-799ca3c525cd`) with Studio first | `web/nav.js` |
 | App kit | game-art-pipeline (`local_d942daf3-5e93-4b16-859f-19350f268328`) | `web/kit-app.js` |
 | Video kit, Story film | video-director (`local_6e540b29-6ca4-46c0-a129-924b821f037a`) | `web/kit-video.js` |
@@ -227,7 +227,7 @@ and a rough first frame.
 | Deck kind, Open Design data | open-design-eval-2 (`local_fe7a9e1c-57d2-45d1-8970-298a4b232fdf`) | `web/kit-deck.js` |
 | Game kit (the Plan board behind the contract), game starters | game-builder-loop (`local_e718470c-6699-42cd-a0fd-5e3a754265db`) | `web/kit-game.js` |
 
-Until `web/studio.js` lands, a kit can be built and tested on its own:
+Until `web/scaffold.js` lands, a kit can be built and tested on its own:
 - `makeBoard` is the board;
 - a stub `ctx` holds an empty brand, refs and assets;
 - `kits.js` is the one line it adds.
