@@ -1751,7 +1751,7 @@ async function sendDock() {
 // project with nothing built yet. From a project's dock its pages stay and Build extends it.
 // The talk is kept in a chat (spec 29, engine/chats.mjs): the server makes it on the first turn and
 // answers with its id; an old chat opened from Studio home or a project's chats comes back here.
-const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null }
+const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null, plan: null }
 const dockBtn = els.form.querySelector('button[type="submit"]')
 // while talking, the dock sends to Hermia: its button says Send, not Build
 function talkDock(on) {
@@ -1764,7 +1764,7 @@ const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read'
 // Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
 function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false }) {
   if (blank) { viewing = 'new'; fresh(null) }
-  Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from })
+  Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null })
   talkDock(true)
   els.feed.querySelector('.empty-chat')?.remove()
   let last = null
@@ -1832,6 +1832,7 @@ function gameActs(item, turn) {
     const o = b && opts.find(x => x.id === b.dataset.pick)
     if (!o || talk.busy) return
     if (o.id === 'lock') return gameLock()
+    if (o.id.startsWith('start:')) return gameStart(o, acts, b)
     gameSay({ pick: o.id, label: o.label })
   }
   item.append(acts)
@@ -1840,9 +1841,19 @@ async function gameResume(last) {
   const j = await api(`/api/talk/${encodeURIComponent(talk.chat)}`).then(r => r.ok ? r.json() : null).catch(() => null)
   if (!j?.chat || !talk.on) return
   const turn = j.chat.turns.at(-1)
+  talk.plan = j.chat.plan || null
   if (turn?.who === 'planner' && j.chat.state !== 'locked') gameActs(last, turn)
+  // locked: where to go next, from what is painted so far
+  else if (j.chat.state === 'locked' && j.starts?.length) gameActs(last, { options: j.starts })
   if (j.draft && !j.chat.plan) window.swarmCosmos?.planDraft?.(j.draft)
   els.brief.focus({ preventScroll: true })
+}
+// where to start (after the lock): the pick opens that part of the Plan board; the chips stay, so
+// another part is one click away
+function gameStart(o, acts, b) {
+  if (!talk.plan) return
+  acts.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b))
+  window.swarmCosmos?.planAt?.(talk.plan, { focus: o.focus, select: o.select })
 }
 // only a locked spec builds: the plan is made (or re-planned, the same plan) and the board opens on it
 async function gameLock() {
@@ -1852,7 +1863,8 @@ async function gameLock() {
   try {
     const j = await talkPost(`/api/talk/${encodeURIComponent(talk.chat)}/lock`)
     botMsg('Locked')
-    if (j.plan?.id) window.swarmCosmos?.plan?.(j.plan.id, true)
+    if (j.plan?.id) { talk.plan = j.plan.id; window.swarmCosmos?.plan?.(j.plan.id, true) }
+    if (j.turn?.text) { talk.said.push({ who: 'hermia', text: j.turn.text }); gameActs(botMsg(j.turn.text), j.turn) }
   } catch (err) { botMsg(err.message) } finally { talk.busy = false }
 }
 // under Hermia's latest answer: Build, which writes the brief first (nothing starts yet)

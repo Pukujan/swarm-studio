@@ -3,12 +3,14 @@
 // is Open. Locking a game chat makes its plan (or re-plans the one it has) and opens the Plan board.
 //   GET  /api/talk                       -> { chats }  the loose chats, newest first
 //   POST /api/talk { kind, said }        -> { chat, turn }  a new chat and the planner's first turn
-//   GET  /api/talk/:id                   -> { chat, draft? }  draft: a game chat's plan as it stands
+//   GET  /api/talk/:id                   -> { chat, draft?, starts? }  draft: a game chat's plan as it stands;
+//                                           starts: a locked one's parts to work on next (startsOf)
 //   POST /api/talk/:id { said?, pick? }  -> { chat, turn, draft? }  pick is a chip's id ("art:2d", "talk")
-//   POST /api/talk/:id/lock              -> { chat, plan? }  a game gets its plan; a site or app its brief
+//   POST /api/talk/:id/lock              -> { chat, plan?, turn?, starts? }  a game gets its plan and the
+//                                           planner's where-to-start turn; a site or app its brief
 //   POST /api/talk/:id/unlock { key? }   -> { chat }
 import { chatStore, CHAT_ID } from '../engine/chats.mjs'
-import { say, lock, unlock, planInput, draftOf } from '../engine/talkplan.mjs'
+import { say, lock, unlock, planInput, draftOf, startsOf, startTurn } from '../engine/talkplan.mjs'
 import { planView } from '../engine/plan.mjs'
 
 // model() -> (messages -> text) or null; env() -> { godot }; plans.fromTalk(input, planId) -> plan view
@@ -23,6 +25,11 @@ export function talkRoutes({ dataDir, model = () => null, env = () => ({}), plan
   const fail = (res, err) => json(res, err.status || 400, { error: String(err.message || err) })
   // a game chat carries its plan as it stands, so the board beside the chat takes shape while they talk
   const withDraft = out => out.chat?.kind === 'game' ? { ...out, draft: planView(draftOf(out.chat, env())) } : out
+  // a locked game chat with its plan: where to go next, from what is painted so far
+  const withStarts = out => {
+    const plan = out.chat?.kind === 'game' && out.chat.state === 'locked' && out.chat.plan && plans?.get?.(out.chat.plan)
+    return plan ? { ...out, starts: startsOf(plan) } : out
+  }
   const turnOf = (id, input) => chats.update(id, async chat => {
     const turn = await say(chat, { said: String(input.said || '').slice(0, 4000), pick: String(input.pick || '').slice(0, 120) }, { model: model(), env: env() })
     return { chat, turn }
@@ -33,7 +40,9 @@ export function talkRoutes({ dataDir, model = () => null, env = () => ({}), plan
     const chat = chats.get(id)
     if (chat.kind !== 'game' || !plans) return { chat, spec }
     const plan = await plans.fromTalk(planInput(chat), chat.plan)
-    return { chat: await chats.update(id, c => { c.plan = plan.id }), plan }
+    let turn = null
+    const out = await chats.update(id, c => { c.plan = plan.id; turn = startTurn(c, plan) })
+    return { chat: out, plan, turn, starts: turn?.options || [] }
   }
 
   const routes = function handle(req, res, url) {
@@ -49,7 +58,7 @@ export function talkRoutes({ dataDir, model = () => null, env = () => ({}), plan
     const m = url.pathname.match(/^\/api\/talk\/([^/]+)(?:\/(lock|unlock))?$/)
     if (!m) return false
     if (!CHAT_ID.test(m[1])) { json(res, 404, { error: 'no such chat' }); return true }
-    if (req.method === 'GET' && !m[2]) { const chat = chats.get(m[1]); json(res, chat ? 200 : 404, chat ? withDraft({ chat }) : { error: 'no such chat' }); return true }
+    if (req.method === 'GET' && !m[2]) { const chat = chats.get(m[1]); json(res, chat ? 200 : 404, chat ? withStarts(withDraft({ chat })) : { error: 'no such chat' }); return true }
     if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
     body(req).then(async input => {
       if (m[2] === 'lock' || input.pick === 'lock') return json(res, 200, await lockChat(m[1]))

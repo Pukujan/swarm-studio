@@ -1938,6 +1938,7 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .talk-opts button { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: 600 13px/1.3 var(--body); cursor: pointer; }
 .feed .talk-opts button:hover, .feed .talk-opts button:focus-visible { border-color: var(--accent); outline: none; }
 .feed .talk-opts small { display: block; margin-top: 2px; font: 400 12px/1.35 var(--body); color: var(--muted); }
+.feed .talk-opts button.on { border-color: var(--accent); }
 
 /* Chats (spec 29): the talks of this project, by group, from the side panel's tabs */
 .tabs .chats-btn { display: inline-flex; align-items: center; gap: 4px; }

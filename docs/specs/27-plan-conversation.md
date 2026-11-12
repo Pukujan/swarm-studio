@@ -212,6 +212,21 @@ picture of the Ant worker on magenta.
   questions".
 - A game chat reopened from Chats comes back beside its board: the plan once it has one, the draft before.
 
+### Slice 5, built (2026-11-12): where to start
+
+- After the lock, the planner adds a turn: "Where to start? I would begin with …", with one row per part
+  and its reason as the second line. The parts come from the plan's own sheets (`startsOf` in
+  engine/talkplan.mjs), so they fit the game:
+  - **Army of Ants:** Units, then Overall design, then A tiny playable slice. A normal-size RTS also gets
+    The map. Character creation is never offered.
+  - **A platformer:** Characters, then The levels.
+  - **A puzzle:** Pieces, then The board.
+- A pick opens that part of the Plan board: the board pans to it and selects it (`C.planAt`, using
+  web/plan.js `focus` and `select`), so its **Draw** is one click away. Nothing is painted until that
+  click. The rows stay, so another part is one click away too.
+- A part that is already painted drops out. A locked game chat reopened from Chats shows the parts left
+  (`starts` on `GET /api/talk/:id`), so the next suggestion follows from what is done.
+
 ## Slices
 
 1. `engine/talkplan.mjs` and the routes, with the game ending into `planStore.create`. Tests: the ants talk

@@ -383,7 +383,8 @@ export function makePlan({ sw, C, root }) {
       P.on = true
       root.hidden = false
       crumb.hidden = false
-      await load()
+      P.ready = load()
+      await P.ready
       if (fresh) writeIn()
     },
     hide() { closeMenu(); P.on = false; root.hidden = true; clearTimeout(P.saving); clearTimeout(P.poll) },
@@ -397,6 +398,8 @@ export function makePlan({ sw, C, root }) {
     talk() { Object.assign(P, { id: null, plan: null, sel: null, cell: null, framed: false, draft: true }); render() },
     draft(plan) { if (!P.draft || !plan) return; P.plan = plan; if (P.on) render() },
     get drafting() { return P.draft },
+    // the plan the board is showing has loaded
+    get ready() { return P.ready || Promise.resolve() },
     // bring a section ('cards', 'sheets', 'build', 'mocks', 'world', 'close') or an artboard (its key) into view
     focus: (target, animate = true) => bd.focus(target, animate)
   }
