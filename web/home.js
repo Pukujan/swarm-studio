@@ -708,12 +708,11 @@ export function makeHome({ sw, C, root }) {
       // started elsewhere take it over, so the new run is handed to it by id.
       const made = await sw.submit(text, false, null, null, chat ? { ...sets, chat } : sets)
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
-      C.open(null)
-      if (typeof made === 'string') C.projectView.show(made, null)
       // A website the crew has just started opens in the Design deck, the one room where the swarm
       // can be watched at work (its Follow camera is on for a new build). Back shows the project's
       // Overview, as from any room. The hosted studio keeps its Overview.
-      if (typeof made === 'string' && !hosted()) C.go('station', 'canvas')
+      if (typeof made === 'string') C.started(made)
+      else C.open(null)
       return
     }
     try {
@@ -724,8 +723,8 @@ export function makeHome({ sw, C, root }) {
       const job = await post('/api/auto', { prompt: text, ...run, ...(chat ? { chat } : {}) })
       input.value = ''
       // the canvas is handed the new build by id, so it follows that build when it starts streaming
-      C.open(job?.run || null)
-      if (job?.run) C.go('station', 'canvas')
+      if (job?.run) C.started(job.run, { room: 'deck' })
+      else C.open(null)
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 

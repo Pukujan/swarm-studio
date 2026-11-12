@@ -33,8 +33,7 @@ const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="curre
 // =====================================================================================
 const C = W.swarmCosmos = {
   ico, esc, reduced,
-  // the canvas asks this before it opens the latest file behind an empty canvas: in the studio the
-  // machine and the address decide what is open, so it never does
+  // kept for older canvases: in the studio the machine and the address decide what is open
   atHome: () => C.mode !== 'off'
 }
 // the old one-screen layout ("Classic view") is gone; forget a browser's old choice
@@ -112,8 +111,11 @@ function writeAddress(v) {
   else history.replaceState(history.state, '', url)
 }
 nav.subscribe(v => { if (!restoring) writeAddress(v) })
-// the build the machine names, in the canvas (a reload, Back or Forward)
-const loadNamed = () => { const { run } = nav.view; if (inBuild() && run && run !== sw.viewing) C.load(run) }
+// The canvas loads the build the machine names, whenever that changes (a click, a reload, Back or
+// Forward). It holds it already when it shows it, or asked for it and is not on a blank talk.
+const holds = run => run === (sw.viewing && sw.viewing !== 'new' ? sw.viewing : sw.S?.run) || (run === sw.claimed && sw.viewing !== 'new')
+const loadNamed = () => { const { run } = nav.view; if (inBuild() && run && run !== C.opening && !holds(run)) C.load(run) }
+nav.subscribe(() => { if (!restoring) loadNamed() })
 addEventListener('popstate', () => {
   if (sw.wall) return
   restoring = going = true
@@ -216,11 +218,20 @@ C.open = (run, pid) => {
   C.go('project', run || undefined)
   return loaded
 }
+// A build the person started (spec 34 `started`): its deck (the Overview in the hosted studio), waited
+// for until the stream says it has begun. A new project has no project yet.
+C.started = (run, { project = null, room } = {}) => {
+  C.project = project
+  going = true
+  try { nav.go({ type: 'started', run, project, room: room || (body.classList.contains('hosted') ? 'overview' : 'deck') }) } finally { going = false }
+  draw()
+  loadNamed()
+}
 // Load a run into the canvas and remember it until it is there: whoever asks "which run is open"
 // in between gets this one, not the one the canvas still holds.
 C.opening = null
 C.load = run => {
-  if (!run || run === sw.viewing) return Promise.resolve()
+  if (!run || run === sw.viewing || run === C.opening) return Promise.resolve()
   C.opening = run
   return Promise.resolve(sw.openRun(run)).finally(() => { if (C.opening === run) C.opening = null })
 }

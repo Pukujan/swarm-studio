@@ -14,6 +14,7 @@
 //   5. Play and Watch a visitor
 //   6. in every room the navigation machine, the pill and the back button agree, and Esc climbs
 //   7. the address: Back and Forward, and a reload in each room
+//   8. Make, then another project: the new build opens in the deck, and opening another keeps it
 // It never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
@@ -287,6 +288,23 @@ try {
     if (room === 'overview') ok(at.crumb === 'Bravo Bikes' && at.project, `a reload on the Overview shows Bravo's Overview (${at.crumb})`)
     if (room !== 'overview') await pickRoom('overview')
   }
+
+  console.log('Make, then another project')
+  await home()
+  // what Projects' Make box does once the person says Build (web/home.js start): the canvas submits the
+  // brief and the studio is told the build the person started
+  const made = await page.evaluate(async () => { const run = await window.swarm.submit('Cedar Cafe, a small cafe by the river'); window.swarmCosmos.started(run); return run })
+  await page.waitForFunction(r => window.swarm.S?.run === r, made, { timeout: 10000 }).catch(() => {})
+  await page.waitForFunction(() => !window.swarmCosmos.nav.view.pending, null, { timeout: 10000 }).catch(() => {})
+  at = await where()
+  ok(typeof made === 'string' && at.room === 'deck' && at.version === made && at.run === made, `Make opens the new build in the Design deck (${at.room}, ${at.run === made ? 'the new build' : at.run})`)
+  ok(!(await page.evaluate(() => window.swarmCosmos.nav.view.pending)), 'its start on the stream clears the wait')
+  await page.keyboard.press('Escape'); await wait(400)
+  await home()
+  await page.click('.home .card[aria-label="Alpha Tea"]')
+  await settle(A1)
+  await wait(2500)
+  await shows(A1, 'Alpha Tea', 'Alpha opened while the new build goes on')
   void C1
 } finally {
   await browser.close()
