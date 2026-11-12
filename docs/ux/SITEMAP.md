@@ -258,6 +258,8 @@ flowchart LR
   SE5 --> SE6[Pick a model]
   SE6 --> SE7[Cost and speed]
   SE3 --> SE8["Supabase, GitHub, Feed account"]
+  SE --> SE9["Data: where each thing goes"]
+  SE3 --> SE10["A connection: name, state, its Goes to line"]
 ```
 
 ## 8. A project: one canvas

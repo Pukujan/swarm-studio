@@ -4,6 +4,7 @@
 // Right-click or … manages a project; drag a card onto a folder; Shift/⌘-click picks several.
 // Re-runs of one idea stack on one card (server/projects.mjs groups them).
 import { ic, cursor, logo, CREW } from './icons.js'
+import { openSettings } from './settings.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
@@ -745,7 +746,9 @@ export function makeHome({ sw, C, root }) {
     showMenu([
       { k: 'theme', icon: light ? 'moon' : 'sun', label: light ? 'Dark' : 'Light', run: () => document.querySelector('#theme-btn')?.click() },
       { k: 'sound', icon: 'sound', label: sound === 'on' ? 'Mute' : 'Sound on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
-      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => document.querySelector('#models-btn')?.click() }])
+      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => document.querySelector('#models-btn')?.click() },
+        // what the studio is connected to and where its data goes (docs/specs/25-connections.md)
+        { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }])
     ], e.currentTarget)
   }
 

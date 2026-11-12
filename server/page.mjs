@@ -31,5 +31,5 @@ export function canvasPage(webDir, extra = {}) {
     .replace('<link rel="stylesheet" href="plan.css">', () => `<style>${read('plan.css')}</style>`)
     .replace('<link rel="stylesheet" href="workshop.css">', () => `<style>${read('workshop.css')}</style>`)
     // the studio controller, Projects and a project: its own modules joined into one, since the pane's frame has no origin to import from
-    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${['icons.js', 'route.js', 'home.js', 'project.js', 'work.js', 'plan.js', 'studio.js'].map(join1).join('\n')}</script>`)
+    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${['icons.js', 'route.js', 'settings.js', 'home.js', 'project.js', 'work.js', 'plan.js', 'studio.js'].map(join1).join('\n')}</script>`)
 }
