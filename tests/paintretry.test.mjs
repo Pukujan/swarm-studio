@@ -59,33 +59,32 @@ test('a result whose file is missing counts as a failure', async () => {
   assert.equal(f.calls.length, 2)
 })
 
-// the image model for a build (chooseImage)
+// the image model for a build (chooseImage): Hermes's own image tool, the studio's ckff key, an old pick
 const LIST = [
-  { provider: 'openai', available: false, models: ['gpt-image-2-low', 'gpt-image-2-medium'], default: 'gpt-image-2-medium' },
-  { provider: 'openai-codex', available: true, models: ['gpt-image-2-low', 'gpt-image-2-medium'], default: 'gpt-image-2-medium' },
+  { provider: 'hermes', available: true, models: [], default: '' },
+  { provider: 'ckff', available: true, models: ['gpt-image-2.5', 'gpt-image-2-4k'], default: 'gpt-image-2.5' },
   { provider: 'xai', available: true, models: [], default: null }
 ]
 
-test('a pick that is signed in is used as picked', () => {
+test('a pick that is available is used as picked', () => {
   assert.deepEqual(chooseImage(LIST, { provider: 'xai', model: '' }), { provider: 'xai', model: '' })
-  assert.deepEqual(chooseImage(LIST, { provider: 'openai-codex', model: 'gpt-image-2-medium' }), { provider: 'openai-codex', model: 'gpt-image-2-medium' })
+  assert.deepEqual(chooseImage(LIST, { provider: 'ckff', model: 'gpt-image-2-4k' }), { provider: 'ckff', model: 'gpt-image-2-4k' })
 })
 
-test('a pick that is not signed in falls back instead of switching pictures off', () => {
-  const c = chooseImage(LIST, { provider: 'openai', model: 'gpt-image-2.5' })
-  assert.equal(c.provider, 'openai-codex')
-  assert.equal(c.model, 'gpt-image-2-low')
-  assert.equal(c.insteadOf, 'openai')
-  assert.equal(chooseImage(LIST.filter(x => x.provider !== 'openai-codex'), { provider: 'openai', model: 'gpt-image-2.5' }).provider, 'xai')
+test('a pick that is not available (an old Codex pick) falls back to Hermes instead of switching pictures off', () => {
+  const c = chooseImage(LIST, { provider: 'openai-codex', model: 'gpt-image-2-low' })
+  assert.deepEqual([c.provider, c.model, c.insteadOf], ['hermes', '', 'openai-codex'])
+  assert.equal(chooseImage(LIST.filter(x => x.provider !== 'hermes'), { provider: 'openai-codex' }).provider, 'ckff')
 })
 
-test('a model the provider does not list gives way to its default', () => {
-  assert.equal(chooseImage(LIST, { provider: 'openai-codex', model: 'gpt-image-2.5' }).model, 'gpt-image-2-medium')
+test('a model the source does not list gives way to its default', () => {
+  assert.equal(chooseImage(LIST, { provider: 'ckff', model: 'gpt-image-9' }).model, 'gpt-image-2.5')
 })
 
-test('no pick: the Codex login, else any signed-in provider, else no pictures', () => {
-  assert.deepEqual(chooseImage(LIST, null), { provider: 'openai-codex', model: 'gpt-image-2-low' })
-  assert.equal(chooseImage(LIST.filter(x => x.provider !== 'openai-codex'), null).provider, 'xai')
+test('no pick: Hermes, else ckff, else any available source, else no pictures', () => {
+  assert.deepEqual(chooseImage(LIST, null), { provider: 'hermes', model: '' })
+  assert.equal(chooseImage(LIST.filter(x => x.provider !== 'hermes'), null).provider, 'ckff')
+  assert.equal(chooseImage(LIST.slice(2), null).provider, 'xai')
   assert.equal(chooseImage(LIST.map(x => ({ ...x, available: false })), null), null)
 })
 
@@ -93,18 +92,3 @@ test('Off stays off', () => {
   assert.equal(chooseImage(LIST, 'off'), null)
 })
 
-// ckff: the studio's own image key, listed beside Hermes's logins when it has one
-const WITH_CKFF = [...LIST, { provider: 'ckff', available: true, models: ['gpt-image-2.5', 'gpt-image-2-4k'], default: 'gpt-image-2.5' }]
-test('ckff can be picked like any signed-in provider', () => {
-  assert.deepEqual(chooseImage(WITH_CKFF, { provider: 'ckff', model: 'gpt-image-2-4k' }), { provider: 'ckff', model: 'gpt-image-2-4k' })
-})
-test('a pick that is not signed in falls back to ckff before the Codex login', () => {
-  const c = chooseImage(WITH_CKFF, { provider: 'openai', model: 'gpt-image-2.5' })
-  assert.equal(c.provider, 'ckff')
-  assert.equal(c.model, 'gpt-image-2.5')
-  assert.equal(c.insteadOf, 'openai')
-})
-test('no pick still means the Codex login when it is signed in, ckff when it is not', () => {
-  assert.equal(chooseImage(WITH_CKFF, null).provider, 'openai-codex')
-  assert.equal(chooseImage(WITH_CKFF.filter(x => x.provider !== 'openai-codex'), null).provider, 'ckff')
-})

@@ -10,6 +10,7 @@ import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
 import { execFile, hermesEnv, pick } from '../engine/proc.mjs'
+import { hermesBridge, imageBody, videoBody } from '../engine/bridge.mjs'
 import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -138,24 +139,27 @@ const pyCommand = (call, timeout) => new Promise(resolve => {
   })
 })
 
-// ---------- images, from Hermes's own image providers (a Codex login, xAI, FAL…)
-// imagegen.py runs in Hermes's Python, so the provider tokens never reach this server.
+// ---------- pictures and clips, through Hermes's own image_generate and video_generate tools
+// The Hermes bridge (engine/bridge.mjs, bridge.py, docs/specs/33-hermes-bridge.md): a Hermes process with the
+// plugin loaded attaches a loopback bridge, and Hermes paints with the provider and key it is set up with.
+// No provider key reaches this server.
 const PY = process.env.SWARM_HERMES_PY || ''
-// Hermes's Python finds Hermes by HERMES_HOME and its import paths; a FAL key from the secret scope switches on its FAL providers
-const pyEnv = hermesEnv({ PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '', ...pick(['FAL_KEY']) })
-// keys pasted in the Film panel (engine/media.mjs): a FAL key switches on Hermes's own FAL providers
+// Hermes's Python finds Hermes by HERMES_HOME and its import paths (the Feed and connector helpers)
+const pyEnv = hermesEnv({ PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '' })
+// the ElevenLabs key pasted in the Film panel (engine/media.mjs)
 const mediaKeyStore = mediaKeys(dataDir)
-const hermesPy = (script, what) => (args, timeout) => new Promise(resolve => {
-  if (!PY) return resolve({ ok: false, error: `start Swarm Studio from Hermes to use its ${what} providers` })
-  execFile(PY, [join(root, script), ...args], { env: { ...pyEnv, ...mediaKeyStore.env(pyEnv) }, timeout, maxBuffer: 1 << 20 }, (err, stdout) => {
-    const line = String(stdout || '').trim().split('\n').pop()
-    try { resolve(JSON.parse(line)) } catch { resolve({ ok: false, error: String(err?.message || 'no answer').slice(0, 200) }) }
-  })
-})
-const imagegenHermes = hermesPy('imagegen.py', 'image')
+const hermes = hermesBridge()
+const HERMES_IMAGE = { provider: 'hermes', available: true, models: [], default: '' }
+const imagegenHermes = async (args, timeout) => {
+  if (args[0] === '--list') {
+    const m = await hermes.call('/media', undefined, 10000)
+    return { ok: true, providers: [{ ...HERMES_IMAGE, available: !m.absent && m.image?.available !== false }] }
+  }
+  return hermes.call('/image', imageBody(args), timeout || 300000)
+}
 // ckff (engine/ckff.mjs) is an image provider of the studio's own: an OpenAI-shaped image API with
-// its own key (CKFF_API_KEY). With a key it is listed beside Hermes's image logins, so it can be
-// picked in the Images menu and a build can paint with it when no Hermes login works.
+// its own key (CKFF_API_KEY). With a key it is listed beside Hermes's image tool, so it can be
+// picked in the Images menu and a build can paint with it when Hermes cannot.
 const CKFF_MODELS = ['gpt-image-2.5', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2-4k']
 const ckffProvider = () => (ckffCreds() ? { provider: 'ckff', available: true, models: CKFF_MODELS, default: process.env.CKFF_MODEL || CKFF_MODELS[0] } : null)
 const argAfter = (args, flag) => { const i = args.indexOf(flag); return i >= 0 ? String(args[i + 1] || '') : '' }
@@ -165,18 +169,29 @@ const imagegen = (args, timeout) => {
     return mine ? { ok: true, providers: [...listed, mine] } : r
   })
   if (argAfter(args, '--provider') !== 'ckff') return imagegenHermes(args, timeout)
-  // the same arguments imagegen.py takes; ckff has no centre-crop, so the picture comes back whole
+  // the same arguments as a Hermes picture; ckff has no centre-crop, so the picture comes back whole
   const refs = args.flatMap((x, i) => (x === '--ref' && args[i + 1] ? [args[i + 1]] : [])).filter(r => existsSync(r))
   return ckffPaint({ prompt: String(args[args.length - 1] || ''), aspect: argAfter(args, '--aspect') || 'landscape', refs, model: argAfter(args, '--model') || undefined, timeoutMs: timeout || 300000 })
 }
-// moving clips from a still, through Hermes's video providers (FAL's Veo 3.1, xAI…)
-const videogen = hermesPy('videogen.py', 'video')
+// moving clips from a still, through Hermes's own video_generate (the provider Hermes is set up with)
+const videogen = async (args, timeout) => {
+  if (args[0] === '--list') {
+    const m = await hermes.call('/media', undefined, 10000)
+    return { ok: true, providers: [{ provider: 'hermes', label: 'Hermes', model: '', available: !m.absent && m.video?.available !== false }] }
+  }
+  const { out, ...body } = videoBody(args)
+  const r = await hermes.call('/video', body, timeout || 600000)
+  if (!r.ok || !out) return r
+  // the bridge keeps the clip in Hermes's folder; the run gets its own copy
+  try { mkdirSync(dirname(out), { recursive: true }); copyFileSync(r.path, out) } catch (err) { return { ok: false, error: `could not keep the clip: ${err.message}` } }
+  return { ...r, path: out }
+}
 let imageProviders = null, videoProviders = null
 const loadImageProviders = () => (imageProviders ||= imagegen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
 const loadVideoProviders = () => (videoProviders ||= videogen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
 loadImageProviders()
 loadVideoProviders()
-// The image model for new builds: the pick, else your Codex login's cheapest tier when it is signed in.
+// The image model for new builds: the pick, else Hermes's own image tool when a Hermes process is attached.
 // A pick that is not signed in falls back to one that is (engine/paintretry.mjs chooseImage), so
 // a stale pick never leaves a build without pictures.
 async function imageChoice() {
@@ -237,12 +252,12 @@ async function checkArt(path, guide, messages = art.checkMessages) {
 }
 // One picture through the art director. A picture sent back is made once more with
 // the reasons in its prompt; the second one stands.
-// another signed-in image provider than the one in use: Codex first, then any other
+// another image source than the one in use: ckff first, then Hermes, then any other
 async function backupImage(choice) {
   const list = (await loadImageProviders()).filter(x => x.available && x.provider !== choice?.provider)
   // ckff first when it has a key: it is the one that still paints when a Hermes login is out of quota
-  const p = list.find(x => x.provider === 'ckff') || list.find(x => x.provider === 'openai-codex') || list[0]
-  return p ? { provider: p.provider, model: p.provider === 'openai-codex' ? 'gpt-image-2-low' : p.default || '' } : null
+  const p = list.find(x => x.provider === 'ckff') || list.find(x => x.provider === 'hermes') || list[0]
+  return p ? { provider: p.provider, model: p.default || '' } : null
 }
 async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false, ref = '' }, onSentBack) {
   // ref: a picture to match in style (the hero's sprite, for a figure or prop painted to stand beside it)
@@ -1153,7 +1168,7 @@ async function mediaNow() {
     loadImageProviders(), loadVideoProviders(),
     Promise.all(ELEVEN_MCP.map(n => connectors.status(n).then(st => [n, st], () => [n, {}]))).then(Object.fromEntries),
   ])
-  return mediaSources({ env: pick(['SWARM_ELEVENLABS_KEY', 'FAL_KEY']), keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
+  return mediaSources({ env: pick(['SWARM_ELEVENLABS_KEY']), keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
 }
 // The launch kit's pitch (engine/launch.mjs): one line on what the product is and who it is for,
 // written by the planner from the pages the crew planned. Never the person's words to the crew.
@@ -1316,7 +1331,7 @@ async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', cro
   // ckff (engine/ckff.mjs) is the fallback when no Hermes image login works (Codex out of quota)
   const fallback = () => (ckffCreds() && !crop ? ckffPaint({ prompt, aspect, refs }) : null)
   if (!choice) return (await fallback()) || { ok: false, error: 'no image model' }
-  const model = choice.provider === 'openai-codex' ? `gpt-image-2-${quality === 'high' ? 'high' : 'medium'}` : choice.model
+  const model = choice.model
   const args = ['--provider', choice.provider, ...(model ? ['--model', model] : []), '--aspect', aspect, ...(crop ? ['--crop', crop] : [])]
   for (const r of refs.slice(0, 4)) if (existsSync(r)) args.push('--ref', r)
   const r = await imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
@@ -3038,6 +3053,39 @@ const server = createServer((req, res) => {
   // ⚡ Auto mode: GET its timeline, POST { prompt } to start, /stop to stop
   // The Film studio's services: GET where each comes from; POST /key {service, key|null}
   // to paste (or forget) a key; POST /allow to let the studio use Hermes's ElevenLabs connector.
+  // The Hermes bridge (engine/bridge.mjs): a Hermes process says where its loopback bridge is, every 15 s.
+  // The server's token guards this route like every other /api/ one.
+  if (url.pathname === '/api/hermes/attach' && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 4e3) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const was = hermes.status().attached, r = hermes.attach(input)
+      // Hermes is back: what it offers for pictures and clips is asked again
+      if (r.ok && !was) { imageProviders = null; videoProviders = null }
+      res.writeHead(r.ok ? 200 : 400, { 'content-type': 'application/json' }).end(JSON.stringify(r))
+    })
+    return
+  }
+  // One picture through Hermes's image tool, for tools outside the server (engine/skins.mjs's command line):
+  // { prompt, aspect, refs, edit } -> { ok, path } | { ok:false, error }
+  if (url.pathname === '/api/hermes/image' && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 2e4) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const refs = (Array.isArray(input.refs) ? input.refs : []).filter(r => typeof r === 'string' && existsSync(r)).slice(0, 4)
+      hermes.call('/image', { prompt: String(input.prompt || '').slice(0, 8000), aspect: String(input.aspect || 'landscape'), refs, edit: !!input.edit }, 300000)
+        .then(r => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(r)))
+    })
+    return
+  }
+  if (url.pathname === '/api/hermes' && req.method === 'GET') {
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(hermes.status()))
+    return
+  }
   if (url.pathname === '/api/media' && req.method === 'GET') {
     mediaNow().then(m => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(m)), err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
     return
@@ -3504,6 +3552,8 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({
       app: 'swarm-studio',
       version: webVersion(),
+      // whether a Hermes process is attached (its bridge does pictures and clips); never its token
+      hermes: hermes.status().attached,
       // for the launcher: which process this is, when it started, and whether stopping it would lose work
       pid: process.pid,
       booted: BOOTED,

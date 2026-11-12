@@ -9,6 +9,8 @@ Agent half. Registers:
 - ``/swarm <brief>`` / ``/swarm <subcommand>``: from any chat without going through the model;
   ``connect``, ``post``, ``remix`` and ``login`` reach the Swarm Feed (``feed.py``)
 - ``hermes swarm``: the same from the command line
+- the Hermes bridge (``bridge.py``): a loopback server in this process through which the canvas server
+  gets pictures and clips from Hermes's own ``image_generate`` and ``video_generate`` tools
 - a ``pre_tool_call`` hook: when the model asks to publish (anywhere but this computer), deploy an app or
   post to the Feed, Hermes asks the person first, and refuses when nobody is there (commands.approval_hook)
 - the ``swarm-studio:swarm-design`` skill: when and how to use the swarm
@@ -27,7 +29,7 @@ import json
 import webbrowser
 from pathlib import Path
 
-from . import commands, launcher
+from . import bridge, commands, launcher
 
 TOOLSET = "swarm-studio"
 
@@ -101,11 +103,24 @@ def _run_cli(args: argparse.Namespace) -> int:
         webbrowser.open(result["url"])
     if brief and args.wait:
         print(json.dumps(launcher.wait_run(result["run"]), indent=2))
+    elif brief and bridge.running() and not bridge.others():
+        # this process is the only Hermes the build can ask for pictures: it stays until the build is done
+        print("Keeping Hermes open for the build's pictures until it is done (Ctrl-C leaves; the build goes on without them).")
+        try:
+            done = launcher.wait_run(result["run"], timeout=3600)
+        except KeyboardInterrupt:
+            return 0
+        print(f"swarm: {done.get('status')}")
     return 0
 
 
 def register(ctx) -> None:
     commands.CTX = ctx
+    # the Hermes bridge (bridge.py): the canvas server asks this process for pictures and clips, which
+    # Hermes makes with its own image_generate and video_generate tools and keys
+    bridge.CTX = ctx
+    launcher.on_server = bridge.start
+    bridge.start_later()
     # the model's publish, deploy and post wait for a person's OK (Hermes's approval gate)
     ctx.register_hook("pre_tool_call", commands.approval_hook)
     ctx.register_auxiliary_task(

@@ -16,15 +16,12 @@ optional_env:
     description: "Optional: ElevenLabs key for the Film studio's music and sound effects (without it the studio writes its own score)"
     secret: true
   - name: CKFF_API_KEY
-    description: "Optional: ckff image key, used for pictures when no Hermes image login can paint"
+    description: "Optional: ckff image key, used for pictures when Hermes's image tool cannot paint"
     secret: true
   - name: CKFF_BASE_URL
     description: "Optional: ckff endpoint (default https://ckffai.com/v1)"
   - name: CKFF_MODEL
     description: "Optional: ckff image model"
-  - name: FAL_KEY
-    description: "Optional: FAL key for Hermes's FAL image and video providers"
-    secret: true
   - name: MESHY_API_KEY
     description: "Optional: Meshy key for 3D characters (the studio asks before spending credits)"
     secret: true

@@ -16,7 +16,9 @@ test('with nothing connected, every service falls back to the built-in path', ()
   assert.equal(m.clips.via, 'built-in')
   assert.equal(m.pictures.via, 'built-in')
   assert.equal(m.music.keyLabel, 'ElevenLabs')
-  assert.equal(m.clips.keyLabel, 'FAL')
+  // clips and pictures take no key here: their keys belong to Hermes
+  assert.deepEqual([m.clips.key, m.pictures.key], [null, null])
+  assert.match(m.clips.hint, /hermes tools/)
 })
 
 test('what Hermes already has is used first, with no setup', () => {
@@ -29,9 +31,9 @@ test('what Hermes already has is used first, with no setup', () => {
   // installed but not granted to the studio yet: one press, no key
   const grant = mediaSources({ env: {}, keys, mcp: { elevenlabs: { installed: true, allowed: false } } }).music
   assert.deepEqual([grant.on, grant.grant], [false, true])
-  // Hermes's video and image provider plugins, signed in
-  const m = mediaSources({ env: {}, keys, videos: [{ provider: 'xai', available: false }, { provider: 'fal', available: true, model: 'veo3.1' }], images: [{ provider: 'openai-codex', available: true }] })
-  assert.deepEqual([m.clips.on, m.clips.via, m.clips.by, m.clips.provider], [true, 'hermes', 'Veo', 'fal'])
+  // Hermes's own video and image tools, through the bridge
+  const m = mediaSources({ env: {}, keys, videos: [{ provider: 'hermes', label: 'Hermes', available: true }], images: [{ provider: 'hermes', available: true }] })
+  assert.deepEqual([m.clips.on, m.clips.via, m.clips.by, m.clips.provider], [true, 'hermes', 'Hermes', 'hermes'])
   assert.deepEqual([m.pictures.on, m.pictures.via], [true, 'hermes'])
   // an image pick of "off" stays off
   assert.equal(mediaSources({ env: {}, keys, images: [{ provider: 'openai-codex', available: true }], imagePick: 'off' }).pictures.on, false)
@@ -40,19 +42,16 @@ test('what Hermes already has is used first, with no setup', () => {
 test('a pasted key is checked, kept private, and switches the service on', async () => {
   const dir = tmp(), keys = mediaKeys(dir)
   await assert.rejects(keys.set('elevenlabs', 'sk_bad', { fetcher: async () => ({ ok: false, status: 401 }) }), /did not accept/)
-  await assert.rejects(keys.set('fal', 'not a key'), /not a key/)
-  await assert.rejects(keys.set('fal', 'nocolon'), /id:secret/)
+  // a FAL key is Hermes's to hold: the studio takes none
+  await assert.rejects(keys.set('fal', 'abcdefgh-1234:0123456789abcdef'), /unknown service/)
   await keys.set('elevenlabs', 'sk_live_1234', { fetcher: ok })
-  await keys.set('fal', 'abcdefgh-1234:0123456789abcdef')
   assert.equal(statSync(join(dir, 'media-keys.json')).mode & 0o777, 0o600)
-  const m = mediaSources({ env: {}, keys, videos: [{ provider: 'fal', available: true, model: 'veo3.1' }] })
+  const m = mediaSources({ env: {}, keys, videos: [{ provider: 'hermes', available: true }] })
   assert.deepEqual([m.music.on, m.music.via, m.music.pasted], [true, 'key', true])
-  assert.equal(m.clips.via, 'key')
+  assert.equal(m.clips.via, 'hermes')
   // nothing the canvas sees holds a key
-  assert.doesNotMatch(JSON.stringify(m), /sk_live|0123456789abcdef/)
-  // the FAL key goes to Hermes's Python helpers, unless Hermes has its own
-  assert.deepEqual(keys.env({}), { FAL_KEY: 'abcdefgh-1234:0123456789abcdef' })
-  assert.deepEqual(keys.env({ FAL_KEY: 'hermes' }), {})
+  assert.doesNotMatch(JSON.stringify(m), /sk_live/)
+  assert.equal(keys.env, undefined, 'no key is handed to a Python helper any more')
   await keys.set('elevenlabs', null)
   assert.equal(keys.has('elevenlabs'), false)
   assert.doesNotMatch(readFileSync(join(dir, 'media-keys.json'), 'utf8'), /sk_live/)

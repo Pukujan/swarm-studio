@@ -34,8 +34,7 @@ KEY_ENV = "SWARM_STUDIO_API_KEY"
 # Optional keys and addresses, declared in plugin.yaml and read through Hermes's secret scope when the
 # server starts (start()). Nothing here is required: each one switches a service on.
 PASSED_KEYS = (
-    "CKFF_API_KEY", "CKFF_BASE_URL", "CKFF_MODEL",              # pictures when no Hermes image login can paint
-    "FAL_KEY",                                                  # Hermes's FAL image and video providers
+    "CKFF_API_KEY", "CKFF_BASE_URL", "CKFF_MODEL",              # pictures when Hermes's image tool cannot paint
     "MESHY_API_KEY",                                            # 3D characters (asks before spending credits)
     "PEXELS_API_KEY", "PEXELS_OCTO_LEASE",                      # stand-in photos
     "OCTO_SWARM_WS", "OCTO_SWARM_WORKSPACE_ID", "OCTO_BASE_URL",  # public copies of stand-in photos
@@ -204,11 +203,30 @@ def _retire(st: dict) -> bool:
     return False
 
 
+# Set by the package (``__init__.py``) to bridge.start: once the server answers, this Hermes process attaches
+# its bridge, so the server can ask Hermes for pictures and clips. None when this file is loaded on its own.
+on_server = None
+
+
+def _bridged(result: dict) -> dict:
+    if result.get("running") and on_server is not None:
+        try:
+            on_server()
+        except Exception:  # the build still runs; pictures fall back as when Hermes is closed
+            pass
+    return result
+
+
 def ensure_server() -> dict:
-    """Start the canvas server if it is not already up. Returns {url} or {error}.
+    """Start the canvas server if it is not already up, and attach this process's Hermes bridge.
+    Returns {url} or {error}.
 
     A server left running from before a plugin update is replaced when it is idle, so an update
     takes effect without the person finding and stopping a background process."""
+    return _bridged(_ensure_server())
+
+
+def _ensure_server() -> dict:
     st = state()
     if st and not (stale(st) and _retire(st)):
         return {"running": True, "started": False, "url": canvas_url()}
@@ -231,8 +249,9 @@ def ensure_server() -> dict:
                  "HOMEDRIVE", "HOMEPATH", "NVM_HOME", "NVM_SYMLINK")
     env = {k: os.environ[k] for k in keep if k in os.environ}
     env.update(SWARM_TOKEN=token(), SWARM_RUNS_DIR=str(data_dir() / "runs"), SWARM_DATA_DIR=str(data_dir()))
-    # Images come from Hermes's own image providers (your Codex login, for one):
-    # the server runs imagegen.py with this Python and these import paths.
+    # Pictures and clips come from Hermes's own image and video tools through the bridge (bridge.py),
+    # which attaches itself once the server is up. The Python and its import paths are for the Feed and
+    # connector helpers.
     env.update(SWARM_HERMES_BIN=shutil.which("hermes") or "", SWARM_HERMES_PY=sys.executable, SWARM_HERMES_PYTHONPATH=os.pathsep.join(p for p in sys.path if p and os.path.isdir(p)))
     # Defaults for builds started from the canvas itself; Hermes sends fresh ones with each run.
     for role, m in models.items():

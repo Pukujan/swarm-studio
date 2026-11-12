@@ -3946,7 +3946,7 @@ function mediaRow() {
     const forget = m.pasted ? `<button class="vsrc-forget" data-key="${esc(m.key)}">Forget key</button>` : ''
     pop = m.on && m.via !== 'key'
       ? `<div class="vsrc-pop"><span>${MEDIA_VIA[m.via] || ''}</span>${forget}</div>`
-      : `<div class="vsrc-pop">${m.on ? `<span>${MEDIA_VIA.key}</span>${forget}` : `${m.grant ? `<button class="vsrc-allow" data-name="${esc(m.server)}">Use Hermes's ${esc(m.keyLabel)}</button>` : ''}<form class="vsrc-form" data-key="${esc(m.key)}"><input type="password" autocomplete="off" spellcheck="false" aria-label="${esc(m.keyLabel)} key" placeholder="${esc(m.keyLabel)} key"><button>Connect</button></form><a href="${esc(m.keyUrl)}" target="_blank" rel="noopener">Get a key</a>`}<div class="perr"></div></div>`
+      : `<div class="vsrc-pop">${m.on ? `<span>${MEDIA_VIA.key}</span>${forget}` : !m.key ? `<span>${esc(m.hint || '')}</span>` : `${m.grant ? `<button class="vsrc-allow" data-name="${esc(m.server)}">Use Hermes's ${esc(m.keyLabel)}</button>` : ''}<form class="vsrc-form" data-key="${esc(m.key)}"><input type="password" autocomplete="off" spellcheck="false" aria-label="${esc(m.keyLabel)} key" placeholder="${esc(m.keyLabel)} key"><button>Connect</button></form><a href="${esc(m.keyUrl)}" target="_blank" rel="noopener">Get a key</a>`}<div class="perr"></div></div>`
   }
   return `<div class="vsrc">${chips}</div>${pop}`
 }
