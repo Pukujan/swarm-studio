@@ -28,6 +28,7 @@ import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
+import { CHAT_ID } from '../engine/chats.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
@@ -1307,6 +1308,32 @@ const talks = talkRoutes({
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
   })).text : null
 })
+// Chats (docs/specs/29-chats-references-marks.md): conversations live apart from builds and move into
+// their project when they build. On start: empty old chats go, and game plans made before chats existed
+// each get a chat that points at them (the plan files stay where they are).
+const chats = talks.chats
+try {
+  chats.cleanup()
+  const pd = join(dataDir, 'plans')
+  if (existsSync(pd)) chats.importPlans(readdirSync(pd).filter(f => /^p-[a-z0-9]+\.json$/.test(f)).map(f => { try { return JSON.parse(readFileSync(join(pd, f), 'utf8')) } catch { return null } }).filter(Boolean))
+} catch (err) { console.warn('chats:', err.message) }
+// a chat that started a build: Locked on its brief, moved into the build's project once it has one
+function chatBuilt(chatId, runId, pid, brief) {
+  if (!chatId || !chats.get(chatId)) return
+  chats.built(chatId, { run: runId, brief, project: pid || null })
+    .then(() => { if (!pid) setTimeout(() => chats.settle(id => projects.projectOf(id)).catch(() => {}), 2000) })
+    .catch(err => console.warn('chat:', err.message))
+}
+// a build typed straight into the Make box, or a message in a project's dock, without a talk first:
+// the words still go into a chat (a new one, or the project's newest in that group)
+function chatFor({ chat, text, kind = 'site', project = null }) {
+  try {
+    if (chat && chats.get(chat)) return chat
+    if (!String(text || '').trim()) return null
+    if (project) { const c = chats.forMessage(project, kind); chats.say(c.id, { who: 'person', text }).catch(() => {}); return c.id }
+    return chats.create({ kind, text }).id
+  } catch { return null }
+}
 // Guided game making (engine/workshop.mjs): the spec walked one step at a time, with pictures
 const workshops = workshopRoutes({
   dataDir,
@@ -2148,6 +2175,8 @@ const server = createServer((req, res) => {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'brief required' }))
         return
       }
+      const typed = String(input.brief).trim(), chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
+      delete input.chat
       // a message inside an open build belongs to that build's project
       if (typeof input.from === 'string' && typeof input.project !== 'string' && RUN_ID.test(input.from)) input.project = projects.projectOf(input.from) || undefined
       // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
@@ -2178,8 +2207,11 @@ const server = createServer((req, res) => {
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (pid) projects.claim(run.id, pid)
+      // the words go into a chat: the talk that led here, else a new one (or the project's newest)
+      const chat = chatFor({ chat: chatId, text: typed, kind: 'site', project: pid })
+      chatBuilt(chat, run.id, pid, typed)
       broadcast({ type: 'reset', run: run.id })
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(base ? { extend: true, from: next.from } : {}) }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(chat ? { chat } : {}), ...(base ? { extend: true, from: next.from } : {}) }))
     })
     return
   }
@@ -2212,6 +2244,33 @@ const server = createServer((req, res) => {
     if (req.method !== 'POST') return json(200, projects.list())
     return readJson(1e5, input => json(200, projects.op(input)))
   }
+  // Chats (spec 29): loose chats for Studio home, one chat, rename / move to a group / delete, and a
+  // project's chats grouped by category. The talk itself goes through /api/discuss.
+  // ?run=<id>: the chats of that build's project (the Design deck knows its run, not always its project)
+  const settled = () => chats.settle(id => projects.projectOf(id)).catch(() => {})
+  if (url.pathname === '/api/chats' && req.method === 'GET') {
+    const run = url.searchParams.get('run')
+    settled().then(() => {
+      const pid = run && RUN_ID.test(run) ? projects.projectOf(run) : null
+      json(200, pid ? { project: pid, ...chats.forProject(pid) } : { chats: chats.listLoose().filter(c => c.turns) })
+    })
+    return
+  }
+  const chatRoute = url.pathname.match(/^\/api\/chats\/(c-[0-9a-f]{10})$/)
+  if (chatRoute) {
+    const id = chatRoute[1]
+    if (req.method === 'GET') { const c = chats.get(id); return c ? json(200, c) : json(404, { error: 'no such chat' }) }
+    const fail = err => json(err.status || 400, { error: String(err.message || err) })
+    if (req.method === 'DELETE') return void chats.remove(id).then(r => json(200, r), fail)
+    if (req.method === 'POST') return readJson(1e4, input => {
+      Promise.resolve()
+        .then(() => typeof input.title === 'string' && chats.rename(id, input.title))
+        .then(() => typeof input.category === 'string' && chats.setCategory(id, input.category))
+        .then(() => json(200, chats.get(id)), fail)
+    })
+  }
+  const projectChats = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/chats$/)
+  if (projectChats && req.method === 'GET') return void settled().then(() => json(200, chats.forProject(projectChats[1])))
   // Talk first (engine/talkplan.mjs): the Make box asks whether a message means build, talk or unsure,
   // and a talk with the planner runs in the Design deck's chat with nothing built.
   // POST /api/discuss/read { text, kind, answerTo? } -> { intent, by }
@@ -2230,7 +2289,19 @@ const server = createServer((req, res) => {
         const talk = chat(input.brief ? 400 : 600, 60000)
         if (!talk) return json(503, { error: 'No planner model yet: pick one in Models.' })
         const said = Array.isArray(input.said) ? input.said.slice(-40) : []
-        json(200, await (input.brief ? d.writeBrief : d.discuss)({ said, kind, chat: talk }))
+        const out = await (input.brief ? d.writeBrief : d.discuss)({ said, kind, chat: talk })
+        // the talk is kept in its chat (spec 29): made on the first turn, inside the project when it
+        // started in one; the person's newest words and Hermia's answer are added, a brief is the spec's
+        let id = typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat) ? input.chat : null
+        try {
+          const last = said.at(-1)
+          const pid = typeof input.project === 'string' ? input.project : typeof input.from === 'string' && RUN_ID.test(input.from) ? projects.projectOf(input.from) : null
+          if (!id) id = chats.create({ kind, project: pid }).id
+          if (!input.brief && last && last.who !== 'hermia') await chats.say(id, { who: 'person', text: last.text })
+          if (out.reply) await chats.say(id, { who: 'planner', text: out.reply })
+          if (out.brief) await chats.update(id, c => { c.spec = { brief: String(out.brief).slice(0, 8000), open: [], art: [], engine: null, time: null, cost: null, lockedAt: null, ...(c.spec || {}), ...{ brief: String(out.brief).slice(0, 8000) } } })
+        } catch (err) { console.warn('chat:', err.message) }
+        json(200, id ? { ...out, chat: id } : out)
       }).catch(err => json(502, { error: String(err.message || err) }))
     })
   }
@@ -2687,7 +2758,17 @@ const server = createServer((req, res) => {
     req.on('end', () => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
-      try { reply(200, auto.start(input)) } catch (err) { reply(400, { error: String(err.message || err) }) }
+      const chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
+      delete input.chat
+      try {
+        const job = auto.start(input)
+        // App, Game and Video from the Make box: the words go into a chat that moves into the build's project
+        const only = Array.isArray(input.only) ? input.only : []
+        const kind = only.includes('games') ? 'game' : only.includes('video') && !only.includes('app') ? 'film' : only.includes('app') ? 'app' : 'site'
+        const chat = job?.run ? chatFor({ chat: chatId, text: String(input.prompt || ''), kind }) : null
+        if (chat) chatBuilt(chat, job.run, projects.projectOf(job.run), String(input.prompt || ''))
+        reply(200, chat ? { ...job, chat } : job)
+      } catch (err) { reply(400, { error: String(err.message || err) }) }
     })
     return
   }

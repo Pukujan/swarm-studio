@@ -1933,3 +1933,18 @@ body.view-video .video-pop .vmin { display: none; }
 /* talk first (engine/talkplan.mjs): the brief Hermia writes from the talk, to read and edit before Build */
 .feed .item.talk-brief textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .feed .item.talk-brief textarea:focus { outline: none; border-color: var(--accent); }
+
+/* Chats (spec 29): the talks of this project, by group, from the side panel's tabs */
+.tabs .chats-btn { display: inline-flex; align-items: center; gap: 4px; }
+.tabs .chats-btn .ico { width: 13px; height: 13px; }
+body.side-min .tabs .chats-btn { display: none; }
+.chats-pop { width: 280px; padding: 6px; }
+.chats-pop .cp-group h4 { margin: 8px 8px 4px; font: 600 11px/1 var(--ui-head); letter-spacing: .12em; text-transform: uppercase; color: var(--ui-muted-foreground); }
+.chats-pop .cp-group.empty { display: none; }
+.chats-pop.dragging .cp-group.empty { display: block; min-height: 34px; border: 1px dashed var(--ui-border); border-radius: 8px; margin: 4px 0; }
+.chats-pop .cp-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--ui-foreground); font: 13px/1.3 var(--ui-font); text-align: left; cursor: pointer; }
+.chats-pop .cp-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chats-pop .cp-row small { color: var(--ui-muted-foreground); font-size: 11px; }
+.chats-pop .cp-row:hover, .chats-pop .cp-row:focus-visible, .chats-pop .cp-row.on { background: var(--ui-muted, rgb(127 127 127 / .14)); outline: none; }
+.chats-pop .cp-new { margin-top: 4px; border-top: 1px solid var(--ui-border); border-radius: 0 0 8px 8px; color: var(--ui-muted-foreground); }
+.chats-pop .cp-new .ico { width: 14px; height: 14px; }

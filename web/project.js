@@ -967,7 +967,7 @@ export function makeProject({ sw, C, root }) {
     // no pages yet (its build failed) is still this project's: the server builds on its brief.
     // Each turn extends the one before it: the open version becomes the run that starts.
     const from = route === 'extend' || (route === 'new' && P.run && P.board?.kind !== 'game' && !hosted()) ? P.run : null
-    const send = t => Promise.resolve(sw.submit(t, false, P.pid, from)).then(r => {
+    const send = (t, chat) => Promise.resolve(sw.submit(t, false, P.pid, from, chat ? { chat } : {})).then(r => {
       if (r?.busy) { if (!input.value) input.value = text; toast(`${ic('msg', 15)}<span>Still on the last change</span>`); return }
       if (typeof r === 'string' && r !== P.run) { P.run = r; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
       load()
@@ -978,9 +978,9 @@ export function makeProject({ sw, C, root }) {
     if (read === 'build') return send(text)
     C.go('station', 'canvas')
     C.chat(true)
-    const build = t => { C.go('project'); send(t) }
-    if (read === 'talk') sw.talk.start({ text, build })
-    else sw.talk.ask(text, () => build(text), () => sw.talk.start({ text, build }))
+    const build = (t, chat) => { C.go('project'); send(t, chat) }
+    if (read === 'talk') sw.talk.start({ text, build, from: P.run })
+    else sw.talk.ask(text, () => build(text), () => sw.talk.start({ text, build, from: P.run }))
   }
 
   // the section the dock is talking about; its × goes back to the whole project

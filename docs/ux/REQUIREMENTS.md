@@ -130,6 +130,14 @@ write one otherwise. Its copy names the product by its brand (the nav's wordmark
 line the planner writes from the pages, lists the pages by name, never counts zeros and says "is live" only beside
 the live link. The Design deck's title is that name too, not the first page's title.
 
+**Chats apart from projects**
+> i think we need a store just for chat that doesnt get turned into projets
+
+Said on 2026-11-11 (spec 29). A talk with the planner is kept in a chat of its own, not a project: listed under
+**Chats** in the Projects sidebar, never in Projects, and opened again where it left off. When it builds, the chat
+moves into the project, which keeps all its chats grouped Design, App, Game and Video. The first words typed into
+the Make box always land in a chat, even when they build at once.
+
 **Stop the crew**
 > anyway to stop an ongoing swarm or agents? wish there was ? lol i cant stop them once they start
 
