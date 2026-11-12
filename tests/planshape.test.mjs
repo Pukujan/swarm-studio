@@ -132,8 +132,21 @@ test('the Rooftop Signal brief: a Godot runner with crouch, slide, crows and a c
   assert.match(card(p, 'world').body.camera, /side/i)
 })
 
+test('Meshy is not in a plan unless the person said 3D', () => {
+  // the owner: "i also dont think we need meshy for this?"
+  for (const input of [ANTS, { idea: 'a platformer about a fox', answers: {} }, { idea: 'a match-3 puzzle', answers: {} }, { idea: 'a deck-building card game', answers: {} }, { idea: 'ARES, a girls-only action RPG', answers: { size: '6' } }]) {
+    const p = planFromAnswers(input)
+    const price = planPrice(p)
+    assert.equal(is3d(p), false, input.idea)
+    assert.equal(price.credits, 0, input.idea)
+    assert.deepEqual(price.parts.filter(x => x.n), [], `${input.idea}: no Models, Rigs, Animations or Weapons rows`)
+  }
+  assert.equal(is3d(planFromAnswers({ idea: 'a 3D action RPG', answers: {} })), true)
+  assert.equal(is3d(planFromAnswers({ idea: 'an action RPG', answers: { look: '3D toon shaded' } })), true)
+})
+
 test('an action RPG still gets the action RPG shape', () => {
-  const p = planFromAnswers({ idea: 'ARES, a girls-only action RPG in the war god\'s arena', answers: { cast: 'Girls only', size: '6' } })
+  const p = planFromAnswers({ idea: 'ARES, a girls-only 3D action RPG in the war god\'s arena', answers: { cast: 'Girls only', size: '6' } })
   assert.equal(p.shape.family, 'action')
   assert.ok(ids(p).includes('combat'))
   assert.equal(roster(p).length, 6)

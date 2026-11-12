@@ -133,8 +133,8 @@ export function shapeOf({ idea = '', given = {}, answers = {}, title = '', note 
   if (engine.target === 'godot') engine.installed = env.godot === undefined ? null : !!env.godot
   const said3d = has(`${text} ${given.look || ''}`, /\b3d\b|three.?d|low.?poly|toon.?shaded 3d/i)
   const said2d = has(`${text} ${given.look || ''}`, /\b2d\b|pixel|flat|sprite|hand.?drawn|paper/i)
-  // tiny games are drawn, not modelled, unless the person said 3D
-  const art = said3d ? '3d' : said2d ? '2d' : size === 'tiny' ? '2d' : f.art
+  // Meshy (3D models, rigs, clips, weapons) only when the person said 3D: every game is painted 2D otherwise
+  const art = said3d && !said2d ? '3d' : '2d'
   const subject = clean(hint?.subject, 30).toLowerCase() || subjectFrom(text)
   return {
     family, label: f.label, size, art, engine,

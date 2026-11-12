@@ -138,7 +138,7 @@ export function makePlan({ sw, C, root }) {
   function renderPrimary() {
     const p = P.plan, pr = price()
     const busy = p?.build?.state === 'building'
-    const label = !p ? '' : busy ? 'Building' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${pr.credits} credits`
+    const label = !p ? '' : busy ? 'Building' : p.gate?.locked ? (p.gate.phase === 'first' ? 'Build one' : 'Build') : `Lock · ${cost(pr.credits, pr)}`
     primary.disabled = busy
     primary.querySelector('.t').textContent = label
     primary.classList.toggle('pri', !!p)
@@ -321,23 +321,26 @@ export function makePlan({ sw, C, root }) {
     noting = setTimeout(() => post(url('pick'), { sheet: s.id, cell: Number(input.dataset.note), note: input.value }).then(p => { P.plan = p }).catch(err => toast(err.message)), 450)
   }
 
-  // ---------- the gate: the parts, the total, Test one first, and one confirm carrying the price
+  // ---------- the gate: the parts, the total, Test one first, and one confirm carrying the price.
+  // A plan with no Meshy parts (every 2D plan) costs no credits, so its gate counts pictures instead.
+  const cost = (credits, pr) => pr.credits ? `${credits} credits` : `${pr.images} pictures`
   function gate() {
     const p = P.plan
     if (!p) return
     if (p.gate?.locked) return build()
     const pr = price()
     let first = false
+    const flat = !pr.credits
     const rows = pr.parts.filter(x => x.n).map(x => `<div class="pl-row"><span>${esc(x.what)}</span><i>${x.n} × ${x.each}</i><b>${x.credits}</b></div>`).join('')
     const d = window.SwarmUI.dialog({
-      title: `Lock · ${pr.credits} credits`,
+      title: `Lock · ${cost(pr.credits, pr)}`,
       className: 'pl-gate',
       body: `<div class="pl-rows">${rows}<div class="pl-row"><span>Coding runs</span><i></i><b>${pr.runs}</b></div><div class="pl-row"><span>Pictures</span><i></i><b>${pr.images}</b></div></div>
-        <label class="pl-sw"><input type="checkbox" class="pl-first" ${pr.first.credits && pr.first.credits < pr.credits ? '' : 'disabled'}><span>Test one first</span></label>`,
+        <label class="pl-sw"><input type="checkbox" class="pl-first" ${(flat ? pr.images > 1 : pr.first.credits && pr.first.credits < pr.credits) ? '' : 'disabled'}><span>Test one first</span></label>`,
       footer: '<button class="btn pri pl-go"></button>'
     })
     const go = d.footer.querySelector('.pl-go')
-    const paint = () => { go.textContent = `Lock · ${first ? pr.first.credits : pr.credits} credits` }
+    const paint = () => { go.textContent = flat ? `Lock · ${first ? 1 : pr.images} ${first ? 'picture' : 'pictures'}` : `Lock · ${first ? pr.first.credits : pr.credits} credits` }
     paint()
     d.body.querySelector('.pl-first').onchange = e => { first = e.target.checked; paint() }
     go.onclick = async () => {

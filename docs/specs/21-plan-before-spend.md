@@ -84,8 +84,10 @@ crouch and slide, Hazards and enemies, Levels in side view), **puzzle** (Pieces,
 (Cards, Rules, Opponents, Board), **sim**, **racing** and **story**. The family comes from the genre answer
 first, then the planner model's reading of the idea (`askShape`, validated), then the idea's words. Every
 family ends with Look, Money and Systems. An answer always wins: "no shooting" leaves no gun on any card, "no
-fights" no enemies. Size words count: "tiny" is one map or level, a few of everything and 2D sprites, so no
-Meshy credits. The title comes from the idea ("a game called army of ants" is **Army of Ants**), and an engine
+fights" no enemies. **Meshy is not part of a plan by default** (owner, 2026-11-11): every game is painted 2D
+(sprites, tiles, UI) unless the person says 3D in the idea or the Look answer. A 2D plan has no Models, Rigs,
+Animations or Weapons rows, costs no credits, and its gate counts pictures ("Lock · 14 pictures"), never
+credits. Size words count: "tiny" is one map or level and a few of everything. The title comes from the idea ("a game called army of ants" is **Army of Ants**), and an engine
 named in the idea is the plan's target ("in Godot" is Godot 4, and the plan says so when Godot is not
 installed). A 2D plan's build paints its art list (units, buildings, resources, tiles, HUD), each cut-out on the
 magenta key (green for pink or purple subjects); a 3D plan's turnarounds are on the same key, and only

@@ -8,7 +8,7 @@ import { PLAN_QUESTIONS, CARDS, planFromAnswers, editCard, setSystems, planPrice
 
 const ARES = { genre: 'Action RPG', cast: 'Girls only', size: '6', combat: 'Stylish combos', enemies: 'Minions, elites, bosses', progression: 'New Game+', money: 'Free + cosmetics', look: 'Anime cel-shaded' }
 const ares = () => {
-  const p = planFromAnswers({ idea: 'ARES, a girls-only action RPG in the war god\'s arena', answers: ARES })
+  const p = planFromAnswers({ idea: 'ARES, a girls-only 3D action RPG in the war god\'s arena', answers: ARES })
   // ARES shipped with five systems
   return setSystems(p, { logins: true, payments: true, leaderboard: true, gacha: true, pilot: true, enemyAI: false, loadout: false, subscriptions: false })
 }
@@ -107,7 +107,7 @@ test('sheet cells: box math and picks with notes', () => {
 
 test('the store keeps plans by id and lists them newest first', () => {
   const s = planStore(join(mkdtempSync(join(tmpdir(), 'plans-')), 'plans'))
-  const a = s.create({ idea: 'Alpha, a test', answers: { size: '1' } })
+  const a = s.create({ idea: 'Alpha, a 3D test', answers: { size: '1' } })
   const b = s.create({ idea: 'Beta, a test' })
   assert.match(a.id, /^p-[a-z0-9]+$/)
   assert.equal(s.get(a.id).title, 'Alpha')
