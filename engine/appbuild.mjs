@@ -52,12 +52,15 @@ function run(cmd, args, opts, onLine) {
 // Hermes may start this server on its own, newer Node, so the engine runs on the
 // first Node that can load them: this one, then the one on PATH, then common installs.
 let nodeFor = null
-export function engineNode() {
-  if (nodeFor) return nodeFor
-  // every node on PATH, not only the first: Hermes puts its own Node in front
+// every node on PATH, not only the first: Hermes puts its own Node in front
+function nodes() {
   const onPath = (process.env.PATH || process.env.Path || '').split(delimiter).filter(Boolean).map(d => join(d, WIN ? 'node.exe' : 'node'))
   const login = WIN ? '' : (() => { try { return execFileSync('/bin/sh', ['-lc', 'command -v node'], { encoding: 'utf8' }).trim() } catch { return '' } })()
-  const candidates = [process.execPath, ...onPath, login, '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
+  return [process.execPath, ...onPath, login, '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
+}
+export function engineNode() {
+  if (nodeFor) return nodeFor
+  const candidates = nodes()
   for (const n of candidates) {
     try {
       execFileSync(n, ['-e', "new (require('better-sqlite3'))(':memory:')"], { cwd: dyadDir, stdio: 'ignore', timeout: 20000 })
@@ -67,18 +70,38 @@ export function engineNode() {
   return (nodeFor = process.execPath)
 }
 
+// The Node versions the engine supports (dyad/package.json "engines"), and the first such Node here
+const ENGINE_NODE = (() => {
+  let range = ''
+  try { range = JSON.parse(readFileSync(join(dyadDir, 'package.json'), 'utf8')).engines?.node || '' } catch {}
+  const lo = Number((range.match(/>=\s*(\d+)/) || [])[1]) || 0, hi = Number((range.match(/<\s*(\d+)/) || [])[1]) || Infinity
+  return { lo, hi, label: range || 'any' }
+})()
+export const nodeFits = (version, { lo, hi } = ENGINE_NODE) => { const major = Number(String(version).replace(/^v/, '').split('.')[0]); return major >= lo && major < hi }
+export function installNode(list = nodes(), versionOf = n => execFileSync(n, ['-v'], { encoding: 'utf8', timeout: 10000 }).trim()) {
+  for (const n of list) {
+    try { if (nodeFits(versionOf(n))) return n } catch {}
+  }
+  return null
+}
+
 let setting = null
 // Install and bundle the engine once. The install exits non-zero when dugite's
 // git download fails; the modules are still there, so only the bundle decides.
 export function setupEngine(onStage = () => {}) {
   if (engineReady()) return Promise.resolve()
   return setting ??= (async () => {
-    const env = { ELECTRON_SKIP_BINARY_DOWNLOAD: '1', CI: '1' }
+    // the install and the bundle run on a Node the engine accepts (its native modules have no build
+    // for a newer one, and pnpm refuses it): Hermes may put its own, newer Node first on PATH
+    const node = installNode()
+    if (!node) throw new Error(`The app engine needs Node ${ENGINE_NODE.label}, and none was found (this one is ${process.version}). Install Node 24 from nodejs.org, then try again.`)
+    const env = { ELECTRON_SKIP_BINARY_DOWNLOAD: '1', CI: '1', PATH: [dirname(node), process.env.PATH || process.env.Path || ''].join(delimiter) }
     onStage('installing the app engine (once, about a minute)')
-    await run('pnpm', ['install', '--frozen-lockfile'], { cwd: dyadDir, env })
+    const i = await run('pnpm', ['install', '--frozen-lockfile'], { cwd: dyadDir, env })
     onStage('bundling the app engine')
     const b = await run('npx', ['vite', 'build', '--config', 'vite.aba-headless.config.mts'], { cwd: dyadDir, env })
-    if (!engineReady()) throw new Error(`engine build failed: ${b.tail.slice(-400)}`)
+    // the install's own words when it is what failed (a bundle that cannot find its packages says less)
+    if (!engineReady()) throw new Error(`engine build failed: ${(i.code ? i.tail : b.tail).slice(-400)}`)
   })().finally(() => { setting = null })
 }
 
