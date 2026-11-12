@@ -1,5 +1,7 @@
 # Instructions for coding agents in this repository
 
+**Read [docs/PRODUCT.md](docs/PRODUCT.md) first:** what Swarm is, what runs where, and the standing rules.
+
 ## Dependencies: use mature ones (owner, 2026-11-12)
 
 Use a mature, maintained, widely adopted dependency wherever one solves the problem. Don't reinvent what a

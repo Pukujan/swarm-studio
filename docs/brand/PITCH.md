@@ -75,6 +75,7 @@ The way in is the Hermes community (262,021 stars), then everyone those people m
 
 1. **Free plugin, open source.** It grows through the Hermes Marketplace.
 2. **Hosted Swarm Studio.** Build in the browser without installing Hermes, paid per build in credits.
+   > Superseded by the owner's direction of 2026-11-12: there is no hosted studio and no build credits. Swarm Studio runs in the person's own Hermes; the Feed is the only hosted part. See [PRODUCT.md](../PRODUCT.md).
 3. **The pack marketplace.** Pros sell packs (a crew and a plan for a market), and makers earn a share of every use.
 4. **Studio seats.** Teams, shared boards, brand kits and review.
 5. **Remix revenue share.** When a remix earns, the original maker earns too. The credit chain already records who made what.
@@ -89,6 +90,8 @@ Real billing waits for a legal and payments review. The demo only shows a labell
 | **Next** | the Hermes Marketplace listing, the hosted studio, real credits, and Feed boards for everyone |
 | **Then** | new crews through MCP and open-source skills: game engines, marketing and ad tools, print, 3D. **Any tool Hermes can reach, the crew can use.** |
 | **Later** | Swarm beyond Hermes: any agent host that speaks MCP can run the studio and post to the Feed |
+
+> "The hosted studio, real credits" in **Next**: Superseded by the owner's direction of 2026-11-12: there is no hosted studio and no build credits. Swarm Studio runs in the person's own Hermes; the Feed is the only hosted part. See [PRODUCT.md](../PRODUCT.md).
 
 ## The maker
 
@@ -118,6 +121,7 @@ Design Baker, [@Pukujan](https://github.com/Pukujan) on GitHub. Portfolio: [desi
 5. **The loop.** Post, remix and credit in the Feed.
 6. **The numbers.** The market, Hermes' reach, and the 72 PRs on day one.
 7. **The road.** Packs, the hosted studio and new crews through MCP. This hackathon is day one.
+   > "The hosted studio": Superseded by the owner's direction of 2026-11-12: there is no hosted studio and no build credits. Swarm Studio runs in the person's own Hermes; the Feed is the only hosted part. See [PRODUCT.md](../PRODUCT.md).
 
 ## What we never claim
 
