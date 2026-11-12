@@ -39,7 +39,22 @@ from pathlib import Path
 from . import bridge_llm, launcher
 
 CTX = None  # the plugin context, set by register()
-ATTACH_EVERY = 15.0  # seconds; the canvas server drops a bridge silent for 45
+ATTACH_EVERY = 5.0  # seconds; the canvas server drops a bridge silent for 45, and a restarted one is found this fast
+SERVER_POLL = 5.0  # seconds between looks for a canvas server that is not up yet
+
+
+def _py_stamp(root: Path) -> float:
+    """When this package's Python files were last written (the newest at its root), in seconds."""
+    try:
+        return max((f.stat().st_mtime for f in root.glob("*.py")), default=0.0)
+    except OSError:
+        return 0.0
+
+
+# The code this process loaded, sent with every attach. The server compares it with the files on disk: a
+# Hermes that loaded an older copy (``hermes plugins install … --force`` or an update while it ran) is told
+# apart from one that is current, and the person is asked to restart Hermes (engine/hermeshealth.mjs).
+LOADED = _py_stamp(Path(__file__).resolve().parent)
 IMAGE_ASPECTS = ("landscape", "square", "portrait")
 VIDEO_ASPECTS = ("16:9", "9:16", "1:1", "4:3", "3:4", "21:9")
 # a backend Hermes reports as not set up: that kind of media is off until the studio asks again
@@ -80,7 +95,7 @@ def attach() -> bool:
     if not _server:
         return False
     try:
-        launcher._request("/api/hermes/attach", method="POST", body={"url": url(), "token": _token, "pid": os.getpid()}, timeout=2)
+        launcher._request("/api/hermes/attach", method="POST", body={"url": url(), "token": _token, "pid": os.getpid(), "code": LOADED}, timeout=2)
         return True
     except (OSError, urllib.error.URLError, ValueError):
         return False
@@ -92,14 +107,18 @@ def _attach_loop() -> None:
         attach()
 
 
-def start_later(delay: float = 3.0) -> None:
-    """From register(): start the bridge after a few seconds, only when a canvas server is up.
+def start_later(delay: float = 3.0, poll: float = SERVER_POLL) -> None:
+    """From register(): start the bridge once a canvas server is up, however late it comes.
 
-    A short-lived command (``hermes model``, ``hermes config``) has exited by then, so it never opens a port."""
+    A server this Hermes did not start (another process, a restart, the Studio opened later) is found too:
+    the thread keeps looking every ``poll`` seconds until one answers. It is a daemon thread, so a
+    short-lived command (``hermes model``, ``hermes config``) exits before it ever opens a port."""
     def later() -> None:
         time.sleep(delay)
-        if launcher.state():
-            start()
+        while not running() and CTX is not None:
+            if launcher.state() and start():
+                return
+            time.sleep(poll)
     threading.Thread(target=later, name="swarm-studio-bridge-later", daemon=True).start()
 
 

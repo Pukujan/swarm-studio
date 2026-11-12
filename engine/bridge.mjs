@@ -1,6 +1,6 @@
 // The Hermes bridge, the server's side (docs/specs/33-hermes-bridge.md). A Hermes process with the plugin
 // loaded runs a small loopback server (bridge.py) and attaches it here: POST /api/hermes/attach
-// {url, token, pid}, again every 15 s. Pictures, clips, model calls (engine/hermesllm.mjs) and MCP calls are asked of
+// {url, token, pid, code}, again every 5 s (code: when the Python it loaded was written, engine/hermeshealth.mjs). Pictures, clips, model calls (engine/hermesllm.mjs) and MCP calls are asked of
 // the newest live bridge, which does them with Hermes's own tools, so the provider keys stay in Hermes.
 //
 // Up to 4 bridges are kept, newest first. One silent for 45 s, or one that refuses a connection, is
@@ -13,10 +13,10 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
   let bridges = []
   const live = () => (bridges = bridges.filter(b => now() - b.seen < SILENT_MS))
 
-  function attach({ url, token, pid } = {}) {
+  function attach({ url, token, pid, code } = {}) {
     if (typeof url !== 'string' || !/^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(url)) return { ok: false, error: 'a loopback bridge address is needed' }
     if (typeof token !== 'string' || token.length < 16) return { ok: false, error: 'a bridge token is needed' }
-    bridges = [{ url, token, pid: Number(pid) || null, seen: now() }, ...bridges.filter(b => b.url !== url)].slice(0, KEEP)
+    bridges = [{ url, token, pid: Number(pid) || null, code: Number.isFinite(code) ? code : null, seen: now() }, ...bridges.filter(b => b.url !== url)].slice(0, KEEP)
     return { ok: true }
   }
 
@@ -42,7 +42,7 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
       }
     }
     if (passed) return passed
-    return { ok: false, absent: true, error: 'Hermes is not open: open Hermes, or run `hermes swarm`, to use its picture and clip tools' }
+    return { ok: false, absent: true, error: "Hermes isn't connected: open Hermes Desktop, or run `hermes swarm`, to use its picture and clip tools" }
   }
   // The raw answer of the newest bridge that takes the request (a model call streams through as it is),
   // or null when none does. A bridge that refuses the connection or the token is dropped.
@@ -63,12 +63,26 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
   const drop = b => { bridges = bridges.filter(x => x !== b) }
   const refused = err => /ECONNREFUSED|ECONNRESET|EHOSTUNREACH|fetch failed/i.test(String(err?.cause?.code || err?.code || err?.message || ''))
 
+  // Before a build: ask each bridge a cheap question (its model list) so one whose Hermes has just closed
+  // is dropped now, not 45 s later. A bridge that is only slow to answer is kept.
+  async function ping(timeoutMs = 1500) {
+    await Promise.all(live().slice().map(async b => {
+      try {
+        const res = await fetcher(b.url + '/v1/models', { headers: { authorization: `Bearer ${b.token}` }, signal: AbortSignal.timeout(timeoutMs) })
+        if (res.status === 403) drop(b)
+        else b.seen = now()
+        await res.body?.cancel?.()
+      } catch (err) { if (refused(err)) drop(b) }
+    }))
+  }
+
   return {
     attach,
     call,
     send,
+    ping,
     // for /api/state and the canvas: whether Hermes is there, never a token or an address
-    status: () => ({ attached: live().length > 0, pids: live().map(b => b.pid).filter(Boolean) })
+    status: () => ({ attached: live().length > 0, pids: live().map(b => b.pid).filter(Boolean), codes: live().map(b => b.code) })
   }
 }
 

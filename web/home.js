@@ -732,6 +732,9 @@ export function makeHome({ sw, C, root }) {
     e.preventDefault()
     const text = input.value.trim()
     if (!text) return showcases()
+    // no Hermes to answer the model: one calm line and what to do, before anything starts (the words stay)
+    const off = hosted() || !sw.hermesReady ? null : await sw.hermesReady()
+    if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => form.requestSubmit())
     // a game is planned before anything costly is made (spec 21), by talking it through with the
     // planner in the left chat while the Plan board takes shape beside it (spec 27)
     if (make.k === 'game' && !hosted()) { closePop(); input.value = ''; return C.talkGame({ text }) }
