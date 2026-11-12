@@ -58,7 +58,7 @@ export function makeScaffold({ sw, C, root }) {
       if (pid !== A.pid) return
       A.d = d
       // a kit that loads or drafts its own state does it once, before its cards are drawn
-      if (kit().prepare && A.prepared !== pid) { A.prepared = pid; await kit().prepare(ctx()) }
+      if (kit().prepare && A.prepared !== pid && d.studio.idea) { A.prepared = pid; await kit().prepare(ctx()) }
       if (pid === A.pid) render()
     } catch (err) { fail(err) }
   }
@@ -243,7 +243,14 @@ export function makeScaffold({ sw, C, root }) {
     if (!sw.talk || A.talked === A.pid) return
     A.talked = A.pid
     const k = kit()
-    sw.talk.start({ kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat, blank: true, said: [{ who: 'you', text: d.studio.idea }], build: brief => (k.build ? build(brief) : openBrand()) })
+    // opened with an empty box: the chat asks, and the first words become the idea (and the project's name)
+    const pid = A.pid
+    const heard = text => {
+      if (A.d?.studio.idea || pid !== A.pid) return
+      post(at('/idea'), { idea: text }).then(() => { A.prepared = null; return load() }).catch(fail)
+    }
+    sw.talk.start({ kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat, blank: true, said: d.studio.idea ? [{ who: 'you', text: d.studio.idea }] : [], heard, build: brief => (k.build ? build(brief) : openBrand()) })
+    if (!d.studio.idea) return sw.say?.('What are you making?')
     // a kit with prepare() posts its own planner line
     const st = k.prepare ? null : startOf()
     if (st) sw.say?.(st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`)

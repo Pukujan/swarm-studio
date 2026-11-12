@@ -3,7 +3,7 @@
 // one brand, a Studio project with nothing built yet, and the Studio's place in the navigation machine.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assetStore } from '../engine/assetstore.mjs'
@@ -120,4 +120,14 @@ test('a Studio address goes round: room, project and step', () => {
   assert.match(q, /room=studio/); assert.match(q, /project=s-1/); assert.match(q, /step=assets/)
   const back = view(at(...fromAddress(q)).getSnapshot())
   assert.deepEqual([back.room, back.project, back.step], ['studio', 's-1', 'assets'])
+})
+
+test('Make offers the ways to begin in one menu; an empty Studio asks for the idea in its chat', () => {
+  const src = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const home = src('web/home.js'), scaffold = src('web/scaffold.js'), studio = src('server/studio.mjs')
+  for (const name of ["label: 'Studio'", "label: 'Brand sheet'", "label: 'Build now'"]) assert.ok(home.includes(name), name)
+  assert.doesNotMatch(home, /Studio first\?/)
+  assert.match(scaffold, /What are you making\?/)
+  assert.match(studio, /'New project'/)
+  assert.doesNotMatch(studio, /if \(!idea\) throw bad\('say what it is'\)\n    const pid/)
 })

@@ -685,10 +685,9 @@ export function makeHome({ sw, C, root }) {
   const showKind = () => { kindBtn.innerHTML = `${ic(make.icon, 16)}<span>${make.label}</span>${ic('chd', 14)}` }
   showKind()
   if (hosted()) kindBtn.hidden = true  // the hosted studio makes websites only
-  // Studio first or Build now (spec 37): asked on every Make, the last choice per kind pre-selected.
-  // The Studio's depth (what Grill me was) is Light or Thorough.
+  // the way to begin last picked for a kind (Make's menu pre-selects it). The Studio's depth (what Grill
+  // me was) is Light or Thorough, kept from before; the menu does not ask it.
   const modeOf = k => store.get(`home.mode.${k}`, null)
-  const nowRun = k => Number(store.get(`home.now.${k}`, 0)) || 0
   let depth = store.get('home.depth', 'light') === 'thorough' ? 'thorough' : 'light'
   kindBtn.onclick = () => { showKind(); return showMenu([
     // only things to make (how pictures are made is Setup's, not a kind)
@@ -732,58 +731,43 @@ export function makeHome({ sw, C, root }) {
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 
-  form.onsubmit = async e => {
+  // Make: one small menu of the ways to begin, names only, with or without words in the box (spec 37).
+  // The last way picked for this kind, else what the words suggest, is pre-selected, quietly.
+  const makeBtn = $('.hm-make')
+  form.onsubmit = e => {
     e.preventDefault()
     const text = input.value.trim()
-    // an empty box opens nothing: the lightbulb is the one way to the examples
-    if (!text) return input.focus()
+    closePop()
+    // the hosted studio builds websites as it always did
+    if (hosted()) return text ? confirmBuild(text) : input.focus()
+    const pick = modeOf(make.k) || (text && !studioFits(text) ? 'now' : 'studio')
+    const ways = [
+      { k: 'studio', icon: 'grid', label: 'Studio' },
+      // the brand board straight away (a game's look is decided on its Plan board)
+      ...(make.k === 'game' ? [] : [{ k: 'brand', icon: 'sliders', label: 'Brand sheet' }]),
+      // Build now needs the words, and a brand or a deck is made in the Studio only
+      ...(text && !make.studioOnly ? [{ k: 'now', icon: 'zap', label: 'Build now' }] : [])
+    ].map(w => ({ ...w, on: w.k === pick, run: () => begin(w.k, text) }))
+    showMenu(ways, makeBtn)
+    document.querySelector('.hm-menu button.on, .hm-menu button')?.focus({ preventScroll: true })
+  }
+  async function begin(way, text) {
     // no Hermes to answer the model: one calm line and what to do, before anything starts (the words stay)
-    const off = hosted() || !sw.hermesReady ? null : await sw.hermesReady()
-    if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => form.requestSubmit())
-    // a game is planned before anything costly is made (spec 21), by talking it through with the
-    // planner in the left chat while the Plan board takes shape beside it (spec 27)
-    if (make.k === 'game' && !hosted()) { closePop(); input.value = ''; return C.talkGame({ text }) }
+    const off = !sw.hermesReady ? null : await sw.hermesReady()
+    if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => begin(way, text))
     G.sheet = false
-    if (hosted()) return confirmBuild(text)
-    // a brand (or a deck) is made in the Studio only
-    if (make.studioOnly) return studioFirst(text)
-    // the planner reads the prompt (engine/talkplan.mjs): "let's talk first" or a vague idea leans Studio
-    // (at most 2.5 s: then the words alone decide which choice is pre-selected)
-    const read = !sw.readTalk ? 'build' : await Promise.race([Promise.resolve().then(() => sw.readTalk(text, '', guideKind())).catch(() => 'build'), new Promise(r => setTimeout(() => r('build'), 2500))])
-    askStart(text, modeOf(make.k) || (studioFits(text, read) ? 'studio' : 'now'))
+    store.set(`home.mode.${make.k}`, way === 'now' ? 'now' : 'studio')
+    if (way === 'now') return buildNow(text)
+    return studioFirst(text, way === 'brand' ? 'brand' : null)
   }
 
-  // ---------- Studio first or Build now (spec 37)
+  // ---------- Studio or Build now (spec 37)
   // the Studio fits a game, a vague idea, or one where the look matters
   const LOOKS = /\b(look|feel|vibe|mood|brand(ing)?|style|aesthetic|colou?rs?|logo|palette|typography|font|premium|elegant|beautiful|moody|minimal|bold)\b/i
-  function studioFits(text, read = 'build') {
-    if (make.k === 'game' || read === 'talk') return true
+  function studioFits(text) {
+    if (make.k === 'game') return true
     const words = text.split(/\s+/).filter(Boolean).length
-    return words < 8 || read === 'unsure' && words < 20 || LOOKS.test(text)
-  }
-  function askStart(text, pick) {
-    openPop('grill start', `<h3>Studio first?</h3>
-      <div class="hm-start" role="group" aria-label="How to start">
-        <button type="button" class="hm-choice${pick === 'studio' ? ' pri' : ''}" data-studio>${ic('grid', 20)}<span>Studio first</span></button>
-        <button type="button" class="hm-choice${pick === 'now' ? ' pri' : ''}" data-now>${ic('zap', 20)}<span>Build now</span></button>
-      </div>
-      <div class="seg hm-depth" role="group" aria-label="Depth"${pick === 'studio' ? '' : ' hidden'}>
-        <button type="button" data-d="light" class="${depth === 'light' ? 'on' : ''}">Light</button>
-        <button type="button" data-d="thorough" class="${depth === 'thorough' ? 'on' : ''}">Thorough</button>
-      </div>`)
-    const studio = pop.querySelector('[data-studio]'), now = pop.querySelector('[data-now]'), seg = pop.querySelector('.hm-depth')
-    studio.onclick = () => { store.set(`home.mode.${make.k}`, 'studio'); store.set(`home.now.${make.k}`, 0); studioFirst(text) }
-    now.onclick = () => { store.set(`home.mode.${make.k}`, 'now'); store.set(`home.now.${make.k}`, nowRun(make.k) + 1); buildNow(text) }
-    // the depth shows while Studio first is the choice in focus
-    studio.addEventListener('focus', () => { seg.hidden = false })
-    now.addEventListener('focus', () => { seg.hidden = true })
-    for (const b of seg.querySelectorAll('button')) b.onclick = () => {
-      depth = b.dataset.d
-      store.set('home.depth', depth)
-      seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b))
-      studio.focus({ preventScroll: true })
-    }
-    ;(pick === 'studio' ? studio : now).focus({ preventScroll: true })
+    return words < 8 || LOOKS.test(text)
   }
   function buildNow(text) {
     closePop()
@@ -792,7 +776,9 @@ export function makeHome({ sw, C, root }) {
   }
   // the Studio, until the scaffold (spec 37, slice 2) opens it: the game's Plan board, the brand sheet
   // beside the talk, or the talk; Thorough asks the questions the prompt has not answered first
-  async function studioFirst(text) {
+  // sheet 'brand': the brand board straight away, inside the new project (an empty box opens the Studio
+  // on its Brand step, where the chat asks what it is first)
+  async function studioFirst(text, sheet = null) {
     closePop()
     if (make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
     // a kind with a Studio kit (spec 37): its project is made now, and its scaffold opens beside the chat
@@ -801,7 +787,9 @@ export function makeHome({ sw, C, root }) {
         const kit = window.swarmKits[make.k]
         const j = await post('/api/studio', { kind: make.k, idea: text, depth, steps: kit.steps })
         input.value = ''
-        return C.studio(j.project.id)
+        // the sheet opens from the project's Studio, so its Back lands there
+        if (sheet === 'brand' && text) { C.studio(j.project.id, 'brand'); return C.brand({ project: j.project.id, brief: text, kind: make.k === 'app' ? 'app' : 'site' }) }
+        return C.studio(j.project.id, sheet)
       } catch (err) { return toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
     }
     if (make.k === 'brand') { input.value = ''; return window.swarmCosmos?.brand?.({ brief: text, kind: 'site' }) }

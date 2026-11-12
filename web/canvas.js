@@ -1884,9 +1884,10 @@ const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read'
   .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')
 // brief: nothing to talk about yet, the brief is shown at once to read, edit and Build (a showcase, or a
 // Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
-function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false }) {
+// heard(text): told each line the person sends (the Studio takes its idea from the first)
+function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false, heard = null }) {
   if (blank) { viewing = 'new'; fresh(null) }
-  Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null })
+  Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null, heard })
   talkDock(true)
   els.feed.querySelector('.empty-chat')?.remove()
   let last = null
@@ -1905,7 +1906,7 @@ const talkEnd = () => { talk.on = false; talk.busy = false; talkDock(false); els
 async function talkSay(text, brief = false) {
   if (talk.kind === 'game') return gameSay({ said: text })
   const media = brief ? [] : links.take('ref')
-  if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you', media.map(m => m.name).join(', ')) }
+  if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you', media.map(m => m.name).join(', ')); talk.heard?.(text) }
   els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
   const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
   talk.busy = true

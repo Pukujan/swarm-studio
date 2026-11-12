@@ -1,5 +1,7 @@
 // The Studio's routes (docs/specs/37-studio-first.md, engine/studio.mjs, engine/assetstore.mjs).
 //   POST /api/studio { kind, idea, depth?, steps?, start? }  -> { project, chat, studio }  a project with no runs yet
+//        (an empty idea is fine: the chat's first words become it, through /idea)
+//   POST /api/studio/:pid/idea { idea }                -> the studio  the idea, once, while it is empty
 //   GET  /api/studio/:pid                                  -> { project, studio, brand, refs, assets }
 //   POST /api/studio/:pid/step { step, state }             -> the same
 //   POST /api/studio/:pid/depth { depth }                  -> the same
@@ -17,6 +19,9 @@ import { createReadStream, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { STUDIO_KINDS, STEPS } from '../engine/studio.mjs'
 import { projectName } from '../engine/naming.mjs'
+
+// "A website for a tiny ramen bar" is named for the ramen bar, not "Website"
+const nameOf = idea => projectName({ brief: String(idea).replace(/^\s*(?:make|build|create)?\s*(?:me\s+)?(?:an?\s+)?(?:\w+\s+)?(?:website|site|app|game|film|video|deck|brand|logo)\s+(?:for|about|of)\s+/i, '') })
 
 const CHAT_KIND = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
 
@@ -51,12 +56,20 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
   async function make(input) {
     const kind = STUDIO_KINDS.includes(input.kind) ? input.kind : 'site'
     const idea = String(input.idea || '').trim().slice(0, 4000)
-    if (!idea) throw bad('say what it is')
-    const pid = projects.makeStudio({ name: projectName({ brief: idea }), kind })
+    const pid = projects.makeStudio({ name: idea ? nameOf(idea) : 'New project', kind })
     const chat = chats.create({ kind: CHAT_KIND[kind], text: idea, project: pid })
     const steps = Array.isArray(input.steps) ? input.steps.filter(s => STEPS.includes(s)) : STEPS
     studios.make(pid, { kind, idea, depth: input.depth, chat: chat.id, steps: steps.length ? steps : STEPS, start: input.start })
     return { ...whole(pid), chat: chat.id }
+  }
+
+  // the chat's first words, when the Studio was opened with an empty box: the idea, and the project's name
+  function setIdea(pid, text) {
+    const idea = String(text || '').trim().slice(0, 4000)
+    if (!idea) throw bad('say what it is')
+    let set = false
+    studios.update(pid, s => { if (!s.idea) { s.idea = idea; set = true } })
+    if (set && projects.get(pid)?.name === 'New project') projects.op({ op: 'rename', id: pid, title: nameOf(idea) })
   }
 
   // a reference moved over to the assets, or an asset to the references: one action, the other store keeps it as removed
@@ -90,7 +103,7 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
       jsonBody(req).then(make).then(v => json(res, 200, v)).catch(err => fail(res, err))
       return true
     }
-    const sm = url.pathname.match(/^\/api\/studio\/([\w-]{1,64})(?:\/(step|depth|kit))?$/)
+    const sm = url.pathname.match(/^\/api\/studio\/([\w-]{1,64})(?:\/(step|depth|kit|idea))?$/)
     if (sm) {
       const [, pid, op] = sm
       if (req.method === 'GET' && !op) { try { json(res, 200, whole(pid)) } catch (err) { fail(res, err) } return true }
@@ -98,6 +111,7 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
       jsonBody(req).then(input => {
         if (op === 'step') studios.step(pid, String(input.step || ''), String(input.state || ''))
         else if (op === 'kit') studios.kit(pid, input.data)
+        else if (op === 'idea') setIdea(pid, input.idea)
         else studios.depth(pid, String(input.depth || ''))
         json(res, 200, whole(pid))
       }).catch(err => fail(res, err))
