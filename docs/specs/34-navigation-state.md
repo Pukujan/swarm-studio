@@ -148,7 +148,7 @@ It stays as the console's debug dump: `{ nav: { state, context }, app, advisor, 
 | 6 | `web/data.js`, `web/canvas.js`, `server/page.mjs` | `app`, `advisor` and `game` become `fromTransition` actors. `web/store.js` goes. `window.swarmState()` dumps nav and the data actors | the dump has all four |
 | 7 | `web/canvas.js` (the player) | `openPlayer`, `closePlayer` and `watchVisitor` send `play`, `watch`, `stop` and `close`. The player draws from the `player` region | the player never outlives its build or room |
 | 8 | `web/project.js`, `web/home.js` | `P.run` and `P.pid` read the context. A version tile sends `open.version` | a version tile from inside a project |
-| 9 | `web/canvas.js` (commands, dock) | Hermes's `open` and `play` commands, the left chat's project and the hosted studio send the events. The duplicate getters on `window.swarm` go | a Hermes `cmd play` while at home |
+| 9 | `web/canvas.js` (commands, dock) | Hermes's `open` and `play` commands, the left chat's project and the hosted studio send the events (`runNow`, `showRun`). The duplicate getters on `window.swarm` go (`claimed` and `liveId`; `holds(run)` answers instead) | a Hermes `cmd play` while at home |
 
 ## Done when
 
