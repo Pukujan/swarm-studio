@@ -1762,14 +1762,14 @@ const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read'
   .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')
 // brief: nothing to talk about yet, the brief is shown at once to read, edit and Build (a showcase, or a
 // Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
-function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '' }) {
+function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false }) {
   if (blank) { viewing = 'new'; fresh(null) }
   Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from })
   talkDock(true)
   els.feed.querySelector('.empty-chat')?.remove()
   let last = null
   for (const m of said) { talk.said.push(m); last = m.who === 'hermia' ? botMsg(m.text) : feed(null, m.text, 'you') }
-  if (brief) { talk.said.push({ who: 'you', text: brief }); return talkBrief(brief, '', what) }
+  if (brief) { talk.said.push({ who: 'you', text: brief }); return talkBrief(brief, '', what, sheet) }
   if (text) return talkSay(text)
   // an old chat reopened: its words are back, and the dock goes on from them
   if (last && said.at(-1)?.who === 'hermia') talkActs(last)
@@ -1805,14 +1805,17 @@ function talkActs(item) {
 // Inside a project the planner says which way it goes (engine/talkplan.mjs routeFor): more for this
 // project (Build), a different product (New project, with Add here for when it is not), or this one
 // from scratch (Start over: new pages and look, the old version stays in the project).
-function talkBrief(text, route = '', what = '') {
+// sheet: open the brand sheet at once (asked for from the Make box's brief)
+function talkBrief(text, route = '', what = '', sheet = false) {
   const item = botMsg(what || 'The brief')
   item.classList.add('talk-brief')
   const inProject = !!talk.from
   const acts = inProject && route === 'new' ? '<button class="primary" data-go="new">New project</button><button data-go="add">Add here</button>'
     : inProject && route === 'redo' ? '<button class="primary" data-go="redo">Start over</button><button data-go="add">Add here</button>'
       : '<button class="primary" data-go="add">Build</button>'
-  item.insertAdjacentHTML('beforeend', `<textarea aria-label="The brief" rows="6" maxlength="4000"></textarea><div class="chips talk-acts">${acts}<button data-more>Keep talking</button></div>`)
+  // a website or app can settle its story, palette and type first (spec 31); Build works without it
+  const sheetHtml = talk.kind === 'site' || talk.kind === 'app' ? '<button data-brand>Brand sheet</button>' : ''
+  item.insertAdjacentHTML('beforeend', `<textarea aria-label="The brief" rows="6" maxlength="4000"></textarea><div class="chips talk-acts">${acts}${sheetHtml}<button data-more>Keep talking</button></div>`)
   const box = item.querySelector('textarea')
   box.value = text
   item.querySelectorAll('[data-go]').forEach(b => { b.onclick = () => {
@@ -1827,6 +1830,13 @@ function talkBrief(text, route = '', what = '') {
     go?.(t, chat)
   } })
   item.querySelector('[data-more]').onclick = () => { item.querySelector('.talk-acts').remove(); els.brief.focus() }
+  const sheetBtn = item.querySelector('[data-brand]')
+  if (sheetBtn) sheetBtn.onclick = () => {
+    const t = box.value.trim()
+    if (!t) return
+    window.swarmCosmos?.brand?.({ chat: talk.chat, brief: t, kind: talk.kind, done: (id, locked) => { if (id) talk.chat = id; sheetBtn.textContent = locked ? 'Brand sheet · Locked' : 'Brand sheet' } })
+  }
+  if (sheet && sheetBtn) return sheetBtn.click()
   box.focus({ preventScroll: true })
 }
 // ---------- Chats (spec 29): the project's talks, grouped Design, App, Game, Video; outside a

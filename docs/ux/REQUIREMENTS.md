@@ -157,6 +157,15 @@ and a Make box idea with no questions, opens a chat with the brief in plain word
 builds only on **Build**, and **Keep talking** is there. Stop ends an automatic run as Stopped, not failed. An
 opened project shows its builds as **Version 3, 2, 1**, not as projects of their own.
 
+**A brand sheet before the first page**
+> do this and option for idk pre chosen picture and mood and feel with brand voice storyboard idk
+
+Said on 2026-11-12. A website's or app's brief offers **Brand sheet** beside **Build**. The sheet shows the story (what,
+who, pages), three palettes side by side, each with a light and a dark sample, and three type pairings as a real
+heading and paragraph. The person's own words make one more option. **Lock** makes the chosen palette and type the
+build's theme as they are, and the build checks it kept them. It is optional: **Build** works without it.
+Spec: docs/specs/31-brand-sheet.md.
+
 **Stop the crew**
 > anyway to stop an ongoing swarm or agents? wish there was ? lol i cant stop them once they start
 

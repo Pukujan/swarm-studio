@@ -749,7 +749,7 @@ export function makeHome({ sw, C, root }) {
   // Before a build spends tokens: what it is about to make, in its own words, with Build and Keep
   // talking (the deck's chat, engine/talkplan.mjs for the talk). Nothing starts until Build.
   // The hosted studio's guests are limited already, and build as they always did.
-  function confirmBuild(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}, steps = null) {
+  function confirmBuild(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}, steps = null, sheet = false) {
     if (hosted() || !sw.talk) return start(text, run, sets)
     closePop()
     input.value = ''
@@ -758,7 +758,7 @@ export function makeHome({ sw, C, root }) {
     C.chat(true)
     const kind = !run ? 'site' : run.games === 'big' ? 'game' : guideKind() === 'film' ? 'film' : 'app'
     const what = steps?.length ? steps.join(' · ') : { site: 'Website', app: 'App', game: 'Game', film: 'Video' }[kind]
-    sw.talk.start({ kind, blank: true, brief: text, what, build: (brief, chat) => start(brief, run, sets, chat) })
+    sw.talk.start({ kind, blank: true, brief: text, what, sheet, build: (brief, chat) => start(brief, run, sets, chat) })
   }
   function talkFirst(text) {
     const run = make.k === 'site' ? null : { games: make.games, only: make.only }
@@ -899,11 +899,13 @@ export function makeHome({ sw, C, root }) {
     openPop('grill', `<div class="hm-dots" aria-label="The brief">${G.qs.map(() => '<i class="done"></i>').join('')}<i class="on"></i></div>
       <h3>The brief</h3>
       <textarea class="hm-free hm-brief" aria-label="The brief" maxlength="4000" rows="4">${esc(text)}</textarea>
-      <div class="hm-gfoot"><button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button><span><button type="button" class="btn ghost" data-talk>Keep talking</button><button type="button" class="btn pri" data-go>${ic('up', 16)}Build</button></span></div>`)
+      <div class="hm-gfoot"><button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button><span>${!hosted() && (guideKind() === 'site' || guideKind() === 'app') ? '<button type="button" class="btn ghost" data-sheet>Brand sheet</button>' : ''}<button type="button" class="btn ghost" data-talk>Keep talking</button><button type="button" class="btn pri" data-go>${ic('up', 16)}Build</button></span></div>`)
     const box = pop.querySelector('.hm-brief')
     const go = () => { const t = box.value.trim(); if (t) build(t) }
     pop.querySelector('[data-go]').onclick = go
     pop.querySelector('[data-talk]').onclick = () => { const t = box.value.trim(); if (t) talkFirst(t) }
+    // the brand sheet first (spec 31): the brief goes to the chat, the sheet opens beside it
+    pop.querySelector('[data-sheet]')?.addEventListener('click', () => { const t = box.value.trim(); if (t) confirmBuild(t, undefined, guideSets(G.answers, G.qs), null, true) })
     box.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); go() } }
     pop.querySelector('[data-back]').onclick = () => { G.i = G.qs.length - 1; drawGrill() }
     box.focus({ preventScroll: true })

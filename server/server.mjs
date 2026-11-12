@@ -41,6 +41,7 @@ import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
+import { brandRoutes, lockedBrand } from './brand.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes } from './setup.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
@@ -349,7 +350,7 @@ function broadcast(event) {
 }
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
-function startRun({ brief, agents, models: given, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '' }) {
+function startRun({ brief, agents, models: given, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '', brand = null }) {
   setModels(given)
   current?.controller.abort()
   const id = new Date().toISOString().replace(/[:.]/g, '-')
@@ -417,6 +418,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', resume 
     base,
     ask,
     resume: !!base && resume === true,
+    brand,
     // the last builds' page types and colours, so this one looks different
     recent: recentLooks(runsDir),
     // a page type the request names (PAGE_TYPES key) wins over the pick
@@ -1322,6 +1324,14 @@ const talks = talkRoutes({
 // their project when they build. On start: empty old chats go, and game plans made before chats existed
 // each get a chat that points at them (the plan files stay where they are).
 const chats = talks.chats
+// The brand sheet (docs/specs/31-brand-sheet.md): a website's or app's story, palette and type, locked before it is designed
+const brands = brandRoutes({
+  chats,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'brand' }, model: modelFor('planner'), maxTokens: 900, temperature: 0.6, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null
+})
 try {
   chats.cleanup()
   const pd = join(dataDir, 'plans')
@@ -2240,6 +2250,7 @@ const server = createServer((req, res) => {
       } catch {}
       delete input.base
       delete input.ask
+      delete input.brand
       if (!input.brief) {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'brief required' }))
         return
@@ -2277,6 +2288,9 @@ const server = createServer((req, res) => {
         if (base) input.base = base
       }
       const pid = typeof input.project === 'string' ? input.project : null
+      // a locked brand sheet is the new build's look (a follow-up keeps the project's)
+      const brand = !base ? lockedBrand(chats, chatId) : null
+      if (brand) input.brand = brand
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (pid) projects.claim(run.id, pid)
@@ -2860,6 +2874,9 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
       delete input.chat
+      delete input.brand
+      const brand = lockedBrand(chats, chatId)
+      if (brand) input.brand = brand
       try {
         const job = auto.start(input)
         // App, Game and Video from the Make box: the words go into a chat that moves into the build's project
@@ -2898,6 +2915,7 @@ const server = createServer((req, res) => {
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
   if (talks(req, res, url)) return
+  if (brands(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 

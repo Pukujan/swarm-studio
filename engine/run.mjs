@@ -10,6 +10,7 @@ import { fixSection } from './review.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
 import { cleanSeo, reviewSeo } from './seo.mjs'
 import { projectName } from './naming.mjs'
+import { checkBrand } from './brand.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
 // a follow-up that asks about the look, not only one that names a colour
@@ -91,13 +92,15 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, brand = null, emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   // one page type per build, away from the last builds' types and colours
   // a follow-up (base: the project's last version) keeps that version's page type, theme and pages
   const type = PAGE_TYPES[base?.pageType] ? base.pageType : PAGE_TYPES[pageType] ? pageType : pickPageType(brief, recent.map(r => r.type).filter(Boolean))
-  const look = base ? null : pickLook(recent, Math.random, brief)
+  // a locked brand sheet (engine/brand.mjs) is the look: no variety pick, no fitting, its theme as it is
+  if (base || !brand?.theme?.vars) brand = null
+  const look = base || brand ? null : pickLook(recent, Math.random, brief)
   const plan = base
     ? { theme: base.theme, pages: base.pages.map(p => ({ ...p, layers: p.layers.map(l => ({ ...l })) })), shared: base.shared.map(l => ({ ...l })), pageType: type }
     : { theme: null, pages: [], shared: [], pageType: type }
@@ -183,8 +186,8 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
 
   const onSitemap = obj => {
     if (obj.type === 'theme') {
-      plan.theme = fitTheme(obj, look)
-      emit('theme', plan.theme)
+      plan.theme = brand ? { ...brand.theme } : fitTheme(obj, look)
+      emit('theme', brand ? { ...plan.theme, by: 'brand' } : plan.theme)
     } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id) && !(maxPages && plan.pages.length >= maxPages)) {
       const page = { ...obj, index: plan.pages.length, layers: [] }
       plan.pages.push(page)
@@ -208,7 +211,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         model: plannerModel,
         messages: [
           { role: 'system', content: SITEMAP_SYSTEM },
-          { role: 'user', content: `Brief: ${brief}\n\n${lookBrief(type, recent, look)}` }
+          { role: 'user', content: brand ? `Brief: ${brief}\n\n${lookBrief(type, [], null)}\n${brand.brief || ''}` : `Brief: ${brief}\n\n${lookBrief(type, recent, look)}` }
         ],
         maxTokens: 2000,
         temperature: 0.8,
@@ -280,7 +283,14 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
   // changes. A new build whose theme lost the colours the brief names gets one more try. The check
   // (missingColours) is the reviewer's: what is still missing after that is said in theme:check.
   async function themeStep() {
-    if (resume || signal?.aborted || !plan.theme?.vars) return
+    if (resume || signal?.aborted) return
+    // the brand sheet's look: set when the planner wrote none, then checked against what was locked
+    if (brand) {
+      if (!plan.theme?.vars) { plan.theme = { ...brand.theme }; emit('theme', { ...plan.theme, by: 'brand' }) }
+      emit('theme:check', { named: namedColours(brief), missing: missingColours(brief, plan.theme.vars), brand: checkBrand(plan.theme, brand.theme) })
+      return
+    }
+    if (!plan.theme?.vars) return
     const words = base ? ask : brief
     const asksLook = base && (LOOK_WORDS.test(ask) || namedColours(ask).length > 0)
     const missing = missingColours(words, plan.theme.vars)
