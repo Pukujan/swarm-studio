@@ -69,6 +69,8 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .home .card .cv { position: relative; aspect-ratio: 16 / 10; border-radius: 12px; background: var(--surface-2); }
 .home .card .cv > .im, .home .card .cv > .pk, .home .card .cv > .blank { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 12px; overflow: hidden; }
 .home .card .im { object-fit: cover; display: block; }
+/* a page snapshot as the cover: its top, where the page starts */
+.home .card .im.top { object-position: 50% 0; }
 .home .card .pk { background: #fff; }
 .home .card .pk iframe { width: 1280px; height: 800px; border: 0; transform: scale(var(--k, .2)); transform-origin: 0 0; pointer-events: none; }
 .home .card .blank { display: grid; place-items: center; color: var(--dim); }

@@ -174,7 +174,7 @@ export function makeHome({ sw, C, root }) {
     return `<div class="tc" style="--tc-bg:${esc(bg)};--tc-fg:${esc(fg || primary)};--tc-pr:${esc(primary || fg)}${font ? `;--tc-font:'${esc(String(font).replace(/'/g, ''))}'` : ''}"><i></i><b>${esc(title)}</b><span></span></div>`
   }
   const cover = (src, th, title = '') => src
-    ? `<img class="im" src="${esc((sw.base || '') + src)}" alt="" loading="lazy" decoding="async" draggable="false">`
+    ? `<img class="im${/^\/snaps\//.test(src) ? ' top' : ''}" src="${esc((sw.base || '') + src)}" alt="" loading="lazy" decoding="async" draggable="false">`
     : th?.colors?.length ? typeCover(title, th)
       : `<div class="blank">${ic('box', 28)}</div>`
   const kinds = list => list?.length ? `<span class="kinds" aria-label="${list.map(k => KIND_NAME[k]).join(', ')}">${list.map(k => ic(KIND[k], 14)).join('')}</span>` : ''

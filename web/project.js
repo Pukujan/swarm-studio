@@ -26,7 +26,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, seen: null, shown: '', proj: null, board: null, uploads: [], refs: [], sending: new Map(),
-    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(),
+    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(), shot: new Map(),
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
     // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
     marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
@@ -39,7 +39,7 @@ export function makeProject({ sw, C, root }) {
     run: { get: () => nav.view.version || P.seen },
     pid: { get: () => nav.view.project || P.proj?.id || null }
   })
-  const forget = () => { P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
+  const forget = () => { P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.shot.clear(); P.thumbTries = 0 }
 
   root.className = 'project'
   root.hidden = true
@@ -116,6 +116,8 @@ export function makeProject({ sw, C, root }) {
     for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k.split('/').slice(2).join('/')); if (P.on) renderStage() }, 1600) }
     P.pendingKeys = now
     P.board = board
+    // the pages' saved snapshots paint at once, before the canvas behind has drawn anything
+    fromDisk(board?.snaps)
     // a site and the game made from it are two runs of one version: the rooms switch between them
     C.pair = board?.game?.run ? { site: run, game: board.game.run } : board?.kind === 'game' ? { site: null, game: run } : { site: run, game: null }
     // a game still being built opens on its build (art painting, code, play test), once per open:
@@ -654,36 +656,66 @@ export function makeProject({ sw, C, root }) {
     if (first) first.before(row); else (insp.querySelector('.pj-secs') || insp.querySelector('.btns')).before(row)
   }
 
-  // a page's real look, once the canvas behind has drawn it
-  // the first page's snapshot becomes the build's cover on Projects (a picture cover still wins there)
-  async function saveCover(src) {
-    const run = P.run
-    if (!run || P.saved?.has(run)) return
-    ;(P.saved ||= new Set()).add(run)
+  // ---------- page snapshots (spec 36): saved to the run's folder per page and content version, in
+  // a small size (the Overview at rest) and a full one (zoomed in, and the build's cover). Opening a
+  // project paints them from disk; only a page whose content changed is photographed again, by the
+  // canvas behind, and its pictures are sent back to be kept.
+  // what the server says is saved: { first, pages: { [page]: { v, s?, f? } } }
+  const fromDisk = disk => {
+    let changed = false
+    for (const p of P.board?.pages || []) {
+      const d = disk?.pages?.[p.id]
+      if (!d?.s) continue
+      if (P.thumbs.get(p.id) !== d.s) { P.thumbs.set(p.id, d.s); changed = true }
+      P.stale.delete(p.id)
+    }
+    return changed
+  }
+  // a JPEG of a picture (the canvas's frozen frames can be PNG)
+  async function jpeg(src, q = 0.82) {
+    if (/^data:image\/jpeg/.test(src)) return src
     const im = new Image()
     await new Promise(r => { im.onload = r; im.onerror = r; im.src = src })
-    if (!im.naturalWidth) return
-    const c = document.createElement('canvas'), w = 800, h = 500
-    c.width = w; c.height = h
-    const k = w / im.naturalWidth
-    c.getContext('2d').drawImage(im, 0, 0, im.naturalWidth, Math.min(im.naturalHeight, h / k), 0, 0, w, Math.min(h, im.naturalHeight * k))
-    sw.api(`/api/runs/${encodeURIComponent(run)}/snap`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: c.toDataURL('image/jpeg', 0.82) }) }).catch(() => {})
+    if (!im.naturalWidth) return null
+    const c = document.createElement('canvas')
+    c.width = im.naturalWidth; c.height = im.naturalHeight
+    c.getContext('2d').drawImage(im, 0, 0)
+    return c.toDataURL('image/jpeg', q)
   }
+  const keep = (run, page, v, size, src) => jpeg(src).then(image => image && sw.api(`/api/runs/${encodeURIComponent(run)}/snaps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page, v, size, image }) })).catch(() => null)
   async function thumbs() {
     if (P.thumbBusy || !P.board?.pages?.length) return
     P.thumbBusy = true
+    const run = P.run
     try {
+      // the saved pictures first; a page whose content changed since has none of its version
+      const disk = await sw.api(`/api/runs/${encodeURIComponent(run)}/snaps`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+      if (run !== P.run || !P.on) return
+      if (fromDisk(disk)) { renderList(); renderStage() }
+      // every page's small picture first; the full ones after, so none waits behind another's full one
+      const fulls = []
       for (const p of P.board.pages) {
-        // the build's card on Projects: the first page's picture, else its snapshot (once per build)
-        if (p === P.board.pages[0] && (p.cover || P.thumbs.has(p.id))) saveCover(p.cover ? base() + p.cover : P.thumbs.get(p.id))
-        if (P.thumbs.has(p.id) && !P.stale.has(p.id)) continue
+        const d = disk?.pages?.[p.id]
+        if (d?.s) continue
+        // photographed for this version already (its picture was not kept: the page moved on meanwhile)
+        if (P.thumbs.has(p.id) && !P.stale.has(p.id) && P.shot.get(p.id) === d?.v) continue
         P.stale.delete(p.id)
         const src = await sw.thumb(p.id).catch(() => null)
         // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
         const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
+        if (run !== P.run || !P.on) return
         // a page that changed keeps its last picture until a new one comes (no blank artboard meanwhile)
-        if (ok && P.on) { P.thumbs.set(p.id, src); renderList(); renderStage(); if (p === P.board.pages[0]) saveCover(await sw.thumb(p.id, 0.6).catch(() => null) || src) }
-        else if (P.thumbs.has(p.id)) P.stale.add(p.id)
+        if (!ok) { if (P.thumbs.has(p.id)) P.stale.add(p.id); continue }
+        P.thumbs.set(p.id, src); renderList(); renderStage()
+        if (!d?.v) continue
+        P.shot.set(p.id, d.v)
+        keep(run, p.id, d.v, 's', src)
+        fulls.push([p.id, d.v])
+      }
+      for (const [id, v] of fulls) {
+        if (run !== P.run || !P.on) return
+        const full = await sw.thumb(id, 0.6).catch(() => null)
+        if (full) await keep(run, id, v, 'f', full)
       }
     } finally { P.thumbBusy = false }
     // a page without a picture yet (its frame was still laying out) is tried again a few times;
