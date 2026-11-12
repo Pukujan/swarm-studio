@@ -643,14 +643,18 @@ export function makeHome({ sw, C, root }) {
       if (typeof made === 'string') C.projectView.show(made, null)
       // A website the crew has just started opens in the Design deck, the one room where the swarm
       // can be watched at work (its Follow camera is on for a new build). Back shows the project's
-      // canvas, as from any room. The hosted studio keeps its project canvas.
+      // Overview, as from any room. The hosted studio keeps its Overview.
       if (typeof made === 'string' && !hosted()) C.go('station', 'canvas')
       return
     }
     try {
-      await post('/api/auto', { prompt: text, ...run })
+      // App and Video start with the same page design as a website (engine/auto.mjs design step), so
+      // they open the same way: the new build's project, then the Design deck while the crew designs.
+      // The reply names that build's run; without it the project would show the build before it.
+      const job = await post('/api/auto', { prompt: text, ...run })
       input.value = ''
       C.open(null)
+      if (job?.run) { C.projectView.show(job.run, null); C.go('station', 'canvas') }
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 

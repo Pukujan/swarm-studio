@@ -97,6 +97,14 @@ These are answered in [PATTERNS.md](PATTERNS.md) and RULES.md rules 9 and 27–3
 
 Said of the Design deck, after a website finished in about 40 seconds on the project's canvas before anyone had
 double-clicked into a page. A website started with Make opens in the Design deck (SITEMAP.md sections 8 and 10).
-The project's canvas and the Design deck stay two places: the canvas holds the files, the deck is where the crew
-is watched and a page is designed.
+The project's Overview and the Design deck stay two places: the Overview holds the pages and files, the deck is
+where the crew is watched and a page is designed.
+
+> again its doing this instead of designing and taking me here is it coz both of them is called canvas?
+
+> this needs to be called overview
+
+Said on 2026-11-11 of an App started with Make, which stayed on the project's pages while the crew designed, with
+the mode menu reading Canvas on both places. The project's pages and files are the **Overview**; the Design deck
+keeps **Canvas** in the mode menu. Every kind that starts with page design (Website, App, Video) opens in the deck.
 
