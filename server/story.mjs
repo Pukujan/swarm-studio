@@ -1,6 +1,6 @@
 // The story's routes (docs/specs/37-story.md, engine/story.mjs, engine/storycards.mjs).
 //   GET  /api/runs/:id/story                  -> { story, cards, types } (404 before one is written)
-//   POST /api/runs/:id/story { type? }        -> written (again) from the build, cards drawn
+//   POST /api/runs/:id/story { type?, auto? } -> written (again) from the build, cards drawn (auto: rules only)
 //   POST /api/runs/:id/story/edit { op, ... } -> reword | picture | move | order | type; cards redrawn
 //   GET  /story/<id>/<shape>-<beat>.jpg      -> one card (open like /img/, so an <img> can show it)
 //   GET  /story/<id>/screens/<page>-<desktop|phone>.jpg -> a page shot a beat may use
@@ -98,10 +98,13 @@ export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null
     const input = await body(req)
     try {
       const out = await once(id, async () => {
-        const f = await factsOf(id, { pitch: !sub || input.op === 'type' })
+        // written without a press (the Overview opening a finished build): from the rules alone, no model
+        // call; the person's Again or a new type asks the planner
+        const auto = !sub && input.auto === true
+        const f = await factsOf(id, { pitch: !auto && (!sub || input.op === 'type') })
         let story
         if (!sub) {
-          const talk = chat()
+          const talk = auto ? null : chat()
           story = (await writeStory(f, { type: input.type || null, chat: talk })).story
         } else {
           const now = readStory(runDir)

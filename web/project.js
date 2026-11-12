@@ -151,7 +151,7 @@ export function makeProject({ sw, C, root }) {
       if (P.run !== run) return
       P.story = got; P.storyRun = run
     }
-    if (!P.story && !board.busy && !P.storyAsked.has(run)) { P.storyAsked.add(run); storyWrite(run, {}) }
+    if (!P.story && !board.busy && !P.storyAsked.has(run)) { P.storyAsked.add(run); storyWrite(run, { auto: true }) }
   }
   function storyWrite(run, body, path = '') {
     P.storyWriting.add(run)
