@@ -25,12 +25,21 @@ export function makeProject({ sw, C, root }) {
   const base = () => sw.base || ''
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
-    on: false, pid: null, run: null, proj: null, board: null, uploads: [], refs: [], sending: new Map(),
+    on: false, seen: null, shown: '', proj: null, board: null, uploads: [], refs: [], sending: new Map(),
     sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), stale: new Set(),
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
     // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
     marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
   }
+  // the version shown and its project are the navigation machine's (spec 34). A project opened with
+  // no version yet shows the build the canvas holds; one too new to name its project takes it from
+  // the project list.
+  const nav = C.nav
+  Object.defineProperties(P, {
+    run: { get: () => nav.view.version || P.seen },
+    pid: { get: () => nav.view.project || P.proj?.id || null }
+  })
+  const forget = () => { P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
 
   root.className = 'project'
   root.hidden = true
@@ -98,7 +107,7 @@ export function makeProject({ sw, C, root }) {
     // never the server's current run: an Overview shows the build that was opened or started here
     const run = P.run || sw.viewing || sw.S?.run
     if (!run || run === 'new') { P.board = null; render(); return }
-    P.run = run
+    if (run !== nav.view.version) P.seen = run
     const [board, list] = await Promise.all([api(`/api/runs/${encodeURIComponent(run)}/board`).catch(() => null), hosted() ? null : api('/api/projects').catch(() => null)])
     // the view moved to another run while this one loaded: its answer is not drawn over the new one
     if (!P.on || P.run !== run) return
@@ -116,11 +125,10 @@ export function makeProject({ sw, C, root }) {
     P.toGame.add(run)
     // the project is the one this run belongs to; the one it was opened from only when the run is
     // too new to be listed (so a name never sits over another project's pages)
-    P.proj = list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || list?.projects.find(p => p.id === P.pid) || null
+    P.proj = list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || list?.projects.find(p => p.id === nav.view.project) || null
     // back from a site's game: the project shows the site's version, which holds the game
     const up = P.proj?.parts?.[run]
-    if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0; C.load(up); return load() }
-    if (P.proj) P.pid = P.proj.id
+    if (up && up !== run) { nav.go({ type: 'open.version', version: up, project: P.proj.id }); return }
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
     P.refs = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/refs`).catch(() => ({ refs: [] }))).refs : []
     render()
@@ -1029,7 +1037,7 @@ export function makeProject({ sw, C, root }) {
     const items = [
       { k: 'rename', icon: 'type', label: 'Rename', run: renameProject },
       { k: 'dup', icon: 'layers', label: 'Duplicate', run: () => post('/api/projects', { op: 'duplicate', ids: [P.pid] }).then(out => { const np = out.projects.find(x => x.id === out.id); if (np) C.open(np.head, np.id) }).catch(() => {}) },
-      ...(p?.versions?.length > 1 ? ['-', ...p.versions.map((v, i) => ({ k: `v:${v.id}`, icon: 'clock', label: `Version ${p.versions.length - i}`, on: v.id === P.run, run: () => C.open(v.id, P.pid) }))] : [])
+      ...(p?.versions?.length > 1 ? ['-', ...p.versions.map((v, i) => ({ k: `v:${v.id}`, icon: 'clock', label: `Version ${p.versions.length - i}`, on: v.id === P.run, run: () => nav.go({ type: 'open.version', version: v.id }) }))] : [])
     ]
     showMenu(items, anchor)
   }
@@ -1193,7 +1201,8 @@ export function makeProject({ sw, C, root }) {
     const from = route === 'extend' || (route === 'new' && P.run && P.board?.kind !== 'game' && !hosted()) ? P.run : null
     const send = (t, chat) => Promise.resolve(sw.submit(t, false, P.pid, from, chat ? { chat } : {})).then(r => {
       if (r?.busy) { if (!input.value) input.value = text; toast(`${ic('msg', 15)}<span>Still on the last change</span>`); return }
-      if (typeof r === 'string' && r !== P.run) { P.run = r; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
+      // the new version is the one shown: the machine names it, the Overview follows
+      if (typeof r === 'string' && r !== P.run) return C.started(r, { project: P.pid, room: 'overview' })
       load()
     })
     // "don't build yet, let's talk" or a question for the crew: the planner answers in the Design
@@ -1549,7 +1558,7 @@ export function makeProject({ sw, C, root }) {
     if (/^(image|review)(:|$)/.test(e.type) && (!e.run || e.run === P.run)) { clearTimeout(P.soonP); P.soonP = setTimeout(load, 350) }
     // a run starting elsewhere (another project, another window) does not take over this one;
     // the dock's own turns switch to their run when it starts (above)
-    if (e.type === 'run:start' || e.type === 'reset') { if (e.run && !P.run) P.run = e.run; if (!e.run || e.run === P.run) { P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0; setTimeout(load, 600) } }
+    if (e.type === 'run:start' || e.type === 'reset') { if (e.run && !P.run) P.seen = e.run; if (!e.run || e.run === P.run) { P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0; setTimeout(load, 600) } }
     if (e.type === 'image' || e.type === 'page' || e.type === 'video:done' || e.type === 'run:done') { clearTimeout(P.soon); P.soon = setTimeout(load, 800) }
     // a finished section changes its page (a shared one, '*', every page): those are taken again
     if (e.type === 'layer:done') { for (const p of P.board?.pages || []) if (!e.page || e.page === '*' || e.page === p.id) P.stale.add(p.id); P.thumbTries = 0; clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
@@ -1580,10 +1589,10 @@ export function makeProject({ sw, C, root }) {
 
   return {
     el: root,
-    show(run, pid) {
-      if (pid !== undefined && pid !== P.pid) { P.pid = pid; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
-      if (run && run !== P.run) { P.run = run; P.sel = null; P.framed = false; P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0 }
-      if (!run && pid === null) { P.run = null; P.framed = false }
+    // the machine's version and project (draw passes them); another one starts the view afresh
+    show() {
+      const shown = `${nav.view.project}|${nav.view.version}`
+      if (shown !== P.shown) { P.shown = shown; P.seen = null; forget() }
       root.hidden = false
       P.on = true
       load()

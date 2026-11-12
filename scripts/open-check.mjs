@@ -157,6 +157,17 @@ try {
   await settle(B1)
   await shows(B1, 'Bravo Bikes', 'Version 1 opened')
 
+  // a version picked from inside the project (the name's menu): the machine's version, the canvas
+  // and the address follow, and the project stays
+  await page.click('.pj-crumb .pj-name')
+  await page.click('.hm-menu [data-k="v:' + B2 + '"]')
+  await settle(B2)
+  const tile = await page.evaluate(() => ({ version: window.swarmCosmos.nav.view.version, project: window.swarmCosmos.nav.view.project, room: window.swarmCosmos.nav.view.room, run: window.swarm.S?.run, address: location.search }))
+  ok(tile.version === B2 && tile.run === B2 && tile.room === 'overview' && tile.address.includes(`version=${B2}`) && !!tile.project, `a version from inside the project opens it there (${tile.room}, ${tile.run === B2 ? 'version 2' : tile.run})`)
+  await shows(B2, 'Bravo Bikes', 'Version 2 from inside the project')
+  await page.goBack(); await settle(B1)
+  await shows(B1, 'Bravo Bikes', 'Back is Version 1 again')
+
   console.log('the stream changes nothing by itself')
   const C2 = await elsewhere('Neon Alley Nights again, from another window')
   await wait(1200)

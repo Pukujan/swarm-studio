@@ -38,7 +38,8 @@ const toRoom = [
   ...BUILD_ROOMS.map(room => ({ guard: ({ event }) => event.room === room, target: target(room), reenter: true, actions: assign({ run: ({ context }) => context.version, page: null }) })),
   { guard: ({ event }) => event.room === 'game' && !!id(event.run), target: target('game'), actions: assign({ run: ({ event }) => id(event.run), page: null }) }
 ]
-const opened = room => ({ target: target(room), reenter: true, actions: assign({ version: ({ event }) => id(event.version), run: ({ event }) => id(event.version), page: null }) })
+// another version of the open project (its project may come with it, when the project list knew it first)
+const opened = room => ({ target: target(room), reenter: true, actions: assign({ project: ({ context, event }) => (event.project === undefined ? context.project : id(event.project)), version: ({ event }) => id(event.version), run: ({ event }) => id(event.version), page: null }) })
 const playerMoves = {
   close: { target: 'closed' },
   page: { actions: assign({ page: ({ event }) => id(event.page) }) }
