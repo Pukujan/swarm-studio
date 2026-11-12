@@ -204,6 +204,7 @@ flowchart LR
   PROJ --> MO[Mood boards]
   PROJ --> SW[Shared with me]
   PROJ --> SU["Setup: once, then the user menu (spec 6)"]
+  SU --> SU0["Account: Skipped, or Google / GitHub / Discord → Feed sign-in → linked as you"]
   SU --> SU1["Models: tested ✓ or ⚠ → Let Hermes set this up"]
   SU --> SU2["Pictures: Painted, Stock photos, Drawn"]
   SU --> SU3[Start]

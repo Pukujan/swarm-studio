@@ -76,3 +76,31 @@ test('a model error never carries a key', () => {
   assert.doesNotMatch(modelError(new Error('refused for Bearer sk-abcdefghijklmnop1234')), /abcdefghijklmnop/)
   assert.equal(modelError(''), 'No answer')
 })
+
+test('the Account row: who this install posts as, never the token, and only known sign-ins', async () => {
+  const { setupRoutes } = await import('../server/setup.mjs')
+  const { mkdtempSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { EventEmitter } = await import('node:events')
+  const dir = mkdtempSync(join(tmpdir(), 'su-'))
+  const calls = []
+  const handle = setupRoutes({ dataDir: dir, roles: () => ({}), call: async () => {}, image: async () => ({ providers: [] }), setPictures: () => {}, feed: async c => { calls.push(c); return { ok: true } } })
+  const ask = (method, path, body) => new Promise(resolve => {
+    const req = new EventEmitter(); req.method = method; req.destroy = () => {}
+    const res = { writeHead: code => ({ end: s => resolve({ code, data: JSON.parse(s) }) }) }
+    handle(req, res, new URL(`http://x${path}`))
+    req.emit('data', JSON.stringify(body || {})); req.emit('end')
+  })
+  assert.deepEqual((await ask('GET', '/api/setup')).data.account, { connected: false, name: '', handle: '', guest: false, pending: null })
+  writeFileSync(join(dir, 'feed.json'), JSON.stringify({ pending: { userCode: 'WXYZ-2345', provider: 'google', expiresAt: Date.now() / 1000 + 600 } }))
+  const r = await ask('POST', '/api/setup/account', { provider: 'google' })
+  assert.equal(calls[0], 'account_json("provider", "google")')
+  assert.deepEqual(r.data.account.pending, { code: 'WXYZ-2345', provider: 'google' })
+  assert.equal((await ask('POST', '/api/setup/account', { provider: 'myspace' })).code, 400)
+  assert.equal(calls.length, 1)
+  writeFileSync(join(dir, 'feed.json'), JSON.stringify({ token: 'sfp_secret', handle: 'comet', name: 'Comet', guest: true }))
+  const v = await ask('GET', '/api/setup')
+  assert.deepEqual(v.data.account, { connected: true, name: 'Comet', handle: 'comet', guest: true, pending: null })
+  assert.doesNotMatch(JSON.stringify(v.data), /sfp_secret/)
+})

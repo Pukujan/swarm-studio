@@ -4,6 +4,9 @@
 //   POST /api/setup { seen, pictures } -> the same; pictures: 'painted' | 'stock' | 'drawn' | null (the default again)
 //   POST /api/setup/models { again }   -> one tiny call to the planner and the builders: { ok, planner, worker }
 //   POST /api/setup/hermes             -> "Let Hermes set this up": opens `hermes model` in a terminal
+//   POST /api/setup/account { provider } -> sign in to Swarm Feed with Google, GitHub or Discord, then link
+//        this install to that account; { check } asks whether it came back, { reopen } opens the page
+//        again, { cancel } drops it. Answers { ok, message?, account }. The token stays in feed.py.
 //
 // setup.json holds { seen, paint } and nothing secret: whether the sheet was shown, and how the
 // last real paint went ({ provider, ok, error }), which is how the Pictures row knows an image
@@ -16,7 +19,7 @@ import { pictureState, isPictures, modelTester, paintNote } from '../engine/setu
 
 // roles() -> { planner: { model, baseUrl, apiKey }, worker }; call(provider, model) throws when it
 // does not answer; image() -> { providers, imagePick, pick }; setPictures(mode | null) saves the pick.
-export function setupRoutes({ dataDir, roles, call, image, setPictures, hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile }) {
+export function setupRoutes({ dataDir, roles, call, image, setPictures, feed = null, hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile }) {
   const file = join(dataDir, 'setup.json')
   let state = {}
   try { state = JSON.parse(readFileSync(file, 'utf8')) } catch {}
@@ -29,7 +32,24 @@ export function setupRoutes({ dataDir, roles, call, image, setPictures, hermesBi
   const view = async () => {
     const r = roles()
     const row = x => ({ model: x?.model || '', host: host(x?.baseUrl), key: !!x?.apiKey })
-    return { seen: !!state.seen, models: { planner: row(r.planner), worker: row(r.worker) }, test: lastTest, pictures: await pictures() }
+    return { seen: !!state.seen, account: account(), models: { planner: row(r.planner), worker: row(r.worker) }, test: lastTest, pictures: await pictures() }
+  }
+  // who this install posts as, from feed.json (written by feed.py); never the token
+  const account = () => {
+    let f = {}
+    try { f = JSON.parse(readFileSync(join(dataDir, 'feed.json'), 'utf8')) } catch {}
+    const p = f.pending && f.pending.expiresAt * 1000 > Date.now() ? { code: f.pending.userCode || '', provider: f.pending.provider || '' } : null
+    return { connected: !!f.token, name: f.name || '', handle: f.handle || '', guest: !!f.token && f.guest === true, pending: f.token ? null : p }
+  }
+  const ACCOUNT_OPS = { provider: 1, check: 1, reopen: 1, cancel: 1 }
+  const PROVIDERS = ['google', 'github', 'discord']
+  async function signIn(input) {
+    if (!feed) return { ok: false, message: 'Start Swarm Studio from Hermes to sign in.', account: account() }
+    const op = Object.keys(ACCOUNT_OPS).find(k => input[k])
+    if (!op || (op === 'provider' && !PROVIDERS.includes(input.provider))) return null
+    const arg = op === 'provider' ? JSON.stringify(input.provider) : JSON.stringify('')
+    const out = await feed(`account_json(${JSON.stringify(op)}, ${arg})`)
+    return { ok: out?.ok !== false, ...(out?.message ? { message: String(out.message).slice(0, 200) } : {}), account: account() }
   }
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const body = req => new Promise(resolve => {
@@ -67,6 +87,10 @@ export function setupRoutes({ dataDir, roles, call, image, setPictures, hermesBi
     }
     if (url.pathname === '/api/setup/models' && req.method === 'POST') {
       body(req).then(async input => { lastTest = await tester.test(roles(), { again: input.again === true }); json(res, 200, lastTest) })
+      return true
+    }
+    if (url.pathname === '/api/setup/account' && req.method === 'POST') {
+      body(req).then(async input => { const r = await signIn(input); r ? json(res, 200, r) : json(res, 400, { error: 'bad request' }) })
       return true
     }
     if (url.pathname === '/api/setup/hermes' && req.method === 'POST') { hermesModel().then(r => json(res, 200, r)); return true }

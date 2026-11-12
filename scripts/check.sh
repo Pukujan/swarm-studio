@@ -48,7 +48,7 @@ plan_id=$(sed -E 's/^\{"id":"(p-[a-z0-9]+)".*/\1/' "$tmp/reply")
 curl -sf -H 'x-swarm-token: ci' http://127.0.0.1:$port/api/plans/$plan_id/brief > "$tmp/reply"; has 'Art at close-ups'
 get /api/packs; has '"events"'
 # the Setup sheet (spec 6): with no model key the test fails without a call, and the pictures pick is kept
-get /api/setup; has '"seen":false'; has '"pictures"'
+get /api/setup; has '"seen":false'; has '"pictures"'; has '"account":{"connected":false'
 curl -sf -H 'x-swarm-token: ci' -d '{"seen":true,"pictures":"drawn"}' http://127.0.0.1:$port/api/setup > "$tmp/reply"; has '"seen":true'; has '"mode":"drawn"'
 curl -sf -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/setup/models > "$tmp/reply"; has '"ok":false'
 get /api/library/packs; has '"packs"'

@@ -166,6 +166,11 @@ def _open(url: str) -> bool:
 def _finish(cfg: dict, got: dict) -> None:
     cfg.update(token=got["token"], handle=got.get("handle"), name=got.get("name"), connectedAt=int(time.time()), origin=origin())
     cfg.pop("pending", None)
+    # a browser that was not signed in approves as a guest: the Setup sheet says so (docs/specs/06-onboarding.md)
+    try:
+        cfg["guest"] = (_call("/api/feed/me", token=got["token"]).get("viewer") or {}).get("kind") == "guest"
+    except FeedError:
+        cfg.pop("guest", None)
 
 
 def poll_once() -> str:
@@ -262,6 +267,57 @@ def connect(args: list[str]) -> str:
     return (f"Connect Hermes to the Swarm Feed: approve code {got['userCode']} at\n  {url}\n"
             + ("(opened in your browser) " if opened else "")
             + "It finishes by itself once you press Connect; /swarm connect status checks. The code works for 10 minutes.")
+
+
+# ----------------------------------------------------------------- sign in ---
+# The Setup sheet's Account row: sign in first, then approve the code, so this install is
+# never linked to a guest. The browser opens the provider's sign-in on the feed, which comes
+# back to /link with the code, where the signed-in account presses Connect.
+PROVIDERS = ("google", "github", "discord")
+
+
+def sign_in_url(provider: str, user_code: str) -> str:
+    from urllib.parse import quote
+    return f"{origin()}/auth/{provider}?next={quote('/link?code=' + user_code, safe='')}"
+
+
+def sign_in(provider: str) -> dict:
+    """Start a sign-in with one provider: {ok, message?}. A guest link is dropped first."""
+    if provider not in PROVIDERS:
+        return {"ok": False, "message": "Pick Google, GitHub or Discord."}
+    cfg = load()
+    if cfg.get("token") and not cfg.get("guest"):
+        return {"ok": True}
+    # a guest link (or an old pending code) gives way to one made by a signed-in account
+    _update(lambda c: [c.pop(k, None) for k in ("token", "handle", "name", "connectedAt", "pending", "guest")])
+    host = socket.gethostname().split(".")[0][:40] or "this computer"
+    cid = _update(_client_id)["clientId"]
+    got = _call("/api/feed/device", {"clientId": cid, "clientName": f"Hermes on {host}"[:80]})
+    url = sign_in_url(provider, got["userCode"])
+    pending = {"deviceCode": got["deviceCode"], "userCode": got["userCode"], "url": url, "provider": provider,
+               "expiresAt": time.time() + int(got.get("expiresIn") or 600), "interval": int(got.get("interval") or 5)}
+    _update(lambda c: c.__setitem__("pending", pending))
+    opened = _open(url)
+    return {"ok": True} if opened else {"ok": False, "message": f"Open {url} to sign in."}
+
+
+def sign_in_step(op: str) -> dict:
+    """check: ask the feed once; reopen: open the sign-in page again; cancel: drop the code."""
+    if op == "cancel":
+        _update(lambda c: c.pop("pending", None))
+        return {"ok": True}
+    pending = load().get("pending")
+    if not pending:
+        return {"ok": True}
+    if op == "reopen":
+        _open(pending["url"])
+        return {"ok": True}
+    status = poll_once()
+    if status == "denied":
+        return {"ok": False, "message": "The code was turned down. Sign in again."}
+    if status in ("expired", "used"):
+        return {"ok": False, "message": "That sign-in ran out. Sign in again."}
+    return {"ok": True}
 
 
 def _token() -> str:

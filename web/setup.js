@@ -2,6 +2,7 @@
 // (docs/ux/PATTERNS.md): each row is a name and one state, a tap opens it, and every row has a
 // default already picked, so Start works at once. Shown once on Projects; later from the user menu.
 //
+//   Account   Swarm Feed: sign in with Google, GitHub or Discord, then this install is linked to it
 //   Models    the planner and builder models Hermes passed, tested with one tiny call each
 //   Pictures  what builds use for pictures: Painted, Stock photos or Drawn
 import { ic } from './icons.js'
@@ -11,6 +12,7 @@ const PICTURE_ROWS = [
   { k: 'stock', label: 'Stock photos', note: 'Built-in library and Pexels · instant' },
   { k: 'drawn', label: 'Drawn', note: 'SVG · fastest, no keys' }
 ]
+const PROVIDERS = [{ k: 'google', label: 'Google' }, { k: 'github', label: 'GitHub' }, { k: 'discord', label: 'Discord' }]
 
 export function makeSetup({ sw }) {
   const esc = sw.esc
@@ -35,6 +37,43 @@ export function makeSetup({ sw }) {
     return row('models', 'Models', `<span class="su-val">${esc(short(m.worker.model))}</span>${state}`, `${line('Planner', 'planner')}${line('Builders', 'worker')}${fix}`)
   }
 
+  // Account: Swarm Feed, signed in first (Google, GitHub or Discord), then this install is linked to
+  // that account. Never a guest: a profile with no sign-in of its own is shown as one, with the fix.
+  function accountRow() {
+    const a = S.view.account || {}
+    const who = a.connected ? `${esc(a.name || a.handle || '')}${a.handle ? ` <span class="su-dim">@${esc(a.handle)}</span>` : ''}` : ''
+    const state = a.connected
+      ? `<span class="su-val">${a.guest ? 'Guest' : esc(a.handle ? `@${a.handle}` : a.name || 'Signed in')}</span>${mark(!a.guest, a.guest ? 'Guest profile' : 'Signed in')}`
+      : a.pending ? `<span class="su-val">Waiting</span>${busy}` : '<span class="su-val">Skipped</span>'
+    const providers = `<div class="su-acts su-sign">${PROVIDERS.map(p => `<button type="button" class="ui-btn ui-btn-outline ui-btn-sm" data-sign="${p.k}">${p.label}</button>`).join('')}</div>`
+    const waiting = a.pending ? `<p class="su-note">Finish in your browser. Code <b class="fg">${esc(a.pending.code || '')}</b></p><div class="su-acts"><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-reopen>Open again</button><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-cancel>Cancel</button></div>` : ''
+    const inner = a.connected
+      ? `<div class="su-line"><span class="fg">${who}</span></div>${a.guest ? `<p class="su-why">A guest profile. Sign in to make it yours.</p>${providers}` : ''}`
+      : `${a.pending ? waiting : providers}${S.signError ? `<p class="su-why">${esc(S.signError)}</p>` : ''}`
+    return row('account', 'Account', state, `${inner}<p class="su-note">Builds stay on this computer. Publish and Post make them public.</p>`)
+  }
+
+  async function sign(provider) {
+    S.signError = ''
+    const r = await api('/api/setup/account', { provider }).catch(() => ({ ok: false, message: 'The Feed did not answer.' }))
+    if (r.account) S.view.account = r.account
+    if (!r.ok && r.message) S.signError = r.message
+    draw()
+    watch()
+  }
+  // while a sign-in is open in the browser, ask every few seconds whether it came back
+  let watching = null
+  function watch() {
+    clearTimeout(watching)
+    if (!S.view?.account?.pending || !dlg || dlg.closed) return
+    watching = setTimeout(async () => {
+      const r = await api('/api/setup/account', { check: true }).catch(() => null)
+      if (r?.account) S.view.account = r.account
+      draw()
+      watch()
+    }, 3000)
+  }
+
   function picturesRow() {
     const p = S.view.pictures, on = PICTURE_ROWS.find(x => x.k === p.mode)
     const painted = p.painted.model ? `${short(p.painted.model)} · ${p.painted.provider}` : 'No image model'
@@ -53,15 +92,18 @@ export function makeSetup({ sw }) {
   function draw() {
     if (!dlg || dlg.closed || !S.view) return
     const focus = dlg.body.querySelector(':focus')?.dataset
-    dlg.body.innerHTML = `<div class="su-list">${modelsRow()}${picturesRow()}</div>`
+    dlg.body.innerHTML = `<div class="su-list">${accountRow()}${modelsRow()}${picturesRow()}</div>`
+    for (const b of dlg.body.querySelectorAll('[data-sign]')) b.onclick = () => sign(b.dataset.sign)
     for (const b of dlg.body.querySelectorAll('[data-row]')) b.onclick = () => { S.open = S.open === b.dataset.row ? '' : b.dataset.row; draw() }
     for (const b of dlg.body.querySelectorAll('[data-pic]')) b.onclick = async () => { S.view = await api('/api/setup', { pictures: b.dataset.pic }).catch(() => S.view); draw() }
     const on = (sel, fn) => { const b = dlg.body.querySelector(sel); if (b) b.onclick = fn }
     on('[data-again]', () => test(true))
     on('[data-hermes]', async () => { S.hermes = await api('/api/setup/hermes', {}).catch(() => ({ ok: false, command: 'hermes model' })); draw() })
-    on('[data-copy]', e => navigator.clipboard?.writeText(e.currentTarget.dataset.copy).catch(() => {}))
+    on('[data-reopen]', () => api('/api/setup/account', { reopen: true }).catch(() => {}))
+    on('[data-cancel]', async () => { const r = await api('/api/setup/account', { cancel: true }).catch(() => null); if (r?.account) S.view.account = r.account; draw() })
+    on('[data-copy]',e => navigator.clipboard?.writeText(e.currentTarget.dataset.copy).catch(() => {}))
     // a redraw keeps the keyboard where it was
-    const again = focus && (focus.row ? `[data-row="${focus.row}"]` : focus.pic ? `[data-pic="${focus.pic}"]` : null)
+    const again = focus && (focus.row ? `[data-row="${focus.row}"]` : focus.pic ? `[data-pic="${focus.pic}"]` : focus.sign ? `[data-sign="${focus.sign}"]` : null)
     if (again) dlg.body.querySelector(again)?.focus({ preventScroll: true })
   }
 
@@ -81,13 +123,14 @@ export function makeSetup({ sw }) {
     if (dlg && !dlg.closed) return
     S.view = await api('/api/setup').catch(() => null)
     if (!S.view?.models) return
-    Object.assign(S, { open: '', hermes: null })
+    Object.assign(S, { open: S.view.account?.pending ? 'account' : '', hermes: null, signError: '' })
     dlg = window.SwarmUI.dialog({ title: 'Setup', className: 'su', body: '', footer: '<button type="button" class="ui-btn ui-btn-default su-start">Start</button>', onClose: seen })
     dlg.footer.querySelector('.su-start').onclick = () => dlg.close('start')
     S.test = S.view.test || undefined
     draw()
     // the test is kept by the server for ten minutes, so opening the sheet again costs nothing
     test()
+    watch()
   }
 
   return {

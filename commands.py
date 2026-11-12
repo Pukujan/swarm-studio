@@ -417,6 +417,14 @@ def connect_json() -> dict:
     return {"connected": bool(cfg.get("token")), "name": cfg.get("name") or cfg.get("handle"), "code": p.get("userCode"), "url": p.get("url"), "message": msg}
 
 
+def account_json(op: str, provider: str = "") -> dict:
+    """The Setup sheet's Account row: provider starts a sign-in; check, reopen and cancel follow it."""
+    try:
+        return feed.sign_in(provider) if op == "provider" else feed.sign_in_step(op)
+    except feed.FeedError as exc:
+        return {"ok": False, "message": str(exc)}
+
+
 def _export_zip(run_id: str) -> str | None:
     """The build's export zip (static HTML, React project, ABA spec), made now so it matches the build."""
     out = _api(f"/api/runs/{run_id}/export", {}, timeout=120)
