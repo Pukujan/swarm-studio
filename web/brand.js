@@ -7,7 +7,7 @@ import { makeBoard } from './board.js'
 
 export function makeBrand({ sw, C, root }) {
   const esc = sw.esc
-  const B = { on: false, chat: null, brand: null, theme: null, sel: null, framed: false, done: null, busy: false }
+  const B = { on: false, chat: null, brand: null, theme: null, packs: [], sel: null, framed: false, done: null, busy: false }
 
   // the stage, camera, inspector, Esc and toast are the shared board (web/board.js)
   const bd = makeBoard({ root, cls: 'project plan brand-sheet', label: 'Brand sheet', fit: [0.35, 1], on: () => B.on, selected: () => !!B.sel, clear: () => select(null) })
@@ -30,7 +30,7 @@ export function makeBrand({ sw, C, root }) {
   // ---------- data
   const api = (path, opts) => sw.api(path, opts).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j })
   const post = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })
-  const take = v => { B.chat = v.chat; B.brand = v.brand; B.theme = v.theme; fonts(); render() }
+  const take = v => { B.chat = v.chat; B.brand = v.brand; B.theme = v.theme; B.packs = v.packs || []; fonts(); render() }
   const call = (what, body) => post(`/api/brand/${encodeURIComponent(B.chat)}/${what}`, body).then(take).catch(err => toast(err.message))
   async function lock() {
     await call('lock')
@@ -44,7 +44,7 @@ export function makeBrand({ sw, C, root }) {
   const loaded = new Set()
   function fonts() {
     const fam = f => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;700`
-    const want = (B.brand?.types || []).flatMap(t => [t.heading, t.body]).filter(f => f && !loaded.has(f))
+    const want = [...(B.brand?.types || []), ...B.packs.map(k => k.type)].flatMap(t => [t.heading, t.body]).filter(f => f && !loaded.has(f))
     if (!want.length) return
     want.forEach(f => loaded.add(f))
     const link = document.createElement('link')
@@ -87,12 +87,29 @@ export function makeBrand({ sw, C, root }) {
     const types = b.types.map(x => `<div class="ab br-type${x.id === b.pick?.type ? ' on' : ''}" data-key="type:${esc(x.id)}" tabindex="0" role="button" aria-label="${esc(x.name)}" aria-pressed="${x.id === b.pick?.type}" style="background:${p.bg};color:${p.text}">
       <b style="font-family:'${esc(x.heading)}'">${esc(headline())}</b><span style="font-family:'${esc(x.body)}'">${esc(s.who ? `For ${s.who}. ` : '')}Every page reads in this pairing: the headings above, this paragraph below.</span>
       <em>${esc(x.heading)} · ${esc(x.body)}</em>${sel(`type:${x.id}`)}</div>`).join('')
+    // the packs: each card looks like itself (its ground, its type, its photos, its voice and its button)
+    const packs = B.packs.map(k => { const kp = k.palette, on = b.pack === k.slug
+      return `<div class="ab br-pack${on ? ' on' : ''}${k.suggested ? ' sug' : ''}" data-key="pack:${esc(k.slug)}" tabindex="0" role="button" aria-label="${esc(k.name)}" aria-pressed="${on}" style="background:${kp.bg};color:${kp.text};--r:${esc(k.radius)}">
+      <div class="br-pk-pics">${k.pictures.photos.map(x => `<img src="${esc(x.url)}" alt="" draggable="false" loading="lazy">`).join('')}</div>
+      <b style="font-family:'${esc(k.type.heading)}'">${esc(k.name)}</b>
+      <span style="font-family:'${esc(k.type.body)}'">${esc(k.voice.lines[0])}</span>
+      <div class="br-pk-row"><i class="br-btn" style="background:${kp.accent};color:${onColour(kp.accent)};font-family:'${esc(k.type.body)}'">Join</i><u style="color:${kp.link};font-family:'${esc(k.type.body)}'">Read more</u></div>
+      ${k.why ? `<em>${esc(k.why)}</em>` : ''}${sel(`pack:${k.slug}`)}</div>` }).join('')
+    // what a pack brought: the voice, the pictures and the storyboard, drawn in the picked look
+    const look = `background:${p.bg};color:${p.text}`
+    const voice = b.voice ? `<div class="ab br-voice" data-key="voice:${esc(b.voice.pack)}" tabindex="0" role="button" aria-label="${esc(b.voice.name)}" style="${look}">${b.voice.lines.map(l => `<b style="font-family:'${esc(t.heading)}'">${esc(l)}</b>`).join('')}<em>${esc(b.voice.name)}</em>${sel(`voice:${b.voice.pack}`)}</div>` : ''
+    const pics = b.pictures ? `<div class="ab br-pics" data-key="pictures:${esc(b.pictures.pack)}" tabindex="0" role="button" aria-label="${esc(b.pictures.name)}">${b.pictures.photos.map(x => `<img src="${esc(x.url)}" alt="${esc(x.alt)}" draggable="false" loading="lazy">`).join('')}<em>${esc(b.pictures.name)}</em>${sel(`pictures:${b.pictures.pack}`)}</div>` : ''
+    const frames = b.storyboard ? b.storyboard.frames.map((fr, i) => `<div class="ab br-frame" data-key="frame:${i}" tabindex="0" role="button" aria-label="${esc(fr)}" style="${look};--a:${p.accent}"><i></i><b style="font-family:'${esc(t.heading)}'">${esc(fr)}</b><u></u><u></u>${sel(`frame:${i}`)}</div>`).join('') : ''
     const own = (part, ph) => `<form class="ab br-own" data-own="${part}"><input name="w" placeholder="${ph}" aria-label="${ph}" maxlength="300"></form>`
     // one sheet, read top to bottom: what it is, then its colours, then its type
     world.innerHTML = `<div class="col">
+      ${packs ? `<section class="pj-sec br-packs" data-sec="packs"><span class="al">Packs</span><div class="abs">${packs}</div></section>` : ''}
       <section class="pj-sec br-story" data-sec="story"><span class="al">Story</span><div class="abs">${story}</div></section>
       <section class="pj-sec br-pals" data-sec="palette"><span class="al">Palette</span><div class="abs">${pals}${own('palette', 'Your own colours')}</div></section>
-      <section class="pj-sec br-types" data-sec="type"><span class="al">Type</span><div class="abs">${types}${own('type', 'Your own fonts')}</div></section></div>`
+      <section class="pj-sec br-types" data-sec="type"><span class="al">Type</span><div class="abs">${types}${own('type', 'Your own fonts')}</div></section>
+      ${voice ? `<section class="pj-sec br-voices" data-sec="voice"><span class="al">Voice</span><div class="abs">${voice}</div></section>` : ''}
+      ${pics ? `<section class="pj-sec br-pictures" data-sec="pictures"><span class="al">Pictures</span><div class="abs">${pics}</div></section>` : ''}
+      ${frames ? `<section class="pj-sec br-board" data-sec="storyboard"><span class="al">Storyboard</span><div class="abs">${frames}</div></section>` : ''}</div>`
     root.classList.toggle('locked', locked)
     applyCam()
     if (!B.framed && world.offsetWidth) { B.framed = true; frameAll() }
@@ -106,6 +123,15 @@ export function makeBrand({ sw, C, root }) {
     if (insp.hidden) return
     if (insp.contains(document.activeElement) && document.activeElement.matches('input')) return
     const [part, id] = key.split(':')
+    // a pack: take all of it, or one part (the mix)
+    if (part === 'pack') {
+      const k = B.packs.find(x => x.slug === id)
+      if (!k) return bd.inspector(false)
+      insp.innerHTML = `<h3><span>${esc(k.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>
+        <div class="br-parts"><button class="btn pri" data-take="all">Use all</button>${[['palette', 'Palette'], ['type', 'Type'], ['voice', 'Voice'], ['pictures', 'Pictures']].map(([v, n]) => `<button class="btn ghost" data-take="${v}">${n}</button>`).join('')}</div>`
+      return
+    }
+    if (part !== 'story' && part !== 'palette' && part !== 'type') return bd.inspector(false)
     const head = n => `<h3><span>${esc(n)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>`
     if (part === 'story') {
       const n = { what: 'What', who: 'Who', pages: 'Pages' }[id]
@@ -124,7 +150,11 @@ export function makeBrand({ sw, C, root }) {
     if (!x) return void (insp.hidden = true)
     insp.innerHTML = `${head(x.name)}<label class="pl-f"><span>Headings</span><input data-font="heading" value="${esc(x.heading)}" maxlength="40"></label><label class="pl-f"><span>Body</span><input data-font="body" value="${esc(x.body)}" maxlength="40"></label>`
   }
-  insp.addEventListener('click', e => { if (e.target.closest('.pj-x')) select(null) })
+  insp.addEventListener('click', e => {
+    if (e.target.closest('.pj-x')) return select(null)
+    const tk = e.target.closest('[data-take]')
+    if (tk && B.sel?.startsWith('pack:')) call('pick', { part: 'pack', id: B.sel.slice(5), parts: tk.dataset.take === 'all' ? undefined : [tk.dataset.take] }).then(() => { insp.innerHTML = ''; renderInsp() })
+  })
   insp.addEventListener('change', e => {
     const [part, id] = (B.sel || '').split(':')
     const el = e.target
@@ -141,6 +171,8 @@ export function makeBrand({ sw, C, root }) {
     const key = a.dataset.key
     const [part, id] = key.split(':')
     if ((part === 'palette' || part === 'type') && B.brand.pick?.[part] !== id) call('pick', { part, id }).then(() => select(key))
+    // a pack the sheet has not taken yet: all of it, at once
+    else if (part === 'pack' && B.brand.pack !== id) call('pick', { part: 'pack', id }).then(() => select(key))
     else select(key)
   })
   world.addEventListener('keydown', e => { const a = e.target.closest('.ab[data-key]'); if (a && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); a.click() } })

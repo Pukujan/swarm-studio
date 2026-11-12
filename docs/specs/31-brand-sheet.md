@@ -102,3 +102,37 @@ Every write goes through the chat store's per-chat queue.
   pages.
 - Not yet: the planner suggesting the sheet, and an app build's own screens (the App pipeline's design step
   builds the site from the sheet; appjob's screens do not read it yet).
+
+### Slice 2, built (2026-11-12)
+
+- `engine/brandpacks.mjs` holds five packs as data: Warm editorial, Clean product, Bold event, Quiet portfolio and
+  Playful community. Each pack has:
+  - a palette;
+  - a type pairing;
+  - corners;
+  - a voice with two sample lines;
+  - a picture style (Film photo, from STYLES) with a mood and subjects;
+  - a storyboard of four frames.
+- Slugs have the Feed's pack form (`swarm.packs.slug`). The Studio does not post `pack` to the Feed yet: the Feed
+  accepts only slugs it lists.
+- The sample pictures are three photos per pack from the shipped stock library (engine/stock/library.json).
+  - They are picked by the pack's mood, subjects and people, and by the brief's words.
+  - No photo appears on two packs, and a pack never shows two takes of the same shot.
+  - No model call and no credits are used.
+- The board's planner call also returns `packs: [{ slug, why }]`. Only real slugs are kept, two or three of them.
+  With no model, the brief's words choose them.
+  - The suggested packs come first, each with its reason under the card.
+- The board has a **Packs** gallery on top. Each card is drawn in the pack's own ground, type, photos, voice line,
+  button and corners.
+  - Clicking a pack uses all of it.
+  - The inspector offers **Use all**, or one part: **Palette**, **Type**, **Voice** or **Pictures**. That is the mix.
+  - A pack's palette and type join the sheet's options, so any option can still be picked.
+- A pack that is used shows **Voice**, **Pictures** and **Storyboard** sections.
+  - `POST /api/brand/:chat/pick { part: 'pack', id, parts? }` uses a pack, or only the parts named.
+  - The view carries `packs`, the cards.
+- The locked brief tells the build the voice (its lines) and the picture style (the STYLES guide). The art
+  director's `pickStyle` reads it as Film photo.
+- Not yet:
+  - a painted pack (a mature painted look) needs painted samples, which are slice 3's Pictures;
+  - editing the voice and the storyboard frames.
+

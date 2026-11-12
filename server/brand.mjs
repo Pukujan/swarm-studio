@@ -3,10 +3,12 @@
 //   POST /api/brand { chat?, brief, kind }            -> { chat, brand }  options made (a chat is made when none)
 //   GET  /api/brand/:chat                             -> { chat, brand, theme }
 //   POST /api/brand/:chat/pick { part, id | words }   -> { chat, brand, theme }  words: one more option, picked
+//   POST /api/brand/:chat/pick { part: 'pack', id, parts? } -> a pack fills the sheet (or only the parts named)
 //   POST /api/brand/:chat/edit { part, id, values }   -> { chat, brand, theme }  an option's colours, fonts or the story
 //   POST /api/brand/:chat/lock | /unlock              -> { chat, brand, theme }
 import { CHAT_ID } from '../engine/chats.mjs'
 import { brandOptions, brandTheme, brandBrief, fixPalette, paletteFromWords } from '../engine/brand.mjs'
+import { packCards, applyPack, packOf, PARTS } from '../engine/brandpacks.mjs'
 
 const HEXC = /^#[0-9a-f]{6}$/i
 const FONT = /^[A-Za-z][\w ]{1,38}$/
@@ -19,7 +21,8 @@ export function brandRoutes({ chats, model = () => null }) {
     req.on('data', c => { b += c; if (b.length > 5e4) req.destroy() })
     req.on('end', () => { try { resolve(JSON.parse(b || '{}')) } catch { resolve({}) } })
   })
-  const view = chat => ({ chat: chat.id, brand: chat.brand || null, theme: chat.brand ? brandTheme(chat.brand) : null })
+  // the pack cards are made per view from the brief (data and the shipped photo library: no model call)
+  const view = chat => ({ chat: chat.id, brand: chat.brand || null, theme: chat.brand ? brandTheme(chat.brand) : null, packs: chat.brand ? packCards(chat.brand.brief, chat.brand.suggest) : [] })
   const bad = msg => Object.assign(new Error(msg), { status: 400 })
   // any change to a locked sheet opens it again
   const change = (id, fn) => chats.update(id, chat => {
@@ -38,13 +41,19 @@ export function brandRoutes({ chats, model = () => null }) {
     if (have && have.brief === brief) return view(chats.get(id))
     const opts = await brandOptions({ brief, chat: model() })
     return chats.update(id, chat => {
-      chat.brand = { brief, story: opts.story, palettes: opts.palettes, types: opts.types, pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null }
+      chat.brand = { brief, story: opts.story, palettes: opts.palettes, types: opts.types, suggest: opts.suggest || [], pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null }
     }).then(view)
   }
 
   function pick(id, input) {
+    if (input.part === 'pack') {
+      if (!packOf(String(input.id || ''))) throw bad('no such pack')
+      const parts = Array.isArray(input.parts) ? input.parts.filter(p => PARTS.includes(p)) : PARTS
+      if (!parts.length) throw bad('name a part')
+      return change(id, b => { applyPack(b, input.id, parts) })
+    }
     const part = input.part === 'type' ? 'type' : input.part === 'palette' ? 'palette' : null
-    if (!part) throw bad('part is palette or type')
+    if (!part) throw bad('part is palette, type or pack')
     const words = String(input.words || '').trim().slice(0, 300)
     return change(id, b => {
       const list = part === 'palette' ? b.palettes : b.types

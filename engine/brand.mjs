@@ -3,6 +3,7 @@
 // theme as it is (engine/run.mjs), and checkBrand is the reviewer's check that the build kept it.
 // Kept on the chat record as `brand` (engine/chats.mjs); server/brand.mjs serves it.
 import { namedColours, missingColours } from './pagetype.mjs'
+import { BRAND_PACKS, cleanSuggest, suggestByWords, packBrief } from './brandpacks.mjs'
 
 const HEX = /^#[0-9a-f]{6}$/i
 const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
@@ -121,7 +122,9 @@ export async function brandOptions({ brief = '', chat = null } = {}) {
     const sys = `You set up a brand sheet for a website before it is designed. Reply with one JSON object and nothing else:
 {"story":{"what":"<one line: what it is>","who":"<one line: who it is for>","pages":["<page name>", "..."]},
  "palettes":[{"name":"<2-3 words>","bg":"#hex","text":"#hex","accent":"#hex","link":"#hex"}, two more],
- "types":[{"name":"<1-2 words>","heading":"<Google Font family>","body":"<Google Font family>"}, two more]}
+ "types":[{"name":"<1-2 words>","heading":"<Google Font family>","body":"<Google Font family>"}, two more],
+ "packs":[{"slug":"<a pack below>","why":"<one short line: why it fits this brief>"}, one or two more]}
+The packs: ${BRAND_PACKS.map(p => `${p.slug} (${p.for})`).join('; ')}.
 Three palettes that differ from each other (light and dark grounds), three type pairings that differ. 3 to 6 pages.${named.length ? `\nThe first palette uses the colours the brief names: ${named.join(', ')}. Never a colour they say they do not want.` : ''}`
     try {
       const text = String(await chat([{ role: 'system', content: sys }, { role: 'user', content: String(brief).slice(0, 4000) }]) || '')
@@ -137,10 +140,10 @@ Three palettes that differ from each other (light and dark grounds), three type 
       // the model lost the named colours: the words' own palette goes first
       const words = base.palettes.find(p => p.by === 'words')
       if (words && !pals.some(p => !missingIn(brief, p).length)) pals.unshift(words)
-      out = { story, palettes: [...pals, ...base.palettes].slice(0, 3), types: [...types, ...base.types].slice(0, 3) }
+      out = { story, palettes: [...pals, ...base.palettes].slice(0, 3), types: [...types, ...base.types].slice(0, 3), suggest: cleanSuggest(j.packs, brief) }
     } catch { out = base }
   }
-  return { story: out.story, palettes: ids(out.palettes, 'p'), types: ids(out.types, 't') }
+  return { story: out.story, palettes: ids(out.palettes, 'p'), types: ids(out.types, 't'), suggest: out.suggest || suggestByWords(brief) }
 }
 
 // the colour families of the words a palette lacks
@@ -180,7 +183,8 @@ export function brandBrief(brand) {
     'The look is locked by the person\'s brand sheet. Use exactly these in the theme line:',
     `background ${th.vars['--background']}, text ${th.vars['--foreground']}, main colour ${th.vars['--primary']}, links ${th.vars['--accent']}; headings in ${th.fonts.heading}, body in ${th.fonts.body}.`,
     s.what ? `What it is: ${s.what}` : '', s.who ? `Who it is for: ${s.who}` : '',
-    s.pages?.length ? `Pages: ${s.pages.join(', ')}.` : ''
+    s.pages?.length ? `Pages: ${s.pages.join(', ')}.` : '',
+    packBrief(brand)
   ].filter(Boolean).join('\n')
 }
 
