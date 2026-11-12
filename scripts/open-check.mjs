@@ -55,7 +55,7 @@ function build(run, brief, name, t) {
   pages.forEach(([pid, title], i) => {
     ev.push({ type: 'layer:plan', t: t + 30 + i, run, page: pid, id: 'hero', role: 'hero', height: 400 })
     ev.push({ type: 'agent:assign', t: t + 40 + i, run, agent: 'a0', page: pid, layer: 'hero', role: 'hero' })
-    ev.push({ type: 'layer:done', t: t + 1000 + i, run, page: pid, layer: 'hero', agent: 'a0', ms: 900, done: i + 1, planned: 2, html: `<section style="padding:80px;background:#222;color:#eee"><h1>${title}</h1><p>${brief}</p></section>` })
+    ev.push({ type: 'layer:done', t: t + 1000 + i, run, page: pid, layer: 'hero', agent: 'a0', ms: 900, done: i + 1, planned: 2, html: `<section style="padding:80px;min-height:1100px;background:#222;color:#eee"><h1>${title}</h1><p>${brief}</p></section>` })
   })
   ev.push({ type: 'plan:done', t: t + 50, run, ms: 50, pages: 2, layers: 2 })
   ev.push({ type: 'run:done', t: t + 2000, run, ms: 2000, planned: 2, done: 2, failed: 0, pages: 2 })
@@ -136,6 +136,13 @@ try {
   await page.click('.home .card[aria-label="Alpha Tea"]')
   await settle(A1)
   await shows(A1, 'Alpha Tea', 'Alpha opened')
+  // the Overview photographs each page once and keeps both sizes in the run's folder (spec 36)
+  let disk = null
+  for (let i = 0; i < 40; i++) { disk = await api(`/api/runs/${A1}/snaps`).catch(() => null); if (disk && Object.values(disk.pages).every(d => d.s && d.f)) break; await wait(250) }
+  ok(disk && Object.keys(disk.pages).length === 2 && Object.values(disk.pages).every(d => d.s && d.f), `each page's snapshot is saved in two sizes (${JSON.stringify(Object.values(disk?.pages || {}).map(d => Object.keys(d).join('')))})`)
+  const listed = await api('/api/projects').catch(() => ({}))
+  const card = (listed.projects || []).find(p => p.head === A1 || p.versions?.some(v => v.id === A1))
+  ok(String(card?.cover || card?.versions?.[0]?.cover || '').startsWith(`/snaps/${A1}/home.`), `the build's cover is its first page's saved snapshot (${card?.cover})`)
   await page.click('#play-btn')
   await page.waitForSelector('#player:not([hidden])', { timeout: 5000 }).catch(() => {})
   ok((await state()).player, 'Play opens the player on Alpha')
@@ -146,6 +153,19 @@ try {
   await page.click('.home .card[aria-label="Version 2"]')
   await settle(B2)
   await shows(B2, 'Bravo Bikes', 'Bravo opened')
+
+  // opened again, the pages paint from the saved files
+  await home()
+  await page.click('.home .card[aria-label="Alpha Tea"]')
+  await page.waitForFunction(() => document.querySelectorAll('.pj-stage .ab.page img').length >= 2, null, { timeout: 5000 }).catch(() => {})
+  const srcs = await page.evaluate(() => [...document.querySelectorAll('.pj-stage .ab.page img')].map(im => im.getAttribute('src')))
+  ok(srcs.length === 2 && srcs.every(x => x.includes(`/snaps/`)), `opened again, Alpha's pages paint from their saved snapshots (${srcs.map(x => x.split('/').pop()).join(', ')})`)
+  await settle(A1)
+  await home()
+  await page.click('.home .card[aria-label="Bravo Bikes"]')
+  await page.waitForSelector('.home .card[aria-label="Version 2"]', { timeout: 5000 })
+  await page.click('.home .card[aria-label="Version 2"]')
+  await settle(B2)
 
   console.log('the same through a version tile')
   await page.click('#play-btn')

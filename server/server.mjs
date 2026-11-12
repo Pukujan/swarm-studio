@@ -70,6 +70,7 @@ import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engi
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
 import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idleMessages, IDLE_SAY } from '../engine/idle.mjs'
 import { heavyConfig, runHeavy, interpOf } from '../engine/heavy.mjs'
+import { snapStore } from './snaps.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BOOTED = Date.now()
@@ -674,7 +675,7 @@ function runCard(id) {
     progress: current?.id === id && !current.done ? Math.min(1, (current.events.filter(e => e.type === 'layer:done').length) / Math.max(1, current.events.filter(e => e.type === 'layer:plan').length || 12)) : null,
     work: workOf(id),
     // the cover: its hero picture, else a snapshot of its first page (saved by the canvas), else a film frame
-    cover: card.info.cover || snapOf(id) || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
+    cover: card.info.cover || snapsOf().cover(id) || snapOf(id) || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
   }
   out.state = stateOf(out)
   return out
@@ -695,6 +696,9 @@ function pieceName(e, pageTitle) {
   return rest.toLowerCase().startsWith(`${page.toLowerCase()} `) ? `${page}${rest.slice(page.length)}` : `${page} ${rest}`
 }
 
+// the pages' saved snapshots (server/snaps.mjs): the Overview paints from them, the cover is the first page's
+let snaps = null
+const snapsOf = () => (snaps ||= snapStore(runsDir))
 // the saved first-page snapshot, versioned so a newer one is not served from cache
 function snapOf(id) {
   const f = join(runsDir, id, 'img', 'snap.jpg')
@@ -2728,7 +2732,36 @@ const server = createServer((req, res) => {
       }
     }
     b.work = workOf(id) || b.game?.work || null
+    // each page's content version and its saved snapshots of it: the Overview paints these first
+    b.snaps = snapsOf().list(id, events)
     return json(200, b)
+  }
+  // the same, on its own: what the Overview checks before photographing a page again; and a page's
+  // picture from the browser, { page, v, size: 's' | 'f', image: a JPEG data URL }
+  const runSnaps = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/snaps$/)
+  if (runSnaps && req.method === 'GET') {
+    const events = readEvents(runSnaps[1])
+    if (!events) return json(404, { error: 'no such build' })
+    return json(200, snapsOf().list(runSnaps[1], events))
+  }
+  if (runSnaps && req.method === 'POST') {
+    const id = runSnaps[1]
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 6e6) req.destroy() })
+    req.on('end', () => {
+      try {
+        const input = JSON.parse(body || '{}')
+        const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(input.image || '')
+        if (!m) return json(400, { error: 'send a JPEG data URL' })
+        const events = readEvents(id)
+        if (!events) return json(404, { error: 'no such build' })
+        const out = snapsOf().save(id, events, { page: input.page, v: input.v, size: input.size, jpeg: Buffer.from(m[1], 'base64') })
+        if (out === 'bad') return json(400, { error: 'bad page, version or size' })
+        if (out === 'stale') return json(409, { error: 'that page has changed since' })
+        json(200, { ok: true })
+      } catch (err) { json(400, { error: String(err.message || err) }) }
+    })
+    return
   }
   // a build's own pictures and models, and the ones still to come (the code wall's asset pane)
   const runAssets = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/assets$/)
@@ -3652,6 +3685,16 @@ const server = createServer((req, res) => {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
     res.writeHead(200, { 'content-type': `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
+    res.end(readFileSync(file))
+    return
+  }
+
+  // the pages' saved snapshots; a file's name holds its version, so it never changes
+  const snapFile = url.pathname.match(/^\/snaps\/([\w-]{1,64})\/([^/]{1,100})$/)
+  if (snapFile) {
+    const file = snapsOf().file(snapFile[1], snapFile[2])
+    if (!file || !existsSync(file)) return res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
     res.end(readFileSync(file))
     return
   }
