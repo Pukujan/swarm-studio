@@ -218,7 +218,7 @@ This is in spec 6's Setup sheet (web/setup.js). That session owns it, and it get
   - In a project, the dropped picture showed as a chip, joined References, and was named in the build's brief.
 - **Not yet:**
   - a game talk (server/talk.mjs belongs to the game session);
-  - the omni model row in Setup (spec 6's file), and sampled frames or a transcript for clips;
+  - the media model row in Setup (spec 6's file); sampled frames and the sound of clips are read since spec 32;
   - the mood board and painted options (they need jobs on the art queue);
   - Lock copying a chat's refs into the project's References.
 

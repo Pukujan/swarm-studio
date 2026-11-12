@@ -126,16 +126,21 @@ export function pictureMessages(image) {
 }
 
 // ---------- what the planner is told about a turn's media, one line each, honest about how it was read
+// a link to a video site: its page is read, the video itself is not fetched (their terms do not allow it)
+export const VIDEO_SITE = /^https?:\/\/([\w-]+\.)*(youtube\.com|youtu\.be|vimeo\.com|tiktok\.com|instagram\.com|twitch\.tv)\//i
+
 export function refLine(r) {
   const what = r.kind === 'link' ? `the link ${r.url}` : `a ${r.kind === 'image' ? 'picture' : r.kind === 'video' ? 'video' : 'sound'} "${r.name}"`
   const by = r.read?.by || 'none'
-  if (by === 'vision') return `They attached ${what}. The vision model looked at it: ${r.read.text}`
-  if (by === 'page') return `They gave ${what}. Its page was read (not seen):\n${r.read.text}`
-  if (r.kind === 'video' || r.kind === 'audio') return `They attached ${what}. Nothing here could ${r.kind === 'video' ? 'watch' : 'listen to'} it, so it is kept but not read.`
+  if (by === 'vision' && r.kind === 'image') return `They attached ${what}. The vision model looked at it: ${r.read.text}`
+  // a clip or a sound, read by the media reader: say exactly what was seen and heard
+  if ((by === 'media' || by === 'vision') && (r.kind === 'video' || r.kind === 'audio')) return `They attached ${what}. The ${by === 'media' ? 'media' : 'vision'} model ${r.read.says || 'read it'}: ${r.read.text}`
+  if (by === 'page') return `They gave ${what}. Its page was read (not seen)${r.url && VIDEO_SITE.test(r.url) ? '; the video itself was not watched or heard' : ''}:\n${r.read.text}`
+  if (r.kind === 'video' || r.kind === 'audio') return `They attached ${what}. Nothing here could ${r.kind === 'video' ? 'watch' : 'listen to'} it${r.read?.says && r.read.says !== 'not read' ? ` (${r.read.says.replace(/^not read: /, '')})` : ''}, so it is kept but not read.`
   return `They gave ${what}. It could not be read${r.read?.text ? ` (${r.read.text})` : ''}.`
 }
 
 export function withRefs(text, refs = []) {
   if (!refs.length) return String(text || '')
-  return `${String(text || '').trim()}\n\n[What they attached, and how it was read]\n${refs.map(refLine).join('\n')}\n[Say in plain words how you read each one ("I looked at the picture", "I only read the page's words", "I couldn't open the video"). Never describe what was not read.]`
+  return `${String(text || '').trim()}\n\n[What they attached, and how it was read]\n${refs.map(refLine).join('\n')}\n[Say in plain words how you read each one ("I looked at the picture", "I only read the page's words", "I saw frames of the video but couldn't hear it", "I heard the words, not the music", "I couldn't open the video"). Never describe what was not read.]`
 }

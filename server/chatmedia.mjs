@@ -1,15 +1,16 @@
 // Media in a chat, served (engine/chatmedia.mjs, docs/specs/29-chats-references-marks.md "Media in and out"):
 //   POST /api/chats/:id/media?name=&kind=&from=   (bytes) -> { chat, ref }   id `new` makes the chat first
 //   GET  /chatmedia/:id/:file                      the file, sandboxed like /up/
-// A picture is read by the vision model on the way in; a clip or a sound is kept and marked not read.
+// A picture is read by the vision model on the way in; a clip or a sound by the media reader
+// (engine/mediareader.mjs, docs/specs/32-media-reader.md), which says what it saw and heard.
 import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { CHAT_ID } from '../engine/chats.mjs'
 import { MEDIA_TYPES, MEDIA_MAX, MEDIA_FILE, mediaKind, mediaName } from '../engine/chatmedia.mjs'
 
 // chats: the chat store; projectOf(run): a build's project; see(dataUrl): the vision model's words for a
-// picture, or null when there is none
-export function chatMediaRoutes({ chats, projectOf = () => null, see = null }) {
+// picture, or null when there is none; read(file, kind): the media reader's read of a clip or a sound
+export function chatMediaRoutes({ chats, projectOf = () => null, see = null, read: readClip = null }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const body = (req, max) => new Promise((resolve, reject) => {
     const chunks = []
@@ -49,7 +50,8 @@ export function chatMediaRoutes({ chats, projectOf = () => null, see = null }) {
       let f = name
       for (let i = 2; existsSync(join(dir, f)); i++) f = `${stem} (${i})${ext}`
       writeFileSync(join(dir, f), buf)
-      // only the model the person chose for pictures sees it; a clip or a sound is kept, not read
+      // only the model the person chose sees or hears it: the vision model for a picture, the media pick
+      // (or frames to the vision model) for a clip or a sound
       let read = { by: 'none', text: '' }
       if (kind === 'image') {
         if (buf.length > 5e6) read = { by: 'none', text: 'too big to send to the vision model' }
@@ -58,7 +60,10 @@ export function chatMediaRoutes({ chats, projectOf = () => null, see = null }) {
           const text = await see(`data:${mime};base64,${buf.toString('base64')}`).catch(() => null)
           read = text ? { by: 'vision', text: String(text).replace(/\s+/g, ' ').trim().slice(0, 600) } : { by: 'none', text: 'the vision model did not answer' }
         } else read = { by: 'none', text: 'no vision model is set' }
-      }
+      } else if (readClip) {
+        const r = await readClip(join(dir, f), kind).catch(err => ({ by: 'none', says: `not read: ${String(err.message || err).slice(0, 100)}` }))
+        read = { by: r.by, text: r.by === 'none' ? '' : String(r.text || '').slice(0, 900), says: r.says, saw: r.saw || 'none', heard: r.heard || 'none', model: r.model || null, seconds: r.seconds ?? null }
+      } else read = { by: 'none', text: '', says: 'not read: nothing here can watch or listen' }
       const ref = { id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, kind, name: f, file: f, url: null, src: `/chatmedia/${id}/${encodeURIComponent(f)}`, read, at: Date.now() }
       await chats.update(id, c => { c.refs = [...(c.refs || []), ref].slice(-60) })
       json(res, 200, { chat: id, ref })

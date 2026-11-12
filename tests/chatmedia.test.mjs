@@ -57,6 +57,16 @@ test('the planner is told honestly how each thing was read', () => {
   assert.doesNotMatch(refLine(vid), /looked/)
   assert.match(refLine(bad), /could not be read \(no vision model is set\)/)
   assert.match(refLine(link), /page was read \(not seen\)/)
+  // a clip or a sound read by the media reader says exactly what was seen and heard
+  const seen = { kind: 'video', name: 'walk.mp4', read: { by: 'media', says: 'saw 9 frames of it and heard its sound (words and music)', text: 'A night market; slow lo-fi beat.' } }
+  assert.match(refLine(seen), /The media model saw 9 frames of it and heard its sound \(words and music\): A night market/)
+  const framesOnly = { kind: 'video', name: 'walk.mp4', read: { by: 'vision', says: 'saw 9 frames of it; nothing here could hear its sound', text: 'A night market.' } }
+  assert.match(refLine(framesOnly), /nothing here could hear its sound/)
+  const deaf = { kind: 'audio', name: 'note.m4a', read: { by: 'none', says: 'not read: no model that hears is set' } }
+  assert.match(refLine(deaf), /Nothing here could listen to it \(no model that hears is set\), so it is kept but not read/)
+  const yt = { kind: 'link', url: 'https://www.youtube.com/watch?v=x', read: { by: 'page', text: 'Title: A song' } }
+  assert.match(refLine(yt), /the video itself was not watched or heard/)
+  assert.doesNotMatch(refLine(link), /not watched/)
   const t = withRefs('like this', [pic, vid])
   assert.match(t, /^like this\n\n\[What they attached/)
   assert.match(t, /Never describe what was not read/)
