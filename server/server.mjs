@@ -66,7 +66,9 @@ import { assetLib, readPicks, setPick, pickedItem, creditsFor, SLOT_CATEGORIES, 
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
-import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
+import { writeBoard, fallbackBoard, cueSheet, TEMPLATES, checkBoard } from '../engine/storyboard.mjs'
+import { checkKit, kitBoard, kitPrompt, checkStory, storySource, storyBoard } from '../engine/filmkit.mjs'
+import { filmRoutes, filmSourceOf, inside } from './film.mjs'
 import { scoreWav, elevenScore } from '../engine/score.mjs'
 import { decode, analyse, cutToMusic, planLengths, leastLengths, retime } from '../engine/musiccut.mjs'
 import { readMedia, readSays, mediaCaps, defaultMedia, takesSays } from '../engine/mediareader.mjs'
@@ -777,7 +779,7 @@ function shelveVideo(id, shape = 'wide') {
   const src = join(runsDir, id, 'video', (SHAPES[shape] || SHAPES.wide).file)
   if (!existsSync(src)) return null
   try {
-    const { dir, claim } = shelf(id, 'video'), v = versions(dir, `${fileSlug(id)}-promo${shape === 'tall' ? '-tall' : ''}`, '.mp4')
+    const { dir, claim } = shelf(id, 'video'), v = versions(dir, `${fileSlug(id)}-promo${shape === 'wide' ? '' : `-${shape}`}`, '.mp4')
     if (v.last && statSync(v.last).mtimeMs >= statSync(src).mtimeMs) return v.last
     claim()
     copyFileSync(src, v.next)
@@ -982,7 +984,9 @@ async function shootScenes(id, c, scenes, choice, progress, notes = null) {
 
 async function videoNow(id, input = {}) {
   const events = readEvents(id)
-  if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
+  // a film run (spec 40) has no pages: its brand, references and assets are its material
+  const filmRun = events?.find(e => e.type === 'run:start')?.kind === 'film'
+  if (!filmRun && !events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
   if (videos.get(id)?.state === 'working') return videos.get(id)
   const halt = stopSignal(id)
   const job = { state: 'working', pct: 0, stage: 'storyboard', t: Date.now() }
@@ -1010,10 +1014,28 @@ async function videoNow(id, input = {}) {
         send('video:note', { message: `no footage this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
-    const c = collect(readEvents(id) || events, join(runsDir, id))
+    let c = (filmRun && filmSourceOf(readEvents(id) || events, join(runsDir, id))) || collect(readEvents(id) || events, join(runsDir, id))
     const model = modelFor('planner')
+    // the Video kit's locked spec, or the build's story (spec 40): their beats are the storyboard, in their words
+    const kit = input.kit ? checkKit(input.kit) : null
+    const story = input.story === true ? (() => { try { return checkStory(JSON.parse(readFileSync(join(runsDir, id, 'story.json'), 'utf8'))) } catch { return null } })() : input.story ? checkStory(input.story) : null
+    if (input.story && !story) throw new Error('no story for this build yet')
+    let fixedBoard = null
+    if (story) {
+      const pid = projects.projectOf(id)
+      // a story's picture: a file in the run (img/…, shots/…, footage/…, or its /img/<run>/<file> address),
+      // a page's shot from the Story cards (story/screens/<page>-desktop.jpg), or a reference (refs/<file>)
+      const runDir = join(runsDir, id)
+      const file = pic => (/^refs\//.test(pic.src) && pid ? refs.file(pid, pic.src.slice(5))?.file : null)
+        || inside(runDir, String(pic.src || '').replace(new RegExp(`^/img/${id}/`), 'img/'))
+        || (pic.kind === 'screen' && /^[\w-]{1,80}$/.test(pic.page || '') ? inside(runDir, `story/screens/${pic.page}-desktop.jpg`) : null)
+      const made = storySource(story, c, file)
+      c = made.c
+      if (story.title) c.brand = story.title
+      fixedBoard = storyBoard(story, c, made.at)
+    } else if (kit?.beats.length) fixedBoard = kitBoard(kit, c)
     // the prompt shapes the film; a template is only a starting point the writer may borrow from
-    const prompt = String(input.prompt || input.idea || '').trim().slice(0, 600)
+    const prompt = String(input.prompt || input.idea || (kit ? kitPrompt(kit) : '')).trim().slice(0, 600)
     const template = TEMPLATES[input.template || input.style] ? (input.template || input.style) : ''
     const seed = (Date.now() ^ (Math.random() * 2 ** 31)) >>> 0
     const pinned = TRANSITIONS.includes(input.transition)
@@ -1041,12 +1063,18 @@ async function videoNow(id, input = {}) {
     }
     let scenes
     try {
-      if (!model || !models.planner.apiKey) throw new Error('no planner model')
       // with an image model, the storyboard may ask for new story stills
       const shooter = await imageChoice().catch(() => null)
+      if (fixedBoard) {
+        scenes = checkBoard(fixedBoard, c, { prompt, seed, shots: !!shooter })
+        if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress, notes)
+        for (const sc of scenes) if (sc.shot) { sc.kind = 'title'; sc.layer = 'type'; delete sc.shot }
+      } else {
+      if (!model || !models.planner.apiKey) throw new Error('no planner model')
       scenes = await writeBoard({ provider: provider('planner'), model, c, prompt, template, notes, shots: !!shooter, seed, signal: stopOr(halt, 120000) })
       if (halt.aborted) throw new Error('stopped')
       if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress, notes)
+      }
     } catch (err) {
       scenes = fallbackBoard(c, { prompt, notes, seed, template, fixes: [`no writer this time: ${String(err.message || err).slice(0, 80)}`] })
     }
@@ -1108,7 +1136,10 @@ async function videoNow(id, input = {}) {
       // Hermes's secret, else Hermes's ElevenLabs connector, else a pasted key
       const key = process.env.SWARM_ELEVENLABS_KEY || mediaKeyStore.get('elevenlabs')
       const via = media?.music.via
-      if (input.eleven !== false && (key || via === 'hermes-mcp')) {
+      // a film run's music reference (the Video kit's dropped track) is the score, cut to as it is
+      const ref = filmRun && ['mp3', 'wav', 'm4a', 'ogg', 'aac'].map(x => join(dir, `music.${x}`)).find(f => existsSync(f))
+      if (ref) { musicFile = ref; scoredBy = 'reference' }
+      if (!musicFile && input.eleven !== false && (key || via === 'hermes-mcp')) {
         try {
           progress(2, 'ElevenLabs is scoring the film')
           const e = via === 'hermes-mcp' && !process.env.SWARM_ELEVENLABS_KEY
@@ -1122,7 +1153,7 @@ async function videoNow(id, input = {}) {
         progress(2, 'cutting to the music')
         const { samples, rate } = await decode(t.ffmpeg, musicFile, { env: tenv })
         const a = analyse(samples, rate, { bpm: scenes.music?.bpm })
-        const r = cutToMusic(scenes, planned, a, { min: leastLengths(scenes, voices, VOICE_LEAD), maxEnd: scoredBy === 'elevenlabs' ? a.seconds : null })
+        const r = cutToMusic(scenes, planned, a, { min: leastLengths(scenes, voices, VOICE_LEAD), maxEnd: scoredBy === 'elevenlabs' || scoredBy === 'reference' ? a.seconds : null })
         lengths = r.lengths; musicCut = r.report
         // the studio's own score is written again to the final cuts, so its booms sit on them; a generated track stays as it is
         if (scoredBy === 'studio') scoreWav({ seconds: lengths.reduce((x, y) => x + y, 0), music: scenes.music, cues: cueSheet(scenes, lengths), file: musicFile, seed })
@@ -1139,8 +1170,18 @@ async function videoNow(id, input = {}) {
     writeFileSync(join(dir, 'index.html'), comp.html)
     writeFileSync(join(tallDir, 'index.html'), tallComp.html)
     const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
+    // the square cut for feeds (spec 40), when the kit or the story asks for it
+    const square = Array.isArray(input.shapes) && input.shapes.includes('square')
+    const squareDir = join(dir, 'square')
+    if (square) {
+      mkdirSync(squareDir, { recursive: true })
+      stagePictures(c, squareDir)
+      for (const sc of scenes) if (sc.speedName) copyFileSync(join(dir, sc.speedName), join(squareDir, sc.speedName))
+      writeFileSync(join(squareDir, 'index.html'), composition(scenes, c, lengths, transition, comp.look, { shape: 'square' }).html)
+      files.square = SHAPES.square.file
+    }
     const cues = cueSheet(scenes, lengths)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, planned, musicCut, scoredBy, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, locked: kit || story ? { seconds: kit?.seconds || null, script: (story?.beats || kit?.beats || []).map(b => b.text).filter(Boolean) } : null, files, lengths, planned, musicCut, scoredBy, scenes }, null, 2))
     // the stills and motion lines for Flow (Veo): the flow-video skill animates them into <run>/flow/<still>.mp4,
     // and the next cut plays those clips instead of the stills
     writeFileSync(join(dir, 'flow-prompts.json'), JSON.stringify(scenes.filter(s => s.layer === 'story' && s.image).map(s => { const f = c.images.find(x => x.n === s.image); return { still: f.file, clip: join(runsDir, id, 'flow', `${basename(f.file).replace(/\.[^.]+$/, '')}.mp4`), camera: s.camera, seconds: s.seconds, action: `${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape` } }), null, 2))
@@ -1148,15 +1189,25 @@ async function videoNow(id, input = {}) {
     const quality = ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft'
     const silent = join(dir, 'promo-silent.mp4'), out = join(dir, SHAPES.wide.file)
     const tallSilent = join(dir, 'promo-tall-silent.mp4'), tallOut = join(dir, SHAPES.tall.file)
+    const squareSilent = join(dir, 'promo-square-silent.mp4'), squareOut = join(dir, SHAPES.square.file)
     rmSync(tallOut, { force: true }) // an older tall cut never sits beside a newer wide one
+    rmSync(squareOut, { force: true })
     if (halt.aborted) throw new Error('stopped')
     await render({ tools: t, dir, out: silent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'assemble' ? 'assembling' : 'rendering') })
-    let tall = true
-    try {
+    // the phone cut, unless the kit or the story named its shapes without it (the wide cut always renders: it carries the sound)
+    let tall = !Array.isArray(input.shapes) || input.shapes.includes('tall')
+    if (tall) try {
       await render({ tools: t, dir: tallDir, out: tallSilent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
     } catch (err) {
       tall = false
       send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
+    }
+    let squared = false
+    if (square) {
+      try {
+        await render({ tools: t, dir: squareDir, out: squareSilent, quality, signal: halt, onProgress: (pct, code) => progress(96, code === 'assemble' ? 'assembling the square cut' : 'rendering the square cut') })
+        squared = true
+      } catch (err) { send('video:note', { message: `no square cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` }) }
     }
     let sound = false
     try {
@@ -1176,12 +1227,22 @@ async function videoNow(id, input = {}) {
         send('video:note', { message: `the phone cut is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
+    // the square cut takes the same finished sound
+    if (squared) {
+      try {
+        if (sound) await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-i', squareSilent, '-i', out, '-map', '0:v', '-map', '1:a?', '-c', 'copy', '-shortest', '-movflags', '+faststart', squareOut], { env: { PATH: t.path } }, err => (err ? fail(err) : ok())))
+        else copyFileSync(squareSilent, squareOut)
+      } catch { copyFileSync(squareSilent, squareOut) }
+    }
     const copy = shelveVideo(id)
-    shelveVideo(id, 'tall')
+    if (tall) shelveVideo(id, 'tall')
+    if (squared) shelveVideo(id, 'square')
     const v = Date.now()
     const tallSrc = tall ? `/video/${id}/${SHAPES.tall.file}?v=${v}` : null
-    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
-    send('video:done', { src: job.src, tall: tallSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound, scoredBy })
+    const squareSrc = squared ? `/video/${id}/${SHAPES.square.file}?v=${v}` : null
+    if (!squared) delete files.square
+    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, square: squareSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
+    send('video:done', { src: job.src, tall: tallSrc, square: squareSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide, ...(squared ? { square: files.square } : {}) }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound, scoredBy })
     // the critic (spec 26 step 6, spec 32): the finished film is watched and listened to, and what is wrong
     // is named. It runs after the film is handed over, so it never holds the film back.
     if (!halt.aborted) {
@@ -1418,6 +1479,20 @@ const appKit = appKitRoutes({
 // A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
 const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
 const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input) })
+// a film from a project's brand, References and Assets, no website (spec 40): the Video kit's Build press
+const filmRoute = filmRoutes({
+  projectsDir: projects.projectsDir, refs, known: pid => !!projects.get(pid),
+  makeRun: (pid, events, fill) => {
+    const id = new Date().toISOString().replace(/[:.]/g, '-')
+    const dir = join(runsDir, id)
+    mkdirSync(dir, { recursive: true })
+    fill(dir)
+    writeFileSync(join(dir, 'events.jsonl'), events.map(e => JSON.stringify({ ...e, run: id })).join('\n') + '\n')
+    projects.claim(id, pid)
+    return id
+  },
+  startFilm: (id, input) => makeVideo(id, input)
+})
 // Media in a chat (spec 29, server/chatmedia.mjs): a picture is read by the reviewer's vision model, with
 // reasoning off and the vision fallbacks after it, the same way Scribble's marks are read
 async function askVision(messages, { maxTokens = 300, kind = 'chat-media' } = {}) {
@@ -3324,6 +3399,7 @@ const server = createServer((req, res) => {
   if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute(req, res, url); return }
   if (decks(req, res, url)) return
   if (refsRoute(req, res, url)) return
+  if (filmRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
@@ -3854,7 +3930,7 @@ const server = createServer((req, res) => {
 
   // A run's promo video, with range requests so the player can seek; an earlier
   // cut by its file name in the build's video folder (…-promo-v2.mp4).
-  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo(?:-tall)?\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
+  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo(?:-tall|-square)?\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
   if (vid) {
     const file = vid[3] ? join(shelf(vid[1], 'video').dir, vid[3]) : join(runsDir, vid[1], 'video', vid[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
