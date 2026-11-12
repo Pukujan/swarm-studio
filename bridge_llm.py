@@ -32,6 +32,7 @@ TOOLS_HEAD = """You can call tools. To call one, answer with a block like this, 
 The arguments are one JSON object that matches the tool's parameters. You may put several blocks in one
 answer; they run in order. Text outside the blocks is shown to the person. When you need no tool, answer
 in plain text. A tool's result comes back in a later message that starts with "Tool result".
+Use exactly this <tool_call> JSON format, not any other tool-call syntax you may know.
 
 The tools:"""
 
@@ -98,10 +99,42 @@ def to_hermes(body: dict) -> list:
     return out
 
 
+# Some models answer in their own native tool syntax however they are asked. DeepSeek's DSML:
+#   <｜DSML｜invoke name="list_files"><｜DSML｜parameter name="recursive" string="false">true</｜DSML｜parameter></｜DSML｜invoke>
+# inside a <｜DSML｜function_calls> (or "calls") wrapper; string="true" marks a raw string, anything else is JSON.
+_DSML = r"[｜|]+\s*DSML\s*[｜|]+\s*"
+_DSML_INVOKE = re.compile(rf'<\s*{_DSML}invoke\s+name="([^"]+)"\s*>(.*?)(?:</\s*{_DSML}invoke\s*>|\Z)', re.S)
+_DSML_PARAM = re.compile(rf'<\s*{_DSML}parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?\s*>(.*?)</\s*{_DSML}parameter\s*>', re.S)
+_DSML_WRAP = re.compile(rf'</?\s*{_DSML}(?:function_)?calls\s*>')
+
+
+def _call(name: str, args) -> dict:
+    return {"id": "call_" + uuid.uuid4().hex[:24], "type": "function",
+            "function": {"name": name, "arguments": args if isinstance(args, str) else json.dumps(args)}}
+
+
+def _dsml_calls(text: str) -> tuple[str, list]:
+    calls = []
+    for m in _DSML_INVOKE.finditer(text):
+        args = {}
+        for p in _DSML_PARAM.finditer(m.group(2)):
+            value = p.group(3)
+            if p.group(2) != "true":
+                try:
+                    value = json.loads(value)
+                except ValueError:
+                    pass
+            args[p.group(1)] = value
+        calls.append(_call(m.group(1), args))
+    if not calls:
+        return text, []
+    return _DSML_WRAP.sub("", _DSML_INVOKE.sub("", text)), calls
+
+
 def tool_calls(text: str) -> tuple[str, list]:
     """The model's answer -> (its plain text, OpenAI tool_calls). Each block's JSON is read as JSON, so a
     "</tool_call>" inside an argument (a file that mentions it) does not end the block. A block that is not
-    JSON stays text; a last block with no closing tag still counts."""
+    JSON stays text; a last block with no closing tag still counts. DeepSeek's native DSML calls count too."""
     text = text or ""
     calls, keep, at, pos = [], [], 0, 0
     decoder = json.JSONDecoder()
@@ -122,10 +155,11 @@ def tool_calls(text: str) -> tuple[str, list]:
         args = got.get("arguments", got.get("parameters", {}))
         keep.append(text[at:start])
         at = pos = end
-        calls.append({"id": "call_" + uuid.uuid4().hex[:24], "type": "function",
-                      "function": {"name": got["name"], "arguments": args if isinstance(args, str) else json.dumps(args)}})
+        calls.append(_call(got["name"], args))
     keep.append(text[at:])
-    return ("".join(keep).strip() if calls else text), calls
+    rest, native = _dsml_calls("".join(keep))
+    calls += native
+    return (rest.strip() if calls else text), calls
 
 
 def complete(ctx, body: dict, timeout_s: float | None = None) -> dict:

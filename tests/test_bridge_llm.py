@@ -86,6 +86,25 @@ class ModelCalls(unittest.TestCase):
         self.assertEqual(self.m.tool_calls("just text"), ("just text", []))
         self.assertEqual(self.m.tool_calls("<tool_call>{not json}</tool_call>")[1], [])
 
+    def test_deepseeks_native_dsml_calls_count_as_tool_calls(self):
+        # captured from cb/deepseek-v4.1-flash through ctx.llm: it ignored the <tool_call> format, and the
+        # app engine stopped after one turn with nothing built
+        answer = ("I'll start by exploring the project.\n\n<\uff5c\uff5cDSML\uff5c\uff5c calls>\n"
+                  '<\uff5c\uff5cDSML\uff5c\uff5c invoke name="set_chat_summary">\n'
+                  '<\uff5c\uff5cDSML\uff5c\uff5c parameter name="summary" string="true">Little Fern guestbook app</\uff5c\uff5cDSML\uff5c\uff5c parameter>\n'
+                  "</\uff5c\uff5cDSML\uff5c\uff5c invoke>\n"
+                  '<\uff5cDSML\uff5cinvoke name="list_files">\n'
+                  '<\uff5cDSML\uff5cparameter name="recursive" string="false">true</\uff5cDSML\uff5cparameter>\n'
+                  '<\uff5cDSML\uff5cparameter name="depth" string="false">not json</\uff5cDSML\uff5cparameter>\n'
+                  "</\uff5cDSML\uff5cinvoke>\n</\uff5c\uff5cDSML\uff5c\uff5c calls>")
+        got = self.m.complete(Ctx(Llm(answer)), {"model": "worker", "tools": [{"type": "function", "function": {"name": "list_files"}}], "messages": []})
+        msg = got["choices"][0]["message"]
+        self.assertEqual(got["choices"][0]["finish_reason"], "tool_calls")
+        self.assertEqual(msg["content"], "I'll start by exploring the project.")
+        self.assertEqual([(c["function"]["name"], json.loads(c["function"]["arguments"])) for c in msg["tool_calls"]],
+                         [("set_chat_summary", {"summary": "Little Fern guestbook app"}), ("list_files", {"recursive": True, "depth": "not json"})])
+        self.assertIn("not any other tool-call syntax", self.m.TOOLS_HEAD)
+
     def test_a_stream_is_one_delta_then_usage_then_done(self):
         done = self.m.complete(Ctx(Llm('<tool_call>{"name": "run", "arguments": {"a": 1}}</tool_call>')), {"model": "worker", "tools": [{"type": "function", "function": {"name": "run"}}], "messages": []})
         lines = [x.decode() for x in self.m.sse(done)]
