@@ -1,4 +1,4 @@
-// Where the person is (docs/specs/33-navigation-state.md): one slice, changed only by the actions
+// Where the person is (docs/specs/34-navigation-state.md): one slice, changed only by the actions
 // below. step(state, action) is pure: it returns { state } (the next state) or { refused } (why not),
 // and a refused action changes nothing, so a mixed screen (one project's name over another's pages,
 // a player over Projects) is never drawn. The stream never picks the build: it can only say that a
@@ -111,7 +111,7 @@ export function step(s, a = {}) {
   }
 }
 
-// The address names the same state and nothing else (spec 33):
+// The address names the same state and nothing else (spec 34):
 //   ?project=<id>&version=<run>&room=<room>&run=<game run>&plan=<id>&play=<prototype|visitor>&page=<id>
 // ?run=<id> alone (the old form) opens that build's Overview; ?replay=<id> replays it in the deck.
 export function toAddress(s) {

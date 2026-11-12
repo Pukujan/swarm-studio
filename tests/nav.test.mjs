@@ -1,4 +1,4 @@
-// Where the person is (web/nav.js, docs/specs/33-navigation-state.md): every row of the transition
+// Where the person is (web/nav.js, docs/specs/34-navigation-state.md): every row of the transition
 // table, the refusals that stop a mixed screen, and the address.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
