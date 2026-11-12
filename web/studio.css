@@ -14,7 +14,7 @@ body.cosmos-project .cosmos-back, body.cosmos-station .cosmos-back { display: in
 body.cosmos-project .brand .word, body.cosmos-station .brand .word { display: none; }
 .topbar .brand[role="button"] { cursor: pointer; border-radius: 10px; min-height: 40px; align-items: center; }
 .topbar .brand[role="button"]:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 2px; }
-body.cosmos-home .file-name, body.cosmos-home #play-btn, body.cosmos-home .pubwrap { display: none; }
+body.cosmos-home .file-name, body.cosmos-home .playwrap, body.cosmos-home .pubwrap { display: none; }
 body.cosmos-home .topbar { background: transparent; border-bottom-color: transparent; backdrop-filter: none; }
 body.cosmos .file-name { color: var(--text); font: 600 14px var(--label); letter-spacing: .06em; text-transform: uppercase; }
 body.cosmos .file-name::before { display: none; }
