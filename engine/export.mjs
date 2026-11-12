@@ -4,7 +4,7 @@
 
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { MOTION_CSS, motionPreset, motionSource, swarmMotion } from './motion.mjs'
 import { layoutSource, swarmLayout } from './layout.mjs'
 import { isScreenName, packageName, projectName } from './naming.mjs'

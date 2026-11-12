@@ -1,0 +1,60 @@
+// Every child process the studio starts goes through here, with a minimal environment: PATH, HOME,
+// TMPDIR, LANG (and the system folders Windows needs), plus only what that one child is given by name.
+// The server's own environment holds keys (Hermes hands it the optional ones from plugin.yaml); none of
+// them reaches git, gh, pnpm, ffmpeg, Python, a browser or a generated app unless its call names it.
+//
+// Engine and server code import spawn / execFile / execFileSync from this module, never from
+// node:child_process (tests/childenv.test.mjs checks that).
+
+import * as cp from 'node:child_process'
+
+const BASE = ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'USER', 'LOGNAME']
+// Node, npm, pnpm and Python break on Windows without these (sockets, crypto, temp folders, .cmd shims).
+const WINDOWS = ['Path', 'SYSTEMROOT', 'SystemRoot', 'SYSTEMDRIVE', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE',
+  'APPDATA', 'LOCALAPPDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'ProgramFiles', 'ProgramFiles(x86)', 'PROGRAMDATA', 'ProgramData',
+  'HOMEDRIVE', 'HOMEPATH', 'NVM_HOME', 'NVM_SYMLINK']
+
+// The base environment plus `extra` (an undefined or empty value is left out).
+export function childEnv(extra = {}, from = process.env, platform = process.platform) {
+  const out = {}
+  for (const k of platform === 'win32' ? [...BASE, ...WINDOWS] : BASE) if (from[k]) out[k] = from[k]
+  for (const [k, v] of Object.entries(extra || {})) if (v !== undefined && v !== null && v !== '') out[k] = String(v)
+  return out
+}
+
+// Variables named here are read from the server's environment and handed to that child by name.
+export const pick = (names, from = process.env) => Object.fromEntries(names.filter(k => from[k]).map(k => [k, from[k]]))
+
+// What a generated app is given: its database (Supabase) and a Stripe test key, nothing else. A live
+// Stripe key is never handed over.
+export function appEnv(from = process.env) {
+  const out = pick(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY'], from)
+  if (/^(sk|rk)_test_/.test(from.STRIPE_SECRET_KEY || '')) out.STRIPE_SECRET_KEY = from.STRIPE_SECRET_KEY
+  return out
+}
+
+// What Hermes's own CLI and Python need to find the person's Hermes (no keys: Hermes reads its own).
+export const hermesEnv = (extra = {}) => ({ ...pick(['HERMES_HOME']), ...extra })
+
+// A headless (or headed) browser started by Playwright or Puppeteer: the base, and a display on Linux.
+export const browserEnv = () => childEnv(pick(['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR']))
+
+// The options with `env` replaced by childEnv(options.env).
+const scoped = (opts = {}) => ({ ...opts, env: childEnv(opts.env) })
+
+export function spawn(cmd, args = [], opts = {}) {
+  if (!Array.isArray(args)) return cp.spawn(cmd, scoped(args))
+  return cp.spawn(cmd, args, scoped(opts))
+}
+
+export function execFile(cmd, args, opts, cb) {
+  if (typeof args === 'function') return cp.execFile(cmd, [], scoped(), args)
+  if (!Array.isArray(args)) return cp.execFile(cmd, [], scoped(args), opts)
+  if (typeof opts === 'function') return cp.execFile(cmd, args, scoped(), opts)
+  return cp.execFile(cmd, args, scoped(opts), cb)
+}
+
+export function execFileSync(cmd, args = [], opts = {}) {
+  if (!Array.isArray(args)) return cp.execFileSync(cmd, scoped(args))
+  return cp.execFileSync(cmd, args, scoped(opts))
+}

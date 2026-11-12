@@ -6,7 +6,7 @@ import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, readdirSync, writeFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { execFile } from 'node:child_process'
+import { execFile, browserEnv } from './proc.mjs'
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const run = (cmd, args) => new Promise((ok, fail) => execFile(cmd, args, { maxBuffer: 1 << 24 }, (err, out, errOut) => (err ? fail(new Error(String(errOut || err.message).slice(-400))) : ok(out))))
@@ -121,7 +121,7 @@ export async function filmBuild({ url, runDir, dataDir, ffmpeg, game = true, onS
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
   const base = url.replace(/\/$/, '')
-  const browser = await pp.launch({ executablePath: chrome, headless: true, args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio', '--disable-gpu-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
+  const browser = await pp.launch({ executablePath: chrome, headless: true, env: browserEnv(), args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio', '--disable-gpu-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
   const clips = []
   const shoot = async ({ path, file, what, label, ms, act, from = 0 }) => {
     const page = await browser.newPage()

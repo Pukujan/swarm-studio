@@ -3,7 +3,7 @@
 // Vercel and Cloudflare Pages through a token the person connected (connect.mjs).
 // Without any of them, the canvas server hosts it on this computer (see /site/ in the server).
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { createHash } from 'node:crypto'
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,7 +15,7 @@ const MARK = 'made with Swarm Studio'
 
 function run(cmd, args, { cwd, timeout = 60000, env = {} } = {}) {
   return new Promise((ok, fail) => {
-    execFile(cmd, args, { cwd, timeout, maxBuffer: 4e6, env: { ...process.env, GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0', ...env } }, (err, stdout, stderr) => {
+    execFile(cmd, args, { cwd, timeout, maxBuffer: 4e6, env: { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0', ...env } }, (err, stdout, stderr) => {
       if (err) {
         const why = String(stderr || err.message).trim().split('\n').filter(Boolean).pop() || 'failed'
         return fail(Object.assign(new Error(`${cmd} ${args[0]}: ${why}`), { stderr: String(stderr || '') }))

@@ -7,7 +7,7 @@
 // call one. The canvas never sees a token: calls go through engine/hermes_mcp.py, which uses
 // Hermes's own MCP client.
 
-import { execFile, spawn } from 'node:child_process'
+import { execFile, spawn, hermesEnv } from './proc.mjs'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -38,7 +38,7 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
     })
   })
   const cli = (args, ms = 120000) => new Promise(resolve => {
-    execFile(hermes, args, { env: process.env, timeout: ms, maxBuffer: 4e6 }, (err, out, errOut) => resolve({ ok: !err, out: `${out}\n${errOut}` }))
+    execFile(hermes, args, { env: hermesEnv(), timeout: ms, maxBuffer: 4e6 }, (err, out, errOut) => resolve({ ok: !err, out: `${out}\n${errOut}` }))
   })
 
   async function status(name) {
@@ -75,7 +75,7 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
   // Its link is shown on the canvas too, for a browser Hermes could not open.
   function login(name) {
     return new Promise(resolve => {
-      const child = spawn(hermes, ['mcp', 'login', name], { env: process.env, stdio: ['pipe', 'pipe', 'pipe'] })
+      const child = spawn(hermes, ['mcp', 'login', name], { env: hermesEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
       const entry = { child, authUrl: null }
       logins.set(name, entry)
       let buf = ''

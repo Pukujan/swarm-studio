@@ -7,7 +7,7 @@
 // first time a video is made, unless they are already on PATH: exact versions, and
 // the ffmpeg and ffprobe binaries are checked against recorded SHA-256 sums first.
 
-import { spawn, execFile } from 'node:child_process'
+import { spawn, execFile } from './proc.mjs'
 import { CAST, MOODS } from './sound.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
@@ -657,7 +657,7 @@ export function videoTools(dataDir, onStage = () => {}) {
 
 export function render({ tools: t, dir, out, quality = 'draft', onProgress = () => {}, signal }) {
   return new Promise((ok, fail) => {
-    const child = spawn(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { env: { ...process.env, PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' }, signal })
+    const child = spawn(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { env: { PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' }, signal })
     let tail = ''
     const read = chunk => {
       const s = chunk.toString()

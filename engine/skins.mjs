@@ -16,7 +16,7 @@
 // needed. Cutting runs games/ares/tools/sheets/cut.py (numpy, scipy, Pillow).
 // Output: <game>/assets/skins/<hero>/<outfit>/<sheet>.webp + .json, and pack.json.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'

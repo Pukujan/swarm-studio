@@ -6,7 +6,7 @@
 // no logos, no names, no characters. The notes are kept with the run so anyone
 // can see what was taken from the reference.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { streamChat } from './llm.mjs'

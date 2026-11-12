@@ -10,7 +10,7 @@
 // the site's real address. Nothing is invented: a fact reaches the structured data
 // only when the site's own copy says it, and ratings and reviews never do.
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync } from './proc.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, copyFileSync } from 'node:fs'
 import { join, extname } from 'node:path'

@@ -9,7 +9,7 @@
 // A beat with a spoken line never gets shorter than the line. A track with no
 // clear beat leaves the storyboard's lengths as they are.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { readFileSync } from 'node:fs'
 
 const RATE = 22050
@@ -28,7 +28,7 @@ export function readWav(file) {
 }
 
 // Any audio file as mono samples, through ffmpeg.
-export function decode(ffmpeg, file, { env = process.env } = {}) {
+export function decode(ffmpeg, file, { env = {} } = {}) {
   return new Promise((ok, fail) => execFile(ffmpeg, ['-v', 'error', '-i', file, '-t', '300', '-ac', '1', '-ar', String(RATE), '-f', 's16le', '-'], { encoding: 'buffer', maxBuffer: 1 << 26, timeout: 120000, env }, (err, out) => {
     if (err || !out?.length) return fail(err || new Error('no audio decoded'))
     ok({ samples: new Int16Array(out.buffer, out.byteOffset, Math.floor(out.length / 2)), rate: RATE })

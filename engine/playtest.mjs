@@ -4,7 +4,7 @@
 // page) pass a game whose run ends the moment it starts; this catches that, and
 // crashes, a missing canvas and a start button that does nothing.
 
-import { execFile } from 'node:child_process'
+import { execFile, browserEnv } from './proc.mjs'
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir, tmpdir } from 'node:os'
@@ -37,7 +37,7 @@ export async function launch(chromium, extra = {}) {
   } catch {}
   let last
   for (const opts of [{}, { channel: 'chrome' }, ...shells.map(executablePath => ({ executablePath }))]) {
-    try { return await chromium.launch({ ...opts, ...extra }) } catch (e) { last = e }
+    try { return await chromium.launch({ ...opts, env: browserEnv(), ...extra }) } catch (e) { last = e }
   }
   throw last
 }
