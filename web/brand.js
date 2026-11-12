@@ -3,19 +3,16 @@
 // artboards on the dotted stage, the inspector on the right only while something is selected, and the
 // top bar's one primary button, Lock. The chat stays on the left; Build there builds from the locked sheet.
 import { ic } from './icons.js'
+import { makeBoard } from './board.js'
 
 export function makeBrand({ sw, C, root }) {
   const esc = sw.esc
-  const B = { on: false, chat: null, brand: null, theme: null, sel: null, cam: { x: 0, y: 0, k: 1 }, framed: false, done: null, busy: false }
+  const B = { on: false, chat: null, brand: null, theme: null, sel: null, framed: false, done: null, busy: false }
 
-  root.className = 'project plan brand-sheet'
-  root.hidden = true
-  root.innerHTML = `
-    <div class="pj-stage" tabindex="-1" aria-label="Brand sheet">
-      <div class="pj-world"></div>
-    </div>
-    <aside class="pj-insp" hidden aria-label="Inspector"></aside>`
-  const stage = root.querySelector('.pj-stage'), world = root.querySelector('.pj-world'), insp = root.querySelector('.pj-insp')
+  // the stage, camera, inspector, Esc and toast are the shared board (web/board.js)
+  const bd = makeBoard({ root, cls: 'project plan brand-sheet', label: 'Brand sheet', fit: [0.35, 1], on: () => B.on, selected: () => !!B.sel, clear: () => select(null) })
+  const { world, insp } = bd
+  const applyCam = bd.applyCam, toast = bd.toast, frameAll = () => bd.frameAll(false)
 
   // ---------- the top bar: the name, and Lock
   const bar = document.querySelector('.topbar')
@@ -68,7 +65,8 @@ export function makeBrand({ sw, C, root }) {
       <span style="font-family:'${esc(t.body)}'">${esc(line())}</span>
       <div><i class="br-btn" style="background:${p.accent};color:${onColour(p.accent)};font-family:'${esc(t.body)}'">Join</i><u style="color:${dark ? p.bg : p.link};font-family:'${esc(t.body)}'">Read more</u></div></div>`
   }
-  const headline = () => (B.brand?.story?.what || 'Your site').split(/[,.:;]/)[0].slice(0, 44)
+  // the story's first clause, cut at a word
+  const headline = () => { const h = (B.brand?.story?.what || 'Your site').split(/[,.:;]/)[0].trim(); return h.length <= 44 ? h : h.slice(0, 45).replace(/\s+\S*$/, '') }
   const line = () => B.brand?.story?.who ? `For ${B.brand.story.who}`.slice(0, 70) : 'A first line of the page.'
   const onColour = h => { const n = parseInt(String(h).slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111111' : '#ffffff' }
 
@@ -92,9 +90,9 @@ export function makeBrand({ sw, C, root }) {
     const own = (part, ph) => `<form class="ab br-own" data-own="${part}"><input name="w" placeholder="${ph}" aria-label="${ph}" maxlength="300"></form>`
     // one sheet, read top to bottom: what it is, then its colours, then its type
     world.innerHTML = `<div class="col">
-      <section class="pj-sec br-story"><span class="al">Story</span><div class="abs">${story}</div></section>
-      <section class="pj-sec br-pals"><span class="al">Palette</span><div class="abs">${pals}${own('palette', 'Your own colours')}</div></section>
-      <section class="pj-sec br-types"><span class="al">Type</span><div class="abs">${types}${own('type', 'Your own fonts')}</div></section></div>`
+      <section class="pj-sec br-story" data-sec="story"><span class="al">Story</span><div class="abs">${story}</div></section>
+      <section class="pj-sec br-pals" data-sec="palette"><span class="al">Palette</span><div class="abs">${pals}${own('palette', 'Your own colours')}</div></section>
+      <section class="pj-sec br-types" data-sec="type"><span class="al">Type</span><div class="abs">${types}${own('type', 'Your own fonts')}</div></section></div>`
     root.classList.toggle('locked', locked)
     applyCam()
     if (!B.framed && world.offsetWidth) { B.framed = true; frameAll() }
@@ -104,8 +102,7 @@ export function makeBrand({ sw, C, root }) {
   // ---------- the inspector: the selected option's colours or fonts, or the story line
   function renderInsp() {
     const b = B.brand, key = B.sel
-    insp.hidden = !b || !key
-    root.classList.toggle('insp-on', !insp.hidden)
+    bd.inspector(!!(b && key))
     if (insp.hidden) return
     if (insp.contains(document.activeElement) && document.activeElement.matches('input')) return
     const [part, id] = key.split(':')
@@ -154,56 +151,7 @@ export function makeBrand({ sw, C, root }) {
     call('pick', { part: f.dataset.own, words: w })
   })
 
-  // ---------- the stage: pan and zoom (the Plan board's gestures)
-  function applyCam() { world.style.transform = `translate(${B.cam.x}px, ${B.cam.y}px) scale(${B.cam.k})` }
-  function frameAll() {
-    const w0 = stage.clientWidth - (insp.hidden ? 0 : 272), h0 = stage.clientHeight - 40
-    const w = world.scrollWidth, h = world.scrollHeight
-    if (!w || !h || w0 <= 0) return
-    const k = Math.min(1, Math.max(0.35, Math.min(w0 / w, h0 / h)))
-    B.cam = { k, x: Math.max(0, (w0 - w * k) / 2), y: Math.max(0, Math.min(40, (h0 - h * k) / 2)) }
-    applyCam()
-  }
-  let drag = null
-  stage.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.pj-insp, .ab')) return
-    drag = { x: e.clientX, y: e.clientY, cx: B.cam.x, cy: B.cam.y, moved: false }
-    stage.setPointerCapture(e.pointerId)
-  })
-  stage.addEventListener('pointermove', e => {
-    if (!drag) return
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y
-    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true
-    if (drag.moved) { B.cam.x = drag.cx + dx; B.cam.y = drag.cy + dy; applyCam(); stage.classList.add('panning') }
-  })
-  stage.addEventListener('pointerup', () => { if (drag && !drag.moved && B.sel) select(null); drag = null; stage.classList.remove('panning') })
-  stage.addEventListener('wheel', e => {
-    e.preventDefault()
-    if (e.ctrlKey || e.metaKey) {
-      const r = stage.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top
-      const k = Math.min(3, Math.max(0.2, B.cam.k * Math.exp(-e.deltaY * 0.01)))
-      B.cam.x = px - (px - B.cam.x) * k / B.cam.k; B.cam.y = py - (py - B.cam.y) * k / B.cam.k; B.cam.k = k
-    } else { B.cam.x -= e.deltaX; B.cam.y -= e.deltaY }
-    applyCam()
-  }, { passive: false })
-  addEventListener('keydown', e => {
-    if (!B.on || e.key !== 'Escape' || e.defaultPrevented || window.SwarmUI?.open?.()) return
-    if (e.target.closest?.('input, textarea')) return
-    if (B.sel) { e.preventDefault(); select(null) }
-  }, true)
-
   addEventListener('resize', () => { if (B.on && B.brand) frameAll() })
-
-  let toastEl = null
-  function toast(text) {
-    toastEl?.remove()
-    const t = toastEl = document.createElement('div')
-    t.className = 'hm-toast'
-    t.setAttribute('role', 'status')
-    t.textContent = text
-    root.append(t)
-    setTimeout(() => t.remove(), 3000)
-  }
 
   return {
     el: root,
@@ -220,6 +168,8 @@ export function makeBrand({ sw, C, root }) {
       B.done?.(B.chat, !!B.brand?.lockedAt)
     },
     show() { B.on = true; root.hidden = false; crumb.hidden = false; if (B.brand) { B.framed = false; render() } },
-    hide() { B.on = false; root.hidden = true }
+    hide() { B.on = false; root.hidden = true },
+    // bring a section ('story', 'palette', 'type') or a card (its key) into view
+    focus: (target, animate = true) => bd.focus(target, animate)
   }
 }
