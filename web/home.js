@@ -252,7 +252,8 @@ export function makeHome({ sw, C, root }) {
     let list = H.chats || []
     if (H.q) { const q = H.q.toLowerCase(); list = list.filter(c => c.title.toLowerCase().includes(q)) }
     bodyEl.className = 'hm-body chats'
-    bodyEl.innerHTML = list.map(c => `<div class="chat-row" data-chat="${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.title)}">
+    // New chat first: a new idea starts here, outside every project
+    bodyEl.innerHTML = `<div class="chat-row chat-new" data-new tabindex="0" role="button">${ic('plus', 16)}<b class="cr-nm">New chat</b></div>` + list.map(c => `<div class="chat-row" data-chat="${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.title)}">
       ${ic(CHAT_ICON[c.kind] || 'msg', 16)}<b class="cr-nm">${esc(c.title)}</b>${c.state === 'locked' ? `<span class="cr-st">Locked</span>` : ''}<span class="cr-t">${ago(c.updated)}</span>
       <button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button></div>`).join('')
   }
@@ -269,6 +270,12 @@ export function makeHome({ sw, C, root }) {
     sw.talk.start({ kind: chat.kind, blank: true, chat: chat.id, said: sw.talk.saidOf(chat), build: (brief, c) => start(brief, run, {}, c) })
   }
   C.openChat = openChat
+  function newChat() {
+    C.project = null
+    C.go('station', 'canvas')
+    C.chat(true)
+    sw.talk.start({ kind: 'site', blank: true, build: (brief, c) => start(brief, null, {}, c) })
+  }
   function renameChat(id) {
     const b = bodyEl.querySelector(`.chat-row[data-chat="${CSS.escape(id)}"] .cr-nm`)
     const c = (H.chats || []).find(x => x.id === id)
@@ -279,14 +286,16 @@ export function makeHome({ sw, C, root }) {
     const r = e.target.closest('.chat-row')
     if (!r || e.target.closest('.hm-rename')) return
     e.stopImmediatePropagation()
+    if (r.dataset.new != null) return newChat()
     const id = r.dataset.chat
     if (e.target.closest('.more')) return showMenu([{ k: 'rename', icon: 'pencil', label: 'Rename', run: () => renameChat(id) }, { k: 'del', icon: 'trash', label: 'Delete', red: true, run: () => deleteChat(id) }], e.target.closest('.more'))
     openChat(id)
   }, true)
-  bodyEl.addEventListener('dblclick', e => { const n = e.target.closest('.chat-row .cr-nm'); if (n) { e.preventDefault(); renameChat(n.closest('.chat-row').dataset.chat) } })
+  bodyEl.addEventListener('dblclick', e => { const n = e.target.closest('.chat-row:not(.chat-new) .cr-nm'); if (n) { e.preventDefault(); renameChat(n.closest('.chat-row').dataset.chat) } })
   bodyEl.addEventListener('keydown', e => {
     const r = e.target.closest('.chat-row')
     if (!r || e.target.closest('input')) return
+    if (r.dataset.new != null) { if (e.key === 'Enter') { e.preventDefault(); newChat() } return }
     if (e.key === 'Enter') { e.preventDefault(); openChat(r.dataset.chat) }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteChat(r.dataset.chat) }
   }, true)

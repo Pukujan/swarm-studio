@@ -209,7 +209,10 @@ const hueDeg = h => {
 export function fitTheme(theme, look) {
   const vars = theme?.vars
   if (!vars || !look?.ground || groundOf(vars['--background']) === look.ground) return theme
-  const h = Math.round(hueDeg(vars['--primary']))
+  // a coloured ground keeps the planner's own background hue when it chose one (its "deep
+  // midnight blue" stays blue); only a grey or black one takes the main colour's hue
+  const own = hsl(vars['--background'])
+  const h = Math.round(look.ground === 'colour' && own && own.s >= 0.25 ? own.h : hueDeg(vars['--primary']))
   const set = look.ground === 'dark'
     ? { bg: toHex(h, 22, 7), card: toHex(h, 18, 11), muted: toHex(h, 14, 15), border: toHex(h, 12, 22), fg: '#f3f1ee', mfg: toHex(h, 8, 68) }
     : look.ground === 'white'
@@ -217,11 +220,64 @@ export function fitTheme(theme, look) {
       : { bg: toHex(h, 62, 24), card: toHex(h, 55, 30), muted: toHex(h, 45, 34), border: toHex(h, 40, 42), fg: '#fbf9f6', mfg: toHex(h, 30, 80) }
   const out = { ...vars, '--background': set.bg, '--card': set.card, '--muted': set.muted, '--border': set.border, '--foreground': set.fg, '--muted-foreground': set.mfg }
   if (look.ground === 'colour') {
-    // the main colour cannot vanish into a field of its own hue: use a light accent instead
-    out['--primary'] = toHex((h + 180) % 360, 85, 62)
-    out['--primary-foreground'] = '#121314'
+    // the main colour cannot vanish into a field of its own hue: a light accent instead, unless its
+    // own hue is already far from the ground
+    const away = Math.abs(((hueDeg(vars['--primary']) - h + 540) % 360) - 180)
+    if (away < 60) {
+      out['--primary'] = toHex((h + 180) % 360, 85, 62)
+      out['--primary-foreground'] = '#121314'
+    }
   }
   return { ...theme, vars: out, fitted: look.ground }
+}
+
+// The colours a brief or a talk names, as families a theme can be checked against. A colour named
+// after no / not / without / avoid / hate is one they do not want, so it is not asked for.
+const FAMILIES = [
+  ['black', /\b(black|charcoal|jet)\b/, c => c.l < 0.2],
+  ['white', /\b(white|off-white)\b/, c => c.l > 0.9],
+  ['grey', /\b(gr[ae]y|slate|stone)\b/, c => c.s < 0.2 || (c.l < 0.6 && c.s < 0.3)],
+  ['cream', /\b(cream|beige|ivory|sand|paper|oat)\b/, c => c.l > 0.8 && (c.s < 0.15 || (c.h >= 20 && c.h <= 65))],
+  ['terracotta', /\b(terracotta|rust|brick|clay|coral)\b/, c => c.s > 0.25 && (c.h <= 35 || c.h >= 350) && c.l > 0.25 && c.l < 0.75],
+  ['red', /\bred\b/, c => c.s > 0.3 && (c.h < 18 || c.h >= 340)],
+  ['orange', /\b(orange|amber|peach)\b/, c => c.s > 0.3 && c.h >= 15 && c.h < 48],
+  ['yellow', /\b(yellow|gold|golden|mustard|ochre)\b/, c => c.s > 0.25 && c.h >= 35 && c.h < 68],
+  ['olive', /\b(olive)\b/, c => c.s > 0.15 && c.h >= 45 && c.h < 100],
+  ['green', /\b(green|forest|sage|mint|emerald|moss)\b/, c => c.s > 0.12 && c.h >= 68 && c.h < 168],
+  ['teal', /\b(teal|cyan|turquoise|aqua)\b/, c => c.s > 0.2 && c.h >= 160 && c.h < 205],
+  ['blue', /\b(blue|navy|cobalt|azure|indigo|midnight)\b/, c => c.s > 0.2 && c.h >= 195 && c.h < 258],
+  ['purple', /\b(purple|violet|lavender|lilac|plum)\b/, c => c.s > 0.15 && c.h >= 250 && c.h < 300],
+  ['pink', /\b(pink|magenta|rose|blush|fuchsia)\b/, c => c.s > 0.25 && (c.h >= 290 || c.h < 12) && c.l > 0.35]
+]
+const NOT_WANTED = /\b(no|not|never|without|avoid|hate|dislike|instead of|except)\b[^.;:!?]{0,24}$/i
+export function namedColours(text = '') {
+  const s = String(text).toLowerCase()
+  const out = []
+  for (const [name, re] of FAMILIES) {
+    const g = new RegExp(re.source, 'g')
+    let m, wanted = false
+    while ((m = g.exec(s))) if (!NOT_WANTED.test(s.slice(Math.max(0, m.index - 40), m.index))) wanted = true
+    if (wanted) out.push(name)
+  }
+  return out
+}
+function hsl(hx) {
+  const c = hex(hx)
+  if (!c) return null
+  const [r, g, b] = c, max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, l = (max + min) / 2
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  let h = 0
+  if (d) h = (((max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60) + 360) % 360
+  return { h, s, l }
+}
+// the named colours a theme does not have anywhere in its main colours (the reviewer's check)
+export function missingColours(text, vars = {}) {
+  const cols = ['--background', '--foreground', '--primary', '--accent', '--card', '--muted', '--border', '--muted-foreground'].map(k => hsl(vars[k])).filter(Boolean)
+  const want = namedColours(text)
+  return want.filter(name => {
+    const test = FAMILIES.find(f => f[0] === name)[2]
+    return !cols.some(test)
+  })
 }
 
 // Every page type: no stock formula headlines. These came up on nearly every site.

@@ -38,7 +38,7 @@ export function extendBase(events, savedPlan = null) {
   if (!Array.isArray(events)) return null
   const start = events.find(e => e.type === 'run:start') || {}
   if (start.kind === 'game') return null
-  const theme = events.find(e => e.type === 'theme')
+  const theme = events.findLast(e => e.type === 'theme')
   const pages = events.filter(e => e.type === 'page')
   if (!theme || !pages.length) return null
   const carry = carryEvents(events)

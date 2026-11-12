@@ -4,7 +4,7 @@
 
 import { markStalled, streamChat } from './llm.mjs'
 import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
-import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme } from './pagetype.mjs'
+import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme, namedColours, missingColours } from './pagetype.mjs'
 import { tidyFragment } from './tidy.mjs'
 import { fixSection } from './review.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
@@ -12,6 +12,8 @@ import { cleanSeo, reviewSeo } from './seo.mjs'
 import { projectName } from './naming.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
+// a follow-up that asks about the look, not only one that names a colour
+const LOOK_WORDS = /\b(colou?rs?|palette|theme|look|fonts?|typeface|typography|mood|vibe|styling|restyle)\b/i
 
 export const AGENT_NAMES = [
   // the crew: little alien workers with short, easy star-ish names
@@ -273,6 +275,50 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     }
   }
 
+  // The look follows the words. A follow-up that asks for another look (its colours, type or mood)
+  // gets a new theme for the whole project: every page reads the theme's variables, so every page
+  // changes. A new build whose theme lost the colours the brief names gets one more try. The check
+  // (missingColours) is the reviewer's: what is still missing after that is said in theme:check.
+  async function themeStep() {
+    if (resume || signal?.aborted || !plan.theme?.vars) return
+    const words = base ? ask : brief
+    const asksLook = base && (LOOK_WORDS.test(ask) || namedColours(ask).length > 0)
+    const missing = missingColours(words, plan.theme.vars)
+    if (base ? !asksLook : !missing.length) return
+    const shape = '{"type":"theme","name":"<2-3 word style name>","direction":"<one sentence visual direction>","vars":{"--background":"#hex","--foreground":"#hex","--primary":"#hex","--primary-foreground":"#hex","--muted":"#hex","--muted-foreground":"#hex","--border":"#hex","--accent":"#hex","--card":"#hex"},"fonts":{"heading":"<Google Font family>","body":"<Google Font family>"},"radius":"<e.g. 14px>"}'
+    const ask1 = need => [
+      `The website's theme now: ${JSON.stringify({ name: plan.theme.name, direction: plan.theme.direction, vars: plan.theme.vars, fonts: plan.theme.fonts, radius: plan.theme.radius })}`,
+      `What the person asked for: ${String(words).slice(0, 2000)}`,
+      need.length ? `The theme must use these colours they named: ${need.join(', ')}.` : '',
+      base ? 'If what they asked does not change the colours, type or mood, reply {"keep":true}.' : ''
+    ].filter(Boolean).join('\n\n')
+    let theme = plan.theme
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const need = missingColours(words, theme.vars)
+      if (attempt && !need.length) break
+      const out = await streamChat(provider, {
+        trace: { kind: 'theme' }, model: plannerModel, maxTokens: 500, temperature: 0.4, extra: NO_THINKING, signal,
+        messages: [
+          { role: 'system', content: `You set a website's theme from what the person asked. Reply with one JSON line and nothing else, in this shape:\n${shape}\nKeep every key. Text stays readable on its background and buttons. Use the colours the person named; never one they said they do not want.` },
+          { role: 'user', content: ask1(need) }
+        ]
+      })
+      const text = String(out?.text || '')
+      let j = null
+      try { j = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) } catch {}
+      if (!j || j.keep) break
+      const vars = Object.fromEntries(Object.entries(j.vars || {}).filter(([k, v]) => /^--[\w-]+$/.test(k) && /^#[0-9a-f]{3,8}$/i.test(String(v))))
+      if (!vars['--background'] || !vars['--primary']) continue
+      theme = { ...theme, name: j.name || theme.name, direction: j.direction || theme.direction, vars: { ...theme.vars, ...vars }, ...(j.fonts?.heading ? { fonts: j.fonts } : {}), ...(j.radius ? { radius: j.radius } : {}) }
+      delete theme.fitted
+    }
+    if (signal?.aborted || theme === plan.theme) return
+    plan.theme = theme
+    emit('theme', { ...theme, by: base ? 'ask' : 'check' })
+    const left = missingColours(words, theme.vars)
+    emit('theme:check', { named: namedColours(words), missing: left })
+  }
+
   // Resume (a build that was stopped): no planner call; the sections it did not finish are built
   // now, and a page stopped before it was planned is planned. Everything finished stays as it is.
   async function resumePlan() {
@@ -283,7 +329,9 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     }
   }
   const unplanned = () => resume ? plan.pages.filter(p => !p.layers.length) : []
-  const planning = (base ? (resume ? resumePlan() : extendPlan()) : sitemap())
+  const first = base ? (resume ? resumePlan() : extendPlan()) : sitemap()
+  const theming = first.then(themeStep, () => {}).catch(err => { if (!signal?.aborted) emit('error', { where: 'theme', message: String(err.message || err) }) })
+  const planning = first
     .then(() => {
       emit('sitemap:done', { ms: elapsed(), pages: plan.pages.length })
       // page planners need the whole page list (for links), so they start here
@@ -392,6 +440,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       emit('error', { where: 'seo', message: String(err.message || err) })
     }
   }
+  await theming
   // stopped: the last word is run:stopped (what was built is kept); no run:done, so nothing more starts
   if (signal?.aborted) {
     const result = { ms: elapsed(), ...stats, pages: plan.pages.length, stopped: true }
