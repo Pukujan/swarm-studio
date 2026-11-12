@@ -8,7 +8,7 @@ One prompt in the Hermes app, and a crew of agents does the work on a canvas you
 
 | Area | What Swarm does | Status |
 |---|---|---|
-| **UI / UX design** | UI/UX ideation, layout and copy for every page; 16 agents designing on one canvas at once (collaborative agent design); automated review that finds and fixes problems | works |
+| **UI / UX design** | UI/UX ideation, layout and copy for every page; a crew of agents (8 by default, up to 24) designing on one canvas at once (collaborative agent design); automated review that finds and fixes problems | works |
 | **Prototyping** | Automated prototyping: pages are wired into a clickable prototype you can play on desktop or phone; comment on a section and an agent reworks it live | works |
 | **Images** | Pictures painted for every page, with stand-in stock photos while they are made | works |
 | **One-click deploy** | A live site on GitHub Pages, Vercel or Cloudflare Pages, on your own account | works |
