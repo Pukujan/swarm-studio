@@ -35,3 +35,15 @@ test('measured again with this machine\'s Godot', { skip: !process.env.SWARM_GOD
   const out = execFileSync(process.execPath, [new URL('../bench/starter-strategy.mjs', import.meta.url).pathname, '--units', '500'], { encoding: 'utf8', timeout: 600000 })
   holds(JSON.parse(out.slice(out.indexOf('{'))).headless, 'headless here')
 })
+
+test('the platformer starter\'s feel holds (bench/platformer-feel.json, node bench/starter-feel.mjs)', () => {
+  const f = JSON.parse(readFileSync(new URL('../bench/platformer-feel.json', import.meta.url), 'utf8'))
+  assert.ok(f.full > 95 && f.full < 130, `a held jump reaches about 110 px: ${f.full}`)
+  assert.ok(f.tap < f.full * 0.6, `a tap is a short hop: ${f.tap}`)
+  assert.equal(f.coyote_3, true, 'a jump 3 frames after the ledge still works')
+  assert.equal(f.coyote_15, false, 'a jump 15 frames after does not')
+  assert.equal(f.buffer, true, 'a jump pressed just before landing happens')
+  assert.ok(Math.abs(f.ride - f.lift) < 5 && Math.abs(f.lift) > 30, `rides the lift: ${f.ride} of ${f.lift}`)
+  assert.equal(f.on_ledge && f.dropped, true, 'down + jump drops through a ledge')
+  assert.equal(f.corner, true, 'the head slides around a ceiling corner')
+})
