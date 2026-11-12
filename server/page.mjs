@@ -11,10 +11,39 @@ import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 // (web/edit/ too: its files are joined in like the rest)
 export const webVersion = webDir => String(Math.max(...readdirSync(webDir, { recursive: true }).map(f => statSync(join(webDir, f)).mtimeMs)) | 0)
 
+// A vendored library (web/vendor/, built by scripts/vendor.mjs) imported by a joined module.
+const VENDOR_IMPORT = /^import \{([^}]*)\} from '(?:\.\.?\/)+(vendor\/[^']+\.mjs)'$/gm
+const vendorVar = path => `__vendor_${path.split('/')[1].replace(/\W/g, '_')}`
+const pairs = list => list.split(',').map(e => e.trim()).filter(Boolean).map(e => e.split(/\s+as\s+/))
+
+// Modules joined into one inline script, since the pane's frame has an opaque origin and cannot import:
+// imports of the other web files go and their exports become plain names. A vendored library goes in
+// once, ahead of them, as a value made from its own code: esbuild's closing `export { a as b }` becomes
+// the value's fields, and every `import { b } from './vendor/x/x.mjs'` becomes one declaration of them.
+export function joinModules(webDir, files) {
+  const read = f => readFileSync(join(webDir, f), 'utf8')
+  // path → (local name → exported name), so a name two files import is declared once
+  const libs = new Map()
+  const body = files.map(f => read(f)
+    .replace(VENDOR_IMPORT, (_, names, path) => {
+      const used = libs.get(path) || libs.set(path, new Map()).get(path)
+      for (const [name, local] of pairs(names)) used.set(local || name, name)
+      return ''
+    })
+    .replace(/^import .* from '\.\/.*'$/gm, '').replace(/^export /gm, ''))
+  const vendored = [...libs].map(([path, used]) => {
+    const src = read(path)
+    const end = src.match(/export\s*\{([^}]*)\};?\s*$/)
+    if (!end) throw new Error(`${path}: no closing export to inline`)
+    const fields = pairs(end[1]).map(([local, name]) => `${name || local}: ${local}`).join(', ')
+    const names = [...used].map(([local, name]) => (local === name ? name : `${name}: ${local}`)).join(', ')
+    return `const ${vendorVar(path)} = (() => {\n${src.slice(0, end.index)}\nreturn { ${fields} }\n})()\nconst { ${names} } = ${vendorVar(path)}`
+  })
+  return [...vendored, ...body].join('\n')
+}
+
 export function canvasPage(webDir, extra = {}) {
   const read = f => readFileSync(join(webDir, f), 'utf8')
-  // a module joined into one inline script: its imports of the other files go, its exports become plain
-  const join1 = f => read(f).replace(/^import .* from '\.\/.*'$/gm, '').replace(/^export /gm, '')
   const boot = JSON.stringify({ version: webVersion(webDir), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource(), guard: swarmLayout.toString(), ...extra }).replace(/</g, '\\u003c')
   return read('index.html')
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
@@ -24,7 +53,7 @@ export function canvasPage(webDir, extra = {}) {
     // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
     .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
     .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
-    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${['route.js', 'icons.js', 'store.js', 'workshop.js', 'seo.js', 'layerlink.js', 'clean.js', 'canvas.js'].map(join1).join('\n')}</script>`)
+    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${joinModules(webDir, ['route.js', 'icons.js', 'store.js', 'workshop.js', 'seo.js', 'layerlink.js', 'clean.js', 'canvas.js'])}</script>`)
     // the studio frame, Projects and a project's canvas
     .replace('<link rel="stylesheet" href="studio.css">', () => `<style>${read('studio.css')}</style>`)
     .replace('<link rel="stylesheet" href="home.css">', () => `<style>${read('home.css')}</style>`)
@@ -33,6 +62,6 @@ export function canvasPage(webDir, extra = {}) {
     .replace('<link rel="stylesheet" href="plan.css">', () => `<style>${read('plan.css')}</style>`)
     .replace('<link rel="stylesheet" href="brand.css">', () => `<style>${read('brand.css')}</style>`)
     .replace('<link rel="stylesheet" href="workshop.css">', () => `<style>${read('workshop.css')}</style>`)
-    // the studio controller, Projects and a project: its own modules joined into one, since the pane's frame has no origin to import from
-    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'edit/patches.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', 'studio.js'].map(join1).join('\n')}</script>`)
+    // the studio controller, Projects and a project: its own modules joined into one
+    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${joinModules(webDir, ['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'edit/patches.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', 'studio.js'])}</script>`)
 }
