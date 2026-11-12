@@ -136,13 +136,15 @@ bridge is attached:
   build never starts "planning". The canvas and the Make box ask first (`GET /api/hermes?ready=1`) and
   show one calm line with the one thing to do and **Check again**. `hermes swarm` and `/swarm` print the
   same words. The two cases are told apart:
-  - `hermes_closed`: no Hermes process is running. "Hermes isn't connected." Open Hermes Desktop, or run
+  - `hermes_closed`: no Hermes gateway is running. "Hermes isn't connected." Open Hermes Desktop, or run
     `hermes swarm`.
-  - `hermes_updated`: Hermes is running on an older copy of the plugin. "Swarm Studio was updated. Restart
+  - `hermes_updated`: a Hermes gateway is running on an older copy of the plugin. "Swarm Studio was updated. Restart
     Hermes to finish." Run `hermes gateway restart`, or quit Hermes Desktop and open it again. A copy from
     before the bridge never attaches at all; a newer one sends `code` (the newest mtime of the plugin's
     root `*.py` when it loaded) with every attach, and the server compares it with the files on disk.
-  A Hermes that is running but has not attached yet gets 8 seconds to do so before it is called outdated.
+  A gateway that is running but has not attached yet gets 8 seconds to do so before it is called outdated.
+  A running gateway is known only by `$HERMES_HOME/gateway.pid` and whether that pid is alive: the server
+  reads no process list and no other process's command line (point 1).
 - **Re-attach.** Every Hermes process with the plugin loaded keeps looking for a server every 5 seconds
   until one answers (`bridge.start_later`), then attaches every 5 seconds. So a server it did not start,
   or one restarted by another process, is found without anyone doing anything.

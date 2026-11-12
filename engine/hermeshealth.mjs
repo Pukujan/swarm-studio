@@ -11,7 +11,6 @@
 // A Hermes process that is current attaches within a few seconds of the server answering, so when one is
 // running but has not attached yet, ready() gives it that long before calling it outdated.
 
-import { execFile } from './proc.mjs'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -32,36 +31,19 @@ export function pyStamp(root) {
   return newest
 }
 
-// A running Hermes: 'young' when one started in the last `youngMs` (it may not have attached yet), true
-// when one has run longer, false when none, null when it cannot be told (then the message does not guess).
-// - the gateway Hermes Desktop starts writes $HERMES_HOME/gateway.pid ({"pid": …}) when it starts; its
-//   command line need not say "hermes" (Desktop runs it as `python3 -I -c …`);
-// - a chat or `hermes swarm` runs hermes_cli/main.py, or the `hermes` entry script in a bin folder.
-const HERMES_PROC = /hermes_cli[/\\.]main|[/\\]bin[/\\]hermes(\.exe)?(\s|$)/i
-const ETIME = t => { const m = String(t).trim().match(/^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/); return m ? ((+m[1] || 0) * 86400 + (+m[2] || 0) * 3600 + +m[3] * 60 + +m[4]) * 1000 : Infinity }
+// A running Hermes gateway: 'young' when it started in the last `youngMs` (it may not have attached yet),
+// true when it has run longer, false when none. Found only by $HERMES_HOME/gateway.pid ({"pid": …}), which
+// the gateway Hermes Desktop starts writes; no process list and no other process's command line is read
+// (Nous catalog review, point 1). A chat or `hermes swarm` without a gateway counts as none: its bridge
+// attaches when current, and when it does not, "Hermes isn't connected" still says what to do.
 const alive = pid => { try { process.kill(pid, 0); return true } catch (e) { return e.code === 'EPERM' } }
-export function hermesRunning({ run = execFile, platform = process.platform, self = process.pid, home = process.env.HERMES_HOME || join(homedir(), '.hermes'), youngMs = 30000, now = Date.now } = {}) {
-  let gateway = null
+export function hermesRunning({ self = process.pid, home = process.env.HERMES_HOME || join(homedir(), '.hermes'), youngMs = 30000, now = Date.now } = {}) {
   try {
     const file = join(home, 'gateway.pid')
     const pid = Number(JSON.parse(readFileSync(file, 'utf8')).pid)
-    if (pid > 0 && pid !== self && alive(pid)) gateway = now() - statSync(file).mtimeMs < youngMs ? 'young' : true
+    if (pid > 0 && pid !== self && alive(pid)) return Promise.resolve(now() - statSync(file).mtimeMs < youngMs ? 'young' : true)
   } catch {}
-  if (gateway === 'young') return Promise.resolve('young')
-  if (platform === 'win32') return Promise.resolve(gateway || null)
-  return new Promise(resolve => {
-    run('ps', ['-Ao', 'pid=,etime=,command='], { timeout: 3000, maxBuffer: 4 << 20 }, (err, out) => {
-      if (err) return resolve(gateway || null)
-      let found = gateway
-      for (const line of String(out).split('\n')) {
-        const m = line.trim().match(/^(\d+)\s+(\S+)\s+(.*)$/)
-        if (!m || Number(m[1]) === self || /server\.mjs/.test(m[3]) || !HERMES_PROC.test(m[3])) continue
-        if (ETIME(m[2]) < youngMs) return resolve('young')
-        found = true
-      }
-      resolve(found || false)
-    })
-  })
+  return Promise.resolve(false)
 }
 
 export function hermesHealth({ bridge, root, running = () => hermesRunning(), stamp = () => pyStamp(root), settleMs = 8000, pollMs = 500, cacheMs = 3000, now = () => Date.now() } = {}) {
