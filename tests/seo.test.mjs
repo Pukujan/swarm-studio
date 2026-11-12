@@ -256,6 +256,6 @@ test('the thumbnail: the person\'s pick for the home page, else its hero, else t
 test('the canvas page joins every module canvas.js imports (seo.js among them)', () => {
   const page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')
   const list = page.match(/\[([^\]]*'canvas\.js')\]/)[1]
-  const imports = [...readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8').matchAll(/^import .* from '\.\/([\w.-]+)'$/gm)].map(m => m[1])
+  const imports = [...readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8').matchAll(/^import .* from '\.\/([\w./-]+)'$/gm)].map(m => m[1])
   for (const f of imports) assert.ok(list.includes(`'${f}'`), `${f} is joined into the canvas page`)
 })

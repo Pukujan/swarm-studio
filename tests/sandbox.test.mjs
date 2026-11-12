@@ -41,7 +41,7 @@ test('clean() works on the parsed DOM, not on regexes over the text', () => {
   const canvas = read('web/canvas.js')
   assert.match(canvas, /import \{ clean \} from '\.\/clean\.js'/)
   assert.doesNotMatch(canvas, /function clean\(/)
-  assert.match(read('server/page.mjs'), /'clean\.js', 'canvas\.js'/, 'the inlined studio carries clean.js before canvas.js')
+  assert.match(read('server/page.mjs'), /'clean\.js', ('canvas\/[\w.-]+', )*'canvas\.js'/, 'the inlined studio carries clean.js before canvas.js')
 })
 
 test('/site/ and /video/…/live/ are served with a sandbox CSP', () => {

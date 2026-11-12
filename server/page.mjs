@@ -63,7 +63,7 @@ export function canvasPage(webDir, extra = {}) {
     // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
     .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
     .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
-    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${joinModules(webDir, ['route.js', 'icons.js', 'data.js', 'workshop.js', 'seo.js', 'layerlink.js', 'clean.js', 'canvas.js'])}</script>`)
+    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${joinModules(webDir, ['route.js', 'icons.js', 'data.js', 'workshop.js', 'seo.js', 'layerlink.js', 'clean.js', 'canvas/core.js', 'canvas.js'])}</script>`)
     // the studio frame, Projects and a project's canvas
     .replace('<link rel="stylesheet" href="studio.css">', () => `<style>${read('studio.css')}</style>`)
     .replace('<link rel="stylesheet" href="home.css">', () => `<style>${read('home.css')}</style>`)
