@@ -74,6 +74,8 @@ class StandIn(BaseHTTPRequestHandler):
         if self.path == "/api/feed/builds":
             if not self._authed():
                 return self._send(401, {"ok": False, "code": "UNAUTHORIZED", "message": "Send your token."})
+            if s.get("small_limit") and len(json.dumps(body)) > 400:
+                return self._send(413, {"ok": False, "code": "PAYLOAD_TOO_LARGE", "message": "too big"})
             if s.get("no_shots") and ("posterTall" in body or any("shot" in p or "phoneShot" in p for p in body.get("pages") or [])):
                 return self._send(400, {"ok": False, "code": "BAD_REQUEST", "message": "unknown field shot"})
             if s.get("old_feed") and any(k in body for k in ("project", "into", "piece")):
@@ -302,6 +304,21 @@ class FeedClientTest(unittest.TestCase):
         self.assertNotIn("posterTall", body)
         self.assertEqual(body["pages"], [{"slug": "home", "title": "Home", "path": "/"}])
         self.assertEqual(body["project"], {"name": "Lantern"})  # the project fields stay
+
+    def test_post_over_the_feeds_body_limit_goes_without_shots(self):
+        self._connect()
+        StandIn.state["small_limit"] = True
+        zip_path = Path(self.home.name) / "shots.zip"
+        zip_path.write_bytes(ZIP)
+        run = {"id": "2026-11-12T10-00-03-000Z", "title": "L", "brief": "x", "pageTitles": ["Home"], "sites": {"github": "https://me.github.io/n/"}}
+        big = lambda rid: {"zip": str(zip_path), "pages": [{"path": "/", "shot": "data:image/webp;base64," + "A" * 2000}]}
+        orig = feed.poster_of
+        feed.poster_of = lambda r, folder: "data:image/png;base64,AA"
+        try:
+            self.assertIn("Posted", feed.post(run, [], lambda rid: None, big))
+        finally:
+            feed.poster_of = orig
+        self.assertNotIn("shot", StandIn.state["posts"][-1]["pages"][0])
 
     def test_shots_failing_never_stops_a_post(self):
         self._connect()
