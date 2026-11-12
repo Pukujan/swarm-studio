@@ -106,7 +106,7 @@ import { mkdtempSync, rmSync, existsSync as there } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
-import { say, lock, unlock, planInput, draftOf, wordsDecide, openQuestions, readTurn } from '../engine/talkplan.mjs'
+import { say, lock, unlock, planInput, draftOf, wordsDecide, openQuestions, readTurn, startsOf, startText, startTurn } from '../engine/talkplan.mjs'
 import { newChat, chatStore } from '../engine/chats.mjs'
 import { planPrice, planFromAnswers } from '../engine/plan.mjs'
 import { planRoutes } from '../server/plans.mjs'
@@ -279,9 +279,14 @@ test('/api/talk: the ants talk over HTTP, locked into a plan; locking again re-p
     assert.deepEqual([plan.title, plan.shape.family, plan.shape.art, plan.price.credits], ['Army of Ants', 'rts', '2d', 0])
     assert.equal(locked.data.chat.plan, plan.id)
     assert.equal(locked.data.chat.state, 'locked')
-    // the chat survives: read back from disk
+    // the planner says where to start: the ants' units or map, never character creation
+    assert.match(locked.data.turn.text, /begin with the units/)
+    // (tiny: the board has two sheets, units and buildings, so no map sheet to open)
+    assert.deepEqual(locked.data.starts.map(o => o.id), ['start:units', 'start:design', 'start:slice'])
+    // the chat survives: read back from disk, with the parts to work on next
     const back = await fetch(`${base}/api/talk/${id}`).then(r => r.json())
-    assert.equal(back.chat.turns.length, 8)
+    assert.equal(back.chat.turns.length, 9)
+    assert.deepEqual(back.starts.map(o => o.focus), ['sheet:units', 'cards', 'mock:battle'])
     // change a decision, lock again: the same plan id, re-planned
     await post(`/api/talk/${id}`, { said: 'make it 3d' })
     const again = await post(`/api/talk/${id}/lock`)
@@ -320,4 +325,33 @@ test('the web side: a game idea opens the talk beside a draft board, and Lock is
   assert.match(plan, /primary\.onclick = \(\) => \(P\.draft \? sw\.talk\?\.lock\?\.\(\) : gate\(\)\)/)
   assert.match(plan, /bd\.inspector\(!P\.draft && /, 'a draft has no inspector')
   assert.match(read('studio.js'), /C\.talkGame = /)
+})
+
+test('where to start: the parts fit the game, each with a reason, and what is painted drops out', () => {
+  const plan = f => planFromAnswers({ idea: 'an army of ants', answers: {}, force: { family: f, art: '2d', engine: 'web' } })
+  const ants = plan('rts')
+  const starts = startsOf(ants)
+  assert.deepEqual(starts.map(o => o.label), ['Units', 'The map', 'Overall design', 'A tiny playable slice'])
+  assert.ok(starts.every(o => o.why && o.focus))
+  assert.ok(!starts.some(o => /character/i.test(o.label + o.why)), 'an RTS never starts with character creation')
+  assert.match(startText(starts), /^Where to start\? I would begin with the units: /)
+  assert.equal(startsOf(plan('platformer'))[0].focus, 'sheet:cast')
+  assert.deepEqual(startsOf(plan('puzzle')).slice(0, 2).map(o => o.focus), ['sheet:pieces', 'sheet:board'])
+  // the units sheet painted: the map comes first now
+  ants.sheets = [{ kind: 'units', state: 'done' }]
+  assert.match(startText(startsOf(ants)), /begin with the map: /)
+  // all painted: the design is left
+  ants.sheets.push({ kind: 'terrain', state: 'done' })
+  ants.mocks = [{ shot: 'battle', state: 'done' }]
+  assert.deepEqual(startsOf(ants).map(o => o.id), ['start:design'])
+  const chat = newChat({ kind: 'game' })
+  const turn = startTurn(chat, plan('rts'))
+  assert.equal(chat.turns.at(-1), turn)
+  assert.equal(turn.who, 'planner')
+  assert.equal(turn.options[0].id, 'start:units')
+  const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
+  const studio = readFileSync(new URL('../web/studio.js', import.meta.url), 'utf8')
+  assert.match(canvas, /o\.id\.startsWith\('start:'\)\) return gameStart/)
+  assert.match(studio, /C\.planView\.select\(select\)/)
+  assert.match(studio, /C\.planView\.focus\(focus\)/)
 })

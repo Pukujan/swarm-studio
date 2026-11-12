@@ -191,6 +191,8 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
 
   // true when the request was a plan route (and has been answered)
   handle.fromTalk = fromTalk
+  // a plan as the board shows it, or null
+  handle.get = id => { const p = store.get(id); return p ? view(p) : null }
   return handle
   function handle(req, res, url) {
     if (servePicture(req, res, url)) return true

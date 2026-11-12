@@ -380,3 +380,61 @@ export function unlock(chat, key = '') {
   if (chat.spec) chat.spec.lockedAt = null
   return chat
 }
+
+// ---------- where to start (spec 27 §After the lock): once the spec is locked the planner suggests the
+// first part to work on, each with a one-line reason, and the pick opens that part of the Plan board
+// (web/plan.js focus/select). The parts come from the plan's own sheets (its genre family), so an RTS
+// starts with its units or its map, never character creation. What is already painted drops out, so
+// the next suggestion follows from what is done.
+const MAIN = {
+  units: ['Units', 'they are what you command; every screen is full of them'],
+  cast: ['Characters', 'the hero is on screen every second'],
+  pieces: ['Pieces', 'the pieces are the game; everything else frames them'],
+  cards: ['Cards', 'every turn is the cards in your hand'],
+  vehicles: ['Vehicles', 'the car is what you look at all race'],
+  enemies: ['Enemies', 'what you fight sets how the fights feel'],
+  buildings: ['Buildings', 'the base you grow is half the game'],
+  opponents: ['Opponents', 'who you play against sets the tone'],
+  items: ['Items', 'what you collect and sell drives the loop'],
+  icons: ['Icons', 'the HUD has to read at a glance']
+}
+const MAPS = {
+  terrain: ['The map', 'where the fights happen; it sets the size of everything else'],
+  tiles: ['The levels', 'the jumps and gaps are where the game is'],
+  board: ['The board', 'the board decides how a level reads'],
+  tracks: ['Tracks', 'the corners are where races are won'],
+  places: ['Places', 'the place you run is the whole screen'],
+  scenes: ['Scenes', 'the places the story happens set its mood']
+}
+export function startsOf(plan) {
+  if (!plan?.art) return []
+  // the action RPG's sheets and first shot when the family names none (as web/plan.js shows them)
+  const kinds = (plan.art.sheets || ['cast', 'weapons']).slice(0, plan.shape?.size === 'tiny' ? 2 : 4)
+  const doneSheet = k => (plan.sheets || []).some(s => s.kind === k && s.state === 'done')
+  const out = []
+  const main = kinds.find(k => MAIN[k])
+  if (main) out.push({ id: `start:${main}`, label: MAIN[main][0], why: MAIN[main][1], focus: `sheet:${main}`, select: `sheet:${main}`, done: doneSheet(main) })
+  const map = kinds.find(k => MAPS[k])
+  if (map) out.push({ id: `start:${map}`, label: MAPS[map][0], why: MAPS[map][1], focus: `sheet:${map}`, select: `sheet:${map}`, done: doneSheet(map) })
+  else if (plan.shape?.backdrops !== false) out.push({ id: 'start:world', label: 'The world', why: 'the backdrops set the look of every stage', focus: 'world', select: null, done: (plan.backdrops || []).some(b => b.state === 'done') })
+  const card = plan.cards?.[0]
+  if (card) out.push({ id: 'start:design', label: 'Overall design', why: 'read the plan cards first and change what is wrong before any picture', focus: 'cards', select: `card:${card.id}`, done: false })
+  const shot = plan.art.shots ? plan.art.shots[0]?.[0] : 'combat'
+  if (shot) out.push({ id: 'start:slice', label: 'A tiny playable slice', why: 'one picture of a single moment of play shows if the game works', focus: `mock:${shot}`, select: `mock:${shot}`, done: (plan.mocks || []).some(m => m.shot === shot && m.state === 'done') })
+  const open = out.filter(o => !o.done)
+  return (open.length ? open : out.filter(o => o.id === 'start:design')).map(({ done, ...o }) => o)
+}
+export function startText(starts) {
+  const [first] = starts
+  if (!first) return ''
+  const name = first.id === 'start:design' || first.id === 'start:slice' ? first.label.toLowerCase() : `the ${first.label.toLowerCase().replace(/^the /, '')}`
+  return `Where to start? I would begin with ${name}: ${first.why}.`
+}
+// the planner's turn right after the lock, with the parts as options
+export function startTurn(chat, plan, now = Date.now()) {
+  const starts = startsOf(plan)
+  if (!starts.length) return null
+  const turn = { id: nextId(chat), who: 'planner', at: now, text: startText(starts), options: starts, refs: [], marks: [], layers: [], made: [], reads: [] }
+  chat.turns.push(turn)
+  return turn
+}

@@ -103,6 +103,13 @@ C.home = () => { if (sw.wall) return; C.go('home') }
 C.up = () => { if (sw.wall) return false; if (C.mode === 'brand') { C.go('station', 'canvas'); return true } if (C.mode === 'station') { C.go('project'); return true } if (C.mode === 'project' || C.mode === 'plan') { C.go('home'); return true } return false }
 // open a plan (spec 21); fresh: the crew write its cards in
 C.plan = (id, fresh = false) => { C.planFresh = fresh; C.go('plan', id) }
+// a part of a plan, from the chat's "where to start" (spec 27): the board on that plan, the part in view and selected
+C.planAt = async (id, { focus, select } = {}) => {
+  if (C.mode !== 'plan' || C.planView.id !== id || C.planView.drafting) C.go('plan', id)
+  await C.planView.ready
+  if (select) C.planView.select(select)
+  if (focus) C.planView.focus(focus)
+}
 // a game talk (spec 27): the chat on the left, the plan taking shape on the board; a chat that already
 // has its plan opens on it. { text, chat, said, plan }
 C.talkGame = ({ text = '', chat = null, said = [], plan = null } = {}) => {
