@@ -118,8 +118,10 @@ def _unwrap(name: str, args):
             except ValueError:
                 return args
         inner = args.get("arguments", args.get("parameters")) if isinstance(args, dict) else None
-        if inner is None or not set(args) <= {"name", "arguments", "parameters"} or args.get("name", name) != name:
+        if inner is None or args.get("name", name) != name:
             return args
+        if not set(args) <= {"name", "arguments", "parameters"}:  # real arguments beside a stray flag
+            return args if isinstance(inner, (dict, str)) else {k: v for k, v in args.items() if k not in ("arguments", "parameters")}
         args = inner
     return args
 

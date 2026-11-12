@@ -122,6 +122,8 @@ class ModelCalls(unittest.TestCase):
                 '</\uff5cDSML\uff5cinvoke>\n<\uff5cDSML\uff5cinvoke name="restart_app"></\uff5cDSML\uff5cinvoke>')
         self.assertEqual(args(both), [("restart_app", {}), ("read_file", {"path": "c.tsx"})])
         self.assertEqual(self.m.tool_calls(both)[0], "")
+        stray = '<tool_call>{"name": "write_file", "arguments": {"arguments": true, "path": "a.tsx", "content": "x"}}</tool_call>'
+        self.assertEqual(args(stray), [("write_file", {"path": "a.tsx", "content": "x"})])
         # a real argument that happens to be called "name" is left alone
         self.assertEqual(args('<tool_call>{"name": "rename", "arguments": {"name": "x", "to": "y"}}</tool_call>'), [("rename", {"name": "x", "to": "y"})])
 
