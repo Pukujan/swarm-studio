@@ -1297,11 +1297,19 @@ function frameLoop(now) {
   const camKey = `translate(${cam.x.toFixed(1)}px, ${cam.y.toFixed(1)}px) scale(${cam.s.toFixed(4)})`
   if (camKey !== cam.key) {
     cam.key = camKey
+    // While the camera moves the world keeps the pixels it has (will-change holds the raster
+    // scale), so a zoom or pan slides finished tiles instead of redrawing every page at each
+    // step. The hint comes off when the camera rests and the pages redraw sharp, once. It is
+    // never left on: a standing will-change pinned every page in GPU memory (canvas.css).
+    cam.movedAt = now
+    if (!cam.moving) { cam.moving = true; els.world.classList.add('moving') }
     els.world.style.transform = camKey
     const g = 60 * cam.s
     els.viewport.style.backgroundSize = `${g}px ${g}px`
     els.viewport.style.backgroundPosition = `${cam.x}px ${cam.y}px`
   }
+
+  if (cam.moving && now - cam.movedAt > 260) { cam.moving = false; els.world.classList.remove('moving') }
 
   for (const a of S.agents.values()) {
     // Switching between screen space (dock) and world space (canvas) converts the
@@ -3056,7 +3064,10 @@ function standinFor(gen) {
     .then(r => (r.ok ? r.json() : null)).catch(() => null)
     .then(j => {
       clearTimeout(t)
-      const url = j?.url ? (/^https?:/.test(j.url) ? j.url : BASE + j.url) : null
+      // a stock-library photo comes through this server (/standin/lib/<id>): its CDN sends no CORS
+      // header, and a page holding a picture it cannot read back cannot be photographed
+      const libId = String(j?.url || '').match(/^https:\/\/files\.design-bakery\.com\/([0-9a-f-]{36})$/)?.[1]
+      const url = libId ? `${BASE}/standin/lib/${libId}` : j?.url ? (/^https?:/.test(j.url) ? j.url : BASE + j.url) : null
       standins.set(gen, url)
       if (url) for (const l of S.layers.values()) if (l.status === 'done' && l.text.includes('data-sketch')) fillImages(l)
     })
@@ -3497,6 +3508,9 @@ function freeze(f, image) {
   f.el.append(img)
   f.iframe.remove()
   f.frozen = { img, sig: frameSig(f) }
+  // kept past the next thaw: a page that has not changed rests again on this picture, with no new
+  // screenshot (the screenshot of a long page is the most expensive thing the canvas does)
+  f.rest = { image, sig: f.frozen.sig, h: f.h }
   f.ready = false
 }
 
@@ -3527,10 +3541,14 @@ async function litePass() {
   if (!on) { S.frames.forEach(thaw); return }
   // the reviewer needs its pages live
   if (lite.busy || review.busy) return
+  // Not while the camera moves, nor just after: bringing a page back live reloads it and resting one
+  // takes its screenshot, and either one in the middle of a zoom or pan is a stall of hundreds of ms.
+  if (performance.now() - (cam.movedAt || 0) < 900) return
   // the page you are reading: the most visible one, once zoomed in enough to read
   const vw = els.viewport.clientWidth
   let keep = null, best = 0
-  if (cam.s >= 0.2 && !playing) for (const f of S.frames) {
+  // (behind the project's canvas nobody is reading a page here: they can all rest)
+  if (cam.s >= 0.2 && !playing && !els.viewport.classList.contains('behind')) for (const f of S.frames) {
     const x0 = f.x * cam.s + cam.x, x1 = x0 + FRAME_W * cam.s
     const seen = Math.min(vw, x1) - Math.max(0, x0)
     if (seen > best) { best = seen; keep = f }
@@ -3539,12 +3557,17 @@ async function litePass() {
     const wanted = f === keep || frameBusy(f) || (S.sel && S.sel.startsWith(`${f.id}/`))
     if (f.frozen && (wanted || f.frozen.sig !== frameSig(f))) thaw(f)
     else if (!f.frozen && !wanted && f.ready && f.slots.size) {
+      // unchanged since it last rested: the picture it had then
+      if (f.rest && f.rest.sig === frameSig(f) && f.rest.h === f.h) { freeze(f, f.rest.image); continue }
+      // a screenshot that failed is not tried again every second: it costs seconds each time
+      if (f.restFailed && performance.now() - f.restFailed < 60000) continue
       lite.busy = true
       try {
         // sharp on a Retina screen at the zoom where pages rest
         const shot = await snapFrame(f, Math.min(1, 0.5 * (devicePixelRatio || 1)))
+        f.restFailed = 0
         if (!frameBusy(f) && f !== keep) freeze(f, shot.image)
-      } catch {}
+      } catch { f.restFailed = performance.now() }
       lite.busy = false
       return // one page per pass keeps it smooth
     }
@@ -6532,6 +6555,8 @@ window.swarm = {
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer,
+  // the project's canvas is being zoomed or panned: page swaps and screenshots here wait for it too
+  moved() { cam.movedAt = performance.now() },
   // the crew's sound: 'on', 'muted' or 'quiet' (☰ → Sound in the studio)
   sound(m) { if (m && !WALL) setCrewMode(m); return crewMode },
   // a page's picture for its artboard: the resting snapshot, or a small fresh one

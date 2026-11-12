@@ -151,6 +151,8 @@ button { font: inherit; color: inherit; }
 /* no will-change here: it pinned the whole canvas (every finished page, ~6000px
    tall each) as one GPU texture, and small Macs ran out of tile memory */
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+/* only while the camera moves (web/canvas.js frameLoop): hold the pixels, redraw once at rest */
+.world.moving { will-change: transform; }
 .viewport.behind .world, .viewport.behind .wires, .viewport.behind .cursors { visibility: hidden; }
 .frame { position: absolute; top: 0; width: 1280px; background: var(--text); box-shadow: 0 0 0 2px rgb(var(--glass-rgb) / .06), 0 12px 0 rgb(var(--shade-rgb) / .27); }
 .frame.focus { box-shadow: 0 30px 80px rgb(var(--shade-rgb) / .5), 0 0 0 10px var(--accent); }

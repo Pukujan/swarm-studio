@@ -520,7 +520,17 @@ export function makeProject({ sw, C, root }) {
     offSheet?.(); offSheet = null
     if (on) offSheet = window.SwarmUI?.layer(root.querySelector('.pj-side'), () => sheet(false), { extra: [root.querySelector('.pj-files-btn')] })
   }
-  function applyCam() { world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})`; sizeSoon() }
+  // While the camera moves the world keeps the pixels it has (will-change holds the raster scale) and
+  // the pictures keep the copies they show; both are put right once it rests, in one go. The canvas
+  // behind is told too, so it does not swap a page or take a screenshot in the middle of a gesture.
+  let restT = 0
+  function applyCam() {
+    world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})`
+    world.classList.add('moving')
+    sw.moved?.()
+    clearTimeout(restT)
+    restT = setTimeout(() => { world.classList.remove('moving'); sizePics() }, 280)
+  }
   // Pictures at the size they are drawn: zoomed out, an artboard shows a 256 or 512 px wide copy
   // (web/ui.js small) instead of its full picture, so a whole project on screen holds a few MB of
   // pictures, not every page's full-length snapshot. Zoomed in past that, the full picture comes back.
@@ -528,8 +538,6 @@ export function makeProject({ sw, C, root }) {
   const picTier = new Map() // full src -> the tier last shown
   const tierFor = im => TIERS.find(t => im.offsetWidth * P.cam.k * (devicePixelRatio || 1) <= t * 0.9) || 0
   const picNow = full => { const t = picTier.get(full); return (t && window.SwarmUI?.small?.(full, t, { by: 'width' })) || full }
-  let sizeT = 0
-  function sizeSoon() { clearTimeout(sizeT); sizeT = setTimeout(sizePics, 160) }
   function sizePics() {
     const small = window.SwarmUI?.small
     if (!small) return

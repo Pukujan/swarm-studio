@@ -56,6 +56,8 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .pj-stage.panning { cursor: grabbing; }
 .pj-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; gap: 72px; padding: 48px 56px 140px; width: max-content; }
 .pj-world.ease { transition: transform .3s var(--ease); }
+/* only while the camera moves (applyCam): hold the pixels, redraw once at rest */
+.pj-world.moving { will-change: transform; }
 .pj-world .col { display: flex; flex-direction: column; gap: 64px; }
 .pj-sec { position: relative; }
 .pj-sec .al { display: block; margin-bottom: 12px; font: 600 13px var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
