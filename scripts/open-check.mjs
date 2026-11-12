@@ -305,6 +305,10 @@ try {
   await settle(A1)
   await wait(2500)
   await shows(A1, 'Alpha Tea', 'Alpha opened while the new build goes on')
+
+  console.log('the debug dump')
+  const dump = await page.evaluate(() => window.swarmState())
+  ok(['nav', 'app', 'advisor', 'game'].every(k => dump[k]) && dump.nav.context.version === A1 && 'mode' in dump.app, `window.swarmState() has the machine and the data stores (${Object.keys(dump).join(', ')})`)
   void C1
 } finally {
   await browser.close()

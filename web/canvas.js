@@ -5,7 +5,7 @@
 import { routeMessage } from './route.js'
 import { pageSeoHtml, wirePageSeo, fillThumbRow } from './seo.js'
 import { openWorkshop } from './workshop.js'
-import { stateSlice } from './store.js'
+import { dataStore } from './data.js'
 import { painterOf, REVIEWER, cursor } from './icons.js'
 import { layerLink, layerDrag } from './layerlink.js'
 import { clean } from './clean.js'
@@ -4652,8 +4652,8 @@ if (els.replayBtn) els.replayBtn.onclick = () => (replayAsked ? stopReplay() : s
 // it is doing. The chat follows the view: on App, a message is the app's next
 // change; on Video, an idea for a new cut.
 let view = 'canvas'
-// the App view's state (web/store.js): reset when another run is shown, keeping the preview mode and width
-const appStore = stateSlice('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
+// the App view's state (web/data.js): reset when another run is shown, keeping the preview mode and width
+const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
 const appv = appStore.state
 const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
 const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
@@ -5153,7 +5153,7 @@ async function sliceGo(text) {
 // chat, what the business needs behind it (users, what gets saved, dashboards,
 // a CRM, an admin panel). Each question comes with her recommended answer; the
 // answers become an app plan to tick through, and the plan becomes dyad's brief.
-const adv = stateSlice('advisor', { run: null, qs: [], i: 0, qa: [], busy: false }).state
+const adv = dataStore('advisor', { run: null, qs: [], i: 0, qa: [], busy: false }).state
 function advMsg(html, cls = '') {
   const item = document.createElement('div')
   item.className = `item bot adv ${cls}`
@@ -5322,7 +5322,7 @@ commandOps.view = c => setView(c.view)
 // ---------- 🎮 game mode
 // A few questions, one at a time (chips or your own words; "Just build it"
 // fills the rest), then the spec card, then the build in the App view.
-const game = stateSlice('game', { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false, cast: null }).state
+const game = dataStore('game', { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false, cast: null }).state
 async function openGame(idea = '', answers = null, build = false) {
   if (!game.questions?.length) game.questions = (await api('/api/game').then(r => r.ok ? r.json() : {}).catch(() => ({}))).questions || []
   // a site build is open: the game can be its promo game, in its world and colours
