@@ -76,6 +76,8 @@ class StandIn(BaseHTTPRequestHandler):
                 return self._send(401, {"ok": False, "code": "UNAUTHORIZED", "message": "Send your token."})
             if s.get("small_limit") and len(json.dumps(body)) > 400:
                 return self._send(413, {"ok": False, "code": "PAYLOAD_TOO_LARGE", "message": "too big"})
+            if s.get("no_story") and "story" in body:
+                return self._send(400, {"ok": False, "code": "BAD_REQUEST", "message": "unknown field story"})
             if s.get("no_shots") and ("posterTall" in body or any("shot" in p or "phoneShot" in p for p in body.get("pages") or [])):
                 return self._send(400, {"ok": False, "code": "BAD_REQUEST", "message": "unknown field shot"})
             if s.get("old_feed") and any(k in body for k in ("project", "into", "piece")):
@@ -319,6 +321,53 @@ class FeedClientTest(unittest.TestCase):
         finally:
             feed.poster_of = orig
         self.assertNotIn("shot", StandIn.state["posts"][-1]["pages"][0])
+
+    def _story_run(self, rid):
+        folder = feed.launcher.data_dir() / "runs" / rid
+        (folder / "story").mkdir(parents=True, exist_ok=True)
+        beats = [{"id": f"b{i}", "role": r, "kicker": "", "headline": h, "line": "x" * 300, "picture": None}
+                 for i, (r, h) in enumerate([("hook", "Meet Lantern"), ("what", "A night market"), ("moment", "Tickets"), ("making", "Built by 3 AI agents"), ("next", "Lantern, coming soon")], 1)]
+        beats.append({"id": "../x", "role": "hook", "headline": "bad"})
+        (folder / "story.json").write_text(json.dumps({"v": 1, "type": "launch", "beats": beats}))
+        for shape, size in (("tall", 10), ("square", 10), ("wide", 10)):
+            for b in beats[:5]:
+                (folder / "story" / f"{shape}-{b['id']}.jpg").write_bytes(b"\xff\xd8" + b"j" * size)
+        return folder
+
+    def test_post_carries_the_story_beats_and_cards_phone_first(self):
+        self._connect()
+        rid = "2026-11-12T10-00-04-000Z"
+        folder = self._story_run(rid)
+        run = {"id": rid, "title": "Lantern", "brief": "x", "pageTitles": ["Home"], "sites": {"github": "https://me.github.io/s/"}}
+        try:
+            feed.post(run, [], lambda rid: None)
+            story = StandIn.state["posts"][-1]["story"]
+            self.assertEqual(story["type"], "launch")
+            self.assertEqual([b["id"] for b in story["beats"]], ["b1", "b2", "b3", "b4", "b5"])  # a bad id is dropped
+            self.assertEqual(len(story["beats"][0]["line"]), 140)
+            self.assertNotIn("picture", story["beats"][0])
+            self.assertEqual(list(story["cards"]), ["tall", "square", "wide"])
+            self.assertTrue(all(c.startswith("data:image/jpeg;base64,") for c in story["cards"]["tall"]))
+            # a shape past the budget is left out, phone first
+            self.assertEqual(list(feed.story_of(folder, budget=70)["cards"]), ["tall"])
+        finally:
+            import shutil
+            shutil.rmtree(folder)
+
+    def test_feed_without_story_still_gets_the_post(self):
+        self._connect()
+        StandIn.state["no_story"] = True
+        rid = "2026-11-12T10-00-05-000Z"
+        folder = self._story_run(rid)
+        run = {"id": rid, "title": "Lantern", "brief": "x", "pageTitles": ["Home"], "sites": {"github": "https://me.github.io/t/"}}
+        try:
+            self.assertIn("Posted", feed.post(run, [], lambda rid: None))
+            body = StandIn.state["posts"][-1]
+            self.assertNotIn("story", body)
+            self.assertEqual(body["project"], {"name": "Lantern"})  # only the story was dropped
+        finally:
+            import shutil
+            shutil.rmtree(folder)
 
     def test_shots_failing_never_stops_a_post(self):
         self._connect()
