@@ -313,7 +313,7 @@ function imageQueue(run, emit, choice) {
   return add
 }
 const host = url => { try { return new URL(url).host } catch { return '' } }
-const defaultAgents = Number(process.env.SWARM_AGENTS || 16)
+const defaultAgents = Number(process.env.SWARM_AGENTS || 8)
 
 // Runs spend the user's API credits, so starting one (and watching one) needs
 // this token. The canvas page carries it inline; other websites can't read

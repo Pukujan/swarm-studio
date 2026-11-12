@@ -65,7 +65,7 @@ def _slash_swarm(raw_args: str = "", **_: object) -> str:
 
 def _setup_cli(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("brief", nargs="*", help="what the site is for; omit to just open the canvas")
-    parser.add_argument("--agents", type=int, default=None, help="swarm size, 2-24 (default 16)")
+    parser.add_argument("--agents", type=int, default=None, help="swarm size, 2-24 (default 8)")
     parser.add_argument("--no-open", action="store_true", help="don't open the canvas in a browser")
     parser.add_argument("--wait", action="store_true", help="wait for the build and print its summary")
     parser.add_argument("--models", action="store_true", help="show which models the swarm will use, then exit")
@@ -119,7 +119,7 @@ def register(ctx) -> None:
             "type": "object",
             "properties": {
                 "brief": {"type": "string", "description": "What the product is and who it is for. The swarm plans and builds a 4-page site from it."},
-                "agents": {"type": "integer", "minimum": 2, "maximum": 24, "description": "Swarm size (default 16)."},
+                "agents": {"type": "integer", "minimum": 2, "maximum": 24, "description": "Swarm size (default 8)."},
                 "wait": {"type": "boolean", "description": "Wait for the build to finish and return its summary (default true)."},
             },
             "required": ["brief"],
