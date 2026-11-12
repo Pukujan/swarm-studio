@@ -61,6 +61,8 @@ import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TR
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
 import { scoreWav, elevenScore } from '../engine/score.mjs'
 import { decode, analyse, cutToMusic, planLengths, leastLengths, retime } from '../engine/musiccut.mjs'
+import { readMedia, readSays, mediaCaps, defaultMedia, takesSays } from '../engine/mediareader.mjs'
+import { reviewFilm } from '../engine/filmcritic.mjs'
 import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
 import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idleMessages, IDLE_SAY } from '../engine/idle.mjs'
@@ -112,13 +114,15 @@ const modelFor = role => (picks[role] === 'off' ? '' : picks[role] || models[rol
 
 // Model ids each endpoint offers, for the pickers. Fetched once per endpoint.
 const modelLists = new Map()
+// each listed model's row (its `modality` says what it takes), for the media reader
+const modelRows = new Map()
 function listModels(role) {
   const m = models[role]
   if (!m.apiKey) return Promise.resolve([])
   if (!modelLists.has(m.baseUrl)) {
     modelLists.set(m.baseUrl, fetch(`${m.baseUrl.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${m.apiKey}` }, signal: AbortSignal.timeout(15000) })
       .then(r => r.json())
-      .then(j => (j.data || []).map(x => x.id).filter(Boolean).sort())
+      .then(j => { for (const x of j.data || []) if (x?.id) modelRows.set(x.id, x); return (j.data || []).map(x => x.id).filter(Boolean).sort() })
       .catch(() => { modelLists.delete(m.baseUrl); return [] }))
   }
   return modelLists.get(m.baseUrl)
@@ -1118,6 +1122,14 @@ async function videoNow(id, input = {}) {
     const tallSrc = tall ? `/video/${id}/${SHAPES.tall.file}?v=${v}` : null
     Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
     send('video:done', { src: job.src, tall: tallSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound, scoredBy })
+    // the critic (spec 26 step 6, spec 32): the finished film is watched and listened to, and what is wrong
+    // is named. It runs after the film is handed over, so it never holds the film back.
+    if (!halt.aborted) {
+      send('video:review', { state: 'running' })
+      criticize({ ffmpeg: t.ffmpeg, file: out, dir, music: input.music !== false })
+        .then(review => send('video:review', { state: 'done', ...review }))
+        .catch(err => send('video:review', { state: 'failed', message: String(err.message || err).split('\n')[0].slice(0, 160) }))
+    }
   })().catch(err => {
     Object.assign(job, { state: halt.aborted ? 'stopped' : 'failed', message: halt.aborted ? 'stopped' : String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })
@@ -1339,18 +1351,66 @@ const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => pro
 const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input) })
 // Media in a chat (spec 29, server/chatmedia.mjs): a picture is read by the reviewer's vision model, with
 // reasoning off and the vision fallbacks after it, the same way Scribble's marks are read
-async function seePicture(image) {
+async function askVision(messages, { maxTokens = 300, kind = 'chat-media' } = {}) {
   const first = models.reviewer.apiKey && modelFor('reviewer')
   if (!first) return null
   for (const m of [first, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? REVIEW_FALLBACKS.filter(x => x !== first) : [])]) {
     try {
-      const res = await streamChat(provider('reviewer'), { trace: { kind: 'chat-media' }, model: m, messages: pictureMessages(image), maxTokens: 300, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(45000) })
+      const res = await streamChat(provider('reviewer'), { trace: { kind }, model: m, messages, maxTokens, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(90000) })
       if (String(res.text || '').trim()) return res.text
     } catch {}
   }
   return null
 }
-const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture })
+const seePicture = image => askVision(pictureMessages(image))
+// The media reader (docs/specs/32-media-reader.md): the `media` pick is a model that hears and/or watches,
+// on the reviewer's endpoint and key (the planner's when there is no reviewer). With no pick, the first
+// tested one the endpoint offers; 'off' sends no clip or sound to any model. The person's media goes only
+// to that model, or to the reviewer's vision model as frames.
+const mediaRole = () => (models.reviewer.apiKey ? 'reviewer' : 'planner')
+async function mediaModel() {
+  if (picks.media === 'off' || !models[mediaRole()].apiKey) return ''
+  return picks.media || defaultMedia(await listModels(mediaRole()).catch(() => [])) || ''
+}
+async function mediaState() {
+  const model = await mediaModel()
+  const caps = mediaCaps(model, modelRows.get(model))
+  return { model, pick: picks.media || null, caps, takes: takesSays(caps), vision: !!(models.reviewer.apiKey && modelFor('reviewer')) }
+}
+// who: 'media' (the media pick) or 'vision' (the reviewer's vision model, for frames only)
+async function askMedia(who, messages, { maxTokens = 600, kind = 'media-read' } = {}) {
+  if (who === 'vision') { const t = await askVision(messages, { maxTokens, kind }); if (!t) throw new Error('the vision model did not answer'); return t }
+  const model = await mediaModel()
+  if (!model) throw new Error('no media model')
+  const res = await streamChat(provider(mediaRole()), { trace: { kind }, model, messages, maxTokens, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(150000) })
+  return res.text
+}
+// watch and listen to a finished film; the review is kept beside it as review.json
+async function criticize({ ffmpeg, file, dir, music = true }) {
+  const board = JSON.parse(readFileSync(join(dir, 'storyboard.json'), 'utf8'))
+  const tmp = mkdtempSync(join(tmpdir(), 'swarm-critic-'))
+  try {
+    const { model, caps, vision } = await mediaState()
+    const review = await reviewFilm({ ffmpeg, file, board, tmp, caps, vision, ask: (who, messages) => askMedia(who, messages, { kind: 'film-critic' }), music })
+    const kept = { ...review, model: model || null }
+    writeFileSync(join(dir, 'review.json'), JSON.stringify(kept, null, 2))
+    return kept
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+}
+// read one clip or sound from a chat: what it shows and sounds like, and what happened
+async function readClip(file, kind) {
+  const tmp = mkdtempSync(join(tmpdir(), 'swarm-read-'))
+  try {
+    const { model, caps, vision } = await mediaState()
+    const t = await videoTools(dataDir)
+    const r = await readMedia({ ffmpeg: t.ffmpeg, file, kind, tmp, caps, vision, ask: askMedia })
+    return { ...r, model: r.by === 'media' ? model : r.by === 'vision' ? modelFor('reviewer') : null, says: readSays(r) }
+  } catch (err) {
+    const r = { by: 'none', why: String(err.message || err).split('\n')[0].slice(0, 120) }
+    return { ...r, says: readSays(r) }
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+}
+const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
 const brands = brandRoutes({
   chats,
   model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
@@ -3376,11 +3436,11 @@ const server = createServer((req, res) => {
   }
 
   if (url.pathname === '/api/models' && req.method === 'GET') {
-    Promise.all([listModels('planner'), listModels('reviewer'), loadImageProviders(), idleChoices().catch(() => [])]).then(([text, vision, image, idleOpts]) => {
+    Promise.all([listModels('planner'), listModels('reviewer'), loadImageProviders(), idleChoices().catch(() => []), mediaState().catch(() => null)]).then(([text, vision, image, idleOpts, media]) => {
       const roles = Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), hermes: models[r].model, host: host(models[r].baseUrl), picked: picks[r] || null }]))
       // the idle's video model: the pick and every video model Hermes offers, with its price
       const idle = { pick: picks.idle || null, options: idleOpts, interp: interpOf(heavyConfig(dataDir))?.name || null }
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image }, idle }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image }, idle, media }))
     })
     return
   }
@@ -3395,6 +3455,10 @@ const server = createServer((req, res) => {
       if (ROLES.includes(input.role) && (input.model === null || input.model === '' || name(input.model))) {
         if (input.model) picks[input.role] = input.model
         else delete picks[input.role]
+      } else if (input.role === 'media' && (input.model === null || input.model === '' || input.model === 'off' || name(input.model))) {
+        // the media reader's model (spec 32): 'off' reads no clip or sound with any model
+        if (input.model) picks.media = input.model
+        else delete picks.media
       } else if (input.role === 'lite' && (input.on === null || typeof input.on === 'boolean')) {
         if (input.on === null) delete picks.lite
         else picks.lite = input.on
