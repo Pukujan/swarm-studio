@@ -70,7 +70,7 @@ for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r
 await api('/api/setup', { seen: true }).catch(() => {})
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
-const out = { drawn: [], cold: [], all: [], warm: [], warmAll: [], cpu: [], fpsRest: [], fpsBuild: [], shots: [] }
+const out = { drawn: [], cold: [], all: [], warm: [], warmAll: [], cpu: [], fpsRest: [], fpsBuild: [], shots: [], panShots: [] }
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   // the stream, as the canvas hears it: the bench hands it the build's sections
@@ -96,6 +96,7 @@ try {
     await route.fulfill({ response: res, json: { ...j, live } })
   })
   let shots = 0
+  if (process.env.BENCH_DEBUG) page.on('console', m => m.text().startsWith('DBG') && console.log(m.text()))
   page.on('request', r => { if (/\/snaps\?|\/snaps$/.test(r.url()) && r.method() === 'POST') shots++ })
   const address = `${BASE}/?version=${RUN}`
   // ms from navigation to the first page picture, and to all 14
@@ -150,7 +151,9 @@ try {
       }
     })()
     await wait(4000)
+    const s0 = shots
     out.fpsBuild.push(await fps(3000))
+    out.panShots.push(shots - s0)
     await play
     const left = 14000 - (Date.now() - w0)
     if (left > 0) await wait(left)
@@ -172,5 +175,5 @@ console.log(`  first picture, opened cold      ${ms(median(out.cold))}   all 14:
 console.log(`  first picture, opened again     ${ms(median(out.warm))}   all 14: ${ms(median(out.warmAll))}`)
 console.log(`  main thread busy during a build ${median(out.cpu)}%   pictures sent: ${median(out.shots)}`)
 console.log(`  frame rate panning, at rest     ${median(out.fpsRest)} fps`)
-console.log(`  frame rate panning, building    ${median(out.fpsBuild)} fps`)
+console.log(`  frame rate panning, building    ${median(out.fpsBuild)} fps   pictures sent while panning: ${median(out.panShots)}`)
 console.log(JSON.stringify(out))
