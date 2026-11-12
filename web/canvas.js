@@ -164,7 +164,8 @@ const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nex
 
 function fresh(run = null) {
   // the player plays one build: another build on the canvas closes it (it never carries over)
-  if (S && run !== S.run && !els.player.hidden) closePlayer()
+  // (the canvas only: the machine's player stays as it is, and a reload's player opens once its build is here)
+  if (S && run !== S.run && !els.player.hidden) shutPlayer()
   S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null, images: new Map(), imgQueued: 0, imgSettled: 0, seo: new Map() }
   banter.queue = []
   history.undo = []; history.redo = []; renderUndo()
@@ -2176,6 +2177,8 @@ function showPage(id, push = true) {
   if (!S.frames.some(f => f.id === id)) return
   if (push && player.page && player.page !== id) player.history.push(player.page)
   player.page = id
+  const nav = navOf()
+  if (nav && nav.view.player !== 'closed' && nav.view.page !== id) nav.go({ type: 'page', page: id })
   els.plPage.value = id
   els.plBack.disabled = !player.history.length
   els.plFrame.style.opacity = 0
@@ -2190,7 +2193,35 @@ function playerMessage(m) {
   if (m.type === 'tour:ok') tour.waiting.get(m.seq)?.(m)
 }
 
+// The player is the navigation machine's (spec 34): opening, closing, watching and its page are
+// moves sent to it, and followPlayer draws what it says. Without the studio (the Swarm Wall, a bare
+// canvas) the canvas opens and closes it itself.
+const navOf = () => window.swarmCosmos?.nav
+// the build the canvas shows (a saved run, or the stream's)
+const heldRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
 function openPlayer(page) {
+  if (!S.frames.length) return
+  const nav = navOf()
+  if (!nav) return showPlayer(page)
+  nav.go({ type: 'play', page: page || nav.view.page || S.frames[0].id, pages: S.frames.length })
+}
+function closePlayer() {
+  const nav = navOf()
+  if (nav && nav.view.player !== 'closed') nav.go({ type: 'close' })
+  else shutPlayer()
+}
+function followPlayer(v) {
+  if (v.player === 'closed' || !S.frames.length || (v.run && v.run !== heldRun())) {
+    if (!els.player.hidden) shutPlayer()
+    return
+  }
+  if (els.player.hidden) showPlayer(v.page)
+  else if (v.page && v.page !== player.page) showPage(v.page)
+  const touring = tour.on || tour.starting
+  if (v.player === 'visitor' && !touring) startVisitor()
+  if (v.player === 'prototype' && touring) stopTour()
+}
+function showPlayer(page) {
   if (!S.frames.length) return
   els.plPage.innerHTML = ''
   for (const f of S.frames) els.plPage.add(new Option(`Page ${f.index + 1} · ${f.title}`, f.id))
@@ -2215,7 +2246,7 @@ function playerDoc(html) {
   els.plFrame = frame
   return frame
 }
-function closePlayer() {
+function shutPlayer() {
   stopTour()
   toggleTourMenu(false)
   els.player.hidden = true
@@ -2384,6 +2415,11 @@ function personaBar(t, at, text) {
 // first if there are none yet); while one is on the page it stops them.
 async function watchVisitor() {
   if (tour.on || tour.starting) return stopTour()
+  const nav = navOf()
+  if (nav) return nav.go({ type: 'watch' })
+  return startVisitor()
+}
+async function startVisitor() {
   const id = tour.starting = ++tour.id
   paintWatch()
   await loadTours()
@@ -2393,6 +2429,7 @@ async function watchVisitor() {
   if (els.player.hidden) return
   if (tour.list?.length) return playTour(tour.next % tour.list.length)
   // none could be written: the visitor list says why, with Try again
+  stopTour()
   toggleTourMenu(true)
 }
 function paintWatch() {
@@ -2412,6 +2449,7 @@ async function playTour(index) {
   const id = ++tour.id
   const live = () => tour.on && tour.id === id
   tour.on = true
+  if (navOf()?.view.player === 'prototype') navOf().go({ type: 'watch' })
   tour.next = index + 1
   paintWatch()
   player.history = []
@@ -2463,6 +2501,7 @@ async function playTour(index) {
   bar.querySelector('button').onclick = () => playTour((index + 1) % tour.list.length)
   tour.on = false
   paintWatch()
+  if (navOf()?.view.player === 'visitor') navOf().go({ type: 'stop' })
 }
 
 function stopTour() {
@@ -2470,6 +2509,7 @@ function stopTour() {
   tour.starting = 0
   tour.id++
   paintWatch()
+  if (navOf()?.view.player === 'visitor') navOf().go({ type: 'stop' })
   els.plCursor.hidden = true
   els.plThink.innerHTML = ''
   els.plPersona.hidden = true
@@ -4562,6 +4602,8 @@ async function openRun(id) {
     else if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
   }
   setAuto(true)
+  // a player the address names (a reload, Back) opens once its build is here
+  if (navOf()) followPlayer(navOf().view)
 }
 
 // A saved run keeps each section's finished HTML but not the stream that wrote it, so a replay
@@ -7245,7 +7287,7 @@ window.swarm = {
   get S() { return S }, get view() { return view }, get viewing() { return viewing }, get claimed() { return claimed }, get liveId() { return liveId }, get files() { return files },
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
   on: fn => cosmosHooks.add(fn),
-  openRun, setView, loadFiles, focusPage, openPlayer, closePlayer,
+  openRun, setView, loadFiles, focusPage, openPlayer, closePlayer, followPlayer,
   // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
   readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, lock: () => (talk.on && talk.kind === 'game' ? gameLock() : null), get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },
