@@ -14,7 +14,7 @@ import { fixPalette } from './brand.mjs'
 
 export const PACK_SLUG = /^[a-z0-9][a-z0-9-]{1,40}$/
 
-export const BRAND_PACKS = [
+export const OWN_PACKS = [
   {
     slug: 'warm-editorial', name: 'Warm editorial',
     for: 'a local place, a maker, a story told slowly',
@@ -72,7 +72,21 @@ export const BRAND_PACKS = [
   }
 ]
 
-export const packOf = slug => BRAND_PACKS.find(p => p.slug === slug) || null
+// Open Design's generic design systems, converted once by scripts/import-od-systems.mjs (docs/specs/35-open-design.md;
+// credits in engine/opendesign/NOTICE). Their colours, fonts, corners and look notes are theirs; who each is
+// for, the words that suggest it, the voice, the picture style and the storyboard are ours (per kind of look).
+function odPacks() {
+  try {
+    const j = JSON.parse(readFileSync(new URL('./opendesign/packs.json', import.meta.url), 'utf8'))
+    return j.packs.map(p => { const k = j.kinds[p.kind]
+      return { ...p, words: new RegExp(`\\b(${p.words})\\b`, 'i'), voice: k.voice, storyboard: k.storyboard, pictures: { ...k.pictures, ...p.pictures }, from: 'opendesign' } })
+  } catch { return [] }
+}
+export const OD_PACKS = odPacks()
+// our own five first; the imported looks join only when suggested or picked, so the board never shows sixty
+export const BRAND_PACKS = [...OWN_PACKS, ...OD_PACKS]
+const BY_SLUG = new Map(BRAND_PACKS.map(p => [p.slug, p]))
+export const packOf = slug => BY_SLUG.get(slug) || null
 
 // ---------- the sample pictures: three stock photos that fit the pack's mood (and the brief, when it says)
 let photos = null
@@ -104,10 +118,11 @@ export function packPhotos(pack, brief = '', { taken = new Set(), n = 3, list = 
 }
 
 // ---------- the cards the board shows: every pack, its look, its photos and, when suggested, why
-export function packCards(brief = '', suggest = []) {
+export function packCards(brief = '', suggest = [], picked = null) {
   const taken = new Set()
   const why = new Map((suggest || []).map(s => [s.slug, s.why]))
-  const order = [...BRAND_PACKS].sort((a, b) => (why.has(b.slug) ? 1 : 0) - (why.has(a.slug) ? 1 : 0))
+  const shown = BRAND_PACKS.filter(p => p.from !== 'opendesign' || why.has(p.slug) || p.slug === picked)
+  const order = shown.sort((a, b) => (why.has(b.slug) ? 1 : 0) - (why.has(a.slug) ? 1 : 0))
   return order.map(p => {
     const pics = packPhotos(p, brief, { taken })
     pics.forEach(x => taken.add(x.url))
@@ -169,6 +184,8 @@ export function applyPack(brand, slug, parts = PARTS, brief = '') {
 export function packBrief(brand) {
   const out = []
   if (brand?.voice?.lines?.length) out.push(`The voice: ${brand.voice.name.toLowerCase()}. Write the copy the way these lines sound: "${brand.voice.lines.join('" "')}"`)
+  const look = packOf(brand?.pack)
+  if (look?.notes) out.push(`The look (${look.name}): ${look.notes}`)
   const st = brand?.pictures && STYLES[brand.pictures.style]
   if (st) out.push(`Pictures: ${st.name}. ${st.guide}`)
   return out.join('\n')

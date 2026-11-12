@@ -298,3 +298,46 @@ Swarm must never drive its runs (section 1).
 - Release dates before 0.25.0.
 - Whether any generic system was itself copied from a source without a licence.
 - How their source-patches changed since 6147958: the shallow clone has no history.
+
+## 6. Built: the brand packs (2026-11-12)
+
+- **53 looks** are in `engine/opendesign/packs.json`, converted by `scripts/import-od-systems.mjs`. Credits are in
+  `engine/opendesign/CREDITS.md`; Open Design's Apache-2.0 `LICENSE`, bergside's MIT `LICENSE.bergside` and a
+  `NOTICE` sit beside it. No real brand, product, person or game is among them.
+- **Correction to section 2:** most generic systems came to Open Design from `bergside/awesome-design-skills`.
+  That repo is **MIT** (Copyright (c) 2026 Bergside), checked at `f631a09`. Its licence ships with ours.
+- **Their data is thinner than it looks.**
+  - In 18 of the 53, `DESIGN.md` has no colours of its own: they are the upstream placeholder
+    (`#3B82F6 / #8B5CF6 / #FFFFFF / #111827`), or missing. The importer reads `tokens.css` for those.
+  - In many systems, `tokens.css` is one of a dozen shared fixtures and does not match the system's own
+    `DESIGN.md`.
+  - What tells the looks apart is mostly their fonts.
+- **What our format drops:** the components, spacing and type scales, motion, shadows, the anti-patterns list,
+  translations, previews and Tailwind files. Their "Voice & Brand" text is the same boilerplate in every system,
+  so it is dropped too.
+- **What we wrote ourselves:** a voice, a picture style and a storyboard for each kind of look (11 kinds), plus
+  who each look is for and the words that suggest it.
+  - Picture styles: mostly film photo; a painted look (gouache, watercolour) for story and art looks; concept art
+    for the future looks; pixel art for retro.
+  - Anime is on one look only (`od-creative`), never a default.
+- **Fonts:** every font is a Google Fonts family. Twelve packs had a font swapped, and each swap is recorded on
+  the pack (`dropped`):
+  - eleven display faces used as body text got a reading face;
+  - Google Sans was not on the importer's list of Google Fonts families, so it became Plus Jakarta Sans.
+- **What the person sees:** our five packs first, plus only the two or three looks the planner (or the brief's
+  words) suggests, plus the one they picked. The planner reads all 58.
+
+### Re-syncing from upstream later
+
+1. Sparse-checkout Open Design at the new commit, using the commands in the header of
+   `scripts/import-od-systems.mjs`. Only `manifest.json`, `DESIGN.md` and `tokens.css` are needed (about 23 MB).
+2. Set `COMMIT` in the script, then run `node scripts/import-od-systems.mjs <checkout>`. The script warns when
+   the checkout is at another commit.
+3. Read the diff of `packs.json`:
+   - a system whose colours or fonts changed is a look that changed under people's locked brands;
+   - a removed system leaves the pack in `PICK`, and the script prints `missing`.
+4. Check whether any new generic system is worth adding to `PICK`. Never add one named after a brand.
+5. Update the commit in `NOTICE` and `CREDITS.md` (regenerate `CREDITS.md` with the same table), then run
+   `node --test tests/brandpacks.test.mjs`.
+
+Locked brands are copies, so a re-sync changes only new picks, never a brand someone has already locked.
