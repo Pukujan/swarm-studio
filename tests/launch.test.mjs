@@ -50,6 +50,8 @@ test('the nav wordmark names the product; the deck uses the same lines', () => {
   assert.equal(navBrand('<nav><a href="#" aria-label="Hopliner home"><svg><text>H</text></svg></a></nav>'), 'Hopliner')
   assert.equal(navBrand('<nav><a href="#"><span>ARES</span> <span>—</span></a></nav>'), 'ARES')
   assert.equal(navBrand('<nav><div>no link</div></nav>'), '')
+  // Leaf & Kettle (2026-11-12): the wordmark, then a tagline in the same link
+  assert.equal(navBrand('<nav><a href="#" data-goto="home"><span>Leaf &amp; Kettle</span> <span class="text-xs">loose-leaf tea, Portland</span></a></nav>'), 'Leaf & Kettle')
   const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
   const naming = readFileSync(new URL('../engine/naming.mjs', import.meta.url), 'utf8')
   const body = src => src.slice(src.indexOf('// navbrand:start'), src.indexOf('// navbrand:end')).split('\n').slice(1).join('\n').replace(/^export /m, '')

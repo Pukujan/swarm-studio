@@ -152,7 +152,8 @@ function navBrand(html) {
   const label = (a[1].match(/aria-label="([^"]{2,60})"/i) || [])[1]?.replace(/\s+(home|homepage|logo)$/i, '').trim()
   const bits = (label ? [label] : []).concat(a[2].split(/<[^>]+>/).map(t => t.replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()))
   const ok = bits.filter(t => (t.match(/\p{L}/gu) || []).length >= 2 && t.length <= 40 && t.split(' ').length <= 4)
-  return (ok.sort((x, y) => y.length - x.length)[0] || '').replace(/[\s—–|:·-]+$/, '')
+  // the wordmark comes first; a tagline after it ("loose-leaf tea, Portland") is not the name
+  return (ok[0] || '').replace(/[\s—–|:·-]+$/, '')
 }
 // navbrand:end
 
