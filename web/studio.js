@@ -89,7 +89,11 @@ C.go = (m, v) => {
   draw(m === 'plan' ? v : undefined)
 }
 // a move another part sends straight to the machine is drawn the same way
-nav.subscribe(() => { if (!going) draw() })
+// the player and its page are drawn by the canvas (followPlayer); the rooms only when a room changes
+const spot = v => [v.room, v.from, v.project, v.version, v.run, v.plan, v.replay].join('|')
+let drawnAt = spot(nav.view)
+nav.subscribe(v => { if (!going && spot(v) !== drawnAt) draw() })
+nav.subscribe(v => sw.followPlayer?.(v))
 
 // The address carries the machine's state and nothing else (spec 34). A new place (room, project,
 // version, plan) is a history entry; the player and its page replace the current one. Back, Forward
@@ -134,9 +138,7 @@ function draw(planId) {
   body.classList.remove('side-min')
   // a replay started from the menu plays in the Design deck: leaving the deck ends it
   if (room !== 'deck' && room !== 'draft') sw.stopReplay?.()
-  // the player plays the open build: Projects, a plan or a brand sheet shows none, so it closes
-  // (left open it sat hidden behind Projects and covered the next project opened)
-  if (room === 'home' || room === 'plan' || room === 'brand') sw.closePlayer?.()
+  drawnAt = spot(nav.view)
   queueMicrotask(() => C.work?.paint?.())
   setMode(m)
   if (room !== 'plan') C.planView?.hide()
