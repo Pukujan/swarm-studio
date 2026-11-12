@@ -15,7 +15,7 @@ The owner, 2026-11-12: "they can either use the branding + mood board itself to 
    | Look | The project's brand (spec 37); nothing to set here |
    | Length and shape | About how many seconds; tall, wide or square |
 
-   Where to start: **Opening shot**, **Storyboard** or **Music**. Lock writes the kit into the spec (`spec.kits.video`). Build makes the film. The critic checks the result against it.
+   Where to start: **Opening shot**, **Storyboard** or **Music**. The draft is saved to the project (`GET|PUT /api/kit/video/:pid`, `projects/<pid>/kit-video.json`); a new one starts from the build's story beats when there are some. Lock writes the kit into the spec (`spec.kits.video`). Build makes the film. The critic checks the result against it.
 2. **A film with no website.** The same director, music cut, renderer and critic, fed by the kit instead of a built site.
 3. **The Story film.** Every build can tell its story in 5 to 8 beats, written once and used for cards, film and captions. It renders as a short film cut to music in tall, wide and square.
 
