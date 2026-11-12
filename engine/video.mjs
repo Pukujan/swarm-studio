@@ -420,7 +420,7 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
       enter(`#${id}s`, '{opacity:0, y:30}', 1.2)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.1)
     } else if (s.kind === 'image') {
-      html.push(`<div id="${id}" class="clip scene" data-start="${t}" data-duration="${d}"><div class="frame" id="${id}f">${media(s.image, 'full', `${id}i`)}</div>${s.headline ? `<div class="shade"></div><div class="over">${kicker}<div><h2 class="head light" style="font-size:${sz(s.headline)}px">${words(s.headline, 'w', acc)}</h2>${s.sub ? `<p class="sub light" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>` : ''}</div>`)
+      html.push(`<div id="${id}" class="clip scene${s.sign ? ' sign' : ''}" data-start="${t}" data-duration="${d}"><div class="frame" id="${id}f">${media(s.image, 'full', `${id}i`)}</div>${s.headline ? `<div class="shade"></div><div class="over">${kicker}<div><h2 class="head light" style="font-size:${sz(s.headline)}px">${words(s.headline, 'w', acc)}</h2>${s.sub ? `<p class="sub light" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>` : ''}</div>`)
       cam(`#${id}i`, look.motion === 'drift' ? 'drift' : 'push-in')
       if (look.layout === 'collage' || look.layout === 'brutalist') enter(`#${id}f`, `{opacity:0, y:${r(-60, 60) | 0}, scale:.85}`, 0.05)
       rise(0.45)
@@ -543,6 +543,10 @@ html,body{width:${W}px;height:${H}px;overflow:hidden;background:var(--background
 .footage{position:absolute;left:0;top:0;width:${W}px;height:${H}px;object-fit:cover}
 .clipscene{background:transparent}
 .rec{position:absolute;top:70px;right:80px;font:700 24px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#fff;background:rgba(0,0,0,.45);padding:12px 18px;border-radius:6px}
+/* a mood piece signs its last picture: the name small, low and quiet */
+.sign .over{left:0 !important;right:0 !important;top:auto !important;bottom:${tall ? 340 : 96}px !important;width:auto !important;text-align:center;display:block}
+.sign .over .head{font:600 ${tall ? 40 : 44}px/1.2 var(--fb) !important;letter-spacing:.32em !important;text-transform:uppercase;max-width:none;color:#fff;-webkit-text-stroke:0}
+.sign .shade{display:block !important;background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,.55)) !important}
 .card{background:#000;color:#fff}.card .head{color:#fff;-webkit-text-stroke:0;text-shadow:none}.card .sub{color:rgba(255,255,255,.7)}
 .acc>span{color:var(--primary);font-style:italic}.card .acc>span,.light .acc>span{color:var(--hl,#ffd23f)}
 .cta{background:var(--primary)}.cta .head{color:var(--primary-foreground)}.cta .kicker{color:var(--primary-foreground);opacity:.8}
