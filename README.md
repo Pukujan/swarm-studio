@@ -64,7 +64,7 @@ hermes plugins enable swarm-studio
 | **Working app** | The design becomes a full-stack app (React, server routes, sign-in, forms, an admin page) and deploys to Vercel. | works |
 | **Film director** | A promo film from the site's own copy and pictures. There are six kinds of film, each with its own acts, and the cuts land on the music. | works |
 | **Games** | Plans that follow the genre, the size and the engine. Browser games in three.js, Phaser or PixiJS, play-tested by the crew. Painted art, cut out cleanly. A Godot 4 project when Godot is installed. | works (Unity and Unreal ports are source only) |
-| **Swarm Feed** | Post a build, let others try it and remix it with credit. | works |
+| **Swarm Feed** | Post a build with its pictures and story; others remix it with credit. | works |
 | **Swarm Jams** | Jam events: a theme, a deadline, entries and votes. | first version |
 
 Every feature, with its canvas button and `/swarm` command: [FEATURES.md](FEATURES.md).
@@ -88,26 +88,29 @@ flowchart LR
 4. **Build.** The planner splits the pages into sections, and the crew builds them on one canvas at once. You can scribble, comment, drag a section into the chat or edit by hand while it works.
 5. **Review.** Each page is checked at desktop and phone width, and problems are fixed.
 6. **Publish.** One click puts it online on your own account.
-7. **Share.** Post it to Swarm Feed, where others can try it and remix it.
+7. **Share.** Post it to Swarm Feed, where others see it and can remix it.
 
 ## How Swarm Studio and Swarm Feed fit together
 
-- **Swarm Studio** is a Hermes Agent plugin. It builds on your computer, with the models you picked in Hermes.
-- **[Swarm Feed](https://swarm.design-bakery.com)** is the community site where builds are shared.
-- `/swarm connect` links the Studio to your Feed account (a code you approve in your browser).
-- **Post to Feed** publishes a build's pictures, story and links there.
-- On the Feed, people browse builds, try them live, save them as references and remix them. A remix credits the original.
-- Nothing goes to the Feed unless you connect, post, remix or log in.
+Swarm Studio is the Hermes plugin that makes things: a site, a game, an app or a film, built by a swarm of agents on your machine. Swarm Feed (swarm.design-bakery.com) is where people show what they made: one card per project, with its pictures, story and links out to the live build and its source. The Feed shows builds and links to them; it doesn't host or run them. The plugin only talks to the Feed when you ask it to: when you connect, post, remix or sign in.
 
 ```mermaid
 flowchart LR
-  subgraph You["Your computer"]
-    H[Hermes Agent] --> S[Swarm Studio plugin]
-  end
-  S -- "/swarm connect, Post to Feed" --> F[Swarm Feed]
-  F -- "Remix (credited)" --> S
-  F --> P[People browse, try, save references]
+  H["Hermes + Swarm Studio<br/>on your machine"]
+  F["Swarm Feed<br/>profiles, posts, boards"]
+  S["The live build<br/>and its source"]
+  H -- "connect: approve at /link" --> F
+  H -- "post: pictures, story, links" --> F
+  F -- "remix: brief and zip, credited" --> H
+  H -- "login: sign this browser in" --> F
+  F -. "links out" .-> S
 ```
+
+- `/swarm connect` links this computer to your [Swarm Feed](https://swarm.design-bakery.com) account (a code you approve at /link).
+- **Post to Feed** (`/swarm post`) shares a published build: its pictures, story, page shots and links out to the live site and its files.
+- `/swarm remix <id>` starts your own take on a Feed build from its brief. Posting the remix credits the original.
+- `/swarm login` signs your browser in to the Feed as you.
+- Nothing is sent unless you connect, post, remix or log in. The full list of what is sent is under [What it does on your machine](#what-it-does-on-your-machine).
 
 ## More coming
 
