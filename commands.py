@@ -64,6 +64,51 @@ HELP = """Swarm Studio commands
   /swarm lite [on|off|auto]       lite mode for machines short on memory"""
 
 TARGETS = ("github", "vercel", "cloudflare", "local")
+HOSTS = {"github": "GitHub Pages", "vercel": "Vercel", "cloudflare": "Cloudflare Pages"}
+
+# Hermes's plugin context, set by register() (None in tests and when loaded by path).
+CTX = None
+
+
+def outward(args: dict | None) -> tuple[str, str] | None:
+    """(what, rule) when this swarm_studio call would put something on the internet, else None.
+
+    Publishing (any host but this computer), deploying an app and posting to the Swarm Feed each need a
+    person's OK before the model may do them: approval_hook() hands them to Hermes's own approval gate."""
+    a = args or {}
+    action, build = str(a.get("action") or ""), str(a.get("build") or "the latest build")
+    if action == "publish":
+        target = a.get("target") if a.get("target") in TARGETS else "github"
+        if target == "local":
+            return None
+        return f"publish {build} as a public website on {HOSTS[target]}", f"swarm-studio:publish:{target}"
+    if action == "deploy":
+        return f"deploy the app of {build} to Vercel", "swarm-studio:deploy"
+    if action == "post":
+        return f"post {build} to the Swarm Feed, where anyone can see it", "swarm-studio:post"
+    return None
+
+
+def approval_hook(tool_name: str = "", args: dict | None = None, **_: object) -> dict | None:
+    """``pre_tool_call``: the model's publish, deploy and post go to Hermes's human-approval gate first.
+
+    Hermes asks the person (CLI prompt, Desktop or chat approval card); with nobody there to answer (cron,
+    an unattended platform, a one-shot query) it refuses, and the tool never runs."""
+    if tool_name != "swarm_studio":
+        return None
+    out = outward(args)
+    if not out:
+        return None
+    what, rule = out
+    return {"action": "approve", "message": f"Swarm Studio wants to {what}", "rule_key": rule}
+
+
+def _unattended() -> bool:
+    """True inside a Hermes cron job, where nobody can say yes."""
+    try:
+        return CTX is not None and CTX.current_cron_execution() is not None
+    except Exception:
+        return False
 
 SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "seo", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall", "connect", "post", "remix", "login", "stop"}
 
@@ -661,6 +706,10 @@ TOOL_SCHEMA = {
 def tool(args: dict | None = None, **_: object) -> str:
     a = args or {}
     action = str(a.get("action") or "help")
+    out = outward(a)
+    if out and _unattended():
+        # Hermes's approval gate already refuses here; this keeps the refusal plain if it was skipped
+        return f"Swarm Studio: not done. To {out[0]} needs a person's OK, and this cron job has nobody to give it. Ask in a chat instead."
     if action in ("video", "fix", "seo", "publish", "app", "game", "game_questions", "deploy"):
         try:
             if action == "game_questions":

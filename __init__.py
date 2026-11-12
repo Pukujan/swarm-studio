@@ -9,6 +9,8 @@ Agent half. Registers:
 - ``/swarm <brief>`` / ``/swarm <subcommand>``: from any chat without going through the model;
   ``connect``, ``post``, ``remix`` and ``login`` reach the Swarm Feed (``feed.py``)
 - ``hermes swarm``: the same from the command line
+- a ``pre_tool_call`` hook: when the model asks to publish (anywhere but this computer), deploy an app or
+  post to the Feed, Hermes asks the person first, and refuses when nobody is there (commands.approval_hook)
 - the ``swarm-studio:swarm-design`` skill: when and how to use the swarm
 - two model slots in Hermes's model picker: ``swarm_studio_planner`` (follows the
   main model) and ``swarm_studio_builder`` (follows the compression model, which is
@@ -103,6 +105,9 @@ def _run_cli(args: argparse.Namespace) -> int:
 
 
 def register(ctx) -> None:
+    commands.CTX = ctx
+    # the model's publish, deploy and post wait for a person's OK (Hermes's approval gate)
+    ctx.register_hook("pre_tool_call", commands.approval_hook)
     ctx.register_auxiliary_task(
         "swarm_studio_planner",
         display_name="Swarm Studio planner",
