@@ -42,7 +42,8 @@ import { setupRoutes } from './setup.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
-import { library } from '../engine/library.mjs'
+import { library, PACKS as LIB_PACKS } from '../engine/library.mjs'
+import { assetLib, readPicks, setPick, pickedItem, creditsFor, SLOT_CATEGORIES, slotKind } from '../engine/assetlib.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
@@ -1296,6 +1297,18 @@ const PAINTERS = ['Kiki', 'Juno', 'Tofu']
 const artJobs = new Map()
 // the last resort for an icon or backdrop no provider would paint (engine/library.mjs)
 const assetLibrary = library({ dataDir })
+// the library on purpose (engine/assetlib.mjs): searched and picked from, with packs of one's own
+const assets = assetLib({ dataDir })
+// the library picture for a slot: the closest packs of the build's style first, then any pack
+async function libraryFor(it, style, used) {
+  const category = SLOT_CATEGORIES[slotKind(it.id)] || []
+  const q = String(it.what || '').replace(/^(icon for|backdrop for|portrait of|[a-z ]+:)\s*/i, '')
+  for (const pack of [...(LIB_PACKS[style] || []), '']) {
+    const hit = assets.search({ q, category, pack, limit: 1, used })[0]
+    if (hit && hit.score >= 3) return assets.file(hit.id)
+  }
+  return null
+}
 const OUT_OF_QUOTA = /\b(429|402)\b|usage limit|quota|insufficient|no capacity|rate.?limit|billing|credits?\b/i
 // Cut a sprite out, then check it: the cut's own numbers first, and a sprite that looks off
 // goes to the reviewer on dark and on magenta. → { ok, path, problems, report }
@@ -1415,6 +1428,29 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   for (const kit of items.filter(i => i.parts)) for (const p of kit.parts) if (!items.some(i => i.id === p.id)) items.push({ ...p, part: kit.id })
   const reuseParts = kit => { for (const p of kit.parts || []) reuse(p) }
   for (const it of [...queue]) if (reuse(it)) { queue.splice(queue.indexOf(it), 1); reuseParts(it) }
+  // a library picture taken into the game: copied in under the slot's name, with its credit
+  const libUsedIds = new Set(), credits = []
+  const takeLib = (it, got, why = '') => {
+    const ext = extname(got.file) || '.png', file = `art/${it.id}${ext}`, name = `lib-${it.id}${ext}`
+    copyFileSync(got.file, join(appDir, 'public', file))
+    copyFileSync(got.file, join(runsDir, runId, 'img', name))
+    const r = got.row
+    libUsedIds.add(r.id)
+    credits.push({ file, from: r.id, pack: r.pack, credit: r.credit, license: r.license, url: r.url })
+    done.set(it.id, { file, what: it.what, kind: it.kind, credit: r.credit, library: r.id })
+    return name
+  }
+  // the picks made for this build (runs/<id>/art-picks.json): a picked slot is not painted
+  for (const p of readPicks(join(runsDir, runId))) {
+    const got = await assets.file(p.asset)
+    if (!got) { step({ kind: 'setup', text: `the picked ${p.slot} is not in the library any more: painting it`, ok: false }); continue }
+    let it = items.find(i => i.id === p.slot)
+    if (!it) { it = pickedItem(p, got.row); items.push(it) }
+    const q = queue.indexOf(it)
+    if (q >= 0) queue.splice(q, 1)
+    takeLib(it, got)
+    step({ kind: 'setup', text: `using the picked ${got.row.subject || p.slot} (${got.row.credit}) for the ${it.what}` })
+  }
   // the hero's idle from a video clip (engine/idle.mjs): asked for at the clip's price while the
   // rest paints; a yes adds the painted idle (its first frame is animated) and the video one
   let idleWait = null
@@ -1480,6 +1516,17 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       if (it.kind === 'sheet' && it.video) { await videoSheet(slot, it); continue }
       if (it.kind === 'sheet' && it.tween) { await tweenSheet(slot, it); continue }
       if (it.kind === 'sheet') { await paintSheet(slot, it); continue }
+      // asked from the library (engine/artask.mjs, "from": "library"): painted only when nothing fits
+      if (it.library) {
+        const got = await libraryFor(it, guide.style, libUsedIds)
+        if (got) {
+          const name = takeLib(it, got)
+          live(slot, it, 'done', { src: img(name) })
+          step({ kind: 'setup', text: `took the ${it.what} from the library: ${got.row.subject} (${got.row.credit})` })
+          continue
+        }
+        step({ kind: 'setup', text: `nothing in the library fits the ${it.what}: painting it` })
+      }
       live(slot, it, 'painting')
       const refFile = it.ref && done.get(it.ref)?.file
       const ref = it.ref ? [refFile && join(appDir, 'public', refFile), raws.get(it.ref)].find(f => f && existsSync(f)) : ''
@@ -1501,6 +1548,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
           copyFileSync(lib.path, join(appDir, 'public', file))
           copyFileSync(lib.path, join(runsDir, runId, 'img', name))
           done.set(it.id, { file, what: it.what, kind: it.kind, credit: lib.credit })
+          credits.push({ file, from: lib.from.replace(/^assets\//, ''), pack: lib.from.split('/')[1], credit: lib.credit, license: 'full grant from the author' })
           live(slot, it, 'done', { src: img(name) })
           step({ kind: 'setup', text: `used a library picture for the ${it.what} (${why.slice(0, 80)})` })
           continue
@@ -1719,6 +1767,9 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   }
   await Promise.all(PAINTERS.map((_, i) => worker(i)))
   artJobs.delete(runId)
+  // every library picture in the game keeps its credit beside the art
+  const cr = creditsFor(credits)
+  if (cr) { writeFileSync(join(appDir, 'public', 'art', 'CREDITS.md'), cr.md); writeFileSync(join(appDir, 'public', 'art', 'credits.json'), JSON.stringify(cr.json, null, 1)) }
   // (a kit's sheet is not handed to the game: its pieces are)
   const wanted = items.filter(i => !i.keys && !i.parts)
   const out = wanted.map(i => done.get(i.id)).filter(Boolean)
@@ -2045,6 +2096,39 @@ const server = createServer((req, res) => {
     let name = feed.name || feed.handle || ''
     if (!name) { try { name = userInfo().username } catch {} }
     return json(200, { name: String(name).slice(0, 40), handle: feed.handle || null, feed: (process.env.SWARM_FEED_URL || 'https://swarm.design-bakery.com').replace(/\/$/, '') })
+  }
+  // The asset library (engine/assetlib.mjs): search it, see a picture, add a pack of one's own,
+  // and pick a picture for a slot of a build (used instead of painting that slot)
+  if (url.pathname === '/api/library' && req.method === 'GET') {
+    const q = url.searchParams
+    const results = assets.search({ q: q.get('q') || '', category: q.getAll('category').filter(Boolean), pack: q.get('pack') || '', all: q.get('all') === '1', limit: Number(q.get('limit')) || 40 })
+    return json(200, { results: results.map(r => ({ ...r, src: `/api/library/file?id=${encodeURIComponent(r.id)}` })) })
+  }
+  if (url.pathname === '/api/library/packs' && req.method === 'GET') return json(200, { packs: assets.packs() })
+  if (url.pathname === '/api/library/file' && req.method === 'GET') {
+    assets.file(url.searchParams.get('id')).then(got => {
+      if (!got) return json(404, { error: 'no such picture' })
+      const type = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }[extname(got.file).toLowerCase()] || 'image/jpeg'
+      res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=86400' }).end(readFileSync(got.file))
+    })
+    return
+  }
+  if (url.pathname === '/api/library/import' && req.method === 'POST') {
+    return readJson(4000, input => assets.importPack(input).then(p => json(200, p), err => json(err.status || 400, { error: String(err.message || err) })))
+  }
+  const libPack = url.pathname.match(/^\/api\/library\/packs\/([a-z0-9_]{1,40})$/)
+  if (libPack && req.method === 'DELETE') return assets.removePack(libPack[1]) ? json(200, { ok: true }) : json(404, { error: 'no such pack of your own' })
+  const runPicks = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/art\/picks$/)
+  if (runPicks) {
+    const dir = join(runsDir, runPicks[1])
+    if (!existsSync(dir)) return json(404, { error: 'no such build' })
+    if (req.method === 'GET') return json(200, { picks: readPicks(dir) })
+    if (req.method === 'POST') {
+      return readJson(4000, input => {
+        if (input.asset && !assets.get(String(input.asset))) return json(404, { error: 'no such picture in the library' })
+        json(200, { picks: setPick(dir, { slot: String(input.slot || ''), asset: input.asset || null, what: input.what || '' }), note: 'used the next time this build paints its art (Try again, or the next slice)' })
+      })
+    }
   }
   // every picture, film and upload across live projects, newest first (Home › Assets)
   if (url.pathname === '/api/assets') {
