@@ -6,7 +6,8 @@ import { brandKit } from './kit-brand.js'
 import { appKit } from './kit-app.js'
 import { gameKit } from './kit-game.js'
 import { deckKit } from './kit-deck.js'
+import { videoKit } from './kit-video.js'
 
-export const KITS = Object.fromEntries([siteKit, appKit, gameKit, deckKit, brandKit].map(k => [k.kind, k]))
+export const KITS = Object.fromEntries([siteKit, appKit, gameKit, videoKit, deckKit, brandKit].map(k => [k.kind, k]))
 // home.js offers a kind (Deck, …) only once its kit is here
 window.swarmKits = KITS
