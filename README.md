@@ -108,7 +108,7 @@ flowchart LR
 
 - `/swarm connect` links this computer to your [Swarm Feed](https://swarm.design-bakery.com) account (a code you approve at /link).
 - **Post to Feed** (`/swarm post`) shares a published build: its pictures, story, page shots and links out to the live site and its files.
-- `/swarm remix <id>` starts your own take on a Feed build from its brief. Posting the remix credits the original.
+- `/swarm remix <id>` starts your own take on a Feed build from its brief. Posting the remix names the original.
 - `/swarm login` signs your browser in to the Feed as you.
 - Nothing is sent unless you connect, post, remix or log in. The full list of what is sent is under [What it does on your machine](#what-it-does-on-your-machine).
 

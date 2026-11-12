@@ -24,7 +24,7 @@ People who make things for a living, such as designers, game makers, studios, ma
    - a playable game;
    - a promo film;
    - the posts for launch day.
-6. **The community remixes it.** Post the build to Swarm Feed. People swipe, try it live and remix it, and every remix credits the original and its crew.
+6. **The community remixes it.** Post the build to Swarm Feed. People swipe, try it live and remix it, and every remix names the original and its crew.
 
 **Packs** make it professional: a ready-made crew and plan for a market (Events, Game Studio, Brand Campaign, Commerce). The Swarm Wall runs four packs at once, four launches for four markets, side by side.
 
@@ -71,27 +71,23 @@ Three markets meet where Swarm sits:
 
 The way in is the Hermes community (262,021 stars), then everyone those people make things for.
 
-## How it makes money (next; not in the hackathon build)
+## Where it runs, and how it makes money
 
-1. **Free plugin, open source.** It grows through the Hermes Marketplace.
-2. **Hosted Swarm Studio.** Build in the browser without installing Hermes, paid per build in credits.
-   > Superseded by the owner's direction of 2026-11-12: there is no hosted studio and no build credits. Swarm Studio runs in the person's own Hermes; the Feed is the only hosted part. See [PRODUCT.md](../PRODUCT.md).
-3. **The pack marketplace.** Pros sell packs (a crew and a plan for a market), and makers earn a share of every use.
-4. **Studio seats.** Teams, shared boards, brand kits and review.
-5. **Remix revenue share.** When a remix earns, the original maker earns too. The credit chain already records who made what.
+- **The Studio runs on the person's own machine,** in their own Hermes, with their own models, engines and accounts. We host no studio and sell no builds.
+- **Swarm Feed is the only hosted part:** the showcase, collaborators, annotation and boards, events and jams.
+- **The plugin is free and open source.** It grows through the Hermes Marketplace.
 
-Real billing waits for a legal and payments review. The demo only shows a labelled test checkout.
+**How Swarm makes money: to be decided by the owner.** See [docs/PRODUCT.md](../PRODUCT.md) and [docs/decisions/](../decisions/README.md).
 
 ## The road (this hackathon is day one)
 
 | When | What |
 |---|---|
 | **Now** (hackathon) | the plugin, the crew, Auto, the packs and the live Feed |
-| **Next** | the Hermes Marketplace listing, the hosted studio, real credits, and Feed boards for everyone |
+| **Next** | the Hermes Marketplace listing, and Feed boards for everyone |
 | **Then** | new crews through MCP and open-source skills: game engines, marketing and ad tools, print, 3D. **Any tool Hermes can reach, the crew can use.** |
 | **Later** | Swarm beyond Hermes: any agent host that speaks MCP can run the studio and post to the Feed |
 
-> "The hosted studio, real credits" in **Next**: Superseded by the owner's direction of 2026-11-12: there is no hosted studio and no build credits. Swarm Studio runs in the person's own Hermes; the Feed is the only hosted part. See [PRODUCT.md](../PRODUCT.md).
 
 ## The maker
 
@@ -120,8 +116,7 @@ Design Baker, [@Pukujan](https://github.com/Pukujan) on GitHub. Portfolio: [desi
 4. **The steer.** One sentence changes the colour everywhere.
 5. **The loop.** Post, remix and credit in the Feed.
 6. **The numbers.** The market, Hermes' reach, and the 72 PRs on day one.
-7. **The road.** Packs, the hosted studio and new crews through MCP. This hackathon is day one.
-   > "The hosted studio": Superseded by the owner's direction of 2026-11-12: there is no hosted studio and no build credits. Swarm Studio runs in the person's own Hermes; the Feed is the only hosted part. See [PRODUCT.md](../PRODUCT.md).
+7. **The road.** Packs, the Feed's boards and jams, and new crews through MCP. This hackathon is day one.
 
 ## What we never claim
 

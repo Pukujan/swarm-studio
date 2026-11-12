@@ -11,7 +11,7 @@ A crew you can watch builds everything a launch needs: the site, the live app, t
 We keep to three beliefs:
 1. **Show the work.** Agents shouldn't hide behind a chat box; you watch the crew build.
 2. **Make the whole thing.** A launch is many pieces made together, never one file.
-3. **Credit the crew.** Every build names the people and the agents that made it, and every remix credits the build it came from.
+3. **Credit the crew.** Every build names the people and the agents that made it, and every remix names the build it came from.
 
 ## Names
 
@@ -129,7 +129,7 @@ Swarm talks like a good ship's captain: short, warm, sure, and specific.
 - One prompt. The *whole* launch.
 - Watch your crew build it.
 - Steer it like a design tool. Ship it from Hermes.
-- Every build credits its crew.
+- Every build names its crew.
 - A whole creative studio, inside Hermes.
 - Any tool Hermes can reach, the crew can use.
 
