@@ -4,20 +4,17 @@
 // top bar's one primary button, which carries the price: "Lock · 324 credits". Nothing expensive
 // runs before that click; the server checks the same number again (engine/plan.mjs lockPlan).
 import { ic, cursor, CREW, painterOf } from './icons.js'
+import { makeBoard } from './board.js'
 
 export function makePlan({ sw, C, root }) {
   const esc = sw.esc
   const base = () => sw.base || ''
-  const P = { on: false, id: null, plan: null, sel: null, cam: { x: 0, y: 0, k: 1 }, framed: false, writing: null, saving: null, poll: null, cell: null }
+  const P = { on: false, id: null, plan: null, sel: null, framed: false, writing: null, saving: null, poll: null, cell: null }
 
-  root.className = 'project plan'
-  root.hidden = true
-  root.innerHTML = `
-    <div class="pj-stage" tabindex="-1" aria-label="Plan">
-      <div class="pj-world"></div>
-    </div>
-    <aside class="pj-insp" hidden aria-label="Inspector"></aside>`
-  const stage = root.querySelector('.pj-stage'), world = root.querySelector('.pj-world'), insp = root.querySelector('.pj-insp')
+  // the stage, camera, inspector, Esc and toast are the shared board (web/board.js)
+  const bd = makeBoard({ root, cls: 'project plan', label: 'Plan', fit: [0.3, 1.25], on: () => P.on, selected: () => !!P.sel, clear: () => select(null) })
+  const { world, insp } = bd
+  const applyCam = bd.applyCam, frameAll = bd.frameAll, toast = bd.toast
 
   // ---------- the top bar: Projects › name, and the one primary button (the price)
   const bar = document.querySelector('.topbar')
@@ -120,12 +117,12 @@ export function makePlan({ sw, C, root }) {
     const made = new Map((p.build?.sprites || []).map(x => [x.name, x]))
     const views = flat ? (shown || made.size ? p.art.sprites.map(x => slot(`sp:${x.name}`, 'view', x.name, made.get(x.name))).join('') : '') : shown ? cast.map(r => { const c = chars.get(r.name) || {}; return `<div class="pl-grp">${['front', 'side', 'back'].map((v, i) => slot(`vw:${r.name}:${v}`, 'view', i ? '' : r.name, c[v])).join('')}${modelSlot(r, c.model)}</div>` }).join('') : ''
     const closeups = shown && p.shape?.closeups !== false ? cast.map(r => '<div class="pl-grp">' + slot(`cu:${r.name}:cutin`, 'cutin', r.name, chars.get(r.name)?.cutin) + slot(`cu:${r.name}:portrait`, 'portrait', '', chars.get(r.name)?.portrait) + '</div>').join('') : ''
-    world.innerHTML = `<div class="col"><section class="pj-sec plan-cards"><span class="al">Plan</span><div class="abs">${cards}</div></section>
-      ${writing ? '' : `<section class="pj-sec pl-sheets"><span class="al">Sketches</span><div class="abs">${sheets}</div></section>`}
-      ${views && !writing ? `<section class="pj-sec pl-build"><span class="al">Build</span><div class="abs">${views}</div></section>` : ''}</div>
-      ${writing ? '' : `<div class="col"><section class="pj-sec pl-mocks"><span class="al">Mocks</span><div class="abs">${mocks}</div></section>
-      ${p.shape?.backdrops === false ? '' : `<section class="pj-sec pl-world"><span class="al">World</span><div class="abs">${worldSec}</div></section>`}
-      ${closeups ? `<section class="pj-sec pl-close"><span class="al">Close-ups</span><div class="abs">${closeups}</div></section>` : ''}</div>`}`
+    world.innerHTML = `<div class="col"><section class="pj-sec plan-cards" data-sec="cards"><span class="al">Plan</span><div class="abs">${cards}</div></section>
+      ${writing ? '' : `<section class="pj-sec pl-sheets" data-sec="sheets"><span class="al">Sketches</span><div class="abs">${sheets}</div></section>`}
+      ${views && !writing ? `<section class="pj-sec pl-build" data-sec="build"><span class="al">Build</span><div class="abs">${views}</div></section>` : ''}</div>
+      ${writing ? '' : `<div class="col"><section class="pj-sec pl-mocks" data-sec="mocks"><span class="al">Mocks</span><div class="abs">${mocks}</div></section>
+      ${p.shape?.backdrops === false ? '' : `<section class="pj-sec pl-world" data-sec="world"><span class="al">World</span><div class="abs">${worldSec}</div></section>`}
+      ${closeups ? `<section class="pj-sec pl-close" data-sec="close"><span class="al">Close-ups</span><div class="abs">${closeups}</div></section>` : ''}</div>`}`
     applyCam()
     const firstKey = p.first && (p.art?.sprites?.length ? `sp:${p.first.name}` : `vw:${p.first.name}:front`)
     if (firstKey && P.checked !== `${p.id}:${p.first.src}` && !P.sel) { P.checked = `${p.id}:${p.first.src}`; P.sel = firstKey }
@@ -164,8 +161,7 @@ export function makePlan({ sw, C, root }) {
     const p = P.plan
     const c = P.sel?.startsWith('card:') && p?.cards.find(x => `card:${x.id}` === P.sel)
     const pic = !c && P.sel && p ? picInsp(p, P.sel) : ''
-    insp.hidden = !c && !pic
-    root.classList.toggle('insp-on', !insp.hidden)
+    bd.inspector(!!(c || pic))
     if (insp.hidden) return
     if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea')) return
     if (pic) { insp.innerHTML = pic; return }
@@ -360,40 +356,7 @@ export function makePlan({ sw, C, root }) {
     try { take(await post(url('build'))) } catch (err) { toast(err.message) }
   }
 
-  // ---------- the stage: pan, zoom, select (the Overview's gestures)
-  function applyCam() { world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})` }
-  function frameAll(animate = true) {
-    const sw_ = stage.clientWidth - (insp.hidden ? 0 : 272), sh = stage.clientHeight - 40
-    const w = world.scrollWidth, h = world.scrollHeight
-    if (!w || !h || sw_ <= 0) return
-    const k = Math.min(1.25, Math.max(0.3, Math.min(sw_ / w, sh / h)))
-    P.cam = { k, x: Math.max(0, (sw_ - w * k) / 2), y: Math.max(0, Math.min(40, (sh - h * k) / 2)) }
-    world.classList.toggle('ease', animate)
-    applyCam()
-    setTimeout(() => world.classList.remove('ease'), 300)
-  }
-  let drag = null
-  stage.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.pj-insp, .ab')) return
-    drag = { x: e.clientX, y: e.clientY, cx: P.cam.x, cy: P.cam.y, moved: false }
-    stage.setPointerCapture(e.pointerId)
-  })
-  stage.addEventListener('pointermove', e => {
-    if (!drag) return
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y
-    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true
-    if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(); stage.classList.add('panning') }
-  })
-  stage.addEventListener('pointerup', () => { if (drag && !drag.moved && P.sel) select(null); drag = null; stage.classList.remove('panning') })
-  stage.addEventListener('wheel', e => {
-    e.preventDefault()
-    if (e.ctrlKey || e.metaKey) {
-      const r = stage.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top
-      const k = Math.min(3, Math.max(0.2, P.cam.k * Math.exp(-e.deltaY * 0.01)))
-      P.cam.x = px - (px - P.cam.x) * k / P.cam.k; P.cam.y = py - (py - P.cam.y) * k / P.cam.k; P.cam.k = k
-    } else { P.cam.x -= e.deltaX; P.cam.y -= e.deltaY }
-    applyCam()
-  }, { passive: false })
+  // ---------- select (the stage's gestures are the board's)
   function select(key) {
     if (key !== P.sel) P.cell = null
     P.sel = key
@@ -407,23 +370,6 @@ export function makePlan({ sw, C, root }) {
     select(a.dataset.key)
   })
   world.addEventListener('keydown', e => { const a = e.target.closest('.ab'); if (a && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select(a.dataset.key) } })
-  addEventListener('keydown', e => {
-    if (!P.on || e.key !== 'Escape' || e.defaultPrevented || window.SwarmUI?.open?.()) return
-    if (e.target.closest?.('input, textarea')) return
-    if (P.sel) { e.preventDefault(); select(null) }
-  }, true)
-
-  // ---------- one toast spot
-  let toastEl = null
-  function toast(text) {
-    toastEl?.remove()
-    const t = toastEl = document.createElement('div')
-    t.className = 'hm-toast'
-    t.setAttribute('role', 'status')
-    t.textContent = text
-    root.append(t)
-    setTimeout(() => t.remove(), 3000)
-  }
 
   return {
     el: root,
@@ -443,6 +389,8 @@ export function makePlan({ sw, C, root }) {
       const plan = await post('/api/plans', { idea, answers })
       return plan.id
     },
-    select
+    select,
+    // bring a section ('cards', 'sheets', 'build', 'mocks', 'world', 'close') or an artboard (its key) into view
+    focus: (target, animate = true) => bd.focus(target, animate)
   }
 }
