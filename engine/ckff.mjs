@@ -26,9 +26,13 @@ const mime = p => ({ '.png': 'image/png', '.webp': 'image/webp' }[extname(p).toL
 export async function ckffPaint({ prompt, aspect = 'landscape', refs = [], model = process.env.CKFF_MODEL || 'gpt-image-2.5', fetchImpl = fetch, timeoutMs = 300000 } = {}) {
   const c = ckffCreds()
   if (!c) return { ok: false, error: 'no ckff key' }
-  const body = { model, size: SIZE[aspect] || SIZE.landscape, prompt: String(prompt).slice(0, 3800) }
-  let url = `${c.base}/images/generations`
   const pics = refs.filter(r => r && existsSync(r)).slice(0, 4)
+  // With no picture attached, a prompt that happens to say "repair", "fix" or "edit" (a game item
+  // that "charges the repair") was taken upstream for an edit request and refused with "please
+  // upload the image to edit". Saying it is a new picture up front stops that.
+  const lead = pics.length ? '' : 'Paint a new picture from this description. Nothing is uploaded and nothing is being edited. '
+  const body = { model, size: SIZE[aspect] || SIZE.landscape, prompt: (lead + String(prompt)).slice(0, 3800) }
+  let url = `${c.base}/images/generations`
   if (pics.length) {
     url = `${c.base}/images/edits`
     const im = pics.map(r => `data:${mime(r)};base64,${readFileSync(r).toString('base64')}`)
