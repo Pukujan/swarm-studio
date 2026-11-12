@@ -1,3 +1,4 @@
+// @ts-check
 // Lucide-style line icons (ISC; licence in web/brand/LICENSE-lucide.txt) and the crew's cursor,
 // shared by the Projects browser (home.js) and the project's Overview (project.js).
 export const P = {

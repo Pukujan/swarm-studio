@@ -1,0 +1,15 @@
+{
+  "name": "swarm-studio-dev",
+  "private": true,
+  "description": "Development checks only (the type check and the dependency rules). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "cd ../.. && tsc -p tsconfig.json",
+    "deps": "cd ../.. && depcruise web --config .dependency-cruiser.cjs"
+  },
+  "devDependencies": {
+    "dependency-cruiser": "18.7.2",
+    "typescript": "7.0.2",
+    "xstate": "5.33.3"
+  }
+}

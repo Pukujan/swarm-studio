@@ -1,3 +1,4 @@
+// @ts-check
 // The crew: one mark per agent, drawn in code from its name (its first letter on its shade),
 // so the same name always gets the same mark, at any size.
 // A classic script (it sets window.SwarmCrew) so the canvas can use it whether it is

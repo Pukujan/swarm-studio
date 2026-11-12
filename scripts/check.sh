@@ -14,6 +14,15 @@ if [ -n "$links" ]; then echo "tracked symlinks break the plugin install: $links
 echo "· syntax"
 for f in $(git ls-files '*.mjs' '*.js' | grep -v '^dyad/\|^gameskills/'); do node --check "$f"; done
 
+echo "· type-check ratchet"
+# web files without // @ts-check on their first line (tsconfig.json; CI runs the type check itself with
+# tools/dev). The cap only goes down: type a file, then lower it. A new file starts typed.
+cap=17
+untyped=$(for f in $(git ls-files 'web/*.js' | grep -v '^web/vendor/'); do head -1 "$f" | grep -q '^// @ts-check' || echo "$f"; done)
+n=$(printf '%s' "$untyped" | grep -c . || true)
+if [ "$n" -gt "$cap" ]; then echo "$n web files are not type-checked, over the cap of $cap; start the new ones with // @ts-check:"; echo "$untyped"; exit 1; fi
+if [ "$n" -lt "$cap" ]; then echo "  $n untyped, under the cap of $cap: lower cap= in scripts/check.sh to $n"; fi
+
 echo "· engine modules load"
 for f in engine/*.mjs; do node --input-type=module -e "await import('./$f')"; done
 

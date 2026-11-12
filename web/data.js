@@ -1,3 +1,4 @@
+// @ts-check
 // The canvas's shared data (docs/specs/34-navigation-state.md): the App view, the advisor and the game
 // interview, each an XState actor made from fromTransition (XState's reducer actor), so the studio has
 // one library and one way to subscribe. Its events are `set` (merge a patch) and `reset` (back to the
@@ -7,12 +8,14 @@
 // window.swarmState() dumps the navigation machine and every store, for debugging in the console.
 import { createActor, fromTransition } from './vendor/xstate/xstate.mjs'
 
+/** @typedef {{ type: 'set', patch: Record<string, any> } | { type: 'drop', key: string } | { type: 'reset', patch?: Record<string, any> }} StoreEvent */
+
 const stores = new Map()
 const changed = (ctx, patch) => Object.keys(patch).some(k => ctx[k] !== patch[k] || !(k in ctx))
 
 export function dataStore(name, start, { keep = [] } = {}) {
   const fresh = () => structuredClone(start)
-  const actor = createActor(fromTransition((ctx, e) => {
+  const actor = createActor(fromTransition((/** @type {Record<string, any>} */ ctx, /** @type {StoreEvent} */ e) => {
     if (e.type === 'set') return changed(ctx, e.patch) ? { ...ctx, ...e.patch } : ctx
     if (e.type === 'drop') { if (!(e.key in ctx)) return ctx; const { [e.key]: _, ...rest } = ctx; return rest }
     if (e.type === 'reset') return { ...fresh(), ...Object.fromEntries(keep.filter(k => k in ctx).map(k => [k, ctx[k]])), ...e.patch }
@@ -30,7 +33,7 @@ export function dataStore(name, start, { keep = [] } = {}) {
   const state = new Proxy({}, {
     get: (_, k) => ctx()[k],
     set: (_, k, v) => { actor.send({ type: 'set', patch: { [k]: v } }); return true },
-    deleteProperty: (_, k) => { actor.send({ type: 'drop', key: k }); return true },
+    deleteProperty: (_, k) => { actor.send({ type: 'drop', key: /** @type {string} */ (k) }); return true },
     has: (_, k) => k in ctx(),
     ownKeys: () => Reflect.ownKeys(ctx()),
     getOwnPropertyDescriptor: (_, k) => (k in ctx() ? { value: ctx()[k], writable: true, enumerable: true, configurable: true } : undefined)

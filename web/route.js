@@ -1,3 +1,4 @@
+// @ts-check
 // Where a message typed in the studio goes. Inside an open build it belongs to that
 // build: an edit of the selected section or page (/fix), or the project's next
 // version that keeps every page and adds what was asked (extend). Only with no

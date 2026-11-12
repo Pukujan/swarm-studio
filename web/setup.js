@@ -1,3 +1,4 @@
+// @ts-check
 // Setup: the one-time sheet (docs/specs/06-onboarding.md). A grouped list after iOS Settings
 // (docs/ux/PATTERNS.md): each row is a name and one state, a tap opens it, and every row has a
 // default already picked, so Start works at once. Shown once on Projects; later from the user menu.
