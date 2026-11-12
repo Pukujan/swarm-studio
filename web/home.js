@@ -669,11 +669,19 @@ export function makeHome({ sw, C, root }) {
   if (hosted()) kindBtn.hidden = true  // the hosted studio makes websites only
   // the kind menu also holds the one Grill me switch: on, a prompt gets the questions it has not answered
   let grillOn = store.get('home.grill', true)
-  kindBtn.onclick = () => showMenu([
+  // and Pictures: the same pick as Setup → Pictures (POST /api/setup), so builds can be drawn in SVG
+  // without the image model. Not for a Game: its art has its own steps (the Plan board).
+  const PICS = [{ k: 'painted', icon: 'image', label: 'Painted' }, { k: 'stock', icon: 'search', label: 'Stock photos' }, { k: 'drawn', icon: 'pencil', label: 'Drawn' }]
+  let picMode = null
+  const loadPics = () => api('/api/setup').then(v => { picMode = v?.pictures?.mode || picMode }).catch(() => {})
+  if (!hosted()) loadPics()
+  const picItems = () => PICS.map(p => ({ ...p, k: `pic:${p.k}`, on: picMode === p.k, run: () => { picMode = p.k; post('/api/setup', { pictures: p.k }).catch(err => toast(`<span>${esc(err.message)}</span>`)); input.focus() } }))
+  kindBtn.onclick = () => { if (!hosted()) loadPics(); showKind(); return showMenu([
     ...MAKES.map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })),
     '-',
+    ...(make.k === 'game' ? [] : [{ k: 'pics', icon: 'image', label: 'Pictures', sub: b => subMenu(b, picItems()) }]),
     { k: 'grill', icon: 'msg', label: 'Grill me', on: grillOn, run: () => { grillOn = !grillOn; store.set('home.grill', grillOn); input.focus() } }
-  ], kindBtn)
+  ], kindBtn) }
 
   // what the Make box asks the server for once: the showcases and the interview (engine/intake.mjs)
   let intakeP = null
