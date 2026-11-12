@@ -64,15 +64,36 @@ export async function readIntent({ text, kind = 'site', answerTo = '', chat }) {
 }
 
 const WHAT = { app: 'a web app', film: 'a short promo video', game: 'a game', site: 'a website' }
-const TALK_PROMPT = kind => `You are Hermia, the planner of a crew of AI agents that builds ${WHAT[kind] || WHAT.site} from a brief. The person asked to talk before anything is built, so nothing is being built and nothing has started. Never say you are building, designing or have started.
+// Inside a project the planner is told what is there (the server's projectState): its pages, its look,
+// what is running. It never says nothing exists, and it says which way a build goes: add to this
+// project, start a new project (a different product), or start this one over.
+const ROUTES = '"route": "add" (more for this same product), "new" (a different product: its own new project) or "redo" (this product again from scratch: new pages and a new look; the old version stays restorable)'
+const placeOf = project => project
+  ? `This talk is inside an existing project. What is there now:\n${project}\nNever say nothing exists or nothing has been built: say what is there. When they describe a different product from this project, say so plainly and offer to start it as a new project. When they want to redo it or start from scratch, say that replaces this project's pages and look, and the old version stays restorable.`
+  : 'The person asked to talk before anything is built, so nothing is being built and nothing has started.'
+const TALK_PROMPT = (kind, project = '') => `You are Hermia, the planner of a crew of AI agents that builds ${WHAT[kind] || WHAT.site} from a brief. ${placeOf(project)} Never say you are building, designing or have started.
 Talk with them like a good product lead:
 - Answer what they asked first, directly and concretely. Name real options when they ask (services, APIs, payment or sign-in providers) with one line on each, and say what the crew can and cannot do (the crew builds the product and its pages; outside services need the person's own accounts and keys).
 - Then ask the one or two questions that matter most for this build. Go deeper when they asked to be grilled: who it is for, the main flows, the data, accounts, money, what to leave out.
 - Short: under 130 words, plain sentences, short lists are fine, no headings, no markdown bold.
 Only when their last message clearly says to build now (build it, go ahead, start, let's build), reply with this JSON and nothing else:
-{"build": true, "brief": "<one paragraph the crew builds from: what it is and who it is for, the pages or screens, the data, accounts, outside services decided, and what to leave out>"}`
+{"build": true, "brief": "<one paragraph the crew builds from: what it is and who it is for, the pages or screens, the data, accounts, outside services decided, the colours and type when they were decided, and what to leave out>"${project ? `, ${ROUTES}` : ''}}`
 
-const BRIEF_PROMPT = kind => `Write the brief a crew of AI agents will build ${WHAT[kind] || WHAT.site} from, using only what this conversation decided. One paragraph, under 140 words: what it is and who it is for, the pages or screens, the data, accounts, outside services, and what to leave out. No instructions to the crew about talking or waiting. Reply with the paragraph only.`
+const BRIEF_PROMPT = (kind, project = '') => `Write the brief a crew of AI agents will build ${WHAT[kind] || WHAT.site} from, using only what this conversation decided. One paragraph, under 140 words: what it is and who it is for, the pages or screens, the data, accounts, outside services, the colours and type when they were decided, and what to leave out. No instructions to the crew about talking or waiting. ${project ? `The talk is inside an existing project:\n${project}\nReply with JSON only: {"build": true, "brief": "<the paragraph>", ${ROUTES}}` : 'Reply with the paragraph only.'}`
+
+// which way a build from a project's talk goes, from the person's own words when they say it
+export function routeWords(text = '') {
+  const s = String(text)
+  if (/\b(from scratch|start (it )?over|start again|redo|re-do|rebuild|scrap (it|this))\b/i.test(s)) return 'redo'
+  if (/\b(a |as a )?(new|separate|different) (project|site|website|app)\b/i.test(s)) return 'new'
+  return ''
+}
+export function routeOf(reply) {
+  const m = /"route"\s*:\s*"(add|new|redo)"/.exec(String(reply || ''))
+  return m ? m[1] : ''
+}
+// the person's last words win over the planner's pick; nothing said is "add"
+const routeFor = (said, reply) => routeWords([...said].reverse().find(m => m && m.who !== 'hermia' && m.who !== 'planner')?.text || '') || routeOf(reply) || 'add'
 
 // the conversation as chat messages: the person is the user, Hermia the assistant; the newest kept
 export function toMessages(said = []) {
@@ -92,25 +113,25 @@ export function buildOf(reply) {
 }
 
 // one turn: Hermia's answer, or (when the person said build) the brief to show them
-export async function discuss({ said = [], kind = 'site', chat }) {
+export async function discuss({ said = [], kind = 'site', chat, project = '' }) {
   const messages = toMessages(said)
   if (!messages.length || messages.at(-1).role !== 'user') throw new Error('say something first')
-  const reply = String(await chat([{ role: 'system', content: TALK_PROMPT(kind) }, ...messages]) || '').trim()
+  const reply = String(await chat([{ role: 'system', content: TALK_PROMPT(kind, project) }, ...messages]) || '').trim()
   const brief = buildOf(reply)
-  if (brief) return { brief }
+  if (brief) return project ? { brief, route: routeFor(said, reply) } : { brief }
   if (!reply || /^\s*\{/.test(reply)) throw new Error('the planner did not answer')
   return { reply: reply.replace(/\*\*(.+?)\*\*/g, '$1') }
 }
 
 // the brief, asked for by the Build button: what the conversation decided, never the talk itself
-export async function writeBrief({ said = [], kind = 'site', chat }) {
+export async function writeBrief({ said = [], kind = 'site', chat, project = '' }) {
   const messages = toMessages(said)
   if (!messages.length) throw new Error('nothing to write a brief from')
   const convo = messages.map(m => `${m.role === 'user' ? 'Person' : 'Hermia'}: ${m.content}`).join('\n\n')
-  const text = String(await chat([{ role: 'system', content: BRIEF_PROMPT(kind) }, { role: 'user', content: convo }]) || '').trim()
+  const text = String(await chat([{ role: 'system', content: BRIEF_PROMPT(kind, project) }, { role: 'user', content: convo }]) || '').trim()
   const brief = buildOf(text) || text.replace(/^brief:\s*/i, '')
   if (!brief || /^\s*\{/.test(brief)) throw new Error('the planner did not write a brief')
-  return { brief }
+  return project ? { brief, route: routeFor(said, text) } : { brief }
 }
 
 // ===================== the plan is a conversation (spec 27) =====================

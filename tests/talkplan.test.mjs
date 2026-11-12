@@ -85,7 +85,9 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   // a talk in the deck builds only from its brief card's Build
   assert.match(canvas, /if \(talk\.on\) \{ skip\(\); if \(talk\.busy\) return; els\.brief\.value = ''; talkSay\(brief\); return \}/)
   assert.match(canvas, /els\.brief\.placeholder = 'Tell Hermia…'; dockBtn\.textContent = 'Send'/)
-  assert.match(canvas, /<button class="primary" data-go>Build<\/button><button data-more>Keep talking<\/button>/)
+  // the brief's buttons: Build (or, inside a project, New project / Start over with Add here), then Keep talking
+  assert.match(canvas, /<button class="primary" data-go="add">Build<\/button>/)
+  assert.match(canvas, /\$\{acts\}<button data-more>Keep talking<\/button>/)
   assert.match(project, /const read = [^\n]*sw\.readTalk\(text\)\n\s*if \(read === 'build'\) return send\(text\)/)
 })
 

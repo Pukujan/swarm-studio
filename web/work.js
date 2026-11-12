@@ -31,7 +31,7 @@ export function makeWork({ sw, C }) {
     if (C.mode === 'home') return { jobs, body: {} }
     const run = sw.S?.run
     const mine = jobs.filter(j => (C.project && j.project === C.project) || (run && j.run === run))
-    return { jobs: mine, body: C.project && mine.some(j => j.project === C.project) ? { project: C.project } : { run } }
+    return { jobs: mine, body: { ...(C.project ? { project: C.project } : {}), ...(run ? { run } : {}) } }
   }
   const bar = w => {
     const pct = w.pct == null ? null : Math.round(w.pct * 100)
@@ -41,7 +41,7 @@ export function makeWork({ sw, C }) {
   function paint() {
     chip.hidden = !jobs.length
     const h = here()
-    stopBtn.hidden = !h.jobs.length
+    stopBtn.hidden = !h.jobs.length && !stoppedAt
     stopBtn.setAttribute('aria-label', 'Stop the crew')
     if (!jobs.length) { pop?.close(); return }
     const sig = jobs.map(j => `${j.run}:${j.what}:${j.pct == null ? '' : Math.round(j.pct * 100)}`).join('|')
@@ -68,11 +68,18 @@ export function makeWork({ sw, C }) {
     pop = window.SwarmUI.popover(chip, list(), { className: 'wk-pop' })
     pop.el.addEventListener('click', e => { const r = e.target.closest('.wk-row'); if (r) open(jobs[Number(r.dataset.i)]) })
   }
+  // the button says Stopped at once, and the jobs it stopped leave the chip before the next poll
+  let stoppedAt = 0
   stopBtn.onclick = async () => {
+    const h = here()
     stopBtn.disabled = true
-    try { await sw.api('/api/stop', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(here().body) }) } catch {}
-    stopBtn.disabled = false
-    refresh()
+    stopBtn.querySelector('span').textContent = 'Stopping'
+    try { await sw.api('/api/stop', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(h.body) }) } catch {}
+    jobs = jobs.filter(j => !h.jobs.includes(j))
+    stoppedAt = Date.now()
+    stopBtn.querySelector('span').textContent = 'Stopped'
+    paint()
+    setTimeout(() => { stoppedAt = 0; stopBtn.disabled = false; stopBtn.querySelector('span').textContent = 'Stop'; refresh() }, 2500)
   }
   async function refresh() {
     clearTimeout(timer)

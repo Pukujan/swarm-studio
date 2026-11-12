@@ -138,6 +138,17 @@ Said on 2026-11-11 (spec 29). A talk with the planner is kept in a chat of its o
 moves into the project, which keeps all its chats grouped Design, App, Game and Video. The first words typed into
 the Make box always land in a chat, even when they build at once.
 
+**A talk inside a project knows that project**
+> looks like it wont stop or change the colors what to do? no matter how much i ask it to
+
+Said on 2026-11-12, after a talk in the "Night Runner Press" deck. The planner had said nothing was built while four
+pages were on screen, added a different product (a site for rat owners) to the sneaker project twice, ignored the
+colours the talk agreed, and Stop left pictures painting. Now the planner is told the project's pages, look and
+running work; a different product's brief offers **New project** (and **Add here**), "redo from scratch" offers
+**Start over** (new pages and look, the old version stays in the project); colours a brief or a follow-up names
+become the theme, checked against it; Stop covers every build of the project on screen and says Stopped at once;
+one Enter is one message. **New chat** heads the Chats list on Studio home.
+
 **Stop the crew**
 > anyway to stop an ongoing swarm or agents? wish there was ? lol i cant stop them once they start
 

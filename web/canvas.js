@@ -1682,8 +1682,20 @@ els.brief.addEventListener('blur', () => setTimeout(() => (slashPop.hidden = tru
 // project's next version, which keeps every page and adds what was asked. window.swarm.submit
 // says where its words go: Projects home starts a new project, a project's dock extends it.
 let nextRoute = null
+// one message at a time: while one is being read (talk or build?) or its build is starting, another
+// Enter does nothing (two Enters made two chats, or two builds, from one message)
+let sending = false, queued = null
 els.form.addEventListener('submit', async e => {
   e.preventDefault()
+  // a send made in code (window.swarm.submit, a Build button) while one is going waits its turn
+  if (sending) {
+    if (nextRoute) { const r = nextRoute, v = els.brief.value; nextRoute = null; queued = () => { nextRoute = r; els.brief.value = v; els.form.requestSubmit() } }
+    return
+  }
+  sending = true
+  try { await sendDock() } finally { sending = false; const q = queued; queued = null; q?.() }
+})
+async function sendDock() {
   const brief = els.brief.value.trim()
   if (!brief) return
   if (/^\/[a-z?]/i.test(brief)) {
@@ -1723,14 +1735,14 @@ els.form.addEventListener('submit', async e => {
     }
   }
   setAuto(true)
-  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' ? { from: to.from } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief, agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
   to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true } : null)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }
   else if (res?.status === 409) feed(null, 'The crew are still on the last change.', 'err')
   else if (hosted && res) hosted.refuse(j)
   else feed(null, `Couldn't start the run${res ? ` (${res.status})` : ''}. Is the canvas server running?`, 'err')
-})
+}
 
 // ---------- talk first (engine/talkplan.mjs): the person asked not to build yet, or asked the crew
 // a question. Hermia answers here in the chat, the conversation goes on in this dock, and nothing is
@@ -1775,7 +1787,7 @@ async function talkSay(text, brief = false) {
   wait.remove()
   if (!talk.on) return
   if (!res?.ok) return talkActs(botMsg(j.error || 'Hermia did not answer. Say it again.'))
-  if (j.brief) return talkBrief(j.brief)
+  if (j.brief) return talkBrief(j.brief, j.route)
   talk.said.push({ who: 'hermia', text: j.reply })
   talkActs(botMsg(j.reply))
 }
@@ -1787,20 +1799,30 @@ function talkActs(item) {
   acts.firstChild.onclick = () => { if (!talk.busy) talkSay('', true) }
   item.append(acts)
 }
-function talkBrief(text) {
+// Inside a project the planner says which way it goes (engine/talkplan.mjs routeFor): more for this
+// project (Build), a different product (New project, with Add here for when it is not), or this one
+// from scratch (Start over: new pages and look, the old version stays in the project).
+function talkBrief(text, route = '') {
   const item = botMsg('The brief')
   item.classList.add('talk-brief')
-  item.insertAdjacentHTML('beforeend', '<textarea aria-label="The brief" rows="6" maxlength="4000"></textarea><div class="chips talk-acts"><button class="primary" data-go>Build</button><button data-more>Keep talking</button></div>')
+  const inProject = !!talk.from
+  const acts = inProject && route === 'new' ? '<button class="primary" data-go="new">New project</button><button data-go="add">Add here</button>'
+    : inProject && route === 'redo' ? '<button class="primary" data-go="redo">Start over</button><button data-go="add">Add here</button>'
+      : '<button class="primary" data-go="add">Build</button>'
+  item.insertAdjacentHTML('beforeend', `<textarea aria-label="The brief" rows="6" maxlength="4000"></textarea><div class="chips talk-acts">${acts}<button data-more>Keep talking</button></div>`)
   const box = item.querySelector('textarea')
   box.value = text
-  item.querySelector('[data-go]').onclick = () => {
+  item.querySelectorAll('[data-go]').forEach(b => { b.onclick = () => {
     const t = box.value.trim()
     if (!t) return
-    const go = talk.build, chat = talk.chat
+    const way = b.dataset.go, chat = talk.chat, from = talk.from
+    const go = way === 'new' ? (x, c) => { nextRoute = { fresh: true, chat: c }; els.brief.value = x; els.form.requestSubmit() }
+      : way === 'redo' ? (x, c) => { nextRoute = { from, route: 'redo', selected: false, chat: c }; els.brief.value = x; els.form.requestSubmit() }
+        : talk.build
     talkEnd()
     box.disabled = true
     go?.(t, chat)
-  }
+  } })
   item.querySelector('[data-more]').onclick = () => { item.querySelector('.talk-acts').remove(); els.brief.focus() }
   box.focus({ preventScroll: true })
 }

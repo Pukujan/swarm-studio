@@ -317,7 +317,8 @@ function imageQueue(run, emit, choice) {
   add.drop = message => { if (!held) return; for (const job of jobs.splice(0)) emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message }) }
   // Stop: pictures not started are let go; one already with the image model is kept when it lands
   add.stop = () => { held = true; for (const job of jobs.splice(0)) emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message: 'stopped' }) }
-  add.busy = () => active > 0 || (!held && jobs.length > 0)
+  // a stopped queue is not busy: the one picture already at the provider lands, nothing more starts
+  add.busy = () => !held && (active > 0 || jobs.length > 0)
   return add
 }
 const host = url => { try { return new URL(url).host } catch { return '' } }
@@ -407,7 +408,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', resume 
     if (run.controller.signal.aborted) return emit('run:stopped', { ms: 0, planned: 0, done: 0, failed: 0, pages: 0, stopped: true })
     // painted: the slots are painted; stock: stand-in photos keep them; drawn: no slots at all
     run.paint = pic.paint
-    if (pic.paint) run.images = images = imageQueue(run, emit, pic.choice)
+    if (pic.paint) { run.images = images = imageQueue(run, emit, pic.choice); painters.set(id, images) }
     return withTrace(id, () => runSwarm({
     images: pic.images,
     provider: provider('planner'),
@@ -490,10 +491,14 @@ const withTrace = (id, fn) => traced(traceScope(id), fn)
 // Stop one build's work: its layout pass (workers take no more sections, the model calls in flight
 // are aborted), the pictures not started yet, review and fix passes, a film, an app or game build.
 // What is built is kept. Answers what was stopped; a build that was working gets a stop event.
+// every build's picture queue by run id (a newer build does not end an older one's painting)
+const painters = new Map()
 async function stopRun(id) {
   const what = []
   if (current?.id === id && !current.done && !current.controller.signal.aborted) { current.controller.abort(); what.push('build') }
-  if (current?.id === id && current.images?.busy()) { current.images.stop(); what.push('pictures') }
+  // the pictures of any build, not only the newest: a project's older version may still be painting
+  const pics = painters.get(id)
+  if (pics?.busy()) { pics.stop(); what.push('pictures') }
   const halt = stops.get(id)
   if (halt && !halt.signal.aborted) {
     if ([...reviewing].some(t => t.startsWith(`${id}/`))) what.push('review')
@@ -512,10 +517,10 @@ async function stopRun(id) {
 async function stopWork({ run, project } = {}) {
   const ids = new Set()
   if (RUN_ID.test(String(run || ''))) ids.add(run)
-  const pid = typeof project === 'string' && project ? project : run && RUN_ID.test(run) ? projects.projectOf(run) : null
-  const p = pid ? projects.get(pid) : null
-  if (p) for (const id of [...p.versions.map(v => v.id), ...Object.keys(p.parts || {})]) ids.add(id)
-  const all = !ids.size && !pid
+  // the project named and the project of the run on screen (they differ right after New project)
+  const pids = [...new Set([typeof project === 'string' && project ? project : null, run && RUN_ID.test(run) ? projects.projectOf(run) : null].filter(Boolean))]
+  for (const p of pids.map(x => projects.get(x)).filter(Boolean)) for (const id of [...p.versions.map(v => v.id), ...Object.keys(p.parts || {})]) ids.add(id)
+  const all = !ids.size && !pids.length
   if (all) {
     if (current) ids.add(current.id)
     for (const id of stops.keys()) ids.add(id)
@@ -541,7 +546,7 @@ function workOf(id) {
     const plan = current.events.filter(e => e.type === 'layer:plan').length
     return { what: 'site', stage: plan ? 'building pages' : 'planning', pct: Math.min(1, current.events.filter(e => e.type === 'layer:done').length / Math.max(1, plan || 12)) }
   }
-  if (current?.id === id && current.images?.busy()) return { what: 'site', stage: 'painting pictures', pct: null }
+  if (painters.get(id)?.busy()) return { what: 'site', stage: 'painting pictures', pct: null }
   if ([...reviewing].some(t => t.startsWith(`${id}/`)) || fixing.get(id) > 0) return { what: 'site', stage: 'reviewing', pct: null }
   const au = auto.state()
   if (au?.state === 'working' && au.run === id && !au.steps.some(s => s.state === 'working' && ['app', 'video'].includes(s.id))) return { what: 'site', stage: au.steps.find(s => s.state === 'working')?.label || 'auto', pct: null }
@@ -1324,9 +1329,14 @@ try {
 } catch (err) { console.warn('chats:', err.message) }
 // a chat that started a build: Locked on its brief, moved into the build's project once it has one
 function chatBuilt(chatId, runId, pid, brief) {
-  if (!chatId || !chats.get(chatId)) return
-  chats.built(chatId, { run: runId, brief, project: pid || null })
-    .then(() => { if (!pid) setTimeout(() => chats.settle(id => projects.projectOf(id)).catch(() => {}), 2000) })
+  const c = chatId && chats.get(chatId)
+  if (!c) return
+  // Locked only on a brief the talk wrote: a build typed straight in keeps its chat open, with the run
+  const talked = (c.turns || []).some(t => t.who === 'planner') || !!c.spec?.brief
+  ;(talked ? chats.built(chatId, { run: runId, brief, project: pid || null })
+    : chats.update(chatId, x => { x.run = runId }).then(() => (pid ? chats.moveTo(chatId, pid) : null)))
+    // a new project (no pid yet): the chat follows the run into it, from wherever the talk was
+    .then(() => { if (!pid) setTimeout(() => { const p = projects.projectOf(runId); if (p) chats.moveTo(chatId, p).catch(() => {}) }, 2000) })
     .catch(err => console.warn('chat:', err.message))
 }
 // a build typed straight into the Make box, or a message in a project's dock, without a talk first:
@@ -1338,6 +1348,26 @@ function chatFor({ chat, text, kind = 'site', project = null }) {
     if (project) { const c = chats.forMessage(project, kind); chats.say(c.id, { who: 'person', text }).catch(() => {}); return c.id }
     return chats.create({ kind, text }).id
   } catch { return null }
+}
+// What a project's talk is told is there (engine/talkplan.mjs): its name, the pages its newest site
+// version has, the look, and what is running now. Empty outside a project.
+function projectState(pid) {
+  const p = pid && projects.get(pid)
+  if (!p) return ''
+  const lines = [`Project: "${String(p.title || p.name || 'untitled').slice(0, 80)}".`]
+  const site = (p.versions || []).find(v => (readEvents(v.id) || []).some(e => e.type === 'page'))
+  const ev = site ? readEvents(site.id) : null
+  if (ev) {
+    const pages = [...new Map(ev.filter(e => e.type === 'page').map(e => [e.id, e.title])).values()]
+    lines.push(`Built: ${pages.length} page${pages.length === 1 ? '' : 's'} (${pages.slice(0, 12).join('; ')}).`)
+    const th = ev.findLast(e => e.type === 'theme')
+    if (th?.vars) lines.push(`Its look: "${th.name || 'theme'}", background ${th.vars['--background']}, text ${th.vars['--foreground']}, main colour ${th.vars['--primary']}${th.fonts?.heading ? `, headings in ${th.fonts.heading}` : ''}.`)
+    const brief = ev.find(e => e.type === 'run:start')?.brief
+    if (brief) lines.push(`It was made from: ${String(brief).split('\n')[0].slice(0, 300)}`)
+  } else lines.push('No pages are built yet.')
+  const work = (p.versions || []).map(v => workOf(v.id)).filter(Boolean)
+  lines.push(work.length ? `Running now: ${work.map(w => `${w.what} (${w.stage || 'working'})`).join(', ')}.` : 'Nothing is running now.')
+  return lines.join('\n')
 }
 // Guided game making (engine/workshop.mjs): the spec walked one step at a time, with pictures
 const workshops = workshopRoutes({
@@ -2215,7 +2245,10 @@ const server = createServer((req, res) => {
         return
       }
       const typed = String(input.brief).trim(), chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
+      // redo: this project from scratch, new pages and a new look; its old versions stay restorable
+      const redo = input.redo === true
       delete input.chat
+      delete input.redo
       // a message inside an open build belongs to that build's project
       if (typeof input.from === 'string' && typeof input.project !== 'string' && RUN_ID.test(input.from)) input.project = projects.projectOf(input.from) || undefined
       // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
@@ -2228,9 +2261,10 @@ const server = createServer((req, res) => {
       // last version is kept as it stands and the crew adds only what the message asks for
       // (engine/extend.mjs followUp). While the last turn is still building, the next one waits:
       // starting it would stop that build and lose what it was doing.
-      const from = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
+      const from = !redo && typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
+      if (redo) delete input.from
       const building = r => r && !r.done && !r.controller.signal.aborted && !r.events.some(e => e.type === 'error' && (e.where === 'run' || e.where === 'models'))
-      if (from && building(current) && (current.id === from || (input.project && projects.projectOf(current.id) === input.project))) {
+      if ((from || redo) && building(current) && (current.id === from || (input.project && projects.projectOf(current.id) === input.project))) {
         res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'busy', run: current.id }))
         return
       }
@@ -2328,7 +2362,9 @@ const server = createServer((req, res) => {
         const talk = chat(input.brief ? 400 : 600, 60000)
         if (!talk) return json(503, { error: 'No planner model yet: pick one in Models.' })
         const said = Array.isArray(input.said) ? input.said.slice(-40) : []
-        const out = await (input.brief ? d.writeBrief : d.discuss)({ said, kind, chat: talk })
+        const inRun = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
+        const inPid = typeof input.project === 'string' ? input.project : inRun ? projects.projectOf(inRun) : null
+        const out = await (input.brief ? d.writeBrief : d.discuss)({ said, kind, chat: talk, project: projectState(inPid || (chats.get(input.chat)?.project ?? null)) })
         // the talk is kept in its chat (spec 29): made on the first turn, inside the project when it
         // started in one; the person's newest words and Hermia's answer are added, a brief is the spec's
         let id = typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat) ? input.chat : null
