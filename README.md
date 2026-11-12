@@ -111,7 +111,7 @@ flowchart LR
 
 ## More coming
 
-None of these is built yet. No dates.
+Not built yet, unless a line says otherwise. No dates.
 
 - **Studio mode:** a kit for each kind of thing you make (site, app, game, film, deck).
 - **Brand as the project's foundation:** one brand that every build in a project starts from.
