@@ -75,6 +75,24 @@ is in the inspector.
 | Money | `model` (free, premium, free + cosmetics), `gacha`, `subscription`, `carry` (cosmetics carried into the game) | money |
 | Systems | one switch per module (below) | money + genre |
 
+### The plan follows the genre (2026-11-11)
+
+The nine cards above are the **action RPG's** shape. Any other kind of game gets its own family's shape
+(`engine/planshape.mjs`): **RTS** (Units, Buildings, Resources, Map, Camera and orders with fog, selection and
+orders, Enemy faction with waves or skirmish rules, Upgrades, HUD), **platformer** (Characters, Moves with
+crouch and slide, Hazards and enemies, Levels in side view), **puzzle** (Pieces, Rules, Levels, HUD), **card**
+(Cards, Rules, Opponents, Board), **sim**, **racing** and **story**. The family comes from the genre answer
+first, then the planner model's reading of the idea (`askShape`, validated), then the idea's words. Every
+family ends with Look, Money and Systems. An answer always wins: "no shooting" leaves no gun on any card, "no
+fights" no enemies. Size words count: "tiny" is one map or level, a few of everything and 2D sprites, so no
+Meshy credits. The title comes from the idea ("a game called army of ants" is **Army of Ants**), and an engine
+named in the idea is the plan's target ("in Godot" is Godot 4, and the plan says so when Godot is not
+installed). A 2D plan's build paints its art list (units, buildings, resources, tiles, HUD), each cut-out on the
+magenta key (green for pink or purple subjects); a 3D plan's turnarounds are on the same key, and only
+humanoids are drawn in A-pose. With **Test one first** the build paints one picture; it is shown with the plan
+in plain words and **Not what I asked for**, which re-plans the same plan in place (`POST
+/api/plans/:id/replan { note }`).
+
 The questions and the defaults live in `engine/plan.mjs` (`PLAN_QUESTIONS`, `planFromAnswers`), one source for the
 studio, `/swarm plan` and the Hermes skill. A planner model may fill Story and World from the idea; without one the
 cards are filled from the chips alone, so the board works offline.

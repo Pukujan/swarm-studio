@@ -3,14 +3,20 @@
 // Painting itself happens in server/plans.mjs through imagegen.py (the person's own image login);
 // none of this spends Meshy credits.
 import { randomBytes } from 'node:crypto'
-import { card, roster, is3d, CLOSEUP_RULE } from './plan.mjs'
+import { card, roster, is3d, sprites, CLOSEUP_RULE } from './plan.mjs'
 import { systemsAsk } from './systems.mjs'
+import { keyFor, keyGround } from './keycolor.mjs'
 
 const clean = (v, n = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const fail = (msg, status = 400) => Object.assign(new Error(msg), { status })
 export const newId = prefix => `${prefix}-${randomBytes(4).toString('hex')}`
 
 export const SHEET_KINDS = ['cast', 'weapons', 'enemies']
+// the sheets and shots this plan's family draws (engine/planshape.mjs); the action RPG's by default
+export const sheetKinds = plan => plan.art?.sheets || SHEET_KINDS
+export const shotsOf = plan => plan.art?.shots || SHOTS
+// which cut-outs each family sheet explores
+const SHEET_SPRITES = { units: ['unit'], buildings: ['building'], terrain: ['tile'], icons: ['resource', 'hud'], cast: ['character', 'unit', 'portrait'], enemies: ['enemy'], tiles: ['tile', 'pickup'], pieces: ['piece'], board: ['tile', 'hud'], cards: ['card'], opponents: ['opponent'], places: ['tile'], items: ['item'], vehicles: ['vehicle'], tracks: ['tile'], scenes: ['tile'] }
 export const SHOTS = [
   ['combat', 'mid-combat, the lead launching an enemy into the air, a combo counter and style rank on the HUD'],
   ['boss', 'a boss fight, the boss towering over the party, its health bar across the top'],
@@ -36,10 +42,11 @@ const notesLine = sheet => {
 
 // ---------- sketch sheets: one medium picture, a numbered 5 × 4 grid of rough options
 export function sheetPrompt(plan, kind, prev) {
-  if (!SHEET_KINDS.includes(kind)) throw fail('no such sheet kind')
+  if (!sheetKinds(plan).includes(kind)) throw fail('no such sheet kind')
   const g = prev?.grid || [5, 4]
   const n = g[0] * g[1]
-  const what = {
+  const theirs = (plan.art?.sprites || []).filter(x => (SHEET_SPRITES[kind] || []).includes(x.kind)).map(x => clean(x.what, 100))
+  const what = plan.shape && plan.shape.family !== 'action' ? `${n} rough design options for the ${kind} of this ${plan.shape.label}${theirs.length ? `: ${theirs.join('; ')}` : ''}. Seen as in the game (${clean(plan.shape.view, 80).toLowerCase()}), each a distinct silhouette` : {
     cast: `${n} different character designs for this cast: ${castLine(plan) || clean(card(plan, 'cast')?.body.rule)}. Full body, front view, standing, each a distinct silhouette and outfit`,
     weapons: `${n} different weapon designs: ${[...new Set(roster(plan).map(r => clean(r.weapon)).filter(Boolean))].join(', ') || 'swords, guns and staves'}. Each weapon alone, side view, on plain ground`,
     enemies: `${n} different enemy designs: ${clean(card(plan, 'enemies')?.body.tiers) || 'minions, elites, bosses'}. Full body, front view, growing in size from minions to bosses`
@@ -66,12 +73,12 @@ export function addSheet(plan, kind) {
 
 // ---------- mock screenshots: 4–5 in-game frames from the picks
 export function mockPrompt(plan, shot) {
-  const s = SHOTS.find(x => x[0] === shot)
+  const s = shotsOf(plan).find(x => x[0] === shot)
   if (!s) throw fail('no such shot')
   const world = card(plan, 'world')?.body || {}
   return [
-    `An in-game screenshot of ${clean(plan.title, 80)}, ${is3d(plan) ? 'a 3D game' : 'a 2D game'}, ${clean(world.camera) || 'third person'} camera: ${s[1]}.`,
-    `The cast: ${castLine(plan)}.`,
+    `An in-game screenshot of ${clean(plan.title, 80)}, ${is3d(plan) ? 'a 3D' : 'a 2D'} ${plan.shape?.label || 'game'}, ${clean(plan.shape?.view || world.camera) || 'third person'} camera: ${s[1]}.`,
+    roster(plan).length ? `The ${clean(card(plan, 'cast')?.name || 'cast').toLowerCase()}: ${castLine(plan)}.` : '',
     world.setting && `Setting: ${clean(world.setting)}.`,
     `Style: ${styleLine(plan)}. ${is3d(plan) ? 'Characters as toon-shaded 3D with an ink outline at gameplay distance, a painted sky behind the arena.' : ''}`,
     ...(plan.sheets || []).map(notesLine).filter(Boolean),
@@ -79,7 +86,7 @@ export function mockPrompt(plan, shot) {
   ].filter(Boolean).join(' ')
 }
 const sheetRefs = (plan, dir) => (plan.sheets || []).filter(s => s.state === 'done' && s.file && s.picks?.length).map(s => `${dir}/${s.file}`)
-export function addMocks(plan, dir, shots = SHOTS.map(s => s[0])) {
+export function addMocks(plan, dir, shots = shotsOf(plan).map(s => s[0])) {
   plan.mocks ||= []
   if (plan.mocks.some(m => m.state === 'painting')) throw fail('the mocks are being drawn', 409)
   const jobs = []
@@ -156,6 +163,7 @@ export function closeupPrompt(plan, r, which) {
 const fileName = name => clean(name, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'hero'
 export function addCloseups(plan, dir, { name, missing = false } = {}) {
   if (!plan.gate?.locked) throw fail('lock the plan first', 409)
+  if (plan.shape?.closeups === false) return []
   plan.build ||= { characters: [], props: [], animations: null }
   const cast = roster(plan).filter(r => !name || r.name === name)
   if (!cast.length) throw fail('no such character', 404)
@@ -176,6 +184,7 @@ export function addCloseups(plan, dir, { name, missing = false } = {}) {
 
 // Where a finished picture lands in the plan: the entry for a job id.
 export function entryFor(plan, list, id) {
+  if (list === 'sprites') return (plan.build?.sprites || []).find(x => x.id === id) || null
   if (list === 'closeups' || list === 'views') {
     for (const c of plan.build?.characters || []) for (const w of ['cutin', 'portrait', 'front', 'side', 'back']) if (c[w]?.id === id) return c[w]
     return null
@@ -185,7 +194,7 @@ export function entryFor(plan, list, id) {
 
 // A picture left painting by a server that stopped is shown as failed after a while.
 export function settleStale(plan, now = Date.now(), maxMs = 15 * 60 * 1000) {
-  const all = [...(plan.sheets || []), ...(plan.mocks || []), ...(plan.backdrops || []), ...(plan.build?.characters || []).flatMap(c => [c.cutin, c.portrait, c.front, c.side, c.back]).filter(Boolean)]
+  const all = [...(plan.sheets || []), ...(plan.mocks || []), ...(plan.backdrops || []), ...(plan.build?.sprites || []), ...(plan.build?.characters || []).flatMap(c => [c.cutin, c.portrait, c.front, c.side, c.back]).filter(Boolean)]
   for (const e of all) if (e.state === 'painting' && now - (e.started || 0) > maxMs) Object.assign(e, { state: 'failed', error: 'stopped' })
   // a model (Meshy: the mesh, then the rig) gets three times as long
   for (const c of plan.build?.characters || []) if (c.model?.state === 'making' && now - (c.model.started || 0) > maxMs * 3) Object.assign(c.model, { state: 'failed', error: 'stopped' })
@@ -201,7 +210,9 @@ export function artBrief(plan) {
     if (done(c.portrait)) files.push(`public/art/${c.slug}-portrait.png`)
   }
   for (const b of (plan.backdrops || []).filter(done)) files.push(`public/art/backdrops/${b.stage + 1}-${b.n}.png (${b.shape}, ${b.name})`)
-  return [CLOSEUP_RULE, files.length ? `The painted art in this build:\n${files.map(f => `- ${f}`).join('\n')}` : ''].filter(Boolean).join('\n\n')
+  for (const x of (plan.build?.sprites || []).filter(done)) files.push(`public/art/${x.slug}.png (${x.kind}: ${x.name}${x.kind === 'tile' ? '' : ', background keyed out'})`)
+  const rule = is3d(plan) ? CLOSEUP_RULE : `A 2D ${plan.shape?.label || 'game'}: draw every unit, building, piece and tile from the painted pictures in public/art/, seen ${clean(plan.shape?.view || 'as painted', 80).toLowerCase()}. Shapes drawn in code only where no picture exists.`
+  return [rule, files.length ? `The painted art in this build:\n${files.map(f => `- ${f}`).join('\n')}` : ''].filter(Boolean).join('\n\n')
 }
 
 // ---------- turnarounds (spec 21, Build): front from the cast sheet, then side and back drawn
@@ -210,7 +221,8 @@ export const VIEWS = ['front', 'side', 'back']
 export function turnaroundPrompt(plan, r, view) {
   const pose = { front: 'front view', side: 'side view, facing left, in profile', back: 'back view, seen from behind' }[view]
   return [
-    `A character turnaround picture: ${clean(r.name, 60)}, full body, ${pose}, A-pose (arms out and down at 45°, feet apart), orthographic, plain light grey background, nothing else in the picture, the whole figure inside the frame with a margin.`,
+    `A character turnaround picture: ${clean(r.name, 60)}, full body, ${pose}, ${plan.shape?.humanoid === false ? 'a neutral standing pose' : 'A-pose (arms out and down at 45°, feet apart)'}, orthographic, the whole figure inside the frame with a margin.`,
+    `${keyGround(card(plan, 'look')?.body.style, keyFor(`${r.look} ${card(plan, 'look')?.body.palette || ''}`))}.`,
     view === 'front' ? `Character: ${[r.role, r.look, r.weapon && `holding nothing; her ${r.weapon} is made separately`].filter(Boolean).map(x => clean(x, 120)).join(', ')}.` : 'The same character as the reference picture: the same face, hair, outfit, colours and proportions.',
     `Style: ${styleLine(plan)}. Clean flat colours and line art, no dramatic lighting, no shadows on the ground.`
   ].join(' ')
@@ -238,6 +250,38 @@ export function viewJob(plan, dir, r, view) {
   return { list: 'views', id, prompt: turnaroundPrompt(plan, r, view), quality: 'high', aspect: 'portrait', refs }
 }
 
+// ---------- 2D sprites (the art list of a 2D plan): each a cut-out on the chroma key, a tileset on its own.
+// In the "test one first" phase only the first is painted: one cheap picture to check the direction.
+const SPRITE_VIEW = { rts: 'seen from above at a three-quarter angle, as in a top-down strategy game, facing down-right', platformer: 'side view, facing right', sim: 'seen from above at a three-quarter angle', racing: 'seen from above at a three-quarter angle', puzzle: 'seen straight from above', card: 'flat, front on', narrative: 'waist-up, facing slightly to the side' }
+export function spritePrompt(plan, x) {
+  const look = card(plan, 'look')?.body || {}
+  const where = `for ${clean(plan.title, 80)}, a ${plan.engine?.target === 'godot' ? 'Godot 4 ' : ''}${plan.shape?.label || '2D game'}`
+  if (x.kind === 'tile') return [`A seamless square game tileset ${where}: ${clean(x.what, 200)}, ${SPRITE_VIEW[plan.shape?.family] || 'seen from above'}, laid out in an even grid, each tile edge to edge and tiling without seams, no characters, no text.`, `Style: ${styleLine(plan)}.`].join(' ')
+  const view = x.kind === 'resource' || x.kind === 'hud' ? 'flat, front on, as a game icon' : SPRITE_VIEW[plan.shape?.family] || 'side view'
+  return [
+    `A single 2D game sprite ${where}: ${clean(x.what, 200)}. ${view}, the whole thing inside the frame with a margin, readable at small size.`,
+    `${keyGround(look.style, keyFor(`${x.what} ${look.palette || ''}`))}.`,
+    `Style: ${styleLine(plan)}. Clean shapes and flat colour; no text, no frame.`
+  ].join(' ')
+}
+export function spriteJobs(plan, dir, { missing = true } = {}) {
+  plan.build ||= { characters: [], props: [], animations: null }
+  plan.build.sprites ||= []
+  const refs = (plan.sheets || []).filter(s => s.state === 'done' && s.file && s.picks?.length).map(s => `${dir}/${s.file}`)
+  let list = sprites(plan)
+  if (plan.gate?.phase === 'first') list = list.slice(0, 1)
+  const jobs = []
+  for (const x of list) {
+    let e = plan.build.sprites.find(y => y.name === x.name)
+    if (!e) { e = { name: x.name, kind: x.kind, slug: `${x.kind}-${fileName(x.name)}` }; plan.build.sprites.push(e) }
+    if (e.state === 'painting' || (missing && e.state === 'done')) continue
+    const prompt = spritePrompt(plan, x)
+    Object.assign(e, { id: newId('t'), state: 'painting', started: Date.now(), error: null })
+    jobs.push({ list: 'sprites', id: e.id, kind: x.kind, name: x.name, prompt, quality: 'high', aspect: x.kind === 'tile' || x.kind === 'hud' ? 'landscape' : 'square', refs })
+  }
+  return jobs
+}
+
 // ---------- the whole game brief: the cards, the switched-on systems, the art rule and files
 export function gameBrief(plan) {
   const lines = plan.cards.map(c => {
@@ -245,5 +289,7 @@ export function gameBrief(plan) {
     if (c.id === 'cast') b.roster = (b.roster || []).map(r => [r.name, r.role, r.look, r.weapon].filter(Boolean).join(' / ')).join('; ')
     return `${c.name}: ${Object.entries(b).filter(([, v]) => v && String(v).trim()).map(([k, v]) => `${k} ${String(v).trim()}`).join('; ')}`
   })
-  return [`Make the game "${clean(plan.title, 80)}"${plan.idea ? `: ${clean(plan.idea, 400)}` : ''}.`, `The plan:\n${lines.join('\n')}`, systemsAsk(plan), artBrief(plan)].filter(Boolean).join('\n\n')
+  const engine = plan.engine?.target === 'godot' ? 'Engine: Godot 4. Build it as a Godot 4 project (GDScript, scenes in res://), not a web page.' : plan.engine?.target && plan.engine.target !== 'web' ? `Engine asked for: ${plan.engine.label}.` : ''
+  const kind = plan.shape ? `Kind: a ${plan.shape.size === 'normal' ? '' : `${plan.shape.size} `}${plan.shape.label}, ${is3d(plan) ? '3D' : '2D'}, camera ${clean(plan.shape.view, 120).toLowerCase()}.` : ''
+  return [`Make the game "${clean(plan.title, 80)}"${plan.idea ? `: ${clean(plan.idea, 400)}` : ''}.`, [kind, engine].filter(Boolean).join('\n'), `The plan:\n${lines.join('\n')}`, systemsAsk(plan), artBrief(plan)].filter(Boolean).join('\n\n')
 }

@@ -4,15 +4,25 @@
 import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { join, extname } from 'node:path'
-import { planStore, planView, editCard, setSystems, lockPlan, assertLocked, pickCell, roster, PLAN_ID } from '../engine/plan.mjs'
-import { addSheet, addMocks, lockStyle, addBackdrops, addCloseups, entryFor, settleStale, buildScope, charEntry, viewJob, VIEWS, gameBrief } from '../engine/planart.mjs'
+import { planStore, planView, editCard, setSystems, lockPlan, assertLocked, pickCell, roster, is3d, replan, PLAN_ID } from '../engine/plan.mjs'
+import { addSheet, addMocks, lockStyle, addBackdrops, addCloseups, entryFor, settleStale, buildScope, charEntry, viewJob, spriteJobs, VIEWS, gameBrief } from '../engine/planart.mjs'
+import { askShape } from '../engine/planshape.mjs'
 import { planTemplate, remixPlan, templateStore, TEMPLATE_ID } from '../engine/template.mjs'
 
 // paint({ prompt, quality: 'medium' | 'high', aspect, crop, refs }) -> { ok, path, error }: one picture
 // through the person's own image login (imagegen.py). paint.ready() says whether one is signed in.
 // make.character(opts) is engine/meshy.mjs makeCharacter (spends Meshy credits); make.key() the key or ''.
-export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onPicture = null, builtInTemplates = [] }) {
+// planner() -> { provider, model } or null: reads the idea's genre family (engine/planshape.mjs askShape);
+// without one the plan is shaped from the tables alone. godot() says whether Godot 4 is on this machine.
+export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onPicture = null, builtInTemplates = [], planner = null, godot = () => undefined }) {
   const store = planStore(join(dataDir, 'plans'))
+  const env = () => ({ godot: godot() })
+  // the planner's reading of the idea, never longer than 40 s and never a reason to fail
+  const hintFor = async (idea, answers) => {
+    const p = planner?.()
+    if (!p?.provider || !p?.model || !String(idea || '').trim()) return null
+    return askShape({ ...p, idea, answers, signal: AbortSignal.timeout(40000) }).catch(() => null)
+  }
   const templates = templateStore(join(dataDir, 'templates'), { builtIn: builtInTemplates })
   const files = id => join(store.dir, id)
   const view = plan => planView(settleStale(plan))
@@ -61,6 +71,17 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     building.add(planId)
     try {
       const dir = files(planId)
+      // a 2D plan: its art list, each a cut-out on the chroma key; no turnarounds, no Meshy
+      if (!is3d(store.get(planId))) {
+        const jobs = step(planId, p => spriteJobs(p, dir))
+        for (let i = 0; i < jobs.length; i += 2) await Promise.all(jobs.slice(i, i + 2).map(j => paintNow(planId, j)))
+        step(planId, p => {
+          p.build.state = 'idle'
+          const first = p.build.sprites?.[0]
+          if (p.gate?.phase === 'first' && first?.state === 'done') p.gate = { locked: false, testFirst: false, price: null, lockedAt: null, phase: null, tested: first.name }
+        })
+        return
+      }
       for (const r of buildScope(store.get(planId))) {
         const c0 = step(planId, p => { const c = charEntry(p, r); if (c.state !== 'done') c.state = 'building'; return { ...c } })
         if (c0.state === 'done') continue
@@ -162,8 +183,10 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     if (url.pathname === '/api/plans') {
       if (req.method === 'GET') { json(res, 200, { plans: store.list() }); return true }
       if (req.method === 'POST') {
-        body(req).then(input => {
-          const plan = store.create({ idea: input.idea, answers: input.answers && typeof input.answers === 'object' ? input.answers : {}, title: input.title })
+        body(req).then(async input => {
+          const answers = input.answers && typeof input.answers === 'object' ? input.answers : {}
+          const hint = await hintFor(input.idea, answers)
+          const plan = store.create({ idea: input.idea, answers, title: input.title }, env(), hint)
           json(res, 200, view(plan))
         }).catch(err => fail(res, err))
         return true
@@ -192,6 +215,8 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     body(req).then(async input => {
       try {
         const ready = PAINTS.has(sub) ? !!(paint && await paint.ready()) : true
+        // "this is not what I asked for": the planner reads the idea again with the note, then the plan is re-shaped in place
+        const hint = sub === 'replan' ? await hintFor(`${store.get(id)?.idea || ''}. ${String(input.note || '').slice(0, 300)}`, store.get(id)?.given || {}) : null
         const noPainter = () => Object.assign(new Error('sign in an image model first'), { status: 503 })
         if (!ready && sub !== 'build') throw noPainter()
         // read again after every wait: a picture may have landed meanwhile; nothing below awaits
@@ -199,7 +224,12 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
         let after = null
         if (sub === 'card') editCard(plan, String(input.card || ''), input.body || {})
         else if (sub === 'systems') setSystems(plan, input || {})
-        else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) plan.title = t }
+        else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) { plan.title = t; plan.titleSet = true } }
+        else if (sub === 'replan') {
+          if (building.has(plan.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
+          queues.delete(plan.id)
+          replan(plan, { note: String(input.note || '') }, env(), hint)
+        }
         else if (sub === 'pick') pickCell(plan, input)
         else if (sub === 'template') {
           const t = templates.save(planTemplate(plan, { name: input.name }), files(plan.id))
