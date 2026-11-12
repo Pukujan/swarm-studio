@@ -53,7 +53,7 @@ class StandIn(BaseHTTPRequestHandler):
     def do_GET(self):
         s, base = self.state, f"http://127.0.0.1:{self.server.server_port}"
         if self.path == "/api/feed/me":
-            return self._send(200, {"ok": True, "viewer": {"name": "Comet Otter", "handle": "comet-otter-42", "credits": 100}, "identities": StandIn.state.get("identities", [{"provider": "hermes"}])}) if self._authed() \
+            return self._send(200, {"ok": True, "viewer": {"name": "Comet Otter", "handle": "comet-otter-42", "credits": 100, "kind": StandIn.state.get("kind", "member")}, "identities": StandIn.state.get("identities", [{"provider": "hermes"}])}) if self._authed() \
                 else self._send(401, {"ok": False, "code": "UNAUTHORIZED", "message": "Sign in."})
         if self.path == "/api/feed/builds/b_original01/bundle":
             return self._send(200, {"ok": True, "id": "b_original01", "title": "Tidebreak", "prompt": "a tide game", "maker": "maya", "bundleUrl": f"{base}/zip"})
@@ -146,6 +146,36 @@ class FeedClientTest(unittest.TestCase):
         self.assertNotIn("sfp_test", feed.connect([]))  # the token is never shown
         self.assertIn("Forgot", feed.connect(["forget"]))
         self.assertNotIn("token", feed.load())
+
+    def test_sign_in_goes_through_the_provider_before_the_code(self):
+        opened = []
+        feed._open, was = (lambda url: opened.append(url) or True), feed._open
+        try:
+            self.assertEqual(feed.sign_in("google"), {"ok": True})
+        finally:
+            feed._open = was
+        base = os.environ["SWARM_FEED_URL"]
+        self.assertEqual(opened, [f"{base}/auth/google?next=%2Flink%3Fcode%3DWXYZ-2345"])
+        self.assertEqual(feed.load()["pending"]["provider"], "google")
+        self.assertFalse(feed.sign_in("myspace")["ok"])
+        self.assertEqual(feed.sign_in_step("check"), {"ok": True})
+        self.assertNotIn("token", feed.load())
+        StandIn.state["approved"] = True
+        feed.sign_in_step("check")
+        cfg = feed.load()
+        self.assertEqual(cfg["token"], "sfp_test")
+        self.assertFalse(cfg["guest"])
+
+    def test_a_guest_link_is_marked_and_a_sign_in_replaces_it(self):
+        StandIn.state["kind"] = "guest"
+        self._connect()
+        self.assertTrue(feed.load()["guest"])
+        StandIn.state.update(kind="member", approved=False)
+        out = feed.sign_in("github")
+        self.assertIn("/auth/github?next=", out["message"])  # no browser here: the link to open
+        self.assertNotIn("token", feed.load())
+        self.assertEqual(feed.sign_in_step("cancel"), {"ok": True})
+        self.assertNotIn("pending", feed.load())
 
     def test_post_needs_connect_and_a_public_link(self):
         run = {"id": "2026-11-09T10-00-00-000Z", "title": "Lantern", "brief": "a lantern festival", "sites": {}}

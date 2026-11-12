@@ -174,6 +174,7 @@ const setup = setupRoutes({
   roles: () => ({ planner: { ...models.planner, model: modelFor('planner') }, worker: { ...models.worker, model: modelFor('worker') } }),
   call: (p, model) => streamChat({ baseUrl: p.baseUrl.replace(/\/$/, ''), apiKey: p.apiKey }, { trace: { kind: 'setup-test' }, model, maxTokens: 16, temperature: 0, messages: [{ role: 'user', content: 'Say ok' }], signal: AbortSignal.timeout(30000) }),
   image: async () => ({ providers: await loadImageProviders(), imagePick: picks.image || null, pick: picks.pictures || null }),
+  feed: PY ? call => pyCommand(call, 60000) : null,
   setPictures: mode => { if (mode) picks.pictures = mode; else delete picks.pictures; try { writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {} }
 })
 // What one build does for pictures: its own `pictures`, else the Setup pick, else the default
