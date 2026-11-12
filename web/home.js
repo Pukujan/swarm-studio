@@ -671,15 +671,24 @@ export function makeHome({ sw, C, root }) {
     { k: 'site', icon: 'site', label: 'Website' },
     { k: 'app', icon: 'code', label: 'App', only: ['app', 'data', 'deploy'], games: 'none' },
     { k: 'game', icon: 'game', label: 'Game', only: ['app', 'games', 'deploy'], games: 'big' },
-    { k: 'video', icon: 'film', label: 'Video', only: ['review', 'video'], games: 'none' }
+    { k: 'video', icon: 'film', label: 'Video', only: ['review', 'video'], games: 'none' },
+    // spec 37: a brand on its own (its Lock is the end), and a deck once its kit registers itself
+    { k: 'brand', icon: 'sliders', label: 'Brand', studioOnly: true },
+    { k: 'deck', icon: 'layers', label: 'Deck', studioOnly: true, kit: true }
   ]
-  let make = MAKES.find(m => m.k === store.get('home.make', 'site')) || MAKES[0]
+  // a kind whose kit has not landed yet is not shown (docs/ux/RULES.md rule 6)
+  const offered = () => MAKES.filter(m => !m.kit || window.swarmKits?.[m.k])
+  let make = offered().find(m => m.k === store.get('home.make', 'site')) || MAKES[0]
   const kindBtn = $('.hm-kind')
   const showKind = () => { kindBtn.innerHTML = `${ic(make.icon, 16)}<span>${make.label}</span>${ic('chd', 14)}` }
   showKind()
   if (hosted()) kindBtn.hidden = true  // the hosted studio makes websites only
-  // the kind menu also holds the one Grill me switch: on, a prompt gets the questions it has not answered
-  let grillOn = store.get('home.grill', true)
+  // Studio first or Build now (spec 37): remembered per kind; three Build now in a row and the question
+  // stops for that kind, with Studio first in the kind menu as the way back. The Studio's depth (what
+  // Grill me was) is Light or Thorough.
+  const modeOf = k => store.get(`home.mode.${k}`, null)
+  const nowRun = k => Number(store.get(`home.now.${k}`, 0)) || 0
+  let depth = store.get('home.depth', 'light') === 'thorough' ? 'thorough' : 'light'
   // and Pictures: the same pick as Setup → Pictures (POST /api/setup), so builds can be drawn in SVG
   // without the image model. Not for a Game: its art has its own steps (the Plan board).
   const PICS = [{ k: 'painted', icon: 'image', label: 'Painted' }, { k: 'stock', icon: 'search', label: 'Stock photos' }, { k: 'drawn', icon: 'pencil', label: 'Drawn' }]
@@ -688,10 +697,15 @@ export function makeHome({ sw, C, root }) {
   if (!hosted()) loadPics()
   const picItems = () => PICS.map(p => ({ ...p, k: `pic:${p.k}`, on: picMode === p.k, run: () => { picMode = p.k; post('/api/setup', { pictures: p.k }).catch(err => toast(`<span>${esc(err.message)}</span>`)); input.focus() } }))
   kindBtn.onclick = () => { if (!hosted()) loadPics(); showKind(); return showMenu([
-    ...MAKES.map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })),
+    ...offered().map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); input.focus() } })),
     '-',
-    ...(make.k === 'game' ? [] : [{ k: 'pics', icon: 'image', label: 'Pictures', sub: b => subMenu(b, picItems()) }]),
-    { k: 'grill', icon: 'msg', label: 'Grill me', on: grillOn, run: () => { grillOn = !grillOn; store.set('home.grill', grillOn); input.focus() } }
+    ...(make.k === 'game' || make.studioOnly ? [] : [{ k: 'pics', icon: 'image', label: 'Pictures', sub: b => subMenu(b, picItems()) }]),
+    // the quiet way back once the question stopped for this kind
+    ...(!make.studioOnly && nowRun(make.k) >= 3 ? [{ k: 'studio', icon: 'grid', label: 'Studio first', run: () => {
+      store.set(`home.now.${make.k}`, 0); store.set(`home.mode.${make.k}`, 'studio')
+      const text = input.value.trim()
+      if (text) studioFirst(text); else input.focus()
+    } }] : [])
   ], kindBtn) }
 
   // what the Make box asks the server for once: the showcases and the interview (engine/intake.mjs)
@@ -735,14 +749,64 @@ export function makeHome({ sw, C, root }) {
     // a game is planned before anything costly is made (spec 21), by talking it through with the
     // planner in the left chat while the Plan board takes shape beside it (spec 27)
     if (make.k === 'game' && !hosted()) { closePop(); input.value = ''; return C.talkGame({ text }) }
-    // "don't build yet, let's talk", "grill me first" or a question for the crew: the planner reads
-    // the prompt (engine/talkplan.mjs) and a talk opens instead of a build; not sure, one choice
-    const go = () => (grillOn ? guide(text) : confirmBuild(text))
-    const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text, '', guideKind())
-    if (read === 'talk') return talkFirst(text)
-    if (read === 'unsure') return askTalk(text, go)
-    // Website, App and Video: the questions the prompt has not answered yet (spec 6); none, it builds
-    go()
+    G.sheet = false
+    if (hosted()) return confirmBuild(text)
+    // a brand (or a deck) is made in the Studio only
+    if (make.studioOnly) return studioFirst(text)
+    // three Build now in a row: the question has stopped for this kind (the kind menu has the way back)
+    if (nowRun(make.k) >= 3) return buildNow(text)
+    // the planner reads the prompt (engine/talkplan.mjs): "let's talk first" or a vague idea leans Studio
+    // (at most 2.5 s: then the words alone decide which choice is pre-selected)
+    const read = !sw.readTalk ? 'build' : await Promise.race([Promise.resolve().then(() => sw.readTalk(text, '', guideKind())).catch(() => 'build'), new Promise(r => setTimeout(() => r('build'), 2500))])
+    askStart(text, modeOf(make.k) || (studioFits(text, read) ? 'studio' : 'now'))
+  }
+
+  // ---------- Studio first or Build now (spec 37)
+  // the Studio fits a game, a vague idea, or one where the look matters
+  const LOOKS = /\b(look|feel|vibe|mood|brand(ing)?|style|aesthetic|colou?rs?|logo|palette|typography|font|premium|elegant|beautiful|moody|minimal|bold)\b/i
+  function studioFits(text, read = 'build') {
+    if (make.k === 'game' || read === 'talk') return true
+    const words = text.split(/\s+/).filter(Boolean).length
+    return words < 8 || read === 'unsure' && words < 20 || LOOKS.test(text)
+  }
+  function askStart(text, pick) {
+    openPop('grill start', `<h3>Studio first?</h3>
+      <div class="hm-start" role="group" aria-label="How to start">
+        <button type="button" class="hm-choice${pick === 'studio' ? ' pri' : ''}" data-studio>${ic('grid', 20)}<span>Studio first</span></button>
+        <button type="button" class="hm-choice${pick === 'now' ? ' pri' : ''}" data-now>${ic('zap', 20)}<span>Build now</span></button>
+      </div>
+      <div class="seg hm-depth" role="group" aria-label="Depth"${pick === 'studio' ? '' : ' hidden'}>
+        <button type="button" data-d="light" class="${depth === 'light' ? 'on' : ''}">Light</button>
+        <button type="button" data-d="thorough" class="${depth === 'thorough' ? 'on' : ''}">Thorough</button>
+      </div>`)
+    const studio = pop.querySelector('[data-studio]'), now = pop.querySelector('[data-now]'), seg = pop.querySelector('.hm-depth')
+    studio.onclick = () => { store.set(`home.mode.${make.k}`, 'studio'); store.set(`home.now.${make.k}`, 0); studioFirst(text) }
+    now.onclick = () => { store.set(`home.mode.${make.k}`, 'now'); store.set(`home.now.${make.k}`, nowRun(make.k) + 1); buildNow(text) }
+    // the depth shows while Studio first is the choice in focus
+    studio.addEventListener('focus', () => { seg.hidden = false })
+    now.addEventListener('focus', () => { seg.hidden = true })
+    for (const b of seg.querySelectorAll('button')) b.onclick = () => {
+      depth = b.dataset.d
+      store.set('home.depth', depth)
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b))
+      studio.focus({ preventScroll: true })
+    }
+    ;(pick === 'studio' ? studio : now).focus({ preventScroll: true })
+  }
+  function buildNow(text) {
+    closePop()
+    // a game skipped its Plan board; the talk's Build still starts it (nothing builds without a press)
+    confirmBuild(text)
+  }
+  // the Studio, until the scaffold (spec 37, slice 2) opens it: the game's Plan board, the brand sheet
+  // beside the talk, or the talk; Thorough asks the questions the prompt has not answered first
+  function studioFirst(text) {
+    closePop()
+    if (make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
+    if (make.k === 'brand') { input.value = ''; return window.swarmCosmos?.brand?.({ brief: text, kind: 'site' }) }
+    if (make.k === 'video') return talkFirst(text)
+    if (depth === 'thorough') { G.sheet = true; return guide(text) }
+    confirmBuild(text, undefined, {}, null, true)
   }
 
   // ---------- talk first: a new project with nothing built opens in the Design deck, and Hermia
@@ -771,13 +835,6 @@ export function makeHome({ sw, C, root }) {
     C.go('station', 'canvas')
     C.chat(true)
     sw.talk.start({ text, kind: guideKind(), blank: true, build: (brief, chat) => start(brief, run, sets, chat) })
-  }
-  function askTalk(text, go) {
-    openPop('grill', `<h3>Build now or talk first?</h3>
-      <div class="hm-gfoot"><span></span><span><button type="button" class="btn ghost" data-first>Talk first</button><button type="button" class="btn pri" data-now>Build now</button></span></div>`)
-    pop.querySelector('[data-now]').onclick = () => { closePop(); go() }
-    pop.querySelector('[data-first]').onclick = () => talkFirst(text)
-    pop.querySelector('[data-now]').focus({ preventScroll: true })
   }
   // an answer in your own words that is a question, or says not to build yet, is not brief text:
   // the talk opens with the prompt, the answers so far and those words (null when it is an answer)
@@ -837,7 +894,7 @@ export function makeHome({ sw, C, root }) {
   async function guide(text) {
     const d = await intake()
     const qs = guidePending(d.guides?.[guideKind()] || [], text)
-    if (!qs.length) return confirmBuild(text)
+    if (!qs.length) return confirmBuild(text, undefined, {}, null, !!G.sheet)
     Object.assign(G, { text, qs, i: 0, answers: {}, plan: false, guided: true })
     drawGrill()
   }
@@ -860,7 +917,7 @@ export function makeHome({ sw, C, root }) {
     return out
   }
   // guide:end
-  const G = { text: '', qs: [], i: 0, answers: {}, plan: false, guided: false }
+  const G = { text: '', qs: [], i: 0, answers: {}, plan: false, guided: false, sheet: false }
   async function grill(text) {
     const d = await intake()
     const plan = make.k === 'game' && d.plan?.length && !hosted()
@@ -901,9 +958,10 @@ export function makeHome({ sw, C, root }) {
     openPop('grill', `<div class="hm-dots" aria-label="The brief">${G.qs.map(() => '<i class="done"></i>').join('')}<i class="on"></i></div>
       <h3>The brief</h3>
       <textarea class="hm-free hm-brief" aria-label="The brief" maxlength="4000" rows="4">${esc(text)}</textarea>
-      <div class="hm-gfoot"><button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button><span>${!hosted() && (guideKind() === 'site' || guideKind() === 'app') ? '<button type="button" class="btn ghost" data-sheet>Brand sheet</button>' : ''}<button type="button" class="btn ghost" data-talk>Keep talking</button><button type="button" class="btn pri" data-go>${ic('up', 16)}Build</button></span></div>`)
+      <div class="hm-gfoot"><button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button><span>${!G.sheet && !hosted() && (guideKind() === 'site' || guideKind() === 'app') ? '<button type="button" class="btn ghost" data-sheet>Brand sheet</button>' : ''}<button type="button" class="btn ghost" data-talk>Keep talking</button><button type="button" class="btn pri" data-go>${G.sheet ? `${ic('chr', 16)}Brand sheet` : `${ic('up', 16)}Build`}</button></span></div>`)
     const box = pop.querySelector('.hm-brief')
-    const go = () => { const t = box.value.trim(); if (t) build(t) }
+    // in the Studio (spec 37) the brief goes on to the brand sheet; Build is the talk's, after it
+    const go = () => { const t = box.value.trim(); if (t) G.sheet ? confirmBuild(t, undefined, guideSets(G.answers, G.qs), null, true) : build(t) }
     pop.querySelector('[data-go]').onclick = go
     pop.querySelector('[data-talk]').onclick = () => { const t = box.value.trim(); if (t) talkFirst(t) }
     // the brand sheet first (spec 31): the brief goes to the chat, the sheet opens beside it
