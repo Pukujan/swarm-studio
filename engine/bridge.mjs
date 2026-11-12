@@ -1,0 +1,83 @@
+// The Hermes bridge, the server's side (docs/specs/33-hermes-bridge.md). A Hermes process with the plugin
+// loaded runs a small loopback server (bridge.py) and attaches it here: POST /api/hermes/attach
+// {url, token, pid}, again every 15 s. Pictures and clips (and, later, model and MCP calls) are asked of
+// the newest live bridge, which does them with Hermes's own tools, so the provider keys stay in Hermes.
+//
+// Up to 4 bridges are kept, newest first. One silent for 45 s, or one that refuses a connection, is
+// dropped, and the call moves on to the next one.
+
+const KEEP = 4
+const SILENT_MS = 45000
+
+export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
+  let bridges = []
+  const live = () => (bridges = bridges.filter(b => now() - b.seen < SILENT_MS))
+
+  function attach({ url, token, pid } = {}) {
+    if (typeof url !== 'string' || !/^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(url)) return { ok: false, error: 'a loopback bridge address is needed' }
+    if (typeof token !== 'string' || token.length < 16) return { ok: false, error: 'a bridge token is needed' }
+    bridges = [{ url, token, pid: Number(pid) || null, seen: now() }, ...bridges.filter(b => b.url !== url)].slice(0, KEEP)
+    return { ok: true }
+  }
+
+  // {ok:false, error, absent:true} when no bridge answers; otherwise the bridge's own JSON answer
+  async function call(path, body, timeoutMs = 300000) {
+    for (const b of live().slice()) {
+      try {
+        const res = await fetcher(b.url + path, {
+          method: body === undefined ? 'GET' : 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${b.token}` },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: AbortSignal.timeout(timeoutMs + 15000)
+        })
+        if (res.status === 403) { drop(b); continue } // a bridge from a process that has gone and been replaced
+        return await res.json()
+      } catch (err) {
+        if (refused(err)) { drop(b); continue }
+        return { ok: false, error: String(err?.message || err).slice(0, 200) }
+      }
+    }
+    return { ok: false, absent: true, error: 'Hermes is not open: open Hermes, or run `hermes swarm`, to use its picture and clip tools' }
+  }
+  const drop = b => { bridges = bridges.filter(x => x !== b) }
+  const refused = err => /ECONNREFUSED|ECONNRESET|EHOSTUNREACH|fetch failed/i.test(String(err?.cause?.code || err?.code || err?.message || ''))
+
+  return {
+    attach,
+    call,
+    // for /api/state and the canvas: whether Hermes is there, never a token or an address
+    status: () => ({ attached: live().length > 0, pids: live().map(b => b.pid).filter(Boolean) })
+  }
+}
+
+// imagegen.py's old command line (--provider --model --aspect --ref --edit --crop, then the prompt) as the
+// bridge's /image body. The provider and the model are Hermes's own choice now, so those two are dropped.
+export function imageBody(args) {
+  const out = { refs: [], edit: false, aspect: 'landscape', crop: '', prompt: '' }
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--ref') out.refs.push(String(args[++i] || ''))
+    else if (a === '--edit') out.edit = true
+    else if (a === '--aspect') out.aspect = String(args[++i] || 'landscape')
+    else if (a === '--crop') out.crop = String(args[++i] || '')
+    else if (a === '--provider' || a === '--model') i++
+    else out.prompt = String(a)
+  }
+  out.refs = out.refs.filter(Boolean)
+  return out
+}
+
+// videogen.py's old command line (--provider --model --image --seconds --aspect --out, then the prompt)
+export function videoBody(args) {
+  const out = { image: '', seconds: 4, aspect: '16:9', out: '', prompt: '' }
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--image') out.image = String(args[++i] || '')
+    else if (a === '--seconds') out.seconds = Number(args[++i]) || 4
+    else if (a === '--aspect') out.aspect = String(args[++i] || '16:9')
+    else if (a === '--out') out.out = String(args[++i] || '')
+    else if (a === '--provider' || a === '--model') i++
+    else out.prompt = String(a)
+  }
+  return out
+}
