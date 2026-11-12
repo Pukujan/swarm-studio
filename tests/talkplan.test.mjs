@@ -75,11 +75,10 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   const home = readFileSync(new URL('../web/home.js', import.meta.url), 'utf8')
   const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
   const project = readFileSync(new URL('../web/project.js', import.meta.url), 'utf8')
-  // the Make box reads the prompt before the question (spec 37), and the reading pre-selects Studio first
-  // or Build now: "let's talk first" or a vague idea leans Studio
-  assert.match(home, /const read = [^\n]*sw\.readTalk\(text, '', guideKind\(\)\)[^\n]*\n\s*askStart\(text, modeOf\(make\.k\) \|\| \(studioFits\(text, read\) \? 'studio' : 'now'\)\)/)
-  assert.match(home, /if \(make\.k === 'game' \|\| read === 'talk'\) return true/)
-  assert.match(home, /<span>Studio first<\/span>[\s\S]*<span>Build now<\/span>/)
+  // Make opens its menu at once (spec 37): the last way picked for the kind, else the words, pre-select
+  // Studio or Build now; a vague idea or one about the look leans Studio
+  assert.match(home, /const pick = modeOf\(make\.k\) \|\| \(text && !studioFits\(text\) \? 'now' : 'studio'\)/)
+  assert.match(home, /label: 'Studio'[\s\S]*label: 'Build now'/)
   // an answer typed in your own words is checked before it becomes brief text (Next and Just build)
   assert.equal((home.match(/if \(await answerTalks\(v, q\)\) return/g) || []).length, 2)
   // the brief step has Keep talking beside Build
@@ -316,7 +315,7 @@ test('nothing changed: a question after the spec gets an answer, not the spec ag
 
 test('the web side: a game idea opens the talk beside a draft board, and Lock is the chat\'s', () => {
   const read = f => readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8')
-  assert.match(read('home.js'), /make\.k === 'game' && !hosted\(\)\) \{ closePop\(\); input\.value = ''; return C\.talkGame\(\{ text \}\) \}/)
+  assert.match(read('home.js'), /if \(make\.k === 'game'\) \{ input\.value = ''; return C\.talkGame\(\{ text \}\) \}/)
   assert.match(read('home.js'), /chat\.kind === 'game'\) return C\.talkGame\(/)
   const canvas = read('canvas.js')
   assert.match(canvas, /if \(talk\.kind === 'game'\) return gameSay\(\{ said: text \}\)/)
