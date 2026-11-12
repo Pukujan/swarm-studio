@@ -9,7 +9,7 @@
 // The model: --model, else SWARM_REVIEWER_MODEL / SWARM_STUDIO_REVIEWER_MODEL, else the studio's own
 // pick in <data dir>/models.json, else ali/qwen3.8-flash (what the review step has been using), with
 // the review step's fallbacks when a route is busy. The key: SWARM_REVIEWER_API_KEY, SWARM_API_KEY or
-// HERMES_CUSTOM_INFERHUB_API_KEY, read from the environment or from ~/.hermes/.env. It is never printed.
+// SWARM_STUDIO_API_KEY, from the environment only (never Hermes's own .env or provider keys). It is never printed.
 // Playwright as in scripts/ui-check.mjs. Exits 1 only when it could not review; the issues are advice.
 import { createRequire } from 'node:module'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -24,14 +24,9 @@ const ONLY = (arg('only', '') || '').split(',').filter(Boolean)
 let RUN = arg('run', process.env.UI_RUN || '')
 
 // ---------- the model and its key, like the server's reviewer role
-function dotenv(file) {
-  try {
-    return Object.fromEntries(readFileSync(file, 'utf8').split('\n').map(l => l.match(/^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*)\s*$/)).filter(Boolean).map(m => [m[1], m[2].replace(/^(['"])(.*)\1$/, '$2')]))
-  } catch { return {} }
-}
-const env = { ...dotenv(join(process.env.HERMES_HOME || join(homedir(), '.hermes'), '.env')), ...process.env }
-const apiKey = env.SWARM_REVIEWER_API_KEY || env.SWARM_API_KEY || env.HERMES_CUSTOM_INFERHUB_API_KEY || env.SWARM_STUDIO_API_KEY
-if (!apiKey) { console.error('ui-review: no API key (SWARM_API_KEY or HERMES_CUSTOM_INFERHUB_API_KEY, in the environment or ~/.hermes/.env)'); process.exit(1) }
+const env = process.env
+const apiKey = env.SWARM_REVIEWER_API_KEY || env.SWARM_API_KEY || env.SWARM_STUDIO_API_KEY
+if (!apiKey) { console.error('ui-review: no API key (set SWARM_API_KEY or SWARM_STUDIO_API_KEY in the environment)'); process.exit(1) }
 const provider = { baseUrl: (env.SWARM_REVIEWER_BASE_URL || env.SWARM_BASE_URL || 'https://api.inferhub.dev/v1').replace(/\/$/, ''), apiKey }
 let picked = ''
 try { picked = JSON.parse(readFileSync(join(env.SWARM_DATA_DIR || join(homedir(), '.hermes', 'swarm-studio'), 'models.json'), 'utf8')).reviewer || '' } catch {}

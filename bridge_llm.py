@@ -105,7 +105,7 @@ def to_hermes(body: dict) -> list:
 _DSML = r"[｜|]+\s*DSML\s*[｜|]+\s*"
 _DSML_INVOKE = re.compile(rf'<\s*{_DSML}invoke\s+name="([^"]+)"\s*>(.*?)(?:</\s*{_DSML}invoke\s*>|\Z)', re.S)
 _DSML_PARAM = re.compile(rf'<\s*{_DSML}parameter\s+name="([^"]+)"(?:\s+string="(true|false)")?\s*>(.*?)</\s*{_DSML}parameter\s*>', re.S)
-_DSML_WRAP = re.compile(rf'</?\s*{_DSML}(?:function_)?calls\s*>')
+_DSML_TAG = re.compile(rf'</?\s*{_DSML}\w+[^>]*>')  # a stray tag, left when the model mixes both formats
 
 
 def _call(name: str, args) -> dict:
@@ -126,9 +126,7 @@ def _dsml_calls(text: str) -> tuple[str, list]:
                     pass
             args[p.group(1)] = value
         calls.append(_call(m.group(1), args))
-    if not calls:
-        return text, []
-    return _DSML_WRAP.sub("", _DSML_INVOKE.sub("", text)), calls
+    return _DSML_INVOKE.sub("", text), calls
 
 
 def tool_calls(text: str) -> tuple[str, list]:
@@ -159,7 +157,7 @@ def tool_calls(text: str) -> tuple[str, list]:
     keep.append(text[at:])
     rest, native = _dsml_calls("".join(keep))
     calls += native
-    return (rest.strip() if calls else text), calls
+    return (_DSML_TAG.sub("", rest).strip() if calls else text), calls
 
 
 def complete(ctx, body: dict, timeout_s: float | None = None) -> dict:

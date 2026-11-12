@@ -104,6 +104,10 @@ class ModelCalls(unittest.TestCase):
         self.assertEqual([(c["function"]["name"], json.loads(c["function"]["arguments"])) for c in msg["tool_calls"]],
                          [("set_chat_summary", {"summary": "Little Fern guestbook app"}), ("list_files", {"recursive": True, "depth": "not json"})])
         self.assertIn("not any other tool-call syntax", self.m.TOOLS_HEAD)
+        # both formats in one answer (seen live): the call counts and no stray DSML tag is left as text
+        mixed = '<tool_call>{"name": "read_file", "arguments": {"path": "a.tsx"}}</tool_call>\n</\uff5c\uff5cDSML\uff5c\uff5c parameter>\n</\uff5c\uff5cDSML\uff5c\uff5c calls>'
+        self.assertEqual(self.m.tool_calls(mixed)[0], "")
+        self.assertEqual(self.m.tool_calls("<\uff5cDSML\uff5c note> is just text"), ("<\uff5cDSML\uff5c note> is just text", []))
 
     def test_a_stream_is_one_delta_then_usage_then_done(self):
         done = self.m.complete(Ctx(Llm('<tool_call>{"name": "run", "arguments": {"a": 1}}</tool_call>')), {"model": "worker", "tools": [{"type": "function", "function": {"name": "run"}}], "messages": []})
@@ -227,6 +231,17 @@ class NoProviderKeyReachesNode(unittest.TestCase):
         server = (ROOT / "server" / "server.mjs").read_text("utf-8")
         self.assertNotIn("HERMES_CUSTOM_INFERHUB_API_KEY", server)
         self.assertNotIn("setModels", server)
+
+    def test_no_code_reads_hermes_own_env_file_or_provider_keys(self):
+        # scripts too: a person may run them, and they ship with the plugin
+        for d in ["engine", "server", "scripts", "web"]:
+            for f in (ROOT / d).rglob("*.mjs"):
+                src = f.read_text("utf-8")
+                # the check scripts only delete the name from a child's environment
+                for line in src.splitlines():
+                    if "HERMES_CUSTOM_" in line:
+                        self.assertIn("delete env[k]", line, f"{f.name} reads a Hermes provider key")
+                self.assertNotRegex(src, r"['\"]\.hermes['\"]\s*,\s*['\"]\.env['\"]", f"{f.name} reads ~/.hermes/.env")
 
 
 if __name__ == "__main__":
