@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import unittest
 import urllib.request
 from pathlib import Path
@@ -167,6 +168,53 @@ class Bridge(unittest.TestCase):
             self.assertIsNone(re.search(r"\[\s*'config'\s*,\s*'set'", src), f.name)
             self.assertNotIn("_mcp_envelope", src, f.name)
             self.assertNotIn("discover_mcp_tools", src, f.name)
+
+    def test_attach_sends_the_code_this_process_loaded(self):
+        # the server tells a Hermes on an older copy of the plugin from a current one (engine/hermeshealth.mjs)
+        newest = max(f.stat().st_mtime for f in ROOT.glob("*.py"))
+        self.assertAlmostEqual(self.b.LOADED, newest, delta=1)
+        sent = []
+        with mock.patch.object(self.b, "_server", mock.Mock(server_address=("127.0.0.1", 5999))), \
+                mock.patch.object(self.b.launcher, "_request", side_effect=lambda path, **kw: sent.append((path, kw["body"])) or {}):
+            self.assertTrue(self.b.attach())
+        self.assertEqual(sent[0][0], "/api/hermes/attach")
+        self.assertEqual(sent[0][1]["code"], self.b.LOADED)
+        self.assertEqual(sent[0][1]["pid"], os.getpid())
+
+    def test_a_server_that_comes_up_later_is_still_found(self):
+        # Desktop's gateway loads the plugin long before anyone opens the Studio, and a server can be
+        # restarted by another process: the bridge keeps looking until one answers, then attaches
+        up = {"n": 0}
+        started = []
+
+        def state():
+            up["n"] += 1
+            return {"app": "swarm-studio"} if up["n"] >= 3 else None
+
+        with mock.patch.object(self.b, "CTX", object()), \
+                mock.patch.object(self.b, "running", side_effect=lambda: bool(started)), \
+                mock.patch.object(self.b, "start", side_effect=lambda: started.append(1) or True), \
+                mock.patch.object(self.b.launcher, "state", side_effect=state):
+            self.b.start_later(delay=0, poll=0.01)
+            for _ in range(200):
+                if started:
+                    break
+                time.sleep(0.01)
+        self.assertEqual(started, [1])
+        self.assertEqual(up["n"], 3, "it looked until the server answered, then stopped looking")
+
+    def test_the_command_line_says_why_a_build_was_refused(self):
+        import io
+        launcher = load_package().launcher
+        body = {"error": "Hermes isn't connected. Open Hermes Desktop…", "code": "hermes_closed", "message": "Hermes isn't connected.", "action": "Open Hermes Desktop, or run `hermes swarm`, then try again.", "hermes": True}
+        refused = urllib.error.HTTPError("http://127.0.0.1:1/api/run", 503, "Service Unavailable", {}, io.BytesIO(json.dumps(body).encode()))
+        with mock.patch.object(launcher, "ensure_server", return_value={"running": True, "url": "http://127.0.0.1:1/"}), \
+                mock.patch.object(launcher, "talk_first", return_value=False), \
+                mock.patch.object(launcher, "_request", side_effect=refused):
+            got = launcher.start_run("a site for a plant shop")
+        self.assertEqual(got["error"], "Hermes isn't connected.")
+        self.assertEqual(got["code"], "hermes_closed")
+        self.assertIn("hermes swarm", got["action"])
 
     def test_register_wires_the_bridge(self):
         src = (ROOT / "__init__.py").read_text("utf-8")

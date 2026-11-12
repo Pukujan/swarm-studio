@@ -77,7 +77,14 @@ async function chat(provider, { model, messages, maxTokens = 2048, temperature =
   }
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => '')
-    throw new Error(`${model}: HTTP ${res.status} ${body.slice(0, 300)}`)
+    let said = null
+    try { said = JSON.parse(body).error } catch {}
+    // the provider's own reason (a budget cap, a rate limit), and Hermes's when it is not there
+    throw Object.assign(new Error(`${model}: HTTP ${res.status} ${body.slice(0, 300)}`), {
+      status: res.status,
+      reason: typeof said?.message === 'string' ? said.message : typeof said === 'string' ? said : '',
+      ...(typeof said?.code === 'string' && said.code.startsWith('hermes_') ? { hermes: { code: said.code, message: said.said || said.message, action: said.action || '' } } : {})
+    })
   }
 
   let text = ''

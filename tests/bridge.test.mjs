@@ -16,7 +16,7 @@ test('only a loopback bridge with a token can attach', () => {
   assert.equal(h.attach({ url: 'http://127.0.0.1:5000/x', token: TOKEN }).ok, false)
   assert.equal(h.attach({ url: 'http://127.0.0.1:5000', token: 'short' }).ok, false)
   assert.equal(h.attach({ url: 'http://127.0.0.1:5000', token: TOKEN, pid: 42 }).ok, true)
-  assert.deepEqual(h.status(), { attached: true, pids: [42] })
+  assert.deepEqual(h.status(), { attached: true, pids: [42], codes: [null] })
   assert.doesNotMatch(JSON.stringify(h.status()), /token|5000/)
 })
 
