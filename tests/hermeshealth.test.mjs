@@ -82,19 +82,18 @@ test('the stale-Python case: an attached bridge whose loaded code is older than 
   assert.equal(pyStamp(pluginDir(1234)), 1234)
 })
 
-test('a running Hermes is found by its gateway.pid (Desktop runs it as python3 -c …) or a hermes command line', async () => {
+test('a running Hermes is found by its gateway.pid only (Desktop runs it as python3 -c …), never by reading process lists', async () => {
   const home = mkdtempSync(join(tmpdir(), 'hh-home-'))
-  const ps = out => (cmd, args, opts, cb) => cb(null, out)
-  const none = ps('  101 01:00:00 /usr/bin/node /x/hermes hackathon/server/server.mjs --port 4319\n  102 10:00 /Users/a/dev/hermes hackathon/node_modules/.bin/vite\n')
-  assert.equal(await hermesRunning({ run: none, home, platform: 'darwin' }), false, 'a folder named "hermes …" is not Hermes')
-  assert.equal(await hermesRunning({ run: ps('  103 05:00 /usr/bin/python3 /Users/a/.hermes/hermes-agent/hermes_cli/main.py chat\n'), home, platform: 'darwin' }), true)
-  assert.equal(await hermesRunning({ run: ps('  104 00:04 /Users/a/.local/bin/hermes swarm\n'), home, platform: 'darwin' }), 'young')
-  assert.equal(await hermesRunning({ run: (c, a, o, cb) => cb(new Error('no ps')), home, platform: 'darwin' }), null, 'unknown is not a guess')
+  assert.equal(await hermesRunning({ home }), false, 'no gateway.pid')
   writeFileSync(join(home, 'gateway.pid'), JSON.stringify({ pid: process.pid, kind: 'hermes-gateway' }))
-  assert.equal(await hermesRunning({ run: none, home, platform: 'darwin', self: 1 }), 'young')
-  assert.equal(await hermesRunning({ run: none, home, platform: 'darwin', self: 1, now: () => Date.now() + 60000 }), true)
+  assert.equal(await hermesRunning({ home, self: 1 }), 'young')
+  assert.equal(await hermesRunning({ home, self: 1, now: () => Date.now() + 60000 }), true)
+  assert.equal(await hermesRunning({ home }), false, 'this process is not a Hermes')
   writeFileSync(join(home, 'gateway.pid'), JSON.stringify({ pid: 2 ** 22 + 7 }))
-  assert.equal(await hermesRunning({ run: none, home, platform: 'darwin' }), false, 'a gateway.pid left behind by a dead gateway')
+  assert.equal(await hermesRunning({ home }), false, 'a gateway.pid left behind by a dead gateway')
+  writeFileSync(join(home, 'gateway.pid'), 'not json')
+  assert.equal(await hermesRunning({ home }), false)
+  assert.doesNotMatch(readFileSync(new URL('../engine/hermeshealth.mjs', import.meta.url), 'utf8'), /\bps\b['"]|execFile|child_process/, 'no process list is read')
 })
 
 test('a call that finds no Hermes fails after its grace with the reason, and onGone hears it', async () => {

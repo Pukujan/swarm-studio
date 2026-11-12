@@ -90,8 +90,9 @@ export function deckRoutes({ dataDir, runsDir = join(dataDir, 'runs'), chats = n
       if (what && what !== 'export' && req.method === 'GET') {
         const f = join(dir(pid), 'deck', what)
         if (!existsSync(f)) return json(res, 404, { error: 'not exported yet' }), true
-        // the exported deck runs its own present-mode script: it is shown on its own, never inside the studio page
-        res.writeHead(200, { 'content-type': what.endsWith('.pdf') ? 'application/pdf' : 'text/html; charset=utf-8', 'content-security-policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https: data:; frame-ancestors 'self'" }).end(readFileSync(f))
+        // the exported deck runs its own present-mode script: it is shown on its own, never inside the studio page,
+        // and sandboxed like every generated page (Nous catalog review, point 4): an opaque origin, not the studio's
+        res.writeHead(200, { 'content-type': what.endsWith('.pdf') ? 'application/pdf' : 'text/html; charset=utf-8', 'content-security-policy': "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https: data:; frame-ancestors 'self'" }).end(readFileSync(f))
         return true
       }
       return json(res, 405, { error: 'method not allowed' })
