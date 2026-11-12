@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { words } from './standins.mjs'
 
-const RAW = 'https://raw.githubusercontent.com/mojomast/assetrizz/main/'
+export const RAW = 'https://raw.githubusercontent.com/mojomast/assetrizz/main/'
 export const CREDIT = 'assetrizz by mojomast'
 
 // the build's style (engine/artdirect.mjs STYLES) → the closest packs, nearest first; none that
@@ -34,7 +34,7 @@ const CATEGORY_SET = new Set(Object.values(CATEGORY))
 const FILLER = new Set(['far', 'near', 'wide', 'ornate', 'icon', 'backdrop', 'emblem', 'single', 'bold', 'symbol', 'centred', 'centered', 'plain', 'dark', 'circle', 'readable', 'when', 'small', 'game', 'called', 'people', 'nobody', 'empty', 'figures', 'key', 'art', 'screen', 'title', 'mid', 'sky', 'front', 'back', 'png'])
 // words, singular ("rooftops" finds rooftop_city), without the prompt's own filler
 const stem = w => (w.length > 4 && w.endsWith('ies') ? `${w.slice(0, -3)}y` : w.length > 3 && /[^s]s$/.test(w) ? w.slice(0, -1) : w)
-const terms = s => [...new Set(words(String(s || '').replace(/_/g, ' ')).filter(w => !FILLER.has(w)).map(stem))]
+export const terms = s => [...new Set(words(String(s || '').replace(/_/g, ' ')).filter(w => !FILLER.has(w)).map(stem))]
 
 // rows: the catalog's lines, parsed; → the few fields a pick needs
 export function indexRows(rows) {
@@ -103,5 +103,5 @@ export function library({ dataDir, fetchImpl = fetch }) {
       return { path: local, from: row.path, credit: CREDIT }
     } catch { return null }
   }
-  return { pick }
+  return { pick, load }
 }
