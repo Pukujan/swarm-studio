@@ -821,6 +821,7 @@ export function makeProject({ sw, C, root }) {
     world.style.transform = t
     world.classList.add('moving')
     sw.moved?.()
+    trackCrew()
     clearTimeout(restT)
     restT = setTimeout(() => { world.classList.remove('moving'); sizePics(); pump() }, 280)
   }
@@ -1452,8 +1453,24 @@ export function makeProject({ sw, C, root }) {
     }
     for (const [c, x, y] of spots) {
       c.style.opacity = ''
+      c.classList.remove('track')
+      c.dataset.wx = x; c.dataset.wy = y
       c.style.left = `${world.offsetLeft + P.cam.x + x * P.cam.k}px`
       c.style.top = `${world.offsetTop + P.cam.y + y * P.cam.k}px`
+    }
+  }
+  // While the camera moves, the cursors keep to their spots about ten times a second; CSS eases each
+  // step (.cur.track), so the crew needs no per-frame work. The Design deck keeps its own smooth cursors.
+  function trackCrew() {
+    if (!curEl.children.length) return
+    const wait = 100 - (performance.now() - (P.trackAt || 0))
+    if (wait > 0) { clearTimeout(P.trackT); P.trackT = setTimeout(trackCrew, wait); return }
+    P.trackAt = performance.now()
+    for (const c of curEl.children) {
+      if (c.dataset.wx == null) continue
+      c.classList.add('track')
+      c.style.left = `${world.offsetLeft + P.cam.x + c.dataset.wx * P.cam.k}px`
+      c.style.top = `${world.offsetTop + P.cam.y + c.dataset.wy * P.cam.k}px`
     }
   }
   // an element's box in world units, from layout (offsets up to the world), not from the screen
