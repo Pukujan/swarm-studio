@@ -3463,6 +3463,27 @@ const server = createServer((req, res) => {
     return
   }
 
+  // Post to Feed's page shots (engine/pageshots.mjs): a fresh export, then every page at desktop and
+  // phone size. The export is the one the post then uploads, so the shots match its files.
+  const runShots = url.pathname.match(/^\/api\/runs\/([^/]+)\/pageshots$/)
+  if (runShots && RUN_ID.test(runShots[1]) && req.method === 'POST') {
+    const id = runShots[1]
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    const events = readEvents(id)
+    if (!events) return reply(404, { error: 'no such build' })
+    exportRun({ events, runId: id, runDir: join(runsDir, id), sections: [], name: nameFor(id)?.name, fill: fillExport(id) })
+      .then(async out => {
+        const copy = shelveExport(id, out.zip)
+        record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections })
+        const { pageShots } = await import('../engine/pageshots.mjs')
+        const got = await pageShots({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir }).catch(err => ({ shots: [], note: String(err.message || err).slice(0, 200) }))
+        const pages = out.html.map((file, i) => ({ file, path: i === 0 ? '/' : `/${file}`, ...(got.shots.find(s => s.file === file) || {}) }))
+        reply(200, { zip: out.zip, pages, note: got.note || null })
+      })
+      .catch(err => reply(400, { error: String(err.message || err) }))
+    return
+  }
+
   // Commands from Hermes (/swarm review, the swarm_studio tool) that the open
   // canvas carries out, because it owns the frames.
   if (url.pathname === '/api/cmd' && req.method === 'POST') {
