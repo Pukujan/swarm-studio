@@ -90,3 +90,13 @@ test('with a story, the posts are written from it: its hook, what it is, its mom
   assert.ok(x.thread.some(s => /Planned, designed and built by 2 AI agents/.test(s)))
   for (const p of posts) assert.doesNotMatch(p.thread ? p.thread.join(' ') : p.text, /grill|\blive\b/i, p.id)
 })
+
+test('each network gets the story card in its shape: tall for TikTok and Instagram, square for Threads, wide for the rest', async () => {
+  const { cardFor } = await import('../engine/launch.mjs')
+  const media = ['tall-b3', 'tall-b1', 'square-b3', 'wide-b3'].map(n => ({ kind: 'image', src: `/story/r1/${n}.jpg`, shape: n.split('-')[0] }))
+  assert.deepEqual(cardFor('tiktok', media), { shape: 'tall', src: '/story/r1/tall-b3.jpg' }, 'the first in beat order, the hook')
+  assert.equal(cardFor('threads', media).shape, 'square')
+  assert.equal(cardFor('x', media).shape, 'wide')
+  assert.equal(cardFor('linkedin', media.slice(0, 2)).shape, 'tall', 'a missing shape falls back to the phone card')
+  assert.equal(cardFor('x', [{ kind: 'image', src: '/img/r1/1.png' }]), null, 'no story, no card')
+})

@@ -1637,6 +1637,9 @@ body.side-min .show-sum { grid-area: 2 / 1 / 3 / -1; }
 .lk-text textarea { flex: 1; min-width: 0; resize: vertical; padding: 8px 10px 18px; border-radius: 9px; border: 1px solid var(--line); background: rgb(var(--ink-rgb) / .5); color: var(--text); font: 12.5px/1.45 var(--font); }
 .lk-card.editing textarea { border-color: var(--accent); }
 .lk-count { position: absolute; right: 8px; bottom: 5px; font: 10px var(--mono); color: var(--muted); pointer-events: none; }
+.lk-shot { display: block; align-self: flex-start; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.lk-shot img { display: block; height: 120px; width: auto; }
+.lk-shot.lk-wide img { height: 90px; }
 .lk-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .lk-btns button { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font: 600 12px/1.2 var(--label); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
 .lk-btns .primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
