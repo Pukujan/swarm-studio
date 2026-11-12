@@ -104,3 +104,22 @@ test('the Account row: who this install posts as, never the token, and only know
   assert.deepEqual(v.data.account, { connected: true, name: 'Comet', handle: 'comet', guest: true, pending: null })
   assert.doesNotMatch(JSON.stringify(v.data), /sfp_secret/)
 })
+
+test('the Models row carries the media reader: its model and what it takes, or off, or nothing', async () => {
+  const { setupRoutes } = await import('../server/setup.mjs')
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { EventEmitter } = await import('node:events')
+  let md = { model: 'mimotp/mimo-v2.6-flash', pick: null, takes: 'hears sound, sees frames of a clip', caps: { audio: true } }
+  const handle = setupRoutes({ dataDir: mkdtempSync(join(tmpdir(), 'su-')), roles: () => ({}), call: async () => {}, image: async () => ({ providers: [] }), setPictures: () => {}, media: async () => md })
+  const get = () => new Promise(resolve => {
+    const req = new EventEmitter(); req.method = 'GET'; req.destroy = () => {}
+    handle(req, { writeHead: () => ({ end: s => resolve(JSON.parse(s)) }) }, new URL('http://x/api/setup'))
+  })
+  assert.deepEqual((await get()).models.media, { model: 'mimotp/mimo-v2.6-flash', takes: 'hears sound, sees frames of a clip', off: false })
+  md = { model: '', pick: 'off', takes: '' }
+  assert.equal((await get()).models.media.off, true)
+  md = null
+  assert.equal((await get()).models.media, null)
+})

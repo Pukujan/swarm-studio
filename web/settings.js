@@ -11,6 +11,7 @@ import { ic } from './icons.js'
 const GOES = {
   feed: 'Swarm Feed: an install id on connect, then only the builds you post',
   model: 'The model provider you picked: your prompt, the plan, page screenshots for review',
+  media: 'The media model you picked: clips and sounds you attach, and the crew\'s finished films',
   image: 'The image provider you picked: picture prompts',
   film: 'The provider you picked: film prompts and clips',
   standin: 'Openverse and Pexels: words from a picture prompt',
@@ -25,6 +26,7 @@ const DATA = [
   ['Builds, settings, keys', 'Stay on this computer or with Hermes'],
   ['Prompts, plans, review screenshots', 'The model provider you picked'],
   ['Picture and clip prompts', 'The image and video provider you picked'],
+  ['Clips and sounds you attach, finished films', 'The media model you picked, or none when it is off'],
   ['Words from a picture prompt', 'Openverse and Pexels, for a stand-in photo'],
   ['The canvas page', 'Loads Tailwind and Google Fonts'],
   ['What you publish', 'The host you connected'],
@@ -47,12 +49,14 @@ export function openSettings({ sw, esc }) {
     ${on === null ? '' : `<i class="set-dot${on ? ' on' : ''}" aria-label="${on ? 'Connected' : 'Not connected'}"></i>`}<b>${esc(name)}</b><span>${esc(state)}</span>${more ? ic('chr', 14) : ''}</button>`
 
   function groups() {
-    const m = S.models?.roles || {}, img = S.models?.image || {}
+    const m = S.models?.roles || {}, img = S.models?.image || {}, md = S.models?.media || {}
     const imgOn = (img.providers || []).some(p => p.available)
     const crew = [
       ['model:planner', 'Planner', { on: !!m.planner?.model, state: m.planner?.model || '' }, GOES.model],
       ['model:worker', 'Builders', { on: !!m.worker?.model, state: m.worker?.model || '' }, GOES.model],
       ['model:reviewer', 'Reviewer', { on: !!m.reviewer?.model, state: m.reviewer?.model || '' }, GOES.model],
+      // the media reader (spec 32): the model and, in its own words, what it can take
+      ['model:media', 'Media reader', { on: !!md.model, state: md.model || (md.pick === 'off' ? 'Off' : 'None') }, md.model && md.takes ? `${GOES.media}. It ${md.takes}` : GOES.media],
       ['image', 'Pictures', { on: img.pick !== 'off' && imgOn, state: img.pick === 'off' ? 'Off' : (img.providers || []).filter(p => p.available).map(p => p.provider).join(', ') }, GOES.image],
       ['film', 'Film', { on: !!(S.media?.music?.on || S.media?.clips?.on), state: [S.media?.music?.on && S.media.music.by, S.media?.clips?.on && S.media.clips.by].filter(Boolean).join(', ') }, GOES.film],
       ['standin', 'Stand-in photos', { on: true, state: 'Openverse' }, GOES.standin],
