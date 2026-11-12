@@ -74,6 +74,18 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab .blank { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
 .ab:hover { border-color: var(--line-2); }
 .ab.page { width: 124px; height: 233px; }
+/* a page before its picture (spec 36): a block per planned section, in the project's colours */
+.ab .sk { position: absolute; inset: 0; border-radius: 3px; overflow: hidden; pointer-events: none; --sk-bg: var(--panel-2, #2a2a2a); --sk-a: var(--line-2, #555); --sk-b: var(--line, #444); --sk-fg: var(--muted, #999); background: var(--sk-bg); }
+.ab .sk.over { background: none; }
+.ab .sk i { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--sk-b) 16%, var(--sk-bg)); border-top: 1px solid color-mix(in srgb, var(--sk-fg) 10%, transparent); background-size: cover; background-position: center; }
+.ab .sk i.odd { background-color: color-mix(in srgb, var(--sk-a) 12%, var(--sk-bg)); }
+.ab .sk i.hero { background-color: color-mix(in srgb, var(--sk-a) 34%, var(--sk-bg)); border-top: 0; }
+.ab .sk i b { position: absolute; left: 10%; top: 18%; width: 42%; height: 6px; max-height: 18%; border-radius: 99px; background: color-mix(in srgb, var(--sk-fg) 22%, transparent); }
+.ab .sk i.hero b { width: 58%; height: 9px; top: 30%; background: color-mix(in srgb, var(--sk-fg) 40%, transparent); }
+.ab .sk i[style*="background-image"] b { display: none; }
+.ab .sk.over i { animation: sk-wait 1.6s ease-in-out infinite alternate; }
+@keyframes sk-wait { from { opacity: .92; } to { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .ab .sk.over i { animation: none; } }
 .ab.game { width: 300px; height: 169px; }
 .ab.app, .ab.code { width: 300px; height: 169px; }
 .ab.film { width: 142px; height: 80px; }

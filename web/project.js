@@ -142,7 +142,7 @@ export function makeProject({ sw, C, root }) {
   function groups() {
     const b = P.board || {}
     const g = {}
-    if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id) }, ...draftsOf(p.id)])
+    if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id), cover: p.cover, plan: p.plan }, ...draftsOf(p.id)])
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, pitch: b.game.pitch || '', src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
@@ -203,6 +203,34 @@ export function makeProject({ sw, C, root }) {
     if (x.kind !== 'page' || !th?.colors?.length) return ''
     return `<div class="tc" style="--tc-bg:${esc(th.colors[0])};--tc-pr:${esc(th.colors[1] || th.colors[0])};--tc-fg:${esc(th.colors[3] || th.colors.at(-1))};--tc-font:'${esc(th.fonts?.heading || th.fonts?.display || '')}'"><i></i><b>${esc(x.name)}</b><span></span></div>`
   }
+  // A page before its picture comes: a block per planned section, in the project's colours and in
+  // the section's planned proportions (a page with no plan, from before plans were kept, gets a
+  // usual one). Over a picture taken mid-build, the sections not built yet stay blocks, so each
+  // block gives way to the real page as its section is built.
+  const USUAL = [{ id: 'hero', role: 'hero', h: 720 }, { id: 'a', h: 520 }, { id: 'b', h: 520 }, { id: 'c', h: 300 }]
+  const planOf = x => (x.plan?.length ? x.plan : USUAL)
+  // never a thin strip: a page's tile is at least a little taller than wide
+  const planRatio = x => Math.max(1.25, planOf(x).reduce((a, l) => a + l.h, 0) / 1280)
+  function skeleton(x, over = false) {
+    const plan = planOf(x), total = plan.reduce((a, l) => a + l.h, 0)
+    const cs = P.board?.theme?.colors || []
+    // where each section is on the page: the canvas's own layout once it has one, else the plan's
+    const laid = over ? sw.layers?.list(x.page) || [] : []
+    let top = 0
+    const blocks = plan.map((l, i) => {
+      const box = laid.find(y => y.key?.endsWith(`/${l.id}`))?.box
+      const b = { l, i, top: box ? box.top : top / total, h: box ? box.height : l.h / total }
+      top += l.h
+      return b
+    }).filter(b => !over || (!b.l.done && x.plan?.length))
+    if (over && !blocks.length) return ''
+    const vars = cs.length ? `--sk-bg:${esc(cs[0])};--sk-a:${esc(cs[1] || cs[0])};--sk-b:${esc(cs[2] || cs[1] || cs[0])};--sk-fg:${esc(cs[3] || cs.at(-1))}` : ''
+    const hero = !over && x.cover ? ` style="background-image:url('${esc(base() + x.cover)}')"` : ''
+    return `<div class="sk${over ? ' over' : ''}"${vars ? ` style="${vars}"` : ''}>${blocks.map(b => {
+      const first = b.i === 0 || b.l.role === 'hero'
+      return `<i class="${first ? 'hero' : b.i % 2 ? 'odd' : ''}${b.l.done ? ' done' : ''}" style="top:${(b.top * 100).toFixed(2)}%;height:${(b.h * 100).toFixed(2)}%"${first ? hero : ''}><b></b></i>`
+    }).join('')}</div>`
+  }
   // a piece still being made: a thin bar along its foot (it slides when the job cannot say how far)
   const WORK = { site: 'the site', app: 'the app', game: 'the game', film: 'the film' }
   function workBar(w) {
@@ -212,12 +240,13 @@ export function makeProject({ sw, C, root }) {
   function board(x) {
     const sel = P.sel === x.key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
     const full = x.src ? (x.src.startsWith('data:') ? x.src : base() + x.src) : ''
-    const img = x.src ? `<img src="${esc(picNow(full))}" data-full="${esc(full)}" alt="" draggable="false" loading="lazy" decoding="async">`
+    const img = x.kind === 'page' && !x.snap ? skeleton(x)
+      : x.src ? `<img src="${esc(picNow(full))}" data-full="${esc(full)}" alt="" draggable="false" loading="lazy" decoding="async">${x.kind === 'page' ? skeleton(x, true) : ''}`
       : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
-    const tall = x.kind === 'page' && x.snap && P.aspect.get(x.page)
+    const tall = x.kind === 'page' && ((x.snap && P.aspect.get(x.page)) || (!x.snap && planRatio(x)))
     if (x.kind === 'draft') return draftBoard(x, sel, img)
     const rv = x.kind === 'page' ? reviewOf(x) : null
     const work = x.kind === 'art' && (x.pending || P.landed.has(x.key)) ? painting(x) : ''

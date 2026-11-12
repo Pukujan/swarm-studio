@@ -70,7 +70,7 @@ for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r
 await api('/api/setup', { seen: true }).catch(() => {})
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
-const out = { cold: [], all: [], warm: [], warmAll: [], cpu: [], fpsRest: [], fpsBuild: [], shots: [] }
+const out = { drawn: [], cold: [], all: [], warm: [], warmAll: [], cpu: [], fpsRest: [], fpsBuild: [], shots: [] }
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   // the stream, as the canvas hears it: the bench hands it the build's sections
@@ -100,9 +100,11 @@ try {
   const address = `${BASE}/?version=${RUN}`
   // ms from navigation to the first page picture, and to all 14
   const pictures = async () => {
+    // anything page-shaped on the stage: a skeleton, a title card or a picture
+    const drawn = await page.waitForFunction(() => document.querySelector('.pj-stage[aria-label="Overview"] .ab.page') && performance.now(), null, { timeout: 60000, polling: 'raf' }).then(h => h.jsonValue()).catch(() => NaN)
     const first = await page.waitForFunction(() => [...document.querySelectorAll('.pj-stage .ab.page img')].some(im => im.complete && im.naturalWidth) && performance.now(), null, { timeout: 60000, polling: 'raf' }).then(h => h.jsonValue()).catch(() => NaN)
     const all = await page.waitForFunction(n => [...document.querySelectorAll('.pj-stage .ab.page img')].filter(im => im.complete && im.naturalWidth).length >= n && performance.now(), 14, { timeout: 90000, polling: 'raf' }).then(h => h.jsonValue()).catch(() => NaN)
-    return { first, all }
+    return { drawn, first, all }
   }
   const fps = async ms => {
     const box = await page.locator('.pj-stage[aria-label="Overview"]').boundingBox()
@@ -122,9 +124,10 @@ try {
     rmSync(join(runs, RUN, 'snaps'), { recursive: true, force: true })
     rmSync(join(runs, RUN, 'img'), { recursive: true, force: true })
     await page.goto(address)
+    if (process.env.BENCH_SHOTS && !r) { await page.waitForSelector('.pj-stage .ab.page', { timeout: 10000 }).catch(() => {}); await page.screenshot({ path: join(process.env.BENCH_SHOTS, 'cold.png') }) }
     const cold = await pictures()
     if (process.env.BENCH_DEBUG) console.log(await page.evaluate(() => ({ room: window.swarmCosmos?.nav?.view, body: document.body.className, abs: document.querySelectorAll('.pj-stage .ab').length, imgs: document.querySelectorAll('.pj-stage .ab.page img').length })))
-    out.cold.push(cold.first); out.all.push(cold.all)
+    out.drawn.push(cold.drawn); out.cold.push(cold.first); out.all.push(cold.all)
     await wait(3000) // the pictures are kept
     await page.goto(address)
     const warm = await pictures()
@@ -164,6 +167,7 @@ try {
 }
 const ms = x => `${Math.round(x)} ms`
 console.log(`Overview, 14 pages, ${RUNS} runs (medians), ${ROOT === resolve(fileURLToPath(new URL('..', import.meta.url))) ? 'this checkout' : ROOT}`)
+console.log(`  pages on the stage, opened cold ${ms(median(out.drawn))}`)
 console.log(`  first picture, opened cold      ${ms(median(out.cold))}   all 14: ${ms(median(out.all))}`)
 console.log(`  first picture, opened again     ${ms(median(out.warm))}   all 14: ${ms(median(out.warmAll))}`)
 console.log(`  main thread busy during a build ${median(out.cpu)}%   pictures sent: ${median(out.shots)}`)
