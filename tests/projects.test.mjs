@@ -100,7 +100,10 @@ test('a run whose brand is a project\'s name joins it as a piece, with one name'
     assert.equal(again.length, 1)
     assert.deepEqual(again[0].pieces.map(x => [x.kind, x.runId, x.versions]), [['site', '2026-11-11T03-32-37-133Z', 1], ['app', '2026-11-11T04-00-00-000Z', 2]])
     const index = w.p.runIndex()
-    assert.deepEqual(index.get('2026-11-11T03-33-59-295Z'), { project: '2026-11-11T03-32-37-133Z', name: 'ARES', piece: 'app' })
+    assert.deepEqual(index.get('2026-11-11T03-33-59-295Z'), { project: '2026-11-11T03-32-37-133Z', name: 'ARES', piece: 'app', version: 1 })
+    // versions count within a piece: the site stays version 1, the second app is version 2 (its own link, engine/publish.mjs)
+    assert.equal(index.get('2026-11-11T03-32-37-133Z').version, 1)
+    assert.equal(index.get('2026-11-11T04-00-00-000Z').version, 2)
     // another brand is another project, even with a brief much like it
     w.add('2026-11-11T05-00-00-000Z', { title: 'HERA', brief: SITE.replace('ARES', 'HERA') })
     assert.equal(w.p.list().projects.length, 2)
