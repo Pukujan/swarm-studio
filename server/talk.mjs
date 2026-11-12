@@ -12,6 +12,7 @@
 import { chatStore, CHAT_ID } from '../engine/chats.mjs'
 import { say, lock, unlock, planInput, draftOf, startsOf, startTurn } from '../engine/talkplan.mjs'
 import { planView } from '../engine/plan.mjs'
+import { starterSpec } from '../engine/starters.mjs'
 
 // model() -> (messages -> text) or null; env() -> { godot }; plans.fromTalk(input, planId) -> plan view
 export function talkRoutes({ dataDir, model = () => null, env = () => ({}), plans = null }) {
@@ -41,7 +42,8 @@ export function talkRoutes({ dataDir, model = () => null, env = () => ({}), plan
     if (chat.kind !== 'game' || !plans) return { chat, spec }
     const plan = await plans.fromTalk(planInput(chat), chat.plan)
     let turn = null
-    const out = await chats.update(id, c => { c.plan = plan.id; turn = startTurn(c, plan) })
+    // the locked spec records the starter the build will begin from (engine/starters.mjs)
+    const out = await chats.update(id, c => { c.plan = plan.id; if (c.spec) c.spec.starter = starterSpec(plan); turn = startTurn(c, plan) })
     return { chat: out, plan, turn, starts: turn?.options || [] }
   }
 

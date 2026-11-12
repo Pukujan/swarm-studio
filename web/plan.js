@@ -118,7 +118,13 @@ export function makePlan({ sw, C, root }) {
     const made = new Map((p.build?.sprites || []).map(x => [x.name, x]))
     const views = flat ? (shown || made.size ? p.art.sprites.map(x => slot(`sp:${x.name}`, 'view', x.name, made.get(x.name))).join('') : '') : shown ? cast.map(r => { const c = chars.get(r.name) || {}; return `<div class="pl-grp">${['front', 'side', 'back'].map((v, i) => slot(`vw:${r.name}:${v}`, 'view', i ? '' : r.name, c[v])).join('')}${modelSlot(r, c.model)}</div>` }).join('') : ''
     const closeups = shown && p.shape?.closeups !== false ? cast.map(r => '<div class="pl-grp">' + slot(`cu:${r.name}:cutin`, 'cutin', r.name, chars.get(r.name)?.cutin) + slot(`cu:${r.name}:portrait`, 'portrait', '', chars.get(r.name)?.portrait) + '</div>').join('') : ''
-    world.innerHTML = `<div class="col"><section class="pj-sec plan-cards" data-sec="cards"><span class="al">Plan</span><div class="abs">${cards}</div></section>
+    // the starter (engine/starters.mjs): the engine, a genre template and the art to begin with, then the
+    // systems the template carries, each a card with why it is suggested
+    const sv = p.starterView
+    const stCard = (k, name, c) => `<div class="ab pcard st${c.by === 'person' ? ' mine' : ''}" data-key="st:${k}" tabindex="0" role="button" aria-label="${esc(name)}"><b>${esc(name)}</b><span>${esc(c.name || 'None')}</span><i>${esc(c.why || '')}</i>${sel(`st:${k}`)}</div>`
+    const starter = sv && !writing ? `<section class="pj-sec pl-starter" data-sec="starter"><span class="al">Starter</span><div class="abs">${stCard('engine', 'Engine', sv.engine)}${stCard('template', 'Template', sv.template)}${stCard('assets', 'Assets', sv.assets)}</div></section>
+      ${sv.systems.length ? `<section class="pj-sec pl-systems" data-sec="systems"><span class="al">Systems</span><div class="abs">${sv.systems.map(x => `<div class="ab pcard st${x.on ? '' : ' off'}" data-key="sys:${esc(x.id)}" tabindex="0" role="button" aria-label="${esc(x.name)}"><b>${esc(x.on ? 'On' : 'Off')}</b><span>${esc(x.name)}</span><i>${esc(x.why)}</i>${sel(`sys:${x.id}`)}</div>`).join('')}</div></section>` : ''}` : ''
+    world.innerHTML = `<div class="col"><section class="pj-sec plan-cards" data-sec="cards"><span class="al">Plan</span><div class="abs">${cards}</div></section>${starter}
       ${writing ? '' : `<section class="pj-sec pl-sheets" data-sec="sheets"><span class="al">Sketches</span><div class="abs">${sheets}</div></section>`}
       ${views && !writing ? `<section class="pj-sec pl-build" data-sec="build"><span class="al">Build</span><div class="abs">${views}</div></section>` : ''}</div>
       ${writing ? '' : `<div class="col"><section class="pj-sec pl-mocks" data-sec="mocks"><span class="al">Mocks</span><div class="abs">${mocks}</div></section>
@@ -161,7 +167,7 @@ export function makePlan({ sw, C, root }) {
   function renderInsp() {
     const p = P.plan
     const c = P.sel?.startsWith('card:') && p?.cards.find(x => `card:${x.id}` === P.sel)
-    const pic = !c && P.sel && p && !P.draft ? picInsp(p, P.sel) : ''
+    const pic = !c && P.sel && p && !P.draft ? (/^(st|sys):/.test(P.sel) ? starterInsp(p, P.sel) : picInsp(p, P.sel)) : ''
     // a draft is changed by saying so in the chat: no inspector until it is locked
     bd.inspector(!P.draft && !!(c || pic))
     if (insp.hidden) return
@@ -183,6 +189,21 @@ export function makePlan({ sw, C, root }) {
       }
     }
     insp.innerHTML = `<h3><span>${esc(c.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>${html}`
+  }
+  // a starter choice: its options, each with why, the one in use marked; a system: why, and on or off
+  function starterInsp(p, key) {
+    const sv = p.starterView
+    if (!sv) return ''
+    const [kind, id] = key.split(':')
+    if (kind === 'sys') {
+      const x = sv.systems.find(y => y.id === id)
+      if (!x) return ''
+      return head(x.name) + `<p class="pl-sum">${esc(x.why)}</p><label class="pl-sw"><input type="checkbox" data-sys="${esc(x.id)}" ${x.on ? 'checked' : ''} ${x.required ? 'disabled' : ''}><span>${x.required ? 'Part of this template' : 'On'}</span></label>`
+    }
+    const c = sv[id]
+    if (!c) return ''
+    const opts = id === 'template' ? [...c.options, { id: '', name: 'None', why: 'an empty project; the crew writes every system', fits: true }] : c.options
+    return head({ engine: 'Engine', template: 'Template', assets: 'Assets' }[id]) + `<div class="pl-opts">${opts.map(o => `<button type="button" class="pl-opt${(c.value ?? '') === o.id ? ' on' : ''}" data-st="${id}" data-v="${esc(o.id)}" ${o.fits === false ? 'disabled' : ''}><span>${esc(o.name)}</span><small>${esc(o.fits === false ? `Made for ${sv.engine.value === 'godot' ? 'the browser' : 'Godot 4'}` : o.why)}</small></button>`).join('')}</div>` + (sv.addons.length && id === 'template' ? `<p class="pl-sum pl-addons">${sv.addons.map(a => `${esc(a.name)} ${esc(a.version)} · ${esc(a.licence)}`).join('<br>')}</p>` : '')
   }
   const styleSwitch = p => `<label class="pl-sw"><input type="checkbox" data-style ${p.style?.locked ? 'checked' : ''}><span>Lock style</span></label>`
   const head = name => `<h3><span>${esc(name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>`
@@ -265,10 +286,13 @@ export function makePlan({ sw, C, root }) {
   })
   insp.addEventListener('change', e => {
     if (e.target.matches('[data-style]')) return act('style', { locked: e.target.checked })
+    if (e.target.matches('[data-sys]')) return act('starter', { system: e.target.dataset.sys, on: e.target.checked })
     if (e.target.matches('input[type=checkbox]')) saveSoon(true)
   })
   insp.addEventListener('click', e => {
     if (e.target.closest('.pj-x')) return select(null)
+    const st = e.target.closest('[data-st]')
+    if (st) return st.classList.contains('on') ? null : act('starter', { key: st.dataset.st, value: st.dataset.v || null })
     const pk = e.target.closest('[data-cell]')
     if (pk) { P.cell = Number(pk.dataset.cell); insp.innerHTML = ''; return render() }
     if (e.target.closest('[data-replan]')) { const n = insp.querySelector('[data-replan-note]'); P.sel = null; return act('replan', { note: n?.value || '' }) }
