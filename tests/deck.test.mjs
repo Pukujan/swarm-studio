@@ -101,3 +101,86 @@ test('the PDF is printed by the headless Chrome, one page a slide', { skip: !fin
 test('no Chrome, no PDF, and no throw', () => {
   assert.equal(deckPdf('<p>x</p>', join(tmpdir(), 'never.pdf'), { chrome: null }), false)
 })
+
+// ---------- the kit's routes (server/deck.mjs) ----------
+import { deckRoutes } from '../server/deck.mjs'
+import { suggestLooks, draftDeck, cleanDeck } from '../engine/deck.mjs'
+import { writeFileSync, mkdirSync } from 'node:fs'
+
+const call = (routes, method, path, body) => new Promise(resolve => {
+  const req = { method, on(ev, fn) { if (ev === 'data' && body) fn(JSON.stringify(body)); if (ev === 'end') fn() }, destroy() {} }
+  const res = { writeHead(code, h) { this.code = code; this.h = h; return this }, end(t) { const s = String(t); resolve({ code: this.code, type: this.h?.['content-type'], body: /json/.test(this.h?.['content-type']) ? JSON.parse(s) : s }) } }
+  assert.equal(routes(req, res, new URL(`http://x${path}`)), true)
+})
+
+test('two or three looks are suggested by the words, and the planner writes the slides (or the outline stays)', async () => {
+  assert.equal(suggestLooks('A pitch for our seed round')[0], 'pitch-deck-vc')
+  assert.equal(suggestLooks('a bakery').length, 3)
+  let sys = ''
+  const chat = async m => { sys = m[0].content; return JSON.stringify({ title: 'Bakery', slides: [{ layout: 'points', title: 'Why', points: ['Slow dough', 'Local flour'] }, { layout: 'stats', title: 'Numbers', stats: [{ value: '7', label: 'bakers' }] }, { layout: 'section', title: 'Visit' }] }) }
+  const d = await draftDeck({ brief: 'A bakery', chat, voice: { name: 'Warm', lines: ['Made slowly.'] } })
+  assert.match(sys, /Never invent/)
+  assert.match(sys, /Made slowly/)
+  assert.deepEqual(d.slides.map(s => s.layout), ['title', 'points', 'stats', 'section', 'end'], 'a title and an end are added')
+  assert.equal((await draftDeck({ brief: 'A bakery', chat: async () => 'no json' })).from, 'outline')
+  const c = cleanDeck({ look: 'nope', start: 'x', key: 99, slides: [] })
+  assert.equal(c.look, 'minimal-white')
+  assert.equal(c.start, 'outline')
+  assert.ok(c.slides.length >= 2)
+})
+
+test('the routes: looks, a draft read from the project\'s brand, a still slide, saved, exported and served', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'deckr-'))
+  try {
+    mkdirSync(join(dir, 'projects', 'p1'), { recursive: true })
+    writeFileSync(join(dir, 'projects', 'p1', 'brand.json'), JSON.stringify(bakery()))
+    let printed = 0
+    const routes = deckRoutes({ dataDir: dir, pdf: (html, dst) => { printed++; writeFileSync(dst, '%PDF-1.4'); return true } })
+    assert.equal(routes({ method: 'GET' }, {}, new URL('http://x/api/brand')), false, 'not ours')
+    const looks = await call(routes, 'GET', '/api/kit/deck/looks')
+    assert.equal(looks.body.looks.length, DECK_LOOKS.length)
+    assert.equal((await call(routes, 'POST', '/api/kit/deck/draft', { brief: ' ' })).code, 400)
+    const draft = await call(routes, 'POST', '/api/kit/deck/draft', { brief: 'A bakery in Lisbon', beats: BEATS, project: 'p1', quick: true })
+    assert.equal(draft.body.deck.slides[1].title, 'Bread before the city wakes')
+    assert.equal(draft.body.looks.length, 3)
+    const still = await call(routes, 'POST', '/api/kit/deck/render', { deck: draft.body.deck, slide: 1, project: 'p1' })
+    assert.equal((still.body.html.match(/<section class="slide/g) || []).length, 1)
+    assert.doesNotMatch(still.body.html, /<script>/)
+    assert.match(still.body.html, /--bg:#f5efe6/, 'the project\'s brand')
+    assert.equal((await call(routes, 'POST', '/api/kit/deck/p1/export', { format: 'html' })).code, 409, 'nothing saved yet')
+    await call(routes, 'PUT', '/api/kit/deck/p1', { deck: { ...draft.body.deck, look: 'swiss-grid' } })
+    assert.equal((await call(routes, 'GET', '/api/kit/deck/p1')).body.deck.look, 'swiss-grid')
+    const ex = await call(routes, 'POST', '/api/kit/deck/p1/export', { format: 'html' })
+    assert.equal(ex.body.url, '/api/kit/deck/p1/deck.html')
+    const file = await call(routes, 'GET', ex.body.url)
+    assert.match(file.type, /text\/html/)
+    assert.match(file.body, /ArrowRight/)
+    assert.equal((await call(routes, 'POST', '/api/kit/deck/p1/export', { format: 'pdf' })).body.file, 'deck.pdf')
+    assert.equal(printed, 1)
+    assert.equal((await call(routes, 'GET', '/api/kit/deck/p2/deck.pdf')).code, 404)
+    assert.equal((await call(routes, 'GET', '/api/kit/deck/p1%2F..%2F..%2Fx/deck.html')).code, 404, 'no way out of the project')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a build\'s story (spec 39) starts the outline: its beats by role, line and picture', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'decks-'))
+  try {
+    const runs = join(dir, 'runs')
+    mkdirSync(join(runs, 'r1'), { recursive: true })
+    writeFileSync(join(runs, 'r1', 'story.json'), JSON.stringify({ v: 1, beats: [
+      { id: 'b1', role: 'hook', kicker: 'New', headline: 'Bread at dawn', line: 'Baked at four.' },
+      { id: 'b2', role: 'what', headline: 'A corner bakery', line: 'Slow dough, local flour.', picture: { kind: 'image', src: 'https://example.com/a.jpg' } },
+      { id: 'b3', role: 'next', headline: 'Pão da Esquina', line: 'Rua da Rosa 12' }
+    ] }))
+    const routes = deckRoutes({ dataDir: dir, runsDir: runs })
+    const d = (await call(routes, 'POST', '/api/kit/deck/draft', { brief: 'A bakery', run: 'r1', quick: true })).body
+    assert.deepEqual(d.deck.slides.map(s => s.layout), ['title', 'section', 'picture', 'end'])
+    assert.equal(d.deck.slides[1].lede, 'Baked at four.')
+    assert.equal(d.deck.slides.at(-1).lede, 'Rua da Rosa 12')
+    assert.match(d.say, /from the story/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

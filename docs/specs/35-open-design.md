@@ -376,3 +376,27 @@ kit on the board (`web/kit-deck.js`) comes next, on the spec 37 contract.
 
 Re-syncing is the same as for the packs: sparse-checkout `/design-templates/html-ppt/` too, run
 `node scripts/import-od-decks.mjs <checkout>`, read the diff, and run `node --test tests/deck.test.mjs`.
+
+## 8. Built: the Deck kit on the board (2026-11-12)
+
+`web/kit-deck.js` is the Deck's Plan step on the spec 37 contract (`deckKit`, prefixed names, like
+`web/kit-app.js`). Like the App kit, it is joined into the page when `web/kits.js` lands with the Studio
+scaffold; that file gets one line for it.
+
+- **Outline:** a line per slide; editing the lines renames, adds and removes slides, and the end slide stays
+  last. It starts from the build's story (spec 39, `runs/<id>/story.json`) when the Studio passes `run`, else
+  the brief's own list, then the planner's slides replace it unless the person has already edited.
+- **Storyboard:** every slide, small. The server draws each one (`/api/kit/deck/render`) and the board shows it
+  in a sandboxed frame with no script. The inspector edits the layout, text, points, steps, numbers, quote and
+  notes, and moves, adds or removes the slide.
+- **Theme:** the two or three looks the brief's words suggest (the planner's pick first), each drawn as the
+  title slide in the project's brand, plus More looks with all 25.
+- **Start:** Title slide, Outline or One key slide; the key slide is where Present opens.
+- **Export:** Present covers the window with the deck in a frame sandboxed to scripts only; its keys work, F goes
+  full screen, Esc or Close come back. HTML and PDF are written into `projects/<pid>/deck/` and downloaded
+  with the studio's token (the API needs it, so a plain link would not open).
+- **Lock and Build:** Lock puts the deck under `spec.kits.deck`; Build writes the HTML and the PDF. Nothing is
+  posted.
+- **Not done here:** the crew building the slides on the canvas with cursors, as it builds pages. Today the
+  planner writes the slides in one call through Hermes and the board shows them as they land. Showing the
+  crew at work needs the canvas build to know a deck, which is the canvas session's to add.

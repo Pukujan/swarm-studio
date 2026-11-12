@@ -32,19 +32,24 @@ const safeUrl = u => /^(https:\/\/|assets\/|\.\/)[^"'<>\s]*$/.test(String(u || '
 
 // ---------- the outline: one line per slide ----------
 
-// From the film storyboard's beats (engine/storyboard.mjs: kind, kicker, headline, sub, image), the brand sheet's
+// From the story's beats (engine/story.mjs, spec 39) or the film storyboard's (engine/storyboard.mjs), the brand sheet's
 // story and storyboard frames, or the brief alone. Always a title slide first and an end slide last.
 export function outlineFrom({ title, brief = '', story = {}, beats = [], frames = [], cta = '' } = {}) {
   const name = clip(title || story.what || brief || 'Untitled', 60)
   const slides = [{ layout: 'title', kicker: clip(story.who ? `For ${story.who}` : '', 40), title: name, lede: clip(story.what && story.what !== name ? story.what : brief, 140) }]
+  // the story's beats (spec 39: role, kicker, headline, line, picture) or the film's (kind, headline, sub, image)
+  beats = (Array.isArray(beats) ? beats : []).map(b => ({ ...b, kind: b.kind || (b.role === 'next' ? 'cta' : b.role), sub: b.sub ?? b.line, image: b.image || (b.picture?.kind === 'image' ? b.picture.src : null) }))
   const middle = beats.filter(b => !['open', 'title', 'cta'].includes(b.kind) && (b.headline || b.sub || b.say))
   if (middle.length) {
     for (const b of middle) slides.push(b.image || b.picture
       ? { layout: 'picture', kicker: clip(b.kicker, 30), title: clip(b.headline || b.sub, 70), lede: clip(b.headline ? b.sub : '', 120), image: { url: safeUrl(b.image || b.picture), alt: clip(b.headline, 80) } }
       : { layout: b.say && !b.sub ? 'quote' : 'section', kicker: clip(b.kicker, 30), title: clip(b.headline || b.sub, 70), lede: clip(b.headline ? b.sub : '', 120), quote: b.say && !b.sub ? clip(b.say, 160) : undefined })
+  } else if (frames.length) {
+    for (const f of frames.slice(0, 8)) slides.push({ layout: 'section', title: clip(f, 70) })
   } else {
-    const lines = frames.length ? frames : (story.pages || []).map(p => `${p}`)
-    for (const f of lines.slice(0, 8)) slides.push({ layout: 'section', title: clip(f, 70) })
+    // the brief's own list ("…: slow dough, local flour, open at seven") as one slide of points
+    const list = String(brief).split(':').slice(1).join(':').split(/[,;]|\band\b/).map(x => x.trim().replace(/\.$/, '')).filter(x => x && x.length < 60)
+    if (list.length >= 2) slides.push({ layout: 'points', title: clip(story.what || title || 'What it is', 60), points: list.slice(0, 4) })
   }
   const last = beats.find(b => b.kind === 'cta')
   slides.push({ layout: 'end', title: clip(last?.headline || name, 60), lede: clip(last?.sub || cta, 100) })
@@ -149,21 +154,25 @@ h4{font-family:var(--font-display);font-size:40px;line-height:1.25;font-weight:6
 // present mode: the keys a presenter expects, the slide number in the address, the stage fitted to the window
 const PRESENT = `(()=>{const d=document.querySelector('.deck'),s=[...d.querySelectorAll('.slide')];let i=0;
 const fit=()=>{const k=Math.min(innerWidth/${W},innerHeight/${H});d.style.transform='scale('+k+') translate(-50%,-50%)'};
-const go=n=>{i=Math.max(0,Math.min(s.length-1,n));s.forEach((x,j)=>x.classList.toggle('is-active',j===i));history.replaceState(null,'','#'+(i+1))};
+const go=n=>{i=Math.max(0,Math.min(s.length-1,n));s.forEach((x,j)=>x.classList.toggle('is-active',j===i));try{history.replaceState(null,'','#'+(i+1))}catch{}};
 addEventListener('resize',fit);addEventListener('keydown',e=>{const k=e.key;
 if(['ArrowRight','ArrowDown','PageDown',' '].includes(k)){go(i+1);e.preventDefault()}
 else if(['ArrowLeft','ArrowUp','PageUp'].includes(k)){go(i-1);e.preventDefault()}
 else if(k==='Home')go(0);else if(k==='End')go(s.length-1);
 else if(k==='f'||k==='F'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.()}
-else if(k==='Escape'&&document.fullscreenElement)document.exitFullscreen()});
+else if(k==='Escape'){if(document.fullscreenElement)document.exitFullscreen();else if(parent!==window)parent.postMessage({deck:'close'},'*')}});
 d.addEventListener('click',e=>go(i+(e.clientX<innerWidth/3?-1:1)));
-fit();go((parseInt(location.hash.slice(1))||1)-1)})()`
+fit();go(window.DECK_AT??(parseInt(location.hash.slice(1))||1)-1)})()`
 
-export function deckHtml(deck, { brand = null, look = lookOf(deck.look) } = {}) {
+// only: one slide, drawn still with no script (a picture of it on the board, in a sandboxed frame)
+export function deckHtml(deck, { brand = null, look = lookOf(deck.look), only = null } = {}) {
   const { vars, fonts } = deckVars(brand, look)
   const root = Object.entries(vars).map(([k, v]) => `--${k}:${v}`).join(';')
   const fontVars = `--font-display:'${fonts.heading}',Georgia,serif;--font-sans:'${fonts.body}',system-ui,sans-serif;--font-serif:'${fonts.heading}',Georgia,serif`
-  const slides = deck.slides.map(cleanSlide)
+  let slides = deck.slides.map(cleanSlide)
+  const total = slides.length
+  if (only != null) slides = slides.slice(only, only + 1)
+  const still = only != null ? `.deck{position:absolute;left:0;top:0;transform:scale(var(--k,1))}.slide{display:flex}` : ''
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(deck.title || 'Deck')}</title>
@@ -171,10 +180,10 @@ export function deckHtml(deck, { brand = null, look = lookOf(deck.look) } = {}) 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fam(fonts.heading)}&${fam(fonts.body)}&display=swap">
 <style>:root{${root};${fontVars}}
 ${BASE}
-${look?.rules || ''}</style></head>
+${look?.rules || ''}${still}</style></head>
 <body><div class="deck">
-${slides.map((s, i) => slideHtml(s, i, slides.length)).join('\n')}
-</div><script>${PRESENT}</script></body></html>
+${slides.map((s, i) => slideHtml(s, only ?? i, total)).join('\n')}
+</div>${only != null ? '' : `<script>${PRESENT}</script>`}</body></html>
 `
 }
 
@@ -188,4 +197,50 @@ export function deckPdf(html, dst, { chrome = findChrome() } = {}) {
     execFileSync(chrome, ['--headless', '--disable-gpu', '--no-first-run', `--user-data-dir=${join(tmp, 'profile')}`, '--no-pdf-header-footer', '--print-to-pdf-no-header', '--virtual-time-budget=4000', `--print-to-pdf=${dst}`, `file://${page}`], { stdio: 'ignore', timeout: 60000 })
     return existsSync(dst)
   } catch { return false } finally { rmSync(tmp, { recursive: true, force: true }) }
+}
+
+// ---------- the planner: looks to suggest, and the slides written out ----------
+
+// two or three looks for a brief, by its words; the plain one is always among them
+const LOOK_WORDS = [
+  ['pitch-deck-vc', /\b(pitch|investor|startup|seed|raise|fund)/i], ['corporate-clean', /\b(quarter|report|board|company|team|review|corporate)/i],
+  ['academic-paper', /\b(research|paper|study|lecture|course|class|thesis|science)/i], ['editorial-serif', /\b(story|book|essay|magazine|food|bakery|caf[eé]|travel)/i],
+  ['swiss-grid', /\b(design|architect|studio|portfolio|brand)/i], ['blueprint', /\b(engineer|system|architecture|technical|api|infra)/i],
+  ['terminal-green', /\b(developer|code|cli|hacker|terminal|open source)/i], ['neo-brutalism', /\b(launch|bold|indie|zine|loud)/i],
+  ['memphis-pop', /\b(kids?|party|fun|game|play)/i], ['japanese-minimal', /\b(calm|minimal|tea|wellness|yoga|quiet)/i],
+  ['aurora', /\b(ai|future|night|music|event|festival)/i], ['soft-pastel', /\b(baby|wedding|craft|gentle|pastel)/i]
+]
+export function suggestLooks(text = '', n = 3) {
+  const have = new Set(DECK_LOOKS.map(t => t.slug))
+  const hits = LOOK_WORDS.filter(([slug, re]) => have.has(slug) && re.test(text)).map(([slug]) => slug)
+  return [...new Set([...hits.slice(0, n - 1), 'minimal-white', 'editorial-serif', 'swiss-grid'])].filter(s => have.has(s)).slice(0, n)
+}
+
+// The slides written out by the planner (through Hermes, like the brand sheet's call), from the outline.
+// chat(messages) -> text, or null: then the outline as it is.
+export async function draftDeck({ brief = '', story = {}, beats = [], frames = [], voice = null, chat = null, title } = {}) {
+  const base = outlineFrom({ title, brief, story, beats, frames })
+  const out = { ...base, look: suggestLooks(`${brief} ${story.what || ''}`)[0], from: 'outline' }
+  if (!chat) return out
+  const sys = `You write presentation slides. Answer with JSON only: {"title": "...", "slides": [...]}.
+Each slide is {"layout", "kicker", "title", "lede", ...} with layout one of: ${LAYOUTS.join(', ')}.
+points: [{"head","text"}] up to 4 (layout points); steps: [{"head","text"}] up to 5 (layout steps);
+stats: [{"value","label","note"}] up to 4 (layout stats, only numbers the brief gives); left/right: {"head","text"} (layout two);
+quote and by (layout quote). Short titles (under 8 words), one idea a slide, 6 to 12 slides, title first, end last.
+Never invent facts, names or numbers that are not in the brief or the outline.${voice?.lines?.length ? `\nWrite in this voice: ${voice.name}. For example: ${voice.lines.slice(0, 2).join(' / ')}` : ''}`
+  const user = `Brief: ${String(brief).slice(0, 3000)}\nOutline:\n${outlineLines(base).join('\n')}`
+  try {
+    const text = String(await chat([{ role: 'system', content: sys }, { role: 'user', content: user }]) || '')
+    const j = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
+    const slides = (Array.isArray(j.slides) ? j.slides : []).slice(0, 16).map(cleanSlide).filter(s => s.title || s.quote)
+    if (slides.length < 3) return out
+    if (slides[0].layout !== 'title') slides.unshift(base.slides[0])
+    if (slides.at(-1).layout !== 'end') slides.push(base.slides.at(-1))
+    return { ...out, title: clip(j.title || base.title, 60), slides, from: 'planner' }
+  } catch { return out }
+}
+
+export function cleanDeck(d = {}) {
+  const slides = (Array.isArray(d.slides) ? d.slides : []).slice(0, 40).map(cleanSlide)
+  return { title: clip(d.title, 60) || 'Untitled', look: lookOf(d.look)?.slug || 'minimal-white', start: ['title', 'outline', 'key'].includes(d.start) ? d.start : 'outline', key: Number.isInteger(d.key) && d.key >= 0 && d.key < slides.length ? d.key : Math.min(1, slides.length - 1), slides: slides.length ? slides : outlineFrom({ title: d.title }).slides }
 }
