@@ -390,7 +390,7 @@ def _dispatch(cmd: str, args: list[str]) -> str:
         r = _pick_run(ref)
         if not r:
             return "No such build. See /swarm files."
-        return feed.post(r, args, _export_zip)
+        return feed.post(r, args, _export_zip, _page_shots)
 
     if cmd == "remix":
         return feed.remix(args, lambda brief: launcher.start_run(brief))
@@ -457,7 +457,7 @@ def post_json(run_id: str, unlisted: bool = False) -> dict:
         r = _pick_run(run_id)
         if not r:
             return {"ok": False, "message": "No such build."}
-        return feed.post_result(r, [run_id] + (["--unlisted"] if unlisted else []), _export_zip)
+        return feed.post_result(r, [run_id] + (["--unlisted"] if unlisted else []), _export_zip, _page_shots)
     except feed.FeedError as exc:
         return {"ok": False, "connect": not feed.load().get("token"), "message": str(exc)}
     except RuntimeError as exc:
@@ -487,6 +487,11 @@ def _export_zip(run_id: str) -> str | None:
     """The build's export zip (static HTML, React project, ABA spec), made now so it matches the build."""
     out = _api(f"/api/runs/{run_id}/export", {}, timeout=120)
     return out.get("zip")
+
+
+def _page_shots(run_id: str) -> dict:
+    """A fresh export and every page shot at desktop and phone size, for Post to Feed: {zip, pages, note}."""
+    return _api(f"/api/runs/{run_id}/pageshots", {}, timeout=300)
 
 
 def _fix(text: str, ref: str) -> str:
