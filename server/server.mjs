@@ -60,6 +60,7 @@ import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idl
 import { heavyConfig, runHeavy, interpOf } from '../engine/heavy.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const BOOTED = Date.now()
 const webDir = join(root, 'web')
 const runsDir = process.env.SWARM_RUNS_DIR || join(root, 'runs')
 const dataDir = process.env.SWARM_DATA_DIR || root
@@ -3223,6 +3224,10 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({
       app: 'swarm-studio',
       version: webVersion(),
+      // for the launcher: which process this is, when it started, and whether stopping it would lose work
+      pid: process.pid,
+      booted: BOOTED,
+      busy: !!(current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working',
       run: current?.id || null,
       done: current?.done ?? null,
       working: current?.working.size || 0,
