@@ -11,6 +11,8 @@
 //   2. the same through a version tile (Bravo › Version 1)
 //   3. a build started elsewhere, and the stream dropping and replaying the server's run, change nothing
 //   4. the p key on Projects opens no player behind it
+//   5. Play and Watch a visitor
+//   6. in every room the navigation machine, the pill and the back button agree, and Esc climbs
 // It never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
@@ -197,6 +199,40 @@ try {
   w = await watch()
   ok(w.player && !w.walking && w.label === 'Watch a visitor', 'a plain click on Play plays the prototype, no visitor')
   await page.click('#pl-close')
+
+  console.log('the pill and the back button match the screen in every room')
+  await home()
+  await page.click('.home .card[aria-label="Alpha Tea"]')
+  await settle(A1)
+  const screen = () => page.evaluate(() => ({
+    room: window.swarmCosmos.nav.view.room, mode: window.swarmCosmos.mode, version: window.swarmCosmos.nav.view.version,
+    pill: document.querySelector('.mode-btn .t')?.textContent || '',
+    back: document.querySelector('.cosmos-back .t')?.textContent || '',
+    project: !!document.querySelector('.pj-crumb')?.checkVisibility?.(),
+    home: !!document.querySelector('.home .card')?.checkVisibility?.(),
+    crumb: document.querySelector('.pj-crumb .pj-name')?.textContent?.trim() || ''
+  }))
+  const ROOMS = [['canvas', 'deck', 'Canvas'], ['video', 'video', 'Video'], ['app', 'app', 'App'], ['overview', 'overview', 'Overview']]
+  for (const [mode, room, label] of ROOMS) {
+    await page.click('.mode-btn')
+    await page.click(`.mode-menu [data-mode="${mode}"]`)
+    await wait(700)
+    const s = await screen()
+    const back = room === 'overview' ? 'Projects' : 'Overview'
+    ok(s.room === room && s.pill === label && s.back === back && s.version === A1, `${label}: the machine, the pill and the back button agree (${s.room}, ${s.pill}, ${s.back})`)
+    ok(room === 'overview' ? s.project && s.crumb === 'Alpha Tea' : !s.project && !s.home, `${label}: only its own screen shows (${room === 'overview' ? s.crumb : `project ${s.project}, home ${s.home}`})`)
+  }
+  await page.click('.mode-btn')
+  await page.click('.mode-menu [data-mode="canvas"]')
+  await wait(500)
+  await page.keyboard.press('Escape')
+  await wait(500)
+  let up = await screen()
+  ok(up.room === 'overview' && up.pill === 'Overview' && up.project, `Esc in the deck goes to the Overview (${up.room}, ${up.pill})`)
+  await page.keyboard.press('Escape')
+  await wait(700)
+  up = await screen()
+  ok(up.room === 'home' && up.mode === 'home' && up.home && !up.project, `Esc on the Overview goes to Projects (${up.room})`)
   void C1
 } finally {
   await browser.close()

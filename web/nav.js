@@ -5,7 +5,8 @@
 //
 //   nav
 //   ├─ home                      Projects
-//   ├─ plan                      a game plan
+//   ├─ draft                     a new project talked through on the Design deck, nothing built yet
+//   ├─ plan                      a game plan (or the one a game talk is drafting)
 //   ├─ brand                     the brand sheet (context.from: where it was opened from)
 //   └─ build                     a version is open
 //      ├─ video
@@ -13,7 +14,7 @@
 //      └─ playable               parallel: room (overview · deck live|replay · app) and player (closed · prototype · visitor)
 import { setup, createActor, assign } from './vendor/xstate/xstate.mjs'
 
-export const ROOMS = ['home', 'overview', 'deck', 'app', 'game', 'video', 'plan', 'brand']
+export const ROOMS = ['home', 'draft', 'overview', 'deck', 'app', 'game', 'video', 'plan', 'brand']
 const BUILD_ROOMS = ['overview', 'deck', 'app', 'video']
 const PLAYABLE = ['overview', 'deck', 'app']
 // a run or project id as the address or a caller gives it: a short plain string, or nothing
@@ -25,7 +26,7 @@ const target = room => (room === 'video' || room === 'game' ? `#nav.build.${room
 // The screen a snapshot shows, as one plain record every consumer and the address read
 export function view(snap) {
   const m = s => snap.matches(s)
-  const room = m('home') ? 'home' : m('plan') ? 'plan' : m('brand') ? 'brand' : m({ build: 'video' }) ? 'video' : m({ build: 'game' }) ? 'game'
+  const room = m('home') ? 'home' : m('draft') ? 'draft' : m('plan') ? 'plan' : m('brand') ? 'brand' : m({ build: 'video' }) ? 'video' : m({ build: 'game' }) ? 'game'
     : m({ build: { playable: { room: 'deck' } } }) ? 'deck' : m({ build: { playable: { room: 'app' } } }) ? 'app' : 'overview'
   const player = m({ build: { playable: { player: 'visitor' } } }) ? 'visitor' : m({ build: { playable: { player: 'prototype' } } }) ? 'prototype' : 'closed'
   const replay = m({ build: { playable: { room: { deck: 'replay' } } } })
@@ -68,19 +69,24 @@ export const navMachine = setup({}).createMachine({
         })
       }))
     ],
-    plan: { guard: ({ event }) => !!id(event.plan), target: '.plan', actions: assign({ plan: ({ event }) => id(event.plan), page: null }) },
+    // a new project's talk: the deck with nothing on it, no project or build yet
+    draft: { target: '.draft', actions: assign({ project: null, version: null, run: null, plan: null, page: null }) },
+    // a plan by id, or none yet while a game talk drafts one
+    plan: { target: '.plan', actions: assign({ plan: ({ event }) => id(event.plan), page: null }) },
     brand: { target: '.brand', actions: assign({ from: ({ self }) => view(self.getSnapshot()).room }) },
     streamed: { actions: assign({ pending: ({ context, event }) => (context.pending && event.run === context.pending ? null : context.pending) }) }
   },
   states: {
     home: {},
+    draft: {},
     plan: {},
     brand: {
       // the sheet is open already: a second brand is not a move, and it keeps where it came from
       on: {
         brand: {},
         back: [
-          { guard: ({ context }) => context.from === 'plan' && !!context.plan, target: 'plan' },
+          { guard: ({ context }) => context.from === 'plan', target: 'plan' },
+          { guard: ({ context }) => context.from === 'draft', target: 'draft' },
           { guard: ({ context }) => context.from === 'game' && !!context.version && !!context.run, target: target('game') },
           ...BUILD_ROOMS.map(room => ({ guard: ({ context }) => context.from === room && !!context.version, target: target(room) })),
           { target: 'home' }

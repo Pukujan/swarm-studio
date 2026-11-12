@@ -84,7 +84,8 @@ test('entering a room closes the player, even the room it is in', () => {
 
 test('plans and the brand sheet; leaving the sheet goes back where it came from', () => {
   assert.deepEqual(pick(v(A, { type: 'play' }, { type: 'plan', plan: 'pl1' }), ['room', 'plan', 'player']), ['plan', 'pl1', 'closed'])
-  no([], { type: 'plan' })
+  // a game talk's plan has no id until it is drafted
+  assert.deepEqual(pick(v(A, { type: 'plan' }), ['room', 'plan']), ['plan', null])
   const b = [A, { type: 'room', room: 'deck' }, { type: 'brand' }]
   assert.deepEqual(pick(v(...b), ['room', 'from']), ['brand', 'deck'])
   no(b, { type: 'brand' })
@@ -93,6 +94,16 @@ test('plans and the brand sheet; leaving the sheet goes back where it came from'
   assert.equal(v(A, { type: 'room', room: 'game', run: 'rg' }, { type: 'brand' }, { type: 'back' }).room, 'game')
   assert.equal(v({ type: 'brand' }, { type: 'back' }).room, 'home')
   no([A], { type: 'back' })
+})
+
+test('a new project talked through on the deck: nothing open until its build starts', () => {
+  const d = v(A, { type: 'play' }, { type: 'draft' })
+  assert.deepEqual(pick(d, ['room', 'project', 'version', 'run', 'player']), ['draft', null, null, null, 'closed'])
+  assert.deepEqual(pick(v({ type: 'draft' }, { type: 'started', run: 'rn' }), ['room', 'run', 'pending']), ['deck', 'rn', 'rn'])
+  assert.equal(v({ type: 'draft' }, { type: 'brand' }, { type: 'back' }).room, 'draft')
+  no([{ type: 'draft' }], { type: 'play' })
+  no([{ type: 'draft' }], { type: 'room', room: 'deck' })
+  assert.equal(toAddress(v(A, { type: 'draft' })), '')
 })
 
 test('the player opens only over a build with pages, in the Overview, deck or app', () => {
