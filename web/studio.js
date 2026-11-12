@@ -54,6 +54,9 @@ C.go = (m, v) => {
   body.classList.remove('side-min')
   // a replay started from the menu plays in the Design deck: leaving the deck ends it
   if (m !== 'station' || (v && v !== 'canvas')) sw.stopReplay?.()
+  // the player plays the open build: Projects, a plan or a brand sheet shows none, so it closes
+  // (left open it sat hidden behind Projects and covered the next project opened)
+  if (m === 'home' || m === 'plan' || m === 'brand') sw.closePlayer?.()
   C.mode = m
   queueMicrotask(() => C.work?.paint?.())
   setMode(m)
@@ -125,8 +128,9 @@ C.brand = opts => { C.go('brand'); return C.brandView.open(opts) }
 // open a project: its newest build (or the one asked for); with no run, the build just started
 C.open = (run, pid) => {
   C.project = pid || null
-  C.load(run)
+  const loaded = C.load(run)
   C.go('project', run || undefined)
+  return loaded
 }
 // Load a run into the canvas and remember it until it is there: whoever asks "which run is open"
 // in between gets this one, not the one the canvas still holds.
