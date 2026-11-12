@@ -57,3 +57,35 @@ Each pack below is a look converted from a design system in [nexu-io/open-design
 | od-refined | Refined | `design-systems/refined/` | bergside/awesome-design-skills skills/refined (MIT) | tokens.css |
 | od-simple | Simple | `design-systems/simple/` | Open Design | tokens.css |
 | od-sleek | Sleek | `design-systems/sleek/` | bergside/awesome-design-skills skills/sleek (MIT) | tokens.css |
+
+# Credits: deck looks from html-ppt
+
+Each look in `decks.json` is converted from a theme of html-ppt by lewis ([lewislulu/html-ppt-skill](https://github.com/lewislulu/html-ppt-skill), MIT, Copyright (c) 2026 lewis, see `LICENSE.html-ppt`), as shipped in [nexu-io/open-design](https://github.com/nexu-io/open-design) at commit `bc06128813c99fa63f5af53ad2c903c27db057f2` under `design-templates/html-ppt/`. Converted by `scripts/import-od-decks.mjs`; what was changed is in `NOTICE`.
+
+| Look | Path in Open Design |
+|---|---|
+| Minimal White | `design-templates/html-ppt/assets/themes/minimal-white.css` |
+| Academic Paper | `design-templates/html-ppt/assets/themes/academic-paper.css` |
+| Aurora | `design-templates/html-ppt/assets/themes/aurora.css` |
+| Bauhaus | `design-templates/html-ppt/assets/themes/bauhaus.css` |
+| Blueprint | `design-templates/html-ppt/assets/themes/blueprint.css` |
+| Corporate Clean | `design-templates/html-ppt/assets/themes/corporate-clean.css` |
+| Cyberpunk Neon | `design-templates/html-ppt/assets/themes/cyberpunk-neon.css` |
+| Editorial Serif | `design-templates/html-ppt/assets/themes/editorial-serif.css` |
+| Engineering Whiteprint | `design-templates/html-ppt/assets/themes/engineering-whiteprint.css` |
+| Glassmorphism | `design-templates/html-ppt/assets/themes/glassmorphism.css` |
+| Japanese Minimal | `design-templates/html-ppt/assets/themes/japanese-minimal.css` |
+| Magazine Bold | `design-templates/html-ppt/assets/themes/magazine-bold.css` |
+| Memphis Pop | `design-templates/html-ppt/assets/themes/memphis-pop.css` |
+| Midcentury | `design-templates/html-ppt/assets/themes/midcentury.css` |
+| Neo Brutalism | `design-templates/html-ppt/assets/themes/neo-brutalism.css` |
+| News Broadcast | `design-templates/html-ppt/assets/themes/news-broadcast.css` |
+| Pitch Deck VC | `design-templates/html-ppt/assets/themes/pitch-deck-vc.css` |
+| Rainbow Gradient | `design-templates/html-ppt/assets/themes/rainbow-gradient.css` |
+| Retro TV | `design-templates/html-ppt/assets/themes/retro-tv.css` |
+| Sharp Mono | `design-templates/html-ppt/assets/themes/sharp-mono.css` |
+| Soft Pastel | `design-templates/html-ppt/assets/themes/soft-pastel.css` |
+| Swiss Grid | `design-templates/html-ppt/assets/themes/swiss-grid.css` |
+| Terminal Green | `design-templates/html-ppt/assets/themes/terminal-green.css` |
+| Vaporwave | `design-templates/html-ppt/assets/themes/vaporwave.css` |
+| Y2K Chrome | `design-templates/html-ppt/assets/themes/y2k-chrome.css` |
