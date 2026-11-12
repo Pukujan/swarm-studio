@@ -190,6 +190,23 @@ flowchart LR
   BUILD --> BV["Build: front, side, back, the model (Download)"]
 ```
 
+## 5c. The Studio's scaffold (spec 37)
+
+**Studio first** on Make, for a kind with a kit (Website, Brand), opens a Studio project here. Nothing builds
+before the person presses **Build**.
+
+```mermaid
+flowchart LR
+  MK["Make › Studio first"] --> SC["Projects › name · Build"]
+  CH["Left chat: Start with X, and why"] --- SC
+  SC --> BR["Brand: the brand card → brand sheet → Lock → back"]
+  SC --> RF["References: add, drop; Use as given, Remove"]
+  SC --> AS["Assets: add, drop; Role, Use as reference, Remove"]
+  SC --> PG["Pages (Website): storyboard strip; Add page; rename, Earlier, Later, Remove"]
+  SC --> LK["Lock: the idea"]
+  SC --> BU["Build → the build room"]
+```
+
 ## 6. Projects
 
 ```mermaid

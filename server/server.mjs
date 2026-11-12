@@ -48,6 +48,9 @@ import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
 import { refRoutes } from './refs.mjs'
+import { studioRoutes } from './studio.mjs'
+import { studioStore } from '../engine/studio.mjs'
+import { assetStore } from '../engine/assetstore.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
@@ -1369,6 +1372,10 @@ const chats = talks.chats
 // A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
 const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
 const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input) })
+// The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
+const studios = studioStore({ projectsDir: projects.projectsDir })
+const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
+const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats })
 // Media in a chat (spec 29, server/chatmedia.mjs): a picture is read by the reviewer's vision model, with
 // reasoning off and the vision fallbacks after it, the same way Scribble's marks are read
 async function askVision(messages, { maxTokens = 300, kind = 'chat-media' } = {}) {
@@ -1433,6 +1440,7 @@ async function readClip(file, kind) {
 const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
 const brands = brandRoutes({
   chats,
+  projectBrands: studios.brands,
   model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
     trace: { kind: 'brand' }, model: modelFor('planner'), maxTokens: 900, temperature: 0.6, signal: AbortSignal.timeout(60000),
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
@@ -2475,6 +2483,9 @@ const server = createServer((req, res) => {
         // the project's References store: pictures with what each is for, and links
         const rb = refs.brief(input.project)
         if (rb) input.brief = `${String(input.brief).trim()}\n\n${rb}`
+        // and its Assets (spec 37): placed as they are
+        const ab = projectAssets.brief(input.project)
+        if (ab) input.brief = `${String(input.brief).trim()}\n\n${ab}`
       }
       // A message inside an open build (from: its run) is that project's next version: the
       // last version is kept as it stands and the crew adds only what the message asks for
@@ -2497,7 +2508,8 @@ const server = createServer((req, res) => {
       }
       const pid = typeof input.project === 'string' ? input.project : null
       // a locked brand sheet is the new build's look (a follow-up keeps the project's)
-      const brand = !base ? lockedBrand(chats, chatId) : null
+      // a Studio project's own brand (spec 37) when the chat has none locked
+      const brand = !base ? lockedBrand(chats, chatId) || (pid ? lockedBrand(studios.brands, pid) : null) : null
       if (brand) input.brand = brand
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
@@ -3215,6 +3227,7 @@ const server = createServer((req, res) => {
   if (talks(req, res, url)) return
   if (brands(req, res, url)) return
   if (refsRoute(req, res, url)) return
+  if (studioRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return

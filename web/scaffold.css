@@ -1,0 +1,58 @@
+/* ---------- The Studio's scaffold (web/scaffold.js, docs/specs/37-studio-first.md): the Plan board's stage,
+   sections, artboards and inspector (web/project.css, web/plan.css), with a state dot by each step's name.
+   The brand's swatches and samples are the person's colours; the chrome stays tokens only. */
+
+/* the top bar: Projects › name, and Build, only on the scaffold */
+.sc-crumb, .sc-primary { display: none !important; }
+body.cosmos-studio .sc-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
+body.cosmos-studio .sc-primary:not([hidden]) { display: inline-flex !important; align-items: center; justify-content: center; min-width: 120px; }
+body.cosmos-studio .sc-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+body.cosmos-studio .brand, body.cosmos-studio .file-name, body.cosmos-studio .playwrap, body.cosmos-studio .pubwrap, body.cosmos-studio .mode-wrap,
+body.cosmos-studio .pl-crumb, body.cosmos-studio .pl-primary, body.cosmos-studio .br-crumb, body.cosmos-studio .br-primary { display: none !important; }
+body.cosmos-studio .cosmos-back { display: none; }
+body.cosmos-studio .topbar { background: var(--void); backdrop-filter: none; }
+body.cosmos-studio .viewport, body.cosmos-studio .appview { visibility: hidden; }
+body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
+.sc-crumb button { background: none; border: 0; color: inherit; cursor: pointer; font: 500 14px var(--body); padding: 6px; border-radius: 8px; }
+.sc-crumb button:hover { color: var(--text); background: var(--surface-2); }
+.sc-crumb .sc-name { color: var(--text); font: 600 14px var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 34vw; }
+
+/* each step: its name, and a dot for empty, started, done or skipped */
+.scaffold .pj-sec.sc-step { margin-bottom: 52px; }
+.scaffold .pj-sec.sc-step .abs { max-width: 1040px; gap: 30px 16px; }
+.scaffold .pj-sec .al { display: flex; align-items: center; gap: 9px; }
+.sc-dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.sc-dot.started { background: linear-gradient(90deg, var(--text) 50%, transparent 50%); border-color: var(--text); }
+.sc-dot.done { background: var(--accent); border-color: var(--accent); }
+.sc-dot.skipped { border-style: dashed; opacity: .6; }
+
+/* the cards */
+.scaffold .ab:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.scaffold .ab > em { position: absolute; left: 0; top: calc(100% + 6px); font: 500 12px var(--body); font-style: normal; color: var(--muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ab.sc-add { width: 150px; height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: transparent; border-style: dashed; color: var(--muted); font: 500 13px var(--body); }
+.ab.sc-add:hover { color: var(--text); border-color: var(--line-2); }
+.ab.pcard.sc-wide { width: 420px; }
+.ab.sc-thumb { width: 150px; height: 110px; overflow: visible; }
+.sc-file { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.ab.sc-brand { width: 300px; height: 190px; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); overflow: visible; }
+.sc-type { flex: 1; border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: center; gap: 6px; pointer-events: none; overflow: hidden; }
+.sc-type b { font-size: 40px; line-height: 1; font-weight: 700; }
+.sc-type span { font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ab.sc-brand-new > span { display: flex; align-items: flex-end; color: var(--muted); }
+.ab.pcard.sc-idea { width: 420px; height: auto; min-height: 118px; gap: 10px; }
+.ab.pcard.sc-idea > span { font: 500 16px/1.4 var(--body); -webkit-line-clamp: 4; }
+.sc-idea-full { margin: 0; font: 14px/1.5 var(--body); color: var(--text); }
+
+/* a website's pages: a storyboard strip, each frame in the brand's own colours and heading */
+.ab.sc-frame { width: 200px; height: 140px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); color: var(--text); overflow: visible; }
+.ab.sc-frame .sc-nav { display: block; height: 4px; width: 44%; border-radius: 99px; background: var(--a, var(--muted)); opacity: .9; }
+.ab.sc-frame b { font-size: 20px; line-height: 1.1; font-weight: 700; margin-top: 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ab.sc-frame u { display: block; height: 5px; border-radius: 99px; background: currentColor; opacity: .18; text-decoration: none; }
+.ab.sc-frame u + u { width: 70%; }
+.ab.sc-frame > em { font-variant-numeric: tabular-nums; }
+
+/* the inspector's actions */
+.sc-body { display: flex; flex-direction: column; gap: 12px; }
+.sc-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.sc-acts .btn { display: inline-flex; align-items: center; gap: 6px; }
+.sc-body select { width: 100%; height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px var(--body); padding: 0 8px; }

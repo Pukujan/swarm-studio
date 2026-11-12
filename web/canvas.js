@@ -7313,6 +7313,8 @@ window.swarm = {
   openRun, setView, loadFiles, focusPage, openPlayer, closePlayer, followPlayer,
   // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
+  // the planner's one line in the left chat (the Studio's "start with…", docs/specs/37-studio-first.md)
+  say: text => botMsg(String(text || '')),
   readTalk, talk: { start: talkStart, ask: talkAsk, end: talkEnd, saidOf, lock: () => (talk.on && talk.kind === 'game' ? gameLock() : null), get on() { return talk.on }, get chat() { return talk.on ? talk.chat : null } },
   // a replay started from ☰ → Replay ends when the deck is left
   stopReplay,

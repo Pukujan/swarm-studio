@@ -4,7 +4,10 @@
 // $HERMES_HOME/swarm-studio. A run's own folder is never touched here except by Empty Trash or
 // Delete forever, which the person asks for (and confirms) themself.
 //
-//   folders.json v2: { v: 2, folders: [name], projects: { <pid>: { runs: [id], name, title, folder, trashed, made } } }
+//   folders.json v2: { v: 2, folders: [name], projects: { <pid>: { runs: [id], name, title, folder, trashed, made, studio? } } }
+//
+// A Studio project (docs/specs/37-studio-first.md, `studio: kind`) is made before anything is built, so
+// it is kept with no runs and listed with the status Studio; its first build joins it like any run.
 //
 // A project has one name (engine/naming.mjs): its brand, never a screen title. A new run joins
 // a project it names (meta.project / meta.projectName, from the start request) or whose name its
@@ -141,7 +144,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     for (const [pid, p] of Object.entries(data.projects)) {
       p.runs = (p.runs || []).filter(id => ids.includes(id) && !owner.has(id))
       for (const id of p.runs) owner.set(id, pid)
-      if (!p.runs.length) delete data.projects[pid]
+      if (!p.runs.length && !p.studio) delete data.projects[pid]
     }
     let changed = !!data.migrating
     for (const id of ids) {
@@ -198,6 +201,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
   const coverOf = card => card.cover || null
   function project(pid, p) {
     const all = p.runs.map(id => runCard(id)).filter(Boolean)
+    if (!all.length && p.studio) return studioCard(pid, p)
     if (!all.length) return null
     // a game made from a site in this project is part of that site's version, not a version of its own
     const ids = new Set(all.map(c => c.id))
@@ -252,6 +256,25 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       uploads: uploadsOf(pid).length
     }
   }
+  // a Studio project with nothing built yet: its name, its kind, the status Studio, no versions
+  const STUDIO_KIND = { site: 'Website', app: 'App', game: 'Game', video: 'Video', deck: 'Deck', brand: 'Brand' }
+  function studioCard(pid, p) {
+    return {
+      id: pid, name: p.name || 'New project', title: p.title || p.name || 'New project', studio: p.studio, pieces: [], folder: p.folder || null,
+      trashed: p.trashed || null, made: p.made, updated: p.made, cover: null, peek: null, theme: null, head: null, parts: {}, kinds: [],
+      state: { kind: STUDIO_KIND[p.studio] || 'Website', status: 'Studio', host: null }, live: false, progress: null, work: null, count: 0, versions: [],
+      uploads: uploadsOf(pid).length
+    }
+  }
+  // a new Studio project: { name, kind } -> its id
+  function makeStudio({ name = '', kind = 'site' } = {}) {
+    const { data } = load()
+    const pid = `s-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    // own: kept apart from the projects it shares a name with (no folding into an older one)
+    data.projects[pid] = { runs: [], name: clip(name, 48) || 'New project', title: null, folder: null, trashed: null, made: Date.now(), own: true, studio: STUDIO_KIND[kind] ? kind : 'site' }
+    write(data)
+    return pid
+  }
   function list() {
     const { data } = load()
     const projects = Object.entries(data.projects).map(([pid, p]) => project(pid, p)).filter(Boolean)
@@ -298,7 +321,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       }
       case 'duplicate': {
         const src = data.projects[ids[0]]
-        if (!src) break
+        if (!src || !src.runs.length) break
         const from = src.runs.at(-1), to = new Date().toISOString().replace(/[:.]/g, '-')
         cpSync(join(runsDir, from), join(runsDir, to), { recursive: true, filter: s => !/[\\/](node_modules|\.git)$/.test(s) })
         // the copy is its own build: its events and pictures name the new id
@@ -335,7 +358,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     for (const p of Object.values(data.projects)) p.runs = p.runs.filter(r => r !== runId)
     data.projects[pid].runs.push(runId)
     data.projects[pid].runs.sort()
-    for (const [k, p] of Object.entries(data.projects)) if (!p.runs.length) delete data.projects[k]
+    for (const [k, p] of Object.entries(data.projects)) if (!p.runs.length && !p.studio) delete data.projects[k]
     write(data)
   }
 
@@ -427,5 +450,5 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
   }
   const resolve = ref => findIn(load().data, ref)
 
-  return { list, get, op, claim, projectOf, runIndex, resolve, folderOp, uploadsOf, saveUpload, uploadOp, uploadFile, uploadsDir, projectsDir }
+  return { list, get, op, claim, makeStudio, projectOf, runIndex, resolve, folderOp, uploadsOf, saveUpload, uploadOp, uploadFile, uploadsDir, projectsDir }
 }

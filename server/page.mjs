@@ -24,13 +24,19 @@ export function joinModules(webDir, files) {
   const read = f => readFileSync(join(webDir, f), 'utf8')
   // path → (local name → exported name), so a name two files import is declared once
   const libs = new Map()
-  const body = files.map(f => read(f)
-    .replace(VENDOR_IMPORT, (_, names, path) => {
-      const used = libs.get(path) || libs.set(path, new Map()).get(path)
-      for (const [name, local] of pairs(names)) used.set(local || name, name)
-      return ''
-    })
-    .replace(/^import .* from '\.\/.*'$/gm, '').replace(/^export /gm, ''))
+  const body = files.map(f => {
+    const src = read(f)
+      .replace(VENDOR_IMPORT, (_, names, path) => {
+        const used = libs.get(path) || libs.set(path, new Map()).get(path)
+        for (const [name, local] of pairs(names)) used.set(local || name, name)
+        return ''
+      })
+      .replace(/^import .* from '\.\/.*'$/gm, '').replace(/^export /gm, '')
+    // a Studio kit (web/kit-<kind>.js, docs/specs/37-studio-first.md) keeps its own names: it is its own
+    // closure, and only its export, <kind>Kit, reaches web/kits.js
+    const kit = f.match(/^kit-([a-z]+)\.js$/)
+    return kit ? `const ${kit[1]}Kit = (() => {\n${src}\nreturn ${kit[1]}Kit\n})()` : src
+  })
   const vendored = [...libs].map(([path, used]) => {
     const src = read(path)
     const end = src.match(/export\s*\{([^}]*)\};?\s*$/)
@@ -41,6 +47,9 @@ export function joinModules(webDir, files) {
   })
   return [...vendored, ...body].join('\n')
 }
+
+// every Studio kit there is (web/kit-<kind>.js): web/kits.js names the ones it lists
+const kitFiles = webDir => readdirSync(webDir).filter(f => /^kit-[a-z]+\.js$/.test(f)).sort()
 
 export function canvasPage(webDir, extra = {}) {
   const read = f => readFileSync(join(webDir, f), 'utf8')
@@ -61,7 +70,8 @@ export function canvasPage(webDir, extra = {}) {
     .replace('<link rel="stylesheet" href="setup.css">', () => `<style>${read('setup.css')}</style>`)
     .replace('<link rel="stylesheet" href="plan.css">', () => `<style>${read('plan.css')}</style>`)
     .replace('<link rel="stylesheet" href="brand.css">', () => `<style>${read('brand.css')}</style>`)
+    .replace('<link rel="stylesheet" href="scaffold.css">', () => `<style>${read('scaffold.css')}</style>`)
     .replace('<link rel="stylesheet" href="workshop.css">', () => `<style>${read('workshop.css')}</style>`)
     // the studio controller, Projects and a project: its own modules joined into one
-    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${joinModules(webDir, ['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'edit/patches.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', 'nav.js', 'studio.js'])}</script>`)
+    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${joinModules(webDir, ['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'edit/patches.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', ...kitFiles(webDir), 'kits.js', 'scaffold.js', 'nav.js', 'studio.js'])}</script>`)
 }
