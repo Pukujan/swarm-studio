@@ -234,3 +234,19 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
   .hm-sc { grid-template-columns: 22px 1fr 18px; row-gap: 6px; padding: 10px 12px; }
   .hm-sc .st { grid-column: 2 / 3; grid-row: 2; }
 }
+
+/* ---------- Settings (web/settings.js): grouped lists, a name and a state per row */
+.set .set-list { display: flex; flex-direction: column; gap: 2px; }
+.set-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: none; color: var(--text); cursor: pointer; text-align: left; font: 500 14px var(--font); }
+.set-row:hover, .set-row:focus-visible { background: var(--surface-2); outline: none; }
+.set-row b { font-weight: 600; }
+.set-row span { margin-left: auto; color: var(--muted); font-size: 13px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-row .i { color: var(--muted); flex: none; }
+.set-back { color: var(--muted); margin-bottom: 6px; }
+.set-dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.set-dot.on { background: var(--text); border-color: var(--text); }
+.set-goes { margin: 0 10px 8px 28px; color: var(--muted); font: 13px/1.45 var(--font); }
+.set-data { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 10px 16px; margin: 0; padding: 0 10px; font: 13px/1.45 var(--font); }
+.set-data dt { color: var(--text); font-weight: 600; }
+.set-data dd { margin: 0; color: var(--muted); }
+

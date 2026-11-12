@@ -42,12 +42,14 @@ import { setupRoutes } from './setup.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
 import { ckffPaint, ckffCreds } from '../engine/ckff.mjs'
 import { chooseImage, paintWithBackup } from '../engine/paintretry.mjs'
-import { library } from '../engine/library.mjs'
+import { library, PACKS as LIB_PACKS } from '../engine/library.mjs'
+import { assetLib, readPicks, setPick, pickedItem, creditsFor, SLOT_CATEGORIES, slotKind } from '../engine/assetlib.mjs'
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
 import { scoreWav, elevenScore } from '../engine/score.mjs'
+import { decode, analyse, cutToMusic, planLengths, leastLengths, retime } from '../engine/musiccut.mjs'
 import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
 import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idleMessages, IDLE_SAY } from '../engine/idle.mjs'
@@ -938,7 +940,38 @@ async function videoNow(id, input = {}) {
         send('video:note', { message: `no voiceover this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
-    const lengths = scenes.map((s, i) => Number(Math.max(s.seconds || 2, voices[i]?.seconds ? voices[i].seconds + 0.6 : 0).toFixed(3)))
+    // the music first, then the cuts on it (spec 26): the track is made to the planned lengths,
+    // measured, and every cut moves onto its beats, hits, drop and quiet passages
+    const planned = planLengths(scenes, voices, VOICE_LEAD)
+    let lengths = planned, musicFile = null, fx = [], scoredBy = null, musicCut = null
+    const tenv = { ...process.env, PATH: t.path }
+    if (input.music !== false) {
+      progress(2, 'scoring')
+      const seconds0 = planned.reduce((a, b) => a + b, 0), cues0 = cueSheet(scenes, planned)
+      // Hermes's secret, else Hermes's ElevenLabs connector, else a pasted key
+      const key = process.env.SWARM_ELEVENLABS_KEY || mediaKeyStore.get('elevenlabs')
+      const via = media?.music.via
+      if (input.eleven !== false && (key || via === 'hermes-mcp')) {
+        try {
+          progress(2, 'ElevenLabs is scoring the film')
+          const e = via === 'hermes-mcp' && !process.env.SWARM_ELEVENLABS_KEY
+            ? await mcpScore({ call: connectors.call, server: media.music.server, music: scenes.music, cues: cues0, seconds: seconds0, dir })
+            : await elevenScore({ key, music: scenes.music, cues: cues0, seconds: seconds0, dir })
+          musicFile = e.music; fx = e.sfx; scoredBy = 'elevenlabs'
+        } catch (err) { send('video:note', { message: `ElevenLabs did not score it, so the studio did: ${String(err.message || err).slice(0, 100)}` }) }
+      }
+      if (!musicFile) { musicFile = join(dir, 'music.wav'); scoreWav({ seconds: seconds0, music: scenes.music, cues: cues0, file: musicFile, seed }); scoredBy = 'studio' }
+      try {
+        progress(2, 'cutting to the music')
+        const { samples, rate } = await decode(t.ffmpeg, musicFile, { env: tenv })
+        const a = analyse(samples, rate, { bpm: scenes.music?.bpm })
+        const r = cutToMusic(scenes, planned, a, { min: leastLengths(scenes, voices, VOICE_LEAD), maxEnd: scoredBy === 'elevenlabs' ? a.seconds : null })
+        lengths = r.lengths; musicCut = r.report
+        // the studio's own score is written again to the final cuts, so its booms sit on them; a generated track stays as it is
+        if (scoredBy === 'studio') scoreWav({ seconds: lengths.reduce((x, y) => x + y, 0), music: scenes.music, cues: cueSheet(scenes, lengths), file: musicFile, seed })
+        else fx = fx.map(x => ({ ...x, at: retime(x.at, planned, lengths) }))
+      } catch (err) { musicCut = { kept: `the track could not be measured: ${String(err.message || err).split('\n')[0].slice(0, 100)}` } }
+    }
     const comp = composition(scenes, c, lengths, transition)
     // the tall cut for phones: the same storyboard, look and timing, laid out again for a 9:16 frame
     const tallComp = composition(scenes, c, lengths, transition, comp.look, { shape: 'tall' })
@@ -950,7 +983,7 @@ async function videoNow(id, input = {}) {
     writeFileSync(join(tallDir, 'index.html'), tallComp.html)
     const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
     const cues = cueSheet(scenes, lengths)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, planned, musicCut, scoredBy, scenes }, null, 2))
     // the stills and motion lines for Flow (Veo): the flow-video skill animates them into <run>/flow/<still>.mp4,
     // and the next cut plays those clips instead of the stills
     writeFileSync(join(dir, 'flow-prompts.json'), JSON.stringify(scenes.filter(s => s.layer === 'story' && s.image).map(s => { const f = c.images.find(x => x.n === s.image); return { still: f.file, clip: join(runsDir, id, 'flow', `${basename(f.file).replace(/\.[^.]+$/, '')}.mp4`), camera: s.camera, seconds: s.seconds, action: `${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape` } }), null, 2))
@@ -967,28 +1000,10 @@ async function videoNow(id, input = {}) {
       tall = false
       send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
-    // the score to the storyboard's cue sheet: ElevenLabs when the studio has a key, else written here
-    progress(97, 'scoring')
-    let sound = false, scoredBy = null
+    let sound = false
     try {
-      let musicFile = null, fx = []
-      if (input.music !== false) {
-        // Hermes's secret, else Hermes's ElevenLabs connector, else a pasted key
-        const key = process.env.SWARM_ELEVENLABS_KEY || mediaKeyStore.get('elevenlabs')
-        const via = media?.music.via
-        if (input.eleven !== false && (key || via === 'hermes-mcp')) {
-          try {
-            progress(97, 'ElevenLabs is scoring the film')
-            const e = via === 'hermes-mcp' && !process.env.SWARM_ELEVENLABS_KEY
-              ? await mcpScore({ call: connectors.call, server: media.music.server, music: scenes.music, cues, seconds: comp.seconds, dir })
-              : await elevenScore({ key, music: scenes.music, cues, seconds: comp.seconds, dir })
-            musicFile = e.music; fx = e.sfx; scoredBy = 'elevenlabs'
-          } catch (err) { send('video:note', { message: `ElevenLabs did not score it, so the studio did: ${String(err.message || err).slice(0, 100)}` }) }
-        }
-        if (!musicFile) { musicFile = join(dir, 'music.wav'); scoreWav({ seconds: comp.seconds, music: scenes.music, cues, file: musicFile, seed }); scoredBy = 'studio' }
-      }
       progress(98, 'mixing the sound')
-      sound = await mix({ ffmpeg: t.ffmpeg, env: { ...process.env, PATH: t.path }, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: (cues.cuts[i - 1] || 0) + VOICE_LEAD }), fx, silence: cues.silence, out })
+      sound = await mix({ ffmpeg: t.ffmpeg, env: tenv, video: silent, musicFile, voices: voices.map((v, i) => v && { ...v, at: (cues.cuts[i - 1] || 0) + VOICE_LEAD }), fx, silence: cues.silence, out })
     } catch (err) {
       send('video:note', { message: `sound failed, the video is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
     }
@@ -1296,6 +1311,18 @@ const PAINTERS = ['Kiki', 'Juno', 'Tofu']
 const artJobs = new Map()
 // the last resort for an icon or backdrop no provider would paint (engine/library.mjs)
 const assetLibrary = library({ dataDir })
+// the library on purpose (engine/assetlib.mjs): searched and picked from, with packs of one's own
+const assets = assetLib({ dataDir })
+// the library picture for a slot: the closest packs of the build's style first, then any pack
+async function libraryFor(it, style, used) {
+  const category = SLOT_CATEGORIES[slotKind(it.id)] || []
+  const q = String(it.what || '').replace(/^(icon for|backdrop for|portrait of|[a-z ]+:)\s*/i, '')
+  for (const pack of [...(LIB_PACKS[style] || []), '']) {
+    const hit = assets.search({ q, category, pack, limit: 1, used })[0]
+    if (hit && hit.score >= 3) return assets.file(hit.id)
+  }
+  return null
+}
 const OUT_OF_QUOTA = /\b(429|402)\b|usage limit|quota|insufficient|no capacity|rate.?limit|billing|credits?\b/i
 // Cut a sprite out, then check it: the cut's own numbers first, and a sprite that looks off
 // goes to the reviewer on dark and on magenta. → { ok, path, problems, report }
@@ -1415,6 +1442,29 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   for (const kit of items.filter(i => i.parts)) for (const p of kit.parts) if (!items.some(i => i.id === p.id)) items.push({ ...p, part: kit.id })
   const reuseParts = kit => { for (const p of kit.parts || []) reuse(p) }
   for (const it of [...queue]) if (reuse(it)) { queue.splice(queue.indexOf(it), 1); reuseParts(it) }
+  // a library picture taken into the game: copied in under the slot's name, with its credit
+  const libUsedIds = new Set(), credits = []
+  const takeLib = (it, got, why = '') => {
+    const ext = extname(got.file) || '.png', file = `art/${it.id}${ext}`, name = `lib-${it.id}${ext}`
+    copyFileSync(got.file, join(appDir, 'public', file))
+    copyFileSync(got.file, join(runsDir, runId, 'img', name))
+    const r = got.row
+    libUsedIds.add(r.id)
+    credits.push({ file, from: r.id, pack: r.pack, credit: r.credit, license: r.license, url: r.url })
+    done.set(it.id, { file, what: it.what, kind: it.kind, credit: r.credit, library: r.id })
+    return name
+  }
+  // the picks made for this build (runs/<id>/art-picks.json): a picked slot is not painted
+  for (const p of readPicks(join(runsDir, runId))) {
+    const got = await assets.file(p.asset)
+    if (!got) { step({ kind: 'setup', text: `the picked ${p.slot} is not in the library any more: painting it`, ok: false }); continue }
+    let it = items.find(i => i.id === p.slot)
+    if (!it) { it = pickedItem(p, got.row); items.push(it) }
+    const q = queue.indexOf(it)
+    if (q >= 0) queue.splice(q, 1)
+    takeLib(it, got)
+    step({ kind: 'setup', text: `using the picked ${got.row.subject || p.slot} (${got.row.credit}) for the ${it.what}` })
+  }
   // the hero's idle from a video clip (engine/idle.mjs): asked for at the clip's price while the
   // rest paints; a yes adds the painted idle (its first frame is animated) and the video one
   let idleWait = null
@@ -1480,6 +1530,17 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
       if (it.kind === 'sheet' && it.video) { await videoSheet(slot, it); continue }
       if (it.kind === 'sheet' && it.tween) { await tweenSheet(slot, it); continue }
       if (it.kind === 'sheet') { await paintSheet(slot, it); continue }
+      // asked from the library (engine/artask.mjs, "from": "library"): painted only when nothing fits
+      if (it.library) {
+        const got = await libraryFor(it, guide.style, libUsedIds)
+        if (got) {
+          const name = takeLib(it, got)
+          live(slot, it, 'done', { src: img(name) })
+          step({ kind: 'setup', text: `took the ${it.what} from the library: ${got.row.subject} (${got.row.credit})` })
+          continue
+        }
+        step({ kind: 'setup', text: `nothing in the library fits the ${it.what}: painting it` })
+      }
       live(slot, it, 'painting')
       const refFile = it.ref && done.get(it.ref)?.file
       const ref = it.ref ? [refFile && join(appDir, 'public', refFile), raws.get(it.ref)].find(f => f && existsSync(f)) : ''
@@ -1501,6 +1562,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
           copyFileSync(lib.path, join(appDir, 'public', file))
           copyFileSync(lib.path, join(runsDir, runId, 'img', name))
           done.set(it.id, { file, what: it.what, kind: it.kind, credit: lib.credit })
+          credits.push({ file, from: lib.from.replace(/^assets\//, ''), pack: lib.from.split('/')[1], credit: lib.credit, license: 'full grant from the author' })
           live(slot, it, 'done', { src: img(name) })
           step({ kind: 'setup', text: `used a library picture for the ${it.what} (${why.slice(0, 80)})` })
           continue
@@ -1719,6 +1781,9 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
   }
   await Promise.all(PAINTERS.map((_, i) => worker(i)))
   artJobs.delete(runId)
+  // every library picture in the game keeps its credit beside the art
+  const cr = creditsFor(credits)
+  if (cr) { writeFileSync(join(appDir, 'public', 'art', 'CREDITS.md'), cr.md); writeFileSync(join(appDir, 'public', 'art', 'credits.json'), JSON.stringify(cr.json, null, 1)) }
   // (a kit's sheet is not handed to the game: its pieces are)
   const wanted = items.filter(i => !i.keys && !i.parts)
   const out = wanted.map(i => done.get(i.id)).filter(Boolean)
@@ -2045,6 +2110,39 @@ const server = createServer((req, res) => {
     let name = feed.name || feed.handle || ''
     if (!name) { try { name = userInfo().username } catch {} }
     return json(200, { name: String(name).slice(0, 40), handle: feed.handle || null, feed: (process.env.SWARM_FEED_URL || 'https://swarm.design-bakery.com').replace(/\/$/, '') })
+  }
+  // The asset library (engine/assetlib.mjs): search it, see a picture, add a pack of one's own,
+  // and pick a picture for a slot of a build (used instead of painting that slot)
+  if (url.pathname === '/api/library' && req.method === 'GET') {
+    const q = url.searchParams
+    const results = assets.search({ q: q.get('q') || '', category: q.getAll('category').filter(Boolean), pack: q.get('pack') || '', all: q.get('all') === '1', limit: Number(q.get('limit')) || 40 })
+    return json(200, { results: results.map(r => ({ ...r, src: `/api/library/file?id=${encodeURIComponent(r.id)}` })) })
+  }
+  if (url.pathname === '/api/library/packs' && req.method === 'GET') return json(200, { packs: assets.packs() })
+  if (url.pathname === '/api/library/file' && req.method === 'GET') {
+    assets.file(url.searchParams.get('id')).then(got => {
+      if (!got) return json(404, { error: 'no such picture' })
+      const type = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }[extname(got.file).toLowerCase()] || 'image/jpeg'
+      res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=86400' }).end(readFileSync(got.file))
+    })
+    return
+  }
+  if (url.pathname === '/api/library/import' && req.method === 'POST') {
+    return readJson(4000, input => assets.importPack(input).then(p => json(200, p), err => json(err.status || 400, { error: String(err.message || err) })))
+  }
+  const libPack = url.pathname.match(/^\/api\/library\/packs\/([a-z0-9_]{1,40})$/)
+  if (libPack && req.method === 'DELETE') return assets.removePack(libPack[1]) ? json(200, { ok: true }) : json(404, { error: 'no such pack of your own' })
+  const runPicks = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/art\/picks$/)
+  if (runPicks) {
+    const dir = join(runsDir, runPicks[1])
+    if (!existsSync(dir)) return json(404, { error: 'no such build' })
+    if (req.method === 'GET') return json(200, { picks: readPicks(dir) })
+    if (req.method === 'POST') {
+      return readJson(4000, input => {
+        if (input.asset && !assets.get(String(input.asset))) return json(404, { error: 'no such picture in the library' })
+        json(200, { picks: setPick(dir, { slot: String(input.slot || ''), asset: input.asset || null, what: input.what || '' }), note: 'used the next time this build paints its art (Try again, or the next slice)' })
+      })
+    }
   }
   // every picture, film and upload across live projects, newest first (Home › Assets)
   if (url.pathname === '/api/assets') {

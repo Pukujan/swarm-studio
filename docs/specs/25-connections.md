@@ -105,7 +105,7 @@ Each connection's "Goes to" value is its line from this table, so the honesty is
 
 | Slice | What | Needs | Size |
 |---|---|---|---|
-| 1 | **Read-only Settings**: the four rows, every connection's dot and account, the Data table. No new server code: it reads `/api/me`, `/api/models`, `/api/media`, `/api/publish`, `/api/connectors`, `/api/meshy`, `/api/gateway` | web only | ½ day |
+| 1 (built: `web/settings.js`) | **Read-only Settings**: the four rows, every connection's dot and account, the Data table. No new server code: it reads `/api/me`, `/api/models`, `/api/media`, `/api/publish`, `/api/connectors`, `/api/meshy`, `/api/gateway` | web only | ½ day |
 | 2 | **Move the existing actions in**: model pickers, publish token forms, media keys, and the Supabase connector (its UI is orphaned today). Old places become links | web only | ½ day |
 | 3 | **Missing status**: Feed account (connected, guest or signed in, Sign in, Disconnect), stand-in sources, Stripe test key, Supabase key, which route each model key came from | new endpoints, `feed.py` | ½ day |
 | 4 | **Let Hermes connect + Copy command**: `/swarm setup`, a command per row, connectors beyond Supabase (Stripe and Vercel through Hermes's connectors) | `commands.py`, `engine/hermes_connect.mjs` | 1 day |

@@ -32,6 +32,8 @@ test('with no model, every film in the set finishes', async () => {
   assert.equal(out.summary.fit, 1, out.films.filter(f => !f.fit).map(f => `${f.id}=${f.kind}`).join(', '))
   assert.equal(out.summary.kinds, 6)
   assert.ok(out.summary.closings >= 4, `closings ${out.summary.closings}`)
+  assert.ok(out.summary.onGrid >= 0.98, `cuts on the music's grid ${out.summary.onGrid}`)
+  assert.ok(out.summary.onBeat >= 0.85, `cuts on a whole beat ${out.summary.onBeat} (was 0.72 before cuts went on the music)`)
   assert.ok(out.summary.sameness <= 0.5, `sameness ${out.summary.sameness} (was 0.63 before the director)`)
 })
 
