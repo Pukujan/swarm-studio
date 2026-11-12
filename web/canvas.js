@@ -3,6 +3,7 @@
 // cursor move, tool and bubble comes from a real model stream.
 
 import { routeMessage } from './route.js'
+import { pageSeoHtml, wirePageSeo } from './seo.js'
 import { openWorkshop } from './workshop.js'
 import { stateSlice } from './store.js'
 import { painterOf, REVIEWER, cursor } from './icons.js'
@@ -127,7 +128,7 @@ const cosmosHooks = new Set()
 const cam = { x: 40, y: 140, s: 0.16, tx: 40, ty: 140, ts: 0.16, auto: true, nextFit: 0 }
 
 function fresh(run = null) {
-  S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null, images: new Map(), imgQueued: 0, imgSettled: 0 }
+  S = { run, title: '', t0: 0, tEnd: 0, agents: new Map(), frames: [], layers: new Map(), order: [], wires: new Map(), plans: new Map(), planDirty: true, treeDirty: true, done: 0, planned: 0, theme: null, closed: new Set(), cheerUntil: 0, edits: new Set(), classEdits: [], sel: null, images: new Map(), imgQueued: 0, imgSettled: 0, seo: new Map() }
   banter.queue = []
   history.undo = []; history.redo = []; renderUndo()
   els.world.innerHTML = '<div class="ghosts" id="ghosts"></div>'
@@ -354,6 +355,25 @@ function on(e) {
       break
     case 'edit':
       applyEdit(e)
+      break
+    // search titles, descriptions and share pictures (engine/seo.mjs)
+    case 'seo': {
+      const next = { ...(S.seo.get(e.page) || {}) }
+      for (const f of ['title', 'description', 'image']) if (e[f] === '') delete next[f]; else if (e[f]) next[f] = e[f]
+      S.seo.set(e.page, next)
+      design.last = ''
+      break
+    }
+    case 'seo:review':
+      feed(null, `🔎 Search & share: ${e.pages} pages checked${e.fixed?.length ? ` · ${e.fixed.length} fixed` : ''}`, 'sys')
+      break
+    case 'seo:start': {
+      const a = S.agents.get(e.agent)
+      if (a && live(e)) say(a, 'Reading the titles and descriptions')
+      break
+    }
+    case 'seo:pass':
+      chatAgent(S.agents.get(e.agent), [e.reply, ...(e.changes || [])].filter(Boolean).join('\n'))
       break
     case 'image:queued': {
       const l = S.layers.get(key(e.page, e.layer))
@@ -2382,7 +2402,11 @@ function renderDesign(now) {
   const { a, l } = pickSelection(now)
   let html
   if (!l) {
-    html = `<div class="dempty">${S.layers.size ? 'Click a section on the canvas to edit it, or an agent in the Agents panel to follow its work.' : 'Start a build. While the swarm works, this shows the properties of the section an agent is designing: auto layout, fills, type and effects.'}</div>`
+    // a finished site: the page in view's search title, description and share picture
+    const f = S.tEnd && S.kind !== 'game' && pageInView()
+    if (f && els.dDesign.querySelector('.dseo')?.contains(document.activeElement)) return
+    html = f ? pageSeoHtml({ page: f, seo: S.seo.get(f.id), brand: S.brand || '', pictures: pagePictures(f.id) })
+      : `<div class="dempty">${S.layers.size ? 'Click a section on the canvas to edit it, or an agent in the Agents panel to follow its work.' : 'Start a build. While the swarm works, this shows the properties of the section an agent is designing: auto layout, fills, type and effects.'}</div>`
   } else {
     const owner = S.agents.get(l.agent) || a
     const rows = sectionProps(l)
@@ -2416,8 +2440,17 @@ function renderDesign(now) {
     if (vs) vs.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) sectionVersions(l, vs) }
     wirePictures(S.layers.get(S.sel || design.layer))
     if (tr) tr.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) traceView(S.run, { layer: l.id, title: l.role || l.id }) }
+    wirePageSeo(els.dDesign, { run: shownRun(), api, onError: m => feed(null, `search & share: ${m}`, 'err') })
   }
 }
+
+// the page the view is on: the frame under the middle of the canvas, else the nearest
+function pageInView() {
+  if (!S.frames.length) return null
+  const cx = (els.viewport.clientWidth / 2 - cam.x) / cam.s
+  return S.frames.reduce((best, f) => (Math.abs(f.x + FRAME_W / 2 - cx) < Math.abs(best.x + FRAME_W / 2 - cx) ? f : best))
+}
+const pagePictures = id => [...S.images.entries()].filter(([k, src]) => src && k.startsWith(`${id}/`)).map(([, src]) => src)
 
 function renderVars(now) {
   if (now - design.varsAt < 900 && !(S.themeAt && now - S.themeAt < 3000)) return

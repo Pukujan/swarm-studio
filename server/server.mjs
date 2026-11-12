@@ -19,6 +19,8 @@ import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
+import { seoPass, currentSeo, cleanSeo } from '../engine/seo.mjs'
+import { seoAsk } from '../web/route.js'
 import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
@@ -2009,9 +2011,11 @@ async function publish(id, input = {}) {
   const dir = join(out.dir, 'html')
   // a hosted site is named <project>-site, like ares-site
   const hostName = deployName(out.brand, 'site')
-  const go = target === 'vercel' ? publishVercel({ dir, name: hostName, creds, dataDir, onStage })
-    : target === 'cloudflare' ? publishCloudflare({ dir, name: hostName, creds, dataDir, onStage })
-    : publishGitHub({ dir, name: out.name, title, onStage })
+  // the site's address goes into its canonical links, share tags, sitemap and robots (engine/seo.mjs)
+  const rebase = base => { try { out.rebase(base) } catch (err) { send('error', { where: 'seo', message: String(err.message || err) }) } }
+  const go = target === 'vercel' ? publishVercel({ dir, name: hostName, creds, dataDir, rebase, onStage })
+    : target === 'cloudflare' ? publishCloudflare({ dir, name: hostName, creds, dataDir, rebase, onStage })
+    : publishGitHub({ dir, name: out.name, title, rebase, onStage })
   go.then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
     .catch(err => {
       // said out loud, never swapped for the local link: the person asked for a public one
@@ -2069,6 +2073,8 @@ async function commentNow(id, input) {
   const given = Array.isArray(input.sections) ? input.sections.filter(s => s && typeof s.key === 'string' && typeof s.html === 'string').slice(0, 60) : []
   const sections = given.length ? given.map(s => ({ key: s.key, role: String(s.role || s.key).slice(0, 80), html: s.html })) : runSections(events)
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  // "improve the SEO", "a better description for the menu page": the crew's SEO pass
+  if (seoAsk(text)) return seoRequest(id, { events, start, theme, given, text, send })
   let keys = typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
   let reply = ''
   send('comment', { text, target: keys?.[0] || null })
@@ -2087,6 +2093,36 @@ async function commentNow(id, input) {
     rework(id, send, s, agent, theme, { comment: text })
   })
   return { sections: keys, reply }
+}
+
+// The SEO pass on request (engine/seo.mjs): one planner call edits titles and descriptions,
+// and a builder rewrites at most two sections when the aim needs words the page lacks.
+async function seoRequest(id, { events, start, theme, given, text, send }) {
+  if (!models.planner.apiKey) throw new Error('no model key yet: start a build from Hermes once')
+  const snap = snapshot(events, given, { name: nameFor(id)?.name })
+  const pages = currentSeo(snap)
+  if (!pages.length) throw new Error('nothing built yet')
+  const agents = start.agents || []
+  const agent = agents[(commentTurn++ * 3 + 1) % Math.max(1, agents.length)]?.id
+  send('seo:start', { text, agent })
+  let r
+  try {
+    r = await seoPass({ streamChat, provider: provider('planner'), model: modelFor('planner'), ask: text, brand: snap.brand, pages, signal: AbortSignal.timeout(60000) })
+  } catch (err) {
+    send('seo:pass', { text, agent, reply: `SEO pass failed: ${String(err.message || err).slice(0, 140)}`, failed: true })
+    throw err
+  }
+  for (const c of r.changes) send('seo', { page: c.page, ...(c.title ? { title: c.title } : {}), ...(c.description ? { description: c.description } : {}), by: 'crew' })
+  send('seo:pass', { text, agent, reply: r.reply, changes: r.summary, copy: r.copy.map(c => c.key) })
+  const sections = snap.pages.flatMap(p => p.sections)
+  r.copy.forEach((c, i) => {
+    const s = sections.find(x => x.key === c.key)
+    if (!s) return
+    const who = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
+    send('comment:take', { text, page: c.key.split('/')[0], layer: c.key.split('/').pop(), role: s.role, agent: who, reply: i === 0 ? c.ask.slice(0, 90) : '' })
+    rework(id, send, s, who, theme, { comment: c.ask })
+  })
+  return { sections: r.copy.map(c => c.key), reply: r.reply, seo: r.changes }
 }
 
 function tokenOk(given) {
@@ -2571,6 +2607,25 @@ const server = createServer((req, res) => {
         return
       }
       record(runEdit[1], { type: 'edit', t: Date.now(), run: runEdit[1], ...edit })
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }))
+    })
+    return
+  }
+
+  // a page's search title, description and share picture, as the person sets them (Design panel)
+  const runSeo = url.pathname.match(/^\/api\/runs\/([^/]+)\/seo$/)
+  if (runSeo && req.method === 'POST' && RUN_ID.test(runSeo[1])) {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 20000) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const events = readEvents(runSeo[1])
+      const page = typeof input.page === 'string' && events?.some(e => e.type === 'page' && e.id === input.page) ? input.page : null
+      const fields = cleanSeo({ title: input.title, description: input.description, image: input.image })
+      for (const f of ['title', 'description', 'image']) if (input[f] === '') fields[f] = ''
+      if (!page || !Object.keys(fields).length) return res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: page ? 'nothing to change' : 'no such page' }))
+      record(runSeo[1], { type: 'seo', t: Date.now(), run: runSeo[1], page, ...fields, by: 'person' })
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }))
     })
     return

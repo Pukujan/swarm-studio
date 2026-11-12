@@ -1934,6 +1934,7 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .item.talk-brief textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.45; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .feed .item.talk-brief textarea:focus { outline: none; border-color: var(--accent); }
 
+<<<<<<< HEAD
 /* Chats (spec 29): the talks of this project, by group, from the side panel's tabs */
 .tabs .chats-btn { display: inline-flex; align-items: center; gap: 4px; }
 .tabs .chats-btn .ico { width: 13px; height: 13px; }
@@ -1948,3 +1949,15 @@ body.side-min .tabs .chats-btn { display: none; }
 .chats-pop .cp-row:hover, .chats-pop .cp-row:focus-visible, .chats-pop .cp-row.on { background: var(--ui-muted, rgb(127 127 127 / .14)); outline: none; }
 .chats-pop .cp-new { margin-top: 4px; border-top: 1px solid var(--ui-border); border-radius: 0 0 8px 8px; color: var(--ui-muted-foreground); }
 .chats-pop .cp-new .ico { width: 14px; height: 14px; }
+=======
+/* Search & share: the page's title, description and share picture (web/seo.js) */
+.dseo-f { display: grid; gap: 4px; margin-bottom: 10px; font-size: 11px; color: var(--muted); }
+.dseo-f input, .dseo-f textarea { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); font: 12px/1.4 var(--font); padding: 6px 8px; resize: vertical; }
+.dseo-f input:focus, .dseo-f textarea:focus { outline: none; border-color: var(--accent); }
+.dseo-f small { justify-self: end; font-variant-numeric: tabular-nums; }
+.dseo-f small.over { color: var(--hot-text); }
+.dseo-pics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.dseo-pic { padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--panel-2); cursor: pointer; aspect-ratio: 1200 / 630; overflow: hidden; min-height: 40px; }
+.dseo-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dseo-pic.on { border-color: var(--accent); }
+>>>>>>> dea6e05 (Search and share: every build ships its own SEO, the crew writes, checks and improves it)

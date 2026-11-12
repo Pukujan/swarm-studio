@@ -392,6 +392,7 @@ flowchart LR
   T2 -.-> PIN
   RP --> TOP["Crew, progress, Play, Share"]
   RP --> NS["Nothing selected: page and variables"]
+  NS --> SEO["Search & share: title, description, share picture"]
   RP --> DT[Design tab]
   RP --> PT[Prototype tab]
   DT --> LA["Layout: position, auto layout"]

@@ -2,12 +2,13 @@
 // Vite + Tailwind project with one component per section, and a handoff for an
 // app builder (ABA: a blueprint in its own format and a spec to build from).
 
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { MOTION_CSS, motionPreset, motionSource, swarmMotion } from './motion.mjs'
 import { layoutSource, swarmLayout } from './layout.mjs'
 import { isScreenName, packageName, projectName } from './naming.mjs'
+import { seoFromEvents, seoSite, applyHead } from './seo.mjs'
 
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const text = html => String(html || '').replace(/<!--[\s\S]*?-->/g, ' ').replace(/<(script|style|svg)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()
@@ -45,7 +46,8 @@ export function snapshot(events, given = [], { name = '' } = {}) {
   const top = shared.filter(s => /nav|header|menu/i.test(`${s.id} ${s.role}`))
   const bottom = shared.filter(s => !top.includes(s))
   const brand = clip(name && !isScreenName(name) ? name : projectName({ brief: start.brief, title: start.title }), 40)
-  return { brief: start.brief || '', brand, theme, pages: pages.map(p => ({ ...p, sections: [...top, ...sections.filter(s => s.page === p.id), ...bottom] })) }
+  const seo = seoFromEvents(events)
+  return { brief: start.brief || '', brand, theme, pages: pages.map(p => ({ ...p, seo: seo.get(p.id) || null, sections: [...top, ...sections.filter(s => s.page === p.id), ...bottom] })) }
 }
 
 // Pictures: server paths become files next to the site; empty ones get a placeholder.
@@ -467,6 +469,35 @@ ${pageSpec}
 `)
 }
 
+// The build's film, when it has one: its own page, so a shared link plays it with a card.
+function filmPage(snap, dir, runDir) {
+  const mp4 = join(runDir || '', 'video', 'promo.mp4')
+  if (!runDir || !existsSync(mp4) || statSync(mp4).size > 60e6) return null
+  mkdirSync(join(dir, 'film'), { recursive: true })
+  copyFileSync(mp4, join(dir, 'film', 'promo.mp4'))
+  const poster = ['p1.webp', 'p1.png', 'p1.jpg'].find(f => existsSync(join(runDir, 'video', f)))
+  if (poster) { copyFileSync(join(runDir, 'video', poster), join(dir, 'film', poster)); mkdirSync(join(dir, 'img'), { recursive: true }); copyFileSync(join(runDir, 'video', poster), join(dir, 'img', `film-${poster}`)) }
+  const home = readFileSync(join(dir, 'index.html'), 'utf8')
+  const nav = (home.match(/<nav\b[\s\S]*?<\/nav>/i) || [''])[0], footer = (home.match(/<footer\b[\s\S]*?<\/footer>/i) || [''])[0]
+  const head = (home.match(/<head>([\s\S]*?)<\/head>/i) || [, ''])[1]
+  const script = (home.match(/<script>\n\/\/ layout[\s\S]*<\/script>/) || [''])[0]
+  writeFileSync(join(dir, 'film.html'), `<!doctype html>\n<html lang="en">\n<head>${head}</head>\n<body>\n${nav}\n<section class="max-w-6xl mx-auto px-6 py-16">\n<h1 class="text-4xl md:text-6xl font-bold mb-8" style="font-family:var(--font-heading)">${clip(snap.brand, 80).replace(/</g, '&lt;')}: the film</h1>\n<video class="w-full rounded-[var(--radius)]" src="film/promo.mp4"${poster ? ` poster="film/${poster}"` : ''} controls playsinline preload="metadata"></video>\n</section>\n${footer}\n${script}\n</body>\n</html>\n`)
+  const homeSeo = snap.pages[0]?.seo || {}
+  return { id: 'film', file: 'film.html', title: 'Film', purpose: '', seo: { title: `Film · ${snap.brand}`, description: homeSeo.description ? `The film of ${snap.brand}. ${homeSeo.description}` : '', schema: 'Movie', ...(poster ? { image: `film-${poster}` } : {}) }, video: 'film/promo.mp4' }
+}
+
+// The React project's index.html: the home page's search and share tags, its pictures in public/.
+function reactHead(dir, htmlDir, seo, snap) {
+  const home = seo.pages[0]
+  if (!home || !existsSync(join(dir, 'index.html'))) return
+  const pub = join(dir, 'public')
+  mkdirSync(join(pub, 'img'), { recursive: true })
+  copyFileSync(join(htmlDir, 'favicon.svg'), join(pub, 'favicon.svg'))
+  if (home.image && existsSync(join(htmlDir, home.image))) copyFileSync(join(htmlDir, home.image), join(pub, home.image))
+  const entry = { id: home.id, path: './', pageTitle: snap.pages[0]?.title, title: home.title, description: home.description, lang: home.lang, favicon: '/favicon.svg', ...(home.image ? { image: `/${home.image}`, imageSize: [1200, 630] } : {}) }
+  writeFileSync(join(dir, 'index.html'), applyHead(readFileSync(join(dir, 'index.html'), 'utf8'), entry, { brand: snap.brand, home: true, theme: snap.theme }))
+}
+
 const zip = (cwd, name) => new Promise(ok => execFile('zip', ['-qr', `${name}.zip`, name], { cwd }, err => ok(err ? null : join(cwd, `${name}.zip`))))
 
 // fill(root): optional, fills empty picture slots in the export (html/ and react/) before it is zipped
@@ -477,11 +508,26 @@ export async function exportRun({ events, runId, runDir, sections, name: given =
   const base = join(runDir, 'export'), root = join(base, name)
   rmSync(root, { recursive: true, force: true })
   for (const d of ['html', 'react', 'aba']) mkdirSync(join(root, d), { recursive: true })
-  const htmlFiles = staticSite(snap, join(root, 'html'), runId, runDir)
+  const htmlDir = join(root, 'html')
+  const htmlFiles = staticSite(snap, htmlDir, runId, runDir)
+  const film = filmPage(snap, htmlDir, runDir)
   const react = reactApp(snap, join(root, 'react'), runId, runDir, name)
   abaHandoff(snap, join(root, 'aba'))
   // stand-in photos for the slots no picture was painted for: a site never ships grey boxes
   if (fill) { try { await fill(root) } catch {} }
+  // search and link previews: every page's head, the share pictures, robots, sitemap, 404
+  // (engine/seo.mjs). Publish writes them again with the site's address (rebase).
+  const seoPages = [...snap.pages.map((p, i) => ({ id: p.id, file: htmlFiles[i], title: p.title, purpose: p.purpose, seo: p.seo })), ...(film ? [film] : [])]
+  const seoArgs = { brand: snap.brand, theme: snap.theme, pages: seoPages }
+  const seo = seoSite(htmlDir, seoArgs)
+  writeFileSync(join(root, 'seo.json'), JSON.stringify(seo, null, 2) + '\n')
+  // the React project's one page carries the home page's tags and the same pictures
+  reactHead(join(root, 'react'), htmlDir, seo, snap)
+  const rebase = base => {
+    const again = seoSite(htmlDir, { ...seoArgs, base })
+    writeFileSync(join(root, 'seo.json'), JSON.stringify(again, null, 2) + '\n')
+    return again
+  }
   writeFileSync(join(root, 'README.md'), `# ${snap.brand}
 
 Designed in Swarm Studio from the brief: ${snap.brief}
@@ -491,6 +537,6 @@ Designed in Swarm Studio from the brief: ${snap.brief}
 - \`aba/\`: a handoff for an app builder: \`spec.md\` (what to build, page by page) and \`blueprint.json\` (the design in ABA's blueprint format).
 `)
   const archive = await zip(base, name)
-  return { dir: root, zip: archive, name, brand: snap.brand, pages: snap.pages.length, sections: react.sections, html: htmlFiles }
+  return { dir: root, zip: archive, name, brand: snap.brand, pages: snap.pages.length, sections: react.sections, html: htmlFiles, seo, rebase }
 }
 
