@@ -394,10 +394,12 @@ MIME = {".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg
 
 
 def poster_of(r: dict, folder: Path | None) -> str:
-    """A data URL for the feed card: the first page shot from the video, else the build's first picture, else a drawn card in its colours."""
+    """A data URL for the feed card: the site's thumbnail (the same picture its link preview shows, written at
+    export and publish by engine/seo.mjs), else the first page shot from the video, else the build's first picture,
+    else a drawn card in its colours."""
     candidates: list[Path] = []
     if folder:
-        candidates += [folder / "video" / "p1.webp", folder / "video" / "p1.png"]
+        candidates += [folder / "thumb.jpg", folder / "video" / "p1.webp", folder / "video" / "p1.png"]
         img = folder / "img"
         if img.is_dir():
             pics = [p for p in img.iterdir() if p.suffix.lower() in MIME and not p.name.startswith("video-")]

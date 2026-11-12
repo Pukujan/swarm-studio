@@ -339,6 +339,7 @@ flowchart LR
   S2 --> W2[Working app]
   S2 --> W3[Arcade]
   W1 --> W4[Address]
+  W1 --> WT["Thumbnail: picked, one click to swap"]
   W1 --> W5[Card look]
   W1 --> W6[Go live]
   W4 --> W7[Custom domain]

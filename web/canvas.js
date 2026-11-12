@@ -3,7 +3,7 @@
 // cursor move, tool and bubble comes from a real model stream.
 
 import { routeMessage } from './route.js'
-import { pageSeoHtml, wirePageSeo } from './seo.js'
+import { pageSeoHtml, wirePageSeo, fillThumbRow } from './seo.js'
 import { openWorkshop } from './workshop.js'
 import { stateSlice } from './store.js'
 import { painterOf, REVIEWER, cursor } from './icons.js'
@@ -2972,7 +2972,8 @@ async function publishMenu(force) {
     return `<details class="pconn"><summary><b>Connect ${HOSTS[id].label}</b><span><a href="${esc(url)}" target="_blank" rel="noopener">Get a token</a></span></summary>
       <form data-conn="${id}"><input type="password" autocomplete="off" spellcheck="false" aria-label="${HOSTS[id].label} token" placeholder="Paste the token"><button>Connect</button></form><div class="perr"></div></details>`
   }
-  const el = pubPop(`${['github', 'vercel', 'cloudflare'].map(row).join('')}<div class="prow">${opt('local')}</div>`)
+  const el = pubPop(`<div class="pthumb-slot"></div>${['github', 'vercel', 'cloudflare'].map(row).join('')}<div class="prow">${opt('local')}</div>`)
+  fillThumbRow(el, { run: shownRun(), api })
   el.querySelectorAll('.popt').forEach(b => { b.onclick = () => publishNow(b.dataset.target) })
   el.querySelectorAll('[data-disc]').forEach(b => {
     b.onclick = async () => {

@@ -23,6 +23,14 @@ and the site has `robots.txt`, `sitemap.xml` (every page) and a `404.html` (`noi
 - **The crew, on request.** "improve the SEO", "a better description for the menu page", "target people searching for ramen in Porto" in the project chat, `/swarm seo [n] [what]` or the `swarm_design` tool's `seo` action. One planner call rewrites the titles and descriptions it should, asks for at most two copy changes (reworked by the agent that owns the section, as a comment would be), and says what changed in plain words. An SEO ask never starts a new build.
 - **The person.** The Design panel with nothing selected shows **Search & share** for the page in view: Title (n/60), Description (n/160), Share picture (the page's own pictures). A cleared field goes back to the crew's. Each change is an `seo` event (`by: person`), so undo, replay and other viewers see it.
 
+## The thumbnail, picked with no one asked
+
+Owner, 2026-11-11: "when publishing along with the thumnail image selected automatically?"
+
+Publish needs no extra step. Each page's share picture (`og:image`, `twitter:image`) is picked in this order: the one the person chose, the page's own first picture (its hero), the build's key art, a shot of the top of the page (a headless Chrome: `SWARM_CHROME`, a Playwright headless shell already downloaded, or installed Chrome), and last a card in the site's colours. A picture is cover-cropped to 1200×630, with a 600×600 square as a second `og:image` for small cards; icons, logos and SVGs are skipped. A page shot is cut at the last quiet row above 630 px, so no line of text is sliced, and the square fits that same top whole. At publish, every link is absolute.
+
+The site's thumbnail is the home page's pick. Export keeps it next to the run (`thumb.jpg`, `thumb-square.jpg`). **Post to Feed** uses it as the poster, and a person's pick becomes the project tile's cover too, so the Feed card, the link preview and the tile agree. The **Publish** menu shows the thumbnail at the top, with up to six of the build's other pictures under it. One click swaps it, and nothing is required.
+
 ## Apps, games and films
 
 - An app or game deployed to Vercel gets the same head tags on its `index.html` (its own title kept), a `share.jpg` (a game's title picture, else the first picture) and a favicon.
@@ -42,4 +50,5 @@ GitHub Pages, Vercel and Cloudflare Pages work out the address before the upload
 
 ## Not checked
 
-Whether search engines index the sites: that takes days and a live address.
+- Whether search engines index the sites: that takes days and a live address.
+- Whether a painted picture has garbled lettering in it: nothing reads the words in a picture. The painter is asked for pictures without text, and the crop never adds any.

@@ -12,8 +12,9 @@
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, copyFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, copyFileSync } from 'node:fs'
 import { join, extname } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
 import { navBrand } from './naming.mjs'
 
 export const TITLE_MAX = 60
@@ -249,6 +250,10 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 const CURRENCY = { EUR: /€|\beur\b|euro/i, USD: /\$|\busd\b/i, GBP: /£|\bgbp\b/i, JPY: /¥|\bjpy\b|円/, CHF: /\bchf\b/i, AUD: /\baud\b|a\$/i, CAD: /\bcad\b|c\$/i }
 
 // keep a fact only when the copy says it: every word of it appears in the text
+const PLACEHOLDER_PHONE = v => {
+  const d = String(v).replace(/\D/g, '')
+  return d.length < 6 || /0{5,}|1234567|(\d)\1{5,}/.test(d) || /555\D?01\d\d/.test(v)
+}
 export function honestFacts(facts = {}, text = '') {
   const words = new Set(tokens(text))
   const raw = String(text)
@@ -256,6 +261,9 @@ export function honestFacts(facts = {}, text = '') {
   for (const [k, v] of Object.entries(facts)) {
     const val = squash(v)
     if (!val || /rating|review/i.test(k)) continue
+    // a placeholder is not a fact, even when the page shows it: 22 000 0000, 555-0100, hello@example.com
+    if (/phone|fax/i.test(k) && PLACEHOLDER_PHONE(val)) continue
+    if (/email/i.test(k) && /@(example|test|domain|email|yourdomain|company)\.|^(you|name|user|email)@/i.test(val)) continue
     if (/Date$/.test(k)) {
       const m = val.match(/^(\d{4})-(\d{2})-(\d{2})(T\d{2}:\d{2}(:\d{2})?)?$/)
       if (!m) continue
@@ -350,6 +358,7 @@ export function headBlock(e, { brand = '', base = null, siteText = '', home = fa
     e.image ? `<meta property="og:image" content="${attr(abs(e.image))}">` : '',
     e.image && e.imageSize ? `<meta property="og:image:width" content="${e.imageSize[0]}">\n<meta property="og:image:height" content="${e.imageSize[1]}">` : '',
     e.image && e.imageAlt ? `<meta property="og:image:alt" content="${attr(e.imageAlt)}">` : '',
+    e.square ? `<meta property="og:image" content="${attr(abs(e.square))}">\n<meta property="og:image:width" content="600">\n<meta property="og:image:height" content="600">` : '',
     e.video ? `<meta property="og:video" content="${attr(abs(e.video))}">\n<meta property="og:video:type" content="video/mp4">` : '',
     `<meta name="twitter:card" content="${e.image ? 'summary_large_image' : 'summary'}">`,
     `<meta name="twitter:title" content="${attr(e.title)}">`,
@@ -388,6 +397,15 @@ im = im.resize((max(w, round(im.width * s)), max(h, round(im.height * s))), Imag
 x, y = (im.width - w) // 2, int((im.height - h) * 0.4)
 im.crop((x, y, x + w, y + h)).save(dst, 'JPEG', quality=86, optimize=True)
 `
+// fitted whole into w x h on its own edge colour (a card's square keeps all its words)
+const PY_FIT = `import sys
+from PIL import Image
+src, dst, w, h = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+im = Image.open(src).convert('RGB')
+bg = im.getpixel((4, 4))
+im.thumbnail((w, h), Image.LANCZOS)
+out = Image.new('RGB', (w, h), bg); out.paste(im, ((w - im.width) // 2, (h - im.height) // 2)); out.save(dst, 'JPEG', quality=86)
+`
 const PY_CARD = `import sys
 from PIL import Image, ImageDraw, ImageFont
 dst, bg, fg, title, sub = sys.argv[1:6]
@@ -411,34 +429,97 @@ for w in words:
 if y <= 520 and line.strip(): d.text((80, y), line.strip(), fill=fg, font=font(34))
 im.save(dst, 'JPEG', quality=88)
 `
+// -E: no PYTHONPATH; the temp folder as cwd so no stray module there loads (not -I: it hides a user-installed PIL)
+const py = (code, args) => execFileSync('python3', ['-E', '-c', code, ...args], { stdio: 'ignore', timeout: 30000, cwd: tmpdir() })
+export const squareOf = file => file.replace(/(\.[a-z]+)$/i, '-sq$1')
 const has = cmd => { try { execFileSync('/bin/sh', ['-c', `command -v ${cmd}`], { stdio: 'ignore' }); return true } catch { return false } }
 let tools = null
-const toolsNow = () => tools || (tools = { python: has('python3') && (() => { try { execFileSync('python3', ['-I', '-c', 'import PIL'], { stdio: 'ignore' }); return true } catch { return false } })(), sips: has('sips'), ffmpeg: has('ffmpeg') })
+const toolsNow = () => tools || (tools = { python: has('python3') && (() => { try { py('import PIL', []); return true } catch { return false } })(), sips: has('sips'), ffmpeg: has('ffmpeg') })
 
-// a picture cropped to fill 1200 x 630; false when no tool here can do it
-export function shareCrop(src, dst) {
+// a picture cropped to fill 1200 x 630 (or w x h); false when no tool here can do it
+export function shareCrop(src, dst, w = 1200, h = 630) {
   const t = toolsNow()
   try {
-    if (t.python) { execFileSync('python3', ['-I', '-c', PY_COVER, src, dst, '1200', '630'], { stdio: 'ignore', timeout: 30000 }); return true }
-    if (t.ffmpeg) { execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', 'scale=1200:630:force_original_aspect_ratio=increase,crop=1200:630', '-q:v', '3', dst], { stdio: 'ignore', timeout: 30000 }); return true }
+    if (t.python) { py(PY_COVER, [src, dst, String(w), String(h)]); return true }
+    if (t.ffmpeg) { execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`, '-q:v', '3', dst], { stdio: 'ignore', timeout: 30000 }); return true }
     if (t.sips) {
       const out = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', src], { encoding: 'utf8' })
-      const w = Number(out.match(/pixelWidth: (\d+)/)?.[1]), h = Number(out.match(/pixelHeight: (\d+)/)?.[1])
-      if (!w || !h) return false
-      const s = Math.max(1200 / w, 630 / h)
-      execFileSync('sips', ['-s', 'format', 'jpeg', '-z', String(Math.ceil(h * s)), String(Math.ceil(w * s)), src, '--out', dst], { stdio: 'ignore', timeout: 30000 })
-      execFileSync('sips', ['-c', '630', '1200', dst], { stdio: 'ignore', timeout: 30000 })
+      const W = w, H = h, pw = Number(out.match(/pixelWidth: (\d+)/)?.[1]), ph = Number(out.match(/pixelHeight: (\d+)/)?.[1])
+      if (!pw || !ph) return false
+      const s = Math.max(W / pw, H / ph)
+      execFileSync('sips', ['-s', 'format', 'jpeg', '-z', String(Math.ceil(ph * s)), String(Math.ceil(pw * s)), src, '--out', dst], { stdio: 'ignore', timeout: 30000 })
+      execFileSync('sips', ['-c', String(H), String(W), dst], { stdio: 'ignore', timeout: 30000 })
       return true
     }
   } catch {}
   return false
 }
 
+// how big a picture is, [w, h], or null when nothing here can tell
+export function pictureSize(file) {
+  try {
+    if (toolsNow().python) return execFileSync('python3', ['-E', '-c', 'import sys\nfrom PIL import Image\nprint(*Image.open(sys.argv[1]).size)', file], { encoding: 'utf8', timeout: 15000, cwd: tmpdir(), stdio: ['ignore', 'pipe', 'ignore'] }).trim().split(' ').map(Number)
+    if (toolsNow().sips) { const o = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file], { encoding: 'utf8' }); return [Number(o.match(/pixelWidth: (\d+)/)?.[1]), Number(o.match(/pixelHeight: (\d+)/)?.[1])] }
+  } catch {}
+  return null
+}
+// a picture worth sharing: a photo or painting (not an icon, a logo or an SVG)
+const RASTER = /\.(jpe?g|png|webp|avif|gif)$/i
+const shareable = file => RASTER.test(file) && (s => !s || (s[0] >= 400 && s[1] >= 250))(pictureSize(file))
+
+// a headless Chrome for the page shot: SWARM_CHROME, a Playwright headless shell already
+// downloaded, installed Chrome or Chromium; null when there is none
+let chromeAt
+export function findChrome() {
+  if (chromeAt !== undefined) return chromeAt
+  const list = [process.env.SWARM_CHROME]
+  const cache = process.env.PLAYWRIGHT_BROWSERS_PATH || join(homedir(), process.platform === 'darwin' ? 'Library/Caches/ms-playwright' : '.cache/ms-playwright')
+  try { for (const d of readdirSync(cache).filter(d => /^chromium_headless_shell-\d+$/.test(d)).sort().reverse()) for (const sub of readdirSync(join(cache, d))) list.push(join(cache, d, sub, 'chrome-headless-shell')) } catch {}
+  list.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium')
+  for (const n of ['google-chrome', 'chromium', 'chromium-browser']) if (has(n)) list.push(n)
+  return (chromeAt = list.find(f => f && (!f.includes('/') || existsSync(f))) || null)
+}
+
+// The top of the page as a share picture, for a site with no picture at all. The shot is cut
+// at the last quiet row above 630 px, so no line of text is sliced, and the rest is the page's
+// own background; the square fits the same top in 600 x 600.
+const PY_SHOT = `import sys
+from PIL import Image, ImageStat
+src, dst, sq = sys.argv[1:4]
+im = Image.open(src).convert('RGB')
+im = im.crop((0, 0, 1200, min(im.height, 700)))
+quiet = lambda y: max(ImageStat.Stat(im.crop((0, y, 1200, y + 1))).stddev) < 4
+cut = min(630, im.height)
+while cut > 380 and not all(quiet(y) for y in range(cut - 8, cut)): cut -= 2
+if cut <= 380: cut = min(630, im.height)
+top = im.crop((0, 0, 1200, cut))
+bg = im.getpixel((4, cut - 1))
+out = Image.new('RGB', (1200, 630), bg); out.paste(top, (0, 0)); out.save(dst, 'JPEG', quality=86, optimize=True)
+t = top.copy(); t.thumbnail((600, 600), Image.LANCZOS)
+s = Image.new('RGB', (600, 600), bg); s.paste(t, ((600 - t.width) // 2, (600 - t.height) // 2)); s.save(sq, 'JPEG', quality=86)
+`
+export function pageShot(page, dst) {
+  const chrome = findChrome()
+  if (!chrome || !toolsNow().python) return false
+  const tmp = mkdtempSync(join(tmpdir(), 'swarm-shot-'))
+  try {
+    const png = join(tmp, 'shot.png')
+    execFileSync(chrome, ['--headless', '--disable-gpu', '--hide-scrollbars', '--no-first-run', `--user-data-dir=${join(tmp, 'profile')}`, '--window-size=1200,700', '--virtual-time-budget=4000', `--screenshot=${png}`, `file://${page}`], { stdio: 'ignore', timeout: 30000 })
+    if (!existsSync(png)) return false
+    py(PY_SHOT, [png, dst, squareOf(dst)])
+    return existsSync(dst)
+  } catch { return false } finally { rmSync(tmp, { recursive: true, force: true }) }
+}
+
 // a card in the site's colours with its name, for a page with no picture at all
 export function shareCard(dst, { bg = '#111111', fg = '#ffffff', title = '', sub = '' } = {}) {
   if (!toolsNow().python) return false
   const hex = c => (/^#[0-9a-f]{6}$/i.test(c) ? c : /^#[0-9a-f]{3}$/i.test(c) ? `#${[...c.slice(1)].map(x => x + x).join('')}` : null)
-  try { execFileSync('python3', ['-I', '-c', PY_CARD, dst, hex(bg) || '#111111', hex(fg) || '#ffffff', squash(title).slice(0, 60), clipText(sub, 140)], { stdio: 'ignore', timeout: 30000 }); return true } catch { return false }
+  try {
+    py(PY_CARD, [dst, hex(bg) || '#111111', hex(fg) || '#ffffff', squash(title).slice(0, 60), clipText(sub, 140)])
+    py(PY_FIT, [dst, squareOf(dst), '600', '600'])
+    return true
+  } catch { return false }
 }
 
 export function faviconSvg({ brand = '', bg = '#111111', fg = '#ffffff' } = {}) {
@@ -496,7 +577,7 @@ export function seoSite(dir, { brand = '', theme = null, pages = [], base = null
   const homeImage = (() => {
     const own = siteImage && existsSync(siteImage) ? siteImage : null
     if (own) return { file: own, alt: brand }
-    for (const p of pages) for (const pic of pictures(files.get(p.id))) { const rel = localFile(dir, pic.src); if (rel) return { file: join(dir, rel), alt: pic.alt } }
+    for (const p of pages) for (const pic of pictures(files.get(p.id))) { const rel = localFile(dir, pic.src); if (rel && !/^img\/share-/.test(rel) && shareable(join(dir, rel))) return { file: join(dir, rel), alt: pic.alt } }
     return null
   })()
   const shareOf = (file, alt) => {
@@ -504,7 +585,8 @@ export function seoSite(dir, { brand = '', theme = null, pages = [], base = null
     const name = `share-${createHash('sha1').update(file).digest('hex').slice(0, 10)}.jpg`
     mkdirSync(shareDir, { recursive: true })
     const out = join(shareDir, name)
-    const r = existsSync(out) || shareCrop(file, out) ? { image: `img/${name}`, imageSize: [1200, 630], imageAlt: alt } : (() => {
+    const sq = squareOf(out)
+    const r = (existsSync(out) || shareCrop(file, out)) ? { image: `img/${name}`, imageSize: [1200, 630], imageAlt: alt, ...((existsSync(sq) || shareCrop(file, sq, 600, 600)) ? { square: `img/${squareOf(name)}` } : {}) } : (() => {
       // no tool to crop with: the picture as it is
       const ext = extname(file).toLowerCase() || '.jpg'
       const keep = `share-${createHash('sha1').update(file).digest('hex').slice(0, 10)}${ext}`
@@ -521,7 +603,7 @@ export function seoSite(dir, { brand = '', theme = null, pages = [], base = null
       if (done !== null) return done
       const out = join(shareDir, 'share-card.jpg')
       mkdirSync(shareDir, { recursive: true })
-      done = existsSync(out) || shareCard(out, { bg: v['--primary'] || v['--background'], fg: v['--primary-foreground'] || v['--foreground'], title: brand, sub: fixed.seo.get(pages[0]?.id)?.description || '' }) ? { image: 'img/share-card.jpg', imageSize: [1200, 630], imageAlt: brand } : false
+      done = existsSync(out) || shareCard(out, { bg: v['--primary'] || v['--background'], fg: v['--primary-foreground'] || v['--foreground'], title: brand, sub: fixed.seo.get(pages[0]?.id)?.description || '' }) ? { image: 'img/share-card.jpg', imageSize: [1200, 630], imageAlt: brand, ...(existsSync(squareOf(out)) ? { square: 'img/share-card-sq.jpg' } : {}) } : false
       return done
     }
   })()
@@ -535,17 +617,27 @@ export function seoSite(dir, { brand = '', theme = null, pages = [], base = null
     const path = p.file === 'index.html' ? './' : p.file
     // the page's own picture (the one the person picked, else its first), else the build's key art
     const own = s.image && localFile(dir, `img/${s.image}`) ? { file: join(dir, 'img', s.image), alt: (pictures(html).find(x => x.src.endsWith(s.image)) || {}).alt || p.title } : null
-    const first = pictures(html).map(x => ({ rel: localFile(dir, x.src), alt: x.alt })).find(x => x.rel && !/^img\/share-/.test(x.rel))
+    // the share picture, picked with no one asked: the one the person chose, else the page's
+    // own first picture (its hero), else the build's key art, else a shot of the top of the
+    // page, else a card in the site's colours
+    const first = pictures(html).map(x => ({ rel: localFile(dir, x.src), alt: x.alt })).find(x => x.rel && !/^img\/share-/.test(x.rel) && shareable(join(dir, x.rel)))
     const pick = own || (first ? { file: join(dir, first.rel), alt: first.alt } : homeImage)
-    const shot = pick ? shareOf(pick.file, pick.alt || p.title) : card()
+    const shotOf = () => {
+      const name = `share-page-${String(p.id).replace(/[^\w-]/g, '').slice(0, 40) || i}.jpg`, out = join(shareDir, name)
+      mkdirSync(shareDir, { recursive: true })
+      return existsSync(out) || pageShot(join(dir, p.file), out) ? { image: `img/${name}`, imageSize: [1200, 630], imageAlt: `${p.title} · ${brand}`, ...(existsSync(squareOf(out)) ? { square: `img/${squareOf(name)}` } : {}) } : null
+    }
+    const shot = pick ? shareOf(pick.file, pick.alt || p.title) : shotOf() || card()
     const h1 = plain((bodyOf(html).match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || '')
     const entry = { id: p.id, path, pageTitle: p.title, title: s.title, description: s.description, schema: s.schema, facts: s.facts, lang: s.lang || lang, h1, text: text.get(p.id), html: bodyOf(html), favicon: 'favicon.svg', ...(shot || {}), ...(p.video || (kind === 'film' && video) ? { video: p.video || video } : {}) }
     files.set(p.id, applyHead(html, entry, { brand, base, siteText, home: i === 0, theme, kind }))
     if (!shot) notes.push({ page: p.id, field: 'image', text: `${p.title}: no picture to share, and no way to draw a card here` })
     const ld = jsonLd(entry, { brand, base, siteText, home: i === 0 })
-    manifest.pages.push({ id: p.id, file: p.file, path, title: entry.title, description: entry.description, image: entry.image || null, schema: ld['@graph']?.[1]?.['@type'] || ld['@type'], lang: entry.lang })
+    manifest.pages.push({ id: p.id, file: p.file, path, title: entry.title, description: entry.description, image: entry.image || null, square: entry.square || null, schema: ld['@graph']?.[1]?.['@type'] || ld['@type'], lang: entry.lang })
   })
   for (const p of pages) writeFileSync(join(dir, p.file), files.get(p.id))
+  // the site's thumbnail: the home page's share picture (the Feed poster and the project tile use it too)
+  manifest.thumb = manifest.pages[0]?.image ? { image: manifest.pages[0].image, square: manifest.pages[0].square, ...(base ? { url: new URL(manifest.pages[0].image, base).href } : {}) } : null
   // the site's own files
   writeFileSync(join(dir, 'robots.txt'), `User-agent: *\nAllow: /\n${base ? `\nSitemap: ${new URL('sitemap.xml', base).href}\n` : ''}`)
   const day = new Date().toISOString().slice(0, 10)
@@ -697,4 +789,22 @@ export function shareApp(dir, { name = '', description = '', picture = null, bas
   const next = applyHead(html, { ...entry, title: own ? plain(own) : name }, { brand: name, base, home: true, kind })
   if (next !== html) writeFileSync(file, next)
   return true
+}
+
+// The build's thumbnail as the studio shows it before export: the home page's share picture
+// the person (or crew) chose, else its hero (the first picture painted on the home page).
+// events: the run's; returns { page, src, chosen, pictures: [src] } or null.
+export function thumbOf(events = []) {
+  const home = events.find(e => e.type === 'page' && e.id)?.id
+  if (!home) return null
+  const pics = []
+  for (const e of events) if (e.type === 'image' && e.src && !pics.includes(e.src)) pics.push(e.src)
+  const name = src => String(src).split(/[?#]/)[0].split('/').pop()
+  const chosen = seoFromEvents(events).get(home)?.image || ''
+  // in the page's section order, as the export reads them (not the order they were painted in)
+  const order = events.filter(e => e.type === 'layer:plan' && e.page === home).map(e => e.id)
+  const at = e => (i => (i < 0 ? 1e6 : i))(order.indexOf(e.layer))
+  const onHome = events.filter(e => e.type === 'image' && e.src && e.page === home).map((e, i) => ({ e, i })).sort((a, b) => at(a.e) - at(b.e) || a.i - b.i).map(x => x.e.src)
+  const src = (chosen && pics.find(x => name(x) === chosen)) || onHome[0] || pics[0] || null
+  return { page: home, src, chosen: !!chosen, pictures: pics.slice(0, 12) }
 }

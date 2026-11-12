@@ -19,7 +19,7 @@ import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
-import { seoPass, currentSeo, cleanSeo } from '../engine/seo.mjs'
+import { seoPass, currentSeo, cleanSeo, thumbOf } from '../engine/seo.mjs'
 import { seoAsk } from '../web/route.js'
 import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
@@ -604,9 +604,9 @@ function runCard(id) {
       published: Object.keys(sites),
       videoSeconds: video?.seconds ?? null,
       preview: events.some(e => e.type === 'layer:done' && e.html),
-      // the cover: the hero picture the art director made, else the first picture
-      // a game's own title picture once it is painted
-      cover: (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || gameCover(id),
+      // the cover: the share picture the person chose for the home page, else the hero picture
+      // the art director made, else the first picture; a game's own title picture once it is painted
+      cover: (thumbOf(events)?.chosen && thumbOf(events).src) || (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || gameCover(id),
       game: events.some(e => e.type === 'game:spec') || pages.some(p => /\b(play|game|arcade|trial)\b/i.test(`${p.id} ${p.title}`)),
       app: events.some(e => e.type === 'app:ready' || e.type === 'app:done'),
       planned: events.filter(e => e.type === 'layer:plan').length,
@@ -2614,6 +2614,12 @@ const server = createServer((req, res) => {
 
   // a page's search title, description and share picture, as the person sets them (Design panel)
   const runSeo = url.pathname.match(/^\/api\/runs\/([^/]+)\/seo$/)
+  // the build's thumbnail (the home page's share picture) and the pictures it can be swapped for (Publish menu)
+  if (runSeo && req.method === 'GET' && RUN_ID.test(runSeo[1])) {
+    const events = readEvents(runSeo[1])
+    if (!events) return res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no such build' }))
+    return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ thumb: thumbOf(events) }))
+  }
   if (runSeo && req.method === 'POST' && RUN_ID.test(runSeo[1])) {
     let body = ''
     req.on('data', c => { body += c; if (body.length > 20000) req.destroy() })

@@ -501,6 +501,18 @@ function reactHead(dir, htmlDir, seo, snap) {
 const zip = (cwd, name) => new Promise(ok => execFile('zip', ['-qr', `${name}.zip`, name], { cwd }, err => ok(err ? null : join(cwd, `${name}.zip`))))
 
 // fill(root): optional, fills empty picture slots in the export (html/ and react/) before it is zipped
+// The site's thumbnail next to the run (thumb.jpg 1200 x 630, thumb-square.jpg 600 x 600):
+// the Feed poster and the project tile use the same picture the link preview shows.
+function keepThumb(htmlDir, seo, runDir) {
+  try {
+    for (const [from, to] of [[seo.thumb?.image, 'thumb.jpg'], [seo.thumb?.square, 'thumb-square.jpg']]) {
+      const f = from && join(htmlDir, from)
+      if (f && /\.jpe?g$/i.test(f) && existsSync(f)) copyFileSync(f, join(runDir, to))
+      else rmSync(join(runDir, to), { force: true })
+    }
+  } catch {}
+}
+
 export async function exportRun({ events, runId, runDir, sections, name: given = '', fill = null }) {
   const snap = snapshot(events, sections, { name: given })
   if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
@@ -521,11 +533,13 @@ export async function exportRun({ events, runId, runDir, sections, name: given =
   const seoArgs = { brand: snap.brand, theme: snap.theme, pages: seoPages }
   const seo = seoSite(htmlDir, seoArgs)
   writeFileSync(join(root, 'seo.json'), JSON.stringify(seo, null, 2) + '\n')
+  keepThumb(htmlDir, seo, runDir)
   // the React project's one page carries the home page's tags and the same pictures
   reactHead(join(root, 'react'), htmlDir, seo, snap)
   const rebase = base => {
     const again = seoSite(htmlDir, { ...seoArgs, base })
     writeFileSync(join(root, 'seo.json'), JSON.stringify(again, null, 2) + '\n')
+    keepThumb(htmlDir, again, runDir)
     return again
   }
   writeFileSync(join(root, 'README.md'), `# ${snap.brand}
