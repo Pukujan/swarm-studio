@@ -15,9 +15,10 @@
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
 import { swEdit } from './edit/patches.js'
+import { storyItems, storyInspHtml, storyIntent } from './story.js'
 
 const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
-const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
+const SECTIONS = [['site', 'Site'], ['story', 'Story'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
 const fmtTime = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : ''
 
 export function makeProject({ sw, C, root }) {
@@ -29,7 +30,9 @@ export function makeProject({ sw, C, root }) {
     sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), sharp: new Map(), stale: new Set(), shot: new Map(), want: { s: new Map(), f: new Map() }, failed: new Set(), camAt: 0,
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
     // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
-    marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
+    marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set(),
+    // the Story lane (spec 39): the story's view, the shape shown, the runs a story is being written for
+    story: null, storyRun: null, storyShape: store.get('story.shape', 'tall'), storyWriting: new Set(), storyAsked: new Set()
   }
   // the version shown and its project are the navigation machine's (spec 34). A project opened with
   // no version yet shows the build the canvas holds; one too new to name its project takes it from
@@ -133,9 +136,54 @@ export function makeProject({ sw, C, root }) {
     if (up && up !== run) { nav.go({ type: 'open.version', version: up, project: P.proj.id }); return }
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
     P.refs = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/refs`).catch(() => ({ refs: [] }))).refs : []
+    await loadStory(run, board)
     render()
     clearTimeout(P.timer)
     P.timer = setTimeout(() => P.on && load(), board?.busy ? 2000 : board?.live ? 3000 : 15000)
+  }
+
+  // ---------- the Story lane (spec 39, web/story.js): written once a build with pages is finished,
+  // without a press (it only draws cards here; nothing is posted)
+  async function loadStory(run, board) {
+    if (hosted() || !board?.pages?.length) { P.story = null; P.storyRun = run; return }
+    if (P.storyRun !== run || !P.story) {
+      const got = await api(`/api/runs/${encodeURIComponent(run)}/story`).catch(() => null)
+      if (P.run !== run) return
+      P.story = got; P.storyRun = run
+    }
+    if (!P.story && !board.busy && !P.storyAsked.has(run)) { P.storyAsked.add(run); storyWrite(run, {}) }
+  }
+  function storyWrite(run, body, path = '') {
+    P.storyWriting.add(run)
+    insp.classList.add('st-busy')
+    if (P.on && P.run === run) renderStage()
+    return post(`/api/runs/${encodeURIComponent(run)}/story${path}`, body)
+      .then(v => { if (P.run === run) { P.story = v; P.storyRun = run } return v })
+      .catch(err => { toast(`<span>${esc(err.message || 'The story could not be written')}</span>`); return null })
+      .finally(() => { P.storyWriting.delete(run); insp.classList.remove('st-busy'); if (P.on && P.run === run) render() })
+  }
+  function storyAct(e) {
+    const x = find(P.sel)
+    if (x?.kind !== 'story' || !P.story?.story) return false
+    const want = storyIntent(e, x, P.story)
+    if (!want) return false
+    if (want.shape) {
+      P.storyShape = want.shape; store.set('story.shape', want.shape)
+      renderStage(); renderInsp()
+      return true
+    }
+    const run = P.run
+    const keep = x.beat?.id
+    // a new type rewrites every beat, so the inspector must redraw when it lands
+    if (want.op === 'type' || want.write) e.target.blur?.()
+    ;(want.write ? storyWrite(run, { type: want.type }) : storyWrite(run, want, '/edit')).then(v => {
+      // the card stays selected where it went (a move), or the first card after a new type
+      if (!v) return
+      const at = want.op === 'move' ? v.story.beats.findIndex(b => b.headline === x.beat.headline) : v.story.beats.findIndex(b => b.id === keep)
+      P.sel = `story:${(v.story.beats[at] || v.story.beats[0]).id}`
+      render()
+    })
+    return true
   }
 
   // every file, grouped the way the panel and the stage show them
@@ -143,6 +191,8 @@ export function makeProject({ sw, C, root }) {
     const b = P.board || {}
     const g = {}
     if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, sharp: P.sharp.get(p.id), snap: P.thumbs.has(p.id), cover: p.cover, plan: p.plan }, ...draftsOf(p.id)])
+    const story = P.storyRun === P.run ? storyItems(P.story, P.run, P.storyShape, { writing: P.storyWriting.has(P.run) }) : []
+    if (story.length) g.story = story
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, pitch: b.game.pitch || '', src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
@@ -188,7 +238,7 @@ export function makeProject({ sw, C, root }) {
   }
   const thumbHtml = x => x.src ? `<span class="t" style="background-image:url('${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}')"></span>`
     : x.kind === 'page' && P.board?.theme?.colors?.length ? `<span class="t tcs" style="--tc-bg:${esc(P.board.theme.colors[0])};--tc-pr:${esc(P.board.theme.colors[1] || P.board.theme.colors[0])}"></span>`
-    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', draft: 'pencil', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
+    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', draft: 'pencil', story: 'film', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
   function renderList() {
     const g = groups()
     listEl.innerHTML = SECTIONS.filter(([k]) => g[k]).map(([k, label]) => {
@@ -244,7 +294,7 @@ export function makeProject({ sw, C, root }) {
     const low = at(x.src), full = at(x.sharp) || low
     const img = x.kind === 'page' && !x.snap ? skeleton(x)
       : x.src ? `<img src="${esc(picNow(full, low))}" data-full="${esc(full)}"${low !== full ? ` data-low="${esc(low)}"` : ''} alt="" draggable="false" loading="lazy" decoding="async">${x.kind === 'page' ? skeleton(x, true) : ''}`
-      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
+      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', story: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
@@ -252,7 +302,7 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'draft') return draftBoard(x, sel, img)
     const rv = x.kind === 'page' ? reviewOf(x) : null
     const work = x.kind === 'art' && (x.pending || P.landed.has(x.key)) ? painting(x) : ''
-    return `<div class="ab ${x.kind}${x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}<svg class="mk" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${markPaths(x.page)}</svg>` : ''}${sel}</div>`
+    return `<div class="ab ${x.kind}${x.kind === 'story' ? ` st-${x.shape}${x.pending || P.storyWriting.has(P.run) ? ' st-wait' : ''}` : x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src && x.kind !== 'story' ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}<svg class="mk" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${markPaths(x.page)}</svg>` : ''}${sel}</div>`
   }
   // ---------- Scribble (spec 29): marks on a page's artboard, kept as fractions of the page
   // a page's artboard shows at most 9 widths of it: y on the artboard = y on the page × this
@@ -423,7 +473,7 @@ export function makeProject({ sw, C, root }) {
     const g = groups()
     if (!P.board && !P.uploads.length && !P.refs.length) { world.innerHTML = ''; return }
     const sec = (k, label) => g[k] ? `<section class="pj-sec ${k}"><span class="al">${label}</span><div class="abs">${g[k].map(board).join('')}</div></section>` : ''
-    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
+    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('story', 'Story')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
     applyCam()
     measurePages()
     if (!P.framed && world.offsetWidth) { P.framed = true; frameAll(false) }
@@ -440,6 +490,7 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'page' && P.layer && P.el && sw.layers?.get(P.layer)?.done && !hosted()) { const r = renderElement(x); if (r !== false) return r }
     if (x.kind === 'page' && P.layer && sw.layers?.get(P.layer)) return renderLayer(x)
     P.layer = null
+    if (x.kind === 'story') { insp.innerHTML = storyInspHtml(x, P.story, esc, base()); return }
     if (dims.has(x.key)) x.dims = dims.get(x.key)
     const kv = [
       x.dims && ['Size', x.dims],
@@ -610,6 +661,7 @@ export function makeProject({ sw, C, root }) {
     }, 1200)
   }
   insp.addEventListener('change', e => {
+    if (storyAct(e)) return
     const x = find(P.sel), L = sw.layers
     if (!x || !P.layer || !L) return
     const t = e.target
@@ -619,6 +671,8 @@ export function makeProject({ sw, C, root }) {
     if (t.hasAttribute('data-radius')) { L.edit(P.layer, 'radius', t.value); edited(x.page) }
   })
   insp.addEventListener('keydown', e => {
+    // a story card's words: Enter keeps them (the change saves), Shift+Enter is a new line in Line
+    if (e.key === 'Enter' && !e.shiftKey && e.target.closest('.st-words')) { e.preventDefault(); e.target.blur(); return }
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return
     if (e.target.matches('.pj-eattr input')) { e.preventDefault(); insp.querySelector('[data-eact="attr"]')?.click(); return }
     if (e.target.matches('[data-text], [data-ef], [data-es], [data-ea]')) { e.preventDefault(); e.target.blur() }
@@ -1031,6 +1085,7 @@ export function makeProject({ sw, C, root }) {
   listEl.addEventListener('contextmenu', e => { const r = e.target.closest('.row'); if (!r) return; e.preventDefault(); select(r.dataset.key); fileMenu(find(r.dataset.key), null, { x: e.clientX, y: e.clientY }) })
   insp.addEventListener('click', e => {
     if (e.target.closest('.pj-x')) return select(null)
+    if (storyAct(e)) return
     if (layerClick(e)) return
     const b = e.target.closest('[data-act]'), x = find(P.sel)
     if (!b || !x) return

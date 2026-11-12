@@ -2,13 +2,13 @@
 //   GET  /api/runs/:id/story                  -> { story, cards, types } (404 before one is written)
 //   POST /api/runs/:id/story { type? }        -> written (again) from the build, cards drawn
 //   POST /api/runs/:id/story/edit { op, ... } -> reword | picture | move | order | type; cards redrawn
-//   GET  /api/runs/:id/story/<shape>-<beat>.jpg -> one card
-//   GET  /api/runs/:id/story/screens/<page>-<desktop|phone>.jpg -> a page shot a beat may use
+//   GET  /story/<id>/<shape>-<beat>.jpg      -> one card (open like /img/, so an <img> can show it)
+//   GET  /story/<id>/screens/<page>-<desktop|phone>.jpg -> a page shot a beat may use
 // Nothing here posts anything: the cards go to the Feed only through Post to Feed, and to a network
 // only when the person presses Post on their own connected account.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createReadStream } from 'node:fs'
 import { join } from 'node:path'
-import { storyFacts, writeStory, readStory, saveStory, editStory, STORY_TYPES } from '../engine/story.mjs'
+import { storyFacts, writeStory, readStory, saveStory, editStory, picturesOf, STORY_TYPES } from '../engine/story.mjs'
 import { drawCards, SHAPES } from '../engine/storycards.mjs'
 
 const RUN_ID = /^[\w.-]{1,80}$/
@@ -26,7 +26,15 @@ export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null
   const busy = new Map()
   const once = (id, fn) => { const p = (busy.get(id) || Promise.resolve()).then(fn, fn); busy.set(id, p.catch(() => {})); return p }
 
-  const factsOf = async id => storyFacts(readEvents(id) || [], id, { brand: brandOf(id), pitch: await pitchOf(id).catch(() => '') })
+  // the pitch is a model call: only when writing and the brand does not already say what it is, once per build
+  const pitches = new Map()
+  const factsOf = async (id, { pitch = true } = {}) => {
+    const events = readEvents(id) || [], brand = brandOf(id)
+    const f = storyFacts(events, id, { brand })
+    if (!pitch || f.what) return f
+    if (!pitches.has(id)) pitches.set(id, await pitchOf(id).catch(() => ''))
+    return storyFacts(events, id, { brand, pitch: pitches.get(id) })
+  }
 
   // the page shots a story's screens use, kept as files so a redraw does not shoot the site again
   async function screensOf(id, story) {
@@ -55,32 +63,42 @@ export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null
     const r = await drawCards(story, { outDir: join(runDir, 'story'), runDir, screens: await screensOf(id, story), dataDir })
     return r
   }
-  const view = (id, story, cards) => ({ story, cards: cards || cardsOn(id, story), types: Object.entries(STORY_TYPES).map(([id, t]) => ({ id, label: t.label })), shapes: SHAPES })
+  // the pictures a beat can swap to: the build's own art and its pages (a page shot once there is one)
+  const choices = async id => {
+    const pics = picturesOf(await factsOf(id, { pitch: false }))
+    const shot = p => existsSync(join(runsDir, id, 'story', 'screens', `${p}-desktop.jpg`)) ? `/story/${id}/screens/${p}-desktop.jpg` : null
+    return pics.all.map(p => (p.kind === 'screen' ? { kind: 'screen', page: p.page, src: null, name: p.title, thumb: shot(p.page) } : { kind: 'image', src: p.src, page: null, thumb: p.src }))
+  }
+  const view = async (id, story, cards) => ({ story, cards: cards || cardsOn(id, story), types: Object.entries(STORY_TYPES).map(([id, t]) => ({ id, label: t.label })), shapes: SHAPES, pictures: await choices(id) })
   const cardsOn = (id, story) => Object.fromEntries(Object.keys(SHAPES).map(s => [s, story.beats.map(b => `${s}-${b.id}.jpg`).filter(f => existsSync(join(runsDir, id, 'story', f)))]))
 
-  return async function handle(req, res, url) {
-    const m = url.pathname.match(/^\/api\/runs\/([^/]+)\/story(?:\/(edit|screens\/[\w-]+-(?:desktop|phone)\.jpg|(?:tall|wide|square)-b\d+\.jpg))?$/)
+  // the cards and page shots, open like /img/ (a build's pictures are not secret; the API is)
+  function file(req, res, url) {
+    const m = url.pathname.match(/^\/story\/([\w.-]{1,80})\/((?:screens\/[\w-]{1,60}-(?:desktop|phone)|(?:tall|wide|square)-b\d{1,2})\.jpg)$/)
+    if (!m || req.method !== 'GET') return false
+    const f = join(runsDir, m[1], 'story', m[2])
+    if (!existsSync(f)) { json(res, 404, { error: 'no such card' }); return true }
+    res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-cache' })
+    createReadStream(f).pipe(res)
+    return true
+  }
+
+  async function handle(req, res, url) {
+    const m = url.pathname.match(/^\/api\/runs\/([^/]+)\/story(?:\/(edit))?$/)
     if (!m || !RUN_ID.test(m[1])) return false
     const [, id, sub] = m
     const runDir = join(runsDir, id)
     if (!existsSync(join(runDir, 'events.jsonl'))) { json(res, 404, { error: 'no such build' }); return true }
-    if (sub && sub.endsWith('.jpg')) {
-      const file = join(runDir, 'story', sub)
-      if (req.method !== 'GET' || !existsSync(file)) { json(res, 404, { error: 'no such card' }); return true }
-      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-cache' })
-      createReadStream(file).pipe(res)
-      return true
-    }
     if (req.method === 'GET' && !sub) {
       const story = readStory(runDir)
-      json(res, story ? 200 : 404, story ? view(id, story) : { error: 'no story yet' })
+      json(res, story ? 200 : 404, story ? await view(id, story) : { error: 'no story yet', pictures: await choices(id) })
       return true
     }
     if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
     const input = await body(req)
     try {
       const out = await once(id, async () => {
-        const f = await factsOf(id)
+        const f = await factsOf(id, { pitch: !sub || input.op === 'type' })
         let story
         if (!sub) {
           const talk = chat()
@@ -93,12 +111,13 @@ export function storyRoutes({ runsDir, dataDir, readEvents, brandOf = () => null
         const { fixes, ...keep } = story
         saveStory(runDir, keep)
         const r = await draw(id, keep)
-        return { ...view(id, keep, r.cards), fixes: fixes || [], drawn: r.drawn, by: r.by }
+        return { ...(await view(id, keep, r.cards)), fixes: fixes || [], drawn: r.drawn, by: r.by }
       })
       json(res, 200, out)
     } catch (err) { json(res, err.status || 400, { error: String(err.message || err) }) }
     return true
   }
+  return { handle, file }
 }
 
 export { readStory }

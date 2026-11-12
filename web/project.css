@@ -90,6 +90,22 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab.app, .ab.code { width: 300px; height: 169px; }
 .ab.film { width: 142px; height: 80px; }
 .ab.art { width: 112px; height: 112px; }
+/* the Story lane (spec 39): a card per beat, in the shape picked */
+.ab.story { overflow: hidden; }
+.ab.story img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
+.ab.st-tall { width: 72px; height: 128px; }
+.ab.st-wide { width: 142px; height: 80px; }
+.ab.st-square { width: 100px; height: 100px; }
+.ab.st-wait { background: linear-gradient(105deg, var(--surface-2) 30%, color-mix(in srgb, var(--text) 10%, var(--surface-2)) 50%, var(--surface-2) 70%); background-size: 260% 100%; animation: pt-shine 2.4s linear infinite; }
+.st-shapes { display: flex; gap: 4px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; }
+.st-shape { flex: 1; min-height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.st-shape.on { background: var(--surface-2); color: var(--text); }
+.st-f { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 12px; color: var(--muted); }
+.st-f input, .st-f textarea, .st-f select { font: inherit; font-size: 13px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; resize: vertical; }
+.st-pics { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.st-pic { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--muted); overflow: hidden; cursor: pointer; display: grid; place-items: center; }
+.st-pic img { width: 100%; height: 100%; object-fit: cover; }
+.st-pic.on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ab.upload { width: 112px; height: 112px; }
 .ab.ref { width: 112px; height: 112px; }
 .ab.ref .blank { padding-bottom: 18px; }
@@ -118,6 +134,14 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .pj-insp h3 span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pj-insp .pv { height: 180px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; display: grid; place-items: center; color: var(--dim); }
 .pj-insp .pv img, .pj-insp .pv video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.pj-insp .pv.st-pv { flex: none; height: 300px; background: transparent; border: 0; display: flex; justify-content: center; }
+/* while the story is being written or redrawn: the cards dim and the inspector waits */
+.ab.st-wait img { opacity: .45; }
+.pj-insp.st-busy .pv.st-pv { opacity: .5; transition: opacity .2s; }
+.pj-insp.st-busy :is(.st-pics, .st-type, .btns) { opacity: .5; pointer-events: none; }
+.pj-insp .pv.st-pv img { width: auto; height: 100%; max-width: 100%; border-radius: 6px; }
+.pj-insp .pv.st-wide { height: 136px; }
+.pj-insp .pv.st-square { height: 238px; }
 .pj-insp .pv-tc { position: relative; width: 96px; height: 100%; }
 .pj-insp .pv-tc .tc { position: absolute; inset: 0; border-radius: 3px; overflow: hidden; background: var(--tc-bg); color: var(--tc-fg); padding: 22% 10% 0; display: flex; flex-direction: column; gap: 7px; }
 .pj-insp .pv-tc .tc i { width: 30%; height: 3px; border-radius: 99px; background: var(--tc-pr); }

@@ -50,7 +50,7 @@ import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
 import { appKitRoutes } from './appkit.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
-import { storyRoutes } from './story.mjs'
+import { storyRoutes, readStory } from './story.mjs'
 import { deckRoutes } from './deck.mjs'
 import { refRoutes } from './refs.mjs'
 import { studioRoutes } from './studio.mjs'
@@ -1300,7 +1300,7 @@ async function launchKit(id) {
   if (!launchable(runFacts(events, id))) throw Object.assign(new Error('Nothing to launch yet: publish it first.'), { code: 409 })
   let pitch = ''
   try { pitch = await writePitch(events, id) } catch {}
-  return writeLaunch(join(runsDir, id), events, id, { pitch })
+  return writeLaunch(join(runsDir, id), events, id, { pitch, story: readStory(join(runsDir, id)) })
 }
 const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, connectors,
   writeLaunch: launchKit })
@@ -3408,7 +3408,8 @@ const server = createServer((req, res) => {
   if (talks(req, res, url)) return
   if (appKit(req, res, url)) return
   if (brands(req, res, url)) return
-  if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute(req, res, url); return }
+  if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute.handle(req, res, url); return }
+  if (url.pathname.startsWith('/story/') && storyRoute.file(req, res, url)) return
   if (decks(req, res, url)) return
   if (refsRoute(req, res, url)) return
   if (studioRoute(req, res, url)) return

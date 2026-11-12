@@ -74,5 +74,5 @@ export function canvasPage(webDir, extra = {}) {
     .replace('<link rel="stylesheet" href="scaffold.css">', () => `<style>${read('scaffold.css')}</style>`)
     .replace('<link rel="stylesheet" href="workshop.css">', () => `<style>${read('workshop.css')}</style>`)
     // the studio controller, Projects and a project: its own modules joined into one
-    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${joinModules(webDir, ['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'edit/patches.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', ...kitFiles(webDir), 'kits.js', 'scaffold.js', 'nav.js', 'studio.js'])}</script>`)
+    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${joinModules(webDir, ['icons.js', 'route.js', 'setup.js', 'settings.js', 'home.js', 'edit/patches.js', 'story.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', ...kitFiles(webDir), 'kits.js', 'scaffold.js', 'nav.js', 'studio.js'])}</script>`)
 }

@@ -73,3 +73,20 @@ test('the kit never opens on its own before there is something to launch', () =>
   assert.match(server, /if \(!launchable\(runFacts\(events, id\)\)\) throw/)
   assert.match(auto, /nothing to launch yet: no live link/)
 })
+
+test('with a story, the posts are written from it: its hook, what it is, its moments and how it was made', async () => {
+  const { rulesStory, storyFacts } = await import('../engine/story.mjs')
+  const events = [
+    { type: 'run:start', t: 1, brief: 'do u wanna grill me first? a supper club called Saffron & Smoke', title: 'Saffron & Smoke', agents: [{ id: 'a' }, { id: 'b' }] },
+    { type: 'page', id: 'home', title: 'Saffron & Smoke', index: 0 },
+    { type: 'page', id: 'menu', title: "Tonight's Menu", index: 1 },
+    { type: 'layer:done', page: 'menu', layer: 'hero', html: '<section><h2>Cooked once, eaten late</h2><p>Seven plates, one fire.</p></section>' }
+  ]
+  const story = rulesStory(storyFacts(events, 'r1', { brand: { story: { what: 'A late-night supper club in Lisbon', who: '' } } }))
+  const posts = writePosts(runFacts(events, 'r1'), story)
+  const x = posts.find(p => p.id === 'x')
+  assert.match(x.thread[0], /^Meet Saffron( & Smoke)?\. A late-night supper club in Lisbon\./)
+  assert.ok(x.thread.some(s => /Cooked once, eaten late: Seven plates, one fire\./.test(s)), x.thread.join(' | '))
+  assert.ok(x.thread.some(s => /Planned, designed and built by 2 AI agents/.test(s)))
+  for (const p of posts) assert.doesNotMatch(p.thread ? p.thread.join(' ') : p.text, /grill|\blive\b/i, p.id)
+})
