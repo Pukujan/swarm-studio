@@ -47,6 +47,8 @@ plan_id=$(sed -E 's/^\{"id":"(p-[a-z0-9]+)".*/\1/' "$tmp/reply")
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/plans/$plan_id/build)" = 409 ] || { echo 'an unlocked plan started a build'; exit 1; }
 curl -sf -H 'x-swarm-token: ci' http://127.0.0.1:$port/api/plans/$plan_id/brief > "$tmp/reply"; has 'Art at close-ups'
 get /api/packs; has '"events"'
+# talk first (engine/discuss.mjs): the owner's "don't build yet" brief is a talk, never a build
+curl -sf -H 'x-swarm-token: ci' -d '{"kind":"app","text":"full stack saas app for ticket booking, do u wanna grill me first? Accounts: Email sign-in. dont build yet lets talk about specifications, i need an air booking api or something?"}' http://127.0.0.1:$port/api/discuss/read > "$tmp/reply"; has '"intent":"talk"'
 # the Setup sheet (spec 6): with no model key the test fails without a call, and the pictures pick is kept
 get /api/setup; has '"seen":false'; has '"pictures"'; has '"account":{"connected":false'
 curl -sf -H 'x-swarm-token: ci' -d '{"seen":true,"pictures":"drawn"}' http://127.0.0.1:$port/api/setup > "$tmp/reply"; has '"seen":true'; has '"mode":"drawn"'

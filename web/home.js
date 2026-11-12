@@ -651,6 +651,7 @@ export function makeHome({ sw, C, root }) {
       // App and Video start with the same page design as a website (engine/auto.mjs design step), so
       // they open the same way: the new build's project, then the Design deck while the crew designs.
       // The reply names that build's run; without it the project would show the build before it.
+      sw.talk?.end()
       const job = await post('/api/auto', { prompt: text, ...run })
       input.value = ''
       C.open(null)
@@ -664,9 +665,44 @@ export function makeHome({ sw, C, root }) {
     if (!text) return showcases()
     // a game is planned before anything costly is made (spec 21): its questions, then the Plan board
     if (make.k === 'game' && !hosted()) return grill(text)
+    // "don't build yet, let's talk", "grill me first" or a question for the crew: the planner reads
+    // the prompt (engine/discuss.mjs) and a talk opens instead of a build; not sure, one choice
+    const go = () => (grillOn ? guide(text) : start(text))
+    const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text, '', guideKind())
+    if (read === 'talk') return talkFirst(text)
+    if (read === 'unsure') return askTalk(text, go)
     // Website, App and Video: the questions the prompt has not answered yet (spec 6); none, it builds
-    if (grillOn) return guide(text)
-    start(text)
+    go()
+  }
+
+  // ---------- talk first: a new project with nothing built opens in the Design deck, and Hermia
+  // (the planner) talks it through in its chat. The person's words are the first message; Build
+  // there writes the brief to read and edit, and only its Build starts the crew.
+  function talkFirst(text) {
+    const run = make.k === 'site' ? null : { games: make.games, only: make.only }
+    const sets = G.guided ? guideSets(G.answers, G.qs) : {}
+    closePop()
+    input.value = ''
+    C.project = null
+    C.go('station', 'canvas')
+    C.chat(true)
+    sw.talk.start({ text, kind: guideKind(), blank: true, build: brief => start(brief, run, sets) })
+  }
+  function askTalk(text, go) {
+    openPop('grill', `<h3>Build now or talk first?</h3>
+      <div class="hm-gfoot"><span></span><span><button type="button" class="btn ghost" data-first>Talk first</button><button type="button" class="btn pri" data-now>Build now</button></span></div>`)
+    pop.querySelector('[data-now]').onclick = () => { closePop(); go() }
+    pop.querySelector('[data-first]').onclick = () => talkFirst(text)
+    pop.querySelector('[data-now]').focus({ preventScroll: true })
+  }
+  // an answer in your own words that is a question, or says not to build yet, is not brief text:
+  // the talk opens with the prompt, the answers so far and those words (null when it is an answer)
+  async function answerTalks(v, q) {
+    if (!v || hosted() || !sw.readTalk || q.chips.includes(v)) return false
+    if (!/\?/.test(v) && v.split(/\s+/).length < 5) return false
+    if ((await sw.readTalk(v, q.q, guideKind())) === 'build') return false
+    talkFirst([G.guided ? guideBrief(G.text, G.answers, G.qs) : G.text, v].filter(Boolean).join('\n\n'))
+    return true
   }
 
   // ---------- the pop under the Make box: the showcases, or the interview. One at a time;
@@ -764,12 +800,12 @@ export function makeHome({ sw, C, root }) {
     const free = pop.querySelector('.hm-free')
     const take = v => { if (v) G.answers[q.id] = v; else delete G.answers[q.id] }
     const done = () => (G.plan ? toPlan() : G.guided ? drawBrief() : start(brief()))
-    const next = () => { take(free.value.trim() || G.answers[q.id]); if (!last) { G.i++; drawGrill() } else done() }
+    const next = async () => { const v = free.value.trim(); if (await answerTalks(v, q)) return; take(v || G.answers[q.id]); if (!last) { G.i++; drawGrill() } else done() }
     for (const b of pop.querySelectorAll('[data-c]')) b.onclick = () => { take(b.dataset.c); free.value = ''; next() }
     free.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); next() } }
     pop.querySelector('[data-next]').onclick = next
     // Just build means now: no brief step, the unanswered questions take their defaults
-    pop.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || G.answers[q.id]); G.guided ? build(guideBrief(G.text, G.answers, G.qs)) : done() }
+    pop.querySelector('[data-skip]').onclick = async () => { const v = free.value.trim(); if (await answerTalks(v, q)) return; take(v || G.answers[q.id]); G.guided ? build(guideBrief(G.text, G.answers, G.qs)) : done() }
     pop.querySelector('[data-back]')?.addEventListener('click', () => { G.i--; drawGrill() })
     free.focus({ preventScroll: true })
   }
@@ -781,10 +817,11 @@ export function makeHome({ sw, C, root }) {
     openPop('grill', `<div class="hm-dots" aria-label="The brief">${G.qs.map(() => '<i class="done"></i>').join('')}<i class="on"></i></div>
       <h3>The brief</h3>
       <textarea class="hm-free hm-brief" aria-label="The brief" maxlength="4000" rows="4">${esc(text)}</textarea>
-      <div class="hm-gfoot"><button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button><span><button type="button" class="btn pri" data-go>${ic('up', 16)}Build</button></span></div>`)
+      <div class="hm-gfoot"><button type="button" class="btn ghost" data-back>${ic('chl', 14)}Back</button><span><button type="button" class="btn ghost" data-talk>Keep talking</button><button type="button" class="btn pri" data-go>${ic('up', 16)}Build</button></span></div>`)
     const box = pop.querySelector('.hm-brief')
     const go = () => { const t = box.value.trim(); if (t) build(t) }
     pop.querySelector('[data-go]').onclick = go
+    pop.querySelector('[data-talk]').onclick = () => { const t = box.value.trim(); if (t) talkFirst(t) }
     box.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); go() } }
     pop.querySelector('[data-back]').onclick = () => { G.i = G.qs.length - 1; drawGrill() }
     box.focus({ preventScroll: true })

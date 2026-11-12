@@ -505,6 +505,8 @@ def _auto(prompt: str) -> str:
     if prompt.lower() == "stop":
         _api("/api/auto/stop", {})
         return "⚡ Auto mode stops after the current step; what was built still deploys."
+    if launcher.talk_first(prompt):
+        return f"⚡ {launcher.TALK_FIRST}"
     st = _api("/api/auto", {"prompt": prompt}, timeout=30)
     return ("⚡ Auto mode is running on the canvas: design → review → video → app → mini games → $2 credit pack (demo checkout) "
             "→ Supabase → Vercel. Keep the canvas open (the review photographs it). /swarm auto status shows where it is.")

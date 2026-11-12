@@ -38,6 +38,9 @@ def swarm_design(args: dict | None = None, **_: object) -> str:
     if not brief:
         return json.dumps({"error": "brief is required: describe the product the site is for"})
     started = launcher.start_run(brief, agents)
+    if started.get("talk"):
+        # the person said not to build yet: talk with them here, and call again with the agreed brief
+        return json.dumps({"started": False, "error": "Not started: the brief says to talk before building. Discuss it with the person first, then call swarm_design again with the brief you agreed once they say build."})
     if started.get("error") or not wait:
         return json.dumps(started, indent=2)
     summary = launcher.wait_run(started["run"])
@@ -69,6 +72,7 @@ def _setup_cli(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-open", action="store_true", help="don't open the canvas in a browser")
     parser.add_argument("--wait", action="store_true", help="wait for the build and print its summary")
     parser.add_argument("--models", action="store_true", help="show which models the swarm will use, then exit")
+    parser.add_argument("--build", action="store_true", help="build even when the brief says to talk first")
 
 
 def _run_cli(args: argparse.Namespace) -> int:
@@ -82,7 +86,7 @@ def _run_cli(args: argparse.Namespace) -> int:
     if commands.is_command(brief):
         print(commands.run(brief))
         return 0
-    result = launcher.start_run(brief, args.agents) if brief else launcher.ensure_server()
+    result = launcher.start_run(brief, args.agents, force=args.build) if brief else launcher.ensure_server()
     if result.get("error"):
         print(f"swarm: {result['error']}")
         return 1

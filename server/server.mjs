@@ -2096,6 +2096,27 @@ const server = createServer((req, res) => {
     if (req.method !== 'POST') return json(200, projects.list())
     return readJson(1e5, input => json(200, projects.op(input)))
   }
+  // Talk first (engine/discuss.mjs): the Make box asks whether a message means build, talk or unsure,
+  // and a talk with the planner runs in the Design deck's chat with nothing built.
+  // POST /api/discuss/read { text, kind, answerTo? } -> { intent, by }
+  // POST /api/discuss { said: [{ who: 'you' | 'hermia', text }], kind, brief? } -> { reply } | { brief }
+  if ((url.pathname === '/api/discuss/read' || url.pathname === '/api/discuss') && req.method === 'POST') {
+    const model = modelFor('planner')
+    const chat = (maxTokens, ms) => model && models.planner.apiKey ? async messages => (await streamChat(provider('planner'), {
+      trace: { kind: 'discuss' }, model, maxTokens, temperature: 0.3, signal: AbortSignal.timeout(ms),
+      extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+    })).text : null
+    return readJson(1e5, input => {
+      const kind = ['site', 'app', 'film', 'game'].includes(input.kind) ? input.kind : 'site'
+      import('../engine/discuss.mjs').then(async d => {
+        if (url.pathname === '/api/discuss/read') return json(200, await d.readIntent({ text: String(input.text || '').slice(0, 4000), answerTo: String(input.answerTo || '').slice(0, 300), kind, chat: chat(8, 9000) }))
+        const talk = chat(input.brief ? 400 : 600, 60000)
+        if (!talk) return json(503, { error: 'No planner model yet: pick one in Models.' })
+        const said = Array.isArray(input.said) ? input.said.slice(-40) : []
+        json(200, await (input.brief ? d.writeBrief : d.discuss)({ said, kind, chat: talk }))
+      }).catch(err => json(502, { error: String(err.message || err) }))
+    })
+  }
   // Post to Feed from the canvas, and Connect Hermes when it is not connected yet.
   // feed.py does the work in Hermes's Python, so the feed token never reaches this server.
   const feedPost = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/feed$/)
