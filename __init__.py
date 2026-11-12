@@ -64,7 +64,7 @@ def _slash_swarm(raw_args: str = "", **_: object) -> str:
         return commands.run(brief)
     result = launcher.start_run(brief) if brief else launcher.ensure_server()
     if result.get("error"):
-        return f"Swarm Studio: {result['error']}"
+        return f"Swarm Studio: {result['error']}" + (f" {result['action']}" if result.get("action") else "")
     if not brief:
         return f"Swarm Studio canvas is up: {result['url']}\n\n{commands.HELP}"
     return f"🐝 Swarm started. Watch it in the swarm pane, or open {result['url']}"
@@ -97,6 +97,8 @@ def _run_cli(args: argparse.Namespace) -> int:
     result = launcher.start_run(brief, args.agents, force=args.build) if brief else launcher.ensure_server()
     if result.get("error"):
         print(f"swarm: {result['error']}")
+        if result.get("action"):
+            print(f"swarm: {result['action']}")
         return 1
     print(f"Swarm Studio canvas: {result['url']}")
     if not args.no_open:
@@ -104,8 +106,8 @@ def _run_cli(args: argparse.Namespace) -> int:
     if brief and args.wait:
         print(json.dumps(launcher.wait_run(result["run"]), indent=2))
     elif brief and bridge.running() and not bridge.others():
-        # this process is the only Hermes the build can ask for pictures: it stays until the build is done
-        print("Keeping Hermes open for the build's pictures until it is done (Ctrl-C leaves; the build goes on without them).")
+        # this process is the only Hermes the build can ask for its model and pictures: it stays until the build is done
+        print("Keeping Hermes open for the build's model calls and pictures until it is done (Ctrl-C leaves: the build pauses until Hermes is back, and what is built is kept).")
         try:
             done = launcher.wait_run(result["run"], timeout=3600)
         except KeyboardInterrupt:

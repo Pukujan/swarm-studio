@@ -1322,6 +1322,9 @@ export function makeProject({ sw, C, root }) {
     })
     // "don't build yet, let's talk" or a question for the crew: the planner answers in the Design
     // deck's chat and nothing is built until the person says build there (engine/talkplan.mjs)
+    // no Hermes to answer the model: the chat says so and what to do, before anything starts
+    const off = hosted() || !sw.hermesReady ? null : await sw.hermesReady()
+    if (off) { C.go('station', 'canvas'); C.chat(true); return void sw.hermesSays(off) }
     const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text)
     if (read === 'build') return send(text)
     C.go('station', 'canvas')

@@ -13,6 +13,8 @@ import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, rea
 import { execFile, hermesEnv, pick } from '../engine/proc.mjs'
 import { hermesBridge, imageBody, videoBody } from '../engine/bridge.mjs'
 import { hermesLlm, roleModel } from '../engine/hermesllm.mjs'
+import { hermesHealth, HERMES_SAYS } from '../engine/hermeshealth.mjs'
+import { reasonFromAbort, reasonFromFailure } from '../engine/stopreason.mjs'
 import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -92,7 +94,19 @@ const port = Number(argPort >= 0 ? process.argv[argPort + 1] : process.env.SWARM
 const DEFAULT_BASE = 'https://api.inferhub.dev/v1'
 const DEFAULT_MODEL = 'cb/deepseek-v4.1-flash'
 const hermes = hermesBridge()
-const llm = hermesLlm({ bridge: hermes, port: () => port, broadcast: e => broadcast(e) })
+// Is Hermes there, and if not, why not (closed, or running an older copy of the plugin): asked before a
+// build starts, so a build with nobody to answer its model calls is refused at once, with the reason
+// (SWARM_HERMES_RUNNING=0|1 stands in for the process check in tests: a test server is never the one a
+// running Hermes attaches to, so the real check would call that Hermes outdated)
+const health = hermesHealth({ bridge: hermes, root, ...(/^[01]$/.test(process.env.SWARM_HERMES_RUNNING || '') ? { running: async () => process.env.SWARM_HERMES_RUNNING === '1' } : {}) })
+// a model call that found no Hermes for its grace period stops the build in flight with Hermes's reason
+const hermesGone = why => {
+  if (!current || current.done || current.controller.signal.aborted) return
+  // Hermes was there when this build started (it was checked), so "not connected" now means it closed
+  const said = why.code === 'hermes_closed' ? HERMES_SAYS.gone : why
+  current.controller.abort({ ...said, code: 'hermes' })
+}
+const llm = hermesLlm({ bridge: hermes, port: () => port, broadcast: e => broadcast(e), health, onGone: hermesGone, graceMs: Number(process.env.SWARM_HERMES_GRACE_MS) || 20000 })
 const envRole = (role, fallback = DEFAULT_MODEL) => {
   const apiKey = process.env[`SWARM_${role}_API_KEY`] || process.env.SWARM_API_KEY || process.env.SWARM_STUDIO_API_KEY || ''
   if (!apiKey) return { ...llm.provider(), model: role.toLowerCase() }
@@ -107,6 +121,15 @@ const models = { planner: envRole('PLANNER'), worker: envRole('WORKER'), reviewe
 const ROLES = ['planner', 'worker', 'reviewer']
 const viaHermes = role => models[role].hermes === true
 const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), apiKey: models[role].apiKey, ...(viaHermes(role) ? { hermes: true } : {}) })
+// Before work that calls the model: null when it can go ahead, else the 503 body that says why not
+// ({error, code: 'hermes_closed' | 'hermes_updated', message, action, hermes: true}). Only roles that
+// go through Hermes are asked about; a build with its own key does not need Hermes.
+async function hermesGate() {
+  if (!ROLES.some(r => viaHermes(r) && picks[r] !== 'off')) return null
+  const h = await health.ready().catch(() => null)
+  if (!h || h.ok) return null
+  return { error: `${h.message} ${h.action}`, code: `hermes_${h.code}`, message: h.message, action: h.action, hermes: true }
+}
 
 // Picks made in the canvas's Models menu. Model names only (each role keeps the
 // endpoint and key Hermes gave it), kept in the plugin's data dir, never in
@@ -383,7 +406,7 @@ function broadcast(event) {
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
 function startRun({ brief, agents, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '', brand = null }) {
-  current?.controller.abort()
+  current?.controller.abort('replaced')
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
   mkdirSync(dir, { recursive: true })
@@ -409,6 +432,14 @@ function startRun({ brief, agents, base = null, ask = '', resume = false, projec
     // painted still belongs to it: it goes into this build's own file (and to anyone looking at it).
     // Before, these were dropped and a finished build sat at "0 of 8" with its pictures on disk.
     if (current !== run) { if (LATE_PICTURE.has(type)) record(id, { type, t: Date.now(), run: id, ...data }); return }
+    // every stop names its cause: the person, a newer build, Hermes gone, or (below) the model
+    if (type === 'run:stopped' && !data?.reason) data = { ...data, reason: reasonFromAbort(run.controller.signal.reason) }
+    // a build that ended with nothing planned because the planner failed did not finish: it stopped, and
+    // the provider's own words say why (a 402 budget cap, a timeout); "0 sections" said nothing
+    if (type === 'run:done' && !data?.planned && !data?.extend) {
+      const failed = [...run.events].reverse().find(e => e.type === 'error' && (e.where === 'planner' || e.where === 'run'))
+      if (failed) { type = 'run:stopped'; data = { ...data, stopped: true, reason: reasonFromFailure(failed.message, { viaHermes: viaHermes('planner') }) } }
+    }
     // stopped before its pictures: the slots keep their stand-ins, and run:stopped stays the last word
     if (type === 'run:stopped') images?.drop('stopped')
     // run:start says whether the pictures will be painted: the deck tags a stand-in "real picture coming" only then
@@ -465,7 +496,13 @@ function startRun({ brief, agents, base = null, ask = '', resume = false, projec
       writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan, null, 2))
     })
   })
-    .catch(err => { if (run.controller.signal.aborted) return emit('run:stopped', { stopped: true }); emit('error', { where: 'run', message: String(err.message || err) }); images?.drop('the build stopped before its pictures') })
+    .catch(err => {
+      if (run.controller.signal.aborted) return emit('run:stopped', { stopped: true })
+      const message = String(err.message || err)
+      emit('error', { where: 'run', message })
+      images?.drop('the build stopped before its pictures')
+      emit('run:stopped', { stopped: true, ms: 0, planned: 0, done: 0, failed: 0, pages: 0, reason: reasonFromFailure(message, { viaHermes: viaHermes('planner') }) })
+    })
   return run
 }
 
@@ -528,7 +565,7 @@ const withTrace = (id, fn) => traced(traceScope(id), fn)
 const painters = new Map()
 async function stopRun(id) {
   const what = []
-  if (current?.id === id && !current.done && !current.controller.signal.aborted) { current.controller.abort(); what.push('build') }
+  if (current?.id === id && !current.done && !current.controller.signal.aborted) { current.controller.abort('person'); what.push('build') }
   // the pictures of any build, not only the newest: a project's older version may still be painting
   const pics = painters.get(id)
   if (pics?.busy()) { pics.stop(); what.push('pictures') }
@@ -2499,7 +2536,10 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/run' && req.method === 'POST') {
     let body = ''
     req.on('data', c => (body += c))
-    req.on('end', () => {
+    req.on('end', async () => {
+      // no Hermes to answer the model: refused at once, with why, instead of a build that "plans" for a minute
+      const gate = await hermesGate()
+      if (gate) return void res.writeHead(503, { 'content-type': 'application/json' }).end(JSON.stringify(gate))
       let input = {}
       try {
         input = JSON.parse(body || '{}')
@@ -2628,7 +2668,10 @@ const server = createServer((req, res) => {
       trace: { kind: 'discuss' }, model, maxTokens, temperature: 0.3, signal: AbortSignal.timeout(ms),
       extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
     })).text : null
-    return readJson(1e5, input => {
+    return readJson(1e5, async input => {
+      // the talk itself needs the model; reading whether a message is a build or a talk has its own
+      // fallback without one, so only the talk is refused when Hermes is not there
+      if (url.pathname === '/api/discuss') { const gate = await hermesGate(); if (gate) return json(503, gate) }
       const kind = ['site', 'app', 'film', 'game'].includes(input.kind) ? input.kind : 'site'
       import('../engine/talkplan.mjs').then(async d => {
         if (url.pathname === '/api/discuss/read') return json(200, await d.readIntent({ text: String(input.text || '').slice(0, 4000), answerTo: String(input.answerTo || '').slice(0, 300), kind, chat: chat(8, 9000) }))
@@ -2838,11 +2881,14 @@ const server = createServer((req, res) => {
     try { plan = JSON.parse(readFileSync(join(runsDir, id, 'plan.json'), 'utf8')) } catch {}
     const base = extendBase(events, plan)
     if (!base) return json(400, { error: 'nothing to resume: no pages were planned yet' })
-    const pid = projects.projectOf(id)
-    const run = startRun({ brief: base.brief, base, resume: true, ask: '' })
-    if (pid) projects.claim(run.id, pid)
-    broadcast({ type: 'reset', run: run.id })
-    return json(200, { run: run.id, from: id })
+    return void hermesGate().then(gate => {
+      if (gate) return json(503, gate)
+      const pid = projects.projectOf(id)
+      const run = startRun({ brief: base.brief, base, resume: true, ask: '' })
+      if (pid) projects.claim(run.id, pid)
+      broadcast({ type: 'reset', run: run.id })
+      json(200, { run: run.id, from: id })
+    })
   }
   // what the crew are working on right now, across projects: the Studio's queue
   if (url.pathname === '/api/work' && req.method === 'GET') {
@@ -3150,6 +3196,8 @@ const server = createServer((req, res) => {
       const was = hermes.status().attached, r = hermes.attach(input)
       // Hermes is back: what it offers for pictures and clips is asked again
       if (r.ok && !was) { imageProviders = null; videoProviders = null }
+      // Hermes is back: a canvas waiting on it (a build stopped because Hermes closed) can go on
+      if (r.ok && !was) broadcast({ type: 'hermes:back', attached: true })
       res.writeHead(r.ok ? 200 : 400, { 'content-type': 'application/json' }).end(JSON.stringify(r))
     })
     return
@@ -3168,8 +3216,13 @@ const server = createServer((req, res) => {
     })
     return
   }
+  // whether Hermes is there to answer, and if not why not; ?ready=1 gives a Hermes that is starting up a
+  // few seconds to attach (the Make box asks this before it does anything)
   if (url.pathname === '/api/hermes' && req.method === 'GET') {
-    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(hermes.status()))
+    const needed = ROLES.some(r => viaHermes(r) && picks[r] !== 'off')
+    ;(url.searchParams.get('ready') ? health.ready() : health.now()).catch(() => null).then(h => {
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ...hermes.status(), needed, health: h }))
+    })
     return
   }
   if (url.pathname === '/api/media' && req.method === 'GET') {
@@ -3218,7 +3271,9 @@ const server = createServer((req, res) => {
     if (url.pathname === '/api/auto/stop') { const au = auto.state(); return void (au?.state === 'working' && au.run ? stopWork({ run: au.run }) : Promise.resolve(auto.stop())).then(() => reply(200, auto.state() || { state: 'idle' }), () => reply(200, auto.stop() || { state: 'idle' })) }
     let body = ''
     req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
-    req.on('end', () => {
+    req.on('end', async () => {
+      const gate = await hermesGate()
+      if (gate) return reply(503, gate)
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       const chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null

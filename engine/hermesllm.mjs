@@ -8,16 +8,20 @@
 // `model` names the role (planner, worker, reviewer), with a model picked in the studio after a colon
 // ("worker:cb/deepseek-v4.1-flash"); Hermes uses the pick only when its operator allows model overrides.
 //
-// With no Hermes open the call waits (up to its own timeout) and the canvas says why; when a bridge attaches
-// again the waiting calls go on, so a build pauses instead of failing.
+// With no bridge attached, a call waits a short grace (a Hermes restarting attaches again within seconds) and
+// then fails at once with the reason and what to do (engine/hermeshealth.mjs): Hermes closed, or running a
+// copy of the plugin from before an update. `onGone` hears it, so a build stops with that reason instead
+// of waiting out its own timeout. Builds are refused before they start when Hermes is not there
+// (server.mjs), so the grace only matters when Hermes goes away mid-build.
 
 import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { HERMES_SAYS } from './hermeshealth.mjs'
 
 export const WAITING = 'Waiting for Hermes: open Hermes, or run `hermes swarm`, to continue'
 export const ROLE_MODELS = ['planner', 'worker', 'reviewer']
 const PATHS = { 'POST /llm/v1/chat/completions': '/v1/chat/completions', 'GET /llm/v1/models': '/v1/models' }
 
-export function hermesLlm({ bridge, port, broadcast = () => {}, token = randomBytes(24).toString('base64url'), defaultTimeoutMs = 600000, pollMs = 1000 } = {}) {
+export function hermesLlm({ bridge, port, broadcast = () => {}, token = randomBytes(24).toString('base64url'), defaultTimeoutMs = 600000, pollMs = 1000, graceMs = 20000, health = null, onGone = () => {} } = {}) {
   const baseUrl = () => `http://127.0.0.1:${port()}/llm/v1`
   let waiting = 0
 
@@ -46,7 +50,7 @@ export function hermesLlm({ bridge, port, broadcast = () => {}, token = randomBy
     const timeoutMs = Math.min(1800000, Number(req.headers['x-swarm-timeout']) || defaultTimeoutMs)
     const gone = new AbortController()
     res.on('close', () => { if (!res.writableFinished) gone.abort() })
-    const until = Date.now() + timeoutMs
+    const until = Date.now() + Math.min(timeoutMs, graceMs)
     let told = false
     for (;;) {
       if (gone.signal.aborted) return
@@ -66,8 +70,11 @@ export function hermesLlm({ bridge, port, broadcast = () => {}, token = randomBy
         return
       }
       if (Date.now() > until) {
-        if (told && --waiting === 0) broadcast({ type: 'hermes:back' })
-        res.writeHead(503, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: WAITING } }))
+        if (told && --waiting === 0) broadcast({ type: 'hermes:back', gone: true })
+        const h = (await health?.now().catch(() => null)) || { code: 'closed', ...HERMES_SAYS.closed }
+        const why = { code: `hermes_${h.code}`, message: h.message, action: h.action }
+        try { onGone(why) } catch {}
+        res.writeHead(503, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { ...why, message: `${why.message} ${why.action}`.trim(), said: why.message, type: 'hermes_unavailable' } }))
         return
       }
       if (!told) { told = true; if (waiting++ === 0) broadcast({ type: 'hermes:waiting', message: WAITING }) }

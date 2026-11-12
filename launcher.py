@@ -283,6 +283,19 @@ def talk_first(brief: str) -> bool:
     return got.get("intent") == "talk"
 
 
+def refusal(exc: urllib.error.HTTPError) -> dict:
+    """A refused request as {error, code, action}: the server says why (engine/hermeshealth.mjs) and what to do."""
+    try:
+        got = json.loads(exc.read().decode() or "{}")
+    except (OSError, ValueError):
+        got = {}
+    message = got.get("message") or got.get("error") or f"the server answered HTTP {exc.code}"
+    out = {"error": str(message), "code": str(got.get("code") or exc.code)}
+    if got.get("action"):
+        out["action"] = str(got["action"])
+    return out
+
+
 def start_run(brief: str, agents: int | None = None, force: bool = False) -> dict:
     up = ensure_server()
     if not up.get("running"):
@@ -293,7 +306,11 @@ def start_run(brief: str, agents: int | None = None, force: bool = False) -> dic
     if agents:
         body["agents"] = max(2, min(24, int(agents)))
     try:
-        got = _request("/api/run", method="POST", body=body, timeout=5)
+        # a Hermes that is starting up gets a few seconds to attach before the server says it is missing
+        got = _request("/api/run", method="POST", body=body, timeout=15)
+    except urllib.error.HTTPError as exc:
+        # refused with a reason (Hermes not there, or running an older copy): the server's own words
+        return {"running": True, "url": up["url"], **refusal(exc)}
     except (OSError, urllib.error.URLError, ValueError) as exc:
         return {"running": True, "error": f"could not start the run: {exc}"}
     # the person started it here: an open canvas shows it (a canvas never switches builds by itself)
