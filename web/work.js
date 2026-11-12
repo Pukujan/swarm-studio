@@ -15,8 +15,24 @@ export function makeWork({ sw, C }) {
   const anchor = document.querySelector('.topbar #crew-mute') || document.querySelector('.topbar .spacer')
   if (!anchor) return { refresh() {} }
   anchor.before(chip)
+  // Stop: one button beside the chip, the same place in every room. Inside a project it stops that
+  // project's work (the build, pictures, review and fixes, a film, an app or game build); on Projects
+  // it stops all of it. No confirmation: what is built is kept, and the deck's chat offers Resume.
+  const stopBtn = document.createElement('button')
+  stopBtn.type = 'button'
+  stopBtn.className = 'toggle work-stop'
+  stopBtn.hidden = true
+  stopBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="currentColor"/></svg><span>Stop</span>'
+  chip.after(stopBtn)
 
   let jobs = [], pop = null, timer = 0
+  // the work of the project (or build) on screen; on Projects, all of it
+  const here = () => {
+    if (C.mode === 'home') return { jobs, body: {} }
+    const run = sw.S?.run
+    const mine = jobs.filter(j => (C.project && j.project === C.project) || (run && j.run === run))
+    return { jobs: mine, body: C.project && mine.some(j => j.project === C.project) ? { project: C.project } : { run } }
+  }
   const bar = w => {
     const pct = w.pct == null ? null : Math.round(w.pct * 100)
     return `<span class="wk-bar${pct == null ? ' ind' : ''}" role="progressbar" aria-label="${esc(WHAT[w.what] || 'Work')}"${pct == null ? '' : ` aria-valuenow="${pct}"`}><i${pct == null ? '' : ` style="width:${Math.max(4, pct)}%"`}></i></span>`
@@ -24,6 +40,9 @@ export function makeWork({ sw, C }) {
   const base = () => sw.base || ''
   function paint() {
     chip.hidden = !jobs.length
+    const h = here()
+    stopBtn.hidden = !h.jobs.length
+    stopBtn.setAttribute('aria-label', 'Stop the crew')
     if (!jobs.length) { pop?.close(); return }
     const sig = jobs.map(j => `${j.run}:${j.what}:${j.pct == null ? '' : Math.round(j.pct * 100)}`).join('|')
     chip.setAttribute('aria-label', `Working on ${jobs.length}`)
@@ -49,6 +68,12 @@ export function makeWork({ sw, C }) {
     pop = window.SwarmUI.popover(chip, list(), { className: 'wk-pop' })
     pop.el.addEventListener('click', e => { const r = e.target.closest('.wk-row'); if (r) open(jobs[Number(r.dataset.i)]) })
   }
+  stopBtn.onclick = async () => {
+    stopBtn.disabled = true
+    try { await sw.api('/api/stop', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(here().body) }) } catch {}
+    stopBtn.disabled = false
+    refresh()
+  }
   async function refresh() {
     clearTimeout(timer)
     try {
@@ -58,7 +83,7 @@ export function makeWork({ sw, C }) {
     paint()
     timer = setTimeout(refresh, jobs.length ? 3000 : 15000)
   }
-  sw.on?.(e => { if (['run:start', 'run:done', 'app:start', 'app:done', 'app:failed', 'video:done'].includes(e.type)) setTimeout(refresh, 400) })
+  sw.on?.(e => { if (['run:start', 'run:done', 'run:stopped', 'work:stopped', 'app:start', 'app:done', 'app:failed', 'video:done', 'video:failed', 'review:start', 'review:done', 'image:queued'].includes(e.type)) setTimeout(refresh, 400) })
   refresh()
-  return { refresh }
+  return { refresh, paint }
 }
