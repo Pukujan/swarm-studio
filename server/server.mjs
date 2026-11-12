@@ -46,6 +46,7 @@ import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
+import { appKitRoutes } from './appkit.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
 import { refRoutes } from './refs.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
@@ -1365,6 +1366,15 @@ const talks = talkRoutes({
 // their project when they build. On start: empty old chats go, and game plans made before chats existed
 // each get a chat that points at them (the plan files stay where they are).
 const chats = talks.chats
+// the Studio's App kit (docs/specs/37-studio-first.md): the app's users, screens, data and connections
+const appKit = appKitRoutes({
+  dataDir,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'app-kit' }, model: modelFor('planner'), maxTokens: 2400, temperature: 0.3, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null,
+  supabase: async () => !!(await connectors.list())?.supabase?.signed_in
+})
 // The brand sheet (docs/specs/31-brand-sheet.md): a website's or app's story, palette and type, locked before it is designed
 // A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
 const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
@@ -3213,6 +3223,7 @@ const server = createServer((req, res) => {
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
   if (talks(req, res, url)) return
+  if (appKit(req, res, url)) return
   if (brands(req, res, url)) return
   if (refsRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
