@@ -20,8 +20,10 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
     return { ok: true }
   }
 
-  // {ok:false, error, absent:true} when no bridge answers; otherwise the bridge's own JSON answer
-  async function call(path, body, timeoutMs = 300000) {
+  // {ok:false, error, absent:true} when no bridge answers; otherwise the bridge's own JSON answer.
+  // `next(answer)` true: that bridge could not do it (an MCP server it has not connected), ask the next.
+  async function call(path, body, timeoutMs = 300000, { next = () => false } = {}) {
+    let passed = null
     for (const b of live().slice()) {
       try {
         const res = await fetcher(b.url + path, {
@@ -31,12 +33,15 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
           signal: AbortSignal.timeout(timeoutMs + 15000)
         })
         if (res.status === 403) { drop(b); continue } // a bridge from a process that has gone and been replaced
-        return await res.json()
+        const answer = await res.json()
+        if (next(answer)) { passed = answer; continue }
+        return answer
       } catch (err) {
         if (refused(err)) { drop(b); continue }
         return { ok: false, error: String(err?.message || err).slice(0, 200) }
       }
     }
+    if (passed) return passed
     return { ok: false, absent: true, error: 'Hermes is not open: open Hermes, or run `hermes swarm`, to use its picture and clip tools' }
   }
   const drop = b => { bridges = bridges.filter(x => x !== b) }

@@ -1159,7 +1159,7 @@ const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow 
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
-const connectors = hermesConnectors({ py: PY, pyEnv, broadcast })
+const connectors = hermesConnectors({ bridge: hermes, broadcast })
 
 // The Film studio's outside services (engine/media.mjs): what Hermes already has, else a
 // pasted key, else the built-in path. The canvas learns where each comes from, never a key.
@@ -3090,7 +3090,7 @@ const server = createServer((req, res) => {
     mediaNow().then(m => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(m)), err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
     return
   }
-  if ((url.pathname === '/api/media/key' || url.pathname === '/api/media/allow') && req.method === 'POST') {
+  if (url.pathname === '/api/media/key' && req.method === 'POST') {
     let body = ''
     req.on('data', c => { body += c; if (body.length > 1e4) req.destroy() })
     req.on('end', () => {
@@ -3098,11 +3098,6 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
       const done = () => { imageProviders = null; videoProviders = null; return mediaNow().then(m => reply(200, m)) }
-      if (url.pathname === '/api/media/allow') {
-        const name = ELEVEN_MCP.includes(input.name) ? input.name : null
-        if (!name) return reply(400, { error: 'unknown connector' })
-        return connectors.allow(name).then(done).catch(err => reply(400, { error: String(err.message || err) }))
-      }
       if (!MEDIA_KEYS[input.service]) return reply(400, { error: 'unknown service' })
       mediaKeyStore.set(input.service, typeof input.key === 'string' ? input.key : null).then(done).catch(err => reply(400, { error: String(err.message || err) }))
     })
@@ -3119,7 +3114,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const name = String(input.name || '')
       if (url.pathname === '/api/connectors/cancel') { connectors.cancel(name); return reply(200, { ok: true }) }
-      connectors.connect(name).then(s => reply(200, s), err => reply(400, { error: String(err.message || err) }))
+      connectors.connect(name, { confirm: input.confirm === true }).then(s => reply(200, s), err => reply(400, { error: String(err.message || err) }))
     })
     return
   }

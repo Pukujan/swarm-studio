@@ -2,20 +2,24 @@
 //
 // Hermes ships approved OAuth connectors (Supabase, Vercel, Stripe, Cloudflare): the person
 // presses Connect, Hermes opens the provider's sign-in page, they approve, and Hermes keeps
-// and refreshes the token. Connect also adds the connector to this plugin's MCP allowlist
-// (plugins.entries.swarm-studio.mcp_allowlist), the grant Hermes requires before a plugin may
-// call one. The canvas never sees a token: calls go through engine/hermes_mcp.py, which uses
-// Hermes's own MCP client.
+// and refreshes the token. The canvas never sees a token.
+//
+// Nous catalog review, point 5:
+// - calls go through Hermes's own ctx.call_mcp, inside the Hermes process (bridge.py's /mcp);
+// - what is installed, granted and signed in is read with Hermes's public CLI
+//   (`hermes config get … --json`) and the token file's presence, never with Hermes internals;
+// - the studio never writes plugins.entries.swarm-studio.mcp_allowlist: which servers a plugin may
+//   call is the person's grant, so the canvas shows them the `hermes config set` command to run;
+// - `hermes mcp install` runs only after the person confirms it on the canvas.
 
 import { execFile, spawn, hermesEnv } from './proc.mjs'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 export const CONNECTORS = { supabase: { label: 'Supabase' } }
 const PLUGIN = 'swarm-studio'
-const HELPER = join(dirname(fileURLToPath(import.meta.url)), 'hermes_mcp.py')
+const NAME = /^[A-Za-z0-9_.-]{1,64}$/
 
 // A tool result is text; most connectors put JSON in it, sometimes inside a note.
 export function parseResult(r) {
@@ -27,23 +31,48 @@ export function parseResult(r) {
   return text
 }
 
-export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN, broadcast = () => {} }) {
+// The command the person runs to let Swarm Studio use a server (the same text bridge.py gives back)
+export function allowCommand(server, granted = []) {
+  const names = [...new Set([...granted.filter(n => NAME.test(n)), server])].sort()
+  return `hermes config set plugins.entries.${PLUGIN}.mcp_allowlist '${JSON.stringify(names)}'`
+}
+
+export function hermesConnectors({ bridge, bin = process.env.SWARM_HERMES_BIN, home = process.env.HERMES_HOME || join(homedir(), '.hermes'), broadcast = () => {}, run } = {}) {
   const hermes = bin || [join(homedir(), '.local', 'bin', 'hermes')].find(existsSync) || 'hermes'
   const logins = new Map() // name -> { child, authUrl }
 
-  const helper = (args, ms) => new Promise(resolve => {
-    if (!py) return resolve({ ok: false, error: 'Hermes Python is not known to this server; start it with `hermes swarm`' })
-    execFile(py, [HELPER, ...args], { env: pyEnv, timeout: ms, maxBuffer: 8e6 }, (err, out) => {
-      try { resolve(JSON.parse(out)) } catch { resolve({ ok: false, error: String(err?.message || 'no answer').slice(0, 300) }) }
-    })
-  })
-  const cli = (args, ms = 120000) => new Promise(resolve => {
-    execFile(hermes, args, { env: hermesEnv(), timeout: ms, maxBuffer: 4e6 }, (err, out, errOut) => resolve({ ok: !err, out: `${out}\n${errOut}` }))
-  })
+  const cli = run || ((args, ms = 120000) => new Promise(resolve => {
+    execFile(hermes, args, { env: hermesEnv(), timeout: ms, maxBuffer: 4e6 }, (err, out, errOut) => resolve({ ok: !err, out: String(out || ''), err: String(errOut || '') }))
+  }))
+  // `hermes config get <key> --json`: the value, or null when the key is not set. Masked by default
+  // (never --raw); only the server names and the allowlist are read from it.
+  const configGet = async key => {
+    const r = await cli(['config', 'get', key, '--json'], 30000)
+    if (!r.ok) return null
+    try { return JSON.parse(r.out) } catch { return null }
+  }
+  let known = null // { at, servers, granted } for a few seconds: each look is a Hermes start
+  async function config() {
+    if (known && Date.now() - known.at < 5000) return known
+    const [servers, granted] = await Promise.all([configGet('mcp_servers'), configGet(`plugins.entries.${PLUGIN}.mcp_allowlist`)])
+    known = { at: Date.now(), servers: servers && typeof servers === 'object' ? Object.keys(servers) : [], granted: Array.isArray(granted) ? granted.map(String) : [] }
+    return known
+  }
+  const forget = () => { known = null }
 
   async function status(name) {
-    const s = await helper(['status', name], 30000)
-    return { label: CONNECTORS[name]?.label || name, ...s, signingIn: logins.has(name), authUrl: logins.get(name)?.authUrl || null }
+    if (!NAME.test(String(name))) return { error: 'unknown connector' }
+    const c = await config()
+    const allowed = c.granted.includes(name)
+    return {
+      label: CONNECTORS[name]?.label || name,
+      installed: c.servers.includes(name),
+      allowed,
+      ...(allowed ? {} : { allow: allowCommand(name, c.granted) }),
+      signed_in: existsSync(join(home, 'mcp-tokens', `${name}.json`)),
+      signingIn: logins.has(name),
+      authUrl: logins.get(name)?.authUrl || null
+    }
   }
 
   async function list() {
@@ -52,21 +81,19 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
     return out
   }
 
-  // Installs the connector, grants it to this plugin and starts the browser sign-in.
-  async function connect(name) {
+  // Connect: adds Hermes's connector (only once the person has said yes to that), asks them to grant
+  // it to this plugin (a command for them to run), then starts the browser sign-in.
+  async function connect(name, { confirm = false } = {}) {
     if (!CONNECTORS[name]) throw new Error(`no connector called ${name}`)
     let s = await status(name)
-    if (s.error) throw new Error(s.error)
     if (!s.installed) {
+      if (!confirm) return { ...s, confirm: `Add Hermes's ${s.label} connector? This runs: hermes mcp install ${name}` }
       const r = await cli(['mcp', 'install', name])
+      forget()
       if (!r.ok) throw new Error(`Hermes could not add the ${s.label} connector`)
+      s = await status(name)
     }
-    if (!s.allowed) {
-      const list = [...new Set([...(s.allowlist || []), name])]
-      const r = await cli(['config', 'set', `plugins.entries.${PLUGIN}.mcp_allowlist`, JSON.stringify(list)])
-      if (!r.ok) throw new Error(`Hermes would not let Swarm Studio use ${s.label}`)
-    }
-    s = await status(name)
+    if (!s.allowed) return s // the canvas shows s.allow for the person to run
     if (s.signed_in || logins.has(name)) return s
     return login(name)
   }
@@ -102,22 +129,14 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
 
   function cancel(name) { logins.get(name)?.child.kill() }
 
-  // Lets this plugin use a connector Hermes already has (ElevenLabs's MCP holds its own key,
-  // so there is no sign-in): the same grant Connect gives, without installing or logging in.
-  async function allow(name) {
-    const s = await helper(['status', name], 30000)
-    if (s.error) throw new Error(s.error)
-    if (!s.installed) throw new Error(`Hermes has no ${name} connector`)
-    if (s.allowed) return s
-    const list = [...new Set([...(s.allowlist || []), name])]
-    const r = await cli(['config', 'set', `plugins.entries.${PLUGIN}.mcp_allowlist`, JSON.stringify(list)])
-    if (!r.ok) throw new Error(`Hermes would not let Swarm Studio use ${name}`)
-    return helper(['status', name], 30000)
-  }
-
-  async function call(server, tool, args = {}) {
-    const r = await helper(['call', server, tool, JSON.stringify(args)], 200000)
-    if (!r.ok) throw new Error(String(r.error?.message || r.error || 'the connector call failed').slice(0, 300))
+  async function call(server, tool, args = {}, timeout = 180) {
+    if (!bridge) throw new Error('Hermes is not open')
+    // a Hermes chat, the desktop app and the gateway connect their MCP servers at start; a bare
+    // `hermes swarm …` may not have, so another open Hermes is asked
+    const r = await bridge.call('/mcp', { server, tool, args, timeout }, timeout * 1000, { next: a => a?.ok === false && /is not connected/i.test(String(a.error?.message || a.error || '')) })
+    // not granted: the command keeps every server already granted (a set replaces the whole list)
+    const allow = r?.allowed === false ? (forget(), (await status(server)).allow || r.allow) : ''
+    if (!r?.ok) throw new Error(String(r?.error?.message || r?.error || 'the connector call failed').slice(0, 300) + (allow ? `; to allow it, run: ${allow}` : ''))
     return parseResult(r.result)
   }
 
@@ -162,5 +181,5 @@ export function hermesConnectors({ py, pyEnv, bin = process.env.SWARM_HERMES_BIN
     return { SUPABASE_URL, SUPABASE_ANON_KEY: key }
   }
 
-  return { list, status, connect, cancel, allow, call, supabaseProject }
+  return { list, status, connect, cancel, call, supabaseProject, forget }
 }

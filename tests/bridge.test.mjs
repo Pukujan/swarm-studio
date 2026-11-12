@@ -72,3 +72,16 @@ test('the server paints through the bridge, never through a Python helper with H
   const skins = readFileSync(`${root}engine/skins.mjs`, 'utf8')
   assert.doesNotMatch(skins, /imagegen\.py|SWARM_HERMES_PY/)
 })
+
+test('an answer the caller marks as "not this one" moves on to the next bridge', async () => {
+  const fetcher = async url => answer(url.startsWith('http://127.0.0.1:6000') ? { ok: false, error: "MCP server 'supabase' is not connected" } : { ok: true, result: '[]' })
+  const h = hermesBridge({ fetcher })
+  h.attach({ url: 'http://127.0.0.1:5000', token: TOKEN })
+  h.attach({ url: 'http://127.0.0.1:6000', token: TOKEN })
+  const next = a => /not connected/.test(a.error || '')
+  assert.deepEqual(await h.call('/mcp', {}, 1000, { next }), { ok: true, result: '[]' })
+  assert.equal(h.status().attached, true, 'a bridge that passed stays attached')
+  const only = hermesBridge({ fetcher })
+  only.attach({ url: 'http://127.0.0.1:6000', token: TOKEN })
+  assert.match((await only.call('/mcp', {}, 1000, { next })).error, /not connected/, 'with no other, its own answer comes back')
+})

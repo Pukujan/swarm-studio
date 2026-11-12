@@ -3946,7 +3946,7 @@ function mediaRow() {
     const forget = m.pasted ? `<button class="vsrc-forget" data-key="${esc(m.key)}">Forget key</button>` : ''
     pop = m.on && m.via !== 'key'
       ? `<div class="vsrc-pop"><span>${MEDIA_VIA[m.via] || ''}</span>${forget}</div>`
-      : `<div class="vsrc-pop">${m.on ? `<span>${MEDIA_VIA.key}</span>${forget}` : !m.key ? `<span>${esc(m.hint || '')}</span>` : `${m.grant ? `<button class="vsrc-allow" data-name="${esc(m.server)}">Use Hermes's ${esc(m.keyLabel)}</button>` : ''}<form class="vsrc-form" data-key="${esc(m.key)}"><input type="password" autocomplete="off" spellcheck="false" aria-label="${esc(m.keyLabel)} key" placeholder="${esc(m.keyLabel)} key"><button>Connect</button></form><a href="${esc(m.keyUrl)}" target="_blank" rel="noopener">Get a key</a>`}<div class="perr"></div></div>`
+      : `<div class="vsrc-pop">${m.on ? `<span>${MEDIA_VIA.key}</span>${forget}` : !m.key ? `<span>${esc(m.hint || '')}</span>` : `${m.grant && m.allow ? allowBox(m.allow, `To use Hermes's ${m.keyLabel}, run this once:`) : ''}<form class="vsrc-form" data-key="${esc(m.key)}"><input type="password" autocomplete="off" spellcheck="false" aria-label="${esc(m.keyLabel)} key" placeholder="${esc(m.keyLabel)} key"><button>Connect</button></form><a href="${esc(m.keyUrl)}" target="_blank" rel="noopener">Get a key</a>`}<div class="perr"></div></div>`
   }
   return `<div class="vsrc">${chips}</div>${pop}`
 }
@@ -3967,7 +3967,14 @@ function mediaWire(el) {
     post('/api/media/key', { service: f.dataset.key, key }, f.parentElement.querySelector('.perr')).then(() => { f.querySelector('button').textContent = 'Connect' })
   }
   for (const b of el.querySelectorAll('.vsrc-forget')) b.onclick = () => post('/api/media/key', { service: b.dataset.key, key: null })
-  for (const b of el.querySelectorAll('.vsrc-allow')) b.onclick = () => post('/api/media/allow', { name: b.dataset.name }, b.parentElement.querySelector('.perr'))
+  allowWire(el, loadMedia)
+}
+// Which MCP servers Swarm Studio may call is the person's grant in Hermes (Nous catalog review, point 5):
+// the canvas shows the one command to run, and never runs it.
+const allowBox = (cmd, why) => `<div class="mcp-allow"><span>${esc(why)}</span><code>${esc(cmd)}</code><button class="mcp-copy" data-cmd="${esc(cmd)}">Copy</button><button class="mcp-again">Check again</button></div>`
+function allowWire(el, again) {
+  for (const b of el.querySelectorAll('.mcp-copy')) b.onclick = () => navigator.clipboard?.writeText(b.dataset.cmd).then(() => { b.textContent = 'Copied' }, () => {})
+  for (const b of el.querySelectorAll('.mcp-again')) b.onclick = () => again()
 }
 
 // A render the canvas thinks is running but the server no longer has (it
@@ -7165,6 +7172,7 @@ async function renderConnectors() {
   }
   box.innerHTML = Object.entries(conn.all).filter(([, c]) => c && !c.error).map(([name, c]) => {
     const state = c.signed_in && c.allowed ? `<span class="ac-ok">✓ connected</span>`
+      : c.asked && c.installed && !c.allowed && c.allow ? allowBox(c.allow, `Let Swarm Studio use ${c.label}: run this once, then sign in`)
       : c.signingIn || conn.busy.has(name) ? `<span class="ac-wait">waiting for you to approve in the browser…</span>${c.authUrl ? ` <a href="${esc(c.authUrl)}" target="_blank" rel="noopener">open sign-in</a>` : ''}`
       : `<button class="ac-go" data-name="${esc(name)}">🔌 Connect ${esc(c.label)}</button>`
     return `<div class="ac-row"><b>${esc(c.label)}</b>${state}<small>${c.signed_in && c.allowed ? 'Auto makes a free project and its table for you' : 'sign in once; no keys to copy'}</small></div>`
@@ -7172,13 +7180,21 @@ async function renderConnectors() {
   for (const b of box.querySelectorAll('.ac-go')) b.onclick = async () => {
     const name = b.dataset.name
     conn.busy.add(name); renderConnectors()
-    const res = await api('/api/connectors/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) }).catch(() => null)
-    const out = await res?.json().catch(() => ({}))
+    const ask = body => api('/api/connectors/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
+    let res = await ask({ name })
+    let out = await res?.json().catch(() => ({}))
+    // adding a connector to Hermes is the person's yes, asked here first
+    if (res?.ok && out?.confirm) {
+      if (confirm(out.confirm)) { res = await ask({ name, confirm: true }); out = await res?.json().catch(() => ({})) }
+      else { conn.busy.delete(name); return renderConnectors() }
+    }
+    if (out && typeof out === 'object') out.asked = true
     conn.busy.delete(name)
     if (!res?.ok) { feed(null, `connect: ${out?.error || 'the canvas server is not answering'}`, 'err') }
     else conn.all = { ...conn.all, [name]: { ...conn.all[name], ...out } }
     renderConnectors()
   }
+  allowWire(box, () => { conn.all = null; renderConnectors() })
 }
 function connectorEvent(e) {
   if (!conn.all) return

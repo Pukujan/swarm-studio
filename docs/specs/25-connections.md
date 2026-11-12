@@ -25,9 +25,9 @@ at all.
 |---|---|---|---|
 | Models (planner, builders, reviewer), Lite | ☰ → Models; Projects user menu → Models; `/swarm models` | `GET/POST /api/models` | `models.json` (names only); keys come from Hermes's model slots |
 | Pictures (Hermes image logins, ckff), idle video model | the same Models panel; `/swarm images` | `/api/models` (`image`, `idle`) | `models.json` |
-| Music, clips, film pictures (ElevenLabs, FAL) | ☰ → Video panel, the source chips | `GET /api/media`, `POST /api/media/key`, `/api/media/allow` | `media-keys.json` (mode 0600) |
+| Music, clips, film pictures (ElevenLabs, FAL) | ☰ → Video panel, the source chips | `GET /api/media`, `POST /api/media/key` (an ElevenLabs MCP grant is a `hermes config set` command the panel shows) | `media-keys.json` (mode 0600) |
 | Publishing: GitHub Pages, Vercel, Cloudflare Pages, Octo vault grant | Publish menu, a token form per host | `GET /api/publish`, `POST /api/connect` | `connections.json` (mode 0600); GitHub is the `gh` login |
-| Supabase (apps' data and sign-in) | **no screen**: `renderConnectors()` draws into `.auto-conn`, which left with the Auto dialog | `GET /api/connectors`, `POST /api/connectors/connect`, `/cancel` | Hermes's MCP sign-in; `plugins.entries.swarm-studio.mcp_allowlist` |
+| Supabase (apps' data and sign-in) | **no screen**: `renderConnectors()` draws into `.auto-conn`, which left with the Auto dialog | `GET /api/connectors`, `POST /api/connectors/connect`, `/cancel` | Hermes's MCP sign-in; `plugins.entries.swarm-studio.mcp_allowlist`, which the person sets (the studio only shows the command) |
 | Swarm Feed account | **no screen**: connects silently on the first Post to Feed; `/swarm connect`, `/swarm login` | `GET /api/me`, `POST /api/feed/connect` | `feed.json` (mode 0600) |
 | 3D models (Meshy) | the game Cast step | `GET /api/meshy` | env `MESHY_API_KEY` |
 | Gateways (Discord, Slack, Telegram through Hermes) | Launch kit | `GET /api/gateway` | Hermes |
