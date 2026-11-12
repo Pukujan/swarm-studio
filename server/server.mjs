@@ -18,6 +18,7 @@ import { extendBase, followUp, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
+import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixText, markLine } from '../engine/marks.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
 import { seoPass, currentSeo, cleanSeo, thumbOf } from '../engine/seo.mjs'
 import { seoAsk } from '../web/route.js'
@@ -2075,8 +2076,19 @@ async function publish(id, input = {}) {
 
 // A builder rewrites one finished section live: it is cleared on every canvas,
 // streams back in, and on failure the old section returns.
-async function rework(runId, send, s, agent, theme, args) {
+async function rework(runId, send, s, agent, theme, args, { draft = null } = {}) {
   const layer = s.key.split('/').pop(), page = s.key.split('/')[0], t0 = Date.now()
+  // a draft (Scribble): written beside the original, which stays as it is until the person accepts it
+  if (draft) {
+    const halt = stopSignal(runId)
+    if (halt.aborted) return
+    send('draft:start', { page, layer, agent, marks: draft.marks })
+    fixing.set(runId, (fixing.get(runId) || 0) + 1)
+    return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, images: false, ...args, signal: halt }))
+      .then(html => send('draft', { id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, page, layer, agent, role: s.role, html: html.replace(/^\s*```(?:html)?\s*/i, '').replace(/\s*```\s*$/, ''), marks: draft.marks, ms: Date.now() - t0 }))
+      .catch(err => send('draft:failed', { page, layer, agent, marks: draft.marks, message: halt.aborted ? 'stopped' : String(err.message || err).slice(0, 200) }))
+      .finally(() => fixing.set(runId, fixing.get(runId) - 1))
+  }
   send('agent:assign', { agent, page, layer, role: s.role, fixing: true })
   send('layer:reset', { page, layer, agent })
   // with an image model, a rewrite may add a photo ("add a picture of…"), painted once it is done
@@ -2111,16 +2123,19 @@ async function commentNow(id, input) {
   if (!start) throw new Error('no such build')
   if (!models.worker.apiKey) throw new Error('no model key yet: start a build from Hermes once')
   const text = String(input.text || '').replace(/\s+/g, ' ').trim().slice(0, 600)
-  if (!text) throw new Error('say what to change')
+  const marked = Array.isArray(input.marks) && input.marks.length > 0
+  if (!text && !marked) throw new Error('say what to change')
   // the same comment from two open canvases (a /swarm fix reaches every one) is taken once
   const seen = `${id}|${text}`
-  if (recentComments.get(seen) > Date.now() - 8000) return { sections: [], reply: '', duplicate: true }
+  if (!marked && recentComments.get(seen) > Date.now() - 8000) return { sections: [], reply: '', duplicate: true }
   recentComments.set(seen, Date.now())
   const theme = events.findLast(e => e.type === 'theme')
   // the canvas sends its own copy of the sections (with any edits); otherwise the saved ones
   const given = Array.isArray(input.sections) ? input.sections.filter(s => s && typeof s.key === 'string' && typeof s.html === 'string').slice(0, 60) : []
   const sections = given.length ? given.map(s => ({ key: s.key, role: String(s.role || s.key).slice(0, 80), html: s.html })) : runSections(events)
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  // Scribble: marks drawn on the pages, read by the vision model, answered as drafts beside the original
+  if (marked) return markRequest(id, { events, start, theme, sections, text, input, send })
   // "improve the SEO", "a better description for the menu page": the crew's SEO pass
   if (seoAsk(text)) return seoRequest(id, { events, start, theme, given, text, send })
   let keys = typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
@@ -2141,6 +2156,84 @@ async function commentNow(id, input) {
     rework(id, send, s, agent, theme, { comment: text })
   })
   return { sections: keys, reply }
+}
+
+// Scribble (engine/marks.mjs): the marks get ids on this run, their pictures are kept in marks/, the
+// vision model reads them (how it read each one is the reply), and each marked section's builder writes
+// a draft beside the original. Marks still open from earlier go along. A mark the model could not read
+// is asked about instead of changed.
+const MARK_PIC = /^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]{20,4000000}$/
+async function markRequest(id, { events, start, theme, sections, text, input, send }) {
+  const given = cleanMarks(input.marks)
+  if (!given.length) throw new Error('those marks did not come through')
+  const known = new Map(sections.map(s => [s.key, s]))
+  let n = nextMarkId(events)
+  const ids = {}
+  const marks = given.map(m => { ids[m.id] = `k${n++}`; return { ...m, id: ids[m.id], target: { ...m.target, section: known.has(m.target.section) ? m.target.section : null } } })
+  // the pictures: each page with its marks drawn on it, and a crop around each mark
+  const dir = join(runsDir, id, 'marks')
+  mkdirSync(dir, { recursive: true })
+  const pic = (name, data) => { if (!MARK_PIC.test(String(data || ''))) return null; writeFileSync(join(dir, name), Buffer.from(data.split(',')[1], 'base64')); return data }
+  const shots = Object.entries(input.shots || {}).slice(0, 6).flatMap(([page, data]) => /^[\w-]{1,64}$/.test(page) && pic(`${marks[0].id}-${page}.jpg`, data) ? [{ page, image: data }] : [])
+  const crops = given.flatMap(m => { const data = input.crops?.[m.id]; return pic(`${ids[m.id]}.jpg`, data) ? [{ id: ids[m.id], image: data }] : [] })
+  const open = openMarks(events)
+  send('marks', { text, marks, crops: crops.map(c => c.id) })
+  const roles = Object.fromEntries(sections.map(s => [s.key, s.role]))
+  // the vision model reads them; with none, the builder gets the data lines alone
+  let reads = []
+  const seeing = models.reviewer.apiKey && modelFor('reviewer')
+  if (seeing && (shots.length || crops.length)) {
+    // like the art check: no thinking (it ate the answer), and the next vision model when one reads nothing
+    const chain = [seeing, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? REVIEW_FALLBACKS.filter(m => m !== seeing) : [])]
+    const messages = readMarksMessages({ text, marks, open, roles, shots, crops })
+    for (const m of chain) {
+      try {
+        const res = await streamChat(provider('reviewer'), { trace: { kind: 'marks' }, model: m, messages, maxTokens: 1500, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(60000) })
+        reads = parseReads(res.text, marks)
+        if (reads.length) break
+        console.error(`marks read: ${m} read nothing:`, String(res.text || '').slice(0, 200))
+      } catch (err) { console.error(`marks read: ${m}:`, err.message) }
+    }
+  }
+  const asked = new Set(reads.filter(r => r.ask && !r.change).map(r => r.mark))
+  const reply = reads.map(r => (r.ask && !r.change ? `${r.mark}: ${r.ask}` : r.read)).filter(Boolean).join(' ').slice(0, 600)
+  send('marks:read', { reads, reply })
+  // a mark on no section: the planner works out which one from the words and the mark lines
+  const bySection = new Map()
+  for (const m of marks) {
+    if (asked.has(m.id)) continue
+    let k = m.target.section
+    if (!k) {
+      const heads = sections.map(s => ({ key: s.key, role: s.role, head: (/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(s.html)?.[1] || '').replace(/<[^>]+>/g, '').trim().slice(0, 60) })).filter(s => s.key.startsWith(`${m.page}/`) || s.key.startsWith('*/'))
+      k = (await routeComment({ provider: provider('planner'), model: modelFor('planner'), text: `${text} ${markLine(m)}`, sections: heads, signal: AbortSignal.timeout(45000) }).catch(() => ({ sections: [] }))).sections[0] || null
+    }
+    if (k && known.has(k)) bySection.set(k, [...(bySection.get(k) || []), m])
+  }
+  const agents = start.agents || []
+  const keys = [...bySection.keys()]
+  keys.forEach((k, i) => {
+    const s = known.get(k), list = bySection.get(k)
+    const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
+    send('comment:take', { text: text || `${list.length} mark${list.length > 1 ? 's' : ''}`, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply.slice(0, 90) : '', marks: list.map(m => m.id) })
+    rework(id, send, s, agent, theme, { comment: fixText({ text, marks: list, reads, role: s.role }) }, { draft: { marks: list.map(m => m.id) } })
+  })
+  if (!keys.length && !asked.size) send('comment:none', { text })
+  return { sections: keys, reply, reads, ids }
+}
+
+// A draft (Scribble) accepted becomes the section's new version; dismissed, it is dropped. Either way the
+// marks it answered are closed.
+function closeDraft(id, did, accept) {
+  const events = readEvents(id)
+  if (!events) throw Object.assign(new Error('no such build'), { status: 404 })
+  const d = events.findLast(e => e.type === 'draft' && e.id === did)
+  if (!d) throw Object.assign(new Error('no such draft'), { status: 404 })
+  if (events.some(e => e.type === 'draft:closed' && e.id === did)) throw Object.assign(new Error('that draft is already closed'), { status: 409 })
+  const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  if (accept) send('layer:done', { page: d.page, layer: d.layer, agent: d.agent, html: d.html, fixed: true, draft: did })
+  send('draft:closed', { id: did, page: d.page, layer: d.layer, accepted: !!accept })
+  if (d.marks?.length) send('mark:status', { ids: d.marks, status: 'closed', draft: accept ? 'accepted' : 'dismissed' })
+  return { ok: true }
 }
 
 // The SEO pass on request (engine/seo.mjs): one planner call edits titles and descriptions,
@@ -2767,10 +2860,23 @@ const server = createServer((req, res) => {
     })
     return
   }
+  // Scribble: accept or dismiss a draft, erase a sent mark
+  const runDraft = req.method === 'POST' && url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/drafts\/(d[0-9a-z]{4,20})\/(accept|dismiss)$/)
+  if (runDraft) {
+    try { json(200, closeDraft(runDraft[1], runDraft[2], runDraft[3] === 'accept')) } catch (err) { json(err.status || 400, { error: String(err.message || err) }) }
+    return
+  }
+  const runMarkErase = req.method === 'POST' && url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/marks\/(k\d{1,4})\/erase$/)
+  if (runMarkErase) {
+    const ok = !!readEvents(runMarkErase[1]) && record(runMarkErase[1], { type: 'mark:status', t: Date.now(), run: runMarkErase[1], ids: [runMarkErase[2]], status: 'erased' })
+    json(ok ? 200 : 404, ok ? { ok } : { error: 'no such build' })
+    return
+  }
   const runComment = url.pathname.match(/^\/api\/runs\/([^/]+)\/comment$/)
   if (runComment && req.method === 'POST' && RUN_ID.test(runComment[1])) {
     let body = ''
-    req.on('data', c => { body += c; if (body.length > 4e6) req.destroy() })
+    // marks bring their pictures (a page each and a crop per mark)
+    req.on('data', c => { body += c; if (body.length > 16e6) req.destroy() })
     req.on('end', () => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}

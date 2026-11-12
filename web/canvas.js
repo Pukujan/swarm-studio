@@ -2070,12 +2070,12 @@ function pageParts(id, html) {
   return parts
 }
 
-function pageDoc(id, scripts) {
+function pageDoc(id, scripts, given = null) {
   const t = S.theme || {}
   const heading = t.fonts?.heading || 'Georgia', body = t.fonts?.body || 'Inter'
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;500;600;700`
   const vars = Object.entries(t.vars || {}).map(([k, v]) => `${k}:${v};`).join('')
-  const html = pageParts(id, pageBody(id)).html
+  const html = given ?? pageParts(id, pageBody(id)).html
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com/3.4.17"><\/script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fam(heading)}&${fam(body)}&display=swap">
@@ -3532,6 +3532,75 @@ function checkPage(id, width, snap) {
     document.body.append(iframe)
   })
 }
+
+// ---------- Scribble (engine/marks.mjs): a hidden copy of the page finds what a mark points at (kresilo's
+// rule: the smallest element holding the mark's centre, else the one it covers most of, at least a
+// quarter), and draws a draft section on its own for its picture beside the original.
+const ANCHOR_JS = `(box) => {
+  const H = document.body.scrollHeight, W = document.documentElement.clientWidth
+  const m = { x0: box.x * W, y0: box.y * H, x1: (box.x + box.w) * W, y1: (box.y + box.h) * H }
+  const cx = (m.x0 + m.x1) / 2, cy = (m.y0 + m.y1) / 2
+  const of = el => { const r = el.getBoundingClientRect(); return { x0: r.left + scrollX, y0: r.top + scrollY, x1: r.right + scrollX, y1: r.bottom + scrollY } }
+  const area = b => Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0))
+  const holds = (b, x, y) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1
+  const over = (a, b) => { const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0); return w > 0 && h > 0 ? w * h : 0 }
+  const sects = [...document.body.children].filter(e => e.dataset.layer)
+  const things = sects.flatMap(s => [...s.querySelectorAll('*')]).filter(e => !e.closest('svg') || e.tagName.toLowerCase() === 'svg').filter(e => { const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2 && getComputedStyle(e).visibility !== 'hidden' })
+  let pick = null
+  for (const e of things) { const b = of(e); if (holds(b, cx, cy) && (!pick || area(b) <= area(of(pick)))) pick = e }
+  if (!pick) { let best = 0; for (const e of things) { const b = of(e), share = over(m, b) / Math.min(area(m), area(b)); if (share > best && share >= 0.25) { best = share; pick = e } } }
+  const sect = pick ? pick.closest('[data-layer]') : sects.find(s => holds(of(s), cx, cy)) || null
+  const out = { layer: sect?.dataset.layer || null }
+  if (!pick || !sect) return out
+  const path = [], parts = []
+  for (let el = pick; el && el !== sect; el = el.parentElement) {
+    const p = el.parentElement
+    path.unshift([...p.children].indexOf(el))
+    if (el.id) { parts.unshift('#' + CSS.escape(el.id)); break }
+    const tag = el.tagName.toLowerCase(), same = [...p.children].filter(c => c.tagName === el.tagName)
+    parts.unshift(same.length > 1 ? tag + ':nth-of-type(' + (same.indexOf(el) + 1) + ')' : tag)
+  }
+  out.selector = parts.slice(-5).join(' > ')
+  out.path = path
+  out.tag = pick.tagName.toLowerCase()
+  out.text = (pick.innerText || pick.getAttribute('alt') || pick.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim().slice(0, 120)
+  const bg = getComputedStyle(pick).backgroundImage
+  if (out.tag === 'img' || out.tag === 'canvas' || (bg && bg !== 'none')) {
+    const b = of(pick), w = b.x1 - b.x0, h = b.y1 - b.y0
+    const c = v => Math.max(0, Math.min(1, v))
+    out.region = { x: c((m.x0 - b.x0) / w), y: c((m.y0 - b.y0) / h), w: c((m.x1 - m.x0) / w), h: c((m.y1 - m.y0) / h) }
+  }
+  return out
+}`
+// a hidden copy of a page (or of one section) at desktop width; `body` runs in it once it has loaded
+function hiddenCopy(id, run, { body = null, timeout = 30000 } = {}) {
+  const seq = `m${++review.seq}`
+  const script = `<script>addEventListener('load', async () => {
+  if (document.fonts) await document.fonts.ready
+  await new Promise(r => setTimeout(r, 700))
+  let out = {}
+  try { out = await (${run})() } catch (err) { out = { error: String(err && err.message || err) } }
+  parent.postMessage({ ...out, type: 'check', seq: ${JSON.stringify(seq)} }, '*')
+})<\/script>`
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText = 'position:fixed;left:-20000px;top:0;width:1280px;height:900px;border:0;pointer-events:none'
+  return new Promise(resolve => {
+    const done = data => { clearTimeout(timer); checks.delete(seq); iframe.remove(); resolve(data) }
+    const timer = setTimeout(() => done(null), timeout)
+    checks.set(seq, { iframe, done })
+    iframe.srcdoc = pageDoc(id, script, body)
+    document.body.append(iframe)
+  })
+}
+const SNAP_SECTION = `async () => {
+  await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js'; s.onload = ok; s.onerror = fail; document.head.append(s) })
+  const h = Math.min(document.body.scrollHeight, 3000)
+  const opts = { width: 1280, height: h, pixelRatio: 0.5, quality: 0.8, backgroundColor: getComputedStyle(document.body).backgroundColor }
+  const css = await (${FN_JS})()
+  if (css) opts.fontEmbedCSS = css
+  return { image: await htmlToImage.toJpeg(document.body, opts).catch(() => htmlToImage.toJpeg(document.body, { ...opts, skipFonts: true })), height: h }
+}`
 
 // A section's layer id in a page, as its key: the page's own, else the shared one.
 const layerKey = (page, id) => S.layers.has(key(page, id)) ? key(page, id) : key('*', id)
@@ -6998,6 +7067,40 @@ window.swarm = {
     if (f.frozen && scale <= 0.25) return f.frozen.img.src
     if (!f.ready || !f.slots.size) return f.frozen?.img.src || null
     return (await snapFrame(f, scale)).image
+  },
+  // Scribble (the Overview draws the marks): what a mark points at, a draft's picture, sending the marks
+  // with the person's words, and closing a draft or erasing a sent mark
+  marks: {
+    async anchor(page, box) {
+      if (!S.frames.some(f => f.id === page)) return null
+      const out = await hiddenCopy(page, `() => (${ANCHOR_JS})(${JSON.stringify(box)})`)
+      if (!out || out.error) return null
+      return { section: out.layer ? layerKey(page, out.layer) : null, selector: out.selector || null, path: out.path || [], text: out.text || null, tag: out.tag || null, region: out.region || null }
+    },
+    // a draft section drawn on its own: { image, height } (its height in page px at 1280 wide)
+    async render(page, html) {
+      const out = await hiddenCopy(page, SNAP_SECTION, { body: `<div data-layer="draft">${clean(html)}</div>`, timeout: 45000 })
+      return out?.image ? { image: out.image, height: out.height } : null
+    },
+    async send({ text, marks, shots, crops }) {
+      const run = shownRun()
+      if (!run) throw new Error('Open a build first.')
+      const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, role: l.role, html: l.text }))
+      const res = await api(`/api/runs/${encodeURIComponent(run)}/comment`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, marks, shots, crops, sections }) })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(out.error || 'the marks did not go')
+      return out
+    },
+    async close(id, accept) {
+      const run = shownRun()
+      const res = run && await api(`/api/runs/${encodeURIComponent(run)}/drafts/${encodeURIComponent(id)}/${accept ? 'accept' : 'dismiss'}`, { method: 'POST' }).catch(() => null)
+      return !!res?.ok
+    },
+    async erase(id) {
+      const run = shownRun()
+      const res = run && await api(`/api/runs/${encodeURIComponent(run)}/marks/${encodeURIComponent(id)}/erase`, { method: 'POST' }).catch(() => null)
+      return !!res?.ok
+    }
   },
   // a page's sections for the project canvas's inspector: pick one, change it by hand, open its
   // code, or tell the crew about just that one. Every change is a saved edit event, so it undoes,
