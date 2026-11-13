@@ -5,6 +5,7 @@ import { useNav } from './nav/NavProvider'
 import { NotMovedYet } from './screens/NotMovedYet'
 import { SCREENS } from './screens'
 import { TopBar } from './shell/TopBar'
+import { TrailProvider } from './shell/Trail'
 
 export function App() {
   const { view, go, can } = useNav()
@@ -18,9 +19,11 @@ export function App() {
   }, [view.room, go, can])
   const Screen = SCREENS[view.room] ?? NotMovedYet
   return (
-    <div className="min-h-dvh bg-bg text-text">
-      <TopBar />
-      <main><Screen /></main>
-    </div>
+    <TrailProvider>
+      <div className="flex min-h-dvh flex-col bg-bg text-text">
+        <TopBar />
+        <main className="flex min-h-0 flex-1 flex-col"><Screen /></main>
+      </div>
+    </TrailProvider>
   )
 }

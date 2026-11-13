@@ -23,9 +23,10 @@ test('the token goes into the page at serve time, escaped, and never into ui/dis
   const page = nextPage(dist, { token: 'a</script><b>' })
   assert.ok(page.includes('window.SWARM = {"token":"a\\u003c/script>\\u003cb>","version":"'))
   assert.ok(read('ui/dist/index.html').includes('<!-- swarm:boot -->'))
-  // the build reads the token from window.SWARM at run time (a screen sends it as x-swarm-token); no boot or token
-  // value is ever written into it
+  // a moved screen asks the server with the token header, read from window.SWARM when it asks: never a value in the build
   const js = read('ui/dist/assets/next.js')
+  assert.doesNotMatch(js, /["']?x-swarm-token["']?\s*:\s*["'`][^"'`]/)
+  if (js.includes('x-swarm-token')) assert.match(js, /SWARM\??\.token/)
   assert.ok(!js.includes('window.SWARM = ') && !/"token":"/.test(js))
 })
 
