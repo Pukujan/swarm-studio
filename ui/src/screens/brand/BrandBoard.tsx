@@ -90,7 +90,7 @@ export function BrandBoard({ brand, packs = [], busy, sel, onSelect, actions, to
     <div ref={sheet} className={`brand-sheet${locked ? ' locked' : ''}`}>
     <Board ref={board} label="Brand sheet" fit={[0.35, 1]} selected={!!sel} onClear={() => onSelect(null)} inspector={inspector} toast={toast}>
       <Column>
-        {packs.length > 0 && <Section name="packs" className="max-w-[1160px] gap-x-4! gap-y-[34px]! pb-[46px]" label="Packs">{packs.map(k => <BrandPackCard key={k.slug} k={k} brand={brand} {...card(`pack:${k.slug}`)} />)}</Section>}
+        {packs.length > 0 && <Section name="packs" className="max-w-[1160px] gap-x-4! gap-y-[34px]! pb-[46px]" label="Options">{packs.map(k => <BrandPackCard key={k.slug} k={k} brand={brand} {...card(`pack:${k.slug}`)} />)}</Section>}
         <Section name="story" className={STORY} label="Story">
           <StoryCard part="what" name="What" value={s.what || ''} {...card('story:what')} />
           <StoryCard part="who" name="Who" value={s.who || ''} {...card('story:who')} />
