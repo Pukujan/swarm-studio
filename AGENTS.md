@@ -2,6 +2,22 @@
 
 **Read [docs/PRODUCT.md](docs/PRODUCT.md) first:** what Swarm is, what runs where, and the standing rules.
 
+## Engines: read the page, never guess (owner, 2026-11-12)
+
+Swarm drives engines (Dyad, Godot, Meshy, the video and sound engines, Open Design, Hermes and its
+connections). Each one has a page in [docs/engines/](docs/engines/README.md): what it already does, how Swarm
+drives it, what the person connects, the limits, and the sources for every claim.
+
+- Before you say what an engine can or can't do, or add code or a library around it, read its page. Cite the
+  page or its sources in your answer and in the PR.
+- If the page doesn't cover it, say "not documented, unchecked", check the engine's own code or docs, and add
+  what you found to the page with its source.
+- Never build something an engine already does. Swarm hands the engine the brief; it doesn't redo its work.
+- CI (`engine-docs`) fails a PR that changes an engine's glue code (the files on its page's `Glue:` line)
+  unless the PR updates that page or names it in the description ("Read docs/engines/dyad.md").
+- A Claude Code hook (`.claude/settings.json`, `scripts/engine-docs-hook.mjs`) adds "read docs/engines/…"
+  to any message that names an engine.
+
 ## Dependencies: use mature ones (owner, 2026-11-12)
 
 Use a mature, maintained, widely adopted dependency wherever one solves the problem. Don't reinvent what a
