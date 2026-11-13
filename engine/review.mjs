@@ -68,7 +68,7 @@ export async function routeComment({ provider, model, text, sections, signal }) 
 
 // Rewrite one section with the reviewer's note, or with a person's comment.
 // Streams like a build.
-export async function fixSection({ provider, model, theme, html, role, problem, fix, comment, images = false, onDelta, signal }) {
+export async function fixSection({ provider, model, theme, html, role, problem, fix, comment, images = false, kind = '', onDelta, signal }) {
   const messages = [
     {
       role: 'system',
@@ -87,7 +87,7 @@ ${html}`
   // room for the whole section again plus what is added: a big section (a map, a
   // table) cut off at a fixed limit loses its end and breaks
   const maxTokens = Math.min(16000, Math.max(8000, Math.ceil(html.length / 1.2)))
-  const res = await streamChat(provider, { trace: { kind: comment ? 'fix' : 'review-fix' }, model, messages, maxTokens, temperature: 0.4, extra: NO_THINKING, signal, onDelta })
+  const res = await streamChat(provider, { trace: { kind: kind || (comment ? 'fix' : 'review-fix') }, model, messages, maxTokens, temperature: 0.4, extra: NO_THINKING, signal, onDelta })
   const out = res.text.replace(/^\s*```(?:html)?\s*/i, '').replace(/\s*```\s*$/, '')
   if (!/<\/(section|nav|footer|header|div)>\s*(<!--[\s\S]*?-->\s*)*$/i.test(out)) throw new Error('the rewrite was cut off before the end, so the section was kept as it was')
   return res.text

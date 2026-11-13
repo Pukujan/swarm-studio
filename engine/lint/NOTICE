@@ -1,0 +1,13 @@
+Swarm Studio, the slop linter (engine/lint/artifact.mjs)
+
+artifact.mjs is ported from Open Design
+Repository: https://github.com/nexu-io/open-design
+File: apps/daemon/src/lint-artifact.ts (commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582)
+Copyright (c) Open Design contributors.
+License: Apache-2.0 (see LICENSE in this folder)
+
+Changes made for Swarm Studio: the TypeScript types were removed and the finding type is described in
+a comment instead of imported from @open-design/contracts. The rules, their thresholds and their
+messages are unchanged. engine/lint/index.mjs leaves out four upstream rules that judge a whole page
+or a deck rather than one section (missing-section-anchor, slide-theme-missing, slide-rhythm,
+sans-display). engine/lint/rules.mjs and engine/lint/index.mjs are Swarm Studio's own.
