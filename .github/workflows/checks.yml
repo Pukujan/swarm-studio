@@ -99,9 +99,10 @@ jobs:
           python -c "import json, launcher; r = launcher.ensure_server(); print(json.dumps(r)); assert r.get('running'), r"
           token=$(cat "$HERMES_HOME/swarm-studio/token")
           # each reply read in full before it is searched (grep -q stopping early fails curl under pipefail)
-          home=$(curl -sf http://127.0.0.1:4319/); grep -q '<title>Swarm Studio' <<< "$home"
-          next=$(curl -sf http://127.0.0.1:4319/next/); grep -q '/next/assets/' <<< "$next"
-          state=$(curl -sf -H "x-swarm-token: $token" http://127.0.0.1:4319/api/state); grep -q '"app":"swarm-studio"' <<< "$state"
+          echo '· /'; home=$(curl -sf http://127.0.0.1:4319/); grep -q '<title>Swarm Studio' <<< "$home"
+          # /next/ is one document: its scripts and styles inlined (server/next.mjs), with the boot line written in
+          echo '· /next/'; next=$(curl -sf http://127.0.0.1:4319/next/); grep -q '<title>Swarm Studio' <<< "$next"; grep -q 'window.SWARM = ' <<< "$next"
+          echo '· /api/state'; state=$(curl -sf -H "x-swarm-token: $token" http://127.0.0.1:4319/api/state); grep -q '"app":"swarm-studio"' <<< "$state"
           pid=$(python -c "import json, sys; print(json.loads(sys.argv[1])['pid'])" "$state")
           kill "$pid"
       - if: ${{ !cancelled() && steps.served.outcome == 'failure' }}
