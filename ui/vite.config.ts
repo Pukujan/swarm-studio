@@ -14,13 +14,17 @@ const repo = fileURLToPath(new URL('..', import.meta.url))
 // package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
 export const alias: AliasOptions = [
   { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
-  // Hermia's cursor (web/pet.js, spec 41) and the line icons and crew names (web/icons.js), the same files the
-  // current Studio runs: src/pet/ and src/primitives/Icon.tsx reach them, typed by their .d.ts
+  // Hermia's cursor (web/pet.js, spec 41), the line icons and crew names (web/icons.js) and the crew's marks
+  // (web/crew.js), the same files the current Studio runs: src/pet/, src/primitives/Icon.tsx and src/screens/deck/
+  // reach them, typed by their .d.ts
   { find: '@studio/pet', replacement: fileURLToPath(new URL('../web/pet.js', import.meta.url)) },
   { find: '@studio/icons', replacement: fileURLToPath(new URL('../web/icons.js', import.meta.url)) },
   { find: '@studio/crew', replacement: fileURLToPath(new URL('../web/crew.js', import.meta.url)) },
   // by path: a bare 'xstate' would be looked up from web/, which has no node_modules
-  { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) }
+  { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) },
+  // the sanitiser the current deck runs on every section before a frame shows it (web/clean.js): the Design deck's
+  // frames get the same HTML (src/screens/deck/)
+  { find: '@studio/clean', replacement: fileURLToPath(new URL('../web/clean.js', import.meta.url)) }
 ]
 
 export default defineConfig({

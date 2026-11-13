@@ -416,7 +416,8 @@ style.textContent = 'body:not(.cosmos) .cosmos-fold{display:none}.cosmos-fold{ba
 document.head.append(style)
 
 if (sw && !sw.wall) {
-  // the mode (C.mode, read from the machine) is known before the canvas's own start-up timers run
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
-  else setTimeout(start)
+  // the mode (C.mode, read from the machine) is known before the canvas's own start-up timers run.
+  // A module runs once the page is parsed, so start now: a timer here raced the first replies from
+  // the server, and the Studio booted before or after them by chance (scripts/motion-check.mjs)
+  start()
 }

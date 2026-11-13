@@ -4,6 +4,7 @@
 import type { ComponentType } from 'react'
 import type { Room } from '../nav/nav'
 import { PlanBoard } from './PlanBoard'
+import { DesignDeck } from './DesignDeck'
 
 export const SCREEN_NAMES: Record<Room, string> = {
   home: 'Projects',
@@ -33,4 +34,8 @@ export const CRUMB_NAMES: Record<Room, string> = {
 }
 
 // the screens that have moved (issue #404)
-export const SCREENS: Partial<Record<Room, ComponentType>> = { plan: PlanBoard }
+export const SCREENS: Partial<Record<Room, ComponentType>> = {
+  plan: PlanBoard,
+  // the Design deck's shell is slice 1 of its port; `draft`, a new project's deck, has not moved
+  deck: DesignDeck
+}
