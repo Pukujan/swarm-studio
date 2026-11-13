@@ -54,7 +54,7 @@ export function makeHome({ sw, C, root }) {
       <div class="hm-selbar" hidden></div>
     </main>`
   const $ = s => root.querySelector(s)
-  const side = $('.hm-side'), nav = $('.hm-nav'), foldersEl = $('.hm-folders'), bar = $('.hm-bar'), bodyEl = $('.hm-body'), selbar = $('.hm-selbar')
+  const side = $('.hm-side'), nav = $('.hm-nav'), foldersEl = $('.hm-folders'), bar = $('.hm-bar'), bodyEl = $('.hm-body'), selbar = $('.hm-selbar'), WAIT = bodyEl.innerHTML // WAIT: the waiting cards, for Assets' first visit too
   const form = $('.hm-ask'), input = form.q
 
   // ---------- data
@@ -252,8 +252,9 @@ export function makeHome({ sw, C, root }) {
       if (!ids.length) continue
       html += `${f ? `<h3 class="as-folder">${ic('folder', 15)}<span>${esc(f)}</span></h3>` : ''}${ids.map(group).join('')}`
     }
-    bodyEl.className = 'hm-body assets'
-    bodyEl.innerHTML = html || (narrowed() ? none('search', 'Nothing matches') : none('image', 'Pictures, sections, films and files from every project, to reuse in later builds', true))
+    // the first visit, before the list has come: the same waiting cards as Projects, not "nothing here"
+    bodyEl.className = H.assets ? 'hm-body assets' : 'hm-body grid'
+    bodyEl.innerHTML = !H.assets ? WAIT : html || (narrowed() ? none('search', 'Nothing matches') : none('image', 'Pictures, sections, films and files from every project, to reuse in later builds', true))
     H.assetList = flat
   }
   // Chats (spec 29): talks with the planner that have not built anything, newest first. One opens in
@@ -268,7 +269,7 @@ export function makeHome({ sw, C, root }) {
     bodyEl.innerHTML = `<div class="chat-row chat-new" data-new tabindex="0" role="button">${ic('plus', 16)}<b class="cr-nm">New chat</b></div>` + list.map(c => `<div class="chat-row" data-chat="${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.title)}">
       ${ic(CHAT_ICON[c.kind] || 'msg', 16)}<b class="cr-nm">${esc(c.title)}</b>${c.state === 'locked' ? `<span class="cr-st">Locked</span>` : ''}<span class="cr-t">${ago(c.updated)}</span>
       <button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button></div>`).join('')
-      + (list.length ? '' : H.q ? none('search', 'Nothing matches') : none('msg', 'Talks with the planner that built nothing yet'))
+      + (list.length || !H.chats ? '' : H.q ? none('search', 'Nothing matches') : none('msg', 'Talks with the planner that built nothing yet'))
   }
   async function openChat(id) {
     const chat = await api(`/api/chats/${encodeURIComponent(id)}`).catch(() => null)
@@ -336,7 +337,7 @@ export function makeHome({ sw, C, root }) {
     H.view = view; H.folder = folder; H.stack = null; H.sel.clear(); H.q = ''; H.searching = false
     store.set('home.view', view); store.set('home.folder', folder)
     drawer(false)
-    if (view === 'assets') { H.assets = H.assets || []; api('/api/assets').then(j => { H.assets = j.assets; if (H.view === 'assets') render() }).catch(() => {}) }
+    if (view === 'assets') api('/api/assets').then(j => { H.assets = j.assets || []; if (H.view === 'assets') render() }).catch(() => { H.assets = H.assets || []; if (H.view === 'assets') render() })
     if (view === 'chats') loadChats()
     render()
     bodyEl.scrollTop = 0
