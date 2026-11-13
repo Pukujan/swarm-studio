@@ -14,6 +14,10 @@ const repo = fileURLToPath(new URL('..', import.meta.url))
 // package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
 export const alias: AliasOptions = [
   { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
+  // the Studio's kits (spec 37: web/kit-*.js, listed by web/kits.js) and Hermia's cursor (spec 41, web/pet.js), hosted
+  // as they are, not rewritten (src/legacy/)
+  { find: '@studio/kits', replacement: fileURLToPath(new URL('../web/kits.js', import.meta.url)) },
+  { find: '@studio/pet', replacement: fileURLToPath(new URL('../web/pet.js', import.meta.url)) },
   // by path: a bare 'xstate' would be looked up from web/, which has no node_modules
   { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) }
 ]
@@ -25,7 +29,10 @@ export default defineConfig({
     tailwindcss(),
     // the page is written with \n on every machine: a Windows checkout's index.html has \r\n, and Vite's own tags
     // go in with \n, so ui/dist/index.html would differ between a Windows build and CI's
-    { name: 'swarm:lf', transformIndexHtml: { order: 'post', handler: html => html.replace(/\r\n?/g, '\n') } }
+    { name: 'swarm:lf', transformIndexHtml: { order: 'post', handler: html => html.replace(/\r\n?/g, '\n') } },
+    // the current Studio's stylesheets that src/legacy/ hosts load their fonts relative to web/; here they come from
+    // the server's /fonts/, as src/fonts.css's do, never copied into ui/dist/
+    { name: 'swarm:web-fonts', enforce: 'pre', transform: (code, id) => (/[\\/]web[\\/][^\\/]+\.css$/.test(id) ? code.replace(/url\(\s*['"]?fonts\//g, 'url(/fonts/') : null) }
   ],
   resolve: { alias },
   // web/nav.js and web/tokens.css live outside ui/

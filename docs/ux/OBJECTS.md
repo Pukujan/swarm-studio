@@ -196,7 +196,9 @@ the Film studio). Proposed: the kind
   `proposal`, `locked`.
 - **Name.** Open. Copy says **Studio** (`web/home.js:745`, `web/scaffold.js:121`) and **Studio first** (SITEMAP §6);
   nav.js says `studio`. "Studio" is already the whole plugin. Proposed: **Studio first** for the choice and the
-  scaffold, so the bare word keeps meaning the plugin.
+  scaffold, so the bare word keeps meaning the plugin. **Proposed, provisional pending owner review (2026-11-13):**
+  the next UI's screen is `StudioFirst` (`ui/src/screens/StudioFirst.tsx`), its parts `StepPath`, `Layers` and
+  `KitCard`; the name changes in one place if the owner picks another.
 
 ### Kit
 

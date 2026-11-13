@@ -3,6 +3,7 @@
 // current Studio at the same address. Moving one screen is ui/README.md's recipe.
 import type { ComponentType } from 'react'
 import type { Room } from '../nav/nav'
+import { StudioFirst } from './StudioFirst'
 
 export const SCREEN_NAMES: Record<Room, string> = {
   home: 'Projects',
@@ -17,5 +18,6 @@ export const SCREEN_NAMES: Record<Room, string> = {
   studio: 'Studio scaffold'
 }
 
-// none yet: this is the scaffold (issue #404)
-export const SCREENS: Partial<Record<Room, ComponentType>> = {}
+export const SCREENS: Partial<Record<Room, ComponentType>> = {
+  studio: StudioFirst
+}
