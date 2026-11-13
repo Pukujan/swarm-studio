@@ -399,7 +399,8 @@ def _dispatch(cmd: str, args: list[str]) -> str:
         return feed.post(r, args, _export_zip, _page_shots)
 
     if cmd == "remix":
-        return feed.remix(args, lambda brief: launcher.start_run(brief))
+        # a remix is the person's own command: it builds without the question first (decision 0020)
+        return feed.remix(args, lambda brief: launcher.start_run(brief, sure=True))
 
     if cmd == "login":
         return feed.login()
