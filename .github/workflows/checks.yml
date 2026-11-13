@@ -51,6 +51,91 @@ jobs:
       - run: command -v python3 || cp "$(command -v python)" "$(dirname "$(command -v python)")/python3.exe"
       - run: python -m pip install --quiet pillow
       - run: bash scripts/check.sh
+  # macOS, where nobody here has a machine (issue #405): the plugin installed the way a person installs it
+  # (Hermes's own `hermes plugins install`, nothing built), its server started from that copy, the same checks
+  # and audit gates, and what only a Mac shows (scripts/macos-check.mjs)
+  checks-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # a Hermes home of its own, under the runner's temp folder (TMPDIR-style /var/folders… paths on a Mac)
+      - run: echo "HERMES_HOME=$RUNNER_TEMP/hermes" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet pillow
+      - run: bash scripts/check.sh
+      # the sections below each run even when one before them failed, so one run shows every Mac failure
+      # Hermes as a person installs it on a Mac (its install.sh), at the release the plugin asks for
+      # (plugin.yaml requires_hermes: v0.23.1, commit 3b42157), without its setup questions, browser or
+      # computer-use driver; then this commit installed through it: Hermes clones it, scans it and copies it
+      # into $HERMES_HOME/plugins/ (Hermes refuses a pip install of itself)
+      - id: hermes
+        if: ${{ !cancelled() }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/v0.23.1/scripts/install.sh -o "$RUNNER_TEMP/hermes-install.sh"
+          bash "$RUNNER_TEMP/hermes-install.sh" --commit 3b421578588243f920886e6fe79a6faa87ea026e --hermes-home "$HERMES_HOME" --skip-setup --skip-browser --skip-computer-use
+          echo "$HERMES_HOME/hermes-agent/.hermes/bin" >> "$GITHUB_PATH"
+      - if: ${{ !cancelled() && steps.hermes.outcome == 'failure' }}
+        run: tail -n 80 "$HERMES_HOME/logs/install.log" || true
+      - id: install
+        if: ${{ !cancelled() && steps.hermes.outcome == 'success' }}
+        run: hermes plugins install "file://$GITHUB_WORKSPACE" --force --enable --yes-deps
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: hermes plugins list | tee "$RUNNER_TEMP/plugins.txt" && grep -q swarm-studio "$RUNNER_TEMP/plugins.txt"
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: node scripts/macos-check.mjs tree "$HERMES_HOME/plugins/swarm-studio"
+      # the installed copy's launcher starts its server (HOME, TMPDIR and $HERMES_HOME paths as on a Mac); both
+      # Studios answer, the current one at / and the prebuilt next one at /next/
+      - name: the installed server starts and serves / and /next/
+        id: served
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: ${{ env.HERMES_HOME }}/plugins/swarm-studio
+        run: |
+          python -c "import json, launcher; r = launcher.ensure_server(); print(json.dumps(r)); assert r.get('running'), r"
+          token=$(cat "$HERMES_HOME/swarm-studio/token")
+          # each reply read in full before it is searched (grep -q stopping early fails curl under pipefail)
+          echo '· /'; home=$(curl -sf http://127.0.0.1:4319/); grep -q '<title>Swarm Studio' <<< "$home"
+          # /next/ is one document: its scripts and styles inlined (server/next.mjs), with the boot line written in
+          echo '· /next/'; next=$(curl -sf http://127.0.0.1:4319/next/); grep -q '<title>Swarm Studio' <<< "$next"; grep -q 'window.SWARM = ' <<< "$next"
+          echo '· /api/state'; state=$(curl -sf -H "x-swarm-token: $token" http://127.0.0.1:4319/api/state); grep -q '"app":"swarm-studio"' <<< "$state"
+          pid=$(python -c "import json, sys; print(json.loads(sys.argv[1])['pid'])" "$state")
+          kill "$pid"
+      - if: ${{ !cancelled() && steps.served.outcome == 'failure' }}
+        run: ls -la "$HERMES_HOME/swarm-studio"; cat "$HERMES_HOME"/swarm-studio/*.log 2>/dev/null || true
+      # the film renderer's darwin ffmpeg and ffprobe: installed from the pinned packages and checked against
+      # their SHA-256 for this Mac, and the other Mac's (arm64 / x64) fetched and checked too
+      - if: ${{ !cancelled() }}
+        run: node scripts/macos-check.mjs ffmpeg
+      # Godot as a Mac has it: the app, found without Homebrew on PATH
+      - id: godot
+        if: ${{ !cancelled() }}
+        run: brew install --cask godot
+      - if: ${{ !cancelled() && steps.godot.outcome == 'success' }}
+        run: node scripts/macos-check.mjs godot
+      # the UI audit gates, as in ui-audit, on the current Studio and on /next/
+      - id: devdeps
+        if: ${{ !cancelled() }}
+        run: npm ci --no-audit --no-fund && npx playwright install chromium-headless-shell
+        working-directory: tools/dev
+      - if: ${{ !cancelled() && steps.devdeps.outcome == 'success' }}
+        run: npm run audit
+        working-directory: tools/dev
+      - if: ${{ !cancelled() && steps.devdeps.outcome == 'success' }}
+        run: npm run audit
+        working-directory: tools/dev
+        env:
+          AUDIT_APP: next
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-audit-macos
+          path: test-results
+          retention-days: 7
   # the next UI's stories build (ui/, its Storybook mock-ups); nothing of it is kept
   storybook:
     runs-on: ubuntu-latest

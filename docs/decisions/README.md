@@ -22,6 +22,7 @@ one; don't edit the old one quietly.
 | [0011](0011-hyperframes-default-video.md) | 2026-11-12 | HyperFrames is the default film engine; the person picks another |
 | [0012](0012-design-tokens.md) | 2026-11-13 | The Studio's theme is design tokens, built with Style Dictionary |
 | [0013](0013-react-ui-coexists.md) | 2026-11-13 | The next UI is React, served beside the current Studio at /next/ |
+| [0014](0014-image-first-boards.md) | 2026-11-13 | Image-first boards: a photo unless touched, budgets for live pages, video and GPU memory |
 
 `tests/decisions.test.mjs` fails if the hosted studio, build credits or "paid per build" come back in
 `docs/brand/` or the README.

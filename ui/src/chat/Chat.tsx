@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Tab, TabList, TabPanel, Tabs, TextArea } from 'react-aria-components'
 import { Button } from '../primitives/Button'
-import { Select } from '../primitives/Select'
+import { ChipSelect } from '../primitives/Select'
 import { chatApi, getJson, postJson } from './api'
 import { Chats } from './Chats'
 import { Feed } from './Feed'
@@ -194,8 +194,8 @@ export function Chat(props: ChatProps) {
               }}
               className="w-full resize-none rounded-[10px] border border-line-2 bg-void p-3 font-monospace text-sm text-text outline-none placeholder:text-dim data-[focused]:border-frame-hi" />
             <div className="row flex items-center gap-1.5">
-              <Select name="Agents" options={agentList.map(n => ({ id: String(n), label: `${n} agents` }))} value={agents} onChange={setAgents} />
-              <Select name="Build model" options={model.options} value={model.value} className="min-w-0 flex-1"
+              <ChipSelect name="Agents" options={agentList.map(n => ({ id: String(n), label: `${n} agents` }))} value={agents} onChange={setAgents} />
+              <ChipSelect name="Build model" options={model.options} value={model.value} className="min-w-0 flex-1"
                 onChange={id => { if (id === OTHER) onMoreModels?.(); else void model.pick(id) }} />
               <Button type="submit" role="primary" className="ml-auto">{talk.on ? 'Send' : 'Build'}</Button>
             </div>
