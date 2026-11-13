@@ -16,7 +16,6 @@ import { closeable } from './start.js'
 export const lite = { last: 0, busy: false, quiet: 0 }
 // Auto: on for small machines, and for everyone once the agents have been done
 // for half a minute (a finished build doesn't need every page live).
-// @ts-ignore
 export const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 5000)))
 
 export const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')

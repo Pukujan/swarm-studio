@@ -135,7 +135,6 @@ export function frameLoop(now) {
     els.exportBtn.disabled = !S.done || exp.busy
     paintReplay()
     const pubbing = pub.run === shownRun() && pub.state === 'working'
-    // @ts-ignore
     const deploying = appv.deploying && appv.run === shownRun()
     els.publishBtn.disabled = (!S.done && !pubbing) || deploying
     setLabel(els.publishBtn, pubbing || deploying ? 'Publishing…' : liveUrl() ? 'Live' : 'Publish')
@@ -291,7 +290,6 @@ export async function runSlash(text) {
       const style = VIDEO_STYLES.some(([k]) => k === first?.toLowerCase()) ? first.toLowerCase() : null
       return makeVideo({ style, idea: (style ? more.join(' ') : arg).trim() || null })
     }
-    // @ts-ignore
     case 'app': if (!needRun()) return; return arg ? appAsk(arg) : appv.hasApp || appv.state === 'working' ? setView('app') : (setView('app'), buildApp())
     case 'game': return openGame(arg)
     case 'cast': return openCastOnly()
@@ -400,7 +398,6 @@ export async function sendDock() {
   // while Hermia is answering, the words wait in the box
   if (talk.on) { skip(); if (talk.busy) return; els.brief.value = ''; talkSay(brief); return }
   // a big game waiting after a slice: the answer goes into the next slice, from any view
-  // @ts-ignore
   if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
   if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }

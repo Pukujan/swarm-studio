@@ -14,7 +14,7 @@ import { readTalk, talkStart, talkAsk, talkEnd, saidOf, talk, gameLock } from '.
 import { setCrewMode, crewMode } from './auto.js'
 import { snapFrame, hiddenCopy, ANCHOR_JS, layerKey, SNAP_SECTION, sendComment } from './marks.js'
 import { gensOf, pics } from './start.js'
-import { nextRoute } from './loop.js'
+import { nextRoute, setNextRoute } from './loop.js'
 
 // ---------- studio hook: what web/studio.js, web/home.js and web/project.js may read and call.
 // Kept to this one block so the canvas and the studio views merge cleanly.
@@ -174,7 +174,6 @@ window.swarm = {
     talkEnd()
     return new Promise(done => {
       els.brief.value = text
-      // @ts-ignore
       setNextRoute(project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done, chat: opts.chat } : { fresh: true, done, pictures: opts.pictures, chat: opts.chat })
       if (view !== 'canvas') setView('canvas')
       els.form.requestSubmit()

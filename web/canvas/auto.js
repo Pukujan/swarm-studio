@@ -80,7 +80,6 @@ export function renderAutoPanel() {
   p.hidden = false
   const secs = ms => { const t = Math.round(ms / 1000); return t >= 60 ? `${Math.floor(t / 60)}m ${String(t % 60).padStart(2, '0')}s` : `${t}s` }
   // the working step says what its tab is doing right now
-  // @ts-ignore
   const live = s => s.state !== 'working' || e.run !== shownRun() ? s.note : s.id === 'video' && video.busy && video.stage ? video.stage : AUTO_VIEW[s.id] === 'app' && appv.run === e.run && appv.state === 'working' && appv.stage ? appv.stage : s.note
   const total = e.state === 'working' ? Date.now() - e.t0 : e.ms
   p.className = `auto-panel ${e.state}${autoM.min ? ' min' : ''}`
@@ -564,7 +563,6 @@ export function chatterHear(e) {
     case 'review:done': Chatter.play(e.issues?.length ? 'fail' : 'done', REVIEWER); break
     case 'crew:lead': if (e.kind === 'assign') Chatter.babble('Hermia', e.text); break
     case 'agent:say': if (e.app) Chatter.babble(e.name, e.text); break
-    // @ts-ignore
     case 'app:step': if (e.step?.kind === 'write') { const n = wallNames(); Chatter.play('start', n[(appv.steps.length) % n.length]?.[0]) } break
     case 'auto': {
       const cur = e.steps?.find(s => s.state === 'working')
@@ -684,7 +682,6 @@ export function dockLine(x) {
   if (radio.feed.length > 60) radio.feed.shift()
 }
 export function radioEvent(e) {
-  // @ts-ignore
   const run = e.run || appv.run || shownRun()
   if (radio.run !== run) Object.assign(radio, { run, lead: null, reason: null, acts: new Map(), says: new Map(), order: [], feed: [] })
   const t = e.t || Date.now()
@@ -695,7 +692,6 @@ export function radioEvent(e) {
   else if (e.type === 'crew:act') { radio.acts.set(e.name, { text: e.text, t }); meet(e.name) }
   else if (e.type === 'agent:say') { radio.says.set(e.name, { text: e.text, kind: e.kind, t }); meet(e.name) }
 }
-// @ts-ignore
 export const radioOn = () => radio.run && radio.run === appv.run
 // the wall's crew: the helpers the radio has heard from first, then the build's agents
 export function wallNames() {
@@ -734,7 +730,6 @@ export const kTokens = n => n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
 // minute or more, so the wall says who is planning, for how long, and with how much context.
 export function cwPlan(steps) {
   const last = steps.findLast(s => s.kind !== 'tokens' && s.kind !== 'ask')
-  // @ts-ignore
   if (!(last ? last.kind === 'think' : appv.stage === 'next step')) return null
   const think = steps.findLast(s => s.kind === 'think')
   const write = steps.findLast(s => s.kind === 'write')

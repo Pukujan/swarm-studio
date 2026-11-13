@@ -1128,7 +1128,6 @@ export async function gameShape() {
     api, ico, spec, id,
     onBuilt: async (run, built) => {
       await loadFiles()
-      // @ts-ignore
       await showRun(run, { started: true, room: 'app' })
       setView('app')
       botMsg(`🎮 Building “${built?.title || spec.title}” with the art, story, levels and sound you picked. The App view shows every file as it is written.`)
@@ -1148,7 +1147,6 @@ export async function gameBuild() {
     if (!out.run) throw new Error(out.error || 'could not start')
     closeGame()
     await loadFiles()
-    // @ts-ignore
     await showRun(out.run, { started: true, room: 'app' })
     setView('app')
     botMsg(`🎮 Building “${game.spec.title}” (${game.spec.engine}). The App view shows every file as it is written; the game opens there when it builds. Chat here to change it after.`)

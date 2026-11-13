@@ -7,7 +7,7 @@ import { panels } from './settings.js'
 import { picturesHtml, wirePictures, closeable } from './start.js'
 import { traceView, viewing } from './replay.js'
 import { shownRun } from './film.js'
-import { feed, renderTheme, botMsg, toolbarKey } from './panels.js'
+import { feed, renderTheme, botMsg, toolbarKey, setToolbarKey } from './panels.js'
 import { txt, textEdit, cmt } from './marks.js'
 
 // ---------- Design panel
@@ -559,9 +559,7 @@ export function loadPickerFonts() {
 export function selectAt(f, x, y) {
   const hit = Object.entries(f.geo.slots).find(([, g]) => { const [l, t, w, h] = g.box; return x >= l && x <= l + w && y >= t && y <= t + h })
   S.sel = hit ? hit[0] : null
-  // @ts-ignore
   if (txt.mode && S.sel && S.layers.get(S.sel)?.status === 'done') { txt.mode = false; setToolbarKey(''); els.viewport.classList.remove('texting'); textEdit(S.layers.get(S.sel)) }
-  // @ts-ignore
   if (cmt.mode && S.sel) { cmt.mode = false; cmt.open = S.sel; setToolbarKey(''); els.viewport.classList.remove('commenting') }
   else if (cmt.open !== S.sel) cmt.open = null
   design.pinned = null

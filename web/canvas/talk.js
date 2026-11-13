@@ -1,11 +1,11 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): talks before a build: talk first, the game talk, Chats.
 import { els, api, $, ico } from './core.js'
-import { viewing } from './replay.js'
+import { viewing, setViewing } from './replay.js'
 import { fresh, links } from './base.js'
 import { botMsg, feed } from './panels.js'
 import { esc } from './design.js'
-import { nextRoute, slashPop, slashMatches, slashAt, renderSlash, pickSlash } from './loop.js'
+import { nextRoute, slashPop, slashMatches, slashAt, renderSlash, pickSlash, setNextRoute, setSlashAt } from './loop.js'
 import { runNow, shownRun } from './film.js'
 
 // ---------- talk first (engine/talkplan.mjs): the person asked not to build yet, or asked the crew
@@ -28,7 +28,6 @@ export const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discus
 // Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
 // heard(text): told each line the person sends (the Studio takes its idea from the first)
 export function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false, heard = null }) {
-  // @ts-ignore
   if (blank) { setViewing('new'); fresh(null) }
   Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null, heard })
   talkDock(true)
@@ -166,9 +165,7 @@ export function talkBrief(text, route = '', what = '', sheet = false) {
     if (!t) return
     // @ts-ignore
     const way = b.dataset.go, chat = talk.chat, from = talk.from
-    // @ts-ignore
     const go = way === 'new' ? (x, c) => { setNextRoute({ fresh: true, chat: c }); els.brief.value = x; els.form.requestSubmit() }
-      // @ts-ignore
       : way === 'redo' ? (x, c) => { setNextRoute({ from, route: 'redo', selected: false, chat: c }); els.brief.value = x; els.form.requestSubmit() }
         : talk.build
     talkEnd()
@@ -196,7 +193,6 @@ export let chatsPop = null
 export const projectNow = () => window.swarmCosmos?.project || null
 // Build from a chat: inside a project it is the project's next version; outside one, a new project
 export function chatBuild(run) {
-  // @ts-ignore
   return (text, chat) => { setNextRoute(run ? { from: run, route: 'extend', selected: false, chat } : { fresh: true, chat }); els.brief.value = text; els.form.requestSubmit() }
 }
 export async function openChatHere(id) {
@@ -257,7 +253,6 @@ export function talkAsk(text, now, first) {
 els.brief.addEventListener('keydown', e => {
   if (!slashPop.hidden) {
     const m = slashMatches()
-    // @ts-ignore
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setSlashAt((slashAt + (e.key === 'ArrowDown' ? 1 : m.length - 1)) % m.length); return renderSlash() }
     if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && m[slashAt] && els.brief.value.trim() !== `/${m[slashAt][0]}`)) { e.preventDefault(); return pickSlash(m[slashAt][0]) }
     if (e.key === 'Escape') { slashPop.hidden = true; return }

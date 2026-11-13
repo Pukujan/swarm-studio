@@ -2,7 +2,7 @@
 // web/canvas.js, split by area (web/canvas/README.md): comments, generated images, visual review, Scribble.
 import { painterOf } from '../icons.js'
 import { S, $, els, api, commandOps, BOOT, WALL, BASE } from './core.js'
-import { botMsg, feed, toolbarKey } from './panels.js'
+import { botMsg, feed, toolbarKey, setToolbarKey } from './panels.js'
 import { esc, remember, restoreLayer } from './design.js'
 import { viewing } from './replay.js'
 import { shownRun } from './film.js'
@@ -144,14 +144,11 @@ commandOps.fix = c => {
 
 els.toolbar.addEventListener('click', e => {
   const tool = e.target.closest('[data-tool]')?.dataset.tool
-  // @ts-ignore
   if (tool === 'move') { cmt.mode = txt.mode = false; setToolbarKey(''); els.viewport.classList.remove('commenting', 'texting'); return }
   if (tool === 'text') {
     cmt.mode = false; els.viewport.classList.remove('commenting')
     const l = S.sel && S.layers.get(S.sel)
-    // @ts-ignore
     if (l?.status === 'done') { txt.mode = false; setToolbarKey(''); return textEdit(l) }
-    // @ts-ignore
     txt.mode = !txt.mode; setToolbarKey('')
     els.viewport.classList.toggle('texting', txt.mode)
     if (txt.mode) feed(null, '✏️ Click a section to edit its words.', 'sys')
@@ -161,7 +158,6 @@ els.toolbar.addEventListener('click', e => {
   txt.mode = false; els.viewport.classList.remove('texting')
   if (S.sel && S.layers.get(S.sel)?.status === 'done') { cmt.open = S.sel; return }
   cmt.mode = !cmt.mode
-  // @ts-ignore
   setToolbarKey('')
   els.viewport.classList.toggle('commenting', cmt.mode)
   if (cmt.mode) feed(null, '💬 Click a section to comment on it.', 'sys')

@@ -50,19 +50,16 @@ export function hermiaDock() {
 export function codeWall() {
   hermiaDock()
   playClip()
-  // @ts-ignore
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
     cw.shown = false
     if (cw.el) cw.el.hidden = true
-    // @ts-ignore
     if (appv.state !== 'working') Object.assign(cw, { run: null, seen: 0, queue: [], tiles: [], ...CW_FRESH })
     return
   }
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    // @ts-ignore
     cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
     // a click on a tile makes it big, the others line up beside it; a second click (or Esc) puts it back
@@ -71,21 +68,17 @@ export function codeWall() {
     g.onkeydown = ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList?.contains('cw-tile')) { ev.preventDefault(); cwZoom([...g.children].indexOf(ev.target)) } }
     appEls.preview.append(cw.el)
   }
-  // @ts-ignore
   if (cw.run !== appv.run) {
-    // @ts-ignore
     Object.assign(cw, { run: appv.run, seen: Math.max(0, appv.steps.length - 30), queue: [], tiles: [], hide: false, ...CW_FRESH })
     cw.el.querySelector('.cw-grid').replaceChildren()
   }
   // art time: three painter tiles and one code tile; code time: three code tiles and the asset pane
-  // @ts-ignore
   const artNow = artPhase(appv.steps), mode = artNow ? 'art' : 'code'
   if (cw.mode !== mode) {
     cw.mode = mode
     cw.tiles = []
     cw.el.querySelector('.cw-grid').replaceChildren()
     if (mode === 'art') cw.queue = ['GAME_SPEC.md']
-    // @ts-ignore
     cw.el.querySelector('.cw-head .pop-title').innerHTML = mode === 'art' ? 'Painting the <em>art</em>' : appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'
   }
   const codeTile = i => i === CW_CODE
@@ -96,7 +89,6 @@ export function codeWall() {
     if (autoM.last?.state === 'working' && !autoM.min) setAutoMin(true, false)
   }
   // newly written files join the queue (newest wins; a file already up is retyped)
-  // @ts-ignore
   const steps = appv.steps
   for (; cw.seen < steps.length; cw.seen++) {
     const s = steps[cw.seen]
@@ -118,7 +110,6 @@ export function codeWall() {
   // app already has, scrolling slowly and marked as being read, so the wall is never blank
   if (mode === 'code' && !cw.queue.length && !cw.reads?.length && now - cw.readAt > 20000) {
     cw.readAt = now
-    // @ts-ignore
     appApi('/files').then(r => { if (cw.run === appv.run) cw.reads = (r.files || []).map(f => f.path).filter(p => /\.(tsx?|jsx?|css|md|gd)$/.test(p) && !/lock|tsbuildinfo|node_modules|\.d\.ts$/.test(p)) }).catch(() => {})
   }
   for (let i = 0; i < CW_TILES && cw.reads?.length && !cw.queue.length; i++) {
@@ -209,7 +200,6 @@ export function codeWall() {
     setText(cw.el.querySelector('.cw-count'), `${artNow.painted}/${artNow.total || '?'} pictures${artNow.failed ? ` · ${artNow.failed} ⚠` : ''}`)
   } else {
     cw.planKey = ''
-    // @ts-ignore
     setText(cw.el.querySelector('.cw-count'), `${nFiles} file${nFiles === 1 ? '' : 's'} · ${writing} typing · ${appv.stage || ''}`)
   }
 }
@@ -305,7 +295,6 @@ export function cwAssetTile(d, member, now, k = 0) {
   const ranked = cwRanked(), live = k === 1 ? cwLive() : null
   const a = cw.av[k] ||= { src: '', name: '' }
   // the slice from the status line, else the build's last "stage n of N" step (the line often reads "next step")
-  // @ts-ignore
   const slice = appv.at ? [null, ...appv.at] : String(appv.stage || '').match(/stage (\d+) of (\d+)/) || String(appv.steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text || '').match(/stage (\d+) of (\d+)/)
   let pic = null, label = '', state = ''
   const pool = ranked.slice(0, CW_SHOW)
@@ -365,7 +354,6 @@ export function cwPin(i) {
   if (!r.width && !r.height) return null
   return { x: r.left + 2, y: r.top + 4, text: t.path.split('/').pop(), typing: t.shown < t.text.length }
 }
-// @ts-ignore
 ;(function cwLoop() { try { codeWall() } catch (err) { console.error(err) } nextFrame(cwLoop, !(view === 'app' && appv.state === 'working'), 400) })()
 
 // ---------- 🔌 sign-in connectors (Supabase), through Hermes: Connect opens the provider's
