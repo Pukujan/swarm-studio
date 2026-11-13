@@ -139,6 +139,7 @@ def register(ctx) -> None:
     # the Hermes bridge (bridge.py): the canvas server asks this process for pictures and clips, which
     # Hermes makes with its own image_generate and video_generate tools and keys
     bridge.CTX = ctx
+    bridge.keep_profile()
     launcher.on_server = bridge.start
     bridge.start_later()
     # the model's publish, deploy and post wait for a person's OK (Hermes's approval gate)

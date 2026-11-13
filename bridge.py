@@ -21,6 +21,7 @@ from a web page (any ``Origin`` header), or one with a Host that is not loopback
 from __future__ import annotations
 
 import base64
+import contextvars
 import hmac
 import json
 import re
@@ -39,6 +40,7 @@ from pathlib import Path
 from . import bridge_llm, launcher
 
 CTX = None  # the plugin context, set by register()
+HOME: Path | None = None  # the Hermes home this plugin was loaded for, kept by keep_profile() from register()
 ATTACH_EVERY = 5.0  # seconds; the canvas server drops a bridge silent for 45, and a restarted one is found this fast
 SERVER_POLL = 5.0  # seconds between looks for a canvas server that is not up yet
 
@@ -64,6 +66,49 @@ _lock = threading.Lock()
 _server: ThreadingHTTPServer | None = None
 _token = ""
 _missing = {"image": False, "video": False}
+
+
+def keep_profile() -> None:
+    """From register(): remember the Hermes home this plugin was loaded for (Hermes binds it while loading)."""
+    global HOME
+    try:
+        from hermes_constants import get_hermes_home
+        HOME = Path(get_hermes_home())
+    except Exception:  # an older Hermes, or no Hermes (tests): nothing to bind later
+        HOME = None
+
+
+def in_profile(fn, *args):
+    """Run ``fn(*args)`` with this plugin's profile keys bound, when Hermes has not bound them.
+
+    A Hermes bug, NousResearch/hermes-agent#132887: on a multiplexed gateway (``gateway.multiplex_profiles``,
+    Hermes Desktop's default) a ``ctx.llm`` call made from a plugin's own thread has no profile secret
+    scope, so Hermes refuses to read the model key ("an internal profile-scoping bug"). The bridge answers
+    on its own threads, so every studio model call failed there. Hermes's fix is #132898 (open); until it
+    ships, bind the profile here the way Hermes's own plugin host does (hermes_cli/plugin_host.py,
+    ``_build_base_context``), as other catalog plugins do (#139123). Only when multiplexing is on and no
+    scope is bound: once Hermes binds it, this does nothing. Hermes reads the keys; this module never does.
+    """
+    try:
+        from agent import secret_scope as scope
+    except ImportError:
+        return fn(*args)
+    try:
+        needed = HOME is not None and scope.is_multiplex_active() and scope.current_secret_scope() is None
+    except Exception:
+        needed = False
+    if not needed:
+        return fn(*args)
+
+    def bound():
+        try:
+            from hermes_constants import set_hermes_home_override
+            set_hermes_home_override(HOME)
+        except ImportError:
+            pass
+        scope.set_secret_scope(scope.build_profile_secret_scope(HOME), profile_home=str(HOME))
+        return fn(*args)
+    return contextvars.copy_context().run(bound)
 
 
 def url() -> str:
@@ -363,7 +408,7 @@ class _Handler(BaseHTTPRequestHandler):
         if key == CHAT:
             return self._chat(body)
         try:
-            self._send(200, route(body))
+            self._send(200, in_profile(route, body))
         except Exception as exc:  # a tool that raises comes back as an error, never a crash
             self._send(200, {"ok": False, "error": str(exc)[:300]})
 
@@ -374,7 +419,7 @@ class _Handler(BaseHTTPRequestHandler):
         except ValueError:
             timeout = None
         try:
-            done = chat(body, timeout)
+            done = in_profile(chat, body, timeout)
         except Exception as exc:  # the provider's own error, as Hermes reports it
             msg = str(exc)[:500]
             code = 429 if re.search(r"\b429\b|rate.?limit", msg, re.I) else 503 if re.search(r"\b50[23]\b|overloaded|capacity", msg, re.I) else 502
