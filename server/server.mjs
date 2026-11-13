@@ -3688,8 +3688,8 @@ const server = createServer((req, res) => {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     const fail = err => reply(400, { error: String(err.message || err) })
     if (req.method === 'GET') {
-      // map: the plan as diagrams for the app build wall (spec 44); 404 when the run kept no plan
-      if (sub === 'map') return void apps().then(a => { const m = a.map(id); return m ? reply(200, m) : reply(404, { error: 'no plan kept for this app' }) }).catch(fail)
+      // map: the plan as diagrams for the app build wall (spec 44); null when the run kept no plan, which is not an error
+      if (sub === 'map') return void apps().then(a => reply(200, a.map(id))).catch(fail)
       // the app's state carries its project's name, for the app build wall's breadcrumb (spec 44)
       apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : { ...a.state(id), name: nameFor(id)?.name || null })).catch(fail)
       return

@@ -37,7 +37,7 @@ async function post<T>(path: string, body: unknown = {}): Promise<T> {
 
 export const serverAppSource: AppSource = {
   state: run => get(`${base(run)}/app`),
-  map: run => get<AppMap>(`${base(run)}/app/map`).catch((e: { status?: number }) => { if (e.status === 404) return null; throw e }),
+  map: run => get<AppMap | null>(`${base(run)}/app/map`),
   events: run => get(`${base(run)}/events`),
   // a Windows server lists src\pages\x.tsx: one way of writing a path everywhere (it reads either)
   files: run => get<{ files: { path: string, size: number }[] }>(`${base(run)}/app/files`).then(r => ({ files: r.files.map(f => ({ ...f, path: f.path.replace(/\\/g, '/') })) })),

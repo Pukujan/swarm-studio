@@ -48,7 +48,7 @@ Dyad is a local AI app builder (dyad/README.md:3). Swarm vendors its agent engin
   - Either server stops after 2 minutes with no viewer and no build (the App view's heartbeat, `POST /api/runs/<id>/app/seen`; Settings › Background), and at most 2 run, the least recently viewed stopped first (engine/lifecycle.mjs `previewPool`). A stop kills the whole process tree (`stopTree`, tree-kill). Opening it again serves it cold, with the App view's skeleton while it starts.
   - Unchecked: a real `vite build` of a Nitro app here; the Nitro start command and `.output/` come from Dyad's code, not from a run.
 - What Swarm keeps for the app build wall (spec 44):
-  - The plan an app was built from (the advisor's, or a locked App kit's through `kitPlan`), without its keys, as `runs/<id>/app-plan.json` (`start`, engine/appjob.mjs). `GET /api/runs/<id>/app/map` gives it as Mermaid text, a flowchart of the screens and an ER diagram of the data (engine/appmap.mjs).
+  - The plan an app was built from (the advisor's, or a locked App kit's through `kitPlan`), without its keys, as `runs/<id>/app-plan.json` (`start`, engine/appjob.mjs). `GET /api/runs/<id>/app/map` gives it as Mermaid text, a flowchart of the screens and an ER diagram of the data (engine/appmap.mjs), or `null` when the run kept no plan.
   - One photo of the built app, `runs/<id>/img/app.jpg`, taken once it is served built (`photo`, engine/appjob.mjs), with the play test's browser (engine/playtest.mjs `launch`: Playwright's, an installed Chrome or a shell already there; never a download). Dyad's own `view_render` keeps no picture: it attaches its JPEG to the model's message only (dyad/src/pro/main/ipc/handlers/local_agent/tools/view_render.ts:97-113).
 
 ## What the person connects
