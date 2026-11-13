@@ -1,4 +1,4 @@
-// Idle shutdown and clean process handling (issue #439): the rules with fake time (engine/lifecycle.mjs), the app
+// Idle shutdown and clean process handling (decision 0017, issue #450): the rules with fake time (engine/lifecycle.mjs), the app
 // servers' pool with real processes standing in for dev servers (engine/appjob.mjs), and a real tree-kill: a child
 // that started a grandchild is stopped with it, on whatever OS this runs (CI runs it on Linux, macOS and Windows).
 import { test } from 'node:test'

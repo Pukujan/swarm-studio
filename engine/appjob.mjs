@@ -217,7 +217,7 @@ export const isQuestion = text => QUESTION.test(String(text || '').trim())
 export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v === 'object' && Number.isFinite(Number(v.usd)) ? { usd: Number(v.usd), ...(typeof v.video === 'string' && /^[\w.\/:@+-]{1,160}$/.test(v.video) ? { video: v.video } : {}) } : null)
 
 // idleMs, maxApps: Settings › Background (numbers, or functions read each time): an app's server stops after idleMs
-// with no viewer and no build, and at most maxApps run at once (issue #439)
+// with no viewer and no build, and at most maxApps run at once (decision 0017, issue #450)
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null, idleMs = 120000, maxApps = 2, sweepEvery = 15000, now = Date.now }) {
   const jobs = new Map() // run id -> job
   // Each app's server (spec 44, "the dev server only while building"): the dev server runs while the crew builds

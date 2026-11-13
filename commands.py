@@ -126,7 +126,7 @@ def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
             except ValueError:
                 raise RuntimeError(str(exc)) from None
         except (urllib.error.URLError, ConnectionError):
-            # the server stopped after its idle time just as this was asked (issue #439): start it, ask once more
+            # the server stopped after its idle time just as this was asked (decision 0017, issue #450): start it, ask once more
             if again or not launcher.ensure_server().get("running"):
                 raise
     raise RuntimeError("the canvas server is not running")

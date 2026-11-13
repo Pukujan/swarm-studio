@@ -1,4 +1,4 @@
-"""A command asked just as the server stopped after its idle time (issue #439): commands._api starts it again and
+"""A command asked just as the server stopped after its idle time (decision 0017, issue #450): commands._api starts it again and
 asks once more, so the person never sees the gap."""
 import email.message
 import io

@@ -1,4 +1,4 @@
-// When the studio's background work stops by itself (issue #439). Three small rules, each with its clock passed in
+// When the studio's background work stops by itself (decision 0017, issue #450). Three small rules, each with its clock passed in
 // so tests drive them with fake time:
 // - idleWatch: something busy-or-not, checked every `every` ms; once it has been idle for `ms`, onIdle runs once
 //   (the server exits after 20 min with no pane, build, render or job);

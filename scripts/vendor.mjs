@@ -30,7 +30,7 @@ export const VENDORED = [
   }
 ]
 
-// The server's own libraries, bundled for Node (issue #439): execa starts the studio's child processes and
+// The server's own libraries, bundled for Node (decision 0017, issue #450): execa starts the studio's child processes and
 // tree-kill stops each one with all of its children, on every OS. scripts/vendor/procs/ pins every package.
 export const NODE_VENDORED = [
   {

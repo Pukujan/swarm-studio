@@ -6,7 +6,7 @@
 // Layer 1: You, Setup, Lite mode, Background, Data. You is the Feed account and its "Goes to" line. Setup opens the
 // Setup sheet on its Parts (web/setup-parts.js: every model, tool, connector, key and program a build
 // uses, its state and its fix; Crew and Publish moved there). Lite mode is the pick and what it does.
-// Background is when the studio's background work stops by itself (issue #439). Data is where data goes.
+// Background is when the studio's background work stops by itself (decision 0017, issue #450). Data is where data goes.
 import { ic } from './icons.js'
 
 const DATA = [

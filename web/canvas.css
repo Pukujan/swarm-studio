@@ -663,7 +663,7 @@ body.cosmos .ah-feed { padding-bottom: 56px; }
 .app-empty[hidden] { display: none; }
 .app-empty h2 { margin: 0; color: var(--text); font-size: 20px; }
 .app-empty p { margin: 0; max-width: 520px; line-height: 1.5; }
-/* an app starting again, cold (issue #439): a page's shape, busy (Hermia works on it, web/pet.js PET_BUSY) */
+/* an app starting again, cold (decision 0017, issue #450): a page's shape, busy (Hermia works on it, web/pet.js PET_BUSY) */
 .app-skel { width: min(560px, 80%); display: grid; gap: 12px; }
 .app-skel i { display: block; border-radius: 6px; background: var(--surface-2); animation: app-skel 1.6s ease-in-out infinite alternate; }
 .app-skel .bar { height: 14px; width: 40%; }

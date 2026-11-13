@@ -657,7 +657,7 @@ export function videoTools(dataDir, onStage = () => {}) {
   })().catch(err => { tools = null; throw err }))
 }
 
-// One render at a time across every film (issue #439): HyperFrames drives a headless Chrome and ffmpeg per render,
+// One render at a time across every film (decision 0017, issue #450): HyperFrames drives a headless Chrome and ffmpeg per render,
 // so a second film waits its turn, told as onProgress(0, 'queued').
 export const renders = serialQueue(1)
 export function render(opts) {

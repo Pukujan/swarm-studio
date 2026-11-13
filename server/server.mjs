@@ -149,7 +149,7 @@ const picksFile = join(dataDir, 'models.json')
 let picks = {}
 try { picks = JSON.parse(readFileSync(picksFile, 'utf8')) } catch {}
 const modelFor = role => (picks[role] === 'off' ? '' : viaHermes(role) ? roleModel(role, picks[role]) : picks[role] || models[role].model)
-// Settings › Background (issue #439): when an app's server stops with nobody looking (minutes) and when this
+// Settings › Background (decision 0017, issue #450): when an app's server stops with nobody looking (minutes) and when this
 // server exits with nothing to do (minutes, 0 never). SWARM_APP_IDLE_MIN / SWARM_SERVER_IDLE_MIN win over the pick.
 const STOP_PICKS = { app: [1, 2, 5, 15], server: [10, 20, 60, 0] }
 const envMin = k => (process.env[k] !== undefined && process.env[k] !== '' && Number.isFinite(Number(process.env[k])) ? Number(process.env[k]) : null)
@@ -4067,7 +4067,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, shutdown)
 
 // Nothing to do for Settings › Background's time (20 min): no pane open (an /events stream), no request, no
 // build, Auto run, film, publish or app build. The server exits; the launcher's ensure_server() starts it again
-// on next use (issue #439).
+// on next use (decision 0017, issue #450).
 function serverBusy() {
   if (clients.size > 0) return true
   if ((current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working') return true
