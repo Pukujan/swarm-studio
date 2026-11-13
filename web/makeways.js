@@ -1,36 +1,52 @@
 // @ts-check
-// How each kind is made (docs/specs/37-studio-first.md, "How each kind is made"; docs/ux/SITEMAP.md 5c): the
-// ways Make offers for a kind, each to a different place and named by where it goes. Never two to one screen.
-// A kind left with one way has no menu: Make goes straight there.
-//   studio  the kind's Studio, opened on `step` (a scaffold section, web/nav.js STEPS); a game's is its Plan board
-//   now     Build now: the talk's brief, then Build. It needs the words; a Brand or a Deck is made in the Studio only
-// The brand sheet is not a way of its own: the Studio's Brand step opens it.
+// The ways to make something (docs/specs/42-ways-to-make.md): which of the five ways Make offers for a kind,
+// each by its plain name, never two to one screen. A kind left with one way has no menu: Make goes straight there.
+//   now       Just build: the brief in the Design deck's chat, then Build
+//   guided    Guided: the questions the prompt left open, then the brief (a game: its Plan board's talk)
+//   takes     Three takes: a Studio project on its Takes section, three looks to use one of or mix
+//   scaffold  Scaffold: a Studio project with only its Plan step (the kind's structure, bare)
+//   studio    Studio: a Studio project with every step, on the step path
+// Just build, Guided and Three takes need the words; a game's Guided asks in its talk, so it does not.
 
-/** @typedef {{ k: 'studio' | 'now', icon: string, label: string, step?: string }} MakeWay */
+/** @typedef {'now' | 'guided' | 'takes' | 'scaffold' | 'studio'} MakeMode */
+/** @typedef {{ k: MakeMode, icon: string, label: string, words: boolean, steps?: string[], step?: string }} MakeWay */
 
-/** @type {MakeWay} */
-const MAKE_NOW = { k: 'now', icon: 'zap', label: 'Build now' }
-/** @type {(label: string, step: string) => MakeWay} */
-const makeStudio = (label, step) => ({ k: 'studio', icon: 'grid', label: `Studio · ${label}`, step })
+/** @type {Record<MakeMode, MakeWay>} */
+const MAKE_MODE = {
+  now: { k: 'now', icon: 'zap', label: 'Just build', words: true },
+  guided: { k: 'guided', icon: 'msg', label: 'Guided', words: true },
+  takes: { k: 'takes', icon: 'remix', label: 'Three takes', words: true },
+  scaffold: { k: 'scaffold', icon: 'frame', label: 'Scaffold', words: false, steps: ['plan'], step: 'plan' },
+  studio: { k: 'studio', icon: 'grid', label: 'Studio', words: false }
+}
 
-/** @type {Record<string, MakeWay[]>} */
-export const MAKE_WAYS = {
-  // every page reads the brand, so a website starts there
-  site: [makeStudio('Brand', 'brand'), MAKE_NOW],
-  // an app starts from its screens (the kit's first start)
-  app: [makeStudio('Screens', 'plan'), MAKE_NOW],
-  // a game's look and parts are decided on its Plan board
-  game: [{ k: 'studio', icon: 'grid', label: 'Plan board' }, MAKE_NOW],
-  // a film starts from its storyboard (docs/specs/40-video-kit.md)
-  video: [makeStudio('Storyboard', 'plan'), MAKE_NOW],
-  // a deck starts from what it says, its outline; the brand dresses it later
-  deck: [makeStudio('Outline', 'plan')],
-  // a brand on its own is its Brand step
-  brand: [makeStudio('Brand', 'brand')]
+/** @type {Record<string, MakeMode[]>} */
+export const MAKE_KINDS = {
+  site: ['now', 'guided', 'takes', 'scaffold', 'studio'],
+  app: ['now', 'guided', 'takes', 'scaffold', 'studio'],
+  video: ['now', 'guided', 'takes', 'scaffold', 'studio'],
+  // a deck is built from its Studio's Lock, and has no questions of its own yet
+  deck: ['takes', 'scaffold', 'studio'],
+  // a brand is not built (its Lock is the end) and has no Plan step
+  brand: ['takes', 'studio'],
+  // a game's scaffold and studio are its Plan board, which its Guided talk opens
+  game: ['now', 'guided']
 }
 
 /** the ways Make offers for a kind, with or without words in the box
  * @param {string} kind
  * @param {boolean} words
  * @returns {MakeWay[]} */
-export const makeWays = (kind, words) => (MAKE_WAYS[kind] || MAKE_WAYS.site).filter(w => w.k !== 'now' || words)
+export function makeWays(kind, words) {
+  const ways = (MAKE_KINDS[kind] || MAKE_KINDS.site).map(k => MAKE_MODE[k])
+  return ways.filter(w => words || !w.words || (kind === 'game' && w.k === 'guided'))
+}
+
+/** where a kind's Studio opens: a website and a brand on their Brand step, the rest on their own structure
+ * @param {string} kind */
+export const makeStudioStep = kind => (kind === 'site' || kind === 'brand' ? 'brand' : 'plan')
+
+/** a way remembered before spec 42 ('studio' was the only other) still pre-selects
+ * @param {string | null} k
+ * @returns {MakeMode | null} */
+export const makeModeOf = k => (k && k in MAKE_MODE ? /** @type {MakeMode} */ (k) : null)

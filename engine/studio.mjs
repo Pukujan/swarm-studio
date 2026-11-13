@@ -1,6 +1,8 @@
 // The Studio (docs/specs/37-studio-first.md): a project's studio record and its one brand.
 //
-//   projects/<pid>/studio.json   { v, kind, idea, depth, chat, steps, start, kit, proposal, locked }
+//   projects/<pid>/studio.json   { v, kind, idea, mode, depth, chat, steps, start, kit, proposal, locked }
+//   (mode: how it was begun, docs/specs/42-ways-to-make.md: studio, scaffold or takes; steps: the ones shown,
+//   a removed step is not there)
 //   (kit: the kind's kit's own working state, plain JSON it keeps between visits, e.g. a site's pages)
 //   projects/<pid>/brand.json    the brand sheet (spec 31's shape), one per project
 //
@@ -12,6 +14,7 @@ const PID = /^[\w-]{1,64}$/
 export const STEPS = ['brand', 'references', 'assets', 'plan']
 export const STEP_STATES = ['empty', 'started', 'done', 'skipped']
 export const DEPTHS = ['light', 'thorough']
+export const MODES = ['studio', 'scaffold', 'takes']
 export const STUDIO_KINDS = ['site', 'app', 'game', 'video', 'deck', 'brand']
 
 const readJson = f => { try { return JSON.parse(readFileSync(f, 'utf8')) } catch { return null } }
@@ -19,11 +22,11 @@ const writeJson = (f, v) => { const tmp = `${f}.tmp`; writeFileSync(tmp, JSON.st
 const bad = (msg, status = 400) => Object.assign(new Error(msg), { status })
 
 // a new record: every step empty, the planner's start the first step the kind shows
-export function newStudio({ kind = 'site', idea = '', depth = 'light', chat = null, steps = STEPS, start = null } = {}) {
+export function newStudio({ kind = 'site', idea = '', mode = 'studio', depth = 'light', chat = null, steps = STEPS, start = null } = {}) {
   const k = STUDIO_KINDS.includes(kind) ? kind : 'site'
   const shown = STEPS.filter(s => steps.includes(s))
   return {
-    v: 1, kind: k, idea: String(idea || '').trim().slice(0, 4000), depth: DEPTHS.includes(depth) ? depth : 'light', chat,
+    v: 1, kind: k, idea: String(idea || '').trim().slice(0, 4000), mode: MODES.includes(mode) ? mode : 'studio', depth: DEPTHS.includes(depth) ? depth : 'light', chat,
     steps: Object.fromEntries(shown.map(s => [s, 'empty'])), start: shown.includes(start) ? start : shown[0] || null,
     kit: {}, proposal: null, locked: null, made: Date.now()
   }
@@ -53,9 +56,15 @@ export function studioStore({ projectsDir }) {
     writeJson(at(pid, 'studio.json'), s)
     return s
   }
+  // removed takes a step off the record; empty puts a removed one back, in its place
   const step = (pid, name, state) => update(pid, s => {
+    if (state === 'empty' && STEPS.includes(name) && !(name in s.steps)) {
+      s.steps = Object.fromEntries(STEPS.filter(x => x in s.steps || x === name).map(x => [x, x === name ? 'empty' : s.steps[x]]))
+      return
+    }
     if (!(name in s.steps)) throw bad('no such step')
-    if (!STEP_STATES.includes(state)) throw bad('empty, started, done or skipped')
+    if (state === 'removed') { delete s.steps[name]; if (s.start === name) s.start = Object.keys(s.steps)[0] || null; return }
+    if (!STEP_STATES.includes(state)) throw bad('empty, started, done, skipped or removed')
     s.steps[name] = state
   })
   // the kit's own state: fields merged in (null drops one), at most 20 kB of JSON
@@ -67,6 +76,7 @@ export function studioStore({ projectsDir }) {
     s.kit = next
   })
   const depth = (pid, d) => update(pid, s => { if (!DEPTHS.includes(d)) throw bad('light or thorough'); s.depth = d })
+  const mode = (pid, m) => update(pid, s => { if (!MODES.includes(m)) throw bad('studio, scaffold or takes'); s.mode = m })
 
   // the project's one brand, in the brand sheet's routes' store shape: get(id) -> { id, brand }, update(id, fn)
   const brands = {
@@ -82,7 +92,7 @@ export function studioStore({ projectsDir }) {
       return Promise.resolve(rec)
     }
   }
-  return { get, make, update, step, depth, kit, brands }
+  return { get, make, update, step, depth, mode, kit, brands }
 }
 
 // The brand a kit reads: the project's first, then the chat's (spec 31, a talk with no project yet)
