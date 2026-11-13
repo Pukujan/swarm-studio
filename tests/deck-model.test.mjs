@@ -76,3 +76,27 @@ test('Replay types each finished section back in, in time order, and cuts long g
   const at = schedule([{ type: 'a', t: 0 }, { type: 'b', t: 1000 }, { type: 'c', t: 61000 }])
   assert.deepEqual(at, [0, 1000, 2500])
 })
+
+test('Publish and Export are the build\'s own: its saved events bring back the live link, never a stale "publishing"', async () => {
+  const { liveUrl, doneSections } = await import('../ui/src/screens/deck/model.ts')
+  const old = Date.now() - 60_000
+  const saved = [...deckEvents('done'),
+    { type: 'publish:start', run: RUN, t: old, target: 'github' },
+    { type: 'publish:stage', run: RUN, t: old, target: 'github', stage: 'push' },
+    { type: 'publish:done', run: RUN, t: old, target: 'local', url: 'http://127.0.0.1:4319/site/x/' },
+    { type: 'publish:done', run: RUN, t: old, target: 'github', url: 'https://me.github.io/alpha-tea/' },
+    { type: 'publish:done', run: RUN, t: old, target: 'local', url: 'http://127.0.0.1:4319/site/y/' },
+    { type: 'export', run: RUN, t: old, pages: 3, sections: 8, dir: '/tmp/x', zip: '/tmp/x.zip' }]
+  const m = fold(saved, RUN)
+  assert.equal(m.publish.state, 'done')
+  // a public link wins over this computer's, whatever came last
+  assert.equal(liveUrl(m), 'https://me.github.io/alpha-tea/')
+  assert.deepEqual(m.exported, { pages: 3, sections: 8, dir: '/tmp/x', zip: true })
+  assert.equal(doneSections(m).length, 8)
+  // a step happening now shows; the same step from a saved build does not
+  const now = apply(m, { type: 'publish:stage', run: RUN, t: Date.now(), target: 'vercel', stage: 'upload' })
+  assert.equal(now.publish.state, 'working')
+  assert.equal(now.publish.stage, 'upload')
+  assert.equal(fold([...deckEvents('done'), { type: 'publish:start', run: RUN, t: old, target: 'github' }], RUN).publish.state, 'none')
+  assert.equal(apply(now, { type: 'publish:failed', run: RUN, t: Date.now(), target: 'vercel', message: 'no token' }).publish.message, 'no token')
+})
