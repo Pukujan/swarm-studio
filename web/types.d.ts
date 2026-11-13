@@ -11,6 +11,8 @@ declare global {
     swarmCosmos: any
     /** web/kits.js */
     swarmKits: any
+    /** web/pet.js: Hermia's cursor; pet.on(kind, data) from any screen */
+    swarmPet: any
     /** web/data.js: the debug dump */
     swarmState: () => object
     /** classic scripts: web/ui.js, web/crew.js, web/chatter.js, web/show.js, web/setup.js */
