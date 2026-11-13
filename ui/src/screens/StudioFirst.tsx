@@ -17,6 +17,7 @@ import { useNav, useNavMachine } from '../nav/NavProvider'
 import { useTrail } from '../shell/Trail'
 import { KitCard } from './studio/KitCard'
 import { StepPath } from './studio/StepPath'
+import './studio/brand-step.css'
 import { StudioBoard } from './studio/StudioBoard'
 import { StudioInspector } from './studio/StudioInspector'
 import { STEP_NAME, TAKES, lookOf, useStudio, walkOf, type Pack } from './studio/useStudio'
@@ -30,7 +31,8 @@ export function StudioFirst() {
   const nav = useNavMachine()
   const pid = view.room === 'studio' ? view.project : null
   const S = useStudio(pid)
-  const { d, error, takes, sel, select, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick } = S
+  const { fail, reload } = S
+  const { d, error, takes, moods, sel, select, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick } = S
   const root = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const pickTo = useRef<'ref' | 'asset'>('ref')
@@ -73,11 +75,15 @@ export function StudioFirst() {
       const spec = { idea: idea || c.studio.idea, brand: d.brand, refs: d.refs.map(r => r.id), assets: d.assets.map(a => a.id), kits: { [kit.kind]: kit.lock?.(c) || {} } }
       const out = await kit.build(spec, c)
       if (out?.run) location.assign(`${window.SWARM?.base || ''}/?project=${encodeURIComponent(d.project.id)}&version=${encodeURIComponent(out.run)}&room=deck`)
-    } catch (err) { S.fail(err) } finally { setBuilding(false) }
-  }, [d, kit, building, ctx, S])
+    } catch (err) { fail(err) } finally { setBuilding(false) }
+  }, [d, kit, building, ctx, fail])
 
   // the top bar: Projects › the project's name, and Build
-  const build = useMemo(() => (kit.build ? <Button role="primary" isDisabled={building || !d} onPress={() => void runBuild()}>Build</Button> : undefined), [kit.build, building, d, runBuild])
+  // the button changes only when its look does (a new element each render would redraw the top bar each render)
+  const runRef = useRef(runBuild)
+  runRef.current = runBuild
+  const ready = !!d
+  const build = useMemo(() => (kit.build ? <Button role="primary" isDisabled={building || !ready} onPress={() => void runRef.current()}>Build</Button> : undefined), [kit.build, building, ready])
   useTrail(d?.project.title || d?.project.name, build)
 
   // ---------- the chat: the talk on the project's chat, started once per project; its first words are the idea
@@ -90,13 +96,14 @@ export function StudioFirst() {
     if (!d) return []
     const st = kit.prepare ? null : (kit.starts.find(s => s.id === (kit.suggest?.(ctx()) || d.studio.start)) || kit.starts[0])
     const text = !d.studio.idea ? 'What are you making?' : st ? (st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`) : ''
-    return text ? [{ id: `start:${d.project.id}`, at: 1, who: 'hermia', text }] : []
+    // it follows the idea the talk starts with (its turns are stamped as the chat draws them, just after this)
+    return text ? [{ id: `start:${d.project.id}`, at: Date.now() + 1000, who: 'hermia', text }] : []
   }, [d?.project.id, !!d?.studio.idea]) // the start line, once per project
   const heard = useCallback((text: string) => {
     if (!pid || d?.studio.idea) return
     fetch(`${window.SWARM?.base || ''}/api/studio/${encodeURIComponent(pid)}/idea`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': window.SWARM?.token ?? '' }, body: JSON.stringify({ idea: text }) })
-      .then(() => S.reload()).catch(S.fail)
-  }, [pid, d?.studio.idea, S])
+      .then(() => reload()).catch(fail)
+  }, [pid, d?.studio.idea, reload, fail])
 
   // the step named in the address is in view (the planner's start when none is named), once the board is drawn
   const framed = useRef<string | null>(null)
@@ -117,6 +124,7 @@ export function StudioFirst() {
     const x = cards.get(key)
     if (x?.press) return x.press(ctx())
     if (key === 'brand:open') return void go({ type: 'brand' })
+    if (key.startsWith('mood:')) return void actions.pickMood(key.slice(5)).catch(S.fail)
     if (key === 'ref:add' || key === 'asset:add') { pickTo.current = key === 'ref:add' ? 'ref' : 'asset'; return picker.current?.click() }
     select(key)
   }, [cards, ctx, go, select])
@@ -154,6 +162,24 @@ export function StudioFirst() {
       <div className="sc-type" style={{ background: L.bg, color: L.text }}><b style={{ fontFamily: `'${L.heading}'` }}>Aa</b><span style={{ fontFamily: `'${L.body}'` }}>{L.heading} · {L.body}</span></div>
       <em>{b.lockedAt ? 'Locked' : 'Open'}</em></>)
   }
+  // the Brand step (decision 0015): choices first, the three options to pick a mood from; then the moodboard, and
+  // the story, colours, type and voice that follow from it; the sheet itself for the detail
+  const brandStep = () => {
+    if (!d?.studio.idea) return brandCard()
+    if (!moods) return <>{Array.from({ length: TAKES }, (_, i) => <div key={i} className="ab sc-take wait-in" aria-busy="true" aria-label="An option on its way" />)}{brandCard()}</>
+    const b = moods.brand, picked = (moods.packs || []).find(p => p.slug === b?.pack), L = lookOf(b ?? null)
+    const photos = (b?.pictures?.photos || picked?.pictures?.photos || []).slice(0, 6)
+    const voice = b?.voice?.lines?.[0] || picked?.voice?.lines?.[0]
+    return <>
+      <div className="sc-moods basis-full"><span className="al">Mood · pick one</span><div className="abs">{(moods.packs || []).slice(0, TAKES).map(p => moodCard(p, p.slug === b?.pack))}</div></div>
+      {photos.length > 0 && card('brand:board', 'Moodboard', 'sc-moodboard', <><div className="sc-mb">{photos.map(x => <img key={x.url} src={x.url} alt="" draggable={false} loading="lazy" />)}</div><em>Moodboard</em></>)}
+      {b?.story?.what && card('brand:story', 'Story', 'pcard', <><b>Story</b><span>{b.story.what}</span></>)}
+      {L && card('brand:colours', 'Colours', 'pcard sc-colours', <><b>Colours</b><div className="br-sw">{(['bg', 'text', 'accent', 'link'] as const).map(k => <i key={k} style={{ background: L[k] }} />)}</div></>)}
+      {L && card('brand:type', 'Type', 'pcard', <><b>Type</b><span style={{ fontFamily: `'${L.heading}'` }}>Aa <i style={{ fontFamily: `'${L.body}'` }}>Aa</i></span></>)}
+      {voice && card('brand:voice', 'Voice', 'pcard', <><b>Voice</b><span>{voice}</span></>)}
+      {brandCard()}
+    </>
+  }
   const takeCard = (p: Pack) => card(`take:${p.slug}`, p.name, 'sc-take', <>
     <div className="sc-take-page" style={{ background: p.palette.bg, color: p.palette.text }}>
       {p.pictures?.photos?.[0]?.url && <img src={p.pictures.photos[0].url} alt="" draggable={false} loading="lazy" />}
@@ -161,6 +187,13 @@ export function StudioFirst() {
       <span style={{ fontFamily: `'${p.type.body}'` }}>{p.voice?.lines?.[0] || p.for}</span><i style={{ background: p.palette.accent }} />
     </div>
     <div className="br-sw">{(['bg', 'text', 'accent', 'link'] as const).map(k => <i key={k} style={{ background: p.palette[k] }} />)}</div><em>{p.name}</em></>)
+  const moodCard = (p: Pack, on: boolean) => card(`mood:${p.slug}`, p.name, `sc-take${on ? ' on' : ''}`, <>
+    <div className="sc-take-page" style={{ background: p.palette.bg, color: p.palette.text }}>
+      {p.pictures?.photos?.[0]?.url && <img src={p.pictures.photos[0].url} alt="" draggable={false} loading="lazy" />}
+      <b style={{ fontFamily: `'${p.type.heading}'` }}>{p.name}</b>
+      <span style={{ fontFamily: `'${p.type.body}'` }}>{p.why || p.voice?.lines?.[0] || p.for}</span><i style={{ background: p.palette.accent }} />
+    </div>
+    <em>{on ? `${p.name} · picked` : p.name}</em></>)
   const kitLook = (x: KitCardDef) => `${x.cls || (x.add ? 'sc-add' : 'pcard')}${x.wide ? ' sc-wide' : ''}`
   const sec = (step: string, inner: React.ReactNode, cls = '') => <section key={step} className={`pj-sec sc-step ${cls}`} data-sec={step}>{head(step)}<div className="abs">{inner}</div></section>
 
@@ -171,7 +204,7 @@ export function StudioFirst() {
       {takes.packs.length ? takes.packs.map(takeCard) : Array.from({ length: TAKES }, (_, i) => <div key={i} className="ab sc-take wait-in" aria-busy="true" />)}
     </div></section>}
     {walk.map(step => {
-      if (step === 'brand') return sec('brand', brandCard())
+      if (step === 'brand') return sec('brand', brandStep())
       if (step === 'references') return sec('references', <>{d.refs.map(r => thumb('ref', r))}{add('ref:add', 'Add reference')}</>)
       if (step === 'assets') return sec('assets', <>{d.assets.map(a => thumb('asset', a))}{add('asset:add', 'Add asset')}</>)
       if (step === 'plan' && kit.plan) return sec('plan', planSections.flatMap(s => s.cards).map(x => card(x.key, x.name, kitLook(x), x.render ? null : <b>{x.name}</b>, x)), `sc-plan-${kit.kind}`)
@@ -202,7 +235,6 @@ export function StudioFirst() {
 
   const x = sel ? cards.get(sel) : undefined
   const pack = sel?.startsWith('take:') ? takes?.packs.find(p => `take:${p.slug}` === sel) : undefined
-  const fail = S.fail
   const insp = !!(d && sel && (x || pack || /^(step|ref|asset|lock):/.test(sel)))
 
   return (
