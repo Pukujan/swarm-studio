@@ -79,7 +79,7 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   // Make opens its menu at once (spec 37): the last way picked for the kind, else the words, pre-select
   // Studio or Build now; a vague idea or one about the look leans Studio
   assert.match(home, /const pick = modeOf\(make\.k\) \|\| \(text && !studioFits\(text\) \? 'now' : 'studio'\)/)
-  assert.match(home, /label: 'Studio'[\s\S]*label: 'Build now'/)
+  assert.match(home, /const ways = makeWays\(make\.k, !!text\)/)
   // an answer typed in your own words is checked before it becomes brief text (Next and Just build)
   assert.equal((home.match(/if \(await answerTalks\(v, q\)\) return/g) || []).length, 2)
   // the brief step has Keep talking beside Build

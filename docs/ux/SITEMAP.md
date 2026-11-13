@@ -192,12 +192,22 @@ flowchart LR
 
 ## 5c. The Studio's scaffold (spec 37)
 
-**Studio first** on Make, for a kind with a kit (Website, Brand), opens a Studio project here. Nothing builds
-before the person presses **Build**.
+**Make** opens a Studio project here for every kind with a kit, on the kind's own first step. Nothing builds
+before the person presses **Build**. Make's menu lists only ways that go to different places, each named by
+where it goes; a kind with one way has no menu (`web/makeways.js`, spec 37 "How each kind is made"):
+
+| Kind | Make's ways (no words in the box: the first only, no menu) |
+|---|---|
+| Website | Studio · Brand → the scaffold on Brand · Build now → the talk's brief |
+| App | Studio · Screens → the scaffold on Plan · Build now |
+| Game | Plan board → the game's talk and Plan board · Build now |
+| Video | Studio · Storyboard → the scaffold on Plan · Build now |
+| Deck | Studio · Outline → the scaffold on Plan (no menu) |
+| Brand | Studio · Brand → the scaffold on Brand (no menu) |
 
 ```mermaid
 flowchart LR
-  MK["Make › Studio first"] --> SC["Projects › name · Build"]
+  MK["Make › Studio · step"] --> SC["Projects › name · Build"]
   CH["Left chat: Start with X, and why"] --- SC
   SC --> BR["Brand: the brand card → Projects › name › Brand → Lock → back"]
   SC --> RF["References: add, drop; Use as given, Remove"]
@@ -220,8 +230,8 @@ flowchart LR
   ASK --> SC["💡 Starting prompts for the kind, then its showcases"]
   ASK --> GR["Guided prompt: only the unanswered questions → The brief (editable) → Build or Keep talking"]
   ASK --> TK["Don't build yet, talk first, a question → Design deck chat: Hermia talks, nothing built → Build → The brief → Build or Keep talking"]
-  ASK --> TU["Studio first? → Studio first (Light, Thorough) or Build now; three Build now stops asking"]
-  ASK --> KM["Kind menu: Website, App, Game, Video, Brand, Pictures ›, Studio first after three Build now"]
+  ASK --> TU["Make: the kind's ways, each named by where it goes (5c); one way goes straight there"]
+  ASK --> KM["Kind menu: Website, App, Game, Video, Brand, Deck, Pictures ›"]
   KM --> KMP["Pictures: Painted, Stock photos, Drawn (the Setup pick; not for Game)"]
   PROJ --> BD[Boards]
   PROJ --> MO[Mood boards]

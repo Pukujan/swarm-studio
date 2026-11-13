@@ -125,7 +125,11 @@ test('a Studio address goes round: room, project and step', () => {
 test('Make offers the ways to begin in one menu; an empty Studio asks for the idea in its chat', () => {
   const src = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
   const home = src('web/home.js'), scaffold = src('web/scaffold.js'), studio = src('server/studio.mjs')
-  for (const name of ["label: 'Studio'", "label: 'Brand sheet'", "label: 'Build now'"]) assert.ok(home.includes(name), name)
+  // the menu is the kind's ways (web/makeways.js); one way goes straight there; the Studio opens on the way's step
+  assert.match(home, /const ways = makeWays\(make\.k, !!text\)\s+if \(ways\.length === 1\) return begin\(ways\[0\], text\)/)
+  assert.match(home, /return studioFirst\(text, way\.step\)/)
+  assert.match(home, /return C\.studio\(j\.project\.id, step\)/)
+  assert.doesNotMatch(home, /label: 'Brand sheet'/)
   assert.doesNotMatch(home, /Studio first\?/)
   assert.match(scaffold, /What are you making\?/)
   assert.match(studio, /'New project'/)
