@@ -1229,6 +1229,18 @@ export function makeProject({ sw, C, root }) {
     pickLayer(row.dataset.key)
     if (narrow()) sheet(false)
   }, true)
+  // the tree's keys (web/layers.js) pick here too: Enter, or ↑ ↓ to the next section, goes the same way as a click
+  layersEl.addEventListener('keydown', e => {
+    const at = e.target.closest('.ly[data-key], .pg-title[data-page]')
+    if (!at || e.target.closest('input') || !['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
+    e.preventDefault(); e.stopPropagation()
+    const rows = [...layersEl.querySelectorAll('.pg.open .ly[data-key]')], i = rows.indexOf(at)
+    const to = e.key === 'Enter' ? at : at.matches('.ly') ? rows[i + (e.key === 'ArrowDown' ? 1 : -1)] : null
+    if (!to) return
+    const key = to.dataset.key, page = to.dataset.page
+    to.click()
+    layersEl.querySelector(key ? `.ly[data-key="${CSS.escape(key)}"]` : `.pg-title[data-page="${CSS.escape(page)}"]`)?.focus({ preventScroll: true })
+  }, true)
   const search = $('.pj-search'), sInput = search.querySelector('input')
   $('.pj-find').onclick = () => { search.hidden = !search.hidden; if (!search.hidden) sInput.focus(); else { P.q = ''; sInput.value = ''; render() } }
   sInput.oninput = () => { P.q = sInput.value.trim(); renderList(); renderStage() }

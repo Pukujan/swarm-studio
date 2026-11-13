@@ -220,10 +220,8 @@ export function makeScaffold({ sw, C, root }) {
   // where a card is on screen, for a chip dragged into the chat (web/layerlink.js draws its line)
   sw.studioRect = key => {
     if (!A.on || root.hidden) return false
-    const el = cardEl(key)
-    if (!el) return null
-    const r = el.getBoundingClientRect(), s = bd.stage.getBoundingClientRect()
-    return r.right < s.left || r.left > s.right || r.bottom < s.top || r.top > s.bottom ? null : { left: r.left, top: r.top, width: r.width, height: r.height }
+    const r = cardEl(key)?.getBoundingClientRect()
+    return r ? { left: r.left, top: r.top, width: r.width, height: r.height } : null
   }
 
   // ---------- the inspector: the selected card's own controls
