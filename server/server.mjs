@@ -23,6 +23,7 @@ import { extendBase, followUp, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
+import { lintSection } from '../engine/lint/index.mjs'
 import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixText, markLine } from '../engine/marks.mjs'
 import { handChanges, keepHand } from '../engine/handedit.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
@@ -882,6 +883,10 @@ async function reviewNow(id, input) {
   // overlaps the canvas measured at desktop and phone width: no model needed to see them
   const measured = (Array.isArray(input.measured) ? input.measured : []).filter(m => m && keys.has(m.section) && m.problem).slice(0, 6)
     .map(m => ({ section: m.section, problem: clip(m.problem, 160), fix: clip(m.fix, 220), measured: true }))
+  // what the slop linter (engine/lint) still finds after each builder's own fix pass: the worst in each
+  // section, handed on like the measured overlaps (the rest of a section's findings are P1 advice)
+  const linted = sections.flatMap(s => lintSection(s.html).filter(f => f.severity === 'P0').slice(0, 1)
+    .map(f => ({ section: s.key, problem: clip(f.message, 160), fix: clip(f.fix, 220), lint: f.id })))
   // the same page at phone width, for a second look
   const phone = input.mobile && /^data:image\/(jpeg|png|webp);base64,/.test(String(input.mobile.image || '')) && Array.isArray(input.mobile.sections)
     ? { image: String(input.mobile.image), sections: input.mobile.sections.filter(s => s && keys.has(s.key)).map(s => ({ key: s.key, role: String(s.role || s.key), top: Math.round(s.top) || 0, height: Math.round(s.height) || 0 })) }
@@ -923,7 +928,7 @@ async function reviewNow(id, input) {
     const real = i => !(BLANK.test(i.problem) && words(i.section) > 80)
     const seen = [...result.issues, ...(phone?.result?.issues || []).map(i => ({ ...i, problem: `On phones: ${i.problem}` }))]
     const dropped = seen.filter(i => !real(i)).length
-    const all = [...measured, ...seen.filter(real)]
+    const all = [...measured, ...seen.filter(real), ...linted]
     const bySection = new Map()
     for (const i of all) {
       const had = bySection.get(i.section)
@@ -932,7 +937,7 @@ async function reviewNow(id, input) {
     }
     const issues = [...bySection.values()].slice(0, 4)
     const verdict = phone?.result ? `${result.verdict} On phones: ${phone.result.verdict}` : result.verdict
-    send('review:done', { page: input.page, model: result.model, verdict, issues, ms: result.ms, measured: measured.length, phone: !!phone?.result, phoneError: phone?.error, dropped })
+    send('review:done', { page: input.page, model: result.model, verdict, issues, ms: result.ms, measured: measured.length, linted: linted.length, phone: !!phone?.result, phoneError: phone?.error, dropped })
     // each issue goes to a builder, in parallel; the agents are the run's own
     const agents = start.agents || []
     issues.forEach((issue, i) => {

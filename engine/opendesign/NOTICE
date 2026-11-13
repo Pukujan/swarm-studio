@@ -42,3 +42,8 @@ Changes made for Swarm Studio (scripts/import-od-decks.mjs):
   card, pill and divider rules from assets/base.css, rescaled to a fixed 1920 x 1080 slide. The present
   mode script, the layouts and the PDF route are ours; html-ppt's runtime.js, animations, presenter
   window and templates are not used.
+
+----
+
+The slop linter (engine/lint/artifact.mjs) is ported from Open Design's apps/daemon/src/lint-artifact.ts
+(commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582), Apache-2.0; its notice and licence are in engine/lint/.
