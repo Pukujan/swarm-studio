@@ -14,6 +14,19 @@ export interface DeckLayer {
 }
 export interface DeckAgent { id: string, name: string, layer: string | null, tool: ToolId, idle: boolean }
 export interface DeckTheme { name?: string, vars: Record<string, string>, fonts?: { heading?: string, body?: string }, radius?: string }
+export type Host = 'github' | 'vercel' | 'cloudflare' | 'local'
+// Publish (web/canvas/publish.js publishEvent): the steps while it goes, why it failed, or each host's live link
+export interface DeckPublish {
+  state: 'none' | 'working' | 'failed' | 'done'
+  target: Host | null
+  stage: string
+  message: string
+  live: Partial<Record<Host, string>>
+  liveTarget: Host | null
+  pending: boolean
+}
+// the last Export (the `export` event): where it went and what it holds
+export interface DeckExport { pages: number, sections: number, dir: string, zip: boolean }
 
 export interface DeckModel {
   run: string | null
@@ -25,6 +38,8 @@ export interface DeckModel {
   order: string[]
   agents: DeckAgent[]
   theme: DeckTheme | null
+  publish: DeckPublish
+  exported: DeckExport | null
   planned: number
   done: number
   failed: number
@@ -41,11 +56,16 @@ export interface DeckEvent {
 }
 
 export const key = (page: string, id: string) => `${page}/${id}`
+export const NO_PUBLISH: DeckPublish = { state: 'none', target: null, stage: '', message: '', live: {}, liveTarget: null, pending: false }
+const HOSTS: Host[] = ['github', 'vercel', 'cloudflare', 'local']
+const hostOf = (v: unknown, or: Host | null): Host | null => (HOSTS.includes(v as Host) ? v as Host : or)
+// a publish step older than this is history (a saved build reopened), not a publish going on now
+const FRESH_MS = 8000
 // a section on every page (the nav, the footer) has page '*'
 export const belongs = (page: string, l: DeckLayer) => l.page === '*' || l.page === page
 
 export function empty(run: string | null = null): DeckModel {
-  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
+  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
 }
 
 // What a stream is "doing" right now, read off its tail (web/canvas/deck.js detectTool).
@@ -206,10 +226,43 @@ export function apply(m: DeckModel, e: DeckEvent): DeckModel {
       }
       return n
     }
+    case 'publish:start':
+    case 'publish:stage': {
+      if (typeof e.t === 'number' && Date.now() - e.t > FRESH_MS) return m
+      const n = draft(m)
+      n.publish = { ...m.publish, state: 'working', stage: str(e.stage) || 'export', target: hostOf(e.target, m.publish.target), message: '' }
+      return n
+    }
+    case 'publish:failed': {
+      const n = draft(m)
+      n.publish = { ...m.publish, state: 'failed', message: str(e.message), target: hostOf(e.target, m.publish.target) }
+      return n
+    }
+    case 'publish:done': {
+      const target = hostOf(e.target, null), url = str(e.url)
+      if (!target || !url) return m
+      const n = draft(m)
+      const live = { ...m.publish.live, [target]: url }
+      // a public link wins over this computer's
+      const liveTarget = target !== 'local' || !m.publish.liveTarget || m.publish.liveTarget === 'local' ? target : m.publish.liveTarget
+      n.publish = { ...m.publish, state: 'done', target, live, liveTarget, pending: !!e.pending, message: '' }
+      return n
+    }
+    case 'export': {
+      const n = draft(m)
+      n.exported = { pages: num(e.pages), sections: num(e.sections), dir: str(e.dir), zip: !!e.zip }
+      return n
+    }
     default:
       return m
   }
 }
+
+// the build's live link: the newest public one, else this computer's
+export const liveUrl = (m: DeckModel) => (m.publish.liveTarget ? m.publish.live[m.publish.liveTarget] ?? '' : '')
+
+// the finished sections, as Publish and Export send them (the crew's HTML; the server cleans and builds)
+export const doneSections = (m: DeckModel) => m.order.map(k => m.layers[k]).filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, html: l.text }))
 
 export function fold(events: DeckEvent[], run: string | null = null): DeckModel {
   let m = empty(run)
