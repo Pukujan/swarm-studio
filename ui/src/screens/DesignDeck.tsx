@@ -10,11 +10,15 @@ import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
 import { DeckStage, type StageHandle } from './deck/DeckStage'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
+import { ExportDialog } from './deck/ExportDialog'
+import { Player } from './deck/Player'
+import { PublishDialog } from './deck/PublishDialog'
 import { useDeckRun } from './deck/source'
 
 export function DesignDeck() {
-  const { view } = useNav()
-  const { model, loading, error } = useDeckRun(view.run ?? view.version)
+  const { view, go } = useNav()
+  // ☰ → Replay (the machine's `replay`): the saved build plays again, and ends on the finished build
+  const { model, loading, error } = useDeckRun(view.run ?? view.version, view.replay, useCallback(() => go({ type: 'replay', on: false }), [go]))
   const stage = useRef<StageHandle>(null)
   const [zoom, setZoom] = useState(1)
   // the page Layers lists: the one the person picked, else the address's page, else the first
@@ -25,8 +29,12 @@ export function DesignDeck() {
   // below 768 px Layers is a sheet behind its button
   const [sheet, setSheet] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
-  useEffect(() => { setPicked(null); setFollow(true) }, [model.run])
+  const [dialog, setDialog] = useState<'publish' | 'export' | null>(null)
+  useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
   const working = model.state === 'planning' || model.state === 'building'
+  const play = () => go({ type: 'play', page: page ?? undefined, pages: model.pages.length })
+  const canPlay = !loading && model.pages.some(p => model.order.some(k => model.layers[k].text && (model.layers[k].page === p.id || model.layers[k].page === '*')))
+  const replay = { on: view.replay, can: !loading && (view.replay || model.state === 'done'), toggle: () => go({ type: 'replay', on: !view.replay }) }
 
   const studio = <LinkButton role="secondary" href={`/${search(view, location.search)}`}>Open in the Studio</LinkButton>
   if (error) {
@@ -46,6 +54,7 @@ export function DesignDeck() {
           <Button role="secondary" aria-expanded={sheet} aria-controls="deck-layers-panel" onPress={() => setSheet(s => !s)} className="md:hidden">
             <Icon name="layers" size={16} />Layers
           </Button>
+          <Button role="primary" isDisabled={!canPlay} onPress={play} className="md:hidden"><Icon name="play" size={16} />Play</Button>
           {working && !loading && (
             <Button role="secondary" aria-pressed={follow} onPress={() => setFollow(f => !f)} className={follow ? 'outline-1 outline-frame-hi' : 'text-muted'}>
               <Icon name="users" size={16} />Follow
@@ -64,7 +73,11 @@ export function DesignDeck() {
             : <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
-      <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} />
+      <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
+        onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} />
+      {view.player !== 'closed' && model.pages.length > 0 && <Player model={model} />}
+      {model.run && <PublishDialog model={model} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
+      {model.run && <ExportDialog model={model} isOpen={dialog === 'export'} onOpenChange={o => setDialog(o ? 'export' : null)} />}
     </div>
   )
 }

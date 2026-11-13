@@ -48,7 +48,7 @@ const SCREENS = [
   { id: 'app', crumb: trail('Shift Log', 'App'), address: s => `?version=${s.ids.app}&room=app`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.app}&room=app`, { waitUntil: 'commit' }), ready: 'body.view-app #appview' },
   { id: 'game', crumb: trail('Lantern Run', 'Game'), address: s => `?version=${s.ids.game}&room=game`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.game}&room=game`, { waitUntil: 'commit' }), ready: 'body.view-app' },
   { id: 'film', crumb: trail('River Hours', 'Film'), address: s => `?version=${s.ids.film}&room=video`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.film}&room=video`, { waitUntil: 'commit' }), ready: 'body.view-video' },
-  { id: 'studio', crumb: trail('Cedar Cafe', 'Studio'), address: s => `?room=studio&project=${s.scaffold}&step=brand`, go: (p, s) => p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`, { waitUntil: 'commit' }), ready: '.ab[data-key="brand:open"]' },
+  { id: 'studio', crumb: trail('Cedar Cafe', 'Studio'), address: s => `?room=studio&project=${s.scaffold}&step=brand`, go: (p, s) => p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`, { waitUntil: 'commit' }), ready: '.ab[data-key="brand:open"]', nextReady: '.ab[data-key="brand:open"]' },
   { id: 'plan', crumb: trail('New game', 'Plan'), address: () => '?room=plan',
     pre: async (p, s) => { await p.goto(s.BASE + '/'); await p.locator('.home .card').first().waitFor() },
     go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) }), ready: 'body.cosmos-plan .pl-crumb',

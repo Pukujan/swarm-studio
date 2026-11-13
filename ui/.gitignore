@@ -1,2 +1,4 @@
 node_modules
 storybook-static
+# built by CI on every branch and committed only on a release branch (docs/decisions/0018-next-ui-build-on-release.md)
+dist

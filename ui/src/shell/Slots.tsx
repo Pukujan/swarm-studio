@@ -1,30 +1,25 @@
-// What a screen puts in the frame's top bar (RULES.md rule 27: the breadcrumb on the left, the one primary button on
-// the right): the build's name in the breadcrumb, a menu beside it (▾), and the primary button. A screen calls
-// useTopBar({ … }) and the top bar draws it; it is cleared when the screen goes. Screens that have not moved set
-// nothing, and the breadcrumb names only the room.
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+// What a screen puts in the frame's top bar, as the Plan board and the brand sheet say it: the build's name in the
+// breadcrumb, a menu beside it (▾), and the one primary button (RULES.md rule 27). It is the frame's one trail
+// (Trail.tsx) under these names, so every screen reaches the same top bar; it is cleared when the screen goes.
+import type { ReactNode } from 'react'
+import { useTrail, useTrailShown } from './Trail'
 
 export interface TopBarParts {
   build?: string | null
-  // the build's name goes back to its level (RULES.md rule 7: each crumb goes to its level), e.g. the brand sheet's
-  // project to its Studio
+  // the build's name goes back to its level, e.g. the brand sheet's project to its Studio
   onBuild?: () => void
   menu?: ReactNode
   primary?: ReactNode
 }
 
-const Ctx = createContext<{ parts: TopBarParts, set: (p: TopBarParts) => void }>({ parts: {}, set: () => {} })
+// the frame (App.tsx) holds the trail; this stays for stories that draw a top bar of their own
+export { TrailProvider as TopBarSlots } from './Trail'
 
-export function TopBarSlots({ children }: { children: ReactNode }) {
-  const [parts, set] = useState<TopBarParts>({})
-  return <Ctx value={{ parts, set }}>{children}</Ctx>
+export function useTopBarParts(): TopBarParts {
+  const { name, menu, action, onName } = useTrailShown()
+  return { build: name, onBuild: onName, menu, primary: action }
 }
 
-export const useTopBarParts = () => useContext(Ctx).parts
-
-export function useTopBar(parts: TopBarParts) {
-  const { set } = useContext(Ctx)
-  const { build, onBuild, menu, primary } = parts
-  useEffect(() => { set({ build, onBuild, menu, primary }) }, [set, build, onBuild, menu, primary])
-  useEffect(() => () => set({}), [set])
+export function useTopBar({ build, onBuild, menu, primary }: TopBarParts) {
+  useTrail(build ?? undefined, primary, menu, onBuild)
 }

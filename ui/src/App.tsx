@@ -5,8 +5,8 @@ import { useNav, useNavMachine } from './nav/NavProvider'
 import { PetProvider } from './pet/Pet'
 import { NotMovedYet } from './screens/NotMovedYet'
 import { SCREENS } from './screens'
-import { TopBarSlots } from './shell/Slots'
 import { TopBar } from './shell/TopBar'
+import { TrailProvider } from './shell/Trail'
 
 export function App() {
   const { view, go, can } = useNav()
@@ -29,12 +29,12 @@ export function App() {
   const Screen = SCREENS[view.room] ?? NotMovedYet
   return (
     <PetProvider nav={nav}>
-      <TopBarSlots>
-        <div className="min-h-dvh bg-bg text-text">
+      <TrailProvider>
+        <div className="flex min-h-dvh flex-col bg-bg text-text">
           <TopBar />
-          <main><Screen /></main>
+          <main className="flex min-h-0 flex-1 flex-col"><Screen /></main>
         </div>
-      </TopBarSlots>
+      </TrailProvider>
     </PetProvider>
   )
 }

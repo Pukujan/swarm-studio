@@ -1,5 +1,5 @@
-// Hermia's cursor in the next UI (docs/specs/41-pet-cursor.md): the current Studio's own pet (web/pet.js), started
-// once beside the machine, and the one way a screen tells her something is slow. Every port uses these:
+// Hermia's cursor in the next UI (docs/specs/41-pet-cursor.md): the current Studio's own pet (web/pet.js), the one
+// src/legacy/ starts for the page (startPet), and the one way a screen tells her something is slow. Every port uses these:
 //
 //   usePet()                      the pet, or null (Storybook, tests: no cursor, nothing breaks)
 //   useWorking(ref, busy)         while busy, she works on ref's element and it is aria-busy
@@ -7,7 +7,7 @@
 //
 // She also finds skeletons on screen herself (PET_BUSY: .wait-in, [aria-busy="true"]), as in the current Studio.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { makePet, type Pet, type PetKind, type PetData } from '@studio/pet'
+import { startPet, type Pet, type PetKind, type PetData } from '../legacy'
 // the crew's marks (window.SwarmCrew), which draw her avatar
 import '@studio/crew'
 import type { Nav } from '../nav/nav'
@@ -17,11 +17,8 @@ const PetContext = createContext<Pet | null>(null)
 // `nav` is the running machine (NavProvider's); she follows its screens and steps
 export function PetProvider({ nav, children }: { nav: Nav, children: ReactNode }) {
   const [pet, setPet] = useState<Pet | null>(null)
-  useEffect(() => {
-    const p = makePet({ sw: null, C: { nav } })
-    setPet(p)
-    return () => { p.el.remove() }
-  }, [nav])
+  // one for the page: the Studio scaffold's screen may have started her already, and she has no stop of her own
+  useEffect(() => { setPet(startPet(nav)) }, [nav])
   return <PetContext value={pet}>{children}</PetContext>
 }
 
