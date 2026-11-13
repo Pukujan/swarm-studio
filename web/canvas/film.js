@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the promo video and the film's outside services.
 import { S, api, ico, store, els, commandOps } from './core.js'
 import { viewing, openRun, claimed } from './replay.js'
@@ -25,7 +26,8 @@ export function runNow() {
 }
 // Show a build. In the studio the machine is told and the canvas follows it: a build the person just
 // started is `started` (it stays in the room it was started from), any other opens its project.
-export function showRun(id, { started = false, room } = {}) {
+/** @param {any} id @param {{ started?: boolean, room?: any }} [opts] */
+export function showRun(id,{ started = false, room } = {}) {
   const studio = window.swarmCosmos
   if (!studio?.nav) return openRun(id)
   if (!started) return studio.open(id)
@@ -239,6 +241,7 @@ export function bigScreen(on) {
   const small = video.el?.querySelector('video')
   if (small) { v.currentTime = small.currentTime; small.pause() }
   v.play().catch(() => { v.muted = true; v.play().catch(() => {}) })
+  // @ts-ignore
   wrap.querySelector('.vbclose').onclick = () => bigScreen(false)
   wrap.requestFullscreen?.().catch(() => {}) // the pane may not allow it; filling the pane is the fallback
   const esc_ = e => { if (e.key === 'Escape' && !document.fullscreenElement) { bigScreen(false); removeEventListener('keydown', esc_) } }

@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api } from './core.js'
@@ -134,6 +135,7 @@ export function frameLoop(now) {
     els.exportBtn.disabled = !S.done || exp.busy
     paintReplay()
     const pubbing = pub.run === shownRun() && pub.state === 'working'
+    // @ts-ignore
     const deploying = appv.deploying && appv.run === shownRun()
     els.publishBtn.disabled = (!S.done && !pubbing) || deploying
     setLabel(els.publishBtn, pubbing || deploying ? 'Publishing…' : liveUrl() ? 'Live' : 'Publish')
@@ -227,8 +229,11 @@ els.viewport.addEventListener('wheel', e => {
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !els.player.hidden) return tour.on ? stopTour() : closePlayer()
   if (e.key === 'Escape' && S.sel) { S.sel = null; design.last = ''; return }
+  // @ts-ignore
   if (e.key === 'v' && !els.player.hidden && !e.target.closest('input, select, textarea')) return watchVisitor()
+  // @ts-ignore
   if (e.key === 'm' && !els.player.hidden && !e.target.closest('input, select, textarea')) return setMotion()
+  // @ts-ignore
   if (e.target.closest('input, select, textarea')) return
   if (e.metaKey || e.ctrlKey || e.altKey) return
   // the Design panel belongs to the Canvas room; a project has its own Layers inspector
@@ -286,6 +291,7 @@ export async function runSlash(text) {
       const style = VIDEO_STYLES.some(([k]) => k === first?.toLowerCase()) ? first.toLowerCase() : null
       return makeVideo({ style, idea: (style ? more.join(' ') : arg).trim() || null })
     }
+    // @ts-ignore
     case 'app': if (!needRun()) return; return arg ? appAsk(arg) : appv.hasApp || appv.state === 'working' ? setView('app') : (setView('app'), buildApp())
     case 'game': return openGame(arg)
     case 'cast': return openCastOnly()
@@ -354,6 +360,7 @@ export function pickSlash(c) {
   els.brief.focus()
   if (!takes) els.form.requestSubmit()
 }
+// @ts-ignore
 slashPop.addEventListener('mousedown', e => { const d = e.target.closest('[data-c]'); if (d) { e.preventDefault(); pickSlash(d.dataset.c) } })
 els.brief.addEventListener('input', () => { slashAt = 0; renderSlash() })
 els.brief.addEventListener('blur', () => setTimeout(() => (slashPop.hidden = true), 150))
@@ -393,6 +400,7 @@ export async function sendDock() {
   // while Hermia is answering, the words wait in the box
   if (talk.on) { skip(); if (talk.busy) return; els.brief.value = ''; talkSay(brief); return }
   // a big game waiting after a slice: the answer goes into the next slice, from any view
+  // @ts-ignore
   if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }
   if (view === 'video' && shownRun()) { skip(); els.brief.value = ''; feed(null, `🎬 ${brief}`, 'you'); return makeVideo({ idea: brief }) }

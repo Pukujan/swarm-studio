@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): engine events drawn on the canvas.
 import { cosmosHooks, S, els, replayId } from './core.js'
 import { fresh, setTitle, navBrand, links } from './base.js'

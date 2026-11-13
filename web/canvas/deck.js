@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the Design deck: agents and their cursors, frames and layers, geometry, design gestures, the break room, wires, the camera.
 import { clean } from '../clean.js'
 import { Crew, ARROW, TOOL, els, S, cam, FRAME_W, GAP, BOOT, replayId, $, TOOLS } from './core.js'

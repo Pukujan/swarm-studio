@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): what web/studio.js, web/home.js and web/project.js may read and call (window.swarm).
 import { layerDrag } from '../layerlink.js'
 import { clean } from '../clean.js'
@@ -173,6 +174,7 @@ window.swarm = {
     talkEnd()
     return new Promise(done => {
       els.brief.value = text
+      // @ts-ignore
       setNextRoute(project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done, chat: opts.chat } : { fresh: true, done, pictures: opts.pictures, chat: opts.chat })
       if (view !== 'canvas') setView('canvas')
       els.form.requestSubmit()
