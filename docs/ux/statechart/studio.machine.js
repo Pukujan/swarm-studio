@@ -306,7 +306,29 @@ export const studioMachine = setup({
         setup: {
           description: 'Setup: once, then from the user menu (spec 6)',
           meta: { owner: 'studio', live: null, sitemap: ['6. Projects › Setup: once, then the user menu (spec 6)'] },
-          on: { up: 'browser', start: 'browser' }
+          initial: 'index',
+          states: {
+            index: {
+              description: 'The rows: Account, Models, Pictures, Parts',
+              meta: { owner: 'studio', live: null, sitemap: [] },
+              on: { up: '#projects.browser', start: '#projects.browser', parts: 'parts' }
+            },
+            parts: {
+              description: 'Parts (web/setup-parts.js): the groups by what you make, each n of m',
+              meta: { owner: 'studio', live: null, sitemap: ['6. Projects › Parts: n of m, ⚠ when one fails'] },
+              on: { up: 'index', group: 'group' }
+            },
+            group: {
+              description: 'One group: its parts, each a dot, a name and a state',
+              meta: { owner: 'studio', live: null, sitemap: ['6. Projects › Every build, Website, App, Game, Video, Brand, Deck, Publishing, Feed: n of m each'] },
+              on: { up: 'parts', part: 'part' }
+            },
+            part: {
+              description: 'One part: what it is for, what powers it, required or optional, what stops without it, its one fix',
+              meta: { owner: 'studio', live: null, sitemap: ['6. Projects › A part: a dot (working, not set up, installs on first use) or ⚠, its name and state'] },
+              on: { up: 'group' }
+            }
+          }
         },
         boards: {
           description: 'Boards you are on, Host a board',
@@ -374,29 +396,15 @@ export const studioMachine = setup({
           on: { up: 'index', 'open.launch': { guard: 'hasBuild', target: '#launchPad', actions: 'openBuild' } }
         },
         settings: {
-          description: 'Settings (iOS Settings): sound, models, connections, keys, data',
+          description: 'Settings (iOS Settings): You, Setup, Lite mode, Data',
           meta: { owner: 'studio', live: null, sitemap: ['7. Me › Settings'] },
           initial: 'index',
           states: {
             index: {
               description: 'The groups',
               meta: { owner: 'studio', live: null, sitemap: [] },
-              on: { up: '#me.index', models: 'models', connections: 'connections' }
-            },
-            models: {
-              description: 'Models, one per role',
-              meta: { owner: 'studio', live: null, sitemap: ['7. Me › Models'] },
-              on: { up: 'index', role: 'role' }
-            },
-            role: {
-              description: 'A role: pick a model, its cost and speed',
-              meta: { owner: 'studio', live: null, sitemap: ['7. Me › A role', '7. Me › Pick a model'] },
-              on: { up: 'models' }
-            },
-            connections: {
-              description: 'Connections: each a name, a state and its Goes to line',
-              meta: { owner: 'studio', live: null, sitemap: ['7. Me › Connections'] },
-              on: { up: 'index' }
+              // Settings › Setup closes Settings and opens the Setup sheet on its Parts (one sheet at a time)
+              on: { up: '#me.index', setup: '#projects.setup.parts' }
             }
           }
         }
