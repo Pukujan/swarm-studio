@@ -1,6 +1,6 @@
-// The next UI's build (docs/decisions/0013-react-ui-coexists.md). `npm run build` writes ui/dist/, which is
-// committed: the plugin's server serves it at /next/ with the script and styles inlined (server/next.mjs), so
-// installing the plugin builds nothing. File names are fixed and nothing is hashed or mapped, so the same source
+// The next UI's build (docs/decisions/0013-react-ui-coexists.md). `npm run build` writes ui/dist/, which CI builds on
+// every branch and only a release commits (docs/decisions/0018-next-ui-build-on-release.md): the plugin's server serves
+// it at /next/ with the script and styles inlined (server/next.mjs), so installing the plugin builds nothing. File names are fixed and nothing is hashed or mapped, so the same source
 // builds the same bytes (`npm run check` compares them).
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type AliasOptions } from 'vite'
