@@ -20,16 +20,16 @@ export function SheetsProvider({ children, first = true }: { children: ReactNode
   const { view } = useNav()
   const home = view.room === 'home'
 
+  // the warning in every room; the sheet itself only the first time Projects shows
   useEffect(() => {
-    if (!first || !home) return
+    if (!first) return
     let alive = true
     get<{ seen?: boolean, models?: unknown, modelsOk?: boolean | null }>('/api/setup').then(v => {
       if (!alive || !v) return
       setWarn(v.modelsOk === false)
-      if (v.models && v.seen === false) setAt(a => a ?? { sheet: 'setup', row: '' })
+      if (home && v.models && v.seen === false) setAt(a => a ?? { sheet: 'setup', row: '' })
     })
     return () => { alive = false }
-    // once, the first time Projects shows
   }, [first, home])
 
   const open = useCallback((sheet: 'setup' | 'settings', row: SetupRow = '') => setAt(sheet === 'setup' ? { sheet, row } : { sheet }), [])

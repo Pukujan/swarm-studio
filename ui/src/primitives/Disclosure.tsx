@@ -17,12 +17,12 @@ export function Disclosure({ name, state, isExpanded, onToggle, size = 'row', ch
     ? 'min-h-[52px] px-3.5 font-label text-sm font-semibold uppercase tracking-[.08em]'
     : 'min-h-11 px-2.5 font-monospace text-[13px]'
   return (
-    <AriaDisclosure isExpanded={isExpanded} onExpandedChange={onToggle} className="group">
+    <AriaDisclosure isExpanded={isExpanded} onExpandedChange={onToggle}>
       <Heading className="m-0">
         <Button slot="trigger" className={`flex w-full cursor-pointer items-center gap-2.5 text-left text-text outline-none data-[hovered]:bg-panel-2 data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-frame-hi ${head}`}>
           <span className="flex-none">{name}</span>
           <span className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">{state}</span>
-          <svg aria-hidden viewBox="0 0 24 24" className="size-4 flex-none fill-none stroke-current stroke-2 text-muted transition-transform duration-150 group-data-[expanded]:rotate-180 motion-reduce:transition-none"><path d="m6 9 6 6 6-6" /></svg>
+          <svg aria-hidden viewBox="0 0 24 24" className="size-4 flex-none fill-none stroke-current stroke-2 text-muted transition-transform duration-150 [[aria-expanded=true]>&]:rotate-180 motion-reduce:transition-none"><path d="m6 9 6 6 6-6" /></svg>
         </Button>
       </Heading>
       <DisclosurePanel className={size === 'row' ? 'flex flex-col gap-2.5 px-3.5 pt-0.5 pb-3.5' : 'flex flex-col gap-2.5 px-2.5 pb-3'}>{children}</DisclosurePanel>
