@@ -167,6 +167,18 @@ jobs:
           node-version: 24
       - run: npm ci --prefix tools/dev --no-audit --no-fund
       - run: npm run --prefix tools/dev property
+  # metamorphic relations (decision 0019 point 3, tests/metamorphic/README.md): what must hold between two builds
+  # when no output is the one right answer, checked on the crew's recorded output; the nightly workflow
+  # (metamorphic-nightly.yml) checks the same on live models
+  metamorphic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test "tests/metamorphic/*.test.mjs"
   # the next UI's stories build (ui/, its Storybook mock-ups); nothing of it is kept
   storybook:
     runs-on: ubuntu-latest

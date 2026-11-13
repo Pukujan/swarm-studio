@@ -29,6 +29,9 @@ export interface DeckPublish {
 export interface Note { who: string, you: boolean, text: string, t: number }
 // one of the Critic's issues on a section (review:issue), until the section is reworked
 export interface Issue { problem: string, agent: string | null, t: number }
+// A line of the build for the chat (web/canvas/panels.js feed): what the person asked, the crew's words, and the
+// build's own news (planned, done, stopped, failed). `who` is the shared Chat's (src/chat/types.ts ChatLine).
+export interface DeckLine { id: string, at: number, who: 'you' | 'hermia' | 'crew' | 'sys' | 'err', text: string, name?: string, layers?: string[] }
 // the last Export (the `export` event): where it went and what it holds
 export interface DeckExport { pages: number, sections: number, dir: string, zip: boolean }
 
@@ -46,6 +49,7 @@ export interface DeckModel {
   exported: DeckExport | null
   threads: Record<string, Note[]>
   issues: Record<string, Issue>
+  lines: DeckLine[]
   planned: number
   done: number
   failed: number
@@ -71,7 +75,7 @@ const FRESH_MS = 8000
 export const belongs = (page: string, l: DeckLayer) => l.page === '*' || l.page === page
 
 export function empty(run: string | null = null): DeckModel {
-  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
+  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, lines: [], planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
 }
 
 // What a stream is "doing" right now, read off its tail (web/canvas/deck.js detectTool).
@@ -110,8 +114,36 @@ function setAgent(m: DeckModel, id: string, patch: Partial<DeckAgent>) {
 
 const agentOf = (m: DeckModel, id: unknown) => m.agents.find(a => a.id === id)
 
-// Apply one event to a copy of the model. Events of another build are not this deck's.
+const LINES = 300
+// the build's line for an event, if it has one (the last 300 are kept)
+function lineOf(m: DeckModel, e: DeckEvent): DeckLine | null {
+  const at = num(e.t), id = `${e.type}:${at}:${m.lines.length}`
+  const agent = agentOf(m, e.agent)?.name
+  const where = e.page && e.layer ? [key(str(e.page), str(e.layer))] : undefined
+  switch (e.type) {
+    case 'run:start': return str(e.ask) || str(e.brief) ? { id, at, who: 'you', text: str(e.ask) || str(e.brief) } : null
+    case 'plan:done': return { id, at, who: 'sys', text: `Planned ${num(e.pages)} pages and ${num(e.layers)} sections in ${(num(e.ms) / 1000).toFixed(1)}s.` }
+    case 'agent:say': return str(e.text) ? { id, at, who: 'crew', name: agent ?? 'The crew', text: str(e.text), layers: where } : null
+    case 'comment': return str(e.text) ? { id, at, who: 'you', text: str(e.text), layers: str(e.target) ? [str(e.target)] : undefined } : null
+    case 'comment:take': return { id, at, who: 'crew', name: agent ?? 'The crew', text: str(e.reply) || `On it, reworking the ${str(e.role) || str(e.layer)}.`, layers: where }
+    case 'comment:none': return { id, at, who: 'hermia', text: 'Not sure which section that is about. Select one on the canvas and comment there.' }
+    case 'layer:failed': return str(e.keep) ? null : { id, at, who: 'err', text: `${str(e.layer)} failed: ${str(e.message) || 'no reason given'}`, layers: where }
+    case 'run:done': return { id, at, who: 'sys', text: `Done: ${num(e.done)}/${num(e.planned)} sections across ${num(e.pages)} pages in ${(num(e.ms) / 1000).toFixed(1)}s${num(e.failed) ? `, ${num(e.failed)} failed` : ''}.` }
+    case 'run:stopped': return { id, at, who: 'sys', text: 'Stopped. Everything finished is kept.' }
+    case 'error': return { id, at, who: 'err', text: `${str(e.where) || 'build'}: ${str(e.message)}` }
+    default: return null
+  }
+}
+
+// Apply one event to a copy of the model, with the build's line for it. Events of another build are not this deck's.
 export function apply(m: DeckModel, e: DeckEvent): DeckModel {
+  if (m.run && e.run && e.run !== m.run && e.type !== 'run:start' && e.type !== 'reset') return m
+  const n = step(m, e)
+  const line = lineOf(n, e)
+  return line ? { ...n, lines: [...n.lines.slice(-(LINES - 1)), line] } : n
+}
+
+function step(m: DeckModel, e: DeckEvent): DeckModel {
   if (m.run && e.run && e.run !== m.run && e.type !== 'run:start' && e.type !== 'reset') return m
   switch (e.type) {
     case 'reset':

@@ -67,7 +67,7 @@ test('every name ui/ declares for @studio/makeways is one the current Studio\'s 
 })
 
 test('every name ui/ declares for @studio/clean, @studio/icons, @studio/video and @studio/edit is one the web file exports', async () => {
-  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/legacy/studio-pet.d.ts', '../web/pet.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js'], ['ui/src/screens/deck/studio-edit.d.ts', '../web/edit/patches.js']]) {
+  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/legacy/studio-pet.d.ts', '../web/pet.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js'], ['ui/src/screens/deck/studio-edit.d.ts', '../web/edit/patches.js'], ['ui/src/screens/deck/studio-route.d.ts', '../web/route.js']]) {
     const mod = await import(file)
     const declared = [...read(dts).matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
     assert.ok(declared.length >= 1, dts)

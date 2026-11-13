@@ -157,7 +157,8 @@ for (const screen of screens) {
     // chat (decision 0015): along the bottom at every width, never on the left; only the next UI is held to it
     if (APP === 'next') {
       const dock = await page.evaluate(() => {
-        const el = [...document.querySelectorAll('[aria-label="Chat"]')].find(x => x.getClientRects().length)
+        // the chat itself, not a button that opens it (the Overview's dock has one named Chat)
+        const el = [...document.querySelectorAll('[aria-label="Chat"]:not(button, a, [role="button"])')].find(x => x.getClientRects().length)
         if (!el) return null
         const r = el.getBoundingClientRect()
         return { bottom: Math.round(innerHeight - r.bottom), left: Math.round(r.left), width: Math.round(innerWidth - r.width) }
