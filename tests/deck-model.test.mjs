@@ -100,3 +100,12 @@ test('Publish and Export are the build\'s own: its saved events bring back the l
   assert.equal(fold([...deckEvents('done'), { type: 'publish:start', run: RUN, t: old, target: 'github' }], RUN).publish.state, 'none')
   assert.equal(apply(now, { type: 'publish:failed', run: RUN, t: Date.now(), target: 'vercel', message: 'no token' }).publish.message, 'no token')
 })
+
+test('a hand edit, a fix or Undo changes a finished section without counting it twice', () => {
+  const m = fold(deckEvents('done'), RUN)
+  const k = 'home/hero'
+  const n = apply(m, { type: 'layer:done', run: RUN, t: Date.now(), page: 'home', layer: 'hero', html: '<section>by hand</section>', fixed: true, restored: true })
+  assert.equal(n.done, m.done)
+  assert.equal(n.layers[k].text, '<section>by hand</section>')
+  assert.equal(n.layers[k].ver, m.layers[k].ver + 1)
+})

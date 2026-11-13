@@ -4,11 +4,12 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import { App } from './App'
 import { makeNav } from './nav/nav'
 import { NavProvider } from './nav/NavProvider'
+import { SheetsProvider } from './screens/setup/Sheets'
 
 const meta = {
   component: App,
   parameters: { address: '' },
-  decorators: [(Story, { parameters }) => <NavProvider nav={makeNav({ search: parameters.address })}><Story /></NavProvider>]
+  decorators: [(Story, { parameters }) => <NavProvider nav={makeNav({ search: parameters.address })}><SheetsProvider first={false}><Story /></SheetsProvider></NavProvider>]
 } satisfies Meta<typeof App>
 export default meta
 type Story = StoryObj<typeof meta>

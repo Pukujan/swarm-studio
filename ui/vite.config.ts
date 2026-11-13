@@ -14,6 +14,8 @@ const repo = fileURLToPath(new URL('..', import.meta.url))
 // package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
 export const alias: AliasOptions = [
   { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
+  // Setup › Parts: the current Studio's table of parts (src/screens/setup/studio-setup-parts.d.ts types it)
+  { find: '@studio/setup-parts', replacement: fileURLToPath(new URL('../web/setup-parts.js', import.meta.url)) },
   // the Studio's kits (spec 37: web/kit-*.js, listed by web/kits.js) and Hermia's cursor (spec 41, web/pet.js), hosted
   // as they are, not rewritten (src/legacy/)
   { find: '@studio/kits', replacement: fileURLToPath(new URL('../web/kits.js', import.meta.url)) },
@@ -29,7 +31,9 @@ export const alias: AliasOptions = [
   { find: '@studio/clean', replacement: fileURLToPath(new URL('../web/clean.js', import.meta.url)) },
   // the board video rules (web/video.js): posters, preload, teardown and the page's budget of playing clips, one
   // copy for both apps (src/primitives/BoardVideo.tsx)
-  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) }
+  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) },
+  // Open Design's Edit, ported (web/edit/patches.js, decision 0010): one part of a finished section changed by hand
+  { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) }
 ]
 
 export default defineConfig({
