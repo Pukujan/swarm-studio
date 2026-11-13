@@ -1,11 +1,11 @@
-// The image-first boards' core (ui/src/board/, the architecture's §3.1–3.3 and §4): the camera store, the spatial
+// The image-first boards' core (src/board/, the architecture's §3.1–3.3 and §4): the camera store, the spatial
 // index and the tier manager, driven with a fake clock. Node runs the TypeScript files as they are (type stripping),
 // so they keep to syntax that strips.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { TierManager, PROFILES, budgetsFor, pow2 } from '../ui/src/board/tiers.ts'
-import { Spatial } from '../ui/src/board/spatial.ts'
-import { createCamera, bucketOf, SETTLE_MS } from '../ui/src/board/camera.ts'
+import { TierManager, PROFILES, budgetsFor, pow2 } from '../src/board/tiers.ts'
+import { Spatial } from '../src/board/spatial.ts'
+import { createCamera, bucketOf, SETTLE_MS } from '../src/board/camera.ts'
 
 const MB = 1024 * 1024
 // a row of pages 1440 wide, 120 apart, their photos 1440 px wide
@@ -130,7 +130,7 @@ test('the camera draws once per frame and settles after resting; React only hear
 })
 
 test('the tier manager\'s BoardHost: wishes become wants, and each plan is what tier() and onTier() report', async () => {
-  const { tierHost } = await import('../ui/src/board/tierHost.ts')
+  const { tierHost } = await import('../src/board/tierHost.ts')
   const host = tierHost()
   let asked = 0
   host.onWants(() => asked++)
