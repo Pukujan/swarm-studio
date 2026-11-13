@@ -4,20 +4,23 @@
 //
 //   focus(target): a section's name (its data-sec), a card's key, or an element, fitted with a margin, never past 1:1
 //   frameAll(): the whole board in view, beside the inspector when it is open
+//   camera: given one, every move is written to it too (src/board/camera.ts), for the tier manager
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Board } from './useStudio'
+import type { Camera } from '../../board/camera'
 
 const INSP = 272
 
-export const StudioBoard = forwardRef<Board, { inspector: boolean, fit?: [number, number], onEmptyClick?: () => void, children: ReactNode, onDropFiles?: (to: 'ref' | 'asset', files: File[]) => void }>(
-  function StudioBoard({ inspector, fit = [0.35, 1], onEmptyClick, onDropFiles, children }, ref) {
+export const StudioBoard = forwardRef<Board, { inspector: boolean, fit?: [number, number], onEmptyClick?: () => void, children: ReactNode, onDropFiles?: (to: 'ref' | 'asset', files: File[]) => void, camera?: Camera }>(
+  function StudioBoard({ inspector, fit = [0.35, 1], onEmptyClick, onDropFiles, children, camera }, ref) {
     const stage = useRef<HTMLDivElement>(null)
     const world = useRef<HTMLDivElement>(null)
     const cam = useRef({ x: 0, y: 0, k: 1 })
     const [easing, setEasing] = useState(false)
     const place = useCallback(() => {
       if (world.current) world.current.style.transform = `translate(${cam.current.x}px, ${cam.current.y}px) scale(${cam.current.k})`
-    }, [])
+      camera?.set(cam.current)
+    }, [camera])
     const apply = useCallback((animate = false) => {
       if (animate) { setEasing(true); setTimeout(() => setEasing(false), 300) }
       place()

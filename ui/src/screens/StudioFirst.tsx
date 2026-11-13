@@ -17,6 +17,9 @@ import { useTrail } from '../shell/Trail'
 import { KitCard } from './studio/KitCard'
 import { StepPath } from './studio/StepPath'
 import { StudioBoard } from './studio/StudioBoard'
+import { useCardTiers } from './studio/useCardTiers'
+import { createCamera } from '../board/camera'
+import { boardMode } from '../board/flag'
 import { StudioInspector } from './studio/StudioInspector'
 import { STEP_NAME, TAKES, lookOf, useStudio, type Pack } from './studio/useStudio'
 
@@ -32,7 +35,11 @@ export function StudioFirst() {
   const picker = useRef<HTMLInputElement>(null)
   const pickTo = useRef<'ref' | 'asset'>('ref')
   const [sheet, setSheet] = useState(false)
+  // the tier manager on the board's cards, behind ?board= (spec 43 §4)
+  const camera = useMemo(() => createCamera(), [])
+  const [tiered] = useState(() => boardMode() !== 'dom')
   const here = search(view, typeof location === 'undefined' ? '' : location.search)
+  useCardTiers(root, camera, `${tick}|${d?.refs.length}|${d?.assets.length}|${steps.join()}|${takes?.packs.length}`, tiered)
 
   // Hermia's cursor (web/pet.js), started as it is with this machine and this screen
   useEffect(() => { startPet(nav, root.current) }, [nav])
@@ -188,7 +195,7 @@ export function StudioFirst() {
         <div className="border-t border-line p-3"><LinkButton role="secondary" href={`/${here}`} className="w-full">Chat in the Studio</LinkButton></div>
       </aside>
 
-      <StudioBoard ref={board} inspector={insp} onEmptyClick={() => { if (sel) select(null) }} onDropFiles={(to, files) => void actions.upload(to, files)}>
+      <StudioBoard ref={board} camera={tiered ? camera : undefined} inspector={insp} onEmptyClick={() => { if (sel) select(null) }} onDropFiles={(to, files) => void actions.upload(to, files)}>
         <div className="col">{sections}</div>
       </StudioBoard>
 
