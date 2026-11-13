@@ -265,11 +265,12 @@ export function makeSetup({ sw }) {
   // closing it any way counts as seen: nothing here is required
   const seen = () => { if (S.view && !S.view.seen) { S.view.seen = true; api('/api/setup', { seen: true }).catch(() => {}) } }
 
-  async function open() {
-    if (dlg && !dlg.closed) return
+  // row: the row to open with (☰ → Models opens it on Models)
+  async function open(row = '') {
+    if (dlg && !dlg.closed) { if (row) { S.open = row; draw() } return }
     S.view = await api('/api/setup').catch(() => null)
     if (!S.view?.models) return
-    Object.assign(S, { open: S.view.account?.pending ? 'account' : '', hermes: null, signError: '', details: false, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '' })
+    Object.assign(S, { open: row || (S.view.account?.pending ? 'account' : ''), hermes: null, signError: '', details: false, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '' })
     dlg = window.SwarmUI.dialog({ title: 'Setup', className: 'su', body: '', footer: '<button type="button" class="ui-btn ui-btn-default su-start">Start</button>', onClose: seen })
     dlg.footer.querySelector('.su-start').onclick = () => dlg.close('start')
     S.test = S.view.test || undefined
