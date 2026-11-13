@@ -48,7 +48,12 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
       const e = err as ApiError
       // a new website asks first (docs/decisions/0020-ask-before-build.md): the question, here under the box
       const b = e.body as { error?: string, ask?: string, chat?: string | null, text?: string, options?: GoOption[] } | undefined
-      if (e.status === 409 && b?.error === 'ask') return setPop(b.ask === 'talk' || !b.chat ? { k: 'brief', text: brief, back: null } : { k: 'go', brief, chat: b.chat, text: b.text || '', options: b.options || [] })
+      if (e.status === 409 && b?.error === 'ask') {
+        if (b.chat && b.ask !== 'talk') return setPop({ k: 'go', brief, chat: b.chat, text: b.text || '', options: b.options || [] })
+        // "don't build yet": nothing builds; the words stay in the box and the talk is a new chat on the deck
+        setPop(null); setText(brief)
+        return toast(b.text || "Let's talk it through first.", { action: 'Talk', onAction: () => go({ type: 'draft' }) })
+      }
       if (e.status === 409) toast('A build is running. Yours can start when it ends.', e.body?.run ? { action: 'Watch it', onAction: () => go({ type: 'started', run: e.body.run, room: 'deck' }) } : {})
       else toast(said(err))
     }
