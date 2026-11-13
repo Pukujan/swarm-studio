@@ -256,6 +256,8 @@ test('the source: every client handles the ask before treating a 409 as busy; He
   assert.ok(loop.indexOf("j.error === 'ask'") > 0 && loop.indexOf("j.error === 'ask'") < loop.indexOf('{ busy: true'), 'loop.js: ask before busy')
   // the old UI's Make box and a project's Build need nothing more: the question's chat opens on the deck (home.js openChat)
   assert.match(loop, /openAsk\(j\.chat\)/)
+  assert.match(loop, /if \(!from\) \{ window\.swarmCosmos\?\.go\?\.\('station', 'canvas'\)/, 'a talk from the Make box opens on the deck')
+  assert.match(read('web/home.js'), /if \(!input\.value && !made\?\.ask\) input\.value = text/, 'the words leave the box once asked')
   for (const f of ['ui/src/screens/projects/MakeBox.tsx', 'ui/src/screens/deck/DeckChat.tsx']) assert.ok(read(f).includes("error === 'ask'"), f)
   const launcher = read('launcher.py'), init = read('__init__.py'), commands = read('commands.py')
   // swarm_design passes brief and agents only; sure is a script's (--build, remix)
@@ -265,4 +267,18 @@ test('the source: every client handles the ask before treating a 409 as busy; He
   assert.match(commands, /launcher\.start_run\(brief, sure=True\)/)
   assert.match(launcher, /if sure:\n\s*body\["sure"\] = True/)
   assert.match(launcher, /"op": "chat", "target": chat/)
+})
+
+test('a skipped Plan forces no pages on the Studio build (web/kit-site.js)', async () => {
+  const { siteKit } = await import('../web/kit-site.js')
+  const sent = []
+  const ctx = plan => ({ state: {}, studio: { idea: 'a tea shop', steps: { plan } }, project: { id: 'p1' }, chat: 'c1', sw: { submit: async b => { sent.push(b); return 'r1' } } })
+  assert.deepEqual(siteKit.lock(ctx('skipped')), {})
+  await siteKit.build({}, ctx('skipped'))
+  assert.equal(sent.at(-1), 'a tea shop', 'the planner picks the pages')
+  assert.deepEqual(siteKit.lock(ctx('todo')).pages, ['Home', 'About', 'Contact'])
+  await siteKit.build({}, ctx('todo'))
+  assert.match(sent.at(-1), /Pages: Home, About, Contact\.$/)
+  const picked = { ...ctx('skipped'), state: { pages: ['Menu'] } }
+  assert.deepEqual(siteKit.lock(picked).pages, ['Menu'], 'pages the person named still go')
 })
