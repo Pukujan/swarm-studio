@@ -139,3 +139,54 @@ run one after the other, three times each. The timings vary by seconds between r
 | each Overview cursor's moves a second, panning during a build | 0.3 | 10 |
 | panning at rest / during a build | 60 / 60 fps | 60 / 60 fps |
 | pictures taken while panning, during a build | 0 | 0 |
+
+## 5. The page photographs itself (image-first boards, step 4)
+
+A generated page is sandboxed with `allow-scripts` and no same-origin, so nothing outside it can read it. It has
+always photographed itself, but with html-to-image fetched from jsdelivr at run time, once per size, each answer a JPEG
+data URL that the Overview decoded and encoded again. Now:
+
+- **In the page.** `web/frame.html` answers `capture { scale, maxHeight, fit }` with one `ImageBitmap` of itself,
+  transferred, not copied. It takes it with [snapDOM](https://github.com/zumerlab/snapdom) 3.7.0 (MIT), vendored in
+  `web/vendor/snapdom/` by `scripts/vendor.mjs` (the package's own browser build, pinned by its npm integrity). The
+  library is not in every page: the first request finds none, and the next one brings its text, which the plugin's
+  own server serves. Nothing is fetched from the internet. A page is photographed at most nine widths long, as long
+  as the Overview shows it. The painters' marks and the review's scan line stay out of the picture.
+- **In a worker.** `web/capture.js` makes each size from that one bitmap with
+  `createImageBitmap(…, { resizeWidth, resizeHeight })` and `OffscreenCanvas.convertToBlob()`, as JPEGs, and closes
+  every bitmap it is given or makes. The worker is made from a Blob, so it also starts in the Desktop pane's opaque
+  origin. A document that cannot start one does the same work on its main thread.
+- **One capture, both sizes.** A page with no picture of its current version is photographed once at 0.6. The small
+  picture (0.25) and the full one come from it; the full one is kept and drawn in idle time, after the small one is
+  on screen. Only a page whose small picture is saved but not its full one is photographed for the full one alone.
+  The storage, the versions and the rules above are unchanged: idle time, nothing while the camera moves, only pages
+  in view, only a page whose version changed. `capture` can make a 1× picture too (`scales: [1]`); the Overview does
+  not store one, since its tiles never need more than the full size.
+- **Every other picture of a page** (the reviewer's whole page, Scribble's, the hosted studio's cover, a resting
+  page's frozen frame) goes through the same capture (`snapFrame` in `web/canvas/marks.js`), with the reviewer's old
+  limit: the whole page, at most 5000 px tall (3000 without a scale).
+
+### Measured
+
+`PLAYWRIGHT_DIR=tools/dev node scripts/overview-bench.mjs [--root <checkout>] --runs 3`. Medians of three runs, the
+14-page fixture, headless Chromium on a Windows laptop with other work running (2.3 GB of memory free). Before is an
+export of `main` at 1fcf587. The per-page rows open the Overview fresh for each way of taking the pictures, and time
+only pages that answered with a picture.
+
+| | before (main) | after |
+|---|---|---|
+| first picture, opened cold | 1186 ms | 1275 ms |
+| all 14 pictures, opened cold | 4318 ms | 3185 ms |
+| first picture, opened again | 942 ms | 945 ms |
+| main thread busy during a build | 44% | 25% |
+| one page, small + full as two captures | 310 ms (141 to 428) | 92 ms (22 to 141) |
+| long tasks on the main thread, those 14 pages | 2409 ms | 0 ms |
+| one page, both from one capture | — | 125 ms (77 to 241): 110 in the page, 10 in the worker |
+| long tasks on the main thread, those 14 pages | — | 52 ms |
+| panning at rest / during a build | 60 / 60 fps | 60 / 60 fps |
+
+The time a page's pictures take is a third of what it was, and the studio's main thread is free while they are
+taken: html-to-image ran in the studio's own renderer and held it for 2.4 seconds over 14 pages. On these
+fixture pages, two in-page captures (92 ms) beat one at the larger scale (125 ms): snapDOM keeps its copy of the page
+between two captures, and rasterising at 0.6 costs more than at 0.26. Which is better on the crew's real pages, with
+pictures and web fonts, is for the gauge (image-first boards step 1) to settle.

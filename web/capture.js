@@ -1,5 +1,5 @@
 // @ts-check
-// A page's picture, taken inside the page (docs/specs/36-fast-overview.md, image-first boards §3.7). A generated page
+// A page's picture, taken inside the page (docs/specs/36-overview-speed.md, image-first boards §3.7). A generated page
 // is sandboxed with allow-scripts and no same-origin, so nothing outside can read it: the frame photographs its own
 // document (web/frame.html `capture`, with snapDOM, web/vendor/snapdom/) at the largest size asked for, and posts out
 // one ImageBitmap, transferred, not copied. A worker makes every size's JPEG from it with
