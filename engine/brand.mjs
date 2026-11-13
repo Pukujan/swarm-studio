@@ -125,7 +125,8 @@ export async function brandOptions({ brief = '', chat = null } = {}) {
  "types":[{"name":"<1-2 words>","heading":"<Google Font family>","body":"<Google Font family>"}, two more],
  "packs":[{"slug":"<a pack below>","why":"<one short line: why it fits this brief>"}, one or two more]}
 The packs: ${BRAND_PACKS.map(p => `${p.slug} (${p.for})`).join('; ')}.
-Three palettes that differ from each other (light and dark grounds), three type pairings that differ. 3 to 6 pages.${named.length ? `\nThe first palette uses the colours the brief names: ${named.join(', ')}. Never a colour they say they do not want.` : ''}`
+Three palettes that differ from each other (light and dark grounds), three type pairings that differ. 3 to 6 pages.
+Each "why" is shown to the person: never use the word "pack" in it (they are options).${named.length ? `\nThe first palette uses the colours the brief names: ${named.join(', ')}. Never a colour they say they do not want.` : ''}`
     try {
       const text = String(await chat([{ role: 'system', content: sys }, { role: 'user', content: String(brief).slice(0, 4000) }]) || '')
       const j = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))

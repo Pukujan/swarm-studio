@@ -491,6 +491,12 @@ export function makePet({ sw, C, doc = document }) {
         scan()
       }
     },
+    /**
+     * A line the chat shows, so she never says it: the next UI's chat (ui/src/chat/) tells her each one, since
+     * hearChat only watches the #feed already on the page when she starts.
+     * @param {string} text
+     */
+    hear(text) { const t = norm(text); if (t) chatSaid.add(t) },
     get state() { return { dozing: P.dozing, loading: P.loading, away: el.classList.contains('away'), room: P.room, working: !!P.work } }
   }
   win.swarmPet = pet
