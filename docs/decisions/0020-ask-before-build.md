@@ -22,17 +22,36 @@ person wanted from their words, and the old Make box's **Just build** didn't car
     options, the pages) and says what it picked in one line.
   - **Step by step**: Brand → Lock → Plan, one at a time. Before each step the chat says what that step does in one
     line and recommends **Do it** or **Skip** ("i think we should have step and step").
-  - **Pick steps to skip**: the person ticks Brand, Lock, Plan.
+  - **Pick steps to skip**: Brand or Plan. *(our wording)* Lock goes with Brand: the server uses a brand only once
+    it's locked, so "do Brand, skip Lock" would throw the person's choice away. Skipping Brand skips Lock too; doing
+    Brand locks it.
+- **Only the person answers.** The question waits in the Studio chat; Hermes's model calling `swarm_design` can't
+  answer it for them (the tool says it's waiting on the person). An error while reading the prompt asks; it never
+  builds by default. "Don't build yet" still wins.
+- **The answers live in the suggestions drawer** ([0015](0015-studio-walk-and-chat.md): no row of reply buttons), and
+  a typed answer ("skip all", "step by step", "skip the plan") works the same.
 - **One path is always recommended**, from what the person said:
   - a sure prompt ("no branding, just generate", or a full brief): **Skip all, build now**;
   - a brand file, a website to read, or "help me set it up": **Step by step**;
   - anything between: **Pick steps to skip**, with the steps their words already answer ticked.
   The recommendation is the first answer and says why in a few words.
+- **References take website links the crew opens** ("references we can directly keep other websites here that our
+  agent can visit to get ideas"), and a link or picture in the chat is looked at, not refused ("I can't browse the
+  web" was "not good").
 - **Every build is its own build.** A quick build isn't rebuilt later in the person's look: doing the walk afterwards
   makes a new build beside it ("we should have different build"). There's no "Set up brand" link inside a running
   build, and "just build it" mid-walk doesn't jump ahead; the question before Build is where steps are skipped.
+- **Make has two ways** ("instead of studio and brand sheet coz studio path defaults to default path of branding
+  first make just do studio and one prompt mode or just make it?"): **Just make it** (one prompt; the question then
+  recommends Skip all) and **Studio** (the walk; the question recommends Step by step). This replaces spec 42's five
+  ways: Guided is Step by step, Scaffold is skipping Brand, Three takes is the Brand step's three options.
+- **When it asks** *(owner's OK to the defaults, 2026-11-13)*: before a new build. The next version of a build that
+  exists doesn't ask (its look and plan are already locked). A finished walk's Build doesn't ask again. Scripts say
+  so explicitly (`hermes swarm --build`, remix, resume, the evals).
+- **Which kinds:** websites first. App and Video follow with the same question; a game keeps its Plan board talk,
+  and a brand or deck is made only in the Studio.
 - **A guide shows what to press next** ("some arrow or prompt or shiny thing for what ot click and then what to
-  choose like a guide for studio"). *Proposed form, waiting on the owner:* one soft shine on the one thing to press
+  choose like a guide for studio"). Decided form: one soft shine on the one thing to press
   next: the recommended answer, then the next step's choice. It's never a tooltip and never a text bubble
   ([RULES 1](../ux/RULES.md)). It moves on once the person presses something and doesn't come back on its own.
   With reduced motion it's a still outline.
