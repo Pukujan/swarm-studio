@@ -135,8 +135,9 @@ try {
   console.log('open A, play, home, open B')
   await page.click('.home .card[aria-label="Alpha Tea"]')
   // before its picture, a page is a block per planned section: never a title card or a thin strip
-  await page.waitForSelector('.pj-stage[aria-label="Overview"] .ab.page', { timeout: 5000 }).catch(() => {})
-  const tiles = await page.evaluate(() => [...document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page')].map(a => ({ sk: a.querySelectorAll('.sk:not(.over) i').length, img: !!a.querySelector(':scope > img'), tc: !!a.querySelector('.tc'), ratio: a.offsetHeight / a.offsetWidth })))
+  // (its pages, once the board has come: until then the stage holds three loading cards, .wait-in)
+  await page.waitForSelector('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)', { timeout: 5000 }).catch(() => {})
+  const tiles = await page.evaluate(() => [...document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)')].map(a => ({ sk: a.querySelectorAll('.sk:not(.over) i').length, img: !!a.querySelector(':scope > img'), tc: !!a.querySelector('.tc'), ratio: a.offsetHeight / a.offsetWidth })))
   ok(tiles.length === 2 && tiles.every(t => (t.sk || t.img) && !t.tc && t.ratio >= 1.2), `before their pictures, pages are skeletons from the plan (${JSON.stringify(tiles)})`)
   await settle(A1)
   await shows(A1, 'Alpha Tea', 'Alpha opened')
@@ -161,7 +162,8 @@ try {
   // opened again, the pages paint from the saved files
   await home()
   await page.click('.home .card[aria-label="Alpha Tea"]')
-  await page.waitForFunction(() => document.querySelectorAll('.pj-stage .ab.page img').length >= 2, null, { timeout: 5000 }).catch(() => {})
+  // (Alpha's pages: right after the click the stage can still hold Bravo's, with Bravo's saved pictures)
+  await page.waitForFunction(run => { const ims = [...document.querySelectorAll('.pj-stage .ab.page img')]; return ims.length >= 2 && ims.every(im => !im.getAttribute('src').includes('/snaps/') || im.getAttribute('src').includes(`/snaps/${run}/`)) }, A1, { timeout: 5000 }).catch(() => {})
   const srcs = await page.evaluate(() => [...document.querySelectorAll('.pj-stage .ab.page img')].map(im => im.getAttribute('src')))
   ok(srcs.length === 2 && srcs.every(x => x.includes(`/snaps/`)), `opened again, Alpha's pages paint from their saved snapshots (${srcs.map(x => x.split('/').pop()).join(', ')})`)
   // the small picture first, the full one for when the camera comes close
