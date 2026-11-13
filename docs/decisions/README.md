@@ -28,6 +28,7 @@ one; don't edit the old one quietly.
 | [0017](0017-processes-run-only-when-needed.md) | 2026-11-13 | Processes run only when needed: Dyad 2 min, server 20 min, one render, execa + tree-kill |
 | [0018](0018-next-ui-build-on-release.md) | 2026-11-13 | The next UI's build is made by CI and committed only on a release |
 | [0019](0019-how-swarm-is-tested.md) | 2026-11-13 | How Swarm is tested: specs bound to tests, BDD runs the OpenSpec scenarios, metamorphic relations, property tests, prompt evals gate prompt changes |
+| [0020](0020-ask-before-build.md) | 2026-11-13 | Ask before every build: skip all, step by step or pick steps, with a recommended path; every build is its own |
 
 `tests/decisions.test.mjs` fails if the hosted studio, build credits or "paid per build" come back in
 `docs/brand/` or the README.
