@@ -20,7 +20,13 @@ export const alias: AliasOptions = [
 
 export default defineConfig({
   base: '/next/',
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // the page is written with \n on every machine: a Windows checkout's index.html has \r\n, and Vite's own tags
+    // go in with \n, so ui/dist/index.html would differ between a Windows build and CI's
+    { name: 'swarm:lf', transformIndexHtml: { order: 'post', handler: html => html.replace(/\r\n?/g, '\n') } }
+  ],
   resolve: { alias },
   // web/nav.js and web/tokens.css live outside ui/
   server: { fs: { allow: [repo] }, port: 5317, strictPort: true },
