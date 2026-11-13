@@ -170,14 +170,17 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
     scaffold is in `ui/` and served at `/next/` beside the current Studio, with React Aria primitives, the
     Tailwind theme from the tokens and Storybook. No screen has moved yet; [ui/README.md](../ui/README.md) is the
     recipe for one.
+  - the third and fourth, breadboards and per-screen specs: [docs/ux/breadboards/](ux/breadboards/README.md) (places,
+    presses and where each goes, by the object map's names and the statechart's events) and
+    [openspec/specs/](../openspec/project.md) (requirements and WHEN/THEN scenarios, each tagged with the audit gate
+    that tests it) for Projects, Make, the Studio, the brand sheet, the Plan board, the Overview, the Design deck,
+    Setup and Settings, and Publish; a draft for the owner to review.
 - **In review:** Playwright audit gates in CI ([docs/ux/AUDIT.md](ux/AUDIT.md)). Every top-level screen, at 1440
   and 390 wide, is checked for its breadcrumb (rule 7), axe-core violations, sideways scroll, console errors and
   a loading state. What the app breaks today is in `.ui-audit-known-violations.json`, so CI fails only on a new
   violation. AUDIT.md lists the rules not yet automated.
 - **Not started:**
-  - the other four design artifacts:
-    - breadboards;
-    - per-screen specs in OpenSpec;
+  - the other two design artifacts:
     - Storybook mock-ups (Storybook is set up in `ui/`; each moved screen adds its own);
     - an independent review;
   - feature flags with OpenFeature;
