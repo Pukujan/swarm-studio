@@ -13,7 +13,9 @@
 // A screen not moved yet (/next/ shows its name and "Open in the Studio") is skipped and said so.
 //
 //   node scripts/motion-parity.mjs run <dir> [--root <tree>] [--only a,b] [--px 24]   record both apps, compare
-//   node scripts/motion-parity.mjs compare <dir> [--px 24]                            compare what run recorded
+//   node scripts/motion-parity.mjs compare <dir> [--px 24] [--update]                 compare what run recorded
+//     A difference already known is in docs/ux/motion/parity-known.json, labelled "intended (PR #N)" or "drift"
+//     with a why; a new one fails. --update writes what was found there (new ones as "drift", to be labelled).
 //   node scripts/motion-parity.mjs clips <dir> [--root <tree>] [--only a,b]           side-by-side videos
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check; clips needs ffmpeg on PATH to put the two side by side)
 //
@@ -37,7 +39,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms))
 // the flows a person clicks through: the Make menu, the Plan board, the Publish menu, the brand sheet and its picks.
 // `act` runs at its time on the clock; the controls are found by role and name, which a port keeps.
 const FLOWS = [
-  { id: 'make', at: () => '/', ms: 3000, act: [{ t: 500, run: async p => { await p.getByRole('textbox').first().fill('A ferry timetable for an island town', { timeout: 5000 }); await p.getByRole('button', { name: 'Make', exact: true }).first().click({ timeout: 5000 }) } }] },
+  { id: 'make', at: () => '/', ms: 3000, act: [{ t: 500, run: async p => { await p.getByRole('textbox', { name: 'What should the crew build?' }).first().fill('A ferry timetable for an island town', { timeout: 5000 }); await p.getByRole('button', { name: 'Make', exact: true }).first().click({ timeout: 5000 }) } }] },
   { id: 'plan', at: () => '/?room=plan', ms: 3000 },
   { id: 'publish', at: i => `/?project=${i.site}&version=${i.site}&room=deck`, ms: 2500, act: [{ t: 1000, run: p => p.getByRole('button', { name: 'Publish' }).first().click({ timeout: 5000 }) }] },
   { id: 'brand', at: i => `/?room=studio&project=${i.scaffold}&step=brand`, ms: 4000, act: [
@@ -70,12 +72,12 @@ const LOG = `(() => {
 })()`
 const TAKE = () => (window.__parity || []).splice(0)
 const ENDLESS = () => document.getAnimations().filter(a => a.effect?.getTiming?.().iterations === Infinity).map(a => { const t = a.effect.getTiming(); return `@${a.animationName || a.transitionProperty || 'animate'} endless ${Math.round(Number(t.duration) / 10) * 10 || 0}ms ${a.effect.getKeyframes?.()[0]?.easing || t.easing}` })
-// Hermia (.pet, web/pet.js) and the crew (.cursor, web/canvas/deck.js): where each one is, by name
+// Hermia (.pet, web/pet.js) and the crew (.cursor, web/canvas/deck.js; [data-agent] in ui/src/screens/deck): where each one is, by name
 const CURSORS = () => {
   const seen = {}
-  return [...document.querySelectorAll('.pet, .cursor')].filter(el => el.getClientRects().length && getComputedStyle(el).opacity !== '0').map(el => {
+  return [...document.querySelectorAll('.pet, .cursor, [data-agent]')].filter(el => el.getClientRects().length && getComputedStyle(el).opacity !== '0').map(el => {
     const r = el.getBoundingClientRect()
-    const who = el.classList.contains('pet') ? 'Hermia' : el.querySelector('.tag span')?.textContent || 'cursor'
+    const who = el.classList.contains('pet') ? 'Hermia' : el.dataset.agent || el.querySelector('.tag span')?.textContent || 'cursor'
     seen[who] = (seen[who] || 0) + 1
     return { id: seen[who] > 1 ? `${who} ${seen[who]}` : who, x: Math.round(r.left), y: Math.round(r.top) }
   })
@@ -124,7 +126,7 @@ async function record(out, { root, app, reduced, scenes }) {
       let broke = null
       for (let t = 0; t <= sc.ms; t += every) {
         if (t) await page.clock.runFor(every)
-        for (const a of (sc.act || []).filter(a => a.t === t)) await a.run(page).catch(e => { broke ||= `at ${t} ms: ${e.message.split('\n')[0]}` })
+        for (const a of (sc.act || []).filter(a => a.t === t)) await a.run(page).catch(e => { broke ||= `in ${app === 'next' ? '/next/' : '/'} at ${t} ms: ${e.message.split('\n')[0]}` })
         await settle()
         // the stand-in for a screen not moved yet (ui/src/screens/NotMovedYet.tsx), here or after a click
         if (app === 'next' && await NOT_MOVED(page)) { trace[sc.id] = { notMoved: true }; break }
@@ -151,16 +153,16 @@ async function record(out, { root, app, reduced, scenes }) {
 const RUNS = ['current1', 'current2', 'next1', 'next2']
 const load = dir => existsSync(join(dir, 'trace.json')) ? JSON.parse(readFileSync(join(dir, 'trace.json'), 'utf8')) : {}
 const both = (x, y) => x.filter(k => y.includes(k)), either = (x, y) => [...new Set([...x, ...y])]
-const kinds = steps => [...new Set(steps.flatMap(x => x.sig))].sort()
-const moves = k => !/ 0ms /.test(k) && !/ endless /.test(k)
+// a kind that takes no time (a 0 ms transition) moves nothing: left out
+const kinds = steps => [...new Set(steps.flatMap(x => x.sig))].filter(k => !/ 0ms x/.test(k)).sort()
 
-// one screen, one pair of recordings per app: what differs in both runs
-function diff(id, [c1, c2, n1, n2]) {
+// one screen, one pair of recordings per app: what differs in both runs, each with a key that stays the same
+// from run to run (docs/ux/motion/parity-known.json) and what was seen
+function diff(name, [c1, c2, n1, n2]) {
   const out = []
   const [a1, a2, b1, b2] = [c1, c2, n1, n2].map(r => kinds(r.steps))
-  const lost = both(a1, a2).filter(k => !either(b1, b2).includes(k)), gained = both(b1, b2).filter(k => !either(a1, a2).includes(k))
-  if (lost.length) out.push(`only in /:      ${lost.join('\n                  ')}`)
-  if (gained.length) out.push(`only in /next/: ${gained.join('\n                  ')}`)
+  for (const k of both(a1, a2).filter(k => !either(b1, b2).includes(k))) out.push({ key: `${name} only in /: ${k}`, detail: '' })
+  for (const k of both(b1, b2).filter(k => !either(a1, a2).includes(k))) out.push({ key: `${name} only in /next/: ${k}`, detail: '' })
   // the cursors, step by step: the nearest of the four pairings, so a difference holds in both runs
   const far = {}
   const steps = Math.min(...[c1, c2, n1, n2].map(r => r.steps.length))
@@ -175,44 +177,55 @@ function diff(id, [c1, c2, n1, n2]) {
     }
   }
   for (const [who, f] of Object.entries(far)) {
-    out.push(!f.a ? `cursor ${who}: only in /next/ (first seen at ${f.t} ms, ${f.b.x},${f.b.y})`
-      : !f.b ? `cursor ${who}: only in / (at ${f.t} ms, ${f.a.x},${f.a.y})`
-      : `cursor ${who}: ${Math.round(f.d)} px apart at ${f.t} ms (/ ${f.a.x},${f.a.y}; /next/ ${f.b.x},${f.b.y})`)
+    out.push(!f.a ? { key: `${name} cursor ${who}: only in /next/`, detail: `first at ${f.t} ms, ${f.b.x},${f.b.y}` }
+      : !f.b ? { key: `${name} cursor ${who}: only in /`, detail: `at ${f.t} ms, ${f.a.x},${f.a.y}` }
+      : { key: `${name} cursor ${who}: apart`, detail: `${Math.round(f.d)} px at ${f.t} ms (/ ${f.a.x},${f.a.y}; /next/ ${f.b.x},${f.b.y})` })
   }
   return out
 }
 
-function compare(dir) {
-  const fails = [], report = []
+// differences already known, each labelled "intended (PR #N)" or "drift" with a why, like the audit gates'
+// known list: a new one fails, a known one that no longer happens is printed to delete
+const KNOWN = join(ROOT, 'docs/ux/motion/parity-known.json')
+const known = () => existsSync(KNOWN) ? JSON.parse(readFileSync(KNOWN, 'utf8')) : []
+
+function compare(dir, { update = false } = {}) {
+  const found = [], report = []
   for (const mode of ['', '-reduced']) {
     const T = RUNS.map(r => load(join(dir, r + mode)))
     for (const id of Object.keys(T[2])) {
-      const name = `${id}${mode ? ' (reduced motion)' : ''}`
+      const name = `${id}${mode ? ' reduced' : ''}`
       if (T[2][id].notMoved || T[3][id]?.notMoved) { if (!mode) report.push(`- ${id}: not moved yet, skipped`); continue }
       const runs = T.map(t => t[id])
-      if (runs.some(r => !r?.steps?.length)) { fails.push(`${name}: not recorded in every run`); continue }
+      if (runs.some(r => !r?.steps?.length)) { found.push({ key: `${name}: not recorded in every run`, detail: '' }); continue }
+      const d = diff(name, runs)
       const broke = runs.map(r => r.broke).filter(Boolean)
-      if (broke.length) fails.push(`${name}: the flow broke ${broke[0]}`)
-      const d = diff(id, runs)
-      // with reduced motion asked for, nothing moved to the next UI may move
+      if (broke.length) d.push({ key: `${name}: the flow broke`, detail: broke[0] })
+      // with reduced motion asked for, nothing moved to the next UI may move that / keeps still
       if (mode) {
-        const still = both(kinds(runs[2].steps), kinds(runs[3].steps)).filter(k => k.startsWith('page') && moves(k))
         const before = either(kinds(runs[0].steps), kinds(runs[1].steps))
-        const own = still.filter(k => !before.includes(k))
-        if (own.length) d.push(`moves although reduced motion is asked for: ${own.join(', ')}`)
-        const old = both(kinds(runs[0].steps), kinds(runs[1].steps)).filter(k => k.startsWith('page') && moves(k))
-        if (old.length) console.log(`  ${id}: / itself moves with reduced motion: ${old.join(', ')}`)
+        for (const k of both(kinds(runs[2].steps), kinds(runs[3].steps)).filter(k => k.startsWith('page') && !/ endless /.test(k) && !before.includes(k))) d.push({ key: `${name} moves although reduced motion is asked for: ${k}`, detail: '' })
       }
-      if (d.length) fails.push(`${name}:\n    ${d.join('\n    ')}`)
-      report.push(`- ${name}: ${d.length || broke.length ? 'differs' : 'the same'} (${both(kinds(runs[0].steps), kinds(runs[1].steps)).length} kinds of animation, ${new Set(runs[0].steps.flatMap(s => s.cursors.map(c => c.id))).size} cursors)`)
+      found.push(...d)
+      report.push(`- ${id}${mode ? ' (reduced motion)' : ''}: ${d.length ? `${d.length} differences` : 'the same'} (${both(kinds(runs[0].steps), kinds(runs[1].steps)).length} kinds of animation in /, ${new Set(runs[0].steps.flatMap(s => s.cursors.map(c => c.id))).size} cursors)`)
     }
   }
-  const text = `${report.join('\n')}\n${fails.length ? `\n${fails.join('\n')}\n` : ''}`
+  const list = known(), keys = new Set(list.map(k => k.key))
+  const fresh = found.filter(f => !keys.has(f.key)), seen = new Set(found.map(f => f.key))
+  const lines = found.map(f => { const k = list.find(x => x.key === f.key); return `  ${k ? `[${k.label}]` : '[new]'} ${f.key}${f.detail ? ` (${f.detail})` : ''}` })
+  const stale = list.filter(k => !seen.has(k.key) && moved(dir).some(id => k.key.startsWith(`${id} `)))
+  const text = `${report.join('\n')}\n${lines.length ? `\nDifferences:\n${lines.join('\n')}\n` : ''}${stale.length ? `\nKnown but not seen any more, delete from docs/ux/motion/parity-known.json:\n${stale.map(k => `  ${k.key}`).join('\n')}\n` : ''}`
   writeFileSync(join(dir, 'report.md'), text)
   console.log(`\n${text}`)
-  if (fails.length) process.exit(1)
-  console.log('The moved screens move the same.')
+  if (update) {
+    const next = found.map(f => list.find(x => x.key === f.key) || { key: f.key, label: 'drift', why: '' })
+    const keep = list.filter(k => !seen.has(k.key) && !moved(dir).some(id => k.key.startsWith(`${id} `)))
+    writeFileSync(KNOWN, JSON.stringify([...keep, ...next].sort((a, b) => a.key.localeCompare(b.key)), null, 2) + '\n')
+    console.log(`wrote ${KNOWN}`)
+  } else if (fresh.length) { console.log(`${fresh.length} new: fix them, or label them in docs/ux/motion/parity-known.json`); process.exit(1) }
+  else console.log('The moved screens move the same, apart from the known differences.')
 }
+const moved = dir => Object.entries(load(join(dir, 'next1'))).filter(([, v]) => !v.notMoved).map(([id]) => id)
 
 async function run(dir, root) {
   mkdirSync(dir, { recursive: true })
@@ -226,7 +239,7 @@ async function run(dir, root) {
     await record(join(dir, r), { root, app, reduced, scenes: moved })
   }
   // next1 keeps the not-moved marks; the others only have what moved
-  compare(dir)
+  compare(dir, { update: rest.includes('--update') })
 }
 
 // real-time videos of each scene in both apps, 640 wide, and the two side by side (ffmpeg's hstack)
@@ -239,20 +252,21 @@ async function clips(out, root) {
   try {
     for (const sc of ALL) {
       const got = {}
-      for (const app of ['current', 'next']) {
+      // /next/ first: a screen not moved yet is not recorded in / either
+      for (const app of ['next', 'current']) {
         const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'dark', recordVideo: { dir: tmp, size: { width: 640, height: 400 } } })
         const page = await ctx.newPage()
         const start = Date.now()
         await page.goto(s.BASE + address(app, sc.at(ids)), { waitUntil: 'load' })
-        for (const a of sc.act || []) { await wait(a.t - (Date.now() - start)); await a.run(page).catch(() => {}) }
-        await wait(Math.min(sc.ms, 8000) - (Date.now() - start))
+        for (const a of sc.act || []) { await wait(Math.max(0, a.t - (Date.now() - start))); await a.run(page).catch(() => {}) }
+        await wait(Math.max(0, Math.min(sc.ms, 8000) - (Date.now() - start)))
         const notMoved = app === 'next' && await NOT_MOVED(page)
         const v = page.video()
         await ctx.close()
-        if (notMoved) { rmSync(await v.path(), { force: true }); continue }
+        if (notMoved) { rmSync(await v.path(), { force: true }); break }
         renameSync(await v.path(), got[app] = join(out, `${sc.id}-${app}.webm`))
       }
-      if (!got.next) { rmSync(got.current, { force: true }); console.log(`· ${sc.id}: not moved yet`); continue }
+      if (!got.next) { console.log(`· ${sc.id}: not moved yet`); continue }
       if (!ffmpeg) { console.log(`· ${sc.id}-current.webm, ${sc.id}-next.webm (no ffmpeg: not put side by side)`); continue }
       // left the current Studio, right the next UI; VP9 at a low rate, so a set stays small enough to commit
       const r = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', got.current, '-i', got.next, '-filter_complex', '[0:v][1:v]hstack=inputs=2:shortest=1', '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '42', '-row-mt', '1', '-an', join(out, `${sc.id}.webm`)])
@@ -268,6 +282,6 @@ async function clips(out, root) {
 
 const root = resolve(flag('root', ROOT))
 if (cmd === 'run' && pos[0]) await run(resolve(pos[0]), root)
-else if (cmd === 'compare' && pos[0]) compare(resolve(pos[0]))
+else if (cmd === 'compare' && pos[0]) compare(resolve(pos[0]), { update: rest.includes('--update') })
 else if (cmd === 'clips' && pos[0]) await clips(resolve(pos[0]), root)
 else { console.log('node scripts/motion-parity.mjs run <dir> [--root <tree>] [--only a,b] [--px 24] | compare <dir> | clips <dir>'); process.exit(2) }
