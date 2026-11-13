@@ -421,7 +421,6 @@ export function makeProject({ sw, C, root }) {
   }
   function renderStage() {
     const g = groups()
-    // this build's board is on its way (not the last one's): its pages' skeletons, which Hermia works on (web/pet.js)
     if (P.boardOf !== P.run || (!P.board && !P.uploads.length && !P.refs.length)) { world.innerHTML = P.boardOf !== P.run ? `<div class="col"><section class="pj-sec site"><span class="al">Site</span><div class="abs">${[0, 1, 2].map(() => `<div class="ab page wait-in" aria-busy="true">${skeleton({})}</div>`).join('')}</div></section></div>` : ''; return }
     const sec = (k, label) => g[k] ? `<section class="pj-sec ${k}"><span class="al">${label}</span><div class="abs">${g[k].map(board).join('')}</div></section>` : ''
     world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`

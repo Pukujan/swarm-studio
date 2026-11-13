@@ -193,8 +193,17 @@ const kinds = steps => [...new Set(steps.flatMap(x => x.sig.map(kind)))].sort()
 const load = dir => JSON.parse(readFileSync(join(dir, 'trace.json'), 'utf8'))
 const both = (x, y) => x.filter(k => y.includes(k)), either = (x, y) => [...new Set([...x, ...y])]
 
+// a change that means to move differently says so (docs/ux/MOTION.md, "A change that changes the motion"):
+// the animation kinds it gains or loses, in docs/ux/motion/accepted.json of the tree being checked. Nothing
+// else is excused, and the pictures are still compared.
+function accepted() {
+  try { const a = JSON.parse(readFileSync(join(ROOT, 'docs/ux/motion/accepted.json'), 'utf8')); return { gained: a.gained || [], lost: a.lost || [] } } catch { return { gained: [], lost: [] } }
+}
+
 async function compare(before, after, tolerance = 2000) {
   const [A1, A2] = before.map(load), [B1, B2] = after.map(load)
+  const ok = accepted(), used = new Set()
+  const excuse = (list, k) => { const hit = list.includes(k); if (hit) used.add(k); return !hit }
   const { chromium } = await loadPlaywright()
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
   const page = await browser.newPage()
@@ -204,7 +213,7 @@ async function compare(before, after, tolerance = 2000) {
       const runs = [A1, A2, B1, B2].map(t => t[id]?.steps)
       if (runs.some(r => !r?.length)) { fails.push(`${id}: not recorded in every run`); continue }
       const [a1, a2, b1, b2] = runs.map(kinds)
-      const lost = both(a1, a2).filter(k => !either(b1, b2).includes(k)), gained = both(b1, b2).filter(k => !either(a1, a2).includes(k))
+      const lost = both(a1, a2).filter(k => !either(b1, b2).includes(k) && excuse(ok.lost, k)), gained = both(b1, b2).filter(k => !either(a1, a2).includes(k) && excuse(ok.gained, k))
       let bad = 0
       if (lost.length || gained.length) { bad++; fails.push(`${id}: the animations differ\n    ran before, not after: ${lost.join('\n                           ') || '-'}\n    ran after, not before: ${gained.join('\n                           ') || '-'}`) }
       // the picture it ends on: it differs only when neither after-run matches either before-run
@@ -219,6 +228,9 @@ async function compare(before, after, tolerance = 2000) {
       console.log(`${bad ? '✗' : '✓'} ${id}: ${both(a1, a2).length} kinds of animation${bad ? ', differs' : ', the same'}`)
     }
   } finally { await browser.close() }
+  if (used.size) console.log(`\naccepted (docs/ux/motion/accepted.json): ${[...used].join(', ')}`)
+  const stale = [...ok.gained, ...ok.lost].filter(k => !used.has(k))
+  if (stale.length) console.log(`accepted but not seen, delete from docs/ux/motion/accepted.json: ${stale.join(', ')}`)
   if (fails.length) { console.log(`\n${fails.join('\n')}`); process.exit(1) }
   console.log('\nThe motion is the same.')
 }

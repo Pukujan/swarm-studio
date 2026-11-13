@@ -306,12 +306,15 @@ export function makePet({ sw, C, doc = document }) {
   }
   // the crew works: she hands over to their cursors until the build is done (the rooms, the deck among
   // them, keep her at rest: their docked crew is hidden in the Studio)
-  function away() { el.classList.toggle('away', P.building) }
+  // ...and while a screen already shows her as a crew cursor (the brand sheet's skeleton: web/brand.js)
+  let crewHermia = false
+  function away() { el.classList.toggle('away', P.building || crewHermia) }
 
   // ---------- working on what is on its way: the newest placeholder a screen handed her, else the first one on
   // screen. Twice a second, never in a hidden tab, not during a build (the crew's cursors work then).
   function shows(n) {
-    if (!n.isConnected || n.closest(PET_NOT)) return false
+    // a crew cursor already works in it
+    if (!n.isConnected || n.closest(PET_NOT) || n.querySelector('.cur')) return false
     const r = n.getBoundingClientRect()
     return r.width > 8 && r.height > 8 && r.bottom > 56 && r.top < win.innerHeight - 40 && r.right > 8 && r.left < win.innerWidth - 40
   }
@@ -320,6 +323,8 @@ export function makePet({ sw, C, doc = document }) {
     P.scanT = win.setTimeout(scan, 500)
     if (doc.hidden) return
     for (const n of P.jobs) if (!n.isConnected) P.jobs.delete(n)
+    const hermia = [...doc.querySelectorAll('.cur[data-n="Hermia"]')].some(n => n.getClientRects().length)
+    if (hermia !== crewHermia) { crewHermia = hermia; away() }
     const next = P.building ? null : [...P.jobs].reverse().find(shows) || [...doc.querySelectorAll(PET_BUSY)].find(shows) || null
     // the audit gates (and screen readers) see a loading state wherever she works
     if (next && !next.hasAttribute('aria-busy')) next.setAttribute('aria-busy', 'true')

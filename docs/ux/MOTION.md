@@ -12,6 +12,16 @@ The motion check does not see the speed of JS-driven movement (a cursor gliding 
 
 How to read the tables. "Owned by" gives the keyframes or rule first, then the JS that triggers it (`css | js`). Reduced motion: "global" means the blanket rule at `web/canvas.css:1403` (`*` gets `animation-duration .01ms`, `animation-iteration-count 1`, `transition-duration .01ms`, all `!important`). It covers the whole app page but not the page frames, which are separate documents (`web/frame.html`, the Play frame, the exports). "none" means nothing is done for it beyond that. JS-driven movement (camera glide, cursor travel, tours, loops) is not touched by any reduced-motion rule unless a row says so.
 
+## A change that changes the motion
+
+The motion check is for changes that keep the motion. A change meant to add or remove motion (a new cursor, a
+new skeleton) says so in [docs/ux/motion/accepted.json](motion/accepted.json): the animation kinds it gains
+(`gained`) or loses (`lost`), exactly as the check prints them under "ran after, not before" and "ran before, not
+after", and a `why`. Those kinds are excused in every scene; nothing else is, and the end pictures are still
+compared. The change also adds or removes its rows in the tables below. The check prints the kinds it excused,
+and any listed kind it did not see; the next change that touches motion empties the list, since after the merge
+those kinds run before as well.
+
 ## Design deck and camera
 
 | What moves | When | How long / how often | Owned by | Reduced motion |
