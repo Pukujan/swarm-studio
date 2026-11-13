@@ -1,7 +1,8 @@
 # What Swarm is (owner, 2026-11-12)
 
 Every session reads this first. Where a spec, the pitch or older docs disagree with this page, this page wins.
-The detail behind each point is in [docs/decisions/](decisions/README.md).
+The detail behind each point is in [docs/decisions/](decisions/README.md). Where each kind of work is headed
+(websites, games, video, decks, UI governance) is in [PLANS.md](PLANS.md).
 
 ## Swarm Studio runs on the person's own machine
 
