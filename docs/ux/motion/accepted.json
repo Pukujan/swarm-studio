@@ -1,5 +1,5 @@
 {
-  "why": "PR fix/flaky-checks: the Studio and Hermia start on the tick their script runs, not on a timer that raced the server's first replies. Her first look at the screen now always comes while its loading cards are still there, so at load she taps them (Projects gains @pet-tap) instead of idling (Studio loses @pet-bob); from the next step on both sides match. Empty this list in the next change that touches motion.",
-  "gained": ["page @pet-tap endless span.pet-body"],
-  "lost": ["page @pet-bob endless span.pet-body"]
+  "why": "None: list here the animation kinds a change means to gain or lose (docs/ux/MOTION.md, \"A change that changes the motion\").",
+  "gained": [],
+  "lost": []
 }

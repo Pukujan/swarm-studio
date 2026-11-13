@@ -24,6 +24,8 @@ export const alias: AliasOptions = [
   // Studio runs: src/primitives/Icon.tsx and src/screens/deck/ reach them, typed by their .d.ts
   { find: '@studio/icons', replacement: fileURLToPath(new URL('../web/icons.js', import.meta.url)) },
   { find: '@studio/crew', replacement: fileURLToPath(new URL('../web/crew.js', import.meta.url)) },
+  // the ways to make something, the same file as the current Studio's (src/studio/)
+  { find: '@studio/makeways', replacement: fileURLToPath(new URL('../web/makeways.js', import.meta.url)) },
   // by path: a bare 'xstate' would be looked up from web/, which has no node_modules
   { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) },
   // the sanitiser the current deck runs on every section before a frame shows it (web/clean.js): the Design deck's

@@ -44,8 +44,8 @@ const trail = (build, room) => ['Home', 'Projects', build, room]
 // Studio's top layer (Home is the Feed, rule 1), so it reads Home › Projects; the Design deck keeps Figma's
 // frame (rule 32) but rule 7 has no exception for it, so it reads like every other room.
 const SCREENS = [
-  { id: 'projects', crumb: ['Home', 'Projects'], address: () => '', go: (p, s) => p.goto(s.BASE + '/', { waitUntil: 'commit' }), ready: '.home .card' },
-  { id: 'overview', crumb: trail('Alpha Tea', 'Overview'), address: s => `?project=${s.ids.site}&version=${s.ids.site2}`, go: (p, s) => p.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site2}`, { waitUntil: 'commit' }), ready: '.pj-world .ab.page' },
+  { id: 'projects', crumb: ['Home', 'Projects'], address: () => '', go: (p, s) => p.goto(s.BASE + '/', { waitUntil: 'commit' }), ready: '.home .card', nextReady: 'main [data-id]' },
+  { id: 'overview', crumb: trail('Alpha Tea', 'Overview'), address: s => `?project=${s.ids.site}&version=${s.ids.site2}`, go: (p, s) => p.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site2}`, { waitUntil: 'commit' }), ready: '.pj-world .ab.page', nextReady: '.ov-world .ov-ab.page' },
   { id: 'deck', crumb: trail('Alpha Tea', 'Design deck'), address: s => `?version=${s.ids.site2}&room=deck`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.site2}&room=deck`, { waitUntil: 'commit' }), ready: 'body.cosmos-station #viewport', nextReady: '[role="region"][aria-label="Canvas"]' },
   { id: 'app', crumb: trail('Shift Log', 'App'), address: s => `?version=${s.ids.app}&room=app`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.app}&room=app`, { waitUntil: 'commit' }), ready: 'body.view-app #appview' },
   { id: 'game', crumb: trail('Lantern Run', 'Game'), address: s => `?version=${s.ids.game}&room=game`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.game}&room=game`, { waitUntil: 'commit' }), ready: 'body.view-app' },
@@ -53,16 +53,17 @@ const SCREENS = [
   { id: 'studio', crumb: trail('Cedar Cafe', 'Studio'), address: s => `?room=studio&project=${s.scaffold}&step=brand`, go: (p, s) => p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`, { waitUntil: 'commit' }), ready: '.ab[data-key="brand:open"]', nextReady: '.ab[data-key="brand:open"]' },
   { id: 'plan', crumb: trail('New game', 'Plan'), address: () => '?room=plan',
     pre: async (p, s) => { await p.goto(s.BASE + '/'); await p.locator('.home .card').first().waitFor() },
-    go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) }), ready: 'body.cosmos-plan .pl-crumb' },
+    go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) }), ready: 'body.cosmos-plan .pl-crumb',
+    nextReady: 'main [role="region"][aria-label="Plan"]' },
   // opened from the Studio, the way a person reaches it
-  { id: 'brand', crumb: trail('Cedar Cafe', 'Brand sheet'),
+  { id: 'brand', crumb: trail('Cedar Cafe', 'Brand sheet'), address: s => `?room=brand&project=${s.scaffold}&step=brand`, nextReady: '.brand-sheet [data-sec="palette"] .ab',
     pre: async (p, s) => { await p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`); await p.locator('.ab[data-key="brand:open"]').first().waitFor() },
     go: p => p.locator('.ab[data-key="brand:open"]').first().press('Enter'), ready: 'body.cosmos-brand .br-crumb' }
 ]
 
 // In /next/ each screen opens at its address. Until it has moved, every one is the same stand-in, so `main` is
-// what is on screen; a moved screen gives its own `nextReady`. The brand sheet has no address of its own (it opens
-// from a screen), so it joins when its way in has moved.
+// what is on screen; a moved screen gives its own `nextReady`. A project's brand sheet has an address of its own
+// (?room=brand&project=…&step=…), opened there directly.
 const screens = APP !== 'next' ? SCREENS : SCREENS.filter(x => x.address).map(x => ({
   ...x, pre: undefined, ready: x.nextReady || 'main',
   go: (p, s) => p.goto(`${s.BASE}/next/${x.address(s)}`, { waitUntil: 'commit' })
@@ -156,7 +157,8 @@ for (const screen of screens) {
     // chat (decision 0015): along the bottom at every width, never on the left; only the next UI is held to it
     if (APP === 'next') {
       const dock = await page.evaluate(() => {
-        const el = [...document.querySelectorAll('[aria-label="Chat"]')].find(x => x.getClientRects().length)
+        // the chat itself, not a button that opens it (the Overview's dock has one named Chat)
+        const el = [...document.querySelectorAll('[aria-label="Chat"]:not(button, a, [role="button"])')].find(x => x.getClientRects().length)
         if (!el) return null
         const r = el.getBoundingClientRect()
         return { bottom: Math.round(innerHeight - r.bottom), left: Math.round(r.left), width: Math.round(innerWidth - r.width) }

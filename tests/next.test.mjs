@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { nextPage } from '../server/next.mjs'
 import * as nav from '../web/nav.js'
+import * as makeways from '../web/makeways.js'
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const json = f => JSON.parse(read(f))
@@ -58,8 +59,15 @@ test('every name ui/ declares for @studio/nav is one web/nav.js exports', () => 
   assert.deepEqual([...read('ui/src/nav/studio-nav.d.ts').match(/export type Room = (.*)/)[1].matchAll(/'(\w+)'/g)].map(m => m[1]).sort(), [...nav.ROOMS].sort())
 })
 
+test('every name ui/ declares for @studio/makeways is one the current Studio\'s file exports', () => {
+  const declared = [...read('ui/src/studio/studio-makeways.d.ts').matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
+  assert.ok(declared.length >= 2)
+  for (const name of declared) assert.ok(name in makeways, `web/makeways.js: no export ${name}`)
+  assert.deepEqual([...read('ui/src/studio/studio-makeways.d.ts').match(/export type MakeMode = (.*)/)[1].matchAll(/'(\w+)'/g)].map(m => m[1]), makeways.MAKE_KINDS.site)
+})
+
 test('every name ui/ declares for @studio/clean, @studio/icons, @studio/video and @studio/edit is one the web file exports', async () => {
-  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js'], ['ui/src/screens/deck/studio-edit.d.ts', '../web/edit/patches.js'], ['ui/src/screens/deck/studio-route.d.ts', '../web/route.js']]) {
+  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/legacy/studio-pet.d.ts', '../web/pet.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js'], ['ui/src/screens/deck/studio-edit.d.ts', '../web/edit/patches.js'], ['ui/src/screens/deck/studio-route.d.ts', '../web/route.js']]) {
     const mod = await import(file)
     const declared = [...read(dts).matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
     assert.ok(declared.length >= 1, dts)

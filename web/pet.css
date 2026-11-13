@@ -36,4 +36,6 @@
 .pet.flip .pet-bub { left: auto; right: 4px; border-radius: 12px 4px 12px 12px; }
 @media (prefers-reduced-motion: reduce) {
   .pet-body, .pet.doze .pet-body, .pet.working:not(.doze) .pet-body, .pet-dots i { animation: none; }
+  /* she appears, dozes, works and speaks without fading: no transition under reduced motion either */
+  .pet, .pet-av, .pet-z, .pet-dots, .pet-bub { transition: none; }
 }
