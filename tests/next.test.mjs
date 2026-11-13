@@ -23,7 +23,10 @@ test('the token goes into the page at serve time, escaped, and never into ui/dis
   const page = nextPage(dist, { token: 'a</script><b>' })
   assert.ok(page.includes('window.SWARM = {"token":"a\\u003c/script>\\u003cb>","version":"'))
   assert.ok(read('ui/dist/index.html').includes('<!-- swarm:boot -->'))
-  assert.ok(!read('ui/dist/assets/next.js').includes('x-swarm-token'))
+  // the build reads the token from window.SWARM at run time (a screen sends it as x-swarm-token); no boot or token
+  // value is ever written into it
+  const js = read('ui/dist/assets/next.js')
+  assert.ok(!js.includes('window.SWARM = ') && !/"token":"/.test(js))
 })
 
 test('a plugin without ui/dist/ has no /next/ page, and nothing is built for it', () => {
@@ -46,6 +49,15 @@ test('every name ui/ declares for @studio/nav is one web/nav.js exports', () => 
   assert.ok(declared.length >= 6)
   for (const name of declared) assert.ok(name in nav, `web/nav.js has no export ${name}`)
   assert.deepEqual([...read('ui/src/nav/studio-nav.d.ts').match(/export type Room = (.*)/)[1].matchAll(/'(\w+)'/g)].map(m => m[1]).sort(), [...nav.ROOMS].sort())
+})
+
+test('every name ui/ declares for @studio/clean and @studio/icons is one the web file exports', async () => {
+  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js']]) {
+    const mod = await import(file)
+    const declared = [...read(dts).matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
+    assert.ok(declared.length >= 1, dts)
+    for (const name of declared) assert.ok(name in mod, `${file} has no export ${name}`)
+  }
 })
 
 test('ui/ writes the address by the same rules as web/studio.js', () => {
