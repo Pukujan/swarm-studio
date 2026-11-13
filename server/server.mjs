@@ -22,7 +22,7 @@ import { runSwarm } from '../engine/run.mjs'
 import { extendBase, followUp, rehomeImages } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
-import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
+import { reviewPage, fixSection, routeComment, reviewAgain, REVIEW_PASS, REVIEW_ROUNDS } from '../engine/review.mjs'
 import { lintSection } from '../engine/lint/index.mjs'
 import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixText, markLine } from '../engine/marks.mjs'
 import { handChanges, keepHand } from '../engine/handedit.mjs'
@@ -937,7 +937,12 @@ async function reviewNow(id, input) {
     }
     const issues = [...bySection.values()].slice(0, 4)
     const verdict = phone?.result ? `${result.verdict} On phones: ${phone.result.verdict}` : result.verdict
-    send('review:done', { page: input.page, model: result.model, verdict, issues, ms: result.ms, measured: measured.length, linted: linted.length, phone: !!phone?.result, phoneError: phone?.error, dropped })
+    // the page's score is the lower of desktop and phone; under the bar, the canvas reviews it again once fixed
+    const scores = [result.score, phone?.result?.score].filter(n => n != null)
+    const score = scores.length ? Math.min(...scores) : null
+    const round = Math.max(1, Math.min(REVIEW_ROUNDS, Number(input.round) || 1))
+    const again = reviewAgain({ score, issues, round })
+    send('review:done', { page: input.page, model: result.model, verdict, issues, ms: result.ms, measured: measured.length, linted: linted.length, phone: !!phone?.result, phoneError: phone?.error, dropped, score, pass: REVIEW_PASS, round, again })
     // each issue goes to a builder, in parallel; the agents are the run's own
     const agents = start.agents || []
     issues.forEach((issue, i) => {
@@ -947,7 +952,7 @@ async function reviewNow(id, input) {
       send('review:issue', { page: pageId, layer, agent, problem: issue.problem, fix: issue.fix })
       rework(id, send, s, agent, theme, { problem: issue.problem, fix: issue.fix })
     })
-    return { ...result, verdict, issues }
+    return { ...result, verdict, issues, score, round, again }
   } finally {
     reviewing.delete(tag)
   }
