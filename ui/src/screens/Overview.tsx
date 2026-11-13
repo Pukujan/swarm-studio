@@ -7,8 +7,9 @@
 //
 // Not here yet, because they run on the Design deck's runtime in the current Studio (web/canvas/): a page's sections
 // picked and edited by hand, Scribble and its drafts, the Critic's pins, pictures' stand-ins while painting, the
-// crew's cursors and Follow, the live line, and new snapshots of a changed page. A page shows its saved snapshot,
-// else its plan; the chat is the current Studio's (the Dock says how).
+// crew's cursors and Follow, and the live line. A page shows its saved snapshot, else its plan, and a page that
+// changed is photographed again in a frame of its own (overview/Snapper.tsx); the chat is the current Studio's (the
+// Dock says how).
 import { useCallback, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
@@ -21,6 +22,8 @@ import { FilesPanel } from './overview/FilesPanel'
 import { Inspector } from './overview/Inspector'
 import { download, findItem, groups as groupOf, opening, projectName, type Act, type Item, type Project, type Ref, type Section, type Sending, type Upload } from './overview/model'
 import { ProjectCrumb } from './overview/ProjectCrumb'
+import { useSnapshots } from './overview/Snapper'
+import { withShots } from './overview/snaps'
 import { Stage, type StageHandle } from './overview/Stage'
 import { useOverview } from './overview/useOverview'
 import './overview/overview.css'
@@ -55,7 +58,10 @@ function OverviewScreen() {
   const [dropping, setDropping] = useState(0)
 
   const waiting = !o.ready || o.run !== view.version
-  const groups = useMemo(() => groupOf(waiting ? null : o.board, o.uploads, o.refs, q, sending), [waiting, o.board, o.uploads, o.refs, q, sending])
+  // pages that changed are photographed again, and their new pictures drawn before the server is asked again
+  const snaps = useSnapshots(waiting ? null : o.run, waiting ? null : o.board, stage)
+  const board = useMemo(() => withShots(o.board, snaps.kept), [o.board, snaps.kept])
+  const groups = useMemo(() => groupOf(waiting ? null : board, o.uploads, o.refs, q, sending), [waiting, board, o.uploads, o.refs, q, sending])
   const find = useCallback((key: string | null) => findItem(groups, key), [groups])
   const x = find(sel)
   const name = projectName(o.project, o.board)
@@ -229,6 +235,7 @@ function OverviewScreen() {
       <Dock ref={ask} text={text} onText={setText} onSubmit={send} files={files} onFiles={() => setFiles(!files)}
         onFrame={() => stage.current?.frameAll()} onNewPage={newPage} onUpload={() => fileIn.current?.click()} onChat={() => { location.href = studioAt }} />
       {dropping > 0 && <div className="ov-drop" aria-hidden />}
+      {snaps.booth}
       <input ref={fileIn} type="file" multiple hidden onChange={e => {
         const fs = [...(e.target.files || [])]
         if (fs.length) upload(fs, replacing.current && fs.length === 1 ? replacing.current : null)
