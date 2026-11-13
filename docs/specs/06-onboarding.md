@@ -64,8 +64,9 @@ The one primary action is **Start**, bottom right, fixed width.
   the sheet shows its code and an **Open** link, and the list refreshes when Hermes says it is signed in).
   Providers Hermes sets up only in its own setup (cloud consoles, local servers, custom endpoints) are not
   listed; **Let Hermes set this up** covers them.
-- The list, the pick and the key go through `hermes_models.py`, run in Hermes's own Python
-  ([hermes-and-connections.md](../engines/hermes-and-connections.md) names why it imports Hermes internals).
+- The list is read by `hermes_models.py`, run in Hermes's own Python; the pick and the key are Hermes's public
+  CLI (`hermes config set`). [hermes-and-connections.md](../engines/hermes-and-connections.md) names why the
+  list reads Hermes internals and what keeps that read-only.
 - When the screen opens, the server makes one tiny call to each (a few tokens; `POST /api/setup/models`).
   A ✓ when both answer. The check is kept for ten minutes, so opening the screen again costs nothing.
 - When one fails: a ⚠ on the row (rule 10); opened, one plain line saying what is wrong and the one fix that

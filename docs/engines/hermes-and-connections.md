@@ -84,17 +84,28 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
   `swarm_studio_builder` slots (docs/specs/06-onboarding.md, Models). `hermes_models.py` runs as a short
   process in Hermes's Python (`SWARM_HERMES_PY`, `SWARM_HERMES_PYTHONPATH`, the profile's `HERMES_HOME`), started
   by server/server.mjs `pyModels`; routes in server/setup.mjs (`/api/setup/models/options`, `/pick`, `/signin`).
-- **Stopgap: it imports Hermes internals**, against the Nous review's "public plugin API only" (point 5), because
-  Hermes has no plugin API for its model list, its slots or its key store yet. It calls what Hermes's own
-  dashboard and Desktop picker call: `hermes_cli.inventory.build_model_options_payload` (web_routers/models.py
-  `/api/model/options`), the aux-slot save of `/api/model/set` (web_server_config.py
-  `_apply_aux_assignment_sync`, with `hermes_cli.config.clear_model_endpoint_credentials`), and
-  `hermes_cli.credential_lifecycle.save_provider_env_credential` (tui_gateway `model.save_key`). The dashboard's
-  HTTP routes need an in-process session token, so they are not used. Move to a public API when Hermes ships one.
+- **Stopgap, read only: it imports Hermes internals to read**, against the Nous review's "public plugin API only"
+  (point 5), because Hermes has no public API for its model list yet. It reads with what Hermes's own dashboard
+  and Desktop picker use: `hermes_cli.inventory.build_model_options_payload` (web_routers/models.py
+  `/api/model/options`), `hermes_cli.config.load_config` (the two slots, credentials left out) and
+  `hermes_cli.auth.PROVIDER_REGISTRY` (the env name a provider's key is kept under). Nothing in it writes;
+  tests/test_bridge.py pins its imports and refuses any save, set or write in it. The dashboard's HTTP routes
+  need an in-process session token, so they are not used. Move to a public API when Hermes ships one (asked
+  for on NousResearch/hermes-agent).
+- **Every change is Hermes's public CLI** (server/setup.mjs):
+  - a pick: `hermes config set auxiliary.<slot>.model <model>` when the provider stays, else
+    `hermes config set auxiliary.<slot> '<json>'` with the new provider and model and the slot's other settings,
+    which drops the old endpoint and credentials as Hermes's own slot save does (web_server_config.py
+    `_apply_aux_assignment_sync`, config.py `clear_model_endpoint_credentials`);
+  - a key: `hermes config set <ENV_NAME> <key>`, which Hermes routes to `save_provider_env_credential`, the
+    same store as its `model.save_key`. The env name comes from Hermes's list, never from the page. The key is
+    on that process's command line for under two seconds (same user only); `hermes auth add --type api-key`
+    would read it from a prompt instead, but that prompt waits on a hidden console on Windows.
 - Browser sign-in is Hermes's public CLI, `hermes auth add <provider> --type oauth`, unbuffered; the sheet reads
   the link after "Open" and the user code from what it prints (hermes_cli/auth_device_flow.py,
   auth_codex_browser.py, auth_openrouter.py). Hermes opens the browser itself.
-- Hermes caches its config by file time, so a pick applies without a restart.
+- Hermes caches its config by file time, so a pick applies without a restart. A pick is two CLI calls, about
+  1.5 s each.
 
 ## What the person connects
 

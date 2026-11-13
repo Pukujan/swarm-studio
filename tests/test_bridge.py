@@ -233,10 +233,24 @@ class Bridge(unittest.TestCase):
         self.assertFalse((ROOT / "engine" / "hermes_mcp.py").exists())
         private = re.compile(r"^\s*(from|import)\s+(tools|hermes_cli)\b", re.M)
         for f in [*ROOT.glob("*.py"), *(ROOT / "engine").glob("*.py")]:
+            if f.name == "hermes_models.py":
+                continue  # the one stopgap, read-only: below
             self.assertIsNone(private.search(f.read_text("utf-8")), f.name)
-        for f in [*(ROOT / "engine").glob("*.mjs"), ROOT / "server" / "server.mjs", *ROOT.glob("*.py")]:
+        # Setup's model list has no public API yet (docs/engines/hermes-and-connections.md). The file that
+        # reads it imports Hermes only to read: nothing in it saves, sets or writes.
+        src = (ROOT / "hermes_models.py").read_text("utf-8")
+        imported = set(re.findall(r"^\s*from\s+(hermes_cli\.\w+)\s+import\s+([\w, ]+)", src, re.M))
+        self.assertEqual({(m, n.strip()) for m, names in imported for n in names.split(",")},
+                         {("hermes_cli.config", "load_config"), ("hermes_cli.inventory", "build_model_options_payload"),
+                          ("hermes_cli.inventory", "load_picker_context"), ("hermes_cli.auth", "PROVIDER_REGISTRY")})
+        self.assertIsNone(re.search(r"\b(save|set|write|clear|remove|delete)_\w*\(|open\(", src))
+        # `hermes config set` from the plugin: only the studio's own two model slots and a provider key named
+        # by Hermes's list (server/setup.mjs), never the plugin's allowlist or any other setting
+        for f in [*(ROOT / "engine").glob("*.mjs"), *(ROOT / "server").glob("*.mjs"), *ROOT.glob("*.py")]:
             src = f.read_text("utf-8")
-            self.assertIsNone(re.search(r"\[\s*'config'\s*,\s*'set'", src), f.name)
+            targets = re.findall(r"\[\s*'config'\s*,\s*'set'\s*,\s*([^,\]]+)", src)
+            allowed = {"`auxiliary.${s.slot}.model`", "`auxiliary.${s.slot}`", "row.keyEnv"} if f.name == "setup.mjs" else set()
+            self.assertTrue(set(t.strip() for t in targets) <= allowed, (f.name, targets))
             self.assertNotIn("_mcp_envelope", src, f.name)
             self.assertNotIn("discover_mcp_tools", src, f.name)
 

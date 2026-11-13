@@ -93,21 +93,47 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
     if (value?.ok) options = { at: Date.now(), value }
     return value?.ok ? value : { ok: false, message: value?.message || 'Hermes did not answer.', providers: [] }
   }
+  // every change goes through Hermes's public CLI; hermes_models.py only reads (tests/test_bridge.py)
+  const hermesExe = () => {
+    const bin = hermesBin || [join(homedir(), '.local', 'bin', 'hermes')].find(existsSync) || 'hermes'
+    // the Store app's own file cannot start outside its package: its `hermes` alias does
+    return platform === 'win32' && /\\WindowsApps\\/i.test(String(bin)) ? 'hermes' : bin
+  }
+  const hermesCli = args => new Promise(resolve => run(hermesExe(), args, { env: hermesEnv(), timeout: 30000, windowsHide: true }, (err, stdout, stderr) =>
+    resolve(err ? { ok: false, message: lastLine(stderr) || lastLine(stdout) || String(err.message || err).split('\n')[0] } : { ok: true })))
+  const SLUG = /^[a-z0-9][a-z0-9._-]{0,63}$/i
   async function pickModel(input) {
     if (!hermesModels) return { ok: false, message: 'Start Swarm Studio from Hermes to pick a model.' }
-    const r = await hermesModels(`pick_json(${JSON.stringify(String(input.provider || ''))}, ${JSON.stringify(String(input.model || ''))})`)
-    if (!r?.ok) return { ok: false, message: r?.message || 'Hermes did not save it.' }
+    const provider = String(input.provider || '').trim(), model = String(input.model || '').trim()
+    if (!SLUG.test(provider) || !model || model.length > 200 || /[\s'"]/.test(model) || model.startsWith('-')) return { ok: false, message: 'Pick a model.' }
+    const now = await hermesModels('slots_json()')
+    if (!now?.ok) return { ok: false, message: now?.message || 'Hermes did not answer.' }
+    // as Hermes's own slot save does: the same provider changes only the model; a new one replaces the
+    // slot, which drops the old endpoint and its credentials and keeps the slot's other settings
+    for (const s of Object.values(now.slots)) {
+      const same = s.provider.toLowerCase() === provider.toLowerCase()
+      const value = { ...s.keep, provider, model, ...(provider.toLowerCase() === 'custom' && s.base_url ? { base_url: s.base_url } : {}) }
+      const r = same ? await hermesCli(['config', 'set', `auxiliary.${s.slot}.model`, model]) : await hermesCli(['config', 'set', `auxiliary.${s.slot}`, JSON.stringify(value)])
+      if (!r.ok) return { ok: false, message: r.message || 'Hermes did not save it.' }
+    }
     clearPicks()
     options = null
     lastTest = await tester.test(roles(), { again: true })
     if (state.modelsOk !== lastTest.ok) { state.modelsOk = lastTest.ok; save() }
-    return { ok: true, slots: r.slots, test: lastTest }
+    const slots = Object.fromEntries(Object.keys(now.slots).map(role => [role, { provider, model }]))
+    return { ok: true, slots, test: lastTest }
   }
   async function saveKey(input) {
     if (!hermesModels) return { ok: false, message: 'Start Swarm Studio from Hermes to sign in.' }
-    const r = await hermesModels('save_key_json()', JSON.stringify({ slug: String(input.slug || ''), key: String(input.key || '') }))
+    const slug = String(input.slug || ''), key = String(input.key || '').trim()
+    if (!key) return { ok: false, message: 'Paste the key.' }
+    if (/\s/.test(key) || key.length > 500 || key.startsWith('-')) return { ok: false, message: 'That is not a key.' }
+    // the name it is kept under comes from Hermes's own list, never from the page
+    const row = (await modelOptions()).providers?.find(p => p.slug === slug && p.sign === 'key')
+    if (!row || !/^[A-Z][A-Z0-9_]{1,63}$/.test(row.keyEnv || '')) return { ok: false, message: 'This provider signs in another way.' }
+    const r = await hermesCli(['config', 'set', row.keyEnv, key])
     options = null
-    return r?.ok ? { ok: true, options: await modelOptions(true) } : { ok: false, message: r?.message || 'Hermes did not save the key.' }
+    return r.ok ? { ok: true, options: await modelOptions(true) } : { ok: false, message: r.message || 'Hermes did not save the key.' }
   }
   // one browser sign-in at a time: its provider, link and code, and how it ended
   let signing = null
@@ -116,8 +142,7 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
   const URL_RE = /\bOpen\b[^\n]*?:\s*(https?:\/\/[^\s"'<>]+)/, CODE_RE = /\b[A-Z0-9]{4,}(?:-[A-Z0-9]{4,})+\b/
   function signInBrowser(slug) {
     if (signing?.child && signing.done === undefined) signing.child.kill()
-    const bin = hermesBin || [join(homedir(), '.local', 'bin', 'hermes')].find(existsSync) || 'hermes'
-    const exe = platform === 'win32' && /\\WindowsApps\\/i.test(String(bin)) ? 'hermes' : bin
+    const exe = hermesExe()
     const s = { slug, url: '', code: '', out: '', done: undefined, child: null }
     signing = s
     try {
@@ -170,7 +195,7 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
       body(req).then(async input => {
         if (input.cancel) { if (signing?.child && signing.done === undefined) signing.child.kill(); signing = null; return json(res, 200, signState()) }
         if (input.key) return json(res, 200, await saveKey(input))
-        if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(String(input.slug || ''))) return json(res, 400, { error: 'bad provider' })
+        if (!SLUG.test(String(input.slug || ''))) return json(res, 400, { error: 'bad provider' })
         json(res, 200, { ok: true, ...(await signInBrowser(String(input.slug))) })
       })
       return true

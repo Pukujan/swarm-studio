@@ -1,7 +1,7 @@
 """The Setup sheet's model picker (hermes_models.py), against fake Hermes modules.
 
-It lists what Hermes lists, sets only the studio's two slots the way Hermes's own /api/model/set does, and
-saves a key only for a provider whose sign-in is a key, through Hermes's own key store."""
+It lists what Hermes lists and reads the studio's two slots without their credentials. It changes nothing:
+picks and keys go through Hermes's CLI (server/setup.mjs; tests/setup.test.mjs)."""
 import io
 import json
 import sys
@@ -65,34 +65,25 @@ class Picker(unittest.TestCase):
         self.assertEqual((rows["anthropic"]["sign"], rows["minimax-oauth"]["sign"], rows["inferhub"]["sign"]), ("key", "browser", ""))
         self.assertTrue(rows["inferhub"]["current"])
 
-    def test_a_pick_sets_only_the_studio_slots(self):
-        cfg = {"model": {"provider": "inferhub"}, "auxiliary": {"vision": {"provider": "x"},
-               "swarm_studio_builder": {"provider": "custom", "model": "m", "base_url": "https://old", "api_key": "k"}}}
+    def test_slots_without_their_credentials(self):
+        cfg = {"auxiliary": {"swarm_studio_builder": {"provider": "custom", "model": "m", "base_url": "https://own", "api_key": "SECRET-1",
+                                                      "key_env": "X", "api_mode": "chat", "timeout": 45, "extra_body": {"a": 1}},
+                             "swarm_studio_planner": {"provider": "nous", "model": "b", "base_url": "https://n", "api_key": "SECRET-2"}}}
         h = Hermes(cfg)
         with mock.patch.dict(sys.modules, h.modules):
-            r = hermes_models.pick_json("nous", "b")
-        self.assertTrue(r["ok"])
-        aux = h.saved["auxiliary"]
-        self.assertEqual(aux["vision"], {"provider": "x"})
-        self.assertEqual(h.saved["model"], {"provider": "inferhub"})
-        for slot in ("swarm_studio_planner", "swarm_studio_builder"):
-            self.assertEqual((aux[slot]["provider"], aux[slot]["model"]), ("nous", "b"))
-        # a new provider drops the old endpoint and its key, as Hermes's own slot save does
-        self.assertNotIn("base_url", aux["swarm_studio_builder"])
-        self.assertNotIn("api_key", aux["swarm_studio_builder"])
-        self.assertEqual(r["slots"]["worker"], {"provider": "nous", "model": "b"})
-        self.assertFalse(hermes_models.pick_json("", "b")["ok"])
+            s = hermes_models.slots_json()["slots"]
+        self.assertEqual(s["worker"], {"slot": "swarm_studio_builder", "provider": "custom", "model": "m", "keep": {"timeout": 45}, "base_url": "https://own"})
+        # an endpoint is kept only for a custom provider, and no key ever comes out
+        self.assertEqual(s["planner"], {"slot": "swarm_studio_planner", "provider": "nous", "model": "b", "keep": {}, "base_url": ""})
+        self.assertNotIn("SECRET", json.dumps(s))
 
-    def test_a_key_is_saved_only_where_a_key_is_the_sign_in(self):
+    def test_a_key_provider_names_where_hermes_keeps_its_key(self):
         h = Hermes({})
         with mock.patch.dict(sys.modules, h.modules):
-            with mock.patch.object(sys, "stdin", io.StringIO(json.dumps({"slug": "anthropic", "key": " sk-ant-x "}))):
-                self.assertTrue(hermes_models.save_key_json()["ok"])
-            with mock.patch.object(sys, "stdin", io.StringIO(json.dumps({"slug": "nous", "key": "x"}))):
-                self.assertFalse(hermes_models.save_key_json()["ok"])
-            with mock.patch.object(sys, "stdin", io.StringIO(json.dumps({"slug": "anthropic", "key": ""}))):
-                self.assertFalse(hermes_models.save_key_json()["ok"])
-        self.assertEqual(h.keys, [("ANTHROPIC_API_KEY", "sk-ant-x")])
+            rows = {r["slug"]: r for r in hermes_models.options_json()["providers"]}
+        self.assertEqual(rows["anthropic"]["keyEnv"], "ANTHROPIC_API_KEY")
+        self.assertNotIn("keyEnv", rows["nous"])
+        self.assertIsNone(h.saved)
 
 
 if __name__ == "__main__":

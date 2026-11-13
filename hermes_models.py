@@ -3,14 +3,14 @@
 Models stay in Hermes. The studio's planner and builders are Hermes auxiliary slots (launcher.py SLOTS), so
 the picker shows what Hermes Desktop's own picker shows and a pick sets those slots in Hermes's config:
 
-- ``options_json()``   every provider Hermes knows, whether it is signed in, its models, and the two slots
-- ``pick_json(p, m)``  sets the planner and builder slots to provider ``p`` and model ``m``
-- ``save_key_json()``  saves a provider's API key, read from stdin as JSON (never an argument)
+- ``options_json()``  every provider Hermes knows, whether it is signed in, its models, and the two slots
+- ``slots_json()``    the two slots as they are now, without their credentials
 
-Hermes has no public plugin API for its model list or for its slots yet, so this calls the same functions
-its dashboard and Desktop picker call (hermes_cli/web_routers/models.py ``/api/model/options`` and
-``/api/model/set``; tui_gateway/methods_complete.py ``model.save_key``). It runs as a short-lived process
-under the profile's HERMES_HOME, not in the gateway. docs/engines/hermes-and-connections.md names it.
+READ ONLY. Hermes has no public plugin API for its model list yet, so this reads it with the function its
+dashboard and Desktop picker use (hermes_cli/web_routers/models.py ``/api/model/options``). Everything that
+changes Hermes goes through its public CLI instead (server/setup.mjs: ``hermes config set``, ``hermes auth
+add``). It runs as a short-lived process under the profile's HERMES_HOME, not in the gateway.
+docs/engines/hermes-and-connections.md names it; tests/test_bridge.py keeps it read-only.
 """
 from __future__ import annotations
 
@@ -20,6 +20,9 @@ import sys
 # role -> Hermes auxiliary slot (launcher.py SLOTS; registered in __init__.py)
 SLOTS = {"planner": "swarm_studio_planner", "worker": "swarm_studio_builder"}
 MAX_MODELS = 300
+# what Hermes's own slot save drops when the provider changes (hermes_cli/config.py
+# clear_model_endpoint_credentials, web_server_config.py _apply_aux_assignment_sync): never sent out of here
+ENDPOINT = {"api_key", "api", "key_env", "api_key_env", "api_mode", "base_url"}
 
 
 def _sign(auth_type) -> str:
@@ -50,6 +53,15 @@ def _slots(cfg: dict) -> dict:
     return out
 
 
+def _key_env(slug: str) -> str:
+    """The environment name Hermes keeps this provider's key under (its provider registry)."""
+    from hermes_cli.auth import PROVIDER_REGISTRY
+
+    p = PROVIDER_REGISTRY.get(slug)
+    names = list(getattr(p, "api_key_env_vars", None) or []) if p and getattr(p, "auth_type", "") == "api_key" else []
+    return str(names[0]) if names else ""
+
+
 def options_json(refresh: bool = False) -> dict:
     from hermes_cli.config import load_config
     from hermes_cli.inventory import build_model_options_payload, load_picker_context
@@ -66,48 +78,28 @@ def options_json(refresh: bool = False) -> dict:
             continue  # set up only in Hermes itself (cloud consoles, local servers)
         featured = _ids(r.get("featured_models"))
         models = featured + [m for m in _ids(r.get("models")) if m not in featured]
-        rows.append({"slug": slug, "name": str(r.get("name") or slug), "signedIn": signed, "sign": sign,
-                     "current": bool(r.get("is_current")), "models": models[:MAX_MODELS]})
+        row = {"slug": slug, "name": str(r.get("name") or slug), "signedIn": signed, "sign": sign,
+               "current": bool(r.get("is_current")), "models": models[:MAX_MODELS]}
+        if sign == "key":
+            row["keyEnv"] = _key_env(slug)
+            if not row["keyEnv"]:
+                continue  # no key name to save it under: Hermes's own setup covers it
+        rows.append(row)
     return {"ok": True, "main": {"provider": str(payload.get("provider") or ""), "model": str(payload.get("model") or "")},
             "slots": _slots(load_config()), "providers": rows}
 
 
-def pick_json(provider: str, model: str) -> dict:
-    """The planner and builder slots -> provider/model, as Hermes's own /api/model/set saves a slot."""
-    provider, model = str(provider or "").strip(), str(model or "").strip()
-    if not provider or not model:
-        return {"ok": False, "message": "Pick a model."}
-    from hermes_cli.config import clear_model_endpoint_credentials, load_config, save_config
+def slots_json() -> dict:
+    """Each slot's provider and model, the settings a pick keeps (``keep``), and its endpoint only for a
+    ``custom`` provider. Credentials never leave."""
+    from hermes_cli.config import load_config
 
     cfg = load_config()
     aux = cfg.get("auxiliary") if isinstance(cfg.get("auxiliary"), dict) else {}
-    for slot in SLOTS.values():
+    out = {}
+    for role, slot in SLOTS.items():
         s = aux.get(slot) if isinstance(aux.get(slot), dict) else {}
-        prev = str(s.get("provider") or "").strip().lower()
-        s["provider"], s["model"] = provider, model
-        if provider.lower() != prev and provider.lower() != "custom":
-            s.pop("base_url", None)
-            clear_model_endpoint_credentials(s)
-        aux[slot] = s
-    cfg["auxiliary"] = aux
-    save_config(cfg)
-    return {"ok": True, "slots": _slots(cfg)}
-
-
-def save_key_json() -> dict:
-    """{slug, key} on stdin -> the key saved where Hermes keeps it (model.save_key's own path)."""
-    from hermes_cli.auth import PROVIDER_REGISTRY
-    from hermes_cli.credential_lifecycle import save_provider_env_credential
-
-    try:
-        body = json.loads(sys.stdin.read() or "{}")
-    except ValueError:
-        body = {}
-    slug, key = str(body.get("slug") or "").strip(), str(body.get("key") or "").strip()
-    if not slug or not key:
-        return {"ok": False, "message": "Paste the key."}
-    pconfig = PROVIDER_REGISTRY.get(slug)
-    if not pconfig or pconfig.auth_type != "api_key" or not pconfig.api_key_env_vars:
-        return {"ok": False, "message": "This provider signs in another way."}
-    save_provider_env_credential(pconfig.api_key_env_vars[0], key)
-    return {"ok": True}
+        keep = {k: v for k, v in s.items() if k not in ENDPOINT and k not in ("provider", "model") and isinstance(v, (str, int, float, bool))}
+        out[role] = {"slot": slot, "provider": str(s.get("provider") or ""), "model": str(s.get("model") or ""), "keep": keep,
+                     "base_url": str(s.get("base_url") or "") if str(s.get("provider") or "").lower() == "custom" else ""}
+    return {"ok": True, "slots": out}
