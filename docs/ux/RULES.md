@@ -178,6 +178,8 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 - [ ] Every new panel closes with ×, Esc and an outside click; the logo and Esc take you home from every view.
 - [ ] `node scripts/ui-check.mjs` passes (overlaps, clickability, closing, way home, no sideways scroll, and
       the checks PATTERNS.md lists as landed).
+- [ ] `npm run --prefix tools/dev audit` passes: no new breadcrumb, axe, scroll, console or loading violation
+      beyond `.ui-audit-known-violations.json` ([AUDIT.md](AUDIT.md)).
 - [ ] `node scripts/ui-review.mjs` passes: the studio's own design review (`engine/review.mjs`) finds no real
       issue on the screens you touched.
 - [ ] You looked at the 1280 and 768 screenshots yourself, and the PR shows before and after.
