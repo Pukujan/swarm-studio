@@ -412,6 +412,8 @@ button { font: inherit; color: inherit; }
 .models-pop input:disabled { opacity: .45; }
 .models-pop .mfield button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; color: var(--text); cursor: pointer; font-weight: 600; }
 .models-pop .mfield button.on { color: var(--muted); }
+.models-pop .mnow-model { flex: 1; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px var(--mono); color: var(--text); }
+.models-pop .mfield button[data-change] { padding: 5px 10px; }
 .models-pop .mnow { display: block; color: var(--muted); font: 10.5px var(--mono); margin-top: 4px; }
 .models-pop .mfoot { color: var(--muted); font-size: 11px; border-top: 1px solid var(--line); padding-top: 9px; }
 #review-btn:disabled { opacity: .45; cursor: default; }

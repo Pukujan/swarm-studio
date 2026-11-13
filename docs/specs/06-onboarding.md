@@ -81,8 +81,8 @@ The one primary action is **Start**, bottom right, fixed width.
   Hermes's key store, and the plugin's own files never hold it.
 - While the last check failed, the avatar keeps a small red dot and its menu's **Setup** item an ⚠, so closing
   the sheet never hides the problem. The server keeps the result (`modelsOk` in setup.json) until a check passes.
-- A different model per role stays where it is (☰ → Models; Settings › Crew in spec 25). The Setup pick sets
-  planner and builders together.
+- ☰ → Models on the canvas shows the planner and builder models Hermes uses, each with **Change**, which opens
+  this row. The Setup pick sets planner and builders together; the reviewer keeps its own field there.
 
 ### Pictures
 
