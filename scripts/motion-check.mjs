@@ -19,7 +19,7 @@
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, renameSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { studio } from './walkthrough-fixtures.mjs'
 
@@ -109,7 +109,9 @@ async function record(out, { root = ROOT } = {}) {
   mkdirSync(out, { recursive: true })
   const T = Date.parse('2026-11-01T09:00:00Z')
   const crew = new Date(T).toISOString().replace(/[:.]/g, '-')
-  const s = await studio({ root, setup: ({ runs }) => crewRun(runs, crew, T) })
+  // Setup counts as seen, so Projects ends on Projects: the first-run sheet says what this throwaway
+  // studio has (no model, which parts are set up), and a new Setup row is not a change in motion
+  const s = await studio({ root, setup: ({ runs }) => { crewRun(runs, crew, T); writeFileSync(join(dirname(runs), 'setup.json'), '{"seen":true}') } })
   const ids = { ...s.ids, crew }
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
   const trace = {}
