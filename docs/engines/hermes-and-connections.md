@@ -104,6 +104,15 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - Browser sign-in is Hermes's public CLI, `hermes auth add <provider> --type oauth`, unbuffered; the sheet reads
   the link after "Open" and the user code from what it prints (hermes_cli/auth_device_flow.py,
   auth_codex_browser.py, auth_openrouter.py). Hermes opens the browser itself.
+- Setup › Parts (web/setup-parts.js) lists every part a build uses, grouped by what the person makes, with its
+  state and one fix. `GET /api/setup/parts` (server/setup.mjs `partsLocal`) answers only whether each key in
+  `PART_KEYS` is set (booleans), Stripe's `test`/`live`, and whether Godot (`godotBin`), Chrome (`findChrome`),
+  ffmpeg, HyperFrames, Kokoro and the built Dyad engine are on this computer. A key's fix is the command
+  `hermes config set <NAME> <your key>` to copy, never a box to paste into; the launcher passes it at the
+  studio's next start (launcher.py PASSED_KEYS). Unchecked: that `hermes config set` stores a plugin's own
+  `optional_env` secret where `get_secret` reads it (verified only for provider keys, the `keyEnv` route above);
+  settle from Hermes's hermes_cli/config.py. Nothing restarts the studio yet, so a new key shows "Not set up"
+  until it next starts.
 - Hermes caches its config by file time, so a pick applies without a restart. A pick is two CLI calls, about
   1.5 s each.
 

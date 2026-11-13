@@ -117,6 +117,8 @@ const hermesUses = role => {
   return s?.model ? s : hermesModels?.main?.model ? hermesModels.main : null
 }
 loadModels()
+// Settings › Lite mode saved a pick: read it again
+addEventListener('swarm:models', () => { loadModels() })
 
 const ROLE_ROWS = [
   { role: 'planner', label: 'Planner', note: 'plans the pages and the design system', list: 'text' },
