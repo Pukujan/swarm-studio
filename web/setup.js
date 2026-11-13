@@ -25,7 +25,7 @@ export function makeSetup({ sw }) {
   const S = { view: null, test: undefined, open: '', hermes: null, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '' }
 
   const mark = (ok, label) => `<span class="su-mark${ok ? '' : ' warn'}" role="img" aria-label="${label}">${ic(ok ? 'check' : 'alert', 16)}</span>`
-  const busy = '<span class="su-spin" role="img" aria-label="Testing"></span>'
+  const busy = '<span class="su-spin" role="img" aria-label="Testing" aria-busy="true"></span>'
   const short = m => String(m || '').replace(/^[a-z]+\//, '')
 
   // the model a role runs on: its Hermes slot, or Hermes's main model while the slot is empty

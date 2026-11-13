@@ -1,0 +1,39 @@
+/* Hermia's cursor, always there (docs/specs/41-pet-cursor.md; web/pet.js). One fixed cursor above the Studio's
+   boards, Projects (150) and the chat sheet, and below every menu, popover and dialog (160 and up). She never
+   takes a click: nothing here has pointer-events. */
+.pet { position: fixed; left: 0; top: 0; z-index: 155; pointer-events: none; will-change: transform; transition: opacity .3s; }
+.pet * { pointer-events: none; }
+.pet.away { opacity: 0; }
+.pet-body { position: relative; display: block; width: 32px; height: 32px; transform-origin: 30% 90%; }
+.pet-nib { position: absolute; left: -1px; top: -1px; width: 11px; height: 11px; display: block; filter: drop-shadow(0 1px 1px rgb(var(--shade-rgb) / .7)); }
+.pet-nib path { fill: var(--text); stroke: var(--void); stroke-width: 1; stroke-linejoin: round; }
+.pet-av { position: absolute; left: 5px; top: 6px; display: block; filter: drop-shadow(0 2px 4px rgb(var(--shade-rgb) / .65)); transition: opacity .3s; }
+.pet-av svg { display: block; }
+/* a little float while she waits, a slow breath while she dozes */
+.pet-body { animation: pet-bob 2.6s ease-in-out infinite; }
+@keyframes pet-bob { 50% { transform: translateY(-2px) rotate(-4deg); } }
+.pet.doze .pet-body { animation: pet-doze 4.2s ease-in-out infinite; }
+@keyframes pet-doze { 50% { transform: translateY(1px) scale(.96); } }
+.pet.doze .pet-av { opacity: .55; }
+.pet-z { position: absolute; left: 26px; top: -4px; font: 600 10px var(--mono); color: var(--muted); opacity: 0; transition: opacity .3s; }
+.pet.doze .pet-z { opacity: 1; }
+/* a screen is starting: three dots beside her */
+.pet-dots { position: absolute; left: 28px; top: 14px; display: flex; gap: 3px; opacity: 0; transition: opacity .2s; }
+.pet-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--text); animation: pet-dot 1s ease-in-out infinite; }
+.pet-dots i:nth-child(2) { animation-delay: .15s; }
+.pet-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes pet-dot { 50% { opacity: .25; } }
+.pet:not(.loading):not(.working) .pet-dots i { animation: none; }
+.pet.loading .pet-dots, .pet.working .pet-dots { opacity: 1; }
+.pet.loading .pet-z, .pet.working .pet-z { opacity: 0; }
+/* working on a placeholder (pet.working, or a skeleton she found): a small tap, like the crew at work */
+.pet.working:not(.doze) .pet-body { animation: pet-tap .7s ease-in-out infinite; }
+@keyframes pet-tap { 50% { transform: translateY(2px) scale(.9); } }
+.pet-bub { position: absolute; left: 34px; top: 34px; max-width: 220px; width: max-content; padding: 6px 10px; border-radius: 4px 12px 12px 12px;
+  background: rgb(var(--deep-rgb) / .94); backdrop-filter: blur(8px); color: var(--text); font: 12px/1.4 var(--font); border: 1px solid var(--line);
+  box-shadow: 0 4px 14px rgb(var(--shade-rgb) / .5); opacity: 0; transform: translateY(-4px); transition: opacity .25s, transform .25s; }
+.pet.talking .pet-bub { opacity: 1; transform: none; }
+.pet.flip .pet-bub { left: auto; right: 4px; border-radius: 12px 4px 12px 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .pet-body, .pet.doze .pet-body, .pet.working:not(.doze) .pet-body, .pet-dots i { animation: none; }
+}

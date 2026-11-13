@@ -1,0 +1,10 @@
+{
+  "why": "PR studio-layers (#416): the Design deck's Layers panel narrows its canvas by 272 px, so in the replay the reviewer's cursor crosses the canvas's edge (it fades) and the page is further along at its first frame (the chat feed's arrivals are not caught). With the margin off, the replay's animations match exactly. Empty this list in the next change that touches motion. (PR pet-cursor's kinds were emptied here, as that rule asks.)",
+  "gained": [
+    "page ~opacity div.cursor<#cursors"
+  ],
+  "lost": [
+    "page @blink 0s 1 span.txt",
+    "page @in 0.3s 1 div.item<#feed"
+  ]
+}

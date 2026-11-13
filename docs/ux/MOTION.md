@@ -8,11 +8,21 @@ Everything in the Studio web UI that moves, with the code that owns it. It exist
 2. **The split itself is a move.** The split moved code without changing it. The few lines that had to change are listed in its pull request: an import, an export, and an assignment to a `let` that another file owns, which now calls that file's setter. Since the split, the `file:line` references here point into `web/canvas/` ([web/canvas/README.md](../../web/canvas/README.md)).
 3. **Clips to watch** (`docs/ux/motion/clips/`): Projects, the replay, a half-done build, Play and a visitor's tour, 640 wide, recorded from this commit with `node scripts/motion-check.mjs clips <dir>`. Record them again after a split to compare by eye.
 
-A pull request that means to change how a scene looks (a new panel on the Studio scaffold, say) adds one line to its description, `Motion: looks change in studio` (scene names from the list above, comma-separated). CI then lets that scene's end picture differ and prints how much; its animations are still compared, so a change of motion fails as before. A pull request whose layout change also changes a scene's animations (a narrower canvas moves a cursor across its edge) adds `Motion: moves change in replay`; the lost and gained animations are then printed in the log for the reviewer instead of failing. Both lines are bare (no bullet, backticks or full stop), and they are read from the description when the branch is pushed, so edit the description first.
+A pull request that means to change how a scene looks (a new panel on the Studio scaffold, say) adds one line to its description, `Motion: looks change in studio` (scene names from the list above, comma-separated). CI then lets that scene's end picture differ and prints how much; its animations are still compared, so a change of motion fails as before (a change that means to add or remove animations lists them in `docs/ux/motion/accepted.json`, below). The line is bare (no bullet, backticks or full stop), and it is read from the description when the branch is pushed, so edit the description first.
 
 The motion check does not see the speed of JS-driven movement (a cursor gliding a little faster ends in the same place), so a split must not touch the numbers in the JS clocks and gestures below; the move-only rule is what covers them.
 
 How to read the tables. "Owned by" gives the keyframes or rule first, then the JS that triggers it (`css | js`). Reduced motion: "global" means the blanket rule at `web/canvas.css:1403` (`*` gets `animation-duration .01ms`, `animation-iteration-count 1`, `transition-duration .01ms`, all `!important`). It covers the whole app page but not the page frames, which are separate documents (`web/frame.html`, the Play frame, the exports). "none" means nothing is done for it beyond that. JS-driven movement (camera glide, cursor travel, tours, loops) is not touched by any reduced-motion rule unless a row says so.
+
+## A change that changes the motion
+
+The motion check is for changes that keep the motion. A change meant to add or remove motion (a new cursor, a
+new skeleton) says so in [docs/ux/motion/accepted.json](motion/accepted.json): the animation kinds it gains
+(`gained`) or loses (`lost`), exactly as the check prints them under "ran after, not before" and "ran before, not
+after", and a `why`. Those kinds are excused in every scene; nothing else is, and the end pictures are still
+compared. The change also adds or removes its rows in the tables below. The check prints the kinds it excused,
+and any listed kind it did not see; the next change that touches motion empties the list, since after the merge
+those kinds run before as well.
 
 ## Design deck and camera
 
@@ -51,6 +61,12 @@ How to read the tables. "Owned by" gives the keyframes or rule first, then the J
 | Hermia radio line (dotted) | an order is heard in the last 7 s | `radio-dash` .8 s linear infinite; path rewritten every crewTick frame | `web/canvas.css:1447` (keyframes `1448`) ; `web/canvas/start.js:272-280` | global |
 | Reviewer cursor (hovers over the page under review) | `rvMove` on review events | ease 0.12 per frame (not dt-corrected); re-aims every 1100 ms; `leaving` removes it after 600 ms; `--inv` set each frame so boxes keep their pixel width | `web/canvas.css:1500` ; `web/canvas/auto.js:171-216` (`rvTick` `web/canvas/auto.js:193`, wander `web/canvas/auto.js:215`) | not handled |
 | Reviewer boxes: appear, then green flash and clear | `review:flag`, then fix lands | `rv-in` .35 s scale 1.04 to 1; `rv-fixed` 1.1 s ease-out (ring grows, fades); box removed at 1100 ms | `web/canvas.css:1501-1506` ; `web/canvas/auto.js:218-236` (`web/canvas/auto.js:235`, `web/canvas/auto.js:236`) | global |
+| Hermia's cursor (the pet, spec 41): travel | pointer moves (she trails it by 26/30 px), the pointer rests 1.7 s near the last-touched card (she walks to its top-right corner and follows it while the board pans), a resize, a new screen | ease 0.075 per 60 fps frame, dt-corrected; rAF only while more than 0.6 px from the target, never in a hidden tab; on a phone (≤ 760 px) she sits at the board's right edge above the chat and does not follow touches | `web/pet.js:237-260` (`step`, `go`, `rest`) | JS: snaps to the target, no easing (`web/pet.js:252`) |
+| Hermia's cursor: float and doze | always; `.doze` after 30 s with no pointer or key | `pet-bob` 2.6 s ease-in-out infinite; `pet-doze` 4.2 s infinite; avatar opacity and the `z` .3 s | `web/pet.css:13-19` ; `web/pet.js:262-273` (`wake`) | `web/pet.css:37-39` (no animation) and global |
+| Hermia's cursor: loading dots | `.loading` from a new screen until its view holds no `.wait-in` or `aria-busy` (checked every 250 ms, at most 12 s), or `pet.on('ready')` | `pet-dot` 1 s infinite, .15 s stagger; opacity .2 s | `web/pet.css:21-29` ; `web/pet.js:274-306` | `web/pet.css:37-39` and global |
+| Hermia's cursor: bubble and hand-over | `.talking` for 3.6 s per line (a burst of events within 0.9 s, at most 2.5 s, makes one; at most one bubble per 20 s); `.away` from `run:start` to `run:done` | bubble `opacity`/`transform` .25 s; the cursor's opacity .3 s | `web/pet.css:32-36`, `3-5` ; `web/pet.js:341-362` | global |
+| Hermia's cursor: working on something slow | a placeholder on screen (`PET_BUSY`: `.wait-in`, `aria-busy`, an Overview page's `.sk`, the app's frame loading) or one handed to `pet.working(el)`; checked every 500 ms; she goes to it while a screen loads or the pointer rests 1.2 s, and leaves when it is gone | `.working`: `pet-tap` .7 s ease-in-out infinite, the dots as above; travel as above | `web/pet.css:30-31` ; `web/pet.js:315-338` (`scan`), `web/pet.js:477` (`working`) | `web/pet.css:37-39` and global |
+| Board skeletons while a screen loads (Projects' cards, the Overview's pages, the Plan board, the Studio, the brand sheet) | `.wait-in` until the data arrives | `sk-wait` 1.6 s ease-in-out infinite alternate on `.ab.wait-in` | `web/project.css:90` ; `web/home.js:53`, `web/project.js:424`, `web/plan.js:104`, `web/scaffold.js:164` | `web/project.css:91` and global |
 
 ## Chat, feed and dock
 
@@ -231,6 +247,7 @@ Every `requestAnimationFrame` loop and `setInterval` in `web/*.js` and `web/*.ht
 | `cwLoop` (rAF through `nextFrame`) | every rAF while `view === 'app'` and the app is working; otherwise every 400 ms | code and art wall tiles (typing, scroll, picture turns) | `web/canvas/dock.js:356` |
 | `rvTick` (rAF) | every rAF while the reviewer cursor exists; stops when it leaves | reviewer cursor, `--inv` | `web/canvas/auto.js:193-202`, started `web/canvas/auto.js:216` |
 | `glide` step (rAF) | per rAF for 380-1100 ms per tour move | tour cursor | `web/canvas/player.js:331-347` |
+| Hermia's cursor `step` (rAF) | every rAF while she is more than 0.6 px from her target; stops at rest and in a hidden tab | the pet | `web/pet.js:237-249` |
 | `draw` in layerlink (rAF) | every rAF while any line is drawn (`wake()` restarts it) | dashed lines from chips to layers | `web/layerlink.js:95-128` |
 | One-shot rAF | once | `appKitArrows` after render (`web/kit-app.js:111`); Overview narrow-screen fit and zoom (`web/project.js:598`, `1019`) | |
 | `think` phrase timer | 1500 ms | tour thought bubble | `web/canvas/player.js:362` |
@@ -256,6 +273,7 @@ Not intervals but they run on a clock: setTimeout chains for data polls (`web/ho
 
 | File:line | What it varies |
 |---|---|
+| `web/pet.js:119` | which of an event's lines Hermia's cursor says (text only, no motion) |
 | `web/canvas/deck.js:24` | start offset of a new agent cursor above its dock seat |
 | `web/canvas/deck.js:88` | `--dx`, horizontal drift of each `spark` letter |
 | `web/canvas/deck.js:256` | whether an `<svg>` tail gets a `pen` gesture (50 %) |
