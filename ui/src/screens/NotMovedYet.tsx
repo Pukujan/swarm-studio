@@ -8,9 +8,9 @@ import { SCREEN_NAMES } from './index'
 export function NotMovedYet() {
   const { view } = useNav()
   return (
-    <section className="grid min-h-[60dvh] place-content-center justify-items-center gap-6 p-6 text-center">
+    <main className="grid min-h-[60dvh] place-content-center justify-items-center gap-6 p-6 text-center">
       <h1 className="font-display text-5xl font-extrabold uppercase">{SCREEN_NAMES[view.room]}</h1>
       <LinkButton role="primary" href={`/${search(view, location.search)}`}>Open in the Studio</LinkButton>
-    </section>
+    </main>
   )
 }

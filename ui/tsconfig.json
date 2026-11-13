@@ -18,7 +18,11 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client", "node"],
-    "paths": { "@studio/nav": ["./src/nav/studio-nav.d.ts"] }
+    "paths": {
+      "@studio/nav": ["./src/nav/studio-nav.d.ts"],
+      "@studio/icons": ["./src/studio/studio-icons.d.ts"],
+      "@studio/makeways": ["./src/studio/studio-makeways.d.ts"]
+    }
   },
   "include": ["src", ".storybook", "vite.config.ts"]
 }
