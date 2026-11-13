@@ -1,9 +1,9 @@
-Swarm Studio, brand packs (engine/opendesign/packs.json)
+Swarm Studio, brand packs and design systems (engine/opendesign/packs.json, engine/opendesign/systems.json)
 
-Portions of packs.json are derived from Open Design
+Portions of packs.json and systems.json are derived from Open Design
 Repository: https://github.com/nexu-io/open-design
-Files: design-systems/<id>/DESIGN.md, tokens.css and manifest.json for the 53 generic styles listed in
-CREDITS.md (commit bc06128813c99fa63f5af53ad2c903c27db057f2)
+Files: design-systems/<id>/DESIGN.md, tokens.css, manifest.json and components.manifest.json for every
+system listed in CREDITS.md (commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582)
 Copyright (c) Open Design contributors.
 License: Apache-2.0 (see LICENSE in this folder)
 
@@ -11,16 +11,20 @@ Most of those systems were themselves normalised by Open Design from bergside/aw
 (https://github.com/bergside/awesome-design-skills, commit f631a09b4fcc0166f2e2c1a8c81906ef680c57e8),
 Copyright (c) 2026 Bergside, License: MIT (see LICENSE.bergside in this folder).
 
-Changes made for Swarm Studio (scripts/import-od-systems.mjs):
-- Only the colours (surface, text, primary, secondary), the heading and body font, the medium corner
-  radius and the first line of the visual theme are kept. Dropped: the rest of DESIGN.md (components,
-  spacing, motion, voice boilerplate, anti-patterns, translations), the full token scale (surfaces,
-  borders, shadows, type scale, spacing, motion), components.html, previews and Tailwind files.
+Changes made for Swarm Studio (scripts/import-od-systems.mjs; decision 0016):
+- packs.json keeps the colours (surface, text, primary, secondary), the heading and body font, the
+  medium corner radius (in px) and the first line of the visual theme.
+- systems.json keeps, per system: the tokens of the first :root block in tokens.css without its comments,
+  colours and fonts (the brand sheet's palette and type are the colours and fonts) and without the names
+  Swarm's pages already define; a digest of DESIGN.md (the first line of the visual theme, the first four
+  do's and don'ts or anti-patterns, shortened); and the labels of the component groups in
+  components.manifest.json. Dropped: the rest of DESIGN.md, components.html, previews and Tailwind files.
 - Fonts that are not Google Fonts families, and display faces used as body text, are replaced; each
   replacement is listed in the pack's `dropped` field.
 - Who each look is for, the words that suggest it, the voice, the picture style and the storyboard
   were written for Swarm Studio; they are not from either source.
-- Systems named after a real company, product, person or game were not imported.
+- Every system is imported, the ones named after a real company or product too (decision 0016); they
+  are Open Design's aesthetic inspirations, not official assets of those companies.
 
 ----
 

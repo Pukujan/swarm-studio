@@ -893,8 +893,9 @@ async function reviewNow(id, input) {
   const measured = (Array.isArray(input.measured) ? input.measured : []).filter(m => m && keys.has(m.section) && m.problem).slice(0, 6)
     .map(m => ({ section: m.section, problem: clip(m.problem, 160), fix: clip(m.fix, 220), measured: true }))
   // what the slop linter (engine/lint) still finds after each builder's own fix pass: the worst in each
-  // section, handed on like the measured overlaps (the rest of a section's findings are P1 advice)
-  const linted = sections.flatMap(s => lintSection(s.html).filter(f => f.severity === 'P0').slice(0, 1)
+  // section, handed on like the measured overlaps, and a section that ignores the design system's tokens (the
+  // rest of a section's findings are P1 advice)
+  const linted = sections.flatMap(s => lintSection(s.html, { tokens: theme?.system?.tokens }).filter(f => f.severity === 'P0' || f.id === 'tokens-unused').slice(0, 1)
     .map(f => ({ section: s.key, problem: clip(f.message, 160), fix: clip(f.fix, 220), lint: f.id })))
   // the same page at phone width, for a second look
   const phone = input.mobile && /^data:image\/(jpeg|png|webp);base64,/.test(String(input.mobile.image || '')) && Array.isArray(input.mobile.sections)
