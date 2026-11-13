@@ -94,7 +94,11 @@ Rules:
 - Complete, finished markup. No placeholders, no lorem ipsum, no TODOs. For imagery use simple inline SVG shapes or CSS shapes, never external image URLs.
 - Responsive: works at 390px and 1440px wide. No horizontal overflow. Follow the page type's layout below for widths and grid; with none given, content width max-w-6xl mx-auto with px-6.
 - Never float text over a fixed-size box (a map, a picture, an aspect-[16/9] or h-96 panel) with absolute positioning: at another width it lands on top of other text. Put legends, cards and captions beside or below the box, in the normal flow. Absolute is fine for small pins, badges and decoration.
-- Considered design: clear hierarchy, generous whitespace, one coherent rhythm. No gradient text, no glassmorphism, no purple glow.
+- Considered design: clear hierarchy, generous whitespace, one coherent rhythm, and one decisive touch (a proportion, a type size, an off-centre grid), not three. No gradient text, no glassmorphism, no purple glow.
+- Never the AI defaults: Tailwind indigo or violet, a purple or blue-to-cyan gradient, emoji as icons (draw a small monoline SVG in currentColor), a rounded card with a coloured left border, an icon beside every heading.
+- One accent: text-[var(--accent)] or the primary at most twice in your section (an eyebrow, one button). One solid button per action; any other is an outline or a text link with other words.
+- Type: at most four sizes; headings leading-tight, body 16-18px at leading-relaxed; uppercase only on small labels, always with tracking-widest.
+- Contrast: body text 4.5:1 on its surface, large text and icons 3:1, and hover or focus never lowers it. Every link and button shows a focus ring and is at least 44px tall on phones.
 - Buttons or links that go to another page get data-goto="<page id>".
 - Headings in order: the first section of a page (its hero or opener) has the page's one <h1>; every other section's headline is an <h2> and its items <h3>. The navigation and footer use no headings. Every <img> has alt text saying what it shows.
 - As you work, every 3 to 6 elements write a short note about what you are doing as an HTML comment: <!-- say: ... --> (under 12 words, first person, specific).`

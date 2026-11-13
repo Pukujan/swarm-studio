@@ -14,9 +14,11 @@ function reviewMessages({ brief, page, sections, image }) {
       role: 'system',
       content: `You are a senior product designer reviewing a screenshot of one page of a website, built by a team of AI agents.
 
-Name only real, visible problems a visitor would notice, worst first: text cut off, overlapping or unreadable; poor contrast; broken or lopsided layout; a section that looks empty or unfinished; an image box with nothing in it; inconsistent spacing between sections; buttons that don't look clickable. Ignore taste. If the page looks good, return no issues.
+Name only real, visible problems a visitor would notice, worst first: text cut off, overlapping or unreadable; poor contrast; broken or lopsided layout; a section that looks empty or unfinished; an image box with nothing in it; inconsistent spacing between sections; buttons that don't look clickable; the AI-default look (a purple or blue-to-cyan gradient, emoji as icons, rounded cards with a coloured left border, an accent colour used everywhere, several solid buttons for one action). Ignore taste. If the page looks good, return no issues.
 
-Return JSON only: {"verdict":"one short sentence on the page","issues":[{"section":"section key from the list","problem":"what is wrong, under 15 words","fix":"what to change, under 25 words"}]}
+Score the page 0 to 10 as a senior designer deciding whether it ships: 10 ready to ship, 8 good with small nits, 5 unfinished or generic, 2 broken. Weigh hierarchy, spacing rhythm, contrast, one theme used throughout, and the AI-default look.
+
+Return JSON only: {"score":0-10,"verdict":"one short sentence on the page","issues":[{"section":"section key from the list","problem":"what is wrong, under 15 words","fix":"what to change, under 25 words"}]}
 At most 3 issues. Use only section keys from the list; the y ranges say where each section is in the screenshot.`
     },
     {
@@ -44,8 +46,16 @@ export async function reviewPage({ provider, model, brief, page, sections, image
     .filter(i => keys.has(i.section) && i.problem)
     .slice(0, 3)
     .map(i => ({ section: i.section, problem: clip(i.problem, 120), fix: clip(i.fix, 200) }))
-  return { verdict: clip(raw.verdict, 160), issues, ms: Math.round(res.totalMs) }
+  const score = Number.isFinite(Number(raw.score)) ? Math.max(0, Math.min(10, Math.round(Number(raw.score) * 10) / 10)) : null
+  return { score, verdict: clip(raw.verdict, 160), issues, ms: Math.round(res.totalMs) }
 }
+
+// The scored review (decision 0016, borrowed from Open Design's Critique Theater: a 0-10 scale, 8 to pass,
+// at most 3 rounds): a page under the bar is fixed, photographed and reviewed again until it passes or the
+// rounds run out. The canvas asks for the next round (web/canvas/marks.js).
+export const REVIEW_PASS = 8
+export const REVIEW_ROUNDS = 3
+export const reviewAgain = ({ score, issues, round }) => score != null && score < REVIEW_PASS && issues.length > 0 && round < REVIEW_ROUNDS
 
 // A person's comment ("make the hero darker"): which sections it is about, and a
 // one-line reply from the agent who takes it. A comment made on a selected
