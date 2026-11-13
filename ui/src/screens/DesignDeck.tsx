@@ -9,6 +9,8 @@ import { Icon } from '../primitives/Icon'
 import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
 import { DeckStage, type StageHandle } from './deck/DeckStage'
+import { DeckBoard } from './deck/DeckBoard'
+import { boardMode } from '../board/flag'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
 import { useDeckRun } from './deck/source'
 
@@ -16,6 +18,7 @@ export function DesignDeck() {
   const { view } = useNav()
   const { model, loading, error } = useDeckRun(view.run ?? view.version)
   const stage = useRef<StageHandle>(null)
+  const [board] = useState(() => boardMode())
   const [zoom, setZoom] = useState(1)
   // the page Layers lists: the one the person picked, else the address's page, else the first
   const [picked, setPicked] = useState<string | null>(null)
@@ -61,7 +64,10 @@ export function DesignDeck() {
                 <p className="font-monospace text-muted">This version has nothing on its pages yet.</p>
                 {studio}
               </div>
-            : <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} />}
+            : board === 'dom'
+              ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} />
+              // the image-first board, behind ?board=tiers|pixi until the gauge says (src/board/flag.ts)
+              : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={picked ?? view.page ?? null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} />
