@@ -402,7 +402,7 @@ export function makePlan({ sw, C, root }) {
     get id() { return P.id },
     get selected() { return !!P.sel },
     async show(id, { fresh = false } = {}) {
-      if (id && id !== P.id) { P.id = id; P.plan = null; P.sel = null; P.cell = null; P.framed = false }
+      if (id && id !== P.id) { P.id = id; P.plan = null; P.sel = null; P.cell = null; P.framed = false; render() }
       if (id) P.draft = false
       P.on = true
       root.hidden = false
