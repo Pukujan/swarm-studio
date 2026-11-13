@@ -179,6 +179,12 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
   and 390 wide, is checked for its breadcrumb (rule 7), axe-core violations, sideways scroll, console errors and
   a loading state. What the app breaks today is in `.ui-audit-known-violations.json`, so CI fails only on a new
   violation. AUDIT.md lists the rules not yet automated.
+- **Decided (owner, 2026-11-13), not built:** image-first boards ([decision 0014](decisions/0014-image-first-boards.md),
+  [spec 43](specs/43-image-first-boards.md)). Anything nobody is touching is a photo sized by the zoom: at most 3 live
+  pages and 2 playing videos, photo textures within a byte budget, Lite mode as the low-memory profile. PixiJS v8
+  paints the photos and video; live pages sit on a DOM overlay. A CI gauge (a 250-card fixture: p95 frame time, heap,
+  GPU memory) gates every board PR and lands first (`ci/board-gauge`), then `fix/video-teardown`,
+  `feat/image-service` (`@napi-rs/image`), `feat/inpage-capture`, `feat/tier-manager` and the ports.
 - **Not started:**
   - the other two design artifacts:
     - Storybook mock-ups (Storybook is set up in `ui/`; each moved screen adds its own);
