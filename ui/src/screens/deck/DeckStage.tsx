@@ -193,6 +193,13 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     const l = a.layer ? model.layers[a.layer] : null
     return l ? [l.page === '*' ? model.pages[0]?.id : l.page].filter((x): x is string => !!x) : []
   }))].sort().join('|')
+  // the page the person picked a section on should be live too (a tier manager shows it for real, not as a photo)
+  const pickedPage = selected?.page ?? null
+  useEffect(() => {
+    if (!pickedPage) return
+    host.requestLive(pickedPage, 'selected')
+    return () => host.releaseLive(pickedPage, 'selected')
+  }, [host, pickedPage])
   useEffect(() => {
     const ids = agentPages ? agentPages.split('|') : []
     for (const id of ids) host.requestLive(id, 'agent')
