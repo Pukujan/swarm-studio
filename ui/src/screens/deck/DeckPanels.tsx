@@ -118,7 +118,11 @@ export function progress(m: DeckModel): string {
   }
 }
 
-export function RightPanel({ model, zoom, onFit }: { model: DeckModel, zoom: number, onFit: () => void }) {
+// the top row (Figma's): who is here, Play, Replay and the zoom. Play is the deck's one primary action (rule 17).
+export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay }: {
+  model: DeckModel, zoom: number, onFit: () => void, canPlay: boolean, onPlay: () => void,
+  replay: { on: boolean, can: boolean, toggle: () => void }
+}) {
   const vars = Object.entries(model.theme?.vars ?? {})
   const fonts = model.theme?.fonts
   return (
@@ -131,6 +135,12 @@ export function RightPanel({ model, zoom, onFit }: { model: DeckModel, zoom: num
         </ul>
         <Button role="ghost" onPress={onFit} aria-label={`Zoom ${Math.round(zoom * 100)}%, fit every page`} className="ml-auto px-2 font-monospace font-normal! normal-case! tracking-normal!">
           {Math.round(zoom * 100)}%
+        </Button>
+      </div>
+      <div className="flex gap-2 border-b border-edge px-3 py-2">
+        <Button role="primary" isDisabled={!canPlay} onPress={onPlay} className="flex-1"><Icon name="play" size={16} />Play</Button>
+        <Button role="secondary" isDisabled={!replay.can} aria-pressed={replay.on} onPress={replay.toggle}>
+          <Icon name={replay.on ? 'x' : 'restore'} size={16} />{replay.on ? 'Stop replay' : 'Replay'}
         </Button>
       </div>
       <p role="status" className="border-b border-edge px-4 py-2.5 font-monospace text-[13px] text-muted">{progress(model)}</p>

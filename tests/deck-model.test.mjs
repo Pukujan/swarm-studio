@@ -58,3 +58,21 @@ test('the tool an agent holds is read off what it is writing (web/canvas/deck.js
   assert.equal(detectTool('<a data-goto="plans"'), 'connect')
   assert.equal(detectTool(''), 'frame')
 })
+
+test('Replay types each finished section back in, in time order, and cuts long gaps to 1.5 s', async () => {
+  const { withTyping, schedule } = await import('../ui/src/screens/deck/replay.ts')
+  const saved = deckEvents('done')
+  const events = withTyping(saved)
+  const deltas = events.filter(e => e.type === 'layer:delta')
+  assert.ok(deltas.length >= 6 * 8, 'each section in at least six pieces')
+  // the pieces of one section make its finished HTML, and they come before its layer:done
+  const done = saved.find(e => e.type === 'layer:done' && e.page === 'home' && e.layer === 'hero')
+  const mine = deltas.filter(e => e.page === 'home' && e.layer === 'hero')
+  assert.equal(mine.map(e => e.text).join(''), done.html)
+  assert.ok(events.indexOf(mine.at(-1)) < events.indexOf(done))
+  for (let i = 1; i < events.length; i++) assert.ok(events[i].t >= events[i - 1].t)
+  // folded, the replay ends where the saved build does
+  assert.deepEqual(fold(events, RUN).order.map(k => fold(events, RUN).layers[k].text), fold(saved, RUN).order.map(k => fold(saved, RUN).layers[k].text))
+  const at = schedule([{ type: 'a', t: 0 }, { type: 'b', t: 1000 }, { type: 'c', t: 61000 }])
+  assert.deepEqual(at, [0, 1000, 2500])
+})
