@@ -21,6 +21,7 @@ Film voiceover (server/server.mjs:1121-1131):
 Film music (server/server.mjs:1133-1163). First match wins:
 1. A track dropped in the Video kit (`video/music.*`) is used as is (server/server.mjs:1143-1144).
 2. ElevenLabs via Hermes's MCP connector (`mcpScore`) or a key (`elevenScore`), with a prompt of tempo, mood, instruments and the timed cue sheet, "No vocals", never a reference's melody (server/server.mjs:1145-1151, engine/score.mjs:162-166).
+   Through the MCP the saved file is found in the connector's reply, as a Unix or a Windows path; none found and the code score below plays (engine/media.mjs:102-107).
 3. Otherwise `scoreWav()` writes a stereo WAV in code to the cue sheet: sections, booms on hits, true silence in stops, nine synthesised effects (server/server.mjs:1153, engine/score.mjs:31, engine/storyboard.mjs:19).
 - Then `decode()`/`analyse()` measure tempo, onsets, drop and quiet passages, and `cutToMusic()` moves the cuts; the studio score is rewritten to the final cuts (server/server.mjs:1155-1162, engine/musiccut.mjs:31-39).
 - `mix()` lays music, voice lines and effects under the silent render with ffmpeg; music ducks under voice (sidechain compress), stop windows are muted, a limiter caps at 0.95 (engine/sound.mjs:184-210, server/server.mjs:1218).

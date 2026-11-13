@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 const BAR = { units: 500, p95: 25, avg: 20 } // ms: a playable 60 fps frame with room for the game on top
 const run = JSON.parse(readFileSync(new URL('../bench/strategy-500.json', import.meta.url), 'utf8'))
@@ -32,7 +33,7 @@ test('the Web export holds 500 units at a playable frame rate in a browser', () 
 })
 
 test('measured again with this machine\'s Godot', { skip: !process.env.SWARM_GODOT && 'set SWARM_GODOT to measure here' }, () => {
-  const out = execFileSync(process.execPath, [new URL('../bench/starter-strategy.mjs', import.meta.url).pathname, '--units', '500'], { encoding: 'utf8', timeout: 600000 })
+  const out = execFileSync(process.execPath, [fileURLToPath(new URL('../bench/starter-strategy.mjs', import.meta.url)), '--units', '500'], { encoding: 'utf8', timeout: 600000 })
   holds(JSON.parse(out.slice(out.indexOf('{'))).headless, 'headless here')
 })
 

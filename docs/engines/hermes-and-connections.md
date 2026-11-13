@@ -71,6 +71,7 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 ### Other connectors
 
 - ElevenLabs: `ELEVENLABS_API_KEY` passed as `SWARM_ELEVENLABS_KEY`, or a pasted key, or an ElevenLabs MCP (plugin.yaml:15-17, launcher.py:217-223, engine/media.mjs:18-30, 84-86).
+  Through the MCP, the file the connector saved is found from its reply, as a Unix or a Windows path (engine/media.mjs:102-107); none found means the studio scores the film itself (server/server.mjs).
 - Meshy: `MESHY_API_KEY`, asks before spending credits (plugin.yaml:25-27).
 - Pexels and Octo stand-in photos: `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL` (plugin.yaml:28-40).
 - Vercel and Cloudflare Pages: pasted token checked with the provider, kept mode 0600 in `connections.json`, or env `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`, or an Octo vault grant (engine/connect.mjs:1-24, 128-141).
