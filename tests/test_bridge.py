@@ -140,6 +140,77 @@ class Bridge(unittest.TestCase):
             if f.is_file():
                 self.assertNotIn(token.encode(), f.read_bytes(), f)
 
+    def fake_hermes(self, multiplex=True):
+        """A stand-in for Hermes's secret scope: on a multiplexed gateway a key read with no scope fails
+        closed (agent/secret_scope.py get_secret), as NousResearch/hermes-agent#132887 reports."""
+        import contextvars
+        import types
+        bound = contextvars.ContextVar("bound", default=None)
+        homes = contextvars.ContextVar("home", default=None)
+        scope = types.ModuleType("agent.secret_scope")
+        scope.is_multiplex_active = lambda: multiplex
+        scope.current_secret_scope = bound.get
+        scope.build_profile_secret_scope = lambda home: {"MODEL_KEY": f"key-of:{home}"}
+        scope.set_secret_scope = lambda mapping, profile_home=None: bound.set(mapping)
+
+        def get_secret(name):
+            if bound.get() is None and multiplex:
+                raise RuntimeError("Hermes could not read this profile's MODEL_KEY (an internal profile-scoping bug)")
+            return (bound.get() or {}).get(name, "from-env")
+        scope.get_secret = get_secret
+        agent = types.ModuleType("agent")
+        agent.secret_scope = scope
+        consts = types.ModuleType("hermes_constants")
+        consts.get_hermes_home = lambda: Path(self.home)
+        consts.set_hermes_home_override = homes.set
+        patch = mock.patch.dict(sys.modules, {"agent": agent, "agent.secret_scope": scope, "hermes_constants": consts})
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(setattr, self.b, "HOME", None)
+        return scope, bound, homes
+
+    def test_a_model_call_reads_its_key_on_a_multiplexed_gateway(self):
+        # Hermes Desktop multiplexes profiles: the bridge's own threads must carry the profile's keys
+        scope, bound, homes = self.fake_hermes()
+        self.b.keep_profile()
+        self.assertEqual(self.b.HOME, Path(self.home))
+        with self.assertRaises(RuntimeError):
+            scope.get_secret("MODEL_KEY")  # what every studio model call hit before
+        got = self.b.in_profile(lambda: (scope.get_secret("MODEL_KEY"), homes.get()))
+        self.assertEqual(got, (f"key-of:{self.home}", Path(self.home)))
+        self.assertIsNone(bound.get())  # bound for that call only, never left on the thread
+        # a scope Hermes already bound (its own fix, hermes-agent#132898) is kept as it is
+        token = bound.set({"MODEL_KEY": "hermes-bound"})
+        self.assertEqual(self.b.in_profile(scope.get_secret, "MODEL_KEY"), "hermes-bound")
+        bound.reset(token)
+
+    def test_a_single_profile_hermes_is_left_alone(self):
+        scope, bound, _ = self.fake_hermes(multiplex=False)
+        self.b.keep_profile()
+        self.assertEqual(self.b.in_profile(lambda: (scope.get_secret("MODEL_KEY"), bound.get())), ("from-env", None))
+        self.b.HOME = None  # no Hermes home known (an older Hermes): the call runs as it is
+        self.assertEqual(self.b.in_profile(lambda x: x + 1, 1), 2)
+
+    def test_the_server_binds_the_profile_for_model_calls(self):
+        scope, _, _ = self.fake_hermes()
+        self.b.keep_profile()
+
+        class Llm:
+            def complete(self, messages, **_):
+                return {"text": scope.get_secret("MODEL_KEY")}
+
+        class Ctx:
+            llm = Llm()
+        self.b.CTX = Ctx()
+        with mock.patch.object(self.b, "attach", return_value=False), mock.patch.object(self.b, "_attach_loop"):
+            self.assertTrue(self.b.start())
+        req = urllib.request.Request(self.b.url() + "/v1/chat/completions", method="POST",
+                                     data=json.dumps({"model": "worker", "messages": [{"role": "user", "content": "Say ok"}]}).encode(),
+                                     headers={"content-type": "application/json", "authorization": f"Bearer {self.b._token}"})
+        with mock.patch.object(self.b.bridge_llm, "complete", lambda ctx, body, timeout=None: ctx.llm.complete(body["messages"])):
+            with urllib.request.urlopen(req, timeout=5) as res:
+                self.assertEqual(json.loads(res.read()), {"text": f"key-of:{self.home}"})
+
     def test_mcp_calls_go_through_ctx_call_mcp_and_a_missing_grant_gives_the_command(self):
         class Ctx:
             calls = []

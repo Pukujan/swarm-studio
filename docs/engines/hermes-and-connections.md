@@ -29,6 +29,7 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - Fallback: `SWARM_STUDIO_API_KEY` with `SWARM_STUDIO_BASE_URL`, default InferHub `https://api.inferhub.dev/v1`, model `cb/deepseek-v4.1-flash` (plugin.yaml:12-14, server/server.mjs:100-101).
 - InferHub route failover (cb/, ali/, alitp/, ocg/) only for an inferhub base URL (engine/llm.mjs:33-51).
 - `ctx.llm` does not stream (one SSE delta) and has no tool calls; bridge fakes tools with `<tool_call>` blocks in the prompt (docs/specs/33-hermes-bridge.md:84-104).
+- Multiplexed gateway (`gateway.multiplex_profiles`, Hermes Desktop's default): a `ctx.llm` call from the bridge's own threads has no profile secret scope, and Hermes refuses to read the model key (Hermes bug NousResearch/hermes-agent#132887; its fix #132898 is open). Until it ships, the bridge binds the profile Hermes loaded the plugin for around each request, only when multiplexing is on and nothing is bound (bridge.py:71-109, 411, 422; __init__.py:142). It imports Hermes's `agent.secret_scope`: remove it once #132898 is in the pinned Hermes.
 - Model override only when the operator grants `plugins.entries.swarm-studio.llm.allow_model_override` (docs/specs/33-hermes-bridge.md:80-83).
 
 ### Supabase
