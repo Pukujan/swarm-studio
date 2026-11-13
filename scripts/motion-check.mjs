@@ -29,7 +29,7 @@ const flag = (k, d) => { const i = rest.indexOf(`--${k}`); return i >= 0 ? rest[
 const pos = rest.filter((x, i) => !x.startsWith('--') && !rest[i - 1]?.startsWith('--'))
 const ONLY = (flag('only', '') || '').split(',').filter(Boolean)
 const wait = ms => new Promise(r => setTimeout(r, ms))
-export async function loadPlaywright() {
+async function loadPlaywright() {
   try { return await import('playwright') } catch {}
   const dir = process.env.PLAYWRIGHT_DIR
   if (!dir) throw new Error('Playwright not found: npm i --no-save playwright, or set PLAYWRIGHT_DIR')
@@ -39,7 +39,7 @@ export async function loadPlaywright() {
 
 // a build with a crew of four that talks, gets reviewed, rests and takes a comment: most of what the
 // deck animates during a build happens in this one replay
-export function crewRun(runs, run, t) {
+function crewRun(runs, run, t) {
   const crew = [['a0', 'Ada', '#d4d4d8'], ['a1', 'Bo', '#a1a1aa'], ['a2', 'Cy', '#e4e4e7'], ['a3', 'Di', '#71717a']]
   const ev = [{ type: 'run:start', t, run, brief: 'Harbour Lights, a ferry timetable for an island town', agents: crew.map(([id, name, color]) => ({ id, name, color })) }]
   ev.push({ type: 'theme', t: t + 10, run, name: 'Plain', direction: '', vars: { '--background': '#101012', '--foreground': '#ececee', '--primary': '#e4e4e7' } })
@@ -67,7 +67,7 @@ export function crewRun(runs, run, t) {
 }
 
 // the scenes: an address, and how long to run the clock
-export const SCENES = [
+const SCENES = [
   { id: 'projects', at: () => '/', ms: 3000 },
   { id: 'overview', at: i => `/?project=${i.site}&version=${i.site2}`, ms: 3000 },
   { id: 'replay', at: i => `/?replay=${i.crew}&speed=2`, ms: 16000 },
@@ -82,7 +82,7 @@ export const SCENES = [
 ].filter(s => !ONLY.length || ONLY.includes(s.id))
 
 // Math.random, seeded the same in the page and every frame (mulberry32)
-export const SEED = `(() => { let a = 0x5eed; Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } })()`
+const SEED = `(() => { let a = 0x5eed; Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } })()`
 // every animation that starts, in the page and every frame: CSS animations and transitions by their
 // start events, Web Animations by wrapping animate(). Name, target and timing; never the progress,
 // since CSS runs on the real clock. A transition turned round midway is shortened by how far it got,
@@ -104,7 +104,7 @@ const LOG = `(() => {
 const TAKE = () => { const a = (window.__motion || []).splice(0); return a }
 // the endless animations running now (a spinner, a caret, the radio's dashes)
 const ENDLESS = () => document.getAnimations().filter(a => a.effect?.getTiming?.().iterations === Infinity).map(a => { const el = a.effect.target; return `@${a.animationName || 'animate'} endless ${el?.id ? `#${el.id}` : `${el?.tagName?.toLowerCase()}${el?.classList?.[0] ? `.${el.classList[0]}` : ''}`}` }).sort()
-export const FROZEN = new Date('2026-11-01T12:00:00Z')
+const FROZEN = new Date('2026-11-01T12:00:00Z')
 
 async function record(out, { root = ROOT } = {}) {
   const { chromium } = await loadPlaywright()
@@ -276,10 +276,7 @@ async function clips(out) {
   console.log(readdirSync(out).join(' '))
 }
 
-// run as a script, not imported (scripts/motion-parity.mjs takes the scenes and the seed from here)
-const MAIN = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-if (!MAIN) { /* imported for its scenes */ }
-else if (cmd === 'record' && pos[0]) await record(resolve(pos[0]), { root: resolve(flag('root', ROOT)) })
+if (cmd === 'record' && pos[0]) await record(resolve(pos[0]), { root: resolve(flag('root', ROOT)) })
 else if (cmd === 'compare' && pos[1]) await compare(pos[0].split(',').map(d => resolve(d)), pos[1].split(',').map(d => resolve(d)), Number(flag('tolerance', 2000)), (flag('looks', '') || '').split(',').map(x => x.trim()).filter(Boolean))
 else if (cmd === 'clips' && pos[0]) await clips(resolve(pos[0]))
 else { console.log('node scripts/motion-check.mjs record <dir> [--root <tree>] | compare <a> <b> | clips <dir>'); process.exit(2) }

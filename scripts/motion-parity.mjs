@@ -26,7 +26,7 @@ import { mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, existsSync 
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { studio } from './walkthrough-fixtures.mjs'
-import { loadPlaywright, crewRun, SCENES, SEED, FROZEN } from './motion-check.mjs'
+import { createRequire } from 'node:module'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const [cmd, ...rest] = process.argv.slice(2)
@@ -35,6 +35,65 @@ const pos = rest.filter((x, i) => !x.startsWith('--') && !rest[i - 1]?.startsWit
 const ONLY = (flag('only', '') || '').split(',').filter(Boolean)
 const PX = Number(flag('px', 24))
 const wait = ms => new Promise(r => setTimeout(r, ms))
+
+// ---------- the motion check's own fixtures (scripts/motion-check.mjs), word for word, so both play the same
+// scenes; tests/motion-parity.test.mjs fails when the two drift apart. A copy, not an import, so a change here
+// does not set off the motion check's own base-against-head run
+async function loadPlaywright() {
+  try { return await import('playwright') } catch {}
+  const dir = process.env.PLAYWRIGHT_DIR
+  if (!dir) throw new Error('Playwright not found: npm i --no-save playwright, or set PLAYWRIGHT_DIR')
+  const req = createRequire(join(resolve(dir), 'package.json'))
+  try { return req('playwright') } catch { return req('playwright-core') }
+}
+
+// a build with a crew of four that talks, gets reviewed, rests and takes a comment: most of what the
+// deck animates during a build happens in this one replay
+function crewRun(runs, run, t) {
+  const crew = [['a0', 'Ada', '#d4d4d8'], ['a1', 'Bo', '#a1a1aa'], ['a2', 'Cy', '#e4e4e7'], ['a3', 'Di', '#71717a']]
+  const ev = [{ type: 'run:start', t, run, brief: 'Harbour Lights, a ferry timetable for an island town', agents: crew.map(([id, name, color]) => ({ id, name, color })) }]
+  ev.push({ type: 'theme', t: t + 10, run, name: 'Plain', direction: '', vars: { '--background': '#101012', '--foreground': '#ececee', '--primary': '#e4e4e7' } })
+  const pages = [['home', 'Harbour Lights'], ['times', 'Timetable'], ['fares', 'Fares']], roles = ['hero', 'features', 'footer']
+  pages.forEach(([id, title], i) => ev.push({ type: 'page', t: t + 20 + i, run, id, title, purpose: '', index: i }))
+  ev.push({ type: 'plan:done', t: t + 60, run, ms: 60, pages: 3, layers: 9 })
+  let n = 0
+  pages.forEach(([pid, title], i) => roles.forEach((role, j) => {
+    const a = `a${n % 4}`, at = t + 200 + n * 900
+    ev.push({ type: 'layer:plan', t: t + 30 + i, run, page: pid, id: role, role, height: j ? 520 : 760 })
+    ev.push({ type: 'agent:assign', t: at, run, agent: a, page: pid, layer: role, role })
+    if (n % 3 === 0) ev.push({ type: 'agent:say', t: at + 300, run, agent: a, layer: role, text: `Taking the ${role} of ${title}.` })
+    ev.push({ type: 'layer:done', t: at + 2400, run, page: pid, layer: role, agent: a, ms: 2100, done: n + 1, planned: 9, html: `<section style="padding:72px 64px;min-height:${j ? 520 : 760}px;background:${['#1d1d1f', '#2a2a2d', '#3a3a3e'][j]};color:#eee;font-family:system-ui"><h2 style="font-size:${j ? 40 : 64}px;margin:0 0 16px">${title}: ${role}</h2><p style="font-size:20px;max-width:640px;opacity:.8">Boats leave the harbour every hour from six.</p><a href="#times" style="color:#eee">See times</a></section>` })
+    n++
+  }))
+  ev.push({ type: 'agent:idle', t: t + 9000, run, agent: 'a0' }, { type: 'agent:idle', t: t + 9100, run, agent: 'a1' })
+  ev.push({ type: 'review:start', t: t + 9400, run, page: 'home', model: 'Reviewer' })
+  ev.push({ type: 'review:issue', t: t + 10400, run, page: 'home', layer: 'features', agent: 'a2', problem: 'the times are too small to read' })
+  ev.push({ type: 'review:done', t: t + 10600, run, page: 'home', verdict: 'one thing to fix', issues: [{ layer: 'features' }] })
+  ev.push({ type: 'comment', t: t + 11000, run, text: 'Make the timetable easier to scan', layers: [{ page: 'times', layer: 'hero' }] })
+  ev.push({ type: 'comment:take', t: t + 11300, run, agent: 'a3', page: 'times', layer: 'hero', role: 'hero' })
+  ev.push({ type: 'run:done', t: t + 12000, run, ms: 12000, planned: 9, done: 9, failed: 0, pages: 3 })
+  mkdirSync(join(runs, run))
+  writeFileSync(join(runs, run, 'events.jsonl'), ev.map(e => JSON.stringify(e)).join('\n') + '\n')
+}
+
+// the scenes: an address, and how long to run the clock
+const SCENES = [
+  { id: 'projects', at: () => '/', ms: 3000 },
+  { id: 'overview', at: i => `/?project=${i.site}&version=${i.site2}`, ms: 3000 },
+  { id: 'replay', at: i => `/?replay=${i.crew}&speed=2`, ms: 16000 },
+  { id: 'mid-build', at: i => `/?project=${i.mid}&version=${i.mid}&room=deck`, ms: 3000 },
+  { id: 'deck', at: i => `/?project=${i.site}&version=${i.site}&room=deck`, ms: 3000 },
+  { id: 'play', at: i => `/?project=${i.site}&version=${i.site}&room=deck&play=prototype`, ms: 3000 },
+  { id: 'visitor', at: i => `/?project=${i.site}&version=${i.site}&room=deck&play=visitor`, ms: 10000 },
+  { id: 'app', at: i => `/?project=${i.app}&version=${i.app}&room=app`, ms: 3000 },
+  { id: 'film', at: i => `/?project=${i.film}&version=${i.film}&room=video`, ms: 3000 },
+  { id: 'game', at: i => `/?project=${i.game}&version=${i.game}&room=game`, ms: 3000 },
+  { id: 'studio', at: i => `/?room=studio&project=${i.site}`, ms: 3000 }
+].filter(s => !ONLY.length || ONLY.includes(s.id))
+
+// Math.random, seeded the same in the page and every frame (mulberry32)
+const SEED = `(() => { let a = 0x5eed; Math.random = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } })()`
+const FROZEN = new Date('2026-11-01T12:00:00Z')
 
 // the flows a person clicks through: the Make menu, the Plan board, the Publish menu, the brand sheet and its picks.
 // `act` runs at its time on the clock; the controls are found by role and name, which a port keeps.

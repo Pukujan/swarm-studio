@@ -110,17 +110,7 @@
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
-    "key": "play only in /: frame ~opacity 60ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "intended (PR #438)",
-    "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
-  },
-  {
     "key": "play only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "intended (PR #438)",
-    "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
-  },
-  {
-    "key": "play only in /: frame ~transform 60ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
   },
@@ -215,6 +205,11 @@
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
   },
   {
+    "key": "publish only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
+    "label": "intended (PR #438)",
+    "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
+  },
+  {
     "key": "publish reduced cursor Ada: only in /",
     "label": "intended (PR #438)",
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
@@ -230,7 +225,12 @@
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
   },
   {
-    "key": "publish reduced: the flow broke",
+    "key": "publish reduced moves although reduced motion is asked for: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
+    "label": "intended (PR #438)",
+    "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
+  },
+  {
+    "key": "publish reduced only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
   },
@@ -305,22 +305,12 @@
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
   {
-    "key": "replay only in /: page ~opacity 170ms x1 ease",
-    "label": "drift",
-    "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
     "key": "replay only in /: page ~opacity 250ms x1 ease",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
   {
     "key": "replay only in /: page ~opacity 300ms x1 ease",
-    "label": "drift",
-    "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
-    "key": "replay only in /: page ~opacity 340ms x1 ease",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
@@ -341,21 +331,6 @@
   },
   {
     "key": "replay only in /: page ~transform 250ms x1 ease",
-    "label": "drift",
-    "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
-    "key": "replay only in /: page ~width 320ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
-    "key": "replay only in /: page ~width 350ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
-    "key": "replay only in /: page ~width 480ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
