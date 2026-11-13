@@ -51,7 +51,7 @@ export function setTool(a, tool, holdMs = 0) {
 }
 
 // The action line on an agent's tag, readable at any zoom: what it is doing now.
-export const ACT_LABEL = { marquee: 'drawing a frame', shape: 'drawing a shape', component: 'placing a button', swatch: 'picking a colour', pen: 'sketching', wire: 'linking pages', menu: 'setting properties', resize: 'resizing' }
+const ACT_LABEL = { marquee: 'drawing a frame', shape: 'drawing a shape', component: 'placing a button', swatch: 'picking a colour', pen: 'sketching', wire: 'linking pages', menu: 'setting properties', resize: 'resizing' }
 export function doing(a, now) {
   if (a.painting && now < a.painting.until) return `· waiting on the photo “${a.painting.gen.slice(0, 18)}…” ${Math.round((now - a.painting.from) / 1000)}s`
   if (a.docked || !a.layer) return ''
@@ -171,7 +171,7 @@ export function addLayer(e) {
 
 export const belongs = (f, l) => l.page === '*' || l.page === f.id
 
-export function ensureSlot(f, l) {
+function ensureSlot(f, l) {
   if (!f.ready || !l || !belongs(f, l) || f.slots.has(l.key)) return
   const where = l.page === '*' && l.id === 'nav' ? 'start' : l.page === '*' && l.id === 'footer' ? 'end' : 'before-footer'
   post(f, { type: 'slot', key: l.key, where })
@@ -245,9 +245,9 @@ export function agentTarget(a, now) {
 
 // a replay (?replay=) plays a saved run as if it were live: bubbles, sparks and gestures included
 export const live = e => (!viewing || !!replayId) && (!e.t || Date.now() - e.t < 5000)
-export const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
-export const lerp = (a, b, t) => a + (b - a) * t
-export const rand = (a, b) => a + Math.random() * (b - a)
+const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+const lerp = (a, b, t) => a + (b - a) * t
+const rand = (a, b) => a + Math.random() * (b - a)
 
 export function gestureFor(text) {
   const tail = text.slice(-400)
@@ -269,7 +269,7 @@ export function gestureFor(text) {
 }
 
 // Where the agent is writing now, in world coordinates.
-export function caretOf(l) {
+function caretOf(l) {
   const s = slotFor(l)
   if (!s) return null
   const b = s.box
@@ -277,7 +277,7 @@ export function caretOf(l) {
   return { s, x: s.f.x + Math.max(b.left + 30, Math.min(b.right - 30, x)), y: Math.max(b.top + 20, Math.min(b.top + Math.max(b.height, l.height) - 20, y)) }
 }
 
-export function ghostFor(a) {
+function ghostFor(a) {
   if (!a.ghost?.isConnected) {
     a.ghost = document.createElement('div')
     a.ghost.className = 'ghost'
@@ -438,12 +438,12 @@ export function gestureStep(a, now) {
   return p
 }
 
-export function themeColors() {
+function themeColors() {
   const v = S.theme?.vars || {}
   return ['--primary', '--accent', '--foreground', '--muted', '--card', '--background'].map(k => v[k]).filter(Boolean)
 }
 
-export function drawSelection(gh, b, on) {
+function drawSelection(gh, b, on) {
   const hs = [[0, 0], [0.5, 0], [1, 0], [0, 0.5], [1, 0.5], [0, 1], [0.5, 1], [1, 1]]
   gh.innerHTML = `<div class="select${on ? ' on' : ''}" style="left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${b.h}px">${hs.map(([x, y]) => `<b style="left:${x * 100}%;top:${y * 100}%"></b>`).join('')}<span>${Math.round(b.w)} × ${Math.round(b.h)}</span></div>`
 }
@@ -458,14 +458,14 @@ export const dockCell = i => ({
   y: els.dock.offsetTop + DOCK.top + Math.floor(i / DOCK.cols) * DOCK.ch
 })
 
-export const QUIPS = [
+const QUIPS = [
   '☕ third coffee. still not a designer.', 'who keeps putting Comic Sans in the drafts', 'I could have done that hero in 4 tokens',
   '😴', 'is it lunch? it feels like lunch', 'pixel-perfect. emotionally, not literally', '🫠 the padding haunts me',
   'rate my last section 1–10. wrong, it\'s 11', 'did someone say "make the logo bigger"?', 'my gradients have gradients',
   '🤖 beep. boop. kerning.', 'if you need me I\'ll be in the margins', '😤 someone renamed my div "div2"',
   'manifesting a client who says "ship it"', '🧘 centering a div. spiritually.', 'I\'m not idle, I\'m load-balancing'
 ]
-export const FIGHTS = [
+const FIGHTS = [
   [[0, '{b}, your footer is 40% links'], [1, 'and 100% load-bearing']],
   [[0, 'who put the CTA below the fold'], [1, 'it\'s called suspense, {a}']],
   [[0, 'dibs on the next hero section'], [1, 'you can\'t dibs a queue, {a}'], [0, 'watch me']],
@@ -477,8 +477,8 @@ export const FIGHTS = [
   [[0, '⚔️ tabs vs spaces, {b}. now.'], [1, 'Tailwind. there are no spaces.'], [0, '...fair']],
   [[0, 'who tells the planner the brief said "minimal"'], [1, 'not it'], [0, 'not it'], [1, '😶']]
 ]
-export const CHEERS = ['🎉 shipped!', 'ship it ship it ship it', '🥳 all green', 'that\'s a wrap, folks', '📸 screenshot it before anyone changes it']
-export const HIGH_FIVES = [[[0, 'high five, {b}'], [1, '✋ (missed)'], [0, 'we don\'t talk about that']]]
+const CHEERS = ['🎉 shipped!', 'ship it ship it ship it', '🥳 all green', 'that\'s a wrap, folks', '📸 screenshot it before anyone changes it']
+const HIGH_FIVES = [[[0, 'high five, {b}'], [1, '✋ (missed)'], [0, 'we don\'t talk about that']]]
 
 export const banter = { next: 0, queue: [] }
 export const pick = list => list[Math.floor(Math.random() * list.length)]
@@ -510,7 +510,7 @@ export const toScreen = (x, y) => ({ x: x * cam.s + cam.x, y: y * cam.s + cam.y 
 
 // ---------- wires: one per (page -> page) link, drawn once the linking layer is done
 
-export function linkWires(f) {
+function linkWires(f) {
   for (const g of f.geo.gotos) {
     const l = S.layers.get(g.key)
     if (!l || l.status !== 'done') continue

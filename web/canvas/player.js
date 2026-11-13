@@ -11,10 +11,10 @@ import { closeable } from './start.js'
 // the Mobile view is the site at 390px, not a scaled-down desktop. Links built
 // with data-goto move between pages; nothing else navigates.
 
-export const DEVICES = { desktop: { w: 1280, h: 800 }, mobile: { w: 390, h: 844 } }
-export const player = { page: null, device: store.get('device', 'desktop'), history: [], motion: store.get('motion', true) }
+const DEVICES = { desktop: { w: 1280, h: 800 }, mobile: { w: 390, h: 844 } }
+const player = { page: null, device: store.get('device', 'desktop'), history: [], motion: store.get('motion', true) }
 
-export const PLAYER_SCRIPT = `<script>
+const PLAYER_SCRIPT = `<script>
 addEventListener('click', e => {
   const g = e.target.closest('[data-goto]')
   e.preventDefault()
@@ -68,8 +68,8 @@ addEventListener('message', async e => {
 
 // Each element a visitor could use or read gets a data-tour id, the same one in
 // the inventory the tour writer sees and in the document the player shows.
-export const TOURABLE = 'a, button, [data-goto], input, textarea, select, h1, h2, h3'
-export function pageParts(id, html) {
+const TOURABLE = 'a, button, [data-goto], input, textarea, select, h1, h2, h3'
+function pageParts(id, html) {
   const cached = S.parts?.get(id)
   if (cached && cached.source === html) return cached
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
@@ -112,10 +112,10 @@ ${scripts ?? PLAYER_SCRIPT + layoutTag() + motionTags()}</head><body>${html}</bo
 
 // The layout guard in Play mode, as in the exports: floated text panels that
 // would cover other text at this width move beside the box they sat on.
-export const layoutTag = () => BOOT.layout ? `<script>addEventListener('load', () => ${BOOT.layout})<\/script>` : ''
+const layoutTag = () => BOOT.layout ? `<script>addEventListener('load', () => ${BOOT.layout})<\/script>` : ''
 
 // Motion in Play mode: the same reveal the exports get, in the feel the theme asks for.
-export function motionTags() {
+function motionTags() {
   const m = BOOT.motion
   if (!player.motion || !m) return ''
   const t = S.theme || {}
@@ -131,7 +131,7 @@ export function setMotion(on = !player.motion) {
 }
 commandOps.motion = c => setMotion(c.on === undefined ? !player.motion : !!c.on)
 
-export function fitDevice() {
+function fitDevice() {
   const d = DEVICES[player.device]
   const sw = els.plStage.clientWidth - 40, sh = els.plStage.clientHeight - 56
   const mobile = player.device === 'mobile'
@@ -147,7 +147,7 @@ export function fitDevice() {
   els.plShell.style.top = `${20 / scale}px`
 }
 
-export function showPage(id, push = true) {
+function showPage(id, push = true) {
   if (!S.frames.some(f => f.id === id)) return
   if (push && player.page && player.page !== id) player.history.push(player.page)
   player.page = id
@@ -173,7 +173,7 @@ export function playerMessage(m) {
 // canvas) the canvas opens and closes it itself.
 export const navOf = () => window.swarmCosmos?.nav
 // the build the canvas shows (a saved run, or the stream's)
-export const heldRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
+const heldRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
 export function openPlayer(page) {
   if (!S.frames.length) return
   const nav = navOf()
@@ -196,7 +196,7 @@ export function followPlayer(v) {
   if (v.player === 'visitor' && !touring) startVisitor()
   if (v.player === 'prototype' && touring) stopTour()
 }
-export function showPlayer(page) {
+function showPlayer(page) {
   if (!S.frames.length) return
   els.plPage.innerHTML = ''
   for (const f of S.frames) els.plPage.add(new Option(`Page ${f.index + 1} · ${f.title}`, f.id))
@@ -212,7 +212,7 @@ export function showPlayer(page) {
 // a document adds an entry to the page's own history, so Back stepped through the player's pages
 // before the studio's and a closed player cut off Forward. A fresh frame's first document adds none,
 // so the frame is swapped for a fresh one.
-export function playerDoc(html) {
+function playerDoc(html) {
   const old = els.plFrame
   const frame = old.cloneNode(false)
   if (html) frame.srcdoc = html
@@ -229,7 +229,7 @@ export function shutPlayer() {
   if (els.plFrame.hasAttribute('srcdoc')) playerDoc('')
 }
 
-export function setDevice(name, reload = true) {
+function setDevice(name, reload = true) {
   if (reload) stopTour()
   player.device = name
   store.set('device', name)
@@ -248,7 +248,7 @@ export function setDevice(name, reload = true) {
 
 export const tour = { list: null, loading: null, error: '', on: false, id: 0, seq: 0, waiting: new Map(), x: 0, y: 0, starting: 0, next: 0 }
 
-export function loadTours(fresh = false) {
+function loadTours(fresh = false) {
   if (tour.run !== S.run) Object.assign(tour, { run: S.run, list: null, error: '' })
   if (!S.run || (tour.list && !fresh) || tour.loading) return tour.loading
   const run = S.run
@@ -267,14 +267,14 @@ export function loadTours(fresh = false) {
   return tour.loading
 }
 
-export function pageBody(id) {
+function pageBody(id) {
   const layers = S.order.map(k => S.layers.get(k)).filter(l => l.page === id || l.page === '*')
   const shared = name => layers.filter(l => l.page === '*' && l.id === name)
   const mid = layers.filter(l => l.page === id || (l.page === '*' && l.id !== 'nav' && l.id !== 'footer'))
   return [...shared('nav'), ...mid, ...shared('footer')].map(l => `<div data-layer="${l.id}">${clean(l.text)}</div>`).join('\n')
 }
 
-export function renderTourMenu() {
+function renderTourMenu() {
   const m = els.plTourMenu
   m.innerHTML = ''
   const note = (text, cls = '') => { const d = document.createElement('div'); d.className = `note ${cls}`; d.textContent = text; m.append(d) }
@@ -300,7 +300,7 @@ export function renderTourMenu() {
   m.append(again)
 }
 
-export function toggleTourMenu(open = els.plTourMenu.hidden) {
+function toggleTourMenu(open = els.plTourMenu.hidden) {
   els.plTourMenu.hidden = !open
   els.plTourList.setAttribute('aria-expanded', String(open))
   if (open) { loadTours(); renderTourMenu() }
@@ -309,7 +309,7 @@ export function toggleTourMenu(open = els.plTourMenu.hidden) {
 export const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 // Ask the page frame to do something; resolves with its reply.
-export function ask(op, extra = {}) {
+function ask(op, extra = {}) {
   const seq = ++tour.seq
   return new Promise(resolve => {
     const timer = setTimeout(() => { tour.waiting.delete(seq); resolve({ box: null }) }, 3000)
@@ -319,13 +319,13 @@ export function ask(op, extra = {}) {
 }
 
 // A point inside the frame, in window coordinates (the device is zoomed).
-export function frameToScreen(x, y) {
+function frameToScreen(x, y) {
   const r = els.plFrame.getBoundingClientRect()
   const k = r.width / els.plFrame.clientWidth || player.scale || 1
   return [r.left + x * k, r.top + y * k]
 }
 
-export function placeCursor(x, y) {
+function placeCursor(x, y) {
   tour.x = x
   tour.y = y
   els.plCursor.style.transform = `translate(${x}px, ${y}px)`
@@ -333,7 +333,7 @@ export function placeCursor(x, y) {
 }
 
 // Glide along a slight arc and ease out, the way a hand moves a mouse.
-export function glide(x, y, live) {
+function glide(x, y, live) {
   const x0 = tour.x, y0 = tour.y, d = Math.hypot(x - x0, y - y0)
   if (d < 2) return Promise.resolve()
   const ms = Math.min(1100, 380 + d * 0.9), bend = (Math.random() < 0.5 ? -1 : 1) * Math.min(60, d * 0.12)
@@ -354,7 +354,7 @@ export function glide(x, y, live) {
 }
 
 // Cycle a step's phrasings of one thought until the step is over.
-export function think(lines, emoji, live) {
+function think(lines, emoji, live) {
   let i = 0, stop = false
   const show = () => {
     els.plThink.classList.add('swap')
@@ -370,7 +370,7 @@ export function think(lines, emoji, live) {
   return { end: () => { stop = true; clearInterval(timer) }, min: lines.length * 1500 }
 }
 
-export function press() {
+function press() {
   els.plCursor.classList.add('press')
   const ring = document.createElement('div')
   ring.className = 'ring'
@@ -378,7 +378,7 @@ export function press() {
   setTimeout(() => { els.plCursor.classList.remove('press'); ring.remove() }, 500)
 }
 
-export function personaBar(t, at, text) {
+function personaBar(t, at, text) {
   const p = els.plPersona
   p.hidden = false
   p.innerHTML = '<span></span><span class="who"><b></b> <small></small></span><span class="dots"></span><button>Stop</button>'
@@ -397,7 +397,7 @@ export async function watchVisitor() {
   if (nav) return nav.go({ type: 'watch' })
   return startVisitor()
 }
-export async function startVisitor() {
+async function startVisitor() {
   const id = tour.starting = ++tour.id
   paintWatch()
   await loadTours()
@@ -410,7 +410,7 @@ export async function startVisitor() {
   stopTour()
   toggleTourMenu(true)
 }
-export function paintWatch() {
+function paintWatch() {
   const b = els.plTours, on = tour.on, busy = !!tour.starting
   b.classList.toggle('on', on)
   b.classList.toggle('busy', busy)
@@ -420,7 +420,7 @@ export function paintWatch() {
   b.setAttribute('aria-label', name)
 }
 
-export async function playTour(index) {
+async function playTour(index) {
   const t = tour.list?.[index]
   if (!t) return
   stopTour()
@@ -500,8 +500,8 @@ document.addEventListener('click', e => { if (!els.plTourMenu.hidden && !e.targe
 
 // Play: a plain click plays the prototype; its caret also offers a visitor who walks through it
 els.play.onclick = () => openPlayer()
-export const closePlayMenu = (focus = false) => { els.playMenu.hidden = true; els.playMore.setAttribute('aria-expanded', 'false'); playMenuOff?.(); playMenuOff = null; if (focus) els.playMore.focus() }
-export let playMenuOff = null
+const closePlayMenu = (focus = false) => { els.playMenu.hidden = true; els.playMore.setAttribute('aria-expanded', 'false'); playMenuOff?.(); playMenuOff = null; if (focus) els.playMore.focus() }
+let playMenuOff = null
 els.playMore.onclick = e => {
   e.stopPropagation()
   if (!els.playMenu.hidden) return closePlayMenu()

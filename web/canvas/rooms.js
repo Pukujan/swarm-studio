@@ -18,11 +18,11 @@ import { HOSTS } from './publish.js'
 // change; on Video, an idea for a new cut.
 export let view = 'canvas'
 // the App view's state (web/data.js): reset when another run is shown, keeping the preview mode and width
-export const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
+const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
 /** @type {any} */
 export const appv = appStore.state
 export const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
-export const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
+const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
 
 export function setView(v) {
   if (!['canvas', 'video', 'app'].includes(v)) return
@@ -43,7 +43,7 @@ export function setView(v) {
 // @ts-ignore
 for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.view)
 
-export function renderBadges() {
+function renderBadges() {
   const vb = document.querySelector('#views [data-view="video"] .vbadge'), ab = document.querySelector('#views [data-view="app"] .vbadge')
   if (vb) vb.className = `vbadge ${video.busy ? 'working' : video.message ? 'failed' : video.src ? 'done' : ''}`
   if (ab) ab.className = `vbadge ${appv.run === shownRun() ? { working: 'working', done: 'done', failed: 'failed' }[appv.state] || '' : ''}`
@@ -57,7 +57,7 @@ export function resetApp(run) {
   appEls.frame.removeAttribute('src')
 }
 
-export async function loadApp() {
+async function loadApp() {
   const run = shownRun()
   if (!run) { resetApp(null); return renderApp() }
   if (appv.run !== run) resetApp(run)
@@ -85,7 +85,7 @@ export async function loadApp() {
 setInterval(() => { if (view === 'app' && appv.elsewhere && !document.hidden) loadApp() }, 4000)
 
 // the latest play test, filmed: the clip loops from the first key, with the key it pressed
-export const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
+const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
 // While the code wall is up, the play test is one of its windows (the first tile, over that
 // tile's pictures); otherwise a small card over the game, which × hides.
 export function playClip() {
@@ -123,8 +123,8 @@ export function playClip() {
   }
 }
 
-export const STEP_ICON = { setup: '⚙︎', turn: '▸', write: '✎', render: '👁', think: '·', tokens: 'Σ', serve: '▶', gate: '✓', ask: '💬' }
-export function stepsHtml() {
+const STEP_ICON = { setup: '⚙︎', turn: '▸', write: '✎', render: '👁', think: '·', tokens: 'Σ', serve: '▶', gate: '✓', ask: '💬' }
+function stepsHtml() {
   // the current round in full; earlier rounds fold into one line each
   const all = appv.steps.slice(-300)
   const cut = all.findLastIndex(s => s.kind === 'ask')
@@ -148,8 +148,8 @@ export function renderAppLink() {
 
 // The preview loads in the background: a loading screen covers the frame until the app inside
 // has loaded (a dev server compiles a big game on its first visit, which shows as a blank page)
-export let frameWait = 0
-export function loadFrame() {
+let frameWait = 0
+function loadFrame() {
   const el = $('#app-loading')
   if (el) {
     el.querySelector('span').textContent = appv.kind === 'game' ? 'Loading the game…' : 'Loading the app…'
@@ -179,15 +179,15 @@ export function frameUrl(u) {
 // The app and the game run on their own port, so their origin is never the studio's: they keep their own
 // storage (an app's sign-in needs it) but cannot steer the studio's tab. Should the address ever be the
 // studio's own origin, the frame gets an opaque one instead (Nous catalog review, point 4).
-export function appSandbox(src) {
+function appSandbox(src) {
   let same = true
   try { same = new URL(src, location.href).origin === location.origin } catch {}
   return same ? 'allow-scripts allow-forms' : 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals'
 }
-export function frameLoaded() { clearTimeout(frameWait); const el = $('#app-loading'); if (el) el.hidden = true }
-export function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && appEls.frame.src !== 'about:blank') { clearTimeout(frameWait); frameWait = setTimeout(frameLoaded, 700) } }
+function frameLoaded() { clearTimeout(frameWait); const el = $('#app-loading'); if (el) el.hidden = true }
+function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && appEls.frame.src !== 'about:blank') { clearTimeout(frameWait); frameWait = setTimeout(frameLoaded, 700) } }
 
-export function renderApp() {
+function renderApp() {
   // while the crew builds the box talks to it; a game's own examples are a game's
   if (view === 'app') els.brief.placeholder = appv.state === 'working' ? 'Ask the crew, or say what to change…' : appv.kind === 'game' ? 'Change the game: “make the jump higher”, “add a boss”…' : PLACEHOLDER.app
   renderAppLink()
@@ -253,8 +253,8 @@ export function renderApp() {
 
 // A game being built: its whole art plan as one sheet, each picture landing in its cell as the
 // crew paints it, the cell being painted showing who is on it. Read again every 4 s while shown.
-export const sheetv = { run: null, data: null, t: 0, busy: false }
-export function artSheet(run) {
+const sheetv = { run: null, data: null, t: 0, busy: false }
+function artSheet(run) {
   if (sheetv.run !== run) Object.assign(sheetv, { run, data: null, t: 0 })
   if (!sheetv.busy && Date.now() - sheetv.t > 4000) {
     sheetv.busy = true
@@ -275,7 +275,7 @@ export function artSheet(run) {
   appEls.empty.classList.add('sheet')
 }
 
-export async function renderCode() {
+async function renderCode() {
   if (!appv.files) {
     appv.files = []
     try { appv.files = (await appApi('/files')).files } catch { appv.files = [] }
@@ -290,7 +290,7 @@ export async function renderCode() {
   for (const d of appEls.tree.querySelectorAll('[data-path]')) d.onclick = () => showFile(d.dataset.path)
   if (!appv.file && appv.files.length) showFile((appv.files.find(f => f.path === 'src/App.tsx') || appv.files[0]).path)
 }
-export async function showFile(path) {
+async function showFile(path) {
   appv.file = path
   for (const d of appEls.tree.querySelectorAll('[data-path]')) d.classList.toggle('on', d.dataset.path === path)
   try { appEls.file.textContent = (await appApi(`/files?path=${encodeURIComponent(path)}`)).text } catch (err) { appEls.file.textContent = err.message }
@@ -313,7 +313,7 @@ for (const b of document.querySelectorAll('#app-device button')) b.onclick = () 
 }
 $('#app-reload').onclick = () => { if (appv.url) loadFrame() }
 // the steps column folds away, and stays folded the next time (this browser only)
-export const stepsMin = on => {
+const stepsMin = on => {
   appEls.view.classList.toggle('steps-min', on)
   const b = $('#app-steps-btn')
   b.setAttribute('aria-pressed', String(on))
@@ -346,7 +346,7 @@ export async function appAsk(ask, extra = {}) {
   renderApp()
 }
 
-export async function tellCrew(text) {
+async function tellCrew(text) {
   const t = String(text || '').trim()
   if (!t) return botMsg('The crew is building. Ask what it is doing, or say what to change next.')
   feed(null, t, 'you')
@@ -369,7 +369,7 @@ export async function tellCrew(text) {
 }
 // a change Talk wrote out for the builder: sent only when the person confirms it, at the next
 // slice, or now (the builder's turn stops and the slice starts again with it)
-export function changeBlock(p) {
+function changeBlock(p) {
   const box = document.createElement('div')
   box.className = 'tell-change'
   const q = document.createElement('p')
@@ -394,7 +394,7 @@ export function changeBlock(p) {
   return box
 }
 // what Hermia shows when asked to see the build: the newest play test clip and pictures
-export function mediaBlock(m) {
+function mediaBlock(m) {
   const box = document.createElement('div')
   box.className = 'tell-media'
   if (m.clip) {
@@ -410,7 +410,7 @@ export function mediaBlock(m) {
   return box
 }
 // a crew member's answer, said in their own window for a while (k -1: over the wall's title)
-export function cwSay(k, words, thinking = false) {
+function cwSay(k, words, thinking = false) {
   const host = k >= 0 ? cw.el?.querySelector('.cw-grid')?.children[k] : cw.el?.querySelector('.cw-head')
   if (!host) return
   let b = host.querySelector(':scope > .cw-say')
@@ -426,7 +426,7 @@ export function cwSay(k, words, thinking = false) {
 // After each slice the build waits: Hermia shows what the bots played (their filmed run and a
 // still), points at the live game in the App view, and asks what to change. A suggestion or
 // the person's own words start the next slice with that note.
-export function sliceCard(s, run = shownRun()) {
+function sliceCard(s, run = shownRun()) {
   if (!s || !run) return
   const key = `${run}:${s.i}:${s.clip || ''}`
   if (els.feed.querySelector(`.slice-card[data-key="${CSS.escape(key)}"]`)) return
@@ -530,23 +530,23 @@ export async function sliceGo(text) {
 // a CRM, an admin panel). Each question comes with her recommended answer; the
 // answers become an app plan to tick through, and the plan becomes dyad's brief.
 /** @type {any} */
-export const adv = dataStore('advisor', { run: null, qs: [], i: 0, qa: [], busy: false }).state
-export function advMsg(html, cls = '') {
+const adv = dataStore('advisor', { run: null, qs: [], i: 0, qa: [], busy: false }).state
+function advMsg(html, cls = '') {
   const item = document.createElement('div')
   item.className = `item bot adv ${cls}`
   item.innerHTML = `<b>${HERMIA}Hermia<small>advisor</small></b><div class="txt">${html}</div>`
   push(els.feed, item)
   return item
 }
-export function advOpen(on) {
+function advOpen(on) {
   document.body.classList.toggle('advising', on)
   // @ts-ignore
   if (on) { document.body.classList.add('cosmos-chat'); document.querySelector('.side .tabs [data-tab="chat"]')?.click() }
 }
-export const advSections = () => [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
-export const advPost = body => api(`/api/runs/${encodeURIComponent(adv.run)}/advise`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sections: advSections(), ...body }) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
+const advSections = () => [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
+const advPost = body => api(`/api/runs/${encodeURIComponent(adv.run)}/advise`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sections: advSections(), ...body }) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
 
-export async function openAdvisor() {
+async function openAdvisor() {
   const run = shownRun()
   if (!run) return botMsg('Open a build first: the app is made from its design.')
   if (adv.busy) return advOpen(true)
@@ -562,7 +562,7 @@ export async function openAdvisor() {
   } catch (err) { wait.remove(); adv.busy = false; advMsg(`I couldn't read the pages: ${esc(err.message)}`, 'err') }
 }
 
-export function advAsk() {
+function advAsk() {
   const q = adv.qs[adv.i]
   if (!q) return advPlan()
   const picks = new Set(q.recommended)
@@ -606,7 +606,7 @@ export function advAsk() {
   }
 }
 
-export async function advPlan() {
+async function advPlan() {
   const wait = advMsg('Writing the app plan…', 'working')
   let plan
   try { plan = (await advPost({ qa: adv.qa })).plan } catch (err) { wait.remove(); adv.busy = false; return advMsg(`The plan didn't come back: ${esc(err.message)}`, 'err') }
@@ -638,7 +638,7 @@ export const buildApp = () => (appv.kind !== 'game' && !appv.hasApp && !appv.pla
 
 // The image model ran out before any art landed: say which, offer the other image models
 // Hermes has signed in, and building with shapes drawn in code.
-export function artStopCard(stop) {
+function artStopCard(stop) {
   // @ts-ignore
   if (!modelsInfo?.image && !artStopCard.asked) { artStopCard.asked = true; loadModels().then(() => renderApp()) }
   const others = (modelsInfo?.image?.providers || []).filter(p => p.available && p.provider !== stop.provider)
@@ -648,7 +648,7 @@ export function artStopCard(stop) {
     + `<div class="fail-acts"><button class="big" data-build>${ico('rotate-ccw')}Try again</button><button class="fail-alt" data-incode>Draw in code</button></div></div>`
 }
 // what a stopped build had done: its pictures and its stages
-export function stopSummary() {
+function stopSummary() {
   const steps = appv.steps || [], art = artPhase(steps)
   const painted = steps.filter(s => /^painted the /.test(s.text || '')).length
   const stage = steps.findLast(s => /^stage \d+ of/.test(s.text || ''))?.text.match(/^stage (\d+ of \d+)/)?.[1]
@@ -733,9 +733,9 @@ export async function openGame(idea = '', answers = null, build = false) {
   game.resume = (await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null))?.workshops?.[0] || null
   renderGame()
 }
-export const closeGame = () => { game.off?.(); game.off = null; game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
+const closeGame = () => { game.off?.(); game.off = null; game.el?.remove(); game.el = null; $('#game-btn').classList.remove('on') }
 
-export function renderGame() {
+function renderGame() {
   const el = game.el
   if (!el) return
   const qs = game.questions, q = qs[game.i]
@@ -782,7 +782,7 @@ export function renderGame() {
   el.querySelector('.gclose').onclick = closeGame
 }
 
-export async function gameSpec(build = false) {
+async function gameSpec(build = false) {
   game.busy = 'The planner is writing the game spec: an original world, hero and enemies…'
   renderGame()
   try {
@@ -805,14 +805,14 @@ export async function gameSpec(build = false) {
 // A numbered picture shortlist per role, from VRoid Hub and Sketchfab, licence
 // checked by the server. At rest a card is its picture and name; the open card
 // shows the creator and the licence. One pick per role, then the build.
-export function readSpecEdits() {
+function readSpecEdits() {
   for (const x of game.el?.querySelectorAll('[data-k]') || []) {
     const k = x.dataset.k, v = x.textContent.trim()
     if (k === 'enemies') { if (v !== gameList(game.spec.enemies)) game.spec.enemies = v.split(/\s*,\s*/).filter(Boolean) }
     else if (v) game.spec[k] = v
   }
 }
-export function openCast() {
+function openCast() {
   readSpecEdits()
   game.cast.open = true
   renderGame()
@@ -821,7 +821,7 @@ export function openCast() {
 }
 // ---------- 🧊 the project's own art as a character (spec 20): made with Meshy when a key is set,
 // else the art itself as a 2.5D sprite. Meshy spends credits: the price is on the button.
-export async function ownArt() {
+async function ownArt() {
   const c = game.cast
   if (c.meshy) return
   c.meshy = { art: [] }
@@ -832,12 +832,12 @@ export async function ownArt() {
   c.roles.forEach((r, i) => { if (c.meshy.art.length) c.own[r.id] ||= { art: c.meshy.art[i % c.meshy.art.length], job: null } })
   if (game.cast === c) renderGame()
 }
-export const castFrom = () => game.spec?.brand?.from || game.from || ''
+const castFrom = () => game.spec?.brand?.from || game.from || ''
 
 // Pictures the person adds (picked or dropped): each one becomes a role, named from its file
 // ("00a-messenger.png" -> Messenger), with that picture as its art.
-export const roleLabel = name => String(name).replace(/\.[a-z0-9]+$/i, '').replace(/^\d+[a-z]?[-_ ]+/i, '').replace(/[-_]+/g, ' ').trim().replace(/^./, ch => ch.toUpperCase()) || 'Character'
-export async function castAdd(files) {
+const roleLabel = name => String(name).replace(/\.[a-z0-9]+$/i, '').replace(/^\d+[a-z]?[-_ ]+/i, '').replace(/[-_]+/g, ' ').trim().replace(/^./, ch => ch.toUpperCase()) || 'Character'
+async function castAdd(files) {
   const c = game.cast
   const pics = [...files].filter(f => /^image\/(png|jpeg|webp)$/.test(f.type)).slice(0, 16)
   if (!pics.length || !castFrom()) return
@@ -861,13 +861,13 @@ export async function castAdd(files) {
 }
 
 // ---------- the bench: every Meshy job of this cast, each worked by its own crew member
-export const castJobs = (c = game.cast) => (c?.roles || []).map((r, i) => ({ r, i, o: c.own?.[r.id] })).filter(x => x.o?.job)
-export const makingJobs = c => castJobs(c).filter(x => x.o.job.state === 'running')
+const castJobs = (c = game.cast) => (c?.roles || []).map((r, i) => ({ r, i, o: c.own?.[r.id] })).filter(x => x.o?.job)
+const makingJobs = c => castJobs(c).filter(x => x.o.job.state === 'running')
 // the ones a crew member is working right now (the rest wait in line, their worker's mark on the tile)
 export const workedJobs = c => makingJobs(c).filter(x => x.o.job.stage !== 'queued')
 // the roles "Make all" would make: a picture, nothing made or being made
-export const makeable = c => (c.meshy?.ready ? c.roles.filter(r => c.own?.[r.id]?.art && !['running', 'done'].includes(c.own[r.id].job?.state)) : [])
-export async function meshyMake(r) {
+const makeable = c => (c.meshy?.ready ? c.roles.filter(r => c.own?.[r.id]?.art && !['running', 'done'].includes(c.own[r.id].job?.state)) : [])
+async function meshyMake(r) {
   const c = game.cast, o = c.own[r.id]
   o.job = { state: 'running', stage: 'queued', progress: 0, worker: 'Pebble' }
   renderGame()
@@ -876,7 +876,7 @@ export async function meshyMake(r) {
   meshyPoll(c)
 }
 // Make all: one click, one price for every role on the button, and the server checks that total
-export async function meshyAll() {
+async function meshyAll() {
   const c = game.cast, roles = makeable(c)
   if (roles.length < 2) return
   for (const r of roles) c.own[r.id].job = { state: 'running', stage: 'queued', progress: 0, worker: '' }
@@ -886,7 +886,7 @@ export async function meshyAll() {
   meshyPoll(c)
 }
 // one poll for every job; the bench is patched in place, the step re-drawn only when a job ends
-export async function meshyPoll(c) {
+async function meshyPoll(c) {
   if (c.polling) return
   c.polling = true
   if (game.cast === c) renderGame()
@@ -911,28 +911,28 @@ export async function meshyPoll(c) {
 
 // Pictures on the bench are small copies (256 px at most, webp, web/ui.js), made once and kept:
 // never the full-size art. Until a copy is ready the tile shows nothing rather than the big picture.
-export const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
-export function small(src, max = 256) {
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+function small(src, max = 256) {
   // @ts-ignore
   const ready = url => { for (const img of document.querySelectorAll('img[data-small]')) if (img.dataset.small === src && Number(img.dataset.max || 256) === max) img.src = url }
   return window.SwarmUI?.small ? window.SwarmUI.small(src, max, { ready }) || BLANK : src || BLANK
 }
-export const smallImg = (src, max = 256, cls = '') => `<img${cls ? ` class="${cls}"` : ''} src="${esc(small(src, max))}" data-small="${esc(src)}" data-max="${max}" alt="" loading="lazy" decoding="async">`
+const smallImg = (src, max = 256, cls = '') => `<img${cls ? ` class="${cls}"` : ''} src="${esc(small(src, max))}" data-small="${esc(src)}" data-max="${max}" alt="" loading="lazy" decoding="async">`
 
-export const STAGE_WORD = { queued: 'waiting', model: 'sculpting', rig: 'rigging', download: 'carrying' }
+const STAGE_WORD = { queued: 'waiting', model: 'sculpting', rig: 'rigging', download: 'carrying' }
 // A clay figure under a turning wire mesh; bones for the rig. Small SVG, transform and opacity only.
-export const WIRE = '<svg class="fg-wire" viewBox="0 0 60 100" aria-hidden="true"><g class="fg-lat"><ellipse cx="30" cy="16" rx="11" ry="3"/><ellipse cx="30" cy="36" rx="16" ry="4"/><ellipse cx="30" cy="56" rx="14" ry="4"/><ellipse cx="30" cy="78" rx="12" ry="3.5"/></g><g class="fg-mer"><ellipse cx="30" cy="16" rx="11" ry="11"/><ellipse cx="30" cy="57" rx="16" ry="38"/></g><g class="fg-mer b"><ellipse cx="30" cy="16" rx="11" ry="11"/><ellipse cx="30" cy="57" rx="16" ry="38"/></g></svg>'
+const WIRE = '<svg class="fg-wire" viewBox="0 0 60 100" aria-hidden="true"><g class="fg-lat"><ellipse cx="30" cy="16" rx="11" ry="3"/><ellipse cx="30" cy="36" rx="16" ry="4"/><ellipse cx="30" cy="56" rx="14" ry="4"/><ellipse cx="30" cy="78" rx="12" ry="3.5"/></g><g class="fg-mer"><ellipse cx="30" cy="16" rx="11" ry="11"/><ellipse cx="30" cy="57" rx="16" ry="38"/></g><g class="fg-mer b"><ellipse cx="30" cy="16" rx="11" ry="11"/><ellipse cx="30" cy="57" rx="16" ry="38"/></g></svg>'
 // joints in the 60x100 box: head, neck, shoulders, elbows, hands, hips, knees, feet
-export const JOINTS = [[30, 14], [30, 27], [19, 31], [41, 31], [14, 46], [46, 46], [12, 60], [48, 60], [30, 52], [24, 56], [36, 56], [23, 74], [37, 74], [22, 92], [38, 92]]
-export const BONES = [[0, 1], [1, 8], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [8, 9], [8, 10], [9, 11], [10, 12], [11, 13], [12, 14]]
-export const RIG = `<svg class="fg-bones" viewBox="0 0 60 100" aria-hidden="true">${BONES.map(([a, b], i) => `<line style="--i:${i}" x1="${JOINTS[a][0]}" y1="${JOINTS[a][1]}" x2="${JOINTS[b][0]}" y2="${JOINTS[b][1]}"/>`).join('')}${JOINTS.map(([x, y], i) => `<circle style="--i:${i}" cx="${x}" cy="${y}" r="1.8"/>`).join('')}</svg>`
-export function benchTile({ r, o }) {
+const JOINTS = [[30, 14], [30, 27], [19, 31], [41, 31], [14, 46], [46, 46], [12, 60], [48, 60], [30, 52], [24, 56], [36, 56], [23, 74], [37, 74], [22, 92], [38, 92]]
+const BONES = [[0, 1], [1, 8], [1, 2], [1, 3], [2, 4], [3, 5], [4, 6], [5, 7], [8, 9], [8, 10], [9, 11], [10, 12], [11, 13], [12, 14]]
+const RIG = `<svg class="fg-bones" viewBox="0 0 60 100" aria-hidden="true">${BONES.map(([a, b], i) => `<line style="--i:${i}" x1="${JOINTS[a][0]}" y1="${JOINTS[a][1]}" x2="${JOINTS[b][0]}" y2="${JOINTS[b][1]}"/>`).join('')}${JOINTS.map(([x, y], i) => `<circle style="--i:${i}" cx="${x}" cy="${y}" r="1.8"/>`).join('')}</svg>`
+function benchTile({ r, o }) {
   const j = o.job, p = Math.max(0, Math.min(100, Number(j.progress) || 0)) / 100
   const stage = j.state === 'failed' ? 'failed' : j.stage || 'queued'
   const ago = ((Date.now() - (j.stageAt || Date.now())) / 1000).toFixed(1)
   return `<button type="button" class="fg st-${stage}" role="listitem" data-job="${esc(j.id || r.id)}" data-role-id="${esc(r.id)}" style="--p:${stage === 'model' ? p : 1};--ago:-${ago}s" aria-label="${esc(r.label)}, ${esc(STAGE_WORD[stage] || 'failed')}"><span class="fg-stage">${WIRE}<span class="fg-fill"><span>${smallImg(o.art, 256, 'fg-clay')}</span></span>${RIG}${smallImg(o.art, 256, 'fg-made')}${stage === 'failed' ? '<span class="fg-warn" aria-hidden="true">⚠</span>' : ''}${stage === 'queued' && j.worker ? `<span class="fg-who" aria-hidden="true">${Crew.avatar(j.worker, 20)}</span>` : ''}</span><b>${esc(r.label)}</b></button>`
 }
-export function benchHtml(c) {
+function benchHtml(c) {
   const jobs = castJobs(c)
   if (!jobs.length) return ''
   const work = jobs.filter(x => x.o.job.state !== 'done'), made = jobs.filter(x => x.o.job.state === 'done')
@@ -941,7 +941,7 @@ export function benchHtml(c) {
   return `<div class="cforge"><div class="fg-row" role="list" aria-label="Making">${work.map(benchTile).join('')}</div>${lib}</div>`
 }
 // a poll patches the tiles in place, so their motion runs on without a restart
-export function benchPatch() {
+function benchPatch() {
   const box = game.el?.querySelector('.cforge'), c = game.cast
   if (!box || !c) return
   for (const x of castJobs(c)) {
@@ -955,8 +955,8 @@ export function benchPatch() {
   benchWatch()
 }
 // offscreen, the bench rests: its animations pause until it scrolls back into view
-export let benchSeen = null
-export function benchWatch() {
+let benchSeen = null
+function benchWatch() {
   const box = game.el?.querySelector('.cforge')
   if (!box || box.dataset.watched) return
   box.dataset.watched = '1'
@@ -992,7 +992,7 @@ export function benchPin(i) {
   return { x: lib.left + lib.width / 2, y: lib.top + lib.height / 2, text, carry: small(x.o.art, 256) }
 }
 
-export async function castSearch() {
+async function castSearch() {
   const c = game.cast, r = c.roles[c.role]
   if (!r || c.lists[r.id] || c.only) return
   c.lists[r.id] = { busy: true, models: [] }
@@ -1004,7 +1004,7 @@ export async function castSearch() {
   }
   if (game.cast === c) renderGame()
 }
-export function renderCast(el, head) {
+function renderCast(el, head) {
   const c = game.cast, r = c.roles[c.role]
   const addBtn = `<button class="glink cadd" data-add>${ico('plus')}<span class="t">Pictures</span></button><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden data-files>`
   const foot = c.only ? `<div class="gfoot"><span></span><span>${c.adding ? '<div class="spin" aria-label="Adding"></div>' : ''}</span></div>`
@@ -1091,7 +1091,7 @@ export async function openCastOnly() {
 
 // The promo game links back only to a real address: put the site online first
 // (a connected Vercel or Cloudflare, else GitHub Pages), then the link goes in the spec.
-export async function gameOnline() {
+async function gameOnline() {
   const brand = game.spec?.brand
   if (!brand?.from) return
   const h = await api('/api/publish').then(r => r.json()).catch(() => ({}))
@@ -1112,10 +1112,10 @@ export async function gameOnline() {
 }
 
 // names of a spec's list (a big spec's entries are objects with a name)
-export const gameList = v => (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : x?.name || '')).join(', ') : v || '')
+const gameList = v => (Array.isArray(v) ? v.map(x => (typeof x === 'string' ? x : x?.name || '')).join(', ') : v || '')
 
 // Shape it: the spec walked step by step with pictures (web/workshop.js), then the same build
-export async function gameShape() {
+async function gameShape() {
   readSpecEdits()
   const spec = { ...game.spec }
   closeGame()
@@ -1135,7 +1135,7 @@ export async function gameShape() {
   })
 }
 
-export async function gameBuild() {
+async function gameBuild() {
   // the card's edits go into the spec (a big spec's enemies stay objects unless that line changed)
   readSpecEdits()
   // the picked cast, one model per role

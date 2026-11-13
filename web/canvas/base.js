@@ -17,7 +17,7 @@ export const FRAME_SANDBOX = 'allow-scripts'
 export const links = layerLink({ form: els.form, feed: els.feed, rect: layerRect, open: () => window.swarmCosmos?.chat(true), files: list => chatFiles(list) })
 // Media in the chat (spec 29, server/chatmedia.mjs): in a talk, a picture goes to the chat and the vision
 // model reads it now; in a project, it joins the project's References. Either way it is a chip until sent.
-export async function chatFiles(list) {
+async function chatFiles(list) {
   const talking = talk.on && talk.kind !== 'game'
   const pid = !talk.on && shownRun() ? window.swarmCosmos?.projectView?.pid : null
   if (!talking && !pid) return feed(null, talk.on ? 'Pictures in a game talk come later.' : 'Open a project or start a talk first.', 'err')
@@ -36,7 +36,7 @@ export async function chatFiles(list) {
 // a project message's attached references, named for the crew (the brief lists the store with its links)
 export const refLines = (text, media) => media.length ? `${text}\n${media.map(m => `Use the reference ${m.data?.kind === 'image' ? 'picture' : 'file'} "${m.name}" (${m.data?.src || ''}).`).join('\n')}` : text
 // where a layer is on screen: the Overview's artboard when it shows, else the Design deck's frame
-export function layerRect(key) {
+function layerRect(key) {
   const o = window.swarm?.overviewRect?.(key)
   if (o !== false && o !== undefined) return o
   const l = S.layers.get(key), s = l && slotFor(l)

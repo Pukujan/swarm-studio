@@ -27,7 +27,7 @@ export function renderTheme() {
 }
 
 // Layers: which sections are expanded or hidden (hidden only on the canvas, not in exports).
-export const layersOpen = new Set(), layersHidden = new Set()
+const layersOpen = new Set(), layersHidden = new Set()
 export let treeSel = null, treeRun = null
 
 // What is inside a section, as a designer's layer list: headings, text, images, buttons, links, forms.
@@ -44,7 +44,7 @@ export function layerKids(html = '') {
   return out
 }
 
-export function selectLayer(l) {
+function selectLayer(l) {
   const s = slotFor(l)
   S.sel = l.key
   design.pinned = null
@@ -54,7 +54,7 @@ export function selectLayer(l) {
   renderTree()
 }
 
-export function hideLayer(l, hide) {
+function hideLayer(l, hide) {
   hide ? layersHidden.add(l.key) : layersHidden.delete(l.key)
   for (const f of l.page === '*' ? S.frames : S.frames.filter(fr => fr.id === l.page)) post(f, { type: 'slot', key: l.key, hidden: hide })
   if (hide && S.sel === l.key) S.sel = null
@@ -298,7 +298,7 @@ export async function resumeRun(run) {
   if (viewing && window.swarmCosmos?.nav) showRun(j.run, { started: true })
 }
 // an action with `commands` in it: the commands set as code
-export function actionLine(text) {
+function actionLine(text) {
   const span = document.createElement('span')
   span.className = 'act'
   String(text).split('`').forEach((part, i) => {
@@ -346,7 +346,7 @@ export function botMsg(text, working = false) {
 }
 
 // a follow-up's reply: what was added or changed, and that the rest is as it was
-export function extendSummary(e, secs) {
+function extendSummary(e, secs) {
   // a resumed build (after Stop, or Hermes closing) finished the sections that were left
   if (e.resume) return `Finished the build: ${e.done} section${e.done === 1 ? '' : 's'} in ${secs}s${e.failed ? ` (${e.failed} failed)` : ''}. All ${e.pages} page${e.pages === 1 ? '' : 's'} are built.`
   const names = (e.added || []).map(p => p.title)

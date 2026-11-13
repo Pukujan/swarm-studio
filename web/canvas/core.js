@@ -41,7 +41,7 @@ export const store = {
 
 // Lucide line icons (ISC, lucide.dev; licence in web/brand/LICENSE-lucide.txt), only the ones the studio uses.
 // Emoji stay in chat and agent messages; the chrome uses these.
-export const LUCIDE = {
+const LUCIDE = {
   "box":"<path d=\"M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z\" /><path d=\"M3.3 7l8.7 5 8.7-5\" /><path d=\"M12 22V12\" />",
   "refresh-cw":"<path d=\"M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8\" /><path d=\"M21 3v5h-5\" /><path d=\"M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16\" /><path d=\"M8 16H3v5\" />",
   "send":"<path d=\"M14.5 21.5a.5.5 0 00.9-.1L22 3.5a.5.5 0 00-.6-.6L3.6 9.6a.5.5 0 00-.1.9l7.4 3.2a2 2 0 011.1 1.1z\" /><path d=\"M21.9 2.1L11 13\" />",

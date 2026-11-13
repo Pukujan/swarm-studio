@@ -35,12 +35,12 @@ export function loadThemeFonts(t) {
   link.href = `https://fonts.googleapis.com/css2?${names.map(fam).join('&')}&display=swap`
 }
 
-export const TW_SIZE = { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl': 30, '4xl': 36, '5xl': 48, '6xl': 60, '7xl': 72, '8xl': 96, '9xl': 128 }
-export const TW_WEIGHT = { thin: 100, extralight: 200, light: 300, normal: 400, medium: 500, semibold: 600, bold: 700, extrabold: 800, black: 900 }
-export const TW_RADIUS = { none: '0', sm: '2', '': '4', md: '6', lg: '8', xl: '12', '2xl': '16', '3xl': '24', full: '∞' }
-export const BP = { '': 0, sm: 1, md: 2, lg: 3, xl: 4 }
+const TW_SIZE = { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl': 30, '4xl': 36, '5xl': 48, '6xl': 60, '7xl': 72, '8xl': 96, '9xl': 128 }
+const TW_WEIGHT = { thin: 100, extralight: 200, light: 300, normal: 400, medium: 500, semibold: 600, bold: 700, extrabold: 800, black: 900 }
+const TW_RADIUS = { none: '0', sm: '2', '': '4', md: '6', lg: '8', xl: '12', '2xl': '16', '3xl': '24', full: '∞' }
+const BP = { '': 0, sm: 1, md: 2, lg: 3, xl: 4 }
 export const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
-export const space = v => (v === 'px' ? 1 : /^\[(.+)\]$/.test(v) ? v.slice(1, -1) : Number(v) * 4)
+const space = v => (v === 'px' ? 1 : /^\[(.+)\]$/.test(v) ? v.slice(1, -1) : Number(v) * 4)
 
 // The token of a family that applies at desktop width (the widest breakpoint up to xl wins).
 export function tw(classes, re) {
@@ -108,7 +108,7 @@ export function sectionProps(l) {
   return rows
 }
 
-export function pickSelection(now) {
+function pickSelection(now) {
   if (S.sel && S.layers.has(S.sel)) { design.layer = S.sel; return { a: null, l: S.layers.get(S.sel) } }
   const has = id => { const a = S.agents.get(id); return a?.layer ? a : null }
   let a = has(design.pinned)
@@ -169,14 +169,14 @@ export function renderDesign(now) {
 }
 
 // the page the view is on: the frame under the middle of the canvas, else the nearest
-export function pageInView() {
+function pageInView() {
   if (!S.frames.length) return null
   const cx = (els.viewport.clientWidth / 2 - cam.x) / cam.s
   return S.frames.reduce((best, f) => (Math.abs(f.x + FRAME_W / 2 - cx) < Math.abs(best.x + FRAME_W / 2 - cx) ? f : best))
 }
-export const pagePictures = id => [...S.images.entries()].filter(([k, src]) => src && k.startsWith(`${id}/`)).map(([, src]) => src)
+const pagePictures = id => [...S.images.entries()].filter(([k, src]) => src && k.startsWith(`${id}/`)).map(([, src]) => src)
 
-export function renderVars(now) {
+function renderVars(now) {
   if (now - design.varsAt < 900 && !(S.themeAt && now - S.themeAt < 3000)) return
   design.varsAt = now
   const t = S.theme
@@ -220,11 +220,11 @@ export const SIZES = Object.keys(TW_SIZE)
 export const SPACE = ['0', '0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '16', '20', '24', '28', '32', '36', '40', '44', '48', '52', '56', '60', '64', '72', '80', '96']
 export const FONTS = ['Inter', 'DM Sans', 'Karla', 'Manrope', 'Space Grotesk', 'IBM Plex Sans', 'Work Sans', 'Syne', 'Fraunces', 'Playfair Display', 'DM Serif Display', 'Instrument Serif', 'Libre Baskerville', 'JetBrains Mono']
 export const SIZE_RE = /^text-(xs|sm|base|lg|xl|[2-9]xl)$/
-export const SPACE_RE = /^(-?)(p|px|py|pt|pb|pl|pr|gap|gap-x|gap-y|space-y|space-x|mt|mb|my)-([\d.]+)$/
+const SPACE_RE = /^(-?)(p|px|py|pt|pb|pl|pr|gap|gap-x|gap-y|space-y|space-x|mt|mb|my)-([\d.]+)$/
 
 // Rewrite the class tokens of every class attribute in some HTML. `fn` gets the
 // token without its breakpoint prefix and returns a replacement (or the same).
-export function mapClasses(html, fn) {
+function mapClasses(html, fn) {
   return html.replace(/class="([^"]*)"/g, (m, c) => `class="${c.split(/\s+/).map(tok => {
     const i = tok.lastIndexOf(':')
     const bp = i < 0 ? '' : tok.slice(0, i)
@@ -234,7 +234,7 @@ export function mapClasses(html, fn) {
   }).filter(Boolean).join(' ')}"`)
 }
 
-export const stepIn = (list, v, d) => list[Math.max(0, Math.min(list.length - 1, list.indexOf(v) + d))]
+const stepIn = (list, v, d) => list[Math.max(0, Math.min(list.length - 1, list.indexOf(v) + d))]
 
 // Class-level group edits, applied to a layer's HTML.
 export function restyle(l, e) {
@@ -252,7 +252,7 @@ export function restyle(l, e) {
   if (out !== l.text) { l.text = out; l.ver++ }
 }
 
-export function setCls(el, drop, add) {
+function setCls(el, drop, add) {
   if (!el) return
   const toks = (el.getAttribute('class') || '').split(/\s+/).filter(Boolean).filter(tok => {
     const i = tok.lastIndexOf(':')
@@ -266,7 +266,7 @@ export function layoutEl(root) {
   return [root, ...root.querySelectorAll('*')].slice(0, 8).find(el => /(^|\s)((sm|md|lg|xl):)?(flex|grid|inline-flex)(\s|$)/.test(el.getAttribute('class') || ''))
 }
 
-export function editSection(l, prop, v) {
+function editSection(l, prop, v) {
   const doc = new DOMParser().parseFromString(`<body>${l.text}</body>`, 'text/html')
   const root = doc.body.firstElementChild
   if (!root) return
@@ -317,7 +317,7 @@ export function applyEdit(e) {
   if (e.by && e.by !== CLIENT && live(e)) feed(null, `Someone else edited the design: ${describeEdit(e)}`, 'sys')
 }
 
-export function describeEdit(e) {
+function describeEdit(e) {
   return {
     var: () => `${e.name.slice(2)} → ${e.value}`,
     font: () => `${e.role} font → ${e.value}`,
@@ -328,7 +328,7 @@ export function describeEdit(e) {
   }[e.kind]?.() || e.kind
 }
 
-export const REACT = {
+const REACT = {
   var: e => [`ooh, new ${e.name.slice(2)}. matching it`, `${e.value}? bold. I like it`, 'colour change! repainting my bit', 'ok that token just got better'],
   font: e => [`${e.value}, nice pick`, `switching to ${e.value} 👌`, 'new font, who dis'],
   radius: () => ['softer corners, noted', 'rounding everything off', 'corner police approve'],
@@ -352,7 +352,7 @@ export async function commitEdit(edit) {
   if (a) setTimeout(() => say(a, pick(REACT[e.kind](e))), 500)
   return saveEdit(run, e)
 }
-export async function saveEdit(run, e) {
+async function saveEdit(run, e) {
   const res = await api(`/api/runs/${encodeURIComponent(run)}/edit`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(e) }).catch(() => null)
   if (!res?.ok) feed(null, 'That edit is shown here but could not be saved with the file.', 'err')
 }
@@ -367,7 +367,7 @@ export function remember(step) {
   renderUndo()
 }
 // what puts an edit back: the value before it, or the section as it was
-export function undoFor(e) {
+function undoFor(e) {
   const t = S.theme || {}
   if (e.kind === 'var') return { kind: 'edit', label: describeEdit(e), back: { kind: 'var', name: e.name, value: t.vars?.[e.name] }, again: { kind: 'var', name: e.name, value: e.value } }
   if (e.kind === 'font') return { kind: 'edit', label: describeEdit(e), back: { kind: 'font', role: e.role, value: t.fonts?.[e.role] }, again: { kind: 'font', role: e.role, value: e.value } }
@@ -432,7 +432,7 @@ window.addEventListener('keydown', e => {
 })
 
 // Every version a section has had: as built, each fix, each restore. Any one comes back.
-export async function sectionVersions(l, at) {
+async function sectionVersions(l, at) {
   document.querySelector('.fmenu')?.remove()
   const run = viewing && viewing !== 'new' ? viewing : S.run
   const events = await (await api(`/api/runs/${encodeURIComponent(run)}/events`)).json().catch(() => [])
@@ -467,7 +467,7 @@ export async function sectionVersions(l, at) {
 
 // One small menu for every editable value, Figma style.
 export const picker = { el: null }
-export function openPicker(anchor, options, current, onPick) {
+function openPicker(anchor, options, current, onPick) {
   closePicker()
   const el = document.createElement('div')
   el.className = 'dpick'
@@ -484,12 +484,12 @@ export function openPicker(anchor, options, current, onPick) {
   el.style.top = `${Math.min(r.bottom + 4, innerHeight - el.offsetHeight - 8)}px`
   picker.el = el
 }
-export function closePicker() { picker.el?.remove(); picker.el = null }
+function closePicker() { picker.el?.remove(); picker.el = null }
 document.addEventListener('mousedown', e => { if (picker.el && !picker.el.contains(e.target)) closePicker() })
 window.addEventListener('keydown', e => { if (e.key === 'Escape') closePicker() })
 
-export const px = v => `${space(v)}px`
-export const SECTION_OPTIONS = {
+const px = v => `${space(v)}px`
+const SECTION_OPTIONS = {
   pad: () => ['0', '4', '8', '12', '16', '20', '24', '32'].map(v => ({ value: v, label: `${px(v)} top & bottom` })),
   gap: () => ['0', '2', '4', '6', '8', '10', '12', '16'].map(v => ({ value: v, label: px(v) })),
   dir: () => [['col', '↓ Vertical'], ['row', '→ Horizontal'], ['grid-2', '▦ Grid · 2 cols'], ['grid-3', '▦ Grid · 3 cols'], ['grid-4', '▦ Grid · 4 cols']].map(([value, label]) => ({ value, label })),
@@ -508,9 +508,9 @@ els.dDesign.addEventListener('click', e => {
 })
 
 /** @type {HTMLInputElement & { timer?: any }} */
-export const colorInput = Object.assign(document.createElement('input'), { type: 'color', className: 'dcolor' })
+const colorInput = Object.assign(document.createElement('input'), { type: 'color', className: 'dcolor' })
 document.body.append(colorInput)
-export let colorEdit = null
+let colorEdit = null
 colorInput.addEventListener('input', () => {
   // preview while dragging in the colour picker, save when it settles
   if (!colorEdit || !S.theme) return
@@ -548,7 +548,7 @@ els.dVars.addEventListener('click', e => {
   }
 })
 
-export function loadPickerFonts() {
+function loadPickerFonts() {
   if ($('#picker-fonts')) return
   const link = Object.assign(document.createElement('link'), { id: 'picker-fonts', rel: 'stylesheet' })
   link.href = `https://fonts.googleapis.com/css2?${FONTS.map(f => `family=${encodeURIComponent(f).replace(/%20/g, '+')}`).join('&')}&display=swap`

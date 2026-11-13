@@ -25,9 +25,9 @@ export function setAutoMin(on, remember = true) {
   if (remember) try { localStorage.setItem('swarm.autoMin', on ? '1' : '0') } catch {}
   renderAutoPanel()
 }
-export const AUTO_VIEW = { design: 'canvas', review: 'canvas', video: 'video', app: 'app', tools: 'app', games: 'app', shop: 'app', data: 'app', checks: 'app', deploy: 'app', launch: 'app' }
+const AUTO_VIEW = { design: 'canvas', review: 'canvas', video: 'video', app: 'app', tools: 'app', games: 'app', shop: 'app', data: 'app', checks: 'app', deploy: 'app', launch: 'app' }
 // step states as drawn icons: a ring, a spinning arc, a check, a dash, a cross
-export const AUTO_ICON = {
+const AUTO_ICON = {
   wait: icon('<circle cx="12" cy="12" r="8" stroke-dasharray="2 3"/>'),
   working: icon('<circle cx="12" cy="12" r="8" opacity=".25"/><path d="M12 4a8 8 0 0 1 8 8"/>'),
   done: icon('<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16.2 9.6"/>'),
@@ -68,7 +68,7 @@ export function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
   renderAutoPanel()
 }
 
-export function renderAutoPanel() {
+function renderAutoPanel() {
   const e = autoM.last
   if (!e) return
   if (!autoM.panel) {
@@ -107,8 +107,8 @@ export function renderAutoPanel() {
   p.querySelector('.ap-kit')?.addEventListener('click', ev => { ev.stopPropagation(); openLaunch(e.run) })
 }
 // something to launch: a live link, or a finished promo video (a design alone is not a launch)
-export const launchable = e => !!(e?.url || e?.steps?.some(s => s.id === 'video' && s.state === 'done'))
-export const linkify = t => esc(t).replace(/https?:\/\/[^\s<"]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
+const launchable = e => !!(e?.url || e?.steps?.some(s => s.id === 'video' && s.state === 'done'))
+const linkify = t => esc(t).replace(/https?:\/\/[^\s<"]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`)
 // the clocks tick between events
 setInterval(() => { if (autoM.last?.state === 'working' && autoM.panel && !autoM.panel.hidden) renderAutoPanel() }, 1000)
 if (!Q.get('replay')) api('/api/auto').then(r => r.ok ? r.json() : null).then(e => { if (e?.steps && (e.state === 'working' || Date.now() - e.t0 < 3600000)) autoEvent(e, e.state === 'working') }).catch(() => {})
@@ -116,19 +116,19 @@ if (!Q.get('replay')) api('/api/auto').then(r => r.ok ? r.json() : null).then(e 
 // ---------- the Auto show (spec 07): step cards, the reviewer, the deploy shot, the summary,
 // the launch kit and the crew's chatter. All of it only watches: none of it changes a build.
 export const Chatter = window.SwarmChatter || null
-export const Show = window.SwarmShow || null
+const Show = window.SwarmShow || null
 // live, or a replay being watched (?replay= or ☰ → Replay): the show plays for both, a reopened file stays quiet
-export const showLive = e => live(e) || (!!replayId && viewing === replayId && !WALL)
-export const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches
-export const STEP_SHOW = {
+const showLive = e => live(e) || (!!replayId && viewing === replayId && !WALL)
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+const STEP_SHOW = {
   design: ['Designing the', 'site', 'palette'], review: ['Reviewing every', 'page', 'search-check'], app: ['Building the', 'app', 'server'],
   tools: ['Running the', 'tools', 'sliders-horizontal'], games: ['Adding the', 'games', 'gamepad-2'], shop: ['Opening the', 'shop', 'zap'],
   data: ['Wiring the', 'data', 'layers'], checks: ['Checking it', 'works', 'check'], video: ['Cutting the', 'promo', 'clapperboard'],
   deploy: ['Taking it', 'live', 'rocket'], launch: ['Writing the', 'launch kit', 'message-square']
 }
-export const pill = (name, color = Crew.color(name)) => `<span class="sc-pill" style="--c:${color};--ci:${Crew.ink(color)}">${name === 'Hermia' ? HERMIA : Crew.avatar(name, 22)}<b>${esc(name)}</b></span>`
+const pill = (name, color = Crew.color(name)) => `<span class="sc-pill" style="--c:${color};--ci:${Crew.ink(color)}">${name === 'Hermia' ? HERMIA : Crew.avatar(name, 22)}<b>${esc(name)}</b></span>`
 // who works on a step, as the canvas knows them
-export function stepCrew(id) {
+function stepCrew(id) {
   if (id === 'review') return [['Reviewer', 'var(--info)'], ...crewMembers(2)]
   if (id === 'deploy' || id === 'launch') return [['Hermia', 'var(--frame-hi)'], ...crewMembers(id === 'launch' ? 1 : 2)]
   if (AUTO_VIEW[id] === 'app') return wallNames().slice(0, 4)
@@ -138,7 +138,7 @@ export function stepCrew(id) {
 // A. Step transitions: a full-width card slides in for 1.2 s (step number, the step in display
 // type, its icon and crew, Hermia pointing on), the view changes under it, then
 // the card slides away. Under prefers-reduced-motion: no card, the new view fades in.
-export function showStep(e, step, change) {
+function showStep(e, step, change) {
   const i = e.steps.findIndex(s => s.id === step.id)
   Chatter?.fanfare()
   if (reduced() || WALL) {
@@ -163,7 +163,7 @@ export function showStep(e, step, change) {
 }
 
 // The live view tab pulses while Auto works in it.
-export function showLiveTab(e) {
+function showLiveTab(e) {
   const cur = e.state === 'working' && e.steps.find(s => s.state === 'working')
   const v = cur && AUTO_VIEW[cur.id]
   // @ts-ignore
@@ -172,8 +172,8 @@ export function showLiveTab(e) {
 
 // A2. The reviewer: a cursor in its own colour hovers over the page being checked and draws a
 // dashed box round each section it flags; a fix landing flashes the box green and clears it.
-export const rv = { el: null, page: null, flags: new Map(), x: 0, y: 0, tx: 0, ty: 0, hop: 0, raf: 0, quietAt: 0 }
-export function rvEnsure() {
+const rv = { el: null, page: null, flags: new Map(), x: 0, y: 0, tx: 0, ty: 0, hop: 0, raf: 0, quietAt: 0 }
+function rvEnsure() {
   if (rv.el) return rv.el
   rv.el = document.createElement('div')
   rv.el.className = 'cursor rv-cursor'
@@ -182,7 +182,7 @@ export function rvEnsure() {
   return rv.el
 }
 // a point on a section of the page under review, in world space
-export function rvSpot(page, layerKey) {
+function rvSpot(page, layerKey) {
   const f = S.frames.find(fr => fr.id === page)
   if (!f) return null
   const keys = layerKey ? [layerKey] : Object.keys(f.geo.slots || {})
@@ -192,7 +192,7 @@ export function rvSpot(page, layerKey) {
   const [left, top, width, height] = g.box
   return { x: f.x + left + width * (0.25 + ((rv.hop * 37) % 50) / 100), y: top + Math.min(height, 600) * 0.45 }
 }
-export function rvTick() {
+function rvTick() {
   rv.raf = 0
   if (!rv.el) return
   if (Date.now() - rv.quietAt > 0 && rv.quietAt && !rv.flags.size) { rv.el.classList.add('leaving'); setTimeout(() => { rv.el?.remove(); rv.el = null }, 600); rv.page = null; return }
@@ -203,7 +203,7 @@ export function rvTick() {
   els.world.style.setProperty('--inv', String(1 / Math.max(0.05, cam.s)))
   rv.raf = requestAnimationFrame(rvTick)
 }
-export function rvMove(page, layerKey, doing) {
+function rvMove(page, layerKey, doing) {
   rvEnsure()
   rv.quietAt = 0
   rv.el.classList.remove('leaving')
@@ -217,7 +217,7 @@ export function rvMove(page, layerKey, doing) {
   rv.wander = setInterval(() => { if (rv.page === page) { const n = rvSpot(page); if (n) { rv.tx = n.x; rv.ty = n.y } } }, 1100)
   if (!rv.raf) rv.raf = requestAnimationFrame(rvTick)
 }
-export function rvFlag(e) {
+function rvFlag(e) {
   const l = S.layers.get(key(e.page, e.layer))
   const s = l && slotFor(l)
   if (!s) return
@@ -230,7 +230,7 @@ export function rvFlag(e) {
   rv.flags.set(l.key, box)
   rvMove(e.page, l.key, 'flagging a section')
 }
-export function rvFixed(e) {
+function rvFixed(e) {
   const k = key(e.page, e.layer), box = rv.flags.get(k)
   if (!box) return
   rv.flags.delete(k)
@@ -249,11 +249,11 @@ export function reviewShow(e) {
 // A3. The deploy shot. While Vercel builds: a terminal tile with the build log and an edge
 // graphic that pulses at each stage. When it is ready: the live site in a laptop and a phone,
 // with the crew's cursors clicking around it.
-export const ds = { el: null, run: null, mode: '', lines: [], stage: '', url: '', timers: [], games: false }
-export const DS_STAGES = [['upload', 'Upload'], ['building', 'Build'], ['ready', 'Ready']]
-export function dsClear() { ds.timers.forEach(clearTimeout); ds.timers = [] }
-export function dsClose() { dsClear(); ds.el?.remove(); Object.assign(ds, { el: null, run: null, mode: '', lines: [], stage: '', url: '' }) }
-export function dsOpen(run) {
+const ds = { el: null, run: null, mode: '', lines: [], stage: '', url: '', timers: [], games: false }
+const DS_STAGES = [['upload', 'Upload'], ['building', 'Build'], ['ready', 'Ready']]
+function dsClear() { ds.timers.forEach(clearTimeout); ds.timers = [] }
+function dsClose() { dsClear(); ds.el?.remove(); Object.assign(ds, { el: null, run: null, mode: '', lines: [], stage: '', url: '' }) }
+function dsOpen(run) {
   if (ds.el && ds.run === run) return
   dsClose()
   ds.run = run
@@ -263,7 +263,7 @@ export function dsOpen(run) {
   if (cw.el) cw.el.hidden = true
   dsBuild()
 }
-export function dsBuild() {
+function dsBuild() {
   ds.mode = 'build'
   ds.el.className = 'deployshot build'
   ds.el.innerHTML = `<div class="ds-head"><b class="pop-title">Going <em>live</em></b><span class="ds-sub">Vercel is building it</span><button class="ds-x" aria-label="Close">${ico('x')}</button></div>
@@ -274,12 +274,12 @@ export function dsBuild() {
   ds.el.querySelector('.ds-x').onclick = dsClose
   dsRender()
 }
-export function dsLog(lines) {
+function dsLog(lines) {
   for (const l of [].concat(lines)) if (l && ds.lines.at(-1) !== l) ds.lines.push(String(l).slice(0, 200))
   ds.lines = ds.lines.slice(-60)
   dsRender()
 }
-export function dsRender() {
+function dsRender() {
   if (!ds.el || ds.mode !== 'build') return
   const pre = ds.el.querySelector('.ds-log')
   pre.innerHTML = ds.lines.map(l => `<span>${esc(l)}</span>`).join('\n') + '<i class="ds-caret"></i>'
@@ -288,14 +288,14 @@ export function dsRender() {
   ds.el.querySelectorAll('.ds-stages li').forEach((li, i) => { li.className = i < at ? 'done' : i === at ? 'on' : '' })
   ds.el.querySelector('.ds-globe').dataset.stage = ds.stage || 'upload'
 }
-export function dsStage(stage) {
+function dsStage(stage) {
   const s = /ready/.test(stage) ? 'ready' : /build/.test(stage) ? 'building' : 'upload'
   if (s !== ds.stage) { ds.stage = s; ds.el?.querySelector('.ds-globe')?.classList.remove('pulse'); void ds.el?.offsetWidth; ds.el?.querySelector('.ds-globe')?.classList.add('pulse') }
   dsRender()
 }
 // the shot's crew, with a pill each
-export const dsCursor = (name, color) => `<div class="ds-cur" data-name="${esc(name)}">${ARROW(color, name)}<div class="tag" style="background:${color};color:${Crew.ink(color)}"><span>${esc(name)}</span><em class="doing"></em></div></div>`
-export function dsLive(url) {
+const dsCursor = (name, color) => `<div class="ds-cur" data-name="${esc(name)}">${ARROW(color, name)}<div class="tag" style="background:${color};color:${Crew.ink(color)}"><span>${esc(name)}</span><em class="doing"></em></div></div>`
+function dsLive(url) {
   if (!ds.el || ds.mode === 'live') return
   dsClear()
   ds.mode = 'live'; ds.url = url; ds.stage = 'ready'
@@ -314,7 +314,7 @@ export function dsLive(url) {
   if (!reduced()) dsScript(crew3.map(c => c[0]))
 }
 // the laptop shows a 1280-wide page and the phone a 390-wide one, both scaled to their screens
-export function dsFit() {
+function dsFit() {
   if (!ds.el || ds.mode !== 'live') return
   for (const [sel, w] of [['.ds-laptop .ds-screen', 1280], ['.ds-phone .ds-screen', 390]]) {
     const s = ds.el.querySelector(sel)
@@ -327,7 +327,7 @@ export function dsFit() {
 }
 new ResizeObserver(dsFit).observe(appEls.preview)
 // The cursors' little tour: scroll the hero, open /play, press Play; then the phone; then again.
-export function dsScript(names) {
+function dsScript(names) {
   const stage = ds.el.querySelector('.ds-stage')
   const curs = [...ds.el.querySelectorAll('.ds-cur')]
   const lap = ds.el.querySelector('.ds-laptop .ds-screen'), ph = ds.el.querySelector('.ds-phone .ds-screen')
@@ -376,7 +376,7 @@ export function deployShow(e) {
 }
 
 // A4. The final screen: the time and the time per step, the counts, the live link and its QR code.
-export async function showSummary(e) {
+async function showSummary(e) {
   if (!e?.run) return
   document.querySelector('.show-sum')?.remove()
   const r = await api(`/api/runs/${encodeURIComponent(e.run)}/show`).catch(() => null)
@@ -418,8 +418,8 @@ export async function showSummary(e) {
 // share page, prefilled; the person presses Post there. Discord, Slack and Telegram go through
 // Hermes's gateway, and only after a confirm box with the exact text, channel and attachments.
 // Nothing is ever sent by itself.
-export const NET_ICON = { x: '𝕏', linkedin: 'in', threads: '@', bluesky: '🦋', instagram: '◎', tiktok: '♪', discord: '◆', slack: '#', telegram: '➤' }
-export async function openLaunch(run) {
+const NET_ICON = { x: '𝕏', linkedin: 'in', threads: '@', bluesky: '🦋', instagram: '◎', tiktok: '♪', discord: '◆', slack: '#', telegram: '➤' }
+async function openLaunch(run) {
   if (!run) return
   document.querySelector('.launch-pop')?.remove()
   const el = document.createElement('div')
@@ -436,7 +436,7 @@ export async function openLaunch(run) {
   const gw = (await api('/api/gateway').then(r => r.json()).catch(() => ({}))).platforms || {}
   renderLaunch(el, run, kit, gw)
 }
-export function renderLaunch(el, run, kit, gw) {
+function renderLaunch(el, run, kit, gw) {
   const mark = (post, action, text) => api(`/api/runs/${encodeURIComponent(run)}/launch/mark`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ post, action, text }) }).then(r => r.ok ? r.json() : null).catch(() => null)
   const url = kit.facts.url
   const media = kit.media.filter(m => m.kind !== 'link')
@@ -494,7 +494,7 @@ export function renderLaunch(el, run, kit, gw) {
     }
   }
 }
-export function launchCard(p, gw) {
+function launchCard(p, gw) {
   const texts = p.thread || [p.text]
   const gwOn = p.how === 'gateway' && gw[p.network]
   const postLabel = p.how === 'intent' ? (p.thread ? `Post 1/${texts.length}` : 'Post') : p.how === 'download' ? 'Download video + copy caption' : gwOn ? 'Post…' : `Connect ${p.label} in Hermes to send`
@@ -503,7 +503,7 @@ export function launchCard(p, gw) {
     <div class="lk-btns"><button class="primary lk-post"${p.how === 'gateway' && !gwOn ? ' disabled' : ''}>${esc(postLabel)}</button>${p.how === 'gateway' ? '<button class="lk-copy">Copy</button>' : ''}<button class="lk-edit">Edit</button><button class="lk-skip">Skip</button></div></div>`
 }
 // the one way a post leaves through Hermes: this box, with the exact text, the channel and the attachments, then Send
-export function launchConfirm(run, p, text, targets, kit, done) {
+function launchConfirm(run, p, text, targets, kit, done) {
   document.querySelector('.lk-confirm')?.remove()
   const box = document.createElement('div')
   box.className = 'lk-confirm'
@@ -535,7 +535,7 @@ export function launchConfirm(run, p, text, targets, kit, done) {
 }
 
 // B. Chatter: the same events the canvas draws, as sounds. Off unless the person turns it on.
-export const chat = { failed: new Set(), said: new Set() }
+const chat = { failed: new Set(), said: new Set() }
 export function chatterHear(e) {
   if (!Chatter?.on || !showLive(e)) return
   const nameOf = id => S.agents.get(id)?.name
@@ -597,12 +597,12 @@ if (Chatter && !WALL) {
 // on (voices and sounds) → sounds off → quiet (no sounds, no bubbles). Quiet also hides the speech
 // bubbles on the canvas and Hermia's strip and the helpers' bubbles on the code wall. Remembered in
 // this browser. The button keeps its width whichever word it shows.
-export const CREW_KEY = 'swarm.crew'
-export const CREW_MODES = ['on', 'muted', 'quiet']
-export const CREW_WORD = { on: 'Crew', muted: 'Muted', quiet: 'Quiet' }
-export const crewBtn = document.getElementById('crew-mute')
+const CREW_KEY = 'swarm.crew'
+const CREW_MODES = ['on', 'muted', 'quiet']
+const CREW_WORD = { on: 'Crew', muted: 'Muted', quiet: 'Quiet' }
+const crewBtn = document.getElementById('crew-mute')
 export let crewMode = 'muted'
-export let soundPop = null // the crew button's popover, while it is open
+let soundPop = null // the crew button's popover, while it is open
 export function setCrewMode(m, { save = true, chatter = true } = {}) {
   if (!CREW_MODES.includes(m)) m = 'muted'
   crewMode = m
@@ -617,7 +617,7 @@ export function setCrewMode(m, { save = true, chatter = true } = {}) {
   }
   renderSoundPop()
 }
-export const cycleCrew = () => {
+const cycleCrew = () => {
   setCrewMode(CREW_MODES[(CREW_MODES.indexOf(crewMode) + 1) % CREW_MODES.length])
   if (crewMode === 'on') Chatter?.babble('Hermia', 'hello crew')
 }
@@ -641,13 +641,13 @@ if (WALL) { if (crewBtn) crewBtn.hidden = true } else {
   })
 }
 // the crew button's popover: the three states and the volume, nothing else
-export function renderSoundPop() {
+function renderSoundPop() {
   if (!soundPop || soundPop.closed) return
   for (const b of soundPop.el.querySelectorAll('[data-mode]')) b.setAttribute('aria-checked', String(b.dataset.mode === crewMode))
   const vol = soundPop.el.querySelector('.ui-slider')
   if (vol && Chatter) { vol.value = String(Math.round((Chatter.volume ?? 0.6) * 100)); window.SwarmUI?.slider(vol) }
 }
-export function openSoundPop(e) {
+function openSoundPop(e) {
   e?.stopPropagation()
   if (soundPop && !soundPop.closed) return soundPop.close('toggle')
   if (!window.SwarmUI) return cycleCrew()
@@ -665,7 +665,7 @@ Chatter?.watch?.(() => renderSoundPop())
 // tile is the asset pane, always: the build's pictures turning on a card, one after another.
 export const CW_TILES = 4
 export const CW_CODE = CW_TILES - 1 // the one code tile, in both modes; the other three are pictures
-export const CW_TURN = 2600 // ms per asset
+const CW_TURN = 2600 // ms per asset
 // ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
 // and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
 // talking to, each helper's reply as a bubble on its cursor, and what it is doing right now
@@ -673,8 +673,8 @@ export const CW_TURN = 2600 // ms per asset
 export const radio = { run: null, lead: null, reason: null, acts: new Map(), says: new Map(), order: [], feed: [] }
 // Hermia's history for her dock: her thinking fragments join into one line while fresh
 // the engine's own boilerplate (file-size notes, where the chat backup is) is not her talking
-export const DOCK_NOISE = /^(Note: This file may be large|If you need to retrieve earlier parts of the conversation)/
-export function dockLine(x) {
+const DOCK_NOISE = /^(Note: This file may be large|If you need to retrieve earlier parts of the conversation)/
+function dockLine(x) {
   if (DOCK_NOISE.test(String(x.text || '').trim())) return
   const last = radio.feed.at(-1)
   if (x.kind === 'reason' && last?.kind === 'reason' && x.t - last.t < 20000 && last.text.length < 1400) { last.text += ` ${x.text}`; last.t = x.t; last.n = (last.n || 1) + 1; return }
@@ -706,7 +706,7 @@ export const CW_FRESH = { assets: null, assetsAt: 0, av: [], mode: '', reads: nu
 // painters (the server's PAINTERS) each get a tile with the picture they are on: painting,
 // cut out, checked, sent back, done. The last tile stays code. When the code starts, the
 // wall turns back to three code tiles and the asset pane.
-export const ART_TILES = ['Kiki', 'Juno', 'Tofu']
+const ART_TILES = ['Kiki', 'Juno', 'Tofu']
 export const ART_STATE = { painting: 'painting', cutting: 'cutting', checking: 'checking', 'sent back': 'again', done: 'done', failed: 'failed' }
 export const paintv = { run: null, slots: [] }
 export function artEvent(e) {
