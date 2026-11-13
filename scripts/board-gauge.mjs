@@ -186,11 +186,14 @@ async function scene(browser, sc, BASE) {
   const ready = await page.waitForFunction(sc.ready, PAGES, { timeout: 90000, polling: 250 }).then(() => Date.now() - t0, () => null)
   // the board settles: its pictures and frames load; then the film plays where a person plays it
   await wait(5000)
+  // (from its row in the Files list: on a 250-page board its tile is far off the stage)
+  let filmPlaying = null
   if (sc.film) {
-    await page.click('.pj-stage .ab[data-key="film:0"]', { timeout: 10000 }).catch(() => {})
+    await page.click('.pj-list .row[data-key="film:0"]', { timeout: 10000 }).catch(() => {})
     await page.waitForSelector('.pj-insp video', { timeout: 10000 }).catch(() => {})
     await page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (v) { v.muted = true; v.loop = true; return v.play().catch(() => {}) } })
-    await wait(1000)
+    await wait(1500)
+    filmPlaying = await page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return v && !v.paused && v.readyState >= 2 && v.currentTime > 0 ? 1 : 0 })
   }
   // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time
   const box = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }))
@@ -223,7 +226,7 @@ async function scene(browser, sc, BASE) {
     after = await playersOf()
   }
   await ctx.close()
-  return { readyMs: ready, frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
+  return { readyMs: ready, filmPlaying, frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
 }
 
 async function layerCount(cdp) {
@@ -262,7 +265,7 @@ function print(r) {
   for (const [id, s] of Object.entries(r.scenes)) {
     const m = s.median
     if (!m.frame) { console.log(`  ${id.padEnd(8)} crashed in every run (${s.runs[0]?.error})`); continue }
-    console.log(`  ${id.padEnd(8)} frame p50/p95/p99 ${m.frame.p50}/${m.frame.p95}/${m.frame.p99} ms · JS heap ${m.jsHeapMB} MB · ${m.nodes} nodes · ${m.layers} layers · GPU process ${m.gpuMB ?? '?'} MB (gpu allocators ${m.gpuAllocMB ?? '?'} MB) · ${m.iframes} frames · players ${m.players}${m.playersAfter == null ? '' : `, ${m.playersAfter} after leaving`} · ready in ${m.readyMs} ms${m.crashes ? ` · crashed in ${m.crashes} of ${s.runs.length} runs` : ''}`)
+    console.log(`  ${id.padEnd(8)} frame p50/p95/p99 ${m.frame.p50}/${m.frame.p95}/${m.frame.p99} ms · JS heap ${m.jsHeapMB} MB · ${m.nodes} nodes · ${m.layers} layers · GPU process ${m.gpuMB ?? '?'} MB (gpu allocators ${m.gpuAllocMB ?? '?'} MB) · ${m.iframes} frames · players ${m.players}${m.playersAfter == null ? '' : `, ${m.playersAfter} after leaving`} ${m.filmPlaying == null ? '' : m.filmPlaying ? ' · film playing' : ' · film did not play'} · ready in ${m.readyMs} ms${m.crashes ? ` · crashed in ${m.crashes} of ${s.runs.length} runs` : ''}`)
   }
 }
 
@@ -296,6 +299,8 @@ function compare(a, b, frameT, memT) {
       if (bad) fails.push(`${id}: ${what} ${p} → ${q} (${t == null ? 'no more than the base' : `over +${Math.round(t * 100)}%`})`)
     }
     over('crashes', 'crashes', null)
+    // the film plays on a board that has one, or its players are not measured
+    if (y.filmPlaying === 0) { row.push('film did not play ✗'); fails.push(`${id}: the film did not play, so its players were not measured`) }
     over('frame p95 ms', 'p95', frameT, m => m.frame?.p95)
     over('JS heap MB', 'jsHeapMB', memT)
     over('DOM nodes', 'nodes', memT)
