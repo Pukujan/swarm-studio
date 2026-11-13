@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the views and rooms: Canvas, Video, App, the big game, the app advisor, game mode, cast, art, the bench.
 import { dataStore } from '../data.js'
 import { painterOf, cursor } from '../icons.js'
@@ -18,6 +19,7 @@ import { HOSTS } from './publish.js'
 export let view = 'canvas'
 // the App view's state (web/data.js): reset when another run is shown, keeping the preview mode and width
 export const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
+/** @type {any} */
 export const appv = appStore.state
 export const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
 export const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
@@ -29,6 +31,7 @@ export function setView(v) {
   view = v
   document.body.classList.toggle('view-video', v === 'video')
   document.body.classList.toggle('view-app', v === 'app')
+  // @ts-ignore
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === v)
   appEls.view.hidden = v !== 'app'
   if (v === 'video') toggleVideo(true)
@@ -37,6 +40,7 @@ export function setView(v) {
   els.brief.placeholder = PLACEHOLDER[v]
   renderBadges()
 }
+// @ts-ignore
 for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.view)
 
 export function renderBadges() {
@@ -292,13 +296,17 @@ export async function showFile(path) {
   try { appEls.file.textContent = (await appApi(`/files?path=${encodeURIComponent(path)}`)).text } catch (err) { appEls.file.textContent = err.message }
 }
 
+// @ts-ignore
 for (const b of document.querySelectorAll('#app-mode button')) b.onclick = () => {
+  // @ts-ignore
   appv.mode = b.dataset.mode
   for (const x of document.querySelectorAll('#app-mode button')) x.classList.toggle('on', x === b)
   if (appv.mode === 'code') appv.files = null
   renderApp()
 }
+// @ts-ignore
 for (const b of document.querySelectorAll('#app-device button')) b.onclick = () => {
+  // @ts-ignore
   appv.w = Number(b.dataset.w)
   for (const x of document.querySelectorAll('#app-device button')) x.classList.toggle('on', x === b)
   renderApp()
@@ -372,7 +380,9 @@ export function changeBlock(p) {
     b.type = 'button'
     b.textContent = label
     b.onclick = async () => {
+      // @ts-ignore
       for (const x of row.children) x.disabled = true
+      // @ts-ignore
       try { const r = await appApi('/tell', { confirm: p.change, now }); box.classList.add('sent'); botMsg(r.answer) } catch (err) { for (const x of row.children) x.disabled = false; botMsg(`App: ${err.message}`) }
     }
     return b
@@ -433,7 +443,9 @@ export function sliceCard(s, run = shownRun()) {
     + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
     + `<div class="sc-ideas">${(s.ideas || []).map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
   item.querySelector('.txt').textContent = s.ask || `Slice ${s.i + 1} is built. Anything to change?`
+  // @ts-ignore
   item.querySelector('.sc-live').onclick = () => setView('app')
+  // @ts-ignore
   for (const b of item.querySelectorAll('.sc-ideas button')) b.onclick = () => sliceGo(s.ideas[+b.dataset.j])
   push(els.feed, item)
 }
@@ -517,6 +529,7 @@ export async function sliceGo(text) {
 // chat, what the business needs behind it (users, what gets saved, dashboards,
 // a CRM, an admin panel). Each question comes with her recommended answer; the
 // answers become an app plan to tick through, and the plan becomes dyad's brief.
+/** @type {any} */
 export const adv = dataStore('advisor', { run: null, qs: [], i: 0, qa: [], busy: false }).state
 export function advMsg(html, cls = '') {
   const item = document.createElement('div')
@@ -527,6 +540,7 @@ export function advMsg(html, cls = '') {
 }
 export function advOpen(on) {
   document.body.classList.toggle('advising', on)
+  // @ts-ignore
   if (on) { document.body.classList.add('cosmos-chat'); document.querySelector('.side .tabs [data-tab="chat"]')?.click() }
 }
 export const advSections = () => [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
@@ -556,25 +570,33 @@ export function advAsk() {
     <div class="adv-opts">${q.options.map(o => `<button class="adv-opt" aria-pressed="${picks.has(o)}" data-o="${esc(o)}">${esc(o)}${q.recommended.includes(o) ? '<em>Recommended</em>' : ''}</button>`).join('')}</div>
     <input class="adv-own" placeholder="Or in your own words" aria-label="Your own answer">
     <div class="adv-go"><span class="adv-n">${adv.i + 1} of ${adv.qs.length}</span>${adv.i === 0 && adv.qs.length > 1 ? '<button class="adv-all">Use all my picks</button>' : ''}<button class="adv-next">${adv.i === adv.qs.length - 1 ? 'Write the plan' : 'Next'}</button></div>`, 'ask')
+  // @ts-ignore
   for (const b of card.querySelectorAll('.adv-opt')) b.onclick = () => {
+    // @ts-ignore
     const o = b.dataset.o
     if (q.multi) picks.has(o) ? picks.delete(o) : picks.add(o)
     else { picks.clear(); picks.add(o) }
+    // @ts-ignore
     for (const x of card.querySelectorAll('.adv-opt')) x.setAttribute('aria-pressed', picks.has(x.dataset.o))
   }
   const own = card.querySelector('.adv-own')
   const answer = () => {
     const a = [...picks]
+    // @ts-ignore
     if (own.value.trim()) a.push(own.value.trim())
     card.classList.add('done')
     card.querySelector('.adv-go').remove(); own.remove()
+    // @ts-ignore
     for (const x of card.querySelectorAll('.adv-opt')) x.disabled = true
     adv.qa.push({ q: q.q, a })
     adv.i++
   }
+  // @ts-ignore
   own.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); card.querySelector('.adv-next').click() } }
+  // @ts-ignore
   card.querySelector('.adv-next').onclick = () => { answer(); advAsk() }
   const all = card.querySelector('.adv-all')
+  // @ts-ignore
   if (all) all.onclick = () => {
     answer()
     for (const r of adv.qs.slice(adv.i)) adv.qa.push({ q: r.q, a: r.recommended })
@@ -595,8 +617,11 @@ export async function advPlan() {
     ${plan.data?.length ? `<h5>What it keeps</h5><p class="adv-why">${plan.data.map(d => `<b>${esc(d.name)}</b> ${esc(d.fields.join(', '))}`).join('<br>')}</p>` : ''}
     ${plan.roles?.length ? `<h5>Who uses it</h5><p class="adv-why">${plan.roles.map(r => `<b>${esc(r.name)}</b> ${esc(r.can)}`).join('<br>')}</p>` : ''}
     <div class="adv-go"><button class="adv-again">Change answers</button><button class="adv-next">Build the app</button></div>`, 'ask plan')
+  // @ts-ignore
   card.querySelector('.adv-again').onclick = () => { card.classList.add('done'); card.querySelector('.adv-go').remove(); adv.busy = false; openAdvisor() }
+  // @ts-ignore
   card.querySelector('.adv-next').onclick = () => {
+    // @ts-ignore
     const keep = new Set([...card.querySelectorAll('.adv-screen input:checked')].map(x => Number(x.dataset.i)))
     appv.plan = { ...plan, screens: plan.screens.filter((_, i) => keep.has(i)) }
     card.classList.add('done'); card.querySelector('.adv-go').remove()
@@ -614,6 +639,7 @@ export const buildApp = () => (appv.kind !== 'game' && !appv.hasApp && !appv.pla
 // The image model ran out before any art landed: say which, offer the other image models
 // Hermes has signed in, and building with shapes drawn in code.
 export function artStopCard(stop) {
+  // @ts-ignore
   if (!modelsInfo?.image && !artStopCard.asked) { artStopCard.asked = true; loadModels().then(() => renderApp()) }
   const others = (modelsInfo?.image?.providers || []).filter(p => p.available && p.provider !== stop.provider)
   return `<div class="fail-card"><span class="fail-ico">${ico('image')}</span><h2>No <em>art</em></h2>`
@@ -686,8 +712,10 @@ commandOps.view = c => setView(c.view)
 // ---------- 🎮 game mode
 // A few questions, one at a time (chips or your own words; "Just build it"
 // fills the rest), then the spec card, then the build in the App view.
+/** @type {any} */
 export const game = dataStore('game', { el: null, questions: null, i: 0, answers: {}, idea: '', spec: null, busy: false, cast: null }).state
 export async function openGame(idea = '', answers = null, build = false) {
+  // @ts-ignore
   if (!game.questions?.length) game.questions = (await api('/api/game').then(r => r.ok ? r.json() : {}).catch(() => ({}))).questions || []
   // a site build is open: the game can be its promo game, in its world and colours
   const site = S.kind !== 'game' && S.layers.size ? shownRun() : null
@@ -744,6 +772,7 @@ export function renderGame() {
     el.querySelector('[data-resume]')?.addEventListener('click', () => {
       const id = game.resume.id
       closeGame()
+      // @ts-ignore
       openWorkshop({ api, ico, id, onBuilt: async (run, built) => { await loadFiles(); await openRun(run); setView('app'); botMsg(`🎮 Building “${built?.title || 'the game'}” with the art, story, levels and sound you picked.`) } })
     })
     el.querySelector('[data-skip]').onclick = () => { take(free.value.trim() || game.answers[q.id]); gameSpec() }
@@ -884,6 +913,7 @@ export async function meshyPoll(c) {
 // never the full-size art. Until a copy is ready the tile shows nothing rather than the big picture.
 export const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
 export function small(src, max = 256) {
+  // @ts-ignore
   const ready = url => { for (const img of document.querySelectorAll('img[data-small]')) if (img.dataset.small === src && Number(img.dataset.max || 256) === max) img.src = url }
   return window.SwarmUI?.small ? window.SwarmUI.small(src, max, { ready }) || BLANK : src || BLANK
 }
@@ -1093,10 +1123,12 @@ export async function gameShape() {
   const key = String(spec.title || '').trim().toLowerCase()
   const open = await api('/api/workshops').then(r => (r.ok ? r.json() : null)).catch(() => null)
   const id = (open?.workshops || []).find(w => String(w.title || '').trim().toLowerCase() === key)?.id
+  // @ts-ignore
   openWorkshop({
     api, ico, spec, id,
     onBuilt: async (run, built) => {
       await loadFiles()
+      // @ts-ignore
       await showRun(run, { started: true, room: 'app' })
       setView('app')
       botMsg(`🎮 Building “${built?.title || spec.title}” with the art, story, levels and sound you picked. The App view shows every file as it is written.`)
@@ -1116,6 +1148,7 @@ export async function gameBuild() {
     if (!out.run) throw new Error(out.error || 'could not start')
     closeGame()
     await loadFiles()
+    // @ts-ignore
     await showRun(out.run, { started: true, room: 'app' })
     setView('app')
     botMsg(`🎮 Building “${game.spec.title}” (${game.spec.engine}). The App view shows every file as it is written; the game opens there when it builds. Chat here to change it after.`)
