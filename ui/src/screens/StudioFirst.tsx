@@ -37,16 +37,28 @@ export function StudioFirst() {
   // Hermia's cursor (web/pet.js), started as it is with this machine and this screen
   useEffect(() => { startPet(nav, root.current) }, [nav])
 
-  // Esc clears the selection first, as the board does in the current Studio; with nothing selected it goes up (App)
+  // Esc shuts the Layers sheet, then clears the selection, as the board does in the current Studio; with neither,
+  // it goes back a step and then to Projects (App's Esc, through the machine)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || !sel || (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [role="menu"], [role="dialog"]')) return
-      e.preventDefault()
-      select(null)
+      if (e.key !== 'Escape' || (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [role="menu"], [role="dialog"]')) return
+      if (sheet) { e.preventDefault(); setSheet(false); return }
+      if (sel) { e.preventDefault(); select(null) }
     }
     addEventListener('keydown', onKey, true)
     return () => removeEventListener('keydown', onKey, true)
-  }, [sel, select])
+  }, [sel, select, sheet])
+  // a click outside the Layers sheet shuts it
+  useEffect(() => {
+    if (!sheet) return
+    const onDown = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.pj-side, .sc-layers-btn')) setSheet(false) }
+    addEventListener('pointerdown', onDown, true)
+    return () => removeEventListener('pointerdown', onDown, true)
+  }, [sheet])
+  // the step the address names comes into view when it changes from outside (Back, Esc), not under a selection
+  useEffect(() => {
+    if (view.step && !sel && framed.current === pid) board.current?.focus(view.step)
+  }, [view.step]) // only a change of step moves the board
 
   // the top bar: Projects › the project's name, and Build (pressed in the current Studio, where the build runs)
   const build = useMemo(() => (kit.build ? <LinkButton role="primary" href={`/${here}`}>Build<span className="max-[760px]:sr-only"> in the Studio</span></LinkButton> : undefined), [kit.build, here])
@@ -156,7 +168,7 @@ export function StudioFirst() {
   return (
     <div ref={root} className={`project plan scaffold min-h-0 flex-1${insp ? ' insp-on' : ''}${sheet ? ' files-on' : ''}`} style={{ minHeight: 'calc(100dvh - 3.5rem)' }}>
       <aside className="pj-side" aria-label="Layers" onKeyDown={e => { if (e.key === 'Escape' && sheet) { e.stopPropagation(); setSheet(false) } }}>
-        <div className="flex items-center gap-2 px-3 pt-2.5 pb-2"><span className="rounded-[8px] bg-surface-2 px-2.5 py-1.5 font-label text-[13px] font-semibold uppercase tracking-[.1em] text-text">Layers</span></div>
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-2"><span className="rounded-[8px] bg-surface-2 px-2.5 py-1.5 font-label text-[13px] font-semibold uppercase tracking-[.1em] text-text">Layers</span><Button role="ghost" aria-label="Close Layers" onPress={() => setSheet(false)} className="ml-auto hidden min-h-9 min-w-9 px-0 max-[760px]:inline-flex">×</Button></div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {d && <Layers groups={groups} selected={sel}
             onSelect={k => { setSheet(false); if (selectable(k) && sel !== k) select(k); fly(k) }}
