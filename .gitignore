@@ -11,3 +11,4 @@ deploy/vps/.env
 deploy/vps/.deploy-failed
 plans/
 test-results/
+engine/imagetools/node_modules/
