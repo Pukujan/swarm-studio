@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Draft first</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+/* Prototype: draft first, then react (decision 0021 draft). Fake data, real motion. Nothing here is wired to the crew. */
+@font-face { font-family: 'Big Shoulders Display'; src: url(../fonts/big-shoulders-display-latin-800-normal.woff2) format('woff2'); font-weight: 800; }
+@font-face { font-family: 'JetBrains Mono'; src: url(../fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2'); font-weight: 400; }
+@font-face { font-family: 'JetBrains Mono'; src: url(../fonts/jetbrains-mono-latin-600-normal.woff2) format('woff2'); font-weight: 600; }
+@font-face { font-family: 'EB Garamond'; src: url(../fonts/eb-garamond-latin-500-italic.woff2) format('woff2'); font-style: italic; font-weight: 500; }
+@font-face { font-family: 'Inter'; src: url(../fonts/inter-latin-400-normal.woff2) format('woff2'); font-weight: 400; }
+@font-face { font-family: 'Inter'; src: url(../fonts/inter-latin-600-normal.woff2) format('woff2'); font-weight: 600; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--void); color: var(--text); font: 13px/1.45 'Inter', sans-serif; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* top bar */
+.top { position: fixed; inset: 0 0 auto 0; height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid var(--edge); background: var(--void); z-index: 30; }
+.top .logo { font: 800 20px/1 'Big Shoulders Display'; letter-spacing: .02em; }
+.top .crumb { color: var(--muted); font-family: 'JetBrains Mono'; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.top .sp { flex: 1; }
+.link { background: none; border: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; padding: 6px 4px; }
+.link:hover { color: var(--text); }
+.btn { border: 1px solid var(--line-2); background: var(--deep); border-radius: 999px; padding: 8px 16px; font-family: 'JetBrains Mono'; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.btn.main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn[disabled] { opacity: .35; cursor: default; }
+
+/* canvas */
+.canvas { position: fixed; inset: 52px 0 0 0; background-color: var(--void); background-image: radial-gradient(rgb(var(--glass-rgb) / .08) 1px, transparent 1px); background-size: 22px 22px; overflow: hidden; }
+.world { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; transform-origin: 0 0; }
+.lbl { position: absolute; font-family: 'JetBrains Mono'; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.lbl b { color: var(--text); font-weight: 600; }
+
+/* the reference */
+.ref { position: absolute; left: 40px; top: 70px; width: 300px; border: 1px solid var(--edge); border-radius: 10px; background: var(--deep); overflow: hidden; opacity: 0; transform: translateY(10px); transition: opacity .5s, transform .5s; }
+.ref.in { opacity: 1; transform: none; }
+.ref img { display: block; width: 100%; }
+.ref .read { padding: 10px 12px; font-size: 12px; color: var(--muted); min-height: 54px; }
+.ref .read b { color: var(--text); font-weight: 600; }
+.sweep { position: absolute; left: 0; top: 0; width: 100%; height: 3px; background: rgb(var(--glass-rgb) / .7); box-shadow: 0 0 18px rgb(var(--glass-rgb) / .5); opacity: 0; }
+.sweep.on { animation: sweep 2.6s ease-in-out 2; opacity: 1; }
+@keyframes sweep { 0% { top: 0 } 50% { top: 168px } 100% { top: 0 } }
+
+/* the look sheet */
+.look { position: absolute; left: 40px; top: 360px; width: 300px; padding: 14px; border: 1px solid var(--edge); border-radius: 10px; background: var(--deep); }
+.sw { display: flex; gap: 8px; margin: 8px 0 14px; }
+.sw button { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line-2); padding: 0; opacity: 0; transform: scale(.4); transition: opacity .35s, transform .35s cubic-bezier(.2,1.4,.4,1), background .4s; }
+.sw button.in { opacity: 1; transform: none; }
+.picker { display: none; gap: 6px; margin: -6px 0 12px; }
+.picker.open { display: flex; }
+.picker button { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); padding: 0; }
+.type { opacity: 0; transition: opacity .5s; }
+.type.in { opacity: 1; }
+.type .d { font: 800 30px/1 'Big Shoulders Display'; text-transform: uppercase; color: #f2f0e8; }
+.type .d i { font: italic 500 32px/1 'EB Garamond'; color: var(--lime); text-transform: none; }
+.type .m { font: 400 10px/1.6 'JetBrains Mono'; letter-spacing: .14em; text-transform: uppercase; color: #cfcfc6; margin-top: 8px; }
+.type .pill { display: inline-flex; margin-top: 10px; border: 1px solid #3a3a36; border-radius: 999px; padding: 6px 12px; font-size: 11px; color: #e8e8e0; background: #151513; }
+.why { font-size: 11px; color: var(--muted); margin-top: 10px; }
+
+/* the pages */
+.pages { position: absolute; left: 400px; top: 70px; display: flex; gap: 22px; }
+.page { position: relative; width: 250px; }
+.page .name { font-family: 'JetBrains Mono'; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.frame { position: relative; height: 380px; border-radius: 8px; border: 1px solid var(--edge); overflow: hidden; background: #111; opacity: 0; transform: translateY(12px); transition: opacity .5s, transform .5s, filter .6s; }
+.frame.in { opacity: 1; transform: none; }
+.frame.rough .blk { background: #2a2a2a !important; color: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+.frame.rough .blk * { visibility: hidden; }
+.frame.gone { opacity: .18; filter: grayscale(1); }
+.blk { position: absolute; border-radius: 4px; transition: background .5s, color .5s, opacity .4s, transform .4s; }
+.blk.pop { animation: pop .5s ease; }
+@keyframes pop { 0% { transform: scale(.94); opacity: .3 } 100% { transform: none; opacity: 1 } }
+.ghost .frame { border-style: dashed; background: transparent; }
+.ghost .frame::after { content: 'Research?'; position: absolute; inset: 0; display: grid; place-items: center; font-family: 'JetBrains Mono'; font-size: 12px; color: var(--muted); }
+
+/* page contents in the copied look */
+.f { background: #0e0e0c; }
+.nav { left: 12px; right: 12px; top: 12px; height: 12px; display: flex; justify-content: space-between; font: 400 6px/12px 'JetBrains Mono'; letter-spacing: .12em; color: #d9d9d0; text-transform: uppercase; }
+.hero { left: 12px; top: 40px; right: 12px; height: 120px; }
+.hero .h { font: 800 34px/.9 'Big Shoulders Display'; color: #f2f0e8; text-transform: uppercase; }
+.hero .h i { font: italic 500 36px/.9 'EB Garamond'; color: var(--lime); text-transform: none; }
+.hero .s { font: 400 6px/1.6 'JetBrains Mono'; letter-spacing: .14em; color: #bdbdb4; text-transform: uppercase; margin-top: 10px; }
+.hero .art { position: absolute; right: 4px; top: 56px; width: 70px; height: 70px; border-radius: 50%; border: 2px solid var(--lime); box-shadow: 0 0 24px color-mix(in srgb, var(--lime) 50%, transparent), inset 0 0 18px color-mix(in srgb, var(--lime) 40%, transparent); transition: all .6s; }
+.hero .art.painted { border-radius: 10px; border: 0; background: linear-gradient(135deg, #f2f0e8 0 30%, var(--lime) 30% 34%, #1d1d1a 34%); box-shadow: none; }
+.grid { left: 12px; right: 12px; top: 176px; height: 150px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.grid div { border-radius: 4px; background: #1b1b18; border: 1px solid #2c2c28; }
+.grid div:nth-child(1) { background: linear-gradient(160deg, #23231f, #11110f); }
+.foot { left: 12px; right: 12px; bottom: 12px; height: 18px; border-top: 1px solid #2c2c28; font: 400 6px/18px 'JetBrains Mono'; color: #8a8a80; letter-spacing: .12em; }
+.list { left: 12px; right: 12px; top: 44px; bottom: 40px; display: flex; flex-direction: column; gap: 8px; }
+.list div { height: 34px; border-bottom: 1px solid #2c2c28; font: 800 14px/34px 'Big Shoulders Display'; color: #f2f0e8; text-transform: uppercase; }
+.form { left: 12px; right: 12px; top: 60px; height: 120px; display: flex; flex-direction: column; gap: 8px; }
+.form div { height: 26px; border: 1px solid #3a3a36; border-radius: 999px; background: #151513; }
+.form .go { width: 40%; background: var(--lime); border-color: var(--lime); }
+
+/* markers: a question sits on the draft */
+.mk { position: absolute; z-index: 6; }
+.mk .dot { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 600 11px/22px 'JetBrains Mono'; text-align: center; border: 0; padding: 0; box-shadow: 0 0 0 4px rgb(var(--void-rgb) / .9); }
+.mk.quiet .dot { background: var(--frame); color: var(--text); }
+.mk.done .dot { background: transparent; color: var(--muted); border: 1px solid var(--line-2); }
+.mk .ask { display: none; position: absolute; left: 30px; top: -8px; width: max-content; max-width: 380px; padding: 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--glass); backdrop-filter: blur(8px); }
+.mk.asking .ask { display: block; animation: pop .35s ease; }
+.ask .q { font-size: 12px; margin-bottom: 8px; }
+.ask .opts { display: flex; gap: 8px; }
+.opt { width: 108px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--deep); padding: 6px; text-align: left; position: relative; }
+.opt .mini { height: 62px; border-radius: 5px; background: #0e0e0c; margin-bottom: 6px; position: relative; overflow: hidden; }
+.opt .t { font-size: 11px; }
+.opt .w { font-size: 10px; color: var(--muted); }
+.opt.rec::after, .shine { content: ''; position: absolute; inset: -4px; border-radius: 11px; pointer-events: none; box-shadow: 0 0 0 1px rgb(var(--glass-rgb) / .9), 0 0 18px 2px rgb(var(--glass-rgb) / .35); animation: shine 2.2s ease-in-out infinite; }
+@keyframes shine { 50% { box-shadow: 0 0 0 1px rgb(var(--glass-rgb) / .5), 0 0 6px 0 rgb(var(--glass-rgb) / .15); } }
+.picked { position: absolute; font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono'; letter-spacing: .04em; white-space: nowrap; }
+
+/* cursors: names only */
+.cur { position: absolute; left: 0; top: 0; z-index: 20; pointer-events: none; transition: transform 1.1s cubic-bezier(.4,.1,.2,1); }
+.cur svg { display: block; }
+.cur span { position: absolute; left: 14px; top: 16px; font: 600 10px/1 'JetBrains Mono'; padding: 3px 6px; border-radius: 4px; background: var(--text); color: var(--void); white-space: nowrap; }
+.cur.crew span { background: var(--frame); color: var(--text); }
+.cur.tap svg { animation: tap .22s ease; }
+@keyframes tap { 50% { transform: scale(.8) } }
+
+/* links back to the reference */
+svg.wires { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; pointer-events: none; z-index: 1; }
+svg.wires path { fill: none; stroke: rgb(var(--glass-rgb) / .22); stroke-width: 1; stroke-dasharray: 3 4; }
+
+/* versions */
+.versions { position: absolute; left: 400px; top: 560px; display: flex; align-items: center; gap: 12px; }
+.ver { width: 120px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--deep); padding: 6px; font-size: 11px; animation: pop .5s ease; }
+.ver .mini { height: 60px; border-radius: 4px; background: #0e0e0c; margin-bottom: 6px; position: relative; overflow: hidden; }
+.ver .c { color: var(--muted); font-size: 10px; }
+
+/* drawing to point the chat */
+svg.ink { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; z-index: 15; pointer-events: none; }
+body.drawing svg.ink { pointer-events: auto; cursor: crosshair; }
+svg.ink path { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; opacity: .95; }
+.target { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* the chat, docked along the bottom */
+.chat { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(760px, calc(100vw - 32px)); z-index: 40; }
+.log { max-height: 132px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 0 6px 8px; mask-image: linear-gradient(transparent, #000 40%); }
+.log p { margin: 0; font-size: 12px; color: var(--muted); animation: pop .3s ease; }
+.log p b { color: var(--text); font-weight: 600; font-family: 'JetBrains Mono'; font-size: 11px; margin-right: 6px; }
+.log p.me { color: var(--text); text-align: right; }
+.box { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--glass); backdrop-filter: blur(10px); }
+.chip { display: none; align-items: center; gap: 6px; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 11px; white-space: nowrap; }
+.chip.on { display: inline-flex; }
+.chip button { border: 0; background: none; color: var(--muted); padding: 0 4px; }
+.box input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: 13px 'Inter'; }
+.ib { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--deep); display: grid; place-items: center; padding: 0; }
+.ib.on { background: var(--accent); color: var(--accent-ink); }
+.under { display: flex; justify-content: space-between; padding: 6px 8px 0; }
+.drawer { display: none; flex-wrap: wrap; gap: 6px; padding: 8px 4px 0; }
+.drawer.open { display: flex; }
+.drawer button { border: 1px solid var(--line-2); background: var(--deep); border-radius: 999px; padding: 5px 10px; font-size: 11px; }
+
+/* a big step asks once */
+.confirm { position: fixed; right: 18px; top: 62px; width: 280px; padding: 14px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--glass); backdrop-filter: blur(10px); z-index: 45; display: none; }
+.confirm.open { display: block; animation: pop .3s ease; }
+.confirm p { margin: 0 0 12px; font-size: 13px; }
+.confirm .row { display: flex; gap: 8px; justify-content: flex-end; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .opt.rec::after, .shine { box-shadow: 0 0 0 1px rgb(var(--glass-rgb) / .9); }
+}
+:root { --lime: #b8f23a; }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="logo">SWARM</span>
+  <span class="crumb">Studio / Portfolio · draft</span>
+  <span class="sp"></span>
+  <button class="link" id="anyway">I don't care, you decide</button>
+  <button class="btn main" id="buildBtn" disabled>Looks good, build it</button>
+</header>
+
+<main class="canvas" id="canvas">
+  <div class="world" id="world">
+    <svg class="wires" id="wires"></svg>
+
+    <div class="lbl" style="left:40px;top:46px">Reference</div>
+    <div class="ref" id="ref" data-name="the reference">
+      <div style="position:relative"><img src="ref-design-bakery.jpg" alt="design-bakery.com"><div class="sweep" id="sweep"></div></div>
+      <div class="read" id="refRead">design-bakery.com</div>
+    </div>
+
+    <div class="lbl" style="left:40px;top:336px">Look <b id="lookFrom"></b></div>
+    <div class="look" id="look" data-name="the look">
+      <div class="sw" id="swatches">
+        <button data-c="#0e0e0c" data-name="background colour" style="background:#0e0e0c"></button>
+        <button data-c="#1b1b18" data-name="surface colour" style="background:#1b1b18"></button>
+        <button data-c="#f2f0e8" data-name="text colour" style="background:#f2f0e8"></button>
+        <button data-c="lime" data-name="accent colour" id="accentSw" style="background:var(--lime)"></button>
+        <button data-c="#d23a2a" data-name="second accent" style="background:#d23a2a"></button>
+      </div>
+      <div class="picker" id="picker">
+        <button data-v="#b8f23a" style="background:#b8f23a"></button>
+        <button data-v="#ff8a00" style="background:#ff8a00"></button>
+        <button data-v="#4dd8ff" style="background:#4dd8ff"></button>
+        <button data-v="#ff3b5c" style="background:#ff3b5c"></button>
+        <button data-v="#f2f0e8" style="background:#f2f0e8"></button>
+      </div>
+      <div class="type" id="type">
+        <div class="d">Design B<i>a</i>ker</div>
+        <div class="m">Mono labels · wide tracking</div>
+        <span class="pill">Talk to me →</span>
+      </div>
+      <div class="why" id="lookWhy"></div>
+    </div>
+
+    <div class="pages" id="pages">
+      <div class="page" data-page="home"><div class="name"><span>Home</span></div>
+        <div class="frame f rough" id="pHome">
+          <div class="blk nav"><span>DB</span><span>Work · Writing · Research · Contact</span></div>
+          <div class="blk hero" id="hero" data-name="the hero"><div class="h" id="heroH">Design B<i>a</i>ker</div><div class="s">AI product engineer · a one-person studio</div><div class="art" id="heroArt" data-name="the hero picture"></div></div>
+          <div class="blk grid" id="homeGrid" data-name="selected work"><div></div><div></div><div></div><div></div></div>
+          <div class="blk foot">© Design Baker</div>
+        </div></div>
+      <div class="page" data-page="work"><div class="name"><span>Work</span></div>
+        <div class="frame f rough" id="pWork">
+          <div class="blk nav"><span>DB</span><span>Work</span></div>
+          <div class="blk grid" style="top:40px;height:286px" data-name="the case studies"><div></div><div></div><div></div><div></div><div></div><div></div></div>
+          <div class="blk foot">© Design Baker</div>
+        </div></div>
+      <div class="page" data-page="writing"><div class="name"><span>Writing</span></div>
+        <div class="frame f rough" id="pWriting">
+          <div class="blk nav"><span>DB</span><span>Writing</span></div>
+          <div class="blk list" data-name="the articles"><div>On agents</div><div>Calm UI</div><div>Shipping fast</div><div>Notes</div></div>
+          <div class="blk foot">© Design Baker</div>
+        </div></div>
+      <div class="page ghost" data-page="research" id="research"><div class="name"><span>Research</span></div>
+        <div class="frame" id="pResearch"></div></div>
+      <div class="page" data-page="contact"><div class="name"><span>Contact</span></div>
+        <div class="frame f rough" id="pContact">
+          <div class="blk nav"><span>DB</span><span>Contact</span></div>
+          <div class="blk form" id="contactForm" data-name="the contact form"><div></div><div></div><div style="height:60px;border-radius:12px"></div><div class="go"></div></div>
+          <div class="blk foot">© Design Baker</div>
+        </div></div>
+    </div>
+
+    <div class="lbl" style="left:400px;top:536px" id="verLbl" hidden>Versions</div>
+    <div class="versions" id="versions"></div>
+  </div>
+  <svg class="ink" id="ink"></svg>
+</main>
+
+<div class="confirm" id="confirm">
+  <p id="confirmText">Build 4 pages in this look? About 2 minutes.</p>
+  <div class="row"><button class="btn" id="notYet">Not yet</button><button class="btn main" id="sure">Build</button></div>
+</div>
+
+<div class="chat">
+  <div class="log" id="log"></div>
+  <form class="box" id="box">
+    <span class="chip" id="chip"><span id="chipText"></span><button type="button" id="chipX" aria-label="Stop pointing">×</button></span>
+    <input id="say" autocomplete="off" placeholder="Tell Hermia…">
+    <button type="button" class="ib" id="pen" aria-label="Circle something" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+    <button class="btn main" id="send">Send</button>
+  </form>
+  <div class="under"><button class="link" id="ideas">Ideas</button><button class="link" id="replay">Replay</button></div>
+  <div class="drawer" id="drawer"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s)
+const wait = ms => new Promise(r => setTimeout(r, matchMedia('(prefers-reduced-motion: reduce)').matches ? Math.min(ms, 60) : ms))
+const world = $('#world')
+const log = (who, text, me) => { const p = document.createElement('p'); if (me) p.className = 'me'; p.innerHTML = me ? text : `<b>${who}</b>${text}`; $('#log').append(p) }
+
+// ---------- cursors: Hermia leads, the crew works in parallel
+const CREW = {}
+function cursor(name, crew) {
+  const c = document.createElement('div'); c.className = 'cur' + (crew ? ' crew' : '')
+  c.innerHTML = `<svg width="16" height="18" viewBox="0 0 16 18"><path d="M1 1l13 7-6 1.6L5 16z" fill="${crew ? 'var(--frame-hi)' : 'var(--text)'}" stroke="var(--void)" stroke-width="1.2"/></svg><span>${name}</span>`
+  c.style.transform = 'translate(800px,820px)'; world.append(c); CREW[name] = c; return c
+}
+let SC = 1
+const at = (el, dx = .5, dy = .5) => { const r = el.getBoundingClientRect(), w = world.getBoundingClientRect(); return [(r.left - w.left + r.width * dx) / SC, (r.top - w.top + r.height * dy) / SC] }
+async function go(name, el, dx, dy, ms = 1100) { const [x, y] = at(el, dx, dy); CREW[name].style.transform = `translate(${x}px,${y}px)`; await wait(ms) }
+async function tap(name) { const c = CREW[name]; c.classList.remove('tap'); void c.offsetWidth; c.classList.add('tap'); await wait(220) }
+
+// ---------- lines from what was taken back to the reference
+function wire(fromEl, toEl) {
+  const [x1, y1] = at(fromEl, .5, .9), [x2, y2] = at(toEl, .5, .1)
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  p.setAttribute('d', `M${x1},${y1} C${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}`)
+  $('#wires').append(p)
+}
+
+// ---------- the questions that matter, sitting on the draft
+const Q = [
+  { id: 'hero', on: '#hero', dx: 0, dy: .1, q: 'Home opens with…', next: 'how Home opens', opts: [
+    { k: 'name', t: 'Your name, big', w: 'like your site', rec: true },
+    { k: 'work', t: 'Work first', w: 'cases up top' },
+    { k: 'talk', t: 'Talk-to-me box', w: 'your Cortex box' } ] },
+  { id: 'research', on: '#pResearch', dx: .1, dy: .1, q: 'Keep a Research page?', next: 'keep a Research page or not', opts: [
+    { k: 'keep', t: 'Keep it', w: 'your site has one', rec: true },
+    { k: 'drop', t: 'Drop it', w: '4 pages, simpler' } ] },
+  { id: 'contact', on: '#contactForm', dx: 0, dy: 0, q: 'Contact is…', next: 'how people reach you', opts: [
+    { k: 'email', t: 'Email link', w: 'one tap, no spam', rec: true },
+    { k: 'form', t: 'A form', w: 'needs an inbox' } ] }
+]
+const answers = {}
+let asking = null, auto = false
+
+function mini(qid, k) {
+  if (qid === 'hero') return k === 'name' ? `<div style="position:absolute;left:8px;top:14px;font:800 16px/1 'Big Shoulders Display';color:#f2f0e8">DESIGN B<i style="font:italic 500 17px 'EB Garamond';color:var(--lime)">a</i>KER</div>`
+    : k === 'work' ? `<div style="position:absolute;inset:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px">${'<div style="background:#22221e;border-radius:3px"></div>'.repeat(4)}</div>`
+    : `<div style="position:absolute;left:8px;right:8px;top:24px;height:16px;border:1px solid #3a3a36;border-radius:999px"></div>`
+  if (qid === 'research') return k === 'keep' ? `<div style="position:absolute;inset:8px;display:flex;gap:3px">${'<div style="flex:1;background:#22221e;border-radius:2px"></div>'.repeat(5)}</div>` : `<div style="position:absolute;inset:8px;display:flex;gap:3px">${'<div style="flex:1;background:#22221e;border-radius:2px"></div>'.repeat(4)}</div>`
+  return k === 'email' ? `<div style="position:absolute;left:8px;top:24px;font:400 9px 'JetBrains Mono';color:#f2f0e8">hello@…  →</div>` : `<div style="position:absolute;left:8px;right:8px;top:10px;display:flex;flex-direction:column;gap:4px">${'<div style="height:9px;border:1px solid #3a3a36;border-radius:999px"></div>'.repeat(3)}</div>`
+}
+function placeMarkers() {
+  Q.forEach((q, i) => {
+    const m = document.createElement('div'); m.className = 'mk quiet'; m.id = 'mk-' + q.id
+    const [x, y] = at($(q.on), q.dx, q.dy); m.style.left = (x - 11) + 'px'; m.style.top = (y - 11) + 'px'
+    m.innerHTML = `<button class="dot">${i + 1}</button><div class="ask"><div class="q">${q.q}</div><div class="opts">${q.opts.map(o => `<button class="opt${o.rec ? ' rec' : ''}" data-k="${o.k}"><div class="mini">${mini(q.id, o.k)}</div><div class="t">${o.t}</div><div class="w">${o.w}</div></button>`).join('')}</div></div>`
+    m.querySelector('.dot').onclick = () => ask(q.id)
+    m.querySelectorAll('.opt').forEach(b => b.onclick = () => answer(q.id, b.dataset.k, 'click'))
+    world.append(m)
+  })
+}
+async function ask(id) {
+  if (answers[id]) return
+  document.querySelectorAll('.mk').forEach(m => m.classList.remove('asking'))
+  asking = id
+  const m = $('#mk-' + id); m.classList.remove('quiet'); m.classList.add('asking')
+  await go('Hermia', m.querySelector('.opt.rec'), .5, .5, 900)
+  drawerFor(id)
+}
+async function answer(id, k, by) {
+  const q = Q.find(x => x.id === id); const o = q.opts.find(x => x.k === k); if (!o || answers[id]) return
+  answers[id] = k
+  const m = $('#mk-' + id); m.classList.remove('asking'); m.classList.add('done'); m.querySelector('.dot').textContent = '✓'
+  const tag = document.createElement('div'); tag.className = 'picked'; tag.textContent = `${by === 'auto' ? 'picked for you' : 'you picked'}: ${o.t.toLowerCase()}`
+  tag.style.left = (parseFloat(m.style.left) + 28) + 'px'; tag.style.top = (parseFloat(m.style.top) + 4) + 'px'; world.append(tag)
+  if (by !== 'auto') log('', o.t, true)
+  await apply(id, k)
+  asking = null
+  const next = Q.find(x => !answers[x.id])
+  if (auto) return
+  if (next) { log('Hermia', `Next: ${next.next}. Continue?`); drawer([['Continue', () => ask(next.id)], ['You decide the rest', doRest]]) }
+  else ready()
+}
+async function apply(id, k) {
+  if (id === 'hero') {
+    await go('Pip', $('#hero'), .5, .4, 700); await tap('Pip')
+    const h = $('#hero'); h.classList.remove('pop'); void h.offsetWidth; h.classList.add('pop')
+    if (k === 'work') { $('#heroH').style.fontSize = '20px'; $('#homeGrid').style.top = '96px' }
+    if (k === 'talk') { $('#heroH').style.fontSize = '22px'; $('#heroArt').style.cssText = 'right:12px;left:12px;top:70px;width:auto;height:18px;border-radius:999px;border:1px solid #3a3a36;box-shadow:none' }
+  }
+  if (id === 'research') {
+    const r = $('#research')
+    if (k === 'keep') { r.classList.remove('ghost'); const f = $('#pResearch'); f.className = 'frame f in'; f.innerHTML = `<div class="blk nav"><span>DB</span><span>Research</span></div><div class="blk list"><div>Agent UI</div><div>Evals</div><div>Notes</div></div><div class="blk foot">© Design Baker</div>`; await go('Mochi', f, .5, .4, 700); await tap('Mochi') }
+    else { $('#pResearch').classList.add('gone'); r.style.width = '120px'; await go('Mochi', $('#pResearch'), .5, .5, 600); await tap('Mochi') }
+    $('#confirmText').textContent = `Build ${k === 'keep' ? 5 : 4} pages in this look? About 2 minutes.`
+  }
+  if (id === 'contact' && k === 'form') { await go('Ren', $('#contactForm'), .5, .5, 600); await tap('Ren') }
+  if (id === 'contact' && k === 'email') { const f = $('#contactForm'); await go('Ren', f, .5, .5, 600); await tap('Ren'); f.innerHTML = `<div style="border:0;height:auto;font:800 22px/1 'Big Shoulders Display';color:#f2f0e8;text-transform:uppercase">Say hi</div><div style="border:0;background:none;height:auto;font:400 8px 'JetBrains Mono';color:var(--lime)">hello@design-bakery.com →</div>` }
+}
+async function doRest() {
+  auto = true; log('Hermia', 'Taking my picks for the rest.')
+  const open = Q.filter(x => !answers[x.id])
+  await Promise.all(open.map((q, i) => wait(i * 250).then(() => answer(q.id, q.opts.find(o => o.rec).k, 'auto'))))
+  auto = false; ready()
+}
+function ready() { $('#buildBtn').disabled = false; $('#buildBtn').classList.add('shine-host'); log('Hermia', 'Everything I need is here. Build it?'); drawer([['Build it', confirmBuild], ['Keep changing', () => {}]]); shineOn($('#buildBtn')) }
+function shineOn(el) { document.querySelectorAll('.shine').forEach(s => s.remove()); const s = document.createElement('span'); s.className = 'shine'; el.style.position = 'relative'; el.append(s) }
+
+// ---------- a big step asks once
+function confirmBuild() { $('#confirm').classList.add('open'); shineOn($('#sure')) }
+$('#notYet').onclick = () => { $('#confirm').classList.remove('open'); log('Hermia', 'Not yet. Change anything, then say build.') }
+$('#sure').onclick = build
+$('#buildBtn').onclick = () => { if (Q.some(x => !answers[x.id])) { log('Hermia', `${Q.filter(x => !answers[x.id]).length} things are still open. I'll take my picks for them first.`); doRest().then(confirmBuild) } else confirmBuild() }
+async function build() {
+  $('#confirm').classList.remove('open'); document.querySelectorAll('.shine').forEach(s => s.remove())
+  log('Hermia', 'Building. Watch the pages.')
+  const frames = [...document.querySelectorAll('.frame.f:not(.gone)')]
+  const crew = ['Pip', 'Mochi', 'Ren', 'Hermia']
+  await Promise.all(frames.map(async (f, i) => {
+    const who = crew[i % crew.length]
+    for (const b of f.querySelectorAll('.blk')) { await go(who, b, .5, .5, 450 + Math.random() * 300); await tap(who); b.classList.add('pop') }
+  }))
+  $('#verLbl').hidden = false
+  const v = document.createElement('div'); v.className = 'ver'; v.innerHTML = `<div class="mini" style="background:linear-gradient(#0e0e0c 60%,#1b1b18)"><div style="position:absolute;left:6px;top:8px;font:800 12px 'Big Shoulders Display';color:#f2f0e8">DESIGN B<i style="font:italic 500 13px 'EB Garamond';color:var(--lime)">a</i>KER</div></div><b>v1</b> <span class="c">· ${frames.length} pages · from design-bakery.com</span>`
+  $('#versions').append(v)
+  log('Hermia', 'v1 is built. Circle anything to change it, or tell me.')
+  drawer([['Make a v2', () => log('Hermia', 'Say what v2 changes, or circle it.')]])
+}
+
+// ---------- circle something to point the chat at it (the controls stay)
+let pointing = null
+$('#pen').onclick = () => { const on = !document.body.classList.toggle('drawing') ? false : true; $('#pen').classList.toggle('on', on); $('#pen').setAttribute('aria-pressed', on) }
+let path = null, pts = []
+$('#ink').addEventListener('pointerdown', e => { const w = world.getBoundingClientRect(); pts = [[(e.clientX - w.left) / SC, (e.clientY - w.top) / SC]]; path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); $('#ink').append(path); $('#ink').setPointerCapture(e.pointerId) })
+$('#ink').addEventListener('pointermove', e => { if (!path) return; const w = world.getBoundingClientRect(); pts.push([(e.clientX - w.left) / SC, (e.clientY - w.top) / SC]); path.setAttribute('d', 'M' + pts.map(p => p.join(',')).join(' L')) })
+$('#ink').addEventListener('pointerup', () => {
+  if (!path) return
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const box = { l: Math.min(...xs), r: Math.max(...xs), t: Math.min(...ys), b: Math.max(...ys) }
+  const w = world.getBoundingClientRect()
+  // the smallest named thing the circle covers most of
+  let best = null, bestA = Infinity
+  document.querySelectorAll('[data-name]').forEach(el => {
+    const r = el.getBoundingClientRect(); const x = { l: (r.left - w.left) / SC, r: (r.right - w.left) / SC, t: (r.top - w.top) / SC, b: (r.bottom - w.top) / SC }
+    const ix = Math.max(0, Math.min(x.r, box.r) - Math.max(x.l, box.l)), iy = Math.max(0, Math.min(x.b, box.b) - Math.max(x.t, box.t))
+    const area = (x.r - x.l) * (x.b - x.t); if (ix * iy > area * .45 && area < bestA) { best = el; bestA = area }
+  })
+  const p = path; path = null; setTimeout(() => p.remove(), 2500)
+  if (!best) return log('Hermia', 'I can\'t tell what that circles. Try around one thing.')
+  point(best)
+})
+function point(el) {
+  document.querySelectorAll('.target').forEach(t => t.classList.remove('target'))
+  pointing = el; el.classList.add('target')
+  $('#chipText').textContent = 'Pointing at: ' + el.dataset.name; $('#chip').classList.add('on')
+  document.body.classList.remove('drawing'); $('#pen').classList.remove('on'); $('#pen').setAttribute('aria-pressed', 'false')
+  go('Hermia', el, .9, .9, 700)
+  log('Hermia', `Got ${el.dataset.name}. What should change?`)
+  drawer(el.id === 'heroArt' ? [['Change this image', () => send('change this image')], ['Make it a photo', () => send('make it a photo')]] : el.dataset.c ? [['Make this orange', () => send('make this orange')], ['Make this cyan', () => send('make this cyan')]] : [['Make this bigger', () => send('make this bigger')], ['Remove this', () => send('remove this')]])
+  $('#say').focus()
+}
+$('#chipX').onclick = unpoint
+function unpoint() { pointing?.classList.remove('target'); pointing = null; $('#chip').classList.remove('on') }
+
+// the colour picker stays: a swatch opens it
+document.querySelectorAll('#swatches button').forEach(b => b.onclick = () => { if (b.id === 'accentSw') $('#picker').classList.toggle('open') })
+document.querySelectorAll('#picker button').forEach(b => b.onclick = () => setAccent(b.dataset.v, 'picker'))
+async function setAccent(v, by) {
+  document.documentElement.style.setProperty('--lime', v); $('#picker').classList.remove('open')
+  await go('Ren', $('#accentSw'), .5, .5, 500); await tap('Ren')
+  log('Hermia', `Accent is ${by === 'picker' ? 'now' : 'changed to'} ${v}. Every page follows.`)
+}
+
+// ---------- the chat is the command
+const COLOURS = { orange: '#ff8a00', cyan: '#4dd8ff', pink: '#ff3b5c', red: '#ff3b5c', lime: '#b8f23a', green: '#b8f23a', white: '#f2f0e8', cream: '#f2f0e8' }
+async function send(text) {
+  text = text.trim(); if (!text) return
+  log('', text, true); $('#say').value = ''
+  const t = text.toLowerCase()
+  if (/don'?t care|you decide|surprise me|do (it )?all/.test(t)) return doRest()
+  if (/^(build|looks good|ship it|go)\b/.test(t)) return $('#buildBtn').onclick()
+  if (/^(continue|next|ok|yes)\b/.test(t)) { const n = Q.find(x => !answers[x.id]); return n ? ask(n.id) : ready() }
+  const colour = Object.keys(COLOURS).find(c => t.includes(c))
+  if (pointing) {
+    const el = pointing; unpoint()
+    if (colour && (el.dataset.c || el.closest('#look') || el.id === 'hero')) return setAccent(COLOURS[colour], 'chat')
+    if (/image|picture|photo|art/.test(t) && (el.id === 'heroArt' || el.id === 'hero')) { await go('Mochi', $('#heroArt'), .5, .5, 700); await tap('Mochi'); $('#heroArt').classList.add('painted'); return log('Hermia', 'Painted a new hero picture in the look. The old one is kept.') }
+    if (/bigger|larger/.test(t)) { el.style.transform = 'scale(1.08)'; return log('Hermia', `Made ${el.dataset.name} bigger.`) }
+    if (/remove|drop|delete/.test(t)) { el.style.opacity = '.15'; return log('Hermia', `Took ${el.dataset.name} out. It stays in the story as not used.`) }
+    return log('Hermia', `On ${el.dataset.name}: "${text}". The crew would do that now.`)
+  }
+  if (colour && /accent|colour|color/.test(t)) return setAccent(COLOURS[colour], 'chat')
+  if (asking) {
+    const q = Q.find(x => x.id === asking)
+    const n = /\b(1|first|one)\b/.test(t) ? 0 : /\b(2|second|two)\b/.test(t) ? 1 : /\b(3|third|three)\b/.test(t) ? 2 : -1
+    const o = n >= 0 ? q.opts[n] : q.opts.find(o => t.includes(o.k) || t.includes(o.t.toLowerCase().split(' ')[0]))
+    if (o) { log('Hermia', `${o.t}.`); return answer(q.id, o.k, 'chat') }
+  }
+  if (/research/.test(t) && /drop|no|remove/.test(t)) return answer('research', 'drop', 'chat')
+  if (/research/.test(t) && /keep|yes/.test(t)) return answer('research', 'keep', 'chat')
+  log('Hermia', 'Circle the part you mean, or pick one of the open questions.')
+}
+$('#box').onsubmit = e => { e.preventDefault(); send($('#say').value) }
+$('#anyway').onclick = () => { log('', 'I don\'t care, you decide', true); doRest() }
+
+// ---------- ideas drawer (suggestions are a link, not a row of buttons)
+let ideas = []
+function drawer(list) { ideas = list; $('#drawer').innerHTML = ''; list.forEach(([t, f]) => { const b = document.createElement('button'); b.textContent = t; b.onclick = () => { $('#drawer').classList.remove('open'); f() }; $('#drawer').append(b) }) }
+function drawerFor(id) { const q = Q.find(x => x.id === id); drawer([...q.opts.map(o => [o.t, () => answer(id, o.k, 'click')]), ['You decide the rest', doRest]]) }
+$('#ideas').onclick = () => $('#drawer').classList.toggle('open')
+$('#replay').onclick = () => location.reload()
+
+// ---------- fit the draft to the window (the canvas zooms out; nothing scrolls sideways)
+function fit() { const s = SC = Math.min(1, innerWidth / (world.scrollWidth + 40), (innerHeight - 52 - 190) / 640); world.style.transform = `scale(${s})`; $('#ink').style.transform = `scale(${s})`; $('#ink').style.transformOrigin = '0 0' }
+addEventListener('resize', fit); fit()
+
+// ---------- the opening: you give it a reference and a sentence; the swarm drafts everything at once
+async function start() {
+  for (const n of ['Hermia']) cursor(n); for (const n of ['Pip', 'Mochi', 'Ren']) cursor(n, true)
+  log('', 'A portfolio site for my design studio, with the look of this <span class="mono" style="color:var(--muted)">design-bakery.com</span>', true)
+  await wait(400); $('#ref').classList.add('in')
+  await go('Hermia', $('#ref'), .5, .3, 900)
+  log('Hermia', 'Reading your site…'); $('#sweep').classList.add('on')
+  // parallel: frames go up while the look is read
+  const frames = ['#pHome', '#pWork', '#pWriting', '#pContact']
+  const pages = (async () => { for (const [i, f] of frames.entries()) { const who = ['Pip', 'Mochi'][i % 2]; go(who, $(f), .5, .3, 600); await wait(550); $(f).classList.add('in') } $('#pResearch').classList.add('in') })()
+  const look = (async () => {
+    for (const b of document.querySelectorAll('#swatches button')) { await go('Ren', $('#ref'), .3 + Math.random() * .5, .2 + Math.random() * .4, 450); await go('Ren', b, .5, .5, 450); b.classList.add('in') }
+    $('#type').classList.add('in')
+  })()
+  await Promise.all([pages, look])
+  $('#refRead').innerHTML = '<b>Got it:</b> near-black, tall condensed type, one lime accent in italic serif, mono labels.'
+  $('#lookFrom').textContent = '· from design-bakery.com'
+  wire($('#ref'), $('#look'))
+  log('Hermia', 'Near-black, tall condensed type, one lime accent, mono labels. Your pages, in that look.')
+  // the draft takes the look, page by page, at once
+  await Promise.all(frames.map(async (f, i) => { await wait(i * 220); $(f).classList.remove('rough'); $(f).querySelectorAll('.blk').forEach(b => b.classList.add('pop')) }))
+  $('#lookWhy').textContent = 'Picked for you: the look. Change a swatch, or circle it and say.'
+  placeMarkers()
+  await wait(400)
+  log('Hermia', '3 things I can\'t decide for you. First: how Home opens.')
+  ask('hero')
+}
+start()
+</script>
+</body>
+</html>
