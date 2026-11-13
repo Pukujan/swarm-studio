@@ -156,7 +156,7 @@ async function measure(out, { root, runs: N, only }) {
   const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runsDir, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
   for (const k of ['SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
   const server = studio = spawn(process.execPath, [join(root, 'server/server.mjs')], { env, stdio: ['ignore', 'ignore', 'ignore'] })
-  const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1 }, scenes: {} }
+  const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1, filmBytes: film.length }, scenes: {} }
   try {
     for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r.ok, () => false)) break; await wait(150) }
     await fetch(`${BASE}/api/setup`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: JSON.stringify({ seen: true }) }).catch(() => {})
@@ -195,12 +195,14 @@ async function scene(browser, sc, BASE) {
   for (let last = -1, same = 0, i = 0; i < 120 && same < 4; i++) { await wait(500); const n = await nodesNow(); same = n === last ? same + 1 : 0; last = n }
   // then the film plays where a person plays it (from its row in the Files list: on a 250-page board its tile
   // is far off the stage), and the gauge waits until it is playing, not for a fixed time
-  let filmPlaying = null
+  let filmPlaying = null, filmWhy = null
   if (sc.film) {
-    await page.click('.pj-list .row[data-key="film:0"]', { timeout: 30000 }).catch(() => {})
+    const clicked = await page.click('.pj-list .row[data-key="film:0"]', { timeout: 30000 }).then(() => true, e => String(e.message).split(/\r?\n/)[0])
     await page.waitForSelector('.pj-insp video', { timeout: 30000 }).catch(() => {})
-    await within('playing the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (v) { v.muted = true; v.loop = true; v.play().catch(() => {}) } })).catch(() => {})
+    const played = await within('playing the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (!v) return 'no video'; v.muted = true; v.loop = true; return v.play().then(() => 'ok', e => `play: ${e.name}`) })).catch(e => e.message)
     filmPlaying = await page.waitForFunction(() => { const v = document.querySelector('.pj-insp video'); return v && !v.paused && v.readyState >= 2 && v.currentTime > 0 }, null, { timeout: 30000, polling: 100 }).then(() => 1, () => 0)
+    // when it did not play, where it stopped: the Files row, the inspector, or the media itself
+    if (!filmPlaying) filmWhy = { clicked, played, ...await within('reading the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return { row: !!document.querySelector('.pj-list .row[data-key="film:0"]'), sel: window.swarmCosmos?.projectView ? document.querySelector('.pj-list .row.on')?.dataset.key || null : null, video: !!v, src: v?.currentSrc || v?.getAttribute('src') || null, readyState: v?.readyState ?? null, networkState: v?.networkState ?? null, error: v?.error ? `${v.error.code} ${v.error.message}` : null } })).catch(e => ({ read: e.message })) }
   }
   // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time
   const box = await within('the window size', 15000, page.evaluate(() => ({ w: innerWidth, h: innerHeight })))
@@ -235,7 +237,7 @@ async function scene(browser, sc, BASE) {
   }
   await within('closing the page', 30000, ctx.close()).catch(() => {})
   // (the frame times themselves too, to the 0.1 ms: compare takes its percentiles over every run's frames)
-  return { readyMs: ready, filmPlaying, ft: ft.map(x => round(x)), frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
+  return { readyMs: ready, filmPlaying, filmWhy, ft: ft.map(x => round(x)), frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
 }
 
 async function layerCount(cdp) {
@@ -284,7 +286,7 @@ function print(r) {
 // 10% on the same code); the rest is each run's number, the median of them
 const medians = s => {
   const ok = s.runs.filter(r => !r.crashed), first = ok[0] || {}
-  const keys = Object.keys(first).filter(k => k !== 'ft' && k !== 'frame')
+  const keys = Object.keys(first).filter(k => !['ft', 'frame', 'filmWhy'].includes(k))
   const ft = ok.flatMap(r => r.ft || [])
   s.median = { ...Object.fromEntries(keys.map(k => [k, median(ok.map(x => x[k]))])), frame: ft.length ? { p50: pct(ft, 0.5), p95: pct(ft, 0.95), p99: pct(ft, 0.99) } : null, crashes: s.runs.length - ok.length }
   return s
