@@ -3,6 +3,10 @@ version: 0.3.0
 description: "A crew of agents builds a whole launch from one prompt, live on a canvas you can watch and steer: a multi-page website, a working web app with a database, a playable game (also as a Godot, Unity or Unreal project), a promo film and social posts. Builds go to Swarm Feed, where others remix them and every maker is credited."
 author: Pukujan
 kind: standalone
+# Installed on first use, never at plugin install (README, "What it does on your machine"):
+# - the image service: @napi-rs/image 1.16.0 (MIT, a prebuilt binary for this platform) and thumbhash 0.1.1 (MIT),
+#   from engine/imagetools/package-lock.json into $HERMES_HOME/swarm-studio/image-tools/ with
+#   `npm ci --ignore-scripts`: nothing is compiled and no install script runs. SWARM_IMAGE_SERVICE=0 turns it off.
 requires_hermes: ">=0.23"
 provides_tools:
   - swarm_design

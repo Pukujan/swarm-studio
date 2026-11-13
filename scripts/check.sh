@@ -84,6 +84,8 @@ curl -sf -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/setup/models 
 # Setup › Parts: whether each key is set (never its value) and which local programs are found
 get /api/setup/parts; has '"keys":{"SWARM_STUDIO_API_KEY":'; has '"renderer":'
 get /api/library/packs; has '"packs"'
+# the image service (engine/images.mjs): a picture by its content hash, and nothing for a hash it has not stored
+code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/img/00000000000000000000000000000000?w=256"); [ "$code" = 404 ] || { echo "/img/<hash> answered $code"; exit 1; }
 get '/api/library?q=boots'; has '"results"'
 curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; grep -q '__SWARM_TOKEN__' "$tmp/reply" && { echo 'the wall has no token'; exit 1; }
 get /api/auto; has '"state"'

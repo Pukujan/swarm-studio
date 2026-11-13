@@ -47,7 +47,7 @@ export const TYPE = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp', 
 
 // The libraries, from the plugin's own engine/imagetools/node_modules when a developer installed them there,
 // else from the data folder, installed there once from the lockfile. `npm` is Node's own, beside its binary.
-export function imageTools(dataDir, { install = true } = {}) {
+export function imageTools(dataDir, { install = true, own = true } = {}) {
   const from = dir => {
     try {
       const req = createRequire(join(dir, 'package.json'))
@@ -55,7 +55,7 @@ export function imageTools(dataDir, { install = true } = {}) {
       return { Transformer, thumbhash: req('thumbhash') }
     } catch { return null }
   }
-  return from(TOOLS) || (async () => {
+  return (own && from(TOOLS)) || (async () => {
     const dir = join(dataDir, 'image-tools')
     const have = from(dir)
     if (have || !install) return have
