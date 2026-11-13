@@ -31,10 +31,14 @@ export function makeSetup({ sw }) {
     const m = S.view.models, t = S.test
     const state = t === null ? busy : t ? mark(t.ok, t.ok ? 'Working' : 'Not working') : ''
     const line = (name, role) => `<div class="su-line"><span>${name}</span><b>${esc(short(m[role].model) || 'None')}</b>${t ? mark(t[role].ok, t[role].ok ? 'Working' : 'Not working') : t === null ? busy : ''}</div>`
-    const why = t && !t.ok ? esc(t.worker.error || t.planner.error || '') : ''
-    // one action when it fails: Hermes's own model setup. Where no terminal could be opened, its command.
-    const fix = t && !t.ok
-      ? `${why ? `<p class="su-why">${why}</p>` : ''}<div class="su-acts"><button type="button" class="ui-btn ui-btn-outline ui-btn-sm" data-hermes>Let Hermes set this up</button><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-again>Test again</button></div>${S.hermes && !S.hermes.ok ? `<div class="su-cmd"><code>${esc(S.hermes.command)}</code><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-copy="${esc(S.hermes.command)}">Copy</button></div>` : ''}`
+    // when it fails: one plain line and the one fix that fits it (engine/setup.mjs modelProblem). Hermes's
+    // own model setup only when a model or key is the problem; where no terminal opens, its command.
+    // The provider's raw message stays behind Details (rule 10).
+    const p = t && !t.ok ? (t.problem || { line: 'The model didn\'t work.', fix: 'hermes' }) : null
+    const raw = p ? String((t.planner.ok ? t.worker.error : t.planner.error) || '') : ''
+    const btn = (attr, label, strong) => `<button type="button" class="ui-btn ${strong ? 'ui-btn-outline' : 'ui-btn-ghost'} ui-btn-sm" ${attr}>${label}</button>`
+    const fix = p
+      ? `<p class="su-why">${esc(p.line)}</p><div class="su-acts">${p.fix === 'hermes' ? btn('data-hermes', 'Let Hermes set this up', true) : ''}${btn('data-again', 'Test again', p.fix !== 'hermes')}${raw ? btn(`data-details aria-expanded="${!!S.details}"`, 'Details') : ''}</div>${S.details && raw ? `<p class="su-raw">${esc(raw)}</p>` : ''}${S.hermes && !S.hermes.ok ? `<div class="su-cmd"><code>${esc(S.hermes.command)}</code><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-copy="${esc(S.hermes.command)}">Copy</button></div>` : ''}`
       : ''
     // the media reader: no test mark (it is not called here), its model and, below, what it can take
     const md = m.media
@@ -103,7 +107,13 @@ export function makeSetup({ sw }) {
     for (const b of dlg.body.querySelectorAll('[data-pic]')) b.onclick = async () => { S.view = await api('/api/setup', { pictures: b.dataset.pic }).catch(() => S.view); draw() }
     const on = (sel, fn) => { const b = dlg.body.querySelector(sel); if (b) b.onclick = fn }
     on('[data-again]', () => test(true))
-    on('[data-hermes]', async () => { S.hermes = await api('/api/setup/hermes', {}).catch(() => ({ ok: false, command: 'hermes model' })); draw() })
+    on('[data-hermes]', async () => {
+      S.hermes = await api('/api/setup/hermes', {}).catch(() => ({ ok: false, command: 'hermes model' }))
+      // a terminal opened: test again when the person comes back to this window (spec 6)
+      if (S.hermes.ok) window.addEventListener('focus', () => test(true), { once: true })
+      draw()
+    })
+    on('[data-details]', () => { S.details = !S.details; draw() })
     on('[data-reopen]', () => api('/api/setup/account', { reopen: true }).catch(() => {}))
     on('[data-cancel]', async () => { const r = await api('/api/setup/account', { cancel: true }).catch(() => null); if (r?.account) S.view.account = r.account; draw() })
     on('[data-copy]',e => navigator.clipboard?.writeText(e.currentTarget.dataset.copy).catch(() => {}))
@@ -116,10 +126,15 @@ export function makeSetup({ sw }) {
     S.test = null
     draw()
     S.test = await api('/api/setup/models', { again }).catch(() => undefined)
+    if (S.test) dot(S.test.ok)
     // a model that does not answer opens its row: the marker first, the message one tap in (rule 10)
     if (S.test && !S.test.ok && !S.open) S.open = 'models'
     draw()
   }
+
+  // the avatar keeps a warning dot while the models do not answer, so closing the sheet never hides it
+  // (the server keeps the last check across restarts); its menu's Setup item carries the same marker
+  const dot = ok => document.querySelector('.hm-who')?.classList.toggle('warn', ok === false)
 
   // closing it any way counts as seen: nothing here is required
   const seen = () => { if (S.view && !S.view.seen) { S.view.seen = true; api('/api/setup', { seen: true }).catch(() => {}) } }
@@ -128,7 +143,7 @@ export function makeSetup({ sw }) {
     if (dlg && !dlg.closed) return
     S.view = await api('/api/setup').catch(() => null)
     if (!S.view?.models) return
-    Object.assign(S, { open: S.view.account?.pending ? 'account' : '', hermes: null, signError: '' })
+    Object.assign(S, { open: S.view.account?.pending ? 'account' : '', hermes: null, signError: '', details: false })
     dlg = window.SwarmUI.dialog({ title: 'Setup', className: 'su', body: '', footer: '<button type="button" class="ui-btn ui-btn-default su-start">Start</button>', onClose: seen })
     dlg.footer.querySelector('.su-start').onclick = () => dlg.close('start')
     S.test = S.view.test || undefined
@@ -143,6 +158,7 @@ export function makeSetup({ sw }) {
     // once, the first time Projects shows
     async first() {
       const v = await api('/api/setup').catch(() => null)
+      if (v) dot(v.modelsOk)
       if (v && v.models && v.seen === false) open()
     }
   }

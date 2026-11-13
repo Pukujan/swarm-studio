@@ -34,7 +34,7 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
     const row = x => ({ model: x?.model || '', host: host(x?.baseUrl), key: !!x?.apiKey })
     // the media reader (spec 32): its model and what it can take; it is not part of the tiny call test
     const md = await media().catch(() => null)
-    return { seen: !!state.seen, account: account(), models: { planner: row(r.planner), worker: row(r.worker), media: md ? { model: md.model || '', takes: md.takes || '', off: md.pick === 'off' } : null }, test: lastTest, pictures: await pictures() }
+    return { seen: !!state.seen, modelsOk: state.modelsOk !== false, account: account(), models: { planner: row(r.planner), worker: row(r.worker), media: md ? { model: md.model || '', takes: md.takes || '', off: md.pick === 'off' } : null }, test: lastTest, pictures: await pictures() }
   }
   // who this install posts as, from feed.json (written by feed.py); never the token
   const account = () => {
@@ -61,10 +61,17 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
   })
 
   // `hermes model` is Hermes's own model setup. It asks questions, so it needs a terminal: on a Mac
-  // a .command file opens one. Elsewhere the sheet shows the command to copy.
+  // a .command file opens one; on Windows a console window (the server runs in the person's session,
+  // and `hermes` is Hermes Desktop's command alias there). Elsewhere the sheet shows the command to copy.
   function hermesModel() {
     const bin = hermesBin || [join(homedir(), '.local', 'bin', 'hermes')].find(existsSync) || 'hermes'
     const command = 'hermes model'
+    if (platform === 'win32') {
+      // a Store install's own files cannot be started outside its package: its `hermes` alias can
+      const exe = (/\\WindowsApps\\/i.test(String(bin)) ? 'hermes' : String(bin)).replace(/'/g, "''")
+      const ps = `Start-Process -FilePath cmd.exe -ArgumentList '/k', '"${exe}" model'`
+      return new Promise(resolve => run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 15000, windowsHide: true }, err => resolve({ ok: !err, command })))
+    }
     if (platform !== 'darwin') return Promise.resolve({ ok: false, command })
     const script = join(dataDir, 'hermes-model.command')
     try {
@@ -88,7 +95,12 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
       return true
     }
     if (url.pathname === '/api/setup/models' && req.method === 'POST') {
-      body(req).then(async input => { lastTest = await tester.test(roles(), { again: input.again === true }); json(res, 200, lastTest) })
+      body(req).then(async input => {
+        lastTest = await tester.test(roles(), { again: input.again === true })
+        // kept, so the avatar's warning dot outlives a restart until a check passes
+        if (state.modelsOk !== lastTest.ok) { state.modelsOk = lastTest.ok; save() }
+        json(res, 200, lastTest)
+      })
       return true
     }
     if (url.pathname === '/api/setup/account' && req.method === 'POST') {

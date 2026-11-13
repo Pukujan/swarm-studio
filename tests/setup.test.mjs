@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { pictureState, pictureRun, modelTester, modelError } from '../engine/setup.mjs'
+import { pictureState, pictureRun, modelTester, modelError, modelProblem } from '../engine/setup.mjs'
 
 const codex = { provider: 'openai-codex', available: true, models: ['gpt-image-2-low'], default: 'gpt-image-2-low' }
 const xai = { provider: 'xai', available: false, models: ['grok-image'], default: 'grok-image' }
@@ -122,4 +122,58 @@ test('the Models row carries the media reader: its model and what it takes, or o
   assert.equal((await get()).models.media.off, true)
   md = null
   assert.equal((await get()).models.media, null)
+})
+
+test('a failed model check is one plain line and the fix that fits it, never the raw message', async () => {
+  const scoped = 'planner: HTTP 502 {"error": {"message": "UnscopedSecretError: Hermes could not read this profile\'s HERMES_CUSTOM_INFERHUB_API_KEY (an internal profile-scoping bug'
+  assert.deepEqual(modelProblem(scoped), { line: 'Hermes can\'t read your model key. Restart Hermes.', fix: 'restart' })
+  assert.deepEqual(modelProblem('No model yet'), { line: 'No model is set up.', fix: 'hermes' })
+  assert.equal(modelProblem('401: Incorrect API key provided').fix, 'hermes')
+  assert.equal(modelProblem('404: model cb/x not found').line, 'Hermes doesn\'t have this model.')
+  assert.equal(modelProblem('429: rate limit reached').fix, 'again')
+  assert.equal(modelProblem('Waiting for Hermes: open Hermes, or run `hermes swarm`, to continue').line, 'Hermes isn\'t connected. Open Hermes.')
+  assert.equal(modelProblem('Swarm Studio was updated. Restart Hermes to finish.').fix, 'restart')
+  // as Hermes really sends it: a 503 that is not "busy"
+  assert.equal(modelProblem('planner: HTTP 503 {"error":{"code":"hermes_updated","message":"Swarm Studio was updated. Restart Hermes to finish.').line, 'Swarm Studio was updated. Restart Hermes.')
+  assert.equal(modelProblem('The operation was aborted due to timeout').fix, 'again')
+  assert.deepEqual(modelProblem('something nobody has seen'), { line: 'The model didn\'t work.', fix: 'hermes' })
+  // the tester says it once, from the first role that failed
+  const r = await modelTester({ call: async () => { throw new Error(scoped) } }).test({ planner: { model: 'p', baseUrl: 'https://a', apiKey: 'k' }, worker: { model: 'w', baseUrl: 'https://a', apiKey: 'k' } })
+  assert.equal(r.problem.fix, 'restart')
+  assert.equal((await modelTester({ call: async () => {} }).test({ planner: { model: 'p', baseUrl: 'https://a', apiKey: 'k' }, worker: { model: 'w', baseUrl: 'https://a', apiKey: 'k' } })).problem, null)
+})
+
+test('Let Hermes set this up opens a console on Windows, and a failed check is kept for the avatar', async () => {
+  const { setupRoutes } = await import('../server/setup.mjs')
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { EventEmitter } = await import('node:events')
+  const dir = mkdtempSync(join(tmpdir(), 'su-'))
+  const runs = []
+  let fail = true
+  const opts = { dataDir: dir, roles: () => ({ planner: { model: 'p', baseUrl: 'https://a', apiKey: 'k' }, worker: { model: 'w', baseUrl: 'https://a', apiKey: 'k' } }), call: async () => { if (fail) throw new Error('No answer') }, image: async () => ({ providers: [] }), setPictures: () => {} }
+  const make = extra => {
+    const handle = setupRoutes({ ...opts, ...extra })
+    return (method, path, body) => new Promise(resolve => {
+      const req = new EventEmitter(); req.method = method; req.destroy = () => {}
+      const res = { writeHead: code => ({ end: s => resolve({ code, data: JSON.parse(s) }) }) }
+      handle(req, res, new URL(`http://x${path}`))
+      req.emit('data', JSON.stringify(body || {})); req.emit('end')
+    })
+  }
+  const win = make({ platform: 'win32', hermesBin: 'C:\\Program Files\\WindowsApps\\NousResearchInc.HermesAgent_1\\app\\bin\\hermes.exe', run: (cmd, args, o, cb) => { runs.push([cmd, args]); cb(null) } })
+  assert.deepEqual((await win('POST', '/api/setup/hermes')).data, { ok: true, command: 'hermes model' })
+  // the Store app's own file cannot start outside its package: its `hermes` alias does
+  assert.equal(runs[0][0], 'powershell.exe')
+  assert.equal(runs[0][1].at(-1), "Start-Process -FilePath cmd.exe -ArgumentList '/k', '\"hermes\" model'")
+  const linux = make({ platform: 'linux', run: () => assert.fail('nothing runs on Linux') })
+  assert.deepEqual((await linux('POST', '/api/setup/hermes')).data, { ok: false, command: 'hermes model' })
+  // a failed check outlives a restart (a new server reads setup.json) until one passes
+  assert.equal((await win('GET', '/api/setup')).data.modelsOk, true)
+  assert.equal((await win('POST', '/api/setup/models', { again: true })).data.ok, false)
+  assert.equal((await make({})('GET', '/api/setup')).data.modelsOk, false)
+  fail = false
+  assert.equal((await win('POST', '/api/setup/models', { again: true })).data.ok, true)
+  assert.equal((await make({})('GET', '/api/setup')).data.modelsOk, true)
 })
