@@ -1,0 +1,10 @@
+{
+  "name": "@zumer/snapdom",
+  "version": "3.7.0",
+  "license": "MIT",
+  "tarball": "https://registry.npmjs.org/@zumer/snapdom/-/snapdom-3.7.0.tgz",
+  "integrity": "sha512-YUbc4psiyjTktuOkvCkuDNWHjZiqwJZ/SPpnYmOUFoKWi6nyjY3CgW7+uQSwVTVR9ka2/Swz1UiRM739j07kmQ==",
+  "copied": "dist/snapdom.js",
+  "file": "snapdom.js",
+  "sha256": "764a485de9e9c56f054456598b129733931d69fbcc51e1e3fd1e2a78c2c1b4ef"
+}

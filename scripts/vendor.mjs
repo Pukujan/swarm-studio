@@ -27,6 +27,16 @@ export const VENDORED = [
     entry: 'dist/xstate.esm.js',
     exports: ['setup', 'createActor', 'assign', 'fromTransition'],
     out: 'web/vendor/xstate/xstate.mjs'
+  },
+  // the page photographs itself (web/frame.html `capture`, web/capture.js): the package's own browser build, a classic
+  // script that sets window.snapdom, copied as it is. Fetched from the plugin's own server only when a page is
+  // photographed, never loaded into one that is not.
+  {
+    name: '@zumer/snapdom',
+    version: '3.7.0',
+    integrity: 'sha512-YUbc4psiyjTktuOkvCkuDNWHjZiqwJZ/SPpnYmOUFoKWi6nyjY3CgW7+uQSwVTVR9ka2/Swz1UiRM739j07kmQ==',
+    copy: 'dist/snapdom.js',
+    out: 'web/vendor/snapdom/snapdom.js'
   }
 ]
 
@@ -88,14 +98,19 @@ async function build(lib, outRoot) {
   try {
     writeFileSync(join(tmp, 'pkg.tgz'), tgz)
     execFileSync('tar', ['-xzf', 'pkg.tgz'], { cwd: tmp })
-    writeFileSync(join(tmp, 'entry.mjs'), `export { ${lib.exports.join(', ')} } from './package/${lib.entry}'\n`)
-    const banner = `/* ${lib.name} ${lib.version} (MIT, see LICENSE), built by scripts/vendor.mjs with esbuild ${ESBUILD} */`
-    execFileSync(...npx(['--yes', `esbuild@${ESBUILD}`, 'entry.mjs', '--bundle', '--format=esm', '--minify', '--legal-comments=none', '--target=es2022', `--banner:js=${banner}`, '--outfile=out.mjs', '--log-level=warning', '--log-override:ignored-bare-import=silent']), { cwd: tmp, stdio: ['ignore', 'inherit', 'inherit'] })
     const out = join(outRoot, lib.out)
     mkdirSync(dirname(out), { recursive: true })
-    copyFileSync(join(tmp, 'out.mjs'), out)
+    // a package's own browser build is kept as it is; anything else is bundled down to the exports the studio uses
+    if (lib.copy) copyFileSync(join(tmp, 'package', lib.copy), out)
+    else {
+      writeFileSync(join(tmp, 'entry.mjs'), `export { ${lib.exports.join(', ')} } from './package/${lib.entry}'\n`)
+      const banner = `/* ${lib.name} ${lib.version} (MIT, see LICENSE), built by scripts/vendor.mjs with esbuild ${ESBUILD} */`
+      execFileSync(...npx(['--yes', `esbuild@${ESBUILD}`, 'entry.mjs', '--bundle', '--format=esm', '--minify', '--legal-comments=none', '--target=es2022', `--banner:js=${banner}`, '--outfile=out.mjs', '--log-level=warning', '--log-override:ignored-bare-import=silent']), { cwd: tmp, stdio: ['ignore', 'inherit', 'inherit'] })
+      copyFileSync(join(tmp, 'out.mjs'), out)
+    }
     copyFileSync(join(tmp, 'package', 'LICENSE'), join(dirname(out), 'LICENSE'))
-    const source = { name: lib.name, version: lib.version, license: meta.license, tarball, integrity, esbuild: ESBUILD, exports: lib.exports, file: lib.out.split('/').pop(), sha256: sha('sha256', readFileSync(out)) }
+    const how = lib.copy ? { copied: lib.copy } : { esbuild: ESBUILD, exports: lib.exports }
+    const source = { name: lib.name, version: lib.version, license: meta.license, tarball, integrity, ...how, file: lib.out.split('/').pop(), sha256: sha('sha256', readFileSync(out)) }
     writeFileSync(join(dirname(out), 'SOURCE.json'), JSON.stringify(source, null, 2) + '\n')
     return dirname(lib.out)
   } finally { rmSync(tmp, { recursive: true, force: true }) }

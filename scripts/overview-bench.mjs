@@ -172,6 +172,31 @@ try {
     live = false
     await wait(2000)
   }
+  // One page's pictures, timed page by page on the open Overview: its small and full picture as two captures
+  // (window.swarm.thumb, the path every checkout has), and, where the checkout has it, both from one capture
+  // (window.swarm.capture). The main thread's long tasks are summed for each. 0.26, not 0.25: thumb hands back a
+  // resting page's frozen picture at 0.25 and under, without photographing it.
+  await page.goto(address)
+  await pictures()
+  await wait(2000)
+  const each = await page.evaluate(async ids => {
+    const sw = window.swarm, longs = { pair: 0, one: 0 }
+    let into = 'pair'
+    const po = new PerformanceObserver(l => { for (const e of l.getEntries()) longs[into] += e.duration })
+    po.observe({ type: 'longtask' })
+    // the library loads once, before anything is timed
+    await sw.thumb(ids[0], 0.26).catch(() => null)
+    const time = async f => { const t = performance.now(); try { await f() } catch { return NaN } return performance.now() - t }
+    const pair = [], one = []
+    for (const id of ids) pair.push(await time(async () => { await sw.thumb(id, 0.26); await sw.thumb(id, 0.6) }))
+    await new Promise(r => setTimeout(r, 500))
+    into = 'one'
+    if (sw.capture) for (const id of ids) one.push(await time(() => sw.capture(id, [0.25, 0.6])))
+    await new Promise(r => setTimeout(r, 500))
+    po.disconnect()
+    return { pair, one, longs }
+  }, ids)
+  out.each = each
 } finally {
   await browser.close()
   server.kill()
@@ -187,4 +212,9 @@ console.log(`  main thread busy during a build ${median(out.cpu)}%   pictures se
 console.log(`  frame rate panning, at rest     ${median(out.fpsRest)} fps`)
 console.log(`  frame rate panning, building    ${median(out.fpsBuild)} fps   pictures sent while panning: ${median(out.panShots)}`)
 console.log(`  each cursor's moves a second, panning during a build  ${median(out.curHz)}`)
+if (out.each) {
+  const { pair, one, longs } = out.each
+  console.log(`  one page, small + full as two captures  ${ms(median(pair))} (${ms(Math.min(...pair))} to ${ms(Math.max(...pair))})   long tasks, all ${pair.length}: ${ms(longs.pair)}`)
+  if (one.length) console.log(`  one page, both from one capture         ${ms(median(one))} (${ms(Math.min(...one))} to ${ms(Math.max(...one))})   long tasks, all ${one.length}: ${ms(longs.one)}`)
+}
 console.log(JSON.stringify(out))

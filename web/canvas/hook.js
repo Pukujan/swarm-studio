@@ -13,7 +13,7 @@ import { openPlayer, closePlayer, followPlayer } from './player.js'
 import { botMsg, hermesReady, hermesSays, layerKids, renderTree } from './panels.js'
 import { readTalk, talkStart, talkAsk, talkEnd, saidOf, talk, gameLock } from './talk.js'
 import { setCrewMode, crewMode } from './auto.js'
-import { snapFrame, hiddenCopy, ANCHOR_JS, layerKey, SNAP_SECTION, sendComment } from './marks.js'
+import { snapFrame, pageCapture, hiddenCopy, ANCHOR_JS, layerKey, SNAP_SECTION, sendComment } from './marks.js'
 import { gensOf, pics } from './start.js'
 import { nextRoute, setNextRoute } from './loop.js'
 
@@ -48,6 +48,13 @@ window.swarm = {
     if (f.frozen && scale <= 0.25) return f.frozen.img.src
     if (!f.ready || !f.slots.size) return f.frozen?.img.src || null
     return (await snapFrame(f, scale)).image
+  },
+  // a page's saved snapshots for the Overview (spec 36): photographed once inside the page, a JPEG Blob at each
+  // scale (web/capture.js), or null while the page is not drawn yet
+  async capture(id, scales = [0.25, 0.6]) {
+    const f = S.frames.find(x => x.id === id)
+    if (!f?.ready || !f.slots.size) return null
+    return pageCapture.shoot(f.iframe.contentWindow, { scales })
   },
   // Scribble (the Overview draws the marks): what a mark points at, a draft's picture, sending the marks
   // with the person's words, and closing a draft or erasing a sent mark
