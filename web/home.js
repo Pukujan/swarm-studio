@@ -745,7 +745,8 @@ export function makeHome({ sw, C, root }) {
       // Overview, as from any room. The hosted studio keeps its Overview.
       if (typeof made === 'string') return C.started(made)
       // Not started: Projects stays, with the words back in the box. Another build running is
-      // shown on the deck on request; anything else has said why in the chat (Hermes, a talk)
+      // shown on the deck on request; anything else has said why in the chat (Hermes, a talk, the question
+      // before a new website: web/canvas/loop.js opens it, decision 0020)
       if (!input.value) input.value = text
       if (made?.busy) toast('<span>A build is running. Yours can start when it ends.</span>', made.run ? 'Watch it' : null, made.run ? () => C.started(made.run, { room: 'deck' }) : null)
       return
@@ -835,7 +836,8 @@ export function makeHome({ sw, C, root }) {
   // talking (the deck's chat, engine/talkplan.mjs for the talk). Nothing starts until Build.
   // The hosted studio's guests are limited already, and build as they always did.
   function confirmBuild(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}, steps = null, sheet = false) {
-    if (hosted() || !sw.talk) return start(text, run, sets)
+    // a website goes straight to the question before its build (decision 0020): it is the press, so no brief first
+    if (hosted() || !sw.talk || (!run && !sheet)) return start(text, run, sets)
     closePop()
     input.value = ''
     C.project = null
