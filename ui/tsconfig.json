@@ -23,6 +23,7 @@
       "@studio/crew": ["./src/pet/studio-crew.d.ts"],
       "@studio/icons": ["./src/primitives/studio-icons.d.ts"],
       "@studio/clean": ["./src/screens/deck/studio-clean.d.ts"],
+      "@studio/edit": ["./src/screens/deck/studio-edit.d.ts"],
       "@studio/kits": ["./src/legacy/studio-kits.d.ts"],
       "@studio/pet": ["./src/legacy/studio-pet.d.ts"],
       "@studio/video": ["./src/primitives/studio-video.d.ts"]
