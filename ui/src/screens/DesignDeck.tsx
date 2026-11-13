@@ -10,7 +10,9 @@ import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
 import { DeckStage, type StageHandle } from './deck/DeckStage'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
+import { ExportDialog } from './deck/ExportDialog'
 import { Player } from './deck/Player'
+import { PublishDialog } from './deck/PublishDialog'
 import { useDeckRun } from './deck/source'
 
 export function DesignDeck() {
@@ -27,6 +29,7 @@ export function DesignDeck() {
   // below 768 px Layers is a sheet behind its button
   const [sheet, setSheet] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
+  const [dialog, setDialog] = useState<'publish' | 'export' | null>(null)
   useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
   const working = model.state === 'planning' || model.state === 'building'
   const play = () => go({ type: 'play', page: page ?? undefined, pages: model.pages.length })
@@ -70,8 +73,11 @@ export function DesignDeck() {
             : <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
-      <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay} />
+      <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
+        onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} />
       {view.player !== 'closed' && model.pages.length > 0 && <Player model={model} />}
+      {model.run && <PublishDialog model={model} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
+      {model.run && <ExportDialog model={model} isOpen={dialog === 'export'} onOpenChange={o => setDialog(o ? 'export' : null)} />}
     </div>
   )
 }

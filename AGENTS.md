@@ -42,7 +42,8 @@ The Studio's theme variables are design tokens: change `tokens/*.tokens.json`, r
 and commit `web/tokens.css` and `ui/src/theme.css` with them; never edit either by hand (`tokens:check` fails a stale one).
 The Studio is moving to React in `ui/`, served at `/next/` ([decision 0013](docs/decisions/0013-react-ui-coexists.md)).
 For code in `ui/`: `npm ci --prefix ui`, then `npm run --prefix tools/dev typecheck:ui`, `deps:ui` and `ui:check`
-(rebuild with `npm run --prefix ui build` and commit `ui/dist/`). [ui/README.md](ui/README.md) is how a screen moves.
+(`npm run --prefix ui build` makes `ui/dist/` for `/next/`; never commit it: CI builds it and only a release carries it,
+[decision 0018](docs/decisions/0018-next-ui-build-on-release.md)). [ui/README.md](ui/README.md) is how a screen moves.
 CI's `motion-check` compares the Studio's motion before and after (docs/ux/MOTION.md). CI's `ui-audit` checks
 every top-level screen against the rules a machine can check (docs/ux/AUDIT.md). A new violation fails; a
 known one is in `.ui-audit-known-violations.json`.
