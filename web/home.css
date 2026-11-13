@@ -74,6 +74,9 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .home .card .pk { background: #fff; }
 .home .card .pk iframe { width: 1280px; height: 800px; border: 0; transform: scale(var(--k, .2)); transform-origin: 0 0; pointer-events: none; }
 .home .card .blank { display: grid; place-items: center; color: var(--dim); }
+/* the list on its way (web/pet.js works on it): the cards' shape, nothing to click */
+.home .card.wait-in { pointer-events: none; cursor: default; }
+.home .card.wait-in .nm b { display: block; width: 42%; height: 10px; margin-top: 10px; border-radius: 99px; background: var(--surface-2); }
 .home .card:hover .cv, .home .card:focus-visible .cv { box-shadow: 0 0 0 1.5px var(--line-2); }
 .home .card .cv.stack::before, .home .card .cv.stack::after { content: ""; position: absolute; left: 10px; right: 10px; top: -6px; height: 12px; border-radius: 10px 10px 0 0; background: var(--line-2); z-index: -1; }
 .home .card .cv.stack::after { left: 20px; right: 20px; top: -11px; background: var(--surface-2); z-index: -2; }

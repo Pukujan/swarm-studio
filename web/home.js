@@ -50,7 +50,7 @@ export function makeHome({ sw, C, root }) {
         <button type="button" class="ib hm-ideas" aria-label="Examples" aria-haspopup="dialog">${ic('idea', 18)}</button><button type="submit" class="btn pri hm-make">${ic('up', 16)}Make</button></form>
       <div class="hm-pop" hidden></div>
       <div class="hm-bar"></div>
-      <div class="hm-body"></div>
+      <div class="hm-body grid">${'<div class="card wait-in" aria-busy="true"><div class="cv"></div><div class="nm"><b></b></div></div>'.repeat(4)}</div>
       <div class="hm-selbar" hidden></div>
     </main>`
   const $ = s => root.querySelector(s)

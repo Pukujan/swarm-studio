@@ -161,7 +161,7 @@ export function makeScaffold({ sw, C, root }) {
   }
 
   function render() {
-    if (!A.d) { world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Studio</span><div class="abs"><div class="ab pcard wait-in"><b>Brand</b><span></span></div></div></section></div>'; return }
+    if (!A.d) { world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Studio</span><div class="abs"><div class="ab pcard wait-in" aria-busy="true"><b>Brand</b><span></span></div></div></section></div>'; return }
     sync()
     const k = kit(), c = ctx(), d = A.d
     crumb.querySelector('.sc-name').textContent = d.project.title || d.project.name

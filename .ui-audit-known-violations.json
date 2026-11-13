@@ -148,20 +148,12 @@
     "detail": "reads \"Projects › Lantern Run\", should read \"Home › Projects › Lantern Run › Game\""
   },
   {
-    "key": "game@1440 loading",
-    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T13-00-00-000Z/events, /api/runs/2026-11-01T13-00-00-000Z/board, /api/projects, /api/projects/2026-11-01T13-00-00-000Z/files, /api/runs/2026-11-01T13-00-00-000Z/app were held"
-  },
-  {
     "key": "game@390 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
   {
     "key": "game@390 breadcrumb",
     "detail": "reads \"Lantern Run\", should read \"Home › Projects › Lantern Run › Game\""
-  },
-  {
-    "key": "game@390 loading",
-    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T13-00-00-000Z/events, /api/runs/2026-11-01T13-00-00-000Z/board, /api/projects were held"
   },
   {
     "key": "overview@1440 axe aria-required-children",
@@ -176,20 +168,12 @@
     "detail": "reads \"Projects › Alpha Tea\", should read \"Home › Projects › Alpha Tea › Overview\""
   },
   {
-    "key": "overview@1440 loading",
-    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T11-00-00-000Z/events, /api/runs/2026-11-01T11-00-00-000Z/board, /api/projects were held"
-  },
-  {
     "key": "overview@390 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
   {
     "key": "overview@390 breadcrumb",
     "detail": "reads \"Alpha Tea\", should read \"Home › Projects › Alpha Tea › Overview\""
-  },
-  {
-    "key": "overview@390 loading",
-    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/runs/2026-11-01T11-00-00-000Z/events, /api/runs/2026-11-01T11-00-00-000Z/board, /api/projects were held"
   },
   {
     "key": "plan@1440 axe label",
@@ -240,10 +224,6 @@
     "detail": "reads \"no breadcrumb\", should read \"Home › Projects\""
   },
   {
-    "key": "projects@1440 loading",
-    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/me, /api/projects, /api/plans were held"
-  },
-  {
     "key": "projects@390 axe label",
     "detail": "Form elements must have labels: .dcolor"
   },
@@ -258,10 +238,6 @@
   {
     "key": "projects@390 breadcrumb",
     "detail": "reads \"no breadcrumb\", should read \"Home › Projects\""
-  },
-  {
-    "key": "projects@390 loading",
-    "detail": "nothing showed it was loading while /api/models, /api/auto, /api/work, /api/me, /api/projects, /api/plans were held"
   },
   {
     "key": "studio@1440 axe label",
