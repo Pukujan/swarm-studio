@@ -1,0 +1,8 @@
+{
+  "why": "decision 0019 point 5: a prompt change fails when, on any set, after against before (the mean of the runs) passes one of these",
+  "scoreDrop": 0.5,
+  "findingsRise": 0.25,
+  "p0Rise": 1,
+  "timeRisePct": 25,
+  "tokensRisePct": 40
+}

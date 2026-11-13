@@ -1,0 +1,22 @@
+{
+  "id": "kiln",
+  "brief": "Kiln, a booking app for small ceramics studios",
+  "title": "Kiln",
+  "purpose": "Sell Kiln to small ceramics studios",
+  "theme": { "name": "Kiln", "direction": "warm, earthy, calm, handmade", "fonts": { "heading": "Fraunces", "body": "Inter" }, "radius": "14px",
+    "vars": { "--background": "#FAF7F2", "--foreground": "#1C1B19", "--card": "#FFFFFF", "--muted": "#EFE9DF", "--muted-foreground": "#5E5A52", "--primary": "#0F5C55", "--primary-foreground": "#FAF7F2", "--border": "#DDD5C8", "--accent": "#C8643B" } },
+  "layers": [
+    ["nav", "nav", "Logo \"Kiln\"; links Studios, Classes, Pricing; button \"Book a wheel\"."],
+    ["hero", "hero", "Headline \"Fill every wheel, every week.\" Subline \"Kiln handles bookings, waitlists and kiln schedules so you can stay at the wheel.\" Buttons \"Start free\", \"See a studio\"."],
+    ["logos", "logos", "\"Used by 140 studios\": Mudroom, Slip & Co, Earthbound, The Wheelhouse, Clayground."],
+    ["problem", "problem", "Title \"Spreadsheets were never a booking system.\" Three pains: double-booked wheels, no-shows nobody chases, kiln loads tracked on paper."],
+    ["booking", "feature", "Title \"Bookings that fill themselves.\" Members book wheels and classes from their phone; the waitlist moves up when someone cancels."],
+    ["kiln", "feature", "Title \"Kiln loads, scheduled.\" Each firing: bisque or glaze, cone, shelf space left, whose pieces are in it."],
+    ["stats", "stats", "92% fewer no-shows; 6 hours saved a week; 31% more class revenue. Caption \"Averages across studios after 3 months.\""],
+    ["steps", "how-it-works", "1 Add your wheels and kilns. 2 Share your booking link. 3 Watch the calendar fill."],
+    ["quote", "testimonial", "\"We stopped losing Saturdays to no-shows.\" Ana Ruiz, owner, Mudroom Ceramics."],
+    ["pricing", "pricing", "Studio $39/month: 4 wheels, waitlists. Collective $89/month: 12 wheels, kiln schedule, class packs."],
+    ["faq", "faq", "Can members pay in the app? Yes, by card. Do you take a fee per booking? No. Can I import my spreadsheet? Yes, a CSV."],
+    ["footer", "footer", "Kiln, made in Leeds. Links Privacy, Terms, Contact."]
+  ]
+}

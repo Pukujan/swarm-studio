@@ -1,0 +1,18 @@
+{
+  "id": "harbour",
+  "brief": "Harbour Lights, a ferry timetable and ticket site for an island town",
+  "title": "Harbour Lights",
+  "purpose": "Show the ferry times and sell tickets",
+  "theme": { "name": "Harbour", "direction": "maritime, clear, sturdy, public service", "fonts": { "heading": "Archivo", "body": "Source Sans 3" }, "radius": "6px",
+    "vars": { "--background": "#0F1C24", "--foreground": "#ECEFF1", "--card": "#16262F", "--muted": "#1E313B", "--muted-foreground": "#A7B4BB", "--primary": "#F2B33D", "--primary-foreground": "#0F1C24", "--border": "#2A404B", "--accent": "#F2B33D" } },
+  "layers": [
+    ["nav", "nav", "Logo \"Harbour Lights\"; links Times, Fares, Island guide; button \"Buy a ticket\"."],
+    ["hero", "hero", "Headline \"Boats every hour from six.\" Subline \"The ferry to Saltholm runs all year, weather allowing.\" Buttons \"See today's times\", \"Buy a ticket\"."],
+    ["today", "timetable", "Today's sailings from the harbour: 06:00, 07:00, 08:00, 09:00, 12:00, 15:00, 18:00, 21:00. Last return 21:40."],
+    ["fares", "pricing", "Adult £6.50 return; child £3; bike £1; car £24. Islanders travel free with a card."],
+    ["status", "notice", "Service status: running normally. Strong winds may cancel the 21:00; check here before you leave."],
+    ["guide", "feature", "Title \"On the island\". The lighthouse walk, 40 minutes; the harbour café, open till four; the seal colony at Ness Point."],
+    ["faq", "faq", "Can I take a dog? Yes, on a lead. Is there parking? Pay and display at the harbour. Do I need to book? Only for cars in August."],
+    ["footer", "footer", "Saltholm Ferry Company. Links Contact, Accessibility, Lost property."]
+  ]
+}
