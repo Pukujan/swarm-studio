@@ -23,6 +23,10 @@ one; don't edit the old one quietly.
 | [0012](0012-design-tokens.md) | 2026-11-13 | The Studio's theme is design tokens, built with Style Dictionary |
 | [0013](0013-react-ui-coexists.md) | 2026-11-13 | The next UI is React, served beside the current Studio at /next/ |
 | [0014](0014-image-first-boards.md) | 2026-11-13 | Image-first boards: a photo unless touched, budgets for live pages, video and GPU memory |
+| [0015](0015-studio-walk-and-chat.md) | 2026-11-12 | The Studio walk and the chat: chat at the bottom, importer first, three options, no "pack" |
+| [0016](0016-open-design-intake.md) | 2026-11-13 | What Swarm takes from Open Design's runtime: full design systems, its library, slop linter; not its loop |
+| [0017](0017-processes-run-only-when-needed.md) | 2026-11-13 | Processes run only when needed: Dyad 2 min, server 20 min, one render, execa + tree-kill |
+| [0019](0019-how-swarm-is-tested.md) | 2026-11-13 | How Swarm is tested: specs bound to tests, BDD runs the OpenSpec scenarios, metamorphic relations, property tests, prompt evals gate prompt changes |
 
 `tests/decisions.test.mjs` fails if the hosted studio, build credits or "paid per build" come back in
 `docs/brand/` or the README.

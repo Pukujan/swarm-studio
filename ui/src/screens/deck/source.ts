@@ -53,7 +53,8 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
     if (replay) return play(run)
     let live = true, frame = 0
     setLoad({ model: empty(run), loading: true, error: null })
-    // stream events wait in a queue until the file is folded, then go in once a frame (a build streams fast)
+    // stream events wait in a queue until the file is folded, then go in together every 33 ms (a build streams
+    // fast). A timer, not requestAnimationFrame, which never runs in a hidden tab: the deck there would stop
     let ready = false
     const flush = () => {
       frame = 0
@@ -68,7 +69,7 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
     const stop = source.stream?.(e => {
       if (e.run !== run) return
       queue.current.push(e)
-      if (ready && !frame) frame = requestAnimationFrame(flush)
+      if (ready && !frame) frame = window.setTimeout(flush, 33)
     })
     Promise.all([source.events(run), source.live?.(run).catch(() => false) ?? false]).then(([events, building]) => {
       if (!live) return
@@ -78,11 +79,11 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
       if (!building && (m.state === 'planning' || m.state === 'building')) m = apply(m, { type: 'run:stopped', run, t: m.tEnd || m.t0 })
       setLoad({ model: m, loading: false, error: null })
       ready = true
-      if (queue.current.length) frame = requestAnimationFrame(flush)
+      if (queue.current.length) frame = window.setTimeout(flush, 33)
     }, (err: unknown) => {
       if (live) setLoad({ model: empty(run), loading: false, error: err instanceof Error ? err.message : String(err) })
     })
-    return () => { live = false; stop?.(); if (frame) cancelAnimationFrame(frame); queue.current = [] }
+    return () => { live = false; stop?.(); if (frame) clearTimeout(frame); queue.current = [] }
   }, [run, source, replay])
 
   // Replay: every event at its time, stamped now (the deck treats it as happening), on one timer at a time

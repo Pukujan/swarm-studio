@@ -4,19 +4,31 @@
 // nothing selected the build's variables, the design tokens the planner set up.
 import { useEffect } from 'react'
 import { Button } from '../../primitives/Button'
+import { Menu, MenuItem } from '../../primitives/Menu'
 import { Icon } from '../../primitives/Icon'
+import { Layers, type LayerGroup } from '../../shared/Layers'
 import { crew } from './crew'
-import { layersOf, type DeckModel, type LayerStatus, type ToolId } from './model'
+import type { DeckModel, ToolId } from './model'
 
-const STATUS: Record<LayerStatus, string> = { planned: 'planned', assigned: 'starting', streaming: 'writing', done: 'done', failed: 'failed' }
+// Layers (the shared tree, src/shared/Layers.tsx), as the breadboard draws the deck's: the nav and footer every page
+// shares, then each page with its sections; a dot on the one an agent is writing
+function layerGroups(m: DeckModel): LayerGroup[] {
+  const row = (k: string) => {
+    const l = m.layers[k]
+    return { key: k, name: l.status === 'failed' ? `${l.role} · failed` : l.role, busy: l.status === 'assigned' || l.status === 'streaming' }
+  }
+  const shared = m.order.filter(k => m.layers[k].page === '*')
+  return [
+    ...(shared.length ? [{ id: '*', title: 'Shared nav and footer', rows: shared.map(row) }] : []),
+    ...m.pages.map(p => ({ id: p.id, title: `Page ${p.index + 1} · ${p.title}`, rows: m.order.filter(k => m.layers[k].page === p.id).map(row) }))
+  ]
+}
 
 // `sheet`: below 768 px the panel is a sheet over the canvas, opened from the Layers button (SITEMAP §10); × or Esc
 // closes it (Esc before the frame's, which goes up a level)
 export function LeftPanel({ model, page, onPage, sheet, onClose, id }: {
   model: DeckModel, page: string | null, onPage: (id: string) => void, sheet: boolean, onClose: () => void, id?: string
 }) {
-  const layers = page ? layersOf(model, page) : []
-  const shown = model.pages.find(p => p.id === page)
   useEffect(() => {
     if (!sheet) return
     // only while it is a sheet: at 768 px and wider the panel is always there and Esc is the frame's
@@ -48,22 +60,12 @@ export function LeftPanel({ model, page, onPage, sheet, onClose, id }: {
           ))}
         </ul>
       </section>
-      {shown && (
+      {model.pages.length > 0 && (
         <section aria-labelledby="deck-layers" className="px-2 py-3">
           <h3 id="deck-layers" className="px-2 pb-2 font-label text-xs font-semibold uppercase tracking-[.12em] text-muted">Layers</h3>
-          <ul className="flex flex-col">
-            {layers.map(l => {
-              const a = model.agents.find(x => x.id === l.agent)
-              const busy = l.status === 'assigned' || l.status === 'streaming'
-              return (
-                <li key={l.key} className="flex min-h-9 items-center gap-2 px-2 font-monospace text-[13px]">
-                  <span aria-hidden className={`size-2 flex-none rounded-full ${busy ? '' : 'invisible'}`} style={busy && a ? { background: crew().color(a.name) } : undefined} />
-                  <span className="min-w-0 flex-1 truncate">{l.role}</span>
-                  <span className={`text-xs ${l.status === 'failed' ? 'text-hot-text' : 'text-muted'}`}>{busy && a ? `${a.name} ${STATUS[l.status]}` : STATUS[l.status]}</span>
-                </li>
-              )
-            })}
-          </ul>
+          <Layers label="Layers" groups={layerGroups(model)} selected={null}
+            onSelect={k => { const l = model.layers[k]; onPage(l && l.page !== '*' ? l.page : page ?? model.pages[0].id) }}
+            onGroup={id => { if (model.pages.some(p => p.id === id)) onPage(id) }} />
         </section>
       )}
     </aside>
@@ -119,10 +121,13 @@ export function progress(m: DeckModel): string {
 }
 
 // the top row (Figma's): who is here, Play, Replay and the zoom. Play is the deck's one primary action (rule 17).
-export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay }: {
+// Publish's label is its state (the breadboard's "Publish", "Publishing…", "Live"); Replay and Export, both acts on
+// the build, are in the ⋯ menu beside it
+export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPublish, onExport }: {
   model: DeckModel, zoom: number, onFit: () => void, canPlay: boolean, onPlay: () => void,
-  replay: { on: boolean, can: boolean, toggle: () => void }
+  replay: { on: boolean, can: boolean, toggle: () => void }, onPublish: () => void, onExport: () => void
 }) {
+  const pubLabel = model.publish.state === 'working' ? 'Publishing…' : model.publish.liveTarget && model.publish.state !== 'failed' ? 'Live' : 'Publish'
   const vars = Object.entries(model.theme?.vars ?? {})
   const fonts = model.theme?.fonts
   return (
@@ -139,9 +144,12 @@ export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay }: {
       </div>
       <div className="flex gap-2 border-b border-edge px-3 py-2">
         <Button role="primary" isDisabled={!canPlay} onPress={onPlay} className="flex-1"><Icon name="play" size={16} />Play</Button>
-        <Button role="secondary" isDisabled={!replay.can} aria-pressed={replay.on} onPress={replay.toggle}>
-          <Icon name={replay.on ? 'x' : 'restore'} size={16} />{replay.on ? 'Stop replay' : 'Replay'}
-        </Button>
+        <Button role="secondary" isDisabled={!canPlay} onPress={onPublish}><Icon name="globe" size={16} />{pubLabel}</Button>
+        <Menu label={<Icon name="more" size={18} />} name="Build" disabledKeys={[...(replay.can ? [] : ['replay']), ...(canPlay ? [] : ['export'])]}
+          onAction={k => (k === 'replay' ? replay.toggle() : onExport())}>
+          <MenuItem id="replay">{replay.on ? 'Stop replay' : 'Replay'}</MenuItem>
+          <MenuItem id="export">Export</MenuItem>
+        </Menu>
       </div>
       <p role="status" className="border-b border-edge px-4 py-2.5 font-monospace text-[13px] text-muted">{progress(model)}</p>
       <section aria-labelledby="deck-vars" className="px-4 py-3">

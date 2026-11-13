@@ -12,7 +12,9 @@ import { DeckStage, type StageHandle } from './deck/DeckStage'
 import { DeckBoard } from './deck/DeckBoard'
 import { boardMode, type BoardMode } from '../board/flag'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
+import { ExportDialog } from './deck/ExportDialog'
 import { Player } from './deck/Player'
+import { PublishDialog } from './deck/PublishDialog'
 import { useDeckRun } from './deck/source'
 
 // `board` forces the board's mode (a story); otherwise the address's ?board= says (src/board/flag.ts)
@@ -31,6 +33,7 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   // below 768 px Layers is a sheet behind its button
   const [sheet, setSheet] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
+  const [dialog, setDialog] = useState<'publish' | 'export' | null>(null)
   useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
   const working = model.state === 'planning' || model.state === 'building'
   const play = () => go({ type: 'play', page: page ?? undefined, pages: model.pages.length })
@@ -77,8 +80,11 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
               : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={picked ?? view.page ?? null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
-      <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay} />
+      <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
+        onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} />
       {view.player !== 'closed' && model.pages.length > 0 && <Player model={model} />}
+      {model.run && <PublishDialog model={model} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
+      {model.run && <ExportDialog model={model} isOpen={dialog === 'export'} onOpenChange={o => setDialog(o ? 'export' : null)} />}
     </div>
   )
 }
