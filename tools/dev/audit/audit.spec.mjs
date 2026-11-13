@@ -6,6 +6,8 @@
 //   scroll       the page does not scroll sideways (rule 25)
 //   console      no console error, page error or failed request
 //   loading      a skeleton or busy indicator is on screen while the screen's data is on its way
+//   words        the Studio never shows the word "pack" (decision 0015: people see options)
+//   chat         in the next UI, a chat on screen is docked along the bottom, the full width (decision 0015)
 //
 // A violation the app has today is kept in .ui-audit-known-violations.json, so this passes now and fails
 // on a new one. A known one that no longer happens is reported, never failed: delete its entry (or run
@@ -147,6 +149,21 @@ for (const screen of screens) {
     for (const v of axe.violations) add('axe', `${v.help}: ${v.nodes.slice(0, 6).map(n => n.target.join(' ')).join(', ')}${v.nodes.length > 6 ? ` and ${v.nodes.length - 6} more` : ''}`, v.id)
 
     for (const e of errors) add('console', e, e)
+
+    // words (decision 0015): the option is never called a pack; the built pages in frames are the person's own
+    const said = await page.evaluate(() => (document.body.innerText.match(/packs?/gi) || []).length)
+    if (said) add('words', `the word "pack" is on screen ${said} time${said === 1 ? '' : 's'}`)
+
+    // chat (decision 0015): along the bottom at every width, never on the left; only the next UI is held to it
+    if (APP === 'next') {
+      const dock = await page.evaluate(() => {
+        const el = [...document.querySelectorAll('[aria-label="Chat"]')].find(x => x.getClientRects().length)
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { bottom: Math.round(innerHeight - r.bottom), left: Math.round(r.left), width: Math.round(innerWidth - r.width) }
+      })
+      if (dock && (Math.abs(dock.bottom) > 2 || Math.abs(dock.left) > 2 || dock.width > 20)) add('chat', `the chat is not docked along the bottom (${dock.bottom}px above it, ${dock.left}px in from the left, ${dock.width}px narrower than the screen)`)
+    }
 
     // compare with the known ones
     const mine = known.filter(k => k.key.startsWith(`${screen.id}@${width} `))

@@ -43,6 +43,8 @@ export interface Kit {
   suggest?: (ctx: KitCtx) => string | undefined
   prepare?: (ctx: KitCtx) => Promise<unknown>
   plan?: { sections(ctx: KitCtx): { sec?: string, cards: KitCard[] }[], done?(ctx: KitCtx): boolean }
+  // what Build takes from the kit's own record (web/kit-*.js lock)
+  lock?: (ctx: KitCtx) => Record<string, unknown>
   build?: (spec: unknown, ctx: KitCtx) => Promise<{ run?: string } | undefined>
 }
 
