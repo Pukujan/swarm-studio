@@ -11,6 +11,7 @@ import { esc } from './design.js'
 import { saveModel, modelsInfo, loadModels, showTab } from './settings.js'
 import { loadFiles, openRun } from './replay.js'
 import { HOSTS } from './publish.js'
+import { adoptVideos, boardVideo } from '../video.js'
 
 // ---------- views: Canvas | Video | App
 // Each view keeps working while you look at another; a dot on its tab says how
@@ -99,7 +100,7 @@ export function playClip() {
   if (!clip.el) {
     clip.el = document.createElement('div')
     clip.el.className = 'playclip'
-    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline autoplay></video>`
+    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline></video>`
     clip.el.querySelector('.pc-x').onclick = () => { clip.shut = clip.src; clip.el.hidden = true }
     const v = clip.el.querySelector('video')
     v.addEventListener('loadedmetadata', () => { v.currentTime = clip.at })
@@ -110,7 +111,8 @@ export function playClip() {
     })
   }
   const host = tile || appEls.preview
-  if (clip.el.parentElement !== host) { host.append(clip.el); clip.el.querySelector('video').play().catch(() => {}) }
+  // on screen it plays (web/video.js), within the page's budget; hidden or off screen, it is its poster
+  if (clip.el.parentElement !== host) host.append(clip.el)
   tile?.classList.add('has-play')
   clip.el.classList.toggle('in-wall', !!tile)
   clip.el.hidden = false
@@ -119,7 +121,7 @@ export function playClip() {
     clip.src = s.clip
     clip.keys = (s.keys || []).filter(x => typeof x.t === 'number')
     clip.at = Math.max(0, (clip.keys[0]?.t || 0) - 1)
-    clip.el.querySelector('video').src = BASE + s.clip
+    boardVideo(clip.el.querySelector('video'), { src: BASE + s.clip, auto: true })
   }
 }
 
@@ -399,8 +401,8 @@ function mediaBlock(m) {
   box.className = 'tell-media'
   if (m.clip) {
     const v = document.createElement('video')
-    Object.assign(v, { src: BASE + m.clip, muted: true, autoplay: true, loop: true, playsInline: true })
-    box.append(v)
+    Object.assign(v, { muted: true, loop: true, playsInline: true })
+    box.append(boardVideo(v, { src: BASE + m.clip, auto: true }))
   }
   for (const p of (m.pics || []).slice(0, 4)) {
     const i = document.createElement('img')
@@ -435,13 +437,14 @@ function sliceCard(s, run = shownRun()) {
   item.dataset.key = key
   item.dataset.run = run
   item.dataset.i = s.i
-  const vid = s.clip ? `<video class="sc-clip" src="${esc(BASE + s.clip)}" muted playsinline autoplay loop></video>` : ''
+  const vid = s.clip ? `<video class="sc-clip" data-src="${esc(BASE + s.clip)}" data-auto muted playsinline loop></video>` : ''
   const pic = s.shot ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
   item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${s.i + 1} of ${s.n}</small></b>`
     + `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>`
     + `<span class="txt"></span>`
     + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
     + `<div class="sc-ideas">${(s.ideas || []).map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
+  adoptVideos(item)
   item.querySelector('.txt').textContent = s.ask || `Slice ${s.i + 1} is built. Anything to change?`
   // @ts-ignore
   item.querySelector('.sc-live').onclick = () => setView('app')

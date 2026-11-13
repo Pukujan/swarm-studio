@@ -67,6 +67,8 @@ an add-on folder up to 5 MB with `bringAddon`; native files mark it `web: false`
   move happen (engine/playtest.mjs:208-232, engine/playcheck.mjs:23);
 - keeps pressing keys and fails a run that ends within 2.5 s or throws errors (engine/playtest.mjs:234-252);
 - can film the run to `.webm` with the Web Audio sound muxed by ffmpeg (engine/playtest.mjs:58, 157-174).
+  The film gets a poster frame beside it, `playtest-N.poster.jpg`: a frame of the film made with ffmpeg, else the
+  title-screen photo the test takes (engine/playtest.mjs, engine/poster.mjs); the App view and the chat show it until the clip plays (web/video.js).
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).
 `testDodges` flags `.gd` files that check for the test, named with forward slashes on every system (engine/playcheck.mjs:71-87).
 

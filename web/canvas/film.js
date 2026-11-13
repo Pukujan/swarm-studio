@@ -8,6 +8,7 @@ import { view } from './rooms.js'
 import { esc } from './design.js'
 import { fitLive } from './start.js'
 import { shortReason } from './publish.js'
+import { boardVideo, dropVideo, playVideo, setVideoHtml } from '../video.js'
 
 // ---------- promo video
 // The planner storyboards the build into a few scenes, each handed to an agent,
@@ -119,7 +120,7 @@ function renderVideo() {
   const src = latest ? video.src : `/video/${video.run}/cut/${cut.name}`, file = cut?.file || video.file
   const cuts = video.cuts.length > 1 ? `<div class="vcuts">${video.cuts.map((c, i) => `<button class="${i === video.pick ? 'on' : ''}" data-cut="${i}" aria-label="${esc(c.idea || '')}"><b>v${c.name.match(/-v(\d+)\.mp4$/)[1]}</b> ${esc(VIDEO_STYLES.find(([k]) => k === c.style)?.[1] || '')}${c.idea ? ` · ${esc(c.idea.length > 28 ? `${c.idea.slice(0, 28)}…` : c.idea)}` : ''}${c.seconds ? ` <small>${Math.round(c.seconds)}s</small>` : ''}</button>`).join('')}</div>` : ''
   const body = video.src && !video.busy
-    ? `${cuts}<video src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
+    ? `${cuts}<video data-src="${esc(src)}" controls playsinline></video><div class="vfoot"><span>Saved to ${esc(String(file || 'video/promo.mp4').replace(/^\/(Users|home)\/[^/]+/, '~'))}</span><span class="vacts"><a class="vdl" href="${esc(src)}" download="${esc(cut?.name || 'promo.mp4')}">Download</a><button class="vreveal">Show in Finder</button><button class="vbig">⛶ Big screen</button></span></div>${opts}<div class="vfoot"><span></span><button class="vagain">Make a new cut</button></div>`
     : video.busy
       ? `${liveOn ? `<div class="vlive"><iframe sandbox="allow-scripts" src="/video/${encodeURIComponent(video.run)}/live/index.html?v=${video.liveAt}" aria-label="The video, playing while it renders" scrolling="no"></iframe><span class="vlive-tag">● live: the agents' cut, rendering</span></div>` : ''}<div class="vbar"><i style="width:${Math.max(3, video.pct)}%"></i></div><div class="vstage">${esc(stage)}${video.pct ? ` ${video.pct | 0}%` : ''}</div>`
       : video.message
@@ -127,7 +128,7 @@ function renderVideo() {
         : `${opts}<div class="vfoot"><span></span><button class="vagain">Make the film</button></div>`
   // minimized: only the title and the progress, so the canvas and the crew stay in view
   el.classList.toggle('min', !!video.min && !document.body.classList.contains('view-video'))
-  el.innerHTML = `<div class="vhead pop-title"><span>The promo <em>video</em></span><span class="vhead-acts"><button class="vmin" aria-label="${video.min ? 'Expand' : 'Minimize'}" aria-expanded="${!video.min}">${ico(video.min ? 'up' : 'minus')}</button><button class="vclose" aria-label="Close">${ico('x')}</button></span></div>${head}${story ? `<div class="vstory">${story}</div>` : ''}${body}`
+  setVideoHtml(el, `<div class="vhead pop-title"><span>The promo <em>video</em></span><span class="vhead-acts"><button class="vmin" aria-label="${video.min ? 'Expand' : 'Minimize'}" aria-expanded="${!video.min}">${ico(video.min ? 'up' : 'minus')}</button><button class="vclose" aria-label="Close">${ico('x')}</button></span></div>${head}${story ? `<div class="vstory">${story}</div>` : ''}${body}`)
   el.querySelector('.vclose').onclick = () => toggleVideo(false)
   el.querySelector('.vmin').onclick = e => { e.stopPropagation(); video.min = !video.min; renderVideo() }
   const again = el.querySelector('.vagain')
@@ -231,16 +232,17 @@ export const VIDEO_STYLES = [['', 'The prompt'], ['trailer', 'Movie trailer'], [
 
 // The video filling the whole pane (and the screen, where the app allows it).
 function bigScreen(on) {
-  document.querySelector('.video-big')?.remove()
+  const was = document.querySelector('.video-big')
+  if (was) { for (const v of was.querySelectorAll('video')) dropVideo(v); was.remove() }
   if (!on || !video.src) return
   const wrap = document.createElement('div')
   wrap.className = 'video-big'
-  wrap.innerHTML = `<video src="${esc(video.src)}" controls autoplay playsinline></video><button class="vbclose" aria-label="Back to the canvas (Esc)">×</button>`
+  wrap.innerHTML = `<video controls playsinline></video><button class="vbclose" aria-label="Back to the canvas (Esc)">×</button>`
   document.body.append(wrap)
-  const v = wrap.querySelector('video')
   const small = video.el?.querySelector('video')
-  if (small) { v.currentTime = small.currentTime; small.pause() }
-  v.play().catch(() => { v.muted = true; v.play().catch(() => {}) })
+  const v = boardVideo(wrap.querySelector('video'), { src: video.src, at: small?.currentTime || 0 })
+  small?.pause()
+  playVideo(v).catch(() => { v.muted = true; playVideo(v).catch(() => {}) })
   // @ts-ignore
   wrap.querySelector('.vbclose').onclick = () => bigScreen(false)
   wrap.requestFullscreen?.().catch(() => {}) // the pane may not allow it; filling the pane is the fallback
@@ -262,7 +264,7 @@ export async function makeVideo({ idea = null, style = null } = {}) {
 }
 
 export async function toggleVideo(open = !video.el) {
-  if (!open) { video.el?.remove(); video.el = null; return }
+  if (!open) { for (const v of video.el?.querySelectorAll('video') || []) dropVideo(v); video.el?.remove(); video.el = null; return }
   if (!video.el) {
     video.el = document.createElement('div')
     video.el.className = 'video-pop'
