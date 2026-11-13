@@ -346,7 +346,7 @@ button { font: inherit; color: inherit; }
 .selbox { position: absolute; border: 2px solid var(--frame); box-shadow: 0 0 0 9999px transparent; pointer-events: none; border-radius: 2px; }
 
 /* ---------- models menu */
-.models-pop { position: fixed; z-index: 70; width: 400px; max-width: calc(100vw - 16px); max-height: calc(100vh - 70px); overflow: auto; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 16px 40px rgb(var(--shade-rgb) / .62); }
+.models-pop { position: fixed; z-index: 300; width: 400px; max-width: calc(100vw - 16px); max-height: calc(100vh - 70px); overflow: auto; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 16px 40px rgb(var(--shade-rgb) / .62); }
 .models-pop .mhead { font-weight: 700; margin-bottom: 10px; }
 .models-pop .mhead small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 2px; }
 .models-pop .mrow { display: block; padding: 9px 0; border-top: 1px solid var(--line); }
@@ -817,7 +817,7 @@ body.side-min .side > .resizer { display: none; }
 .tree .kid i { font-style: normal; font: 10px var(--mono); color: var(--accent); flex: 0 0 auto; }
 
 /* the model fields' own suggestion list (scrolls everywhere, unlike a datalist) */
-.combo-list { position: fixed; z-index: 95; overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 14px 34px rgb(var(--shade-rgb) / .68); padding: 4px; font: 12px var(--mono); }
+.combo-list { position: fixed; z-index: 310; overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 14px 34px rgb(var(--shade-rgb) / .68); padding: 4px; font: 12px var(--mono); }
 .combo-list div { padding: 5px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .combo-list div:hover, .combo-list div.on { background: var(--panel-2); }
 .combo-list small { display: block; padding: 6px 8px; color: var(--muted); }

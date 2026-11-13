@@ -206,16 +206,26 @@ function modelCombo(root, signal) {
   root.addEventListener('scroll', close)
 }
 
-export function toggleModels(open = !models.el) {
+// anchor: what it opens from when that isn't ☰ (Projects' user menu, which has no ☰ of its own)
+export function toggleModels(open = !models.el, anchor = null) {
   if (!open) { models.ac?.abort(); document.querySelector('.combo-list')?.remove(); models.el?.remove(); models.el = null; els.modelsBtn.classList.remove('on'); return }
+  if (models.el) return
   models.el = document.createElement('div')
   models.el.className = 'models-pop'
   document.body.append(models.el)
-  const r = (els.modelsBtn.offsetParent ? els.modelsBtn : moreBtn).getBoundingClientRect()
-  models.el.style.top = `${r.bottom + 6}px`
-  models.el.style.right = `${Math.max(8, innerWidth - r.right)}px`
-  els.modelsBtn.classList.add('on')
-  closeable(models.el, () => toggleModels(false), { extra: [els.modelsBtn, moreBtn, '.combo-list', '#more-menu'] })
+  if (anchor) {
+    // beside the anchor, opening upward when it sits low on the screen (the user menu is bottom left)
+    const r = anchor.getBoundingClientRect()
+    models.el.style.left = `${Math.max(8, Math.min(r.left, innerWidth - models.el.offsetWidth - 8))}px`
+    if (r.top > innerHeight / 2) Object.assign(models.el.style, { bottom: `${innerHeight - r.top + 6}px`, maxHeight: `${r.top - 14}px` })
+    else models.el.style.top = `${r.bottom + 6}px`
+  } else {
+    const r = (els.modelsBtn.offsetParent ? els.modelsBtn : moreBtn).getBoundingClientRect()
+    models.el.style.top = `${r.bottom + 6}px`
+    models.el.style.right = `${Math.max(8, innerWidth - r.right)}px`
+    els.modelsBtn.classList.add('on')
+  }
+  closeable(models.el, () => toggleModels(false), { extra: [els.modelsBtn, moreBtn, '.combo-list', '#more-menu', anchor].filter(Boolean) })
   renderModels()
   loadModels().then(() => models.el && !models.el.contains(document.activeElement) && renderModels())
   models.ac = new AbortController()
@@ -297,6 +307,7 @@ document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.
 const themeBtn = $('#theme-btn'), sysLight = matchMedia('(prefers-color-scheme: light)')
 const theme = () => document.documentElement.dataset.theme || (sysLight.matches ? 'light' : 'dark')
 function themeLabel() { const next = theme() === 'light' ? 'dark' : 'light'; themeBtn.innerHTML = `${ico(next === 'light' ? 'sun' : 'moon')}${next === 'light' ? 'Light' : 'Dark'}` }
+export const toggleTheme = () => setTheme(theme() === 'light' ? 'dark' : 'light')
 function setTheme(t) {
   const before = theme()
   document.documentElement.dataset.theme = t
@@ -304,7 +315,7 @@ function setTheme(t) {
   themeLabel()
   if (theme() !== before) dispatchEvent(new CustomEvent('swarm:theme', { detail: theme() }))
 }
-themeBtn.onclick = () => setTheme(theme() === 'light' ? 'dark' : 'light')
+themeBtn.onclick = toggleTheme
 sysLight.addEventListener('change', () => { if (!document.documentElement.dataset.theme) themeLabel() })
 themeLabel()
 
