@@ -11,7 +11,7 @@ const ROLE: Record<Role, string> = {
 }
 
 export const buttonClass = (role: Role = 'secondary') =>
-  `inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-transparent px-4 font-label text-sm font-semibold uppercase leading-none tracking-[.07em] outline-none transition-[filter,background-color] duration-150 data-[hovered]:brightness-110 data-[pressed]:brightness-95 data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-frame-hi data-[disabled]:cursor-default data-[disabled]:opacity-50 ${ROLE[role]}`
+  `inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-transparent px-4 font-label text-sm font-semibold uppercase leading-none tracking-[.07em] outline-none transition-[filter,background-color] duration-150 motion-reduce:transition-none data-[hovered]:brightness-110 data-[pressed]:brightness-95 data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-frame-hi data-[disabled]:cursor-default data-[disabled]:opacity-50 ${ROLE[role]}`
 
 export function Button({ role, className, ...props }: AriaButtonProps & { role?: Role, className?: string }) {
   return <AriaButton {...props} className={`${buttonClass(role)} ${className ?? ''}`} />
