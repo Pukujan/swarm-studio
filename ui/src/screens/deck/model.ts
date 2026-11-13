@@ -183,7 +183,8 @@ export function apply(m: DeckModel, e: DeckEvent): DeckModel {
       // saved runs carry the finished HTML, so a file opens without the stream
       const html = str(e.html)
       setLayer(n, k, html ? { status: 'done', text: html, ver: l.ver + 1 } : { status: 'done' })
-      n.done = e.done != null ? num(e.done) : n.done + 1
+      // a section changed again (a hand edit, a fix, Undo) is still one section
+      n.done = e.done != null ? num(e.done) : l.status === 'done' ? n.done : n.done + 1
       if (agentOf(n, e.agent)) setAgent(n, String(e.agent), { layer: null, tool: 'move' })
       return n
     }

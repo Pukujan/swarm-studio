@@ -33,8 +33,12 @@ function target(m: DeckModel, geo: Record<string, FrameGeo>, a: DeckAgent): { x:
 // the agent the camera follows: one writing, else one just starting
 const followed = (m: DeckModel) => m.agents.find(a => a.layer && m.layers[a.layer]?.status === 'streaming') ?? m.agents.find(a => a.layer)
 
-export function DeckStage({ ref, model, onZoom, follow = false, onFollow }: {
-  ref?: Ref<StageHandle>, model: DeckModel, onZoom?: (k: number) => void, follow?: boolean, onFollow?: (on: boolean) => void
+// a section the person picked, on the page it was picked on (the nav and footer are on every page)
+export interface Picked { key: string, page: string }
+
+export function DeckStage({ ref, model, onZoom, follow = false, onFollow, selected = null, onSelect }: {
+  ref?: Ref<StageHandle>, model: DeckModel, onZoom?: (k: number) => void, follow?: boolean, onFollow?: (on: boolean) => void,
+  selected?: Picked | null, onSelect?: (p: Picked | null) => void
 }) {
   const stage = useRef<HTMLDivElement>(null)
   const [cam, setCam] = useState<Cam>({ x: 40, y: 40, k: 0.16 })
@@ -101,7 +105,32 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow }: {
     setPanning(true)
     setCam(c => ({ ...c, x: d.cx + dx, y: d.cy + dy }))
   }
-  const up = () => { drag.current = null; setPanning(false) }
+  // a click (no drag) picks the section under it, from where the frames say each one is; the empty canvas clears it
+  const up = (e: React.PointerEvent) => {
+    const clicked = !!drag.current && !panning
+    drag.current = null
+    setPanning(false)
+    if (clicked && e.type === 'pointerup') onSelect?.(hit(e.clientX, e.clientY))
+  }
+  const hit = (sx: number, sy: number): Picked | null => {
+    const r = stage.current?.getBoundingClientRect()
+    if (!r) return null
+    const wx = (sx - r.left - cam.x) / cam.k, wy = (sy - r.top - cam.y) / cam.k - LABEL
+    const page = model.pages.find(p => wx >= frameX(p) && wx <= frameX(p) + FRAME_W)
+    const g = page && geo[page.id]
+    if (!page || !g) return null
+    const fx = wx - frameX(page)
+    const key = Object.entries(g.slots).find(([, s]) => fx >= s.box[0] && fx <= s.box[0] + s.box[2] && wy >= s.box[1] && wy <= s.box[1] + s.box[3])?.[0]
+    return key && model.layers[key] ? { key, page: page.id } : null
+  }
+  // the picked section's outline, in the stage's coordinates
+  const pick = (() => {
+    if (!selected) return null
+    const page = model.pages.find(p => p.id === selected.page), s = page && geo[page.id]?.slots[selected.key]
+    if (!page || !s) return null
+    const [x, y, w, h] = s.box
+    return { left: cam.x + (frameX(page) + x) * cam.k, top: cam.y + (LABEL + y) * cam.k, width: w * cam.k, height: h * cam.k }
+  })()
 
   // the wheel scrolls; ctrl/⌘ + wheel zooms at the pointer (React's onWheel is passive, so it is added here)
   const off = useRef(() => {})
@@ -155,6 +184,7 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow }: {
         ))}
       </div>
       <div aria-hidden className="pointer-events-none absolute inset-0">
+        {pick && <div data-picked className="absolute border-[1.5px] border-text" style={pick} />}
         {working.map(a => {
           const t = target(model, geo, a)
           if (!t) return null
