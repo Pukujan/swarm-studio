@@ -42,6 +42,9 @@ async function loadPlaywright() {
   const req = createRequire(join(resolve(dir), 'package.json'))
   try { return req('playwright') } catch { return req('playwright-core') }
 }
+// every wait on the browser is bounded: a page or a CDP call that never answers fails its scene, named, instead
+// of holding the machine's job queue (a run hung for half an hour on Windows with nothing bounded)
+const within = (what, ms, p) => { let t; return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error(`${what}: no answer in ${ms / 1000} s`)), ms) })]).finally(() => clearTimeout(t)) }
 const freePort = () => new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
 
 // ---------- the fixture: one seeded build
@@ -125,9 +128,9 @@ async function measure(out, { root, runs: N, only }) {
   // the server serves it as promo.mp4 and the browser reads what it is
   let film
   {
-    const b = await launch()
-    const p = await b.newPage()
-    film = Buffer.from(await p.evaluate(async () => {
+    const b = await within('launching Chromium', 60000, launch())
+    const p = await within('a page for the film', 30000, b.newPage())
+    film = Buffer.from(await within('recording the film', 60000, p.evaluate(async () => {
       const c = Object.assign(document.createElement('canvas'), { width: 640, height: 360 }), g = c.getContext('2d')
       const rec = new MediaRecorder(c.captureStream(30), { mimeType: 'video/webm;codecs=vp8' }), parts = []
       rec.ondataavailable = e => parts.push(e.data)
@@ -137,8 +140,8 @@ async function measure(out, { root, runs: N, only }) {
       await new Promise(r => { const f = t => { const k = (t - t0) / 4000; g.fillStyle = `hsl(${k * 360} 50% 30%)`; g.fillRect(0, 0, 640, 360); g.fillStyle = '#eee'; g.fillRect(40 + k * 520, 150, 60, 60); if (k < 1) requestAnimationFrame(f); else r() }; requestAnimationFrame(f) })
       rec.stop(); await done
       return [...new Uint8Array(await new Blob(parts).arrayBuffer())]
-    }))
-    await b.close()
+    })))
+    await within('closing Chromium', 30000, b.close()).catch(() => {})
   }
   const data = mkdtempSync(join(tmpdir(), 'swarm-gauge-'))
   const runsDir = join(data, 'runs')
@@ -150,7 +153,7 @@ async function measure(out, { root, runs: N, only }) {
   fixture(runsDir, BASE, film)
   const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runsDir, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
   for (const k of ['SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
-  const server = spawn(process.execPath, [join(root, 'server/server.mjs')], { env, stdio: ['ignore', 'ignore', 'ignore'] })
+  const server = studio = spawn(process.execPath, [join(root, 'server/server.mjs')], { env, stdio: ['ignore', 'ignore', 'ignore'] })
   const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1 }, scenes: {} }
   try {
     for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r.ok, () => false)) break; await wait(150) }
@@ -158,10 +161,10 @@ async function measure(out, { root, runs: N, only }) {
     for (let r = 0; r < N; r++) for (const sc of SCENES.filter(s => !only.length || only.includes(s.id))) {
       // a fresh browser and no saved pictures each time: every run starts from the same place
       rmSync(join(runsDir, RUN, 'snaps'), { recursive: true, force: true })
-      const browser = await launch()
-      // a page that crashes (out of memory, most likely) is a result, not the end of the gauge
+      const browser = await within('launching Chromium', 60000, launch())
+      // a page that crashes (out of memory, most likely) or stops answering is a result, not the end of the gauge
       let m
-      try { m = await scene(browser, sc, BASE) } catch (e) { m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200) } } finally { await browser.close().catch(() => {}) }
+      try { m = await within(`the ${sc.id} board`, 300000, scene(browser, sc, BASE)) } catch (e) { m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200) } } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
       console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify(m)}`)
     }
@@ -180,9 +183,9 @@ async function scene(browser, sc, BASE) {
   await ctx.addInitScript(PROBE)
   const page = await ctx.newPage()
   const cdp = await ctx.newCDPSession(page)
-  await cdp.send('Performance.enable')
+  await within('Performance.enable', 15000, cdp.send('Performance.enable'))
   const t0 = Date.now()
-  await page.goto(BASE + sc.at.replace(/RUN/g, RUN), { waitUntil: 'load' })
+  await page.goto(BASE + sc.at.replace(/RUN/g, RUN), { waitUntil: 'load', timeout: 60000 })
   const ready = await page.waitForFunction(sc.ready, PAGES, { timeout: 90000, polling: 250 }).then(() => Date.now() - t0, () => null)
   // the board settles: its pictures and frames load; then the film plays where a person plays it
   await wait(5000)
@@ -191,49 +194,50 @@ async function scene(browser, sc, BASE) {
   if (sc.film) {
     await page.click('.pj-list .row[data-key="film:0"]', { timeout: 10000 }).catch(() => {})
     await page.waitForSelector('.pj-insp video', { timeout: 10000 }).catch(() => {})
-    await page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (v) { v.muted = true; v.loop = true; return v.play().catch(() => {}) } })
+    await within('playing the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (v) { v.muted = true; v.loop = true; return v.play().catch(() => {}) } })).catch(() => {})
     await wait(1500)
-    filmPlaying = await page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return v && !v.paused && v.readyState >= 2 && v.currentTime > 0 ? 1 : 0 })
+    filmPlaying = await within('reading the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return v && !v.paused && v.readyState >= 2 && v.currentTime > 0 ? 1 : 0 }))
   }
   // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time
-  const box = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }))
+  const box = await within('the window size', 15000, page.evaluate(() => ({ w: innerWidth, h: innerHeight })))
   await page.mouse.move(box.w / 2, box.h / 2)
-  await page.evaluate(() => { window.__ft = [] })
+  await within('starting the frame count', 15000, page.evaluate(() => { window.__ft = [] }))
   const steps = [...Array(30)].map(() => [0, 40, 80, false]).concat([...Array(12)].map(() => [0, 0, 120, true]), [...Array(16)].map(() => [0, 0, -90, true]), [...Array(30)].map(() => [0, -40, -80, false]))
   for (const [, dx, dy, zoom] of steps) {
     if (zoom) await page.keyboard.down('Control')
-    await page.mouse.wheel(dx, dy)
+    await within('a wheel step', 15000, page.mouse.wheel(dx, dy))
     if (zoom) await page.keyboard.up('Control')
     await wait(30)
   }
   await wait(500)
-  const ft = await page.evaluate(() => { const f = window.__ft || []; window.__ft = null; return f })
+  const ft = await within('reading the frame times', 15000, page.evaluate(() => { const f = window.__ft || []; window.__ft = null; return f }))
   // memory once the path is done, after a GC
-  await cdp.send('HeapProfiler.collectGarbage').catch(() => {})
-  const metric = async name => (await cdp.send('Performance.getMetrics')).metrics.find(x => x.name === name)?.value ?? null
+  await within('HeapProfiler.collectGarbage', 30000, cdp.send('HeapProfiler.collectGarbage')).catch(() => {})
+  const metric = async name => (await within('Performance.getMetrics', 15000, cdp.send('Performance.getMetrics'))).metrics.find(x => x.name === name)?.value ?? null
   const heap = await metric('JSHeapUsedSize'), nodes = await metric('Nodes')
   const layers = await layerCount(cdp)
-  const gpu = await gpuMemory(browser)
+  const gpu = await within('the memory dump', 45000, gpuMemory(browser)).catch(() => null)
   const frames = page.frames()
   const iframes = frames.length - 1
-  const playersOf = async () => { let n = 0; for (const f of page.frames()) n += await f.evaluate(PLAYERS).catch(() => 0); return n }
+  // (each frame asked on its own clock: one page that stopped answering is skipped, not waited on)
+  const playersOf = async () => { let n = 0; for (const f of page.frames()) n += await within("a frame's players", 5000, f.evaluate(PLAYERS)).catch(() => 0); return n }
   const players = await playersOf()
   // leaving the board for Projects (the Studio's own move): what it leaves behind
   let after = null
   if (sc.id !== 'next') {
-    await page.evaluate(() => window.swarmCosmos?.nav?.go?.({ type: 'home' }))
+    await within('leaving the board', 15000, page.evaluate(() => window.swarmCosmos?.nav?.go?.({ type: 'home' })))
     await wait(2000)
     after = await playersOf()
   }
-  await ctx.close()
+  await within('closing the page', 30000, ctx.close()).catch(() => {})
   return { readyMs: ready, filmPlaying, frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
 }
 
 async function layerCount(cdp) {
   const got = new Promise(r => { cdp.once('LayerTree.layerTreeDidChange', e => r(e.layers?.length ?? null)); setTimeout(() => r(null), 3000) })
-  await cdp.send('LayerTree.enable').catch(() => {})
+  await within('LayerTree.enable', 15000, cdp.send('LayerTree.enable')).catch(() => {})
   const n = await got
-  await cdp.send('LayerTree.disable').catch(() => {})
+  await within('LayerTree.disable', 15000, cdp.send('LayerTree.disable')).catch(() => {})
   return n
 }
 
@@ -244,11 +248,11 @@ async function gpuMemory(browser) {
   cdp.on('Tracing.dataCollected', e => events.push(...e.value))
   const complete = new Promise(r => cdp.once('Tracing.tracingComplete', r))
   try {
-    await cdp.send('Tracing.start', { traceConfig: { includedCategories: ['disabled-by-default-memory-infra'], excludedCategories: ['*'], memoryDumpConfig: { triggers: [] } }, transferMode: 'ReportEvents' })
-    await cdp.send('Tracing.requestMemoryDump', { deterministic: true, levelOfDetail: 'detailed' })
-    await cdp.send('Tracing.end')
+    await within('Tracing.start', 15000, cdp.send('Tracing.start', { traceConfig: { includedCategories: ['disabled-by-default-memory-infra'], excludedCategories: ['*'], memoryDumpConfig: { triggers: [] } }, transferMode: 'ReportEvents' }))
+    await within('Tracing.requestMemoryDump', 20000, cdp.send('Tracing.requestMemoryDump', { deterministic: true, levelOfDetail: 'detailed' }))
+    await within('Tracing.end', 15000, cdp.send('Tracing.end'))
     await Promise.race([complete, wait(10000)])
-  } catch { return null } finally { await cdp.detach().catch(() => {}) }
+  } catch { return null } finally { await within('detaching', 5000, cdp.detach()).catch(() => {}) }
   const name = new Map(events.filter(e => e.ph === 'M' && e.name === 'process_name').map(e => [e.pid, e.args?.name || '']))
   const hex = v => typeof v === 'string' ? parseInt(v, 16) : Number(v) || 0
   const dumps = events.filter(e => e.ph === 'v' && e.args?.dumps)
@@ -265,7 +269,7 @@ function print(r) {
   for (const [id, s] of Object.entries(r.scenes)) {
     const m = s.median
     if (!m.frame) { console.log(`  ${id.padEnd(8)} crashed in every run (${s.runs[0]?.error})`); continue }
-    console.log(`  ${id.padEnd(8)} frame p50/p95/p99 ${m.frame.p50}/${m.frame.p95}/${m.frame.p99} ms · JS heap ${m.jsHeapMB} MB · ${m.nodes} nodes · ${m.layers} layers · GPU process ${m.gpuMB ?? '?'} MB (gpu allocators ${m.gpuAllocMB ?? '?'} MB) · ${m.iframes} frames · players ${m.players}${m.playersAfter == null ? '' : `, ${m.playersAfter} after leaving`} ${m.filmPlaying == null ? '' : m.filmPlaying ? ' · film playing' : ' · film did not play'} · ready in ${m.readyMs} ms${m.crashes ? ` · crashed in ${m.crashes} of ${s.runs.length} runs` : ''}`)
+    console.log(`  ${id.padEnd(8)} frame p50/p95/p99 ${m.frame.p50}/${m.frame.p95}/${m.frame.p99} ms · JS heap ${m.jsHeapMB} MB · ${m.nodes} nodes · ${m.layers} layers · GPU process ${m.gpuMB ?? '?'} MB (gpu allocators ${m.gpuAllocMB ?? '?'} MB) · ${m.iframes} frames · players ${m.players}${m.playersAfter == null ? '' : `, ${m.playersAfter} after leaving`}${m.filmPlaying == null ? '' : m.filmPlaying ? ' · film playing' : ' · film did not play'} · ready in ${m.readyMs} ms${m.crashes ? ` · crashed in ${m.crashes} of ${s.runs.length} runs` : ''}`)
   }
 }
 
@@ -313,6 +317,9 @@ function compare(a, b, frameT, memT) {
   console.log('\nNo board got slower or heavier.')
 }
 
+// and the whole run has a deadline (--deadline minutes, 25 by default): past it the gauge says so and exits
+let studio = null
+if (cmd === 'measure') setTimeout(() => { console.log(`the gauge ran past its ${flag('deadline', 25)} minute deadline`); studio?.kill(); process.exit(3) }, Number(flag('deadline', 25)) * 60000).unref()
 if (cmd === 'measure' && pos[0]) await measure(resolve(pos[0]), { root: resolve(flag('root', fileURLToPath(new URL('..', import.meta.url)))), runs: Number(flag('runs', 3)), only: (flag('only', '') || '').split(',').filter(Boolean) })
 else if (cmd === 'compare' && pos[1]) compare(pos[0], pos[1], Number(flag('frame', 0.10)), Number(flag('memory', 0.15)))
 else { console.log('node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only a,b] | compare <base.json> <head.json>'); process.exit(2) }
