@@ -180,7 +180,7 @@ export function makePet({ sw, C, doc = document }) {
     px: -1, py: -1, movedAt: Date.now(), active: 0,
     card: '', raf: 0, settle: 0, doze: 0, dozing: false, dozedAt: 0,
     queue: /** @type {{ kind: string, data: PetData }[]} */ ([]), batch: 0, batchFirst: 0, sayTimer: 0,
-    room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, briefed: '', step: '',
+    phoned: false, room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, briefed: '', step: '',
     // what she works on: the placeholders screens hand her (newest last), and the one she is at
     jobs: /** @type {Set<Element>} */ (new Set()), work: /** @type {Element | null} */ (null), workAt: '', scanT: 0
   }
@@ -222,8 +222,12 @@ export function makePet({ sw, C, doc = document }) {
       const top = side ? side.getBoundingClientRect().top : win.innerHeight
       ;[P.tx, P.ty] = [Math.max(8, win.innerWidth - 44), Math.max(70, Math.min(win.innerHeight - 110, top - 48))]
       el.classList.add('flip')
+      P.phoned = true
       return
     }
+    // the screen grew past a phone's before the pointer moved: her desktop spot, not the phone's edge
+    if (P.phoned && P.px < 0) [P.tx, P.ty] = [win.innerWidth - 120, win.innerHeight - 160]
+    P.phoned = false
     const c = Date.now() - P.movedAt > 1600 && cardEl()
     if (c) { const r = c.getBoundingClientRect(); [P.tx, P.ty] = clear(r.right + 6, r.top - 12) }
     else if (P.px >= 0) [P.tx, P.ty] = clear(P.px + 26, P.py + 30)

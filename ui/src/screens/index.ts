@@ -3,6 +3,7 @@
 // current Studio at the same address. Moving one screen is ui/README.md's recipe.
 import type { ComponentType } from 'react'
 import type { Room } from '../nav/nav'
+import { PlanBoard } from './PlanBoard'
 
 export const SCREEN_NAMES: Record<Room, string> = {
   home: 'Projects',
@@ -17,5 +18,19 @@ export const SCREEN_NAMES: Record<Room, string> = {
   studio: 'Studio scaffold'
 }
 
-// none yet: this is the scaffold (issue #404)
-export const SCREENS: Partial<Record<Room, ComponentType>> = {}
+// the room as the breadcrumb's last part names it (RULES.md rule 7; the audit gates read these, docs/ux/AUDIT.md)
+export const CRUMB_NAMES: Record<Room, string> = {
+  home: 'Projects',
+  draft: 'Design deck',
+  overview: 'Overview',
+  deck: 'Design deck',
+  app: 'App',
+  game: 'Game',
+  video: 'Film',
+  plan: 'Plan',
+  brand: 'Brand sheet',
+  studio: 'Studio'
+}
+
+// the screens that have moved (issue #404)
+export const SCREENS: Partial<Record<Room, ComponentType>> = { plan: PlanBoard }

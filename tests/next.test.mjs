@@ -5,6 +5,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { nextPage } from '../server/next.mjs'
 import * as nav from '../web/nav.js'
+import * as pet from '../web/pet.js'
+import * as icons from '../web/icons.js'
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const json = f => JSON.parse(read(f))
@@ -46,6 +48,14 @@ test('every name ui/ declares for @studio/nav is one web/nav.js exports', () => 
   assert.ok(declared.length >= 6)
   for (const name of declared) assert.ok(name in nav, `web/nav.js has no export ${name}`)
   assert.deepEqual([...read('ui/src/nav/studio-nav.d.ts').match(/export type Room = (.*)/)[1].matchAll(/'(\w+)'/g)].map(m => m[1]).sort(), [...nav.ROOMS].sort())
+})
+
+test('every name ui/ declares for @studio/pet and @studio/icons is one the file exports', () => {
+  for (const [file, mod] of [['ui/src/pet/studio-pet.d.ts', pet], ['ui/src/primitives/studio-icons.d.ts', icons]]) {
+    const declared = [...read(file).matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
+    assert.ok(declared.length >= 3, file)
+    for (const name of declared) assert.ok(name in mod, `${file}: no export ${name}`)
+  }
 })
 
 test('ui/ writes the address by the same rules as web/studio.js', () => {

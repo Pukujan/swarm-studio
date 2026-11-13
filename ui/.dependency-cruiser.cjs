@@ -18,6 +18,13 @@ module.exports = {
       to: { path: 'studio-nav\\.d\\.ts$' }
     },
     {
+      name: 'pet-only-through-src-pet',
+      severity: 'error',
+      comment: "Hermia's cursor (@studio/pet, web/pet.js) is reached only through src/pet/: usePet() and <Working>.",
+      from: { path: '^src/', pathNot: '^src/pet/' },
+      to: { path: 'studio-pet\\.d\\.ts$' }
+    },
+    {
       name: 'primitives-stand-alone',
       severity: 'error',
       comment: 'A primitive (src/primitives/) knows nothing of the navigation, the frame or a screen, so its stories need nothing else.',

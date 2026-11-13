@@ -51,7 +51,8 @@ const SCREENS = [
   { id: 'studio', crumb: trail('Cedar Cafe', 'Studio'), address: s => `?room=studio&project=${s.scaffold}&step=brand`, go: (p, s) => p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`, { waitUntil: 'commit' }), ready: '.ab[data-key="brand:open"]' },
   { id: 'plan', crumb: trail('New game', 'Plan'), address: () => '?room=plan',
     pre: async (p, s) => { await p.goto(s.BASE + '/'); await p.locator('.home .card').first().waitFor() },
-    go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) }), ready: 'body.cosmos-plan .pl-crumb' },
+    go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) }), ready: 'body.cosmos-plan .pl-crumb',
+    nextReady: 'main [role="region"][aria-label="Plan"]' },
   // opened from the Studio, the way a person reaches it
   { id: 'brand', crumb: trail('Cedar Cafe', 'Brand sheet'),
     pre: async (p, s) => { await p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`); await p.locator('.ab[data-key="brand:open"]').first().waitFor() },
