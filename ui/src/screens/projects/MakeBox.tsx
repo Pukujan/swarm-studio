@@ -89,8 +89,8 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
     <>
       <form ref={form} autoComplete="off" onSubmit={e => { e.preventDefault(); submit() }}
         className="mx-auto mt-1.5 mb-7 flex w-full max-w-[760px] items-center gap-2 rounded-[16px] border border-line bg-deep py-2 pr-2 pl-2 focus-within:border-line-2">
-        <Button ref={kindBtn} role="ghost" aria-label="What to make" aria-haspopup="menu" onPress={() => setMenu('kind')} className="!px-2.5 text-muted">
-          <Icon name={make.icon} size={16} /><span>{make.label}</span><Icon name="chd" size={14} />
+        <Button ref={kindBtn} role="ghost" aria-label={`What to make: ${make.label}`} aria-haspopup="menu" onPress={() => setMenu('kind')} className="!px-2.5 text-muted">
+          <Icon name={make.icon} size={16} /><span className="max-md:sr-only">{make.label}</span><Icon name="chd" size={14} />
         </Button>
         <input ref={inputRef} name="q" value={text} onChange={e => setText(e.target.value)} maxLength={4000}
           placeholder="What should the crew build?" aria-label="What should the crew build?"
@@ -104,7 +104,7 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
         {MAKES.map(m => <MenuRow key={m.k} id={m.k} icon={m.icon} label={m.label} on={m.k === make.k} />)}
       </MenuAt>
       {menu && menu !== 'kind' && (
-        <MenuAt name="How to make it" triggerRef={makeBtn} isOpen onClose={() => setMenu(null)} selectionMode="single" selectedKeys={[menu.pick]} autoFocus
+        <MenuAt name="How to make it" triggerRef={makeBtn} isOpen onClose={() => setMenu(null)} selectionMode="single" selectedKeys={[menu.pick]}
           onAction={k => { const w = menu.ways.find(x => x.k === k); if (w) void begin(w, menu.text) }}>
           {menu.ways.map(w => <MenuRow key={w.k} id={w.k} icon={w.icon} label={w.label} on={w.k === menu.pick} />)}
         </MenuAt>

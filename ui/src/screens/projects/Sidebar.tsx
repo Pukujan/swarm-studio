@@ -59,7 +59,7 @@ export function Sidebar({ view, folder, stacked, counts, folders, me, adding, on
   )
   return (
     <aside aria-label="Projects" className="flex h-full w-[248px] flex-none flex-col gap-0.5 overflow-y-auto border-r border-line bg-void px-3.5 py-5">
-      <PlainButton aria-label="Projects" onPress={() => onGo('recent')} className="mb-5 self-start px-2 py-1"><Logo /></PlainButton>
+      <PlainButton aria-label="Swarm, Projects" onPress={() => onGo('recent')} className="mb-5 self-start px-2 py-1"><Logo /></PlainButton>
       <nav aria-label="Views" className="flex flex-col gap-0.5">
         {item('recent', 'clock', 'Recent')}
         {item('all', 'grid', 'All projects', counts.all)}
@@ -111,9 +111,9 @@ export function Sidebar({ view, folder, stacked, counts, folders, me, adding, on
 export function Who({ me, onPress, ref }: { me: Me | null, onPress: () => void, ref: React.Ref<HTMLButtonElement> }) {
   const name = me?.name || 'You'
   return (
-    <Button ref={ref} role="ghost" aria-label="You" aria-haspopup="menu" onPress={onPress}
+    <Button ref={ref} role="ghost" aria-label={`You, ${name}`} aria-haspopup="menu" onPress={onPress}
       className="!h-auto min-w-0 flex-1 !justify-start !gap-2.5 !px-2.5 !py-1.5 !font-body !text-[13px] !font-normal !tracking-normal !normal-case text-muted">
-      <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-surface-2 text-xs font-semibold text-text">{name.slice(0, 1).toUpperCase()}</span>
+      <span aria-hidden className="grid h-7 w-7 flex-none place-items-center rounded-full bg-surface-2 text-xs font-semibold text-text">{name.slice(0, 1).toUpperCase()}</span>
       <span className="truncate">{name}</span>
     </Button>
   )

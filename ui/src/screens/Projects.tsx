@@ -347,7 +347,7 @@ export function Projects() {
   )
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] bg-void text-sm text-text">
+    <div className="flex h-[calc(100dvh-56px)] bg-void font-body text-sm text-text">
       <div className="max-md:hidden">{side}</div>
       {drawer && (
         <div className="fixed inset-0 z-40 md:hidden" onKeyDown={e => { if (e.key === 'Escape') setDrawer(false) }}>
