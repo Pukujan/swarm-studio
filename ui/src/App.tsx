@@ -5,6 +5,7 @@ import { useNav } from './nav/NavProvider'
 import { NotMovedYet } from './screens/NotMovedYet'
 import { SCREENS } from './screens'
 import { TopBar } from './shell/TopBar'
+import { ToastProvider } from './primitives/Toast'
 import { TrailProvider } from './shell/Trail'
 
 export function App() {
@@ -20,10 +21,12 @@ export function App() {
   const Screen = SCREENS[view.room] ?? NotMovedYet
   return (
     <TrailProvider>
-      <div className="flex min-h-dvh flex-col bg-bg text-text">
-        <TopBar />
-        <main className="flex min-h-0 flex-1 flex-col"><Screen /></main>
-      </div>
+      <ToastProvider>
+        <div className="flex min-h-dvh flex-col bg-bg text-text">
+          <TopBar />
+          <main className="flex min-h-0 flex-1 flex-col"><Screen /></main>
+        </div>
+      </ToastProvider>
     </TrailProvider>
   )
 }

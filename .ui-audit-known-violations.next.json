@@ -88,19 +88,15 @@
     "detail": "nothing showed it was loading, and the screen asked for no data"
   },
   {
+    "key": "projects@1440 axe label-content-name-mismatch",
+    "detail": "Elements must have their visible text as part of their accessible name: #react-aria9611836315-«rk»"
+  },
+  {
     "key": "projects@1440 breadcrumb",
     "detail": "reads \"\", should read \"Home › Projects\""
   },
   {
-    "key": "projects@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
     "key": "projects@390 breadcrumb",
     "detail": "reads \"\", should read \"Home › Projects\""
-  },
-  {
-    "key": "projects@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
   }
 ]

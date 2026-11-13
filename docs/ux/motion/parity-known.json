@@ -40,6 +40,41 @@
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
+    "key": "make cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "make only in /: page @pet-bob endless 2600ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "make only in /: page @pet-dot endless 1000ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "make only in /: page @pet-tap endless 700ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "make only in /: page ~opacity 200ms x1 ease",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "make only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
+    "label": "drift",
+    "why": "The kit's Button brightens on hover in 150 ms (ui/src/primitives/Button.tsx); the current Make box's button changes at once. Reduced motion turns it off."
+  },
+  {
+    "key": "make reduced cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
     "key": "mid-build cursor Ada: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
@@ -148,6 +183,36 @@
     "key": "play reduced cursor Hermia: only in /",
     "label": "intended (PR #432)",
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+  },
+  {
+    "key": "projects cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "projects only in /: page @pet-bob endless 2600ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "projects only in /: page @pet-dot endless 1000ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "projects only in /: page @pet-tap endless 700ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "projects only in /: page ~opacity 200ms x1 ease",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
+  },
+  {
+    "key": "projects reduced cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); Projects and Make have none of their own before it."
   },
   {
     "key": "publish cursor Ada: only in /",

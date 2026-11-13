@@ -29,6 +29,8 @@ To see it as the person will, start the plugin's server and open `http://127.0.0
 |---|---|
 | `src/nav/` | the current Studio's machine (`web/nav.js`, as `@studio/nav`), `useNav()`, and the address |
 | `src/primitives/` | the kit on React Aria: Button, Menu, Dialog, TextField, SearchField, ToggleGroup, Disclosure (a grouped-list row), Busy, Command (a command and Copy), with stories |
+| `src/studio/` | the types of the other current-Studio files the UI imports, not copies: `web/icons.js` as `@studio/icons`, `web/makeways.js` as `@studio/makeways` |
+| `src/primitives/` | the kit on React Aria: Button (and IconButton, PlainButton), Menu (and MenuAt, MenuRow, Submenu), Dialog, ConfirmDialog, TextField, Panel, Icon, Toast, each with stories |
 | `src/screens/` | the screens, by the machine's room, named from OBJECTS.md; `SCREENS` lists the ones that moved |
 | `src/screens/setup/` | the Setup and Settings sheets (not rooms: no address), opened with `useSheets().open('setup' \| 'settings')`; their layers are the statechart's (`layers.ts`) |
 | `src/shell/` | the frame: the top bar |
