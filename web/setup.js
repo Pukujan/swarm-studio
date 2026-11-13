@@ -46,7 +46,7 @@ export function makeSetup({ sw }) {
     if (o === null) return `<div class="su-line"><span>Models</span>${busy}</div>`
     if (!o?.ok) return o?.message ? `<p class="su-note">${esc(o.message)}</p>` : ''
     const now = using('worker'), q = S.q.trim().toLowerCase()
-    const signed = o.providers.filter(p => p.signedIn).sort((a, b) => (b.slug === now.provider) - (a.slug === now.provider) || (b.current - a.current))
+    const signed = o.providers.filter(p => p.signedIn).sort((a, b) => Number(b.slug === now.provider) - Number(a.slug === now.provider) || Number(b.current) - Number(a.current))
     const groups = signed.map(p => {
       // the model in use comes first, so it is seen without searching
       const models = p.slug === now.provider && p.models.includes(now.model) ? [now.model, ...p.models.filter(m => m !== now.model)] : p.models
