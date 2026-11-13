@@ -283,11 +283,11 @@ function chrome() {
   const menu = $('#more-menu')
   if (menu) {
     menu.insertAdjacentHTML('beforeend', `<div class="cosmos-sep" role="separator"></div>
-      <button class="toggle cosmos-only" id="cosmos-sound">${ico('sound')}<span>Sound</span></button>
+      <button class="toggle cosmos-only" id="cosmos-sound" aria-pressed="false">${ico('sound')}<span>Crew sound</span></button>
 `)
-    // the crew's voices: on or off from the menu
+    // the crew's voices and sounds (web/chatter.js): the same switch and words as the user menu's; ✓ while on
     const sound = $('#cosmos-sound')
-    const paint = () => { const on = sw.sound?.() === 'on'; sound.classList.toggle('on', on); sound.querySelector('span').textContent = on ? 'Sound on' : 'Sound off' }
+    const paint = () => { const on = sw.sound?.() === 'on'; sound.classList.toggle('on', on); sound.setAttribute('aria-pressed', String(on)) }
     sound.onclick = () => { sw.sound?.(sw.sound() === 'on' ? 'muted' : 'on'); paint() }
     $('#more-btn')?.addEventListener('click', paint)
     paint()
@@ -359,7 +359,7 @@ function modeMenu() {
     if (id === 'overview') return C.go('project')
     // Game: the project's game, when it has one; else the wizard that makes one
     if (id === 'game') {
-      if (!C.pair?.game) return $('#game-btn')?.click()
+      if (!C.pair?.game) return sw.game?.()
       return C.toGame()
     }
     // the other rooms show the site's run, not the game's (which has no pages or film)
@@ -381,7 +381,7 @@ function modeMenu() {
   }
   renderMode()
 }
-C.chat = on => { body.classList.toggle('cosmos-chat', on); if (on) $('.side .tabs [data-tab="chat"]')?.click() }
+C.chat = on => { body.classList.toggle('cosmos-chat', on); if (on) sw.tab?.('chat') }
 
 function start() {
   if (sw.wall || !sw) return

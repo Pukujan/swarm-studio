@@ -3,7 +3,8 @@
 import { layerDrag } from '../layerlink.js'
 import { clean } from '../clean.js'
 import { S, Q, WALL, BASE, store, api, cosmosHooks, cam, els } from './core.js'
-import { view, setView } from './rooms.js'
+import { view, setView, openGame } from './rooms.js'
+import { toggleModels, toggleTheme, showTab } from './settings.js'
 import { viewing, files, openRun, loadFiles, stopReplay } from './replay.js'
 import { holds, shownRun } from './film.js'
 import { esc, sectionProps, commitEdit, remember, restoreLayer, design, SPACE, SIZES, FONTS, tw, layoutEl, sizeOf, SIZE_RE } from './design.js'
@@ -34,8 +35,12 @@ window.swarm = {
   stopReplay,
   // the project's canvas is being zoomed or panned: page swaps and screenshots here wait for it too
   moved() { cam.movedAt = performance.now() },
-  // the crew's sound: 'on', 'muted' or 'quiet' (☰ → Sound in the studio)
+  // the crew's sound: 'on', 'muted' or 'quiet' (☰ → Crew sound in the studio)
   sound(m) { if (m && !WALL) setCrewMode(m); return crewMode },
+  // ☰'s items, called straight from any screen (never a click on a ☰ button that may be hidden):
+  // models(anchor) opens the models pop beside anchor, theme() swaps Light and Dark,
+  // game() opens the game wizard, tab(name) shows a side tab (chat, log)
+  models: anchor => toggleModels(true, anchor), theme: toggleTheme, game: () => openGame(), tab: showTab,
   // a page's picture for its artboard: the resting snapshot, or a small fresh one
   async thumb(id, scale = 0.25) {
     const f = S.frames.find(x => x.id === id)

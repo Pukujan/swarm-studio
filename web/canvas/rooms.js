@@ -8,7 +8,7 @@ import { toggleVideo, video, shownRun, showRun } from './film.js'
 import { cw, CW_CODE, wallNames, paintv, artPhase } from './auto.js'
 import { setText, botMsg, feed, push } from './panels.js'
 import { esc } from './design.js'
-import { saveModel, modelsInfo, loadModels } from './settings.js'
+import { saveModel, modelsInfo, loadModels, showTab } from './settings.js'
 import { loadFiles, openRun } from './replay.js'
 import { HOSTS } from './publish.js'
 
@@ -540,8 +540,7 @@ function advMsg(html, cls = '') {
 }
 function advOpen(on) {
   document.body.classList.toggle('advising', on)
-  // @ts-ignore
-  if (on) { document.body.classList.add('cosmos-chat'); document.querySelector('.side .tabs [data-tab="chat"]')?.click() }
+  if (on) { document.body.classList.add('cosmos-chat'); showTab('chat') }
 }
 const advSections = () => [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
 const advPost = body => api(`/api/runs/${encodeURIComponent(adv.run)}/advise`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sections: advSections(), ...body }) }).then(async r => { const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`); return out })
