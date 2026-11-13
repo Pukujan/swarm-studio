@@ -145,7 +145,8 @@ class FeedClientTest(unittest.TestCase):
             self.assertNotIn("/swarm login", feed.connect(["status"]))
         finally:
             StandIn.state.pop("identities", None)
-        self.assertEqual(oct(feed._settings_path().stat().st_mode & 0o777), "0o600")
+        if os.name != "nt":  # Windows has no owner-only file mode; the file sits in the person's profile there
+            self.assertEqual(oct(feed._settings_path().stat().st_mode & 0o777), "0o600")
         self.assertIn("100 credits", feed.connect([]))
         self.assertNotIn("sfp_test", feed.connect([]))  # the token is never shown
         self.assertIn("Forgot", feed.connect(["forget"]))
