@@ -15,7 +15,7 @@ import type { DeckModel, ToolId } from './model'
 function layerGroups(m: DeckModel): LayerGroup[] {
   const row = (k: string) => {
     const l = m.layers[k]
-    return { key: k, name: l.status === 'failed' ? `${l.role} · failed` : l.role, busy: l.status === 'assigned' || l.status === 'streaming' }
+    return { key: k, name: l.status === 'failed' ? `${l.role} · failed` : m.issues[k] ? `${l.role} · the Critic: ${m.issues[k].problem}` : l.role, busy: l.status === 'assigned' || l.status === 'streaming' }
   }
   const shared = m.order.filter(k => m.layers[k].page === '*')
   return [

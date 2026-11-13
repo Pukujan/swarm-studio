@@ -25,6 +25,10 @@ export interface DeckPublish {
   liveTarget: Host | null
   pending: boolean
 }
+// A section's comment thread: the person's notes and the crew's replies (comment, comment:take)
+export interface Note { who: string, you: boolean, text: string, t: number }
+// one of the Critic's issues on a section (review:issue), until the section is reworked
+export interface Issue { problem: string, agent: string | null, t: number }
 // the last Export (the `export` event): where it went and what it holds
 export interface DeckExport { pages: number, sections: number, dir: string, zip: boolean }
 
@@ -40,6 +44,8 @@ export interface DeckModel {
   theme: DeckTheme | null
   publish: DeckPublish
   exported: DeckExport | null
+  threads: Record<string, Note[]>
+  issues: Record<string, Issue>
   planned: number
   done: number
   failed: number
@@ -65,7 +71,7 @@ const FRESH_MS = 8000
 export const belongs = (page: string, l: DeckLayer) => l.page === '*' || l.page === page
 
 export function empty(run: string | null = null): DeckModel {
-  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
+  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
 }
 
 // What a stream is "doing" right now, read off its tail (web/canvas/deck.js detectTool).
@@ -183,6 +189,8 @@ export function apply(m: DeckModel, e: DeckEvent): DeckModel {
       // saved runs carry the finished HTML, so a file opens without the stream
       const html = str(e.html)
       setLayer(n, k, html ? { status: 'done', text: html, ver: l.ver + 1 } : { status: 'done' })
+      // the Critic's issue on it is fixed once it is written again
+      if (m.issues[k] && num(e.t) >= m.issues[k].t) { const { [k]: _fixed, ...rest } = m.issues; n.issues = rest }
       // a section changed again (a hand edit, a fix, Undo) is still one section
       n.done = e.done != null ? num(e.done) : l.status === 'done' ? n.done : n.done + 1
       if (agentOf(n, e.agent)) setAgent(n, String(e.agent), { layer: null, tool: 'move' })
@@ -247,6 +255,33 @@ export function apply(m: DeckModel, e: DeckEvent): DeckModel {
       // a public link wins over this computer's
       const liveTarget = target !== 'local' || !m.publish.liveTarget || m.publish.liveTarget === 'local' ? target : m.publish.liveTarget
       n.publish = { ...m.publish, state: 'done', target, live, liveTarget, pending: !!e.pending, message: '' }
+      return n
+    }
+    case 'comment': {
+      // a note on one section (the person's); one the planner routes arrives with the crew's reply
+      const k = str(e.target)
+      if (!k || !m.layers[k] || !str(e.text)) return m
+      const n = draft(m)
+      n.threads = { ...m.threads, [k]: [...(m.threads[k] ?? []), { who: 'You', you: true, text: str(e.text), t: num(e.t) }] }
+      return n
+    }
+    case 'comment:take': {
+      const k = key(str(e.page), str(e.layer))
+      if (!m.layers[k]) return m
+      const n = draft(m)
+      const a = agentOf(m, e.agent)
+      const thread = m.threads[k] ?? []
+      // a routed comment has no note of its own yet: the person's words come first
+      const mine = thread.some(x => x.you && x.text === str(e.text)) || !str(e.text) ? [] : [{ who: 'You', you: true, text: str(e.text), t: num(e.t) }]
+      const reply = str(e.reply) || `On it, reworking the ${str(e.role) || str(e.layer)}.`
+      n.threads = { ...m.threads, [k]: [...thread, ...mine, { who: a?.name ?? 'The crew', you: false, text: reply, t: num(e.t) }] }
+      return n
+    }
+    case 'review:issue': {
+      const k = key(str(e.page), str(e.layer))
+      if (!m.layers[k]) return m
+      const n = draft(m)
+      n.issues = { ...m.issues, [k]: { problem: str(e.problem), agent: typeof e.agent === 'string' ? e.agent : null, t: num(e.t) } }
       return n
     }
     case 'export': {

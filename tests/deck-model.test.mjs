@@ -109,3 +109,18 @@ test('a hand edit, a fix or Undo changes a finished section without counting it 
   assert.equal(n.layers[k].text, '<section>by hand</section>')
   assert.equal(n.layers[k].ver, m.layers[k].ver + 1)
 })
+
+test('a comment thread holds the note and the crew\'s reply; the Critic\'s issue stays until the section is reworked', () => {
+  let m = fold(deckEvents('done'), RUN)
+  const t = Date.now()
+  m = apply(m, { type: 'comment', run: RUN, t, text: 'make the heading warmer', target: 'home/hero' })
+  m = apply(m, { type: 'comment:take', run: RUN, t: t + 1, text: 'make the heading warmer', page: 'home', layer: 'hero', role: 'hero', agent: 'a1', reply: '' })
+  assert.deepEqual(m.threads['home/hero'].map(n => [n.who, n.text]), [['You', 'make the heading warmer'], ['Mochi', 'On it, reworking the hero.']])
+  // a comment the planner routed arrives only as the crew taking it: the person's words come first
+  m = apply(m, { type: 'comment:take', run: RUN, t: t + 2, text: 'bigger prices', page: 'plans', layer: 'features', role: 'features', agent: 'a0', reply: 'Making the prices bigger.' })
+  assert.deepEqual(m.threads['plans/features'].map(n => n.who), ['You', 'Pip'])
+  m = apply(m, { type: 'review:issue', run: RUN, t: t + 3, page: 'gifts', layer: 'hero', agent: 'a0', problem: 'the heading is cut off on phones' })
+  assert.equal(m.issues['gifts/hero'].problem, 'the heading is cut off on phones')
+  m = apply(m, { type: 'layer:done', run: RUN, t: t + 4, page: 'gifts', layer: 'hero', agent: 'a0', html: '<section>fixed</section>', fixed: true })
+  assert.equal(m.issues['gifts/hero'], undefined)
+})

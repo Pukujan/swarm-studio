@@ -17,8 +17,8 @@ const STYLE: [string, string, string][] = [
   ['padding', 'Padding', '12px 20px'], ['margin', 'Margin', '0 auto'], ['backgroundColor', 'Fill', '#ffffff'], ['borderRadius', 'Corners', '8px'], ['opacity', 'Opacity', '0.9']
 ]
 
-export function DesignTab({ layer, part, onPart, onEdit, onClose }: {
-  layer: DeckLayer, part: string | null, onPart: (id: string | null) => void,
+export function DesignTab({ layer, part, onPart, onEdit, onClose, issue }: {
+  layer: DeckLayer, part: string | null, onPart: (id: string | null) => void, issue?: string,
   onEdit: (patch: Patch, why: string) => void, onClose: () => void
 }) {
   const rows = useMemo(() => (layer.status === 'done' ? swEdit.tree(layer.text, 60) : []), [layer.text, layer.status])
@@ -30,6 +30,7 @@ export function DesignTab({ layer, part, onPart, onEdit, onClose }: {
         <span className="min-w-0 flex-1 truncate">{p ? p.label || p.tag : layer.role}</span>
         <Button role="ghost" aria-label="Close" onPress={onClose} className="min-w-8 px-1"><Icon name="x" size={16} /></Button>
       </h3>
+      {issue && <p className="rounded-[8px] border border-hot px-2.5 py-1.5 font-monospace text-[13px]"><b className="text-hot-text">The Critic</b> {issue}</p>}
       {layer.status !== 'done' && <p className="font-monospace text-[13px] text-muted">{layer.status === 'failed' ? 'This section did not finish. Ask the crew to try again.' : 'The crew is still writing this section.'}</p>}
       {layer.status === 'done' && !p && (
         <ul aria-label="Parts" className="flex flex-col">
