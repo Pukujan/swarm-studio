@@ -1,0 +1,104 @@
+# Hermes and connections
+
+Glue: launcher.py, bridge.py, bridge_llm.py, engine/bridge.mjs, engine/hermesllm.mjs, engine/llm.mjs, engine/hermeshealth.mjs, engine/hermes_connect.mjs, engine/connect.mjs, engine/proc.mjs, engine/ckff.mjs, engine/paint-ckff.mjs, engine/auto.mjs, engine/appkit.mjs, engine/media.mjs, server/server.mjs, web/show.js
+Status: built in
+
+Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`, plugin.yaml:6) under FSL-1.1-ALv2 (plugin.yaml:58). Hermes's own licence: Unchecked (not in this repo; settle from Hermes's repo). Every other service here is an outside service reached through Hermes or a declared key.
+
+## What it already does
+
+- Model calls with Hermes's provider, model and key via `ctx.llm`; pictures and clips via its `image_generate` / `video_generate` tools; MCP via `ctx.call_mcp` (docs/specs/33-hermes-bridge.md:5-9, 54-61).
+- Secrets through `agent.secret_scope.get_secret` (launcher.py:80-85).
+- OAuth MCP connectors with `hermes mcp install` / `hermes mcp login`; Hermes keeps and refreshes the token (engine/hermes_connect.mjs:3-5).
+- Messaging gateways (Discord, Slack, Telegram) with `hermes send` (server/server.mjs:1334-1343).
+- Three auxiliary model slots in Hermes's model picker: `swarm_studio_planner`, `swarm_studio_builder`, `swarm_studio_reviewer` (launcher.py:10-12, 49).
+
+## How Swarm drives it
+
+- launcher.py starts a detached Node server with a minimal env plus the declared keys read through Hermes's secret scope (launcher.py:200-233).
+- bridge.py runs a loopback server inside each Hermes process and attaches with `POST /api/hermes/attach {url, token, pid, code}`; Node keeps 4 bridges, drops one silent 45 s (engine/bridge.mjs:1-20). Attach interval: 5 s (engine/bridge.mjs:3, docs/specs/33-hermes-bridge.md:148-149); spec 33 also says 15 s (docs/specs/33-hermes-bridge.md:44).
+- `call(path, body)` for `/image`, `/video`, `/mcp`; `send` streams model calls (engine/bridge.mjs:25-62).
+- `/llm/v1` on the studio's port, with a per-process key, forwards to the bridge; `model` is the role (`planner`, `worker`, `reviewer`), optionally `role:pick` (engine/hermesllm.mjs:3-9, 22-24, 94). The app engine (Dyad) uses the same endpoint (engine/hermesllm.mjs:3-5).
+- `streamChat` is the client for any OpenAI-shaped endpoint; through Hermes it drops provider hints and sends `x-swarm-timeout` (engine/llm.mjs:12, 58, 71).
+- `hermesHealth` tells `closed` from `updated` by `$HERMES_HOME/gateway.pid` and the plugin's `.py` mtimes (engine/hermeshealth.mjs:18-22, 26-47).
+- Every child process gets `childEnv` only (engine/proc.mjs:1-23).
+
+### Models / gateway
+
+- Default: all roles through Hermes; no provider key reaches Node (server/server.mjs:93-98).
+- Fallback: `SWARM_STUDIO_API_KEY` with `SWARM_STUDIO_BASE_URL`, default InferHub `https://api.inferhub.dev/v1`, model `cb/deepseek-v4.1-flash` (plugin.yaml:12-14, server/server.mjs:100-101).
+- InferHub route failover (cb/, ali/, alitp/, ocg/) only for an inferhub base URL (engine/llm.mjs:33-51).
+- `ctx.llm` does not stream (one SSE delta) and has no tool calls; bridge fakes tools with `<tool_call>` blocks in the prompt (docs/specs/33-hermes-bridge.md:84-104).
+- Model override only when the operator grants `plugins.entries.swarm-studio.llm.allow_model_override` (docs/specs/33-hermes-bridge.md:80-83).
+
+### Supabase
+
+- Keys: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (plugin.yaml:41-45, launcher.py:43).
+- Or Hermes's Supabase MCP connector, the only one in `CONNECTORS` (engine/hermes_connect.mjs:20). `connect` installs only after the person confirms; the allowlist is a command shown, never written (engine/hermes_connect.mjs:86-99, 34-38).
+- `supabaseProject` reuses or makes a project called `swarm-studio`, only if Supabase says it costs $0; region `us-east-1` unless `SWARM_SUPABASE_REGION` (engine/hermes_connect.mjs:146-163). It returns `SUPABASE_ANON_KEY` (publishable only) (engine/hermes_connect.mjs:143-145, 176-181).
+- Connector route enables RLS with a policy open to `anon` for all rows; the key stays in the app's server env (engine/auto.mjs:73-75).
+- Auto's data step: keys, else connector, else skipped with the SQL to run (engine/auto.mjs:257-269). `appEnv` hands Supabase vars to the generated app (engine/proc.mjs:32-33).
+- App kit options: Supabase Auth and Supabase Storage (engine/appkit.mjs:36, 47).
+
+### Stripe (test keys only)
+
+- `STRIPE_SECRET_KEY`, test key only, live refused (plugin.yaml:46-48).
+- Gate: `/^(sk|rk)_test_/` in `stripeEnv` and `appEnv` (engine/auto.mjs:77-80, engine/proc.mjs:34). Build prompts say `sk_test_` only (engine/auto.mjs:86, engine/appkit.mjs:39).
+- With no test key: demo checkout, banner "DEMO", card 4242 (engine/auto.mjs:82-86, engine/appkit.mjs:40).
+- Stripe through Hermes's connector is planned, not built (docs/specs/25-connections.md:111).
+
+### Resend
+
+- `RESEND_API_KEY`, handed only to an app whose locked plan chose Resend (plugin.yaml:49-51, engine/proc.mjs:31-36, engine/appkit.mjs:328, 390).
+- Without it, emails go to an Outbox screen (engine/appkit.mjs:42-45).
+
+### Image painting
+
+- First choice: Hermes's `image_generate` through the bridge; provider is Hermes's `image_gen.provider` (docs/specs/33-hermes-bridge.md:56, 63-65, server/server.mjs:191).
+- ckff (OpenAI-shaped image API, default `gpt-image-2.5`, base `https://ckffai.com/v1`) is listed beside Hermes when `CKFF_API_KEY` is set, and is the fallback when Hermes cannot paint (engine/ckff.mjs:1-14, server/server.mjs:193-207, 1437-1448). Keys: `CKFF_API_KEY`, `CKFF_BASE_URL`, `CKFF_MODEL` (plugin.yaml:18-24).
+- `ckffCreds` also reads `CKFF_IMAGE_KEY`, but launcher.py does not pass it (engine/ckff.mjs:11, launcher.py:39).
+- engine/paint-ckff.mjs is a developer command line (sprite sheets), not called by the server. It reads `CKFF_IMAGE_KEY` or an Octo vault item via `OCTO_AGENT_KEY`, and `CKFF_BASE` / `OCTO_URL`; none declared in plugin.yaml (engine/paint-ckff.mjs:1-33).
+- Tools outside the server paint through `POST /api/hermes/image` (server/server.mjs:3292-3305).
+- Clips: Hermes `video_generate` only (server/server.mjs:209-213). FAL is Hermes's own `FAL_KEY` (docs/specs/33-hermes-bridge.md:70-71).
+
+### Posting (Postiz and others)
+
+- No Postiz code exists; the only mentions are decision 0005 and the docs hook (docs/decisions/0005-sharing-person-posts.md:21-22, scripts/engine-docs-hook.mjs:16).
+- Swarm never posts for anyone (docs/PRODUCT.md:60-62). Share pages open X, LinkedIn, Threads, Bluesky prefilled; the person presses Post (web/show.js:164-176).
+- Launch kit can send one confirmed post to Discord, Slack or Telegram through the person's Hermes gateway (`hermes send --to`), only with `confirm: true` and unchanged text (server/server.mjs:3554-3566).
+- Handing a post to a Hermes posting plugin (AdaptlyPost, Postel, Postroom): Unchecked, no code found (docs/decisions/0005-sharing-person-posts.md:20-22).
+
+### Other connectors
+
+- ElevenLabs: `ELEVENLABS_API_KEY` passed as `SWARM_ELEVENLABS_KEY`, or a pasted key, or an ElevenLabs MCP (plugin.yaml:15-17, launcher.py:217-223, engine/media.mjs:18-30, 84-86).
+- Meshy: `MESHY_API_KEY`, asks before spending credits (plugin.yaml:25-27).
+- Pexels and Octo stand-in photos: `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL` (plugin.yaml:28-40).
+- Vercel and Cloudflare Pages: pasted token checked with the provider, kept mode 0600 in `connections.json`, or env `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`, or an Octo vault grant (engine/connect.mjs:1-24, 128-141).
+- GitHub Pages: the `gh` login; Swarm Feed: `feed.json` (docs/specs/25-connections.md:29, 31).
+
+## What the person connects
+
+- All keys optional, names only: `SWARM_STUDIO_API_KEY`, `ELEVENLABS_API_KEY`, `CKFF_API_KEY`, `CKFF_BASE_URL`, `CKFF_MODEL`, `MESHY_API_KEY`, `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, `VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN` (plugin.yaml:11-57).
+- Hermes connector: Supabase, plus the allowlist command the canvas shows (engine/hermes_connect.mjs:34-38).
+- Hermes itself running (Desktop, gateway or `hermes swarm`) for any build (engine/hermeshealth.mjs:18-21).
+
+## Limits inside Swarm
+
+- A generated app gets only Supabase vars, a Stripe test key and its kit's declared keys (engine/proc.mjs:28-37).
+- Keyed APIs like Duffel, Amadeus, Twilio, Mapbox are named but never reach a built app (engine/appkit.mjs:53-64).
+- No Hermes, no build: refused with 503 before it starts; mid-build a call waits 20 s then stops (docs/specs/33-hermes-bridge.md:133-154).
+- Hermes's default auxiliary timeout is 30 s; Swarm sends its own (docs/specs/33-hermes-bridge.md:108-111).
+- Google sign-in for apps is not built (docs/specs/25-connections.md:114-116).
+
+## Open questions
+
+- Settings slices 2-5 (one place for every connection, `/swarm setup`) not built; slice 1 is (docs/specs/25-connections.md:106-112).
+- Stripe and Vercel through Hermes connectors: planned (docs/specs/25-connections.md:111).
+- Unchecked: Hermes's licence and whether a Postiz Hermes plugin exists (decision 0005 says none; not re-checked).
+
+## Sources
+
+- plugin.yaml, launcher.py:10-85, 200-233
+- engine/bridge.mjs, hermesllm.mjs, llm.mjs, hermeshealth.mjs, hermes_connect.mjs, connect.mjs, proc.mjs, ckff.mjs, paint-ckff.mjs, auto.mjs, appkit.mjs, media.mjs:18-86
+- server/server.mjs:93-114, 190-213, 1334-1343, 1437-1448, 3290-3330, 3540-3576; web/show.js:164-176
+- docs/specs/25-connections.md, docs/specs/33-hermes-bridge.md, docs/decisions/0005, docs/PRODUCT.md, docs/PLANS.md, AGENTS.md, scripts/engine-docs-hook.mjs
