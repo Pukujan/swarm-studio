@@ -29,6 +29,20 @@ it, so it reads like every other room.
 A test, "the loading check sees a skeleton", holds back a build's events on the Overview, which always shows a
 skeleton then. If it fails, the loading check is broken, not the screens.
 
+## The next UI at /next/
+
+The Studio is moving to React one screen at a time ([decision 0013](../decisions/0013-react-ui-coexists.md)).
+`AUDIT_APP=next` runs the same screens at the same addresses under `/next/`, against their own known list,
+[.ui-audit-known-violations.next.json](../../.ui-audit-known-violations.next.json). CI runs both.
+
+- Until a screen moves, `/next/` shows a stand-in for it: the screen's name and a button to the current Studio.
+  Its known violations are the stand-in's, not the screen's.
+- When a screen moves, give it a `nextReady` selector in the suite, run `AUDIT_APP=next` with `audit:update`,
+  and compare the screen's entries with the current Studio's. The port may fix violations, never add one
+  ([ui/README.md](../../ui/README.md)).
+- The brand sheet has no address of its own, so it joins the `/next/` run when its way in has moved.
+- Plan opens at `?room=plan` there: the current Studio's run opens it from a game talk.
+
 ## Known violations
 
 What the app breaks today is listed in [.ui-audit-known-violations.json](../../.ui-audit-known-violations.json),

@@ -42,8 +42,8 @@ Utilities use the Studio's tokens only: `bg-void`, `text-muted`, `border-edge`, 
 Read [AGENTS.md](../AGENTS.md)'s list for anything a person sees (RULES, PATTERNS, AUDIENCE, INVENTORY,
 SITEMAP, REQUIREMENTS) first, and the screen's spec in `docs/specs/`.
 
-1. **The gates pass before.** Run the audit gates on the screen in the current Studio and keep the result
-   (`ci/playwright-audit`, once merged). The screen moves as it is: no redesign in the same PR.
+1. **The gates pass before.** Run the audit gates ([docs/ux/AUDIT.md](../docs/ux/AUDIT.md)) and keep the screen's
+   entries from `.ui-audit-known-violations.json`. The screen moves as it is: no redesign in the same PR.
 2. **One component per object, by its OBJECTS.md name.** `src/screens/Overview.tsx` for the Overview, not
    `Project.tsx`. Its parts take OBJECTS.md's names too (a `VersionTile`, a `BrandSheet`). A name OBJECTS.md marks
    **Open** is settled with the owner before the port, not in it.
@@ -59,7 +59,9 @@ SITEMAP, REQUIREMENTS) first, and the screen's spec in `docs/specs/`.
    mock-ups, one of the six design artifacts.
 6. **List it.** Add the component to `SCREENS` in `src/screens/index.ts`. Until it is there, `/next/` shows the
    screen's name and a button to the current Studio at the same address.
-7. **The gates pass after**, on `/next/` at the same addresses, with the same result as step 1. Run
+7. **The gates pass after**, on `/next/` at the same addresses: give the screen a `nextReady` selector in
+   `tools/dev/audit/audit.spec.mjs` and run `AUDIT_APP=next npm run --prefix tools/dev audit:update`. Its entries in
+   `.ui-audit-known-violations.next.json` may be fewer than step 1's, never more. Run
    `typecheck:ui`, `deps:ui`, `npm run --prefix ui build` and `ui:check`, and commit `ui/dist/`.
 8. **Leave `web/` alone.** The current screen stays until every screen has moved; retiring `web/` is its own PR.
    Update INVENTORY.md if a control moved.

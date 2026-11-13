@@ -51,13 +51,15 @@ Three constraints shape how:
 
 ### How a screen moves
 
-1. The audit gates pass on the screen in the current Studio (`ci/playwright-audit`, when merged).
+1. The audit gates ([AUDIT.md](../ux/AUDIT.md)) pass on the screen in the current Studio. CI runs them on `/`
+   and, with `AUDIT_APP=next`, on `/next/` at the same addresses, each against its own known list.
 2. A component named for the screen's object in OBJECTS.md goes in `ui/src/screens/`, with a story that starts the
    machine at the screen's address. It reads the view with `useNav()` and moves with `go()`; it keeps no copy of
    where the person is.
 3. It goes in `SCREENS` in `ui/src/screens/index.ts`. Until then `/next/` shows the screen's name and a button to
    the current Studio at the same address.
-4. The same audit gates pass on `/next/`. `ui/dist/` is rebuilt and committed.
+4. The same audit gates pass on `/next/`, with no violation the current Studio's screen doesn't have. `ui/dist/`
+   is rebuilt and committed.
 5. Once every screen has moved, `/` serves the new UI and `web/`'s screens retire, in a PR of their own.
 
 [ui/README.md](../../ui/README.md) is the recipe in full.
