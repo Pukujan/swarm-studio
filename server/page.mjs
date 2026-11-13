@@ -64,7 +64,7 @@ export function canvasPage(webDir, extra = {}) {
     // the UI kit (docs/specs/12-flow-map.md): shadcn-style tokens and components, and the panel helpers
     .replace('<script src="ui.js"></script>', () => `<script>${read('ui.js')}</script>`)
     .replace('<link rel="stylesheet" href="ui.css">', () => `<style>${read('ui.css')}</style>`)
-    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${joinModules(webDir, ['route.js', 'icons.js', 'data.js', 'workshop.js', 'seo.js', 'layerlink.js', 'layers.js', 'clean.js', 'canvas/core.js', 'canvas/base.js', 'canvas/events.js', 'canvas/deck.js', 'canvas/panels.js', 'canvas/loop.js', 'canvas/talk.js', 'canvas/player.js', 'canvas/design.js', 'canvas/publish.js', 'canvas/marks.js', 'canvas/film.js', 'canvas/settings.js', 'canvas/replay.js', 'canvas/rooms.js', 'canvas/start.js', 'canvas/auto.js', 'canvas/dock.js', 'canvas/hook.js', 'canvas/hosted.js', 'canvas.js'])}</script>`)
+    .replace('<script type="module" src="canvas.js"></script>', () => `<script>window.SWARM = ${boot}</script>\n<script type="module">${joinModules(webDir, ['route.js', 'icons.js', 'data.js', 'workshop.js', 'seo.js', 'layerlink.js', 'layers.js', 'clean.js', 'video.js', 'canvas/core.js', 'canvas/base.js', 'canvas/events.js', 'canvas/deck.js', 'canvas/panels.js', 'canvas/loop.js', 'canvas/talk.js', 'canvas/player.js', 'canvas/design.js', 'canvas/publish.js', 'canvas/marks.js', 'canvas/film.js', 'canvas/settings.js', 'canvas/replay.js', 'canvas/rooms.js', 'canvas/start.js', 'canvas/auto.js', 'canvas/dock.js', 'canvas/hook.js', 'canvas/hosted.js', 'canvas.js'])}</script>`)
     // the studio frame, Projects and a project's canvas
     .replace('<link rel="stylesheet" href="studio.css">', () => `<style>${read('studio.css')}</style>`)
     .replace('<link rel="stylesheet" href="home.css">', () => `<style>${read('home.css')}</style>`)
@@ -76,5 +76,5 @@ export function canvasPage(webDir, extra = {}) {
     .replace('<link rel="stylesheet" href="workshop.css">', () => `<style>${read('workshop.css')}</style>`)
     .replace('<link rel="stylesheet" href="pet.css">', () => `<style>${read('pet.css')}</style>`)
     // the studio controller, Projects and a project: its own modules joined into one
-    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${joinModules(webDir, ['icons.js', 'route.js', 'setup-parts.js', 'setup.js', 'settings.js', 'makeways.js', 'home.js', 'edit/patches.js', 'layers.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', ...kitFiles(webDir), 'kits.js', 'scaffold.js', 'nav.js', 'pet.js', 'studio.js'])}</script>`)
+    .replace('<script type="module" src="studio.js"></script>', () => `<script type="module">${joinModules(webDir, ['icons.js', 'route.js', 'video.js', 'setup-parts.js', 'setup.js', 'settings.js', 'makeways.js', 'home.js', 'edit/patches.js', 'layers.js', 'project.js', 'work.js', 'board.js', 'plan.js', 'brand.js', ...kitFiles(webDir), 'kits.js', 'scaffold.js', 'nav.js', 'pet.js', 'studio.js'])}</script>`)
 }

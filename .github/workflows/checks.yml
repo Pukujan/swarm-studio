@@ -161,6 +161,9 @@ jobs:
       - run: node scripts/open-check.mjs
       # model-written pages cannot reach the studio (scripts/sandbox-check.mjs, catalog review point 4)
       - run: node scripts/sandbox-check.mjs
+      # board videos: posters, teardown off screen, at most 2 playing, while a board of 10 clips is scrolled
+      # (scripts/video-check.mjs, web/video.js)
+      - run: node scripts/video-check.mjs
   # the UI audit gates (docs/ux/AUDIT.md, tools/dev/audit): every top-level screen at 1440 and 390 wide has
   # its breadcrumb, no axe violation, no sideways scroll, no console error and a loading state, apart from the
   # violations already in .ui-audit-known-violations.json
