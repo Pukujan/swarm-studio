@@ -27,6 +27,8 @@ jobs:
       # the next UI (ui/, docs/decisions/0013-react-ui-coexists.md): its type check and dependency rules, and the
       # committed ui/dist/ is what its source builds (development only: the plugin installs none of it)
       - run: npm ci --prefix ui --no-audit --no-fund
+      # ui/'s own tests (the boards' tier manager, its fast-check properties): they import ui/'s dependencies
+      - run: npm test --prefix ui
       - run: npm run --prefix tools/dev typecheck:ui
       - run: npm run --prefix tools/dev deps:ui
       - run: npm run --prefix tools/dev ui:check
