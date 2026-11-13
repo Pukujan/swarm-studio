@@ -69,15 +69,24 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --quiet pillow
       - run: bash scripts/check.sh
+      # the sections below each run even when one before them failed, so one run shows every Mac failure
       # Hermes at the release the plugin asks for (plugin.yaml requires_hermes), then this commit installed
       # through it: Hermes clones it, scans it and copies it into $HERMES_HOME/plugins/
-      - run: python -m pip install --quiet "hermes-agent @ git+https://github.com/NousResearch/hermes-agent@v0.23.1"
-      - run: hermes plugins install "file://$GITHUB_WORKSPACE" --force --enable --yes-deps
-      - run: hermes plugins list | tee "$RUNNER_TEMP/plugins.txt" && grep -q swarm-studio "$RUNNER_TEMP/plugins.txt"
-      - run: node scripts/macos-check.mjs tree "$HERMES_HOME/plugins/swarm-studio"
+      - id: hermes
+        if: ${{ !cancelled() }}
+        run: python -m pip install --quiet "hermes-agent @ git+https://github.com/NousResearch/hermes-agent@v0.23.1"
+      - id: install
+        if: ${{ !cancelled() && steps.hermes.outcome == 'success' }}
+        run: hermes plugins install "file://$GITHUB_WORKSPACE" --force --enable --yes-deps
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: hermes plugins list | tee "$RUNNER_TEMP/plugins.txt" && grep -q swarm-studio "$RUNNER_TEMP/plugins.txt"
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: node scripts/macos-check.mjs tree "$HERMES_HOME/plugins/swarm-studio"
       # the installed copy's launcher starts its server (HOME, TMPDIR and $HERMES_HOME paths as on a Mac); both
       # Studios answer, the current one at / and the prebuilt next one at /next/
       - name: the installed server starts and serves / and /next/
+        id: served
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         working-directory: ${{ env.HERMES_HOME }}/plugins/swarm-studio
         run: |
           python -c "import json, launcher; r = launcher.ensure_server(); print(json.dumps(r)); assert r.get('running'), r"
@@ -88,22 +97,27 @@ jobs:
           state=$(curl -sf -H "x-swarm-token: $token" http://127.0.0.1:4319/api/state); grep -q '"app":"swarm-studio"' <<< "$state"
           pid=$(python -c "import json, sys; print(json.loads(sys.argv[1])['pid'])" "$state")
           kill "$pid"
-      - if: failure()
-        run: cat "$HERMES_HOME"/swarm-studio/*.log 2>/dev/null || true
+      - if: ${{ !cancelled() && steps.served.outcome == 'failure' }}
+        run: ls -la "$HERMES_HOME/swarm-studio"; cat "$HERMES_HOME"/swarm-studio/*.log 2>/dev/null || true
       # the film renderer's darwin ffmpeg and ffprobe: installed from the pinned packages and checked against
       # their SHA-256 for this Mac, and the other Mac's (arm64 / x64) fetched and checked too
-      - run: node scripts/macos-check.mjs ffmpeg
+      - if: ${{ !cancelled() }}
+        run: node scripts/macos-check.mjs ffmpeg
       # Godot as a Mac has it: the app, found without Homebrew on PATH
-      - run: brew install --cask godot
-      - run: node scripts/macos-check.mjs godot
+      - id: godot
+        if: ${{ !cancelled() }}
+        run: brew install --cask godot
+      - if: ${{ !cancelled() && steps.godot.outcome == 'success' }}
+        run: node scripts/macos-check.mjs godot
       # the UI audit gates, as in ui-audit, on the current Studio and on /next/
-      - run: npm ci --no-audit --no-fund
+      - id: devdeps
+        if: ${{ !cancelled() }}
+        run: npm ci --no-audit --no-fund && npx playwright install chromium-headless-shell
         working-directory: tools/dev
-      - run: npx playwright install chromium-headless-shell
+      - if: ${{ !cancelled() && steps.devdeps.outcome == 'success' }}
+        run: npm run audit
         working-directory: tools/dev
-      - run: npm run audit
-        working-directory: tools/dev
-      - if: success() || failure()
+      - if: ${{ !cancelled() && steps.devdeps.outcome == 'success' }}
         run: npm run audit
         working-directory: tools/dev
         env:
