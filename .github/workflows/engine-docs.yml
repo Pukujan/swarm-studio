@@ -18,4 +18,6 @@ jobs:
         with:
           node-version: 24
       - run: node scripts/engine-docs-check.mjs
-      - run: node scripts/engine-docs-check.mjs --base ${{ github.event.pull_request.base.sha }}
+      # against main as it is now (fetch-depth 0 has it): from the base commit the pull request was opened against, a
+      # branch that merged main in would be charged with every glue change main gained since
+      - run: node scripts/engine-docs-check.mjs --base origin/${{ github.event.pull_request.base.ref }}

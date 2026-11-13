@@ -7,6 +7,7 @@ import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.m
 import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme, namedColours, missingColours } from './pagetype.mjs'
 import { tidyFragment } from './tidy.mjs'
 import { fixSection } from './review.mjs'
+import { lintSection, forBuilder } from './lint/index.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
 import { cleanSeo, reviewSeo } from './seo.mjs'
 import { projectName } from './naming.mjs'
@@ -405,12 +406,34 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         planned: stats.planned,
         html: text
       })
+      // the slop linter (engine/lint, decision 0016) reads every section: model-free, so it costs no time
+      // to speak of. What it must have fixed (P0) goes back to this builder for one pass; the rest is
+      // the reviewer's to see
+      const found = lintSection(text, { content: layer.content })
+      if (found.length) emit('layer:lint', { page: layer.page, layer: layer.id, agent: agent.id, findings: found.map(({ severity, id, message }) => ({ severity, id, message })) })
+      const must = found.filter(f => f.severity === 'P0')
+      if (must.length && !signal?.aborted) await lintFix(agent, layer, must)
     } catch (err) {
       // stopped: the section is left unbuilt (Resume builds it), not failed
       if (signal?.aborted) return
       stats.failed++
       emit('layer:failed', { page: layer.page, layer: layer.id, agent: agent.id, message: String(err.message || err) })
     }
+  }
+
+  // the builder's fix pass for what the linter flagged P0: streamed back like a review fix. The rewrite is
+  // kept when it breaks fewer of those rules; when it is cut off, stopped or no better, the first one stays
+  async function lintFix(agent, layer, must) {
+    const page = layer.page, first = layer.html, started = performance.now()
+    emit('layer:reset', { page, layer: layer.id, agent: agent.id })
+    try {
+      const html = tidyFragment(await fixSection({
+        provider: workerProvider, model: workerModel, theme: plan.theme || {}, html: first, role: layer.role || layer.id, ...forBuilder(must), images, kind: 'lint-fix',
+        signal, onDelta: d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d })
+      }))
+      if (lintSection(html, { content: layer.content }).filter(f => f.severity === 'P0').length < must.length) layer.html = html
+    } catch { /* the first one stays */ }
+    emit('layer:done', { page, layer: layer.id, agent: agent.id, ms: Math.round(performance.now() - started), done: stats.done, planned: stats.planned, html: layer.html, fixed: true, lint: must.map(f => f.id) })
   }
 
   // a finished section rewritten for a follow-up (the /fix path): cleared, streamed back,
