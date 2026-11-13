@@ -101,7 +101,8 @@ export function Board({ ref, label, fit = [0.3, 1.25], selected, onClear, inspec
   useEffect(() => {
     const key = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || !selected) return
-      if (e.target instanceof Element && e.target.closest('input, textarea, [role="dialog"]')) return
+      if (document.querySelector('[role="dialog"], [role="menu"]')) return
+      if (e.target instanceof Element && e.target.closest('input, textarea')) return
       e.preventDefault()
       onClear()
     }

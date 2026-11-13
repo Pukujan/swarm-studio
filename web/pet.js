@@ -190,7 +190,7 @@ export function makePet({ sw, C, doc = document }) {
   // read at most twice a second: a pointermove must not force a layout each time
   let zones = { at: 0, rects: /** @type {DOMRect[]} */ ([]) }
   const avoid = () => {
-    if (Date.now() - zones.at > 500) zones = { at: Date.now(), rects: [...doc.querySelectorAll('body.cosmos-chat .side, .pj-insp:not([hidden]), .ui-overlay, .ui-popover')].map(n => n.getBoundingClientRect()).filter(r => r.width && r.height) }
+    if (Date.now() - zones.at > 500) zones = { at: Date.now(), rects: [...doc.querySelectorAll('body.cosmos-chat .side, .pj-insp:not([hidden]), aside[aria-label="Inspector"]:not([hidden]), .ui-overlay, .ui-popover')].map(n => n.getBoundingClientRect()).filter(r => r.width && r.height) }
     return zones.rects
   }
   function clear(x, y) {
@@ -217,8 +217,8 @@ export function makePet({ sw, C, doc = document }) {
       return
     }
     if (phone()) {
-      // a phone: the edge of the board, above the chat; touches are not followed
-      const side = doc.querySelector('body.cosmos-chat .side')
+      // a phone: the edge of the board, above the chat or an open inspector sheet; touches are not followed
+      const side = doc.querySelector('aside[aria-label="Inspector"]:not([hidden])') || doc.querySelector('body.cosmos-chat .side')
       const top = side ? side.getBoundingClientRect().top : win.innerHeight
       ;[P.tx, P.ty] = [Math.max(8, win.innerWidth - 44), Math.max(70, Math.min(win.innerHeight - 110, top - 48))]
       el.classList.add('flip')
@@ -338,7 +338,8 @@ export function makePet({ sw, C, doc = document }) {
     const moved = next !== P.work || at !== P.workAt
     P.work = next
     P.workAt = at
-    if (next ? moved || Date.now() - P.movedAt > 1200 : moved) go()
+    // on a phone her spot moves with the sheets that open under her (the chat, an inspector)
+    if (next ? moved || Date.now() - P.movedAt > 1200 : moved || phone()) go()
   }
 
   // ---------- what she says: a burst of events makes one reaction, at most one bubble every ~20 s
