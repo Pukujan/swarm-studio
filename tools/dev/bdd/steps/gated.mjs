@@ -69,8 +69,10 @@ async function open({ page, app, studio: s }, screen, width, hold) {
       const t0 = performance.now()
       const look = () => {
         m.busy = Math.max(m.busy, count(BUSY))
-        m.waitCards = Math.max(m.waitCards, count('.card.wait-in[aria-busy="true"]'))
-        m.siteSkeletons = Math.max(m.siteSkeletons, count('.pj-sec.site .ab.page[aria-busy="true"]'))
+        // each Studio's own markup: / marks each skeleton busy; /next/ marks the list busy (ui/src/screens/Projects.tsx
+        // Waiting) and draws its pages as .ov-ab (ui/src/screens/overview/Artboard.tsx WaitingPages)
+        m.waitCards = Math.max(m.waitCards, count('.card.wait-in[aria-busy="true"], [aria-busy="true"] > .wait-in'))
+        m.siteSkeletons = Math.max(m.siteSkeletons, count('.pj-sec.site .ab.page[aria-busy="true"], .ov-sec .ov-ab.page.ov-wait[aria-busy="true"]'))
         const status = document.getElementById('status')
         if (status && shown(status) && status.textContent.trim() === 'Ready') m.ready = true
         if (/nothing here/i.test(document.body?.innerText || '')) m.nothingHere = true
