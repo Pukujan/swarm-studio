@@ -747,7 +747,7 @@ export function makeHome({ sw, C, root }) {
       // Not started: Projects stays, with the words back in the box. Another build running is
       // shown on the deck on request; anything else has said why in the chat (Hermes, a talk, the question
       // before a new website: web/canvas/loop.js opens it, decision 0020)
-      if (!input.value) input.value = text
+      if (!input.value && !made?.ask) input.value = text
       if (made?.busy) toast('<span>A build is running. Yours can start when it ends.</span>', made.run ? 'Watch it' : null, made.run ? () => C.started(made.run, { room: 'deck' }) : null)
       return
     }

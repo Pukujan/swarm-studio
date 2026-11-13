@@ -439,6 +439,8 @@ async function sendDock() {
     await new Promise(r => setTimeout(r, 0))
     if (j.ask === 'talk') {
       const from = to.from || null
+      // from the Make box: the talk is in the Design deck's chat, so it opens there (as the question's chat does)
+      if (!from) { window.swarmCosmos?.go?.('station', 'canvas'); window.swarmCosmos?.chat?.(true) }
       return void talkStart({ text: brief, blank: !from, from, build: (text, chat) => { setNextRoute(from ? { from, route: 'extend', selected: false, chat } : { fresh: true, chat }); els.brief.value = text; els.form.requestSubmit() } })
     }
     return void openAsk(j.chat)
