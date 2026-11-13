@@ -26,6 +26,7 @@ Open Design is a whole design app (daemon, CLI, MCP, Electron desktop) at https:
 | html-ppt class names and type/grid/card sizes, rescaled to 1920 x 1080 | engine/deck.mjs:123-152 | same (engine/opendesign/NOTICE:41-44) | MIT |
 | `source-patches.ts` + `types.ts` ported to plain JS | web/edit/patches.js | open-design `6147958` (web/edit/NOTICE:3-5) | Apache-2.0 (web/edit/NOTICE:7) |
 | `lint-artifact.ts` (the slop linter) ported to plain JS, rules and messages unchanged | engine/lint/artifact.mjs | open-design `59e4f2a` (engine/lint/NOTICE:3-6) | Apache-2.0 (engine/lint/LICENSE) |
+| Craft and anti-slop rules, condensed into the builders' prompt and the reviewer's; the reviewer's 0-10 score, pass mark 8 and 3 rounds from Critique Theater's defaults (no code) | engine/prompts.mjs, engine/review.mjs | open-design `59e4f2a` (engine/opendesign/NOTICE, last entry) | Apache-2.0; craft/ itself adapts refero_skill (MIT) |
 | Two skills, unmodified: `threejs`, `shader-dev` | gameskills/opendesign/ | open-design main `87a4f91` (gameskills/README.md:10, 79-80) | Apache-2.0; upstream MIT (gameskills/opendesign/threejs/LICENSE.upstream:1-3) |
 
 - Dropped from design systems: components, spacing, motion, the full token scale, previews, Tailwind files; brand-named systems never imported (engine/opendesign/NOTICE:15-23).

@@ -1,4 +1,5 @@
-// The Studio's next UI (ui/, docs/decisions/0013-react-ui-coexists.md) at /next/: its committed build, ui/dist/,
+// The Studio's next UI (ui/, docs/decisions/0013-react-ui-coexists.md) at /next/: its build, ui/dist/ (carried by the
+// release the catalog pins, built by CI on every branch: docs/decisions/0018-next-ui-build-on-release.md),
 // as one document with the script and styles inline, like the canvas page (server/page.mjs), because the Desktop
 // pane's frame has an opaque origin and cannot import. The token goes in here, at serve time, never into ui/dist/.
 // Nothing is built or fetched: a plugin without ui/dist/ answers 404 at /next/ and the current Studio is unchanged.

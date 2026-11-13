@@ -84,6 +84,14 @@ async function loadApp() {
 
 // a build another Studio drives has no live feed here: read the shared log again every few seconds
 setInterval(() => { if (view === 'app' && appv.elsewhere && !document.hidden) loadApp() }, 4000)
+// someone is looking at the app: its server is kept (engine/appjob.mjs seen); with nobody looking it stops after
+// Settings › Background's time, and the next look opens it again
+function appSeen() {
+  if (view !== 'app' || document.hidden || !appv.run || !appv.url || appv.elsewhere) return
+  appApi('/seen', {}).then(o => { if (!o.url) { appv.url = null; loadApp() } }).catch(() => {})
+}
+setInterval(appSeen, 30000)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && view === 'app') { if (appv.url) appSeen(); else loadApp() } })
 
 // the latest play test, filmed: the clip loops from the first key, with the key it pressed
 const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
@@ -225,8 +233,11 @@ function renderApp() {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
-      : working || appv.opening
-        ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+      // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
+      : appv.opening && !working
+        ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
+      : working
+        ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
         : st === 'failed' && appv.result?.artStop
           ? artStopCard(appv.result.artStop)
         : st === 'failed' && appv.message === 'stopped'
@@ -689,6 +700,13 @@ export function appEvent(e) {
   } else if (e.type === 'app:ready') {
     // only a live event: an old one from the log names a dev server that may be gone
     if (fresh_) appv.url = e.url
+    // served built now, on the same address: the frame loads it again
+    if (fresh_ && e.built) appEls.frame.dataset.src = ''
+  } else if (e.type === 'app:parked') {
+    // its server stopped (no viewer for a while, or room for another app): open again when it is looked at
+    appv.url = null
+    appEls.frame.dataset.src = ''
+    if (view === 'app' && !document.hidden) loadApp()
   } else if (e.type === 'app:done') {
     Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
     if (e.url && fresh_) appv.url = e.url

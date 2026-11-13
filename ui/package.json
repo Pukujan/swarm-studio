@@ -1,7 +1,7 @@
 {
   "name": "swarm-studio-ui",
   "private": true,
-  "description": "The Studio's next UI: Vite, React 19, TypeScript, XState and React Aria (docs/decisions/0013-react-ui-coexists.md). Development only: its build, ui/dist/, is committed and the plugin's server serves it at /next/, so installing the plugin builds and downloads nothing. It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install.",
+  "description": "The Studio's next UI: Vite, React 19, TypeScript, XState and React Aria (docs/decisions/0013-react-ui-coexists.md). Development only: its build, ui/dist/, is made by CI on every branch and committed only on the release the catalog pins (docs/decisions/0018-next-ui-build-on-release.md), and the plugin's server serves it at /next/, so installing the plugin builds and downloads nothing. It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,6 @@
     "build-storybook": "storybook build -o storybook-static --quiet"
   },
   "devDependencies": {
-    "@pixi/react": "8.0.5",
     "@storybook/react-vite": "10.6.5",
     "@swc/core": "1.16.20",
     "@tailwindcss/vite": "4.3.3",
@@ -26,8 +25,6 @@
     "@xstate/react": "6.1.0",
     "dependency-cruiser": "18.7.2",
     "fast-check": "4.10.2",
-    "pixi-viewport": "7.0.2",
-    "pixi.js": "8.22.0",
     "rbush": "4.0.1",
     "react": "19.1.10",
     "react-aria-components": "1.22.1",

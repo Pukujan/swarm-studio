@@ -76,7 +76,7 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
               </div>
             : board === 'dom'
               ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} />
-              // the image-first board, behind ?board=tiers|pixi until the gauge says (src/board/flag.ts)
+              // the image-first board, behind ?board=tiers until the gauge says (src/board/flag.ts)
               : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={picked ?? view.page ?? null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
