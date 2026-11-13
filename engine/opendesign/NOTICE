@@ -47,3 +47,12 @@ Changes made for Swarm Studio (scripts/import-od-decks.mjs):
 
 The slop linter (engine/lint/artifact.mjs) is ported from Open Design's apps/daemon/src/lint-artifact.ts
 (commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582), Apache-2.0; its notice and licence are in engine/lint/.
+
+----
+
+The builders' craft rules (engine/prompts.mjs WORKER_SYSTEM) and the reviewer's AI-default look
+(engine/review.mjs) are condensed, in our words, from Open Design's apps/daemon/src/prompts/core-slim.ts
+("Design Craft") and craft/anti-ai-slop.md, craft/typography.md and craft/color.md (commit
+59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582, Apache-2.0; craft/ adapts referodesign/refero_skill, MIT). The
+reviewer's 0-10 score, its pass mark of 8 and its 3 rounds follow the defaults of Open Design's Critique
+Theater (packages/contracts/src/critique.ts); none of its code is used.
