@@ -3,7 +3,7 @@
 // calls the button and the menu, for a label that is only an icon.
 // MenuAt is the same menu opened by something other than its own button (Make's submit, a right-click at a point);
 // MenuRow is an item with its icon, a ✓ when it is the current one, and red for a step that removes something.
-import type { ReactNode, RefObject } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { Menu as AriaMenu, MenuItem as AriaMenuItem, MenuTrigger, Popover, Separator, SubmenuTrigger, type MenuItemProps, type MenuProps } from 'react-aria-components'
 import { Button, type Role } from './Button'
 import { Icon } from './Icon'
@@ -22,9 +22,16 @@ export function Menu<T extends object>({ label, name, role = 'ghost', className,
 }
 
 export function MenuAt<T extends object>({ name, triggerRef, isOpen, onClose, placement = 'bottom end', children, ...props }: MenuProps<T> & { name: string, triggerRef: RefObject<Element | null>, isOpen: boolean, onClose: () => void, placement?: 'bottom end' | 'bottom start' | 'top start' }) {
+  // opened without its own button, the menu takes the focus once it is placed: the current item, else the first
+  const menu = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!isOpen) return
+    const t = setTimeout(() => (menu.current?.querySelector<HTMLElement>('[aria-checked="true"]') || menu.current?.querySelector<HTMLElement>('[role^="menuitem"]'))?.focus(), 30)
+    return () => clearTimeout(t)
+  }, [isOpen])
   return (
     <Popover triggerRef={triggerRef} isOpen={isOpen} onOpenChange={open => { if (!open) onClose() }} placement={placement} offset={6} className={POPOVER}>
-      <AriaMenu {...props} aria-label={name} autoFocus={props.autoFocus ?? 'first'} onClose={onClose} className="outline-none">{children}</AriaMenu>
+      <AriaMenu {...props} ref={menu} aria-label={name} onClose={onClose} className="outline-none">{children}</AriaMenu>
     </Popover>
   )
 }

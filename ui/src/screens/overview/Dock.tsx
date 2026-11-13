@@ -22,7 +22,7 @@ export const Dock = forwardRef<HTMLInputElement, {
         <input ref={ref} value={text} onChange={e => onText(e.target.value)} placeholder="Tell the crew…" aria-label="Tell the crew" maxLength={4000}
           className="min-w-0 flex-1 bg-transparent font-monospace text-sm text-text outline-none placeholder:text-dim" />
         <button type="submit" aria-label="Send"
-          className="grid size-10 flex-none cursor-pointer place-items-center rounded-full bg-accent text-accent-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-frame-hi">
+          className="grid size-10 flex-none cursor-pointer place-items-center rounded-[10px] bg-text text-void outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-frame-hi">
           <Icon name="up" size={16} />
         </button>
       </form>

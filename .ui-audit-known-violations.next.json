@@ -68,16 +68,8 @@
     "detail": "reads \"Overview\", should read \"Home › Projects › Alpha Tea › Overview\""
   },
   {
-    "key": "overview@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
     "key": "overview@390 breadcrumb",
     "detail": "reads \"Overview\", should read \"Home › Projects › Alpha Tea › Overview\""
-  },
-  {
-    "key": "overview@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
   },
   {
     "key": "plan@1440 breadcrumb",
