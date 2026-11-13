@@ -5,6 +5,8 @@ import type { ComponentType } from 'react'
 import type { Room } from '../nav/nav'
 import { StudioFirst } from './StudioFirst'
 import { DesignDeck } from './DesignDeck'
+// an app build's App room, the app build wall (spec 44); a game's App room has not moved and stays the stand-in
+import { AppWall } from './app/AppWall'
 
 export const SCREEN_NAMES: Record<Room, string> = {
   home: 'Projects',
@@ -21,6 +23,7 @@ export const SCREEN_NAMES: Record<Room, string> = {
 
 // the Design deck's shell is slice 1 of its port (issue #404); `draft`, a new project's deck, has not moved
 export const SCREENS: Partial<Record<Room, ComponentType>> = {
+  app: AppWall,
   deck: DesignDeck,
   studio: StudioFirst
 }

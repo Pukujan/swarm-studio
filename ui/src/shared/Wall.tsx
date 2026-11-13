@@ -25,7 +25,8 @@ export function Wall({ label, windows, start = 0 }: { label: string, windows: Wa
   const names = useRef<(HTMLButtonElement | null)[]>([])
   useEffect(() => { setOne(start) }, [start])
 
-  // Esc puts an enlarged window back; it is this wall's, so the frame does not also leave the screen
+  // Esc puts an enlarged window back; it is this wall's, so the frame does not also leave the screen: heard in the
+  // capture phase, before the frame's own Esc (App.tsx), which skips a key already taken
   useEffect(() => {
     if (big == null) return
     const onKey = (e: KeyboardEvent) => {
@@ -34,8 +35,8 @@ export function Wall({ label, windows, start = 0 }: { label: string, windows: Wa
       setBig(null)
       names.current[big]?.focus()
     }
-    addEventListener('keydown', onKey)
-    return () => removeEventListener('keydown', onKey)
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
   }, [big])
 
   const move = (i: number, by: number) => {
