@@ -34,6 +34,12 @@ for (const [name, over] of [['score', { score: 6.4 }], ['findings', { findings: 
   })
 }
 
+test('a base with no score of its own is not compared on score', () => {
+  const { fails, table } = judge(side({ score: 10, scored: false }), side({ score: 6, scored: true }), T)
+  assert.deepEqual(fails, [])
+  assert.match(table, /6 \(the base gives no score\)/)
+})
+
 test('a set only after the change is listed, not judged', () => {
   const after = side(); after.sets.harbour = after.sets.kiln
   const { fails, table } = judge(side(), after, T)

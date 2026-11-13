@@ -127,7 +127,8 @@ async function scorePage(root, set, built, browser) {
     const height = Math.min(9000, Math.max(...sections.map(s => s.top + s.height), 800))
     const shot = await page.screenshot({ type: 'jpeg', quality: 70, clip: { x: 0, y: 0, width: 1280, height } })
     const r = await reviewPage({ provider: provider(), model: REVIEWER, brief: set.brief, page: set.title, sections: sections.map(s => ({ ...s, role: set.layers.find(l => `home/${l[0]}` === s.key)?.[1] || '' })), image: `data:image/jpeg;base64,${shot.toString('base64')}` })
-    // a reviewer without a score (a tree before the scored review) is scored by its issues, the same on both sides
+    // a reviewer without a score (a tree before the scored review) is scored by its issues; judge() compares
+    // the score only when both sides were really scored
     return { score: r.score ?? Math.max(0, 10 - 2 * r.issues.length), scored: r.score != null, issues: r.issues.length, verdict: r.verdict }
   } finally { await page.close() }
 }
@@ -147,7 +148,7 @@ async function measure(out, root = ROOT, runs = 2) {
         console.log(`· ${set.id} run ${i + 1}: ${(b.wallMs / 1000).toFixed(1)} s, score ${s.score ?? '-'}, ${b.p0} P0 ${b.p1} P1, ${b.tokens.in}+${b.tokens.out} tokens`)
       }
       const mean = k => { const v = rs.map(r => r[k]).filter(Number.isFinite); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 100) / 100 : null }
-      sets[set.id] = { runs: rs, wallMs: mean('wallMs'), tokensIn: mean('tokensIn'), tokensOut: mean('tokensOut'), score: mean('score'), findings: Math.round((mean('p0') + mean('p1')) / set.layers.length * 100) / 100, p0: mean('p0'), errors: mean('errors') }
+      sets[set.id] = { runs: rs, scored: rs.every(r => r.scored), wallMs: mean('wallMs'), tokensIn: mean('tokensIn'), tokensOut: mean('tokensOut'), score: mean('score'), findings: Math.round((mean('p0') + mean('p1')) / set.layers.length * 100) / 100, p0: mean('p0'), errors: mean('errors') }
     }
   } finally { await browser.close() }
   const report = { fingerprint: await fingerprint(root), model: MODEL, reviewer: REVIEWER, runs, at: new Date().toISOString(), sets }
@@ -164,7 +165,7 @@ export function judge(before, after, t = THRESHOLDS) {
     if (!b) { rows.push(`| ${id} | new set | | | | |`); continue }
     const pct = (x, y) => y ? Math.round((x - y) / y * 100) : 0
     const checks = [
-      ['score', a.score != null && b.score != null && a.score < b.score - t.scoreDrop, `${b.score} → ${a.score}`],
+      ['score', a.score != null && b.score != null && b.scored !== false && a.scored !== false && a.score < b.score - t.scoreDrop, b.scored === false && a.scored !== false ? `${a.score} (the base gives no score)` : `${b.score} → ${a.score}`],
       ['findings per section', a.findings > b.findings + t.findingsRise, `${b.findings} → ${a.findings}`],
       ['P0 findings', a.p0 > b.p0 + t.p0Rise, `${b.p0} → ${a.p0}`],
       ['wall time', pct(a.wallMs, b.wallMs) > t.timeRisePct, `${(b.wallMs / 1000).toFixed(1)} s → ${(a.wallMs / 1000).toFixed(1)} s (${pct(a.wallMs, b.wallMs)}%)`],

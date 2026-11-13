@@ -13,7 +13,7 @@ and fails past the thresholds. It is how decision 0007's "a prompt change comes 
 
   | | how |
   |---|---|
-  | score | the reviewer (`engine/review.mjs` `reviewPage`, a vision model) on a 1280-wide photo of the page, 0–10. A tree from before the scored review gives 10 minus 2 per issue, on both sides |
+  | score | the reviewer (`engine/review.mjs` `reviewPage`, a vision model) on a 1280-wide photo of the page, 0–10. A tree from before the scored review gives 10 minus 2 per issue, and the score is then not compared |
   | findings | slop-linter findings (`engine/lint`) per section, P0 and P1, counted with the newer tree's linter on both sides |
   | time | the page's wall time, fix passes included |
   | tokens | prompt and completion tokens, as the endpoint counts them |
