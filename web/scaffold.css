@@ -64,5 +64,5 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .scaffold .pj-layers { padding-top: 2px; }
 .scaffold .pj-layers .pg-title { gap: 9px; }
 @media (max-width: 760px) { .scaffold.files-on { z-index: 141; } }
-.sc-layers-btn { position: absolute; right: 12px; top: 12px; z-index: 44; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; width: 40px; height: 40px; place-items: center; color: var(--muted); cursor: pointer; }
+.sc-layers-btn { position: absolute; right: 12px; top: 12px; z-index: 44; background: var(--deep); border: 1px solid var(--line); border-radius: 10px; width: 40px; height: 40px; place-items: center; color: var(--muted); cursor: pointer; }
 .sc-layers-btn[aria-expanded="true"] { color: var(--text); background: var(--surface-2); }

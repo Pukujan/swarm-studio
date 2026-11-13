@@ -56,7 +56,7 @@ one, so a designer already knows it (rule 32).
 
 | Figma | Design deck |
 |---|---|
-| Left panel: the file name and main menu, Pages, Layers | The same. The logo menu holds the five-slot nav, Versions and Export all. A dot on a layer means an agent is working on it. The Overview's Layers tab and the Studio scaffold's left panel draw the same tree (web/layers.js); there a dot means the planner is still drafting that section |
+| Left panel: the file name and main menu, Pages, Layers | The same. The logo menu holds the five-slot nav, Versions and Export all. A dot on a layer means an agent is working on it. The Design deck's Layers panel (left of the canvas; a sheet from the Layers button in a narrow pane), the Overview's Layers tab and the Studio scaffold's left panel draw the same tree (web/layers.js); on the scaffold a dot means the planner is still drafting that section |
 | The bottom toolbar: Move, Frame, Shape, Pen, Text, Comment, Actions, Dev Mode | Move, Frame, Shape, Pen, Text, Comment, **Hermia** (in place of Actions: ⌘K, search any action or ask the crew), **Code** (in place of Dev Mode) |
 | Right panel, top row: who's here, Present, Share, zoom | The crew's avatars, the progress pill, **Play**, **Share**, zoom |
 | Right panel with nothing selected: page colour, variables, styles, export | The same; our variables are the design tokens the planner set up |

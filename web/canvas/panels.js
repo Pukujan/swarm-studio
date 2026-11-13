@@ -1,7 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the panels: theme, layer tree, agents, status, toolbar, and the chat feed with its messages.
 import { layerDrag } from '../layerlink.js'
-import { layerTree } from '../layers.js'
+import { layerTree, layerSheet } from '../layers.js'
 import { S, els, TOOL, TOOLS, Crew, HERMIA, api } from './core.js'
 import { slotFor, setAuto, fit, post, focusPage, toolFlash } from './deck.js'
 import { design, showDtab, esc } from './design.js'
@@ -62,6 +62,12 @@ function hideLayer(l, hide) {
   renderTree()
 }
 
+// the Design deck's Layers in a narrow pane: a sheet from the Layers button on the canvas; a pick closes it
+const deckSide = /** @type {HTMLElement | null} */ (document.querySelector('.deck-layers')), deckBtn = /** @type {HTMLElement | null} */ (document.querySelector('.deck-layers-btn'))
+const deckSheet = deckSide && deckBtn ? layerSheet(document.body, deckSide, deckBtn) : null
+if (deckSheet && deckBtn) deckBtn.onclick = () => deckSheet.set(!deckSheet.on)
+const deckPicked = () => { if (deckSheet?.on) deckSheet.set(false) }
+
 export function renderTree() {
   if (treeRun !== S.run) { treeRun = S.run; layersOpen.clear(); layersHidden.clear() }
   treeSel = S.sel
@@ -86,10 +92,10 @@ export function renderTree() {
   layerTree(els.tree, groups, {
     group(id, caret) {
       if (caret || id === '*') S.closed.has(id) ? S.closed.delete(id) : S.closed.add(id)
-      else { S.closed.delete(id); focusPage(id) }
+      else { S.closed.delete(id); deckPicked(); focusPage(id) }
       renderTree()
     },
-    row: key => { const l = S.layers.get(key); if (l) selectLayer(l) },
+    row: key => { const l = S.layers.get(key); if (l) { deckPicked(); selectLayer(l) } },
     twist(key) { layersOpen.has(key) ? layersOpen.delete(key) : layersOpen.add(key); renderTree() },
     eye(key) { const l = S.layers.get(key); if (l) hideLayer(l, !layersHidden.has(key)) },
     drag: (e, key, name) => layerDrag(e, key, name)

@@ -6,7 +6,9 @@
 // animations held still. Two recordings are then compared step by step.
 //
 //   node scripts/motion-check.mjs record <dir> [--root <tree>] [--only a,b]   record this tree (or another)
-//   node scripts/motion-check.mjs compare <dir-a> <dir-b> [--tolerance <pixels>]
+//   node scripts/motion-check.mjs compare <dir-a> <dir-b> [--tolerance <pixels>] [--looks a,b]
+//     --looks: scenes whose end picture a pull request means to change (its description's "Motion: looks
+//     change in a, b" line, docs/ux/MOTION.md); their animations are still compared, only the picture is not
 //   node scripts/motion-check.mjs clips <dir> [--only a,b]                   short real-time clips to watch
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check)
 //
@@ -193,7 +195,7 @@ const kinds = steps => [...new Set(steps.flatMap(x => x.sig.map(kind)))].sort()
 const load = dir => JSON.parse(readFileSync(join(dir, 'trace.json'), 'utf8'))
 const both = (x, y) => x.filter(k => y.includes(k)), either = (x, y) => [...new Set([...x, ...y])]
 
-async function compare(before, after, tolerance = 2000) {
+async function compare(before, after, tolerance = 2000, looks = []) {
   const [A1, A2] = before.map(load), [B1, B2] = after.map(load)
   const { chromium } = await loadPlaywright()
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
@@ -215,7 +217,8 @@ async function compare(before, after, tolerance = 2000) {
         n = Math.min(n, runs[i].at(-1).png === runs[j].at(-1).png ? 0 : await pixelDiff(page, end(before[i], runs[i]), end(after[j - 2], runs[j])))
         if (n <= tolerance) break
       }
-      if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})`) }
+      if (n > tolerance && looks.includes(id)) console.log(`  ${id}: the picture it ends on differs by ${n} pixels, as the pull request says it should`)
+      else if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})`) }
       console.log(`${bad ? '✗' : '✓'} ${id}: ${both(a1, a2).length} kinds of animation${bad ? ', differs' : ', the same'}`)
     }
   } finally { await browser.close() }
@@ -253,6 +256,6 @@ async function clips(out) {
 }
 
 if (cmd === 'record' && pos[0]) await record(resolve(pos[0]), { root: resolve(flag('root', ROOT)) })
-else if (cmd === 'compare' && pos[1]) await compare(pos[0].split(',').map(d => resolve(d)), pos[1].split(',').map(d => resolve(d)), Number(flag('tolerance', 2000)))
+else if (cmd === 'compare' && pos[1]) await compare(pos[0].split(',').map(d => resolve(d)), pos[1].split(',').map(d => resolve(d)), Number(flag('tolerance', 2000)), (flag('looks', '') || '').split(',').map(x => x.trim()).filter(Boolean))
 else if (cmd === 'clips' && pos[0]) await clips(resolve(pos[0]))
 else { console.log('node scripts/motion-check.mjs record <dir> [--root <tree>] | compare <a> <b> | clips <dir>'); process.exit(2) }
