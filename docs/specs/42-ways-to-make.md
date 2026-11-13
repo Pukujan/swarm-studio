@@ -28,7 +28,7 @@ the Plan board's talk), but the menu offered only some of them, and under names 
 |---|---|---|
 | **Just build** | The brief, in the Design deck's chat, with **Build** and **Keep talking**. No questions. | Build starts the crew. |
 | **Guided** | The questions the prompt left open, one at a time (chips or your own words), then the brief to edit. | Build starts the crew. |
-| **Three takes** | Three directions for the idea side by side, each in its own look (colours, type, photos, voice). | Use one (it becomes the project's brand), or Mix them in the brand sheet. Then the Studio. |
+| **Three takes** | Three directions for the idea side by side, each in its own look (colours, type, photos, voice). | Use one: it becomes the project's brand, and the Studio goes on. Mix opens the brand sheet; the takes stay until one is used. |
 | **Scaffold** | The kind's structure laid out bare: a website's pages, an app's screens, a deck's outline and slides, a film's storyboard. Every block can be clicked, filled, reordered or deleted. | Lock, then Build. |
 | **Studio** | Every step the kind needs as a path across the top of the board: Brand, References, Assets, Plan, Lock. Each step opens on a click. Any step can be skipped, removed or brought back, in any order. Not a wizard. | Lock, then Build. |
 
