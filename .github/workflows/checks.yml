@@ -343,3 +343,47 @@ jobs:
             ${{ runner.temp }}/parity/clips/*.webm
             ${{ runner.temp }}/parity/*/trace.json
           retention-days: 30
+  # how heavy a 250-page board is (scripts/board-gauge.mjs, image-first boards step 1): the base and the head are
+  # each measured three times in this runner, interleaved, and compared; it fails on p95 frame time +10% (over
+  # every run's frames, and at least 0.5 ms), JS heap, DOM nodes or GPU memory +15%, or more live frames,
+  # crashes or players left after leaving the board, or a film that did not play.
+  # Skipped when web/, ui/, server/ and the gauge itself are untouched
+  board-gauge:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - id: touched
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          if git diff --quiet "$base" HEAD -- web ui server scripts/board-gauge.mjs; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'web/, ui/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.touched.outputs.run == 'yes'
+        run: npm install --no-save --no-package-lock playwright@1.64.1 && npx playwright install --with-deps chromium-headless-shell
+      # /next/ is served from ui/dist/, which main and pull requests do not carry: each side builds its own
+      - if: steps.touched.outputs.run == 'yes'
+        run: |
+          git worktree add "$RUNNER_TEMP/base" ${{ github.event.pull_request.base.sha }}
+          npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+          npm ci --prefix "$RUNNER_TEMP/base/ui" --no-audit --no-fund && npm run --prefix "$RUNNER_TEMP/base/ui" build
+      - if: steps.touched.outputs.run == 'yes'
+        run: |
+          g=$RUNNER_TEMP/gauge
+          mkdir -p $g
+          for i in 1 2 3; do
+            node scripts/board-gauge.mjs measure $g/base$i.json --root "$RUNNER_TEMP/base" --runs 1
+            node scripts/board-gauge.mjs measure $g/head$i.json --runs 1
+          done
+          node scripts/board-gauge.mjs compare $g/base1.json,$g/base2.json,$g/base3.json $g/head1.json,$g/head2.json,$g/head3.json
+      # the numbers, pass or fail (docs/perf/board-gauge.json is a baseline read from them)
+      - if: always() && steps.touched.outputs.run == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-gauge
+          path: ${{ runner.temp }}/gauge
+          retention-days: 14
