@@ -7,6 +7,7 @@ import { ic, cursor, logo, CREW } from './icons.js'
 import { makeSetup } from './setup.js'
 import { openSettings } from './settings.js'
 import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
+import { templatePicker } from './templatepick.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
@@ -736,7 +737,8 @@ export function makeHome({ sw, C, root }) {
       // The project opens on the build this box started. The canvas may still hold the build before
       // it (the server replays its last run to every canvas), and a project never lets a run that
       // started elsewhere take it over, so the new run is handed to it by id.
-      const made = await sw.submit(text, false, null, null, chat ? { ...sets, chat } : sets)
+      // with the design template the person picked in Examples, for a website (web/templatepick.js)
+      const made = await sw.submit(text, false, null, null, { ...sets, ...(run ? {} : tpl.take()), ...(chat ? { chat } : {}) })
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
       // A website the crew has just started opens in the Design deck, the one room where the swarm
       // can be watched at work (its Follow camera is on for a new build). Back shows the project's
@@ -865,7 +867,8 @@ export function makeHome({ sw, C, root }) {
 
   // ---------- the pop under the Make box: the showcases, or the interview. One at a time;
   // it closes with ×, Esc and a click outside, and the prompt stays in the box.
-  const pop = $('.hm-pop'), ideasBtn = $('.hm-ideas')
+  // and Open Design's design templates, for the person to pick one for a website under the examples
+  const pop = $('.hm-pop'), ideasBtn = $('.hm-ideas'), tpl = templatePicker({ api, esc, form, input })
   let popOff = null
   function openPop(cls, html) {
     pop.className = `hm-pop ${cls}`
@@ -889,10 +892,10 @@ export function makeHome({ sw, C, root }) {
     const key = exampleKey()
     const list = key ? ((await intake()).starters?.[key] || []).slice(0, 4) : []
     if (!list.length) return input.focus()
-    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>`)
+    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>${hosted() || make.k !== 'site' ? '' : await tpl.html()}`); tpl.bind(pop, closePop)
     ideasBtn.classList.add('on')
     pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
-    for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
+    for (const b of pop.querySelectorAll('.hm-st')) b.onclick = () => {
       input.value = list[Number(b.dataset.st)]
       closePop()
       input.focus()

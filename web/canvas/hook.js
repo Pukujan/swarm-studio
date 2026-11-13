@@ -179,7 +179,7 @@ window.swarm = {
     talkEnd()
     return new Promise(done => {
       els.brief.value = text
-      setNextRoute(project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done, chat: opts.chat } : { fresh: true, done, pictures: opts.pictures, chat: opts.chat })
+      setNextRoute(project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done, chat: opts.chat } : { fresh: true, done, pictures: opts.pictures, chat: opts.chat, template: opts.template })
       if (view !== 'canvas') setView('canvas')
       els.form.requestSubmit()
     })

@@ -52,6 +52,8 @@ import { planRoutes } from './plans.mjs'
 import { talkRoutes } from './talk.mjs'
 import { appKitRoutes } from './appkit.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
+import { requestedBrand } from '../engine/brand.mjs'
+import { templates as odTemplates } from '../engine/odlibrary.mjs'
 import { storyRoutes } from './story.mjs'
 import { deckRoutes } from './deck.mjs'
 import { refRoutes } from './refs.mjs'
@@ -440,7 +442,7 @@ function broadcast(event) {
 }
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
-function startRun({ brief, agents, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '', brand = null }) {
+function startRun({ brief, agents, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '', brand = null, template = '' }) {
   current?.controller.abort('replaced')
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
@@ -520,6 +522,8 @@ function startRun({ brief, agents, base = null, ask = '', resume = false, projec
     recent: recentLooks(runsDir),
     // a page type the request names (PAGE_TYPES key) wins over the pick
     pageType: typeof pageType === 'string' ? pageType : '',
+    // the design template the person picked (engine/odlibrary.mjs), for the planners
+    template: typeof template === 'string' ? template : '',
     agents: agents || defaultAgents,
     plannerModel: modelFor('planner'),
     workerModel: modelFor('worker'),
@@ -2734,9 +2738,10 @@ const server = createServer((req, res) => {
         if (base) input.base = base
       }
       const pid = typeof input.project === 'string' ? input.project : null
-      // a locked brand sheet is the new build's look (a follow-up keeps the project's)
-      // a Studio project's own brand (spec 37) when the chat has none locked
-      const brand = !base ? lockedBrand(chats, chatId) || (pid ? lockedBrand(studios.brands, pid) : null) : null
+      // the look, in Open Design's order (decision 0016 point 3): a design system the request names, then the
+      // project's (a locked brand sheet, or a Studio project's own brand, spec 37), then the default (the planner's).
+      // A follow-up keeps the project's
+      const brand = !base ? requestedBrand(input.system, String(input.brief)) || lockedBrand(chats, chatId) || (pid ? lockedBrand(studios.brands, pid) : null) : null
       if (brand) input.brand = brand
       const run = startRun(input)
       // "Tell the crew…" inside a project: the new run is that project's next version
@@ -2886,6 +2891,8 @@ const server = createServer((req, res) => {
     return json(200, { results: results.map(r => ({ ...r, src: `/api/library/file?id=${encodeURIComponent(r.id)}` })) })
   }
   if (url.pathname === '/api/library/packs' && req.method === 'GET') return json(200, { packs: assets.packs() })
+  // Open Design's design templates, for the person to pick one for a build (engine/odlibrary.mjs, decision 0016)
+  if (url.pathname === '/api/library/templates' && req.method === 'GET') return json(200, { templates: odTemplates() })
   if (url.pathname === '/api/library/file' && req.method === 'GET') {
     assets.file(url.searchParams.get('id')).then(got => {
       if (!got) return json(404, { error: 'no such picture' })
