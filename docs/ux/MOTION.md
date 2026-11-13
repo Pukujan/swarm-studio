@@ -4,7 +4,7 @@ Everything in the Studio web UI that moves, with the code that owns it. It exist
 
 ## How a change is shown to keep the motion
 
-1. **The motion check** (`scripts/motion-check.mjs`, run by CI on every pull request as `motion-check`). It plays eleven scenes (Projects, with Setup already seen so the first-run sheet does not cover it; an Overview, a replay of a crew of four building, reviewing and taking a comment, a half-done build, the deck, Play, a visitor's tour, and the App, Video, Game and Studio rooms) on Playwright's clock, paused so only the checker moves it, with `Math.random` seeded in the page and every frame. It logs every animation that starts (CSS animations and transitions by their start events, `element.animate` by wrapping it: name, target, duration) and the endless ones running, and keeps the picture each scene ends on. The page frames still draw on the real clock, so each side is recorded twice and a difference counts only when both runs agree: an animation that ran in both runs before and in neither after (or the reverse), or an end picture that matches neither run before. Recording the same code four times passes; turning off the reviewer's scan and the crew's speech bubbles fails with `frame @scan … #scan` and `page ~transform div.bubble` listed as "ran before, not after".
+1. **The motion check** (`scripts/motion-check.mjs`, run by CI on every pull request as `motion-check`). It plays eleven scenes (Projects, with Setup already seen so the first-run sheet does not cover it; an Overview, a replay of a crew of four building, reviewing and taking a comment, a half-done build, the deck, Play, a visitor's tour, and the App, Video, Game and Studio rooms) on Playwright's clock, paused so only the checker moves it, with `Math.random` seeded in the page and every frame. It logs every animation that starts (CSS animations and transitions by their start events, `element.animate` by wrapping it: name, target, duration) and the endless ones running, and keeps the picture each scene ends on. An animation already cancelled when its start event is heard (a spinner shown for one frame) is not logged: whether a frame was drawn in between is the machine's timing, and it logged as `@spin 0s 1` in some runs and not others. For the same reason the Studio starts on the tick its script runs (`web/studio.js`, `web/pet.js`), not on a timer that raced the server's first replies, and Hermia starts away on a replay address instead of fading out when its `run:start` arrives. The page frames still draw on the real clock, so each side is recorded twice and a difference counts only when both runs agree: an animation that ran in both runs before and in neither after (or the reverse), or an end picture that matches neither run before. Recording the same code four times passes; turning off the reviewer's scan and the crew's speech bubbles fails with `frame @scan … #scan` and `page ~transform div.bubble` listed as "ran before, not after".
 2. **The split itself is a move.** The split moved code without changing it. The few lines that had to change are listed in its pull request: an import, an export, and an assignment to a `let` that another file owns, which now calls that file's setter. Since the split, the `file:line` references here point into `web/canvas/` ([web/canvas/README.md](../../web/canvas/README.md)).
 3. **Clips to watch** (`docs/ux/motion/clips/`): Projects, the replay, a half-done build, Play and a visitor's tour, 640 wide, recorded from this commit with `node scripts/motion-check.mjs clips <dir>`. Record them again after a split to compare by eye.
 
@@ -13,6 +13,48 @@ A pull request that means to change how a scene looks (a new panel on the Studio
 The motion check does not see the speed of JS-driven movement (a cursor gliding a little faster ends in the same place), so a split must not touch the numbers in the JS clocks and gestures below; the move-only rule is what covers them.
 
 How to read the tables. "Owned by" gives the keyframes or rule first, then the JS that triggers it (`css | js`). Reduced motion: "global" means the blanket rule at `web/canvas.css:1403` (`*` gets `animation-duration .01ms`, `animation-iteration-count 1`, `transition-duration .01ms`, all `!important`). It covers the whole app page but not the page frames, which are separate documents (`web/frame.html`, the Play frame, the exports). "none" means nothing is done for it beyond that. JS-driven movement (camera glide, cursor travel, tours, loops) is not touched by any reduced-motion rule unless a row says so.
+
+## The next UI moves the same
+
+A screen moved to the next UI (`ui/`, served at `/next/`, issue #404) has to move the way the current Studio
+does at `/`, which is the baseline. CI's `motion-parity` job checks this on every pull request that touches
+`ui/`, `web/` or `server/` (`scripts/motion-parity.mjs`). It runs the motion check's scenes and five more:
+- the Make menu (Projects, then type an idea and press Make);
+- the Plan board;
+- the Publish menu (the deck, then Publish);
+- the brand sheet (the Studio's Brand sheet card, then a palette and a type picked).
+
+It runs them in both apps from the same tree, on the same frozen clock and seed, and compares, per screen:
+
+- **Animations.** Every CSS animation, transition and Web Animation that starts, by name (or property),
+  duration, iterations and easing. The element it runs on is left out, since the port's elements have other
+  classes. A 0 ms transition moves nothing and is left out.
+- **Cursors.** Where Hermia's cursor (`.pet`) and each crew cursor (`.cursor` at `/`, `[data-agent]` in
+  `ui/`) are at every 500 ms step, within 24 px (`--px`). This is the movement the motion check can't see,
+  because a JS clock ends in the same place at another speed.
+- **Reduced motion.** The same again with `prefers-reduced-motion: reduce`. On top of that, nothing on the page
+  may move in `/next/` that `/` keeps still.
+
+The end pictures are not compared: a port is not pixel-identical, and the audit gates ([AUDIT.md](AUDIT.md))
+check how it looks. A screen whose `/next/` still shows its name and "Open in the Studio" is skipped as not
+moved yet. As in the motion check, each app is recorded twice, and a difference counts only when both runs
+agree. Nothing is retried.
+
+Known differences are in [motion/parity-known.json](motion/parity-known.json). Each one is labelled
+`intended (PR #N)`, a slice that leaves it for later on purpose, or `drift`, which is to be fixed, and each
+has a why. A new difference fails the job. A known one that no longer happens is printed so its entry can be
+deleted. To write the list again: `node scripts/motion-parity.mjs run <dir> --update`, then label the new
+entries.
+
+**Recordings.** `node scripts/motion-parity.mjs clips <dir>` films each moved scene in real time at 640 wide
+in both apps. It puts them side by side, `/` on the left and `/next/` on the right, with ffmpeg's `hstack`
+(the Studio already uses ffmpeg for sound, [docs/engines/video.md](../engines/video.md)). CI uploads them as
+the `motion-parity` artifact on every run.
+
+A reference set is committed:
+- [motion/parity/](motion/parity/): the moved screens, side by side;
+- [motion/demo/](motion/demo/): the owner's demo video, cut into short clips and key frames for beats 1, 2,
+  4, 5, 7 and 10, next to the same moment at `/` and `/next/` ([motion/demo/README.md](motion/demo/README.md)).
 
 ## A change that changes the motion
 

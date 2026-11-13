@@ -1,8 +1,5 @@
-// The types of web/pet.js (Hermia's cursor, docs/specs/41-pet-cursor.md) as the next UI uses it. The file itself
-// is the current Studio's, checked by the root tsconfig.json; here it is `@studio/pet` (vite.config.ts resolves it
-// to ../web/pet.js). tests/next.test.mjs checks that every name declared here is one web/pet.js exports.
-import type { Nav } from '../nav/nav'
-
+// The types of web/pet.js's makePet as the next UI uses it (Hermia's cursor, docs/specs/41-pet-cursor.md): the
+// current Studio's file, imported by name (`@studio/pet`, resolved by vite.config.ts) and started as it is.
 export type PetKind = 'step' | 'file' | 'link' | 'pick' | 'skip' | 'brief' | 'back' | 'built' | 'loading' | 'ready'
 export interface PetData { step?: string, name?: string, type?: string, count?: number, url?: string, idea?: string, ms?: number, pages?: number }
 
@@ -16,5 +13,5 @@ export interface Pet {
 
 export declare const PET_BUSY: string
 export declare const PET_NOT: string
-// sw: the current Studio's window.swarm (none at /next/); C: the controller, of which the pet reads only `nav`
-export declare function makePet(o: { sw: unknown, C: { nav: Nav }, doc?: Document }): Pet
+// C is the current Studio's controller; she reads C.nav (the machine) and C.<room>View.el (the screen on show)
+export declare function makePet(options: { sw: unknown, C: unknown, doc?: Document }): Pet

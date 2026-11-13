@@ -11,6 +11,7 @@ import { esc } from './design.js'
 import { saveModel, modelsInfo, loadModels, showTab } from './settings.js'
 import { loadFiles, openRun } from './replay.js'
 import { HOSTS } from './publish.js'
+import { adoptVideos, boardVideo } from '../video.js'
 
 // ---------- views: Canvas | Video | App
 // Each view keeps working while you look at another; a dot on its tab says how
@@ -83,6 +84,14 @@ async function loadApp() {
 
 // a build another Studio drives has no live feed here: read the shared log again every few seconds
 setInterval(() => { if (view === 'app' && appv.elsewhere && !document.hidden) loadApp() }, 4000)
+// someone is looking at the app: its server is kept (engine/appjob.mjs seen); with nobody looking it stops after
+// Settings › Background's time, and the next look opens it again
+function appSeen() {
+  if (view !== 'app' || document.hidden || !appv.run || !appv.url || appv.elsewhere) return
+  appApi('/seen', {}).then(o => { if (!o.url) { appv.url = null; loadApp() } }).catch(() => {})
+}
+setInterval(appSeen, 30000)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && view === 'app') { if (appv.url) appSeen(); else loadApp() } })
 
 // the latest play test, filmed: the clip loops from the first key, with the key it pressed
 const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
@@ -99,7 +108,7 @@ export function playClip() {
   if (!clip.el) {
     clip.el = document.createElement('div')
     clip.el.className = 'playclip'
-    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline autoplay></video>`
+    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline></video>`
     clip.el.querySelector('.pc-x').onclick = () => { clip.shut = clip.src; clip.el.hidden = true }
     const v = clip.el.querySelector('video')
     v.addEventListener('loadedmetadata', () => { v.currentTime = clip.at })
@@ -110,7 +119,8 @@ export function playClip() {
     })
   }
   const host = tile || appEls.preview
-  if (clip.el.parentElement !== host) { host.append(clip.el); clip.el.querySelector('video').play().catch(() => {}) }
+  // on screen it plays (web/video.js), within the page's budget; hidden or off screen, it is its poster
+  if (clip.el.parentElement !== host) host.append(clip.el)
   tile?.classList.add('has-play')
   clip.el.classList.toggle('in-wall', !!tile)
   clip.el.hidden = false
@@ -119,7 +129,7 @@ export function playClip() {
     clip.src = s.clip
     clip.keys = (s.keys || []).filter(x => typeof x.t === 'number')
     clip.at = Math.max(0, (clip.keys[0]?.t || 0) - 1)
-    clip.el.querySelector('video').src = BASE + s.clip
+    boardVideo(clip.el.querySelector('video'), { src: BASE + s.clip, auto: true })
   }
 }
 
@@ -223,8 +233,11 @@ function renderApp() {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
-      : working || appv.opening
-        ? `<div class="spin"></div><h2>${appv.opening ? 'Starting the app…' : appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+      // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
+      : appv.opening && !working
+        ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
+      : working
+        ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
         : st === 'failed' && appv.result?.artStop
           ? artStopCard(appv.result.artStop)
         : st === 'failed' && appv.message === 'stopped'
@@ -399,8 +412,8 @@ function mediaBlock(m) {
   box.className = 'tell-media'
   if (m.clip) {
     const v = document.createElement('video')
-    Object.assign(v, { src: BASE + m.clip, muted: true, autoplay: true, loop: true, playsInline: true })
-    box.append(v)
+    Object.assign(v, { muted: true, loop: true, playsInline: true })
+    box.append(boardVideo(v, { src: BASE + m.clip, auto: true }))
   }
   for (const p of (m.pics || []).slice(0, 4)) {
     const i = document.createElement('img')
@@ -435,13 +448,14 @@ function sliceCard(s, run = shownRun()) {
   item.dataset.key = key
   item.dataset.run = run
   item.dataset.i = s.i
-  const vid = s.clip ? `<video class="sc-clip" src="${esc(BASE + s.clip)}" muted playsinline autoplay loop></video>` : ''
+  const vid = s.clip ? `<video class="sc-clip" data-src="${esc(BASE + s.clip)}" data-auto muted playsinline loop></video>` : ''
   const pic = s.shot ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
   item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${s.i + 1} of ${s.n}</small></b>`
     + `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>`
     + `<span class="txt"></span>`
     + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
     + `<div class="sc-ideas">${(s.ideas || []).map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
+  adoptVideos(item)
   item.querySelector('.txt').textContent = s.ask || `Slice ${s.i + 1} is built. Anything to change?`
   // @ts-ignore
   item.querySelector('.sc-live').onclick = () => setView('app')
@@ -686,6 +700,13 @@ export function appEvent(e) {
   } else if (e.type === 'app:ready') {
     // only a live event: an old one from the log names a dev server that may be gone
     if (fresh_) appv.url = e.url
+    // served built now, on the same address: the frame loads it again
+    if (fresh_ && e.built) appEls.frame.dataset.src = ''
+  } else if (e.type === 'app:parked') {
+    // its server stopped (no viewer for a while, or room for another app): open again when it is looked at
+    appv.url = null
+    appEls.frame.dataset.src = ''
+    if (view === 'app' && !document.hidden) loadApp()
   } else if (e.type === 'app:done') {
     Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
     if (e.url && fresh_) appv.url = e.url

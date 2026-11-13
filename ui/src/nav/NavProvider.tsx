@@ -15,7 +15,7 @@ export function NavProvider({ nav, children }: { nav?: Nav, children: ReactNode 
   return <NavContext value={own}>{children}</NavContext>
 }
 
-// the running machine itself, for what follows it outside React (Hermia's cursor, src/pet/)
+// the machine itself, for a piece of the current Studio hosted as it is (Hermia's cursor follows it: src/legacy/)
 export function useNavMachine(): Nav {
   const nav = useContext(NavContext)
   if (!nav) throw new Error('useNavMachine needs a NavProvider')

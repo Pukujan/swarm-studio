@@ -18,11 +18,18 @@ module.exports = {
       to: { path: 'studio-nav\\.d\\.ts$' }
     },
     {
-      name: 'pet-only-through-src-pet',
+      name: 'legacy-only-through-src-legacy',
       severity: 'error',
-      comment: "Hermia's cursor (@studio/pet, web/pet.js) is reached only through src/pet/: usePet() and <Working>.",
-      from: { path: '^src/', pathNot: '^src/pet/' },
-      to: { path: 'studio-pet\\.d\\.ts$' }
+      comment: 'The current Studio\'s kits and Hermia\'s cursor (@studio/kits, @studio/pet) are hosted only through src/legacy/, so they leave from one place.',
+      from: { path: '^src/', pathNot: '^src/legacy/' },
+      to: { path: 'studio-(kits|pet)\\.d\\.ts$' }
+    },
+    {
+      name: 'shared-stand-alone',
+      severity: 'error',
+      comment: 'A shared part (src/shared/, such as Layers) is used by several screens, so it knows none of them, nor the frame.',
+      from: { path: '^src/shared/' },
+      to: { path: '^src/(shell|screens|legacy)/' }
     },
     {
       name: 'primitives-stand-alone',
