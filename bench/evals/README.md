@@ -18,6 +18,7 @@ and fails past the thresholds. It is how decision 0007's "a prompt change comes 
   | time | the page's wall time, fix passes included |
   | tokens | prompt and completion tokens, as the endpoint counts them |
 
+- **A set whose prompts did not change** (the same fingerprint on both sides) is listed and not judged: what differs there is the models' noise.
 - **The thresholds** (`thresholds.json`): after against before, on any set, the score may drop by at most 0.5,
   findings per section rise by at most 0.25 and P0 findings by at most 1, wall time by at most 25% and prompt
   tokens by at most 40%.

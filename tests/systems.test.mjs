@@ -51,7 +51,7 @@ test("a look from Open Design puts its tokens on the page and in the builders' p
   assert.equal(theme.vars['--primary'], brand.palettes[0].accent)
   const page = { id: 'home', title: 'Home', layers: [{ id: 'hero', role: 'hero' }] }
   const system = workerMessages({ theme, plan: { pages: [page] }, page, layer: { ...page.layers[0], page: 'home', content: '' } })[0].content
-  assert.ok(system.includes(systemLine(theme)) && system.includes('--space-4: '), 'the token block')
+  assert.ok(system.includes(systemLine(theme)) && system.includes('--space-4 '), 'the token block')
   assert.equal(systemLine({ vars: {} }), '')
 })
 

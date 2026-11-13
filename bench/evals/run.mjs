@@ -45,11 +45,17 @@ function key() {
 }
 const provider = () => ({ baseUrl: process.env.SWARM_BASE_URL || 'https://api.inferhub.dev/v1', apiKey: key() })
 
-// ---------- the fingerprint: every crew prompt exactly as it is sent, caught at fetch, never sent
-export async function fingerprint(root = ROOT) {
+// ---------- the fingerprint: every crew prompt exactly as it is sent for the sets, caught at fetch, never sent.
+// One set's alone says whether that set's prompts changed: a set whose prompts did not is not judged (judge())
+export async function fingerprint(root = ROOT, sets = SETS) {
+  const each = []
+  for (const set of sets) each.push(await promptsOf(root, set))
+  return createHash('sha256').update(each.join('\n')).digest('hex').slice(0, 16)
+}
+async function promptsOf(root, set) {
   const { workerMessages, pagePlannerMessages, SITEMAP_SYSTEM } = await engine(root, 'prompts.mjs')
   const review = await engine(root, 'review.mjs')
-  const set = SETS[0], page = pageOf(set), plan = planOf(set)
+  const page = pageOf(set), plan = planOf(set)
   const sent = [SITEMAP_SYSTEM]
   for (const images of [false, true]) sent.push(JSON.stringify(workerMessages({ theme: set.theme, plan, page, layer: page.layers[1], images })))
   try { sent.push(JSON.stringify(pagePlannerMessages({ brief: set.brief, theme: set.theme, plan, page }))) } catch { /* its shape changed: its text is in prompts.mjs's hash below */ }
@@ -157,7 +163,7 @@ async function measure(out, root = ROOT, runs = 2) {
         console.log(`· ${set.id} run ${i + 1}: ${(b.wallMs / 1000).toFixed(1)} s, score ${s.score ?? '-'}, ${b.p0} P0 ${b.p1} P1, ${b.tokens.in}+${b.tokens.out} tokens`)
       }
       const mean = k => { const v = rs.map(r => r[k]).filter(Number.isFinite); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 100) / 100 : null }
-      sets[set.id] = { runs: rs, scored: rs.every(r => r.scored), wallMs: mean('wallMs'), tokensIn: mean('tokensIn'), tokensOut: mean('tokensOut'), score: mean('score'), findings: Math.round((mean('p0') + mean('p1')) / set.layers.length * 100) / 100, p0: mean('p0'), errors: mean('errors') }
+      sets[set.id] = { prompts: await fingerprint(root, [set]), runs: rs, scored: rs.every(r => r.scored), wallMs: mean('wallMs'), tokensIn: mean('tokensIn'), tokensOut: mean('tokensOut'), score: mean('score'), findings: Math.round((mean('p0') + mean('p1')) / set.layers.length * 100) / 100, p0: mean('p0'), errors: mean('errors') }
     }
   } finally { await browser.close() }
   const report = { fingerprint: await fingerprint(root), model: MODEL, reviewer: REVIEWER, runs, at: new Date().toISOString(), sets }
@@ -172,6 +178,8 @@ export function judge(before, after, t = THRESHOLDS) {
   for (const [id, a] of Object.entries(after.sets)) {
     const b = before.sets[id]
     if (!b) { rows.push(`| ${id} | new set | | | | |`); continue }
+    // the same prompts on both sides: whatever differs is the models' noise, not the change
+    if (a.prompts && a.prompts === b.prompts) { rows.push(`| ${id} | prompts unchanged on this set, not judged | | | | |`); continue }
     const pct = (x, y) => y ? Math.round((x - y) / y * 100) : 0
     const checks = [
       ['score', a.score != null && b.score != null && b.scored !== false && a.scored !== false && a.score < b.score - t.scoreDrop, b.scored === false && a.scored !== false ? `${a.score} (the base gives no score)` : `${b.score} → ${a.score}`],

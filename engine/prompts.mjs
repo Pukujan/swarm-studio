@@ -115,12 +115,16 @@ const NO_PICTURE = /cta|form|faq|footer|nav|legal|ticker|sparkline|chart|calenda
 const wantsPicture = layer => layer.page !== '*' && PICTURE_ROLE.test(`${layer.role} ${layer.id}`) && !NO_PICTURE.test(layer.role || '')
 
 // an Open Design system's tokens and rules (decision 0016): the tokens are on the page as CSS variables
-// (engine/brand.mjs brandTheme), to be used as they are; the linter checks a section uses them (engine/lint)
+// (engine/brand.mjs brandTheme), to be used as they are; the linter checks a section uses them (engine/lint).
+// A section's builder is told the ones a section uses (spacing, radius, type, shadow, motion) and two rules of
+// each kind: every token is on the page, but the prompt stays short, since every section's call carries it
+const SECTION_TOKEN = /^--(space|radius|text|leading|tracking|shadow|elev|motion|ease|duration|section-y)/
 export function systemLine(theme) {
   const s = theme?.system, v = theme?.vars || {}
-  if (!s?.tokens?.length) return ''
-  const rules = [...(s.rules?.do || []).map(x => `Do: ${x}`), ...(s.rules?.dont || []).map(x => `Don't: ${x}`)].join(' ')
-  return [`Design system "${s.name}" (Open Design): its tokens are on the page. Use them through var() for spacing, sizes, type, radius, shadows and motion instead of numbers of your own (p-[var(--space-6)], gap-[var(--space-4)], rounded-[var(--radius-md)], text-[length:var(--text-xl)]): ${s.tokens.map(k => `${k}: ${v[k]}`).join('; ')}.`, rules && `Its rules: ${rules}`].filter(Boolean).join('\n')
+  const tokens = (s?.tokens || []).filter(k => SECTION_TOKEN.test(k) && v[k]).slice(0, 28)
+  if (!tokens.length) return ''
+  const rules = [...(s.rules?.do || []).slice(0, 2).map(x => `Do: ${x}`), ...(s.rules?.dont || []).slice(0, 2).map(x => `Don't: ${x.replace(/^(do not|don't)\s+/i, '')}`)].map(x => x.slice(0, 120)).join(' ')
+  return [`Design system "${s.name}" (Open Design), on the page as CSS variables: use them through var() instead of numbers of your own (p-[var(--space-6)], rounded-[var(--radius-md)], text-[length:var(--text-xl)]). ${tokens.map(k => `${k} ${v[k]}`).join(', ')}.`, rules && `Its rules: ${rules}`].filter(Boolean).join('\n')
 }
 
 export function workerMessages({ theme, plan, page, layer, images = false }) {
