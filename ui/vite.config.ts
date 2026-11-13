@@ -2,6 +2,7 @@
 // every branch and only a release commits (docs/decisions/0018-next-ui-build-on-release.md): the plugin's server serves
 // it at /next/ with the script and styles inlined (server/next.mjs), so installing the plugin builds nothing. File names are fixed and nothing is hashed or mapped, so the same source
 // builds the same bytes (`npm run check` compares them).
+import { copyFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type AliasOptions } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -46,7 +47,16 @@ export default defineConfig({
     { name: 'swarm:lf', transformIndexHtml: { order: 'post', handler: html => html.replace(/\r\n?/g, '\n') } },
     // the current Studio's stylesheets that src/legacy/ hosts load their fonts relative to web/; here they come from
     // the server's /fonts/, as src/fonts.css's do, never copied into ui/dist/
-    { name: 'swarm:web-fonts', enforce: 'pre', transform: (code, id) => (/[\\/]web[\\/][^\\/]+\.css$/.test(id) ? code.replace(/url\(\s*['"]?fonts\//g, 'url(/fonts/') : null) }
+    { name: 'swarm:web-fonts', enforce: 'pre', transform: (code, id) => (/[\\/]web[\\/][^\\/]+\.css$/.test(id) ? code.replace(/url\(\s*['"]?fonts\//g, 'url(/fonts/') : null) },
+    // Mermaid (pinned in package.json, MIT) for the app build wall's Map (spec 44): too big to go inline in every
+    // /next/ page, so its own classic script beside it, ui/dist/vendor/, which the server serves at /next/vendor/ and
+    // the Map loads when it first shows (src/shared/mermaid.ts). A release carries it with the rest of ui/dist/.
+    { name: 'swarm:vendor-mermaid', apply: 'build', closeBundle() {
+      const from = fileURLToPath(new URL('./node_modules/mermaid/', import.meta.url)), to = fileURLToPath(new URL('./dist/vendor/', import.meta.url))
+      mkdirSync(to, { recursive: true })
+      copyFileSync(`${from}dist/mermaid.min.js`, `${to}mermaid.min.js`)
+      copyFileSync(`${from}LICENSE`, `${to}mermaid.LICENSE`)
+    } }
   ],
   resolve: { alias },
   // web/nav.js and web/tokens.css live outside ui/

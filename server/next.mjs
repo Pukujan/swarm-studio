@@ -11,6 +11,14 @@ const SCRIPT = /<script type="module" crossorigin src="\/next\/(assets\/[\w.-]+\
 const STYLE = /<link rel="stylesheet" crossorigin href="\/next\/(assets\/[\w.-]+\.css)">/
 
 // boot: what the page finds as window.SWARM (the token); the build's version is added here
+// A file the next UI loads beside its page (ui/dist/vendor/: Mermaid, for the app build wall's Map), or null. Only the
+// names listed: nothing else under ui/dist/ is reachable this way.
+const VENDOR = new Set(['mermaid.min.js', 'mermaid.LICENSE'])
+export function nextVendor(uiDist, name) {
+  const file = join(uiDist, 'vendor', name)
+  return VENDOR.has(name) && existsSync(file) ? file : null
+}
+
 export function nextPage(uiDist, boot) {
   if (!existsSync(join(uiDist, 'index.html'))) return null
   const read = f => readFileSync(join(uiDist, f), 'utf8')

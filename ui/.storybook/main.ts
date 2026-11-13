@@ -8,7 +8,7 @@ const config: StorybookConfig = {
   framework: { name: '@storybook/react-vite', options: {} },
   core: { disableTelemetry: true },
   // the Studio's fonts at the path the plugin's server gives them (src/fonts.css)
-  staticDirs: [{ from: '../../web/fonts', to: '/fonts' }],
+  staticDirs: [{ from: '../../web/fonts', to: '/fonts' }, { from: '../node_modules/mermaid/dist', to: '/next/vendor' }],
   viteFinal: async c => ({ ...c, resolve: { ...c.resolve, alias } })
 }
 

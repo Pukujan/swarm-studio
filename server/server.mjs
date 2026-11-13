@@ -37,7 +37,7 @@ import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
-import { nextPage } from './next.mjs'
+import { nextPage, nextVendor } from './next.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { CHAT_ID } from '../engine/chats.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
@@ -2646,6 +2646,16 @@ const server = createServer((req, res) => {
   // address as /: ?project=…&version=…&room=… opens the same place in either
   if (url.pathname === '/next') {
     res.writeHead(302, { location: `/next/${url.search}` }).end()
+    return
+  }
+  // a classic script the next UI loads beside its page (Mermaid, for the app build wall's Map; spec 44). Classic, not a
+  // module, and open to any origin, as the vendored files are, so the Desktop pane's frame can load it
+  const nv = url.pathname.match(/^\/next\/vendor\/([\w.-]+)$/)
+  if (nv) {
+    const file = nextVendor(uiDist, nv[1])
+    if (!file) return void res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': nv[1].endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/plain; charset=utf-8', 'access-control-allow-origin': '*', 'cache-control': 'max-age=86400' })
+    res.end(readFileSync(file))
     return
   }
   if (url.pathname === '/next/' || url.pathname === '/next/index.html') {
