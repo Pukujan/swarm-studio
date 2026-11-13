@@ -199,6 +199,7 @@ before the person presses **Build**.
 flowchart LR
   MK["Make › Studio first"] --> SC["Projects › name · Build"]
   CH["Left chat: Start with X, and why"] --- SC
+  SC --> LY["Layers (left panel; a sheet from the Layers button ≤ 760 px): a group per section with its dot and count, a row per card; click flies and selects, double-click opens, F2 / right-click Rename, Delete, drag into the chat"]
   SC --> BR["Brand: the brand card → brand sheet → Lock → back"]
   SC --> RF["References: add, drop; Use as given, Remove"]
   SC --> AS["Assets: add, drop; Role, Use as reference, Remove"]

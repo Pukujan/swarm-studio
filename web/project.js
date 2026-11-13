@@ -15,6 +15,7 @@
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
 import { swEdit } from './edit/patches.js'
+import { layerSheet } from './layers.js'
 
 const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
 const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
@@ -802,14 +803,9 @@ export function makeProject({ sw, C, root }) {
 
   // ---------- the stage: pan (drag empty space, wheel), zoom (pinch, ⌘ wheel), Frame fits all
   // narrow panes (a phone, Hermes Desktop's side pane): the canvas stays; Files and Layers are a sheet
-  const narrow = () => matchMedia('(max-width: 760px)').matches
-  let offSheet = null
-  function sheet(on) {
-    root.classList.toggle('files-on', on)
-    root.querySelector('.pj-files-btn')?.setAttribute('aria-expanded', String(on))
-    offSheet?.(); offSheet = null
-    if (on) offSheet = window.SwarmUI?.layer(root.querySelector('.pj-side'), () => sheet(false), { extra: [root.querySelector('.pj-files-btn')] })
-  }
+  const filesSheet = layerSheet(root, $('.pj-side'), $('.pj-files-btn'))
+  const narrow = filesSheet.narrow
+  const sheet = on => filesSheet.set(on)
   // While the camera moves the world keeps the pixels it has (will-change holds the raster scale) and
   // the pictures keep the copies they show; both are put right once it rests, in one go. The canvas
   // behind is told too, so it does not swap a page or take a screenshot in the middle of a gesture.

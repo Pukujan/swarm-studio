@@ -48,7 +48,9 @@ export const talkEnd = () => { talk.on = false; talk.busy = false; talkDock(fals
 export async function talkSay(text, brief = false) {
   if (talk.kind === 'game') return gameSay({ said: text })
   const media = brief ? [] : links.take('ref')
-  if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you', media.map(m => m.name).join(', ')); talk.heard?.(text) }
+  // layers dragged in (the Studio scaffold's Layers, web/layers.js): the planner is told what the turn is about
+  const about = brief ? [] : links.take('layer')
+  if (!brief) { talk.said.push({ who: 'you', text: about.length ? `${text}\n(About: ${about.map(c => c.name).join(', ')})` : text }); feed(null, text, 'you', [...about, ...media].map(m => m.name).join(', ')); talk.heard?.(text) }
   els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
   const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
   talk.busy = true

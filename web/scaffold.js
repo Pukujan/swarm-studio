@@ -1,3 +1,4 @@
+// @ts-check
 // The Studio's scaffold (docs/specs/37-studio-first.md): a Studio project before anything is built. The
 // shared board (web/board.js) with the kind's steps as sections, each named, with a dot for its state:
 // Brand, References, Assets, Plan (the kit's own cards) and Lock. The chat stays on the left, where the
@@ -10,6 +11,7 @@
 import { ic } from './icons.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
+import { layerTree, layerSheet } from './layers.js'
 
 const STEP_NAME = { brand: 'Brand', references: 'References', assets: 'Assets', plan: 'Plan', proposal: 'Lock' }
 const STATE_NAME = { empty: 'Empty', started: 'Started', done: 'Done', skipped: 'Skipped' }
@@ -22,13 +24,22 @@ export function makeScaffold({ sw, C, root }) {
   const bd = makeBoard({ root, cls: 'project plan scaffold', label: 'Studio', fit: [0.35, 1], on: () => A.on, selected: () => !!A.sel, clear: () => select(null) })
   const { world, insp } = bd
 
+  // ---------- the left panel: Layers, every section on the board and what is in it (web/layers.js, the
+  // same tree as the Overview's and the Design deck's). In a narrow pane it is a sheet from the Layers button.
+  root.insertAdjacentHTML('afterbegin', `<aside class="pj-side" aria-label="Layers"><div class="pj-tabs" role="tablist"><span class="pj-tab on" role="tab" aria-selected="true">Layers</span></div><div class="pj-layers tree"></div></aside>`)
+  root.insertAdjacentHTML('beforeend', `<button class="ib pj-files-btn sc-layers-btn" aria-label="Layers" aria-expanded="false">${ic('layers')}</button>`)
+  const side = root.querySelector('.pj-side'), tree = root.querySelector('.pj-layers'), sheet = layerSheet(root, side, root.querySelector('.sc-layers-btn'))
+  root.querySelector('.sc-layers-btn').onclick = () => sheet.set(!sheet.on)
+  const shut = new Set()
+
   // ---------- the top bar: Projects › the project's name, and Build
   const bar = document.querySelector('.topbar')
   const crumb = document.createElement('div')
   crumb.className = 'sc-crumb'
   crumb.innerHTML = `<button class="sc-up">Projects</button>${ic('chr', 14)}<b class="sc-name"></b>`
   bar?.querySelector('.spacer')?.before(crumb)
-  crumb.querySelector('.sc-up').onclick = () => C.go('home')
+  const up = /** @type {HTMLButtonElement} */ (crumb.querySelector('.sc-up'))
+  up.onclick = () => C.go('home')
   const primary = document.createElement('button')
   primary.className = 'toggle sc-primary pri'
   primary.innerHTML = '<span class="t">Build</span>'
@@ -118,7 +129,7 @@ export function makeScaffold({ sw, C, root }) {
   }
 
   function render() {
-    if (!A.d) { world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Studio</span><div class="abs"><div class="ab pcard wait-in"><b>Brand</b><span></span></div></div></section></div>'; return }
+    if (!A.d) { world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Studio</span><div class="abs"><div class="ab pcard wait-in"><b>Brand</b><span></span></div></div></section></div>'; renderLayers(); return }
     sync()
     const k = kit(), c = ctx(), d = A.d
     crumb.querySelector('.sc-name').textContent = d.project.title || d.project.name
@@ -146,7 +157,73 @@ export function makeScaffold({ sw, C, root }) {
     for (const [key, x] of A.cards) { const el = world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`); if (el) { x.render?.(el, c); if (A.sel === key) el.insertAdjacentHTML('beforeend', sel(key)) } }
     bd.applyCam()
     if (!A.framed && world.offsetWidth) { A.framed = true; bd.frameAll(false) }
+    renderLayers()
     renderInsp()
+  }
+
+  // ---------- Layers: a group per section on the board, its cards as rows ("Add" cards are not layers)
+  function layerGroups() {
+    const k = kit(), c = ctx(), d = A.d
+    const row = (key, name, x = null) => ({ key, name, sel: A.sel === key, dot: x?.busy ? 'var(--text)' : '' })
+    const group = (id, title, rows, more = {}) => ({ id, title, rows, count: rows.length, open: !shut.has(id), state: stateOf(more.step || id), ...more })
+    const out = []
+    for (const step of k.steps) {
+      if (step === 'brand') out.push(group('brand', STEP_NAME.brand, [row('brand:open', 'Brand sheet')]))
+      if (step === 'references') out.push(group('references', STEP_NAME.references, d.refs.map(r => row(`ref:${r.id}`, r.name))))
+      if (step === 'assets') out.push(group('assets', STEP_NAME.assets, d.assets.map(a => row(`asset:${a.id}`, a.name))))
+      if (step === 'plan' && k.plan) {
+        const secs = k.plan.sections(c).map(s => ({ ...s, cards: s.cards.filter(x => !x.add && x.cls !== 'sc-add') }))
+        const name = STEP_NAME.plan
+        // a kit still drafting its plan (it has none yet) is the planner at work: a dot on the step
+        const drafting = !secs.length && !!k.prepare && !!d.studio.idea
+        if (secs.length <= 1) out.push(group('plan', name, (secs[0]?.cards || []).map(x => row(x.key, x.name, x)), { busy: drafting || secs[0]?.cards.some(x => x.busy) }))
+        else for (const s of secs) out.push(group(`plan:${s.sec}`, s.sec, s.cards.map(x => row(x.key, x.name, x)), { step: 'plan', busy: s.cards.some(x => x.busy) }))
+      }
+    }
+    out.push(group('proposal', STEP_NAME.proposal, [row('lock:idea', 'Idea')]))
+    return out
+  }
+  const cardEl = key => world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)
+  // what the inspector opens on (the Brand card opens the brand sheet instead)
+  const selectable = key => A.cards.has(key) || /^(ref|asset|lock):/.test(key)
+  function renderLayers() {
+    if (!A.d) { tree.replaceChildren(); return }
+    layerTree(tree, layerGroups(), {
+      group(id, caret) {
+        if (caret) { shut.has(id) ? shut.delete(id) : shut.add(id); return renderLayers() }
+        shut.delete(id)
+        if (sheet.narrow()) sheet.set(false)
+        const el = world.querySelector(`[data-sec="${CSS.escape(id.split(':')[0])}"]`)
+        if (el) bd.focus(el)
+        renderLayers()
+      },
+      // fly to it and select it
+      row(key) {
+        if (sheet.narrow()) sheet.set(false)
+        if (selectable(key) && A.sel !== key) select(key)
+        const el = cardEl(key)
+        if (el) { bd.focus(el); el.focus({ preventScroll: true }) }
+      },
+      open(key) { const el = cardEl(key); if (el) press(el) },
+      drag: (e, key, name) => sw.layerDrag?.(e, key, name),
+      canRename: key => !!A.cards.get(key)?.rename,
+      rename: (key, name) => A.cards.get(key)?.rename?.(name),
+      canRemove: key => /^(ref|asset):/.test(key) || !!A.cards.get(key)?.remove,
+      remove(key) {
+        const [part, id] = key.split(':'), x = A.cards.get(key)
+        if (x?.remove) return x.remove()
+        if (part === 'ref') post(proj(`/refs/${id}/remove`)).then(j => { A.d.refs = j.refs; if (A.sel === key) select(null); else render() }).catch(fail)
+        if (part === 'asset') api(proj(`/assets/${id}`), { method: 'DELETE' }).then(j => { A.d.assets = j.assets; if (A.sel === key) select(null); else render() }).catch(fail)
+      }
+    })
+  }
+  // where a card is on screen, for a chip dragged into the chat (web/layerlink.js draws its line)
+  sw.studioRect = key => {
+    if (!A.on || root.hidden) return false
+    const el = cardEl(key)
+    if (!el) return null
+    const r = el.getBoundingClientRect(), s = bd.stage.getBoundingClientRect()
+    return r.right < s.left || r.left > s.right || r.bottom < s.top || r.top > s.bottom ? null : { left: r.left, top: r.top, width: r.width, height: r.height }
   }
 
   // ---------- the inspector: the selected card's own controls

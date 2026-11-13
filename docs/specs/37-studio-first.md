@@ -91,8 +91,10 @@ export const appKit = {
   // its Plan step: sections of artboards on the shared board
   plan: {
     // a card: cls (its look) or the flags add (a + card) and wide; render(el), with null meaning the
-    // kit's own board draws it (the scaffold shows its name); inspect(box) for the inspector, or press()
-    sections: ctx => [{ sec: 'Screens', cards: [{ key, name, cls, add, wide, render(el), inspect(box), press() }] }],
+    // kit's own board draws it (the scaffold shows its name); inspect(box) for the inspector, or press().
+    // Optional for the left panel's Layers (web/layers.js): rename(name) and remove() make its row's Rename and
+    // Delete; busy puts a working dot on its row while the planner or crew is making it
+    sections: ctx => [{ sec: 'Screens', cards: [{ key, name, cls, add, wide, render(el), inspect(box), press(), rename(name), remove(), busy }] }],
     // the chat's questions for this kind (Studio talk, below); [] when the planner asks them (a game)
     questions: ctx => [{ id, q, options: [{ id, name, picture? }], free: true }],
     // a picked option or a typed line in the left chat, back to the kit (wired with the Studio talk)

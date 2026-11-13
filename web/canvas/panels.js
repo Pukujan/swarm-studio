@@ -1,6 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the panels: theme, layer tree, agents, status, toolbar, and the chat feed with its messages.
 import { layerDrag } from '../layerlink.js'
+import { layerTree } from '../layers.js'
 import { S, els, TOOL, TOOLS, Crew, HERMIA, api } from './core.js'
 import { slotFor, setAuto, fit, post, focusPage, toolFlash } from './deck.js'
 import { design, showDtab, esc } from './design.js'
@@ -64,71 +65,35 @@ function hideLayer(l, hide) {
 export function renderTree() {
   if (treeRun !== S.run) { treeRun = S.run; layersOpen.clear(); layersHidden.clear() }
   treeSel = S.sel
-  const groups = [{ id: '*', num: 'All', title: 'Shared nav and footer' }, ...S.frames.map(f => ({ id: f.id, num: `Page ${f.index + 1}`, title: f.title }))]
-  els.tree.innerHTML = S.frames.length ? '' : '<div class="empty">Pages appear here once the planner names them.</div>'
-  for (const g of groups) {
+  if (!S.frames.length) { els.tree.innerHTML = '<div class="empty">Pages appear here once the planner names them.</div>'; return }
+  const pages = [{ id: '*', num: 'All', title: 'Shared nav and footer' }, ...S.frames.map(f => ({ id: f.id, num: `Page ${f.index + 1}`, title: f.title }))]
+  const groups = pages.map(g => {
     const layers = S.order.map(k => S.layers.get(k)).filter(l => l.page === g.id)
-    if (!layers.length && g.id === '*') continue
-    const div = document.createElement('div')
-    div.className = `pg${S.closed.has(g.id) ? '' : ' open'}`
-    const title = document.createElement('div')
-    title.className = 'pg-title'
-    title.dataset.page = g.id
-    title.innerHTML = `<span class="num"></span><span class="ttl"></span><span class="caret">▶</span>`
-    title.children[0].textContent = g.num
-    title.children[1].textContent = g.title
-    title.onclick = e => {
-      // @ts-ignore
-      if (e.target.classList.contains('caret') || g.id === '*') S.closed.has(g.id) ? S.closed.delete(g.id) : S.closed.add(g.id)
-      else { S.closed.delete(g.id); focusPage(g.id) }
-      renderTree()
-    }
-    div.append(title)
-    const lys = document.createElement('div')
-    lys.className = 'lys'
-    div.append(lys)
-    for (const l of layers) {
-      const a = l.agent && S.agents.get(l.agent)
-      const open = layersOpen.has(l.key), hid = layersHidden.has(l.key)
-      const row = document.createElement('div')
-      row.className = `ly ${l.status}${S.sel === l.key ? ' sel' : ''}${hid ? ' hid' : ''}`
-      row.dataset.key = l.key
-      row.draggable = true
-      row.ondragstart = e => layerDrag(e, l.key, l.role || l.id)
-      row.innerHTML = `<span class="tw">${l.status === 'done' ? (open ? '▼' : '▶') : ''}</span><span class="dot"></span><span></span><span class="who"></span><button class="eye" aria-label="${hid ? 'Show' : 'Hide'} on the canvas">${hid ? '◌' : '👁'}</button>`
-      row.children[2].textContent = l.role
-      if (a) {
-        row.children[3].textContent = l.status === 'done' ? `${a.name} ${(l.ms / 1000).toFixed(1)}s` : a.name
-        // @ts-ignore
-        if (l.status !== 'done' && l.status !== 'failed') row.children[1].style.background = a.color
-        // @ts-ignore
-        row.children[3].style.color = a.color
-      }
-      row.onclick = e => {
-        // @ts-ignore
-        if (e.target.classList.contains('eye')) return hideLayer(l, !hid)
-        // @ts-ignore
-        if (e.target.classList.contains('tw')) { open ? layersOpen.delete(l.key) : layersOpen.add(l.key); return renderTree() }
-        selectLayer(l)
-      }
-      lys.append(row)
-      if (open && l.status === 'done') {
-        const kids = document.createElement('div')
-        kids.className = 'kids'
-        for (const k of layerKids(l.text)) {
-          const d = document.createElement('div')
-          d.className = 'kid'
-          d.innerHTML = '<i></i><span></span>'
-          d.firstChild.textContent = k.tag
-          d.lastChild.textContent = k.label
-          d.onclick = () => selectLayer(l)
-          kids.append(d)
+    return {
+      ...g, open: !S.closed.has(g.id), count: layers.length,
+      // a dot on the page while an agent is working on one of its sections (docs/ux/PATTERNS.md)
+      busy: layers.some(l => l.agent && l.status !== 'done' && l.status !== 'failed'),
+      rows: layers.map(l => {
+        const a = l.agent && S.agents.get(l.agent), open = layersOpen.has(l.key), working = l.status !== 'done' && l.status !== 'failed'
+        return {
+          key: l.key, name: l.role, status: l.status, sel: S.sel === l.key, hid: layersHidden.has(l.key), eye: true,
+          twist: l.status === 'done' ? (open ? 'open' : 'shut') : '', kids: open && l.status === 'done' ? layerKids(l.text) : [],
+          dot: a && working ? a.color : '', who: a ? (l.status === 'done' ? `${a.name} ${(l.ms / 1000).toFixed(1)}s` : a.name) : '', color: a?.color
         }
-        lys.append(kids)
-      }
+      })
     }
-    els.tree.append(div)
-  }
+  }).filter(g => g.rows.length || g.id !== '*')
+  layerTree(els.tree, groups, {
+    group(id, caret) {
+      if (caret || id === '*') S.closed.has(id) ? S.closed.delete(id) : S.closed.add(id)
+      else { S.closed.delete(id); focusPage(id) }
+      renderTree()
+    },
+    row: key => { const l = S.layers.get(key); if (l) selectLayer(l) },
+    twist(key) { layersOpen.has(key) ? layersOpen.delete(key) : layersOpen.add(key); renderTree() },
+    eye(key) { const l = S.layers.get(key); if (l) hideLayer(l, !layersHidden.has(key)) },
+    drag: (e, key, name) => layerDrag(e, key, name)
+  })
 }
 
 // The panels redraw only when what they show has changed: rebuilding them every
