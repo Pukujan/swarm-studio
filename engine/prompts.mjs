@@ -114,10 +114,20 @@ const PICTURE_ROLE = /hero|gallery|product|destination|stall|vendor|menu|dish|co
 const NO_PICTURE = /cta|form|faq|footer|nav|legal|ticker|sparkline|chart|calendar|heatmap|map|table|accordion|rules|pricing|tiers|wallet|panel|timeline/i
 const wantsPicture = layer => layer.page !== '*' && PICTURE_ROLE.test(`${layer.role} ${layer.id}`) && !NO_PICTURE.test(layer.role || '')
 
+// an Open Design system's tokens and rules (decision 0016): the tokens are on the page as CSS variables
+// (engine/brand.mjs brandTheme), to be used as they are; the linter checks a section uses them (engine/lint)
+export function systemLine(theme) {
+  const s = theme?.system, v = theme?.vars || {}
+  if (!s?.tokens?.length) return ''
+  const rules = [...(s.rules?.do || []).map(x => `Do: ${x}`), ...(s.rules?.dont || []).map(x => `Don't: ${x}`)].join(' ')
+  return [`Design system "${s.name}" (Open Design): its tokens are on the page. Use them through var() for spacing, sizes, type, radius, shadows and motion instead of numbers of your own (p-[var(--space-6)], gap-[var(--space-4)], rounded-[var(--radius-md)], text-[length:var(--text-xl)]): ${s.tokens.map(k => `${k}: ${v[k]}`).join('; ')}.`, rules && `Its rules: ${rules}`].filter(Boolean).join('\n')
+}
+
 export function workerMessages({ theme, plan, page, layer, images = false }) {
   const shared = [
     `Theme "${theme.name}": ${theme.direction}`,
     `Fonts: headings ${theme.fonts?.heading}, body ${theme.fonts?.body}. Radius ${theme.radius}.`,
+    systemLine(theme),
     PAGE_TYPES[plan.pageType] ? `Page type: ${PAGE_TYPES[plan.pageType].name}. ${PAGE_TYPES[plan.pageType].grid} Build your section in this layout, so the page reads as one ${PAGE_TYPES[plan.pageType].name.toLowerCase()}, not a generic landing page.` : '',
     `Site pages: ${plan.pages.map(p => `${p.id} ("${p.title}")`).join(', ')}.`
   ].filter(Boolean).join('\n')

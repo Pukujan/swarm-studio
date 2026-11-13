@@ -8,7 +8,7 @@
 //
 // Get the checkout small (only what is read here):
 //   git init od && cd od && git remote add origin https://github.com/nexu-io/open-design.git
-//   git sparse-checkout set --no-cone '/design-systems/*/manifest.json' '/design-systems/*/DESIGN.md' '/design-systems/*/tokens.css' '/LICENSE'
+//   git sparse-checkout set --no-cone '/design-systems/*/manifest.json' '/design-systems/*/DESIGN.md' '/design-systems/*/tokens.css' '/design-systems/*/components.manifest.json' '/LICENSE'
 //   git fetch --depth 1 --filter=blob:none origin <COMMIT> && git checkout FETCH_HEAD
 //
 // What is read from each system, and from where:
@@ -22,14 +22,21 @@
 //   notes     DESIGN.md "## 1. Visual Theme": its first line, for the build's art direction.
 // What is ours, written here: who each look is for, the words that suggest it, the voice, the picture style and
 // the storyboard (their format has none of these).
-// Systems named after a real company, product, person or game are never imported (their README: "aesthetic
-// inspirations, not official assets"); only the generic styles in PICK are.
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+// Every system is imported (decision 0016, the owner: "I want these"), the ones named after a real brand too.
+// The generic styles in PICK have who they are for and their words written here; the rest take them from their
+// category (CATEGORY), their theme line and their name.
+//
+// And for every pack, engine/opendesign/systems.json (decision 0016 point 1, issue #447):
+//   tokens      its tokens.css :root block without colours (the brand sheet's palette is the colour) and without
+//               the names Swarm's pages already define: spacing, radius, shadow, type, motion, component sizes
+//   rules       a digest of DESIGN.md: the first line of "Visual Theme" and the first Do's and Don'ts (or Anti-patterns)
+//   components  the groups its component manifest covers
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-export const COMMIT = 'bc06128813c99fa63f5af53ad2c903c27db057f2'
+export const COMMIT = '59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582'
 export const BERGSIDE = 'f631a09b4fcc0166f2e2c1a8c81906ef680c57e8'
 // the systems Open Design normalised from bergside/awesome-design-skills (MIT); the rest of PICK are its own
 const FROM_BERGSIDE = new Set('agentic artistic bento bold brutalism cafe claymorphism clean colorful contemporary corporate cosmic creative dithered doodle dramatic editorial enterprise expressive fantasy flat friendly futuristic glassmorphism gradient levels minimal modern mono neobrutalism neon neumorphism paper perspective premium professional refined retro skeumorphism sleek spacious storytelling vibrant vintage'.split(' '))
@@ -167,14 +174,56 @@ function font(name, dropped, role) {
   dropped.push(`${role} font ${name || '(none)'} → ${to}`)
   return to
 }
+// a system not in PICK: its kind from its category, who it is for from its theme line, its words from its name
+const CATEGORY = {
+  'AI & LLM': 'product', 'Productivity & SaaS': 'product', 'Media & Consumer': 'playful', 'Creative & Artistic': 'story',
+  'Professional & Corporate': 'corporate', 'Modern & Minimal': 'editorial', 'Developer Tools': 'data', 'Backend & Data': 'data',
+  'Themed & Unique': 'loud', 'Bold & Expressive': 'loud', 'Fintech & Crypto': 'corporate', 'Design & Creative': 'story',
+  Automotive: 'luxe', 'Morphism & Effects': 'product', 'E-Commerce & Retail': 'warm', 'Retro & Nostalgic': 'retro',
+  'Layout & Structure': 'product', Starter: 'product', 'Social & Messaging': 'playful'
+}
+const kindOf = category => CATEGORY[category] || (/editorial|publication|print/i.test(category || '') ? 'editorial' : 'product')
+const wordsOf = (id, name) => [...new Set([id, name.toLowerCase().replace(/[^a-z0-9 -]/g, '').trim()])].filter(Boolean).map(w => w.replace(/[\s-]+/g, '[- ]?')).join('|')
+
+// the tokens a builder gets: the first :root block, without comments, colours, fonts (the brand sheet's type is
+// the font, from Google Fonts) or the names Swarm's pages define
+const SWARM_VARS = new Set(['--background', '--foreground', '--primary', '--primary-foreground', '--muted', '--muted-foreground', '--border', '--accent', '--card', '--link', '--radius', '--font-heading', '--font-body'])
+const COLOUR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch|color-mix|color)\(|\b(?:transparent|currentcolor|white|black)\b/i
+export function tokensOf(css) {
+  const root = /:root\s*\{([\s\S]*?)\n\}/.exec(css.replace(/\/\*[\s\S]*?\*\//g, ''))?.[1] || ''
+  const out = {}
+  for (const [, k, v] of root.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
+    const val = v.replace(/\s+/g, ' ').trim()
+    if (SWARM_VARS.has(k) || k.startsWith('--font-') || COLOUR.test(val) || /var\(--(?:bg|fg|surface|accent|border|muted)/.test(val) || val.length > 160) continue
+    out[k] = val
+  }
+  return out
+}
+// DESIGN.md's rules, short: the theme line, then up to four Do's and four Don'ts
+const sectionOf = (md, head) => { const i = md.search(new RegExp(`^## \\d+\\. ${head}`, 'm')); if (i < 0) return ''; const rest = md.slice(i).split('\n').slice(1).join('\n'); const j = rest.search(/^## /m); return j < 0 ? rest : rest.slice(0, j) }
+const bulletsOf = (text, head) => { const i = text.search(new RegExp(`^### ${head}\\b`, 'm')); if (i < 0) return []; const rest = text.slice(i).split('\n').slice(1); const end = rest.findIndex(l => /^### /.test(l)); return (end < 0 ? rest : rest.slice(0, end)).filter(l => /^- /.test(l)).slice(0, 4).map(l => l.slice(2).replace(/\*\*/g, '').replace(/\s+/g, ' ').trim().slice(0, 150)) }
+export function rulesOf(md) {
+  const dd = sectionOf(md, "Do'?s and Don'?ts")
+  const theme = (sectionOf(md, 'Visual Theme').split('\n').find(l => l.trim() && !/^[#>]/.test(l)) || '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim().slice(0, 240)
+  // the generic systems list only what to avoid, as their "Anti-patterns"
+  const anti = sectionOf(md, 'Anti-patterns').split('\n').filter(l => /^- /.test(l)).slice(0, 4).map(l => l.slice(2).replace(/\*\*/g, '').replace(/\s+/g, ' ').trim().slice(0, 150))
+  return { theme, do: bulletsOf(dd, 'Do'), dont: dd ? bulletsOf(dd, "Don'?t") : anti }
+}
+const componentsOf = dir => { try { return (JSON.parse(readFileSync(join(dir, 'components.manifest.json'), 'utf8')).groups || []).filter(g => g.present).map(g => g.label).slice(0, 12) } catch { return [] } }
+
+// a corner radius in px, as the brand sheet keeps it ('0' is 0px, rem is 16px; anything else is left to the default)
+const px = v => { const m = /^(\d*\.?\d+)(px|rem)?$/.exec(String(v || '').trim()); return m ? `${Math.round(Number(m[1]) * (m[2] === 'rem' ? 16 : 1))}px` : '' }
+// a checkout made on Windows has CRLF line ends; the patterns here read LF
+const text = f => readFileSync(f, 'utf8').replace(/\r\n?/g, '\n')
 const title = s => s.replace(/(^|[\s-])\w/g, c => c.toUpperCase()).replace(/-/g, ' ')
 
 export function convert(root, id) {
   const dir = join(root, 'design-systems', id)
   const man = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
-  const md = readFileSync(join(dir, 'DESIGN.md'), 'utf8')
-  const css = readFileSync(join(dir, 'tokens.css'), 'utf8')
-  const [kind, forWhom, words, style] = PICK[id]
+  const md = text(join(dir, 'DESIGN.md'))
+  const css = text(join(dir, 'tokens.css'))
+  const line1 = rulesOf(md).theme.split(/(?<=[.;—–])\s/)[0].replace(/[.;—–]\s*$/, '')
+  const [kind, forWhom, words, style] = PICK[id] || [kindOf(man.category), line1.slice(0, 90) || `the ${man.name || id} look`, wordsOf(id, String(man.name || id))]
   const k = KINDS[kind]
   const dropped = []
   // the colours: DESIGN.md's own, unless they are the placeholder
@@ -197,23 +246,32 @@ export function convert(root, id) {
     slug: `od-${id}`, name, for: forWhom, words, kind,
     palette: { name, bg: palette.bg, text: palette.text, accent: palette.accent, link: palette.link },
     type: { name, heading, body },
-    radius: token(css, 'radius-md') || '8px',
+    radius: px(token(css, 'radius-md')) || '8px',
     notes: theme.replace(/\s+/g, ' ').trim().slice(0, 240),
     pictures: { style: style || k.pictures.style },
     source: { repo: 'nexu-io/open-design', commit: COMMIT, path: `design-systems/${id}/`, colours: palette.from, upstream: FROM_BERGSIDE.has(id) ? `bergside/awesome-design-skills skills/${id} (MIT)` : null },
+    ...(man.category ? { category: man.category } : {}),
     dropped
   }
 }
 
+// the whole system for the builders: tokens, the rules digest and the components (systems.json)
+export function systemOf(root, id) {
+  const dir = join(root, 'design-systems', id)
+  return { tokens: tokensOf(text(join(dir, 'tokens.css'))), rules: rulesOf(text(join(dir, 'DESIGN.md'))), components: componentsOf(dir) }
+}
+export const systemIds = root => readdirSync(join(root, 'design-systems'), { withFileTypes: true })
+  .filter(d => d.isDirectory() && ['manifest.json', 'DESIGN.md', 'tokens.css'].every(f => existsSync(join(root, 'design-systems', d.name, f)))).map(d => d.name).sort()
+
 export function importAll(root) {
   const out = [], seen = new Map()
-  for (const id of Object.keys(PICK)) {
+  for (const id of [...Object.keys(PICK), ...systemIds(root).filter(id => !PICK[id])]) {
     if (!existsSync(join(root, 'design-systems', id, 'manifest.json'))) { console.error(`missing: ${id}`); continue }
     const p = convert(root, id)
-    // two systems that come out the same look are one pack
+    // two systems that come out the same colours and fonts stay two packs: their tokens and rules differ
     const key = [p.palette.bg, p.palette.text, p.palette.accent, p.type.heading, p.type.body].join('|')
-    if (seen.has(key)) { console.error(`same look as ${seen.get(key)}: ${id} (left out)`); continue }
-    seen.set(key, id)
+    if (seen.has(key)) console.error(`same colours and fonts as ${seen.get(key)}: ${id}`)
+    else seen.set(key, id)
     out.push(p)
   }
   return out
@@ -232,4 +290,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const text = `{"source": ${line({ repo: 'nexu-io/open-design', commit: COMMIT, bergside: BERGSIDE, licence: 'Apache-2.0 (Open Design); MIT (bergside/awesome-design-skills)' })},\n"kinds": {\n${Object.entries(KINDS).map(([k, v]) => `${line(k)}: ${line(v)}`).join(',\n')}\n},\n"packs": [\n${packs.map(line).join(',\n')}\n]}\n`
   writeFileSync(file, text)
   console.log(`${packs.length} packs → ${file}`)
+  // each pack's system, by slug, one line each
+  const sys = join(dirname(file), 'systems.json')
+  writeFileSync(sys, `{"source": ${line({ repo: 'nexu-io/open-design', commit: COMMIT, licence: 'Apache-2.0' })},\n"systems": {\n${packs.map(p => `${line(p.slug)}: ${line(systemOf(root, p.source.path.split('/')[1]))}`).join(',\n')}\n}}\n`)
+  console.log(`${packs.length} systems → ${sys}`)
 }
