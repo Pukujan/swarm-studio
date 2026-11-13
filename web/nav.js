@@ -183,10 +183,13 @@ export const navMachine = setup({ types: /** @type {{ context: NavContext, event
 // The address names the same state and nothing else (spec 34):
 //   ?project=<id>&version=<run>&room=<room>&run=<game run>&plan=<id>&play=<prototype|visitor>&page=<id>
 // ?run=<id> alone (the old form) opens that build's Overview; ?replay=<id> replays it in the deck.
+// A project's brand sheet, opened from its Studio, is ?room=brand&project=<id>&step=<step>; one opened from a
+// chat is no address of its own (the chat is not in the address), so a reload shows where it was opened from.
 export function toAddress(v) {
   const q = new URLSearchParams()
   const room = v.room === 'brand' ? v.from || 'home' : v.room
-  if (room === 'plan' && v.plan) { q.set('room', 'plan'); q.set('plan', v.plan) }
+  if (v.room === 'brand' && v.from === 'studio' && v.project) { q.set('room', 'brand'); q.set('project', v.project); if (v.step) q.set('step', v.step) }
+  else if (room === 'plan' && v.plan) { q.set('room', 'plan'); q.set('plan', v.plan) }
   else if (room === 'studio' && v.project) { q.set('room', 'studio'); q.set('project', v.project); if (v.step) q.set('step', v.step) }
   else if (room !== 'home' && room !== 'plan' && v.version) {
     if (v.project) q.set('project', v.project)
@@ -208,6 +211,8 @@ export function fromAddress(search = '') {
   if (replay) return [{ type: 'home' }, { type: 'open.project', version: replay }, { type: 'room', room: 'deck' }, { type: 'replay', on: true }]
   if (q.get('room') === 'plan') return [{ type: 'home' }, { type: 'plan', plan: get('plan') }]
   if (q.get('room') === 'studio') return [{ type: 'home' }, { type: 'studio', project: get('project'), step: q.get('step') }]
+  // the sheet over its project's Studio, so Back lands on the step it was opened from
+  if (q.get('room') === 'brand') return get('project') ? [{ type: 'home' }, { type: 'studio', project: get('project'), step: q.get('step') }, { type: 'brand' }] : [{ type: 'home' }]
   const version = get('version') || get('run')
   if (!version && !get('project')) return [{ type: 'home' }]
   /** @type {NavEvent[]} */

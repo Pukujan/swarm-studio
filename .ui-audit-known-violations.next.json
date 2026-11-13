@@ -16,6 +16,22 @@
     "detail": "nothing showed it was loading, and the screen asked for no data"
   },
   {
+    "key": "brand@1440 axe color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds: div[data-key=\"pack:bold-event\"] > .br-pk-row > .br-btn, div[data-key=\"pack:playful-community\"] > .br-pk-row > .br-btn"
+  },
+  {
+    "key": "brand@1440 axe label-content-name-mismatch",
+    "detail": "Elements must have their visible text as part of their accessible name: div[data-key=\"pack:warm-editorial\"], div[data-key=\"pack:od-cafe\"], div[data-key=\"pack:clean-product\"], div[data-key=\"pack:bold-event\"], div[data-key=\"pack:quiet-portfolio\"], div[data-key=\"pack:playful-community\"] and 8 more"
+  },
+  {
+    "key": "brand@390 axe color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds: div[data-key=\"pack:bold-event\"] > .br-pk-row > .br-btn, div[data-key=\"pack:playful-community\"] > .br-pk-row > .br-btn"
+  },
+  {
+    "key": "brand@390 axe label-content-name-mismatch",
+    "detail": "Elements must have their visible text as part of their accessible name: div[data-key=\"pack:warm-editorial\"], div[data-key=\"pack:od-cafe\"], div[data-key=\"pack:clean-product\"], div[data-key=\"pack:bold-event\"], div[data-key=\"pack:quiet-portfolio\"], div[data-key=\"pack:playful-community\"] and 8 more"
+  },
+  {
     "key": "deck@1440 breadcrumb",
     "detail": "reads \"Design deck\", should read \"Home › Projects › Alpha Tea › Design deck\""
   },
@@ -56,16 +72,8 @@
     "detail": "reads \"Projects › Alpha Tea\", should read \"Home › Projects › Alpha Tea › Overview\""
   },
   {
-    "key": "plan@1440 breadcrumb",
-    "detail": "reads \"Plan board\", should read \"Home › Projects › New game › Plan\""
-  },
-  {
     "key": "plan@1440 loading",
     "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
-    "key": "plan@390 breadcrumb",
-    "detail": "reads \"Plan board\", should read \"Home › Projects › New game › Plan\""
   },
   {
     "key": "plan@390 loading",

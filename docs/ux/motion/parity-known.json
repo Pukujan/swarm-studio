@@ -638,5 +638,85 @@
     "key": "publish reduced only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
+  },
+  {
+    "key": "deck only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "deck only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "deck only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "mid-build cursor Hermia: only in /next/",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "mid-build only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "mid-build only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "mid-build only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "mid-build reduced cursor Hermia: only in /next/",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "play only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "play only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "play only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "publish cursor Hermia: apart",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "publish only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "publish only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "publish only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "publish reduced cursor Hermia: apart",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
   }
 ]
