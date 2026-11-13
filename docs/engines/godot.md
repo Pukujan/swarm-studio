@@ -42,7 +42,7 @@ time it falls back to the browser and says so in a step (engine/appjob.mjs:409-4
      `assets/art/` (engine/godotfirst.mjs:86-95). `syncGodotArt` keeps files the crew changed (engine/godotfirst.mjs:102-124).
    - Each stage prompt is `godotStagePrompt`: the spec, the starter's `CREW.md`, the art brief, `GODOT_RULES`
      (Godot 4.7, GDScript 2, no Godot 3 syntax) and four Godot skills (engine/godotfirst.mjs:138-177).
-   - After each stage `godotStage` runs `checkGodot`; errors get one fix turn, then `exportWeb` and `serveStatic`
+   - After each stage `godotStage` runs `checkGodot`; errors get one fix turn, then `exportWeb` and `serveStatic` (files from Swarm's own process, no server of its own; a finished web app is served the same way since decision 0017, issue #450)
      on 127.0.0.1 with CORS (engine/appjob.mjs:512-530, engine/godotfirst.mjs:182-222).
    - `exportWeb` returns `{ ok, dir, error? }` and empties `persistentPaths` so the export does not touch
      IndexedDB in a sandboxed frame (engine/godotfirst.mjs:182-204).
@@ -67,6 +67,8 @@ an add-on folder up to 5 MB with `bringAddon`; native files mark it `web: false`
   move happen (engine/playtest.mjs:208-232, engine/playcheck.mjs:23);
 - keeps pressing keys and fails a run that ends within 2.5 s or throws errors (engine/playtest.mjs:234-252);
 - can film the run to `.webm` with the Web Audio sound muxed by ffmpeg (engine/playtest.mjs:58, 157-174).
+  The film gets a poster frame beside it, `playtest-N.poster.jpg`: a frame of the film made with ffmpeg, else the
+  title-screen photo the test takes (engine/playtest.mjs, engine/poster.mjs); the App view and the chat show it until the clip plays (web/video.js).
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).
 `testDodges` flags `.gd` files that check for the test, named with forward slashes on every system (engine/playcheck.mjs:71-87).
 

@@ -1,6 +1,6 @@
 # Open Design
 
-Glue: engine/brandpacks.mjs, engine/deck.mjs, engine/handedit.mjs, web/edit/patches.js, web/project.js, server/deck.mjs, web/kit-deck.js, scripts/import-od-systems.mjs, scripts/import-od-decks.mjs
+Glue: engine/brandpacks.mjs, engine/lint/index.mjs, engine/lint/artifact.mjs, engine/deck.mjs, engine/handedit.mjs, web/edit/patches.js, web/project.js, server/deck.mjs, web/kit-deck.js, scripts/import-od-systems.mjs, scripts/import-od-decks.mjs
 Status: built in
 
 Open Design is a whole design app (daemon, CLI, MCP, Electron desktop) at https://github.com/nexu-io/open-design, Apache-2.0 (engine/opendesign/NOTICE:4-8). Swarm does not run it. Swarm ships copies of its data and one ported file, pinned to commits, with licences beside them (docs/specs/35-open-design.md:227-237). Its editing tools (Edit, Comment, Tweaks, Draw) are decided but not yet brought in (docs/decisions/0010-open-design-tools.md:14-19, docs/PLANS.md:84-90).
@@ -25,6 +25,8 @@ Open Design is a whole design app (daemon, CLI, MCP, Electron desktop) at https:
 | 25 of 36 html-ppt deck themes (shape, colour tokens, decoration rules) | engine/opendesign/decks.json | open-design `bc06128`, `design-templates/html-ppt/` (engine/opendesign/NOTICE:29-32) | MIT, Copyright (c) 2026 lewis (engine/opendesign/LICENSE.html-ppt:1-3) |
 | html-ppt class names and type/grid/card sizes, rescaled to 1920 x 1080 | engine/deck.mjs:123-152 | same (engine/opendesign/NOTICE:41-44) | MIT |
 | `source-patches.ts` + `types.ts` ported to plain JS | web/edit/patches.js | open-design `6147958` (web/edit/NOTICE:3-5) | Apache-2.0 (web/edit/NOTICE:7) |
+| `lint-artifact.ts` (the slop linter) ported to plain JS, rules and messages unchanged | engine/lint/artifact.mjs | open-design `59e4f2a` (engine/lint/NOTICE:3-6) | Apache-2.0 (engine/lint/LICENSE) |
+| Craft and anti-slop rules, condensed into the builders' prompt and the reviewer's; the reviewer's 0-10 score, pass mark 8 and 3 rounds from Critique Theater's defaults (no code) | engine/prompts.mjs, engine/review.mjs | open-design `59e4f2a` (engine/opendesign/NOTICE, last entry) | Apache-2.0; craft/ itself adapts refero_skill (MIT) |
 | Two skills, unmodified: `threejs`, `shader-dev` | gameskills/opendesign/ | open-design main `87a4f91` (gameskills/README.md:10, 79-80) | Apache-2.0; upstream MIT (gameskills/opendesign/threejs/LICENSE.upstream:1-3) |
 
 - Dropped from design systems: components, spacing, motion, the full token scale, previews, Tailwind files; brand-named systems never imported (engine/opendesign/NOTICE:15-23).
@@ -40,6 +42,7 @@ No Open Design code runs. Swarm reads the copied files.
 - Brand packs: `odPacks()` reads packs.json and merges kind defaults; `BRAND_PACKS` puts Swarm's five own packs first (engine/brandpacks.mjs:78-87). The board shows an imported look only when suggested or picked (engine/brandpacks.mjs:121-125). `applyPack(brand, slug, parts)` fills the brand sheet (engine/brandpacks.mjs:160-181).
 - Decks: `DECK_LOOKS` from decks.json (engine/deck.mjs:21-24). `outlineFrom` builds slides from story beats, storyboard frames or the brief (engine/deck.mjs:37-57). `draftDeck` asks the planner through Hermes for JSON slides, else returns the outline (engine/deck.mjs:221-241). `deckVars` puts the locked brand's colours and fonts over the look's shape (engine/deck.mjs:78-96). `deckHtml` gives one self-contained HTML file with present mode; `deckPdf` prints it with headless Chrome (engine/deck.mjs:168-200). Routes: server/deck.mjs:1-10. Board: web/kit-deck.js (docs/specs/35-open-design.md:399-416).
 - Edit (the Overview's Inspector): `swEdit.tree`, `read`, `apply`, `pathId` (web/edit/patches.js:88-178), called from web/project.js:505-577. Patches: set-text, set-link, set-image, set-style, set-attributes, remove-element, move-element (web/edit/patches.js:12-16).
+- The slop linter: every section a builder finishes is linted with Open Design's rules plus Swarm's own for Tailwind classes and the Studio's chrome hues (engine/lint/index.mjs:1-8, engine/lint/rules.mjs:1-6); P0 findings send it back to that builder for one fix pass, kept only when it breaks fewer of them (engine/run.mjs, `lintFix`); what is still P0 at review joins the reviewer's issues (server/server.mjs, `linted`). Four upstream rules for whole pages and decks are left out (engine/lint/NOTICE:9-11). Copy the planner gave word for word is not flagged (engine/lint/index.mjs, `COPY`).
 - Hand changes are saved as section versions; `handChanges` + `keepHand` tell the crew to keep them on a rework (engine/handedit.mjs:7-22, server/server.mjs:2432).
 - Re-sync is a dev-only script against a sparse checkout; output is committed, nothing fetched at install (scripts/import-od-systems.mjs:4-12, docs/specs/35-open-design.md:347-360).
 

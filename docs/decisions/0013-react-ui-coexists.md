@@ -23,7 +23,7 @@ Three constraints shape how:
 *(our wording)*
 
 - **Where it lives.** `ui/` is a Vite + React 19 + TypeScript (strict) app with its own `package.json`, development
-  only, every version exact. Its build, `ui/dist/`, is committed. Fixed file names, no hashes, no source maps, so
+  only, every version exact. Its build, `ui/dist/`, is committed (since [decision 0018](0018-next-ui-build-on-release.md): built by CI, committed only on a release). Fixed file names, no hashes, no source maps, so
   the same source builds the same bytes. CI's `ui:check` rebuilds it and fails if a byte differs.
 - **How it is served.** The plugin's own server serves it at **`/next/`** (`server/next.mjs`). Like `/`, it is one
   document: the script and styles go inline and the token goes in at serve time, never into `ui/dist/`. Nothing is
@@ -59,7 +59,7 @@ Three constraints shape how:
 3. It goes in `SCREENS` in `ui/src/screens/index.ts`. Until then `/next/` shows the screen's name and a button to
    the current Studio at the same address.
 4. The same audit gates pass on `/next/`, with no violation the current Studio's screen doesn't have. `ui/dist/`
-   is rebuilt and committed.
+   is built by CI ([decision 0018](0018-next-ui-build-on-release.md)): commit the source only.
 5. Once every screen has moved, `/` serves the new UI and `web/`'s screens retire, in a PR of their own.
 
 [ui/README.md](../../ui/README.md) is the recipe in full.
@@ -68,7 +68,7 @@ Three constraints shape how:
 
 - The current Studio is untouched: `/` and every file in `web/` stay as they are. Fixes to a screen that has not
   moved still land in `web/`. A screen that has moved and then changes in `web/` is ported again.
-- Each port commits a rebuilt `ui/dist/` (about 390 KB of script today, 123 KB gzipped). It goes into the page
+- (Before decision 0018) each port committed a rebuilt `ui/dist/` (about 390 KB of script today, 123 KB gzipped). It goes into the page
   inline, only at `/next/`.
 - `ui/node_modules` is a developer's install (Vite, Storybook, Tailwind's native parts, swc). None of it is in the
   plugin or on the person's machine.

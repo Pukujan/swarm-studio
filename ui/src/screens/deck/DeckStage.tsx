@@ -4,6 +4,8 @@
 // a drag or the wheel turns it off and a double-click turns it back on (openspec/specs/design-deck/spec.md). The
 // pages only show here: they take no pointer.
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
+import { BoardHostContext } from '../../board/host'
+import { iframeHost } from '../../board/iframeHost'
 import { crew } from './crew'
 import { FRAME_W, GAP, PageFrame, frameX, type FrameGeo } from './PageFrame'
 import { layersOf, type DeckAgent, type DeckModel } from './model'
@@ -139,9 +141,29 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow }: {
   }, [fit])
 
   const pageLayers = useMemo(() => Object.fromEntries(model.pages.map(p => [p.id, layersOf(model, p.id)])), [model])
+
+  // The board's host (src/board/host.ts): it holds the pages and carries their messages. This one is slice 1's,
+  // every page a live frame; the tier manager's takes its place, and these calls stay as they are.
+  const host = useMemo(() => iframeHost(), [])
+  const placed = model.pages.map((p, i) => `${p.id}:${frameX(p)}:${heights[i]}`).join('|')
+  useEffect(() => {
+    host.place(model.pages.map((p, i) => ({ id: p.id, kind: 'page', rect: { x: frameX(p), y: LABEL, w: FRAME_W, h: heights[i] } })))
+  // when a page is added, moved or grows
+  }, [host, placed])
+  // a page an agent is writing should be live (a section on every page asks for the first)
+  const agentPages = [...new Set(model.agents.flatMap(a => {
+    const l = a.layer ? model.layers[a.layer] : null
+    return l ? [l.page === '*' ? model.pages[0]?.id : l.page].filter((x): x is string => !!x) : []
+  }))].sort().join('|')
+  useEffect(() => {
+    const ids = agentPages ? agentPages.split('|') : []
+    for (const id of ids) host.requestLive(id, 'agent')
+    return () => { for (const id of ids) host.releaseLive(id, 'agent') }
+  }, [host, agentPages])
   const working = model.agents.filter(a => a.layer)
 
   return (
+    <BoardHostContext value={host}>
     <div ref={stage} role="region" aria-label="Canvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onDoubleClick={() => onFollow?.(true)}
       className={`relative min-h-0 min-w-0 flex-1 touch-none overflow-hidden bg-void outline-none [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px] ${panning ? 'cursor-grabbing' : 'cursor-default'}`}>
       <div className={`absolute top-0 left-0 origin-top-left ${follow ? 'motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-out' : ''}`} style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})`, width: worldW }}>
@@ -169,5 +191,6 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow }: {
         })}
       </div>
     </div>
+    </BoardHostContext>
   )
 }

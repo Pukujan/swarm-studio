@@ -3,6 +3,7 @@
 // connect). Stories hand the deck a source of their own, so a mock-up needs no server.
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { apply, empty, fold, type DeckEvent, type DeckModel } from './model'
+import { schedule, withTyping } from './replay'
 
 export interface DeckSource {
   events(run: string): Promise<DeckEvent[]>
@@ -38,16 +39,22 @@ export type DeckLoad = { model: DeckModel, loading: boolean, error: string | nul
 
 // The build `run` as a model: loaded once, then kept up to date from the stream. The stream replays the server's
 // current build from its run:start to a late joiner, so a run:start of this build starts the fold again from it.
-export function useDeckRun(run: string | null): DeckLoad {
+// With `replay`, the saved build plays again on its own clock instead (Replay), with no stream; `onReplayEnd` is
+// called when it has played to the end.
+export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () => void): DeckLoad {
   const source = useContext(DeckSourceContext)
   const [load, setLoad] = useState<DeckLoad>({ model: empty(run), loading: !!run, error: null })
   const queue = useRef<DeckEvent[]>([])
+  const ended = useRef(onReplayEnd)
+  ended.current = onReplayEnd
 
   useEffect(() => {
     if (!run) { setLoad({ model: empty(null), loading: false, error: null }); return }
+    if (replay) return play(run)
     let live = true, frame = 0
     setLoad({ model: empty(run), loading: true, error: null })
-    // stream events wait in a queue until the file is folded, then go in once a frame (a build streams fast)
+    // stream events wait in a queue until the file is folded, then go in together every 33 ms (a build streams
+    // fast). A timer, not requestAnimationFrame, which never runs in a hidden tab: the deck there would stop
     let ready = false
     const flush = () => {
       frame = 0
@@ -62,7 +69,7 @@ export function useDeckRun(run: string | null): DeckLoad {
     const stop = source.stream?.(e => {
       if (e.run !== run) return
       queue.current.push(e)
-      if (ready && !frame) frame = requestAnimationFrame(flush)
+      if (ready && !frame) frame = window.setTimeout(flush, 33)
     })
     Promise.all([source.events(run), source.live?.(run).catch(() => false) ?? false]).then(([events, building]) => {
       if (!live) return
@@ -72,12 +79,36 @@ export function useDeckRun(run: string | null): DeckLoad {
       if (!building && (m.state === 'planning' || m.state === 'building')) m = apply(m, { type: 'run:stopped', run, t: m.tEnd || m.t0 })
       setLoad({ model: m, loading: false, error: null })
       ready = true
-      if (queue.current.length) frame = requestAnimationFrame(flush)
+      if (queue.current.length) frame = window.setTimeout(flush, 33)
     }, (err: unknown) => {
       if (live) setLoad({ model: empty(run), loading: false, error: err instanceof Error ? err.message : String(err) })
     })
-    return () => { live = false; stop?.(); if (frame) cancelAnimationFrame(frame); queue.current = [] }
-  }, [run, source])
+    return () => { live = false; stop?.(); if (frame) clearTimeout(frame); queue.current = [] }
+  }, [run, source, replay])
+
+  // Replay: every event at its time, stamped now (the deck treats it as happening), on one timer at a time
+  function play(id: string) {
+    let live = true, timer = 0
+    setLoad({ model: empty(id), loading: true, error: null })
+    source.events(id).then(all => {
+      if (!live) return
+      const events = withTyping(all.filter(e => e.type !== 'cmd')), at = schedule(events), start = performance.now()
+      let i = 0, m = empty(id)
+      setLoad({ model: m, loading: false, error: null })
+      const step = () => {
+        if (!live) return
+        const now = performance.now() - start
+        while (i < events.length && at[i] <= now) m = apply(m, { ...events[i++], t: Date.now() })
+        setLoad(l => ({ ...l, model: m }))
+        if (i < events.length) timer = window.setTimeout(step, Math.max(16, at[i] - now))
+        else ended.current?.()
+      }
+      step()
+    }, (err: unknown) => {
+      if (live) setLoad({ model: empty(id), loading: false, error: err instanceof Error ? err.message : String(err) })
+    })
+    return () => { live = false; clearTimeout(timer) }
+  }
 
   return load
 }
