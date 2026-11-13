@@ -3,7 +3,10 @@
 // tab can show it. The server imports this file only when someone opens the
 // App tab, so a studio that never builds an app never loads it.
 
-import { spawn, execFile, execFileSync, appEnv } from './proc.mjs'
+import { execFile, execFileSync, appEnv, start as startProc, stopTree } from './proc.mjs'
+import { previewPool } from './lifecycle.mjs'
+import { createHash } from 'node:crypto'
+import { createServer as httpServer, request } from 'node:http'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
@@ -80,12 +83,46 @@ const freePort = () => new Promise((ok, fail) => {
 const portFree = port => new Promise(ok => {
   const s = createServer().once('error', () => ok(false)).listen(port, '127.0.0.1', () => s.close(() => ok(true)))
 })
-const stopProc = p => new Promise(ok => {
-  if (p.exitCode !== null) return ok()
-  const t = setTimeout(() => { p.kill('SIGKILL'); ok() }, 5000)
-  p.once('exit', () => { clearTimeout(t); ok() })
-  p.kill()
-})
+// What a finished app's build depends on: every file of the app but its packages and build output, by name,
+// size and time. The build is redone only when this changes.
+const BUILD_SKIP = /^(node_modules|dist|\.output|\.nitro|\.git|\.vite|\.dyad|\.vercel|\.swarm-built\.json)$/
+export function sourceSig(dir) {
+  const h = createHash('sha1')
+  const walk = (d, rel) => {
+    let names = []
+    try { names = readdirSync(d).sort() } catch { return }
+    for (const n of names) {
+      if (BUILD_SKIP.test(n)) continue
+      const f = join(d, n)
+      let st
+      try { st = statSync(f) } catch { continue }
+      if (st.isDirectory()) walk(f, `${rel}${n}/`)
+      else h.update(`${rel}${n}:${st.size}:${st.mtimeMs}\n`)
+    }
+  }
+  walk(dir, '')
+  return h.digest('hex')
+}
+// An app with server routes (Dyad's Nitro layer) builds to .output/ and runs as `node .output/server/index.mjs`
+// (dyad/src/lib/framework_constants.ts:58); one without serves dist/ as files
+export const hasServer = dir => ['nitro.config.ts', 'nitro.config.js', 'server'].some(f => existsSync(join(dir, f)))
+
+// A built app's server behind a front on the app's own port that adds CORS: Hermes shows the Studio in a
+// sandboxed frame (origin null), and the app's module scripts need it to load there (the dev server's --cors)
+export function corsFront(port, to) {
+  const srv = httpServer((req, res) => {
+    const up = request({ host: '127.0.0.1', port: to, path: req.url, method: req.method, headers: { ...req.headers, host: `127.0.0.1:${to}` } }, r => {
+      res.writeHead(r.statusCode || 502, { ...r.headers, 'access-control-allow-origin': '*' })
+      r.pipe(res)
+    })
+    up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end() })
+    req.pipe(up)
+  })
+  return new Promise((ok, fail) => {
+    srv.once('error', fail)
+    srv.listen(port, '127.0.0.1', () => ok({ url: `http://127.0.0.1:${port}/`, close: () => new Promise(r => { srv.closeAllConnections?.(); srv.close(() => r()) }) }))
+  })
+}
 
 // What a running Vite dev server cannot take in without a restart: its
 // config, Nitro's, the packages, and a server/ folder appearing.
@@ -179,8 +216,17 @@ export const isQuestion = text => QUESTION.test(String(text || '').trim())
 // that must match the clip's price when it is asked (engine/idle.mjs priceOk)
 export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v === 'object' && Number.isFinite(Number(v.usd)) ? { usd: Number(v.usd), ...(typeof v.video === 'string' && /^[\w.\/:@+-]{1,160}$/.test(v.video) ? { video: v.video } : {}) } : null)
 
-export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
+// idleMs, maxApps: Settings › Background (numbers, or functions read each time): an app's server stops after idleMs
+// with no viewer and no build, and at most maxApps run at once (decision 0017, issue #450)
+export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null, idleMs = 120000, maxApps = 2, sweepEvery = 15000, now = Date.now }) {
   const jobs = new Map() // run id -> job
+  // Each app's server (spec 44, "the dev server only while building"): the dev server runs while the crew builds
+  // or someone edits; a finished app is served built (serveBuilt). Either one stops when no viewer has sent a
+  // heartbeat (seen) for idleMs and nobody is building it, and at most maxApps run, the least recently viewed
+  // stopped first. The next open serves it again, cold.
+  const pool = previewPool({ max: maxApps, idleMs, now, busy: id => jobs.get(id)?.state === 'working', stop: (id, why) => park(id, why) })
+  const sweeper = setInterval(() => { pool.sweep().catch(() => {}) }, sweepEvery)
+  sweeper.unref?.()
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const dirOf = id => join(runsDir, id, 'app')
 
@@ -207,7 +253,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
   const built = (id, events = readEvents(id) || []) => events.some(e => e.type === 'app:done') && existsSync(join(dirOf(id), 'package.json'))
-  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
+  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, served: j.mode || null, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
 
   // Start the first build, or one more turn on the same app.
   async function start(id, input = {}) {
@@ -335,6 +381,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
+      // building stopped: the app is served built from here on, on the same address (spec 44)
+      if (!j.gsrv) serveBuilt(id, j, step).catch(err => step({ kind: 'serve', text: `the app stays on its dev server: ${String(err.message || err).slice(0, 200)}`, ok: false }))
     })().catch(err => {
       Object.assign(j, { state: 'failed', message: String(err.message || err).slice(0, 400) })
       j.radio?.stop()
@@ -532,7 +580,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   async function serveGodot(id, j) {
     j.godot = true
     if (j.gsrv) return
-    if (j.proc && j.proc.exitCode === null) { await stopProc(j.proc); j.proc = null }
+    await unserve(id, j)
     j.port = j.port && await portFree(j.port) ? j.port : await freePort()
     j.gsrv = await serveStatic(webBuild(dirOf(id)), j.port)
     j.url = j.gsrv.url
@@ -614,45 +662,119 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   async function serve(id, j, step = () => {}) {
     const dir = dirOf(id)
     const sig = serveSig(dir)
-    if (j.proc && j.proc.exitCode === null) {
-      if (j.sig === sig) return
+    if (j.mode === 'dev' && j.proc && j.proc.exitCode === null) {
+      if (j.sig === sig) return pool.seen(id)
       step({ kind: 'serve', text: 'the app\'s setup changed: restarting it' })
-      await stopProc(j.proc)
-      j.url = null
     }
+    // the dev server, the app built, or none: whatever serves it now gives way
+    await unserve(id, j)
     step({ kind: 'serve', text: 'installing the app\'s packages' })
     const inst = await sh('pnpm', ['install', '--prefer-offline'], dir)
     if (!inst.ok) throw new Error(`pnpm install failed: ${inst.out.slice(-300)}`)
     j.port = j.port && await portFree(j.port) ? j.port : await freePort()
     j.sig = sig
+    await pool.admit(id)
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
     // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
     // vite's own script under this Node: .bin/vite is a shell shim (vite.cmd on Windows)
-    const p = spawn(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { BROWSER: 'none', ...appEnv(process.env, keysOf(id, j)) } })
-    j.proc = p
+    const p = startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { BROWSER: 'none', ...appEnv(process.env, keysOf(id, j)) } })
+    j.url = await answers(id, j, p, `http://127.0.0.1:${j.port}/`, 'dev')
+    send(id, 'app:ready', { url: j.url })
+  }
+
+  // A process that serves the app: kept as j.proc, waited for until its address answers (30 s)
+  async function answers(id, j, p, url, mode) {
+    Object.assign(j, { proc: p, mode })
     let log = ''
-    p.stdout.on('data', b => { log = (log + b).slice(-4000) })
-    p.stderr.on('data', b => { log = (log + b).slice(-4000) })
-    const url = `http://127.0.0.1:${j.port}/`
+    p.stdout?.on('data', b => { log = (log + b).slice(-4000) })
+    p.stderr?.on('data', b => { log = (log + b).slice(-4000) })
+    // it stopped by itself (a crash, a kill from outside): nothing serves the app now
+    p.once('exit', () => { if (j.proc === p) { Object.assign(j, { proc: null, url: null, mode: null }); pool.gone(id) } })
     for (let i = 0; i < 60; i++) {
-      if (p.exitCode !== null) throw new Error(`the app stopped: ${log.slice(-300)}`)
-      if (await fetch(url, { signal: AbortSignal.timeout(2000) }).then(r => r.ok).catch(() => false)) { j.url = url; break }
+      if (p.exitCode !== null && p.exitCode !== undefined) throw new Error(`the app stopped: ${log.slice(-300)}`)
+      if (await fetch(url, { signal: AbortSignal.timeout(2000) }).then(r => r.status < 500).catch(() => false)) return url
       await new Promise(r => setTimeout(r, 500))
     }
-    if (!j.url) throw new Error('the app did not answer in 30 s')
-    send(id, 'app:ready', { url: j.url })
+    await stopTree(p)
+    throw new Error('the app did not answer in 30 s')
+  }
+
+  // Whatever serves the app now stops: its dev server or built server with all their children, its files, its
+  // front; the port is kept, so the next start has the same address
+  async function unserve(id, j) {
+    const p = j.proc, files = j.files, front = j.front
+    Object.assign(j, { proc: null, files: null, front: null, url: j.gsrv ? j.url : null, mode: null })
+    pool.gone(id)
+    if (front) await front.close()
+    if (files) await files.close()
+    if (p) await stopTree(p)
+  }
+
+  // Nobody has looked for a while, or another app needs the room: its server stops (spec 44). The App view hears
+  // it and opens the app again, served built, when someone comes back.
+  async function park(id, why) {
+    const j = jobs.get(id)
+    if (!j || j.state === 'working') return
+    await unserve(id, j)
+    broadcast({ type: 'app:parked', t: Date.now(), run: id, why })
+  }
+
+  // A finished app, served built (spec 44): the app's build when the app changed since the last one, then dist/
+  // as files from this process (no process of its own), or for an app with server routes its built Nitro server
+  // alone behind a CORS front. Editing or building again starts the dev server (serve).
+  async function serveBuilt(id, j, step = () => {}) {
+    const dir = dirOf(id), server = hasServer(dir), sig = sourceSig(dir)
+    const out = server ? join(dir, '.output', 'server', 'index.mjs') : join(dir, 'dist', 'index.html')
+    let stamp = null
+    try { stamp = JSON.parse(readFileSync(join(dir, '.swarm-built.json'), 'utf8')) } catch {}
+    if (stamp?.sig !== sig || !existsSync(out)) {
+      if (!existsSync(join(dir, 'node_modules', 'vite'))) {
+        step({ kind: 'serve', text: 'installing the app\'s packages' })
+        const inst = await sh('pnpm', ['install', '--prefer-offline'], dir)
+        if (!inst.ok) throw new Error(`pnpm install failed: ${inst.out.slice(-300)}`)
+      }
+      step({ kind: 'serve', text: 'building the app to serve it' })
+      const b = await startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), 'build'], { cwd: dir, buffer: true, all: true, timeout: 300000, env: { CI: '1', ...appEnv(process.env, keysOf(id, j)) } })
+      if (b.exitCode !== 0 || !existsSync(out)) throw new Error(`the app's build failed: ${String(b.all || '').slice(-300)}`)
+      writeFileSync(join(dir, '.swarm-built.json'), JSON.stringify({ sig, server, t: Date.now() }))
+    }
+    await unserve(id, j)
+    j.port = j.port && await portFree(j.port) ? j.port : await freePort()
+    if (server) {
+      await pool.admit(id)
+      const inner = await freePort()
+      const p = startProc(process.execPath, [out], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { PORT: String(inner), HOST: '127.0.0.1', NITRO_PORT: String(inner), NITRO_HOST: '127.0.0.1', NODE_ENV: 'production', ...appEnv(process.env, keysOf(id, j)) } })
+      await answers(id, j, p, `http://127.0.0.1:${inner}/`, 'built')
+      j.front = await corsFront(j.port, inner)
+      j.url = j.front.url
+    } else {
+      // files from this process: no process to stop, so not one of the maxApps
+      j.files = await serveStatic(join(dir, 'dist'), j.port, { spa: true })
+      Object.assign(j, { mode: 'files', url: j.files.url })
+    }
+    send(id, 'app:ready', { url: j.url, built: true })
+  }
+
+  // a viewer's heartbeat (the App view, every 30 s while it shows the app): the app's server is kept
+  function seen(id) {
+    const j = jobs.get(id)
+    if (j?.url) pool.seen(id)
+    return { url: j?.url || null, served: j?.mode || null }
   }
 
   async function open(id) {
     const j = jobs.get(id)
     if (j?.url && j.gsrv) return view(j)
-    if (j?.url && j.proc?.exitCode === null && j.sig === serveSig(dirOf(id))) return view(j)
+    // served built, or its dev server still up and current: kept
+    if (j?.url && (j.mode === 'files' || j.mode === 'built')) { pool.seen(id); return view(j) }
+    if (j?.url && j.mode === 'dev' && j.proc?.exitCode === null && j.sig === serveSig(dirOf(id))) { pool.seen(id); return view(j) }
     if (!existsSync(join(dirOf(id), 'package.json'))) throw new Error('no app yet')
     const k = j || { id, kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
     jobs.set(id, k)
-    // a Godot-first game plays from its Web export
+    // a Godot-first game plays from its Web export; one being built, from its dev server; a finished one, built
     if (isGodotFirst(dirOf(id)) && existsSync(join(webBuild(dirOf(id)), 'index.html'))) await serveGodot(id, k)
-    else await serve(id, k)
+    else if (k.state === 'working') await serve(id, k)
+    else await serveBuilt(id, k)
     k.state = k.state === 'working' ? 'working' : 'done'
     return view(k)
   }
@@ -746,9 +868,15 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     return n === 'Swarm build' ? '' : n
   }
 
-  function close() { for (const j of jobs.values()) { j.controller?.abort(); j.proc?.kill() } }
+  // the server is stopping: every app's server and its children go with it
+  function close() {
+    clearInterval(sweeper)
+    return Promise.all([...jobs.entries()].map(([id, j]) => { j.controller?.abort(); return unserve(id, j) }))
+  }
+  // a build is running somewhere (the server's idle exit waits for it)
+  const busy = () => [...jobs.values()].some(j => j.state === 'working')
 
-  return { start, state, stop, tell, redirect, open, files, deploy, close, dirOf, jobs }
+  return { start, state, stop, tell, redirect, open, seen, files, deploy, close, busy, dirOf, jobs, pool }
 }
 
 // "can I see it", "show me the pictures": the person wants to look, not to change anything

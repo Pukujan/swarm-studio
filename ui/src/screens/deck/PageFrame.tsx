@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from 'react'
 import frameHtml from '../../../../web/frame.html?raw'
 import { clean } from '@studio/clean'
+import { useBoardHost } from '../../board/host'
+import type { IframeHost } from '../../board/iframeHost'
 import { crew } from './crew'
 import type { DeckAgent, DeckLayer, DeckPage, DeckTheme, LayerStatus } from './model'
 
@@ -34,11 +36,18 @@ export function PageFrame({ page, layers, agents, theme, onGeo }: {
   // bumped to send what the throttle held back
   const [later, setLater] = useState(0)
 
+  // the board's host carries this page's messages (src/board/host.ts); slice 1's host is every page a live frame
+  const host = useBoardHost()
+  // this page is a live frame: the host hears and reaches it (a host that draws photos attaches its own frames)
   useEffect(() => {
-    const onMessage = (e: MessageEvent) => {
-      if (!ref.current || e.source !== ref.current.contentWindow) return
-      const m = e.data as { type?: string, height?: number, slots?: FrameGeo['slots'] } | null
-      if (m?.type === 'ready') {
+    if (!host || !ref.current || !('attach' in host)) return
+    return (host as IframeHost).attach(page.id, ref.current)
+  }, [host, page.id])
+  useEffect(() => {
+    if (!host) return
+    return host.onMessage(page.id, msg => {
+      const m = msg as { type?: string, height?: number, slots?: FrameGeo['slots'] }
+      if (m.type === 'ready') {
         sent.current.clear()
         setReady(n => n + 1)
       } else if (m?.type === 'geo') {
@@ -46,12 +55,10 @@ export function PageFrame({ page, layers, agents, theme, onGeo }: {
         setHeight(Math.min(36000, Math.max(700, m.height || 0)))
         onGeo(page.id, { height: m.height || 0, slots: m.slots || {} })
       }
-    }
-    addEventListener('message', onMessage)
-    return () => removeEventListener('message', onMessage)
-  }, [page.id, onGeo])
+    })
+  }, [host, page.id, onGeo])
 
-  const post = (msg: object) => ref.current?.contentWindow?.postMessage(msg, '*')
+  const post = (msg: { type: string, [k: string]: unknown }) => host?.post(page.id, msg)
 
   useEffect(() => {
     if (ready && theme) post({ type: 'theme', theme: { vars: theme.vars, fonts: theme.fonts, radius: theme.radius } })
@@ -69,7 +76,7 @@ export function PageFrame({ page, layers, agents, theme, onGeo }: {
         s = { ver: -1, status: null, t: 0 }
         sent.current.set(l.key, s)
       }
-      const msg: Record<string, unknown> = { type: 'slot', key: l.key }
+      const msg: { type: string, [k: string]: unknown } = { type: 'slot', key: l.key }
       if (s.status !== l.status) {
         const before = s.status
         s.status = l.status

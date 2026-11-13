@@ -1,0 +1,197 @@
+{
+  "base": "origin/main",
+  "before": {
+    "fingerprint": "4da5d4815fda95f1",
+    "model": "cb/deepseek-v4.1-flash",
+    "reviewer": "ali/qwen3.8-omni-flash",
+    "runs": 2,
+    "at": "2026-11-13T15:37:31.157Z",
+    "sets": {
+      "harbour": {
+        "runs": [
+          {
+            "wallMs": 7092,
+            "tokensIn": 5913,
+            "tokensOut": 7680,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 2,
+            "ids": [
+              "accent-overuse",
+              "all-caps-no-tracking"
+            ],
+            "score": 10,
+            "scored": false,
+            "issues": 0,
+            "verdict": "The page has a clean, modern design with clear navigation and readable content."
+          },
+          {
+            "wallMs": 6574,
+            "tokensIn": 5913,
+            "tokensOut": 7824,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 2,
+            "ids": [
+              "all-caps-no-tracking",
+              "accent-overuse"
+            ],
+            "score": 10,
+            "scored": false,
+            "issues": 0,
+            "verdict": "The page has a clean, readable layout with clear navigation and well-structured content."
+          }
+        ],
+        "scored": false,
+        "wallMs": 6833,
+        "tokensIn": 5913,
+        "tokensOut": 7752,
+        "score": 10,
+        "findings": 0.25,
+        "p0": 0,
+        "errors": 0
+      },
+      "kiln": {
+        "runs": [
+          {
+            "wallMs": 9337,
+            "tokensIn": 8973,
+            "tokensOut": 9801,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "all-caps-no-tracking"
+            ],
+            "score": 10,
+            "scored": false,
+            "issues": 0,
+            "verdict": "The hero section features a clean layout with clear typography and well-defined call-to-action buttons."
+          },
+          {
+            "wallMs": 9227,
+            "tokensIn": 8973,
+            "tokensOut": 10449,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 0,
+            "ids": [],
+            "score": 10,
+            "scored": false,
+            "issues": 0,
+            "verdict": "The hero section features a large, empty placeholder graphic on the right side."
+          }
+        ],
+        "scored": false,
+        "wallMs": 9282,
+        "tokensIn": 8973,
+        "tokensOut": 10125,
+        "score": 10,
+        "findings": 0.04,
+        "p0": 0,
+        "errors": 0
+      }
+    }
+  },
+  "after": {
+    "fingerprint": "02baabaf83505a07",
+    "model": "cb/deepseek-v4.1-flash",
+    "reviewer": "ali/qwen3.8-omni-flash",
+    "runs": 2,
+    "at": "2026-11-13T15:38:21.474Z",
+    "sets": {
+      "harbour": {
+        "runs": [
+          {
+            "wallMs": 6948,
+            "tokensIn": 7577,
+            "tokensOut": 7174,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-designed page with strong typography and a cohesive dark theme."
+          },
+          {
+            "wallMs": 5128,
+            "tokensIn": 7577,
+            "tokensOut": 5526,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-structured page with strong typography and a cohesive theme."
+          }
+        ],
+        "scored": true,
+        "wallMs": 6038,
+        "tokensIn": 7577,
+        "tokensOut": 6350,
+        "score": 8,
+        "findings": 0.13,
+        "p0": 0,
+        "errors": 0
+      },
+      "kiln": {
+        "runs": [
+          {
+            "wallMs": 8589,
+            "tokensIn": 11469,
+            "tokensOut": 8273,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 0,
+            "ids": [],
+            "score": 9,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A polished landing page with strong typography and a clear value proposition."
+          },
+          {
+            "wallMs": 9510,
+            "tokensIn": 11469,
+            "tokensOut": 10714,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 9,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A highly polished, cohesive landing page with strong typography and clear visual hierarchy."
+          }
+        ],
+        "scored": true,
+        "wallMs": 9049.5,
+        "tokensIn": 11469,
+        "tokensOut": 9493.5,
+        "score": 9,
+        "findings": 0.04,
+        "p0": 0,
+        "errors": 0
+      }
+    }
+  },
+  "table": "| set | score | findings per section | P0 | wall time | prompt tokens |\n|---|---|---|---|---|---|\n| harbour | 8 (the base gives no score) | 0.25 → 0.13 | 0 → 0 | 6.8 s → 6.0 s (-12%) | 5913 → 7577 (28%) |\n| kiln | 9 (the base gives no score) | 0.04 → 0.04 | 0 → 0 | 9.3 s → 9.0 s (-3%) | 8973 → 11469 (28%) |",
+  "fails": []
+}

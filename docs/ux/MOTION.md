@@ -14,6 +14,48 @@ The motion check does not see the speed of JS-driven movement (a cursor gliding 
 
 How to read the tables. "Owned by" gives the keyframes or rule first, then the JS that triggers it (`css | js`). Reduced motion: "global" means the blanket rule at `web/canvas.css:1403` (`*` gets `animation-duration .01ms`, `animation-iteration-count 1`, `transition-duration .01ms`, all `!important`). It covers the whole app page but not the page frames, which are separate documents (`web/frame.html`, the Play frame, the exports). "none" means nothing is done for it beyond that. JS-driven movement (camera glide, cursor travel, tours, loops) is not touched by any reduced-motion rule unless a row says so.
 
+## The next UI moves the same
+
+A screen moved to the next UI (`ui/`, served at `/next/`, issue #404) has to move the way the current Studio
+does at `/`, which is the baseline. CI's `motion-parity` job checks this on every pull request that touches
+`ui/`, `web/` or `server/` (`scripts/motion-parity.mjs`). It runs the motion check's scenes and five more:
+- the Make menu (Projects, then type an idea and press Make);
+- the Plan board;
+- the Publish menu (the deck, then Publish);
+- the brand sheet (the Studio's Brand sheet card, then a palette and a type picked).
+
+It runs them in both apps from the same tree, on the same frozen clock and seed, and compares, per screen:
+
+- **Animations.** Every CSS animation, transition and Web Animation that starts, by name (or property),
+  duration, iterations and easing. The element it runs on is left out, since the port's elements have other
+  classes. A 0 ms transition moves nothing and is left out.
+- **Cursors.** Where Hermia's cursor (`.pet`) and each crew cursor (`.cursor` at `/`, `[data-agent]` in
+  `ui/`) are at every 500 ms step, within 24 px (`--px`). This is the movement the motion check can't see,
+  because a JS clock ends in the same place at another speed.
+- **Reduced motion.** The same again with `prefers-reduced-motion: reduce`. On top of that, nothing on the page
+  may move in `/next/` that `/` keeps still.
+
+The end pictures are not compared: a port is not pixel-identical, and the audit gates ([AUDIT.md](AUDIT.md))
+check how it looks. A screen whose `/next/` still shows its name and "Open in the Studio" is skipped as not
+moved yet. As in the motion check, each app is recorded twice, and a difference counts only when both runs
+agree. Nothing is retried.
+
+Known differences are in [motion/parity-known.json](motion/parity-known.json). Each one is labelled
+`intended (PR #N)`, a slice that leaves it for later on purpose, or `drift`, which is to be fixed, and each
+has a why. A new difference fails the job. A known one that no longer happens is printed so its entry can be
+deleted. To write the list again: `node scripts/motion-parity.mjs run <dir> --update`, then label the new
+entries.
+
+**Recordings.** `node scripts/motion-parity.mjs clips <dir>` films each moved scene in real time at 640 wide
+in both apps. It puts them side by side, `/` on the left and `/next/` on the right, with ffmpeg's `hstack`
+(the Studio already uses ffmpeg for sound, [docs/engines/video.md](../engines/video.md)). CI uploads them as
+the `motion-parity` artifact on every run.
+
+A reference set is committed:
+- [motion/parity/](motion/parity/): the moved screens, side by side;
+- [motion/demo/](motion/demo/): the owner's demo video, cut into short clips and key frames for beats 1, 2,
+  4, 5, 7 and 10, next to the same moment at `/` and `/next/` ([motion/demo/README.md](motion/demo/README.md)).
+
 ## A change that changes the motion
 
 The motion check is for changes that keep the motion. A change meant to add or remove motion (a new cursor, a

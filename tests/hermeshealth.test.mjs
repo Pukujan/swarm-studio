@@ -182,50 +182,55 @@ test('a server with no Hermes refuses a build in under a second, with the reason
   } finally { s.stop() }
 })
 
-test('a Hermes that disappears mid-build stops the build with the reason; when one attaches again the canvas is told', async () => {
+// Each step waits for the thing it is about (the bridge's first call, the stop on the canvas's stream, Hermes
+// back), not for a count of polls: on a slow runner the polls ran out before the stop came. The time limit is
+// only for a hang.
+test('a Hermes that disappears mid-build stops the build with the reason; when one attaches again the canvas is told', { timeout: 60000 }, async () => {
   const s = await startServer({ SWARM_HERMES_GRACE_MS: '300' })
   // a fake bridge that takes the model calls and never answers, then goes away
   const held = []
-  const bridge = createServer((req, res) => { held.push(res); req.resume() })
+  let called
+  const firstCall = new Promise(r => { called = r })
+  const bridge = createServer((req, res) => { held.push(res); req.resume(); called() })
   await new Promise(r => bridge.listen(0, '127.0.0.1', r))
-  const events = []
+  // the canvas's stream, as it arrives; hear(…) resolves with the first event that matches
+  const events = [], waiting = new Set()
+  const hear = match => new Promise(r => { const look = () => { const e = events.find(match); if (e) { waiting.delete(look); r(e) } }; waiting.add(look); look() })
   const ctl = new AbortController()
-  const sse = fetch(`${s.base}/events?k=t`, { signal: ctl.signal }).then(async r => {
+  const stream = await fetch(`${s.base}/events?k=t`, { signal: ctl.signal })
+  const sse = (async () => {
     let buf = ''
-    for await (const chunk of r.body) {
+    for await (const chunk of stream.body) {
       buf += Buffer.from(chunk).toString()
       for (let i; (i = buf.indexOf('\n\n')) >= 0; buf = buf.slice(i + 2)) { const line = buf.slice(0, i); if (line.startsWith('data: ')) try { events.push(JSON.parse(line.slice(6))) } catch {} }
+      for (const look of [...waiting]) look()
     }
-  }).catch(() => {})
+  })().catch(() => {})
   try {
     const at = await s.call('/api/hermes/attach', { method: 'POST', body: JSON.stringify({ url: `http://127.0.0.1:${bridge.address().port}`, token: 'bridge-token-0123456789', pid: 4242, code: 1e10 }) })
     assert.equal(at.status, 200)
     const res = await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A one-page site for a plant shop' }) })
     assert.equal(res.status, 200)
     const { run } = await res.json()
-    for (let i = 0; i < 50 && !held.length; i++) await new Promise(r => setTimeout(r, 100))
+    await firstCall
     assert.ok(held.length, 'the build called the model through the bridge')
-    // Hermes closes: the call in flight breaks and the bridge refuses the next ones
+    // Hermes closes: the call in flight breaks and the bridge refuses the next ones. Its connections go first:
+    // close() alone waits for the server's idle keep-alive connections to time out, seconds later
     for (const r of held) r.socket?.destroy()
-    await new Promise(r => bridge.close(r))
     bridge.closeAllConnections?.()
-    let stopped = null
-    for (let i = 0; i < 100 && !stopped; i++) {
-      await new Promise(r => setTimeout(r, 100))
-      const lines = runEvents(s, run)
-      stopped = lines.find(e => e.type === 'run:stopped')
-      assert.ok(!lines.some(e => e.type === 'run:done'), 'a build that planned nothing did not "finish"')
-    }
-    assert.ok(stopped, 'the build stopped')
+    await new Promise(r => bridge.close(r))
+    const stopped = await hear(e => e.type === 'run:stopped' && e.run === run)
+    assert.ok(!events.some(e => e.type === 'run:done' && e.run === run), 'a build that planned nothing did not "finish"')
     assert.equal(stopped.reason.code, 'hermes')
     assert.match(stopped.reason.message, /Hermes closed during the build/)
     assert.ok(stopped.reason.action)
+    // and the run's file says the same
+    assert.equal(runEvents(s, run).find(e => e.type === 'run:stopped')?.reason?.code, 'hermes')
     // Hermes is back: the canvas hears it (and resumes a build it stopped)
     const again = createServer((req, res) => res.writeHead(200).end('{}'))
     await new Promise(r => again.listen(0, '127.0.0.1', r))
     await s.call('/api/hermes/attach', { method: 'POST', body: JSON.stringify({ url: `http://127.0.0.1:${again.address().port}`, token: 'bridge-token-0123456789', pid: 4243, code: 1e10 }) })
-    for (let i = 0; i < 30 && !events.some(e => e.type === 'hermes:back' && e.attached); i++) await new Promise(r => setTimeout(r, 50))
-    assert.ok(events.some(e => e.type === 'hermes:back' && e.attached))
+    await hear(e => e.type === 'hermes:back' && e.attached)
     again.close()
   } finally { ctl.abort(); await sse; bridge.close(); s.stop() }
 })
