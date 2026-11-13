@@ -3,7 +3,7 @@
 // twice in a row and never repeats the chat.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PET_LINES, PET_ORDER, PET_MAX, PET_GAP, petBrain } from '../web/pet.js'
+import { PET_LINES, PET_ORDER, PET_MAX, PET_GAP, PET_BUSY, PET_NOT, petBrain, petSpot } from '../web/pet.js'
 
 const SAMPLES = {
   step: [{ step: 'brand' }, { step: 'references' }, { step: 'assets' }, { step: 'plan' }, { step: 'proposal' }, { step: 'nowhere' }, {}],
@@ -111,4 +111,20 @@ test('an unknown event or an empty burst says nothing', () => {
   assert.equal(b.take([]), null)
   assert.equal(b.take([{ kind: 'whistle', data: {} }]), null)
   assert.deepEqual(b.lines('whistle'), [])
+})
+
+// slow things (the owner, 2026-11-13): a skeleton, and her working on it
+test('she works inside a placeholder, near its top left, never off the screen', () => {
+  const [x, y] = petSpot({ left: 300, top: 200, width: 400, height: 300 }, 1440, 900)
+  assert.ok(x > 300 && x < 700 && y > 200 && y < 500, `${x},${y} is not on the placeholder`)
+  assert.deepEqual(petSpot({ left: 20, top: 100, width: 100, height: 60 }, 1440, 900), [50, 124])
+  // a placeholder past the edge: she stays on screen, below the top bar
+  const [ex, ey] = petSpot({ left: 1430, top: 0, width: 400, height: 40 }, 1440, 900)
+  assert.ok(ex <= 1400 && ey >= 56)
+})
+
+test('the placeholders she finds are the shared skeleton pattern and the aria-busy marker', () => {
+  for (const s of ['.wait-in', '[aria-busy="true"]', '.ab .sk:not(.over)']) assert.ok(PET_BUSY.includes(s), `${s} missing`)
+  // where a crew cursor already paints, the chat, and dialogs above her are not hers
+  for (const s of ['.pt', '.pl-work', '.side', '.ui-overlay']) assert.ok(PET_NOT.includes(s), `${s} missing`)
 })

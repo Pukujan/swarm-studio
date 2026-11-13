@@ -16,6 +16,9 @@
 //   pet.on('back', { ms })              the person is back after a doze
 //   pet.on('built', { name, pages })    a build finished
 //   pet.on('loading') / pet.on('ready') a screen is starting / has drawn
+//   const done = pet.working(el)        something slow is on its way into el (a skeleton): she works on it,
+//                                       el is aria-busy, until done(). Skeletons on screen (PET_BUSY) she
+//                                       finds herself.
 //
 // Most of these she notices herself (the address, drops, pastes, clicks on a card, the canvas's events), so
 // the screens need no code for them. Joined into the studio's one script (server/page.mjs): every top-level
@@ -125,6 +128,26 @@ export function petBrain({ now = () => Date.now(), random = Math.random, gap = P
   }
 }
 
+// ---------- what is still on its way (the owner, 2026-11-13: "slow loading things obviously need skeleton and a
+// cursor like thing working on them as the visual")
+
+// a placeholder in the shape of what is coming: a screen's `.wait-in` cards, anything marked `aria-busy`, an
+// Overview page whose picture is not made yet, the app's frame loading
+export const PET_BUSY = '.wait-in, [aria-busy="true"], .ab .sk:not(.over), .app-loading:not([hidden])'
+// where she does not go: a crew cursor already paints there, a dialog sits above her, or the chat (she keeps
+// clear of it; its own dot says a reply is coming)
+export const PET_NOT = '.pt, .pl-work, .su-spin, .side, .ui-overlay, .ui-popover, .pet'
+/**
+ * Where she works on a placeholder: inside it, near its top left, never past the screen's edge.
+ * @param {{ left: number, top: number, width: number, height: number }} r
+ * @param {number} W the screen's width
+ * @param {number} H the screen's height
+ */
+export function petSpot(r, W, H) {
+  const x = r.left + Math.min(r.width * 0.3, 64), y = r.top + Math.min(r.height * 0.4, 48)
+  return [Math.max(8, Math.min(W - 40, x)), Math.max(56, Math.min(H - 40, y))]
+}
+
 // ---------- the cursor on the page
 
 const PET_ROOMS = { home: 'home', overview: 'project', plan: 'plan', brand: 'brand', studio: 'scaffold' }
@@ -157,7 +180,9 @@ export function makePet({ sw, C, doc = document }) {
     px: -1, py: -1, movedAt: Date.now(), active: 0,
     card: '', raf: 0, settle: 0, doze: 0, dozing: false, dozedAt: 0,
     queue: /** @type {{ kind: string, data: PetData }[]} */ ([]), batch: 0, batchFirst: 0, sayTimer: 0,
-    room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, briefed: '', step: ''
+    room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, briefed: '', step: '',
+    // what she works on: the placeholders screens hand her (newest last), and the one she is at
+    jobs: /** @type {Set<Element>} */ (new Set()), work: /** @type {Element | null} */ (null), workAt: '', scanT: 0
   }
   P.tx = P.x; P.ty = P.y
 
@@ -185,6 +210,12 @@ export function makePet({ sw, C, doc = document }) {
     return n && n.getClientRects().length ? n : null
   }
   function aim() {
+    // something is on its way: she works on it while the screen loads or the pointer rests
+    if (P.work && (P.loading || phone() || Date.now() - P.movedAt > 1200)) {
+      ;[P.tx, P.ty] = petSpot(P.work.getBoundingClientRect(), win.innerWidth, win.innerHeight)
+      el.classList.toggle('flip', P.tx > win.innerWidth - 240)
+      return
+    }
     if (phone()) {
       // a phone: the edge of the board, above the chat; touches are not followed
       const side = doc.querySelector('body.cosmos-chat .side')
@@ -237,7 +268,8 @@ export function makePet({ sw, C, doc = document }) {
     } else if (t - P.active < 1000) return
     P.active = t
     clearTimeout(P.doze)
-    P.doze = win.setTimeout(() => { P.dozing = true; P.dozedAt = Date.now(); el.classList.add('doze') }, PET_DOZE)
+    // never asleep on the job: while she works on something she stays up
+    P.doze = win.setTimeout(() => { if (P.work) return wake(true); P.dozing = true; P.dozedAt = Date.now(); el.classList.add('doze') }, PET_DOZE)
   }
   function loading(on) {
     P.loading = on
@@ -245,8 +277,9 @@ export function makePet({ sw, C, doc = document }) {
     clearTimeout(P.loadTimer)
     if (on) { P.loadSince = Date.now(); P.loadTimer = win.setTimeout(watchLoad, 250) }
   }
-  // a screen is ready once its view is shown and holds no placeholder (`.wait-in`, `aria-busy`); a screen
-  // may also say so itself with on('ready'). At most 12 seconds of dots either way.
+  // a screen is ready once its view is shown and holds no screen placeholder (`.wait-in`: a picture still
+  // being made inside a ready screen does not count); a screen may also say so itself with on('ready'). At
+  // most 12 seconds of dots either way.
   function viewEl() {
     const v = PET_VIEW[PET_ROOMS[P.room]]
     return v && C?.[v]?.el
@@ -255,7 +288,7 @@ export function makePet({ sw, C, doc = document }) {
     if (!P.loading) return
     const v = viewEl()
     const shown = !v || (!v.hidden && v.childElementCount > 0)
-    const busy = v && v.querySelector('.wait-in, [aria-busy="true"]')
+    const busy = v && v.querySelector('.wait-in')
     if ((shown && !busy) || Date.now() - P.loadSince > 12000) return ready()
     P.loadTimer = win.setTimeout(watchLoad, 250)
   }
@@ -274,6 +307,30 @@ export function makePet({ sw, C, doc = document }) {
   // the crew works: she hands over to their cursors until the build is done (the rooms, the deck among
   // them, keep her at rest: their docked crew is hidden in the Studio)
   function away() { el.classList.toggle('away', P.building) }
+
+  // ---------- working on what is on its way: the newest placeholder a screen handed her, else the first one on
+  // screen. Twice a second, never in a hidden tab, not during a build (the crew's cursors work then).
+  function shows(n) {
+    if (!n.isConnected || n.closest(PET_NOT)) return false
+    const r = n.getBoundingClientRect()
+    return r.width > 8 && r.height > 8 && r.bottom > 56 && r.top < win.innerHeight - 40 && r.right > 8 && r.left < win.innerWidth - 40
+  }
+  function scan() {
+    clearTimeout(P.scanT)
+    P.scanT = win.setTimeout(scan, 500)
+    if (doc.hidden) return
+    for (const n of P.jobs) if (!n.isConnected) P.jobs.delete(n)
+    const next = P.building ? null : [...P.jobs].reverse().find(shows) || [...doc.querySelectorAll(PET_BUSY)].find(shows) || null
+    // the audit gates (and screen readers) see a loading state wherever she works
+    if (next && !next.hasAttribute('aria-busy')) next.setAttribute('aria-busy', 'true')
+    const r = next?.getBoundingClientRect()
+    const at = r ? `${r.left | 0},${r.top | 0}` : ''
+    el.classList.toggle('working', !!next)
+    const moved = next !== P.work || at !== P.workAt
+    P.work = next
+    P.workAt = at
+    if (next ? moved || Date.now() - P.movedAt > 1200 : moved) go()
+  }
 
   // ---------- what she says: a burst of events makes one reaction, at most one bubble every ~20 s
   function note(kind, data = {}) {
@@ -391,6 +448,7 @@ export function makePet({ sw, C, doc = document }) {
   draw()
   wake(true)
   go()
+  scan()
 
   const pet = {
     el,
@@ -405,7 +463,27 @@ export function makePet({ sw, C, doc = document }) {
       wake(true)
       note(kind, data)
     },
-    get state() { return { dozing: P.dozing, loading: P.loading, away: el.classList.contains('away'), room: P.room } }
+    /**
+     * Something slow is on its way into this placeholder: she works on it until done() (or until it leaves the
+     * page). It is marked aria-busy meanwhile. One line at a call site: `const done = pet.working(skel)`.
+     * @param {Element | null | undefined} node
+     * @returns {() => void} done
+     */
+    working(node) {
+      if (!node) return () => {}
+      const had = node.getAttribute('aria-busy')
+      node.setAttribute('aria-busy', 'true')
+      P.jobs.add(node)
+      wake(true)
+      scan()
+      return () => {
+        if (!P.jobs.delete(node)) return
+        if (had == null) node.removeAttribute('aria-busy')
+        else node.setAttribute('aria-busy', had)
+        scan()
+      }
+    },
+    get state() { return { dozing: P.dozing, loading: P.loading, away: el.classList.contains('away'), room: P.room, working: !!P.work } }
   }
   win.swarmPet = pet
   return pet

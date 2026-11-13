@@ -23,14 +23,17 @@
 .pet-dots i:nth-child(2) { animation-delay: .15s; }
 .pet-dots i:nth-child(3) { animation-delay: .3s; }
 @keyframes pet-dot { 50% { opacity: .25; } }
-.pet:not(.loading) .pet-dots i { animation: none; }
-.pet.loading .pet-dots { opacity: 1; }
-.pet.loading .pet-z { opacity: 0; }
+.pet:not(.loading):not(.working) .pet-dots i { animation: none; }
+.pet.loading .pet-dots, .pet.working .pet-dots { opacity: 1; }
+.pet.loading .pet-z, .pet.working .pet-z { opacity: 0; }
+/* working on a placeholder (pet.working, or a skeleton she found): a small tap, like the crew at work */
+.pet.working:not(.doze) .pet-body { animation: pet-tap .7s ease-in-out infinite; }
+@keyframes pet-tap { 50% { transform: translateY(2px) scale(.9); } }
 .pet-bub { position: absolute; left: 34px; top: 34px; max-width: 220px; width: max-content; padding: 6px 10px; border-radius: 4px 12px 12px 12px;
   background: rgb(var(--deep-rgb) / .94); backdrop-filter: blur(8px); color: var(--text); font: 12px/1.4 var(--font); border: 1px solid var(--line);
   box-shadow: 0 4px 14px rgb(var(--shade-rgb) / .5); opacity: 0; transform: translateY(-4px); transition: opacity .25s, transform .25s; }
 .pet.talking .pet-bub { opacity: 1; transform: none; }
 .pet.flip .pet-bub { left: auto; right: 4px; border-radius: 12px 4px 12px 12px; }
 @media (prefers-reduced-motion: reduce) {
-  .pet-body, .pet.doze .pet-body, .pet-dots i { animation: none; }
+  .pet-body, .pet.doze .pet-body, .pet.working:not(.doze) .pet-body, .pet-dots i { animation: none; }
 }

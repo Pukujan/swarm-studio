@@ -115,7 +115,7 @@ export function makeProject({ sw, C, root }) {
     const now = new Set((board?.painting || []).filter(w => w.state !== 'failed').map(w => `art:${w.page}/${w.layer}/${w.gen}`))
     for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k.split('/').slice(2).join('/')); if (P.on) renderStage() }, 1600) }
     P.pendingKeys = now
-    P.board = board
+    P.board = board; P.boardOf = run
     // the pages' saved snapshots paint at once, before the canvas behind has drawn anything
     fromDisk(board?.snaps)
     // a site and the game made from it are two runs of one version: the rooms switch between them
@@ -312,7 +312,7 @@ export function makeProject({ sw, C, root }) {
       ? `<span class="pt-tag"><b>${esc(who)}</b>no picture</span><button class="pt-again" data-again="${esc(x.key)}">${ic('restore', 12)}Try again</button>`
       : `<span class="pt-tag"><b>${esc(who)}</b>${w.state === 'again' ? 'painting it again' : 'real picture coming'}</span><i class="pt-bar" role="progressbar" aria-label="Painting" aria-valuenow="${pct}"><i style="width:${pct}%"></i></i>`
     const th = P.board?.theme?.colors || []
-    return `<div class="pt${over ? ' over' : ''}" style="--ago:-${ago.toFixed(1)}s${th[1] ? `;--pt-tint:${esc(th[1])}` : ''}">${under}${tag}</div>`
+    return `<div class="pt${over ? ' over' : ''}"${w.state === 'failed' ? '' : ' aria-busy="true"'} style=""--ago:-${ago.toFixed(1)}s${th[1] ? `;--pt-tint:${esc(th[1])}` : ''}">${under}${tag}</div>`
   }
   // a found stand-in for the slot, from the studio's picture service. The sketch shows at once; a new
   // subject can take the service 10-30 s (it searches and tags), so the call never blocks and the
@@ -421,7 +421,7 @@ export function makeProject({ sw, C, root }) {
   }
   function renderStage() {
     const g = groups()
-    if (!P.board && !P.uploads.length && !P.refs.length) { world.innerHTML = ''; return }
+    if (!P.board && !P.uploads.length && !P.refs.length) { world.innerHTML = P.run && P.run !== 'new' && P.boardOf !== P.run ? `<div class="col"><section class="pj-sec site"><span class="al">Site</span><div class="abs">${[0, 1, 2].map(() => `<div class="ab page wait-in" aria-busy="true">${skeleton({})}</div>`).join('')}</div></section></div>` : ''; return }
     const sec = (k, label) => g[k] ? `<section class="pj-sec ${k}"><span class="al">${label}</span><div class="abs">${g[k].map(board).join('')}</div></section>` : ''
     world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
     applyCam()

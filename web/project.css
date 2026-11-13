@@ -86,6 +86,8 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab .sk.over i { animation: sk-wait 1.6s ease-in-out infinite alternate; }
 @keyframes sk-wait { from { opacity: .92; } to { opacity: .7; } }
 @media (prefers-reduced-motion: reduce) { .ab .sk.over i { animation: none; } }
+/* a board's cards on their way (.wait-in, web/pet.js works on them): their shape, nothing to click */
+.ab.wait-in { pointer-events: none; }
 .ab.game { width: 300px; height: 169px; }
 .ab.app, .ab.code { width: 300px; height: 169px; }
 .ab.film { width: 142px; height: 80px; }

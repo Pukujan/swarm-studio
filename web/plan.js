@@ -83,7 +83,7 @@ export function makePlan({ sw, C, root }) {
   // one picture slot: the picture when done, the crew at work while painting, an empty frame before
   function slot(key, cls, name, e, extra = '') {
     const pic = e?.state === 'done' && e.src ? `<img src="${esc(base() + e.src)}" alt="" draggable="false" loading="lazy">` : ''
-    const work = e?.state === 'painting' ? `<div class="pl-work"></div>${cursor(painterOf(key))}` : ''
+    const work = e?.state === 'painting' ? `<div class="pl-work" aria-busy="true"></div>${cursor(painterOf(key))}` : ''
     const failed = e?.state === 'failed' ? ' failed' : ''
     return `<div class="ab ppic ${cls}${failed}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(name)}">${pic}${work}${extra}<em>${esc(name)}</em>${sel(key)}</div>`
   }
@@ -91,7 +91,7 @@ export function makePlan({ sw, C, root }) {
   function modelSlot(r, m) {
     const key = `md:${r.name}`
     const pic = m?.state === 'done' && m.thumb ? `<img src="${esc(base() + m.thumb)}" alt="" draggable="false" loading="lazy">` : m?.state === 'done' ? `<div class="blank">${ic('box', 22)}</div>` : ''
-    const work = m?.state === 'making' ? `<div class="pl-work"></div>${cursor(painterOf(key))}` : ''
+    const work = m?.state === 'making' ? `<div class="pl-work" aria-busy="true"></div>${cursor(painterOf(key))}` : ''
     return `<div class="ab ppic view model${m?.state === 'failed' ? ' failed' : ''}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(r.name)} model">${pic}${work}${sel(key)}</div>`
   }
   const rings = s => (s.picks || []).map(c => {
@@ -101,7 +101,7 @@ export function makePlan({ sw, C, root }) {
   }).join('')
   function render() {
     const p = P.plan
-    if (!p) { world.innerHTML = ''; return }
+    if (!p) { world.innerHTML = P.id ? `<div class="col"><section class="pj-sec"><span class="al">Plan</span><div class="abs">${'<div class="ab pcard wait-in" aria-busy="true"><b></b><span></span></div>'.repeat(3)}</div></section></div>` : ''; return }
     crumb.querySelector('.pl-name').textContent = p.title || 'Plan'
     renderPrimary()
     const cards = p.cards.map((c, i) => `<div class="ab pcard${P.writing != null && i >= P.writing ? ' wait' : ''}" data-key="card:${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.name)}">
