@@ -19,7 +19,7 @@
 //
 // Most of these she notices herself (the address, drops, pastes, clicks on a card, the canvas's events), so
 // the screens need no code for them. Joined into the studio's one script (server/page.mjs): every top-level
-// name here starts with pet or PET.
+// name here has pet or PET in it.
 
 // ---------- the pure half
 
