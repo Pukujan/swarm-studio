@@ -12,14 +12,14 @@
 // last real paint went ({ provider, ok, error }), which is how the Pictures row knows an image
 // model is out of quota without painting a test picture.
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
-import { execFile } from '../engine/proc.mjs'
+import { execFile, spawn } from '../engine/proc.mjs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pictureState, isPictures, modelTester, paintNote } from '../engine/setup.mjs'
 
 // roles() -> { planner: { model, baseUrl, apiKey }, worker }; call(provider, model) throws when it
 // does not answer; image() -> { providers, imagePick, pick }; setPictures(mode | null) saves the pick.
-export function setupRoutes({ dataDir, roles, call, image, media = async () => null, setPictures, feed = null, hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile }) {
+export function setupRoutes({ dataDir, roles, call, image, media = async () => null, setPictures, feed = null, hermesModels = null, clearPicks = () => {}, hermesEnv = () => ({}), hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile, start = spawn }) {
   const file = join(dataDir, 'setup.json')
   let state = {}
   try { state = JSON.parse(readFileSync(file, 'utf8')) } catch {}
@@ -82,6 +82,87 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
     return new Promise(resolve => run('open', [script], { timeout: 15000 }, err => resolve({ ok: !err, command })))
   }
 
+  // ---------- the model picker (hermes_models.py): Hermes's own provider and model list, a pick sets the
+  // planner and builder slots in Hermes, a key goes to Hermes's own key store, a browser sign-in is
+  // `hermes auth add <provider>` with its link and code shown in the sheet
+  let options = null // { at, value }: Hermes's list, kept a minute
+  async function modelOptions(refresh = false) {
+    if (!hermesModels) return { ok: false, message: 'Start Swarm Studio from Hermes to pick a model.', providers: [] }
+    if (!refresh && options && Date.now() - options.at < 60e3) return options.value
+    const value = await hermesModels(`options_json(${refresh ? 'True' : 'False'})`, '', 90000)
+    if (value?.ok) options = { at: Date.now(), value }
+    return value?.ok ? value : { ok: false, message: value?.message || 'Hermes did not answer.', providers: [] }
+  }
+  // every change goes through Hermes's public CLI; hermes_models.py only reads (tests/test_bridge.py)
+  const hermesExe = () => {
+    const bin = hermesBin || [join(homedir(), '.local', 'bin', 'hermes')].find(existsSync) || 'hermes'
+    // the Store app's own file cannot start outside its package: its `hermes` alias does
+    return platform === 'win32' && /\\WindowsApps\\/i.test(String(bin)) ? 'hermes' : bin
+  }
+  const hermesCli = args => new Promise(resolve => run(hermesExe(), args, { env: hermesEnv(), timeout: 30000, windowsHide: true }, (err, stdout, stderr) =>
+    resolve(err ? { ok: false, message: lastLine(stderr) || lastLine(stdout) || String(err.message || err).split('\n')[0] } : { ok: true })))
+  const SLUG = /^[a-z0-9][a-z0-9._-]{0,63}$/i
+  async function pickModel(input) {
+    if (!hermesModels) return { ok: false, message: 'Start Swarm Studio from Hermes to pick a model.' }
+    const provider = String(input.provider || '').trim(), model = String(input.model || '').trim()
+    if (!SLUG.test(provider) || !model || model.length > 200 || /[\s'"]/.test(model) || model.startsWith('-')) return { ok: false, message: 'Pick a model.' }
+    const now = await hermesModels('slots_json()')
+    if (!now?.ok) return { ok: false, message: now?.message || 'Hermes did not answer.' }
+    // as Hermes's own slot save does: the same provider changes only the model; a new one replaces the
+    // slot, which drops the old endpoint and its credentials and keeps the slot's other settings
+    for (const s of Object.values(now.slots)) {
+      const same = s.provider.toLowerCase() === provider.toLowerCase()
+      const value = { ...s.keep, provider, model, ...(provider.toLowerCase() === 'custom' && s.base_url ? { base_url: s.base_url } : {}) }
+      const r = same ? await hermesCli(['config', 'set', `auxiliary.${s.slot}.model`, model]) : await hermesCli(['config', 'set', `auxiliary.${s.slot}`, JSON.stringify(value)])
+      if (!r.ok) return { ok: false, message: r.message || 'Hermes did not save it.' }
+    }
+    clearPicks()
+    options = null
+    lastTest = await tester.test(roles(), { again: true })
+    if (state.modelsOk !== lastTest.ok) { state.modelsOk = lastTest.ok; save() }
+    const slots = Object.fromEntries(Object.keys(now.slots).map(role => [role, { provider, model }]))
+    return { ok: true, slots, test: lastTest }
+  }
+  async function saveKey(input) {
+    if (!hermesModels) return { ok: false, message: 'Start Swarm Studio from Hermes to sign in.' }
+    const slug = String(input.slug || ''), key = String(input.key || '').trim()
+    if (!key) return { ok: false, message: 'Paste the key.' }
+    if (/\s/.test(key) || key.length > 500 || key.startsWith('-')) return { ok: false, message: 'That is not a key.' }
+    // the name it is kept under comes from Hermes's own list, never from the page
+    const row = (await modelOptions()).providers?.find(p => p.slug === slug && p.sign === 'key')
+    if (!row || !/^[A-Z][A-Z0-9_]{1,63}$/.test(row.keyEnv || '')) return { ok: false, message: 'This provider signs in another way.' }
+    const r = await hermesCli(['config', 'set', row.keyEnv, key])
+    options = null
+    return r.ok ? { ok: true, options: await modelOptions(true) } : { ok: false, message: r.message || 'Hermes did not save the key.' }
+  }
+  // one browser sign-in at a time: its provider, link and code, and how it ended
+  let signing = null
+  // Hermes prints the link after "Open:" or "Open this URL …:" (hermes_cli/auth_device_flow.py,
+  // auth_codex_browser.py, auth_openrouter.py); other links it prints (the portal) are not the sign-in
+  const URL_RE = /\bOpen\b[^\n]*?:\s*(https?:\/\/[^\s"'<>]+)/, CODE_RE = /\b[A-Z0-9]{4,}(?:-[A-Z0-9]{4,})+\b/
+  function signInBrowser(slug) {
+    if (signing?.child && signing.done === undefined) signing.child.kill()
+    const exe = hermesExe()
+    const s = { slug, url: '', code: '', out: '', done: undefined, child: null }
+    signing = s
+    try {
+      s.child = start(exe, ['auth', 'add', slug, '--type', 'oauth'], { env: { ...hermesEnv(), PYTHONUNBUFFERED: '1' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    } catch (e) { s.done = false; s.out = String(e?.message || e); return Promise.resolve(signState()) }
+    const read = b => { s.out = (s.out + b).slice(-4000); s.url ||= s.out.match(URL_RE)?.[1] || ''; s.code ||= s.out.match(CODE_RE)?.[0] || '' }
+    s.child.stdout?.on('data', read)
+    s.child.stderr?.on('data', read)
+    s.child.on('error', e => { s.done = false; s.out += String(e?.message || e) })
+    s.child.on('exit', code => { s.done = code === 0; options = null })
+    // the link comes in a second or two; answer once it is there (or the sign-in already ended)
+    return new Promise(resolve => {
+      const t0 = Date.now()
+      const tick = () => (s.url || s.done !== undefined || Date.now() - t0 > 10000 ? resolve(signState()) : setTimeout(tick, 200))
+      tick()
+    })
+  }
+  const lastLine = s => String(s || '').trim().split('\n').map(x => x.trim()).filter(Boolean).pop() || ''
+  const signState = () => !signing ? { signing: null } : { signing: { slug: signing.slug, url: signing.url, code: signing.code, done: signing.done ?? null, ...(signing.done === false ? { error: lastLine(signing.out).slice(0, 300) } : {}) } }
+
   function handle(req, res, url) {
     if (!url.pathname.startsWith('/api/setup')) return false
     if (url.pathname === '/api/setup' && req.method === 'GET') { view().then(v => json(res, 200, v)); return true }
@@ -108,6 +189,17 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
       return true
     }
     if (url.pathname === '/api/setup/hermes' && req.method === 'POST') { hermesModel().then(r => json(res, 200, r)); return true }
+    if (url.pathname === '/api/setup/models/options' && req.method === 'GET') { modelOptions(url.searchParams.get('refresh') === '1').then(r => json(res, 200, { ...r, ...signState() })); return true }
+    if (url.pathname === '/api/setup/models/pick' && req.method === 'POST') { body(req).then(async input => json(res, 200, await pickModel(input))); return true }
+    if (url.pathname === '/api/setup/models/signin' && req.method === 'POST') {
+      body(req).then(async input => {
+        if (input.cancel) { if (signing?.child && signing.done === undefined) signing.child.kill(); signing = null; return json(res, 200, signState()) }
+        if (input.key) return json(res, 200, await saveKey(input))
+        if (!SLUG.test(String(input.slug || ''))) return json(res, 400, { error: 'bad provider' })
+        json(res, 200, { ok: true, ...(await signInBrowser(String(input.slug))) })
+      })
+      return true
+    }
     return false
   }
   // how a real paint went, for the Pictures row

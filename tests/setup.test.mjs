@@ -177,3 +177,61 @@ test('Let Hermes set this up opens a console on Windows, and a failed check is k
   assert.equal((await win('POST', '/api/setup/models', { again: true })).data.ok, true)
   assert.equal((await make({})('GET', '/api/setup')).data.modelsOk, true)
 })
+
+test('the model picker: Hermes\'s own list; a pick and a key go through Hermes\'s CLI; the browser signs in', async () => {
+  const { setupRoutes } = await import('../server/setup.mjs')
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { EventEmitter } = await import('node:events')
+  const calls = [], cli = []
+  let cleared = 0
+  const hermesModels = async call => {
+    calls.push(call)
+    if (call.startsWith('options_json')) return { ok: true, main: { provider: 'inferhub', model: 'cb/flash' }, slots: {}, providers: [{ slug: 'nous', signedIn: true, models: ['a'] }, { slug: 'anthropic', signedIn: false, sign: 'key', keyEnv: 'ANTHROPIC_API_KEY', models: [] }] }
+    if (call === 'slots_json()') return { ok: true, slots: { planner: { slot: 'swarm_studio_planner', provider: 'nous', model: 'b', keep: {}, base_url: '' }, worker: { slot: 'swarm_studio_builder', provider: 'custom', model: 'm', keep: { timeout: 45 }, base_url: 'https://own' } } }
+  }
+  const run = (cmd, args, o, cb) => { cli.push([cmd, args]); cb(null, '', '') }
+  // what `hermes auth add minimax-oauth` prints: the portal first, then the sign-in link and its code
+  const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill() { this.killed = true } })
+  const started = []
+  const start = (cmd, args, o) => { started.push([cmd, args, o.env.PYTHONUNBUFFERED]); setTimeout(() => child.stdout.emit('data', 'Portal: https://api.example.io\n\nTo continue:\n  1. Open: https://example.io/oauth-authorize?user_code=5KBH-F8VV\n  2. If prompted, enter code: 5KBH-F8VV\n'), 5); return child }
+  const handle = setupRoutes({ dataDir: mkdtempSync(join(tmpdir(), 'su-')), roles: () => ({ planner: { model: 'p', baseUrl: 'https://a', apiKey: 'k' }, worker: { model: 'w', baseUrl: 'https://a', apiKey: 'k' } }), call: async () => {}, image: async () => ({ providers: [] }), setPictures: () => {}, hermesModels, clearPicks: () => cleared++, hermesBin: '/h/hermes', run, start })
+  const ask = (method, path, body) => new Promise(resolve => {
+    const req = new EventEmitter(); req.method = method; req.destroy = () => {}
+    handle(req, { writeHead: code => ({ end: s => resolve({ code, data: JSON.parse(s) }) }) }, new URL(`http://x${path}`))
+    req.emit('data', JSON.stringify(body || {})); req.emit('end')
+  })
+  const o = (await ask('GET', '/api/setup/models/options')).data
+  assert.equal(o.providers[0].slug, 'nous')
+  assert.equal(o.signing, null)
+  await ask('GET', '/api/setup/models/options')
+  assert.equal(calls.filter(c => c.startsWith('options')).length, 1, 'kept a minute')
+  // a pick: the same provider changes the model; a new one replaces the slot, keeping its other settings
+  const p = (await ask('POST', '/api/setup/models/pick', { provider: 'nous', model: 'a' })).data
+  assert.equal(p.ok, true)
+  assert.deepEqual(cli, [
+    ['/h/hermes', ['config', 'set', 'auxiliary.swarm_studio_planner.model', 'a']],
+    ['/h/hermes', ['config', 'set', 'auxiliary.swarm_studio_builder', '{"timeout":45,"provider":"nous","model":"a"}']]
+  ])
+  assert.equal(cleared, 1)
+  assert.equal(p.test.ok, true)
+  assert.deepEqual(p.slots.worker, { provider: 'nous', model: 'a' })
+  // nothing that reads as a flag or breaks out of the value
+  for (const model of ['--force', 'a b', 'a"b', '']) assert.equal((await ask('POST', '/api/setup/models/pick', { provider: 'nous', model })).data.ok, false, model)
+  assert.equal((await ask('POST', '/api/setup/models/pick', { provider: '../x', model: 'a' })).data.ok, false)
+  assert.equal(cli.length, 2)
+  // a key: saved under the name Hermes's list gives, never one from the page
+  assert.equal((await ask('POST', '/api/setup/models/signin', { slug: 'anthropic', key: 'sk-x', keyEnv: 'PATH' })).data.ok, true)
+  assert.deepEqual(cli.at(-1), ['/h/hermes', ['config', 'set', 'ANTHROPIC_API_KEY', 'sk-x']])
+  assert.equal((await ask('POST', '/api/setup/models/signin', { slug: 'nous', key: 'sk-x' })).data.ok, false, 'nous signs in another way')
+  assert.equal((await ask('POST', '/api/setup/models/signin', { slug: '../x; rm' })).code, 400)
+  // the browser: Hermes's own sign-in, its link and code read from what it prints
+  const s = (await ask('POST', '/api/setup/models/signin', { slug: 'minimax-oauth' })).data.signing
+  assert.deepEqual(started[0], ['/h/hermes', ['auth', 'add', 'minimax-oauth', '--type', 'oauth'], '1'])
+  assert.equal(s.url, 'https://example.io/oauth-authorize?user_code=5KBH-F8VV')
+  assert.equal(s.code, '5KBH-F8VV')
+  assert.equal(s.done, null)
+  assert.deepEqual((await ask('POST', '/api/setup/models/signin', { cancel: true })).data, { signing: null })
+  assert.equal(child.killed, true)
+})

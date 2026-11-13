@@ -78,6 +78,35 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - Vercel and Cloudflare Pages: pasted token checked with the provider, kept mode 0600 in `connections.json`, or env `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`, or an Octo vault grant (engine/connect.mjs:1-24, 128-141).
 - GitHub Pages: the `gh` login; Swarm Feed: `feed.json` (docs/specs/25-connections.md:29, 31).
 
+## The Setup model picker (hermes_models.py)
+
+- Setup › Models lists Hermes's own providers and models and sets the `swarm_studio_planner` and
+  `swarm_studio_builder` slots (docs/specs/06-onboarding.md, Models). `hermes_models.py` runs as a short
+  process in Hermes's Python (`SWARM_HERMES_PY`, `SWARM_HERMES_PYTHONPATH`, the profile's `HERMES_HOME`), started
+  by server/server.mjs `pyModels`; routes in server/setup.mjs (`/api/setup/models/options`, `/pick`, `/signin`).
+- **Stopgap, read only: it imports Hermes internals to read**, against the Nous review's "public plugin API only"
+  (point 5), because Hermes has no public API for its model list yet. It reads with what Hermes's own dashboard
+  and Desktop picker use: `hermes_cli.inventory.build_model_options_payload` (web_routers/models.py
+  `/api/model/options`), `hermes_cli.config.load_config` (the two slots, credentials left out) and
+  `hermes_cli.auth.PROVIDER_REGISTRY` (the env name a provider's key is kept under). Nothing in it writes;
+  tests/test_bridge.py pins its imports and refuses any save, set or write in it. The dashboard's HTTP routes
+  need an in-process session token, so they are not used. Move to a public API when Hermes ships one (asked
+  for on NousResearch/hermes-agent).
+- **Every change is Hermes's public CLI** (server/setup.mjs):
+  - a pick: `hermes config set auxiliary.<slot>.model <model>` when the provider stays, else
+    `hermes config set auxiliary.<slot> '<json>'` with the new provider and model and the slot's other settings,
+    which drops the old endpoint and credentials as Hermes's own slot save does (web_server_config.py
+    `_apply_aux_assignment_sync`, config.py `clear_model_endpoint_credentials`);
+  - a key: `hermes config set <ENV_NAME> <key>`, which Hermes routes to `save_provider_env_credential`, the
+    same store as its `model.save_key`. The env name comes from Hermes's list, never from the page. The key is
+    on that process's command line for under two seconds (same user only); `hermes auth add --type api-key`
+    would read it from a prompt instead, but that prompt waits on a hidden console on Windows.
+- Browser sign-in is Hermes's public CLI, `hermes auth add <provider> --type oauth`, unbuffered; the sheet reads
+  the link after "Open" and the user code from what it prints (hermes_cli/auth_device_flow.py,
+  auth_codex_browser.py, auth_openrouter.py). Hermes opens the browser itself.
+- Hermes caches its config by file time, so a pick applies without a restart. A pick is two CLI calls, about
+  1.5 s each.
+
 ## What the person connects
 
 - All keys optional, names only: `SWARM_STUDIO_API_KEY`, `ELEVENLABS_API_KEY`, `CKFF_API_KEY`, `CKFF_BASE_URL`, `CKFF_MODEL`, `MESHY_API_KEY`, `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, `VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN` (plugin.yaml:11-57).
@@ -100,7 +129,8 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 
 ## Sources
 
-- plugin.yaml, launcher.py:10-85, 200-233
+- plugin.yaml, launcher.py:10-85, 200-233, hermes_models.py, server/setup.mjs (model picker)
+- Hermes: hermes_cli/inventory.py, web_routers/models.py, web_server_config.py, config.py:765, credential_lifecycle.py, auth_device_flow.py:305-316
 - engine/bridge.mjs, hermesllm.mjs, llm.mjs, hermeshealth.mjs, hermes_connect.mjs, connect.mjs, proc.mjs, ckff.mjs, paint-ckff.mjs, auto.mjs, appkit.mjs, media.mjs:18-86
 - server/server.mjs:93-114, 190-213, 1334-1343, 1437-1448, 3290-3330, 3540-3576; web/show.js:164-176
 - docs/specs/25-connections.md, docs/specs/33-hermes-bridge.md, docs/decisions/0005, docs/PRODUCT.md, docs/PLANS.md, AGENTS.md, scripts/engine-docs-hook.mjs
