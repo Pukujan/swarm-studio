@@ -1,10 +1,13 @@
 // The top bar: the logo goes home, the breadcrumb says where the person is (RULES.md rule 7), and ☰ holds the
-// settings (rule 5). It reads the machine's view and nothing else.
+// settings (rule 5). It reads the machine's view and nothing else. A screen gives the bar either its build's name
+// (useTrail, shell/Trail.tsx: the bar draws the trail) or a whole crumb of its own (useScreenCrumb, shell/crumb.ts:
+// the Overview's Projects › name ▾, whose name opens the project's menu), which then stands in for the trail.
 import { Button } from '../primitives/Button'
 import { Menu, MenuItem } from '../primitives/Menu'
 import { useNav } from '../nav/NavProvider'
 import { SCREEN_NAMES } from '../screens'
 import { useSheets } from '../screens/setup/Sheets'
+import { useCrumb } from './crumb'
 import { useTrailShown } from './Trail'
 
 // the same key the current Studio's ☰ → Light / Dark writes (web/index.html reads it before the first paint)
@@ -20,12 +23,14 @@ export function TopBar() {
   const { view, go } = useNav()
   const { name, action } = useTrailShown()
   const sheets = useSheets()
+  const crumb = useCrumb()
   return (
     <header className="flex h-14 items-center gap-2 border-b border-edge px-3">
       <Button role="ghost" onPress={() => go({ type: 'home' })} className="font-display text-xl font-extrabold">Swarm</Button>
       {/* a screen that names its build gets the whole trail, Home › Projects › build › room (Home is the Feed,
           which has no address here yet, so it is the trail's start, not a link) */}
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 overflow-hidden font-monospace text-sm text-muted">
+        {crumb ?? <>
         {view.room !== 'home' && name && <>
           <span className="flex-none">Home</span><span aria-hidden>›</span>
           <button type="button" onClick={() => go({ type: 'home' })} className="flex-none cursor-pointer rounded-[6px] px-1 hover:text-text">Projects</button><span aria-hidden>›</span>
@@ -33,6 +38,7 @@ export function TopBar() {
         </>}
         {view.room !== 'home' && <span aria-hidden>›</span>}
         {view.room !== 'home' && <span aria-current="page" className="flex-none text-text">{name ? CRUMB_ROOM[view.room] ?? SCREEN_NAMES[view.room] : SCREEN_NAMES[view.room]}</span>}
+        </>}
       </nav>
       {action && <span className="ml-auto flex-none">{action}</span>}
       <span aria-label="Next Studio" className={`${action ? '' : 'ml-auto '}flex-none rounded-full border border-line-2 px-2 py-0.5 font-label text-xs font-semibold uppercase tracking-[.07em] text-muted max-[760px]:hidden`}>Next</span>

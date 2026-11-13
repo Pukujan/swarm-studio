@@ -43,7 +43,7 @@ const trail = (build, room) => ['Home', 'Projects', build, room]
 // frame (rule 32) but rule 7 has no exception for it, so it reads like every other room.
 const SCREENS = [
   { id: 'projects', crumb: ['Home', 'Projects'], address: () => '', go: (p, s) => p.goto(s.BASE + '/', { waitUntil: 'commit' }), ready: '.home .card', nextReady: 'main [data-id]' },
-  { id: 'overview', crumb: trail('Alpha Tea', 'Overview'), address: s => `?project=${s.ids.site}&version=${s.ids.site2}`, go: (p, s) => p.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site2}`, { waitUntil: 'commit' }), ready: '.pj-world .ab.page' },
+  { id: 'overview', crumb: trail('Alpha Tea', 'Overview'), address: s => `?project=${s.ids.site}&version=${s.ids.site2}`, go: (p, s) => p.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site2}`, { waitUntil: 'commit' }), ready: '.pj-world .ab.page', nextReady: '.ov-world .ov-ab.page' },
   { id: 'deck', crumb: trail('Alpha Tea', 'Design deck'), address: s => `?version=${s.ids.site2}&room=deck`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.site2}&room=deck`, { waitUntil: 'commit' }), ready: 'body.cosmos-station #viewport', nextReady: '[role="region"][aria-label="Canvas"]' },
   { id: 'app', crumb: trail('Shift Log', 'App'), address: s => `?version=${s.ids.app}&room=app`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.app}&room=app`, { waitUntil: 'commit' }), ready: 'body.view-app #appview' },
   { id: 'game', crumb: trail('Lantern Run', 'Game'), address: s => `?version=${s.ids.game}&room=game`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.game}&room=game`, { waitUntil: 'commit' }), ready: 'body.view-app' },

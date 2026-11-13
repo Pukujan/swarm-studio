@@ -41,35 +41,19 @@
   },
   {
     "key": "game@1440 breadcrumb",
-    "detail": "reads \"Overview\", should read \"Home › Projects › Lantern Run › Game\""
-  },
-  {
-    "key": "game@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
+    "detail": "reads \"Projects › Lantern Run\", should read \"Home › Projects › Lantern Run › Game\""
   },
   {
     "key": "game@390 breadcrumb",
-    "detail": "reads \"Overview\", should read \"Home › Projects › Lantern Run › Game\""
-  },
-  {
-    "key": "game@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
+    "detail": "reads \"Projects › Lantern Run\", should read \"Home › Projects › Lantern Run › Game\""
   },
   {
     "key": "overview@1440 breadcrumb",
-    "detail": "reads \"Overview\", should read \"Home › Projects › Alpha Tea › Overview\""
-  },
-  {
-    "key": "overview@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
+    "detail": "reads \"Projects › Alpha Tea\", should read \"Home › Projects › Alpha Tea › Overview\""
   },
   {
     "key": "overview@390 breadcrumb",
-    "detail": "reads \"Overview\", should read \"Home › Projects › Alpha Tea › Overview\""
-  },
-  {
-    "key": "overview@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
+    "detail": "reads \"Projects › Alpha Tea\", should read \"Home › Projects › Alpha Tea › Overview\""
   },
   {
     "key": "plan@1440 breadcrumb",

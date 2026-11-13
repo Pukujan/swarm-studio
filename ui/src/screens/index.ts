@@ -6,6 +6,7 @@ import type { Room } from '../nav/nav'
 import { Projects } from './Projects'
 import { StudioFirst } from './StudioFirst'
 import { DesignDeck } from './DesignDeck'
+import { Overview } from './Overview'
 
 export const SCREEN_NAMES: Record<Room, string> = {
   home: 'Projects',
@@ -20,9 +21,10 @@ export const SCREEN_NAMES: Record<Room, string> = {
   studio: 'Studio scaffold'
 }
 
-// the Design deck's shell is slice 1 of its port (issue #404); `draft`, a new project's deck, has not moved
+// the Overview, and the Design deck's shell (slice 1) of its port (issue #404); `draft`, a new project's deck, has not moved
 export const SCREENS: Partial<Record<Room, ComponentType>> = {
   deck: DesignDeck,
   home: Projects,
+  overview: Overview,
   studio: StudioFirst
 }
