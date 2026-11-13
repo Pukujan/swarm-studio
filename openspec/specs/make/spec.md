@@ -70,6 +70,35 @@ Build. A stop or a wish to talk, in the prompt or an answer, SHALL never start a
 - **THEN** the chat talks; Build appears only after the brief is written
 - Gate: `manual`
 
+### Requirement: The question before a new website
+
+Before a new website builds, the planner SHALL ask one question in the chat, `Before I build: skip the steps, or go
+through them?`, with three answers, the recommended one first with a short reason: Skip all, build now; Step by
+step; Pick steps to skip. The recommendation SHALL come from the person's words alone. Pick steps to skip SHALL ask
+which: Skip Brand, Skip Plan, or Skip both, build now. A typed answer SHALL count the same as a pick; Hermes's
+model SHALL never answer it. Nothing SHALL build until the person answers (decision 0020, slice 1).
+
+#### Scenario: Asked before a new site
+- **WHEN** the person makes a new website from the Make box or the chat
+- **THEN** the chat asks the question with three answers, the recommended one first with its reason, and no agent
+  is working
+- Gate: `manual`
+
+#### Scenario: Skip all, build now
+- **WHEN** the person picks Skip all, build now (or types "just build it")
+- **THEN** the crew starts that one build; the next new site asks again
+- Gate: `manual`
+
+#### Scenario: Pick steps to skip
+- **WHEN** the person picks Pick steps to skip, then Skip Brand
+- **THEN** the Studio opens on Plan with Brand marked skipped
+- Gate: `manual`
+
+#### Scenario: Already answered
+- **WHEN** the person presses Build in a Studio project, or changes a site that is already built
+- **THEN** the build starts without the question
+- Gate: `manual`
+
 ### Requirement: Guided
 
 Guided SHALL ask only the questions the words left open, one at a time, as chips or the person's own words, then show

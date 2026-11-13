@@ -109,5 +109,10 @@
  "studio › Empty steps › Files dropped on a step": "#461",
  "studio › Build is the person's press › Build opens the Design deck": "#461",
  "studio › Build is the person's press › Build does not move": "#461",
- "studio › 390 px › Layers as a sheet": "#461"
+ "studio › 390 px › Layers as a sheet": "#461",
+ "make › The question before a new website › Asked before a new site": "#461",
+ "make › The question before a new website › Skip all, build now": "#461",
+ "make › The question before a new website › Pick steps to skip": "#461",
+ "make › The question before a new website › Already answered": "#461",
+ "design-deck › Talk and brief before building › The skip question": "#461"
 }
