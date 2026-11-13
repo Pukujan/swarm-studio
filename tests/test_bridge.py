@@ -74,6 +74,18 @@ class Bridge(unittest.TestCase):
         self.b.image({"prompt": "x", "aspect": "21:9", "refs": ["/a.png"]})
         self.assertEqual(ctx.calls[-1][1], {"prompt": "x", "aspect_ratio": "landscape", "reference_image_urls": ["/a.png"]})
 
+    def test_web_search_and_page_text_are_hermes_web_tools(self):
+        self.b.CTX = ctx = FakeCtx(lambda name, args: {"success": True, "data": {"web": [{"title": "T", "url": "https://a.example"}]}} if name == "web_search" else {"results": [{"url": args["urls"][0], "title": "A", "content": "# A", "error": None}]})
+        got = self.b.web({"search": "vite nitro", "limit": 50})
+        self.assertEqual(got["res"]["data"]["web"][0]["url"], "https://a.example")
+        self.assertEqual(ctx.calls[-1], ("web_search", {"query": "vite nitro", "limit": 20}))
+        got = self.b.web({"urls": ["https://a.example", "file:///etc/passwd"]})
+        self.assertEqual(got["res"]["results"][0]["content"], "# A")
+        self.assertEqual(ctx.calls[-1], ("web_extract", {"urls": ["https://a.example"]}))
+        self.assertEqual(self.b.web({})["ok"], False)
+        self.b.CTX = FakeCtx({"success": False, "error": "no web backend"})
+        self.assertEqual(self.b.web({"search": "x"}), {"ok": False, "error": "no web backend"})
+
     def test_a_data_url_picture_is_saved(self):
         self.b.CTX = FakeCtx({"success": True, "image": "data:image/png;base64," + base64.b64encode(PNG).decode()})
         got = self.b.image({"prompt": "x"})

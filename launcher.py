@@ -38,6 +38,7 @@ KEY_ENV = "SWARM_STUDIO_API_KEY"
 PASSED_KEYS = (
     "CKFF_API_KEY", "CKFF_BASE_URL", "CKFF_MODEL",              # pictures when Hermes's image tool cannot paint
     "MESHY_API_KEY",                                            # 3D characters (asks before spending credits)
+    "FISH_API_KEY",                                             # game character voices (Fish Audio)
     "PEXELS_API_KEY", "PEXELS_OCTO_LEASE",                      # stand-in photos
     "OCTO_SWARM_WS", "OCTO_SWARM_WORKSPACE_ID", "OCTO_BASE_URL",  # public copies of stand-in photos
     "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",                # a generated app's data
@@ -197,7 +198,7 @@ def _ensure_server() -> dict:
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
     # On Windows, Node also needs the system folders (SYSTEMROOT for its sockets and
     # crypto, TEMP, APPDATA for npm and pnpm, PATHEXT for finding .cmd tools).
-    keep = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME", "SWARM_GODOT")
+    keep = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME", "SWARM_GODOT", "GODOT")
     if os.name == "nt":
         keep += ("SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "USERPROFILE",
                  "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",

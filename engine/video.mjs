@@ -658,7 +658,7 @@ export function videoTools(dataDir, onStage = () => {}) {
 
 export function render({ tools: t, dir, out, quality = 'draft', onProgress = () => {}, signal }) {
   return new Promise((ok, fail) => {
-    const child = spawn(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { env: { PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' }, signal })
+    const child = spawn(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { env: { PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', HYPERFRAMES_NO_TELEMETRY: '1', HYPERFRAMES_NO_UPDATE_CHECK: '1', DO_NOT_TRACK: '1', NO_COLOR: '1' }, signal })
     let tail = ''
     const read = chunk => {
       const s = chunk.toString()

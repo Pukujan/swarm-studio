@@ -1,6 +1,6 @@
 // One picture through ckff's OpenAI-shaped image API (gpt-image-2.5 by default): the studio's
 // fallback when no Hermes image provider is signed in or the signed-in one fails (Codex out of
-// quota). The key is CKFF_API_KEY (or CKFF_IMAGE_KEY) in this process's environment, which
+// quota). The key is CKFF_API_KEY in this process's environment, which
 // launcher.py fills from Hermes's secret scope. No file is read for it. It stays in this process
 // and is never printed or logged.
 import { readFileSync, writeFileSync, existsSync, mkdtempSync } from 'node:fs'
@@ -8,7 +8,7 @@ import { extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 export function ckffCreds(env = process.env) {
-  const key = env.CKFF_API_KEY || env.CKFF_IMAGE_KEY || ''
+  const key = env.CKFF_API_KEY || ''
   const base = (env.CKFF_BASE_URL || 'https://ckffai.com/v1').replace(/\/$/, '')
   return key ? { key, base } : null
 }

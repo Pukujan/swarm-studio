@@ -6,7 +6,8 @@
 // with a `line` gets recorded. Providers:
 //   fish        Fish Audio TTS (POST /v1/tts, reference_id = voice, header model)
 //   elevenlabs  ElevenLabs TTS (POST /v1/text-to-speech/<voice>)
-// Keys: FISH_API_KEY / ELEVENLABS_API_KEY in the environment, or else a lease from
+// Keys: FISH_API_KEY / ELEVENLABS_API_KEY in the environment (the launcher hands ElevenLabs over as
+// SWARM_ELEVENLABS_KEY, which counts too), or else a lease from
 // the Octo vault (OCTO_VAULT_GRANT, the key named by the voice's `vault`), called
 // through the vault proxy so the real key never leaves the vault.
 //
@@ -88,7 +89,7 @@ async function vaultLease(label, baseUrl) {
 // Record one line to an mp3 and return its size in bytes.
 export async function speakLine(voice, text, out) {
   const req = ttsRequest(voice, text)
-  const key = process.env[ENV_KEY[voice.provider]]
+  const key = process.env[ENV_KEY[voice.provider]] || (voice.provider === 'elevenlabs' ? process.env.SWARM_ELEVENLABS_KEY : '')
   let url = req.target
   const headers = { ...req.headers, 'user-agent': UA }
   if (key) {

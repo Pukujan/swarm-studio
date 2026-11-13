@@ -132,7 +132,7 @@ function mux(ffmpeg, video, audio, delayMs, out) {
   return new Promise((ok, fail) => execFile(ffmpeg, ['-y', '-v', 'error', '-i', video, '-i', audio, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-af', `adelay=${d}:all=1,apad`, '-c:a', 'libopus', '-b:a', '96k', '-shortest', out], { timeout: 60000 }, err => (err ? fail(err) : ok(out))))
 }
 
-// { ok, skipped?, problem?, seconds } — `problem` is one sentence for a fix turn
+// { ok, skipped?, problem?, seconds } (a play test that could not run is ok: false with `skipped`, never a pass) — `problem` is one sentence for a fix turn
 // shot: a file to save the title screen to (the game's cover), as a JPEG
 // clip: a path to film the test to (.webm); the result then has clip and the keys pressed, in order
 // checks: the spec's play checks (engine/playcheck.mjs checklist): each control is held and the game's
@@ -147,10 +147,10 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
   let film = async () => ({}), vdir = null, g = null
   const kept = box // (the canvas's own box takes the name further down)
   const pw = await loadPlaywright()
-  if (!pw) return { ok: true, skipped: 'no browser for the play test' }
+  if (!pw) return { ok: false, skipped: 'no browser for the play test' }
   let browser
   // sound plays without a click first, so the film can record it
-  try { browser = await launch(pw.chromium, { args: ['--autoplay-policy=no-user-gesture-required'] }) } catch (e) { return { ok: true, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
+  try { browser = await launch(pw.chromium, { args: ['--autoplay-policy=no-user-gesture-required'] }) } catch (e) { return { ok: false, skipped: `the browser would not start: ${String(e.message).slice(0, 120)}` } }
   const errors = [], blocked = []
   try {
     vdir = clip ? mkdtempSync(join(tmpdir(), 'playtest-')) : null
@@ -251,7 +251,7 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     if (checked?.problems.length) return { ok: false, seconds: lasted, problem: checked.problems.length === 1 ? checked.problems[0] : `The play test held each control and read the game's state; ${checked.problems.length} things are wrong:\n${checked.problems.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
     return { ok: true, seconds: lasted, ended: !!endedAt }
   } catch (e) {
-    return { ok: true, skipped: `the play test could not run: ${String(e.message).slice(0, 160)}` }
+    return { ok: false, skipped: `the play test could not run: ${String(e.message).slice(0, 160)}` }
   } finally {
     box.filmed = await film().catch(() => ({}))
     if (vdir) rmSync(vdir, { recursive: true, force: true })

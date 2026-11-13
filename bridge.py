@@ -7,6 +7,8 @@ Hermes may do:
 - ``POST /image``: one picture through Hermes's own ``image_generate`` tool (``ctx.dispatch_tool``);
 - ``POST /video``: one clip through Hermes's own ``video_generate`` tool;
 - ``GET /media``: whether pictures and clips are available;
+- ``POST /web``: a web search or a page's text through Hermes's own ``web_search`` / ``web_extract`` tools
+  (for the app engine's search, fetch and clone tools, engine/enginetools.mjs);
 - ``POST /mcp``: one MCP tool call through ``ctx.call_mcp``;
 - ``POST /v1/chat/completions`` and ``GET /v1/models``: model calls through ``ctx.llm`` (bridge_llm.py).
 
@@ -276,6 +278,32 @@ def media(_body: dict | None = None) -> dict:
     return {"image": {"available": not _missing["image"]}, "video": {"available": not _missing["video"]}}
 
 
+def web(body: dict) -> dict:
+    """A web search or page text through Hermes's own web tools (its backend, keys and private-address refusal).
+
+    {search, limit} -> {ok, res: {data: {web: [{title, url, description}]}}};
+    {urls} -> {ok, res: {results: [{url, title, content, error}]}}."""
+    query = str(body.get("search") or "").strip()[:500]
+    urls = [u for u in (body.get("urls") or []) if isinstance(u, str) and u.startswith(("http://", "https://"))][:5]
+    if query:
+        try:
+            limit = max(1, min(20, int(body.get("limit") or 8)))
+        except (TypeError, ValueError):
+            limit = 8
+        raw = CTX.dispatch_tool("web_search", {"query": query, "limit": limit})
+    elif urls:
+        raw = CTX.dispatch_tool("web_extract", {"urls": urls})
+    else:
+        return {"ok": False, "error": "a search or a web address is needed"}
+    try:
+        res = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Hermes's web tool gave no answer"}
+    if res.get("success") is False or (res.get("error") and not res.get("results")):
+        return {"ok": False, "error": str(res.get("error") or "the web tool failed")[:300]}
+    return {"ok": True, "res": res}
+
+
 PLUGIN = "swarm-studio"
 NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
@@ -312,7 +340,7 @@ def chat(body: dict, timeout_s: float | None = None) -> dict:
     return bridge_llm.complete(CTX, body, timeout_s)
 
 
-ROUTES = {("POST", "/image"): image, ("POST", "/video"): video, ("GET", "/media"): media, ("POST", "/mcp"): mcp,
+ROUTES = {("POST", "/image"): image, ("POST", "/video"): video, ("GET", "/media"): media, ("POST", "/mcp"): mcp, ("POST", "/web"): web,
           ("POST", "/v1/chat/completions"): chat, ("GET", "/v1/models"): bridge_llm.models}
 CHAT = ("POST", "/v1/chat/completions")
 BIG = 48 << 20  # a reviewer's call carries page screenshots
