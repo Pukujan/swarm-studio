@@ -37,6 +37,17 @@ export function StudioFirst() {
   // Hermia's cursor (web/pet.js), started as it is with this machine and this screen
   useEffect(() => { startPet(nav, root.current) }, [nav])
 
+  // Esc clears the selection first, as the board does in the current Studio; with nothing selected it goes up (App)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !sel || (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [role="menu"], [role="dialog"]')) return
+      e.preventDefault()
+      select(null)
+    }
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
+  }, [sel, select])
+
   // the top bar: Projects › the project's name, and Build (pressed in the current Studio, where the build runs)
   const build = useMemo(() => (kit.build ? <LinkButton role="primary" href={`/${here}`}>Build<span className="max-[760px]:sr-only"> in the Studio</span></LinkButton> : undefined), [kit.build, here])
   useTrail(d?.project.title || d?.project.name, build)
