@@ -199,7 +199,7 @@ before the person presses **Build**.
 flowchart LR
   MK["Make › Studio first"] --> SC["Projects › name · Build"]
   CH["Left chat: Start with X, and why"] --- SC
-  SC --> BR["Brand: the brand card → brand sheet → Lock → back"]
+  SC --> BR["Brand: the brand card → Projects › name › Brand → Lock → back"]
   SC --> RF["References: add, drop; Use as given, Remove"]
   SC --> AS["Assets: add, drop; Role, Use as reference, Remove"]
   SC --> PG["Pages (Website): storyboard strip; Add page; rename, Earlier, Later, Remove"]
