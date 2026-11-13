@@ -81,5 +81,5 @@ SITEMAP, REQUIREMENTS) first, and the screen's spec in `docs/specs/`.
    the parity test in `tests/next.test.mjs`. Run
    `typecheck:ui`, `deps:ui`, `npm run --prefix ui build` and `ui:check`, and commit `ui/dist/`.
 11. **Leave the current screen as it is.** It stays, and stays what people see, until the owner switches the room on
-    ([decision 0014](../docs/decisions/0014-switching-on-a-ported-screen.md): one line in `server/next.mjs`'s
+    ([decision 0018](../docs/decisions/0018-switching-on-a-ported-screen.md): one line in `server/next.mjs`'s
     `LIVE`, in its own PR). Retiring it is another PR again. Update INVENTORY.md if a control moved.

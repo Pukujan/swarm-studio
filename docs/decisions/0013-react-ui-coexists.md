@@ -63,7 +63,7 @@ Three constraints shape how:
 5. Once every screen has moved, `/` serves the new UI and `web/`'s screens retire, in a PR of their own.
 
 [ui/README.md](../../ui/README.md) is the recipe in full. How a moved screen is then switched on for everyone is
-[decision 0014](0014-switching-on-a-ported-screen.md).
+[decision 0018](0018-switching-on-a-ported-screen.md).
 
 ## Consequences
 
