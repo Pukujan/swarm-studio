@@ -1,0 +1,20 @@
+name: release
+# A release branch is what the catalog pins (docs/decisions/0008-releases-stable-pin.md). It carries the next UI's
+# build, ui/dist/, which main and pull requests leave untracked (docs/decisions/0018-next-ui-build-on-release.md):
+# this fails a release push whose ui/dist/ is missing or is not a fresh build of its ui/. Fix: node scripts/release-ui.mjs
+on:
+  push:
+    branches: ['release/**']
+permissions:
+  contents: read
+jobs:
+  ui-dist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # a release from before the next UI has no ui/ and nothing to check
+      - run: if [ -f ui/package.json ]; then npm ci --prefix ui --no-audit --no-fund && node scripts/release-ui.mjs --check; else echo 'no next UI in this release'; fi

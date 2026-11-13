@@ -20,16 +20,8 @@
     "detail": "reads \"Design deck\", should read \"Home › Projects › Alpha Tea › Design deck\""
   },
   {
-    "key": "deck@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
     "key": "deck@390 breadcrumb",
     "detail": "reads \"Design deck\", should read \"Home › Projects › Alpha Tea › Design deck\""
-  },
-  {
-    "key": "deck@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
   },
   {
     "key": "film@1440 breadcrumb",
@@ -109,22 +101,6 @@
   },
   {
     "key": "projects@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
-    "key": "studio@1440 breadcrumb",
-    "detail": "reads \"Studio scaffold\", should read \"Home › Projects › Cedar Cafe › Studio\""
-  },
-  {
-    "key": "studio@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
-    "key": "studio@390 breadcrumb",
-    "detail": "reads \"Studio scaffold\", should read \"Home › Projects › Cedar Cafe › Studio\""
-  },
-  {
-    "key": "studio@390 loading",
     "detail": "nothing showed it was loading, and the screen asked for no data"
   }
 ]
