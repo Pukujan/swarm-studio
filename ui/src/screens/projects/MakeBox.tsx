@@ -20,6 +20,9 @@ const intake = () => (intakeP ||= api<Intake>('/api/intake').catch(() => { intak
 
 type Pop = null | { k: 'examples', list: string[] } | { k: 'ask', text: string, qs: Question[], i: number, answers: Record<string, string> }
   | { k: 'brief', text: string, back: null | { text: string, qs: Question[], answers: Record<string, string> } }
+  | { k: 'go', brief: string, chat: string, text: string, options: GoOption[] }
+interface GoOption { id: string, label: string, why?: string }
+type Sets = { pictures?: string, chat?: string }
 
 export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | null> }) {
   const { go } = useNav()
@@ -33,7 +36,7 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
 
   // a website builds live (/api/run); App, Game and Video run their steps (/api/auto). Either opens the new
   // build on the Design deck, the one room where the crew can be watched at work
-  async function build(brief: string, sets: { pictures?: string } = {}) {
+  async function build(brief: string, sets: Sets = {}) {
     const run = runOf(make)
     try {
       const j = run
@@ -43,6 +46,9 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
       if (j.run) go({ type: 'started', run: j.run, room: 'deck' })
     } catch (err) {
       const e = err as ApiError
+      // a new website asks first (docs/decisions/0020-ask-before-build.md): the question, here under the box
+      const b = e.body as { error?: string, ask?: string, chat?: string | null, text?: string, options?: GoOption[] } | undefined
+      if (e.status === 409 && b?.error === 'ask') return setPop(b.ask === 'talk' || !b.chat ? { k: 'brief', text: brief, back: null } : { k: 'go', brief, chat: b.chat, text: b.text || '', options: b.options || [] })
       if (e.status === 409) toast('A build is running. Yours can start when it ends.', e.body?.run ? { action: 'Watch it', onAction: () => go({ type: 'started', run: e.body.run, room: 'deck' }) } : {})
       else toast(said(err))
     }
@@ -84,6 +90,16 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
     setPop({ k: 'examples', list })
   }
   const close = () => setPop(null)
+  // the answer: all builds from the chat (answered now); the rest open the Studio walk with those steps skipped
+  async function answered(g: { path: string, skip: string[], brief: string, chat: string }) {
+    if (g.path === 'all') return build(g.brief, { chat: g.chat })
+    const start = g.skip.includes('brand') ? 'plan' : 'brand'
+    try {
+      const j = await post<{ project?: { id: string } }>('/api/studio', { kind: 'site', idea: g.brief, chat: g.chat, skip: g.skip, start })
+      setPop(null); setText('')
+      if (j.project?.id) go({ type: 'studio', project: j.project.id, step: start })
+    } catch (err) { toast(said(err)) }
+  }
 
   return (
     <>
@@ -110,7 +126,7 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
         </MenuAt>
       )}
 
-      <Panel name={pop?.k === 'examples' ? 'Examples' : pop?.k === 'brief' ? 'The brief' : 'Questions'} triggerRef={form} isOpen={!!pop} onClose={close}>
+      <Panel name={pop?.k === 'examples' ? 'Examples' : pop?.k === 'brief' ? 'The brief' : pop?.k === 'go' ? 'Before the build' : 'Questions'} triggerRef={form} isOpen={!!pop} onClose={close}>
         {pop?.k === 'examples' && (
           <>
             <h3 className="m-0 mb-3 font-label text-sm font-semibold tracking-[.12em] text-muted uppercase">Examples</h3>
@@ -128,6 +144,7 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
         )}
         {pop?.k === 'ask' && <Ask pop={pop} setPop={setPop} build={build} />}
         {pop?.k === 'brief' && <Brief pop={pop} setPop={setPop} build={build} />}
+        {pop?.k === 'go' && <Go pop={pop} setPop={setPop} answered={answered} />}
       </Panel>
     </>
   )
@@ -142,7 +159,7 @@ const CHIP = '!h-9 !min-h-9 !px-3 !font-monospace !text-[13px] !normal-case !tra
 
 // the guided prompt (docs/specs/06-onboarding.md): the questions the words left open, one at a time (chips or your
 // own words), then the brief. Just build skips the rest: the unanswered questions take their defaults.
-function Ask({ pop, setPop, build }: { pop: Extract<Pop, { k: 'ask' }>, setPop: (p: Pop) => void, build: (t: string, s?: { pictures?: string }) => void }) {
+function Ask({ pop, setPop, build }: { pop: Extract<Pop, { k: 'ask' }>, setPop: (p: Pop) => void, build: (t: string, s?: Sets) => void }) {
   const q = pop.qs[pop.i], val = pop.answers[q.id] || ''
   const [free, setFree] = useState(q.chips.includes(val) ? '' : val)
   const take = (v: string) => { const answers = { ...pop.answers }; if (v) answers[q.id] = v; else delete answers[q.id]; return answers }
@@ -173,7 +190,7 @@ function Ask({ pop, setPop, build }: { pop: Extract<Pop, { k: 'ask' }>, setPop: 
 }
 
 // the brief before the build: one short paragraph, editable; Build (or ⌘/Ctrl+Enter) starts it
-function Brief({ pop, setPop, build }: { pop: Extract<Pop, { k: 'brief' }>, setPop: (p: Pop) => void, build: (t: string, s?: { pictures?: string }) => void }) {
+function Brief({ pop, setPop, build }: { pop: Extract<Pop, { k: 'brief' }>, setPop: (p: Pop) => void, build: (t: string, s?: Sets) => void }) {
   const [text, setText] = useState(pop.text)
   const sets = pop.back ? guideSets(pop.back.answers, pop.back.qs) : {}
   const go = () => { const t = text.trim(); if (t) build(t, sets) }
@@ -187,6 +204,34 @@ function Brief({ pop, setPop, build }: { pop: Extract<Pop, { k: 'brief' }>, setP
       <div className="mt-4 flex items-center justify-between gap-2">
         {pop.back ? <Button role="ghost" onPress={() => { const b = pop.back!; setPop({ k: 'ask', text: b.text, qs: b.qs, i: b.qs.length - 1, answers: b.answers }) }}><Icon name="chl" size={14} />Back</Button> : <span />}
         <Button role="primary" onPress={go} isDisabled={!text.trim()}><Icon name="up" size={16} />Build</Button>
+      </div>
+    </div>
+  )
+}
+
+// the question before a new website (docs/decisions/0020-ask-before-build.md): the planner's answers, the
+// recommended one first with its reason; a pick goes to the chat (/api/talk), which answers or asks which to skip
+function Go({ pop, setPop, answered }: { pop: Extract<Pop, { k: 'go' }>, setPop: (p: Pop) => void, answered: (g: { path: string, skip: string[], brief: string, chat: string }) => void }) {
+  const toast = useToast()
+  const pick = async (id: string) => {
+    try {
+      const j = await post<{ turn?: { text?: string, options?: GoOption[], go?: { path: string, skip: string[], brief: string } } }>(`/api/talk/${pop.chat}`, { pick: id })
+      const t = j.turn
+      if (t?.go) return answered({ ...t.go, chat: pop.chat })
+      if (t?.options?.length) setPop({ ...pop, text: t.text || pop.text, options: t.options })
+    } catch (err) { toast(said(err)) }
+  }
+  return (
+    <div>
+      <h3 className="m-0 mb-3 font-display text-xl font-extrabold uppercase">{pop.text}</h3>
+      <div role="list" aria-label="Answers" className="flex flex-col gap-1">
+        {pop.options.map((o, i) => (
+          <div role="listitem" key={o.id}>
+            <Button role={i ? 'ghost' : 'secondary'} autoFocus={!i} className="!h-auto w-full !justify-start !py-2 !normal-case !tracking-normal" onPress={() => void pick(o.id)}>
+              <span className="flex flex-1 flex-col text-left"><span>{o.label}</span>{o.why && <small className="text-muted">{o.why}</small>}</span>
+            </Button>
+          </div>
+        ))}
       </div>
     </div>
   )

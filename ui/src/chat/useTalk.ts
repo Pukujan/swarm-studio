@@ -9,7 +9,7 @@
 // the start chips after a lock stay, so another part of the plan is one click away.
 import { useCallback, useReducer, useRef, useState } from 'react'
 import { base, chatApi, getJson, postJson } from './api'
-import type { BuildRoute, ChatApi, ChatChip, ChatKind, ChatLine, ChatOption, ChatProps, ChatTalk } from './types'
+import type { BuildRoute, ChatApi, ChatChip, ChatGo, ChatKind, ChatLine, ChatOption, ChatProps, ChatTalk } from './types'
 
 // the chips under one of Hermia's turns
 export type Acts =
@@ -20,8 +20,8 @@ export type Acts =
 export interface Turn extends ChatLine { acts?: Acts }
 
 type Said = { who: 'you' | 'hermia', text: string }
-type Turnish = { text: string, options?: ChatOption[] }
-type Events = Pick<ChatProps, 'onBuild' | 'onBrandSheet' | 'onPlanDraft' | 'onPlan' | 'onPlanAt' | 'onOpenChat' | 'onHeard' | 'onTalk'>
+type Turnish = { text: string, options?: ChatOption[], go?: Omit<ChatGo, 'chat'> }
+type Events = Pick<ChatProps, 'onBuild' | 'onBrandSheet' | 'onPlanDraft' | 'onPlan' | 'onPlanAt' | 'onOpenChat' | 'onHeard' | 'onTalk' | 'onGo'>
 
 let seq = 0
 const nid = () => `c${Date.now().toString(36)}${(++seq).toString(36)}`
@@ -39,6 +39,8 @@ const gameActs = (turn?: Turnish | null): Acts | undefined => {
   const options = turn?.options || []
   return options.length ? { type: 'options', spec: options.some(o => o.id === 'lock'), options } : undefined
 }
+// the question before a website's build (decision 0020): its answers have go: ids
+const isAsk = (turn?: Turnish | null) => !!turn?.options?.some(o => o.id.startsWith('go:'))
 
 export function useTalk({ api = chatApi, from = null, project = null, events, addChip }: { api?: ChatApi, from?: string | null, project?: string | null, events: Events, addChip: (c: ChatChip) => void }) {
   const ev = useRef(events)
@@ -47,7 +49,8 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
   ctx.current = { from, project }
   // the talk itself (talk.js `talk`): mutable, read after every await; gen changes with each new talk, so an
   // answer that comes back for an old one is dropped
-  const T = useRef({ on: false, busy: false, said: [] as Said[], kind: 'site' as ChatKind, chat: null as string | null, from: null as string | null, plan: null as string | null, gen: 0, started: '' })
+  // ask: a website chat's question before the build is open; words and picks answer it (talk.js talk.ask)
+  const T = useRef({ on: false, busy: false, said: [] as Said[], kind: 'site' as ChatKind, chat: null as string | null, from: null as string | null, plan: null as string | null, gen: 0, started: '', ask: false })
   const [turns, setTurns] = useState<Turn[]>([])
   const [, redraw] = useReducer((x: number) => x + 1, 0)
 
@@ -70,6 +73,7 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
   async function say(text: string, chips: ChatChip[], brief = false) {
     const s = T.current
     if (s.kind === 'game') return gameSay({ said: text })
+    if (s.ask && !brief) return goSay({ said: text })
     const refs = brief ? [] : chips.filter(c => c.kind === 'ref')
     // layers dragged in: the planner is told what the turn is about
     const about = brief ? [] : chips.filter(c => c.kind === 'layer')
@@ -106,6 +110,38 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     // a website or app can settle its story, palette and type first (spec 31); Build works without it
     const id = add({ who: 'hermia', text: what || 'The brief', acts: { type: 'brief', text, routes, sheet: s.kind === 'site' || s.kind === 'app', sheetLabel: 'Brand sheet', open: true, done: false } })
     if (sheet) void brandSheet(id, text)
+  }
+
+  // ---------- the question before a website's build (docs/decisions/0020-ask-before-build.md, server/talk.mjs): a
+  // pick or typed words answer it, offline; the answer tells the screen to build now or open the Studio walk
+  async function goSay({ said = '', pick = '', label = '' }: { said?: string, pick?: string, label?: string }) {
+    const s = T.current
+    if (s.busy || !s.chat) return
+    const text = said || label
+    if (text) { s.said.push({ who: 'you', text }); add({ who: 'you', text }) }
+    clearActs()
+    const g = s.gen
+    const wait = add({ who: 'hermia', text: '…', working: true })
+    setBusy(true, g)
+    try {
+      const j = await postJson<{ chat: { id: string }, turn: Turnish }>(api, `/api/talk/${enc(s.chat)}`, { said, pick })
+      if (!alive(g)) return
+      s.said.push({ who: 'hermia', text: j.turn.text })
+      s.ask = isAsk(j.turn)
+      add({ who: 'hermia', text: j.turn.text, acts: s.ask ? gameActs(j.turn) : undefined })
+      if (j.turn.go) { const chat = j.chat?.id || s.chat; end(); ev.current.onGo?.({ ...j.turn.go, chat }) }
+    } catch (err) {
+      if (alive(g)) add({ who: 'hermia', text: (err as Error).message || 'Hermia did not answer. Say it again.' })
+    } finally { setBusy(false, g); drop(wait) }
+  }
+  // a website chat reopened with its question open: the answers come back in Suggestions, not Build
+  async function siteResume(last: string) {
+    const s = T.current, g = s.gen
+    const j = await getJson<{ chat: { go?: unknown, turns: (Turnish & { who: string })[] } }>(api, `/api/talk/${enc(s.chat || '')}`)
+    if (!alive(g)) return
+    const turn = j?.chat?.turns?.at(-1)
+    if (!j?.chat?.go && turn?.who === 'planner' && isAsk(turn)) { s.ask = true; patch(last, { acts: gameActs(turn) }) }
+    else patch(last, { acts: { type: 'build' } })
   }
 
   // ---------- a game talk (server/talk.mjs)
@@ -167,7 +203,7 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
   function start(t: ChatTalk) {
     const s = T.current
     s.gen++
-    Object.assign(s, { on: true, busy: false, said: [], kind: t.kind || 'site', chat: t.chat || null, from: t.blank ? null : ctx.current.from, plan: null, started: t.id })
+    Object.assign(s, { on: true, busy: false, said: [], kind: t.kind || 'site', chat: t.chat || null, from: t.blank ? null : ctx.current.from, plan: null, started: t.id, ask: false })
     clearActs()
     let last: string | null = null
     for (const m of t.said || []) { s.said.push(m); last = add({ who: m.who, text: m.text }) }
@@ -176,6 +212,8 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
     if (t.text) return void say(t.text, [])
     // a game chat reopened: its open question's chips come back under the planner's last words
     if (s.kind === 'game' && s.chat) return void gameResume(last)
+    // a website chat with its question before the build open (decision 0020)
+    if (s.kind === 'site' && s.chat && last && t.said?.at(-1)?.who === 'hermia') return void siteResume(last)
     // an old chat reopened: its words are back, and the box goes on from them
     if (last && t.said?.at(-1)?.who === 'hermia') patch(last, { acts: { type: 'build' } })
   }
@@ -193,6 +231,7 @@ export function useTalk({ api = chatApi, from = null, project = null, events, ad
   function pick(id: string, o: ChatOption) {
     const s = T.current
     if (s.busy) return
+    if (o.id.startsWith('go:')) return void goSay({ pick: o.id, label: o.label })
     if (o.id === 'lock') return void gameLock()
     // where to start (after the lock): the pick opens that part of the Plan board; the chips stay
     if (o.id.startsWith('start:')) {
