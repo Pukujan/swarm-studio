@@ -1,10 +1,11 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): starting a build, resizable panels, crews, the Publish button, pictures in the Design panel.
 import { BASE, BOOT, WALL, S, cosmosHooks, commandOps, els, store, Q, $, Crew, ARROW, TOOL, api } from './core.js'
-import { hermesResume, botMsg, resumeRun, renderToolbar, setText, feed } from './panels.js'
+import { hermesResume, botMsg, resumeRun, renderToolbar, setText, feed, setHermesResume } from './panels.js'
 import { hosted } from './hosted.js'
 import { fresh } from './base.js'
 import { connectorEvent, cwPin } from './dock.js'
-import { liveId, viewing, claimed, openRun, replayRun } from './replay.js'
+import { liveId, viewing, claimed, openRun, replayRun, setLiveId, setViewing } from './replay.js'
 import { talk } from './talk.js'
 import { on } from './events.js'
 import { runNow, shownRun, video } from './film.js'
@@ -115,10 +116,12 @@ requestAnimationFrame(frameLoop)
 
 // ---------- resizable side panels: drag the inner edge, double-click to reset
 for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['.design', '--design-w', 220, 480, -1]]) {
+  // @ts-ignore
   const panel = $(sel)
   if (!panel) continue
   let saved = null
   try { saved = localStorage.getItem(`swarm${name}`) } catch {}
+  // @ts-ignore
   if (saved) document.body.style.setProperty(name, `${saved}px`)
   const grip = Object.assign(document.createElement('div'), { className: 'resizer' })
   panel.append(grip)
@@ -128,7 +131,9 @@ for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['
     const x0 = e.clientX, w0 = panel.getBoundingClientRect().width
     grip.classList.add('drag'); document.body.classList.add('resizing')
     const move = ev => {
+      // @ts-ignore
       const w = Math.round(Math.max(min, Math.min(max, w0 + (ev.clientX - x0) * dir)))
+      // @ts-ignore
       document.body.style.setProperty(name, `${w}px`)
     }
     const up = () => {
@@ -139,6 +144,7 @@ for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['
     grip.addEventListener('pointermove', move)
     grip.addEventListener('pointerup', up, { once: true })
   })
+  // @ts-ignore
   grip.addEventListener('dblclick', () => { document.body.style.removeProperty(name); try { localStorage.removeItem(`swarm${name}`) } catch {} })
 }
 
@@ -233,6 +239,7 @@ export function crewTick(now) {
       })
     }
   }
+  // @ts-ignore
   if (!job) { radioLine.hidden = true; return }
   let lineTo = null
   for (const [i, m] of crew.members.entries()) {
@@ -272,9 +279,12 @@ export function crewTick(now) {
   }
   // Hermia's dotted line, from her strip to the helper she is giving an order to
   const from = lineTo && document.querySelector('#app-hermia:not([hidden]):not(.min) .ah-head .cw-radio-av')?.getBoundingClientRect()
+  // @ts-ignore
   radioLine.hidden = !from?.width
+  // @ts-ignore
   if (!radioLine.hidden) {
     const x1 = from.left + from.width / 2, y1 = from.bottom, x2 = lineTo.x + 6, y2 = lineTo.y + 4
+    // @ts-ignore
     radioLine.firstChild.setAttribute('d', `M${x1.toFixed(1)} ${y1.toFixed(1)}C${x1.toFixed(1)} ${(y1 + 80).toFixed(1)} ${x2.toFixed(1)} ${(y2 - 80).toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`)
     radioLine.style.setProperty('--c', Crew.color(lineTo.name))
   }
@@ -296,6 +306,7 @@ els.publishBtn.onclick = async e => {
   const run = shownRun()
   opt.disabled = true
   setText(why, 'checking…')
+  /** @type {any} the app's state, as the server reports it */
   const st = run ? await api(`/api/runs/${encodeURIComponent(run)}/app`).then(r => r.ok ? r.json() : {}).catch(() => ({})) : {}
   if (run !== shownRun()) return
   opt.disabled = !st.hasApp || st.state === 'working'
@@ -311,6 +322,7 @@ for (const b of pubMenu.querySelectorAll('[data-pub]')) b.onclick = () => {
   if (appv.run !== shownRun()) resetApp(shownRun())
   deployApp()
 }
+// @ts-ignore
 document.addEventListener('mousedown', e => { if (!pubMenu.hidden && !e.target.closest('.pubwrap')) closePub() })
 
 // ---------- pictures in the Design panel: swap any generated photo, or ask for one

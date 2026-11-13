@@ -1,7 +1,8 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): comments, generated images, visual review, Scribble.
 import { painterOf } from '../icons.js'
 import { S, $, els, api, commandOps, BOOT, WALL, BASE } from './core.js'
-import { botMsg, feed, toolbarKey } from './panels.js'
+import { botMsg, feed, toolbarKey, setToolbarKey } from './panels.js'
 import { esc, remember, restoreLayer } from './design.js'
 import { viewing } from './replay.js'
 import { shownRun } from './film.js'
@@ -39,7 +40,9 @@ export function textEdit(l) {
     row.innerHTML = `<span>${esc(/^h[1-6]$/.test(tag) ? 'heading' : tag === 'a' || tag === 'button' ? 'button / link' : tag === 'p' ? 'text' : tag)}</span>`
     const f = document.createElement(t.length > 60 ? 'textarea' : 'input')
     f.value = t.replace(/\s+/g, ' ')
+    // @ts-ignore
     f.dataset.i = i
+    // @ts-ignore
     if (f.tagName === 'TEXTAREA') f.rows = Math.min(5, Math.ceil(t.length / 70))
     row.append(f)
     list.append(row)
@@ -49,10 +52,13 @@ export function textEdit(l) {
   const key = e => { if (e.key === 'Escape') close() }
   addEventListener('keydown', key)
   wrap.onclick = e => { if (e.target === wrap) close() }
+  // @ts-ignore
   wrap.querySelector('.fix').onclick = close
+  // @ts-ignore
   wrap.querySelector('.fi-save').onclick = async () => {
     let changed = 0
     for (const f of list.querySelectorAll('[data-i]')) {
+      // @ts-ignore
       const n = nodes[Number(f.dataset.i)], old = n.textContent, now = f.value.trim()
       if (now === old.trim().replace(/\s+/g, ' ')) continue
       // keep the spacing around the words
@@ -66,6 +72,7 @@ export function textEdit(l) {
     await restoreLayer(step, step.after, 'text')
     feed(null, `✏️ You changed ${changed} piece${changed > 1 ? 's' : ''} of text in ${l.role || l.id}`, 'sys')
   }
+  // @ts-ignore
   list.querySelector('[data-i]')?.focus()
 }
 

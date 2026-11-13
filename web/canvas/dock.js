@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): Hermia's dock and sign-in connectors.
 import { $, HERMIA, ico, Crew, api } from './core.js'
 import { radioOn, radio, cw, CW_FRESH, cwZoom, artPhase, CW_CODE, autoM, setAutoMin, CW_TILES, wallNames, cwZoomShow, cwHighlight, cwPlan, heardIn, clock, kTokens, paintv, ART_STATE, artEvent } from './auto.js'

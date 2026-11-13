@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): what web/studio.js, web/home.js and web/project.js may read and call (window.swarm).
 import { layerDrag } from '../layerlink.js'
 import { clean } from '../clean.js'
@@ -13,7 +14,7 @@ import { readTalk, talkStart, talkAsk, talkEnd, saidOf, talk, gameLock } from '.
 import { setCrewMode, crewMode } from './auto.js'
 import { snapFrame, hiddenCopy, ANCHOR_JS, layerKey, SNAP_SECTION, sendComment } from './marks.js'
 import { gensOf, pics } from './start.js'
-import { nextRoute } from './loop.js'
+import { nextRoute, setNextRoute } from './loop.js'
 
 // ---------- studio hook: what web/studio.js, web/home.js and web/project.js may read and call.
 // Kept to this one block so the canvas and the studio views merge cleanly.

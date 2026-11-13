@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the build on the canvas (fresh, setTitle, navBrand), the frame sandbox, and media dragged into the chat.
 import { layerLink } from '../layerlink.js'
 import { els, api, BASE, S, cam, setS, history } from './core.js'

@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the hosted studio.
 import { BOOT, els, S, api, store, cosmosHooks } from './core.js'
 import { esc } from './design.js'
@@ -34,6 +35,7 @@ export const hosted = BOOT.hosted && (() => {
       + `<span class="g-left">${open ? `${left} of ${H.limits.builds} builds left today` : 'Done for today'}</span>`
       + `<button class="ui-btn ${can ? 'ui-btn-default' : 'ui-btn-outline'} ui-btn-sm g-post" ${can ? '' : 'disabled'} aria-label="Post this build to Swarm Feed">${posting ? 'Posting…' : posted.has(shown()) ? 'Posted' : 'Post to Feed'}</button>`
       + plugin
+    // @ts-ignore
     bar.querySelector('.g-post').onclick = postToFeed
   }
   async function refresh() {

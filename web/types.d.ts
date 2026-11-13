@@ -21,4 +21,8 @@ declare global {
     SwarmSetup: any
     webkitAudioContext: typeof AudioContext
   }
+  interface Navigator {
+    /** Chromium only: the device's memory in GB, rounded (web/canvas/settings.js picks lite mode by it) */
+    deviceMemory?: number
+  }
 }

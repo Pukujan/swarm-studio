@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api } from './core.js'
@@ -227,8 +228,11 @@ els.viewport.addEventListener('wheel', e => {
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !els.player.hidden) return tour.on ? stopTour() : closePlayer()
   if (e.key === 'Escape' && S.sel) { S.sel = null; design.last = ''; return }
+  // @ts-ignore
   if (e.key === 'v' && !els.player.hidden && !e.target.closest('input, select, textarea')) return watchVisitor()
+  // @ts-ignore
   if (e.key === 'm' && !els.player.hidden && !e.target.closest('input, select, textarea')) return setMotion()
+  // @ts-ignore
   if (e.target.closest('input, select, textarea')) return
   if (e.metaKey || e.ctrlKey || e.altKey) return
   // the Design panel belongs to the Canvas room; a project has its own Layers inspector
@@ -354,6 +358,7 @@ export function pickSlash(c) {
   els.brief.focus()
   if (!takes) els.form.requestSubmit()
 }
+// @ts-ignore
 slashPop.addEventListener('mousedown', e => { const d = e.target.closest('[data-c]'); if (d) { e.preventDefault(); pickSlash(d.dataset.c) } })
 els.brief.addEventListener('input', () => { slashAt = 0; renderSlash() })
 els.brief.addEventListener('blur', () => setTimeout(() => (slashPop.hidden = true), 150))

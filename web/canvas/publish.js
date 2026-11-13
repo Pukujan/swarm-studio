@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): publishing a live link.
 import { fillThumbRow } from '../seo.js'
 import { ico, api, S, els, $, commandOps } from './core.js'
@@ -75,6 +76,7 @@ export function hostAsk(msg, ms = 1500) {
   })
 }
 if (framed) document.addEventListener('click', e => {
+  // @ts-ignore
   const a = e.target.closest?.('a[target="_blank"][href^="http"]')
   if (!a) return
   e.preventDefault()

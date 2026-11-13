@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the Design panel, manual editing, undo and redo, export.
 import { pageSeoHtml, wirePageSeo } from '../seo.js'
 import { $, S, els, api, cam, FRAME_W, history, BOOT, ico, commandOps } from './core.js'
@@ -6,7 +7,7 @@ import { panels } from './settings.js'
 import { picturesHtml, wirePictures, closeable } from './start.js'
 import { traceView, viewing } from './replay.js'
 import { shownRun } from './film.js'
-import { feed, renderTheme, botMsg, toolbarKey } from './panels.js'
+import { feed, renderTheme, botMsg, toolbarKey, setToolbarKey } from './panels.js'
 import { txt, textEdit, cmt } from './marks.js'
 
 // ---------- Design panel
@@ -20,6 +21,7 @@ export const design = { tab: 'design', tabPinned: false, pinned: null, agent: nu
 
 export function showDtab(name) {
   design.tab = name
+  // @ts-ignore
   for (const el of document.querySelectorAll('[data-dtab]')) el.classList.toggle('on', el.dataset.dtab === name)
   design.last = design.lastVars = ''
 }
@@ -161,6 +163,7 @@ export function renderDesign(now) {
     if (vs) vs.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) sectionVersions(l, vs) }
     wirePictures(S.layers.get(S.sel || design.layer))
     if (tr) tr.onclick = () => { const l = S.layers.get(S.sel || design.layer); if (l) traceView(S.run, { layer: l.id, title: l.role || l.id }) }
+    // @ts-ignore
     wirePageSeo(els.dDesign, { run: shownRun(), api, onError: m => feed(null, `search & share: ${m}`, 'err') })
   }
 }
@@ -411,7 +414,9 @@ export async function redo() {
 export function renderUndo() {
   const u = document.getElementById('undo-btn'), r = document.getElementById('redo-btn')
   if (!u) return
+  // @ts-ignore
   u.disabled = !history.undo.length
+  // @ts-ignore
   r.disabled = !history.redo.length
 }
 document.getElementById('undo-btn').onclick = () => undo()
@@ -419,6 +424,7 @@ document.getElementById('redo-btn').onclick = () => redo()
 window.addEventListener('keydown', e => {
   if (!(e.metaKey || e.ctrlKey) || e.altKey) return
   // typing in a field keeps the field's own undo
+  // @ts-ignore
   if (e.target.closest('input, textarea, select, [contenteditable]')) return
   const k = e.key.toLowerCase()
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
@@ -446,6 +452,7 @@ export async function sectionVersions(l, at) {
   const away = e => { if (!m.contains(e.target)) close() }
   setTimeout(() => addEventListener('mousedown', away))
   m.onclick = async e => {
+    // @ts-ignore
     const b = e.target.closest('button[data-i]')
     if (!b) return
     close()
@@ -500,6 +507,7 @@ els.dDesign.addEventListener('click', e => {
   openPicker(v, SECTION_OPTIONS[prop](), null, value => commitEdit({ kind: 'section', layer: l.key, prop, value }))
 })
 
+/** @type {HTMLInputElement & { timer?: any }} */
 export const colorInput = Object.assign(document.createElement('input'), { type: 'color', className: 'dcolor' })
 document.body.append(colorInput)
 export let colorEdit = null

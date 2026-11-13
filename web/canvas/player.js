@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): Play mode and visitor tours.
 import { clean } from '../clean.js'
 import { store, S, BOOT, els, commandOps, api, $ } from './core.js'
@@ -77,10 +78,12 @@ export function pageParts(id, html) {
   for (const el of doc.body.querySelectorAll(TOURABLE)) {
     const tag = el.tagName.toLowerCase()
     const input = tag === 'input' || tag === 'textarea' || tag === 'select'
+    // @ts-ignore
     const text = (input ? el.getAttribute('placeholder') || el.getAttribute('aria-label') || el.getAttribute('name') || el.type : el.textContent || el.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 60)
     if (!text || (el.closest('[data-goto]') && el.closest('[data-goto]') !== el && !input)) continue
     const tid = `e${++n}`
     el.setAttribute('data-tour', tid)
+    // @ts-ignore
     const goto = el.closest('[data-goto]')?.dataset.goto
     if (items.length < 60) items.push({ id: tid, kind: input ? 'input' : /^h\d$/.test(tag) ? 'heading' : goto || tag === 'a' ? 'link' : 'button', text, ...(goto ? { goto } : {}) })
   }
@@ -155,6 +158,7 @@ export function showPage(id, push = true) {
   els.plFrame.style.opacity = 0
   player.loaded = new Promise(resolve => setTimeout(() => {
     const frame = playerDoc(pageDoc(id))
+    // @ts-ignore
     frame.onload = () => { frame.style.opacity = 1; resolve() }
   }, 120))
 }
@@ -229,6 +233,7 @@ export function setDevice(name, reload = true) {
   if (reload) stopTour()
   player.device = name
   store.set('device', name)
+  // @ts-ignore
   for (const b of document.querySelectorAll('#pl-device button')) b.classList.toggle('on', b.dataset.device === name)
   fitDevice()
   if (reload && player.page) showPage(player.page, false)
@@ -336,10 +341,12 @@ export function glide(x, y, live) {
   const t0 = performance.now()
   return new Promise(resolve => {
     const step = now => {
+      // @ts-ignore
       if (!live()) return resolve()
       const t = Math.min(1, (now - t0) / ms), e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
       const arc = Math.sin(Math.PI * e) * bend
       placeCursor(x0 + (x - x0) * e + nx * arc, y0 + (y - y0) * e + ny * arc)
+      // @ts-ignore
       t < 1 ? requestAnimationFrame(step) : resolve()
     }
     requestAnimationFrame(step)
@@ -488,6 +495,7 @@ export function stopTour() {
 
 els.plTours.onclick = e => { e.stopPropagation(); toggleTourMenu(false); watchVisitor() }
 els.plTourList.onclick = e => { e.stopPropagation(); toggleTourMenu() }
+// @ts-ignore
 document.addEventListener('click', e => { if (!els.plTourMenu.hidden && !e.target.closest('.tour-pick')) toggleTourMenu(false) })
 
 // Play: a plain click plays the prototype; its caret also offers a visitor who walks through it
@@ -521,5 +529,6 @@ $('#pl-restart').onclick = () => { player.history = []; showPage(S.frames[0].id,
 els.plMotion.onclick = () => setMotion()
 els.plMotion.classList.toggle('on', player.motion)
 els.plPage.onchange = () => showPage(els.plPage.value)
+// @ts-ignore
 for (const b of document.querySelectorAll('#pl-device button')) b.onclick = () => setDevice(b.dataset.device)
 window.addEventListener('resize', () => !els.player.hidden && fitDevice())

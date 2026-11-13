@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): Auto mode and the Auto show, the code wall, crew radio, the art wall.
 import { REVIEWER, painterOf } from '../icons.js'
 import { icon, WALL, ico, Q, api, replayId, Crew, HERMIA, els, ARROW, S, cam } from './core.js'
@@ -165,6 +166,7 @@ export function showStep(e, step, change) {
 export function showLiveTab(e) {
   const cur = e.state === 'working' && e.steps.find(s => s.state === 'working')
   const v = cur && AUTO_VIEW[cur.id]
+  // @ts-ignore
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('live', !!v && b.dataset.view === v)
 }
 
@@ -318,6 +320,7 @@ export function dsFit() {
     const s = ds.el.querySelector(sel)
     const f = s?.querySelector('iframe')
     if (!f || !s.clientWidth) continue
+    // @ts-ignore
     const k = s.clientWidth / w
     Object.assign(f.style, { width: `${w}px`, height: `${Math.round(s.clientHeight / k * 1.6)}px`, transform: `scale(${k})` })
   }
@@ -402,9 +405,11 @@ export async function showSummary(e) {
     <div class="ss-actions">${url && games ? `<a class="primary ss-play" href="${esc(url.replace(/\/?$/, '/'))}play" target="_blank" rel="noopener">${ico('gamepad-2')}Play the game</a>` : ''}${url ? `<a class="ss-open" href="${esc(url)}" target="_blank" rel="noopener">${ico('globe')}Open the site</a>` : ''}${launchable({ ...e, url }) ? `<button class="ss-launch">${ico('message-square')}Open the launch kit</button>` : ''}</div></div>`
   document.body.append(el)
   const close = () => el.remove()
+  // @ts-ignore
   el.querySelector('.ss-x').onclick = close
   closeable(el.querySelector('.ss-card'), close)
   el.onclick = ev => { if (ev.target === el) close() }
+  // @ts-ignore
   el.querySelector('.ss-copy')?.addEventListener('click', ev => navigator.clipboard?.writeText(url).then(() => { ev.target.textContent = 'Copied' }, () => {}))
   el.querySelector('.ss-launch')?.addEventListener('click', () => { close(); openLaunch(e.run) })
 }
@@ -421,6 +426,7 @@ export async function openLaunch(run) {
   el.className = 'game-pop launch-pop'
   el.innerHTML = `<div class="ghead"><b class="kicker">${ico('message-square')}Launch kit</b><button class="gclose" aria-label="Close">${ico('x')}</button></div><p class="lk-wait">Writing the posts…</p>`
   document.body.append(el)
+  // @ts-ignore
   el.querySelector('.gclose').onclick = () => el.remove()
   closeable(el, () => el.remove(), { extra: ['.ui-overlay'] })
   let res = await api(`/api/runs/${encodeURIComponent(run)}/launch`).catch(() => null)
@@ -512,12 +518,17 @@ export function launchConfirm(run, p, text, targets, kit, done) {
     <div class="lkc-btns"><button class="lkc-cancel">Cancel</button><button class="primary lkc-send">Send</button></div></div>`
   document.body.append(box)
   const close = () => box.remove()
+  // @ts-ignore
   box.querySelector('.lkc-cancel').onclick = close
+  // @ts-ignore
   box.querySelector('.lkc-cancel').focus()
+  // @ts-ignore
   box.querySelector('.lkc-send').onclick = async ev => {
     ev.currentTarget.disabled = true
+    // @ts-ignore
     const r = await api(`/api/runs/${encodeURIComponent(run)}/launch/send`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ post: p.id, text, target: box.querySelector('.lkc-target').value, confirm: true }) }).catch(() => null)
     const out = await r?.json().catch(() => ({}))
+    // @ts-ignore
     if (!r?.ok) { const er = box.querySelector('.lkc-err'); er.hidden = false; er.textContent = out?.error || 'the send failed'; ev.currentTarget.disabled = false; return }
     done(out); close()
   }
@@ -623,6 +634,7 @@ if (WALL) { if (crewBtn) crewBtn.hidden = true } else {
   })
   addEventListener('keydown', e => {
     if (e.key !== 'm' && e.key !== 'M') return
+    // @ts-ignore
     if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.('input, select, textarea, [contenteditable]')) return
     if (!els.player.hidden) return // the player uses M for its motion switch
     cycleCrew()

@@ -37,6 +37,9 @@ How it runs:
   `setToolbarKey`, `setSlashAt`, `setHermesResume`, `setLiveId`, `setS`, `setReplayId`). An ES module cannot
   assign another module's binding. Use the setter.
 - Names are shared across the whole page: two files must not declare the same top-level name.
+- Every file here is type-checked (`// @ts-check`). The `// @ts-ignore` lines (about 100) mark the DOM reads that
+  JSDoc comments alone cannot type (`querySelector` results, event targets). Replace one when you touch that
+  code, with a typed variable. Do not add new ones.
 - A new file here starts with `// @ts-check`. Add it to the list in `server/page.mjs` and to `canvas.js`, in
   the order it must run.
 - The areas still import each other in cycles. `.dependency-cruiser-known-violations.json` lists those cycles

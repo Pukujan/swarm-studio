@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the panels: theme, layer tree, agents, status, toolbar, and the chat feed with its messages.
 import { layerDrag } from '../layerlink.js'
 import { S, els, TOOL, TOOLS, Crew, HERMIA, api } from './core.js'
@@ -77,6 +78,7 @@ export function renderTree() {
     title.children[0].textContent = g.num
     title.children[1].textContent = g.title
     title.onclick = e => {
+      // @ts-ignore
       if (e.target.classList.contains('caret') || g.id === '*') S.closed.has(g.id) ? S.closed.delete(g.id) : S.closed.add(g.id)
       else { S.closed.delete(g.id); focusPage(g.id) }
       renderTree()
@@ -97,11 +99,15 @@ export function renderTree() {
       row.children[2].textContent = l.role
       if (a) {
         row.children[3].textContent = l.status === 'done' ? `${a.name} ${(l.ms / 1000).toFixed(1)}s` : a.name
+        // @ts-ignore
         if (l.status !== 'done' && l.status !== 'failed') row.children[1].style.background = a.color
+        // @ts-ignore
         row.children[3].style.color = a.color
       }
       row.onclick = e => {
+        // @ts-ignore
         if (e.target.classList.contains('eye')) return hideLayer(l, !hid)
+        // @ts-ignore
         if (e.target.classList.contains('tw')) { open ? layersOpen.delete(l.key) : layersOpen.add(l.key); return renderTree() }
         selectLayer(l)
       }
@@ -268,10 +274,12 @@ export function stoppedMsg(e) {
   acts.className = 'chips'
   if (canResume) {
     acts.innerHTML = '<button class="primary">Resume</button>'
+    // @ts-ignore
     acts.firstChild.onclick = () => { acts.remove(); resumeRun(run) }
   } else if (why?.code === 'hermes') {
     // nothing to resume: say whether Hermes is there now, so Make can be pressed again
     acts.innerHTML = '<button>Check again</button>'
+    // @ts-ignore
     acts.firstChild.onclick = async () => {
       const h = await hermesReady()
       acts.remove()
@@ -317,6 +325,7 @@ export function hermesSays(h) {
   const acts = document.createElement('div')
   acts.className = 'chips'
   acts.innerHTML = '<button>Check again</button>'
+  // @ts-ignore
   acts.firstChild.onclick = async () => {
     const again = await hermesReady()
     acts.remove()

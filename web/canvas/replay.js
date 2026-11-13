@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): saved runs (files) and traces, replay.
 import { api, S, els, ico, setReplayId, Q, replayId } from './core.js'
 import { feed, botMsg } from './panels.js'
@@ -81,10 +82,13 @@ export async function traceList() {
   const wrap = document.querySelector('.trace-wrap')
   if (!wrap || !trace.run) return
   const got = await (await api(`/api/runs/${encodeURIComponent(trace.run)}/trace`)).json().catch(() => ({ calls: [] }))
+  // @ts-ignore
   wrap.querySelector('.tr-on input').checked = got.on !== false
+  // @ts-ignore
   const q = wrap.querySelector('.tr-q').value.trim().toLowerCase()
   const calls = (got.calls || []).filter(c => !q || q.split(/\s+/).every(w => [c.kind, KIND_LABEL[c.kind], c.agent, c.page, c.layer, c.model].join(' ').toLowerCase().includes(w)))
   const list = wrap.querySelector('.tr-list')
+  // @ts-ignore
   const open = new Set([...list.querySelectorAll('.tr-call.open')].map(el => el.dataset.id))
   const name = id => S.agents?.get?.(id)?.name || id || ''
   list.innerHTML = calls.length ? '' : `<div class="empty">${got.calls?.length ? 'No calls match.' : got.on === false ? 'Traces are off for this build. Tick “Record traces” to keep them from now on.' : 'No model calls traced yet. Builds, fixes, reviews and videos made from now on are traced.'}</div>`
@@ -97,6 +101,7 @@ export async function traceList() {
     row.querySelector('b').textContent = `${c.ok ? '' : '⚠ '}${KIND_LABEL[c.kind] || c.kind || 'call'}`
     row.querySelector('.tr-where').textContent = [name(c.agent), c.layer || (c.page && `page ${c.page}`), c.model].filter(Boolean).join(' · ')
     row.querySelector('.tr-prev').textContent = c.ok ? c.preview : c.error
+    // @ts-ignore
     row.querySelector('.tr-head').onclick = () => traceOpen(row, c.id)
     list.append(row)
     if (open.has(c.id)) traceOpen(row, c.id)
