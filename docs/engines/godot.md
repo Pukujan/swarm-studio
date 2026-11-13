@@ -42,7 +42,7 @@ time it falls back to the browser and says so in a step (engine/appjob.mjs:409-4
      `assets/art/` (engine/godotfirst.mjs:86-95). `syncGodotArt` keeps files the crew changed (engine/godotfirst.mjs:102-124).
    - Each stage prompt is `godotStagePrompt`: the spec, the starter's `CREW.md`, the art brief, `GODOT_RULES`
      (Godot 4.7, GDScript 2, no Godot 3 syntax) and four Godot skills (engine/godotfirst.mjs:138-177).
-   - After each stage `godotStage` runs `checkGodot`; errors get one fix turn, then `exportWeb` and `serveStatic`
+   - After each stage `godotStage` runs `checkGodot`; errors get one fix turn, then `exportWeb` and `serveStatic` (files from Swarm's own process, no server of its own; a finished web app is served the same way since issue #439)
      on 127.0.0.1 with CORS (engine/appjob.mjs:512-530, engine/godotfirst.mjs:182-222).
    - `exportWeb` returns `{ ok, dir, error? }` and empties `persistentPaths` so the export does not touch
      IndexedDB in a sandboxed frame (engine/godotfirst.mjs:182-204).

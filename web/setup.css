@@ -80,4 +80,7 @@
 /* Settings › Lite mode (web/settings.js): the pick, then what it does */
 .set .set-lite { margin: 0 10px 12px; }
 .set .set-litedl { grid-template-columns: minmax(0, .8fr) minmax(0, 1.6fr); }
+/* Background (issue #439): a name, its picks, one line */
+.set .set-stop { display: grid; gap: 8px; margin: 0 10px 14px; }
+.set .set-stop .set-goes { margin: 0; }
 @media (max-width: 480px) { .set .set-litedl { grid-template-columns: 1fr; gap: 2px; } .set .set-litedl dd { margin-bottom: 8px; } }

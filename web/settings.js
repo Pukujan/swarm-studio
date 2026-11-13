@@ -3,10 +3,10 @@
 // iOS Settings, as docs/ux/PATTERNS.md assigns for Me › Settings: grouped lists, one level per tap, names
 // and a state.
 //
-// Layer 1: You, Setup, Lite mode, Data. You is the Feed account and its "Goes to" line. Setup opens the
+// Layer 1: You, Setup, Lite mode, Background, Data. You is the Feed account and its "Goes to" line. Setup opens the
 // Setup sheet on its Parts (web/setup-parts.js: every model, tool, connector, key and program a build
 // uses, its state and its fix; Crew and Publish moved there). Lite mode is the pick and what it does.
-// Data is where data goes.
+// Background is when the studio's background work stops by itself (issue #439). Data is where data goes.
 import { ic } from './icons.js'
 
 const DATA = [
@@ -30,6 +30,11 @@ const LITE = [
   ['On', 'Always, on any device.'],
   ['Off', 'Never, not even in Play. Every page stays live.']
 ]
+// Background: the server's own picks (server/server.mjs STOP_PICKS), in minutes; 0 is never
+const STOPS = [
+  { k: 'app', name: 'Stop an app nobody is looking at', note: 'Opening it again takes a few seconds.', label: m => `${m} min` },
+  { k: 'server', name: 'Close the studio when nothing runs', note: 'It starts again when you next use it.', label: m => (m ? `${m} min` : 'Never') }
+]
 const LITE_PICKS = [{ k: 'auto', label: 'Auto', on: null }, { k: 'on', label: 'On', on: true }, { k: 'off', label: 'Off', on: false }]
 const small = () => (/** @type {any} */ (navigator).deviceMemory || 8) <= 4
 
@@ -40,7 +45,7 @@ export function openSettings({ sw, esc }) {
   const d = ui.dialog({ title: 'Settings', className: 'set', body: '<div class="set-list" role="list"></div>' })
   const list = d.body.querySelector('.set-list')
   // each state fills in when its own answer comes: the sheet never waits
-  const S = { me: null, lite: undefined }
+  const S = { me: null, lite: undefined, stops: null }
   let at = null, open = false
 
   // one row: a name, and its state on the right (an account, a pick, or nothing but the dot)
@@ -49,6 +54,7 @@ export function openSettings({ sw, esc }) {
 
   // a Feed account has a handle; without one the server answers the computer's user name, which is not an account
   const you = () => (S.me?.handle ? S.me.name || `@${S.me.handle}` : '')
+  const stopsState = () => (S.stops ? `${S.stops.app} min · ${S.stops.server ? `${S.stops.server} min` : 'never'}` : '')
   const liteState = () => S.lite === undefined ? '' : S.lite === true ? 'On' : S.lite === false ? 'Off' : `Auto · ${small() ? 'on' : 'off'} here`
 
   function draw() {
@@ -57,6 +63,7 @@ export function openSettings({ sw, esc }) {
       list.innerHTML = row('you', 'You', { state: you() || 'Not signed in', more: true })
         + row('setup', 'Setup', { more: true })
         + row('lite', 'Lite mode', { state: liteState(), more: true })
+        + row('stops', 'Background', { state: stopsState(), more: true })
         + row('data', 'Data', { more: true })
       return
     }
@@ -64,6 +71,11 @@ export function openSettings({ sw, esc }) {
     if (at === 'data') {
       d.setHead('', 'Data')
       list.innerHTML = back + `<dl class="set-data">${DATA.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`
+      return
+    }
+    if (at === 'stops') {
+      d.setHead('', 'Background')
+      list.innerHTML = back + (S.stops ? STOPS.map(x => `<div class="set-stop"><b id="set-stop-${x.k}">${esc(x.name)}</b><div class="ui-toggle-group ui-block" role="radiogroup" aria-labelledby="set-stop-${x.k}">${S.stops.picks[x.k].map(m => `<button type="button" class="ui-toggle" role="radio" aria-checked="${m === S.stops[x.k]}" data-stop="${x.k}" data-min="${m}">${esc(x.label(m))}</button>`).join('')}</div><p class="set-goes">${esc(x.note)}</p></div>`).join('') : '')
       return
     }
     if (at === 'lite') {
@@ -89,9 +101,19 @@ export function openSettings({ sw, esc }) {
     dispatchEvent(new CustomEvent('swarm:models'))
   }
 
+  async function pickStop(k, m) {
+    if (!S.stops) return
+    S.stops = { ...S.stops, [k]: m }
+    draw()
+    list.querySelector(`[data-stop="${k}"][data-min="${m}"]`)?.focus({ preventScroll: true })
+    await sw.api('/api/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: 'stops', [k]: m }) }).catch(() => null)
+  }
+
   list.onclick = e => {
     const l = e.target.closest('[data-lite]')
     if (l) { pickLite(l.dataset.lite); return }
+    const st = e.target.closest('[data-stop]')
+    if (st) { pickStop(st.dataset.stop, Number(st.dataset.min)); return }
     const b = e.target.closest('.set-row')
     if (!b) return
     const k = b.dataset.k
@@ -107,6 +129,6 @@ export function openSettings({ sw, esc }) {
   draw()
   list.querySelector('.set-row')?.focus({ preventScroll: true })
   get('/api/me').then(v => { if (!d.closed) { S.me = v; if (!at || at === 'you') draw() } })
-  get('/api/models').then(v => { if (!d.closed) { S.lite = v ? v.lite ?? null : null; if (!at || at === 'lite') draw() } })
+  get('/api/models').then(v => { if (!d.closed) { S.lite = v ? v.lite ?? null : null; S.stops = v?.stops || null; if (!at || at === 'lite' || at === 'stops') draw() } })
   return d
 }

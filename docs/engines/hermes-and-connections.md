@@ -21,7 +21,8 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - `/llm/v1` on the studio's port, with a per-process key, forwards to the bridge; `model` is the role (`planner`, `worker`, `reviewer`), optionally `role:pick` (engine/hermesllm.mjs:3-9, 22-24, 94). The app engine (Dyad) uses the same endpoint (engine/hermesllm.mjs:3-5).
 - `streamChat` is the client for any OpenAI-shaped endpoint; through Hermes it drops provider hints and sends `x-swarm-timeout` (engine/llm.mjs:12, 58, 71).
 - `hermesHealth` tells `closed` from `updated` by `$HERMES_HOME/gateway.pid` and the plugin's `.py` mtimes (engine/hermeshealth.mjs:18-22, 26-47).
-- Every child process gets `childEnv` only (engine/proc.mjs:1-23).
+- Every child process gets `childEnv` only (engine/proc.mjs:1-23). The long-running ones (an app's dev or built server, a film render) start through `start()`, execa with `extendEnv: false`, `cleanup` and `forceKillAfterDelay`, and stop through `stopTree()`, tree-kill, so their children go too (engine/proc.mjs, engine/vendor/procs/; issue #439).
+- The server exits after 20 minutes with nothing to do: no pane (an `/events` stream), no request other than the bridge's re-attach and status looks, no build, Auto run, film, publish or app build (Settings › Background; server/server.mjs `serverBusy`, engine/lifecycle.mjs `idleWatch`). It closes its port first, so the next `ensure_server()` (the pane's `/canvas`, any `/swarm` command, `start_run`) starts a new one at once, and the bridge's attach loop attaches to it (launcher.py `_ensure_server`, bridge.py `_attach_loop`). A command refused in that moment starts it and asks once more (commands.py `_api`).
 
 ### Models / gateway
 
