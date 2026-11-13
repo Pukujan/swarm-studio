@@ -80,7 +80,8 @@ History: Hermes-blue glow (spec 08) → Ultraviolet (trial, 2026-11-09) → Grap
 2026-11-09). The rule lives in [docs/ux/RULES.md](../ux/RULES.md), standing rule 3.
 
 The studio follows the system's light or dark setting; ☰ → Light / Dark overrides it and is remembered. The
-tokens are in `web/canvas.css`: dark is `:root`, light is the block after it.
+tokens are `tokens/studio.tokens.json` (dark) and `tokens/studio.light.tokens.json` (light), built into
+`web/tokens.css` (decision 0012).
 
 | Token | Dark | Light | Job |
 |---|---|---|---|

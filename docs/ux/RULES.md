@@ -18,7 +18,7 @@ These win over every rule below that disagrees.
 2. **Always minimal text.** A default screen is a headline, one input and one button. No eyebrows (kickers),
    helper sentences, sub-paragraphs or explanatory captions. Clear empty space beats words.
 3. **Few colours.** Black, graphite and white, plus **one** accent for the whole plugin, in one CSS variable,
-   `--accent` (`web/canvas.css`). No per-room, per-view or per-agent colours: the crew is told apart by shade.
+   `--accent` (`tokens/studio.tokens.json`, built into `web/tokens.css`). No per-room, per-view or per-agent colours: the crew is told apart by shade.
    The accent is the text colour: a white button with black text in dark mode, black with white text in light
    mode. The owner may pick a hue later, and that is the one line (every tint is a `color-mix` of `--accent`).
    Red is kept only for errors. Pictures (built pages, planets, art, video) are the only other colour.
