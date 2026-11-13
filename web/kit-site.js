@@ -6,6 +6,9 @@ import { ic } from './icons.js'
 
 const GUESS = ['Home', 'About', 'Contact']
 const pagesOf = ctx => ctx.state.pages || (ctx.brand?.story?.pages?.length ? ctx.brand.story.pages : GUESS)
+// the person skipped the Plan when asked before the build (docs/decisions/0020-ask-before-build.md): the planner
+// picks the pages, so the guess is not handed to the crew as if it were theirs
+const planSkipped = ctx => ctx.studio?.steps?.plan === 'skipped' && !ctx.state.pages?.length
 const MAX = 12
 
 // one page as a frame of the strip: a nav line, the page's name in the brand's heading, two lines of text
@@ -70,11 +73,12 @@ export const siteKit = {
     done: ctx => !!ctx.state.pages?.length
   },
   proposal: ctx => ({ items: pagesOf(ctx).map((what, i) => ({ what, order: i + 1 })), minutes: 4 + 2 * pagesOf(ctx).length, credits: null }),
-  lock: ctx => ({ pages: pagesOf(ctx) }),
+  lock: ctx => (planSkipped(ctx) ? {} : { pages: pagesOf(ctx) }),
   // the person's press: the idea and its pages, built inside the Studio's project
   build: async (spec, ctx) => {
-    const pages = spec.kits?.site?.pages || pagesOf(ctx)
-    const brief = `${spec.idea || ctx.studio.idea}\n\nPages: ${pages.join(', ')}.`
+    const pages = spec.kits?.site?.pages || (planSkipped(ctx) ? null : pagesOf(ctx))
+    const idea = spec.idea || ctx.studio.idea
+    const brief = pages?.length ? `${idea}\n\nPages: ${pages.join(', ')}.` : idea
     const run = await ctx.sw.submit(brief, false, ctx.project.id, null, { chat: ctx.chat })
     return { run: typeof run === 'string' ? run : null }
   }

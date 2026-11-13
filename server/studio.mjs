@@ -1,6 +1,8 @@
 // The Studio's routes (docs/specs/37-studio-first.md, engine/studio.mjs, engine/assetstore.mjs).
-//   POST /api/studio { kind, idea, mode?, depth?, steps?, start? }  -> { project, chat, studio }  a project with no runs yet
-//        (an empty idea is fine: the chat's first words become it, through /idea)
+//   POST /api/studio { kind, idea, mode?, depth?, steps?, start?, skip?, chat? }  -> { project, chat, studio }  a project with no runs yet
+//        (an empty idea is fine: the chat's first words become it, through /idea). skip: the steps the person
+//        skipped when asked before the build (decision 0020; 'brand' or 'plan'), marked skipped, the walk starting
+//        on the first one left. chat: the loose chat that asked, moved into the project instead of a new one
 //   POST /api/studio/:pid/idea { idea }                -> the studio  the idea, once, while it is empty
 //   GET  /api/studio/:pid                                  -> { project, studio, brand, refs, assets }
 //   POST /api/studio/:pid/step { step, state }             -> the same
@@ -58,9 +60,14 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
     const kind = STUDIO_KINDS.includes(input.kind) ? input.kind : 'site'
     const idea = String(input.idea || '').trim().slice(0, 4000)
     const pid = projects.makeStudio({ name: idea ? nameOf(idea) : 'New project', kind })
-    const chat = chats.create({ kind: CHAT_KIND[kind], text: idea, project: pid })
+    const asked = typeof input.chat === 'string' ? chats.get(input.chat) : null
+    const chat = asked && !asked.project && asked.kind === CHAT_KIND[kind] ? await chats.moveTo(asked.id, pid) : chats.create({ kind: CHAT_KIND[kind], text: idea, project: pid })
     const steps = Array.isArray(input.steps) ? input.steps.filter(s => STEPS.includes(s)) : STEPS
-    studios.make(pid, { kind, idea, mode: input.mode, depth: input.depth, chat: chat.id, steps: steps.length ? steps : STEPS, start: input.start })
+    const shown = steps.length ? steps : STEPS
+    const skip = Array.isArray(input.skip) ? input.skip.filter(s => shown.includes(s)) : []
+    const start = shown.includes(input.start) && !skip.includes(input.start) ? input.start : skip.length ? shown.find(s => !skip.includes(s)) || null : input.start
+    studios.make(pid, { kind, idea, mode: input.mode, depth: input.depth, chat: chat.id, steps: shown, start })
+    for (const s of skip) studios.step(pid, s, 'skipped')
     return { ...whole(pid), chat: chat.id }
   }
 
