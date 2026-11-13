@@ -969,14 +969,15 @@ export function makeHome({ sw, C, root }) {
   // ---------- you: theme, sound and models live in your menu; the globe opens the Feed
   $('.hm-who').onclick = e => {
     const light = (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')) === 'light'
-    const sound = sw.sound?.() || 'muted'
+    const sound = sw.sound?.() || 'muted', who = e.currentTarget
     showMenu([
-      { k: 'theme', icon: light ? 'moon' : 'sun', label: light ? 'Dark' : 'Light', run: () => document.querySelector('#theme-btn')?.click() },
-      { k: 'sound', icon: 'sound', label: sound === 'on' ? 'Mute' : 'Sound on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
-      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => document.querySelector('#models-btn')?.click() }, { k: 'setup', ...($('.hm-who').classList.contains('warn') ? { icon: 'alert' } : { icon: 'check' }), label: 'Setup', run: () => setup.open() },
+      { k: 'theme', icon: light ? 'moon' : 'sun', label: light ? 'Dark' : 'Light', run: () => sw.theme?.() },
+      // the crew's voices and sounds (web/chatter.js), the same switch as ☰ → Crew sound; ✓ while on
+      { k: 'sound', icon: 'sound', label: 'Crew sound', on: sound === 'on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
+      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => sw.models?.(who) }, { k: 'setup', ...($('.hm-who').classList.contains('warn') ? { icon: 'alert' } : { icon: 'check' }), label: 'Setup', run: () => setup.open() },
         // what the studio is connected to and where its data goes (docs/specs/25-connections.md)
         { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }])
-    ], e.currentTarget)
+    ], who)
   }
 
   // ---------- phones: the sidebar is a drawer
