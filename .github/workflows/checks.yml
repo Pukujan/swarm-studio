@@ -70,11 +70,18 @@ jobs:
       - run: python -m pip install --quiet pillow
       - run: bash scripts/check.sh
       # the sections below each run even when one before them failed, so one run shows every Mac failure
-      # Hermes at the release the plugin asks for (plugin.yaml requires_hermes), then this commit installed
-      # through it: Hermes clones it, scans it and copies it into $HERMES_HOME/plugins/
+      # Hermes as a person installs it on a Mac (its install.sh), at the release the plugin asks for
+      # (plugin.yaml requires_hermes: v0.23.1, commit 3b42157), without its setup questions, browser or
+      # computer-use driver; then this commit installed through it: Hermes clones it, scans it and copies it
+      # into $HERMES_HOME/plugins/ (Hermes refuses a pip install of itself)
       - id: hermes
         if: ${{ !cancelled() }}
-        run: python -m pip install --quiet "hermes-agent @ git+https://github.com/NousResearch/hermes-agent@v0.23.1"
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/v0.23.1/scripts/install.sh -o "$RUNNER_TEMP/hermes-install.sh"
+          bash "$RUNNER_TEMP/hermes-install.sh" --commit 3b421578588243f920886e6fe79a6faa87ea026e --hermes-home "$HERMES_HOME" --skip-setup --skip-browser --skip-computer-use
+          echo "$HERMES_HOME/hermes-agent/.hermes/bin" >> "$GITHUB_PATH"
+      - if: ${{ !cancelled() && steps.hermes.outcome == 'failure' }}
+        run: tail -n 80 "$HERMES_HOME/logs/install.log" || true
       - id: install
         if: ${{ !cancelled() && steps.hermes.outcome == 'success' }}
         run: hermes plugins install "file://$GITHUB_WORKSPACE" --force --enable --yes-deps
