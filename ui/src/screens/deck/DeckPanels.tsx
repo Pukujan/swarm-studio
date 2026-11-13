@@ -2,6 +2,7 @@
 // build's name, its Pages and the chosen page's Layers (a dot on a layer an agent is writing); along the bottom the
 // toolbar, where a tool lights up while an agent uses it; on the right the crew, the progress and the zoom, and with
 // nothing selected the build's variables, the design tokens the planner set up.
+import { useEffect } from 'react'
 import { Button } from '../../primitives/Button'
 import { Icon } from '../../primitives/Icon'
 import { crew } from './crew'
@@ -9,14 +10,33 @@ import { layersOf, type DeckModel, type LayerStatus, type ToolId } from './model
 
 const STATUS: Record<LayerStatus, string> = { planned: 'planned', assigned: 'starting', streaming: 'writing', done: 'done', failed: 'failed' }
 
-export function LeftPanel({ model, page, onPage }: { model: DeckModel, page: string | null, onPage: (id: string) => void }) {
+// `sheet`: below 768 px the panel is a sheet over the canvas, opened from the Layers button (SITEMAP §10); × or Esc
+// closes it (Esc before the frame's, which goes up a level)
+export function LeftPanel({ model, page, onPage, sheet, onClose, id }: {
+  model: DeckModel, page: string | null, onPage: (id: string) => void, sheet: boolean, onClose: () => void, id?: string
+}) {
   const layers = page ? layersOf(model, page) : []
   const shown = model.pages.find(p => p.id === page)
+  useEffect(() => {
+    if (!sheet) return
+    // only while it is a sheet: at 768 px and wider the panel is always there and Esc is the frame's
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !matchMedia('(max-width: 767px)').matches) return
+      e.preventDefault()
+      onClose()
+    }
+    addEventListener('keydown', key, true)
+    return () => removeEventListener('keydown', key, true)
+  }, [sheet, onClose])
   return (
-    <aside aria-label="Pages and layers" className="flex w-[260px] flex-none flex-col overflow-y-auto border-r border-edge bg-deep max-md:hidden">
-      <h2 className="truncate border-b border-edge px-4 py-3 font-label text-sm font-semibold uppercase tracking-[.1em]">{model.title || 'Untitled'}</h2>
+    <aside id={id} aria-label="Pages and layers" className={`flex w-[260px] flex-none flex-col overflow-y-auto border-r border-edge bg-deep max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-30 max-md:shadow-[0_14px_40px_rgb(var(--shade-rgb)/.6)] ${sheet ? '' : 'max-md:hidden'}`}>
+      <div className="flex items-center border-b border-edge pr-1">
+        <h2 className="min-w-0 flex-1 truncate px-4 py-3 font-label text-sm font-semibold uppercase tracking-[.1em]">{model.title || 'Untitled'}</h2>
+        {sheet && <Button role="ghost" aria-label="Close Layers" onPress={onClose} className="md:hidden"><Icon name="x" size={16} /></Button>}
+      </div>
       <section aria-labelledby="deck-pages" className="border-b border-edge px-2 py-3">
         <h3 id="deck-pages" className="px-2 pb-2 font-label text-xs font-semibold uppercase tracking-[.12em] text-muted">Pages</h3>
+        {!model.pages.length && <p className="px-2 font-monospace text-[13px] text-muted">Pages appear here once the planner names them.</p>}
         <ul className="flex flex-col gap-0.5">
           {model.pages.map(p => (
             <li key={p.id}>
@@ -85,12 +105,15 @@ export function Toolbar({ model }: { model: DeckModel }) {
   )
 }
 
-function progress(m: DeckModel): string {
+// the status pill's words (openspec/specs/design-deck/spec.md, "Watching the crew")
+export function progress(m: DeckModel): string {
+  const n = m.agents.filter(a => a.layer).length
+  const pages = (k: number) => `${k} page${k === 1 ? '' : 's'}`
   switch (m.state) {
-    case 'empty': return 'No build yet'
+    case 'empty': return 'Ready'
     case 'planning': return 'Planning the pages'
-    case 'building': return `Building · ${m.done} of ${m.planned} sections`
-    case 'done': return m.failed ? `Done · ${m.done} of ${m.planned} sections, ${m.failed} failed` : `Done · ${m.done} of ${m.planned} sections`
+    case 'building': return n ? `${n} agent${n === 1 ? '' : 's'} building · ${m.done} of ${m.planned} sections` : `Building · ${m.done} of ${m.planned} sections`
+    case 'done': return m.failed ? `${pages(m.pages.length)} built · ${m.failed} section${m.failed === 1 ? '' : 's'} failed` : `${pages(m.pages.length)} built`
     case 'stopped': return `Stopped · ${m.done} of ${m.planned} sections kept`
   }
 }

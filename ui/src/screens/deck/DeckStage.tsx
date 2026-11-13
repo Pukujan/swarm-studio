@@ -1,6 +1,8 @@
 // The Design deck's canvas: the build's pages side by side, the crew's cursors on the sections they are writing,
 // and the camera. Drag the empty canvas to pan, the wheel scrolls, ctrl/⌘ + wheel zooms at the pointer, ⇧1 fits
-// every page (PATTERNS.md, "The Design deck follows Figma"). The pages only show here: they take no pointer.
+// every page (PATTERNS.md, "The Design deck follows Figma"). While Follow is on the camera goes to the agent at work;
+// a drag or the wheel turns it off and a double-click turns it back on (openspec/specs/design-deck/spec.md). The
+// pages only show here: they take no pointer.
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
 import { crew } from './crew'
 import { FRAME_W, GAP, PageFrame, frameX, type FrameGeo } from './PageFrame'
@@ -28,7 +30,12 @@ function target(m: DeckModel, geo: Record<string, FrameGeo>, a: DeckAgent): { x:
   return { x: x0 + g.last[0], y: y0 + g.last[1] - 6 }
 }
 
-export function DeckStage({ ref, model, onZoom }: { ref?: Ref<StageHandle>, model: DeckModel, onZoom?: (k: number) => void }) {
+// the agent the camera follows: one writing, else one just starting
+const followed = (m: DeckModel) => m.agents.find(a => a.layer && m.layers[a.layer]?.status === 'streaming') ?? m.agents.find(a => a.layer)
+
+export function DeckStage({ ref, model, onZoom, follow = false, onFollow }: {
+  ref?: Ref<StageHandle>, model: DeckModel, onZoom?: (k: number) => void, follow?: boolean, onFollow?: (on: boolean) => void
+}) {
   const stage = useRef<HTMLDivElement>(null)
   const [cam, setCam] = useState<Cam>({ x: 40, y: 40, k: 0.16 })
   const [geo, setGeo] = useState<Record<string, FrameGeo>>({})
@@ -55,6 +62,17 @@ export function DeckStage({ ref, model, onZoom }: { ref?: Ref<StageHandle>, mode
   }, [frame, model.pages])
   useImperativeHandle(ref, () => ({ fit, focusPage }), [fit, focusPage])
 
+  // Follow: the page the agent is writing, at a width that reads, its cursor a third of the way down
+  useEffect(() => {
+    const s = stage.current, a = follow ? followed(model) : undefined
+    const t = a && target(model, geo, a)
+    if (!s || !t || !s.clientWidth) return
+    const vw = s.clientWidth, vh = s.clientHeight
+    const k = Math.min(1, Math.max(MIN_K, (vw - 48) / FRAME_W))
+    const next = { k, x: Math.round(vw / 2 - t.x * k), y: Math.round(vh / 3 - t.y * k) }
+    setCam(c => (Math.abs(c.x - next.x) + Math.abs(c.y - next.y) + Math.abs(c.k - next.k) * 1000 < 2 ? c : next))
+  }, [follow, model, geo])
+
   // the first look fits every page; a page added later is fitted in until the person moves the camera
   const moved = useRef(false)
   useEffect(() => { if (!moved.current) fit() }, [fit, model.pages.length])
@@ -79,18 +97,22 @@ export function DeckStage({ ref, model, onZoom }: { ref?: Ref<StageHandle>, mode
     const dx = e.clientX - d.x, dy = e.clientY - d.y
     if (!panning && Math.abs(dx) + Math.abs(dy) < 3) return
     moved.current = true
+    if (follow) onFollow?.(false)
     setPanning(true)
     setCam(c => ({ ...c, x: d.cx + dx, y: d.cy + dy }))
   }
   const up = () => { drag.current = null; setPanning(false) }
 
   // the wheel scrolls; ctrl/⌘ + wheel zooms at the pointer (React's onWheel is passive, so it is added here)
+  const off = useRef(() => {})
+  off.current = () => { if (follow) onFollow?.(false) }
   useEffect(() => {
     const s = stage.current
     if (!s) return
     const wheel = (e: WheelEvent) => {
       e.preventDefault()
       moved.current = true
+      off.current()
       if (e.ctrlKey || e.metaKey) {
         const r = s.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top
         setCam(c => {
@@ -120,9 +142,9 @@ export function DeckStage({ ref, model, onZoom }: { ref?: Ref<StageHandle>, mode
   const working = model.agents.filter(a => a.layer)
 
   return (
-    <div ref={stage} role="region" aria-label="Canvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+    <div ref={stage} role="region" aria-label="Canvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onDoubleClick={() => onFollow?.(true)}
       className={`relative min-h-0 min-w-0 flex-1 touch-none overflow-hidden bg-void outline-none [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px] ${panning ? 'cursor-grabbing' : 'cursor-default'}`}>
-      <div className="absolute top-0 left-0 origin-top-left" style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})`, width: worldW }}>
+      <div className={`absolute top-0 left-0 origin-top-left ${follow ? 'motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-out' : ''}`} style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})`, width: worldW }}>
         {model.pages.map(p => (
           <div key={p.id} className="absolute top-0" style={{ left: frameX(p), width: FRAME_W }}>
             <div className="flex h-7 items-baseline gap-3 truncate font-label text-[18px] font-semibold uppercase tracking-[.08em] text-muted">
