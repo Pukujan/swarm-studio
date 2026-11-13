@@ -302,3 +302,44 @@ jobs:
           name: prompt-evals
           path: bench/evals/reports
           retention-days: 30
+  # a screen moved to the next UI (/next/, issue #404) moves as it does in the current Studio (/): the same
+  # animations, durations and easings, the same cursor paths, and still with reduced motion
+  # (docs/ux/MOTION.md, scripts/motion-parity.mjs). Both apps run from this pull request's tree; screens not
+  # moved yet are skipped. The side-by-side videos (left /, right /next/) are uploaded on every run.
+  motion-parity:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - id: touched
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          if git diff --quiet "$base" HEAD -- ui web server scripts/motion-check.mjs scripts/motion-parity.mjs scripts/walkthrough-fixtures.mjs; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'ui/, web/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
+      # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
+      - if: steps.touched.outputs.run == 'yes'
+        run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      - if: steps.touched.outputs.run == 'yes'
+        run: |
+          npm install --no-save --no-package-lock playwright@1.64.1 && npx playwright install --with-deps chromium-headless-shell
+          command -v ffmpeg || (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg)
+      - if: steps.touched.outputs.run == 'yes'
+        run: node scripts/motion-parity.mjs run "$RUNNER_TEMP/parity"
+      - if: steps.touched.outputs.run == 'yes' && (success() || failure())
+        run: |
+          node scripts/motion-parity.mjs clips "$RUNNER_TEMP/parity/clips"
+          { echo '## Motion parity, / against /next/'; cat "$RUNNER_TEMP/parity/report.md" 2>/dev/null; echo; echo 'Side by side (left /, right /next/): the motion-parity artifact, clips/'; } >> "$GITHUB_STEP_SUMMARY"
+      - if: steps.touched.outputs.run == 'yes' && (success() || failure())
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-parity
+          path: |
+            ${{ runner.temp }}/parity/report.md
+            ${{ runner.temp }}/parity/clips/*.webm
+            ${{ runner.temp }}/parity/*/trace.json
+          retention-days: 30
