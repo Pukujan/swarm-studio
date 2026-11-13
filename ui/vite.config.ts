@@ -33,7 +33,9 @@ export const alias: AliasOptions = [
   // copy for both apps (src/primitives/BoardVideo.tsx)
   { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) },
   // Open Design's Edit, ported (web/edit/patches.js, decision 0010): one part of a finished section changed by hand
-  { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) }
+  { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) },
+  // where a message typed into a build's chat goes (web/route.js): the Design deck routes the same way
+  { find: '@studio/route', replacement: fileURLToPath(new URL('../web/route.js', import.meta.url)) }
 ]
 
 export default defineConfig({

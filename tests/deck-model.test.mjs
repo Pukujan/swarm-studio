@@ -124,3 +124,15 @@ test('a comment thread holds the note and the crew\'s reply; the Critic\'s issue
   m = apply(m, { type: 'layer:done', run: RUN, t: t + 4, page: 'gifts', layer: 'hero', agent: 'a0', html: '<section>fixed</section>', fixed: true })
   assert.equal(m.issues['gifts/hero'], undefined)
 })
+
+test('the build\'s lines for the chat: the ask, the crew, the news, and nothing from another build', () => {
+  let m = fold(deckEvents('done'), RUN)
+  assert.equal(m.lines[0].who, 'you')
+  assert.ok(m.lines.some(l => l.who === 'sys' && l.text.startsWith('Planned 3 pages')))
+  assert.ok(m.lines.at(-1).text.startsWith('Done: 8/8 sections across 3 pages'))
+  const before = m.lines.length
+  m = apply(m, { type: 'error', run: RUN, t: Date.now(), where: 'publish', message: 'no token' })
+  assert.equal(m.lines.at(-1).who, 'err')
+  m = apply(m, { type: 'agent:say', run: 'other', t: Date.now(), agent: 'a0', text: 'not here' })
+  assert.equal(m.lines.length, before + 1)
+})
