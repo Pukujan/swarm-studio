@@ -1,14 +1,17 @@
 {
   "name": "swarm-studio-dev",
   "private": true,
-  "description": "Development checks only (the type check and the dependency rules). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
+  "description": "Development checks only (the type check, the dependency rules and the design-token build). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
   "type": "module",
   "scripts": {
     "typecheck": "cd ../.. && tsc -p tsconfig.json",
-    "deps": "cd ../.. && depcruise web --config .dependency-cruiser.cjs --ignore-known .dependency-cruiser-known-violations.json"
+    "deps": "cd ../.. && depcruise web --config .dependency-cruiser.cjs --ignore-known .dependency-cruiser-known-violations.json",
+    "tokens": "node tokens.mjs",
+    "tokens:check": "node tokens.mjs --check"
   },
   "devDependencies": {
     "dependency-cruiser": "18.7.2",
+    "style-dictionary": "5.8.0",
     "typescript": "7.0.2",
     "xstate": "5.33.3"
   }

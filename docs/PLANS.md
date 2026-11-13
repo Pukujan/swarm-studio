@@ -158,6 +158,8 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
   - XState for navigation (#321, #322, #331);
   - type checking with TypeScript 7 and dependency-cruiser (#373, #376);
   - the canvas file split (#375 to #377);
+  - design tokens in W3C format with Style Dictionary: the Studio's theme
+    (#412, [decision 0012](decisions/0012-design-tokens.md)). Lock's variables and the kit's `--ui-*` are not in it yet;
   - `docs/decisions/`.
 - **In progress:**
   - the first of the six design artifacts, the object map and glossary:
@@ -172,7 +174,6 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
     - Storybook mock-ups;
     - an independent review;
   - React Aria;
-  - design tokens in W3C format with Style Dictionary (Lock's variables are the first candidate);
   - feature flags with OpenFeature;
   - Danger JS;
   - screenshot review with Argos or Chromatic. Only the owner approves these.

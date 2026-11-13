@@ -1,0 +1,28 @@
+{
+  "$description": "Light: a white page, #f4f4f5 surfaces, #e4e4e7 lines, #0b0b0c text. Pictures are the only colour. Only what differs from studio.tokens.json; it applies by prefers-color-scheme (unless the ☰ menu picked dark) or when the ☰ menu picks light.",
+  "channel": {
+    "void-rgb": { "$value": "255 255 255" },
+    "deep-rgb": { "$value": "244 244 245" },
+    "glass-rgb": { "$value": "11 11 12" },
+    "frame-rgb": { "$value": "212 212 216" },
+    "shade-rgb": { "$value": "60 60 70" }
+  },
+  "color": {
+    "void": { "$type": "color", "$value": "#ffffff" },
+    "deep": { "$type": "color", "$value": "#f4f4f5" },
+    "surface-2": { "$type": "color", "$value": "#ececef" },
+    "edge": { "$type": "color", "$value": "#e4e4e7" },
+    "panel-edge": { "$type": "color", "$value": "#e4e4e7" },
+    "line-2": { "$type": "color", "$value": "#d4d4d8" },
+    "frame": { "$type": "color", "$value": "#e4e4e7" },
+    "frame-hi": { "$type": "color", "$value": "#52525b" },
+    "text": { "$type": "color", "$value": "#0b0b0c" },
+    "muted": { "$type": "color", "$value": "#636369" },
+    "code": { "$type": "color", "$value": "#3f3f46" },
+    "hot-text": { "$type": "color", "$value": "#c40000" },
+    "nebula": { "$type": "color", "$value": "#d4d4d8" },
+    "nebula-2": { "$type": "color", "$value": "#a1a1aa" },
+    "dim": { "$type": "color", "$value": "#a1a1aa" },
+    "red": { "$type": "color", "$value": "#c40000" }
+  }
+}

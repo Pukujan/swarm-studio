@@ -181,7 +181,7 @@ The first thing you see is a slowly turning spiral galaxy, drawn with three.js. 
 
 ## Done when
 
-- [ ] Tokens, fonts and the frame are in `web/canvas.css`. The canvas uses the Hermes dashboard's `--color-*` variables when embedded, and `swarm-space.yaml` installs and works as a dashboard theme.
+- [ ] Fonts and the frame are in `web/canvas.css`; the tokens are `tokens/*.tokens.json`, built into `web/tokens.css`. The canvas uses the Hermes dashboard's `--color-*` variables when embedded, and `swarm-space.yaml` installs and works as a dashboard theme.
 - [ ] Hermia appears at the start of a build and gives orders in bubbles with dotted lines to cursors. She's also in the Auto transitions and the onboarding.
 - [ ] Each agent cursor has its SVG avatar: it blinks, its mouth moves with chatter, its wings flap while it moves, and it hops when done. Two runs with the same agent names look the same.
 - [ ] The app icon, favicon and README hero use Hermia's logo. The footer says "Built for Hermes Agent", with no Nous logo anywhere.
