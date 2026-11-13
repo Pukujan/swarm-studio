@@ -55,12 +55,12 @@ test('each size keeps the page\'s shape, and a page is photographed nine widths 
 test('the Overview\'s snapshots and every picture of a page go through the in-page capture', () => {
   const project = read('web/project.js'), marks = read('web/canvas/marks.js'), hook = read('web/canvas/hook.js')
   // one capture makes both stored sizes; the full one alone only when the small one is saved already
-  assert.match(project, /pics\(id, v \? \[0\.25, 0\.6\] : \[0\.25\]\)/)
-  assert.match(project, /pics\(id, \[0\.6\]\)/)
+  assert.match(project, /sw\.capture\?\.\(id, v \? \[0\.25, 0\.6\] : \[0\.25\]\)/)
+  assert.match(project, /sw\.capture\?\.\(id, \[0\.6\]\)/)
   assert.doesNotMatch(project, /sw\.thumb\(id\)|sw\.thumb\(id, 0\.6\)/)
   // spec 36's rules stay: idle time, never while the camera moves, only a page with no picture of its version
   assert.match(project, /const rest = performance\.now\(\) - P\.camAt\n\s+if \(rest < 400\) return pump\(400 - rest\)/)
-  assert.match(project, /idle\(\(\) => sharpen\(/)
+  assert.match(project, /idle\(\(\) => shootFull\(run, id, v, visit, out\.urls\.get\(0\.6\)\)\)/)
   assert.match(hook, /async capture\(id, scales = \[0\.25, 0\.6\]\)/)
   assert.match(marks, /export const pageCapture = makeCapture\(\{ base: BASE \}\)/)
   assert.match(marks, /export async function snapFrame\(f, scale\) \{\n  const s = scale \|\| 0\.625\n  const out = await pageCapture\.shoot/)
