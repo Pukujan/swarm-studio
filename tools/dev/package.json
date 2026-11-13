@@ -1,7 +1,7 @@
 {
   "name": "swarm-studio-dev",
   "private": true,
-  "description": "Development checks only (the type check, the dependency rules, the design-token build, the UI audit gates and the property tests in tests/property/ (fast-check, decision 0019), the metamorphic relations in tests/metamorphic/; the :ui scripts run the next UI's own, from ui/package.json). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
+  "description": "Development checks only (the type check, the dependency rules, the design-token build, the UI audit gates, the property tests in tests/property/ (fast-check, decision 0019), the metamorphic relations in tests/metamorphic/ and the OpenSpec scenarios in tests/bdd/ (playwright-bdd, decision 0019); the :ui scripts run the next UI's own, from ui/package.json). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
   "type": "module",
   "scripts": {
     "typecheck": "cd ../.. && tsc -p tsconfig.json",
@@ -14,13 +14,15 @@
     "audit:update": "playwright test -c playwright.config.mjs --update-snapshots",
     "typecheck:ui": "npm run --prefix ../../ui typecheck",
     "deps:ui": "npm run --prefix ../../ui deps",
-    "ui:check": "npm run --prefix ../../ui check"
+    "ui:check": "npm run --prefix ../../ui check",
+    "bdd": "node ../../tests/bdd/gen.mjs && bddgen -c bdd.config.mjs && playwright test -c bdd.config.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.1",
     "dependency-cruiser": "18.7.2",
     "fast-check": "4.10.2",
+    "playwright-bdd": "9.2.1",
     "style-dictionary": "5.8.0",
     "typescript": "7.0.2",
     "xstate": "5.33.3"
