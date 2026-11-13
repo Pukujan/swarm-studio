@@ -3672,12 +3672,14 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|seen|deploy|tell|idle))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|map|stop|open|seen|deploy|tell|idle))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     const fail = err => reply(400, { error: String(err.message || err) })
     if (req.method === 'GET') {
+      // map: the plan as diagrams for the app build wall (spec 44); 404 when the run kept no plan
+      if (sub === 'map') return void apps().then(a => { const m = a.map(id); return m ? reply(200, m) : reply(404, { error: 'no plan kept for this app' }) }).catch(fail)
       apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : a.state(id))).catch(fail)
       return
     }
