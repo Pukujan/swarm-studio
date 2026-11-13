@@ -56,6 +56,16 @@ const address = (app, at) => app === 'next' ? `/next/${at.slice(1)}` : at
 const LOG = `(() => {
   const log = window.__parity = []
   const ms = v => typeof v === 'number' ? Math.round(v / 10) * 10 : String(v)
+  // a transition turned round midway runs only as long as it had gone, so its Animation's duration is the
+  // machine's timing: the duration the CSS declares for that property is taken instead
+  const secs = v => v.trim().endsWith('ms') ? parseFloat(v) : parseFloat(v) * 1000
+  const declared = e => {
+    const cs = getComputedStyle(e.target), props = cs.transitionProperty.split(',').map(p => p.trim())
+    let i = props.indexOf(e.propertyName)
+    if (i < 0) i = props.indexOf('all')
+    const d = cs.transitionDuration.split(',')
+    return secs(d[Math.max(0, i) % d.length])
+  }
   const pick = e => e.target.getAnimations?.().find(a => e.type === 'animationstart' ? a.animationName === e.animationName : a.transitionProperty === e.propertyName)
   const css = e => {
     const a = pick(e)
@@ -63,7 +73,7 @@ const LOG = `(() => {
     const t = a.effect.getTiming()
     if (t.iterations === Infinity) return
     const ease = e.type === 'animationstart' ? a.effect.getKeyframes()[0]?.easing || t.easing : t.easing
-    log.push((e.type === 'animationstart' ? '@' + e.animationName : '~' + e.propertyName) + ' ' + ms(t.duration) + 'ms x' + t.iterations + ' ' + ease)
+    log.push((e.type === 'animationstart' ? '@' + e.animationName + ' ' + ms(t.duration) : '~' + e.propertyName + ' ' + ms(declared(e))) + 'ms x' + t.iterations + ' ' + ease)
   }
   addEventListener('animationstart', css, true)
   addEventListener('transitionrun', css, true)
