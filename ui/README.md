@@ -28,8 +28,10 @@ To see it as the person will, start the plugin's server and open `http://127.0.0
 | Path | What |
 |---|---|
 | `src/nav/` | the current Studio's machine (`web/nav.js`, as `@studio/nav`), `useNav()`, and the address |
-| `src/primitives/` | the kit on React Aria: Button, Menu, Dialog, TextField, each with stories |
+| `src/primitives/` | the kit on React Aria: Button, Menu, Dialog, TextField, SearchField, ToggleGroup, Disclosure (a grouped-list row), Busy, Command (a command and Copy), with stories |
 | `src/screens/` | the screens, by the machine's room, named from OBJECTS.md; `SCREENS` lists the ones that moved |
+| `src/screens/setup/` | the Setup and Settings sheets (not rooms: no address), opened with `useSheets().open('setup' \| 'settings')`; their layers are the statechart's (`layers.ts`) |
+| `src/shell/` | the frame: the top bar |
 | `src/shell/` | the frame: the top bar, and `useTrail()`, which a screen uses to give it the build's name and its one action |
 | `src/shared/` | parts several screens use, each with stories: `Layers` (the canvas's left panel) |
 | `src/legacy/` | the current Studio's pieces hosted as they are until they move: the kits (`@studio/kits`), Hermia's cursor (`@studio/pet`) and the stylesheets they draw with |

@@ -14,6 +14,8 @@ const repo = fileURLToPath(new URL('..', import.meta.url))
 // package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
 export const alias: AliasOptions = [
   { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
+  // Setup › Parts: the current Studio's table of parts (src/screens/setup/studio-setup-parts.d.ts types it)
+  { find: '@studio/setup-parts', replacement: fileURLToPath(new URL('../web/setup-parts.js', import.meta.url)) },
   // the Studio's kits (spec 37: web/kit-*.js, listed by web/kits.js) and Hermia's cursor (spec 41, web/pet.js), hosted
   // as they are, not rewritten (src/legacy/)
   { find: '@studio/kits', replacement: fileURLToPath(new URL('../web/kits.js', import.meta.url)) },

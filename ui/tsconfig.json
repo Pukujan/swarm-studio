@@ -26,7 +26,8 @@
       "@studio/edit": ["./src/screens/deck/studio-edit.d.ts"],
       "@studio/kits": ["./src/legacy/studio-kits.d.ts"],
       "@studio/pet": ["./src/legacy/studio-pet.d.ts"],
-      "@studio/video": ["./src/primitives/studio-video.d.ts"]
+      "@studio/video": ["./src/primitives/studio-video.d.ts"],
+      "@studio/setup-parts": ["./src/screens/setup/studio-setup-parts.d.ts"]
     }
   },
   "include": ["src", ".storybook", "vite.config.ts"]
