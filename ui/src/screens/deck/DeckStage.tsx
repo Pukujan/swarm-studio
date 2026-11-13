@@ -3,7 +3,7 @@
 // every page (PATTERNS.md, "The Design deck follows Figma"). While Follow is on the camera goes to the agent at work;
 // a drag or the wheel turns it off and a double-click turns it back on (openspec/specs/design-deck/spec.md). The
 // pages only show here: they take no pointer.
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { crew } from './crew'
 import { FRAME_W, GAP, PageFrame, frameX, type FrameGeo } from './PageFrame'
 import { layersOf, type DeckAgent, type DeckModel } from './model'
@@ -36,9 +36,11 @@ const followed = (m: DeckModel) => m.agents.find(a => a.layer && m.layers[a.laye
 // a section the person picked, on the page it was picked on (the nav and footer are on every page)
 export interface Picked { key: string, page: string }
 
-export function DeckStage({ ref, model, onZoom, follow = false, onFollow, selected = null, onSelect }: {
+export function DeckStage({ ref, model, onZoom, follow = false, onFollow, selected = null, onSelect, pickExtra }: {
   ref?: Ref<StageHandle>, model: DeckModel, onZoom?: (k: number) => void, follow?: boolean, onFollow?: (on: boolean) => void,
-  selected?: Picked | null, onSelect?: (p: Picked | null) => void
+  selected?: Picked | null, onSelect?: (p: Picked | null) => void,
+  // drawn at the picked section's top right (its comment pin)
+  pickExtra?: ReactNode
 }) {
   const stage = useRef<HTMLDivElement>(null)
   const [cam, setCam] = useState<Cam>({ x: 40, y: 40, k: 0.16 })
@@ -91,7 +93,8 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
   // drag the empty canvas to pan
   const drag = useRef<{ x: number, y: number, cx: number, cy: number } | null>(null)
   const down = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
+    // the pin, its thread and the flags are controls, not the canvas
+    if (e.button !== 0 || (e.target instanceof Element && e.target.closest('[data-ui]'))) return
     drag.current = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }
     stage.current?.setPointerCapture(e.pointerId)
   }
@@ -123,6 +126,12 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     const key = Object.entries(g.slots).find(([, s]) => fx >= s.box[0] && fx <= s.box[0] + s.box[2] && wy >= s.box[1] && wy <= s.box[1] + s.box[3])?.[0]
     return key && model.layers[key] ? { key, page: page.id } : null
   }
+  // the Critic's issues (3 at most), a flag on each section until it is reworked, on the first page that shows it
+  const flags = Object.entries(model.issues).slice(0, 3).flatMap(([key, issue]) => {
+    const page = model.pages.find(p => geo[p.id]?.slots[key])
+    const s = page && geo[page.id].slots[key]
+    return page && s ? [{ key, problem: issue.problem, left: cam.x + (frameX(page) + s.box[0]) * cam.k, top: cam.y + (LABEL + s.box[1]) * cam.k }] : []
+  })
   // the picked section's outline, in the stage's coordinates
   const pick = (() => {
     if (!selected) return null
@@ -183,8 +192,14 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
           </div>
         ))}
       </div>
+      {pick && pickExtra && <div data-ui className="absolute z-20 flex justify-end" style={{ left: Math.max(8, pick.left + pick.width - 328), top: Math.max(8, pick.top + 8), width: 320 }}>{pickExtra}</div>}
       <div aria-hidden className="pointer-events-none absolute inset-0">
         {pick && <div data-picked className="absolute border-[1.5px] border-text" style={pick} />}
+        {flags.map(f => (
+          <span key={f.key} className="absolute flex max-w-64 -translate-y-full items-center gap-1 truncate rounded-t-[6px] bg-hot px-1.5 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[.06em] text-paper" style={{ left: f.left, top: f.top }}>
+            Critic · {f.problem}
+          </span>
+        ))}
         {working.map(a => {
           const t = target(model, geo, a)
           if (!t) return null

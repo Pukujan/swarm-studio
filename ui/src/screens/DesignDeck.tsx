@@ -9,6 +9,7 @@ import { Icon } from '../primitives/Icon'
 import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
 import { DeckStage, type Picked, type StageHandle } from './deck/DeckStage'
+import { CommentPin } from './deck/Comment'
 import { DesignTab } from './deck/DesignTab'
 import { useEdits } from './deck/edit'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
@@ -93,12 +94,13 @@ export function DesignDeck() {
                 <p className="font-monospace text-muted">This version has nothing on its pages yet.</p>
                 {studio}
               </div>
-            : <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select} />}
+            : <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select}
+              pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} /> : null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
         onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} history={edits}
-        design={pickedLayer && <DesignTab layer={pickedLayer} part={part} onPart={setPart} onClose={() => select(null)}
+        design={pickedLayer && <DesignTab layer={pickedLayer} issue={model.issues[pickedLayer.key]?.problem} part={part} onPart={setPart} onClose={() => select(null)}
           onEdit={(patch, why) => { edits.edit(pickedLayer.key, patch, why).then(id => { if (id !== undefined) setPart(id) }) }} />} />
       {view.player !== 'closed' && model.pages.length > 0 && <Player model={model} />}
       {model.run && <PublishDialog model={model} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
