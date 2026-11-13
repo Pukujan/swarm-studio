@@ -162,10 +162,11 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
 - **In progress:**
   - the first of the six design artifacts, the object map and glossary:
     [docs/ux/OBJECTS.md](ux/OBJECTS.md), a draft for the owner to review. Its name picks are proposals.
+  - the second, the statechart: [docs/ux/statechart/](ux/statechart/README.md), every SITEMAP screen and the
+    way home from each, checked by `tests/statechart.test.mjs`; a draft for the owner to review.
 - **Not started:**
   - Playwright audit gates in CI;
-  - the other five design artifacts:
-    - a statechart in Stately;
+  - the other four design artifacts:
     - breadboards;
     - per-screen specs in OpenSpec;
     - Storybook mock-ups;
