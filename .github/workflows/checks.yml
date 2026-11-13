@@ -85,7 +85,9 @@ jobs:
           SWARM_NEED_UI: '1'
       # what a release does before the catalog pins it: the build committed in this runner's own checkout, so the
       # copy Hermes installs below carries ui/dist/ exactly as a release's does (scripts/release-ui.mjs)
-      - run: node scripts/release-ui.mjs
+      # it runs even when check.sh failed, like the sections below, so the install is still checked
+      - if: ${{ !cancelled() }}
+        run: node scripts/release-ui.mjs
       # the sections below each run even when one before them failed, so one run shows every Mac failure
       # Hermes as a person installs it on a Mac (its install.sh), at the release the plugin asks for
       # (plugin.yaml requires_hermes: v0.23.1, commit 3b42157), without its setup questions, browser or
