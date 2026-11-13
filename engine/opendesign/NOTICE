@@ -60,3 +60,21 @@ The builders' craft rules (engine/prompts.mjs WORKER_SYSTEM) and the reviewer's 
 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582, Apache-2.0; craft/ adapts referodesign/refero_skill, MIT). The
 reviewer's 0-10 score, its pass mark of 8 and its 3 rounds follow the defaults of Open Design's Critique
 Theater (packages/contracts/src/critique.ts); none of its code is used.
+
+----
+
+Swarm Studio, Open Design's library (engine/opendesign/library.json, engine/opendesign/library-texts.json.gz)
+
+The catalogue and the texts are taken from Open Design (commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582) by
+scripts/import-od-library.mjs: skills/<id>/SKILL.md (169 skills), design-templates/<id>/SKILL.md and
+open-design.json (115 design templates), plugins/**/SKILL.md and open-design.json (272 plugin skills) and
+prompt-templates/{image,video}/*.json (106 prompt templates). Each entry keeps the licence it declares, else
+Open Design's Apache-2.0; where an entry ships its own LICENSE file, that file's text is kept in
+library-texts.json.gz under "licence:<its path>" and the entry names it. Upstream sources an entry names
+(its "upstream") are kept in the catalogue.
+
+Changes made for Swarm Studio: each entry's one-line description is shortened to 140 characters; a SKILL.md
+is kept to its first 12,000 characters, and a prompt template to its prompt, aspect and model. The skills'
+references, scripts and assets, the templates' HTML, pictures and fonts, and the plugins' other files are not
+taken. How the library is used, and what each part of Swarm is given from it, is engine/odlibrary.mjs.
+

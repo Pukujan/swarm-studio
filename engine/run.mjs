@@ -8,6 +8,7 @@ import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme, namedColours, 
 import { tidyFragment } from './tidy.mjs'
 import { fixSection } from './review.mjs'
 import { lintSection, forBuilder } from './lint/index.mjs'
+import { shortlist, catalogueLines, skillTexts, templateText } from './odlibrary.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
 import { cleanSeo, reviewSeo } from './seo.mjs'
 import { projectName } from './naming.mjs'
@@ -93,7 +94,7 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, brand = null, emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, brand = null, template = '', emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   // one page type per build, away from the last builds' types and colours
@@ -163,7 +164,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         return streamChat(provider, {
           trace: { kind: 'plan', page: page.id },
           model: plannerModel,
-          messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page }),
+          messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page, skills: skillTexts(plan.skills), template: picked }),
           maxTokens: 3400,
           temperature: 0.8,
           extra: NO_THINKING,
@@ -185,8 +186,16 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       .catch(err => { if (!signal?.aborted) emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }) })
   }
 
+  // Open Design's library (engine/odlibrary.mjs): the skills that fit the brief, for the sitemap planner to choose
+  // from, and the template the person picked. The chosen skills' text and the template go to the page planners
+  const offered = base ? [] : shortlist(brief)
+  const picked = base ? '' : templateText(template)
+  if (picked) emit('template', { id: template })
   const onSitemap = obj => {
-    if (obj.type === 'theme') {
+    if (obj.type === 'skills' && Array.isArray(obj.ids) && !plan.skills) {
+      plan.skills = obj.ids.filter(id => offered.some(e => e.id === id)).slice(0, 2)
+      if (plan.skills.length) emit('skills', { ids: plan.skills })
+    } else if (obj.type === 'theme') {
       plan.theme = brand ? { ...brand.theme } : fitTheme(obj, look)
       emit('theme', brand ? { ...plan.theme, by: 'brand' } : plan.theme)
     } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id) && !(maxPages && plan.pages.length >= maxPages)) {
@@ -213,7 +222,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         model: plannerModel,
         messages: [
           { role: 'system', content: SITEMAP_SYSTEM },
-          { role: 'user', content: brand ? `Brief: ${brief}\n\n${lookBrief(type, [], null)}\n${brand.brief || ''}` : `Brief: ${brief}\n\n${lookBrief(type, recent, look)}` }
+          { role: 'user', content: [brand ? `Brief: ${brief}\n\n${lookBrief(type, [], null)}\n${brand.brief || ''}` : `Brief: ${brief}\n\n${lookBrief(type, recent, look)}`, picked, offered.length ? `Skills you may name (id: name, kind, what it is for):\n${catalogueLines(offered)}` : ''].filter(Boolean).join('\n\n') }
         ],
         maxTokens: 2000,
         temperature: 0.8,

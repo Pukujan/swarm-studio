@@ -736,7 +736,11 @@ export function makeHome({ sw, C, root }) {
       // The project opens on the build this box started. The canvas may still hold the build before
       // it (the server replays its last run to every canvas), and a project never lets a run that
       // started elsewhere take it over, so the new run is handed to it by id.
-      const made = await sw.submit(text, false, null, null, chat ? { ...sets, chat } : sets)
+      // the design template the person picked in Examples (Open Design's, engine/odlibrary.mjs), for a website
+      const tpl = !run && picked ? { template: picked.id } : {}
+      picked = null
+      drawPicked()
+      const made = await sw.submit(text, false, null, null, chat ? { ...sets, ...tpl, chat } : { ...sets, ...tpl })
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
       // A website the crew has just started opens in the Design deck, the one room where the swarm
       // can be watched at work (its Follow camera is on for a new build). Back shows the project's
@@ -889,10 +893,11 @@ export function makeHome({ sw, C, root }) {
     const key = exampleKey()
     const list = key ? ((await intake()).starters?.[key] || []).slice(0, 4) : []
     if (!list.length) return input.focus()
-    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>`)
+    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>${await templateChoices()}`)
+    for (const b of pop.querySelectorAll('.hm-tpl')) b.onclick = () => { picked = { id: b.dataset.tpl, name: b.dataset.name }; drawPicked(); closePop(); input.focus() }
     ideasBtn.classList.add('on')
     pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
-    for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
+    for (const b of pop.querySelectorAll('.hm-st')) b.onclick = () => {
       input.value = list[Number(b.dataset.st)]
       closePop()
       input.focus()
@@ -900,6 +905,28 @@ export function makeHome({ sw, C, root }) {
     }
   }
   ideasBtn.onclick = () => showcases()
+
+  // Open Design's design templates (decision 0016): the person picks one for a website, under the examples.
+  // At most four, the ones whose name or line fit what is typed; the pick shows as a chip beside Make
+  let tplP = null, picked = null
+  const templateList = () => (tplP ||= api('/api/library/templates').then(j => j.templates || []).catch(() => { tplP = null; return [] }))
+  async function templateChoices() {
+    if (hosted() || make.k !== 'site') return ''
+    const words = new Set(String(input.value || '').toLowerCase().match(/[a-z]{4,}/g) || [])
+    const all = await templateList()
+    const score = t => [...words].filter(w => `${t.name} ${t.line} ${t.category}`.toLowerCase().includes(w)).length
+    const list = all.map(t => [score(t), t]).sort((a, b) => b[0] - a[0]).slice(0, 4).map(([, t]) => t)
+    return list.length ? `<h3>Templates</h3><div class="hm-show" role="list" aria-label="Templates">${list.map(t => `<button type="button" class="hm-sc hm-tpl" role="listitem" data-tpl="${esc(t.id)}" data-name="${esc(t.name)}">${ic('layers', 18)}<span class="nm">${esc(t.name)}</span><span class="ds">${esc(t.line)}</span>${ic('chr', 15)}</button>`).join('')}</div>` : ''
+  }
+  function drawPicked() {
+    form.querySelector('.hm-picked')?.remove()
+    if (!picked) return
+    const chip = document.createElement('span')
+    chip.className = 'hm-picked'
+    chip.innerHTML = `${esc(picked.name)}<button type="button" class="ib" aria-label="No template">${ic('x', 14)}</button>`
+    chip.querySelector('button').onclick = () => { picked = null; drawPicked(); input.focus() }
+    form.querySelector('.hm-make')?.before(chip)
+  }
 
   // the guided prompt (docs/specs/06-onboarding.md): the questions the prompt has not answered, one at a
   // time (chips or your own words), then the brief, one short paragraph to edit, then the build.
