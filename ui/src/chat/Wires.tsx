@@ -1,5 +1,6 @@
-// The wires (web/layerlink.js): a thin line from each layer chip in the message box to its layer where it is on
-// screen, and from a hovered turn to each layer it was about. A layer off screen ends at the screen's edge. They
+// The wires (web/layerlink.js): a thin line from each layer chip in the message box up to its layer where it is on
+// screen, and from a hovered turn to each layer it was about. A layer off screen, or under the chat's dock, ends at
+// the edge of what shows. They
 // follow the canvas while any is drawn (it pans and zooms under them), so they are drawn each frame into one SVG
 // over the page, not through React's state.
 import { useEffect, useRef, type RefObject } from 'react'
@@ -19,22 +20,24 @@ export function Wires({ side, rect, hot, hover, chips }: { side: RefObject<HTMLE
       const list: { from: Element, key: string, hot: boolean }[] = []
       for (const el of s.querySelectorAll<HTMLElement>('[data-chip][data-wire]')) list.push({ from: el, key: el.dataset.chip || '', hot: el.dataset.chip === hot })
       if (hover?.isConnected) for (const key of (hover.dataset.layers || '').split(' ').filter(Boolean)) list.push({ from: hover, key, hot: true })
-      const W = innerWidth, H = innerHeight, pad = 6
-      const sideR = s.getBoundingClientRect().right
+      // the chat is a dock along the bottom: a wire ends above its top edge
+      const W = innerWidth, pad = 6
+      const top = s.getBoundingClientRect().top, H = top
       const keep = new Set<string>()
       for (const [i, l] of list.entries()) {
         const a = l.from.getBoundingClientRect()
         if (!a.width) continue
-        const ax = a.right, ay = a.top + a.height / 2
+        const ax = a.left + a.width / 2
         const r = rect?.(l.key)
         let bx: number, by: number, edge = false
         if (r && r.width) {
           bx = r.left; by = r.top + Math.min(r.height / 2, 60)
-          const lo = Math.max(sideR + pad, pad)
-          if (bx < lo || bx > W - pad || by < pad || by > H - pad) { edge = true; bx = Math.min(W - pad, Math.max(lo, bx)); by = Math.min(H - pad, Math.max(pad, by)) }
-        } else { edge = true; bx = sideR + 28; by = ay }
-        const dx = Math.max(30, Math.abs(bx - ax) * 0.4)
-        const d = `M${ax.toFixed(1)},${ay.toFixed(1)} C${(ax + dx).toFixed(1)},${ay.toFixed(1)} ${(bx - dx).toFixed(1)},${by.toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`
+          if (bx < pad || bx > W - pad || by < pad || by > H - pad) { edge = true; bx = Math.min(W - pad, Math.max(pad, bx)); by = Math.min(H - pad, Math.max(pad, by)) }
+        } else { edge = true; bx = ax; by = H - 28 }
+        // from the chip's top up to the layer: a gentle curve, upward
+        const sx = a.left + a.width / 2, sy = a.top
+        const dy = Math.max(30, Math.abs(sy - by) * 0.4)
+        const d = `M${sx.toFixed(1)},${sy.toFixed(1)} C${sx.toFixed(1)},${(sy - dy).toFixed(1)} ${bx.toFixed(1)},${(by + dy).toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`
         const id = `l${i}`
         keep.add(id)
         let g = root.querySelector<SVGGElement>(`g[data-id="${id}"]`)

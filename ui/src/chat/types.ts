@@ -1,11 +1,12 @@
-// The left chat's interface (docs/specs/27-plan-conversation.md, 29-chats-references-marks.md): what a screen gives
+// The chat's interface (docs/specs/27-plan-conversation.md, 29-chats-references-marks.md; decision 0015: a dock along
+// the bottom of every screen that has one, never on the left): what a screen gives
 // <Chat> and what it hears back. The Studio scaffold, the Overview and the Design deck all draw the same <Chat>
 // (OBJECTS.md: **Chat**, a conversation with the planner; the code of the current Studio calls it the talk,
 // web/canvas/talk.js). The chat owns its turns, the open question, the brief being edited, the chat's id, its tab,
 // the chips in the message box and the two pickers. The screen owns what was built: the crew's lines, the Log, where
 // each layer is on screen, and what Build, a slash command or a plan does next.
 
-export type ChatKind = 'site' | 'app' | 'game' | 'video'
+export type ChatKind = 'site' | 'app' | 'game' | 'film' | 'video'
 
 // One line in the Chat or the Log tab. `at` orders the screen's lines among the chat's own turns.
 export interface ChatLine {
@@ -120,6 +121,4 @@ export interface ChatProps {
   onHeard?: (text: string) => void
   // the build model picker's Other…: the screen opens the models panel
   onMoreModels?: () => void
-  // the side panel's shrink button
-  onMinimize?: () => void
 }

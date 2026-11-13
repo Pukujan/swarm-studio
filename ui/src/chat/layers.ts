@@ -3,8 +3,9 @@
 // app's Layers lands in either app's chat. The Layers ports call layerDrag in their onDragStart.
 
 export const LAYER_TYPE = 'application/x-swarm-layer'
-// told when a layer drag starts, so a shut chat opens and there is somewhere to drop it
-export const LAYER_DRAG_EVENT = 'swarm:layerdrag'
+// told when a layer drag starts (the current Studio's chat listens; this chat never opens or moves by itself,
+// decision 0015, so it does not)
+const LAYER_DRAG_EVENT = 'swarm:layerdrag'
 
 export function layerDrag(e: { dataTransfer: DataTransfer | null }, key: string, name: string) {
   if (!e.dataTransfer) return

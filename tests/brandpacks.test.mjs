@@ -89,8 +89,8 @@ test('the routes: the view carries the pack cards, a pack is picked whole or in 
     const routes = brandRoutes({ chats })
     const made = await call(routes, 'POST', '/api/brand', { brief: RATS, kind: 'site' })
     const id = made.body.chat
-    // our own five, plus the imported looks the planner suggested (never all of them)
-    assert.ok(made.body.packs.length >= 5 && made.body.packs.length <= 8, `${made.body.packs.length}`)
+    // three options, no more (decision 0015), the planner's suggested ones first
+    assert.equal(made.body.packs.length, 3, `${made.body.packs.length}`)
     assert.ok(made.body.brand.suggest.length >= 2)
     assert.equal((await call(routes, 'POST', `/api/brand/${id}/pick`, { part: 'pack', id: 'no-such' })).code, 400)
     const all = await call(routes, 'POST', `/api/brand/${id}/pick`, { part: 'pack', id: 'playful-community' })
@@ -130,15 +130,15 @@ test('the imported packs are whole, credited, never a real brand, and our own fi
   }
 })
 
-test('the board shows our five plus only the suggested looks, never sixty', () => {
+test('the board shows three options, the suggested looks first, never sixty (decision 0015)', () => {
   const s = suggestByWords('A website for a small café and bakery in Lisbon, with a tea corner')
   assert.ok(s.some(x => x.slug === 'od-cafe'))
   const cards = packCards('café', s)
-  assert.ok(cards.length <= OWN_PACKS.length + 3)
+  assert.equal(cards.length, 3)
   assert.ok(cards.some(k => k.slug === 'od-cafe'))
   for (const k of cards) assert.ok(contrast(k.palette.bg, k.palette.text) >= 7, k.slug)
-  // with nothing suggested, only our own five
-  assert.equal(packCards('café').length, OWN_PACKS.length)
+  // with nothing suggested, the first three of our own
+  assert.deepEqual(packCards('café').map(k => k.slug), OWN_PACKS.slice(0, 3).map(p => p.slug))
   // a picked imported pack stays on the board
   assert.ok(packCards('', [], 'od-hud').some(k => k.slug === 'od-hud'))
 })

@@ -1,14 +1,17 @@
-// The left chat (web/index.html's .side, web/canvas/talk.js, web/layerlink.js; specs 27 and 29): the Chat and Log
-// tabs, Chats, Hermia's turns with the chips under the latest one, the message box with its layer and reference
-// chips, the agents and build model pickers, and Send. The Studio scaffold, the Overview and the Design deck all draw
-// this one component; its props and events are src/chat/types.ts.
+// The chat (web/index.html's .side, web/canvas/talk.js, web/layerlink.js; specs 27 and 29), as decision 0015 puts it:
+// a dock along the bottom at every width, with a handle to three heights (Dock.tsx). The Chat and Log tabs, Chats,
+// Hermia's turns, Suggestions (what her latest turn offers, in a drawer), the message box with its layer and
+// reference chips, the agents and build model pickers, and Send. The Studio scaffold, the Overview and the Design
+// deck all draw this one component; its props and events are src/chat/types.ts.
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Tab, TabList, TabPanel, Tabs, TextArea } from 'react-aria-components'
 import { Button } from '../primitives/Button'
 import { ChipSelect } from '../primitives/ChipSelect'
 import { chatApi, getJson, postJson } from './api'
 import { Chats } from './Chats'
-import { Feed } from './Feed'
+import { DockHandle, useDock } from './Dock'
+import { Feed, Suggested } from './Feed'
+import { Suggestions } from './Suggestions'
 import { LAYER_TYPE, layerOf } from './layers'
 import { hear, useTalk } from './useTalk'
 import { Wires } from './Wires'
@@ -50,7 +53,7 @@ function useBuildModel(api: NonNullable<ChatProps['api']>, onError: (text: strin
 }
 
 export function Chat(props: ChatProps) {
-  const { talk: wanted = null, from = null, project = null, lines = [], log = [], commands = [], agentsMax, layerRect, onSubmit, onCommand, onMoreModels, onMinimize } = props
+  const { talk: wanted = null, from = null, project = null, lines = [], log = [], commands = [], agentsMax, layerRect, onSubmit, onCommand, onMoreModels } = props
   const api = props.api ?? chatApi
   const [chips, setChips] = useState<ChatChip[]>([])
   const [text, setText] = useState('')
@@ -63,6 +66,7 @@ export function Chat(props: ChatProps) {
   const agentList = AGENTS.filter(n => !agentsMax || n <= agentsMax)
   const [agents, setAgents] = useState(() => String(agentsMax ? agentList.at(-1) ?? 8 : 8))
   const side = useRef<HTMLElement>(null)
+  const dock = useDock()
   const box = useRef<HTMLTextAreaElement>(null)
 
   const addChip = (c: ChatChip) => setChips(cs => (!c.key || cs.some(x => x.key === c.key) || cs.length >= 12 ? cs
@@ -138,22 +142,25 @@ export function Chat(props: ChatProps) {
 
   const acts = { build: talk.build, pick: talk.pick, briefText: talk.briefText, briefGo: talk.briefGo, brandSheet: talk.brandSheet, keepTalking: (id: string) => { talk.keepTalking(id); box.current?.focus() }, busy: talk.busy }
   const tabClass = 'inline-flex min-h-10 cursor-pointer items-center rounded-[8px] px-3 font-monospace text-xs text-muted outline-none data-[hovered]:text-text data-[selected]:bg-panel-2 data-[selected]:text-text data-[focus-visible]:outline-2 data-[focus-visible]:outline-frame-hi'
+  // what Hermia's latest turn offers (one open question at a time: only the latest turn has any)
+  const offer = talk.turns.findLast(t => !!t.acts && t.acts.type !== 'brief')
+  const offers = !offer?.acts ? 0 : offer.acts.type === 'build' ? 1 : offer.acts.type === 'options' ? offer.acts.options.length : 0
 
   return (
-    <aside ref={side} aria-label="Chat" {...dragProps}
-      className={`side flex h-full min-h-0 flex-col border-r border-edge bg-deep text-text ${drop ? 'outline-2 -outline-offset-4 outline-dashed outline-accent' : ''}`}>
-      <Tabs selectedKey={tab} onSelectionChange={k => setTab(k === 'log' ? 'log' : 'chat')} className="flex min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-1 border-b border-edge px-2 py-1">
+    <section ref={side} aria-label="Chat" data-chat-dock="" {...dragProps} style={{ height: dock.px }}
+      className={`side chat-dock fixed inset-x-0 bottom-0 z-30 flex flex-col border-t border-edge bg-deep pt-4 text-text shadow-[0_-18px_40px_-24px_rgb(var(--shade-rgb)/.6)] ${dock.drag == null ? 'motion-safe:transition-[height] motion-safe:duration-200' : ''} ${drop ? 'outline-2 -outline-offset-4 outline-dashed outline-accent' : ''}`}>
+      <DockHandle dock={dock} />
+      <Tabs selectedKey={tab} onSelectionChange={k => setTab(k === 'log' ? 'log' : 'chat')} className="mx-auto flex min-h-0 w-full max-w-[960px] flex-1 flex-col">
+        <div className="flex items-center gap-1 px-2">
           <TabList aria-label="Chat or Log" className="flex gap-1">
             <Tab id="chat" className={tabClass}>Chat</Tab>
             <Tab id="log" className={tabClass}>Log</Tab>
           </TabList>
           <Chats api={api} project={project} from={from} current={talk.on ? talk.chat : null} onOpen={id => { setTab('chat'); void talk.openChat(id) }} onNew={() => { setTab('chat'); talk.newChat(); box.current?.focus() }} />
-          {onMinimize && <Button role="ghost" aria-label="Shrink the side panel" className="ml-auto" onPress={onMinimize}><span aria-hidden>⇤</span></Button>}
         </div>
         <TabPanel id="chat" className="flex min-h-0 flex-1 flex-col outline-none">
-          <Feed lines={feed} acts={acts} label="Chat" empty={talk.on ? undefined : EMPTY} onHover={setHover} />
-          <form className="composer relative flex flex-col gap-2 border-t border-edge p-2" onSubmit={e => { e.preventDefault(); send() }}>
+          <Feed lines={feed} acts={acts} label="Messages" empty={talk.on ? undefined : EMPTY} onHover={setHover} />
+          <form className="composer relative flex flex-col gap-1.5 px-2 pb-2" onSubmit={e => { e.preventDefault(); send() }}>
             {chips.length > 0 && (
               <div className="flex flex-wrap gap-1.5" onMouseLeave={() => setHot(null)}>
                 {chips.map(c => (
@@ -177,7 +184,7 @@ export function Chat(props: ChatProps) {
                 ))}
               </div>
             )}
-            <TextArea ref={box} aria-label="Message" rows={3} autoComplete="off" value={text} placeholder={talk.on ? 'Tell Hermia…' : 'Describe a product'}
+            <TextArea ref={box} aria-label="Message" rows={2} autoComplete="off" value={text} placeholder={talk.on ? 'Tell Hermia…' : 'Describe a product'}
               aria-controls={matches.length ? 'chat-slash' : undefined} aria-activedescendant={matches.length ? `chat-slash-${matches[at]?.name}` : undefined}
               onChange={e => { setText(e.target.value); setSlashAt(0); setSlashOff(false) }}
               onBlur={() => setTimeout(() => setSlashOff(true), 150)}
@@ -192,12 +199,16 @@ export function Chat(props: ChatProps) {
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
               }}
-              className="w-full resize-none rounded-[10px] border border-line-2 bg-void p-3 font-monospace text-sm text-text outline-none placeholder:text-dim data-[focused]:border-frame-hi" />
-            <div className="row flex items-center gap-1.5">
-              <ChipSelect name="Agents" options={agentList.map(n => ({ id: String(n), label: `${n} agents` }))} value={agents} onChange={setAgents} />
-              <ChipSelect name="Build model" options={model.options} value={model.value} className="min-w-0 flex-1"
+              className="w-full resize-none rounded-[10px] border border-line-2 bg-void px-3 py-2 font-monospace text-sm text-text outline-none placeholder:text-dim data-[focused]:border-frame-hi" />
+            <div className="row flex min-w-0 items-center gap-1.5">
+              <Suggestions count={offers}>
+                {done => offer ? <Suggested t={offer} a={acts} done={done} /> : <p className="m-0 px-1 py-2 font-monospace text-xs text-muted">Nothing to suggest right now.</p>}
+              </Suggestions>
+              <span className="flex-1" />
+              <ChipSelect name="Agents" options={agentList.map(n => ({ id: String(n), label: `${n} agents` }))} value={agents} onChange={setAgents} className="flex-none" />
+              <ChipSelect name="Build model" options={model.options} value={model.value} className="min-w-0 max-w-56 shrink"
                 onChange={id => { if (id === OTHER) onMoreModels?.(); else void model.pick(id) }} />
-              <Button type="submit" role="primary" className="ml-auto">{talk.on ? 'Send' : 'Build'}</Button>
+              <Button type="submit" role="primary" className="flex-none">{talk.on ? 'Send' : 'Build'}</Button>
             </div>
           </form>
         </TabPanel>
@@ -206,6 +217,6 @@ export function Chat(props: ChatProps) {
         </TabPanel>
       </Tabs>
       <Wires side={side} rect={layerRect} hot={hot} hover={hover} chips={chips.length} />
-    </aside>
+    </section>
   )
 }
