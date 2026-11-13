@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): starting a build, resizable panels, crews, the Publish button, pictures in the Design panel.
 import { BASE, BOOT, WALL, S, cosmosHooks, commandOps, els, store, Q, $, Crew, ARROW, TOOL, api } from './core.js'
 import { hermesResume, botMsg, resumeRun, renderToolbar, setText, feed } from './panels.js'
@@ -23,6 +24,7 @@ import { pub, pubShow, pubButton, copyText, liveUrl, feedPop, publishMenu } from
 export function hermesWait(e) {
   let bar = document.getElementById('hermes-wait')
   // a Hermes attached again: a build it stopped goes on from where it was
+  // @ts-ignore
   if (e.type === 'hermes:back' && e.attached && hermesResume && !hosted) { const run = hermesResume; setHermesResume(null); botMsg('Hermes is back. Going on with the build.'); resumeRun(run) }
   if (e.type === 'hermes:back') return bar?.remove()
   if (!bar) {
@@ -49,6 +51,7 @@ export function connect() {
       // model calls wait for Hermes (engine/hermesllm.mjs): the build goes on once it is open
       if (e.type === 'hermes:waiting' || e.type === 'hermes:back') return hermesWait(e)
       if (e.type === 'reset' || e.type === 'run:start') {
+        // @ts-ignore
         setLiveId(e.run)
         // a talk before building keeps the canvas: a build started elsewhere waits in Projects
         if (talk.on) return
@@ -61,10 +64,12 @@ export function connect() {
         if (e.type === 'run:start') nav?.go({ type: 'streamed', run: e.run })
         const followed = !viewing && (S.run === e.run || (!S.run && (!nav || e.run === nav.view.run)))
         if (!followed && e.run !== claimed) {
+          // @ts-ignore
           if (!viewing && S.run) setViewing(S.run)
           if (e.type === 'run:start') for (const fn of cosmosHooks) try { fn(e) } catch (err) { console.error(err) }
           return
         }
+        // @ts-ignore
         if (viewing) { setViewing(null); fresh(e.run) }
       }
       // following the live build: an event of another build (a late picture of the build before,
@@ -115,10 +120,12 @@ requestAnimationFrame(frameLoop)
 
 // ---------- resizable side panels: drag the inner edge, double-click to reset
 for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['.design', '--design-w', 220, 480, -1]]) {
+  // @ts-ignore
   const panel = $(sel)
   if (!panel) continue
   let saved = null
   try { saved = localStorage.getItem(`swarm${name}`) } catch {}
+  // @ts-ignore
   if (saved) document.body.style.setProperty(name, `${saved}px`)
   const grip = Object.assign(document.createElement('div'), { className: 'resizer' })
   panel.append(grip)
@@ -128,7 +135,9 @@ for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['
     const x0 = e.clientX, w0 = panel.getBoundingClientRect().width
     grip.classList.add('drag'); document.body.classList.add('resizing')
     const move = ev => {
+      // @ts-ignore
       const w = Math.round(Math.max(min, Math.min(max, w0 + (ev.clientX - x0) * dir)))
+      // @ts-ignore
       document.body.style.setProperty(name, `${w}px`)
     }
     const up = () => {
@@ -139,6 +148,7 @@ for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['
     grip.addEventListener('pointermove', move)
     grip.addEventListener('pointerup', up, { once: true })
   })
+  // @ts-ignore
   grip.addEventListener('dblclick', () => { document.body.style.removeProperty(name); try { localStorage.removeItem(`swarm${name}`) } catch {} })
 }
 
@@ -165,18 +175,24 @@ crewLayer.append(radioLine)
 // Which screen is busy, where the agents may point, and what they are each doing.
 export function crewJob() {
   // Meshy characters being made: one crew member per job, on its tile of the Cast step's bench
+  // @ts-ignore
   const making = game.el && game.cast?.open && !game.busy ? workedJobs() : []
   if (making.length) {
     const names = making.map((x, i) => x.o.job.worker || ['Pebble', 'Mochi', 'Tofu', 'Bean', 'Puff', 'Sprout'][i % 6])
+    // @ts-ignore
     return { key: `meshy|${making.map(x => x.r.id).join(',')}`, names: names.map(n => [n, Crew.color(n)]), host: game.el, spots: '.cforge', n: making.length, lines: [''], tool: ['rect'], pin: benchPin, keep: true, cls: 'bench' }
   }
+  // @ts-ignore
   if (game.el && game.busy) return { key: 'game', host: game.el, spots: '.gbody, .spin, h3, .gspec', n: 3, lines: ['inventing the world', 'naming the hero', 'drafting enemies', 'picking the engine', 'tuning game feel', 'writing win and lose'], tool: ['text', 'comment', 'frame'] }
+  // @ts-ignore
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
     return cw.thinking
       ? { key: `app-plan|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
       : { key: `app-${cw.mode || 'code'}|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: [cw.mode === 'art' ? 'painting' : 'writing code'], tool: cw.mode === 'art' ? ['image', 'image', 'image', 'text'] : ['text', 'text', 'connect', 'frame'], pin: cwPin }
   }
+  // @ts-ignore
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
+    // @ts-ignore
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))
     return { key: 'app', host: appEls.view, spots: '#app-steps .st:nth-last-child(-n+5), #app-preview, #app-stage', n: 4, lines: done.length ? done : ['setting up the project', 'reading the design', 'planning routes'], tool: ['text', 'frame', 'connect', 'rect'] }
   }
@@ -233,6 +249,7 @@ export function crewTick(now) {
       })
     }
   }
+  // @ts-ignore
   if (!job) { radioLine.hidden = true; return }
   let lineTo = null
   for (const [i, m] of crew.members.entries()) {
@@ -272,9 +289,12 @@ export function crewTick(now) {
   }
   // Hermia's dotted line, from her strip to the helper she is giving an order to
   const from = lineTo && document.querySelector('#app-hermia:not([hidden]):not(.min) .ah-head .cw-radio-av')?.getBoundingClientRect()
+  // @ts-ignore
   radioLine.hidden = !from?.width
+  // @ts-ignore
   if (!radioLine.hidden) {
     const x1 = from.left + from.width / 2, y1 = from.bottom, x2 = lineTo.x + 6, y2 = lineTo.y + 4
+    // @ts-ignore
     radioLine.firstChild.setAttribute('d', `M${x1.toFixed(1)} ${y1.toFixed(1)}C${x1.toFixed(1)} ${(y1 + 80).toFixed(1)} ${x2.toFixed(1)} ${(y2 - 80).toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`)
     radioLine.style.setProperty('--c', Crew.color(lineTo.name))
   }
@@ -298,8 +318,11 @@ els.publishBtn.onclick = async e => {
   setText(why, 'checking…')
   const st = run ? await api(`/api/runs/${encodeURIComponent(run)}/app`).then(r => r.ok ? r.json() : {}).catch(() => ({})) : {}
   if (run !== shownRun()) return
+  // @ts-ignore
   opt.disabled = !st.hasApp || st.state === 'working'
+  // @ts-ignore
   setText(why, st.state === 'working' ? 'The app is still building.' : !st.hasApp ? 'Build the app first (App mode).' : st.deployed ? `Live at ${st.deployed}; this sends the latest.` : '')
+  // @ts-ignore
   opt.dataset.has = st.hasApp ? '1' : ''
 }
 pubMenu.querySelector('.pub-copy').onclick = ev => { ev.stopPropagation(); copyText(liveUrl(), ev.currentTarget, pubMenu.querySelector('.pub-live a')) }
@@ -308,9 +331,11 @@ for (const b of pubMenu.querySelectorAll('[data-pub]')) b.onclick = () => {
   if (b.dataset.pub === 'feed') return feedPop()
   if (b.dataset.pub === 'site') return pub.state === 'failed' && pub.run === shownRun() ? pubShow() : publishMenu()
   if (view !== 'app') setView('app')
+  // @ts-ignore
   if (appv.run !== shownRun()) resetApp(shownRun())
   deployApp()
 }
+// @ts-ignore
 document.addEventListener('mousedown', e => { if (!pubMenu.hidden && !e.target.closest('.pubwrap')) closePub() })
 
 // ---------- pictures in the Design panel: swap any generated photo, or ask for one

@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): talks before a build: talk first, the game talk, Chats.
 import { els, api, $, ico } from './core.js'
 import { viewing } from './replay.js'
@@ -27,6 +28,7 @@ export const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discus
 // Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
 // heard(text): told each line the person sends (the Studio takes its idea from the first)
 export function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false, heard = null }) {
+  // @ts-ignore
   if (blank) { setViewing('new'); fresh(null) }
   Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null, heard })
   talkDock(true)
@@ -93,6 +95,7 @@ export function gameActs(item, turn) {
   acts.className = spec ? 'chips talk-acts' : 'talk-acts talk-opts'
   acts.innerHTML = opts.map((o, i) => `<button type="button" data-pick="${esc(o.id)}"${spec && !i ? ' class="primary"' : ''}>${esc(o.label)}${!spec && o.why ? `<small>${esc(o.why)}</small>` : ''}</button>`).join('')
   acts.onclick = e => {
+    // @ts-ignore
     const b = e.target.closest('[data-pick]')
     const o = b && opts.find(x => x.id === b.dataset.pick)
     if (!o || talk.busy) return
@@ -137,6 +140,7 @@ export function talkActs(item) {
   const acts = document.createElement('div')
   acts.className = 'chips talk-acts'
   acts.innerHTML = '<button class="primary">Build</button>'
+  // @ts-ignore
   acts.firstChild.onclick = () => { if (!talk.busy) talkSay('', true) }
   item.append(acts)
 }
@@ -156,24 +160,31 @@ export function talkBrief(text, route = '', what = '', sheet = false) {
   item.insertAdjacentHTML('beforeend', `<textarea aria-label="The brief" rows="6" maxlength="4000"></textarea><div class="chips talk-acts">${acts}${sheetHtml}<button data-more>Keep talking</button></div>`)
   const box = item.querySelector('textarea')
   box.value = text
+  // @ts-ignore
   item.querySelectorAll('[data-go]').forEach(b => { b.onclick = () => {
     const t = box.value.trim()
     if (!t) return
+    // @ts-ignore
     const way = b.dataset.go, chat = talk.chat, from = talk.from
+    // @ts-ignore
     const go = way === 'new' ? (x, c) => { setNextRoute({ fresh: true, chat: c }); els.brief.value = x; els.form.requestSubmit() }
+      // @ts-ignore
       : way === 'redo' ? (x, c) => { setNextRoute({ from, route: 'redo', selected: false, chat: c }); els.brief.value = x; els.form.requestSubmit() }
         : talk.build
     talkEnd()
     box.disabled = true
     go?.(t, chat)
   } })
+  // @ts-ignore
   item.querySelector('[data-more]').onclick = () => { item.querySelector('.talk-acts').remove(); els.brief.focus() }
   const sheetBtn = item.querySelector('[data-brand]')
+  // @ts-ignore
   if (sheetBtn) sheetBtn.onclick = () => {
     const t = box.value.trim()
     if (!t) return
     window.swarmCosmos?.brand?.({ chat: talk.chat, brief: t, kind: talk.kind, done: (id, locked) => { if (id) talk.chat = id; sheetBtn.textContent = locked ? 'Brand sheet · Locked' : 'Brand sheet' } })
   }
+  // @ts-ignore
   if (sheet && sheetBtn) return sheetBtn.click()
   box.focus({ preventScroll: true })
 }
@@ -185,6 +196,7 @@ export let chatsPop = null
 export const projectNow = () => window.swarmCosmos?.project || null
 // Build from a chat: inside a project it is the project's next version; outside one, a new project
 export function chatBuild(run) {
+  // @ts-ignore
   return (text, chat) => { setNextRoute(run ? { from: run, route: 'extend', selected: false, chat } : { fresh: true, chat }); els.brief.value = text; els.form.requestSubmit() }
 }
 export async function openChatHere(id) {
@@ -235,7 +247,9 @@ export function talkAsk(text, now, first) {
   const acts = document.createElement('div')
   acts.className = 'chips'
   acts.innerHTML = '<button class="primary" data-now>Build now</button><button data-first>Talk first</button>'
+  // @ts-ignore
   acts.querySelector('[data-now]').onclick = () => { acts.remove(); now() }
+  // @ts-ignore
   acts.querySelector('[data-first]').onclick = () => { acts.remove(); first() }
   item.append(acts)
 }
@@ -243,6 +257,7 @@ export function talkAsk(text, now, first) {
 els.brief.addEventListener('keydown', e => {
   if (!slashPop.hidden) {
     const m = slashMatches()
+    // @ts-ignore
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setSlashAt((slashAt + (e.key === 'ArrowDown' ? 1 : m.length - 1)) % m.length); return renderSlash() }
     if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && m[slashAt] && els.brief.value.trim() !== `/${m[slashAt][0]}`)) { e.preventDefault(); return pickSlash(m[slashAt][0]) }
     if (e.key === 'Escape') { slashPop.hidden = true; return }

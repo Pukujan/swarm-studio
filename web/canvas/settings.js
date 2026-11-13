@@ -1,3 +1,4 @@
+// @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): lite mode, the models menu, side tabs and floating panels.
 import { S, BOOT, els, cam, FRAME_W, api, store, $, ico } from './core.js'
 import { belongs } from './deck.js'
@@ -15,6 +16,7 @@ import { closeable } from './start.js'
 export const lite = { last: 0, busy: false, quiet: 0 }
 // Auto: on for small machines, and for everyone once the agents have been done
 // for half a minute (a finished build doesn't need every page live).
+// @ts-ignore
 export const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 5000)))
 
 export const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
@@ -184,6 +186,7 @@ export function modelCombo(root, signal) {
     else if (e.key === 'Escape') { e.stopPropagation(); close() }
   })
   document.addEventListener('mousedown', e => {
+    // @ts-ignore
     const row = box && e.target.closest?.('.combo-list [data-m]')
     if (row) { e.preventDefault(); choose(row.dataset.m) }
     else if (box && !box.contains(e.target) && e.target !== input) close()
@@ -233,14 +236,17 @@ window.addEventListener('keydown', e => { if (e.key === 'Escape' && models.el) t
 // ---------- side tabs and floating panels
 
 export function showTab(name) {
+  // @ts-ignore
   for (const el of document.querySelectorAll('.side [data-tab]')) el.classList.toggle('on', el.dataset.tab === name)
   store.set('tab', name)
 }
+// @ts-ignore
 for (const b of document.querySelectorAll('.side .tabs button[data-tab]')) b.onclick = () => showTab(b.dataset.tab)
 
 // Design opens by itself when a section (or an agent to follow) is picked, so it isn't kept from before
 export const panels = new Set(store.get('panels', []).filter(p => p !== 'design'))
 export function renderPanels() {
+  // @ts-ignore
   for (const el of document.querySelectorAll('[data-panel]')) el.classList.toggle('on', panels.has(el.dataset.panel))
   document.body.classList.toggle('design-on', panels.has('design'))
   $('.float.agents-card').classList.toggle('below', panels.has('planner'))
@@ -251,6 +257,7 @@ export function togglePanel(p) {
   store.set('panels', [...panels])
   renderPanels()
 }
+// @ts-ignore
 for (const b of document.querySelectorAll('.toggle[data-panel]')) b.onclick = () => togglePanel(b.dataset.panel)
 
 // The Design panel follows the selection: open while a section or agent is
@@ -268,6 +275,7 @@ $('#design-close').onclick = () => { if (panels.has('design')) togglePanel('desi
 export const moreMenu = $('#more-menu'), moreBtn = $('#more-btn')
 moreBtn.onclick = e => { e.stopPropagation(); moreMenu.hidden = !moreMenu.hidden; moreBtn.classList.toggle('on', !moreMenu.hidden); if (!moreMenu.hidden) closeable(moreMenu, () => { moreMenu.hidden = true; moreBtn.classList.remove('on') }, { extra: [moreBtn] }) }
 moreMenu.addEventListener('click', () => setTimeout(() => { moreMenu.hidden = true; moreBtn.classList.remove('on') }))
+// @ts-ignore
 document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.closest('.more')) { moreMenu.hidden = true; moreBtn.classList.remove('on') } })
 
 // ☰ → Light / Dark. The system's choice by default (prefers-color-scheme); a pick here is kept.
@@ -315,4 +323,5 @@ buildModel.onchange = async () => {
   await saveModel({ role: 'worker', model: buildModel.value || null })
 }
 fillBuildModel()
+// @ts-ignore
 for (const b of document.querySelectorAll('.dtabs button')) b.onclick = () => { design.tabPinned = true; showDtab(b.dataset.dtab) }
