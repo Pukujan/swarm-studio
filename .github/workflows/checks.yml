@@ -60,20 +60,23 @@ jobs:
       - if: steps.touched.outputs.run == 'yes'
         run: npm install --no-save --no-package-lock playwright@1.64.1 && npx playwright install --with-deps chromium-headless-shell
       # a pull request that means to change how a scene looks says so in its description, on one line:
-      # "Motion: looks change in studio, overview" (docs/ux/MOTION.md); the animations are still compared
+      # "Motion: looks change in studio, overview" (docs/ux/MOTION.md); the animations are still compared.
+      # One that means to change a scene's animations says "Motion: moves change in replay"; the
+      # difference is printed for the reviewer instead of failing
       - if: steps.touched.outputs.run == 'yes'
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           looks=$(printf '%s\n' "$BODY" | tr -d '\r' | sed -n 's/^Motion: looks change in \([a-z, -]*\)$/\1/p' | head -1 | tr -d ' ')
-          echo "looks change in: ${looks:-none}"
+          moves=$(printf '%s\n' "$BODY" | tr -d '\r' | sed -n 's/^Motion: moves change in \([a-z, -]*\)$/\1/p' | head -1 | tr -d ' ')
+          echo "looks change in: ${looks:-none}; moves change in: ${moves:-none}"
           git worktree add "$RUNNER_TEMP/base" ${{ github.event.pull_request.base.sha }}
           m=$RUNNER_TEMP/motion
           node scripts/motion-check.mjs record $m/before1 --root "$RUNNER_TEMP/base"
           node scripts/motion-check.mjs record $m/after1
           node scripts/motion-check.mjs record $m/before2 --root "$RUNNER_TEMP/base"
           node scripts/motion-check.mjs record $m/after2
-          node scripts/motion-check.mjs compare $m/before1,$m/before2 $m/after1,$m/after2 --looks "$looks"
+          node scripts/motion-check.mjs compare $m/before1,$m/before2 $m/after1,$m/after2 --looks "$looks" --moves "$moves"
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

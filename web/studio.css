@@ -39,6 +39,7 @@ body.cosmos-home .viewport, body.cosmos-project .viewport { visibility: hidden; 
 body .deck-layers, body .deck-layers-btn { display: none; }
 body.cosmos-station:not(.view-video):not(.view-app) .deck-layers { display: flex; grid-area: 2 / 2 / 3 / 3; justify-self: start; width: 272px; z-index: 31; }
 body.cosmos-station:not(.view-video):not(.view-app) .viewport { margin-left: 272px; }
+.deck-layers .pj-layers { padding-bottom: 64px; }
 .deck-layers-btn { position: absolute; right: 12px; top: 12px; z-index: 44; width: 40px; height: 40px; place-items: center; background: var(--deep); border: 1px solid var(--line); border-radius: 10px; color: var(--muted); cursor: pointer; }
 .deck-layers-btn[aria-expanded="true"] { color: var(--text); background: var(--surface-2); }
 @media (max-width: 760px) {
