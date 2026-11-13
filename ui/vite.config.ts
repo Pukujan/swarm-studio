@@ -14,6 +14,8 @@ const repo = fileURLToPath(new URL('..', import.meta.url))
 // package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
 export const alias: AliasOptions = [
   { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
+  // Hermia's cursor (src/pet/usePet.ts), wrapped, not copied
+  { find: '@studio/pet', replacement: fileURLToPath(new URL('../web/pet.js', import.meta.url)) },
   // by path: a bare 'xstate' would be looked up from web/, which has no node_modules
   { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) }
 ]

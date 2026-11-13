@@ -36,7 +36,7 @@ import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
-import { nextPage } from './next.mjs'
+import { nextPage, LIVE } from './next.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { CHAT_ID } from '../engine/chats.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
@@ -2567,7 +2567,7 @@ function tokenOk(given) {
 }
 
 const webVersion = () => pageVersion(webDir)
-const canvasPage = () => sharedCanvasPage(webDir, { token })
+const canvasPage = () => sharedCanvasPage(webDir, { token, next: LIVE })
 
 function sendFile(res, file) {
   if (!existsSync(file)) {

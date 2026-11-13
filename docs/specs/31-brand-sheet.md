@@ -136,3 +136,11 @@ Every write goes through the chat store's per-chat queue.
   - a painted pack (a mature painted look) needs painted samples, which are slice 3's Pictures;
   - editing the voice and the storyboard frames.
 
+
+### In the next UI (2026-11-13)
+
+- The sheet is the first screen moved to React (`ui/src/screens/brand/`, #404; decisions 0013 and 0014), drawn at
+  `/next/?room=brand&project=<id>&step=<step>` from the same routes. It is not what people see until the owner
+  switches the room on.
+- A project's sheet, opened from its Studio, now has that address in both apps (`web/nav.js`), and a reload
+  reopens it (`web/next.js`). A sheet opened from a chat still has none.

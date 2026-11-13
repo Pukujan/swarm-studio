@@ -18,11 +18,25 @@ module.exports = {
       to: { path: 'studio-nav\\.d\\.ts$' }
     },
     {
+      name: 'pet-only-through-src-pet',
+      severity: 'error',
+      comment: 'Hermia\'s cursor (@studio/pet, web/pet.js) is started once, by src/pet/usePet.ts; a screen never makes another.',
+      from: { path: '^src/', pathNot: '^src/pet/' },
+      to: { path: 'studio-pet\\.d\\.ts$' }
+    },
+    {
+      name: 'board-stand-alone',
+      severity: 'error',
+      comment: 'The board shell (src/board/) is shared by the boards (the brand sheet, the Plan board): it knows no screen and no navigation.',
+      from: { path: '^src/board/' },
+      to: { path: '^src/(nav|shell|screens)/' }
+    },
+    {
       name: 'primitives-stand-alone',
       severity: 'error',
       comment: 'A primitive (src/primitives/) knows nothing of the navigation, the frame or a screen, so its stories need nothing else.',
       from: { path: '^src/primitives/' },
-      to: { path: '^src/(nav|shell|screens)/' }
+      to: { path: '^src/(nav|shell|screens|board)/' }
     },
     {
       name: 'resolvable',

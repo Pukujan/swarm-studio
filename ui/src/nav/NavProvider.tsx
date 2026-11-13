@@ -15,6 +15,9 @@ export function NavProvider({ nav, children }: { nav?: Nav, children: ReactNode 
   return <NavContext value={own}>{children}</NavContext>
 }
 
+// the running machine itself, for what follows it outside React (Hermia's cursor)
+export const useNavObject = () => useContext(NavContext)
+
 export function useNav(): { view: View, go: (e: NavEvent) => View | null, can: (e: NavEvent) => boolean } {
   const nav = useContext(NavContext)
   if (!nav) throw new Error('useNav needs a NavProvider')

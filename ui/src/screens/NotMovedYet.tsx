@@ -3,7 +3,7 @@
 import { LinkButton } from '../primitives/Button'
 import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
-import { SCREEN_NAMES } from './index'
+import { SCREEN_NAMES } from './names'
 
 export function NotMovedYet() {
   const { view } = useNav()

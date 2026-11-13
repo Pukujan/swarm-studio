@@ -1,0 +1,56 @@
+/* The brand sheet's cards (ported from web/brand.css, the same class names): the swatches and samples are the
+   person's colours; the chrome is tokens only. The inspector's controls are the kit's primitives instead. */
+.brand-sheet .pj-sec .abs { max-width: 1120px; gap: 30px 16px; align-items: flex-end; }
+.brand-sheet .br-story .abs { align-items: flex-start; }
+.brand-sheet .ab > em { position: absolute; left: 0; top: calc(100% + 6px); font: 500 12px var(--body); font-style: normal; color: var(--muted); white-space: nowrap; }
+.brand-sheet .ab.on { outline: 2px solid var(--text); outline-offset: 3px; }
+.brand-sheet .ab:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.brand-sheet .ab.pcard > span { font-size: 17px; -webkit-line-clamp: 3; }
+
+/* a palette: four swatches over a light and a dark sample */
+.ab.br-pal { width: 340px; height: 236px; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); }
+.br-sw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; height: 34px; }
+.br-sw i { border-radius: 4px; border: 1px solid rgb(0 0 0 / .08); }
+.br-two { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-height: 0; }
+.br-sample { border-radius: 4px; padding: 12px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; pointer-events: none; }
+.br-sample b { font-size: 16px; line-height: 1.1; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.br-sample span { font-size: 11px; line-height: 1.35; opacity: .85; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.br-sample div { margin-top: auto; display: flex; align-items: center; gap: 10px; font-size: 11px; }
+.br-btn { font-style: normal; font-weight: 600; padding: 5px 10px; border-radius: 6px; }
+
+/* a type pairing: a real heading over a real paragraph, on the picked palette */
+.ab.br-type { width: 330px; height: 170px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; overflow: visible; }
+.ab.br-type b { font-size: 26px; line-height: 1.08; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ab.br-type span { font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* while the options are made: the same cards, empty, with the crew's sheen */
+.brand-sheet .ab.br-wait { background: var(--surface-2); pointer-events: none; overflow: visible; }
+
+/* the person's own words: one more option */
+.ab.br-own { width: 210px; height: 48px; display: flex; align-items: center; padding: 0 6px; background: transparent; border-style: dashed; cursor: text; }
+.brand-sheet.locked .ab.br-own { display: none; }
+
+/* the packs (slice 2): each card is its own ground, type, photos, voice line and button */
+.brand-sheet .br-packs { padding-bottom: 46px; }
+.brand-sheet .br-packs .abs { max-width: 1160px; gap: 34px 16px; align-items: flex-start; }
+.ab.br-pack { width: 214px; height: 262px; padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 7px; border-radius: var(--r, 8px); overflow: visible; }
+.br-pk-pics { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 4px; height: 112px; flex: none; overflow: hidden; }
+.br-pk-pics img { width: 100%; height: 100%; min-height: 0; object-fit: cover; border-radius: calc(var(--r, 8px) / 2); display: block; pointer-events: none; }
+.br-pk-pics img:first-child { grid-row: span 2; }
+.ab.br-pack b { font-size: 19px; line-height: 1.1; font-weight: 700; }
+.ab.br-pack span { font-size: 12px; line-height: 1.4; opacity: .85; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.br-pk-row { margin-top: auto; display: flex; align-items: center; gap: 10px; font-size: 11px; }
+.br-pack .br-btn { border-radius: var(--r, 6px); }
+.brand-sheet .ab.br-pack > em { white-space: normal; width: 214px; line-height: 1.35; }
+.brand-sheet .ab.br-pack.sug > em { color: var(--text); }
+
+/* what a pack brought: its voice, its pictures, its storyboard */
+.ab.br-voice { width: 420px; min-height: 120px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.ab.br-voice b { font-size: 20px; line-height: 1.2; font-weight: 600; }
+.ab.br-pics { width: 560px; height: 180px; padding: 0; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; background: transparent; border: 0; }
+.ab.br-pics img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; display: block; pointer-events: none; }
+.ab.br-frame { width: 200px; height: 140px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.ab.br-frame i { height: 46px; border-radius: 4px; background: color-mix(in srgb, currentColor 10%, transparent); }
+.ab.br-frame b { font-size: 13px; line-height: 1.25; font-weight: 600; }
+.ab.br-frame u { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, currentColor 14%, transparent); }
+.ab.br-frame u:last-of-type { width: 60%; background: var(--a); opacity: .7; }

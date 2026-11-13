@@ -40,7 +40,9 @@ The Studio is moving to React one screen at a time ([decision 0013](../decisions
 - When a screen moves, give it a `nextReady` selector in the suite, run `AUDIT_APP=next` with `audit:update`,
   and compare the screen's entries with the current Studio's. The port may fix violations, never add one
   ([ui/README.md](../../ui/README.md)).
-- The brand sheet has no address of its own, so it joins the `/next/` run when its way in has moved.
+- The brand sheet is the first screen that has moved. It opens at its own address there
+  (`?room=brand&project=…&step=brand`), and `tests/next.test.mjs` fails if it has a violation on `/next/` that it
+  doesn't have on `/`.
 - Plan opens at `?room=plan` there: the current Studio's run opens it from a game talk.
 
 ## Known violations

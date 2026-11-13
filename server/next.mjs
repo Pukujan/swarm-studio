@@ -6,6 +6,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { webVersion } from './page.mjs'
 
+// The rooms the next UI draws for everyone (docs/decisions/0014-switching-on-a-ported-screen.md). The current Studio
+// gets the list in its page (SWARM.next) and goes to /next/ when the person enters one (web/next.js). It stays empty
+// until the owner switches a ported screen on: one line in its own PR, the old screen kept until then.
+export const LIVE = []
+
 const SCRIPT = /<script type="module" crossorigin src="\/next\/(assets\/[\w.-]+\.js)"><\/script>/
 const STYLE = /<link rel="stylesheet" crossorigin href="\/next\/(assets\/[\w.-]+\.css)">/
 

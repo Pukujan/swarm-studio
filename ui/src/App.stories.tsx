@@ -8,7 +8,7 @@ import { NavProvider } from './nav/NavProvider'
 const meta = {
   component: App,
   parameters: { address: '' },
-  decorators: [(Story, { parameters }) => <NavProvider nav={makeNav({ search: parameters.address })}><Story /></NavProvider>]
+  decorators: [(Story, { parameters }) => <NavProvider nav={makeNav({ search: parameters.address })}><Story args={{ pet: false }} /></NavProvider>]
 } satisfies Meta<typeof App>
 export default meta
 type Story = StoryObj<typeof meta>
