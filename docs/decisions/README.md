@@ -27,6 +27,7 @@ one; don't edit the old one quietly.
 | [0016](0016-open-design-intake.md) | 2026-11-13 | What Swarm takes from Open Design's runtime: full design systems, its library, slop linter; not its loop |
 | [0017](0017-processes-run-only-when-needed.md) | 2026-11-13 | Processes run only when needed: Dyad 2 min, server 20 min, one render, execa + tree-kill |
 | [0018](0018-next-ui-build-on-release.md) | 2026-11-13 | The next UI's build is made by CI and committed only on a release |
+| [0019](0019-how-swarm-is-tested.md) | 2026-11-13 | How Swarm is tested: specs bound to tests, BDD runs the OpenSpec scenarios, metamorphic relations, property tests, prompt evals gate prompt changes |
 
 `tests/decisions.test.mjs` fails if the hosted studio, build credits or "paid per build" come back in
 `docs/brand/` or the README.
