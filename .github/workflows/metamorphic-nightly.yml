@@ -1,0 +1,32 @@
+name: metamorphic-nightly
+# The crew's metamorphic relations (decision 0019 point 3, tests/metamorphic/README.md) on live models: every
+# night the briefs are built fresh (record.mjs live) and every relation is checked on what came back. Pull
+# requests check the same relations on the recorded output (checks.yml, the metamorphic job). It needs the
+# SWARM_EVAL_API_KEY secret, the prompt evals' key; without it the run says so and passes.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - env:
+          SWARM_META_OUT: ${{ runner.temp }}/metamorphic
+          SWARM_API_KEY: ${{ secrets.SWARM_EVAL_API_KEY }}
+        run: |
+          if [ -z "$SWARM_API_KEY" ]; then echo '::notice::no SWARM_EVAL_API_KEY secret: the live relations were not run'; exit 0; fi
+          node tests/metamorphic/record.mjs live
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metamorphic-live
+          path: ${{ runner.temp }}/metamorphic
+          retention-days: 14
