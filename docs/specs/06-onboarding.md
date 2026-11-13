@@ -31,7 +31,7 @@ At rest (11 words of interface text; values are content):
 | Row | State at rest | Tap opens |
 |---|---|---|
 | **Account** | "Not signed in", or the Feed name | Google, GitHub, Discord; **Skip for now** |
-| **Models** | the builder model's name and a ✓, or a ⚠ | planner and builder names; on ⚠ one plain line, the fix that fits (**Let Hermes set this up** or **Test again**) and **Details** |
+| **Models** | the builder model's name and a ✓, or a ⚠ | planner and builder names; on ⚠ one plain line, the fix that fits (**Let Hermes set this up** or **Test again**) and **Details**; then Hermes's own model list to pick from, and **More providers** to sign in |
 | **Pictures** | Painted, Stock photos or Drawn | the three options |
 
 The one primary action is **Start**, bottom right, fixed width.
@@ -51,7 +51,21 @@ The one primary action is **Start**, bottom right, fixed width.
 
 ### Models
 
-- Shows the planner and builder models Hermes already passed to the plugin. Nothing to choose.
+- Shows the planner and builder models: Hermes's `swarm_studio_planner` and `swarm_studio_builder` slots, or
+  Hermes's main model while a slot is empty.
+- **Pick from a list, never type a name** (owner, 2026-11-13). Opened, the row lists the models Hermes itself
+  lists (the same list as Hermes Desktop's picker), grouped by signed-in provider, the one in use first with a
+  ✓, eight per provider until **All n**, and a search box over all of them. A tap sets both slots in Hermes's
+  config, drops the canvas's own picks for those roles, and tests again. Hermes reads its config again when
+  the file changes, so no restart.
+- **More providers** lists the providers that are not signed in, and the search box narrows them by name.
+  **Sign in** opens what that provider uses: a key box where a key is its only sign-in (saved where Hermes
+  keeps keys, sent on stdin, never shown again), or Hermes's own browser sign-in (`hermes auth add <provider>`;
+  the sheet shows its code and an **Open** link, and the list refreshes when Hermes says it is signed in).
+  Providers Hermes sets up only in its own setup (cloud consoles, local servers, custom endpoints) are not
+  listed; **Let Hermes set this up** covers them.
+- The list, the pick and the key go through `hermes_models.py`, run in Hermes's own Python
+  ([hermes-and-connections.md](../engines/hermes-and-connections.md) names why it imports Hermes internals).
 - When the screen opens, the server makes one tiny call to each (a few tokens; `POST /api/setup/models`).
   A ✓ when both answer. The check is kept for ten minutes, so opening the screen again costs nothing.
 - When one fails: a ⚠ on the row (rule 10); opened, one plain line saying what is wrong and the one fix that
@@ -62,10 +76,12 @@ The one primary action is **Start**, bottom right, fixed width.
     elsewhere the command to copy). The row tests again when the person comes back to the window.
   - Hermes can't read its keys, or Swarm Studio was updated: "Restart Hermes." and **Test again**.
   - Hermes not connected, the model busy or slow: **Test again**.
-  The plugin never asks for or stores a model key (catalog rule 11).
+  The plugin never stores a model key (catalog rule 11): a key pasted under More providers goes straight to
+  Hermes's key store, and the plugin's own files never hold it.
 - While the last check failed, the avatar keeps a small red dot and its menu's **Setup** item an ⚠, so closing
   the sheet never hides the problem. The server keeps the result (`modelsOk` in setup.json) until a check passes.
-- Picking a different model per role stays where it is (☰ → Models; Settings › Crew in spec 25).
+- A different model per role stays where it is (☰ → Models; Settings › Crew in spec 25). The Setup pick sets
+  planner and builders together.
 
 ### Pictures
 

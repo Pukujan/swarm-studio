@@ -37,3 +37,19 @@
 .su-dim { color: var(--ui-muted-foreground); }
 .su-sign .ui-btn { flex: 1 1 0; min-width: 0; }
 .su-note b { font-weight: 600; letter-spacing: .06em; }
+/* the model picker: Hermes's own list, one scrolling box, a tap picks */
+.su-q { width: 100%; }
+.su-models { max-height: 260px; overflow-y: auto; border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) - 4px); }
+.su-models > .su-note { padding: 10px 12px; }
+.su-group + .su-group { border-top: 1px solid var(--ui-border); }
+.su-gname { display: block; padding: 8px 12px 4px; font: 600 11px/1 var(--ui-head); letter-spacing: .08em; text-transform: uppercase; color: var(--ui-muted-foreground); }
+.su-pick { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 12px; border: 0; background: transparent; color: var(--ui-foreground); cursor: pointer; text-align: left; font: 13px/1.2 var(--ui-font); }
+.su-pick > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.su-pick:hover { background: var(--ui-muted); }
+.su-pick:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: -2px; }
+.su-pick[aria-pressed="true"] { font-weight: 600; }
+.su-pick .i { flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.su-pick.su-more { color: var(--ui-muted-foreground); }
+.su-toggle { align-self: flex-start; }
+.su-others { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
+.su-key { flex: 1; min-width: 0; }

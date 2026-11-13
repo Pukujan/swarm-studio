@@ -78,6 +78,24 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - Vercel and Cloudflare Pages: pasted token checked with the provider, kept mode 0600 in `connections.json`, or env `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`, or an Octo vault grant (engine/connect.mjs:1-24, 128-141).
 - GitHub Pages: the `gh` login; Swarm Feed: `feed.json` (docs/specs/25-connections.md:29, 31).
 
+## The Setup model picker (hermes_models.py)
+
+- Setup › Models lists Hermes's own providers and models and sets the `swarm_studio_planner` and
+  `swarm_studio_builder` slots (docs/specs/06-onboarding.md, Models). `hermes_models.py` runs as a short
+  process in Hermes's Python (`SWARM_HERMES_PY`, `SWARM_HERMES_PYTHONPATH`, the profile's `HERMES_HOME`), started
+  by server/server.mjs `pyModels`; routes in server/setup.mjs (`/api/setup/models/options`, `/pick`, `/signin`).
+- **Stopgap: it imports Hermes internals**, against the Nous review's "public plugin API only" (point 5), because
+  Hermes has no plugin API for its model list, its slots or its key store yet. It calls what Hermes's own
+  dashboard and Desktop picker call: `hermes_cli.inventory.build_model_options_payload` (web_routers/models.py
+  `/api/model/options`), the aux-slot save of `/api/model/set` (web_server_config.py
+  `_apply_aux_assignment_sync`, with `hermes_cli.config.clear_model_endpoint_credentials`), and
+  `hermes_cli.credential_lifecycle.save_provider_env_credential` (tui_gateway `model.save_key`). The dashboard's
+  HTTP routes need an in-process session token, so they are not used. Move to a public API when Hermes ships one.
+- Browser sign-in is Hermes's public CLI, `hermes auth add <provider> --type oauth`, unbuffered; the sheet reads
+  the link after "Open" and the user code from what it prints (hermes_cli/auth_device_flow.py,
+  auth_codex_browser.py, auth_openrouter.py). Hermes opens the browser itself.
+- Hermes caches its config by file time, so a pick applies without a restart.
+
 ## What the person connects
 
 - All keys optional, names only: `SWARM_STUDIO_API_KEY`, `ELEVENLABS_API_KEY`, `CKFF_API_KEY`, `CKFF_BASE_URL`, `CKFF_MODEL`, `MESHY_API_KEY`, `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, `VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN` (plugin.yaml:11-57).
@@ -100,7 +118,8 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 
 ## Sources
 
-- plugin.yaml, launcher.py:10-85, 200-233
+- plugin.yaml, launcher.py:10-85, 200-233, hermes_models.py, server/setup.mjs (model picker)
+- Hermes: hermes_cli/inventory.py, web_routers/models.py, web_server_config.py, config.py:765, credential_lifecycle.py, auth_device_flow.py:305-316
 - engine/bridge.mjs, hermesllm.mjs, llm.mjs, hermeshealth.mjs, hermes_connect.mjs, connect.mjs, proc.mjs, ckff.mjs, paint-ckff.mjs, auto.mjs, appkit.mjs, media.mjs:18-86
 - server/server.mjs:93-114, 190-213, 1334-1343, 1437-1448, 3290-3330, 3540-3576; web/show.js:164-176
 - docs/specs/25-connections.md, docs/specs/33-hermes-bridge.md, docs/decisions/0005, docs/PRODUCT.md, docs/PLANS.md, AGENTS.md, scripts/engine-docs-hook.mjs

@@ -171,6 +171,18 @@ const pyCommand = (call, timeout) => new Promise(resolve => {
   })
 })
 
+// hermes_models.py's helpers (the Setup sheet's model picker), run once in Hermes's Python under the
+// profile's HERMES_HOME; `input` goes in on stdin, so a pasted key is never a process argument
+const pyModels = (call, input = '', timeout = 60000) => new Promise(resolve => {
+  if (!PY) return resolve({ ok: false, message: 'Start Swarm Studio from Hermes to pick a model.' })
+  const code = `import sys, json; sys.path.insert(0, ${JSON.stringify(root)}); import hermes_models; print(json.dumps(hermes_models.${call}))`
+  const child = execFile(PY, ['-c', code], { env: pyEnv, cwd: root, timeout, maxBuffer: 4 << 20 }, (err, stdout) => {
+    const line = String(stdout || '').trim().split('\n').pop()
+    try { resolve(JSON.parse(line)) } catch { resolve({ ok: false, message: err ? String(err.message || err).split('\n')[0] : 'Hermes did not answer.' }) }
+  })
+  child.stdin?.end(input)
+})
+
 // ---------- pictures and clips, through Hermes's own image_generate and video_generate tools
 // The Hermes bridge (engine/bridge.mjs, bridge.py, docs/specs/33-hermes-bridge.md): a Hermes process with the
 // plugin loaded attaches a loopback bridge, and Hermes paints with the provider and key it is set up with.
@@ -241,6 +253,10 @@ const setup = setupRoutes({
   image: async () => ({ providers: await loadImageProviders(), imagePick: picks.image || null, pick: picks.pictures || null }),
   media: () => mediaState(),
   feed: PY ? call => pyCommand(call, 60000) : null,
+  hermesModels: PY ? pyModels : null,
+  // a pick in Hermes's slots replaces the canvas's own picks for those roles, so Hermes answers with it
+  clearPicks: () => { delete picks.planner; delete picks.worker; try { writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {} },
+  hermesEnv: () => pyEnv,
   setPictures: mode => { if (mode) picks.pictures = mode; else delete picks.pictures; try { writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {} }
 })
 // What one build does for pictures: its own `pictures`, else the Setup pick, else the default

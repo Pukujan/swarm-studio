@@ -177,3 +177,53 @@ test('Let Hermes set this up opens a console on Windows, and a failed check is k
   assert.equal((await win('POST', '/api/setup/models', { again: true })).data.ok, true)
   assert.equal((await make({})('GET', '/api/setup')).data.modelsOk, true)
 })
+
+test('the model picker: Hermes\'s own list, a pick sets the slots and tests again, a key or the browser signs in', async () => {
+  const { setupRoutes } = await import('../server/setup.mjs')
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { EventEmitter } = await import('node:events')
+  const calls = []
+  let cleared = 0
+  const hermesModels = async (call, input) => {
+    calls.push([call, input])
+    if (call.startsWith('options_json')) return { ok: true, main: { provider: 'inferhub', model: 'cb/flash' }, slots: {}, providers: [{ slug: 'nous', signedIn: true, models: ['a'] }] }
+    if (call.startsWith('pick_json')) return { ok: true, slots: { planner: { provider: 'nous', model: 'a' }, worker: { provider: 'nous', model: 'a' } } }
+    if (call.startsWith('save_key_json')) return JSON.parse(input).key ? { ok: true } : { ok: false, message: 'Paste the key.' }
+  }
+  // what `hermes auth add minimax-oauth` prints: the portal first, then the sign-in link and its code
+  const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill() { this.killed = true } })
+  const started = []
+  const start = (cmd, args, o) => { started.push([cmd, args, o.env.PYTHONUNBUFFERED]); setTimeout(() => child.stdout.emit('data', 'Portal: https://api.example.io\n\nTo continue:\n  1. Open: https://example.io/oauth-authorize?user_code=5KBH-F8VV\n  2. If prompted, enter code: 5KBH-F8VV\n'), 5); return child }
+  const handle = setupRoutes({ dataDir: mkdtempSync(join(tmpdir(), 'su-')), roles: () => ({ planner: { model: 'p', baseUrl: 'https://a', apiKey: 'k' }, worker: { model: 'w', baseUrl: 'https://a', apiKey: 'k' } }), call: async () => {}, image: async () => ({ providers: [] }), setPictures: () => {}, hermesModels, clearPicks: () => cleared++, hermesBin: '/h/hermes', start })
+  const ask = (method, path, body) => new Promise(resolve => {
+    const req = new EventEmitter(); req.method = method; req.destroy = () => {}
+    handle(req, { writeHead: code => ({ end: s => resolve({ code, data: JSON.parse(s) }) }) }, new URL(`http://x${path}`))
+    req.emit('data', JSON.stringify(body || {})); req.emit('end')
+  })
+  const o = (await ask('GET', '/api/setup/models/options')).data
+  assert.equal(o.providers[0].slug, 'nous')
+  assert.equal(o.signing, null)
+  await ask('GET', '/api/setup/models/options')
+  assert.equal(calls.filter(c => c[0].startsWith('options')).length, 1, 'kept a minute')
+  // a pick: both slots in Hermes, the canvas's own picks for them dropped, and the test run again
+  const p = (await ask('POST', '/api/setup/models/pick', { provider: 'nous', model: 'a"); import os; ("' })).data
+  assert.equal(p.ok, true)
+  assert.equal(cleared, 1)
+  assert.equal(p.test.ok, true)
+  assert.equal(calls.at(-1)[0], 'pick_json("nous", "a\\"); import os; (\\"")', 'the model is a string literal, never code')
+  // a key goes on stdin, never in the command
+  assert.equal((await ask('POST', '/api/setup/models/signin', { slug: 'anthropic', key: 'sk-x' })).data.ok, true)
+  const k = calls.find(c => c[0] === 'save_key_json()')
+  assert.deepEqual(JSON.parse(k[1]), { slug: 'anthropic', key: 'sk-x' })
+  assert.equal((await ask('POST', '/api/setup/models/signin', { slug: '../x; rm' })).code, 400)
+  // the browser: Hermes's own sign-in, its link and code read from what it prints
+  const s = (await ask('POST', '/api/setup/models/signin', { slug: 'minimax-oauth' })).data.signing
+  assert.deepEqual(started[0], ['/h/hermes', ['auth', 'add', 'minimax-oauth', '--type', 'oauth'], '1'])
+  assert.equal(s.url, 'https://example.io/oauth-authorize?user_code=5KBH-F8VV')
+  assert.equal(s.code, '5KBH-F8VV')
+  assert.equal(s.done, null)
+  assert.deepEqual((await ask('POST', '/api/setup/models/signin', { cancel: true })).data, { signing: null })
+  assert.equal(child.killed, true)
+})
