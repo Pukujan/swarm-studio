@@ -18,12 +18,12 @@ import { hosted } from './hosted.js'
 
 // ---------- loop
 
-export let lastPanels = 0
+let lastPanels = 0
 // The crew's cursors don't need the screen's 60-120 Hz: 24 fps while a build runs (20 with a big
 // crew), full rate only while the camera itself moves, so a drag or zoom stays smooth. Behind the
 // Overview or Projects this canvas is hidden: 10 fps keeps its pages and crew current (spec 36).
-export const loopAt = { last: 0, dt: 16.7 }
-export const behind = () => document.body.classList.contains('cosmos-project') || document.body.classList.contains('cosmos-home')
+const loopAt = { last: 0, dt: 16.7 }
+const behind = () => document.body.classList.contains('cosmos-project') || document.body.classList.contains('cosmos-home')
 export function frameLoop(now) {
   const moving = Math.abs(cam.ts - cam.s) > 1e-3 || Math.abs(cam.tx - cam.x) > 1 || Math.abs(cam.ty - cam.y) > 1
   const hid = behind(), fps = hid ? 10 : moving ? 120 : S.agents.size > 8 ? 20 : 24
@@ -160,19 +160,19 @@ export function frameLoop(now) {
 
 // Per-frame loops run at the screen's rate only while something moves; at rest they tick a few
 // times a second, so a finished canvas stops costing a full 60 fps of DOM work.
-export const sleepers = new Map()
+const sleepers = new Map()
 export function nextFrame(fn, idle, ms = 200) {
   if (!idle) return requestAnimationFrame(fn)
   sleepers.set(fn, setTimeout(() => { sleepers.delete(fn); requestAnimationFrame(fn) }, ms))
 }
-export function wakeLoops() {
+function wakeLoops() {
   for (const [fn, t] of sleepers) { clearTimeout(t); sleepers.delete(fn); requestAnimationFrame(fn) }
 }
 for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown']) addEventListener(ev, wakeLoops, { capture: true, passive: true })
 
 // ---------- input
 
-export let drag = null
+let drag = null
 els.viewport.addEventListener('mousedown', e => {
   if (e.target.closest('.toolbar, .camera-hint, .float')) return
   drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, moved: false }
@@ -196,7 +196,7 @@ window.addEventListener('mouseup', e => {
 })
 
 // Prototype mode: clicking a linked button on any page flies to its target page.
-export function prototypeClick(e) {
+function prototypeClick(e) {
   const vr = els.viewport.getBoundingClientRect()
   const wx = (e.clientX - vr.left - cam.x) / cam.s, wy = (e.clientY - vr.top - cam.y) / cam.s
   const f = S.frames.find(fr => wx >= fr.x && wx <= fr.x + FRAME_W && wy >= 0 && wy <= fr.h)
@@ -247,7 +247,7 @@ window.addEventListener('keydown', e => {
 
 // Slash commands in the chat box, the same ones as /swarm in Hermes. Anything
 // else is a brief for a new build.
-export const SLASH = [
+const SLASH = [
   ['help', '', 'what you can type here'],
   ['play', '', 'click through the prototype'],
   ['review', '', 'a vision model checks every page; agents fix what it finds'],
@@ -271,11 +271,11 @@ export const SLASH = [
   ['new', '', 'start a new build, from Projects'],
 ]
 
-export function slashHelp() {
+function slashHelp() {
   botMsg(`Commands: ${SLASH.map(([c, a]) => `/${c}${a ? ' ' + a : ''}`).join(' · ')}. Anything else starts a new build.`)
 }
 
-export async function runSlash(text) {
+async function runSlash(text) {
   const [head, ...rest] = text.slice(1).split(/\s+/)
   const cmd = head.toLowerCase(), arg = rest.join(' ').trim()
   const needRun = () => { if (shownRun()) return true; botMsg(`/${cmd} needs a build open: make one, or /open one.`); return false }
@@ -370,7 +370,7 @@ export let nextRoute = null
 export function setNextRoute(v) { return (nextRoute = v) }
 // one message at a time: while one is being read (talk or build?) or its build is starting, another
 // Enter does nothing (two Enters made two chats, or two builds, from one message)
-export let sending = false, queued = null
+let sending = false, queued = null
 els.form.addEventListener('submit', async e => {
   e.preventDefault()
   // a send made in code (window.swarm.submit, a Build button) while one is going waits its turn
@@ -381,7 +381,7 @@ els.form.addEventListener('submit', async e => {
   sending = true
   try { await sendDock() } finally { sending = false; const q = queued; queued = null; q?.() }
 })
-export async function sendDock() {
+async function sendDock() {
   const brief = els.brief.value.trim()
   if (!brief) return
   if (/^\/[a-z?]/i.test(brief)) {

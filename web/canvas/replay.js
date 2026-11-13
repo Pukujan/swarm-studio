@@ -47,8 +47,8 @@ export async function fileInto(id, folder) {
 
 // ---------- traces: every model call an agent made for a build, with the prompt
 // it was sent and the raw answer, so you can see why a section came out as it did.
-export const trace = { run: null, filter: {}, timer: null }
-export const KIND_LABEL = { sitemap: 'Plan the site', plan: 'Plan a page', build: 'Build', review: 'Review', 'review-fix': 'Fix (review)', fix: 'Fix (your comment)', route: 'Route a comment', tours: 'Visitor tours', video: 'Video storyboard' }
+const trace = { run: null, filter: {}, timer: null }
+const KIND_LABEL = { sitemap: 'Plan the site', plan: 'Plan a page', build: 'Build', review: 'Review', 'review-fix': 'Fix (review)', fix: 'Fix (your comment)', route: 'Route a comment', tours: 'Visitor tours', video: 'Video storyboard' }
 
 export async function traceView(run, filter = {}) {
   document.querySelector('.trace-wrap')?.remove()
@@ -78,7 +78,7 @@ export async function traceView(run, filter = {}) {
   await traceList()
 }
 
-export async function traceList() {
+async function traceList() {
   const wrap = document.querySelector('.trace-wrap')
   if (!wrap || !trace.run) return
   const got = await (await api(`/api/runs/${encodeURIComponent(trace.run)}/trace`)).json().catch(() => ({ calls: [] }))
@@ -108,7 +108,7 @@ export async function traceList() {
   }
 }
 
-export async function traceOpen(row, id) {
+async function traceOpen(row, id) {
   if (row.classList.toggle('open') === false) return
   const body = row.querySelector('.tr-body')
   body.textContent = 'Loading…'
@@ -190,7 +190,7 @@ export function fileInfo(f) {
   $q('.fi-title').focus()
 }
 
-export let openSeq = 0
+let openSeq = 0
 export async function openRun(id) {
   const seq = ++openSeq
   claimed = id
@@ -224,7 +224,7 @@ export async function openRun(id) {
 // A saved run keeps each section's finished HTML but not the stream that wrote it, so a replay
 // showed every section popping in whole. This types it back in: the HTML in pieces, spread over
 // the time between the agent taking the section and finishing it.
-export function withTyping(events) {
+function withTyping(events) {
   const took = new Map(), out = []
   let last = 0
   for (const e of events) {
@@ -244,7 +244,7 @@ export function withTyping(events) {
 
 // Replay a saved run on its own clock, sped up: the Swarm Wall plays four of these side by side.
 // Long quiet gaps (a model thinking) are cut to 1.5 s of real time so the tile never looks stuck.
-export let replaySeq = 0, replayAsked = false
+let replaySeq = 0, replayAsked = false
 export async function replayRun(id, speed = 8) {
   const seq = ++replaySeq
   const res = await api(`/api/runs/${encodeURIComponent(id)}/events`).catch(() => null)
@@ -282,8 +282,8 @@ export function paintReplay() {
   if (b.dataset.on !== String(on)) { b.dataset.on = String(on); b.innerHTML = `${ico(on ? 'square-stop' : 'rotate-ccw')}${on ? 'Stop replay' : 'Replay'}` }
   b.disabled = !on && (!S.done || review.busy || !shownRun())
 }
-export function endReplay() { replayAsked = false; setReplayId(Q.get('replay') || ''); paintReplay() }
-export function startReplay() {
+function endReplay() { replayAsked = false; setReplayId(Q.get('replay') || ''); paintReplay() }
+function startReplay() {
   const id = shownRun()
   if (!id || replayAsked) return
   replayAsked = true

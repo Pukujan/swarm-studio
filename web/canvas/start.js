@@ -21,7 +21,7 @@ import { pub, pubShow, pubButton, copyText, liveUrl, feedPop, publishMenu } from
 
 // ---------- start
 
-export function hermesWait(e) {
+function hermesWait(e) {
   let bar = document.getElementById('hermes-wait')
   // a Hermes attached again: a build it stopped goes on from where it was
   if (e.type === 'hermes:back' && e.attached && hermesResume && !hosted) { const run = hermesResume; setHermesResume(null); botMsg('Hermes is back. Going on with the build.'); resumeRun(run) }
@@ -81,7 +81,7 @@ export function connect() {
 }
 
 // Commands sent from Hermes (/swarm review, the swarm_studio tool).
-export async function command(c) {
+async function command(c) {
   const studio = window.swarmCosmos
   if (studio?.nav && (c.op === 'open' || c.op === 'play')) {
     // open and play show the build: the machine opens its project unless a room of it is open, and
@@ -149,27 +149,27 @@ for (const [sel, name, min, max, dir] of [['.side', '--side-w', 220, 560, 1], ['
 }
 
 // ---------- the break room can be put away (☰ More → Break room); idle cursors hide with it
-export const breakBtn = $('#breakroom-btn')
-export const setBreakroom = on => { document.body.classList.toggle('no-breakroom', !on); breakBtn?.classList.toggle('on', on); store.set('breakroom', on) }
+const breakBtn = $('#breakroom-btn')
+const setBreakroom = on => { document.body.classList.toggle('no-breakroom', !on); breakBtn?.classList.toggle('on', on); store.set('breakroom', on) }
 setBreakroom(store.get('breakroom', true))
 if (breakBtn) breakBtn.onclick = () => setBreakroom(document.body.classList.contains('no-breakroom'))
 $('#dock-hide')?.addEventListener('click', () => setBreakroom(false))
 
 // ---------- crews: while an app or game builds, a game spec is written or a video
 // renders, a few agents work over that screen, each on one real step at a time.
-export const CREW_NAMES = (Crew.NAMES || ['Pip', 'Mochi', 'Lumi', 'Nova']).slice(0, 4).map(n => [n, Crew.color(n)])
-export const crewLayer = document.createElement('div')
+const CREW_NAMES = (Crew.NAMES || ['Pip', 'Mochi', 'Lumi', 'Nova']).slice(0, 4).map(n => [n, Crew.color(n)])
+const crewLayer = document.createElement('div')
 crewLayer.className = 'crew-layer'
 document.body.append(crewLayer)
-export const crew = { members: [], key: '', last: 0 }
-export const radioLine = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+const crew = { members: [], key: '', last: 0 }
+const radioLine = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 radioLine.setAttribute('class', 'radio-line')
 radioLine.setAttribute('aria-hidden', 'true')
 radioLine.innerHTML = '<path/>'
 crewLayer.append(radioLine)
 
 // Which screen is busy, where the agents may point, and what they are each doing.
-export function crewJob() {
+function crewJob() {
   // Meshy characters being made: one crew member per job, on its tile of the Cast step's bench
   const making = game.el && game.cast?.open && !game.busy ? workedJobs() : []
   if (making.length) {
@@ -201,7 +201,7 @@ export function crewMembers(n) {
 }
 
 // A point on one of the screen's busy parts (or anywhere on it), kept apart from the others.
-export function crewSpot(job, me) {
+function crewSpot(job, me) {
   const r = job.host.getBoundingClientRect()
   const spots = [...job.host.querySelectorAll(job.spots)].filter(e => e.offsetParent)
   let p
@@ -214,7 +214,7 @@ export function crewSpot(job, me) {
   return p
 }
 
-export function crewTick(now) {
+function crewTick(now) {
   const job = crewJob()
   // no crew on screen: look again a few times a second instead of every frame
   nextFrame(crewTick, !job && !crew.members.length, 300)
@@ -292,8 +292,8 @@ export function crewTick(now) {
 requestAnimationFrame(crewTick)
 
 // ---------- one Publish button: the website (static pages) or the working app (with its server)
-export const pubMenu = $('#pub-menu')
-export const closePub = () => { pubMenu.hidden = true; els.publishBtn.classList.remove('on') }
+const pubMenu = $('#pub-menu')
+const closePub = () => { pubMenu.hidden = true; els.publishBtn.classList.remove('on') }
 els.publishBtn.onclick = async e => {
   e.stopPropagation()
   if (pub.run === shownRun() && pub.state === 'working') return pubShow()

@@ -9,13 +9,13 @@ import { feed } from './panels.js'
 
 // ---------- publish: a live link on GitHub Pages (the person's gh login), or this computer
 export const pub = { run: null, state: 'none', stage: '', target: 'github', el: null, hosts: undefined, live: {}, liveTarget: '', message: '', pending: false }
-export const PUB_STAGES = {
+const PUB_STAGES = {
   github: { export: 'Exporting the pages', repo: 'Making the GitHub repo', push: 'Pushing the site', pages: 'Turning on GitHub Pages', building: 'GitHub is building it' },
   vercel: { export: 'Exporting the pages', project: 'Setting up the Vercel project', upload: 'Uploading the files', building: 'Vercel is deploying it' },
   cloudflare: { export: 'Exporting the pages', project: 'Setting up the Pages project', upload: 'Uploading the files', building: 'Cloudflare is going live' },
 }
 
-export function pubPop(html, title = 'Publish the <em>website</em>') {
+function pubPop(html, title = 'Publish the <em>website</em>') {
   pub.el?.remove()
   pub.el = document.createElement('div')
   pub.el.className = 'export-pop publish-pop'
@@ -35,7 +35,7 @@ export const HOSTS = {
 }
 // the build's link: the newest public one, or the local one if it has no public one
 export const liveUrl = () => pub.run === shownRun() ? (pub.live[pub.liveTarget] || '') : ''
-export const shortUrl = u => String(u).replace(/^https?:\/\//, '').replace(/\/$/, '')
+const shortUrl = u => String(u).replace(/^https?:\/\//, '').replace(/\/$/, '')
 
 // Copy that works inside Hermes's sandboxed frame too: the Clipboard API is refused
 // there (no clipboard-write), so fall back to a hidden textarea and execCommand,
@@ -64,9 +64,9 @@ export function copyText(text, btn, selectEl) {
   navigator.clipboard.writeText(text).then(() => { ok = true }, () => {}).finally(done)
 }
 // Hermes's frame can't open a window either: links go out through the plugin
-export const framed = window.parent !== window
-export let hostSeq = 0
-export function hostAsk(msg, ms = 1500) {
+const framed = window.parent !== window
+let hostSeq = 0
+function hostAsk(msg, ms = 1500) {
   const id = ++hostSeq
   return new Promise(resolve => {
     const t = setTimeout(() => { removeEventListener('message', on); resolve(null) }, ms)
@@ -158,14 +158,14 @@ export function pubShow() {
 }
 
 // Post to Feed, under the Live link: Public (in the feed) or Unlisted (link only), one button.
-export const posted = { runs: new Map(), busy: false, unlisted: false, note: '', connect: null, alone: false }
+const posted = { runs: new Map(), busy: false, unlisted: false, note: '', connect: null, alone: false }
 export function feedPop() {
   posted.alone = true
   const el = pubPop(feedRow(), 'Post to the <em>Feed</em>')
   wireFeedRow(el)
 }
-export const feedRefresh = () => (posted.alone ? feedPop() : pubShow())
-export function feedRow() {
+const feedRefresh = () => (posted.alone ? feedPop() : pubShow())
+function feedRow() {
   const run = shownRun(), done = posted.runs.get(run)
   if (done) return `<div class="pfeed"><div class="pstate live"><b>In the Feed</b><span>${done.unlisted ? 'Unlisted' : 'Public'}</span></div><div class="plink"><a href="${esc(done.url)}" target="_blank" rel="noopener">${esc(shortUrl(done.url))}</a></div></div>`
   if (posted.connect) return `<div class="pfeed"><div class="pstate"><b>Connect Hermes</b><span>${posted.connect.code ? esc(posted.connect.code) : ''}</span></div>
@@ -176,12 +176,12 @@ export function feedRow() {
     <button class="ui-btn ui-btn-default pfpost" ${posted.busy ? 'disabled' : ''}>${posted.busy ? 'Posting…' : 'Post to Feed'}</button>
     ${posted.note ? `<div class="pstate err"><span>${esc(shortReason(posted.note))}</span></div>` : ''}</div>`
 }
-export function wireFeedRow(el) {
+function wireFeedRow(el) {
   el.querySelectorAll('.pseg button').forEach(b => { b.onclick = () => { posted.unlisted = b.dataset.v === 'unlisted'; feedRefresh() } })
   const go = el.querySelector('.pfpost')
   if (go) go.onclick = postToFeedNow
 }
-export async function postToFeedNow() {
+async function postToFeedNow() {
   const run = shownRun()
   if (!run || posted.busy) return
   Object.assign(posted, { busy: true, note: '' })

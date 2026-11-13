@@ -16,9 +16,9 @@ import { runNow, shownRun } from './film.js'
 // The talk is kept in a chat (spec 29, engine/chats.mjs): the server makes it on the first turn and
 // answers with its id; an old chat opened from Studio home or a project's chats comes back here.
 export const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null, plan: null }
-export const dockBtn = els.form.querySelector('button[type="submit"]')
+const dockBtn = els.form.querySelector('button[type="submit"]')
 // while talking, the dock sends to Hermia: its button says Send, not Build
-export function talkDock(on) {
+function talkDock(on) {
   if (on && !talk.dock) { talk.dock = { ph: els.brief.placeholder, btn: dockBtn.textContent }; els.brief.placeholder = 'Tell Hermia…'; dockBtn.textContent = 'Send' }
   if (!on && talk.dock) { els.brief.placeholder = talk.dock.ph; dockBtn.textContent = talk.dock.btn; talk.dock = null }
 }
@@ -67,9 +67,9 @@ export async function talkSay(text, brief = false) {
 // what the idea leaves open, each option with what it gets, costs and takes (its second line, on the
 // open question only); the plan takes shape on the board beside the chat. Lock makes the plan, or
 // re-plans it in place, and opens it; saying a change later ("make it 3d") reopens the spec.
-export const talkPost = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })
+const talkPost = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) })
   .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`); return j })
-export async function gameSay({ said = '', pick = '', label = '' }) {
+async function gameSay({ said = '', pick = '', label = '' }) {
   if (talk.busy) return
   const text = said || label
   if (text) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
@@ -86,7 +86,7 @@ export async function gameSay({ said = '', pick = '', label = '' }) {
   } catch (err) { if (talk.on) botMsg(err.message || 'Hermia did not answer. Say it again.') } finally { talk.busy = false; wait.remove() }
 }
 // the open question's options, or Lock and Keep talking under the spec
-export function gameActs(item, turn) {
+function gameActs(item, turn) {
   const opts = turn?.options || []
   if (!item || !opts.length) return
   const spec = opts.some(o => o.id === 'lock')
@@ -104,7 +104,7 @@ export function gameActs(item, turn) {
   }
   item.append(acts)
 }
-export async function gameResume(last) {
+async function gameResume(last) {
   const j = await api(`/api/talk/${encodeURIComponent(talk.chat)}`).then(r => r.ok ? r.json() : null).catch(() => null)
   if (!j?.chat || !talk.on) return
   const turn = j.chat.turns.at(-1)
@@ -117,7 +117,7 @@ export async function gameResume(last) {
 }
 // where to start (after the lock): the pick opens that part of the Plan board; the chips stay, so
 // another part is one click away
-export function gameStart(o, acts, b) {
+function gameStart(o, acts, b) {
   if (!talk.plan) return
   acts.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b))
   window.swarmCosmos?.planAt?.(talk.plan, { focus: o.focus, select: o.select })
@@ -135,7 +135,7 @@ export async function gameLock() {
   } catch (err) { botMsg(err.message) } finally { talk.busy = false }
 }
 // under Hermia's latest answer: Build, which writes the brief first (nothing starts yet)
-export function talkActs(item) {
+function talkActs(item) {
   const acts = document.createElement('div')
   acts.className = 'chips talk-acts'
   acts.innerHTML = '<button class="primary">Build</button>'
@@ -147,7 +147,7 @@ export function talkActs(item) {
 // project (Build), a different product (New project, with Add here for when it is not), or this one
 // from scratch (Start over: new pages and look, the old version stays in the project).
 // sheet: open the brand sheet at once (asked for from the Make box's brief)
-export function talkBrief(text, route = '', what = '', sheet = false) {
+function talkBrief(text, route = '', what = '', sheet = false) {
   const item = botMsg(what || 'The brief')
   item.classList.add('talk-brief')
   const inProject = !!talk.from
@@ -188,14 +188,14 @@ export function talkBrief(text, route = '', what = '', sheet = false) {
 // ---------- Chats (spec 29): the project's talks, grouped Design, App, Game, Video; outside a
 // project, the loose ones. One opens here where it left off; a row dragged onto another group moves
 // it there. New chat starts an empty talk (in the project when one is open).
-export const chatsBtn = $('#chats-btn')
-export let chatsPop = null
-export const projectNow = () => window.swarmCosmos?.project || null
+const chatsBtn = $('#chats-btn')
+let chatsPop = null
+const projectNow = () => window.swarmCosmos?.project || null
 // Build from a chat: inside a project it is the project's next version; outside one, a new project
-export function chatBuild(run) {
+function chatBuild(run) {
   return (text, chat) => { setNextRoute(run ? { from: run, route: 'extend', selected: false, chat } : { fresh: true, chat }); els.brief.value = text; els.form.requestSubmit() }
 }
-export async function openChatHere(id) {
+async function openChatHere(id) {
   const chat = await api(`/api/chats/${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).catch(() => null)
   if (!chat?.id) return
   // a loose chat that is not a website opens from Studio home, which knows how each kind builds

@@ -16,12 +16,12 @@ import { closeable } from './start.js'
 export const lite = { last: 0, busy: false, quiet: 0 }
 // Auto: on for small machines, and for everyone once the agents have been done
 // for half a minute (a finished build doesn't need every page live).
-export const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 5000)))
+const liteOn = () => (modelsInfo.lite ?? ((navigator.deviceMemory || 8) <= 4 || (S.frames.length > 1 && performance.now() - lite.quiet > 5000)))
 
-export const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
+const frameSig = f => [...f.slots.keys()].map(k => S.layers.get(k)?.ver || 0).join('.')
 export const frameBusy = f => S.order.some(k => { const l = S.layers.get(k); return belongs(f, l) && l.status !== 'done' && l.status !== 'failed' })
 
-export function freeze(f, image) {
+function freeze(f, image) {
   if (f.frozen) return
   const img = document.createElement('img')
   img.className = 'snap'
@@ -109,7 +109,7 @@ export async function loadModels() {
 }
 loadModels()
 
-export const ROLE_ROWS = [
+const ROLE_ROWS = [
   { role: 'planner', label: 'Planner', note: 'plans the pages and the design system', list: 'text' },
   { role: 'worker', label: 'Builders', note: 'every agent that writes a section', list: 'text' },
   { role: 'reviewer', label: 'Reviewer', note: 'looks at screenshots after a build (needs vision)', list: 'vision', off: true }
@@ -124,7 +124,7 @@ export async function saveModel(body) {
   if (body.role === 'worker' && typeof fillBuildModel === 'function') fillBuildModel()
 }
 
-export function renderModels() {
+function renderModels() {
   const info = modelsInfo
   const rows = ROLE_ROWS.map(r => {
     const s = info.roles?.[r.role] || {}
@@ -156,7 +156,7 @@ export function renderModels() {
 
 // The model fields' suggestions: our own scrolling list (a <datalist> popup can't
 // scroll in some embedded browsers, Hermes Desktop's among them). Type to filter.
-export function modelCombo(root, signal) {
+function modelCombo(root, signal) {
   let box = null, input = null, at = -1
   const close = () => { box?.remove(); box = null; input = null; at = -1 }
   const show = el => {
@@ -271,7 +271,7 @@ setInterval(() => {
 $('#design-close').onclick = () => { if (panels.has('design')) togglePanel('design') }
 
 // ☰ More: the toolbar's less-used buttons
-export const moreMenu = $('#more-menu'), moreBtn = $('#more-btn')
+const moreMenu = $('#more-menu'), moreBtn = $('#more-btn')
 moreBtn.onclick = e => { e.stopPropagation(); moreMenu.hidden = !moreMenu.hidden; moreBtn.classList.toggle('on', !moreMenu.hidden); if (!moreMenu.hidden) closeable(moreMenu, () => { moreMenu.hidden = true; moreBtn.classList.remove('on') }, { extra: [moreBtn] }) }
 moreMenu.addEventListener('click', () => setTimeout(() => { moreMenu.hidden = true; moreBtn.classList.remove('on') }))
 // @ts-ignore
@@ -280,10 +280,10 @@ document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.
 // ☰ → Light / Dark. The system's choice by default (prefers-color-scheme); a pick here is kept.
 // The page's colours follow at once (tokens only now: nothing is drawn from them, so no reload,
 // which used to drop a project back to Projects).
-export const themeBtn = $('#theme-btn'), sysLight = matchMedia('(prefers-color-scheme: light)')
-export const theme = () => document.documentElement.dataset.theme || (sysLight.matches ? 'light' : 'dark')
-export function themeLabel() { const next = theme() === 'light' ? 'dark' : 'light'; themeBtn.innerHTML = `${ico(next === 'light' ? 'sun' : 'moon')}${next === 'light' ? 'Light' : 'Dark'}` }
-export function setTheme(t) {
+const themeBtn = $('#theme-btn'), sysLight = matchMedia('(prefers-color-scheme: light)')
+const theme = () => document.documentElement.dataset.theme || (sysLight.matches ? 'light' : 'dark')
+function themeLabel() { const next = theme() === 'light' ? 'dark' : 'light'; themeBtn.innerHTML = `${ico(next === 'light' ? 'sun' : 'moon')}${next === 'light' ? 'Light' : 'Dark'}` }
+function setTheme(t) {
   const before = theme()
   document.documentElement.dataset.theme = t
   try { localStorage.setItem('swarm-theme', t) } catch {}
@@ -295,7 +295,7 @@ sysLight.addEventListener('change', () => { if (!document.documentElement.datase
 themeLabel()
 
 // The side panel can shrink to a small chat over the canvas; the chat stays.
-export function sideMin(on = !document.body.classList.contains('side-min')) {
+function sideMin(on = !document.body.classList.contains('side-min')) {
   document.body.classList.toggle('side-min', on)
   store.set('sideMin', on)
   if (on) showTab('chat')
@@ -306,9 +306,9 @@ $('#side-min').onclick = () => sideMin()
 if (store.get('sideMin')) sideMin(true)
 
 // The builders' model, right where a build starts (the rest live in Models)
-export const buildModel = $('#build-model')
+const buildModel = $('#build-model')
 // a short list: the pick, the ones picked lately and the planner's; "Other…" opens the full search in Models
-export async function fillBuildModel() {
+async function fillBuildModel() {
   const info = await loadModels()
   const s = info.roles?.worker || {}
   const recent = store.get('recentModels') || []

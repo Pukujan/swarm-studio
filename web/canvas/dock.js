@@ -12,7 +12,7 @@ import { nextFrame } from './loop.js'
 // ---------- Hermia's dock: the commander's own section under the steps. Her orders and her
 // thinking out loud, newest at the bottom like a chat. Folds to its header and slides
 // taller or shorter from its top edge; both stay as set in this browser.
-export const hdock = { el: $('#app-hermia'), key: '' }
+const hdock = { el: $('#app-hermia'), key: '' }
 ;(() => {
   const el = hdock.el
   if (!el) return
@@ -31,7 +31,7 @@ export const hdock = { el: $('#app-hermia'), key: '' }
   }
   grip.onkeydown = ev => { const d = { ArrowUp: 24, ArrowDown: -24 }[ev.key]; if (d) { ev.preventDefault(); size(el.getBoundingClientRect().height + d); save() } }
 })()
-export function hermiaDock() {
+function hermiaDock() {
   const el = hdock.el
   if (!el) return
   const feedL = radioOn() ? radio.feed : []
@@ -47,7 +47,7 @@ export function hermiaDock() {
   if (stick) box.scrollTop = box.scrollHeight
 }
 
-export function codeWall() {
+function codeWall() {
   hermiaDock()
   playClip()
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
@@ -207,7 +207,7 @@ export function codeWall() {
 // A painter's tile: the picture they are on, as it goes from a wash of paint to the painted
 // picture, its cut-out on dark and magenta while it is checked, and a ⚠ with the reviewer's
 // words when it is sent back. Before the first word from a painter: the next picture's name.
-export function cwPaintTile(d, i, member) {
+function cwPaintTile(d, i, member) {
   if (!d) return
   cwWho(d, member)
   const sl = paintv.run === cw.run ? paintv.slots[i] : null
@@ -238,7 +238,7 @@ export function cwPaintTile(d, i, member) {
 }
 
 // a tile's name chip: the courier working on it
-export function cwWho(d, member) {
+function cwWho(d, member) {
   const [name, color] = member || ['', '#888']
   const who = d.querySelector('.cw-who')
   if (who.dataset.name !== name) { who.dataset.name = name; who.innerHTML = name ? `${Crew.avatar(name, 16)}<span>${esc(name)}</span>` : ''; who.style.background = color; who.style.color = Crew.ink(color) }
@@ -248,7 +248,7 @@ export function cwWho(d, member) {
 // seconds, cross-fading on a slowly turning card with a scan sweep at each change. Models
 // are listed by the server but not drawn: the Studio does not load three.js. Nothing painted
 // yet: the next picture's name over a turning wireframe cube, never an empty pane.
-export function cwAssets() {
+function cwAssets() {
   if (cw.assetsLoading || Date.now() - cw.assetsAt < (cw.mode === 'art' ? 4000 : 12000)) return
   cw.assetsLoading = true
   const run = cw.run
@@ -267,9 +267,9 @@ export function cwAssets() {
 // jumps to the front. k 0 is the play test (the filmed clip covers it once a slice has one;
 // before that, the latest pictures under a "plays after this slice" note); k 1 and 2 share
 // the latest pictures between them. A picture being painted right now takes window 1.
-export const CW_NEW = 5 * 60e3, CW_SHOW = 6, CW_EVERY = 5200
+const CW_NEW = 5 * 60e3, CW_SHOW = 6, CW_EVERY = 5200
 // the picture window k shows now from the latest few, turning every CW_EVERY (staggered)
-export function cwSlide(a, k, pool, now) {
+function cwSlide(a, k, pool, now) {
   if (!pool.length) return null
   const top = pool[0].src
   if (a.top !== top) { a.top = top; a.n = 0; a.turn = now + CW_EVERY + k * 1700 }
@@ -279,16 +279,16 @@ export function cwSlide(a, k, pool, now) {
   const list = own.length ? own : pool
   return list[(a.n || 0) % list.length]
 }
-export function cwRanked() {
+function cwRanked() {
   const pics = cw.assets?.pics || []
   // newest first; pictures with no time keep the art plan's order, after the timed ones
   return pics.map((p, i) => ({ ...p, i })).sort((x, y) => (y.t || 0) - (x.t || 0) || y.i - x.i)
 }
-export function cwLive() {
+function cwLive() {
   if (paintv.run !== cw.run) return null
   return paintv.slots.filter(sl => sl && ['painting', 'cutting', 'checking', 'sent back'].includes(sl.state)).sort((x, y) => (y.t || 0) - (x.t || 0))[0] || null
 }
-export function cwAssetTile(d, member, now, k = 0) {
+function cwAssetTile(d, member, now, k = 0) {
   if (!d) return
   cwAssets()
   cwWho(d, member)
@@ -358,8 +358,8 @@ export function cwPin(i) {
 
 // ---------- 🔌 sign-in connectors (Supabase), through Hermes: Connect opens the provider's
 // sign-in page; Hermes keeps the token, the canvas only learns who is connected.
-export const conn = { all: null, busy: new Set() }
-export async function renderConnectors() {
+const conn = { all: null, busy: new Set() }
+async function renderConnectors() {
   const box = autoM.pop?.querySelector('.auto-conn')
   if (!box) return
   if (!conn.all) {

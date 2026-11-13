@@ -169,7 +169,7 @@ els.toolbar.addEventListener('click', e => {
 
 // Until a photo arrives, its spot shows a pencil sketch in the theme's colours,
 // different for every description, so a page looks finished from the start.
-export function sketch(desc) {
+function sketch(desc) {
   const v = S.theme?.vars || {}
   const c = n => esc(v[`--${n}`] || { muted: '#e9e4dc', card: '#faf8f4', accent: '#c96', primary: '#333', 'muted-foreground': '#888' }[n])
   let h = 0
@@ -193,8 +193,8 @@ export function sketch(desc) {
 // engine/standins.mjs). Finding one can take a while, so the sketch shows first and the photo
 // takes its place when it comes. It lives only here on the canvas: the saved build keeps the
 // empty slot, and the painted picture replaces the stand-in the moment it lands.
-export const standins = new Map() // the picture's prompt -> its url, null (none found) or 'wait'
-export function standinFor(gen) {
+const standins = new Map() // the picture's prompt -> its url, null (none found) or 'wait'
+function standinFor(gen) {
   if (BOOT.hosted || WALL) return null // the hosted studio has no stand-in source
   const had = standins.get(gen)
   if (had !== undefined) return had === 'wait' ? null : had
@@ -248,7 +248,7 @@ export function fillImages(l) {
 
 export const review = { busy: false, seq: 0, waits: new Map(), auto: null }
 export const frameTitle = id => S.frames.find(f => f.id === id)?.title || id
-export const reviewerOn = () => !!modelsInfo.roles?.reviewer?.model
+const reviewerOn = () => !!modelsInfo.roles?.reviewer?.model
 
 export function scanFrame(page, on) {
   const f = S.frames.find(fr => fr.id === page)
@@ -268,7 +268,7 @@ export function snapFrame(f, scale) {
 // it reports which floated text panels cover other text and, if asked, a
 // screenshot. The reviewer only ever saw the 1280px canvas frame before.
 export const checks = new Map()
-export const FN_JS = `function fontEmbedCSS() {
+const FN_JS = `function fontEmbedCSS() {
     // html-to-image can't read a stylesheet from another origin (Google Fonts), so a
     // snapshot fell back to system fonts and a resting page seemed to change font.
     // Fetch the faces ourselves (latin only, each file once) and hand them over inlined.
@@ -289,7 +289,7 @@ export const FN_JS = `function fontEmbedCSS() {
     }
     return fontEmbedCSS.css
   }`
-export function checkPage(id, width, snap) {
+function checkPage(id, width, snap) {
   const seq = `c${++review.seq}`
   const script = `<script>addEventListener('load', async () => {
   if (document.fonts) await document.fonts.ready

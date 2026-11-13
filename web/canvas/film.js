@@ -18,7 +18,7 @@ export const shownRun = () => (viewing && viewing !== 'new' ? viewing : S.run)
 // The build the left chat and Hermes's commands work on. In the studio it is the navigation machine's
 // (spec 34): its run in a build's room, none on Projects, a plan or a new talk. Without the studio
 // it is the one shown.
-export const BUILD_ROOMS = ['overview', 'deck', 'video', 'app', 'game']
+const BUILD_ROOMS = ['overview', 'deck', 'video', 'app', 'game']
 export function runNow() {
   const v = window.swarmCosmos?.nav?.view
   if (!v) return shownRun()
@@ -78,7 +78,7 @@ export function videoEvent(e) {
   renderVideo()
 }
 
-export function renderVideo() {
+function renderVideo() {
   const el = video.el
   if (!el) return
   // cuts made before this page was open come from the build's video folder
@@ -162,16 +162,16 @@ export function renderVideo() {
 // ---------- the film's outside services: music (ElevenLabs), clips (Veo…), pictures.
 // Hermes's own secrets, connectors and providers are used as they are; otherwise a key
 // pasted here switches one on; with nothing, the studio's own score and camera moves.
-export const media = { all: null, v: 0, open: '', loading: false }
-export const MEDIA_VIA = { hermes: 'Hermes', 'hermes-mcp': 'Hermes connector', key: 'Your key', 'built-in': 'Built in' }
-export async function loadMedia() {
+const media = { all: null, v: 0, open: '', loading: false }
+const MEDIA_VIA = { hermes: 'Hermes', 'hermes-mcp': 'Hermes connector', key: 'Your key', 'built-in': 'Built in' }
+async function loadMedia() {
   media.loading = true
   media.all = await api('/api/media').then(r => (r.ok ? r.json() : null)).catch(() => null)
   media.loading = false
   media.v++
   renderVideo()
 }
-export function mediaRow() {
+function mediaRow() {
   const all = media.all
   if (!all) return ''
   const chips = ['music', 'clips', 'pictures'].map(k => all[k] && `<button class="vsrc-b${all[k].on ? ' on' : ''}" data-src="${k}" aria-expanded="${media.open === k}"><b>${esc(all[k].label)}</b><span>${esc(all[k].by)}</span></button>`).filter(Boolean).join('')
@@ -185,7 +185,7 @@ export function mediaRow() {
   }
   return `<div class="vsrc">${chips}</div>${pop}`
 }
-export function mediaWire(el) {
+function mediaWire(el) {
   for (const b of el.querySelectorAll('[data-src]')) b.onclick = () => { media.open = media.open === b.dataset.src ? '' : b.dataset.src; renderVideo() }
   const post = async (path, body, errEl) => {
     const res = await api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null)
@@ -224,13 +224,13 @@ setInterval(async () => {
 }, 5000)
 
 // The voiceover: Kokoro, on this machine, in one of its voices; or none.
-export const VOICE_OPTS = [['', 'Kokoro · fits the theme'], ['af_heart', 'Kokoro · Heart'], ['af_bella', 'Kokoro · Bella'], ['am_michael', 'Kokoro · Michael'], ['bf_emma', 'Kokoro · Emma (UK)'], ['bm_george', 'Kokoro · George (UK)'], ['off', 'No voice']]
-export const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true, clips: store.get('videoClips') ?? true, style: store.get('videoStyle') || '', idea: '', refs: [] }
+const VOICE_OPTS = [['', 'Kokoro · fits the theme'], ['af_heart', 'Kokoro · Heart'], ['af_bella', 'Kokoro · Bella'], ['am_michael', 'Kokoro · Michael'], ['bf_emma', 'Kokoro · Emma (UK)'], ['bm_george', 'Kokoro · George (UK)'], ['off', 'No voice']]
+const videoOpts = { voice: store.get('videoVoice') ?? '', music: store.get('videoMusic') ?? true, clips: store.get('videoClips') ?? true, style: store.get('videoStyle') || '', idea: '', refs: [] }
 // video plans and cuts (the server has the same lists, in engine/video.mjs)
 export const VIDEO_STYLES = [['', 'The prompt'], ['trailer', 'Movie trailer'], ['promo', 'Promo'], ['kinetic', 'Kinetic type'], ['slideshow', 'Slideshow'], ['teaser', 'Teaser'], ['story', 'Customer story'], ['calm', 'Calm film']]
 
 // The video filling the whole pane (and the screen, where the app allows it).
-export function bigScreen(on) {
+function bigScreen(on) {
   document.querySelector('.video-big')?.remove()
   if (!on || !video.src) return
   const wrap = document.createElement('div')
