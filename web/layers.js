@@ -39,12 +39,14 @@ export function layerTree(host, groups, on) {
   for (const g of groups) {
     const div = document.createElement('div')
     div.className = `pg${g.open ? ' open' : ''}`
+    // a group is an expandable tree item that owns its rows (role=tree holds tree items only)
+    div.setAttribute('role', 'treeitem')
+    div.setAttribute('aria-expanded', String(g.open))
+    div.setAttribute('aria-label', g.num ? `${g.num} ${g.title}` : g.title)
     const title = document.createElement('div')
     title.className = 'pg-title'
     title.dataset.page = g.id
-    title.setAttribute('role', 'button')
     title.tabIndex = 0
-    title.setAttribute('aria-expanded', String(g.open))
     title.innerHTML = `${g.state ? `<i class="sc-dot ${g.state}" role="img"></i>` : ''}<span class="num"></span><span class="ttl"></span>${g.busy ? '<span class="dot busy" role="img" aria-label="Working"></span>' : ''}${g.count != null ? '<span class="n"></span>' : ''}<span class="caret">▶</span>`
     title.querySelector('.sc-dot')?.setAttribute('aria-label', STEP_STATE[g.state] || g.state)
     const num = /** @type {HTMLElement} */ (title.querySelector('.num')), ttl = /** @type {HTMLElement} */ (title.querySelector('.ttl'))
