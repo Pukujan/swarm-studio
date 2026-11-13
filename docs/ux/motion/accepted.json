@@ -1,5 +1,5 @@
 {
-  "why": "Empty: PR studio-layers (#416) changes how the studio, deck, mid-build and replay scenes look (its description's \"Motion: looks change in\" line), not what animates. PR pet-cursor's kinds were emptied here, as this file's rule asks.",
+  "why": "None: list here the animation kinds a change means to gain or lose (docs/ux/MOTION.md, \"A change that changes the motion\").",
   "gained": [],
   "lost": []
 }

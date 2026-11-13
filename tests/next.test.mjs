@@ -25,7 +25,10 @@ test('the token goes into the page at serve time, escaped, and never into ui/dis
   const page = nextPage(dist, { token: 'a</script><b>' })
   assert.ok(page.includes('window.SWARM = {"token":"a\\u003c/script>\\u003cb>","version":"'))
   assert.ok(read('ui/dist/index.html').includes('<!-- swarm:boot -->'))
-  assert.ok(!read('ui/dist/assets/next.js').includes('x-swarm-token'))
+  // the build reads the token from window.SWARM at run time (it sends it as x-swarm-token); it never carries one
+  const js = read('ui/dist/assets/next.js')
+  assert.ok(!/window\.SWARM\s*=/.test(js), 'ui/dist sets no window.SWARM of its own')
+  assert.ok(!js.includes('"token":'), 'no boot data in ui/dist')
 })
 
 test('a plugin without ui/dist/ has no /next/ page, and nothing is built for it', () => {

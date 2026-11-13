@@ -80,10 +80,6 @@
     "detail": "nothing showed it was loading, and the screen asked for no data"
   },
   {
-    "key": "plan@1440 breadcrumb",
-    "detail": "reads \"Plan board\", should read \"Home › Projects › New game › Plan\""
-  },
-  {
     "key": "plan@1440 loading",
     "detail": "nothing showed it was loading, and the screen asked for no data"
   },
@@ -96,16 +92,8 @@
     "detail": "nothing showed it was loading, and the screen asked for no data"
   },
   {
-    "key": "projects@1440 breadcrumb",
-    "detail": "reads \"\", should read \"Home › Projects\""
-  },
-  {
     "key": "projects@1440 loading",
     "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
-    "key": "projects@390 breadcrumb",
-    "detail": "reads \"\", should read \"Home › Projects\""
   },
   {
     "key": "projects@390 loading",
