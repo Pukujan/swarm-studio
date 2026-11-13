@@ -167,6 +167,18 @@ jobs:
           node-version: 24
       - run: npm ci --prefix tools/dev --no-audit --no-fund
       - run: npm run --prefix tools/dev property
+  # metamorphic relations (decision 0019 point 3, tests/metamorphic/README.md): what must hold between two builds
+  # when no output is the one right answer, checked on the crew's recorded output; the nightly workflow
+  # (metamorphic-nightly.yml) checks the same on live models
+  metamorphic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test "tests/metamorphic/*.test.mjs"
   # the next UI's stories build (ui/, its Storybook mock-ups); nothing of it is kept
   storybook:
     runs-on: ubuntu-latest
@@ -227,6 +239,31 @@ jobs:
         with:
           name: ui-audit
           path: test-results
+          retention-days: 7
+  # the OpenSpec scenarios run (decision 0019 point 2, tests/bdd/gen.mjs, tools/dev/bdd.config.mjs): each one has a
+  # bound test or is marked pending #N in tests/bdd/pending.json, else bddgen fails here; they run in the current
+  # Studio at / and, for a screen that has moved, in the next UI at /next/
+  bdd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+        working-directory: tools/dev
+      - run: npx playwright install --with-deps chromium-headless-shell
+        working-directory: tools/dev
+      # /next/ is served from ui/dist/, built here (main and pull requests carry none)
+      - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      - run: npm run bdd
+        working-directory: tools/dev
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdd
+          path: test-results/bdd
           retention-days: 7
   # the Studio moves the same before and after (docs/ux/MOTION.md, scripts/motion-check.mjs): the base
   # and the head are each recorded twice in this runner and compared; skipped when web/, server/ and the check itself are untouched

@@ -1,5 +1,50 @@
 [
   {
+    "key": "brand cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
+  },
+  {
+    "key": "brand only in /: page @in 300ms x1 ease-out",
+    "label": "drift",
+    "why": "The current brand sheet fades its sections in (@in, 300 ms) as the options come; the /next/ sheet draws them at once."
+  },
+  {
+    "key": "brand only in /: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia taps the sheet's loading cards while the options are made; on /next/ the options come before her first look, so she has nothing to tap."
+  },
+  {
+    "key": "brand only in /: page ~border-bottom-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
+  },
+  {
+    "key": "brand only in /: page ~border-left-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
+  },
+  {
+    "key": "brand only in /: page ~border-right-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
+  },
+  {
+    "key": "brand only in /: page ~border-top-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
+  },
+  {
+    "key": "brand only in /next/: page ~opacity 300ms x1 ease",
+    "label": "drift",
+    "why": "Hermia fades in (300 ms, web/pet.css .pet) the first time she shows on the /next/ brand sheet; on / she is already on screen from the Studio scaffold it opened from."
+  },
+  {
+    "key": "brand reduced cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
+  },
+  {
     "key": "deck cursor Ada: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
@@ -10,19 +55,24 @@
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
   },
   {
-    "key": "deck cursor Hermia: only in /",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
-  },
-  {
-    "key": "deck only in /: page @pet-bob endless 2600ms ease-in-out",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
-  },
-  {
     "key": "deck only in /: page @radio-dash endless 800ms linear",
     "label": "intended (PR #432)",
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+  },
+  {
+    "key": "deck only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "deck only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "deck only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
   },
   {
     "key": "deck reduced cursor Ada: only in /",
@@ -35,9 +85,34 @@
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
   },
   {
-    "key": "deck reduced cursor Hermia: only in /",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+    "key": "game cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
+  },
+  {
+    "key": "game only in /: page @in 250ms x1 ease-out",
+    "label": "drift",
+    "why": "The current Game room fades its panel in (@in, 250 ms) when a version opens from the Overview; at /next/ the Game room is still the stand-in, so nothing fades."
+  },
+  {
+    "key": "game reduced cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
+  },
+  {
+    "key": "make cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
+  },
+  {
+    "key": "make only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
+    "label": "drift",
+    "why": "The kit's Button brightens on hover in 150 ms (ui/src/primitives/Button.tsx); the current Make box's button changes at once. Reduced motion turns it off."
+  },
+  {
+    "key": "make reduced cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
   },
   {
     "key": "mid-build cursor Ada: only in /",
@@ -50,14 +125,14 @@
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
   },
   {
+    "key": "mid-build cursor Hermia: only in /next/",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
     "key": "mid-build only in /: frame @draw 600ms x1 cubic-bezier(0.2, 0.8, 0.2, 1)",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
-    "key": "mid-build only in /: page @pet-bob endless 2600ms ease-in-out",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
     "key": "mid-build only in /: page @pulse endless 1200ms ease-in-out",
@@ -80,6 +155,21 @@
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
   {
+    "key": "mid-build only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "mid-build only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "mid-build only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
     "key": "mid-build reduced cursor Ada: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
@@ -90,9 +180,44 @@
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
   },
   {
+    "key": "mid-build reduced cursor Hermia: only in /next/",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
     "key": "mid-build reduced only in /: frame @draw 600ms x1 cubic-bezier(0.2, 0.8, 0.2, 1)",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
+  },
+  {
+    "key": "overview cursor Ada: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview cursor Bo: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
+  },
+  {
+    "key": "overview reduced cursor Ada: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview reduced cursor Bo: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview reduced cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
   },
   {
     "key": "play cursor Ada: only in /",
@@ -105,11 +230,6 @@
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
   },
   {
-    "key": "play cursor Hermia: only in /",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
-  },
-  {
     "key": "play only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
@@ -118,11 +238,6 @@
     "key": "play only in /: frame ~transform 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
-  },
-  {
-    "key": "play only in /: page @pet-bob endless 2600ms ease-in-out",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
     "key": "play only in /: page @radio-dash endless 800ms linear",
@@ -135,6 +250,21 @@
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
   {
+    "key": "play only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "play only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "play only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
     "key": "play reduced cursor Ada: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
@@ -145,9 +275,14 @@
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
   },
   {
-    "key": "play reduced cursor Hermia: only in /",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+    "key": "projects cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
+  },
+  {
+    "key": "projects reduced cursor Hermia: apart",
+    "label": "drift",
+    "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
   },
   {
     "key": "publish cursor Ada: only in /",
@@ -160,14 +295,9 @@
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
   },
   {
-    "key": "publish cursor Hermia: only in /",
-    "label": "intended (PR #438)",
-    "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
-  },
-  {
-    "key": "publish only in /: page @pet-bob endless 2600ms ease-in-out",
-    "label": "intended (PR #438)",
-    "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
+    "key": "publish cursor Hermia: apart",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
   },
   {
     "key": "publish only in /: page @pop 200ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
@@ -205,9 +335,24 @@
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
   },
   {
+    "key": "publish only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
+    "key": "publish only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+  },
+  {
     "key": "publish only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
+  },
+  {
+    "key": "publish only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
   },
   {
     "key": "publish reduced cursor Ada: only in /",
@@ -220,9 +365,9 @@
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
   },
   {
-    "key": "publish reduced cursor Hermia: only in /",
-    "label": "intended (PR #438)",
-    "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
+    "key": "publish reduced cursor Hermia: apart",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
   },
   {
     "key": "publish: the flow broke",
@@ -263,11 +408,6 @@
     "key": "replay only in /: frame @scan endless 2400ms cubic-bezier(0.45, 0, 0.55, 1)",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
-    "key": "replay only in /: page @pet-bob endless 2600ms ease-in-out",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
     "key": "replay only in /: page @pulse endless 1200ms ease-in-out",
@@ -390,26 +530,6 @@
     "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
   },
   {
-    "key": "studio reduced moves although reduced motion is asked for: page ~opacity 250ms x1 ease",
-    "label": "drift",
-    "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
-  },
-  {
-    "key": "studio reduced moves although reduced motion is asked for: page ~transform 250ms x1 ease",
-    "label": "drift",
-    "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
-  },
-  {
-    "key": "studio reduced only in /next/: page ~opacity 250ms x1 ease",
-    "label": "drift",
-    "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
-  },
-  {
-    "key": "studio reduced only in /next/: page ~transform 250ms x1 ease",
-    "label": "drift",
-    "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
-  },
-  {
     "key": "visitor cursor Ada: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
@@ -420,11 +540,6 @@
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
   },
   {
-    "key": "visitor cursor Hermia: only in /",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
-  },
-  {
     "key": "visitor only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
@@ -433,11 +548,6 @@
     "key": "visitor only in /: frame ~transform 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
-  },
-  {
-    "key": "visitor only in /: page @pet-bob endless 2600ms ease-in-out",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
     "key": "visitor only in /: page @radio-dash endless 800ms linear",
@@ -460,9 +570,24 @@
     "why": "The current player fades a visitor's thought as it changes (.swap, 250 ms); /next/ changes the words at once."
   },
   {
+    "key": "visitor only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet, so she stays and works on its loading cards."
+  },
+  {
+    "key": "visitor only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet, so she stays and works on its loading cards."
+  },
+  {
     "key": "visitor only in /next/: page ~background-color 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
     "label": "drift",
     "why": "The kit's buttons (src/primitives/Button.tsx) fade their fill on hover and press; the current player's buttons change at once. None under reduced motion."
+  },
+  {
+    "key": "visitor only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet, so she stays and works on its loading cards."
   },
   {
     "key": "visitor reduced cursor Ada: only in /",
@@ -473,10 +598,5 @@
     "key": "visitor reduced cursor Bo: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
-  },
-  {
-    "key": "visitor reduced cursor Hermia: only in /",
-    "label": "intended (PR #432)",
-    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   }
 ]

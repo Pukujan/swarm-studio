@@ -1,0 +1,3 @@
+/* The board's one keyframe: the crew at work on an empty frame, a slow sheen across it (web/plan.css .pl-work).
+   Reduced motion holds it still (motion-safe: on its use). */
+@keyframes pl-sheen { from { background-position: 130% 0; } to { background-position: -130% 0; } }
