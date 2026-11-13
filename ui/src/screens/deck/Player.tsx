@@ -169,7 +169,7 @@ export function Player({ model }: { model: DeckModel }) {
         </div>
         {v.cursor && v.tour && (
           <div aria-hidden className="pointer-events-none absolute top-0 left-0 z-10" style={{ transform: `translate(${Math.round(v.cursor.x)}px, ${Math.round(v.cursor.y)}px)` }}>
-            <svg key={v.press} viewBox="0 0 24 24" width="22" height="22" className="motion-safe:animate-[pulse_.4s_ease-out_1]"><path d="M4 2l15 9.5-6.6 1.2 3.9 7.6-3 1.5-3.9-7.7L4 18.6z" fill="#F2F2F2" stroke="#05051a" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l15 9.5-6.6 1.2 3.9 7.6-3 1.5-3.9-7.7L4 18.6z" fill="#F2F2F2" stroke="#05051a" strokeWidth="1.5" strokeLinejoin="round" /></svg>
             {v.thought && (
               <div className={`absolute top-6 w-max max-w-64 rounded-[12px] border border-edge bg-surface-2 px-3 py-1.5 font-monospace text-[13px] text-text ${v.cursor.x > size.w - 300 ? 'right-4' : 'left-4'}`}>
                 {v.tour.emoji} {v.thought}
