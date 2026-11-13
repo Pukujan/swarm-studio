@@ -36,6 +36,7 @@ import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
+import { nextPage } from './next.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { CHAT_ID } from '../engine/chats.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
@@ -85,6 +86,7 @@ import { snapStore } from './snaps.mjs'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BOOTED = Date.now()
 const webDir = join(root, 'web')
+const uiDist = join(root, 'ui', 'dist')
 const runsDir = process.env.SWARM_RUNS_DIR || join(root, 'runs')
 const dataDir = process.env.SWARM_DATA_DIR || root
 const argPort = process.argv.indexOf('--port')
@@ -2608,6 +2610,20 @@ const server = createServer((req, res) => {
   if (url.pathname === '/' || url.pathname === '/index.html') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
     res.end(canvasPage())
+    return
+  }
+
+  // the Studio's next UI, its screens moving over one at a time (docs/decisions/0013-react-ui-coexists.md). Same
+  // address as /: ?project=…&version=…&room=… opens the same place in either
+  if (url.pathname === '/next') {
+    res.writeHead(302, { location: `/next/${url.search}` }).end()
+    return
+  }
+  if (url.pathname === '/next/' || url.pathname === '/next/index.html') {
+    const page = nextPage(uiDist, { token })
+    if (!page) return void res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(page)
     return
   }
 

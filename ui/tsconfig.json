@@ -1,0 +1,24 @@
+{
+  // The type check for the next UI (CI: tools/dev, `npm run typecheck:ui`). Vite and Storybook compile without
+  // checking types; this is the check. web/nav.js is the current Studio's file, checked by the root tsconfig.json:
+  // here it is `@studio/nav`, typed by src/nav/studio-nav.d.ts.
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "es2023",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["vite/client", "node"],
+    "paths": { "@studio/nav": ["./src/nav/studio-nav.d.ts"] }
+  },
+  "include": ["src", ".storybook", "vite.config.ts"]
+}

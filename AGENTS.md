@@ -39,7 +39,10 @@ Checks before a PR: `bash scripts/check.sh`; for code in `web/`, also `npm ci --
 `npm run --prefix tools/dev deps` (no new cycles beyond `.dependency-cruiser-known-violations.json`; an area
 folder under `web/canvas/` is used only through its `index.js`).
 The Studio's theme variables are design tokens: change `tokens/*.tokens.json`, run `npm run --prefix tools/dev tokens`
-and commit `web/tokens.css` with them; never edit `web/tokens.css` by hand (`tokens:check` fails a stale one).
+and commit `web/tokens.css` and `ui/src/theme.css` with them; never edit either by hand (`tokens:check` fails a stale one).
+The Studio is moving to React in `ui/`, served at `/next/` ([decision 0013](docs/decisions/0013-react-ui-coexists.md)).
+For code in `ui/`: `npm ci --prefix ui`, then `npm run --prefix tools/dev typecheck:ui`, `deps:ui` and `ui:check`
+(rebuild with `npm run --prefix ui build` and commit `ui/dist/`). [ui/README.md](ui/README.md) is how a screen moves.
 CI's `motion-check` compares the Studio's motion before and after (docs/ux/MOTION.md). CI's `ui-audit` checks
 every top-level screen against the rules a machine can check (docs/ux/AUDIT.md). A new violation fails; a
 known one is in `.ui-audit-known-violations.json`.

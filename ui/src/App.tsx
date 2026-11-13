@@ -1,0 +1,26 @@
+// The next Studio's frame: the top bar and the screen the machine names. Esc goes up one level (RULES.md rule 7):
+// back where the machine has a back (a Studio step, the brand sheet), else to Projects.
+import { useEffect } from 'react'
+import { useNav } from './nav/NavProvider'
+import { NotMovedYet } from './screens/NotMovedYet'
+import { SCREENS } from './screens'
+import { TopBar } from './shell/TopBar'
+
+export function App() {
+  const { view, go, can } = useNav()
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || view.room === 'home') return
+      go(can({ type: 'back' }) ? { type: 'back' } : { type: 'home' })
+    }
+    addEventListener('keydown', onKey)
+    return () => removeEventListener('keydown', onKey)
+  }, [view.room, go, can])
+  const Screen = SCREENS[view.room] ?? NotMovedYet
+  return (
+    <div className="min-h-dvh bg-bg text-text">
+      <TopBar />
+      <main><Screen /></main>
+    </div>
+  )
+}

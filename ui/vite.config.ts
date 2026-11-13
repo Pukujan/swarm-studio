@@ -1,0 +1,36 @@
+// The next UI's build (docs/decisions/0013-react-ui-coexists.md). `npm run build` writes ui/dist/, which is
+// committed: the plugin's server serves it at /next/ with the script and styles inlined (server/next.mjs), so
+// installing the plugin builds nothing. File names are fixed and nothing is hashed or mapped, so the same source
+// builds the same bytes (`npm run check` compares them).
+import { fileURLToPath } from 'node:url'
+import { defineConfig, type AliasOptions } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+const repo = fileURLToPath(new URL('..', import.meta.url))
+
+// Shared with .storybook/main.ts. The current Studio's navigation machine, imported, not copied (src/nav/nav.ts);
+// it imports the vendored XState (web/vendor/xstate/), which here is the same version from npm, pinned in
+// package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
+export const alias: AliasOptions = [
+  { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
+  { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: 'xstate' }
+]
+
+export default defineConfig({
+  base: '/next/',
+  plugins: [react(), tailwindcss()],
+  resolve: { alias },
+  // web/nav.js and web/tokens.css live outside ui/
+  server: { fs: { allow: [repo] }, port: 5317, strictPort: true },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    sourcemap: false,
+    modulePreload: false,
+    cssCodeSplit: false,
+    rolldownOptions: {
+      output: { entryFileNames: 'assets/next.js', assetFileNames: 'assets/next[extname]' }
+    }
+  }
+})
