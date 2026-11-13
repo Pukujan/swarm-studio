@@ -203,12 +203,21 @@ export function makeHome({ sw, C, root }) {
   // a stack opened: each version is a card of its own, named Version n (as in the breadcrumb's menu):
   // "Night Runner 3, 2, 1" read as three projects
   const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `Version ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, state: v.state || null, count: 1, live: v.live, work: v.work || null, progress: v.work?.pct ?? null, updated: v.updated || v.t, made: v.t }))
+  // an empty view says in one line what goes there; Make something puts the cursor in the Make box
+  const none = (icon, line, make = false) => `<div class="hm-none">${ic(icon, 28)}<p>${line}</p>${make && !hosted() ? `<button type="button" class="btn ghost hm-first">${ic('plus', 15)}Make something</button>` : ''}</div>`
+  const narrowed = () => !!(H.q || H.filter)
+  const NONE = {
+    recent: ['clock', 'Projects you open show up here', true],
+    all: ['grid', 'Every project the crew builds lives here', true],
+    folder: ['folder', 'Drag a project here to file it'],
+    trash: ['trash', 'Deleted projects wait here until you empty Trash']
+  }
   function renderCards() {
     let list
     if (H.stack) { const p = H.data.projects.find(x => x.id === H.stack); list = p ? versionCards(p) : [] }
     else list = shown()
     bodyEl.className = `hm-body ${H.layout}`
-    bodyEl.innerHTML = list.length ? list.map(card).join('') : ''
+    bodyEl.innerHTML = list.length ? list.map(card).join('') : H.stack ? '' : narrowed() ? none('search', 'Nothing matches') : none(...(NONE[H.view] || NONE.all))
     bodyEl.querySelectorAll('.card.live .crew').forEach(wander)
   }
   // Assets: grouped by the project each piece came from, in the same folders as Projects;
@@ -244,7 +253,7 @@ export function makeHome({ sw, C, root }) {
       html += `${f ? `<h3 class="as-folder">${ic('folder', 15)}<span>${esc(f)}</span></h3>` : ''}${ids.map(group).join('')}`
     }
     bodyEl.className = 'hm-body assets'
-    bodyEl.innerHTML = html
+    bodyEl.innerHTML = html || (narrowed() ? none('search', 'Nothing matches') : none('image', 'Pictures, sections, films and files from every project, to reuse in later builds', true))
     H.assetList = flat
   }
   // Chats (spec 29): talks with the planner that have not built anything, newest first. One opens in
@@ -259,6 +268,7 @@ export function makeHome({ sw, C, root }) {
     bodyEl.innerHTML = `<div class="chat-row chat-new" data-new tabindex="0" role="button">${ic('plus', 16)}<b class="cr-nm">New chat</b></div>` + list.map(c => `<div class="chat-row" data-chat="${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.title)}">
       ${ic(CHAT_ICON[c.kind] || 'msg', 16)}<b class="cr-nm">${esc(c.title)}</b>${c.state === 'locked' ? `<span class="cr-st">Locked</span>` : ''}<span class="cr-t">${ago(c.updated)}</span>
       <button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button></div>`).join('')
+      + (list.length ? '' : H.q ? none('search', 'Nothing matches') : none('msg', 'Talks with the planner that built nothing yet'))
   }
   async function openChat(id) {
     const chat = await api(`/api/chats/${encodeURIComponent(id)}`).catch(() => null)
@@ -294,6 +304,7 @@ export function makeHome({ sw, C, root }) {
     if (e.target.closest('.more')) return showMenu([{ k: 'rename', icon: 'pencil', label: 'Rename', run: () => renameChat(id) }, { k: 'del', icon: 'trash', label: 'Delete', red: true, run: () => deleteChat(id) }], e.target.closest('.more'))
     openChat(id)
   }, true)
+  bodyEl.addEventListener('click', e => { if (e.target.closest('.hm-first')) { drawer(false); input.focus() } })
   bodyEl.addEventListener('dblclick', e => { const n = e.target.closest('.chat-row:not(.chat-new) .cr-nm'); if (n) { e.preventDefault(); renameChat(n.closest('.chat-row').dataset.chat) } })
   bodyEl.addEventListener('keydown', e => {
     const r = e.target.closest('.chat-row')
@@ -525,7 +536,7 @@ export function makeHome({ sw, C, root }) {
   // ---------- actions
   async function act(op, ids, extra = {}) {
     if (!ids.length) return
-    if (op === 'purge' && !(await confirmDelete(ids.length, false))) return
+    if (op === 'purge') { if (await confirmDelete(ids.length, false)) purge(ids); return }
     try {
       const out = await post('/api/projects', { op, ids, ...extra })
       H.data = { folders: out.folders, projects: out.projects }
@@ -560,9 +571,26 @@ export function makeHome({ sw, C, root }) {
   }
   async function emptyTrash() {
     const n = H.data.projects.filter(p => p.trashed).length
-    if (!n || !(await confirmDelete(n, true))) return
-    const out = await post('/api/projects', { op: 'empty' }).catch(() => null)
-    if (out) { H.data = { folders: out.folders, projects: out.projects }; render() }
+    if (n && (await confirmDelete(n, true))) purge(null)
+  }
+  // Delete forever (ids) or Empty Trash (null), once confirmed: the toast says how many went. A project the
+  // server could not remove (a file in it held open) stays in Trash, named, with Retry; so does a failed call
+  async function purge(ids) {
+    let out
+    try { out = await post('/api/projects', ids ? { op: 'purge', ids } : { op: 'empty' }) } catch (err) {
+      toast(`<span>${esc(err.body?.error || err.message)}</span>`, 'Retry', () => purge(ids))
+      return
+    }
+    H.data = { folders: out.folders, projects: out.projects }
+    H.sel.clear()
+    closeMenu()
+    render()
+    const n = out.removed || 0, failed = out.failed || []
+    const gone = n ? `${n} project${n > 1 ? 's' : ''} deleted forever` : ''
+    if (!failed.length) return toast(`${ic('check', 15)}<span>${gone || 'Nothing to delete'}</span>`)
+    const held = failed.every(f => f.code === 'EBUSY' || f.code === 'EPERM')
+    const kept = failed.length > 1 ? `${failed.length} stayed in Trash` : `${failed[0].title} stayed in Trash`
+    toast(`<span>${gone ? `${gone}. ` : ''}${esc(kept)}: ${esc(held ? 'a file in it is open' : failed[0].error)}</span>`, 'Retry', () => purge(failed.map(f => f.id)))
   }
   async function download(run) {
     toast(`${ic('download', 15)}<span>Preparing</span>`)
