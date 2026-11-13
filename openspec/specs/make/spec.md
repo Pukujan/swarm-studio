@@ -57,12 +57,14 @@ lead to the same screen. A kind left with one way SHALL go straight there with n
 ### Requirement: Nothing builds without a press
 
 Just build SHALL open the brief in the Design deck's chat with Build and Keep talking; the crew SHALL start only on
-Build. A stop or a wish to talk, in the prompt or an answer, SHALL never start a build (REQUIREMENTS 2026-11-11).
+Build. For a new website, Just build is the press: it SHALL go straight to the question before a new website (below),
+and the crew SHALL start only on its answer. A stop or a wish to talk, in the prompt or an answer, SHALL never start a
+build (REQUIREMENTS 2026-11-11).
 
 #### Scenario: Just build
 - **WHEN** the person picks Just build
-- **THEN** the Design deck's chat shows the brief and the steps it will take, with Build and Keep talking, and no
-  agent is working
+- **THEN** the Design deck's chat shows the brief and the steps it will take, with Build and Keep talking (for a new
+  website: the question before the build, with its three answers), and no agent is working
 - Gate: `manual`
 
 #### Scenario: "Don't build yet"
