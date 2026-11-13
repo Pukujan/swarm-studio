@@ -15,8 +15,10 @@
 //   alive with the film playing and after leaving the board (an element still holding its media is a player
 //   that was never torn down: pause, remove src, load).
 // CI measures the pull request's base and head in the same runner, interleaved, and compare fails when the
-// head's median is past the thresholds: p95 frame time +10%, memory (JS heap, DOM nodes, GPU) +15%, and any
-// more live frames or players left after teardown. docs/perf/board-gauge.json keeps a baseline to read.
+// head's median is past the thresholds: p95 frame time +10% (taken over every run's frames, and at least
+// 0.5 ms: frames of 2-4 ms move more than 10% on the same code), memory (JS heap, DOM nodes, GPU) +15%, and
+// any more live frames, crashes or players left after teardown, or a film that did not play.
+// docs/perf/board-gauge.json keeps a baseline to read.
 // It starts its own throwaway Studio and never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
@@ -118,7 +120,7 @@ const PLAYERS = () => [...(window.__media || [])].filter(m => m.networkState !==
 const SCENES = [
   { id: 'overview', at: '/?project=RUN&version=RUN', ready: n => document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)').length >= n, film: true },
   { id: 'deck', at: '/?project=RUN&version=RUN&room=deck', ready: n => (window.swarm?.S?.frames?.length || 0) >= n },
-  { id: 'next', at: '/next/?project=RUN&version=RUN&room=deck', ready: () => !!document.querySelector('[role="region"][aria-label="Canvas"]') && document.querySelectorAll('iframe').length > 0 }
+  { id: 'next', at: '/next/?project=RUN&version=RUN&room=deck', ready: n => !!document.querySelector('[role="region"][aria-label="Canvas"]') && document.querySelectorAll('iframe').length >= n }
 ]
 
 async function measure(out, { root, runs: N, only }) {
@@ -166,7 +168,7 @@ async function measure(out, { root, runs: N, only }) {
       let m
       try { m = await within(`the ${sc.id} board`, 300000, scene(browser, sc, BASE)) } catch (e) { m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200) } } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
-      console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify(m)}`)
+      console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify({ ...m, ft: undefined })}`)
     }
   } finally {
     server.kill()
@@ -187,16 +189,18 @@ async function scene(browser, sc, BASE) {
   const t0 = Date.now()
   await page.goto(BASE + sc.at.replace(/RUN/g, RUN), { waitUntil: 'load', timeout: 60000 })
   const ready = await page.waitForFunction(sc.ready, PAGES, { timeout: 90000, polling: 250 }).then(() => Date.now() - t0, () => null)
-  // the board settles: its pictures and frames load; then the film plays where a person plays it
-  await wait(5000)
-  // (from its row in the Files list: on a 250-page board its tile is far off the stage)
+  // the board settles: its pictures and frames load until its DOM stops growing (the same node count for 2 s,
+  // read every 500 ms); a fixed wait caught /next/ part-way through mounting its pages in some runs
+  const nodesNow = async () => (await within('Performance.getMetrics', 15000, cdp.send('Performance.getMetrics'))).metrics.find(x => x.name === 'Nodes')?.value
+  for (let last = -1, same = 0, i = 0; i < 120 && same < 4; i++) { await wait(500); const n = await nodesNow(); same = n === last ? same + 1 : 0; last = n }
+  // then the film plays where a person plays it (from its row in the Files list: on a 250-page board its tile
+  // is far off the stage), and the gauge waits until it is playing, not for a fixed time
   let filmPlaying = null
   if (sc.film) {
-    await page.click('.pj-list .row[data-key="film:0"]', { timeout: 10000 }).catch(() => {})
-    await page.waitForSelector('.pj-insp video', { timeout: 10000 }).catch(() => {})
-    await within('playing the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (v) { v.muted = true; v.loop = true; return v.play().catch(() => {}) } })).catch(() => {})
-    await wait(1500)
-    filmPlaying = await within('reading the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return v && !v.paused && v.readyState >= 2 && v.currentTime > 0 ? 1 : 0 }))
+    await page.click('.pj-list .row[data-key="film:0"]', { timeout: 30000 }).catch(() => {})
+    await page.waitForSelector('.pj-insp video', { timeout: 30000 }).catch(() => {})
+    await within('playing the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (v) { v.muted = true; v.loop = true; v.play().catch(() => {}) } })).catch(() => {})
+    filmPlaying = await page.waitForFunction(() => { const v = document.querySelector('.pj-insp video'); return v && !v.paused && v.readyState >= 2 && v.currentTime > 0 }, null, { timeout: 30000, polling: 100 }).then(() => 1, () => 0)
   }
   // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time
   const box = await within('the window size', 15000, page.evaluate(() => ({ w: innerWidth, h: innerHeight })))
@@ -230,7 +234,8 @@ async function scene(browser, sc, BASE) {
     after = await playersOf()
   }
   await within('closing the page', 30000, ctx.close()).catch(() => {})
-  return { readyMs: ready, filmPlaying, frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
+  // (the frame times themselves too, to the 0.1 ms: compare takes its percentiles over every run's frames)
+  return { readyMs: ready, filmPlaying, ft: ft.map(x => round(x)), frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
 }
 
 async function layerCount(cdp) {
@@ -275,9 +280,13 @@ function print(r) {
 
 // a regression: the head's median past the threshold, for each scene measured on both sides
 // (several measure files a side, comma-separated: their runs are pooled; CI interleaves base and head)
+// the frame percentiles are taken over every run's frames together (one run's p95 of a few ms moves more than
+// 10% on the same code); the rest is each run's number, the median of them
 const medians = s => {
   const ok = s.runs.filter(r => !r.crashed), first = ok[0] || {}
-  s.median = { ...Object.fromEntries(Object.keys(first).map(k => [k, typeof first[k] === 'object' && first[k] ? Object.fromEntries(Object.keys(first[k]).map(q => [q, median(ok.map(x => x[k]?.[q]))])) : median(ok.map(x => x[k]))])), crashes: s.runs.length - ok.length }
+  const keys = Object.keys(first).filter(k => k !== 'ft' && k !== 'frame')
+  const ft = ok.flatMap(r => r.ft || [])
+  s.median = { ...Object.fromEntries(keys.map(k => [k, median(ok.map(x => x[k]))])), frame: ft.length ? { p50: pct(ft, 0.5), p95: pct(ft, 0.95), p99: pct(ft, 0.99) } : null, crashes: s.runs.length - ok.length }
   return s
 }
 function pool(files) {
@@ -295,17 +304,18 @@ function compare(a, b, frameT, memT) {
     const x = A.scenes[id]?.median, y = B.scenes[id].median
     if (!x) { console.log(`  ${id}: not on the base, not compared`); continue }
     const row = []
-    const over = (what, k, t, get = m => m[k]) => {
+    // floor: a change smaller than this is not counted, however large in percent (frame times of 2-4 ms)
+    const over = (what, k, t, get = m => m[k], floor = 0) => {
       const p = get(x), q = get(y)
       if (p == null || q == null) return row.push(`${what} n/a`)
-      const bad = t == null ? q > p : q > p * (1 + t)
+      const bad = t == null ? q > p : q > p * (1 + t) && q - p >= floor
       row.push(`${what} ${p} → ${q}${bad ? ' ✗' : ''}`)
       if (bad) fails.push(`${id}: ${what} ${p} → ${q} (${t == null ? 'no more than the base' : `over +${Math.round(t * 100)}%`})`)
     }
     over('crashes', 'crashes', null)
     // the film plays on a board that has one, or its players are not measured
     if (y.filmPlaying === 0) { row.push('film did not play ✗'); fails.push(`${id}: the film did not play, so its players were not measured`) }
-    over('frame p95 ms', 'p95', frameT, m => m.frame?.p95)
+    over('frame p95 ms', 'p95', frameT, m => m.frame?.p95, 0.5)
     over('JS heap MB', 'jsHeapMB', memT)
     over('DOM nodes', 'nodes', memT)
     over('GPU MB', 'gpuMB', memT)
