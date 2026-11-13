@@ -7,6 +7,7 @@
 // node:child_process (tests/childenv.test.mjs checks that).
 
 import * as cp from 'node:child_process'
+import { execa, treeKill } from './vendor/procs/procs.mjs'
 
 const BASE = ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'USER', 'LOGNAME']
 // Node, npm, pnpm and Python break on Windows without these (sockets, crypto, temp folders, .cmd shims).
@@ -60,4 +61,23 @@ export function execFile(cmd, args, opts, cb) {
 export function execFileSync(cmd, args = [], opts = {}) {
   if (!Array.isArray(args)) return cp.execFileSync(cmd, scoped(args))
   return cp.execFileSync(cmd, args, scoped(opts))
+}
+
+// A child the studio keeps running and may have to stop (an app's dev server, a built app's server, a film
+// render): started with execa (engine/vendor/procs/, pinned), so it dies with the server (cleanup), a stop it
+// ignores becomes a kill (forceKillAfterDelay), and its environment is only childEnv(opts.env) (extendEnv: false).
+// It is a ChildProcess (stdout, exitCode, 'exit') and a promise of its end; it never rejects (reject: false).
+export function start(cmd, args = [], opts = {}) {
+  return execa(cmd, args, { cleanup: true, forceKillAfterDelay: 5000, windowsHide: true, reject: false, buffer: false, stdin: 'ignore', ...opts, extendEnv: false, env: childEnv(opts.env) })
+}
+
+// Stop a child and every process it started: tree-kill (taskkill /T on Windows; the children by parent pid on
+// macOS and Linux), SIGTERM first, then SIGKILL for what is left after `ms`. Resolves once it has exited.
+export function stopTree(p, { ms = 5000, kill = treeKill } = {}) {
+  if (!p?.pid || (p.exitCode !== null && p.exitCode !== undefined) || p.signalCode) return Promise.resolve()
+  return new Promise(ok => {
+    const t = setTimeout(() => kill(p.pid, 'SIGKILL', () => ok()), ms)
+    p.once('exit', () => { clearTimeout(t); ok() })
+    kill(p.pid, 'SIGTERM', () => {})
+  })
 }

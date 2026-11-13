@@ -72,6 +72,7 @@ import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '..
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { makePoster, posterFfmpeg } from '../engine/poster.mjs'
+import { idleWatch } from '../engine/lifecycle.mjs'
 import { findFfmpeg } from '../engine/playtest.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES, checkBoard } from '../engine/storyboard.mjs'
 import { checkKit, kitBoard, kitPrompt, checkStory, storySource, storyBoard } from '../engine/filmkit.mjs'
@@ -148,6 +149,14 @@ const picksFile = join(dataDir, 'models.json')
 let picks = {}
 try { picks = JSON.parse(readFileSync(picksFile, 'utf8')) } catch {}
 const modelFor = role => (picks[role] === 'off' ? '' : viaHermes(role) ? roleModel(role, picks[role]) : picks[role] || models[role].model)
+// Settings › Background (decision 0017, issue #450): when an app's server stops with nobody looking (minutes) and when this
+// server exits with nothing to do (minutes, 0 never). SWARM_APP_IDLE_MIN / SWARM_SERVER_IDLE_MIN win over the pick.
+const STOP_PICKS = { app: [1, 2, 5, 15], server: [10, 20, 60, 0] }
+const envMin = k => (process.env[k] !== undefined && process.env[k] !== '' && Number.isFinite(Number(process.env[k])) ? Number(process.env[k]) : null)
+const idleStops = () => ({
+  app: envMin('SWARM_APP_IDLE_MIN') ?? (STOP_PICKS.app.includes(picks.stops?.app) ? picks.stops.app : 2),
+  server: envMin('SWARM_SERVER_IDLE_MIN') ?? (STOP_PICKS.server.includes(picks.stops?.server) ? picks.stops.server : 20)
+})
 
 // Model ids each endpoint offers, for the pickers. Fetched once per endpoint.
 const modelLists = new Map()
@@ -955,6 +964,8 @@ async function reviewNow(id, input) {
 
 // ---------- promo video: the planner storyboards the build, HyperFrames renders it
 const videos = new Map() // run id -> { state, pct, stage, src, file, seconds, message }
+// one film renders at a time (engine/video.mjs renders): the next one says so while it waits
+const QUEUED = 'waiting for another film to finish rendering'
 const makeVideo = (id, input) => withTrace(id, () => videoNow(id, input))
 // New pictures for the video: two at a time; a scene whose picture fails becomes a quote.
 // The film's style references: files the person added (kept in video/refs) and links in the prompt.
@@ -1221,11 +1232,11 @@ async function videoNow(id, input = {}) {
     rmSync(tallOut, { force: true }) // an older tall cut never sits beside a newer wide one
     rmSync(squareOut, { force: true })
     if (halt.aborted) throw new Error('stopped')
-    await render({ tools: t, dir, out: silent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'assemble' ? 'assembling' : 'rendering') })
+    await render({ tools: t, dir, out: silent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'queued' ? QUEUED : code === 'assemble' ? 'assembling' : 'rendering') })
     // the phone cut, unless the kit or the story named its shapes without it (the wide cut always renders: it carries the sound)
     let tall = !Array.isArray(input.shapes) || input.shapes.includes('tall')
     if (tall) try {
-      await render({ tools: t, dir: tallDir, out: tallSilent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
+      await render({ tools: t, dir: tallDir, out: tallSilent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'queued' ? QUEUED : code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
     } catch (err) {
       tall = false
       send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
@@ -1233,7 +1244,7 @@ async function videoNow(id, input = {}) {
     let squared = false
     if (square) {
       try {
-        await render({ tools: t, dir: squareDir, out: squareSilent, quality, signal: halt, onProgress: (pct, code) => progress(96, code === 'assemble' ? 'assembling the square cut' : 'rendering the square cut') })
+        await render({ tools: t, dir: squareDir, out: squareSilent, quality, signal: halt, onProgress: (pct, code) => progress(96, code === 'queued' ? QUEUED : code === 'assemble' ? 'assembling the square cut' : 'rendering the square cut') })
         squared = true
       } catch (err) { send('video:note', { message: `no square cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` }) }
     }
@@ -1290,7 +1301,7 @@ async function videoNow(id, input = {}) {
 
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
-const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp, nameFor }))))
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp, nameFor, idleMs: () => idleStops().app * 60000 }))))
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
@@ -2593,6 +2604,8 @@ function sendFile(res, file) {
 
 const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
+  // a request is use, but not Hermes's bridge re-attaching every few seconds or a status look (bridge.py, launcher.py)
+  if (!POLLS.test(url.pathname)) idle.touch()
   if (!hosts.has(req.headers.host)) {
     res.writeHead(421).end('wrong host')
     return
@@ -3653,7 +3666,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy|tell|idle))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|seen|deploy|tell|idle))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
@@ -3672,6 +3685,7 @@ const server = createServer((req, res) => {
         if (sub === 'idle') return idleAnswer(id, input)
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id)
+        if (sub === 'seen') return a.seen(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')
           if (!creds) throw new Error(`connect Vercel first: 🌐 Publish on the canvas → Connect, or set ${PROVIDERS.vercel.env}`)
@@ -3780,7 +3794,7 @@ const server = createServer((req, res) => {
       const roles = Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), hermes: models[r].model, host: host(models[r].baseUrl), picked: picks[r] || null }]))
       // the idle's video model: the pick and every video model Hermes offers, with its price
       const idle = { pick: picks.idle || null, options: idleOpts, interp: interpOf(heavyConfig(dataDir))?.name || null }
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image }, idle, media }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image }, idle, media, stops: { ...idleStops(), picks: STOP_PICKS } }))
     })
     return
   }
@@ -3799,6 +3813,9 @@ const server = createServer((req, res) => {
         // the media reader's model (spec 32): 'off' reads no clip or sound with any model
         if (input.model) picks.media = input.model
         else delete picks.media
+      } else if (input.role === 'stops' && (input.app === undefined || STOP_PICKS.app.includes(input.app)) && (input.server === undefined || STOP_PICKS.server.includes(input.server))) {
+        // Settings › Background: the app's and the server's idle stops, in minutes
+        picks.stops = { ...picks.stops, ...(input.app !== undefined ? { app: input.app } : {}), ...(input.server !== undefined ? { server: input.server } : {}) }
       } else if (input.role === 'lite' && (input.on === null || typeof input.on === 'boolean')) {
         if (input.on === null) delete picks.lite
         else picks.lite = input.on
@@ -4044,5 +4061,24 @@ server.listen(port, '127.0.0.1', () => {
   console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
 })
 
-// app dev servers and engine runs stop with the studio
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { appsP?.then(a => a.close()).finally(() => process.exit(0)); setTimeout(() => process.exit(0), 1500).unref() })
+// app servers and engine runs stop with the studio, each with every process it started (engine/proc.mjs stopTree)
+const shutdown = () => { appsP?.then(a => a.close()).finally(() => process.exit(0)); if (!appsP) process.exit(0); setTimeout(() => process.exit(0), 8000).unref() }
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, shutdown)
+
+// Nothing to do for Settings › Background's time (20 min): no pane open (an /events stream), no request, no
+// build, Auto run, film, publish or app build. The server exits; the launcher's ensure_server() starts it again
+// on next use (decision 0017, issue #450).
+function serverBusy() {
+  if (clients.size > 0) return true
+  if ((current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working') return true
+  if ([...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working')) return true
+  return !!appsNow?.busy()
+}
+const POLLS = /^\/api\/(state|hermes(\/attach)?)$/
+// checked every 30 s, or a quarter of the time when it is shorter (a test sets SWARM_SERVER_IDLE_MIN to seconds)
+const idle = idleWatch({ ms: () => idleStops().server * 60000, busy: serverBusy, every: Math.max(200, Math.min(30000, (idleStops().server * 60000) / 4 || 30000)), onIdle: () => {
+  console.log(`swarm studio: nothing to do for ${idleStops().server} min, stopping (it starts again on next use)`)
+  // the port first: an ensure_server() from now on finds no server and starts a new one at once
+  server.close()
+  shutdown()
+} })

@@ -1,0 +1,9 @@
+{
+  "name": "swarm-vendor-procs",
+  "private": true,
+  "description": "What scripts/vendor.mjs bundles into engine/vendor/procs/procs.mjs: execa and tree-kill, at these exact versions, with every dependency pinned by package-lock.json. Development only: the plugin installs nothing from here.",
+  "dependencies": {
+    "execa": "9.6.1",
+    "tree-kill": "1.2.2"
+  }
+}

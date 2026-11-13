@@ -7,7 +7,8 @@
 // first time a video is made, unless they are already on PATH: exact versions, and
 // the ffmpeg and ffprobe binaries are checked against recorded SHA-256 sums first.
 
-import { spawn, execFile } from './proc.mjs'
+import { execFile, start as startProc, stopTree } from './proc.mjs'
+import { serialQueue } from './lifecycle.mjs'
 import { CAST, MOODS } from './sound.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
@@ -656,9 +657,20 @@ export function videoTools(dataDir, onStage = () => {}) {
   })().catch(err => { tools = null; throw err }))
 }
 
-export function render({ tools: t, dir, out, quality = 'draft', onProgress = () => {}, signal }) {
+// One render at a time across every film (decision 0017, issue #450): HyperFrames drives a headless Chrome and ffmpeg per render,
+// so a second film waits its turn, told as onProgress(0, 'queued').
+export const renders = serialQueue(1)
+export function render(opts) {
+  return renders.run(() => renderNow(opts), () => opts.onProgress?.(0, 'queued'))
+}
+
+// A stop (signal) kills the render with its Chrome and ffmpeg, every process it started (stopTree)
+function renderNow({ tools: t, dir, out, quality = 'draft', onProgress = () => {}, signal }) {
   return new Promise((ok, fail) => {
-    const child = spawn(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { env: { PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' }, signal })
+    if (signal?.aborted) return fail(new Error('render stopped'))
+    const child = startProc(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { stdout: 'pipe', stderr: 'pipe', env: { PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' } })
+    const halt = () => { stopTree(child) }
+    signal?.addEventListener('abort', halt, { once: true })
     let tail = ''
     const read = chunk => {
       const s = chunk.toString()
@@ -669,8 +681,12 @@ export function render({ tools: t, dir, out, quality = 'draft', onProgress = () 
     }
     child.stdout.on('data', read)
     child.stderr.on('data', read)
-    child.on('error', fail)
-    child.on('close', code => (code === 0 && existsSync(out) ? ok() : fail(new Error(`render failed (${code}): ${tail.replace(/\x1b\[[0-9;]*m/g, '').split('\n').filter(l => /error|✗|fail/i.test(l)).slice(-3).join(' ') || 'see the run folder'}`))))
+    child.on('error', err => { signal?.removeEventListener('abort', halt); fail(err) })
+    child.on('close', code => {
+      signal?.removeEventListener('abort', halt)
+      if (signal?.aborted) return fail(new Error('render stopped'))
+      code === 0 && existsSync(out) ? ok() : fail(new Error(`render failed (${code}): ${tail.replace(/\x1b\[[0-9;]*m/g, '').split('\n').filter(l => /error|✗|fail/i.test(l)).slice(-3).join(' ') || 'see the run folder'}`))
+    })
   })
 }
 

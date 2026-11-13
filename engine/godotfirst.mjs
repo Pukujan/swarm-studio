@@ -203,14 +203,20 @@ export function unpersist(file) {
   } catch {}
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.png': 'image/png', '.json': 'application/json', '.css': 'text/css' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.png': 'image/png', '.json': 'application/json', '.css': 'text/css',
+  // a built app's files too (engine/appjob.mjs serveBuilt)
+  '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.ico': 'image/x-icon', '.avif': 'image/avif',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml', '.webmanifest': 'application/manifest+json',
+  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.webm': 'video/webm', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json' }
 
 // A static server for the export, with CORS (the Studio shows games in a sandboxed frame,
 // origin null, and the engine fetches its .pck and .wasm). → { url, close }
-export function serveStatic(root, port) {
+// spa: an address with no file of its own is the app's index.html (a built app's client-side routes)
+export function serveStatic(root, port, { spa = false } = {}) {
   const srv = createServer((req, res) => {
     const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '')
-    const file = join(root, path || 'index.html')
+    let file = join(root, path || 'index.html')
+    if (spa && file.startsWith(root) && !extname(file) && !existsSync(file)) file = join(root, 'index.html')
     if (!file.startsWith(root) || !existsSync(file)) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end('not found') }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-store' })
     res.end(readFileSync(file))
