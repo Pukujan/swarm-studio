@@ -7,7 +7,12 @@ import { KITS, type Kit, type KitCard, type KitCtx, type StoreItem, type Studio 
 import { useNav } from '../../nav/NavProvider'
 import { json, useFetch } from './source'
 
-export const STEP_NAME: Record<string, string> = { brand: 'Brand', references: 'References', assets: 'Assets', plan: 'Plan', proposal: 'Lock' }
+export const STEP_NAME: Record<string, string> = { brand: 'Brand', references: 'What you have', assets: 'Assets', plan: 'Plan', proposal: 'Lock' }
+// The walk's order (decision 0015): What you have (what the person brings, then the files the crew uses) → Brand →
+// Lock (the look) → Plan → Build. A kit's own steps are drawn in this order, with Lock among them.
+export const WALK = ['references', 'assets', 'brand', 'proposal', 'plan']
+const inWalk = (s: string) => { const i = WALK.indexOf(s); return i < 0 ? WALK.length : i }
+export const walkOf = (steps: string[]) => [...steps, 'proposal'].sort((a, b) => inWalk(a) - inWalk(b))
 export const TAKES = 3
 
 export interface Palette { bg: string, text: string, accent: string, link: string }

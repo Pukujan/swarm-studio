@@ -1,4 +1,4 @@
-// The left chat in each state worth seeing. A story answers the chat's server calls from a fixture (the `api`
+// The chat, a dock along the bottom (decision 0015), in each state worth seeing. A story answers the chat's server calls from a fixture (the `api`
 // prop), so each one is a place the person can actually be: the same answers /api/discuss, /api/talk, /api/chats
 // and /api/models give.
 import type { Meta, StoryObj } from '@storybook/react-vite'
@@ -23,7 +23,13 @@ const base = { '/api/models': MODELS, '/api/chats': { chats: [{ id: 'c-loose', t
 const meta = {
   component: Chat,
   args: { api: fixture(base) },
-  decorators: [Story => <div className="h-[680px] w-[340px]"><Story /></div>]
+  parameters: { layout: 'fullscreen', height: 0 },
+  // the dock is along the bottom of the page; a story's height (0 low, 1 middle, 2 high) is the one the person
+  // left it at, kept in this browser
+  decorators: [(Story, { parameters }) => {
+    try { localStorage.setItem('swarm.chatHeight', String(parameters.height ?? 0)) } catch { /* private window */ }
+    return <div className="relative h-dvh w-full bg-void"><Story /></div>
+  }]
 } satisfies Meta<typeof Chat>
 export default meta
 type Story = StoryObj<typeof meta>
@@ -104,3 +110,7 @@ export const InProject: Story = {
 
 // the hosted studio: at most 8 agents
 export const Hosted: Story = { args: { agentsMax: 8 } }
+
+// the three heights the handle drags to: low (the box and the last line), middle, high (the whole history)
+export const Middle: Story = { ...Reopened, parameters: { height: 1 } }
+export const High: Story = { ...InProject, parameters: { height: 2 } }

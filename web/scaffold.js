@@ -20,6 +20,8 @@ const STEP_NAME = { brand: 'Brand', references: 'References', assets: 'Assets', 
 const TAKES = 3
 const STATE_NAME = { empty: 'Empty', started: 'Started', done: 'Done', skipped: 'Skipped' }
 const CHAT_KIND = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
+// an asset's role as the person reads it: the role 'pack' (a set of brand files) is never called that (decision 0015)
+const ROLE_NAME = { pack: 'Brand kit' }
 
 export function makeScaffold({ sw, C, root }) {
   const esc = sw.esc
@@ -315,7 +317,7 @@ export function makeScaffold({ sw, C, root }) {
     }
     if (part === 'asset') {
       const as = A.d.assets.find(a => a.id === id)
-      box.innerHTML = `<label class="pl-f"><span>Role</span><select data-role>${['logo', 'product', 'photo', 'font', 'pack', 'other'].map(r => `<option value="${r}"${r === as.role ? ' selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></label>
+      box.innerHTML = `<label class="pl-f"><span>Role</span><select data-role>${['logo', 'product', 'photo', 'font', 'pack', 'other'].map(r => `<option value="${r}"${r === as.role ? ' selected' : ''}>${ROLE_NAME[r] || r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></label>
         <div class="sc-acts"><button class="btn ghost" data-a="ref">${ic('image', 15)}Use as reference</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
       box.querySelector('[data-role]').onchange = e => post(proj(`/assets/${id}/role`), { role: e.target.value }).then(j => { A.d.assets = j.assets; render() }).catch(fail)
       box.onclick = e => {
