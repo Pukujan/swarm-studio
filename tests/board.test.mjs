@@ -128,3 +128,29 @@ test('the camera draws once per frame and settles after resting; React only hear
   assert.equal(bucketOf(0.5), -1)
   assert.ok(!cam.moving())
 })
+
+test('the tier manager\'s BoardHost: wishes become wants, and each plan is what tier() and onTier() report', async () => {
+  const { tierHost } = await import('../ui/src/board/tierHost.ts')
+  const host = tierHost()
+  let asked = 0
+  host.onWants(() => asked++)
+  host.requestLive('p1', 'agent')
+  host.requestLive('p2', 'selected')
+  host.requestLive('p3', 'review')
+  host.requestLive('p3', 'review')
+  assert.equal(asked, 3, 'the same wish twice is one')
+  const w = host.wants()
+  assert.deepEqual([...w.agents], ['p1'])
+  assert.deepEqual([...w.selected].sort(), ['p2', 'p3'])
+  const told = []
+  host.onTier((id, t) => told.push(`${id}:${t}`))
+  host.apply(new Map([['p1', { tier: 'live', px: 1024, bytes: 1 }], ['p2', { tier: 'tiny', px: 256, bytes: 1 }]]))
+  assert.equal(host.tier('p1'), 'live')
+  assert.equal(host.tier('p9'), 'hidden')
+  host.apply(new Map([['p1', { tier: 'live', px: 1024, bytes: 1 }]]))
+  assert.deepEqual(told, ['p1:live', 'p2:tiny', 'p2:hidden'])
+  host.releaseLive('p1', 'agent')
+  assert.equal(host.wants().agents.size, 0)
+  // a page that is not live takes no message, and nothing is queued for it
+  assert.equal(host.post('p1', { type: 'theme' }), false)
+})

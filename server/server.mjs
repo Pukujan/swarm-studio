@@ -70,6 +70,8 @@ import { assetLib, readPicks, setPick, pickedItem, creditsFor, SLOT_CATEGORIES, 
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
+import { makePoster, posterFfmpeg } from '../engine/poster.mjs'
+import { findFfmpeg } from '../engine/playtest.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES, checkBoard } from '../engine/storyboard.mjs'
 import { checkKit, kitBoard, kitPrompt, checkStory, storySource, storyBoard } from '../engine/filmkit.mjs'
 import { filmRoutes, filmSourceOf, inside } from './film.mjs'
@@ -1255,6 +1257,8 @@ async function videoNow(id, input = {}) {
         else copyFileSync(squareSilent, squareOut)
       } catch { copyFileSync(squareSilent, squareOut) }
     }
+    // a poster frame beside each cut, for the boards to show until the film is played (engine/poster.mjs)
+    for (const f of [out, tall && tallOut, squared && squareOut].filter(Boolean)) await makePoster(f, { ffmpeg: t.ffmpeg })
     const copy = shelveVideo(id)
     if (tall) shelveVideo(id, 'tall')
     if (squared) shelveVideo(id, 'square')
@@ -2204,6 +2208,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     const tag = randomBytes(4).toString('hex'), clipName = `idle-${tag}.mp4`, clip = join(imgDir, clipName)
     const v = await videogen(['--provider', o.provider, ...(o.model ? ['--model', o.model] : []), '--image', start, '--seconds', String(o.seconds), '--aspect', aspect, '--out', clip, idlePrompt({ who: it.who, look: it.look, key, tune: o.tune })], 900000)
     if (!v.ok || !existsSync(clip)) return fail(`the video model made no clip (${String(v.error || 'no answer').slice(0, 100)})`)
+    await makePoster(clip, { ffmpeg: posterFfmpeg(dataDir, findFfmpeg) })
     say('clip', { text: IDLE_SAY.clip(), clip: `/img/${runId}/${clipName}`, model: v.model || null })
     live(slot, it, 'cutting', { src: img(startName) })
     const heavy = heavyConfig(dataDir)
@@ -3889,6 +3894,24 @@ const server = createServer((req, res) => {
     if (!file) return res.writeHead(404).end('not found')
     res.writeHead(200, { 'content-type': `image/${sti[2] === 'jpg' ? 'jpeg' : sti[2]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
     res.end(readFileSync(file))
+    return
+  }
+
+  // a clip's poster frame (engine/poster.mjs): written when the clip was made; a clip from before posters gets
+  // one the first time it is asked for, when there is an ffmpeg to make it with
+  const poster = url.pathname.match(/^\/img\/([\w-]{1,64})\/((playtest-\d{1,3}|idle-[a-f0-9]{8})\.poster\.jpg)$/)
+    || url.pathname.match(/^\/video\/([\w-]{1,64})\/((promo(?:-tall|-square)?)\.poster\.jpg)$/)
+  if (poster) {
+    const dir = join(runsDir, poster[1], url.pathname.startsWith('/img/') ? 'img' : 'video')
+    const file = join(dir, poster[2])
+    const send = () => {
+      if (!existsSync(file)) return res.writeHead(404).end('not found')
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-cache', 'access-control-allow-origin': '*' })
+      res.end(readFileSync(file))
+    }
+    const from = existsSync(file) ? null : [`${poster[3]}.mp4`, `${poster[3]}.webm`].map(n => join(dir, n)).find(f => existsSync(f))
+    if (!from) return send()
+    makePoster(from, { ffmpeg: posterFfmpeg(dataDir, findFfmpeg), out: file }).then(send, send)
     return
   }
 

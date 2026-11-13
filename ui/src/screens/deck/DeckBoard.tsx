@@ -5,12 +5,18 @@
 // PixiPhotos). Going live, the photo stays until the frame has laid itself out (its first `geo`); going back, the
 // frame is removed and the last saved photo shows (the in-page capture of §3.7 has not been built, so nothing is
 // photographed again here yet). The crew's cursors stay HTML on top. Same props and handle as DeckStage.
+//
+// It is the board's host for its pages (src/board/host.ts): the tier manager's (src/board/tierHost.ts), so the
+// deck's PageFrame attaches and talks to its frame here as it does under slice 1's host, and live is asked for by
+// reason (an agent at work, the person's pick).
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
 import { createCamera, type Cam } from '../../board/camera'
 import type { BoardMode } from '../../board/flag'
 import { photoFor, usePhotos, SNAP_W } from '../../board/photos'
 import { machineBudgets, useTiers } from '../../board/useTiers'
 import type { Item } from '../../board/tiers'
+import { BoardHostContext } from '../../board/host'
+import { tierHost } from '../../board/tierHost'
 // static: /next/ is one inlined script, with no chunks to fetch (server/next.mjs)
 import { PixiPhotos } from '../../board/PixiPhotos'
 import { crew } from './crew'
@@ -50,6 +56,7 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   const onGeo = useCallback((page: string, g: FrameGeo) => setGeo(all => ({ ...all, [page]: g })), [])
   const [panning, setPanning] = useState(false)
   const budgets = useMemo(() => machineBudgets(), [])
+  const host = useMemo(() => tierHost(), [])
 
   // the saved photos, asked for again as sections finish (a page's photo changes with its version)
   const done = Object.values(model.layers).filter(l => l.status === 'done').length
@@ -57,9 +64,26 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   const height = (id: string) => Math.min(36000, Math.max(700, geo[id]?.height || 900))
   const items: Item[] = useMemo(() => model.pages.map(p => ({ id: p.id, rect: { x: frameX(p), y: LABEL, w: FRAME_W, h: height(p.id) }, photoW: SNAP_W.f })),
     [model.pages, geo]) // height() reads geo
-  const agentPages = useMemo(() => new Set(model.agents.map(a => (a.layer ? model.layers[a.layer]?.page : null)).filter((p): p is string => !!p && p !== '*')), [model])
-  const wants = useMemo(() => ({ agents: agentPages, selected: new Set(selected ? [selected] : []) }), [agentPages, selected])
+  useEffect(() => { host.place(items.map(i => ({ id: i.id, kind: 'page', rect: i.rect }))) }, [host, items])
+  // a page an agent is writing asks to be live (a section on every page asks for the first), and so does the pick
+  const agentPages = [...new Set(model.agents.flatMap(a => {
+    const l = a.layer ? model.layers[a.layer] : null
+    return l ? [l.page === '*' ? model.pages[0]?.id : l.page].filter((x): x is string => !!x) : []
+  }))].sort().join('|')
+  useEffect(() => {
+    const ids = agentPages ? agentPages.split('|') : []
+    for (const id of ids) host.requestLive(id, 'agent')
+    return () => { for (const id of ids) host.releaseLive(id, 'agent') }
+  }, [host, agentPages])
+  useEffect(() => {
+    if (!selected) return
+    host.requestLive(selected, 'selected')
+    return () => host.releaseLive(selected, 'selected')
+  }, [host, selected])
+  const [wants, setWants] = useState(() => host.wants())
+  useEffect(() => host.onWants(() => setWants(host.wants())), [host])
   const plan = useTiers({ camera, items, stage: size, wants, budgets })
+  useEffect(() => { host.apply(plan) }, [host, plan])
 
   // the camera moves the world and the cursors with one transform each, never through React; will-change only while it moves
   const worldW = model.pages.length ? model.pages.length * FRAME_W + (model.pages.length - 1) * GAP : FRAME_W
@@ -153,17 +177,14 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
     return () => removeEventListener('keydown', key)
   }, [fit])
 
-  // a live frame's first `geo` is its first paint: then its photo goes (src/screens/deck/PageFrame.tsx sends it)
+  // a live frame's first `geo` (web/frame.html, through the host) is its first paint: then its photo goes
+  const liveIds = model.pages.filter(p => plan.get(p.id)?.tier === 'live').map(p => p.id).join('|')
   useEffect(() => {
-    const onMessage = (e: MessageEvent) => {
-      if ((e.data as { type?: string } | null)?.type !== 'geo') return
-      for (const f of world.current?.querySelectorAll<HTMLIFrameElement>('[data-page] iframe') ?? []) {
-        if (f.contentWindow === e.source) { const id = (f.closest('[data-page]') as HTMLElement).dataset.page as string; requestAnimationFrame(() => setPainted(s => (s.has(id) ? s : new Set(s).add(id)))) }
-      }
-    }
-    addEventListener('message', onMessage)
-    return () => removeEventListener('message', onMessage)
-  }, [])
+    const offs = (liveIds ? liveIds.split('|') : []).map(id => host.onMessage(id, m => {
+      if (m.type === 'geo') requestAnimationFrame(() => setPainted(s => (s.has(id) ? s : new Set(s).add(id))))
+    }))
+    return () => { for (const off of offs) off() }
+  }, [host, liveIds])
   // a page that is no longer live has to paint again next time
   useEffect(() => { setPainted(s => { const keep = new Set([...s].filter(id => plan.get(id)?.tier === 'live')); return keep.size === s.size ? s : keep }) }, [plan])
 
@@ -176,6 +197,7 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   })
 
   return (
+    <BoardHostContext value={host}>
     <div ref={stage} role="region" aria-label="Canvas" data-board={mode} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onDoubleClick={() => onFollow?.(true)}
       className={`relative min-h-0 min-w-0 flex-1 touch-none overflow-hidden bg-void outline-none [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px] ${panning ? 'cursor-grabbing' : 'cursor-default'}`}>
       {mode === 'pixi' && <PixiPhotos camera={camera} photos={sprites} onMove={() => stopFollow.current()} />}
@@ -220,5 +242,6 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
         })}
       </div>
     </div>
+    </BoardHostContext>
   )
 }

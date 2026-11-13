@@ -26,7 +26,10 @@ export const alias: AliasOptions = [
   { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) },
   // the sanitiser the current deck runs on every section before a frame shows it (web/clean.js): the Design deck's
   // frames get the same HTML (src/screens/deck/)
-  { find: '@studio/clean', replacement: fileURLToPath(new URL('../web/clean.js', import.meta.url)) }
+  { find: '@studio/clean', replacement: fileURLToPath(new URL('../web/clean.js', import.meta.url)) },
+  // the board video rules (web/video.js): posters, preload, teardown and the page's budget of playing clips, one
+  // copy for both apps (src/primitives/BoardVideo.tsx)
+  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) }
 ]
 
 export default defineConfig({

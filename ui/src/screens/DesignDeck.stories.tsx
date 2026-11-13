@@ -30,9 +30,9 @@ const from = (cut: Cut, live = false): DeckSource => ({ events: async () => deck
 
 const meta = {
   component: DesignDeck,
-  parameters: { source: from('done') },
+  parameters: { source: from('done'), extra: '' },
   decorators: [(Story, { parameters }) => (
-    <NavProvider nav={makeNav({ search: `?version=${RUN}&room=deck` })}>
+    <NavProvider nav={makeNav({ search: `?version=${RUN}&room=deck${(parameters.extra as string | undefined) ?? ''}` })}>
       <DeckSourceContext value={parameters.source as DeckSource}><PhotoSourceContext value={drawn}><Story /></PhotoSourceContext></DeckSourceContext>
     </NavProvider>
   )]
@@ -49,6 +49,10 @@ export const SectionFailed: Story = { parameters: { source: from('failed') } }
 export const Loading: Story = { parameters: { source: { events: () => new Promise(() => {}) } satisfies DeckSource } }
 export const Empty: Story = { parameters: { source: { events: async () => [] } satisfies DeckSource } }
 export const Missing: Story = { parameters: { source: { events: () => Promise.reject(new Error('This build is not here any more.')) } satisfies DeckSource } }
+// Play: the machine's player open on a page (?play=prototype&page=…)
+export const Playing: Story = { parameters: { extra: '&play=prototype&page=plans' } }
+// ☰ → Replay: the finished build played again on its own clock
+export const Replaying: Story = { parameters: { extra: `&replay=${RUN}` } }
 
 // the image-first board behind its flag: photos under the tier manager, as <img> and on the PixiJS canvas
 export const BoardTiers: Story = { args: { board: 'tiers' }, parameters: { source: from('building', true) } }
