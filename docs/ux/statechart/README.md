@@ -97,9 +97,9 @@ studio                          starts on feed.home
 
 ### The five ways of making (planned)
 
-The owner wants five ways of making something, and the make-menu spec (branch `fix/make-menu-ways`) is still
-being written. Until it lands they are sibling flows out of `projects.make`, marked `meta.planned`, each with Esc
-back to Make:
+The owner wants five ways of making something; [spec 42](../../specs/42-ways-to-make.md) defines them and which
+kinds offer which. Here they are sibling flows out of `projects.make`, marked `meta.planned`, each with Esc back to
+Make:
 
 | Event from Make | Way | Flow |
 |---|---|---|

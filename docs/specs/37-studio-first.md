@@ -60,6 +60,11 @@ choice of **Light** or **Thorough**, set in the scaffold's chat and stored on th
 The Make menu offers Website, App, Game, Video, **Brand** and **Deck**. Each kind is a **kit**. Brand is
 the one kit with no Plan step: its Lock is the end.
 
+### How each kind is made
+
+The ways to make each kind (Just build, Guided, Three takes, Scaffold, Studio), which kinds offer which, and how
+they map onto this spec are [spec 42](42-ways-to-make.md). It replaces this spec's question on Make.
+
 ## The kit contract
 
 One module per kind, so sessions don't collide in `web/home.js`, `web/board.js` or `web/brand.js`:

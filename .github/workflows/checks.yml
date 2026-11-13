@@ -26,6 +26,25 @@ jobs:
       - run: npm run --prefix tools/dev tokens:check
       # the vendored libraries are exactly what their npm tarballs build (scripts/vendor.mjs)
       - run: node scripts/vendor.mjs --check
+  # the same checks on Windows, where the owner develops: git's autocrlf, Git Bash and Windows paths (issue #408)
+  checks-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # setup-python names it python.exe only; check.sh calls python3
+      - run: command -v python3 || cp "$(command -v python)" "$(dirname "$(command -v python)")/python3.exe"
+      - run: python -m pip install --quiet pillow
+      - run: bash scripts/check.sh
   # the Studio shows the build that was clicked, in a real browser (scripts/open-check.mjs)
   open-check:
     runs-on: ubuntu-latest

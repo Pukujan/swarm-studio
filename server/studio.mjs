@@ -1,10 +1,11 @@
 // The Studio's routes (docs/specs/37-studio-first.md, engine/studio.mjs, engine/assetstore.mjs).
-//   POST /api/studio { kind, idea, depth?, steps?, start? }  -> { project, chat, studio }  a project with no runs yet
+//   POST /api/studio { kind, idea, mode?, depth?, steps?, start? }  -> { project, chat, studio }  a project with no runs yet
 //        (an empty idea is fine: the chat's first words become it, through /idea)
 //   POST /api/studio/:pid/idea { idea }                -> the studio  the idea, once, while it is empty
 //   GET  /api/studio/:pid                                  -> { project, studio, brand, refs, assets }
 //   POST /api/studio/:pid/step { step, state }             -> the same
 //   POST /api/studio/:pid/depth { depth }                  -> the same
+//   POST /api/studio/:pid/mode { mode }                    -> the same (studio, scaffold or takes; spec 42)
 //   POST /api/studio/:pid/kit { data }                     -> the same  the kit's own state, merged
 // The project's Assets ("use this as given"; References are "like this"):
 //   GET    /api/projects/:pid/assets                       -> { assets }
@@ -59,7 +60,7 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
     const pid = projects.makeStudio({ name: idea ? nameOf(idea) : 'New project', kind })
     const chat = chats.create({ kind: CHAT_KIND[kind], text: idea, project: pid })
     const steps = Array.isArray(input.steps) ? input.steps.filter(s => STEPS.includes(s)) : STEPS
-    studios.make(pid, { kind, idea, depth: input.depth, chat: chat.id, steps: steps.length ? steps : STEPS, start: input.start })
+    studios.make(pid, { kind, idea, mode: input.mode, depth: input.depth, chat: chat.id, steps: steps.length ? steps : STEPS, start: input.start })
     return { ...whole(pid), chat: chat.id }
   }
 
@@ -103,7 +104,7 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
       jsonBody(req).then(make).then(v => json(res, 200, v)).catch(err => fail(res, err))
       return true
     }
-    const sm = url.pathname.match(/^\/api\/studio\/([\w-]{1,64})(?:\/(step|depth|kit|idea))?$/)
+    const sm = url.pathname.match(/^\/api\/studio\/([\w-]{1,64})(?:\/(step|depth|mode|kit|idea))?$/)
     if (sm) {
       const [, pid, op] = sm
       if (req.method === 'GET' && !op) { try { json(res, 200, whole(pid)) } catch (err) { fail(res, err) } return true }
@@ -112,6 +113,7 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
         if (op === 'step') studios.step(pid, String(input.step || ''), String(input.state || ''))
         else if (op === 'kit') studios.kit(pid, input.data)
         else if (op === 'idea') setIdea(pid, input.idea)
+        else if (op === 'mode') studios.mode(pid, String(input.mode || ''))
         else studios.depth(pid, String(input.depth || ''))
         json(res, 200, whole(pid))
       }).catch(err => fail(res, err))
