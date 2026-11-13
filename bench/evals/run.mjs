@@ -66,6 +66,15 @@ export async function fingerprint(root = ROOT) {
   return createHash('sha256').update(sent.map(s => String(s).replace(/"model":"[^"]*"/g, '')).join('\n\u0000')).digest('hex').slice(0, 16)
 }
 
+// a set may name an Open Design system (decision 0016): its theme then carries the system's tokens and rules, as
+// engine/brand.mjs brandTheme makes it for a look from one, read from this tree's engine/opendesign/systems.json
+function themeOf(set) {
+  if (!set.system || set.theme.system) return set.theme
+  const sys = JSON.parse(readFileSync(join(ROOT, 'engine/opendesign/systems.json'), 'utf8')).systems[set.system]
+  if (!sys) return set.theme
+  return set.theme = { ...set.theme, vars: { ...sys.tokens, ...set.theme.vars }, system: { slug: set.system, name: set.systemName || set.system, tokens: Object.keys(sys.tokens), rules: sys.rules, components: sys.components } }
+}
+for (const set of SETS) themeOf(set)
 const pageOf = set => ({ id: 'home', title: set.title, purpose: set.purpose, layers: set.layers.map(([id, role, content]) => ({ id, role, content, page: 'home' })) })
 const planOf = set => ({ theme: set.theme, pages: [pageOf(set)], shared: [] })
 

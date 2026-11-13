@@ -8,7 +8,7 @@ and fails past the thresholds. It is how decision 0007's "a prompt change comes 
   change elsewhere in those files does not.
 - **The test sets** (`sets/`): one page each, built by a crew of eight through the real `workerMessages` and the
   tree's own fix pass, the way `engine/run.mjs` builds it. `kiln` is a light product site with numbers and
-  prices; `harbour` is a dark public-service site with a timetable.
+  prices; `harbour` is a dark public-service site with a timetable, built in Open Design's "Clean" system (`system`), so the system's token block in the builders' prompt is measured too.
 - **What is measured**, per set, as the mean of the runs:
 
   | | how |
