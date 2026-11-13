@@ -40,7 +40,7 @@ body.cosmos-brand .crew-layer, body.cosmos-brand .cbox { display: none; }
 .ab.br-type span { font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* while the options are made: the same cards, empty, with the crew's sheen */
-.brand-sheet .ab.br-wait { background: var(--surface); pointer-events: none; overflow: visible; }
+.brand-sheet .ab.br-wait { background: var(--surface-2);pointer-events: none; overflow: visible; }
 
 /* the person's own words: one more option */
 .ab.br-own { width: 210px; height: 48px; display: flex; align-items: center; padding: 0 6px; background: transparent; border-style: dashed; cursor: text; }
