@@ -17,7 +17,9 @@ export const TAKES = 3
 
 export interface Palette { bg: string, text: string, accent: string, link: string }
 export interface Pack { slug: string, name: string, why?: string, for?: string, palette: Palette, type: { heading: string, body: string }, voice?: { lines?: string[] }, pictures?: { photos?: { url: string }[] } }
-interface Brand { lockedAt?: unknown, palettes?: (Palette & { id: string })[], types?: { id: string, heading: string, body: string }[], pick?: { palette?: string, type?: string } }
+interface Brand { lockedAt?: unknown, palettes?: (Palette & { id: string })[], types?: { id: string, heading: string, body: string }[], pick?: { palette?: string, type?: string }, pack?: string | null, story?: { what?: string, who?: string }, voice?: { lines?: string[] } | null, pictures?: { photos?: { url: string }[] } | null }
+// the brand routes' view (server/brand.mjs): the sheet and its three options
+export interface BrandView { brand: Brand | null, packs?: Pack[] }
 export interface StudioData { project: { id: string, name: string, title?: string | null }, studio: Studio, brand: Brand | null, refs: StoreItem[], assets: StoreItem[] }
 export type StepState = 'empty' | 'started' | 'done' | 'skipped'
 
@@ -39,6 +41,8 @@ export function useStudio(pid: string | null) {
   const [d, setD] = useState<StudioData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [takes, setTakes] = useState<{ pid: string, packs: Pack[] } | null>(null)
+  // the Brand step's own board (decision 0015): the options to pick a mood from, and the moodboard that follows
+  const [moods, setMoods] = useState<{ pid: string, view: BrandView | null } | null>(null)
   const [sel, setSel] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   // a kit's own state changed (it asked to be drawn again)
@@ -66,7 +70,7 @@ export function useStudio(pid: string | null) {
     const cur = dRef.current
     if (!key || !cur) return
     // the step it is in is where the person is (the address follows)
-    const step = key.startsWith('step:') ? key.slice(5) : key === 'brand:open' ? 'brand' : key.startsWith('ref:') ? 'references' : key.startsWith('asset:') ? 'assets' : key.startsWith('lock:') ? 'proposal' : key.startsWith('take:') ? null : 'plan'
+    const step = key.startsWith('step:') ? key.slice(5) : key === 'brand:open' || key.startsWith('mood:') ? 'brand' : key.startsWith('ref:') ? 'references' : key.startsWith('asset:') ? 'assets' : key.startsWith('lock:') ? 'proposal' : key.startsWith('take:') ? null : 'plan'
     if (step && view.room === 'studio' && view.step !== step) go({ type: 'studio.step', step })
   }, [view.room, view.step, go])
 
@@ -110,6 +114,12 @@ export function useStudio(pid: string | null) {
         const made = got.brand ? api<{ packs?: Pack[] }>(proj('/brand')) : post<{ packs?: Pack[] }>(proj('/brand'), { brief: got.studio.idea, kind: got.studio.kind === 'app' ? 'app' : 'site' })
         made.then(j => setTakes({ pid, packs: (j.packs || []).slice(0, TAKES) })).catch(fail)
       }
+      // the Brand step: its options and moodboard, the brand made from the idea first (the slow part, under skeletons)
+      if (got.studio.mode !== 'takes' && 'brand' in got.studio.steps && got.studio.idea) {
+        setMoods(cur => cur?.pid === pid ? cur : { pid, view: null })
+        const made = got.brand ? api<BrandView>(proj('/brand')) : post<BrandView>(proj('/brand'), { brief: got.studio.idea, kind: got.studio.kind === 'app' ? 'app' : 'site' })
+        made.then(view => setMoods({ pid, view })).catch(fail)
+      }
       // a kit that loads or drafts its own state does it once, before its cards are drawn
       const k = KITS[got.studio.kind] || KITS.site
       if (k.prepare && prepared.current !== pid && got.studio.idea) { prepared.current = pid; await k.prepare(ctx()); setTick(t => t + 1) }
@@ -149,8 +159,10 @@ export function useStudio(pid: string | null) {
     removeAsset: (id: string) => api<{ assets: StoreItem[] }>(proj(`/assets/${id}`), { method: 'DELETE' }).then(j => take({ assets: j.assets })),
     assetRole: (id: string, role: string) => post<{ assets: StoreItem[] }>(proj(`/assets/${id}/role`), { role }).then(j => take({ assets: j.assets })),
     assetAsRef: (id: string) => post<{ refs: StoreItem[], assets: StoreItem[], ref: StoreItem }>(proj(`/assets/${id}/reference`)).then(j => { take({ refs: j.refs, assets: j.assets }); return j.ref }),
+    // a mood picked on the Brand step: the option fills the sheet (story, colours, type, voice, pictures)
+    pickMood: (slug: string) => post<BrandView>(proj('/brand/pick'), { part: 'pack', id: slug }).then(view => { setMoods({ pid: pid || '', view }); take({ brand: view.brand }) }),
     useTake: (slug: string) => post(proj('/brand/pick'), { part: 'pack', id: slug }).then(() => post<StudioData>(at('/mode'), { mode: 'studio' })).then(take)
   }
 
-  return { d, error, takes, sel, select, toast, fail, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick, reload: load }
+  return { d, error, takes, moods: moods?.pid === pid ? moods.view : null, sel, select, toast, fail, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick, reload: load }
 }
