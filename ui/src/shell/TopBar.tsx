@@ -17,7 +17,7 @@ const Sep = () => <span aria-hidden>›</span>
 
 export function TopBar() {
   const { view, go } = useNav()
-  const { build, menu, primary } = useTopBarParts()
+  const { build, onBuild, menu, primary } = useTopBarParts()
   const home = view.room === 'home'
   return (
     <header className="flex h-14 items-center gap-2 border-b border-edge px-3">
@@ -27,7 +27,7 @@ export function TopBar() {
         <span className={home ? '' : 'max-md:hidden'}>Home</span>
         <span aria-hidden className={home ? '' : 'max-md:hidden'}>›</span>
         {home ? <span aria-current="page" className="text-text">Projects</span> : <button type="button" onClick={() => go({ type: 'home' })} className="cursor-pointer rounded-[8px] px-1 hover:text-text max-md:hidden">Projects</button>}
-        {!home && build && <><span aria-hidden className="max-md:hidden">›</span><span className="flex min-w-0 items-center gap-1"><b className="min-w-[4ch] truncate font-semibold text-text">{build}</b>{menu}</span></>}
+        {!home && build && <><span aria-hidden className="max-md:hidden">›</span><span className="flex min-w-0 items-center gap-1">{onBuild ? <button type="button" onClick={onBuild} className="min-w-[4ch] cursor-pointer truncate rounded-[8px] px-1 font-semibold text-text hover:bg-panel-2">{build}</button> : <b className="min-w-[4ch] truncate font-semibold text-text">{build}</b>}{menu}</span></>}
         {!home && <span className={`flex items-center gap-2 ${build ? 'max-md:hidden' : ''}`}><Sep /><span aria-current="page" className="truncate text-text">{CRUMB_NAMES[view.room]}</span></span>}
       </nav>
       {primary && <span className="shrink-0">{primary}</span>}

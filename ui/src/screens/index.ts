@@ -3,6 +3,7 @@
 // current Studio at the same address. Moving one screen is ui/README.md's recipe.
 import type { ComponentType } from 'react'
 import type { Room } from '../nav/nav'
+import { BrandSheet } from './BrandSheet'
 import { PlanBoard } from './PlanBoard'
 import { DesignDeck } from './DesignDeck'
 
@@ -36,6 +37,8 @@ export const CRUMB_NAMES: Record<Room, string> = {
 // the screens that have moved (issue #404)
 export const SCREENS: Partial<Record<Room, ComponentType>> = {
   plan: PlanBoard,
+  // a project's brand sheet, opened from its Studio; one opened from a chat has no address and stays behind
+  brand: BrandSheet,
   // the Design deck's shell is slice 1 of its port; `draft`, a new project's deck, has not moved
   deck: DesignDeck
 }

@@ -6,7 +6,7 @@
 //   <Board ref label fit selected onClear inspector toast>{sections}</Board>
 //   ref.current.frameAll(animate) / .focus(target, animate)   target: a section's name or an artboard's key
 //   <Section name label wide>{artboards}</Section>   <Artboard id selected onSelect className>…</Artboard>
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type ReactNode, type Ref, type KeyboardEvent, type MouseEvent } from 'react'
 import { Button } from '../primitives/Button'
 import { Icon } from '../primitives/Icon'
 import './board.css'
@@ -143,14 +143,15 @@ export function Section({ name, label, className, children }: { name?: string, l
 
 // one artboard: selectable by click, Enter or Space; a selection frame with four handles while selected. A click
 // on a selected artboard goes to onPress first (a sheet's cell pick); it returns true when it took the click.
-export function Artboard({ id, selected, onSelect, onPress, className, label, children }: {
+// `style` is for a card drawn in the person's own colours (the brand sheet's), never the Studio's chrome.
+export function Artboard({ id, selected, onSelect, onPress, className, label, style, children }: {
   id: string, selected: boolean, onSelect: (id: string) => void, onPress?: (e: MouseEvent<HTMLDivElement>) => boolean,
-  className?: string, label?: string, children?: ReactNode
+  className?: string, label?: string, style?: CSSProperties, children?: ReactNode
 }) {
   const click = (e: MouseEvent<HTMLDivElement>) => { if (selected && onPress?.(e)) return; onSelect(id) }
   const key = (e: KeyboardEvent<HTMLDivElement>) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(id) } }
   return (
-    <div data-key={id} role="button" tabIndex={0} aria-label={label} aria-pressed={selected} onClick={click} onKeyDown={key}
+    <div data-key={id} role="button" tabIndex={0} aria-label={label} aria-pressed={selected} onClick={click} onKeyDown={key} style={style}
       className={`relative flex-none cursor-pointer rounded-[4px] border border-line bg-surface-2 outline-none focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-text ${className ?? ''}`}>
       {children}
       {selected && <SelectionFrame />}

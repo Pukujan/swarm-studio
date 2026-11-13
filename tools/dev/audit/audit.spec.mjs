@@ -54,14 +54,14 @@ const SCREENS = [
     go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) }), ready: 'body.cosmos-plan .pl-crumb',
     nextReady: 'main [role="region"][aria-label="Plan"]' },
   // opened from the Studio, the way a person reaches it
-  { id: 'brand', crumb: trail('Cedar Cafe', 'Brand sheet'),
+  { id: 'brand', crumb: trail('Cedar Cafe', 'Brand sheet'), address: s => `?room=brand&project=${s.scaffold}&step=brand`, nextReady: '.brand-sheet [data-sec="palette"] .ab',
     pre: async (p, s) => { await p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`); await p.locator('.ab[data-key="brand:open"]').first().waitFor() },
     go: p => p.locator('.ab[data-key="brand:open"]').first().press('Enter'), ready: 'body.cosmos-brand .br-crumb' }
 ]
 
 // In /next/ each screen opens at its address. Until it has moved, every one is the same stand-in, so `main` is
-// what is on screen; a moved screen gives its own `nextReady`. The brand sheet has no address of its own (it opens
-// from a screen), so it joins when its way in has moved.
+// what is on screen; a moved screen gives its own `nextReady`. A project's brand sheet has an address of its own
+// (?room=brand&project=…&step=…), opened there directly.
 const screens = APP !== 'next' ? SCREENS : SCREENS.filter(x => x.address).map(x => ({
   ...x, pre: undefined, ready: x.nextReady || 'main',
   go: (p, s) => p.goto(`${s.BASE}/next/${x.address(s)}`, { waitUntil: 'commit' })

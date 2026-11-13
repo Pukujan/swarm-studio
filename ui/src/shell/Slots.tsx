@@ -6,6 +6,9 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 export interface TopBarParts {
   build?: string | null
+  // the build's name goes back to its level (RULES.md rule 7: each crumb goes to its level), e.g. the brand sheet's
+  // project to its Studio
+  onBuild?: () => void
   menu?: ReactNode
   primary?: ReactNode
 }
@@ -21,7 +24,7 @@ export const useTopBarParts = () => useContext(Ctx).parts
 
 export function useTopBar(parts: TopBarParts) {
   const { set } = useContext(Ctx)
-  const { build, menu, primary } = parts
-  useEffect(() => { set({ build, menu, primary }) }, [set, build, menu, primary])
+  const { build, onBuild, menu, primary } = parts
+  useEffect(() => { set({ build, onBuild, menu, primary }) }, [set, build, onBuild, menu, primary])
   useEffect(() => () => set({}), [set])
 }

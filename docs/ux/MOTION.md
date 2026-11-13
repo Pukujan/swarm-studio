@@ -202,7 +202,7 @@ those kinds run before as well.
 | Overview: "building" bars on artboards | live work | indeterminate `ab-work` 1.6 s infinite; width .6 s | `web/project.css:272-273` ; `web/project.js:238` | `web/project.css:275` |
 | Overview: skeleton and "now" dot | skeleton over a still-painting image; now-working beat | `sk-wait` 1.6 s alternate; `pj-beat` 1.2 s infinite | `web/project.css:86-87`, `259-260` ; `web/project.js` | `web/project.css:88`, `266` |
 | Overview: upload bar; plan cards fade in as they are written | upload; plan generation | upload width .2 s linear; `.ab.pcard.wait` to visible: opacity/transform .3 s, one card per 320 ms (0 ms when reduced) | `web/project.css:102` ; `web/plan.css:22`, `37` ; `web/plan.js:161-163` | `web/plan.css:39` and `web/plan.js:161` |
-| Plan: sheen on a card being painted; the brand sheet's cards while its options are made | `.pl-work` | `pl-sheen` 2.4 s linear infinite | `web/plan.css:75-76` ; `web/brand.js` skeleton | `web/plan.css:77` |
+| Plan: sheen on a card being painted; the brand sheet's cards while its options are made | `.pl-work` | `pl-sheen` 2.4 s linear infinite | `web/plan.css:75-76` ; `web/brand.js` skeleton ; `ui/src/screens/brand/brand.css` (the next UI's brand sheet) | `web/plan.css:77` ; `ui/src/screens/brand/brand.css` |
 | Overview data refresh | poll | 2000 ms busy, 3000 ms live, else 15000 ms (setTimeout chain); `image`/`review` events re-load after 350 ms, others after 800 ms | `web/project.js:138`, `1692-1698` | n/a |
 
 ## Page frames (`web/frame.html`)
