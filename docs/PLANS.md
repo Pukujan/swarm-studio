@@ -159,10 +159,12 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
   - type checking with TypeScript 7 and dependency-cruiser (#373, #376);
   - the canvas file split (#375 to #377);
   - `docs/decisions/`.
+- **In progress:**
+  - the first of the six design artifacts, the object map and glossary:
+    [docs/ux/OBJECTS.md](ux/OBJECTS.md), a draft for the owner to review. Its name picks are proposals.
 - **Not started:**
   - Playwright audit gates in CI;
   - the six design artifacts:
-    - an object map and glossary;
     - a statechart in Stately;
     - breadboards;
     - per-screen specs in OpenSpec;
