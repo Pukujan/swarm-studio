@@ -102,7 +102,8 @@ export function mediaSources({ env = {}, keys, mcp = {}, images = [], videos = [
 // A path an MCP tool says it wrote (ElevenLabs's MCP saves files and answers with where).
 export function pathIn(result) {
   const text = typeof result === 'string' ? result : JSON.stringify(result ?? '')
-  return /(\/[^\s"'<>]+\.(?:mp3|wav|m4a|ogg))/i.exec(text)?.[1] || null
+  // a Unix path, or a Windows one (C:\... or C:/...), as the connector prints it on that system
+  return /((?:[A-Za-z]:[\\/]|\/)[^\s"'<>]+\.(?:mp3|wav|m4a|ogg))/i.exec(text)?.[1] || null
 }
 
 // The score through Hermes's ElevenLabs MCP connector: same prompt, same cue sheet as the

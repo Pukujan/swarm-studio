@@ -45,7 +45,8 @@ test('a pasted key is checked, kept private, and switches the service on', async
   // a FAL key is Hermes's to hold: the studio takes none
   await assert.rejects(keys.set('fal', 'abcdefgh-1234:0123456789abcdef'), /unknown service/)
   await keys.set('elevenlabs', 'sk_live_1234', { fetcher: ok })
-  assert.equal(statSync(join(dir, 'media-keys.json')).mode & 0o777, 0o600)
+  // Windows has no owner-only file mode; the file sits in the person's own profile folder there
+  if (process.platform !== 'win32') assert.equal(statSync(join(dir, 'media-keys.json')).mode & 0o777, 0o600)
   const m = mediaSources({ env: {}, keys, videos: [{ provider: 'hermes', available: true }] })
   assert.deepEqual([m.music.on, m.music.via, m.music.pasted], [true, 'key', true])
   assert.equal(m.clips.via, 'hermes')
@@ -79,6 +80,8 @@ test('the score goes through Hermes\'s ElevenLabs connector, which holds the key
   assert.equal(calls.filter(c => c[1] === 'text_to_sound_effects').length, 2, 'one effect per kind')
   assert.equal(out.sfx.length, cues.sfx.length)
   assert.equal(pathIn('saved to /tmp/x.wav'), '/tmp/x.wav')
+  assert.equal(pathIn('File saved as: C:\\Users\\a\\track_1.mp3. Voice used: none'), 'C:\\Users\\a\\track_1.mp3')
+  assert.equal(pathIn('saved to D:/out/fx_2.wav'), 'D:/out/fx_2.wav')
   await assert.rejects(mcpScore({ call: async () => 'no file', server: 'elevenlabs', music: {}, cues, seconds: 5, dir }), /no music file/)
 })
 

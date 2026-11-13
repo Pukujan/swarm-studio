@@ -13,6 +13,10 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const ESBUILD = '0.28.2'
+// npx is npx.cmd on Windows, which Node will not spawn without a shell: run npm's own npx script with this node
+const npx = args => process.platform === 'win32'
+  ? [process.execPath, [join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js'), ...args]]
+  : ['npx', args]
 export const VENDORED = [
   {
     name: 'xstate',
@@ -39,7 +43,7 @@ async function build(lib, outRoot) {
     execFileSync('tar', ['-xzf', 'pkg.tgz'], { cwd: tmp })
     writeFileSync(join(tmp, 'entry.mjs'), `export { ${lib.exports.join(', ')} } from './package/${lib.entry}'\n`)
     const banner = `/* ${lib.name} ${lib.version} (MIT, see LICENSE), built by scripts/vendor.mjs with esbuild ${ESBUILD} */`
-    execFileSync('npx', ['--yes', `esbuild@${ESBUILD}`, 'entry.mjs', '--bundle', '--format=esm', '--minify', '--legal-comments=none', '--target=es2022', `--banner:js=${banner}`, '--outfile=out.mjs', '--log-level=warning', '--log-override:ignored-bare-import=silent'], { cwd: tmp, stdio: ['ignore', 'inherit', 'inherit'] })
+    execFileSync(...npx(['--yes', `esbuild@${ESBUILD}`, 'entry.mjs', '--bundle', '--format=esm', '--minify', '--legal-comments=none', '--target=es2022', `--banner:js=${banner}`, '--outfile=out.mjs', '--log-level=warning', '--log-override:ignored-bare-import=silent']), { cwd: tmp, stdio: ['ignore', 'inherit', 'inherit'] })
     const out = join(outRoot, lib.out)
     mkdirSync(dirname(out), { recursive: true })
     copyFileSync(join(tmp, 'out.mjs'), out)

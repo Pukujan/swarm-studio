@@ -63,7 +63,7 @@ an add-on folder up to 5 MB with `bringAddon`; native files mark it `web: false`
 - keeps pressing keys and fails a run that ends within 2.5 s or throws errors (engine/playtest.mjs:234-252);
 - can film the run to `.webm` with the Web Audio sound muxed by ffmpeg (engine/playtest.mjs:58, 157-174).
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).
-`testDodges` flags `.gd` files that check for the test (engine/playcheck.mjs:71-87).
+`testDodges` flags `.gd` files that check for the test, named with forward slashes on every system (engine/playcheck.mjs:71-87).
 
 **The browser path, for contrast.** Without Godot, `plan(answers)` picks three.js for a 3D look, PixiJS for
 hand-drawn, else Phaser 3, with matching skills (engine/game.mjs:41-57). It is built by the app engine and played

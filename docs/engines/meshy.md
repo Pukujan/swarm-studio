@@ -58,7 +58,7 @@ A model made from the project's own art belongs to the person on a paid plan (do
 
 - Every made character is rigged (5 credits) and comes with walk and run only (engine/meshy.mjs:29, 140-147).
 - The plan prices a shared set of 8 clips (3 each) and weapon props, but the build does not make them yet (docs/specs/21-plan-before-spend.md:290-293, engine/plan.mjs:242-249).
-- Non-humanoid plans draw turnarounds in a neutral pose, not A-pose (engine/planart.mjs:224); Meshy's rig is humanoid only (https://docs.meshy.ai/en/api/rigging, fetched 2026-11-12). Unchecked: what Swarm does when a non-humanoid is sent to the rig.
+- Non-humanoid plans draw turnarounds in a neutral pose, not A-pose (engine/planart.mjs:225); Meshy's rig is humanoid only (https://docs.meshy.ai/en/api/rigging, fetched 2026-11-12). Unchecked: what Swarm does when a non-humanoid is sent to the rig.
 
 ## What the person connects
 
