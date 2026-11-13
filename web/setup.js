@@ -7,7 +7,10 @@
 //   Models    the planner and builder models Hermes passed, tested with one tiny call each, and the
 //             media reader's model with what it can take (spec 32)
 //   Pictures  what builds use for pictures: Painted, Stock photos or Drawn
+//   Parts     every part a build can use, grouped by what you make (web/setup-parts.js): a group opens
+//             its parts, a part opens what it is for, what powers it, what stops without it and its fix
 import { ic } from './icons.js'
+import { GROUPS, statesOf, tally } from './setup-parts.js'
 
 const PICTURE_ROWS = [
   { k: 'painted', label: 'Painted', note: 'About a minute each' },
@@ -22,7 +25,7 @@ export function makeSetup({ sw }) {
   let dlg = null
   // what the sheet knows: the server's view, the model test (null while it runs) and the open row
   /** @type {any} */
-  const S = { view: null, test: undefined, open: '', hermes: null, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '' }
+  const S = { view: null, test: undefined, open: '', hermes: null, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '', facts: {}, pg: '', pp: '', ask: null, connErr: '' }
 
   const mark = (ok, label) => `<span class="su-mark${ok ? '' : ' warn'}" role="img" aria-label="${label}">${ic(ok ? 'check' : 'alert', 16)}</span>`
   const busy = '<span class="su-spin" role="img" aria-label="Testing" aria-busy="true"></span>'
@@ -202,6 +205,63 @@ export function makeSetup({ sw }) {
     return row('pictures', 'Pictures', `<span class="su-val">${on.label}</span>${warn}`, `${pick}${note}`)
   }
 
+  // ---------- Parts: the facts each part's state is read from (web/setup-parts.js says which route gives what)
+  const FACTS = { hermes: '/api/hermes', models: '/api/models', media: '/api/media', publish: '/api/publish', conn: '/api/connectors', gateway: '/api/gateway', local: '/api/setup/parts' }
+  function loadFacts() {
+    // each fills in when its own answer comes (some ask Hermes and take seconds): the sheet never waits
+    for (const [k, path] of Object.entries(FACTS)) sw.api(path).then(r => (r.ok ? r.json() : null)).catch(() => null).then(v => { S.facts[k] = v || {}; draw() })
+  }
+  const facts = () => ({ ...S.facts, view: S.view && { ...S.view, test: S.test } })
+  const DOT = { ok: 'Working', later: 'Installs on first use', off: 'Not set up', fail: 'Not working', wait: 'Checking' }
+  const dotOf = st => st === 'fail' ? mark(false, DOT.fail) : st === 'wait' ? busy : `<i class="su-dot ${st}" role="img" aria-label="${DOT[st]}"></i>`
+
+  function fixOf(f) {
+    if (!f) return ''
+    const btn = (attr, label) => `<button type="button" class="ui-btn ui-btn-outline ui-btn-sm" ${attr}>${esc(label)}</button>`
+    const cmd = f.cmd ? `<div class="su-cmd"><code>${esc(f.cmd)}</code><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-copy="${esc(f.cmd)}">Copy</button></div>` : ''
+    const acts = [
+      f.row ? btn(`data-goto="${esc(f.row)}"`, f.label) : '',
+      f.link ? `<a class="ui-btn ui-btn-outline ui-btn-sm" href="${esc(f.link)}" target="_blank" rel="noopener">${esc(f.label)}</a>` : '',
+      f.connect && !S.ask ? btn(`data-connect="${esc(f.connect)}"`, f.label) : ''
+    ].join('')
+    // a connector is added only once the person says yes to the exact command Hermes will run
+    const ask = f.connect && S.ask ? `<p class="su-note">${esc(S.ask)}</p><div class="su-acts">${btn(`data-confirm="${esc(f.connect)}"`, 'Add it')}<button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-noask>Cancel</button></div>` : ''
+    return `${cmd}${acts ? `<div class="su-acts">${acts}</div>` : ''}${ask}${f.note ? `<p class="su-note">${esc(f.note)}</p>` : ''}${f.connect && S.connErr ? `<p class="su-why">${esc(S.connErr)}</p>` : ''}`
+  }
+
+  function partOf(F, p, s) {
+    const open = S.pp === p.k
+    // a failed part: the ⚠ at rest, the reason once it is open (rule 10)
+    const head = `<button type="button" class="su-pp" data-pp="${p.k}" aria-expanded="${open}">${dotOf(s.st)}<span class="su-pname">${esc(p.name)}</span><span class="su-val">${s.st === 'fail' ? '' : esc(s.why)}</span></button>`
+    if (!open) return head
+    const dl = [['For', p.for], ['Uses', p.by], ['Needed', p.need ? 'Required' : 'Optional'], ['Without it', p.without], ['Sends', p.goes]].filter(x => x[1])
+    const why = s.st === 'fail' ? `<p class="su-why">${esc(s.why)}</p>` : ''
+    return `${head}<div class="su-pbody"><dl class="su-pd">${dl.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${why}${s.st === 'ok' || s.st === 'later' ? '' : fixOf(p.fix(F))}</div>`
+  }
+
+  function partsRow() {
+    const F = facts()
+    const groups = GROUPS.map(g => ({ g, rows: statesOf(F, g) }))
+    const all = tally(groups.flatMap(x => x.rows))
+    const state = `<span class="su-val">${all.ok} of ${all.all}</span>${all.bad ? mark(false, 'Something is not working') : ''}`
+    const inner = groups.map(({ g, rows }) => {
+      const t = tally(rows), open = S.pg === g.k
+      const head = `<button type="button" class="su-pg" data-pg="${g.k}" aria-expanded="${open}"><span class="su-pname">${esc(g.name)}</span><span class="su-val">${t.ok} of ${t.all}</span>${t.bad ? mark(false, 'Something is not working') : ''}${ic('chd', 16)}</button>`
+      return `<div class="su-pgroup${open ? ' open' : ''}">${head}${open ? `<div class="su-parts">${rows.map(({ p, s }) => partOf(F, p, s)).join('')}</div>` : ''}</div>`
+    }).join('')
+    return row('parts', 'Parts', state, `<div class="su-pgroups">${inner}</div>`)
+  }
+
+  async function connect(name, confirm) {
+    S.connErr = ''
+    const r = await api('/api/connectors/connect', { name, confirm }).catch(() => ({ error: 'Hermes did not answer.' }))
+    if (r.error) S.connErr = String(r.error)
+    else if (r.confirm) S.ask = r.confirm
+    else { S.ask = null; S.facts.conn = { ...S.facts.conn, [name]: { ...(S.facts.conn?.[name] || {}), ...r } } }
+    draw()
+    if (!r.error && !r.confirm) setTimeout(() => sw.api('/api/connectors').then(x => x.json()).then(v => { S.facts.conn = v; draw() }).catch(() => {}), 4000)
+  }
+
   const row = (k, name, state, inner) => `<section class="su-row${S.open === k ? ' open' : ''}">
     <button type="button" class="su-head" data-row="${k}" aria-expanded="${S.open === k}"><span class="su-name">${name}</span><span class="su-state">${state}</span>${ic('chd', 16)}</button>
     ${S.open === k ? `<div class="su-body">${inner}</div>` : ''}</section>`
@@ -213,7 +273,7 @@ export function makeSetup({ sw }) {
     const focusQ = had?.classList.contains('su-q'), caret = focusQ ? /** @type {HTMLInputElement} */ (had).selectionStart ?? S.q.length : 0
     // the picker's list scrolls on its own: a redraw keeps its place
     const top = dlg.body.querySelector('.su-models')?.scrollTop || 0
-    dlg.body.innerHTML = `<div class="su-list">${accountRow()}${modelsRow()}${picturesRow()}</div>`
+    dlg.body.innerHTML = `<div class="su-list">${accountRow()}${modelsRow()}${picturesRow()}${partsRow()}</div>`
     const list = dlg.body.querySelector('.su-models')
     if (list) list.scrollTop = top
     for (const b of dlg.body.querySelectorAll('[data-sign]')) b.onclick = () => sign(b.dataset.sign)
@@ -235,6 +295,13 @@ export function makeSetup({ sw }) {
     for (const b of dlg.body.querySelectorAll('[data-pv]')) b.onclick = () => { if (!S.picking) pick(b.dataset.pv, b.dataset.md) }
     for (const b of dlg.body.querySelectorAll('[data-all]')) b.onclick = () => { S.all[b.dataset.all] = true; draw() }
     for (const b of dlg.body.querySelectorAll('[data-signin]')) b.onclick = () => signIn(b.dataset.signin)
+    // the Parts layer: a group, then a part, one of each open at a time
+    for (const b of dlg.body.querySelectorAll('[data-pg]')) b.onclick = () => { S.pg = S.pg === b.dataset.pg ? '' : b.dataset.pg; S.pp = ''; S.ask = null; draw() }
+    for (const b of dlg.body.querySelectorAll('[data-pp]')) b.onclick = () => { S.pp = S.pp === b.dataset.pp ? '' : b.dataset.pp; S.ask = null; S.connErr = ''; draw() }
+    for (const b of dlg.body.querySelectorAll('[data-goto]')) b.onclick = () => { S.open = b.dataset.goto; draw(); dlg.body.querySelector(`[data-row="${b.dataset.goto}"]`)?.scrollIntoView({ block: 'start' }) }
+    for (const b of dlg.body.querySelectorAll('[data-connect]')) b.onclick = () => connect(b.dataset.connect, false)
+    for (const b of dlg.body.querySelectorAll('[data-confirm]')) b.onclick = () => connect(b.dataset.confirm, true)
+    on('[data-noask]', () => { S.ask = null; draw() })
     on('[data-moreprov]', () => { S.more = !S.more; draw() })
     on('[data-savekey]', e => saveKey(e.currentTarget.dataset.savekey))
     on('[data-signoff]', async () => { clearTimeout(polling); S.signing = null; draw(); await api('/api/setup/models/signin', { cancel: true }).catch(() => {}) })
@@ -244,7 +311,7 @@ export function makeSetup({ sw }) {
     if (k) k.onkeydown = e => { if (e.key === 'Enter') saveKey(S.keyFor) }
     // a redraw keeps the keyboard where it was
     if (focusQ) { const n = /** @type {HTMLInputElement|null} */ (dlg.body.querySelector('.su-q')); n?.focus({ preventScroll: true }); n?.setSelectionRange(caret, caret) }
-    const again = focus && (focus.row ? `[data-row="${focus.row}"]` : focus.pic ? `[data-pic="${focus.pic}"]` : focus.sign ? `[data-sign="${focus.sign}"]` : null)
+    const again = focus && (focus.row ? `[data-row="${focus.row}"]` : focus.pg ? `[data-pg="${focus.pg}"]` : focus.pp ? `[data-pp="${focus.pp}"]` : focus.pic ? `[data-pic="${focus.pic}"]` : focus.sign ? `[data-sign="${focus.sign}"]` : null)
     if (again) dlg.body.querySelector(again)?.focus({ preventScroll: true })
   }
 
@@ -270,7 +337,7 @@ export function makeSetup({ sw }) {
     if (dlg && !dlg.closed) { if (row) { S.open = row; draw() } return }
     S.view = await api('/api/setup').catch(() => null)
     if (!S.view?.models) return
-    Object.assign(S, { open: row || (S.view.account?.pending ? 'account' : ''), hermes: null, signError: '', details: false, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '' })
+    Object.assign(S, { open: row || (S.view.account?.pending ? 'account' : ''), hermes: null, signError: '', details: false, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '', facts: {}, pg: '', pp: '', ask: null, connErr: '' })
     dlg = window.SwarmUI.dialog({ title: 'Setup', className: 'su', body: '', footer: '<button type="button" class="ui-btn ui-btn-default su-start">Start</button>', onClose: seen })
     dlg.footer.querySelector('.su-start').onclick = () => dlg.close('start')
     S.test = S.view.test || undefined
@@ -279,6 +346,7 @@ export function makeSetup({ sw }) {
     test()
     watch()
     loadOptions().then(() => poll())
+    loadFacts()
   }
 
   return {

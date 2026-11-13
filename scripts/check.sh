@@ -21,7 +21,7 @@ echo "· type-check ratchet"
 # lines of code (not blank, comment or import lines) in web files without // @ts-check on their first line
 # (tsconfig.json; CI runs the type check itself with tools/dev). Counted in lines, not files, so splitting a
 # file (web/canvas/) neither helps nor hurts. The cap only goes down: type a file, then lower it.
-cap=4967
+cap=4861
 untyped=$(for f in $(git ls-files 'web/*.js' | grep -v '^web/vendor/'); do head -1 "$f" | grep -q '^// @ts-check' || echo "$f"; done)
 n=$(for f in $untyped; do cat "$f"; done | grep -cvE '^[[:space:]]*(//|$|import )' || true)
 if [ "$n" -gt "$cap" ]; then echo "$n untyped lines of web code, over the cap of $cap; start new files with // @ts-check. Untyped files:"; echo "$untyped"; exit 1; fi
@@ -75,6 +75,8 @@ chat_id=$(grep -oE '"id":"c-[0-9a-f]{10}"' "$tmp/reply" | head -1 | cut -d'"' -f
 get /api/setup; has '"seen":false'; has '"pictures"'; has '"account":{"connected":false'
 curl -sf -H 'x-swarm-token: ci' -d '{"seen":true,"pictures":"drawn"}' http://127.0.0.1:$port/api/setup > "$tmp/reply"; has '"seen":true'; has '"mode":"drawn"'
 curl -sf -H 'x-swarm-token: ci' -d '{}' http://127.0.0.1:$port/api/setup/models > "$tmp/reply"; has '"ok":false'
+# Setup › Parts: whether each key is set (never its value) and which local programs are found
+get /api/setup/parts; has '"keys":{"SWARM_STUDIO_API_KEY":'; has '"renderer":'
 get /api/library/packs; has '"packs"'
 get '/api/library?q=boots'; has '"results"'
 curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; grep -q '__SWARM_TOKEN__' "$tmp/reply" && { echo 'the wall has no token'; exit 1; }

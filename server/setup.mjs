@@ -7,6 +7,9 @@
 //   POST /api/setup/account { provider } -> sign in to Swarm Feed with Google, GitHub or Discord, then link
 //        this install to that account; { check } asks whether it came back, { reopen } opens the page
 //        again, { cancel } drops it. Answers { ok, message?, account }. The token stays in feed.py.
+//   GET  /api/setup/parts              -> what the Parts list needs from this computer (web/setup-parts.js):
+//        { keys: { NAME: true|false }, stripe: 'test'|'live'|'', godot, chrome, ffmpeg, renderer, voice, appEngine }.
+//        Whether each declared key is set, never its value; whether each local program is found.
 //
 // setup.json holds { seen, paint } and nothing secret: whether the sheet was shown, and how the
 // last real paint went ({ provider, ok, error }), which is how the Pictures row knows an image
@@ -14,12 +17,39 @@
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs'
 import { execFile, spawn } from '../engine/proc.mjs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { godotBin } from '../engine/port.mjs'
+import { findChrome } from '../engine/seo.mjs'
 import { pictureState, isPictures, modelTester, paintNote } from '../engine/setup.mjs'
+
+// The keys the Parts list asks about: plugin.yaml's optional_env (passed by launcher.py from Hermes's
+// secret scope) plus the two the launcher renames. Only presence leaves this file.
+export const PART_KEYS = ['SWARM_STUDIO_API_KEY', 'ELEVENLABS_API_KEY', 'CKFF_API_KEY', 'MESHY_API_KEY', 'PEXELS_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'VERCEL_TOKEN', 'CLOUDFLARE_API_TOKEN']
+const onPath = (env, names) => String(env.PATH || env.Path || '').split(delimiter).filter(Boolean).some(d => names.some(n => existsSync(join(d, n))))
+// What this computer has for the Parts list: key presence and local programs (engine pages: godot.md,
+// video.md, sound.md, dyad.md). ffmpeg: on PATH, the pinned copy the first film installed, or not yet.
+export function partsLocal({ env = process.env, dataDir, root, platform = process.platform, godot = godotBin, chrome = findChrome } = {}) {
+  const win = platform === 'win32'
+  const keys = Object.fromEntries(PART_KEYS.map(k => [k, !!env[k]]))
+  keys.ELEVENLABS_API_KEY ||= !!env.SWARM_ELEVENLABS_KEY
+  const stripe = env.STRIPE_SECRET_KEY ? (/^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY) ? 'test' : 'live') : ''
+  const tools = join(dataDir, 'video-tools', 'node_modules')
+  const ff = onPath(env, win ? ['ffmpeg.exe'] : ['ffmpeg']) ? 'path' : existsSync(join(dataDir, 'video-tools', 'bin', win ? 'ffmpeg.exe' : 'ffmpeg')) || existsSync(join(tools, '@ffmpeg-installer')) ? 'pinned' : ''
+  let g = null, c = null
+  try { g = godot(env) } catch {}
+  try { c = chrome() } catch {}
+  return {
+    keys, stripe, godot: !!g, chrome: !!c, ffmpeg: ff,
+    renderer: existsSync(join(tools, 'hyperframes')),
+    voice: existsSync(join(tools, 'kokoro-js')),
+    appEngine: existsSync(join(root, 'dyad', '.vite', 'build', 'aba_headless.cjs'))
+  }
+}
 
 // roles() -> { planner: { model, baseUrl, apiKey }, worker }; call(provider, model) throws when it
 // does not answer; image() -> { providers, imagePick, pick }; setPictures(mode | null) saves the pick.
-export function setupRoutes({ dataDir, roles, call, image, media = async () => null, setPictures, feed = null, hermesModels = null, clearPicks = () => {}, hermesEnv = () => ({}), hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile, start = spawn }) {
+export function setupRoutes({ dataDir, roles, call, image, media = async () => null, setPictures, feed = null, hermesModels = null, clearPicks = () => {}, hermesEnv = () => ({}), hermesBin = process.env.SWARM_HERMES_BIN, platform = process.platform, run = execFile, start = spawn, local = () => partsLocal({ dataDir, root: join(dirname(fileURLToPath(import.meta.url)), '..') }) }) {
   const file = join(dataDir, 'setup.json')
   let state = {}
   try { state = JSON.parse(readFileSync(file, 'utf8')) } catch {}
@@ -188,6 +218,7 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
       body(req).then(async input => { const r = await signIn(input); r ? json(res, 200, r) : json(res, 400, { error: 'bad request' }) })
       return true
     }
+    if (url.pathname === '/api/setup/parts' && req.method === 'GET') { json(res, 200, local()); return true }
     if (url.pathname === '/api/setup/hermes' && req.method === 'POST') { hermesModel().then(r => json(res, 200, r)); return true }
     if (url.pathname === '/api/setup/models/options' && req.method === 'GET') { modelOptions(url.searchParams.get('refresh') === '1').then(r => json(res, 200, { ...r, ...signState() })); return true }
     if (url.pathname === '/api/setup/models/pick' && req.method === 'POST') { body(req).then(async input => json(res, 200, await pickModel(input))); return true }
