@@ -8,6 +8,7 @@ Status: **draft for the owner to review** (2026-11-13). Each name is marked the 
 
 - **Decided:** the owner already said it, with the date and where.
 - **Proposed:** this page's pick. Nothing gets renamed until the owner says so.
+- **Agreed direction:** SITEMAP.md's status (owner, 2026-11-09): the tree is agreed, not every name in it is built.
 - **Open:** two names are in use and neither has been picked.
 
 Read it with [PRODUCT.md](../PRODUCT.md), [RULES.md](RULES.md), [SITEMAP.md](SITEMAP.md) and
@@ -48,8 +49,9 @@ erDiagram
   Person ||--o{ Credit : confirms
 ```
 
-Left of the line from Project to FeedBuild is the Studio, on the person's own machine. Right of it is the Feed, the
-one hosted part ([decision 0001](../decisions/0001-studio-is-local-feed-is-hosted.md)).
+FeedBuild, Credit, Board, MoodBoard and Jam live on the Feed, the one hosted part
+([decision 0001](../decisions/0001-studio-is-local-feed-is-hosted.md)). Everything else is in the Studio, on the
+person's own machine. A person is on both.
 
 ## The two homes
 
@@ -96,7 +98,8 @@ one hosted part ([decision 0001](../decisions/0001-studio-is-local-feed-is-hoste
 - **Shows on.** The kind menu in Projects, the card's kind icons, the Overview's sections, the mode menu.
 - **Name.** Open. The same kind has two names in copy: **Website** in the kind menu but **Site** on the Overview's
   section (`web/project.js:20`) and in SITEMAP §5; **Video** in the kind menu and mode menu but **Film** on the
-  Overview's section and in the engine (`piece: film`, `engine/director.mjs`, the Film studio). Proposed: the kind
+  Overview's section and in the engine (spec 18's `piece: film`, "the film's director" in `engine/director.mjs:1`,
+the Film studio). Proposed: the kind
   menu's words (Website, App, Game, Video) in copy; the short ids (`site`, `app`, `game`, `film`) stay ids.
 
 ### Lens
@@ -104,8 +107,8 @@ one hosted part ([decision 0001](../decisions/0001-studio-is-local-feed-is-hoste
 - **What it is.** Which tools and which first room a build gets: Just make it, Design, Develop, Game, Mix, Launch
   ([AUDIENCE.md](AUDIENCE.md)). Guessed from the idea, shown as a chip.
 - **Name.** **Lens**. Decided (owner 2026-11-09, AUDIENCE.md). Not the same as a kind: a kind is what is made, a
-  lens is who is making it. The chip in code today picks a kind; no lens chip ships yet (not checked beyond
-  `web/home.js`).
+  lens is who is making it. No lens ships yet: no file in `web/` mentions one, and the Make box's menu picks a
+  kind.
 
 ### Chat
 

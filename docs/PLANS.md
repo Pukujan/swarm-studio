@@ -164,7 +164,7 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
     [docs/ux/OBJECTS.md](ux/OBJECTS.md), a draft for the owner to review. Its name picks are proposals.
 - **Not started:**
   - Playwright audit gates in CI;
-  - the six design artifacts:
+  - the other five design artifacts:
     - a statechart in Stately;
     - breadboards;
     - per-screen specs in OpenSpec;
