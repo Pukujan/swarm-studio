@@ -21,7 +21,7 @@ echo "· type-check ratchet"
 # lines of code (not blank, comment or import lines) in web files without // @ts-check on their first line
 # (tsconfig.json; CI runs the type check itself with tools/dev). Counted in lines, not files, so splitting a
 # file (web/canvas/) neither helps nor hurts. The cap only goes down: type a file, then lower it.
-cap=4967
+cap=4861
 untyped=$(for f in $(git ls-files 'web/*.js' | grep -v '^web/vendor/'); do head -1 "$f" | grep -q '^// @ts-check' || echo "$f"; done)
 n=$(for f in $untyped; do cat "$f"; done | grep -cvE '^[[:space:]]*(//|$|import )' || true)
 if [ "$n" -gt "$cap" ]; then echo "$n untyped lines of web code, over the cap of $cap; start new files with // @ts-check. Untyped files:"; echo "$untyped"; exit 1; fi
