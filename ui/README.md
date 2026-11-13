@@ -28,7 +28,8 @@ To see it as the person will, start the plugin's server and open `http://127.0.0
 | Path | What |
 |---|---|
 | `src/nav/` | the current Studio's machine (`web/nav.js`, as `@studio/nav`), `useNav()`, and the address |
-| `src/primitives/` | the kit on React Aria: Button, Menu, Dialog, TextField, each with stories |
+| `src/primitives/` | the kit on React Aria: Button, Menu, Dialog, TextField, Select, each with stories |
+| `src/chat/` | the left chat (**Chat**, specs 27 and 29) that the Studio scaffold, the Overview and the Design deck share: `<Chat>`, its props and events in `types.ts`, and `layerDrag` for a Layers list. Not a screen: a screen draws it |
 | `src/screens/` | the screens, by the machine's room, named from OBJECTS.md; `SCREENS` lists the ones that moved |
 | `src/shell/` | the frame: the top bar |
 | `src/theme.css` | generated: the Tailwind theme from `tokens/` (never edit it) |
