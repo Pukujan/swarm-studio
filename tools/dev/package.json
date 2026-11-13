@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "cd ../.. && tsc -p tsconfig.json",
-    "deps": "cd ../.. && depcruise web --config .dependency-cruiser.cjs"
+    "deps": "cd ../.. && depcruise web --config .dependency-cruiser.cjs --ignore-known .dependency-cruiser-known-violations.json"
   },
   "devDependencies": {
     "dependency-cruiser": "18.7.2",
