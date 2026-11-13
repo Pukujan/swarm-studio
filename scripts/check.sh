@@ -4,6 +4,9 @@
 # not mid-build), the Python plugin compiles, and the server starts and answers.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Git Bash on Windows rewrites env values that look like Unix paths (HOSTED_BASE=/studio/app became
+# C:/Program Files/Git/studio/app): leave this one as written
+export MSYS2_ENV_CONV_EXCL=HOSTED_BASE
 
 echo "· no tracked symlinks"
 # `hermes plugins install` copies the clone and refuses a symlink it cannot read,
