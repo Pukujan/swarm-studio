@@ -213,6 +213,7 @@ Scaffold → this board with only Plan and Lock. Studio → every step, with the
 flowchart LR
   MK["Make › Three takes, Scaffold or Studio"] --> SC["Projects › name · Build"]
   CH["Left chat: Start with X, and why"] --- SC
+  SC --> LY["Layers (left panel; a sheet from the Layers button ≤ 760 px): a group per section with its dot and count, a row per card; click flies and selects, double-click opens, F2 / right-click Rename, Delete, drag into the chat"]
   SC --> PA["Step path: a chip per step (dot, name) → Skip, Bring back, Remove; + Name brings a removed step back"]
   SC --> TK["Takes (Three takes): three looks → Use this take, or Mix in the brand sheet"]
   SC --> BR["Brand: the brand card → Projects › name › Brand → Lock → back"]

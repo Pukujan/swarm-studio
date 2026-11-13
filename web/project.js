@@ -15,6 +15,7 @@
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
 import { swEdit } from './edit/patches.js'
+import { layerSheet } from './layers.js'
 
 const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
 const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
@@ -802,14 +803,9 @@ export function makeProject({ sw, C, root }) {
 
   // ---------- the stage: pan (drag empty space, wheel), zoom (pinch, ⌘ wheel), Frame fits all
   // narrow panes (a phone, Hermes Desktop's side pane): the canvas stays; Files and Layers are a sheet
-  const narrow = () => matchMedia('(max-width: 760px)').matches
-  let offSheet = null
-  function sheet(on) {
-    root.classList.toggle('files-on', on)
-    root.querySelector('.pj-files-btn')?.setAttribute('aria-expanded', String(on))
-    offSheet?.(); offSheet = null
-    if (on) offSheet = window.SwarmUI?.layer(root.querySelector('.pj-side'), () => sheet(false), { extra: [root.querySelector('.pj-files-btn')] })
-  }
+  const filesSheet = layerSheet(root, $('.pj-side'), $('.pj-files-btn'))
+  const narrow = filesSheet.narrow
+  const sheet = on => filesSheet.set(on)
   // While the camera moves the world keeps the pixels it has (will-change holds the raster scale) and
   // the pictures keep the copies they show; both are put right once it rests, in one go. The canvas
   // behind is told too, so it does not swap a page or take a screenshot in the middle of a gesture.
@@ -1232,6 +1228,18 @@ export function makeProject({ sw, C, root }) {
     if (P.sel !== `page:${page}`) select(`page:${page}`, { pan: true })
     pickLayer(row.dataset.key)
     if (narrow()) sheet(false)
+  }, true)
+  // the tree's keys (web/layers.js) pick here too: Enter, or ↑ ↓ to the next section, goes the same way as a click
+  layersEl.addEventListener('keydown', e => {
+    const at = e.target.closest('.ly[data-key], .pg-title[data-page]')
+    if (!at || e.target.closest('input') || !['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
+    e.preventDefault(); e.stopPropagation()
+    const rows = [...layersEl.querySelectorAll('.pg.open .ly[data-key]')], i = rows.indexOf(at)
+    const to = e.key === 'Enter' ? at : at.matches('.ly') ? rows[i + (e.key === 'ArrowDown' ? 1 : -1)] : null
+    if (!to) return
+    const key = to.dataset.key, page = to.dataset.page
+    to.click()
+    layersEl.querySelector(key ? `.ly[data-key="${CSS.escape(key)}"]` : `.pg-title[data-page="${CSS.escape(page)}"]`)?.focus({ preventScroll: true })
   }, true)
   const search = $('.pj-search'), sInput = search.querySelector('input')
   $('.pj-find').onclick = () => { search.hidden = !search.hidden; if (!search.hidden) sInput.focus(); else { P.q = ''; sInput.value = ''; render() } }

@@ -35,6 +35,9 @@ export const siteKit = {
       const cards = pages.map((name, i) => ({
         key: `page:${i}`, name, cls: 'sc-frame',
         render: el => frame(el, ctx, name, i),
+        // the Layers row's Rename and Delete (web/scaffold.js)
+        rename: v => save(pages.map((p, j) => (j === i ? v.slice(0, 40) : p))),
+        remove: pages.length > 1 ? () => save(pages.filter((_, j) => j !== i)).then(() => ctx.select(null)) : null,
         inspect: box => {
           const esc = ctx.sw.esc
           box.innerHTML = `<label class="pl-f"><span>Name</span><input value="${esc(name)}" maxlength="40"></label>

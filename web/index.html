@@ -98,8 +98,13 @@
       <div id="log" class="feed"></div>
     </section>
 
-    <!-- the page and section tree lives here unseen; the project canvas shows it in its Layers panel -->
-    <div class="tree-home" hidden><div id="tree" class="tree"></div></div>
+  </aside>
+
+  <!-- the Design deck's left panel: Layers, the page and section tree (web/layers.js); the Overview borrows the
+       same tree for its Layers tab. In a narrow pane it is a sheet from the Layers button on the canvas -->
+  <aside class="pj-side deck-layers" aria-label="Layers">
+    <div class="pj-tabs" role="tablist"><span class="pj-tab on" role="tab" aria-selected="true">Layers</span></div>
+    <div class="pj-layers"><div id="tree" class="tree"></div></div>
   </aside>
 
   <main id="viewport" class="viewport">
@@ -110,6 +115,7 @@
     <div class="toolbar" id="toolbar"></div>
     <div class="status" id="status">Ready</div>
     <button type="button" class="camera-hint auto" id="camera-hint" aria-label="Follow the crew" aria-pressed="true"><i data-i="users"></i>Follow</button>
+    <button type="button" class="ib deck-layers-btn" aria-label="Layers" aria-expanded="false"><i data-i="layers"></i></button>
 
     <div class="float planner" data-panel="planner">
       <h3>Planner <span id="plan-state" class="pill">idle</span></h3>

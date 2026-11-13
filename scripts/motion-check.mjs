@@ -6,7 +6,10 @@
 // animations held still. Two recordings are then compared step by step.
 //
 //   node scripts/motion-check.mjs record <dir> [--root <tree>] [--only a,b]   record this tree (or another)
-//   node scripts/motion-check.mjs compare <dir-a> <dir-b> [--tolerance <pixels>]
+//   node scripts/motion-check.mjs compare <dir-a> <dir-b> [--tolerance <pixels>] [--looks a,b]
+//     --looks: scenes whose end picture a pull request means to change (its description's "Motion: looks
+//     change in a, b" line, docs/ux/MOTION.md); their animations are still compared, only the picture is not.
+//     Animations a change means to add or remove go in docs/ux/motion/accepted.json instead
 //   node scripts/motion-check.mjs clips <dir> [--only a,b]                   short real-time clips to watch
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check)
 //
@@ -200,7 +203,7 @@ function accepted() {
   try { const a = JSON.parse(readFileSync(join(ROOT, 'docs/ux/motion/accepted.json'), 'utf8')); return { gained: a.gained || [], lost: a.lost || [] } } catch { return { gained: [], lost: [] } }
 }
 
-async function compare(before, after, tolerance = 2000) {
+async function compare(before, after, tolerance = 2000, looks = []) {
   const [A1, A2] = before.map(load), [B1, B2] = after.map(load)
   const ok = accepted(), used = new Set()
   const excuse = (list, k) => { const hit = list.includes(k); if (hit) used.add(k); return !hit }
@@ -215,7 +218,8 @@ async function compare(before, after, tolerance = 2000) {
       const [a1, a2, b1, b2] = runs.map(kinds)
       const lost = both(a1, a2).filter(k => !either(b1, b2).includes(k) && excuse(ok.lost, k)), gained = both(b1, b2).filter(k => !either(a1, a2).includes(k) && excuse(ok.gained, k))
       let bad = 0
-      if (lost.length || gained.length) { bad++; fails.push(`${id}: the animations differ\n    ran before, not after: ${lost.join('\n                           ') || '-'}\n    ran after, not before: ${gained.join('\n                           ') || '-'}`) }
+      const diff = `${id}: the animations differ\n    ran before, not after: ${lost.join('\n                           ') || '-'}\n    ran after, not before: ${gained.join('\n                           ') || '-'}`
+      if (lost.length || gained.length) { bad++; fails.push(diff) }
       // the picture it ends on: it differs only when neither after-run matches either before-run
       const end = (dir, r) => join(dir, id, r.at(-1).file)
       const pairs = [0, 1].flatMap(i => [2, 3].map(j => [i, j]))
@@ -224,8 +228,10 @@ async function compare(before, after, tolerance = 2000) {
         n = Math.min(n, runs[i].at(-1).png === runs[j].at(-1).png ? 0 : await pixelDiff(page, end(before[i], runs[i]), end(after[j - 2], runs[j])))
         if (n <= tolerance) break
       }
-      if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})`) }
-      console.log(`${bad ? '✗' : '✓'} ${id}: ${both(a1, a2).length} kinds of animation${bad ? ', differs' : ', the same'}`)
+      if (n > tolerance && looks.includes(id)) console.log(`  ${id}: the picture it ends on differs by ${n} pixels, as the pull request says it should`)
+      else if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})`) }
+      const declared = looks.includes(id) && n > tolerance
+      console.log(`${bad ? '✗' : '✓'} ${id}: ${both(a1, a2).length} kinds of animation${bad ? ', differs' : declared ? ', changed as the pull request says' : ', the same'}`)
     }
   } finally { await browser.close() }
   if (used.size) console.log(`\naccepted (docs/ux/motion/accepted.json): ${[...used].join(', ')}`)
@@ -265,6 +271,6 @@ async function clips(out) {
 }
 
 if (cmd === 'record' && pos[0]) await record(resolve(pos[0]), { root: resolve(flag('root', ROOT)) })
-else if (cmd === 'compare' && pos[1]) await compare(pos[0].split(',').map(d => resolve(d)), pos[1].split(',').map(d => resolve(d)), Number(flag('tolerance', 2000)))
+else if (cmd === 'compare' && pos[1]) await compare(pos[0].split(',').map(d => resolve(d)), pos[1].split(',').map(d => resolve(d)), Number(flag('tolerance', 2000)), (flag('looks', '') || '').split(',').map(x => x.trim()).filter(Boolean))
 else if (cmd === 'clips' && pos[0]) await clips(resolve(pos[0]))
 else { console.log('node scripts/motion-check.mjs record <dir> [--root <tree>] | compare <a> <b> | clips <dir>'); process.exit(2) }

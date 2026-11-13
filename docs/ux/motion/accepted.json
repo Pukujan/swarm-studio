@@ -1,14 +1,5 @@
 {
-  "why": "PR pet-cursor (docs/specs/41-pet-cursor.md): Hermia's cursor on every Studio screen, and skeletons while screens load. Empty this list in the next change that touches motion: once merged, these run before as well.",
-  "gained": [
-    "page @pet-bob endless span.pet-body",
-    "page @pet-dot endless i",
-    "page @pet-tap endless span.pet-body",
-    "page @sk-wait endless div.ab",
-    "page ~opacity div.pet",
-    "page ~opacity span.pet-bub",
-    "page ~opacity span.pet-dots",
-    "page ~transform span.pet-bub"
-  ],
+  "why": "Empty: PR studio-layers (#416) changes how the studio, deck, mid-build and replay scenes look (its description's \"Motion: looks change in\" line), not what animates. PR pet-cursor's kinds were emptied here, as this file's rule asks.",
+  "gained": [],
   "lost": []
 }

@@ -35,10 +35,13 @@ async function chatFiles(list) {
 }
 // a project message's attached references, named for the crew (the brief lists the store with its links)
 export const refLines = (text, media) => media.length ? `${text}\n${media.map(m => `Use the reference ${m.data?.kind === 'image' ? 'picture' : 'file'} "${m.name}" (${m.data?.src || ''}).`).join('\n')}` : text
-// where a layer is on screen: the Overview's artboard when it shows, else the Design deck's frame
+// where a layer is on screen: the Overview's artboard or the Studio scaffold's card when one shows, else
+// the Design deck's frame
 function layerRect(key) {
   const o = window.swarm?.overviewRect?.(key)
   if (o !== false && o !== undefined) return o
+  const st = window.swarm?.studioRect?.(key)
+  if (st !== false && st !== undefined) return st
   const l = S.layers.get(key), s = l && slotFor(l)
   if (!s || !els.viewport.offsetParent) return null
   const v = els.viewport.getBoundingClientRect(), p = toScreen(s.f.x + s.box.left, s.box.top)
