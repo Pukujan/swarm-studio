@@ -20,8 +20,9 @@
     "types": ["vite/client", "node"],
     "paths": {
       "@studio/nav": ["./src/nav/studio-nav.d.ts"],
-      "@studio/icons": ["./src/studio/studio-icons.d.ts"],
-      "@studio/makeways": ["./src/studio/studio-makeways.d.ts"]
+      "@studio/crew": ["./src/pet/studio-crew.d.ts"],
+      "@studio/icons": ["./src/primitives/studio-icons.d.ts"],
+      "@studio/clean": ["./src/screens/deck/studio-clean.d.ts"]
     }
   },
   "include": ["src", ".storybook", "vite.config.ts"]

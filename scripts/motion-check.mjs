@@ -91,8 +91,11 @@ const LOG = `(() => {
   const log = window.__motion = []
   const name = el => !el || !el.tagName ? '' : el.id ? '#' + el.id : el.tagName.toLowerCase() + [...el.classList].slice(0, 2).map(c => '.' + c).join('') + (el.parentElement && el.parentElement.id ? '<#' + el.parentElement.id : '')
   const ms = v => typeof v === 'number' ? Math.round(v / 10) * 10 : String(v)
-  // endless ones are restarted by every picture taken: they are counted as running, at the end of a step
-  const css = e => { const cs = getComputedStyle(e.target); if (e.type === 'animationstart' && cs.animationIterationCount.split(',').every(v => v.trim() === 'infinite')) return; log.push((e.type === 'animationstart' ? '@' + e.animationName + ' ' + cs.animationDuration + ' ' + cs.animationIterationCount : '~' + e.propertyName) + ' ' + name(e.target)) }
+  // endless ones are restarted by every picture taken: they are counted as running, at the end of a step.
+  // One already cancelled when its start is heard (a spinner shown for a frame, its class gone again)
+  // is not counted: whether a frame was drawn in between is the machine's timing, not the page's
+  const live = e => e.target.getAnimations?.().some(a => e.type === 'animationstart' ? a.animationName === e.animationName : a.transitionProperty === e.propertyName)
+  const css = e => { if (!live(e)) return; const cs = getComputedStyle(e.target); if (e.type === 'animationstart' && cs.animationIterationCount.split(',').every(v => v.trim() === 'infinite')) return; log.push((e.type === 'animationstart' ? '@' + e.animationName + ' ' + cs.animationDuration + ' ' + cs.animationIterationCount : '~' + e.propertyName) + ' ' + name(e.target)) }
   addEventListener('animationstart', css, true)
   addEventListener('transitionrun', css, true)
   const animate = Element.prototype.animate
@@ -131,8 +134,9 @@ async function record(out, { root = ROOT } = {}) {
       page.on('requestfinished', r => { if (counts(r)) pending-- })
       page.on('requestfailed', r => { if (counts(r)) pending-- })
       // the page is settled when no request is out and the frames have drawn (real time, not the page's)
+      // (up to 10 s: the frames fetch Tailwind and their Google Fonts from the network)
       const settle = async () => {
-        for (let i = 0; i < 100 && pending > 0; i++) await wait(20)
+        for (let i = 0; i < 500 && pending > 0; i++) await wait(20)
         await wait(80)
         for (const f of page.frames()) await f.evaluate(() => document.fonts?.ready.then(() => 0)).catch(() => {})
       }

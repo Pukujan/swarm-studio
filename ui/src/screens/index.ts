@@ -3,6 +3,7 @@
 // current Studio at the same address. Moving one screen is ui/README.md's recipe.
 import type { ComponentType } from 'react'
 import type { Room } from '../nav/nav'
+import { DesignDeck } from './DesignDeck'
 import { Overview } from './Overview'
 
 export const SCREEN_NAMES: Record<Room, string> = {
@@ -18,4 +19,8 @@ export const SCREEN_NAMES: Record<Room, string> = {
   studio: 'Studio scaffold'
 }
 
-export const SCREENS: Partial<Record<Room, ComponentType>> = { overview: Overview }
+// the Overview, and the Design deck's shell (slice 1) of its port (issue #404); `draft`, a new project's deck, has not moved
+export const SCREENS: Partial<Record<Room, ComponentType>> = {
+  overview: Overview,
+  deck: DesignDeck
+}
