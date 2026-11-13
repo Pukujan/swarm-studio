@@ -40,6 +40,41 @@
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
+    "key": "game cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "game only in /: page @in 250ms x1 ease-out",
+    "label": "drift",
+    "why": "The current Game room fades its panel in (@in, 250 ms) when a version opens from the Overview; at /next/ the Game room is still the stand-in, so nothing fades."
+  },
+  {
+    "key": "game only in /: page @pet-bob endless 2600ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "game only in /: page @pet-dot endless 1000ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "game only in /: page @pet-tap endless 700ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "game only in /: page ~opacity 200ms x1 ease",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "game reduced cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
     "key": "mid-build cursor Ada: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
@@ -93,6 +128,56 @@
     "key": "mid-build reduced only in /: frame @draw 600ms x1 cubic-bezier(0.2, 0.8, 0.2, 1)",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
+  },
+  {
+    "key": "overview cursor Ada: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview cursor Bo: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "overview only in /: page @pet-bob endless 2600ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "overview only in /: page @pet-dot endless 1000ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "overview only in /: page @pet-tap endless 700ms ease-in-out",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "overview only in /: page ~opacity 200ms x1 ease",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
+  },
+  {
+    "key": "overview reduced cursor Ada: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview reduced cursor Bo: only in /",
+    "label": "drift",
+    "why": "The current Overview shows the crew's cursors over the artboards they are writing while a build runs; the /next/ Overview does not draw them yet."
+  },
+  {
+    "key": "overview reduced cursor Hermia: only in /",
+    "label": "intended (PR #431)",
+    "why": "Hermia's cursor comes to every /next/ screen with the Plan board's frame-wide PetProvider (#431, one cursor on src/legacy's startPet); the Overview has none of its own before it."
   },
   {
     "key": "play cursor Ada: only in /",
