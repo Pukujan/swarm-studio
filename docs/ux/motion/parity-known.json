@@ -225,16 +225,6 @@
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
   },
   {
-    "key": "publish reduced moves although reduced motion is asked for: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
-    "label": "intended (PR #438)",
-    "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
-  },
-  {
-    "key": "publish reduced only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
-    "label": "intended (PR #438)",
-    "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
-  },
-  {
     "key": "publish: the flow broke",
     "label": "intended (PR #438)",
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
@@ -418,5 +408,75 @@
     "key": "studio reduced only in /next/: page ~transform 250ms x1 ease",
     "label": "drift",
     "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
+  },
+  {
+    "key": "visitor cursor Ada: only in /",
+    "label": "drift",
+    "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
+  },
+  {
+    "key": "visitor cursor Bo: only in /",
+    "label": "drift",
+    "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
+  },
+  {
+    "key": "visitor cursor Hermia: only in /",
+    "label": "intended (PR #432)",
+    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+  },
+  {
+    "key": "visitor only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "intended (PR #438)",
+    "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
+  },
+  {
+    "key": "visitor only in /: frame ~transform 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "intended (PR #438)",
+    "why": "The prototype's motion reveal and layout guard are not in /next/'s boot yet; #438 says so."
+  },
+  {
+    "key": "visitor only in /: page @pet-bob endless 2600ms ease-in-out",
+    "label": "intended (PR #432)",
+    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+  },
+  {
+    "key": "visitor only in /: page @radio-dash endless 800ms linear",
+    "label": "intended (PR #432)",
+    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+  },
+  {
+    "key": "visitor only in /: page ~opacity 180ms x1 ease",
+    "label": "drift",
+    "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
+  },
+  {
+    "key": "visitor only in /: page ~opacity 250ms x1 ease",
+    "label": "drift",
+    "why": "The current player fades a visitor's thought as it changes (.swap, 250 ms); /next/ changes the words at once."
+  },
+  {
+    "key": "visitor only in /: page ~transform 250ms x1 ease",
+    "label": "drift",
+    "why": "The current player fades a visitor's thought as it changes (.swap, 250 ms); /next/ changes the words at once."
+  },
+  {
+    "key": "visitor only in /next/: page ~background-color 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
+    "label": "drift",
+    "why": "The kit's buttons (src/primitives/Button.tsx) fade their fill on hover and press; the current player's buttons change at once. None under reduced motion."
+  },
+  {
+    "key": "visitor reduced cursor Ada: only in /",
+    "label": "drift",
+    "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
+  },
+  {
+    "key": "visitor reduced cursor Bo: only in /",
+    "label": "drift",
+    "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
+  },
+  {
+    "key": "visitor reduced cursor Hermia: only in /",
+    "label": "intended (PR #432)",
+    "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   }
 ]

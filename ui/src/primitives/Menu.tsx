@@ -5,10 +5,13 @@ import type { ReactNode } from 'react'
 import { Menu as AriaMenu, MenuItem as AriaMenuItem, MenuTrigger, Popover, type MenuItemProps, type MenuProps } from 'react-aria-components'
 import { Button, type Role } from './Button'
 
-export function Menu<T extends object>({ label, name, role = 'ghost', children, ...props }: MenuProps<T> & { label: ReactNode, name: string, role?: Role }) {
+// `isDisabled` greys the button; `onOpenChange` hears it open (a menu whose items load when it opens)
+export function Menu<T extends object>({ label, name, role = 'ghost', isDisabled, onOpenChange, children, ...props }: MenuProps<T> & {
+  label: ReactNode, name: string, role?: Role, isDisabled?: boolean, onOpenChange?: (open: boolean) => void
+}) {
   return (
-    <MenuTrigger>
-      <Button role={role} aria-label={name}>{label}</Button>
+    <MenuTrigger onOpenChange={onOpenChange}>
+      <Button role={role} aria-label={name} isDisabled={isDisabled}>{label}</Button>
       <Popover placement="bottom end" offset={6} className="min-w-48 rounded-[12px] border border-edge bg-surface-2 p-1 shadow-[0_24px_60px_-12px_rgb(var(--shade-rgb)/.65)] outline-none">
         <AriaMenu {...props} aria-label={name} className="outline-none">{children}</AriaMenu>
       </Popover>

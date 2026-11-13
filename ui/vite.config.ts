@@ -29,7 +29,9 @@ export const alias: AliasOptions = [
   { find: '@studio/clean', replacement: fileURLToPath(new URL('../web/clean.js', import.meta.url)) },
   // the board video rules (web/video.js): posters, preload, teardown and the page's budget of playing clips, one
   // copy for both apps (src/primitives/BoardVideo.tsx)
-  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) }
+  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) },
+  // Open Design's Edit, ported (web/edit/patches.js, decision 0010): one part of a finished section changed by hand
+  { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) }
 ]
 
 export default defineConfig({
