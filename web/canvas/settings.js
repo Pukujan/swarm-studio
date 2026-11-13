@@ -25,6 +25,8 @@ function freeze(f, image) {
   if (f.frozen) return
   const img = document.createElement('img')
   img.className = 'snap'
+  // the picture stands in for the live page, so it is named as the page is
+  img.alt = f.title || 'Page'
   img.src = image
   img.style.height = `${f.h}px`
   f.el.append(img)
