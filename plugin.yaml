@@ -4,8 +4,9 @@ description: "A crew of agents builds a whole launch from one prompt, live on a 
 author: Pukujan
 kind: standalone
 # Installed on first use, never at plugin install (README, "What it does on your machine"):
-# - the image service: @napi-rs/image 1.16.0 (MIT, a prebuilt binary for this platform) and thumbhash 0.1.1 (MIT),
-#   from engine/imagetools/package-lock.json into $HERMES_HOME/swarm-studio/image-tools/ with
+# - the image service: @napi-rs/image, pinned to exactly 1.16.0 (MIT, a prebuilt binary for this platform), and
+#   thumbhash, pinned to exactly 0.1.1 (MIT), from engine/imagetools/package-lock.json (integrity recorded) into
+#   $HERMES_HOME/swarm-studio/image-tools/ with
 #   `npm ci --ignore-scripts`: nothing is compiled and no install script runs. SWARM_IMAGE_SERVICE=0 turns it off.
 requires_hermes: ">=0.23"
 provides_tools:
