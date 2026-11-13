@@ -192,13 +192,29 @@ flowchart LR
 
 ## 5c. The Studio's scaffold (spec 37)
 
-**Studio first** on Make, for a kind with a kit (Website, Brand), opens a Studio project here. Nothing builds
-before the person presses **Build**.
+**Make** offers the kind's ways to make it, each by its plain name, the last one picked pre-selected; a kind with
+one way has no menu ([spec 42](../specs/42-ways-to-make.md)). Scaffold, Studio and Three takes open a Studio project
+here. Nothing builds before the person presses **Build**.
+
+| Kind | Make's ways (an empty box: only the ways that can ask) |
+|---|---|
+| Website | Just build · Guided · Three takes · Scaffold (Pages) · Studio |
+| App | Just build · Guided · Three takes · Scaffold (Screens) · Studio |
+| Video | Just build · Guided · Three takes · Scaffold (Storyboard) · Studio |
+| Deck | Three takes · Scaffold (Outline and slides) · Studio |
+| Brand | Three takes · Studio |
+| Game | Just build · Guided (the Plan board's talk, section 5b) |
+
+Just build → the brief in the Design deck's chat → Build. Guided → the open questions in Make's pop, one at a time
+→ the brief → Build. Three takes → this board's Takes section → Use one or Mix (the brand sheet) → the Studio.
+Scaffold → this board with only Plan and Lock. Studio → every step, with the step path across the top.
 
 ```mermaid
 flowchart LR
-  MK["Make › Studio first"] --> SC["Projects › name · Build"]
+  MK["Make › Three takes, Scaffold or Studio"] --> SC["Projects › name · Build"]
   CH["Left chat: Start with X, and why"] --- SC
+  SC --> PA["Step path: a chip per step (dot, name) → Skip, Bring back, Remove; + Name brings a removed step back"]
+  SC --> TK["Takes (Three takes): three looks → Use this take, or Mix in the brand sheet"]
   SC --> BR["Brand: the brand card → Projects › name › Brand → Lock → back"]
   SC --> RF["References: add, drop; Use as given, Remove"]
   SC --> AS["Assets: add, drop; Role, Use as reference, Remove"]
@@ -220,8 +236,8 @@ flowchart LR
   ASK --> SC["💡 Starting prompts for the kind, then its showcases"]
   ASK --> GR["Guided prompt: only the unanswered questions → The brief (editable) → Build or Keep talking"]
   ASK --> TK["Don't build yet, talk first, a question → Design deck chat: Hermia talks, nothing built → Build → The brief → Build or Keep talking"]
-  ASK --> TU["Studio first? → Studio first (Light, Thorough) or Build now; three Build now stops asking"]
-  ASK --> KM["Kind menu: Website, App, Game, Video, Brand, Pictures ›, Studio first after three Build now"]
+  ASK --> TU["Make: Just build, Guided, Three takes, Scaffold, Studio, as the kind offers (5c); one way goes straight there"]
+  ASK --> KM["Kind menu: Website, App, Game, Video, Brand, Deck, Pictures ›"]
   KM --> KMP["Pictures: Painted, Stock photos, Drawn (the Setup pick; not for Game)"]
   PROJ --> BD[Boards]
   PROJ --> MO[Mood boards]

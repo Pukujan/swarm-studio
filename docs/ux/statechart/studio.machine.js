@@ -264,7 +264,7 @@ export const studioMachine = setup({
           meta: {
             owner: 'studio',
             live: 'home',
-            sitemap: ['6. Projects › What should the crew build? → Make', '6. Projects › Kind menu: Website, App, Game, Video, Brand, Pictures ›, Studio first after three Build now', '5c. The Studio\'s scaffold (spec 37) › Make › Studio first', '5b. The Plan board (spec 21) › 💡 → a template: Remix']
+            sitemap: ['6. Projects › What should the crew build? → Make', '6. Projects › Kind menu: Website, App, Game, Video, Brand, Deck, Pictures ›', '5c. The Studio\'s scaffold (spec 37) › Make › Three takes, Scaffold or Studio', '5b. The Plan board (spec 21) › 💡 → a template: Remix']
           },
           // the five ways of making (planned: the make-menu spec is coming), each a sibling flow out of Make
           on: {

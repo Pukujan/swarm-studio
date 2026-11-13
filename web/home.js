@@ -6,6 +6,7 @@
 import { ic, cursor, logo, CREW } from './icons.js'
 import { makeSetup } from './setup.js'
 import { openSettings } from './settings.js'
+import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
@@ -675,8 +676,8 @@ export function makeHome({ sw, C, root }) {
     { k: 'game', icon: 'game', label: 'Game', only: ['app', 'games', 'deploy'], games: 'big' },
     { k: 'video', icon: 'film', label: 'Video', only: ['review', 'video'], games: 'none' },
     // spec 37: a brand on its own (its Lock is the end), and a deck once its kit registers itself
-    { k: 'brand', icon: 'sliders', label: 'Brand', studioOnly: true },
-    { k: 'deck', icon: 'layers', label: 'Deck', studioOnly: true, kit: true }
+    { k: 'brand', icon: 'sliders', label: 'Brand' },
+    { k: 'deck', icon: 'layers', label: 'Deck', kit: true }
   ]
   // a kind whose kit has not landed yet is not shown (docs/ux/RULES.md rule 6)
   const offered = () => MAKES.filter(m => !m.kit || window.swarmKits?.[m.k])
@@ -731,8 +732,9 @@ export function makeHome({ sw, C, root }) {
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 
-  // Make: one small menu of the ways to begin, names only, with or without words in the box (spec 37).
-  // The last way picked for this kind, else what the words suggest, is pre-selected, quietly.
+  // Make: one small menu of the kind's ways to make it (web/makeways.js, docs/specs/42-ways-to-make.md): Just
+  // build, Guided, Three takes, Scaffold, Studio, as the kind offers them; a kind with one way goes straight
+  // there. The last way picked for this kind, else what the words suggest, is pre-selected, quietly.
   const makeBtn = $('.hm-make')
   form.onsubmit = e => {
     e.preventDefault()
@@ -740,15 +742,11 @@ export function makeHome({ sw, C, root }) {
     closePop()
     // the hosted studio builds websites as it always did
     if (hosted()) return text ? confirmBuild(text) : input.focus()
-    const pick = modeOf(make.k) || (text && !studioFits(text) ? 'now' : 'studio')
-    const ways = [
-      { k: 'studio', icon: 'grid', label: 'Studio' },
-      // the brand board straight away (a game's look is decided on its Plan board)
-      ...(make.k === 'game' ? [] : [{ k: 'brand', icon: 'sliders', label: 'Brand sheet' }]),
-      // Build now needs the words, and a brand or a deck is made in the Studio only
-      ...(text && !make.studioOnly ? [{ k: 'now', icon: 'zap', label: 'Build now' }] : [])
-    ].map(w => ({ ...w, on: w.k === pick, run: () => begin(w.k, text) }))
-    showMenu(ways, makeBtn)
+    const ways = makeWays(make.k, !!text)
+    if (ways.length === 1) return begin(ways[0], text)
+    const fit = make.k === 'game' ? 'guided' : text && !studioFits(text) ? 'now' : 'studio'
+    const pick = [makeModeOf(modeOf(make.k)), fit].find(k => ways.some(w => w.k === k)) || ways[0].k
+    showMenu(ways.map(w => ({ k: w.k, icon: w.icon, label: w.label, on: w.k === pick, run: () => begin(w, text) })), makeBtn)
     document.querySelector('.hm-menu button.on, .hm-menu button')?.focus({ preventScroll: true })
   }
   async function begin(way, text) {
@@ -756,9 +754,12 @@ export function makeHome({ sw, C, root }) {
     const off = !sw.hermesReady ? null : await sw.hermesReady()
     if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => begin(way, text))
     G.sheet = false
-    store.set(`home.mode.${make.k}`, way === 'now' ? 'now' : 'studio')
-    if (way === 'now') return buildNow(text)
-    return studioFirst(text, way === 'brand' ? 'brand' : null)
+    store.set(`home.mode.${make.k}`, way.k)
+    if (way.k === 'now') return buildNow(text)
+    // a game's questions are its Plan board's talk (spec 27); the rest ask in Make's pop, then the brief
+    if (way.k === 'guided' && make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
+    if (way.k === 'guided') return guide(text)
+    return studioFirst(text, way)
   }
 
   // ---------- Studio or Build now (spec 37)
@@ -774,22 +775,20 @@ export function makeHome({ sw, C, root }) {
     // a game skipped its Plan board; the talk's Build still starts it (nothing builds without a press)
     confirmBuild(text)
   }
-  // the Studio, until the scaffold (spec 37, slice 2) opens it: the game's Plan board, the brand sheet
-  // beside the talk, or the talk; Thorough asks the questions the prompt has not answered first
-  // sheet 'brand': the brand board straight away, inside the new project (an empty box opens the Studio
-  // on its Brand step, where the chat asks what it is first)
-  async function studioFirst(text, sheet = null) {
+  // Three takes, Scaffold or Studio (spec 42): a Studio project made in that mode, opened beside its chat (an
+  // empty box's chat asks what it is first). Three takes opens on its looks (web/scaffold.js); Scaffold has
+  // only its Plan step. A game's is its Plan board. Without a kit (the hosted studio):
+  // the brand sheet, the talk, or Thorough's questions first
+  async function studioFirst(text, way = { k: 'studio' }) {
     closePop()
     if (make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
     // a kind with a Studio kit (spec 37): its project is made now, and its scaffold opens beside the chat
     if (!hosted() && window.swarmKits?.[make.k]) {
       try {
         const kit = window.swarmKits[make.k]
-        const j = await post('/api/studio', { kind: make.k, idea: text, depth, steps: kit.steps })
+        const j = await post('/api/studio', { kind: make.k, idea: text, mode: way.k, depth, steps: way.steps || kit.steps })
         input.value = ''
-        // the sheet opens from the project's Studio, so its Back lands there
-        if (sheet === 'brand' && text) { C.studio(j.project.id, 'brand'); return C.brand({ project: j.project.id, brief: text, kind: make.k === 'app' ? 'app' : 'site' }) }
-        return C.studio(j.project.id, sheet)
+        return C.studio(j.project.id, way.step || makeStudioStep(make.k))
       } catch (err) { return toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
     }
     if (make.k === 'brand') { input.value = ''; return window.swarmCosmos?.brand?.({ brief: text, kind: 'site' }) }

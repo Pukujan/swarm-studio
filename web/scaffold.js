@@ -1,7 +1,11 @@
+// @ts-check
 // The Studio's scaffold (docs/specs/37-studio-first.md): a Studio project before anything is built. The
 // shared board (web/board.js) with the kind's steps as sections, each named, with a dot for its state:
 // Brand, References, Assets, Plan (the kit's own cards) and Lock. The chat stays on the left, where the
 // planner says where to start. Steps go in any order and any can be skipped; Build is the person's press.
+// The step path across the top (docs/specs/42-ways-to-make.md) shows the record's steps: each opens on a click,
+// and can be skipped, removed or brought back. A project begun as Three takes shows its Takes first: three
+// looks to use one of, or mix in the brand sheet. A Scaffold is a Studio with only its Plan step.
 // (web/studio.js is the studio controller; this is one of its views, like web/plan.js and web/brand.js.)
 //
 //   ctx, what every kit is handed: { project, studio, brand, refs, assets, chat, sw, C, board, state,
@@ -12,15 +16,21 @@ import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
 
 const STEP_NAME = { brand: 'Brand', references: 'References', assets: 'Assets', plan: 'Plan', proposal: 'Lock' }
+const TAKES = 3
 const STATE_NAME = { empty: 'Empty', started: 'Started', done: 'Done', skipped: 'Skipped' }
 const CHAT_KIND = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
 
 export function makeScaffold({ sw, C, root }) {
   const esc = sw.esc
-  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, talked: null, cards: new Map() }
+  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, talked: null, cards: new Map(), takes: null }
 
   const bd = makeBoard({ root, cls: 'project plan scaffold', label: 'Studio', fit: [0.35, 1], on: () => A.on, selected: () => !!A.sel, clear: () => select(null) })
   const { world, insp } = bd
+  // the step path, over the board's top edge (the left panel is the chat's)
+  const path = document.createElement('nav')
+  path.className = 'sc-path'
+  path.setAttribute('aria-label', 'Steps')
+  root.append(path)
 
   // ---------- the top bar: Projects › the project's name, and Build
   const bar = document.querySelector('.topbar')
@@ -28,7 +38,8 @@ export function makeScaffold({ sw, C, root }) {
   crumb.className = 'sc-crumb'
   crumb.innerHTML = `<button class="sc-up">Projects</button>${ic('chr', 14)}<b class="sc-name"></b>`
   bar?.querySelector('.spacer')?.before(crumb)
-  crumb.querySelector('.sc-up').onclick = () => C.go('home')
+  const up = /** @type {HTMLElement} */ (crumb.querySelector('.sc-up'))
+  up.onclick = () => C.go('home')
   const primary = document.createElement('button')
   primary.className = 'toggle sc-primary pri'
   primary.innerHTML = '<span class="t">Build</span>'
@@ -57,6 +68,13 @@ export function makeScaffold({ sw, C, root }) {
       const d = await api(at(''))
       if (pid !== A.pid) return
       A.d = d
+      // Three takes: the first three looks of the project's brand (the planner's picks first, then the brief's
+      // words), the brand made from the idea first; three waiting cards until then
+      if (d.studio.mode === 'takes' && d.studio.idea && A.takes?.pid !== pid) {
+        A.takes = { pid, packs: [] }
+        const made = d.brand ? api(proj('/brand')) : post(proj('/brand'), { brief: d.studio.idea, kind: d.studio.kind === 'app' ? 'app' : 'site' })
+        made.then(j => { if (A.takes?.pid !== pid) return; A.takes.packs = (j.packs || []).slice(0, TAKES); return load().then(() => { if (A.on && A.pid === pid) bd.focus('takes', false) }) }).catch(fail)
+      }
       // a kit that loads or drafts its own state does it once, before its cards are drawn
       if (kit().prepare && A.prepared !== pid && d.studio.idea) { A.prepared = pid; await kit().prepare(ctx()) }
       if (pid === A.pid) render()
@@ -117,6 +135,31 @@ export function makeScaffold({ sw, C, root }) {
       <div class="sc-type" style="background:${esc(L.bg)};color:${esc(L.text)}"><b style="font-family:'${esc(L.heading)}'">Aa</b><span style="font-family:'${esc(L.body)}'">${esc(L.heading)} · ${esc(L.body)}</span></div><em>${b.lockedAt ? 'Locked' : 'Open'}</em>`)
   }
 
+  // a take: the look as a small page, its ground, a photo, its heading in its own type, a line in its voice and its colours
+  function takeCard(p) {
+    const L = p.palette, head = String(A.d.studio.idea || p.name).split(/\s+/).slice(0, 6).join(' ')
+    const pic = p.pictures?.photos?.[0]?.url
+    return card(`take:${p.slug}`, p.name, 'sc-take', `<div class="sc-take-page" style="background:${esc(L.bg)};color:${esc(L.text)}">
+      ${pic ? `<img src="${esc(pic)}" alt="" draggable="false" loading="lazy">` : ''}<b style="font-family:'${esc(p.type.heading)}'">${esc(head)}</b>
+      <span style="font-family:'${esc(p.type.body)}'">${esc(p.voice?.lines?.[0] || p.for)}</span><i style="background:${esc(L.accent)}"></i></div>
+      <div class="br-sw">${['bg', 'text', 'accent', 'link'].map(k => `<i style="background:${esc(L[k])}"></i>`).join('')}</div><em>${esc(p.name)}</em>`)
+  }
+  // the step path: a chip per step on the record (its dot and name), Lock, then + for each removed step
+  function renderPath() {
+    const k = kit(), kept = A.d.studio.steps
+    const chip = s => { const st = stateOf(s); return `<button class="sc-chip${A.sel === `step:${s}` ? ' on' : ''}" data-step="${s}"><i class="sc-dot ${st}" role="img" aria-label="${STATE_NAME[st]}"></i>${STEP_NAME[s]}</button>` }
+    path.innerHTML = [...k.steps.filter(s => s in kept), 'proposal'].map(chip).join('')
+      + k.steps.filter(s => !(s in kept)).map(s => `<button class="sc-chip sc-gone" data-add="${s}" aria-label="Add ${STEP_NAME[s]}">${ic('plus', 14)}${STEP_NAME[s]}</button>`).join('')
+  }
+  path.onclick = e => {
+    const b = /** @type {HTMLElement} */ (e.target).closest('button')
+    if (!b || !A.d) return
+    const add = b.dataset.add, step = b.dataset.step
+    if (add) return post(at('/step'), { step: add, state: 'empty' }).then(take).then(() => bd.focus(add)).catch(fail)
+    if (step !== 'proposal') select(`step:${step}`)
+    bd.focus(step)
+  }
+
   function render() {
     if (!A.d) { world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Studio</span><div class="abs"><div class="ab pcard wait-in"><b>Brand</b><span></span></div></div></section></div>'; return }
     sync()
@@ -128,7 +171,8 @@ export function makeScaffold({ sw, C, root }) {
     const head = step => { const st = stateOf(step); return `<span class="al"><i class="sc-dot ${st}" role="img" aria-label="${STATE_NAME[st]}"></i>${STEP_NAME[step]}</span>` }
     const sec = (step, inner, cls = '') => `<section class="pj-sec sc-step ${cls}" data-sec="${step}">${head(step)}<div class="abs">${inner}</div></section>`
     const parts = []
-    for (const step of k.steps) {
+    if (d.studio.mode === 'takes' && A.takes) parts.push(`<section class="pj-sec sc-step sc-takes" data-sec="takes"><span class="al">Three takes</span><div class="abs">${A.takes.packs.length ? A.takes.packs.map(takeCard).join('') : '<div class="ab sc-take wait-in"></div>'.repeat(TAKES)}</div></section>`)
+    for (const step of k.steps.filter(s => s in d.studio.steps)) {
       if (step === 'brand') parts.push(sec('brand', brandCard()))
       if (step === 'references') parts.push(sec('references', `${d.refs.map(r => thumb('ref', r)).join('')}${addCard('ref:add', 'Add reference')}`))
       if (step === 'assets') parts.push(sec('assets', `${d.assets.map(a => thumb('asset', a)).join('')}${addCard('asset:add', 'Add asset')}`))
@@ -146,6 +190,7 @@ export function makeScaffold({ sw, C, root }) {
     for (const [key, x] of A.cards) { const el = world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`); if (el) { x.render?.(el, c); if (A.sel === key) el.insertAdjacentHTML('beforeend', sel(key)) } }
     bd.applyCam()
     if (!A.framed && world.offsetWidth) { A.framed = true; bd.frameAll(false) }
+    renderPath()
     renderInsp()
   }
 
@@ -157,12 +202,33 @@ export function makeScaffold({ sw, C, root }) {
     if (insp.contains(document.activeElement) && document.activeElement.matches('input, select')) return
     const [part, id] = key.split(':')
     const x = A.cards.get(key)
-    const name = x?.name || (part === 'ref' ? A.d.refs.find(r => r.id === id)?.name : part === 'asset' ? A.d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : '')
+    const pack = part === 'take' ? A.takes?.packs.find(p => p.slug === id) : null
+    const name = x?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? A.d.refs.find(r => r.id === id)?.name : part === 'asset' ? A.d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : '')
     if (!name) return select(null)
     insp.innerHTML = `<h3><span>${esc(name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="sc-body"></div>`
     const box = insp.querySelector('.sc-body')
     insp.querySelector('.pj-x').onclick = () => select(null)
     if (x) return x.inspect?.(box, ctx())
+    if (pack) {
+      box.innerHTML = `<p class="sc-idea-full">${esc(pack.why || pack.for)}</p><div class="sc-acts"><button class="btn pri" data-a="use">${ic('check', 15)}Use this take</button><button class="btn ghost" data-a="mix">${ic('remix', 15)}Mix</button></div>`
+      box.onclick = e => {
+        const a = e.target.closest('[data-a]')?.dataset.a
+        // used: it is the project's brand, and the Studio goes on from its Brand step
+        if (a === 'use') post(proj('/brand/pick'), { part: 'pack', id: pack.slug }).then(() => post(at('/mode'), { mode: 'studio' })).then(d => { A.sel = null; take(d); bd.focus('brand') }).catch(fail)
+        if (a === 'mix') openBrand()
+      }
+      return
+    }
+    if (part === 'step') {
+      const skipped = A.d.studio.steps[id] === 'skipped'
+      box.innerHTML = `<div class="sc-acts"><button class="btn ghost" data-a="skip">${ic(skipped ? 'restore' : 'x', 15)}${skipped ? 'Bring back' : 'Skip'}</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
+      box.onclick = e => {
+        const a = e.target.closest('[data-a]')?.dataset.a
+        if (a === 'skip') post(at('/step'), { step: id, state: skipped ? 'empty' : 'skipped' }).then(take).catch(fail)
+        if (a === 'remove') post(at('/step'), { step: id, state: 'removed' }).then(d => { A.sel = null; take(d) }).catch(fail)
+      }
+      return
+    }
     if (part === 'ref') {
       box.innerHTML = `<div class="sc-acts"><button class="btn ghost" data-a="given">${ic('pin', 15)}Use as given</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
       box.onclick = e => {
@@ -191,7 +257,7 @@ export function makeScaffold({ sw, C, root }) {
     A.sel = key
     insp.innerHTML = ''
     // the step it is in is where the person is (the address follows)
-    const step = key && world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)?.closest('[data-sec]')?.dataset.sec
+    const step = key?.startsWith('step:') ? key.slice(5) : key && world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)?.closest('[data-sec]')?.dataset.sec
     if (step && C.nav.view.room === 'studio' && C.nav.view.step !== step) C.nav.go({ type: 'studio.step', step })
     render()
   }
@@ -278,12 +344,14 @@ export function makeScaffold({ sw, C, root }) {
     async show(pid, step = null) {
       A.on = true
       root.hidden = false
-      if (pid !== A.pid) { A.pid = pid; A.d = null; A.sel = null; A.talked = null }
+      if (pid !== A.pid) { A.pid = pid; A.d = null; A.sel = null; A.talked = null; path.innerHTML = '' }
       A.framed = false
       render()
       await load()
       if (A.pid !== pid || !A.on || !A.d) return
       talk()
+      // Three takes: its looks first
+      if (A.d.studio.mode === 'takes' && A.takes) return bd.focus('takes', false)
       // the step named (the address, Back), else the planner's start, which the address then names
       const to = step || startOf()?.id
       if (!to) return
