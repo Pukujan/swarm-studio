@@ -57,13 +57,13 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .sc-acts .btn { display: inline-flex; align-items: center; gap: 6px; }
 .sc-body select { width: 100%; height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px var(--body); padding: 0 8px; }
 
-/* the step path (docs/specs/42-ways-to-make.md): a chip per step across the board's top, then Lock, then a
-   dashed + chip for each removed step; it scrolls on its own on a phone. No motion of its own (MOTION.md) */
-.scaffold .pj-stage { margin-top: 52px; }
-.sc-path { position: absolute; top: 10px; left: 16px; right: 16px; z-index: 10; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; pointer-events: none; }
+/* the step path (docs/specs/42-ways-to-make.md): a chip per step floating over the board's top edge, above where
+   the board frames its first section (40px), then Lock, then a dashed + chip for each removed step; it scrolls on
+   its own on a phone, and takes no room from the board. No motion of its own (MOTION.md) */
+.sc-path { position: absolute; top: 8px; left: 16px; right: 16px; z-index: 10; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; pointer-events: none; }
 .sc-path::-webkit-scrollbar { display: none; }
 .project.insp-on .sc-path { right: 288px; }
-.sc-chip { pointer-events: auto; flex: none; display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 500 13px var(--body); cursor: pointer; }
+.sc-chip { pointer-events: auto; flex: none; display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 500 13px var(--body); cursor: pointer; }
 .sc-chip:hover { border-color: var(--line-2); }
 .sc-chip.on { border-color: var(--text); }
 .sc-chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
