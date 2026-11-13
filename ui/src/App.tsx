@@ -14,6 +14,8 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || view.room === 'home') return
+      // Esc in a dialog, a menu or a field is theirs: it closes them, it does not also leave the screen
+      if (e.target instanceof Element && e.target.closest('[role="dialog"], [role="menu"], input, textarea')) return
       go(can({ type: 'back' }) ? { type: 'back' } : { type: 'home' })
     }
     addEventListener('keydown', onKey)
