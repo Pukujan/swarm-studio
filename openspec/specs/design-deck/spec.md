@@ -112,6 +112,9 @@ SHALL stop a replay.
 
 ### Requirement: Accessible and console-clean
 
+The screen SHALL have no new axe violation (one not in `.ui-audit-known-violations.json`) and no console error, page
+error or failed request.
+
 #### Scenario: axe and console
 - **WHEN** the deck has loaded at 1440 and 390 wide
 - **THEN** axe finds nothing outside the known list (built pages in iframes are left out), and no console error or

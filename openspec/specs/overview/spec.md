@@ -99,6 +99,9 @@ once, with no confirmation, and say Stopped (REQUIREMENTS 2026-11-11).
 
 ### Requirement: Accessible and console-clean
 
+The screen SHALL have no new axe violation (one not in `.ui-audit-known-violations.json`) and no console error, page
+error or failed request.
+
 #### Scenario: axe and console
 - **WHEN** the Overview has loaded at 1440 and 390 wide
 - **THEN** axe finds nothing outside the known list, and no console error or 400+ response happens

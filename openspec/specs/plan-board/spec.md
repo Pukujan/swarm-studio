@@ -95,6 +95,9 @@ draft lands it shows the three waiting cards, and a card with no value yet shows
 
 ### Requirement: Accessible and console-clean
 
+The screen SHALL have no new axe violation (one not in `.ui-audit-known-violations.json`) and no console error, page
+error or failed request.
+
 #### Scenario: axe and console
 - **WHEN** the board has loaded at 1440 and 390 wide
 - **THEN** axe finds nothing outside the known list, and no console error or 400+ response happens

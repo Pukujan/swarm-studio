@@ -62,6 +62,8 @@ inspector is a half sheet over the stage.
 
 - **The breadcrumb** reads `Projects › <project>` (`web/scaffold.js:48`), with no `Home` and no room name. Known
   violation `studio breadcrumb`.
+- **The crumb's last word.** The spec follows AUDIT.md's expected `… › Studio`; OBJECTS.md proposes **Studio first**
+  for the scaffold, so that the bare word keeps meaning the plugin. The owner's call.
 - **Esc on a step goes to Projects**, not to the step before: `C.up` sends `home` from the scaffold
   (statechart README, difference 6).
 - **Step names.** The code's steps are `plan` and `proposal` (`web/nav.js:22`), shown as Plan and Lock
