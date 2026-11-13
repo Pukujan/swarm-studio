@@ -56,6 +56,7 @@ export function canvasPage(webDir, extra = {}) {
   const read = f => readFileSync(join(webDir, f), 'utf8')
   const boot = JSON.stringify({ version: webVersion(webDir), frameHtml: read('frame.html'), motion: { css: MOTION_CSS, src: swarmMotion.toString(), snappy: SNAPPY.source }, layout: layoutSource(), guard: swarmLayout.toString(), ...extra }).replace(/</g, '\\u003c')
   return read('index.html')
+    .replace('<link rel="stylesheet" href="tokens.css">', () => `<style>${read('tokens.css')}</style>`)
     .replace('<link rel="stylesheet" href="canvas.css">', () => `<style>${read('canvas.css')}</style>`)
     .replace('<script src="crew.js"></script>', () => `<script>${read('crew.js')}</script>`)
     .replace('<script src="chatter.js"></script>', () => `<script>${read('chatter.js')}</script>`)

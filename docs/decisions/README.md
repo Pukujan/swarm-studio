@@ -20,6 +20,7 @@ one; don't edit the old one quietly.
 | [0009](0009-ux-rules-are-checks.md) | 2026-11-12 | The UX rules are checks, not prose |
 | [0010](0010-open-design-tools.md) | 2026-11-12 | Open Design's editing tools (Edit, Comment, Tweaks, Draw) |
 | [0011](0011-hyperframes-default-video.md) | 2026-11-12 | HyperFrames is the default film engine; the person picks another |
+| [0012](0012-design-tokens.md) | 2026-11-13 | The Studio's theme is design tokens, built with Style Dictionary |
 
 `tests/decisions.test.mjs` fails if the hosted studio, build credits or "paid per build" come back in
 `docs/brand/` or the README.

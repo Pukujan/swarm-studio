@@ -23,6 +23,7 @@ jobs:
       - run: npm ci --prefix tools/dev --no-audit --no-fund
       - run: npm run --prefix tools/dev typecheck
       - run: npm run --prefix tools/dev deps
+      - run: npm run --prefix tools/dev tokens:check
       # the vendored libraries are exactly what their npm tarballs build (scripts/vendor.mjs)
       - run: node scripts/vendor.mjs --check
   # the Studio shows the build that was clicked, in a real browser (scripts/open-check.mjs)

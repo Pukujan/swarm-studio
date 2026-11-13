@@ -3,7 +3,7 @@ import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 const W = process.argv[2] || join(dirname(fileURLToPath(import.meta.url)), '..')
-const css = readFileSync(`${W}/web/canvas.css`, 'utf8'), block = sel => css.slice(css.indexOf(sel), css.indexOf('\n}', css.indexOf(sel)))
+const css = readFileSync(`${W}/web/tokens.css`, 'utf8'), block = sel => css.slice(css.indexOf(sel), css.indexOf('\n}', css.indexOf(sel)))
 const DARK = block(':root {'), LIGHT = block(':root[data-theme="light"] {')
 let root = DARK // the light block overrides the dark one, so a light token is looked up there first
 const tok = n => {

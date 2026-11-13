@@ -1,7 +1,7 @@
 /* ---------- The studio frame (docs/ux/PATTERNS.md): Projects (web/home.css), a project (web/project.css)
    and the rooms (Design deck, Film studio, Engine room). Off on wall tiles: everything here hangs off
    body.cosmos. */
-:root { --cosmos-ease: cubic-bezier(.65, 0, .35, 1); }
+/* --cosmos-ease is web/tokens.css (tokens/*.tokens.json) */
 
 /* ---------- lean chrome: back, Projects › name, the crew, Play, Publish, ☰ */
 body.cosmos #views, body.cosmos #game-btn, body.cosmos .undo-redo, body.cosmos .clock,
