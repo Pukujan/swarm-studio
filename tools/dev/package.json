@@ -1,7 +1,7 @@
 {
   "name": "swarm-studio-dev",
   "private": true,
-  "description": "Development checks only (the type check, the dependency rules, the design-token build and the UI audit gates). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
+  "description": "Development checks only (the type check, the dependency rules, the design-token build and the UI audit gates; the :ui scripts run the next UI's own, from ui/package.json). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
   "type": "module",
   "scripts": {
     "typecheck": "cd ../.. && tsc -p tsconfig.json",
@@ -9,7 +9,10 @@
     "tokens": "node tokens.mjs",
     "tokens:check": "node tokens.mjs --check",
     "audit": "playwright test -c playwright.config.mjs",
-    "audit:update": "playwright test -c playwright.config.mjs --update-snapshots"
+    "audit:update": "playwright test -c playwright.config.mjs --update-snapshots",
+    "typecheck:ui": "npm run --prefix ../../ui typecheck",
+    "deps:ui": "npm run --prefix ../../ui deps",
+    "ui:check": "npm run --prefix ../../ui check"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

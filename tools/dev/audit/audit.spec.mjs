@@ -11,6 +11,10 @@
 // on a new one. A known one that no longer happens is reported, never failed: delete its entry (or run
 // `npm run --prefix tools/dev audit:update`). The Studio is the throwaway one the walkthrough uses
 // (scripts/walkthrough-fixtures.mjs), one per worker; it never touches the 4319 server or the real data.
+//
+// AUDIT_APP=next runs the same screens in the next UI (ui/, served at /next/, docs/decisions/0013-react-ui-coexists.md)
+// at the same addresses, with its own known list (.ui-audit-known-violations.next.json), so a screen moving to React
+// is held to the same gates before and after (ui/README.md).
 import { test as base, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -18,8 +22,9 @@ import { fileURLToPath } from 'node:url'
 import { studio } from '../../../scripts/walkthrough-fixtures.mjs'
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
-const KNOWN_FILE = `${ROOT}.ui-audit-known-violations.json`
-const FOUND_DIR = `${ROOT}test-results/audit-found`
+const APP = process.env.AUDIT_APP === 'next' ? 'next' : ''
+const KNOWN_FILE = `${ROOT}.ui-audit-known-violations${APP ? `.${APP}` : ''}.json`
+const FOUND_DIR = `${ROOT}test-results/audit-found${APP ? `-${APP}` : ''}`
 const known = JSON.parse(readFileSync(KNOWN_FILE, 'utf8'))
 
 // what a screen's loading state may be: the kit's skeletons and busy markers
@@ -37,14 +42,14 @@ const trail = (build, room) => ['Home', 'Projects', build, room]
 // Studio's top layer (Home is the Feed, rule 1), so it reads Home › Projects; the Design deck keeps Figma's
 // frame (rule 32) but rule 7 has no exception for it, so it reads like every other room.
 const SCREENS = [
-  { id: 'projects', crumb: ['Home', 'Projects'], go: (p, s) => p.goto(s.BASE + '/', { waitUntil: 'commit' }), ready: '.home .card' },
-  { id: 'overview', crumb: trail('Alpha Tea', 'Overview'), go: (p, s) => p.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site2}`, { waitUntil: 'commit' }), ready: '.pj-world .ab.page' },
-  { id: 'deck', crumb: trail('Alpha Tea', 'Design deck'), go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.site2}&room=deck`, { waitUntil: 'commit' }), ready: 'body.cosmos-station #viewport' },
-  { id: 'app', crumb: trail('Shift Log', 'App'), go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.app}&room=app`, { waitUntil: 'commit' }), ready: 'body.view-app #appview' },
-  { id: 'game', crumb: trail('Lantern Run', 'Game'), go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.game}&room=game`, { waitUntil: 'commit' }), ready: 'body.view-app' },
-  { id: 'film', crumb: trail('River Hours', 'Film'), go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.film}&room=video`, { waitUntil: 'commit' }), ready: 'body.view-video' },
-  { id: 'studio', crumb: trail('Cedar Cafe', 'Studio'), go: (p, s) => p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`, { waitUntil: 'commit' }), ready: '.ab[data-key="brand:open"]' },
-  { id: 'plan', crumb: trail('New game', 'Plan'),
+  { id: 'projects', crumb: ['Home', 'Projects'], address: () => '', go: (p, s) => p.goto(s.BASE + '/', { waitUntil: 'commit' }), ready: '.home .card' },
+  { id: 'overview', crumb: trail('Alpha Tea', 'Overview'), address: s => `?project=${s.ids.site}&version=${s.ids.site2}`, go: (p, s) => p.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site2}`, { waitUntil: 'commit' }), ready: '.pj-world .ab.page' },
+  { id: 'deck', crumb: trail('Alpha Tea', 'Design deck'), address: s => `?version=${s.ids.site2}&room=deck`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.site2}&room=deck`, { waitUntil: 'commit' }), ready: 'body.cosmos-station #viewport' },
+  { id: 'app', crumb: trail('Shift Log', 'App'), address: s => `?version=${s.ids.app}&room=app`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.app}&room=app`, { waitUntil: 'commit' }), ready: 'body.view-app #appview' },
+  { id: 'game', crumb: trail('Lantern Run', 'Game'), address: s => `?version=${s.ids.game}&room=game`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.game}&room=game`, { waitUntil: 'commit' }), ready: 'body.view-app' },
+  { id: 'film', crumb: trail('River Hours', 'Film'), address: s => `?version=${s.ids.film}&room=video`, go: (p, s) => p.goto(`${s.BASE}/?version=${s.ids.film}&room=video`, { waitUntil: 'commit' }), ready: 'body.view-video' },
+  { id: 'studio', crumb: trail('Cedar Cafe', 'Studio'), address: s => `?room=studio&project=${s.scaffold}&step=brand`, go: (p, s) => p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`, { waitUntil: 'commit' }), ready: '.ab[data-key="brand:open"]' },
+  { id: 'plan', crumb: trail('New game', 'Plan'), address: () => '?room=plan',
     pre: async (p, s) => { await p.goto(s.BASE + '/'); await p.locator('.home .card').first().waitFor() },
     go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) }), ready: 'body.cosmos-plan .pl-crumb' },
   // opened from the Studio, the way a person reaches it
@@ -52,6 +57,14 @@ const SCREENS = [
     pre: async (p, s) => { await p.goto(`${s.BASE}/?room=studio&project=${s.scaffold}&step=brand`); await p.locator('.ab[data-key="brand:open"]').first().waitFor() },
     go: p => p.locator('.ab[data-key="brand:open"]').first().press('Enter'), ready: 'body.cosmos-brand .br-crumb' }
 ]
+
+// In /next/ each screen opens at its address. Until it has moved, every one is the same stand-in, so `main` is
+// what is on screen; a moved screen gives its own `nextReady`. The brand sheet has no address of its own (it opens
+// from a screen), so it joins when its way in has moved.
+const screens = APP !== 'next' ? SCREENS : SCREENS.filter(x => x.address).map(x => ({
+  ...x, pre: undefined, ready: x.nextReady || 'main',
+  go: (p, s) => p.goto(`${s.BASE}/next/${x.address(s)}`, { waitUntil: 'commit' })
+}))
 
 // one throwaway Studio per worker, its Setup sheet already seen, plus a project still in the Studio (no build yet)
 const test = base.extend({
@@ -98,7 +111,7 @@ async function whileHeld(page, match, go) {
 
 const tidy = text => String(text).replace(/https?:\/\/127\.0\.0\.1:\d+/g, '').replace(/\s+/g, ' ').trim().slice(0, 300)
 
-for (const screen of SCREENS) {
+for (const screen of screens) {
   test(screen.id, async ({ page, studio: s }, info) => {
     const width = info.project.name
     const found = []
@@ -154,6 +167,7 @@ for (const screen of SCREENS) {
 // per planned page. Alpha Tea's first version, because no other test opens it: a page photographed once paints from
 // its picture instead. If this fails, the check is broken, not the screens.
 test('the loading check sees a skeleton', async ({ page, studio: s }) => {
+  test.skip(APP === 'next', 'the check itself, on the current Studio only')
   const { busy } = await whileHeld(page, url => url.pathname.endsWith('/events'), () => page.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site}`, { waitUntil: 'commit' }))
   expect(busy).toBe(true)
 })

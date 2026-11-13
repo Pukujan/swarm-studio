@@ -1,0 +1,8 @@
+/* The next UI's styles: the Studio's variables (web/tokens.css, built from tokens/), then Tailwind, then the
+   Tailwind theme built from the same tokens (theme.css), which takes out Tailwind's own colours and fonts. */
+@import '../../web/tokens.css';
+@import 'tailwindcss';
+@import './theme.css';
+@import './fonts.css';
+
+html, body { background: var(--bg); color: var(--text); font-family: var(--font); }

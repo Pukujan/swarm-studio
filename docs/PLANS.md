@@ -166,6 +166,10 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
     [docs/ux/OBJECTS.md](ux/OBJECTS.md), a draft for the owner to review. Its name picks are proposals.
   - the second, the statechart: [docs/ux/statechart/](ux/statechart/README.md), every SITEMAP screen and the
     way home from each, checked by `tests/statechart.test.mjs`; a draft for the owner to review.
+  - the move to Vite, React and TypeScript (#404, [decision 0013](decisions/0013-react-ui-coexists.md)): the
+    scaffold is in `ui/` and served at `/next/` beside the current Studio, with React Aria primitives, the
+    Tailwind theme from the tokens and Storybook. No screen has moved yet; [ui/README.md](../ui/README.md) is the
+    recipe for one.
 - **In review:** Playwright audit gates in CI ([docs/ux/AUDIT.md](ux/AUDIT.md)). Every top-level screen, at 1440
   and 390 wide, is checked for its breadcrumb (rule 7), axe-core violations, sideways scroll, console errors and
   a loading state. What the app breaks today is in `.ui-audit-known-violations.json`, so CI fails only on a new
@@ -174,13 +178,11 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
   - the other four design artifacts:
     - breadboards;
     - per-screen specs in OpenSpec;
-    - Storybook mock-ups;
+    - Storybook mock-ups (Storybook is set up in `ui/`; each moved screen adds its own);
     - an independent review;
-  - React Aria;
   - feature flags with OpenFeature;
   - Danger JS;
   - screenshot review with Argos or Chromatic. Only the owner approves these.
-- **Decided, deferred:** move to Vite, React and TypeScript once the flows are designed.
 - The guided-walk prototype hand-writes screens and menus. It is a flow mock-up only. The real version is built
   from the six artifacts with mature libraries.
 
