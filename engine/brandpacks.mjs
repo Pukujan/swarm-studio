@@ -88,6 +88,14 @@ export const BRAND_PACKS = [...OWN_PACKS, ...OD_PACKS]
 const BY_SLUG = new Map(BRAND_PACKS.map(p => [p.slug, p]))
 export const packOf = slug => BY_SLUG.get(slug) || null
 
+// each Open Design pack's whole system (scripts/import-od-systems.mjs, decision 0016): its tokens without the
+// colours, a digest of its rules and its components. Read once, the first time a theme asks
+let systems = null
+export function systemOf(slug) {
+  if (!systems) { try { systems = JSON.parse(readFileSync(new URL('./opendesign/systems.json', import.meta.url), 'utf8')).systems || {} } catch { systems = {} } }
+  return systems[slug] || null
+}
+
 // ---------- the sample pictures: three stock photos that fit the pack's mood (and the brief, when it says)
 let photos = null
 function library() {

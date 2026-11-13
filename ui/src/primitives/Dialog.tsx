@@ -1,5 +1,5 @@
 // The kit's Dialog on React Aria's: it closes three ways, ×, Esc and a click outside (RULES.md rule 18), keeps
-// focus inside while open and gives it back after.
+// focus inside while open and gives it back after. A tall one scrolls inside the window.
 import type { ReactNode } from 'react'
 import { Dialog as AriaDialog, Heading, Modal, ModalOverlay, type ModalOverlayProps } from 'react-aria-components'
 import { Button } from './Button'
@@ -7,7 +7,7 @@ import { Button } from './Button'
 export function Dialog({ title, children, ...props }: Omit<ModalOverlayProps, 'children'> & { title: string, children: ReactNode }) {
   return (
     <ModalOverlay {...props} isDismissable className="fixed inset-0 z-50 grid place-items-center bg-[rgb(var(--shade-rgb)/.5)] p-4">
-      <Modal className="w-full max-w-md rounded-[14px] border border-edge bg-deep text-text shadow-[0_24px_60px_-12px_rgb(var(--shade-rgb)/.65)]">
+      <Modal className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-[14px] border border-edge bg-deep text-text shadow-[0_24px_60px_-12px_rgb(var(--shade-rgb)/.65)]">
         <AriaDialog className="relative p-6 outline-none">
           {({ close }) => (
             <>

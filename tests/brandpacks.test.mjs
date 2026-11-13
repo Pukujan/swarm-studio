@@ -115,14 +115,14 @@ const OD = JSON.parse(readOd(new URL('../engine/opendesign/packs.json', import.m
 const GOOGLE_FONT = /^[A-Z][A-Za-z0-9 ]{1,38}$/
 const BRANDS = /\b(stripe|apple|linear|vercel|notion|airbnb|tesla|ferrari|nike|spotify|openai|claude|figma|pacman|tetris|google|microsoft|meta|slack|shopify|uber)\b/i
 
-test('the imported packs are whole, credited, never a real brand, and our own five stay first', () => {
-  assert.ok(OD_PACKS.length >= 40 && OD_PACKS.length <= 70, `${OD_PACKS.length}`)
+// every system, the ones named after a real brand too (decision 0016: the owner, "I want these")
+test('the imported packs are whole and credited, all of them, and our own five stay first', () => {
+  assert.ok(OD_PACKS.length >= 151, `${OD_PACKS.length}`)
   assert.deepEqual(BRAND_PACKS.slice(0, OWN_PACKS.length).map(p => p.slug), OWN_PACKS.map(p => p.slug))
-  assert.equal(OD.source.commit, 'bc06128813c99fa63f5af53ad2c903c27db057f2')
+  assert.equal(OD.source.commit, '59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582')
   const slugs = new Set()
   for (const p of OD_PACKS) {
     assert.match(p.slug, PACK_SLUG); assert.ok(!slugs.has(p.slug)); slugs.add(p.slug)
-    assert.ok(!BRANDS.test(`${p.slug} ${p.name}`), p.slug)
     assert.match(p.source.path, /^design-systems\/[a-z0-9-]+\/$/)
     assert.match(p.type.heading, GOOGLE_FONT); assert.match(p.type.body, GOOGLE_FONT)
     assert.ok(p.voice.lines.length >= 2 && p.storyboard.length >= 3 && p.for && p.words instanceof RegExp, p.slug)
