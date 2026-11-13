@@ -62,22 +62,8 @@ the one kit with no Plan step: its Lock is the end.
 
 ### How each kind is made
 
-Make lists only ways that go to different places, each named by where it goes (owner, 2026-11-13: "why are
-these two buttons the same thing?"). A kind left with one way has no menu: Make goes straight there. Each kind's
-Studio opens on its own first place to work, not always on Brand. The table is `web/makeways.js`, and
-[SITEMAP.md](../ux/SITEMAP.md) section 5c draws it.
-
-| Kind | Studio opens on | Build now |
-|---|---|---|
-| Website | **Studio · Brand**: every page reads the brand | with words |
-| App | **Studio · Screens** (Plan): the screens come first | with words |
-| Game | **Plan board** (its own studio; the look is decided there) | with words |
-| Video | **Studio · Storyboard** (Plan, [spec 40](40-video-kit.md)) | with words |
-| Deck | **Studio · Outline** (Plan): a deck starts from what it says; the brand dresses it later | no |
-| Brand | **Studio · Brand** | no |
-
-The brand sheet is not a way of its own: the Studio's Brand step opens it. Without words in the box, Build
-now is not offered, so every kind goes straight to its Studio.
+The ways to make each kind (Just build, Guided, Three takes, Scaffold, Studio), which kinds offer which, and how
+they map onto this spec are [spec 42](42-ways-to-make.md). It replaces this spec's question on Make.
 
 ## The kit contract
 
