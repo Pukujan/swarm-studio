@@ -1,5 +1,5 @@
 {
-  "why": "Empty: PR studio-layers (#416) changes how the studio, deck, mid-build and replay scenes look (its description's \"Motion: looks change in\" line), not what animates. PR pet-cursor's kinds were emptied here, as this file's rule asks.",
-  "gained": [],
-  "lost": []
+  "why": "PR fix/flaky-checks: the Studio and Hermia start on the tick their script runs, not on a timer that raced the server's first replies. Her first look at the screen now always comes while its loading cards are still there, so at load she taps them (Projects gains @pet-tap) instead of idling (Studio loses @pet-bob); from the next step on both sides match. Empty this list in the next change that touches motion.",
+  "gained": ["page @pet-tap endless span.pet-body"],
+  "lost": ["page @pet-bob endless span.pet-body"]
 }

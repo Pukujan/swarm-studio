@@ -355,7 +355,7 @@ export function Projects() {
           <div className="relative h-full w-[248px]">{side}</div>
         </div>
       )}
-      <main className="relative flex min-w-0 flex-1 flex-col px-10 pt-7 max-md:px-4 max-md:pt-3">
+      <div className="relative flex min-w-0 flex-1 flex-col px-10 pt-7 max-md:px-4 max-md:pt-3">
         <div className="mb-3.5 flex items-center gap-2.5 md:hidden">
           <IconButton icon="menu" label="Menu" onPress={() => setDrawer(!drawer)} />
           <Logo />
@@ -398,7 +398,7 @@ export function Projects() {
             <IconButton icon="x" label="Clear selection" onPress={() => setSel(new Set())} />
           </div>
         )}
-      </main>
+      </div>
 
       <span ref={point} aria-hidden className="fixed h-0 w-0" style={{ left: at.x, top: at.y }} />
       {menu && (

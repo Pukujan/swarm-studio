@@ -1,7 +1,7 @@
 {
   "name": "swarm-studio-ui",
   "private": true,
-  "description": "The Studio's next UI: Vite, React 19, TypeScript, XState and React Aria (docs/decisions/0013-react-ui-coexists.md). Development only: its build, ui/dist/, is committed and the plugin's server serves it at /next/, so installing the plugin builds and downloads nothing. It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install.",
+  "description": "The Studio's next UI: Vite, React 19, TypeScript, XState and React Aria (docs/decisions/0013-react-ui-coexists.md). Development only: its build, ui/dist/, is made by CI on every branch and committed only on the release the catalog pins (docs/decisions/0018-next-ui-build-on-release.md), and the plugin's server serves it at /next/, so installing the plugin builds and downloads nothing. It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install.",
   "type": "module",
   "scripts": {
     "dev": "vite",

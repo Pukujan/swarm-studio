@@ -18,15 +18,19 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --quiet pillow
+      # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
+      # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
+      - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
       - run: bash scripts/check.sh
+        env:
+          SWARM_NEED_UI: '1'
       # the type check and the dependency rules (tools/dev: development only, never installed by the plugin)
       - run: npm ci --prefix tools/dev --no-audit --no-fund
       - run: npm run --prefix tools/dev typecheck
       - run: npm run --prefix tools/dev deps
       - run: npm run --prefix tools/dev tokens:check
-      # the next UI (ui/, docs/decisions/0013-react-ui-coexists.md): its type check and dependency rules, and the
-      # committed ui/dist/ is what its source builds (development only: the plugin installs none of it)
-      - run: npm ci --prefix ui --no-audit --no-fund
+      # the next UI (ui/, docs/decisions/0013-react-ui-coexists.md): its type check and dependency rules, and its
+      # build makes the one-document /next/ page (development only: the plugin installs none of it)
       - run: npm run --prefix tools/dev typecheck:ui
       - run: npm run --prefix tools/dev deps:ui
       - run: npm run --prefix tools/dev ui:check
@@ -50,7 +54,107 @@ jobs:
       # setup-python names it python.exe only; check.sh calls python3
       - run: command -v python3 || cp "$(command -v python)" "$(dirname "$(command -v python)")/python3.exe"
       - run: python -m pip install --quiet pillow
+      # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
+      # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
+      - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
       - run: bash scripts/check.sh
+        env:
+          SWARM_NEED_UI: '1'
+  # macOS, where nobody here has a machine (issue #405): the plugin installed the way a person installs it
+  # (Hermes's own `hermes plugins install`, nothing built), its server started from that copy, the same checks
+  # and audit gates, and what only a Mac shows (scripts/macos-check.mjs)
+  checks-macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # a Hermes home of its own, under the runner's temp folder (TMPDIR-style /var/folders… paths on a Mac)
+      - run: echo "HERMES_HOME=$RUNNER_TEMP/hermes" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet pillow
+      # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
+      # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
+      - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      - run: bash scripts/check.sh
+        env:
+          SWARM_NEED_UI: '1'
+      # what a release does before the catalog pins it: the build committed in this runner's own checkout, so the
+      # copy Hermes installs below carries ui/dist/ exactly as a release's does (scripts/release-ui.mjs)
+      # it runs even when check.sh failed, like the sections below, so the install is still checked
+      - if: ${{ !cancelled() }}
+        run: node scripts/release-ui.mjs
+      # the sections below each run even when one before them failed, so one run shows every Mac failure
+      # Hermes as a person installs it on a Mac (its install.sh), at the release the plugin asks for
+      # (plugin.yaml requires_hermes: v0.23.1, commit 3b42157), without its setup questions, browser or
+      # computer-use driver; then this commit installed through it: Hermes clones it, scans it and copies it
+      # into $HERMES_HOME/plugins/ (Hermes refuses a pip install of itself)
+      - id: hermes
+        if: ${{ !cancelled() }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/v0.23.1/scripts/install.sh -o "$RUNNER_TEMP/hermes-install.sh"
+          bash "$RUNNER_TEMP/hermes-install.sh" --commit 3b421578588243f920886e6fe79a6faa87ea026e --hermes-home "$HERMES_HOME" --skip-setup --skip-browser --skip-computer-use
+          echo "$HERMES_HOME/hermes-agent/.hermes/bin" >> "$GITHUB_PATH"
+      - if: ${{ !cancelled() && steps.hermes.outcome == 'failure' }}
+        run: tail -n 80 "$HERMES_HOME/logs/install.log" || true
+      - id: install
+        if: ${{ !cancelled() && steps.hermes.outcome == 'success' }}
+        run: hermes plugins install "file://$GITHUB_WORKSPACE" --force --enable --yes-deps
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: hermes plugins list | tee "$RUNNER_TEMP/plugins.txt" && grep -q swarm-studio "$RUNNER_TEMP/plugins.txt"
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: node scripts/macos-check.mjs tree "$HERMES_HOME/plugins/swarm-studio"
+      # the installed copy's launcher starts its server (HOME, TMPDIR and $HERMES_HOME paths as on a Mac); both
+      # Studios answer, the current one at / and the prebuilt next one at /next/
+      - name: the installed server starts and serves / and /next/
+        id: served
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: ${{ env.HERMES_HOME }}/plugins/swarm-studio
+        run: |
+          python -c "import json, launcher; r = launcher.ensure_server(); print(json.dumps(r)); assert r.get('running'), r"
+          token=$(cat "$HERMES_HOME/swarm-studio/token")
+          # each reply read in full before it is searched (grep -q stopping early fails curl under pipefail)
+          echo '· /'; home=$(curl -sf http://127.0.0.1:4319/); grep -q '<title>Swarm Studio' <<< "$home"
+          # /next/ is one document: its scripts and styles inlined (server/next.mjs), with the boot line written in
+          echo '· /next/'; next=$(curl -sf http://127.0.0.1:4319/next/); grep -q '<title>Swarm Studio' <<< "$next"; grep -q 'window.SWARM = ' <<< "$next"
+          echo '· /api/state'; state=$(curl -sf -H "x-swarm-token: $token" http://127.0.0.1:4319/api/state); grep -q '"app":"swarm-studio"' <<< "$state"
+          pid=$(python -c "import json, sys; print(json.loads(sys.argv[1])['pid'])" "$state")
+          kill "$pid"
+      - if: ${{ !cancelled() && steps.served.outcome == 'failure' }}
+        run: ls -la "$HERMES_HOME/swarm-studio"; cat "$HERMES_HOME"/swarm-studio/*.log 2>/dev/null || true
+      # the film renderer's darwin ffmpeg and ffprobe: installed from the pinned packages and checked against
+      # their SHA-256 for this Mac, and the other Mac's (arm64 / x64) fetched and checked too
+      - if: ${{ !cancelled() }}
+        run: node scripts/macos-check.mjs ffmpeg
+      # Godot as a Mac has it: the app, found without Homebrew on PATH
+      - id: godot
+        if: ${{ !cancelled() }}
+        run: brew install --cask godot
+      - if: ${{ !cancelled() && steps.godot.outcome == 'success' }}
+        run: node scripts/macos-check.mjs godot
+      # the UI audit gates, as in ui-audit, on the current Studio and on /next/
+      - id: devdeps
+        if: ${{ !cancelled() }}
+        run: npm ci --no-audit --no-fund && npx playwright install chromium-headless-shell
+        working-directory: tools/dev
+      - if: ${{ !cancelled() && steps.devdeps.outcome == 'success' }}
+        run: npm run audit
+        working-directory: tools/dev
+      - if: ${{ !cancelled() && steps.devdeps.outcome == 'success' }}
+        run: npm run audit
+        working-directory: tools/dev
+        env:
+          AUDIT_APP: next
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-audit-macos
+          path: test-results
+          retention-days: 7
   # the next UI's stories build (ui/, its Storybook mock-ups); nothing of it is kept
   storybook:
     runs-on: ubuntu-latest
@@ -76,6 +180,9 @@ jobs:
       - run: node scripts/open-check.mjs
       # model-written pages cannot reach the studio (scripts/sandbox-check.mjs, catalog review point 4)
       - run: node scripts/sandbox-check.mjs
+      # board videos: posters, teardown off screen, at most 2 playing, while a board of 10 clips is scrolled
+      # (scripts/video-check.mjs, web/video.js)
+      - run: node scripts/video-check.mjs
   # the UI audit gates (docs/ux/AUDIT.md, tools/dev/audit): every top-level screen at 1440 and 390 wide has
   # its breadcrumb, no axe violation, no sideways scroll, no console error and a loading state, apart from the
   # violations already in .ui-audit-known-violations.json
@@ -91,6 +198,9 @@ jobs:
         working-directory: tools/dev
       - run: npx playwright install --with-deps chromium-headless-shell
         working-directory: tools/dev
+      # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
+      # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
+      - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
       - run: npm run audit
         working-directory: tools/dev
       # the same gates on the next UI at /next/, against its own known list (docs/decisions/0013-react-ui-coexists.md)
@@ -147,3 +257,36 @@ jobs:
           name: motion
           path: ${{ runner.temp }}/motion
           retention-days: 7
+  # prompt evals (decision 0019 point 5, bench/evals/README.md): a change to a crew prompt is measured on the
+  # crew's test sets before and after (the reviewer's score, slop-linter findings, build time, tokens) and fails
+  # past bench/evals/thresholds.json. With the SWARM_EVAL_API_KEY secret CI measures both sides itself; without
+  # it, the PR commits the report `node bench/evals/run.mjs gate --base origin/main` wrote, and CI checks it
+  prompt-evals:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - id: touched
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          if git diff --quiet "$base" HEAD -- engine/prompts.mjs engine/review.mjs engine/pagetype.mjs engine/lint bench/evals; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'no crew prompt changed'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.touched.outputs.run == 'yes'
+        run: npm ci --prefix tools/dev --no-audit --no-fund && npx --prefix tools/dev playwright install --with-deps chromium-headless-shell
+      - if: steps.touched.outputs.run == 'yes'
+        env:
+          SWARM_API_KEY: ${{ secrets.SWARM_EVAL_API_KEY }}
+        run: |
+          base=${{ github.event.pull_request.base.sha }}
+          if [ -n "$SWARM_API_KEY" ]; then node bench/evals/run.mjs gate --base "$base"; else node bench/evals/run.mjs check --base "$base"; fi
+      - if: steps.touched.outputs.run == 'yes' && (success() || failure())
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-evals
+          path: bench/evals/reports
+          retention-days: 30

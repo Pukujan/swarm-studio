@@ -21,7 +21,12 @@ install it: it runs the person's own Godot 4 binary as a child process (engine/p
 ## How Swarm drives it
 
 **Finding Godot.** `godotBin(env)` takes `SWARM_GODOT`, then `GODOT`, then `godot` / `godot4` on `PATH`
-(`godot.exe`, `godot4.exe`, `godot_console.exe` on Windows) (engine/port.mjs:94-98). The launcher passes only
+(`godot.exe`, `godot4.exe`, `godot_console.exe` on Windows), then on macOS the app itself,
+`Godot.app/Contents/MacOS/Godot` in `/Applications` or `~/Applications` (engine/port.mjs:94-103). Godot's command-line
+docs name that binary inside the bundle ([Command line tutorial](https://docs.godotengine.org/en/stable/tutorials/editor/command_line_tutorial.html)).
+A Mac's Godot is an app, from godotengine.org or `brew install --cask godot`. Homebrew's `godot` link in `/opt/homebrew/bin`
+is missing from the `PATH` an app opened from the Dock gets, so `PATH` alone missed it (issue #405; CI's `checks-macos`
+job installs the cask and checks that the app is found with `PATH=/usr/bin:/bin`). The launcher passes only
 `SWARM_GODOT` (plus `PATH`) into the server's environment, so a bare `GODOT` variable likely never reaches it
 (launcher.py:199). The server checks once at start and the planner is told yes, no or unknown (server/server.mjs:1450-1457, engine/talkplan.mjs:282).
 
@@ -62,6 +67,8 @@ an add-on folder up to 5 MB with `bringAddon`; native files mark it `web: false`
   move happen (engine/playtest.mjs:208-232, engine/playcheck.mjs:23);
 - keeps pressing keys and fails a run that ends within 2.5 s or throws errors (engine/playtest.mjs:234-252);
 - can film the run to `.webm` with the Web Audio sound muxed by ffmpeg (engine/playtest.mjs:58, 157-174).
+  The film gets a poster frame beside it, `playtest-N.poster.jpg`: a frame of the film made with ffmpeg, else the
+  title-screen photo the test takes (engine/playtest.mjs, engine/poster.mjs); the App view and the chat show it until the clip plays (web/video.js).
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).
 `testDodges` flags `.gd` files that check for the test, named with forward slashes on every system (engine/playcheck.mjs:71-87).
 

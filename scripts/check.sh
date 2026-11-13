@@ -48,9 +48,15 @@ for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:$port/ && break;
 get() { curl -sf -H 'x-swarm-token: ci' "http://127.0.0.1:$port$1" > "$tmp/reply" || { cat "$tmp/server.log"; echo "$1 did not answer"; exit 1; }; }
 has() { grep -q "$1" "$tmp/reply" || { echo "unexpected reply: $(head -c 300 "$tmp/reply")"; exit 1; }; }
 curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<title>Swarm Studio'
-# the next UI (docs/decisions/0013-react-ui-coexists.md): one document from the committed ui/dist/, the token put in now
-curl -sf http://127.0.0.1:$port/next/ > "$tmp/reply"; has '<title>Swarm Studio'; has '<div id="root">'; has 'window.SWARM = {"token":"ci"'
-grep -q '="/next/assets/' "$tmp/reply" && { echo '/next/ loads a file instead of carrying it'; exit 1; }
+# the next UI (docs/decisions/0013-react-ui-coexists.md): one document from ui/dist/, the token put in now. ui/dist/ is
+# built (npm run --prefix ui build), not committed, except on a release branch (docs/decisions/0018-next-ui-build-on-release.md);
+# CI builds it first and sets SWARM_NEED_UI, so there it must be there
+if [ -f ui/dist/index.html ]; then
+  curl -sf http://127.0.0.1:$port/next/ > "$tmp/reply"; has '<title>Swarm Studio'; has '<div id="root">'; has 'window.SWARM = {"token":"ci"'
+  grep -q '="/next/assets/' "$tmp/reply" && { echo '/next/ loads a file instead of carrying it'; exit 1; }
+elif [ -n "${SWARM_NEED_UI:-}" ]; then echo 'ui/dist/ is not built: npm ci --prefix ui && npm run --prefix ui build'; exit 1
+else echo '  /next/ skipped: ui/dist/ is not built (npm run --prefix ui build)'
+fi
 get /api/state; has '"working"'
 get /api/runs
 get /api/game; has '"questions"'

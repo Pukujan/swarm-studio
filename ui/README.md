@@ -2,7 +2,7 @@
 
 The Studio, moving to Vite, React 19, TypeScript (strict), XState and React Aria one screen at a time
 ([decision 0013](../docs/decisions/0013-react-ui-coexists.md), issue #404). The plugin's server serves the
-committed build, `ui/dist/`, at **`/next/`**, beside the current Studio at `/`. Installing the plugin builds and
+build, `ui/dist/`, at **`/next/`**, beside the current Studio at `/`. Installing the plugin builds and
 downloads nothing for it.
 
 ## Work on it
@@ -14,11 +14,11 @@ npm ci --prefix ui
 | Command | What it does |
 |---|---|
 | `npm run --prefix ui dev` | Vite on `127.0.0.1:5317/next/`, with no server behind it (no API, no token). Stop it when done |
-| `npm run --prefix ui build` | writes `ui/dist/`; commit it with the change |
+| `npm run --prefix ui build` | writes `ui/dist/` for `/next/`. Never commit it: CI builds it on every branch and only a release carries it ([decision 0018](../docs/decisions/0018-next-ui-build-on-release.md)) |
 | `npm run --prefix ui storybook` | Storybook on port 6006. Stop it when done |
 | `npm run --prefix tools/dev typecheck:ui` | the strict type check |
 | `npm run --prefix tools/dev deps:ui` | the dependency rules (`ui/.dependency-cruiser.cjs`) |
-| `npm run --prefix tools/dev ui:check` | fails if `ui/dist/` is not what the source builds |
+| `npm run --prefix tools/dev ui:check` | builds `ui/dist/` and fails unless it makes the one-document `/next/` page (on a release branch: unless the committed build is fresh) |
 | `npm run --prefix tools/dev tokens` | rebuilds `web/tokens.css` and `src/theme.css` from `tokens/` |
 
 To see it as the person will, start the plugin's server and open `http://127.0.0.1:4319/next/`.
@@ -31,7 +31,9 @@ To see it as the person will, start the plugin's server and open `http://127.0.0
 | `src/studio/` | the types of the other current-Studio files the UI imports, not copies: `web/icons.js` as `@studio/icons`, `web/makeways.js` as `@studio/makeways` |
 | `src/primitives/` | the kit on React Aria: Button (and IconButton, PlainButton), Menu (and MenuAt, MenuRow, Submenu), Dialog, ConfirmDialog, TextField, Panel, Icon, Toast, each with stories |
 | `src/screens/` | the screens, by the machine's room, named from OBJECTS.md; `SCREENS` lists the ones that moved |
-| `src/shell/` | the frame: the top bar |
+| `src/shell/` | the frame: the top bar, and `useTrail()`, which a screen uses to give it the build's name and its one action |
+| `src/shared/` | parts several screens use, each with stories: `Layers` (the canvas's left panel) |
+| `src/legacy/` | the current Studio's pieces hosted as they are until they move: the kits (`@studio/kits`), Hermia's cursor (`@studio/pet`) and the stylesheets they draw with |
 | `src/theme.css` | generated: the Tailwind theme from `tokens/` (never edit it) |
 | `dist/` | generated and committed: what `/next/` serves |
 
@@ -63,6 +65,6 @@ SITEMAP, REQUIREMENTS) first, and the screen's spec in `docs/specs/`.
 7. **The gates pass after**, on `/next/` at the same addresses: give the screen a `nextReady` selector in
    `tools/dev/audit/audit.spec.mjs` and run `AUDIT_APP=next npm run --prefix tools/dev audit:update`. Its entries in
    `.ui-audit-known-violations.next.json` may be fewer than step 1's, never more. Run
-   `typecheck:ui`, `deps:ui`, `npm run --prefix ui build` and `ui:check`, and commit `ui/dist/`.
+   `typecheck:ui`, `deps:ui` and `ui:check`. Commit the source only, never `ui/dist/`.
 8. **Leave `web/` alone.** The current screen stays until every screen has moved; retiring `web/` is its own PR.
    Update INVENTORY.md if a control moved.

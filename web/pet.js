@@ -438,6 +438,9 @@ export function makePet({ sw, C, doc = document }) {
     go()
   }
   C?.nav?.subscribe?.(onView)
+  // an address that opens on a replay is a build from the start: she is away before she is first drawn, not
+  // shown and faded out when its run:start arrives (a fade that ran or not by how fast the server answered)
+  if (C?.nav?.view?.replay) { P.building = true; P.buildAt = Date.now(); away() }
   // the canvas's events: a build starts (she hands over) and ends (she says so)
   sw?.on?.(e => {
     if (e.type === 'run:start') { P.building = true; P.buildAt = Date.now(); away() }
@@ -495,9 +498,10 @@ export function makePet({ sw, C, doc = document }) {
 }
 
 // She starts herself beside the studio controller (web/studio.js, joined right after this file), on the same
-// tick, so the Studio's own files carry no code for her. Never on the Swarm Wall.
+// tick, so the Studio's own files carry no code for her. Never on the Swarm Wall. A microtask runs once the
+// joined script (the Studio started) is done and before any reply from the server: a timer here raced them
 if (typeof document !== 'undefined' && window.swarm && !window.swarm.wall) {
   const petStart = () => { const C = window.swarmCosmos; if (C && !C.pet) C.pet = makePet({ sw: window.swarm, C }) }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', petStart)
-  else setTimeout(petStart)
+  else queueMicrotask(petStart)
 }
