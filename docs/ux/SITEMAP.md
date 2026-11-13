@@ -330,7 +330,6 @@ flowchart LR
   FIL --> UP["+ → New page, Upload files; or drop from Finder"]
   STG --> DD["Double-click a page → Design deck"]
   STG --> ER["Double-click the app or game → Engine room"]
-  ER --> AW["An app build (in /next/): Map, Live app, Code, Shipped; click enlarges, Esc puts back; Ask the crew"]
   PJ --> GB["A game still building opens on its build (Engine room) once; Back shows the Overview"]
   PJ --> WB["A website, app or video just started with Make opens in the Design deck (Follow on) while its pages are designed; Back shows the Overview"]
   STG --> FS["Double-click a film → Film studio"]
@@ -340,6 +339,10 @@ flowchart LR
 
 The way home is always there and is not a branch: the breadcrumb (`Projects › project ▾`, then Back from a room), the
 logo (back to Home) and Esc.
+
+An app build's Engine room, in the next UI, is the app build wall (spec 44): four windows, Map, Live app, Code and
+Shipped; a click enlarges one, Esc puts it back, and Ask the crew sends a question to the window of the crew member it
+names.
 
 ## 9. Progress, versions, share
 
