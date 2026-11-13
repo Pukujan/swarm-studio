@@ -27,7 +27,7 @@ export function makeProject({ sw, C, root }) {
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
     on: false, seen: null, shown: '', proj: null, board: null, uploads: [], refs: [], sending: new Map(),
-    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), sharp: new Map(), stale: new Set(), shot: new Map(), want: { s: new Map(), f: new Map() }, failed: new Set(), camAt: 0,
+    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), sharp: new Map(), stale: new Set(), shot: new Map(), want: { s: new Map(), f: new Map() }, failed: new Set(), camAt: 0, visit: 0,
     standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
     // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
     marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
@@ -40,7 +40,8 @@ export function makeProject({ sw, C, root }) {
     run: { get: () => nav.view.version || P.seen },
     pid: { get: () => nav.view.project || P.proj?.id || null }
   })
-  const forget = () => { P.sel = null; P.framed = false; P.thumbs.clear(); P.sharp.clear(); P.stale.clear(); P.shot.clear(); P.want.s.clear(); P.want.f.clear(); P.failed.clear(); P.thumbTries = 0 }
+  // P.visit counts the views: a page picture asked for in an earlier one is not drawn or kept in this one
+  const forget = () => { P.visit++; P.sel = null; P.framed = false; P.thumbs.clear(); P.sharp.clear(); P.stale.clear(); P.shot.clear(); P.want.s.clear(); P.want.f.clear(); P.failed.clear(); P.thumbTries = 0 }
 
   root.className = 'project'
   root.hidden = true
@@ -738,7 +739,8 @@ export function makeProject({ sw, C, root }) {
   }
   // One page at a time: every small picture in view first, then the full ones. Nothing
   // while the camera moves (it picks up when it rests), for a tile out of view, or in a hidden tab.
-  let pumpT = 0, pumping = false
+  // pumping: the view a picture is being taken for (one left over from an earlier view does not hold this one up)
+  let pumpT = 0, pumping = -1
   const idle = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 1500 }) : setTimeout(f, 50))
   // a page with no picture at all is taken straight away; a page that changed, and the full pictures, wait for idle time
   function pump(wait = 0) {
@@ -752,24 +754,27 @@ export function makeProject({ sw, C, root }) {
     return r.width > 0 && r.right > v.left && r.left < v.right && r.bottom > v.top && r.top < v.bottom
   }
   async function shootNext() {
-    if (pumping || !P.on || !P.board || document.hidden) return
+    if (pumping === P.visit || !P.on || !P.board || document.hidden) return
     const rest = performance.now() - P.camAt
     if (rest < 400) return pump(400 - rest)
     const pick = size => [...P.want[size]].find(([id]) => inView(id))
     const size = pick('s') ? 's' : 'f', job = pick(size)
     if (!job) return retry()
-    const [id, v] = job, run = P.run
+    const [id, v] = job, run = P.run, visit = P.visit
     P.want[size].delete(id)
-    pumping = true
-    try { await (size === 's' ? shootSmall(run, id, v) : shootFull(run, id, v)) } finally { pumping = false }
-    if (run === P.run && P.on) pump()
+    pumping = visit
+    try { await (size === 's' ? shootSmall(run, id, v, visit) : shootFull(run, id, v, visit)) } finally { if (pumping === visit) pumping = -1 }
+    if (visit === P.visit && P.on) pump()
   }
-  async function shootSmall(run, id, v) {
+  // A picture can take seconds (the frame fetches its fonts first): one asked for before the person went
+  // elsewhere and came back to this build is not drawn over, or kept instead of, what this view painted
+  const current = (run, visit) => run === P.run && visit === P.visit && P.on
+  async function shootSmall(run, id, v, visit) {
     P.stale.delete(id)
     const src = await sw.thumb(id).catch(() => null)
     // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
     const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
-    if (run !== P.run || !P.on) return
+    if (!current(run, visit)) return
     // a page that changed keeps its last picture until a new one comes (no blank artboard meanwhile)
     if (!ok) { if (P.thumbs.has(id)) P.stale.add(id); P.failed.add(id); return }
     const had = P.thumbs.has(id)
@@ -781,13 +786,13 @@ export function makeProject({ sw, C, root }) {
     keep(run, id, v, 's', src)
     P.want.f.set(id, v)
   }
-  async function shootFull(run, id, v) {
+  async function shootFull(run, id, v, visit) {
     const full = await sw.thumb(id, 0.6).catch(() => null)
-    if (!full || run !== P.run || !P.on) return
+    if (!full || !current(run, visit)) return
     await keep(run, id, v, 'f', full)
     // the page changed again meanwhile: its new small picture comes first
     const low = P.thumbs.get(id)
-    if (!low || P.want.s.has(id) || P.stale.has(id)) return
+    if (!current(run, visit) || !low || P.want.s.has(id) || P.stale.has(id)) return
     P.sharp.set(id, full)
     const im = world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"] img[data-full]`)
     if (im) { im.dataset.low = low.startsWith('data:') ? low : base() + low; im.dataset.full = full; sizePics() }
