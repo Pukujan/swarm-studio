@@ -2,7 +2,7 @@
 // side, before any page is designed. The same board as the game's Plan board (web/plan.js): sections of
 // artboards on the dotted stage, the inspector on the right only while something is selected, and the
 // top bar's one primary button, Lock. The chat stays on the left; Build there builds from the locked sheet.
-import { ic } from './icons.js'
+import { ic, cursor } from './icons.js'
 import { makeBoard } from './board.js'
 
 export function makeBrand({ sw, C, root }) {
@@ -11,15 +11,16 @@ export function makeBrand({ sw, C, root }) {
 
   // the stage, camera, inspector, Esc and toast are the shared board (web/board.js)
   const bd = makeBoard({ root, cls: 'project plan brand-sheet', label: 'Brand sheet', fit: [0.35, 1], on: () => B.on, selected: () => !!B.sel, clear: () => select(null) })
-  const { world, insp } = bd
+  const { stage, world, insp } = bd
   const applyCam = bd.applyCam, toast = bd.toast, frameAll = () => bd.frameAll(false)
 
-  // ---------- the top bar: the name, and Lock
+  // ---------- the top bar: Projects › the project (or the chat) › Brand, and Lock
   const bar = document.querySelector('.topbar')
   const crumb = document.createElement('div')
   crumb.className = 'br-crumb'
-  crumb.innerHTML = `<button class="br-up">Chat</button>${ic('chr', 14)}<b class="br-name">Brand sheet</b>`
+  crumb.innerHTML = `<button class="br-home">Projects</button>${ic('chr', 14)}<button class="br-up">Chat</button>${ic('chr', 14)}<b class="br-name">Brand</b>`
   bar?.querySelector('.spacer')?.before(crumb)
+  crumb.querySelector('.br-home').onclick = () => C.home()
   crumb.querySelector('.br-up').onclick = () => back()
   const primary = document.createElement('button')
   primary.className = 'toggle br-primary pri'
@@ -73,9 +74,20 @@ export function makeBrand({ sw, C, root }) {
   const line = () => B.brand?.story?.who ? `For ${B.brand.story.who}`.slice(0, 70) : 'A first line of the page.'
   const onColour = h => { const n = parseInt(String(h).slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255; return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#111111' : '#ffffff' }
 
+  // while the options are made: the sheet's own sections at their own sizes, empty, with the planner's
+  // cursor on the first card (as the Plan board shows the crew writing), so nothing moves when they come
+  const skeleton = () => {
+    const wait = (cls, n, cur = '') => Array.from({ length: n }, (_, i) => `<div class="ab ${cls} br-wait" aria-hidden="true"><div class="pl-work"></div>${i ? '' : cur}</div>`).join('')
+    return `<div class="col">
+      <section class="pj-sec br-story"><span class="al">Story</span><div class="abs">${wait('pcard', 3, cursor('Hermia'))}</div></section>
+      <section class="pj-sec br-pals"><span class="al">Palette</span><div class="abs">${wait('br-pal', 3)}</div></section>
+      <section class="pj-sec br-types"><span class="al">Type</span><div class="abs">${wait('br-type', 3)}</div></section></div>`
+  }
+
   function render() {
     const b = B.brand
-    if (!b) { primary.disabled = B.busy; world.innerHTML = '<div class="col"><section class="pj-sec"><span class="al">Brand sheet</span><div class="abs"><div class="ab pcard wait-in"><b>Story</b><span></span></div></div></section></div>'; return }
+    stage.setAttribute('aria-busy', String(!b && B.busy))
+    if (!b) { primary.disabled = B.busy; world.innerHTML = B.busy ? skeleton() : ''; if (B.busy && world.offsetWidth) frameAll(); else applyCam(); return }
     const locked = !!b.lockedAt
     primary.querySelector('.t').textContent = locked ? 'Unlock' : 'Lock'
     primary.classList.toggle('pri', !locked)
@@ -124,7 +136,7 @@ export function makeBrand({ sw, C, root }) {
     const b = B.brand, key = B.sel
     bd.inspector(!!(b && key))
     if (insp.hidden) return
-    if (insp.contains(document.activeElement) && document.activeElement.matches('input')) return
+    if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea')) return
     const [part, id] = key.split(':')
     // a pack: take all of it, or one part (the mix)
     if (part === 'pack') {
@@ -139,7 +151,9 @@ export function makeBrand({ sw, C, root }) {
     if (part === 'story') {
       const n = { what: 'What', who: 'Who', pages: 'Pages' }[id]
       const v = id === 'pages' ? (b.story?.pages || []).join(', ') : b.story?.[id] || ''
-      insp.innerHTML = `${head(n)}<label class="pl-f"><span>${n}</span><input data-story="${id}" value="${esc(v)}" maxlength="200"></label>`
+      // a long line wraps and the field grows with it; Enter commits, as the input did
+      insp.innerHTML = `${head(n)}<label class="pl-f"><span>${n}</span><textarea data-story="${id}" rows="1" maxlength="200">${esc(v)}</textarea></label>`
+      grow(insp.querySelector('textarea'))
       return
     }
     if (part === 'palette') {
@@ -158,6 +172,11 @@ export function makeBrand({ sw, C, root }) {
     const tk = e.target.closest('[data-take]')
     if (tk && B.sel?.startsWith('pack:')) call('pick', { part: 'pack', id: B.sel.slice(5), parts: tk.dataset.take === 'all' ? undefined : [tk.dataset.take] }).then(() => { insp.innerHTML = ''; renderInsp() })
   })
+  // a story field fits its text: field-sizing where the browser has it, its scroll height where not
+  const sizing = CSS.supports('field-sizing', 'content')
+  const grow = el => { if (sizing || !el) return; el.style.height = 'auto'; el.style.height = `${el.scrollHeight + 2}px` }
+  insp.addEventListener('input', e => { if (e.target.matches('textarea')) grow(e.target) })
+  insp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && e.target.matches('textarea')) { e.preventDefault(); e.target.blur() } })
   insp.addEventListener('change', e => {
     const [part, id] = (B.sel || '').split(':')
     const el = e.target
@@ -169,8 +188,8 @@ export function makeBrand({ sw, C, root }) {
 
   function select(key) { B.sel = key; insp.innerHTML = ''; render() }
   world.addEventListener('click', e => {
-    const a = e.target.closest('.ab')
-    if (!a || a.matches('.br-own')) return
+    const a = e.target.closest('.ab[data-key]')
+    if (!a) return
     const key = a.dataset.key
     const [part, id] = key.split(':')
     if ((part === 'palette' || part === 'type') && B.brand.pick?.[part] !== id) call('pick', { part, id }).then(() => select(key))
@@ -197,7 +216,11 @@ export function makeBrand({ sw, C, root }) {
       B.sel = null
       B.framed = false
       if (chat !== B.chat || project !== B.project) { B.brand = null; B.chat = chat; B.project = project }
-      crumb.querySelector('.br-up').textContent = project ? 'Studio' : 'Chat'
+      // the middle crumb: the project's name (it goes back to its Studio), or the chat it came from
+      const up = crumb.querySelector('.br-up')
+      up.textContent = project ? (up.dataset.pid === project ? up.textContent : '') : 'Chat'
+      up.dataset.pid = project || ''
+      if (project) api(`/api/studio/${encodeURIComponent(project)}`).then(d => { if (B.project === project) up.textContent = d.project?.title || d.project?.name || 'Studio' }).catch(() => { if (B.project === project && !up.textContent) up.textContent = 'Studio' })
       // Lock waits until the options are there
       B.busy = true
       render()

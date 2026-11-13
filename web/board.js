@@ -1,3 +1,4 @@
+// @ts-check
 // The board shell shared by the game's Plan board (web/plan.js) and the brand sheet (web/brand.js): the
 // dotted stage that pans and zooms, the world of sections and artboards on it, the inspector on the right
 // (shown only while something is selected), Esc and a click on the empty stage to clear the selection, and
@@ -93,7 +94,7 @@ export function makeBoard({ root, cls = 'project', label = 'Board', fit = [0.3, 
   }, { passive: false })
   addEventListener('keydown', e => {
     if (!on() || e.key !== 'Escape' || e.defaultPrevented || window.SwarmUI?.open?.()) return
-    if (e.target.closest?.('input, textarea')) return
+    if (e.target instanceof Element && e.target.closest('input, textarea')) return
     if (selected()) { e.preventDefault(); clear() }
   }, true)
 
