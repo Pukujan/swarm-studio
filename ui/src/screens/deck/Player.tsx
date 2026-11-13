@@ -77,6 +77,7 @@ export function Player({ model }: { model: DeckModel }) {
   const d = DEVICES[device], mobile = device === 'mobile', border = mobile ? 24 : 0
   const scale = size.w ? Math.min(1, (size.w - 40) / (d.w + border), mobile ? (size.h - 56) / (d.h + border) : 1) : 1
   const height = (mobile ? d.h : Math.max(400, (size.h - 56) / scale)) + border
+  const title = model.pages.find(p => p.id === page)?.title ?? 'Page'
 
   return (
     <section aria-label="Play" className="fixed inset-x-0 top-14 bottom-0 z-40 flex flex-col bg-void">
@@ -105,8 +106,7 @@ export function Player({ model }: { model: DeckModel }) {
         {page && (
           <div className={`absolute top-5 ${mobile ? 'rounded-[36px] border-[12px] border-surface-2' : ''}`}
             style={{ width: d.w + border, height, zoom: scale, left: Math.max(0, (size.w / scale - d.w - border) / 2) }}>
-            <iframe key={`${page}:${restart}:${device}`} ref={frame} title={model.pages.find(p => p.id === page)?.title ?? 'Page'} srcDoc={doc}
-              sandbox="allow-scripts" className={`block size-full border-0 bg-paper ${mobile ? 'rounded-[24px]' : ''}`} />
+            <iframe key={`${page}:${restart}:${device}`} ref={frame} title={title} srcDoc={doc} sandbox="allow-scripts" className={`block size-full border-0 bg-paper ${mobile ? 'rounded-[24px]' : ''}`} />
           </div>
         )}
       </div>
