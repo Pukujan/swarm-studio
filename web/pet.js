@@ -162,8 +162,12 @@ export function makePet({ sw, C, doc = document }) {
   P.tx = P.x; P.ty = P.y
 
   // ---------- where she goes: behind the pointer, onto the last-touched card, clear of the chat and the inspector
-  const avoid = () => [...doc.querySelectorAll('body.cosmos-chat .side, .pj-insp:not([hidden]), .ui-overlay, .ui-popover')]
-    .map(n => n.getBoundingClientRect()).filter(r => r.width && r.height)
+  // read at most twice a second: a pointermove must not force a layout each time
+  let zones = { at: 0, rects: /** @type {DOMRect[]} */ ([]) }
+  const avoid = () => {
+    if (Date.now() - zones.at > 500) zones = { at: Date.now(), rects: [...doc.querySelectorAll('body.cosmos-chat .side, .pj-insp:not([hidden]), .ui-overlay, .ui-popover')].map(n => n.getBoundingClientRect()).filter(r => r.width && r.height) }
+    return zones.rects
+  }
   function clear(x, y) {
     const W = win.innerWidth, H = win.innerHeight
     x = Math.max(8, Math.min(W - 40, x)); y = Math.max(56, Math.min(H - 40, y))
