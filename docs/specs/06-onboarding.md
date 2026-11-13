@@ -31,7 +31,7 @@ At rest (11 words of interface text; values are content):
 | Row | State at rest | Tap opens |
 |---|---|---|
 | **Account** | "Not signed in", or the Feed name | Google, GitHub, Discord; **Skip for now** |
-| **Models** | the builder model's name and a ✓, or a ⚠ | planner and builder names; on ⚠ one action, **Let Hermes set this up** |
+| **Models** | the builder model's name and a ✓, or a ⚠ | planner and builder names; on ⚠ one plain line, the fix that fits (**Let Hermes set this up** or **Test again**) and **Details** |
 | **Pictures** | Painted, Stock photos or Drawn | the three options |
 
 The one primary action is **Start**, bottom right, fixed width.
@@ -54,10 +54,17 @@ The one primary action is **Start**, bottom right, fixed width.
 - Shows the planner and builder models Hermes already passed to the plugin. Nothing to choose.
 - When the screen opens, the server makes one tiny call to each (a few tokens; `POST /api/setup/models`).
   A ✓ when both answer. The check is kept for ten minutes, so opening the screen again costs nothing.
-- When one fails: a ⚠ on the row (rule 10); opened, the provider's own message in one line, and one action,
-  **Let Hermes set this up**. It hands the job to Hermes (`hermes model`, started in a terminal by the plugin's
-  server, which already runs `hermes` for connectors) and the row tests again when the person comes back.
+- When one fails: a ⚠ on the row (rule 10); opened, one plain line saying what is wrong and the one fix that
+  fits it (`modelProblem` in engine/setup.mjs). The provider's raw message stays behind **Details**.
+  - No model, a refused key, a model Hermes doesn't have, no credit, or anything unknown:
+    **Let Hermes set this up**. It hands the job to Hermes (`hermes model`, opened in a terminal by the plugin's
+    server: a `.command` file on a Mac, a console window on Windows through Hermes Desktop's `hermes` alias;
+    elsewhere the command to copy). The row tests again when the person comes back to the window.
+  - Hermes can't read its keys, or Swarm Studio was updated: "Restart Hermes." and **Test again**.
+  - Hermes not connected, the model busy or slow: **Test again**.
   The plugin never asks for or stores a model key (catalog rule 11).
+- While the last check failed, the avatar keeps a small red dot and its menu's **Setup** item an ⚠, so closing
+  the sheet never hides the problem. The server keeps the result (`modelsOk` in setup.json) until a check passes.
 - Picking a different model per role stays where it is (☰ → Models; Settings › Crew in spec 25).
 
 ### Pictures

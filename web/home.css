@@ -48,6 +48,8 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .hm-who { flex: 1; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 9px; background: none; border: 0; color: var(--muted); font-size: 13px; cursor: pointer; min-width: 0; }
 .hm-who:hover { background: var(--surface-2); color: var(--text); }
 .hm-who .av { width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); color: var(--text); display: grid; place-items: center; font: 600 12px var(--body); flex: none; }
+.hm-who .av { position: relative; }
+.hm-who.warn .av::after { content: ''; position: absolute; top: -1px; right: -1px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--deep); }
 .hm-who .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home .hm-rename { width: 100%; background: var(--deep); color: var(--text); border: 1px solid var(--text); border-radius: 6px; padding: 3px 6px; font: inherit; outline: none; }
 
