@@ -196,7 +196,7 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
                   : <div aria-hidden className="absolute inset-0 rounded-[2px] border border-line bg-surface-2" />)}
                 {mode === 'pixi' && !shown && !src && <div aria-hidden className="absolute inset-0 rounded-[2px] border border-line bg-surface-2" />}
                 {live && (
-                  <div className={`absolute inset-0 transition-opacity duration-200 ${shown ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className={`absolute inset-0 motion-safe:transition-opacity motion-safe:duration-200 ${shown ? 'opacity-100' : 'opacity-0'}`}>
                     <PageFrame page={p} layers={pageLayers[p.id]} agents={model.agents} theme={model.theme} onGeo={onGeo} />
                   </div>
                 )}

@@ -10,15 +10,16 @@ import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
 import { DeckStage, type StageHandle } from './deck/DeckStage'
 import { DeckBoard } from './deck/DeckBoard'
-import { boardMode } from '../board/flag'
+import { boardMode, type BoardMode } from '../board/flag'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
 import { useDeckRun } from './deck/source'
 
-export function DesignDeck() {
+// `board` forces the board's mode (a story); otherwise the address's ?board= says (src/board/flag.ts)
+export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   const { view } = useNav()
   const { model, loading, error } = useDeckRun(view.run ?? view.version)
   const stage = useRef<StageHandle>(null)
-  const [board] = useState(() => boardMode())
+  const [board] = useState(() => forced ?? boardMode())
   const [zoom, setZoom] = useState(1)
   // the page Layers lists: the one the person picked, else the address's page, else the first
   const [picked, setPicked] = useState<string | null>(null)
