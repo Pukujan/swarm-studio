@@ -54,6 +54,9 @@ curl -sf http://127.0.0.1:$port/ > "$tmp/reply"; has '<title>Swarm Studio'
 if [ -f ui/dist/index.html ]; then
   curl -sf http://127.0.0.1:$port/next/ > "$tmp/reply"; has '<title>Swarm Studio'; has '<div id="root">'; has 'window.SWARM = {"token":"ci"'
   grep -q '="/next/assets/' "$tmp/reply" && { echo '/next/ loads a file instead of carrying it'; exit 1; }
+  # Mermaid for the app build wall's Map (spec 44): its own classic script beside the page, and nothing else from ui/dist/
+  curl -sf http://127.0.0.1:$port/next/vendor/mermaid.min.js > "$tmp/reply"; has 'mermaid'
+  [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/next/vendor/index.html)" = 404 ] || { echo '/next/vendor/ serves a file it does not list'; exit 1; }
 elif [ -n "${SWARM_NEED_UI:-}" ]; then echo 'ui/dist/ is not built: npm ci --prefix ui && npm run --prefix ui build'; exit 1
 else echo '  /next/ skipped: ui/dist/ is not built (npm run --prefix ui build)'
 fi

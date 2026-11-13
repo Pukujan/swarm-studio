@@ -330,6 +330,7 @@ flowchart LR
   FIL --> UP["+ → New page, Upload files; or drop from Finder"]
   STG --> DD["Double-click a page → Design deck"]
   STG --> ER["Double-click the app or game → Engine room"]
+  ER --> AW["An app build (in /next/): Map, Live app, Code, Shipped; click enlarges, Esc puts back; Ask the crew"]
   PJ --> GB["A game still building opens on its build (Engine room) once; Back shows the Overview"]
   PJ --> WB["A website, app or video just started with Make opens in the Design deck (Follow on) while its pages are designed; Back shows the Overview"]
   STG --> FS["Double-click a film → Film studio"]

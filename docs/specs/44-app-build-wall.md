@@ -1,6 +1,8 @@
 # 44. The app build wall: four windows
 
-Status: **owner decided 2026-11-13** ("Yes write it down"). Not built yet.
+Status: **owner decided 2026-11-13** ("Yes write it down"). **Built in `/next/`** (issue #451): the App room for an app build (`ui/src/screens/app/`), on a shared four-window `Wall` (`ui/src/shared/Wall.tsx`). The current Studio keeps its Preview/Code toggle.
+
+Not in this first build, kept for later: agents' notes pinned on the Map's nodes, each crew member's cursor in their own window, the diff in the Code window (it shows the file as written), and the game wall moving onto the shared `Wall` (it is still `web/canvas.js`). `plugin.yaml` has no field for a vendored library, so Mermaid is disclosed in the README only.
 
 The owner, 2026-11-13:
 - "Do we even need a dyad preview btw if our viewer only views the live web app in our own container?"
@@ -49,9 +51,9 @@ An app build's App view becomes a wall of **four fixed windows**, the same patte
 
 ## Done when
 
-- [ ] An app build shows the four windows, enlarges on click and Esc, and answers named questions.
-- [ ] The Map updates as the plan and steps change, with the current step highlighted.
-- [ ] The dev server stops when building stops, and window 2 plus Play show the static build served by Swarm.
-- [ ] Phone layout: one window at a time, with a switcher.
-- [ ] `ui-audit` and motion-check pass, and INVENTORY.md and SITEMAP.md are updated.
-- [ ] Built in the React app (`/next/`). The current app gets it only if it's cheap there.
+- [x] An app build shows the four windows, enlarges on click and Esc, and answers named questions.
+- [x] The Map updates as the plan and steps change, with the current step highlighted (a step's screen is ticked by the kit's checks, `appkit:checks`).
+- [x] The dev server stops when building stops, and window 2 plus Play show the static build served by Swarm (PR #456; window 2 shows the photo taken after the build).
+- [x] Phone layout: one window at a time, with a switcher.
+- [x] `ui-audit` and motion-check pass, and INVENTORY.md and SITEMAP.md are updated.
+- [x] Built in the React app (`/next/`). The current app keeps its toggle: the game wall there is not shared code yet.

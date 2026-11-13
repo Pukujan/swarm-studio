@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
-import { nextPage } from '../server/next.mjs'
+import { nextPage, nextVendor } from '../server/next.mjs'
 import * as nav from '../web/nav.js'
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
@@ -38,6 +38,14 @@ test('the token goes into the page at serve time, escaped, and never into ui/dis
 
 test('a plugin without ui/dist/ has no /next/ page, and nothing is built for it', () => {
   assert.equal(nextPage(new URL('./fixtures', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), {}), null)
+})
+
+test('the next UI serves only its listed vendored files: Mermaid, pinned, for the app build wall', needsBuild, () => {
+  assert.equal(json('ui/package.json').devDependencies.mermaid, '12.2.0')
+  const file = nextVendor(dist, 'mermaid.min.js')
+  assert.ok(file && readFileSync(file, 'utf8').includes('mermaid'))
+  assert.ok(nextVendor(dist, 'mermaid.LICENSE'))
+  for (const name of ['index.html', 'next.js', '../index.html', 'mermaid.js']) assert.equal(nextVendor(dist, name), null, name)
 })
 
 test('both apps run the same XState: the vendored file, tools/dev and ui/ pin one version', () => {
