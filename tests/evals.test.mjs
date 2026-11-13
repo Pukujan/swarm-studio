@@ -40,6 +40,12 @@ test('a base with no score of its own is not compared on score', () => {
   assert.match(table, /6 \(the base gives no score\)/)
 })
 
+test('a set whose prompts are the same on both sides is not judged', () => {
+  const { fails, table } = judge(side({ prompts: 'p' }), side({ prompts: 'p', score: 5, wallMs: 30000 }), T)
+  assert.deepEqual(fails, [])
+  assert.match(table, /prompts unchanged on this set/)
+})
+
 test('a set only after the change is listed, not judged', () => {
   const after = side(); after.sets.harbour = after.sets.kiln
   const { fails, table } = judge(side(), after, T)

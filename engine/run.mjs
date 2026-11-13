@@ -409,7 +409,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       // the slop linter (engine/lint, decision 0016) reads every section: model-free, so it costs no time
       // to speak of. What it must have fixed (P0) goes back to this builder for one pass; the rest is
       // the reviewer's to see
-      const found = lintSection(text, { content: layer.content })
+      const found = lintSection(text, { content: layer.content, tokens: plan.theme?.system?.tokens })
       if (found.length) emit('layer:lint', { page: layer.page, layer: layer.id, agent: agent.id, findings: found.map(({ severity, id, message }) => ({ severity, id, message })) })
       const must = found.filter(f => f.severity === 'P0')
       if (must.length && !signal?.aborted) await lintFix(agent, layer, must)

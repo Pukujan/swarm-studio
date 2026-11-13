@@ -3,7 +3,7 @@
 // theme as it is (engine/run.mjs), and checkBrand is the reviewer's check that the build kept it.
 // Kept on the chat record as `brand` (engine/chats.mjs); server/brand.mjs serves it.
 import { namedColours, missingColours } from './pagetype.mjs'
-import { BRAND_PACKS, cleanSuggest, suggestByWords, packBrief } from './brandpacks.mjs'
+import { BRAND_PACKS, cleanSuggest, suggestByWords, packBrief, packOf, systemOf } from './brandpacks.mjs'
 
 const HEX = /^#[0-9a-f]{6}$/i
 const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
@@ -161,15 +161,21 @@ export function brandTheme(brand) {
   const lightGround = light(p.bg)
   const card = lightGround ? mix(p.bg, '#ffffff', 0.55) : mix(p.bg, p.text, 0.05)
   const onAccent = contrast('#ffffff', p.accent) >= contrast('#111111', p.accent) ? '#ffffff' : '#111111'
+  // a look from Open Design brings its whole system: its tokens go on the page beside the colours (every page
+  // sets the theme's variables), and the builders are told to use them (engine/prompts.mjs)
+  const slug = brand.pack || (String(p.id || '').startsWith('k-od-') ? p.id.slice(2) : '')
+  const sys = slug ? systemOf(slug) : null
   return {
     name: p.name, direction: [String(brand.story?.what || '').replace(/[.\s]+$/, ''), `${p.name}, ${t.heading} and ${t.body}`].filter(Boolean).join('. '),
     vars: {
+      ...(sys?.tokens || {}),
       '--background': p.bg, '--foreground': p.text, '--primary': p.accent, '--primary-foreground': onAccent,
       '--muted': mix(p.bg, p.text, 0.07), '--muted-foreground': readable(mix(p.text, p.bg, 0.3), p.bg, 4.5),
       '--border': mix(p.bg, p.text, 0.16), '--accent': p.link, '--card': card, '--link': p.link
     },
     fonts: { heading: t.heading, body: t.body },
     radius: brand.radius || '12px',
+    ...(sys ? { system: { slug, name: packOf(slug)?.name || slug, tokens: Object.keys(sys.tokens), rules: sys.rules, components: sys.components } } : {}),
     locked: true
   }
 }

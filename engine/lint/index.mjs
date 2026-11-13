@@ -5,6 +5,7 @@
 //
 //   lintSection(html, { content })   [{ severity: 'P0'|'P1'|'P2', id, message, fix, snippet? }], P0 first.
 //     content: what the planner gave the builder to use word for word; copy found in it is not flagged
+//     tokens:  the design system's token names (theme.system.tokens): a section that uses none of them is flagged
 //   forBuilder(list)    the findings as a problem and a fix, for fixSection (engine/review.mjs)
 import { lintArtifact } from './artifact.mjs'
 import { sectionFindings, chromeFindings } from './rules.mjs'
@@ -20,13 +21,16 @@ const RANK = { P0: 0, P1: 1, P2: 2 }
 const COPY = new Set(['invented-metric', 'filler-copy'])
 const given = (content, snippet) => !!snippet && String(content || '').toLowerCase().includes(snippet.toLowerCase())
 
-export function lintSection(html, { content = '' } = {}) {
+export function lintSection(html, { content = '', tokens = [] } = {}) {
   const seen = new Set(), out = []
   for (const f of [...lintArtifact(html), ...sectionFindings(html)]) {
     if (NOT_FOR_SECTIONS.has(f.id) || seen.has(f.id) || (COPY.has(f.id) && given(content, f.snippet))) continue
     seen.add(f.id)
     out.push(f)
   }
+  // the system's tokens are there to be used: spacing, radius and type from them, not the builder's own numbers
+  if (tokens.length && typeof html === 'string' && html && !tokens.some(k => html.includes(`var(${k})`)))
+    out.push({ severity: 'P1', id: 'tokens-unused', message: "The section uses none of the design system's tokens.", fix: 'Take spacing, radius and type sizes from the tokens through var(): p-[var(--space-6)], rounded-[var(--radius-md)], text-[length:var(--text-xl)].' })
   return out.sort((a, b) => RANK[a.severity] - RANK[b.severity])
 }
 
