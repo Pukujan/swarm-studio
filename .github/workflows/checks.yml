@@ -40,6 +40,30 @@ jobs:
       - run: node scripts/open-check.mjs
       # model-written pages cannot reach the studio (scripts/sandbox-check.mjs, catalog review point 4)
       - run: node scripts/sandbox-check.mjs
+  # the UI audit gates (docs/ux/AUDIT.md, tools/dev/audit): every top-level screen at 1440 and 390 wide has
+  # its breadcrumb, no axe violation, no sideways scroll, no console error and a loading state, apart from the
+  # violations already in .ui-audit-known-violations.json
+  ui-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+        working-directory: tools/dev
+      - run: npx playwright install --with-deps chromium-headless-shell
+        working-directory: tools/dev
+      - run: npm run audit
+        working-directory: tools/dev
+      # what each screen found (test-results/audit-found) and Playwright's traces
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-audit
+          path: test-results
+          retention-days: 7
   # the Studio moves the same before and after (docs/ux/MOTION.md, scripts/motion-check.mjs): the base
   # and the head are each recorded twice in this runner and compared; skipped when web/, server/ and the check itself are untouched
   motion-check:

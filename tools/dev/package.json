@@ -1,15 +1,19 @@
 {
   "name": "swarm-studio-dev",
   "private": true,
-  "description": "Development checks only (the type check, the dependency rules and the design-token build). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
+  "description": "Development checks only (the type check, the dependency rules, the design-token build and the UI audit gates). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
   "type": "module",
   "scripts": {
     "typecheck": "cd ../.. && tsc -p tsconfig.json",
     "deps": "cd ../.. && depcruise web --config .dependency-cruiser.cjs --ignore-known .dependency-cruiser-known-violations.json",
     "tokens": "node tokens.mjs",
-    "tokens:check": "node tokens.mjs --check"
+    "tokens:check": "node tokens.mjs --check",
+    "audit": "playwright test -c playwright.config.mjs",
+    "audit:update": "playwright test -c playwright.config.mjs --update-snapshots"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
     "dependency-cruiser": "18.7.2",
     "style-dictionary": "5.8.0",
     "typescript": "7.0.2",
