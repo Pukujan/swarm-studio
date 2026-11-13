@@ -15,6 +15,7 @@
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
 import { swEdit } from './edit/patches.js'
+import { setVideoHtml } from './video.js'
 import { layerSheet } from './layers.js'
 
 const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
@@ -456,7 +457,7 @@ export function makeProject({ sw, C, root }) {
       x.kind === 'ref' && x.ref.use && ['Use', x.ref.use],
       x.kind === 'ref' && x.ref.kind === 'link' && ['Link', x.ref.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)]
     ].filter(Boolean)
-    const pv = x.kind === 'film' && x.video ? `<video src="${esc(base() + x.video)}" poster="${x.src ? esc(base() + x.src) : ''}" controls preload="none"></video>`
+    const pv = x.kind === 'film' && x.video ? `<video data-src="${esc(base() + x.video)}"${x.src ? ` data-poster="${esc(base() + x.src)}"` : ''} controls playsinline></video>`
       : x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="">` : typeCover(x) ? `<div class="pv-tc">${typeCover(x)}</div>` : `<span class="blank">${ic('file', 28)}</span>`
     const btns = [
       ['page', 'game', 'app', 'code', 'film', 'art'].includes(x.kind) && `<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button>`,
@@ -472,8 +473,8 @@ export function makeProject({ sw, C, root }) {
     const useFor = x.kind === 'ref' && !hosted() && P.board ? `<form class="pj-use" autocomplete="off"><input name="u" placeholder="Use for…" aria-label="Use for" maxlength="80" value="${esc(x.ref.use || '')}"><button class="btn" type="submit">Send</button></form>` : ''
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
     const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}" draggable="true">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
-    insp.innerHTML = `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
-      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}<div class="btns">${btns}</div>`
+    setVideoHtml(insp, `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
+      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}<div class="btns">${btns}</div>`)
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
   }
