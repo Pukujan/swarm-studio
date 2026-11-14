@@ -134,9 +134,10 @@ export function StudioFirst() {
     if (x?.press) return x.press(ctx())
     if (key === 'brand:open') return void go({ type: 'brand' })
     if (key.startsWith('mood:')) return void actions.pickMood(key.slice(5)).catch(S.fail)
+    if (key === 'lock:press') return void actions.lock(!d?.brand?.lockedAt).catch(S.fail)
     if (key === 'ref:add' || key === 'asset:add') { pickTo.current = key === 'ref:add' ? 'ref' : 'asset'; return picker.current?.click() }
     select(key)
-  }, [cards, ctx, go, select])
+  }, [cards, ctx, go, select, d?.brand?.lockedAt]) // the lock follows the brand
 
   const fly = (key: string) => { const el = root.current?.querySelector<HTMLElement>(`.ab[data-key="${CSS.escape(key)}"]`); if (el) { board.current?.focus(el); el.focus({ preventScroll: true }) } }
   const selectable = (key: string) => cards.has(key) || /^(ref|asset|lock|take):/.test(key)
@@ -155,7 +156,6 @@ export function StudioFirst() {
   const head = (step: string) => (
     <span className="al flex items-center gap-2"><StepDot state={stateOf(step)} />{STEP_NAME[step]}
       {step === walk[0] && step !== 'proposal' && <Button role="ghost" className="ml-2 min-h-8 px-3 text-xs" onPress={() => skip(step)}>{stateOf(step) === 'skipped' ? 'Undo skip' : 'Skip'}</Button>}
-      {step === 'proposal' && lookOf(d?.brand ?? null) && <Button role={d?.brand?.lockedAt ? 'ghost' : 'primary'} className="ml-2 min-h-8 px-3 text-xs" onPress={() => { actions.lock(!d?.brand?.lockedAt).catch(S.fail) }}>{d?.brand?.lockedAt ? 'Unlock' : 'Lock the look'}</Button>}
     </span>
   )
   const card = (key: string, name: string, cls: string, inner: React.ReactNode, def?: KitCardDef) =>
@@ -172,6 +172,8 @@ export function StudioFirst() {
       <div className="sc-type" style={{ background: L.bg, color: L.text }}><b style={{ fontFamily: `'${L.heading}'` }}>Aa</b><span style={{ fontFamily: `'${L.heading}'` }}>{L.heading}</span><i className="sc-corner" style={{ borderRadius: b.radius || '12px', borderColor: `${L.accent} ${L.accent} transparent transparent` }} aria-hidden /></div>
       <em>{b.lockedAt ? 'Locked' : 'Open'}</em></>)
   }
+  // its press, a card of its own beside the look (a card stays a fair size at any zoom of the board)
+  const lockPress = () => (lookOf(d?.brand ?? null) ? card('lock:press', d?.brand?.lockedAt ? 'Unlock' : 'Lock the look', 'sc-add', <><span aria-hidden className="text-lg">{d?.brand?.lockedAt ? '○' : '●'}</span><span>{d?.brand?.lockedAt ? 'Unlock' : 'Lock the look'}</span></>) : null)
   const add = (key: string, name: string) => card(key, name, 'sc-add', <><span aria-hidden className="text-lg">+</span><span>{name}</span></>)
   const brandCard = () => {
     const b = d?.brand, L = lookOf(b ?? null)
@@ -228,7 +230,7 @@ export function StudioFirst() {
       if (step === 'references') return sec('references', <><Importer onChoose={() => { pickTo.current = 'ref'; picker.current?.click() }} onLink={actions.addLink} />{d.refs.map(r => thumb('ref', r))}</>)
       if (step === 'assets') return sec('assets', <>{d.assets.map(a => thumb('asset', a))}{add('asset:add', 'Add asset')}</>)
       if (step === 'plan' && kit.plan) return sec('plan', planSections.flatMap(s => s.cards).map(x => card(x.key, x.name, kitLook(x), x.render ? null : <b>{x.name}</b>, x)), `sc-plan-${kit.kind}`)
-      if (step === 'proposal') return sec('proposal', lockCard())
+      if (step === 'proposal') return sec('proposal', <>{lockCard()}{lockPress()}</>)
       return null
     })}
   </>
