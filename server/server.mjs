@@ -57,6 +57,7 @@ import { templates as odTemplates } from '../engine/odlibrary.mjs'
 import { storyRoutes } from './story.mjs'
 import { deckRoutes } from './deck.mjs'
 import { refRoutes } from './refs.mjs'
+import { pictureAsk, vagueAsk, gensOf, newPrompt } from '../engine/picask.mjs'
 import { studioRoutes } from './studio.mjs'
 import { studioStore } from '../engine/studio.mjs'
 import { assetStore } from '../engine/assetstore.mjs'
@@ -355,16 +356,35 @@ async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false
 // One picture for a finished section: a new one asked for in an edit, or a
 // replacement. It keeps the <img>'s data-gen as its key, so every canvas, the
 // export and the video pick up the newest one.
-function paintOne(send, runId, { page, layer, gen, prompt }, choice) {
-  send('image:queued', { page, layer, gen, provider: choice.provider, model: choice.model })
+// asked: a person asked for this picture in a comment, so the chat says when it lands ({ agent })
+function paintOne(send, runId, { page, layer, gen, prompt, asked = null }, choice) {
+  const who = asked ? { asked: true, agent: asked.agent } : {}
+  send('image:queued', { page, layer, gen, provider: choice.provider, model: choice.model, ...who })
   const sentBack = c => send('image:sent-back', { page, layer, gen, problems: c.problems, model: c.model })
   return paintArt(choice, guideFor(runId), { gen: prompt || gen, hero: art.isHero({ layer }) }, sentBack).then(r => {
-    if (!r.ok || !r.path || !existsSync(r.path)) return send('image:failed', { page, layer, gen, message: r.error || 'no image' })
+    if (!r.ok || !r.path || !existsSync(r.path)) return send('image:failed', { page, layer, gen, message: r.error || 'no image', ...who })
     const file = `edit-${Date.now().toString(36)}${extname(r.path) || '.png'}`
     mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
     copyFileSync(r.path, join(runsDir, runId, 'img', file))
-    send('image', { page, layer, gen, src: `/img/${runId}/${file}`, model: r.model || choice.model, prompt: prompt || undefined })
+    send('image', { page, layer, gen, src: `/img/${runId}/${file}`, model: r.model || choice.model, prompt: prompt || undefined, ...who })
   })
+}
+// A comment that is only about a section's picture (engine/picask.mjs): the picture is painted again from a new
+// prompt and the section's HTML is not touched, so the layout the person had stays. One paint per section at a
+// time: asking again while it paints says so instead of starting another.
+const repainting = new Set()
+async function repaint(runId, send, s, agent, text, gen, choice) {
+  const layer = s.key.split('/').pop(), page = s.key.split('/')[0], key = `${runId}|${s.key}`, role = s.role || layer
+  if (repainting.has(key)) return send('comment:take', { text, page, layer, role, agent, picture: true, reply: `Still painting the last picture for the ${role}. It lands in a moment.` })
+  repainting.add(key)
+  send('comment:take', { text, page, layer, role, agent, picture: true, reply: `On it, painting a new picture for the ${role}. About a minute; the layout stays as it is.` })
+  try {
+    const chat = models.worker.apiKey && modelFor('worker') ? async messages => (await streamChat(provider('worker'), { trace: { kind: 'picture-prompt', agent, page, layer }, model: modelFor('worker'), maxTokens: 220, temperature: 0.7, signal: AbortSignal.timeout(30000), messages })).text : null
+    const prompt = await newPrompt({ gen, comment: text, role, chat })
+    await paintOne(send, runId, { page, layer, gen, prompt, asked: { agent } }, choice)
+  } catch (err) {
+    send('image:failed', { page, layer, gen, message: String(err.message || err).slice(0, 200), asked: true, agent })
+  } finally { repainting.delete(key) }
 }
 // After a rewrite: paint the <img data-gen> it added (ones painted before keep their picture).
 function paintNew(runId, send, page, layer, html, choice) {
@@ -2498,9 +2518,16 @@ async function commentNow(id, input) {
     if (!keys.length) { send('comment:none', { text }); throw new Error('could not tell which section that is about: select one on the canvas and comment there') }
   }
   const agents = start.agents || []
+  // only about the picture: repaint it and leave the section as it is
+  // (or a short follow-up right after a picture ask on that section: "much more impactful")
+  const lastTake = k => events.findLast(e => e.type === 'comment:take' && `${e.page}/${e.layer}` === k)
+  const aboutPicture = k => pictureAsk(text) || (vagueAsk(text) && lastTake(k)?.picture && Date.now() - lastTake(k).t < 15 * 60000)
+  const picChoice = keys.some(aboutPicture) ? await imageChoice().catch(() => null) : null
   keys.forEach((k, i) => {
     const s = sections.find(x => x.key === k)
     const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
+    const gen = picChoice && aboutPicture(k) ? gensOf(s.html)[0] : null
+    if (gen) return void repaint(id, send, s, agent, text, gen, picChoice)
     send('comment:take', { text, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply : '' })
     // a section the person changed by hand (web/edit/patches.js): its builder keeps those changes
     rework(id, send, s, agent, theme, { comment: keepHand(text, handChanges(events, k.split('/')[0], k.split('/').pop())) })

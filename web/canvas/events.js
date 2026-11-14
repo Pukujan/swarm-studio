@@ -129,10 +129,12 @@ export function on(e) {
       // whole-site edits made earlier (bigger headings, more spacing) apply to late sections too;
       // a reviewer's fix was written from the edited section, so it has them already
       if (!e.fixed && !e.kept) for (const ce of S.classEdits) restyle(l, ce)
+      // what the section was before a rewrite, kept for Undo (read before it is cleared)
+      const before = l.before
       l.before = null
       fillImages(l)
       if (e.kept) { S.treeDirty = true; break } // carried over from the last version as it was
-      if (e.fixed && !e.restored && l.before && live(e)) remember({ kind: 'layer', key: l.key, page: e.page, layer: e.layer, before: l.before, after: e.html, label: `${l.role || e.layer} rewrite` })
+      if (e.fixed && !e.restored && before && live(e)) remember({ kind: 'layer', key: l.key, page: e.page, layer: e.layer, before, after: e.html, label: `${l.role || e.layer} rewrite` })
       if (e.restored && e.by !== CLIENT && live(e)) feed(null, `${l.role || e.layer} was put back to an earlier version`, 'sys')
       if (e.fixed && !e.restored) { feed(S.agents.get(e.agent), `fixed ${e.layer}`, 'sys', e.layer); chatAgent(S.agents.get(e.agent), `Done: the ${l.role || e.layer} is updated (${((e.ms || 0) / 1000).toFixed(0)}s). /trace shows what I was asked and wrote.`, e.layer) }
       if (e.done != null) S.done = e.done
@@ -228,7 +230,7 @@ export function on(e) {
       break
     case 'image:queued': {
       const l = S.layers.get(key(e.page, e.layer))
-      const a = l && S.agents.get(l.agent)
+      const a = (e.agent && S.agents.get(e.agent)) || (l && S.agents.get(l.agent))
       if (a && live(e)) { a.painting = { gen: e.gen, key: `${key(e.page, e.layer)}|${e.gen}`, from: performance.now(), until: performance.now() + 180000 }; say(a, `🖼 asking ${e.provider === 'openai-codex' ? 'Codex' : e.provider} for “${e.gen.slice(0, 40)}…”`) }
       if (!S.imgQueued++) feed(null, `🎨 Painting images with ${e.provider}${e.model ? ` · ${e.model}` : ''}`, 'sys')
       break
@@ -240,6 +242,8 @@ export function on(e) {
       pics.pending.delete(`${key(e.page, e.layer)}|${e.gen}`); design.last = ''
       const l = S.layers.get(key(e.page, e.layer))
       if (l) fillImages(l)
+      // a picture the person asked for in a comment: the chat says when it is in (or could not be painted)
+      if (e.asked && live(e)) chatAgent(S.agents.get(e.agent), e.type === 'image' ? 'Done: the new picture is in.' : `Couldn't paint that picture: ${e.message || 'no image'}.`, e.layer)
       // the agent who asked for it stops painting
       for (const a of S.agents.values()) if (a.painting?.key === `${key(e.page, e.layer)}|${e.gen}`) { a.painting = null; if (live(e) && e.type === 'image') say(a, '🖼 photo’s in') }
       if (e.type === 'image:failed' && e.message !== 'stopped') feed(null, `image for ${e.layer} failed: ${e.message}`, 'err')
