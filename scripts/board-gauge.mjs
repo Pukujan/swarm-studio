@@ -1,7 +1,7 @@
 // Board gauge (image-first boards, step 1): how heavy a big board is, measured the same way every time, so a
 // pull request that makes the boards slower or hungrier fails instead of shipping.
 //
-//   node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only overview,deck,next]
+//   node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only overview,deck,next] [--cold]
 //   node scripts/board-gauge.mjs compare <base.json> <head.json> [--frame 0.10] [--memory 0.15]
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check)
 //
@@ -123,7 +123,40 @@ const SCENES = [
   { id: 'next', at: '/next/?project=RUN&version=RUN&room=deck', ready: n => !!document.querySelector('[role="region"][aria-label="Canvas"]') && document.querySelectorAll('iframe').length >= n }
 ]
 
-async function measure(out, { root, runs: N, only }) {
+// Every page's two snapshots, saved on the server as they are for a project that has been opened before: the Overview
+// then paints from them and photographs nothing. Without them it photographs the pages in view while the path is
+// played, in idle time, a different amount of work in whichever frames it lands in: one p95 of the same code went
+// from 4 to 15 ms in a single CI job. The pictures are JPEGs made here at the two sizes the Overview keeps (a small
+// one of 360 px and a full one of 864), so decoding costs what it does for a real photograph.
+async function seedSnaps(launch, BASE, TOKEN) {
+  const browser = await within('launching Chromium', 60000, launch())
+  try {
+    const page = await within('a page for the pictures', 30000, browser.newPage())
+    const pic = await within('making the pictures', 30000, page.evaluate(() => {
+      const make = (w, h) => {
+        const c = Object.assign(document.createElement('canvas'), { width: w, height: h }), g = c.getContext('2d')
+        const k = g.createLinearGradient(0, 0, w, h)
+        k.addColorStop(0, '#2e4057'); k.addColorStop(1, '#c9a227')
+        g.fillStyle = k; g.fillRect(0, 0, w, h)
+        g.fillStyle = '#eee'
+        for (let i = 0; i < 12; i++) g.fillRect(w * 0.08, h * (0.08 + i * 0.075), w * (0.3 + 0.4 * ((i * 37) % 10) / 10), h * 0.03)
+        return c.toDataURL('image/jpeg', 0.82)
+      }
+      return { s: make(360, 225), f: make(864, 540) }
+    }))
+    const api = (path, body) => within(path, 30000, fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json()))
+    const { pages } = await api(`/api/runs/${RUN}/snaps`)
+    for (const [id, d] of Object.entries(pages)) for (const size of ['s', 'f']) {
+      const out = await api(`/api/runs/${RUN}/snaps`, { page: id, v: d.v, size, image: pic[size] })
+      if (!out.ok) throw new Error(`saving ${id} ${size}: ${JSON.stringify(out)}`)
+    }
+    const after = await api(`/api/runs/${RUN}/snaps`)
+    const saved = Object.values(after.pages).filter(d => d.s && d.f).length
+    if (saved !== PAGES) throw new Error(`${saved} of ${PAGES} pages have their snapshots`)
+  } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
+}
+
+async function measure(out, { root, runs: N, only, cold }) {
   const { chromium } = await loadPlaywright()
   const launch = () => chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}), args: ['--disable-frame-rate-limit', '--disable-gpu-vsync'] })
   // the film: four seconds recorded from a canvas in the browser (Playwright's Chromium plays WebM, not H.264);
@@ -165,9 +198,11 @@ async function measure(out, { root, runs: N, only }) {
   const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1, filmBytes: film.length }, scenes: {} }
   try {
     await fetch(`${BASE}/api/setup`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: JSON.stringify({ seen: true }) }).catch(() => {})
+    if (!cold) await seedSnaps(launch, BASE, TOKEN)
     for (let r = 0; r < N; r++) for (const sc of SCENES.filter(s => !only.length || only.includes(s.id))) {
-      // a fresh browser and no saved pictures each time: every run starts from the same place
-      rmSync(join(runsDir, RUN, 'snaps'), { recursive: true, force: true })
+      // a fresh browser each time; the pictures are saved (seedSnaps) unless --cold asks for none, which
+      // makes the Overview photograph them while the path is played
+      if (cold) rmSync(join(runsDir, RUN, 'snaps'), { recursive: true, force: true })
       const browser = await within('launching Chromium', 60000, launch())
       // a page that crashes (out of memory, most likely) or stops answering is a result, not the end of the gauge
       let m
@@ -341,6 +376,6 @@ function compare(a, b, frameT, memT) {
 // and the whole run has a deadline (--deadline minutes, 25 by default): past it the gauge says so and exits
 let studio = null
 if (cmd === 'measure') setTimeout(() => { console.log(`the gauge ran past its ${flag('deadline', 25)} minute deadline`); studio?.kill(); process.exit(3) }, Number(flag('deadline', 25)) * 60000).unref()
-if (cmd === 'measure' && pos[0]) await measure(resolve(pos[0]), { root: resolve(flag('root', fileURLToPath(new URL('..', import.meta.url)))), runs: Number(flag('runs', 3)), only: (flag('only', '') || '').split(',').filter(Boolean) })
+if (cmd === 'measure' && pos[0]) await measure(resolve(pos[0]), { root: resolve(flag('root', fileURLToPath(new URL('..', import.meta.url)))), runs: Number(flag('runs', 3)), only: (flag('only', '') || '').split(',').filter(Boolean), cold: rest.includes('--cold') })
 else if (cmd === 'compare' && pos[1]) compare(pos[0], pos[1], Number(flag('frame', 0.10)), Number(flag('memory', 0.15)))
 else { console.log('node scripts/board-gauge.mjs measure <out.json> [--root <tree>] [--runs 3] [--only a,b] | compare <base.json> <head.json>'); process.exit(2) }
