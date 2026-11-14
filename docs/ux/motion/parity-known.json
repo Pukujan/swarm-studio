@@ -80,9 +80,29 @@
     "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
   {
+    "key": "mid-build cursor Ada: apart",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
+  },
+  {
+    "key": "mid-build cursor Ada: only in /",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
+  },
+  {
     "key": "mid-build cursor Ada: only in /next/",
     "label": "drift",
     "why": "A build opened half way: the current deck's cursors are still gliding up from the break room below the fold at this step, while the /next/ deck's are already on screen near the sections they last wrote."
+  },
+  {
+    "key": "mid-build cursor Bo: apart",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
+  },
+  {
+    "key": "mid-build cursor Bo: only in /",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
   },
   {
     "key": "mid-build cursor Bo: only in /next/",
@@ -130,12 +150,22 @@
     "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
   },
   {
+    "key": "mid-build reduced cursor Ada: only in /",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
+  },
+  {
     "key": "mid-build reduced cursor Ada: only in /next/",
     "label": "drift",
     "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
   },
   {
     "key": "mid-build reduced cursor Bo: apart",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
+  },
+  {
+    "key": "mid-build reduced cursor Bo: only in /",
     "label": "drift",
     "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
   },
@@ -255,9 +285,29 @@
     "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
   },
   {
+    "key": "replay cursor Ada: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
+    "key": "replay cursor Ada: only in /",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay cursor Ada: only in /next/",
     "label": "drift",
     "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's (it reads the build before it plays), so at the same step a cursor is already, or still, on screen in one and not the other; the crew stays on screen between sections in both (#540)."
+  },
+  {
+    "key": "replay cursor Bo: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
+    "key": "replay cursor Bo: only in /",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
   },
   {
     "key": "replay cursor Bo: only in /next/",
@@ -265,9 +315,24 @@
     "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's (it reads the build before it plays), so at the same step a cursor is already, or still, on screen in one and not the other; the crew stays on screen between sections in both (#540)."
   },
   {
+    "key": "replay cursor Cy: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
+    "key": "replay cursor Cy: only in /",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay cursor Cy: only in /next/",
     "label": "drift",
     "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's (it reads the build before it plays), so at the same step a cursor is already, or still, on screen in one and not the other; the crew stays on screen between sections in both (#540)."
+  },
+  {
+    "key": "replay cursor Di: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
   },
   {
     "key": "replay cursor Di: only in /",
@@ -275,14 +340,29 @@
     "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's (it reads the build before it plays), so at the same step a cursor is already, or still, on screen in one and not the other; the crew stays on screen between sections in both (#540)."
   },
   {
+    "key": "replay cursor Di: only in /next/",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay cursor Hermia: only in /",
     "label": "later (#530)",
     "why": "Hermia's own cursor on the deck during a build, where the current deck shows her; the /next/ deck does not draw her there yet."
   },
   {
+    "key": "replay cursor Reviewer: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay cursor Reviewer: only in /",
     "label": "drift",
     "why": "The /next/ deck draws the reviewer's cursor too (#540), but its replay reaches review:start about half a second later, so at this step only the current deck shows it."
+  },
+  {
+    "key": "replay cursor Reviewer: only in /next/",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
   },
   {
     "key": "replay only in /: page @radio-dash endless 800ms linear",
@@ -295,9 +375,19 @@
     "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
   },
   {
+    "key": "replay reduced cursor Ada: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay reduced cursor Ada: only in /",
     "label": "drift",
     "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's (it reads the build before it plays), so at the same step a cursor is already, or still, on screen in one and not the other; the crew stays on screen between sections in both (#540)."
+  },
+  {
+    "key": "replay reduced cursor Ada: only in /next/",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
   },
   {
     "key": "replay reduced cursor Bo: apart",
@@ -305,9 +395,34 @@
     "why": "The /next/ deck sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma) with its own camera, so a cursor on the same section is drawn at another place on screen than in the current deck."
   },
   {
+    "key": "replay reduced cursor Bo: only in /",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
+    "key": "replay reduced cursor Bo: only in /next/",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
+    "key": "replay reduced cursor Cy: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
+    "key": "replay reduced cursor Cy: only in /",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay reduced cursor Cy: only in /next/",
     "label": "drift",
     "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's (it reads the build before it plays), so at the same step a cursor is already, or still, on screen in one and not the other; the crew stays on screen between sections in both (#540)."
+  },
+  {
+    "key": "replay reduced cursor Di: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
   },
   {
     "key": "replay reduced cursor Di: only in /",
@@ -315,14 +430,29 @@
     "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's (it reads the build before it plays), so at the same step a cursor is already, or still, on screen in one and not the other; the crew stays on screen between sections in both (#540)."
   },
   {
+    "key": "replay reduced cursor Di: only in /next/",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay reduced cursor Hermia: only in /",
     "label": "later (#530)",
     "why": "Hermia's own cursor on the deck during a build, where the current deck shows her; the /next/ deck does not draw her there yet."
   },
   {
+    "key": "replay reduced cursor Reviewer: apart",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
+  },
+  {
     "key": "replay reduced cursor Reviewer: only in /",
     "label": "drift",
     "why": "The /next/ deck draws the reviewer's cursor too (#540), but its replay reaches review:start about half a second later, so at this step only the current deck shows it."
+  },
+  {
+    "key": "replay reduced cursor Reviewer: only in /next/",
+    "label": "drift",
+    "why": "The /next/ deck's replay reaches the same events about half a second after the current deck's, and sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma), so at a given step a crew cursor can be on screen in one deck and not yet, or no longer, in the other, or in both at another place. Which of the three a run sees depends on where the step falls: the same cursor, timed and placed differently (#540)."
   },
   {
     "key": "studio cursor Hermia: apart",
