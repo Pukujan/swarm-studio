@@ -74,12 +74,12 @@ export const navMachine = setup({ types: /** @type {{ context: NavContext, event
       reenter: true,
       actions: assign({ project: ({ event }) => id(event.project), version: ({ event }) => id(event.version), run: ({ event }) => id(event.version), plan: null, page: null })
     },
-    // a project's Studio, on the step asked for (else its first)
+    // a project's Studio, on the step asked for (with none, the whole board)
     studio: {
       guard: ({ event }) => !!id(event.project),
       target: '.studio',
       reenter: true,
-      actions: assign({ project: ({ event }) => id(event.project), step: ({ event }) => stepOf(event.step) || STEPS[0], version: null, run: null, plan: null, page: null, pending: null })
+      actions: assign({ project: ({ event }) => id(event.project), step: ({ event }) => stepOf(event.step), version: null, run: null, plan: null, page: null, pending: null })
     },
     started: [
       ...['overview', 'deck', 'app', 'video'].map(room => ({

@@ -27,7 +27,8 @@ const nameOf = idea => projectName({ brief: String(idea).replace(/^\s*(?:make|bu
 const CHAT_KIND = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
 
 // studios: engine/studio.mjs; assets: engine/assetstore.mjs; refs: engine/refs.mjs; projects: server/projects.mjs; chats: engine/chats.mjs
-export function studioRoutes({ studios, assets, refs, projects, chats }) {
+// builtOf(pid): for a project that has a build, { kind, idea, pages, theme } read from its newest version; else null
+export function studioRoutes({ studios, assets, refs, projects, chats, builtOf = () => null }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const fail = (res, err) => json(res, err.status || 400, { error: String(err.message || err) })
   const bad = (msg, status = 400) => Object.assign(new Error(msg), { status })
@@ -43,10 +44,21 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
   // everything the scaffold draws, in one answer
   function whole(pid) {
     const p = projects.get(pid)
-    const studio = studios.get(pid)
+    let studio = studios.get(pid)
+    // A built project that never had a Studio (made from one prompt) gets one from what it was built with: its
+    // idea and pages. The Studio is the expanded Overview: what was chosen before the design, open again.
+    const built = p ? builtOf(pid) : null
+    if (p && !studio && built) {
+      const kind = STUDIO_KINDS.includes(built.kind) ? built.kind : 'site'
+      const chat = chats.create({ kind: CHAT_KIND[kind], text: built.idea, project: pid })
+      studios.make(pid, { kind, idea: built.idea, chat: chat.id })
+      if (kind === 'site' && built.pages?.length) studios.kit(pid, { pages: built.pages.slice(0, 12) })
+      studio = studios.get(pid)
+    }
     if (!p || !studio) throw bad('no such studio', 404)
     return {
       project: { id: pid, name: p.name, title: p.title, head: p.head },
+      built: built ? { theme: built.theme || null, pages: built.pages || [] } : null,
       studio,
       brand: studios.brands.get(pid)?.brand || null,
       refs: refs.list(pid),

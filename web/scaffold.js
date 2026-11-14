@@ -204,12 +204,14 @@ export function makeScaffold({ sw, C, root }) {
     // assets in a second column. A fact card goes to its step.
     const on = s => s in d.studio.steps
     const fact = (step, name, value, extra = '') => `<div class="ab pcard sc-fact" data-key="fact:${step}:${name}" tabindex="0" role="button" aria-label="${name}"><b>${name}</b><span>${esc(value)}</span>${extra}</div>`
+    // with no brand sheet yet, a built project shows the type and accent its newest version has
+    const was = d.built?.theme || null
     const L = look(d.brand), seen = d.refs.find(r => r.look?.state === 'ready')?.look
     const nPlan = [...A.cards.values()].filter(x => !x.add && x.cls !== 'sc-add').length
     const facts = [
       on('plan') && k.plan && fact('plan', k.kind === 'site' ? 'Pages' : 'Plan', String(nPlan)),
-      on('brand') && fact('brand', 'Type', L?.heading || 'Not set'),
-      on('brand') && fact('brand', 'Accent', L?.accent || 'Not set', L?.accent ? `<i class="sc-fsw" style="background:${esc(L.accent)}"></i>` : ''),
+      on('brand') && fact('brand', 'Type', L?.heading || was?.heading || 'Not set'),
+      on('brand') && fact('brand', 'Accent', L?.accent || was?.accent || 'Not set', L?.accent || was?.accent ? `<i class="sc-fsw" style="background:${esc(L?.accent || was.accent)}"></i>` : ''),
       on('references') && fact('references', 'References', String(d.refs.length)),
       on('assets') && fact('assets', 'Assets', String(d.assets.length)),
       seen?.words?.motion && fact('references', 'Motion', seen.words.motion),
@@ -324,11 +326,17 @@ export function makeScaffold({ sw, C, root }) {
       <textarea class="hm-free" name="use" rows="2" placeholder="What you like about it" aria-label="What you like about it">${esc(r.use || '')}</textarea>
       ${matchHtml(r, { base: sw.base || '', built: !!A.d.project?.head })}
       <p class="lk-from">${esc(from)} · <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(L.from?.host || r.name)}</a></p>
-      <div class="sc-acts"><button class="btn ghost" data-a="look"${L.state === 'walking' ? ' disabled' : ''}>${ic('restore', 15)}Look again</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
+      <div class="sc-acts">${L.state === 'ready' && t.bg ? `<button class="btn pri" data-a="brand">${ic('check', 15)}Use this look</button>` : ''}<button class="btn ghost" data-a="look"${L.state === 'walking' ? ' disabled' : ''}>${ic('restore', 15)}Look again</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
     box.onclick = e => {
       const m = matchClick(e, (path, body) => post(proj(`/refs/${path}`), body))
       if (m) return m.then(j => { A.d.refs = j.refs; if (!j.sent) render(); watchLooks() }).catch(fail)
       const a = e.target.closest('[data-a]')?.dataset.a
+      // Use this look: the reference's colours and type become the project's brand, and the Brand step shows them
+      if (a === 'brand') {
+        const b = /** @type {HTMLButtonElement} */ (e.target.closest('[data-a]'))
+        b.disabled = true
+        return post(proj('/brand/pick'), { part: 'look', look: L.tokens, host: L.from?.host || r.name, brief: A.d.studio.idea || r.name }).then(() => load()).then(() => { select(null); bd.focus('brand') }).catch(err => { b.disabled = false; fail(err) })
+      }
       if (a === 'look') post(proj(`/refs/${r.id}/look`), { use: box.querySelector('[name=use]').value }).then(j => { A.d.refs = j.refs; render(); watchLooks() }).catch(fail)
       if (a === 'remove') post(proj(`/refs/${r.id}/remove`)).then(j => { A.d.refs = j.refs; select(null) }).catch(fail)
     }
@@ -486,6 +494,8 @@ export function makeScaffold({ sw, C, root }) {
   return {
     el: root,
     get project() { return A.pid },
+    // the project's newest build, when it has one (the mode menu goes to its rooms from here)
+    get head() { return A.d?.project?.head || null },
     // open the scaffold on a project: the whole board, or the step the address names
     async show(pid, step = null) {
       A.on = true

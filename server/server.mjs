@@ -19,7 +19,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
-import { extendBase, followUp, rehomeImages } from '../engine/extend.mjs'
+import { extendBase, followUp, rehomeImages, baseBrief } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment, reviewAgain, REVIEW_PASS, REVIEW_ROUNDS } from '../engine/review.mjs'
@@ -1607,7 +1607,17 @@ const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null
 // The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
 const studios = studioStore({ projectsDir: projects.projectsDir })
 const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
-const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats })
+// what a project's newest build was made with, for its Studio (server/studio.mjs): websites only for now
+function builtOf(pid) {
+  const head = projects.get(pid)?.head
+  const events = head ? readEvents(head) : null
+  const start = events?.find(e => e.type === 'run:start')
+  const pages = (events || []).filter(e => e.type === 'page' && e.title).map(e => String(e.title).slice(0, 60))
+  if (!start || !pages.length) return null
+  const th = events.findLast(e => e.type === 'theme')
+  return { kind: 'site', idea: baseBrief(start.brief).split('\n\nPages: ')[0].slice(0, 4000), pages: [...new Set(pages)], theme: th ? { accent: th.vars?.['--accent'] || th.vars?.['--primary'] || null, heading: th.fonts?.heading || null, name: th.name || null } : null }
+}
+const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats, builtOf })
 // a film from a project's brand, References and Assets, no website (spec 40): the Video kit's Build press
 const filmRoute = filmRoutes({
   projectsDir: projects.projectsDir, refs, known: pid => !!projects.get(pid),
