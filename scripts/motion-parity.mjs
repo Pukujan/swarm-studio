@@ -219,7 +219,8 @@ async function record(out, { root, app, reduced, scenes }) {
     }
   } finally {
     await browser.close()
-    s.stop()
+    // on Windows the throwaway Studio's folder can still be held for a moment: that never loses the recording
+    try { s.stop() } catch (err) { console.error(`· the throwaway Studio's folder stays behind: ${err.code || err.message}`) }
     writeFileSync(join(out, 'trace.json'), JSON.stringify(trace, null, 1))
   }
   return trace
@@ -350,7 +351,8 @@ async function clips(out, root) {
     }
   } finally {
     await browser.close()
-    s.stop()
+    // on Windows the throwaway Studio's folder can still be held for a moment: that never loses the recording
+    try { s.stop() } catch (err) { console.error(`· the throwaway Studio's folder stays behind: ${err.code || err.message}`) }
     rmSync(tmp, { recursive: true, force: true })
   }
 }
