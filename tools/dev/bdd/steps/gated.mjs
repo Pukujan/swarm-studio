@@ -26,7 +26,10 @@ export const test = base.extend({
     const s = await studio()
     await s.api('/api/setup', { seen: true })
     const made = await s.api('/api/studio', { kind: 'site', idea: 'Cedar Cafe, a small cafe by the river' })
-    await use({ ...s, scaffold: made.project.id })
+    // the brand sheet's scenarios open a project of their own (the same idea, so the same name): opening the sheet
+    // makes the project's brand, and the Studio scaffold's scenarios would then see a scaffold with a brand card
+    const forBrand = await s.api('/api/studio', { kind: 'site', idea: 'Cedar Cafe, a small cafe by the river' })
+    await use({ ...s, scaffold: made.project.id, brandScaffold: forBrand.project.id })
     s.stop()
   }, { scope: 'worker' }],
   // what a scenario's When saw, for its Then
@@ -39,7 +42,20 @@ const SCREENS = {
   projects: { id: 'projects', address: () => '', ready: '.home .card' },
   overview: { id: 'overview', address: s => `?project=${s.ids.site}&version=${s.ids.site2}`, ready: '.pj-world .ab.page' },
   'design-deck': { id: 'deck', address: s => `?version=${s.ids.site2}&room=deck`, ready: 'body.cosmos-station #viewport', nextReady: '[role="region"][aria-label="Canvas"]' },
-  studio: { id: 'studio', address: s => `?room=studio&project=${s.scaffold}&step=brand`, ready: '.ab[data-key="brand:open"]', nextReady: '.ab[data-key="brand:open"]' }
+  studio: { id: 'studio', address: s => `?room=studio&project=${s.scaffold}&step=brand`, ready: '.ab[data-key="brand:open"]', nextReady: '.ab[data-key="brand:open"]' },
+  // two open the way a person reaches them in the current Studio (`pre`, then `go`, which is what a held request
+  // is watched over), and at their own address in the next UI: the brand sheet from the Studio's Brand card…
+  'brand-sheet': {
+    id: 'brand', address: s => `?room=brand&project=${s.brandScaffold}&step=brand`, ready: 'body.cosmos-brand .br-crumb', nextReady: '.brand-sheet [data-sec="palette"] .ab',
+    pre: async (p, s) => { await p.goto(`${s.BASE}/?room=studio&project=${s.brandScaffold}&step=brand`); await p.locator('.ab[data-key="brand:open"]').first().waitFor() },
+    go: p => p.locator('.ab[data-key="brand:open"]').first().press('Enter')
+  },
+  // …and the Plan board from a game talk (what Make does for a game)
+  'plan-board': {
+    id: 'plan', address: () => '?room=plan', ready: 'body.cosmos-plan .pl-crumb', nextReady: 'main [role="region"][aria-label="Plan"]',
+    pre: async (p, s) => { await p.goto(s.BASE + '/'); await p.locator('.home .card').first().waitFor() },
+    go: p => p.evaluate(() => { window.swarmCosmos.talkGame({ text: 'A platformer through a night market' }) })
+  }
 }
 const HOLD = 2500
 const BUSY = '[aria-busy="true"], [role="progressbar"], .sk, .skeleton, .wait-in, .spin'
@@ -53,19 +69,22 @@ async function open({ page, app, studio: s }, screen, width, hold) {
   page.on('console', m => { if (m.type() === 'error') errors.add(`console: ${tidy(m.text())}`) })
   page.on('pageerror', e => errors.add(`page error: ${tidy(e.message)}`))
   page.on('response', r => { if (r.status() >= 400) errors.add(`${r.status()} ${tidy(r.url())}`) })
+  const way = !app && sc.go
+  if (way && sc.pre) await sc.pre(page, s)
   let release = () => {}
   if (hold) {
     const gate = new Promise(r => { release = r })
     await page.route(url => hold(new URL(url).pathname), async route => { await gate; await route.continue().catch(() => {}) })
   }
-  await page.goto(`${s.BASE}${app ? '/next/' : '/'}${sc.address(s)}`, { waitUntil: 'commit' })
+  if (way) await sc.go(page, s)
+  else await page.goto(`${s.BASE}${app ? '/next/' : '/'}${sc.address(s)}`, { waitUntil: 'commit' })
   let during = null
   if (hold) {
     // the most of each loading sign seen while the data was held
     during = await page.evaluate(([ms, BUSY]) => new Promise(done => {
       const shown = el => !!el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden'
       const count = sel => [...document.querySelectorAll(sel)].filter(shown).length
-      const m = { busy: 0, waitCards: 0, siteSkeletons: 0, ready: false, nothingHere: false }
+      const m = { busy: 0, waitCards: 0, siteSkeletons: 0, ready: false, nothingHere: false, brandParts: 0, hermiaOnStory: false, planCards: 0 }
       const t0 = performance.now()
       const look = () => {
         m.busy = Math.max(m.busy, count(BUSY))
@@ -76,6 +95,14 @@ async function open({ page, app, studio: s }, screen, width, hold) {
         const status = document.getElementById('status')
         if (status && shown(status) && status.textContent.trim() === 'Ready') m.ready = true
         if (/nothing here/i.test(document.body?.innerText || '')) m.nothingHere = true
+        // the brand sheet's Story, Palette and Type each with a skeleton, Hermia's cursor on the first Story card;
+        // the Plan board's waiting cards in its Plan section
+        // (found by each section's label: .al in /, an h2 in /next/)
+        const part = name => [...document.querySelectorAll('section')].find(s => (s.querySelector(':scope > .al, :scope > h2')?.textContent || '').trim().toLowerCase() === name.toLowerCase())
+        const waits = name => [...(part(name)?.querySelectorAll('.br-wait') || [])].filter(shown)
+        m.brandParts = Math.max(m.brandParts, ['Story', 'Palette', 'Type'].filter(n => waits(n).length).length)
+        if (/Hermia/.test(waits('Story')[0]?.textContent || '')) m.hermiaOnStory = true
+        m.planCards = Math.max(m.planCards, count('.pj-sec .pcard.wait-in[aria-busy="true"]'))
         if (performance.now() - t0 < ms) setTimeout(look, 50); else done(m)
       }
       look()
@@ -138,6 +165,17 @@ const noSideways = step('no sideways scroll', async ({ page, seen, app, $testInf
   judge({ app, $testInfo }, seen.screen, seen.width, 'scroll', over > 0 ? [{ text: `the page scrolls ${over}px sideways` }] : [])
 })
 
+// the Make box's three parts on one line (their middles within 8 px), and no sideways scroll; found by their names
+const oneRow = step('the Make box in one row, no sideways scroll', async ({ page, seen, app, $testInfo }) => {
+  const parts = [page.getByRole('button', { name: 'What to make' }), page.getByRole('textbox', { name: 'What should the crew build?' }), page.getByRole('button', { name: 'Make', exact: true })]
+  const boxes = await Promise.all(parts.map(l => l.first().boundingBox().catch(() => null)))
+  const mids = boxes.map(b => b && b.y + b.height / 2)
+  const row = mids.some(m => m == null) ? `missing: ${['the kind', 'the input', 'Make'].filter((_, i) => mids[i] == null).join(', ')}` : Math.max(...mids) - Math.min(...mids) > 8 ? `not in one row (middles at ${mids.map(Math.round).join(', ')} px)` : null
+  judge({ app, $testInfo }, seen.screen, seen.width, 'row', row ? [{ text: `the kind, the input and Make: ${row}` }] : [])
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  judge({ app, $testInfo }, seen.screen, seen.width, 'scroll', over > 0 ? [{ text: `the page scrolls ${over}px sideways` }] : [])
+})
+
 const trail = (build, room) => ['Home', 'Projects', build, room]
 // at 390 the name may be shortened, but no part is dropped
 const toHome = (build, room) => crumbIs(parts => !!parts && parts.length === 4 && parts[0] === 'Home' && parts[1] === 'Projects' && parts[3] === room && build.startsWith(parts[2].replace(/[…\s.]+$/, '')), `Home › Projects › ${build}… › ${room}`)
@@ -167,7 +205,18 @@ const BIND = {
   'studio › Breadcrumb › The scaffold at rest': [at('studio', 1440), crumbIs(trail('Cedar Cafe', 'Studio'))],
   'studio › Loading › First load': [at('studio', 1440, p => p.startsWith('/api/studio/')), loading('a waiting card', d => !d.busy ? 'no waiting card showed while the scaffold was held' : null)],
   'studio › Accessible and console-clean › axe and console': [atBoth('studio'), clean()],
-  'studio › 390 px › No sideways scroll': [at('studio', 390), noSideways]
+  'studio › 390 px › No sideways scroll': [at('studio', 390), noSideways],
+  'brand-sheet › Breadcrumb › Opened from the Studio': [at('brand-sheet', 1440), crumbIs(trail('Cedar Cafe', 'Brand sheet'))],
+  'brand-sheet › Loading › Options being made': [at('brand-sheet', 1440, p => /^\/api\/projects\/[^/]+\/brand$/.test(p)), loading('story, palette and type skeletons, Hermia on the first', d => !d.busy ? 'no busy marker showed while the brand was held' : d.brandParts < 3 ? `${d.brandParts} of Story, Palette and Type showed skeletons while the brand was held, not all three` : !d.hermiaOnStory ? "Hermia's cursor was not on the first Story card" : null)],
+  'brand-sheet › Accessible and console-clean › axe and console': [atBoth('brand-sheet'), clean()],
+  'brand-sheet › 390 px › No sideways scroll': [at('brand-sheet', 390), noSideways],
+  'brand-sheet › 390 px › The breadcrumb at 390': [at('brand-sheet', 390), toHome('Cedar Cafe', 'Brand sheet')],
+  'plan-board › Breadcrumb › A new game talk': [at('plan-board', 1440), crumbIs(trail('New game', 'Plan'))],
+  'plan-board › Loading › A game talk starting': [at('plan-board', 1440, p => p.startsWith('/api/talk')), loading('three waiting cards in Plan', d => d.planCards < 3 ? `${d.planCards} waiting cards showed in the Plan section while the talk was held, not three` : null)],
+  'plan-board › Accessible and console-clean › axe and console': [atBoth('plan-board'), clean()],
+  'plan-board › 390 px › No sideways scroll': [at('plan-board', 390), noSideways],
+  'plan-board › 390 px › The breadcrumb at 390': [at('plan-board', 390), toHome('New game', 'Plan')],
+  'make › 390 px › The box at 390': [at('projects', 390), oneRow]
 }
 
 // each binding's step words, from its spec

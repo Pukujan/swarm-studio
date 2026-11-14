@@ -48,7 +48,9 @@ export interface Kit {
   build?: (spec: unknown, ctx: KitCtx) => Promise<{ run?: string } | undefined>
 }
 
-export interface StoreItem { id: string, name: string, kind?: string, src?: string, role?: string }
+// what the crew read in a reference brought to the first step (engine/importer.mjs, decision 0015)
+export interface Found { state: 'reading' | 'ready' | 'failed', idea?: string, what?: string, who?: string, pages?: string[], note?: string }
+export interface StoreItem { id: string, name: string, kind?: string, src?: string, role?: string, source?: string, found?: Found, look?: { state?: string } }
 
 export interface Studio {
   kind: string

@@ -67,11 +67,13 @@ SHALL never start a build (REQUIREMENTS 2026-11-11).
 - **THEN** the Design deck's chat shows the brief and the steps it will take, with Build and Keep talking (for a new
   website: the question before the build, with its three answers), and no agent is working
 - Gate: `manual`
+- Manual: the brief and its steps are written by the planner's model; the test Studio has no model
 
 #### Scenario: "Don't build yet"
 - **WHEN** the box reads "a habit tracker, don't build yet, let's talk" and the person picks Just make it
 - **THEN** the chat talks; Build appears only after the brief is written
 - Gate: `manual`
+- Manual: the talk is the planner's model answering; the test Studio has no model
 
 ### Requirement: The question before a new website
 
@@ -91,6 +93,7 @@ model SHALL never answer it. Nothing SHALL build until the person answers (decis
 - **WHEN** the person picks Skip all, build now (or types "just build it")
 - **THEN** the crew starts that one build; the next new site asks again
 - Gate: `manual`
+- Manual: the crew starting a build needs the planner and builders' models; the test Studio has no model
 
 #### Scenario: Pick steps to skip
 - **WHEN** the person picks Pick steps to skip, then Skip Brand
@@ -101,6 +104,7 @@ model SHALL never answer it. Nothing SHALL build until the person answers (decis
 - **WHEN** the person presses Build in a Studio project, or changes a site that is already built
 - **THEN** the build starts without the question
 - Gate: `manual`
+- Manual: the build starting needs the planner's model; the test Studio has no model
 
 ### Requirement: A game's Studio
 
@@ -110,6 +114,7 @@ A game's Studio SHALL open its Plan board, where the planner asks only what the 
 - **WHEN** a game's words already name its genre and the person picks Studio
 - **THEN** the Plan board opens and the planner does not ask for the genre
 - Gate: `manual`
+- Manual: which questions the planner asks is its model's choice; the test Studio has no model
 
 ### Requirement: Loading and refusals
 
@@ -125,6 +130,7 @@ Hermes is not answering, Watch it when another build is running.
 - **WHEN** a build is running and the person starts another with Just make it's Build
 - **THEN** a toast reads `A build is running. Yours can start when it ends.` with Watch it
 - Gate: `manual`
+- Manual: needs a build running already, which needs a model; the test Studio has none
 
 ### Requirement: 390 px
 

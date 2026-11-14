@@ -139,7 +139,7 @@ export function studioRoutes({ studios, assets, refs, projects, chats, builtOf =
     return { ref, assets: assets.list(pid), refs: refs.list(pid) }
   }
 
-  return function handle(req, res, url) {
+  function handle(req, res, url) {
     const file = url.pathname.match(/^\/asset\/([\w-]{1,64})\/([^/]{1,400})$/)
     if (file) {
       const f = assets.file(file[1], file[2])
@@ -195,4 +195,6 @@ export function studioRoutes({ studios, assets, refs, projects, chats, builtOf =
     }).catch(err => fail(res, err))
     return true
   }
+  // setIdea: what the person brought to the first step fills in the idea too (server/server.mjs readWhatYouHave)
+  return Object.assign(handle, { setIdea })
 }

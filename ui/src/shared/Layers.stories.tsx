@@ -8,7 +8,7 @@ const STUDIO: LayerGroup[] = [
   { id: 'references', title: 'References', state: 'done', rows: [{ key: 'ref:r1', name: 'Tartine bakery' }, { key: 'ref:r2', name: 'Morning light' }] },
   { id: 'assets', title: 'Assets', state: 'empty', rows: [] },
   { id: 'plan', title: 'Plan', state: 'started', rows: [{ key: 'page:0', name: 'Home' }, { key: 'page:1', name: 'Menu' }, { key: 'page:2', name: 'Visit' }] },
-  { id: 'proposal', title: 'Lock', state: 'empty', rows: [{ key: 'lock:idea', name: 'Idea' }] }
+  { id: 'proposal', title: 'Lock', state: 'empty', rows: [{ key: 'lock:look', name: 'Look' }] }
 ]
 const DECK: LayerGroup[] = [
   { id: 'home', title: 'Page 1 · Cedar Cafe', busy: true, rows: [{ key: 'home/hero', name: 'hero' }, { key: 'home/menu', name: 'menu', busy: true }, { key: 'home/footer', name: 'footer' }] },

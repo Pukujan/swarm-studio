@@ -21,6 +21,7 @@ every state (`Publish`, `Publishing…`, `Live`), and SHALL NOT show on Projects
 - **WHEN** the person publishes a website
 - **THEN** the button reads `Publishing…` then `Live` without moving or changing size
 - Gate: `manual`
+- Manual: needs a real publish to a host (Vercel or another); tests never deploy
 
 #### Scenario: Nothing to publish yet
 - **WHEN** the build is not done
@@ -42,12 +43,14 @@ published`, the reason in one line, Other host and Retry.
 - **WHEN** the person publishes to Vercel
 - **THEN** the stages show ✓, ◌ and · as they pass, then `Live · Vercel`, the link, Copy link, Open ↗ and Post to Feed
 - Gate: `manual`
+- Manual: needs a real deploy to Vercel; tests never deploy
 
 #### Scenario: A failed publish
 - **WHEN** the host refuses the deploy
 - **THEN** the layer reads `Not published` and one short reason, with Other host and Retry; the raw output is behind
   Details
 - Gate: `manual`
+- Manual: needs a host refusing a real deploy; tests never deploy
 
 ### Requirement: Working app
 
@@ -68,6 +71,7 @@ with the link. An install not linked to the Feed SHALL offer Connect Hermes with
 - **WHEN** the person posts a live site as Public
 - **THEN** the button reads `Posting…`, then `In the Feed` and the link; one project is one Feed build (spec 18)
 - Gate: `manual`
+- Manual: posts to the Feed, a live service; tests never post
 
 ### Requirement: We never post
 
@@ -84,6 +88,7 @@ person's Send.
 - **WHEN** the person presses Post on the Discord card
 - **THEN** a confirm shows the channel and the exact text with Cancel and Send; nothing is sent before Send
 - Gate: `manual`
+- Manual: needs a Hermes with a Discord gateway; the test Studio runs without Hermes
 
 #### Scenario: No gateway
 - **WHEN** Hermes has no Discord gateway
@@ -104,6 +109,7 @@ count zeros or say "is live" without the link (REQUIREMENTS 2026-11-11, "Launch 
 - **WHEN** the person opens the launch kit
 - **THEN** it reads `Writing the posts…` with a busy marker until the cards land
 - Gate: `manual`
+- Manual: the posts are written by a model; the test Studio has no model
 
 ### Requirement: 390 px
 

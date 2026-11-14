@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { Button } from '../../primitives/Button'
 import { Select } from '../../primitives/Select'
 import type { KitCard, KitCtx } from '../../legacy'
-import { STEP_NAME, type Pack, type StudioData } from './useStudio'
+import { STEP_NAME, lookOf, type Pack, type StudioData } from './useStudio'
 
 // an asset's role as the person reads it: the role 'pack' (a set of brand files) is never called that (decision 0015)
 const ROLES = ['logo', 'product', 'photo', 'font', 'pack', 'other'].map(id => ({ id, name: id === 'pack' ? 'Brand kit' : id[0].toUpperCase() + id.slice(1) }))
@@ -28,12 +28,13 @@ interface Props {
     removeAsset(id: string): void
     useTake(slug: string): void
     mix(): void
+    lock(on: boolean): void
   }
 }
 
 export function nameOf(sel: string, d: StudioData, card?: KitCard, pack?: Pack) {
   const [part, id] = splitKey(sel)
-  return card?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? d.refs.find(r => r.id === id)?.name : part === 'asset' ? d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : '') || ''
+  return card?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? d.refs.find(r => r.id === id)?.name : part === 'asset' ? d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Look' : '') || ''
 }
 const splitKey = (k: string): [string, string] => { const i = k.indexOf(':'); return i < 0 ? [k, ''] : [k.slice(0, i), k.slice(i + 1)] }
 
@@ -68,7 +69,16 @@ export function StudioInspector({ sel, d, card, pack, ctx, version, onClose, act
             <Select label="Role" options={ROLES} selectedKey={d.assets.find(a => a.id === id)?.role || null} onSelectionChange={k => { if (k != null) act.assetRole(id, String(k)) }} />
             <div className="flex flex-wrap gap-2"><Button onPress={() => act.assetRef(id)}>Use as reference</Button><Button onPress={() => act.removeAsset(id)}>Remove</Button></div>
           </>}
-          {part === 'lock' && <p className="sc-idea-full">{d.studio.idea}</p>}
+          {part === 'lock' && (() => {
+            // Lock is the look only (decision 0015): what the build is held to, locked or open
+            const L = lookOf(d.brand)
+            if (!L) return <p className="sc-idea-full">Pick a mood on Brand first; its look is what gets locked.</p>
+            return <>
+              <p className="sc-idea-full">{d.brand?.lockedAt ? 'Locked: the build uses exactly these.' : 'Open: lock it so the build uses exactly these.'}</p>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-monospace text-xs"><dt className="text-muted">Colours</dt><dd>{[L.bg, L.text, L.accent, L.link].join(' ')}</dd><dt className="text-muted">Headings</dt><dd>{L.heading}</dd><dt className="text-muted">Corners</dt><dd>{d.brand?.radius || '12px'}</dd></dl>
+              <div className="flex flex-wrap gap-2"><Button role={d.brand?.lockedAt ? 'secondary' : 'primary'} onPress={() => act.lock(!d.brand?.lockedAt)}>{d.brand?.lockedAt ? 'Unlock' : 'Lock the look'}</Button><Button onPress={act.mix}>Brand sheet</Button></div>
+            </>
+          })()}
         </div>
       )}
     </aside>

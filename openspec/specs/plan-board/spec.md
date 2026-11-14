@@ -46,6 +46,7 @@ sheen, `aria-busy="true"`, and the painter's crew cursor.
 - **WHEN** a sketch sheet is being painted
 - **THEN** its card shows the sheen and the painter's cursor, and the rest of the board stays usable
 - Gate: `manual`
+- Manual: needs an image model painting a sketch sheet; the test Studio has none
 
 ### Requirement: Nothing costly before Lock
 
@@ -72,6 +73,7 @@ and the Gate SHALL show the price by part before the one confirm (spec 21).
 - **WHEN** the plan is locked and the person presses Build
 - **THEN** the build starts and the Game room opens
 - Gate: `manual`
+- Manual: a game build needs the models and the paid Meshy parts; not run in tests
 
 ### Requirement: The talk shapes the board
 
@@ -82,6 +84,7 @@ Lock, which locks the talk into a plan (spec 27).
 - **WHEN** the person answers the planner's question about the genre
 - **THEN** the matching card's value changes on the board without moving the other cards
 - Gate: `manual`
+- Manual: the planner's model reads the answer into a card; the test Studio has no model
 
 ### Requirement: Empty state
 

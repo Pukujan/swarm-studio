@@ -96,6 +96,7 @@ once, with no confirmation, and say Stopped (REQUIREMENTS 2026-11-11).
 - **WHEN** a build is running and the person presses Stop
 - **THEN** Stop reads `Stopping`, then `Stopped`; what was built stays; Stop keeps its place and size
 - Gate: `manual`
+- Manual: needs a running build to stop; the test Studio has no model
 
 ### Requirement: Accessible and console-clean
 

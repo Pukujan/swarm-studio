@@ -8,7 +8,7 @@
 // This runs on a developer's machine or in CI, never on the user's: the plugin only serves the committed files.
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -69,6 +69,15 @@ export const NODE_VENDORED = [
     entry: "export { default as ipaddr } from 'ipaddr.js'\n",
     exports: ['ipaddr'],
     out: 'engine/vendor/net/net.mjs'
+  },
+  // unpdf reads the text of a PDF the person drops on the Studio's first step (engine/importer.mjs, decision 0015):
+  // Mozilla's PDF.js in the build made to run without a browser, no worker and no canvas
+  {
+    name: 'pdf',
+    dir: 'scripts/vendor/pdf',
+    entry: "export { getDocumentProxy } from 'unpdf'\n",
+    exports: ['getDocumentProxy'],
+    out: 'engine/vendor/pdf/pdf.mjs'
   }
 ]
 
@@ -98,7 +107,11 @@ async function buildNode(lib, outRoot) {
     const licence = pkgs.map(p => {
       const d = join(tmp, p.path), f = ['LICENSE', 'LICENSE.md', 'license', 'license.md', 'LICENSE.txt'].map(n => join(d, n)).find(x => { try { return readFileSync(x) } catch { return false } })
       if (!f) throw new Error(`${p.name}@${p.version}: no licence file`)
-      return `${p.name} ${p.version} (${p.license})\n\n${readFileSync(f, 'utf8').replace(/\r\n/g, '\n').trim()}\n`
+      // a package that bundles others keeps their licences in dist/licenses (unpdf: PDF.js and its decoders)
+      let more = []
+      try { more = readdirSync(join(d, 'dist', 'licenses')).sort() } catch {}
+      const theirs = more.map(n => `\n${n}\n\n${readFileSync(join(d, 'dist', 'licenses', n), 'utf8').replace(/\r\n/g, '\n').trim()}\n`).join('')
+      return `${p.name} ${p.version} (${p.license})\n\n${readFileSync(f, 'utf8').replace(/\r\n/g, '\n').trim()}\n${theirs}`
     }).join('\n----------------------------------------\n\n')
     writeFileSync(join(dirname(out), 'LICENSE'), licence)
     const source = { name: lib.name, lockfile: `${lib.dir}/package-lock.json`, esbuild: ESBUILD, exports: lib.exports, file: lib.out.split('/').pop(), packages: pkgs.map(({ name, version, license, integrity }) => ({ name, version, license, integrity })), sha256: sha('sha256', readFileSync(out)) }

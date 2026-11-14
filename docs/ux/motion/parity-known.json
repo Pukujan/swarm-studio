@@ -1,38 +1,58 @@
 [
   {
+    "key": "app cursor Ada: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
+  },
+  {
+    "key": "app cursor Bo: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
+  },
+  {
+    "key": "app only in /: page @in 250ms x1 ease-out",
+    "label": "intended (PR #477)",
+    "why": "The App room moved as spec 44's build wall, four windows (#477): a new design, not the current room's code wall, so its entrance and Hermia's work on its loading window differ on purpose."
+  },
+  {
+    "key": "app only in /: page @radio-dash endless 800ms linear",
+    "label": "intended (PR #477)",
+    "why": "The radio line (.radio-line) belongs to the crew's cursors over the current App room; the /next/ wall draws no crew cursor yet (spec 44 leaves them for a later slice), so it has no radio line."
+  },
+  {
+    "key": "app only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "intended (PR #477)",
+    "why": "The App room moved as spec 44's build wall, four windows (#477): a new design, not the current room's code wall, so its entrance and Hermia's work on its loading window differ on purpose."
+  },
+  {
+    "key": "app only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "intended (PR #477)",
+    "why": "The App room moved as spec 44's build wall, four windows (#477): a new design, not the current room's code wall, so its entrance and Hermia's work on its loading window differ on purpose."
+  },
+  {
+    "key": "app only in /next/: page ~opacity 200ms x1 ease",
+    "label": "intended (PR #477)",
+    "why": "The App room moved as spec 44's build wall, four windows (#477): a new design, not the current room's code wall, so its entrance and Hermia's work on its loading window differ on purpose."
+  },
+  {
+    "key": "app reduced cursor Ada: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
+  },
+  {
+    "key": "app reduced cursor Bo: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
+  },
+  {
     "key": "brand cursor Hermia: apart",
     "label": "drift",
     "why": "Hermia settles beside the card the person last touched (web/pet.js cardEl); the /next/ screens lay their cards out in the frame and the trail differently, so her spot is apart from /'s. She is there, on the same card."
   },
   {
-    "key": "brand only in /: page @in 300ms x1 ease-out",
-    "label": "drift",
-    "why": "The current brand sheet fades its sections in (@in, 300 ms) as the options come; the /next/ sheet draws them at once."
-  },
-  {
     "key": "brand only in /: page @pet-tap endless 700ms ease-in-out",
     "label": "drift",
     "why": "On / Hermia taps the sheet's loading cards while the options are made; on /next/ the options come before her first look, so she has nothing to tap."
-  },
-  {
-    "key": "brand only in /: page ~border-bottom-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
-  },
-  {
-    "key": "brand only in /: page ~border-left-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
-  },
-  {
-    "key": "brand only in /: page ~border-right-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
-  },
-  {
-    "key": "brand only in /: page ~border-top-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current brand sheet's option cards change their border colour on hover over 160 ms (web/brand.css); the /next/ sheet's cards change at once."
   },
   {
     "key": "brand only in /next/: page ~opacity 300ms x1 ease",
@@ -58,6 +78,11 @@
     "key": "deck only in /: page @radio-dash endless 800ms linear",
     "label": "intended (PR #432)",
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+  },
+  {
+    "key": "deck only in /next/: page @in 300ms x1 ease-out",
+    "label": "intended (PR #458)",
+    "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
   },
   {
     "key": "deck only in /next/: page @pet-dot endless 1000ms ease-in-out",
@@ -140,6 +165,11 @@
     "why": "A saved build that stopped half way: /next/'s status pill says it stopped before it finished and keeps still; / pulses and shimmers as if the crew still worked."
   },
   {
+    "key": "mid-build only in /next/: page @in 300ms x1 ease-out",
+    "label": "intended (PR #458)",
+    "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
+  },
+  {
     "key": "mid-build only in /next/: page @pet-dot endless 1000ms ease-in-out",
     "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
@@ -218,6 +248,11 @@
     "key": "play only in /: page @radio-dash endless 800ms linear",
     "label": "intended (PR #432)",
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
+  },
+  {
+    "key": "play only in /next/: page @in 300ms x1 ease-out",
+    "label": "intended (PR #458)",
+    "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
   },
   {
     "key": "play only in /next/: page @pet-dot endless 1000ms ease-in-out",
@@ -303,6 +338,11 @@
     "key": "publish only in /: page ~border-top-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "intended (PR #438)",
     "why": "Slice 5b of the deck's port (visitor tours, Publish, Share, Export) has not landed; #438 leaves it for later."
+  },
+  {
+    "key": "publish only in /next/: page @in 300ms x1 ease-out",
+    "label": "intended (PR #458)",
+    "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
   },
   {
     "key": "publish only in /next/: page @pet-dot endless 1000ms ease-in-out",
@@ -395,6 +435,11 @@
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
   {
+    "key": "replay only in /next/: page @in 300ms x1 ease-out",
+    "label": "intended (PR #458)",
+    "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
+  },
+  {
     "key": "replay reduced cursor Ada: only in /",
     "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
@@ -460,6 +505,11 @@
     "why": "Hermia's cursor (and her radio line to the crew) on the deck waits for useWorking from feat/port-plan, as #432 says."
   },
   {
+    "key": "visitor only in /next/: page @in 300ms x1 ease-out",
+    "label": "intended (PR #458)",
+    "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
+  },
+  {
     "key": "visitor only in /next/: page @pet-dot endless 1000ms ease-in-out",
     "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
@@ -488,80 +538,5 @@
     "key": "visitor reduced cursor Bo: only in /",
     "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
-  },
-  {
-    "key": "studio only in /: page @in 300ms x1 ease-out",
-    "label": "drift",
-    "why": "The current Studio now ends its scene with the board loaded and the planner's first line fading into the chat (@in, 300 ms); the /next/ Studio screen has no chat line in this scene."
-  },
-  {
-    "key": "studio only in /: page ~border-bottom-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
-  },
-  {
-    "key": "studio only in /: page ~border-left-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
-  },
-  {
-    "key": "studio only in /: page ~border-right-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
-  },
-  {
-    "key": "studio only in /: page ~border-top-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
-  },
-  {
-    "key": "studio only in /next/: page ~transform 300ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The /next/ Studio eases its board into view (transform, 300 ms); the current Studio now frames its whole board at once when it opens, with no step zoomed in."
-  },
-  {
-    "key": "app cursor Ada: only in /",
-    "label": "intended (PR #477)",
-    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
-  },
-  {
-    "key": "app cursor Bo: only in /",
-    "label": "intended (PR #477)",
-    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
-  },
-  {
-    "key": "app only in /: page @in 250ms x1 ease-out",
-    "label": "drift",
-    "why": "The current App room fades each build step into its list (.app-steps .st, @in 250 ms); the /next/ wall has no step list: its Shipped window shows the last step, drawn at once."
-  },
-  {
-    "key": "app only in /: page @radio-dash endless 800ms linear",
-    "label": "intended (PR #477)",
-    "why": "The radio line (.radio-line) belongs to the crew's cursors over the current App room; the /next/ wall draws no crew cursor yet (spec 44 leaves them for a later slice), so it has no radio line."
-  },
-  {
-    "key": "app only in /next/: page @pet-dot endless 1000ms ease-in-out",
-    "label": "drift",
-    "why": "While the app builds and has no address yet, the /next/ wall's Live window says it is busy (aria-busy) and Hermia works on it (web/pet.js PET_BUSY); the current App room shows the same build with a step list and no placeholder she works on."
-  },
-  {
-    "key": "app only in /next/: page @pet-tap endless 700ms ease-in-out",
-    "label": "drift",
-    "why": "While the app builds and has no address yet, the /next/ wall's Live window says it is busy (aria-busy) and Hermia works on it (web/pet.js PET_BUSY); the current App room shows the same build with a step list and no placeholder she works on."
-  },
-  {
-    "key": "app only in /next/: page ~opacity 200ms x1 ease",
-    "label": "drift",
-    "why": "While the app builds and has no address yet, the /next/ wall's Live window says it is busy (aria-busy) and Hermia works on it (web/pet.js PET_BUSY); the current App room shows the same build with a step list and no placeholder she works on."
-  },
-  {
-    "key": "app reduced cursor Ada: only in /",
-    "label": "intended (PR #477)",
-    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
-  },
-  {
-    "key": "app reduced cursor Bo: only in /",
-    "label": "intended (PR #477)",
-    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
   }
 ]

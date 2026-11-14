@@ -8,7 +8,10 @@
 // (refs/look-<id>-<n>.jpg), the measured tokens, the style words and `from` (where and how the person gave it).
 // The shots are for the person to see; they are never placed in a build.
 //
-// kind: image, video, audio, file or link. source: upload, chat, feed, link, plan or film. `use` is what
+// A reference brought to the Studio's first step (source `import`, decision 0015) carries `found`: what the crew
+// read in it (engine/importer.mjs), { state: reading | ready | failed, idea, what, who, pages, note }.
+//
+// kind: image, video, audio, file or link. source: upload, chat, feed, link, plan, film or import. `use` is what
 // it is for ("hero mood", "the menu"); `removed` keeps the time it was removed, so undo brings it back.
 // The project's uploads (projects/<pid>/uploads) are references too, with source `upload`: `all()`
 // lists them beside the store, so every door (the crew's brief, Home › Assets) reads one list.
@@ -20,7 +23,7 @@ const PID = /^[\w-]{1,64}$/
 const REF_ID = /^r[0-9a-z]{4,16}$/
 const FILE = /^[\w][\w .()+-]{0,118}\.[a-z0-9]{1,8}$/i
 export const REF_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', pdf: 'application/pdf', txt: 'text/plain', md: 'text/markdown' }
-const SOURCES = new Set(['upload', 'chat', 'feed', 'link', 'plan', 'film'])
+const SOURCES = new Set(['upload', 'chat', 'feed', 'link', 'plan', 'film', 'import'])
 const kindOf = name => { const t = REF_TYPES[extname(name).slice(1).toLowerCase()] || ''; return t.startsWith('image/') ? 'image' : t.startsWith('video/') ? 'video' : t.startsWith('audio/') ? 'audio' : 'file' }
 const clip = (s, n) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n)
 
@@ -107,6 +110,9 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     })
   }
 
+  // what the crew read in a reference brought to the first step (engine/importer.mjs)
+  const setFound = (pid, id, found) => change(pid, id, r => { r.found = found })
+
   // the match check (engine/lookmatch.mjs): how close a build is to the link's look. `ours` (Buffers) are shots
   // of the build's own pages, kept as match-<id>-<n>.jpg; a new look clears the old match
   function setMatch(pid, id, match, ours = []) {
@@ -148,5 +154,5 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     return clip(`Use ${what} for ${section}.${r.kind === 'image' ? ' Place it as it is (<img src="…">, no data-gen) or match its look, whichever fits the section.' : ' Match its look and feel.'} Keep everything else.`, 600)
   }
 
-  return { list, all, addFile, addLink, remove, restore, setUse, setLook, setMatch, file, brief, useText, dir }
+  return { list, all, addFile, addLink, remove, restore, setUse, setLook, setFound, setMatch, file, brief, useText, dir }
 }

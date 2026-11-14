@@ -6,6 +6,11 @@
 @source not '../dist';
 @import './theme.css';
 @import './fonts.css';
+/* a chat line arrives as it does in the current Studio (web/canvas.css .feed .item, @keyframes in), so the two move
+   the same (docs/ux/MOTION.md, motion parity) */
+@keyframes in { from { opacity: 0; transform: translateY(4px); } }
+.feed .item { animation: in .3s ease-out; }
+@media (prefers-reduced-motion: reduce) { .feed .item { animation: none; } }
 /* Hermia's cursor (web/pet.js, spec 41), the same look as the current Studio's */
 @import '../../web/pet.css';
 

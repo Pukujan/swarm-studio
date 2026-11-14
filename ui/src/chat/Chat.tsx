@@ -199,7 +199,7 @@ export function Chat(props: ChatProps) {
                 }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send() }
               }}
-              className="w-full resize-none rounded-[10px] border border-line-2 bg-void px-3 py-2 font-monospace text-sm text-text outline-none placeholder:text-dim data-[focused]:border-frame-hi" />
+              className="w-full resize-none rounded-[10px] border border-line-2 bg-void px-3 py-2 font-monospace text-sm text-text outline-none transition-[border-color] duration-[160ms] ease-[cubic-bezier(.2,.7,.2,1)] motion-reduce:transition-none placeholder:text-dim data-[focused]:border-frame-hi" />
             <div className="row flex min-w-0 items-center gap-1.5">
               <Suggestions count={offers}>
                 {done => offer ? <Suggested t={offer} a={acts} done={done} /> : <p className="m-0 px-1 py-2 font-monospace text-xs text-muted">Nothing to suggest right now.</p>}
