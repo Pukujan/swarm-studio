@@ -13,17 +13,21 @@ import { CommentPin } from './deck/Comment'
 import { DeckChat } from './deck/DeckChat'
 import { DesignTab } from './deck/DesignTab'
 import { useEdits } from './deck/edit'
+import { DeckBoard } from './deck/DeckBoard'
+import { boardMode, type BoardMode } from '../board/flag'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
 import { ExportDialog } from './deck/ExportDialog'
 import { Player } from './deck/Player'
 import { PublishDialog } from './deck/PublishDialog'
 import { useDeckRun } from './deck/source'
 
-export function DesignDeck() {
+// `board` forces the board's mode (a story); otherwise the address's ?board= says (src/board/flag.ts)
+export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   const { view, go } = useNav()
   // ☰ → Replay (the machine's `replay`): the saved build plays again, and ends on the finished build
   const { model, loading, error } = useDeckRun(view.run ?? view.version, view.replay, useCallback(() => go({ type: 'replay', on: false }), [go]))
   const stage = useRef<StageHandle>(null)
+  const [board] = useState(() => forced ?? boardMode())
   const [zoom, setZoom] = useState(1)
   // the page Layers lists: the one the person picked, else the address's page, else the first
   const [picked, setPicked] = useState<string | null>(null)
@@ -97,8 +101,11 @@ export function DesignDeck() {
                 <p className="font-monospace text-muted">This version has nothing on its pages yet.</p>
                 {studio}
               </div>
-            : <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select}
-              pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} /> : null} />}
+            : board === 'dom'
+              ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select}
+                pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} /> : null} />
+              // the image-first board, behind ?board=tiers until the gauge says (src/board/flag.ts); a picked section's page is live
+              : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel?.page ?? picked ?? null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}

@@ -5,6 +5,11 @@ on:
     branches: [main]
 permissions:
   contents: read
+# a new push to a pull request stops the run of the push before it (thirteen jobs, one a Mac, were queueing behind
+# runs nobody would read); a run on main is never stopped, so every merge has its own result
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -21,6 +26,9 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
@@ -31,6 +39,8 @@ jobs:
       - run: npm run --prefix tools/dev tokens:check
       # the next UI (ui/, docs/decisions/0013-react-ui-coexists.md): its type check and dependency rules, and its
       # build makes the one-document /next/ page (development only: the plugin installs none of it)
+      # ui/'s own tests (the boards' tier manager, its fast-check properties): they import ui/'s dependencies
+      - run: npm test --prefix ui
       - run: npm run --prefix tools/dev typecheck:ui
       - run: npm run --prefix tools/dev deps:ui
       - run: npm run --prefix tools/dev ui:check
@@ -57,6 +67,9 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
@@ -80,14 +93,19 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
       # what a release does before the catalog pins it: the build committed in this runner's own checkout, so the
       # copy Hermes installs below carries ui/dist/ exactly as a release's does (scripts/release-ui.mjs)
       # it runs even when check.sh failed, like the sections below, so the install is still checked
+      # a push to main checks out the branch main, where the script refuses to commit; a pull request's checkout
+      # is already detached. Detached here too, so main's own run installs the plugin as a pull request's does
       - if: ${{ !cancelled() }}
-        run: node scripts/release-ui.mjs
+        run: git checkout --detach && node scripts/release-ui.mjs
       # the sections below each run even when one before them failed, so one run shows every Mac failure
       # Hermes as a person installs it on a Mac (its install.sh), at the release the plugin asks for
       # (plugin.yaml requires_hermes: v0.23.1, commit 3b42157), without its setup questions, browser or
@@ -130,6 +148,9 @@ jobs:
       # their SHA-256 for this Mac, and the other Mac's (arm64 / x64) fetched and checked too
       - if: ${{ !cancelled() }}
         run: node scripts/macos-check.mjs ffmpeg
+      # the image service's libraries installed on first use into the data folder, as a Dock-opened studio does
+      - if: ${{ !cancelled() }}
+        run: node scripts/macos-check.mjs images
       # Godot as a Mac has it: the app, found without Homebrew on PATH
       - id: godot
         if: ${{ !cancelled() }}
