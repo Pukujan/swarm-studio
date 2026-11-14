@@ -54,5 +54,6 @@ export const Playing: Story = { parameters: { extra: '&play=prototype&page=plans
 // ☰ → Replay: the finished build played again on its own clock
 export const Replaying: Story = { parameters: { extra: `&replay=${RUN}` } }
 
-// the image-first board behind its flag: photos under the tier manager
+// the image-first board behind its flag: photos under the tier manager, as <img> and on the PixiJS canvas
 export const BoardTiers: Story = { args: { board: 'tiers' }, parameters: { source: from('building', true) } }
+export const BoardPixi: Story = { args: { board: 'pixi' }, parameters: { source: from('building', true) } }
