@@ -266,19 +266,35 @@ async function scene(browser, sc, BASE) {
     // when it did not play, where it stopped: the Files row, the inspector, or the media itself
     if (!filmPlaying) filmWhy = { clicked, hovered, played, ...await within('reading the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return { row: !!document.querySelector('.pj-list .row[data-key="film:0"]'), sel: window.swarmCosmos?.projectView ? document.querySelector('.pj-list .row.on')?.dataset.key || null : null, video: !!v, src: v?.currentSrc || v?.getAttribute('src') || null, readyState: v?.readyState ?? null, networkState: v?.networkState ?? null, error: v?.error ? `${v.error.code} ${v.error.message}` : null } })).catch(e => ({ read: e.message })) }
   }
-  // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time
+  // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time. It is
+  // played twice and the second pass is the one recorded: the first one makes the board do what it does only the
+  // first time it is moved (decoding the pictures it shows, laying out what comes into view), which is most of the
+  // slow frames of a single pass and lands in them by timing, not by the code
   const box = await within('the window size', 15000, page.evaluate(() => ({ w: innerWidth, h: innerHeight })))
   await page.mouse.move(box.w / 2, box.h / 2)
-  await within('starting the frame count', 15000, page.evaluate(() => { window.__ft = [] }))
   const steps = [...Array(30)].map(() => [0, 40, 80, false]).concat([...Array(12)].map(() => [0, 0, 120, true]), [...Array(16)].map(() => [0, 0, -90, true]), [...Array(30)].map(() => [0, -40, -80, false]))
-  for (const [, dx, dy, zoom] of steps) {
-    if (zoom) await page.keyboard.down('Control')
-    await within('a wheel step', 15000, page.mouse.wheel(dx, dy))
-    if (zoom) await page.keyboard.up('Control')
-    await wait(30)
+  const walk = async () => {
+    for (const [, dx, dy, zoom] of steps) {
+      if (zoom) await page.keyboard.down('Control')
+      await within('a wheel step', 15000, page.mouse.wheel(dx, dy))
+      if (zoom) await page.keyboard.up('Control')
+      await wait(30)
+    }
+    await wait(500)
   }
-  await wait(500)
+  // the browser's own counters (CDP Performance.getMetrics) and how fast this machine runs a fixed piece of script
+  // right now: the best of five runs of the same loop. Counts of layouts and style recalculations do not depend on how
+  // fast the machine is; the times and the loop do, and say by how much
+  const counters = async () => Object.fromEntries((await within('Performance.getMetrics', 15000, cdp.send('Performance.getMetrics'))).metrics.map(x => [x.name, x.value]))
+  const calibrate = () => within('the calibration', 20000, page.evaluate(() => { let best = Infinity; for (let k = 0; k < 5; k++) { const t = performance.now(); let x = 0; for (let i = 0; i < 3e6; i++) x += Math.sqrt(i) * 1.0001; if (x < 0) console.log(x); best = Math.min(best, performance.now() - t) } return best }))
+  await walk()
+  await wait(1500)
+  const c0 = await counters(), speed0 = await calibrate()
+  await within('starting the frame count', 15000, page.evaluate(() => { window.__ft = [] }))
+  await walk()
   const ft = await within('reading the frame times', 15000, page.evaluate(() => { const f = window.__ft || []; window.__ft = null; return f }))
+  const c1 = await counters(), speed1 = await calibrate()
+  const d = k => (c1[k] ?? 0) - (c0[k] ?? 0)
   // memory once the path is done, after a GC
   await within('HeapProfiler.collectGarbage', 30000, cdp.send('HeapProfiler.collectGarbage')).catch(() => {})
   const metric = async name => (await within('Performance.getMetrics', 15000, cdp.send('Performance.getMetrics'))).metrics.find(x => x.name === name)?.value ?? null
@@ -299,7 +315,7 @@ async function scene(browser, sc, BASE) {
   }
   await within('closing the page', 30000, ctx.close()).catch(() => {})
   // (the frame times themselves too, to the 0.1 ms: compare takes its percentiles over every run's frames)
-  return { readyMs: ready, filmPlaying, filmWhy, ft: ft.map(x => round(x)), frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
+  return { readyMs: ready, filmPlaying, filmWhy, ft: ft.map(x => round(x)), frames: ft.length, frame: { p50: round(pct(ft, 0.5)), p95: round(pct(ft, 0.95)), p99: round(pct(ft, 0.99)) }, calibMs: round(Math.min(speed0, speed1), 2), layouts: d('LayoutCount'), restyles: d('RecalcStyleCount'), scriptMs: round(d('ScriptDuration') * 1000), layoutMs: round(d('LayoutDuration') * 1000), styleMs: round(d('RecalcStyleDuration') * 1000), taskMs: round(d('TaskDuration') * 1000), jsHeapMB: MB(heap), nodes, layers, gpuMB: gpu?.process ?? null, gpuAllocMB: gpu?.alloc ?? null, iframes, players, playersAfter: after }
 }
 
 async function layerCount(cdp) {
