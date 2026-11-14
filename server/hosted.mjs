@@ -13,6 +13,7 @@
 // It listens on 0.0.0.0:$PORT (8080) inside its container; the Feed's web container proxies
 // https://swarm.design-bakery.com/studio/app/** to it.
 
+import '../engine/socketsafe.mjs'
 import { createServer } from 'node:http'
 import { createHash, randomBytes } from 'node:crypto'
 import { appendFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'

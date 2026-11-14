@@ -3,8 +3,9 @@
 // {url, token, pid, code}, again every 5 s (code: when the Python it loaded was written, engine/hermeshealth.mjs). Pictures, clips, model calls (engine/hermesllm.mjs) and MCP calls are asked of
 // the newest live bridge, which does them with Hermes's own tools, so the provider keys stay in Hermes.
 //
-// Up to 4 bridges are kept, newest first. One silent for 45 s, or one that refuses a connection, is
-// dropped, and the call moves on to the next one.
+// Up to 4 bridges are kept, newest first. One silent for 45 s, one that refuses a connection, or one whose
+// connection dies under a call (its Hermes quit: reset, closed, a broken pipe), is dropped, and the call
+// moves on to the next one. A Hermes that is still there attaches again within 5 s, so dropping costs nothing.
 
 const KEEP = 4
 const SILENT_MS = 45000
@@ -22,7 +23,9 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
 
   // {ok:false, error, absent:true} when no bridge answers; otherwise the bridge's own JSON answer.
   // `next(answer)` true: that bridge could not do it (an MCP server it has not connected), ask the next.
-  async function call(path, body, timeoutMs = 300000, { next = () => false } = {}) {
+  // `grace`: how long past timeoutMs the call is given, so the bridge's own timeout (timeoutMs, in Hermes) answers
+  // first; 0 for a question the bridge answers from memory (/media), which then takes timeoutMs at most.
+  async function call(path, body, timeoutMs = 300000, { next = () => false, grace = 15000 } = {}) {
     let passed = null
     for (const b of live().slice()) {
       try {
@@ -30,7 +33,7 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
           method: body === undefined ? 'GET' : 'POST',
           headers: { 'content-type': 'application/json', authorization: `Bearer ${b.token}` },
           body: body === undefined ? undefined : JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs + 15000)
+          signal: AbortSignal.timeout(timeoutMs + grace)
         })
         if (res.status === 403) { drop(b); continue } // a bridge from a process that has gone and been replaced
         const answer = await res.json()
@@ -61,7 +64,9 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
     return null
   }
   const drop = b => { bridges = bridges.filter(x => x !== b) }
-  const refused = err => /ECONNREFUSED|ECONNRESET|EHOSTUNREACH|fetch failed/i.test(String(err?.cause?.code || err?.code || err?.message || ''))
+  // the connection was refused or died: fetch says "fetch failed" with the reason as its cause (a code such as
+  // ECONNRESET or EPIPE, or undici's own UND_ERR_SOCKET, "other side closed"). A timeout or an abort is neither.
+  const refused = err => /ECONNREFUSED|ECONNRESET|ECONNABORTED|EPIPE|EHOSTUNREACH|UND_ERR_SOCKET|fetch failed/i.test(String(err?.cause?.code || err?.code || err?.message || ''))
 
   // Before a build: ask each bridge a cheap question (its model list) so one whose Hermes has just closed
   // is dropped now, not 45 s later. A bridge that is only slow to answer is kept.

@@ -1,6 +1,6 @@
 # Hermes and connections
 
-Glue: launcher.py, bridge.py, bridge_llm.py, engine/bridge.mjs, engine/hermesllm.mjs, engine/llm.mjs, engine/hermeshealth.mjs, engine/hermes_connect.mjs, engine/connect.mjs, engine/proc.mjs, engine/ckff.mjs, engine/paint-ckff.mjs, engine/auto.mjs, engine/appkit.mjs, engine/media.mjs, server/server.mjs, web/show.js
+Glue: launcher.py, bridge.py, bridge_llm.py, engine/bridge.mjs, engine/hermesllm.mjs, engine/llm.mjs, engine/hermeshealth.mjs, engine/hermes_connect.mjs, engine/connect.mjs, engine/proc.mjs, engine/ckff.mjs, engine/paint-ckff.mjs, engine/auto.mjs, engine/appkit.mjs, engine/media.mjs, engine/socketsafe.mjs, server/server.mjs, web/show.js
 Status: built in
 
 Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`, plugin.yaml:6) under FSL-1.1-ALv2 (plugin.yaml:58). Hermes's own licence: Unchecked (not in this repo; settle from Hermes's repo). Every other service here is an outside service reached through Hermes or a declared key.
@@ -19,6 +19,8 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - That minimal env keeps `PATH`, `HOME`, `TMPDIR`, `LANG`, `HERMES_HOME`, `SWARM_GODOT`, `GODOT` and `SWARM_IMAGE_SERVICE` (the image service's off switch, engine/images.mjs), plus the Windows system folders (launcher.py:199-202).
 - bridge.py runs a loopback server inside each Hermes process and attaches with `POST /api/hermes/attach {url, token, pid, code}`; Node keeps 4 bridges, drops one silent 45 s (engine/bridge.mjs:1-20). Attach interval: 5 s (engine/bridge.mjs:3, docs/specs/33-hermes-bridge.md:148-149); spec 33 also says 15 s (docs/specs/33-hermes-bridge.md:44).
 - `call(path, body)` for `/image`, `/video`, `/mcp`; `send` streams model calls (engine/bridge.mjs:25-62).
+- A bridge is dropped when it refuses a connection, when its connection dies under a call (reset, closed, a broken pipe: its Hermes quit), or after 45 s of silence; a bridge that is only slow is kept (engine/bridge.mjs `refused`, tests/bridge.test.mjs). A Hermes that is still there attaches again within 5 s.
+- `GET /media` (what Hermes offers for pictures and clips) is answered from memory (bridge.py `media`), and a build asks it before it starts, so it gets 3 s and no more (server/server.mjs `MEDIA_MS`, `mediaOffer`; every other call gets its timeout plus 15 s for the bridge's own timeout to answer first, engine/bridge.mjs `grace`). An attached Hermes that does not answer in time is taken to offer both, as before; that answer is kept for 10 s only (so one build's start asks once), then asked again.
 - `/llm/v1` on the studio's port, with a per-process key, forwards to the bridge; `model` is the role (`planner`, `worker`, `reviewer`), optionally `role:pick` (engine/hermesllm.mjs:3-9, 22-24, 94). The app engine (Dyad) uses the same endpoint (engine/hermesllm.mjs:3-5).
 - `streamChat` is the client for any OpenAI-shaped endpoint; through Hermes it drops provider hints and sends `x-swarm-timeout` (engine/llm.mjs:12, 58, 71).
 - `hermesHealth` tells `closed` from `updated` by `$HERMES_HOME/gateway.pid` and the plugin's `.py` mtimes (engine/hermeshealth.mjs:18-22, 26-47).
@@ -156,6 +158,7 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - A generated app gets only Supabase vars, a Stripe test key and its kit's declared keys (engine/proc.mjs:28-37).
 - Keyed APIs like Duffel, Amadeus, Twilio, Mapbox are named but never reach a built app (engine/appkit.mjs:53-64).
 - No Hermes, no build: refused with 503 before it starts; mid-build a call waits 20 s then stops (docs/specs/33-hermes-bridge.md:133-154).
+- Hermes quitting must never end the server. On macOS, Node 24's fetch (undici 7.29 `writeH1`) throws `setTypeOfService EINVAL` from a socket event when the other side reset the connection in the instant it was made, and the process exits (measured on Node 24.22, macOS 26: 2 of 24 builds with eight running at once; Linux and Windows never; Node 25.3 with undici 7.18 has no such call). engine/socketsafe.mjs lets "no type of service" pass on a dead socket; server/server.mjs and server/hosted.mjs import it first (tests/socketsafe.test.mjs). Unchecked: whether a later Node fixes it upstream; remove the guard when the pinned Node does.
 - Hermes's default auxiliary timeout is 30 s; Swarm sends its own (docs/specs/33-hermes-bridge.md:108-111).
 - Google sign-in for apps is not built (docs/specs/25-connections.md:114-116).
 

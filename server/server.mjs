@@ -7,6 +7,7 @@
 //   env: SWARM_STUDIO_API_KEY or SWARM_API_KEY, SWARM_BASE_URL,
 //        SWARM_PLANNER_MODEL, SWARM_WORKER_MODEL, SWARM_AGENTS
 
+import '../engine/socketsafe.mjs'
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
@@ -223,10 +224,17 @@ const mediaKeyStore = mediaKeys(dataDir)
 // Generated pages served from this origin (/site/, /video/…/live/) run in an opaque origin (Nous catalog review, point 4)
 const SITE_CSP = 'sandbox allow-scripts'
 const HERMES_IMAGE = { provider: 'hermes', available: true, models: [], default: '' }
+// What Hermes offers for pictures and clips. Its bridge answers from memory, on a thread of its own (bridge.py
+// `media`, ThreadingHTTPServer), so the question gets MEDIA_MS and not a moment more: a build asks it before it
+// starts (picturesFor), and a Hermes that has hung must not hold the build's start (it was 25 s: 10 s, and the
+// 15 s every bridge call is given on top for the bridge's own timeout to answer first). A Hermes that is attached
+// and did not answer in time is taken to offer both, as before (`unsure`: that answer is not kept for long).
+const MEDIA_MS = 3000
+const mediaOffer = () => hermes.call('/media', undefined, MEDIA_MS, { grace: 0 })
 const imagegenHermes = async (args, timeout) => {
   if (args[0] === '--list') {
-    const m = await hermes.call('/media', undefined, 10000)
-    return { ok: true, providers: [{ ...HERMES_IMAGE, available: !m.absent && m.image?.available !== false }] }
+    const m = await mediaOffer()
+    return { ok: true, unsure: m.ok === false && !m.absent, providers: [{ ...HERMES_IMAGE, available: !m.absent && m.image?.available !== false }] }
   }
   return hermes.call('/image', imageBody(args), timeout || 300000)
 }
@@ -239,7 +247,7 @@ const argAfter = (args, flag) => { const i = args.indexOf(flag); return i >= 0 ?
 const imagegen = (args, timeout) => {
   if (args[0] === '--list') return imagegenHermes(args, timeout).then(r => {
     const mine = ckffProvider(), listed = (r?.ok ? r.providers : []).filter(x => x.provider !== 'ckff')
-    return mine ? { ok: true, providers: [...listed, mine] } : r
+    return mine ? { ...r, ok: true, providers: [...listed, mine] } : r
   })
   if (argAfter(args, '--provider') !== 'ckff') return imagegenHermes(args, timeout)
   // the same arguments as a Hermes picture; ckff has no centre-crop, so the picture comes back whole
@@ -249,8 +257,8 @@ const imagegen = (args, timeout) => {
 // moving clips from a still, through Hermes's own video_generate (the provider Hermes is set up with)
 const videogen = async (args, timeout) => {
   if (args[0] === '--list') {
-    const m = await hermes.call('/media', undefined, 10000)
-    return { ok: true, providers: [{ provider: 'hermes', label: 'Hermes', model: '', available: !m.absent && m.video?.available !== false }] }
+    const m = await mediaOffer()
+    return { ok: true, unsure: m.ok === false && !m.absent, providers: [{ provider: 'hermes', label: 'Hermes', model: '', available: !m.absent && m.video?.available !== false }] }
   }
   const { out, ...body } = videoBody(args)
   const r = await hermes.call('/video', body, timeout || 600000)
@@ -259,9 +267,25 @@ const videogen = async (args, timeout) => {
   try { mkdirSync(dirname(out), { recursive: true }); copyFileSync(r.path, out) } catch (err) { return { ok: false, error: `could not keep the clip: ${err.message}` } }
   return { ...r, path: out }
 }
-let imageProviders = null, videoProviders = null
-const loadImageProviders = () => (imageProviders ||= imagegen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
-const loadVideoProviders = () => (videoProviders ||= videogen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
+// Kept until Hermes attaches again. An answer that never came (r.unsure) is kept for 10 s only: long enough
+// for the questions of one build's start to share it (they would each wait MEDIA_MS), then asked again.
+const UNSURE_MS = 10000
+const offered = list => {
+  let kept = null, until = Infinity
+  return {
+    ask() {
+      if (Date.now() > until) kept = null
+      if (kept) return kept
+      until = Infinity
+      const asked = kept = list().then(r => { if (r.unsure && kept === asked) until = Date.now() + UNSURE_MS; return r.ok ? r.providers : [] })
+      return asked
+    },
+    forget() { kept = null }
+  }
+}
+const imageOffer = offered(() => imagegen(['--list'], 60000)), videoOffer = offered(() => videogen(['--list'], 60000))
+const loadImageProviders = () => imageOffer.ask()
+const loadVideoProviders = () => videoOffer.ask()
 loadImageProviders()
 loadVideoProviders()
 // The image model for new builds: the pick, else Hermes's own image tool when a Hermes process is attached.
@@ -3696,7 +3720,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const was = hermes.status().attached, r = hermes.attach(input)
       // Hermes is back: what it offers for pictures and clips is asked again
-      if (r.ok && !was) { imageProviders = null; videoProviders = null }
+      if (r.ok && !was) { imageOffer.forget(); videoOffer.forget() }
       // Hermes is back: a canvas waiting on it (a build stopped because Hermes closed) can go on
       if (r.ok && !was) broadcast({ type: 'hermes:back', attached: true })
       res.writeHead(r.ok ? 200 : 400, { 'content-type': 'application/json' }).end(JSON.stringify(r))
@@ -3737,7 +3761,7 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
-      const done = () => { imageProviders = null; videoProviders = null; return mediaNow().then(m => reply(200, m)) }
+      const done = () => { imageOffer.forget(); videoOffer.forget(); return mediaNow().then(m => reply(200, m)) }
       if (!MEDIA_KEYS[input.service]) return reply(400, { error: 'unknown service' })
       mediaKeyStore.set(input.service, typeof input.key === 'string' ? input.key : null).then(done).catch(err => reply(400, { error: String(err.message || err) }))
     })
