@@ -1,6 +1,6 @@
 # Credits: brand packs from Open Design
 
-Each pack below is a look converted from a design system in [nexu-io/open-design](https://github.com/nexu-io/open-design) at commit `bc06128813c99fa63f5af53ad2c903c27db057f2` (Apache-2.0, see `LICENSE`). Most of those systems were normalised by Open Design from [bergside/awesome-design-skills](https://github.com/bergside/awesome-design-skills) at `f631a09b4fcc0166f2e2c1a8c81906ef680c57e8` (MIT, Copyright (c) 2026 Bergside, see `LICENSE.bergside`). Converted by `scripts/import-od-systems.mjs`; what was changed is in `NOTICE`.
+Each pack below is a look converted from a design system in [nexu-io/open-design](https://github.com/nexu-io/open-design) at commit `59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582` (Apache-2.0, see `LICENSE`), every system it ships, the ones named after a real brand too (decision 0016). Systems named after a company or product are Open Design's inspirations, not official assets of that company. Most of those systems were normalised by Open Design from [bergside/awesome-design-skills](https://github.com/bergside/awesome-design-skills) at `f631a09b4fcc0166f2e2c1a8c81906ef680c57e8` (MIT, Copyright (c) 2026 Bergside, see `LICENSE.bergside`). Converted by `scripts/import-od-systems.mjs`, with each system's tokens, rules and components in `systems.json`; what was changed is in `NOTICE`.
 
 | Pack | Name | Path in Open Design | Upstream | Colours read from |
 |---|---|---|---|---|
@@ -57,6 +57,105 @@ Each pack below is a look converted from a design system in [nexu-io/open-design
 | od-refined | Refined | `design-systems/refined/` | bergside/awesome-design-skills skills/refined (MIT) | tokens.css |
 | od-simple | Simple | `design-systems/simple/` | Open Design | tokens.css |
 | od-sleek | Sleek | `design-systems/sleek/` | bergside/awesome-design-skills skills/sleek (MIT) | tokens.css |
+| od-airbnb | Airbnb | `design-systems/airbnb/` | Open Design | tokens.css |
+| od-airtable | Airtable | `design-systems/airtable/` | Open Design | tokens.css |
+| od-ant | Ant | `design-systems/ant/` | Open Design | DESIGN.md |
+| od-apple | Apple | `design-systems/apple/` | Open Design | tokens.css |
+| od-arc | Arc Browser | `design-systems/arc/` | Open Design | tokens.css |
+| od-atelier-zero | Atelier Zero | `design-systems/atelier-zero/` | Open Design | tokens.css |
+| od-binance | Binance.US | `design-systems/binance/` | Open Design | tokens.css |
+| od-bmw | BMW | `design-systems/bmw/` | Open Design | tokens.css |
+| od-bmw-m | BMW M | `design-systems/bmw-m/` | Open Design | tokens.css |
+| od-bugatti | Bugatti | `design-systems/bugatti/` | Open Design | tokens.css |
+| od-cal | Cal.com | `design-systems/cal/` | Open Design | tokens.css |
+| od-canva | Canva | `design-systems/canva/` | Open Design | tokens.css |
+| od-cisco | Cisco | `design-systems/cisco/` | Open Design | tokens.css |
+| od-claude | Claude (Anthropic) | `design-systems/claude/` | Open Design | tokens.css |
+| od-clay | Clay | `design-systems/clay/` | Open Design | tokens.css |
+| od-clickhouse | ClickHouse | `design-systems/clickhouse/` | Open Design | tokens.css |
+| od-cloudflare-kumo | Cloudflare Kumo UI | `design-systems/cloudflare-kumo/` | Open Design | tokens.css |
+| od-cohere | Cohere | `design-systems/cohere/` | Open Design | tokens.css |
+| od-coinbase | Coinbase | `design-systems/coinbase/` | Open Design | tokens.css |
+| od-composio | Composio | `design-systems/composio/` | Open Design | tokens.css |
+| od-cursor | Cursor | `design-systems/cursor/` | Open Design | tokens.css |
+| od-default | Neutral Modern | `design-systems/default/` | Open Design | tokens.css |
+| od-discord | Discord | `design-systems/discord/` | Open Design | tokens.css |
+| od-duolingo | Duolingo | `design-systems/duolingo/` | Open Design | tokens.css |
+| od-elevenlabs | ElevenLabs | `design-systems/elevenlabs/` | Open Design | tokens.css |
+| od-expo | Expo | `design-systems/expo/` | Open Design | tokens.css |
+| od-ferrari | Ferrari | `design-systems/ferrari/` | Open Design | tokens.css |
+| od-figma | Figma | `design-systems/figma/` | Open Design | tokens.css |
+| od-framer | Framer | `design-systems/framer/` | Open Design | tokens.css |
+| od-github | GitHub | `design-systems/github/` | Open Design | tokens.css |
+| od-hashicorp | HashiCorp | `design-systems/hashicorp/` | Open Design | tokens.css |
+| od-huggingface | Hugging Face | `design-systems/huggingface/` | Open Design | tokens.css |
+| od-ibm | IBM | `design-systems/ibm/` | Open Design | tokens.css |
+| od-intercom | Intercom | `design-systems/intercom/` | Open Design | tokens.css |
+| od-kami | Kami (紙 / 纸) | `design-systems/kami/` | Open Design | tokens.css |
+| od-kraken | Kraken | `design-systems/kraken/` | Open Design | tokens.css |
+| od-lamborghini | Lamborghini | `design-systems/lamborghini/` | Open Design | tokens.css |
+| od-linear-app | Linear | `design-systems/linear-app/` | Open Design | tokens.css |
+| od-lingo | Lingo | `design-systems/lingo/` | Open Design | DESIGN.md |
+| od-loom | Loom | `design-systems/loom/` | Open Design | tokens.css |
+| od-lovable | Lovable | `design-systems/lovable/` | Open Design | tokens.css |
+| od-mastercard | Mastercard | `design-systems/mastercard/` | Open Design | tokens.css |
+| od-material | Material | `design-systems/material/` | Open Design | DESIGN.md |
+| od-meta | Meta (Store) | `design-systems/meta/` | Open Design | tokens.css |
+| od-minimax | MiniMax | `design-systems/minimax/` | Open Design | tokens.css |
+| od-mintlify | Mintlify | `design-systems/mintlify/` | Open Design | tokens.css |
+| od-miro | Miro | `design-systems/miro/` | Open Design | tokens.css |
+| od-mission-control | Mission Control | `design-systems/mission-control/` | Open Design | tokens.css |
+| od-mistral-ai | Mistral AI | `design-systems/mistral-ai/` | Open Design | tokens.css |
+| od-mongodb | MongoDB | `design-systems/mongodb/` | Open Design | tokens.css |
+| od-nike | Nike | `design-systems/nike/` | Open Design | tokens.css |
+| od-notion | Notion | `design-systems/notion/` | Open Design | tokens.css |
+| od-nvidia | NVIDIA | `design-systems/nvidia/` | Open Design | tokens.css |
+| od-ollama | Ollama | `design-systems/ollama/` | Open Design | tokens.css |
+| od-openai | OpenAI | `design-systems/openai/` | Open Design | tokens.css |
+| od-opencode-ai | OpenCode | `design-systems/opencode-ai/` | Open Design | tokens.css |
+| od-pacman | Pacman | `design-systems/pacman/` | Open Design | DESIGN.md |
+| od-perplexity | Perplexity AI | `design-systems/perplexity/` | Open Design | tokens.css |
+| od-pinterest | Pinterest | `design-systems/pinterest/` | Open Design | tokens.css |
+| od-playstation | PlayStation | `design-systems/playstation/` | Open Design | tokens.css |
+| od-posthog | PostHog | `design-systems/posthog/` | Open Design | tokens.css |
+| od-raycast | Raycast | `design-systems/raycast/` | Open Design | tokens.css |
+| od-renault | Renault | `design-systems/renault/` | Open Design | tokens.css |
+| od-replicate | Replicate | `design-systems/replicate/` | Open Design | tokens.css |
+| od-resend | Resend | `design-systems/resend/` | Open Design | tokens.css |
+| od-revolut | Revolut | `design-systems/revolut/` | Open Design | tokens.css |
+| od-runwayml | Runway | `design-systems/runwayml/` | Open Design | tokens.css |
+| od-sanity | Sanity | `design-systems/sanity/` | Open Design | tokens.css |
+| od-sentry | Sentry | `design-systems/sentry/` | Open Design | tokens.css |
+| od-shadcn | Shadcn | `design-systems/shadcn/` | Open Design | DESIGN.md |
+| od-shopify | Shopify | `design-systems/shopify/` | Open Design | tokens.css |
+| od-slack | Slack | `design-systems/slack/` | Open Design | tokens.css |
+| od-spacex | SpaceX | `design-systems/spacex/` | Open Design | tokens.css |
+| od-spotify | Spotify | `design-systems/spotify/` | Open Design | tokens.css |
+| od-starbucks | Starbucks | `design-systems/starbucks/` | Open Design | tokens.css |
+| od-stripe | Stripe | `design-systems/stripe/` | Open Design | tokens.css |
+| od-supabase | Supabase | `design-systems/supabase/` | Open Design | tokens.css |
+| od-superhuman | Superhuman | `design-systems/superhuman/` | Open Design | tokens.css |
+| od-tesla | Tesla | `design-systems/tesla/` | Open Design | tokens.css |
+| od-tetris | Tetris | `design-systems/tetris/` | Open Design | DESIGN.md |
+| od-theverge | The Verge | `design-systems/theverge/` | Open Design | tokens.css |
+| od-together-ai | Together AI | `design-systems/together-ai/` | Open Design | tokens.css |
+| od-tom-modern | Tom Modern Design | `design-systems/tom-modern/` | Open Design | tokens.css |
+| od-totality-festival | Totality Festival | `design-systems/totality-festival/` | Open Design | DESIGN.md |
+| od-uber | Uber | `design-systems/uber/` | Open Design | tokens.css |
+| od-urdu | Urdu Modern (Indus Script System) | `design-systems/urdu/` | Open Design | tokens.css |
+| od-vercel | Vercel | `design-systems/vercel/` | Open Design | tokens.css |
+| od-vodafone | Vodafone | `design-systems/vodafone/` | Open Design | tokens.css |
+| od-voltagent | VoltAgent | `design-systems/voltagent/` | Open Design | tokens.css |
+| od-warm-editorial | Warm Editorial | `design-systems/warm-editorial/` | Open Design | tokens.css |
+| od-warp | Warp | `design-systems/warp/` | Open Design | tokens.css |
+| od-webex | Webex | `design-systems/webex/` | Open Design | tokens.css |
+| od-webflow | Webflow | `design-systems/webflow/` | Open Design | tokens.css |
+| od-wechat | WeChat | `design-systems/wechat/` | Open Design | tokens.css |
+| od-wired | WIRED | `design-systems/wired/` | Open Design | tokens.css |
+| od-wise | Wise | `design-systems/wise/` | Open Design | tokens.css |
+| od-x-ai | XAI | `design-systems/x-ai/` | Open Design | tokens.css |
+| od-xiaohongshu | Xiaohongshu | `design-systems/xiaohongshu/` | Open Design | tokens.css |
+| od-zapier | Zapier | `design-systems/zapier/` | Open Design | tokens.css |
 
 # Credits: deck looks from html-ppt
 

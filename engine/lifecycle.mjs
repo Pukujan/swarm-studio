@@ -7,6 +7,9 @@
 //   seen longest ago stopped first (an app being built is never stopped for either);
 // - serialQueue: at most `size` jobs at a time, the rest wait their turn (one film render at a time).
 
+import { readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+
 // ms may be a number or a function; 0 or less never fires (Settings: Never)
 export function idleWatch({ ms, busy, onIdle, every = 30000, now = Date.now, timers = globalThis }) {
   let since = now(), fired = false
@@ -72,3 +75,19 @@ export function serialQueue(size = 1) {
     waiting: () => waiting.length
   }
 }
+
+// The server's own code on disk: the newest change under these folders (their .mjs files, not deeper), in ms.
+// The launcher asks the same of server/ and engine/ (launcher.py code_stamp).
+export function codeStamp(dirs, { readdir = readdirSync, stat = statSync } = {}) {
+  let newest = 0
+  for (const d of dirs) {
+    let names = []
+    try { names = readdir(d) } catch { continue }
+    for (const n of names) if (n.endsWith('.mjs')) { try { newest = Math.max(newest, stat(join(d, n)).mtimeMs) } catch {} }
+  }
+  return newest
+}
+// True when the code changed after this process started (a second's grace, as the launcher gives). The web
+// files are read fresh on every request, so an old server serves a page whose parts no longer fit: the
+// Studio's frame failed to load after an update (2026-11-13).
+export const staleCode = (booted, stamp) => stamp > booted + 1000

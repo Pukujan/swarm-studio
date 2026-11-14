@@ -81,3 +81,12 @@ export function stopTree(p, { ms = 5000, kill = treeKill } = {}) {
     kill(p.pid, 'SIGTERM', () => {})
   })
 }
+
+// The one child that gets the server's whole environment: the server's own replacement, the same program
+// started again after its code changed on disk (server/server.mjs, replaceSelf). It is detached and keeps the
+// log the launcher gave this process.
+export function respawnSelf({ execPath = process.execPath, argv = process.argv.slice(1), env = process.env, cwd = process.cwd(), spawner = cp.spawn } = {}) {
+  const child = spawner(execPath, argv, { env, cwd, detached: true, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true })
+  child.unref?.()
+  return child
+}

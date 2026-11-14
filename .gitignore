@@ -12,3 +12,5 @@ deploy/vps/.deploy-failed
 plans/
 test-results/
 engine/imagetools/node_modules/
+tests/bdd/features/
+tools/dev/bdd/.gen/

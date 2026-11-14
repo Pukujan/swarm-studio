@@ -21,7 +21,7 @@ echo "· type-check ratchet"
 # lines of code (not blank, comment or import lines) in web files without // @ts-check on their first line
 # (tsconfig.json; CI runs the type check itself with tools/dev). Counted in lines, not files, so splitting a
 # file (web/canvas/) neither helps nor hurts. The cap only goes down: type a file, then lower it.
-cap=4861
+cap=4859
 untyped=$(for f in $(git ls-files 'web/*.js' | grep -v '^web/vendor/'); do head -1 "$f" | grep -q '^// @ts-check' || echo "$f"; done)
 n=$(for f in $untyped; do cat "$f"; done | grep -cvE '^[[:space:]]*(//|$|import )' || true)
 if [ "$n" -gt "$cap" ]; then echo "$n untyped lines of web code, over the cap of $cap; start new files with // @ts-check. Untyped files:"; echo "$untyped"; exit 1; fi
@@ -62,6 +62,9 @@ get /api/runs
 get /api/game; has '"questions"'
 get /api/meshy; has '"ready"'; has '"credits":35'
 get /api/intake; has '"showcases"'; has '"game"'; has '"plan"'; has '"guides"'; has '"starters"'
+# bring a project in (docs/specs/45-intake.md): a folder outside the home folder is refused, and so is anything but a GitHub repository
+curl -s -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"repo":"https://example.com/a/b","kind":"game"}' http://127.0.0.1:$port/api/intake > "$tmp/reply"; has 'github.com'
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"kind":"game"}' http://127.0.0.1:$port/api/intake)" = 400 ] || { echo 'an intake with nothing to bring was taken'; exit 1; }
 # plan before spend (spec 21): a plan is free; a lock at a stale price and a build before the lock are refused
 curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"idea":"Check, a 3D test game","answers":{"size":"2"}}' http://127.0.0.1:$port/api/plans > "$tmp/reply"; has '"credits"'
 plan_id=$(sed -E 's/^\{"id":"(p-[a-z0-9]+)".*/\1/' "$tmp/reply")
@@ -101,6 +104,9 @@ for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:$hport/healthz &
 curl -sf http://127.0.0.1:$hport/healthz > "$tmp/reply" || { cat "$tmp/hosted.log"; echo 'hosted /healthz did not answer'; exit 1; }; has '"ok":true'
 curl -sf http://127.0.0.1:$hport/ > "$tmp/reply"; has '<title>Swarm Studio'; has '"hosted"'
 curl -sf http://127.0.0.1:$hport/studio/app/api/intake > "$tmp/reply"; has '"showcases"'
+# bring a project in (docs/specs/45-intake.md) reads a folder and fetches a repository: never on the hosted studio
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"folder":"/tmp","kind":"game"}' http://127.0.0.1:$hport/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"repo":"a/b","kind":"game"}' http://127.0.0.1:$hport/studio/app/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }
 # a build needs a guest (and a model key): refused, never started
 curl -s -X POST -H 'content-type: application/json' -d '{"brief":"a bakery site with an order form"}' http://127.0.0.1:$hport/api/run > "$tmp/reply"; has '"error"'
 echo "all checks passed"

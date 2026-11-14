@@ -1,0 +1,81 @@
+/* The Overview's look, as web/project.css draws it: the panel, the dotted board, the artboards, the inspector and the
+   dock. The pieces the utilities cannot say (a page's planned sections, the type cover, the selection's corners, the
+   bars) live here, in the Studio's own variables only (web/tokens.css). */
+
+.ov { position: relative; display: flex; height: calc(100dvh - 3.5rem); min-height: 0; overflow: hidden; }
+.ov-side { width: 272px; flex: none; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--void); }
+.ov-row { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 8px 0 22px; border-radius: 8px; color: var(--muted); font: 13px var(--body); outline: none; user-select: none; cursor: default; }
+.ov-row:hover { color: var(--text); background: rgb(var(--glass-rgb) / .04); }
+.ov-row.on { color: var(--text); background: var(--surface-2); }
+.ov-row:focus-visible, .ov-row[data-focus-visible] { box-shadow: inset 0 0 0 1.5px var(--text); }
+.ov-tcs { position: relative; background: var(--tc-bg) !important; }
+.ov-tcs::before { content: ''; position: absolute; left: 5px; top: 6px; width: 10px; height: 2px; border-radius: 2px; background: var(--tc-pr); }
+.ov-ring { width: 16px; height: 16px; flex: none; border-radius: 50%; background: conic-gradient(var(--text) var(--p, 0%), var(--surface-2) 0); mask: radial-gradient(circle, transparent 4.5px, #000 5px); }
+.ov-link { position: absolute; left: 12px; top: 56px; width: 248px; z-index: 30; }
+
+/* the board */
+.ov-stage { flex: 1; min-width: 0; position: relative; overflow: hidden; outline: none; touch-action: none;
+  background: radial-gradient(circle, rgb(var(--glass-rgb) / .07) 1px, transparent 1.2px) 0 0 / 22px 22px, var(--bg); }
+.ov-stage.panning { cursor: grabbing; }
+.ov-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: flex; gap: 72px; padding: 48px 56px 140px; width: max-content; }
+.ov-world.ease { transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
+.ov-col { display: flex; flex-direction: column; gap: 64px; }
+.ov-sec { position: relative; }
+.ov-al { display: block; margin-bottom: 12px; font: 600 13px var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.ov-abs { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; max-width: 760px; }
+.ov-sec.art .ov-abs, .ov-sec.uploads .ov-abs, .ov-sec.refs .ov-abs { gap: 14px; }
+
+/* an artboard */
+.ov-ab { position: relative; flex: none; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.ov-ab:hover { border-color: var(--line-2); }
+.ov-ab img { pointer-events: none; }
+.ov-wait { pointer-events: none; background: color-mix(in srgb, var(--text) 5%, transparent); animation: ov-wait 1.6s ease-in-out infinite alternate; }
+@keyframes ov-wait { from { opacity: .55 } to { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .ov-wait { animation: none; } }
+.ov-sk { pointer-events: none; --sk-bg: var(--panel-2); --sk-a: var(--line-2); --sk-b: var(--line); --sk-fg: var(--muted); background: var(--sk-bg); }
+.ov-sk-b { position: absolute; left: 0; right: 0; background-color: color-mix(in srgb, var(--sk-b) 16%, var(--sk-bg)); border-top: 1px solid color-mix(in srgb, var(--sk-fg) 10%, transparent); background-size: cover; background-position: center; }
+.ov-sk-b.odd { background-color: color-mix(in srgb, var(--sk-a) 12%, var(--sk-bg)); }
+.ov-sk-b.hero { background-color: color-mix(in srgb, var(--sk-a) 34%, var(--sk-bg)); border-top: 0; }
+.ov-sk-b b { position: absolute; left: 10%; top: 18%; width: 42%; height: 6px; max-height: 18%; border-radius: 99px; background: color-mix(in srgb, var(--sk-fg) 22%, transparent); }
+.ov-sk-b.hero b { width: 58%; height: 9px; top: 30%; background: color-mix(in srgb, var(--sk-fg) 40%, transparent); }
+.ov-sk-b[style*="background-image"] b { display: none; }
+.ov-tc { position: absolute; inset: 0; border-radius: 3px; overflow: hidden; background: var(--tc-bg); color: var(--tc-fg); padding: 22% 10% 0; display: flex; flex-direction: column; gap: 9px; pointer-events: none; }
+.ov-tc i { width: 30%; height: 4px; border-radius: 99px; background: var(--tc-pr); }
+.ov-tc b { font: 700 15px/1.05 var(--tc-font, var(--display)), var(--display); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.ov-tc span { margin-top: auto; height: 26%; border-radius: 6px 6px 0 0; background: color-mix(in srgb, var(--tc-fg) 10%, transparent); }
+.ov-cap { position: absolute; left: 8px; right: 8px; bottom: 6px; font: 11px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-play { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: rgb(var(--void-rgb) / .7); }
+.ov-play::after { content: ''; position: absolute; left: 13px; top: 10px; border-left: 11px solid var(--text); border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+.ov-ab.film .ov-play { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
+.ov-ab.film .ov-play::after { left: 10px; top: 7px; border-left-width: 9px; border-top-width: 6px; border-bottom-width: 6px; }
+.ov-dur { position: absolute; right: 5px; bottom: 5px; padding: 1px 5px; border-radius: 4px; background: rgb(var(--void-rgb) / .75); color: var(--text); font: 10px var(--mono); }
+.ov-upl, .ov-work, .ov-paint { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 3px; border-radius: 2px; background: rgb(var(--void-rgb) / .6); overflow: hidden; }
+.ov-upl i, .ov-work i { display: block; height: 100%; background: var(--text); transition: width .2s linear; }
+.ov-work.ind i, .ov-paint i { display: block; width: 30%; height: 100%; background: var(--text); animation: ov-slide 1.4s ease-in-out infinite; }
+@keyframes ov-slide { from { transform: translateX(-100%) } to { transform: translateX(340%) } }
+@media (prefers-reduced-motion: reduce) { .ov-work.ind i, .ov-paint i { animation: none; } }
+.ov-ab.pt-failed { border-color: var(--hot-text); }
+.ov-sel { position: absolute; inset: -5px; border: 1.5px solid var(--text); z-index: 5; pointer-events: none; }
+.ov-sel i { position: absolute; width: 8px; height: 8px; background: var(--void); border: 1.5px solid var(--text); }
+.ov-sel i:nth-of-type(1) { left: -5px; top: -5px } .ov-sel i:nth-of-type(2) { right: -5px; top: -5px }
+.ov-sel i:nth-of-type(3) { left: -5px; bottom: -5px } .ov-sel i:nth-of-type(4) { right: -5px; bottom: -5px }
+
+/* the inspector, the dock, a drop, an error */
+.ov-insp { position: absolute; right: 0; top: 0; bottom: 0; width: 272px; z-index: 20; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; overflow-y: auto; background: var(--void); border-left: 1px solid var(--line); }
+.ov-dock { position: absolute; left: calc(272px + 50% - 136px); bottom: 20px; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: var(--deep); box-shadow: 0 24px 60px -12px rgb(var(--shade-rgb) / .65); }
+.ov.insp-on .ov-dock { left: calc(50% - 136px + 136px); }
+.ov-ask { display: flex; align-items: center; gap: 8px; width: min(380px, 40vw); margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
+.ov-files-btn { display: none !important; }
+.ov-drop { position: absolute; inset: 12px; z-index: 40; border: 2px dashed var(--line-2); border-radius: 16px; background: rgb(var(--void-rgb) / .5); pointer-events: none; }
+.ov-error { position: absolute; left: calc(272px + 24px); top: 24px; z-index: 30; margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); color: var(--hot-text); font: 13px var(--mono); }
+
+/* a phone: the board alone; Files opens as a sheet from the dock, the inspector sits at the foot */
+@media (max-width: 760px) {
+  .ov-side { position: absolute; inset: 0 0 auto 0; max-height: 70%; z-index: 30; width: auto; border-right: 0; border-bottom: 1px solid var(--line); display: none; }
+  .ov.files-on .ov-side { display: flex; }
+  .ov-files-btn { display: inline-flex !important; }
+  .ov-insp { top: auto; left: 0; width: auto; max-height: 45%; border-left: 0; border-top: 1px solid var(--line); }
+  .ov-dock, .ov.insp-on .ov-dock { left: 50%; bottom: 12px; max-width: calc(100vw - 24px); }
+  .ov-ask { width: auto; flex: 1; min-width: 0; }
+  .ov-error { left: 16px; }
+}

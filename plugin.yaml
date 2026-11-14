@@ -13,6 +13,8 @@ provides_tools:
   - swarm_design
   - swarm_canvas
   - swarm_studio
+provides_hooks:
+  - pre_tool_call
 optional_env:
   - name: SWARM_STUDIO_API_KEY
     description: "Optional: a key for an OpenAI-compatible chat endpoint, used only when Hermes cannot run the crew's model calls (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"

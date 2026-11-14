@@ -8,7 +8,7 @@ and fails past the thresholds. It is how decision 0007's "a prompt change comes 
   change elsewhere in those files does not.
 - **The test sets** (`sets/`): one page each, built by a crew of eight through the real `workerMessages` and the
   tree's own fix pass, the way `engine/run.mjs` builds it. `kiln` is a light product site with numbers and
-  prices; `harbour` is a dark public-service site with a timetable.
+  prices; `harbour` is a dark public-service site with a timetable, built in Open Design's "Clean" system (`system`), so the system's token block in the builders' prompt is measured too.
 - **What is measured**, per set, as the mean of the runs:
 
   | | how |
@@ -18,6 +18,7 @@ and fails past the thresholds. It is how decision 0007's "a prompt change comes 
   | time | the page's wall time, fix passes included |
   | tokens | prompt and completion tokens, as the endpoint counts them |
 
+- **A set whose prompts did not change** (the same fingerprint on both sides) is listed and not judged: what differs there is the models' noise.
 - **The thresholds** (`thresholds.json`): after against before, on any set, the score may drop by at most 0.5,
   findings per section rise by at most 0.25 and P0 findings by at most 1, wall time by at most 25% and prompt
   tokens by at most 40%.

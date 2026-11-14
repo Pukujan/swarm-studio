@@ -167,14 +167,15 @@ test('the brand sheet goes back to where it was opened from', () => {
   assert.ok(b.getSnapshot().matches({ build: { playable: { room: 'app' } } }))
 })
 
-test('Make has the five ways of making, each its own flow with a way back', () => {
+test('Make has two ways of making, Just make it and the Studio (decision 0020)', () => {
   const make = screens.find(n => n.path.join('.') === 'projects.make')
-  assert.deepEqual([...make.transitions.keys()].filter(k => k.startsWith('way.')).sort(), ['way.blocks', 'way.guided', 'way.just', 'way.studio', 'way.takes'])
+  assert.deepEqual([...make.transitions.keys()].filter(k => k.startsWith('way.')).sort(), ['way.just', 'way.studio'])
   const a = at(make)
-  a.send({ type: 'way.guided' })
-  a.send({ type: 'answered' })
-  a.send({ type: 'build', run: 'r1' })
+  a.send({ type: 'way.just', run: 'r1' })
   assert.ok(a.getSnapshot().matches({ build: { playable: { room: 'deck' } } }))
+  const b = at(make)
+  b.send({ type: 'way.studio', project: 'p1' })
+  assert.ok(b.getSnapshot().matches('scaffold'))
 })
 
 test('+ Create sends each lens where SITEMAP §5 says', () => {
