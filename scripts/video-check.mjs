@@ -35,7 +35,7 @@ try {
   cdp.on('Media.playersCreated', e => { created += e.players.length })
   await cdp.send('Media.enable')
   await page.setContent('<!doctype html><body style="margin:0;background:#111"><main id="board"></main></body>')
-  await page.addScriptTag({ type: 'module', content: `${VIDEO}\nwindow.V = { boardVideo, adoptVideos, videoStats, videoBudget, dropVideo }` })
+  await page.addScriptTag({ type: 'module', content: `${VIDEO}\nwindow.V = { boardVideo, adoptVideos, videoStats, videoBudget, dropVideo, setVideoHtml, playVideo }` })
   await page.waitForFunction(() => !!window.V)
 
   // a 2-second clip, recorded here: a moving square
@@ -121,6 +121,33 @@ try {
   await page.mouse.move(100, 700)
   await page.waitForTimeout(300)
   check(!(await heldHover()), 'left without playing, its player is freed')
+
+  // a panel written again with the same HTML (the Overview's inspector, on every poll): a film playing in it
+  // stays in the page; one with no player, or other HTML, is written anew
+  const kept = await page.evaluate(async () => {
+    const panel = Object.assign(document.createElement('div'), { id: 'panel' })
+    panel.style.cssText = 'position:fixed;left:20px;top:20px;width:200px'
+    document.body.append(panel)
+    const html = `<video data-src="${window.CLIP}" muted loop playsinline style="width:200px;height:120px"></video>`
+    window.V.setVideoHtml(panel, html, true)
+    const first = panel.querySelector('video')
+    window.V.setVideoHtml(panel, html, true)
+    const idle = panel.querySelector('video')
+    await window.V.playVideo(idle)
+    await new Promise(r => setTimeout(r, 300))
+    window.V.setVideoHtml(panel, html, true)
+    const playing = panel.querySelector('video') === idle && !idle.paused
+    window.V.setVideoHtml(panel, html)
+    const plain = panel.querySelector('video')
+    await window.V.playVideo(plain)
+    window.V.setVideoHtml(panel, html + '<p></p>', true)
+    const out = { idle: idle !== first, playing, plain: plain !== idle, other: panel.querySelector('video') !== plain, freed: !plain.hasAttribute('src') }
+    window.V.setVideoHtml(panel, '')
+    panel.remove()
+    return out
+  })
+  check(kept.playing, 'a panel written again with the same HTML keeps the film playing in it')
+  check(kept.idle && kept.plain && kept.other && kept.freed, 'with no player, without keep, or with other HTML, the panel is written anew and the old player freed')
 
   // taken out of the page: still freed (removing the element alone keeps the player)
   await page.evaluate(() => document.getElementById('board').remove())
