@@ -561,7 +561,7 @@ body.side-min .dock { left: auto; }
 .undo-redo { display: contents; }
 .undo-redo .tool { padding: 0; border: 0; background: none; font: inherit; color: var(--text); cursor: pointer; }
 .undo-redo .tool:hover:not(:disabled) { background: rgb(var(--glass-rgb) / .1); }
-.undo-redo .tool:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 1px; }
+.undo-redo .tool:focus-visible, .toolbar:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 1px; }
 .undo-redo .tool:disabled { opacity: .35; cursor: default; }
 .drow2 { display: flex; gap: 6px; margin: 6px 12px 4px; }
 .drow2 .dtrace, .drow2 .dversions { flex: 1; width: auto; margin: 0; background: var(--panel-2); border: 1px solid var(--line); color: inherit; border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12px; text-align: left; }
@@ -1117,7 +1117,7 @@ em { font-style: italic; }
 .tool .lbl { font: 600 10.5px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; bottom: -20px; }
 .toolbar .tsep { background: var(--panel-edge); }
 /* a phone: the dock, with Undo and Redo at its end, is wider than the screen; it keeps its tools' size
-   (rule 16) and scrolls sideways */
+   (rule 16) and scrolls sideways (the dock takes focus, so the arrow keys scroll it too) */
 @media (max-width: 500px) {
   .toolbar { max-width: calc(100% - 28px); overflow-x: auto; scrollbar-width: none; }
   .toolbar .tool, .toolbar .tsep { flex: none; }
