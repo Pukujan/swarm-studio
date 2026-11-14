@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 import { createServer as httpServer, request } from 'node:http'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { join, normalize } from 'node:path'
+import { join, normalize, sep } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
 import { seoFromEvents, shareApp } from './seo.mjs'
 import { deployName, isScreenName, projectName } from './naming.mjs'
@@ -1005,7 +1005,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const dir = dirOf(id)
     if (!path) return { files: appFiles(dir), log: gitLog(dir) }
     const f = normalize(join(dir, path))
-    if (!f.startsWith(dir + '/') || /node_modules|\.git[/\\]/.test(f) || !existsSync(f) || statSync(f).size > 200000) throw new Error('no such file')
+    if (!f.startsWith(normalize(dir) + sep) || /node_modules|\.git[/\\]/.test(f) || !existsSync(f) || statSync(f).size > 200000) throw new Error('no such file')
     return { path, text: readFileSync(f, 'utf8') }
   }
   // each engine turn is a commit in the app's own git
