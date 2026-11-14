@@ -48,7 +48,7 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
   const ok = pid => PID.test(String(pid || '')) && known(pid)
   const read = pid => { try { return JSON.parse(readFileSync(join(dir(pid), 'index.json'), 'utf8')) } catch { return [] } }
   const write = (pid, list) => { mkdirSync(dir(pid), { recursive: true }); const f = join(dir(pid), 'index.json'); writeFileSync(`${f}.tmp`, JSON.stringify(list, null, 1)); renameSync(`${f}.tmp`, f) }
-  const view = (pid, r) => ({ ...r, src: r.file ? `/ref/${pid}/${encodeURIComponent(r.file)}` : null, ...(r.look ? { look: { ...r.look, shots: (r.look.shots || []).map(f => `/ref/${pid}/${encodeURIComponent(f)}`) } } : {}) })
+  const view = (pid, r) => ({ ...r, src: r.file ? `/ref/${pid}/${encodeURIComponent(r.file)}` : null, ...(r.look ? { look: { ...r.look, shots: (r.look.shots || []).map(f => `/ref/${pid}/${encodeURIComponent(f)}`), ...(r.look.match ? { match: { ...r.look.match, ours: (r.look.match.ours || []).map(f => `/ref/${pid}/${encodeURIComponent(f)}`) } } : {}) } } : {}) })
   const newId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const need = pid => { if (!ok(pid)) throw Object.assign(new Error('no such project'), { status: 404 }) }
   const meta = input => ({
@@ -102,7 +102,18 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     return change(pid, id, r => {
       if (r.kind !== 'link') throw Object.assign(new Error('only a link has a look'), { status: 400 })
       const names = shots.slice(0, 9).map((buf, i) => { const f = `look-${id}-${i}.jpg`; mkdirSync(dir(pid), { recursive: true }); writeFileSync(join(dir(pid), f), buf); return f })
-      r.look = { ...look, shots: names.length ? names : look.state === 'walking' ? (r.look?.shots || []) : [] }
+      const kept = look.state === 'walking' ? r.look?.match : null
+      r.look = { ...look, ...(kept ? { match: kept } : {}), shots: names.length ? names : look.state === 'walking' ? (r.look?.shots || []) : [] }
+    })
+  }
+
+  // the match check (engine/lookmatch.mjs): how close a build is to the link's look. `ours` (Buffers) are shots
+  // of the build's own pages, kept as match-<id>-<n>.jpg; a new look clears the old match
+  function setMatch(pid, id, match, ours = []) {
+    return change(pid, id, r => {
+      if (!r.look) throw Object.assign(new Error('no look to match yet'), { status: 400 })
+      const names = ours.slice(0, 4).map((buf, i) => { const f = `match-${id}-${i}.jpg`; mkdirSync(dir(pid), { recursive: true }); writeFileSync(join(dir(pid), f), buf); return f })
+      r.look.match = { ...match, ours: names.length ? names : match.state === 'checking' ? (r.look.match?.ours || []) : [] }
     })
   }
 
@@ -116,7 +127,7 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     const n = decodeURIComponent(String(name || ''))
     if (!PID.test(String(pid || '')) || !FILE.test(n)) return null
     const p = join(dir(pid), n)
-    return existsSync(p) && read(pid).some(r => !r.removed && (r.file === n || r.look?.shots?.includes(n))) ? { file: p, type: REF_TYPES[extname(n).slice(1).toLowerCase()] || 'application/octet-stream' } : null
+    return existsSync(p) && read(pid).some(r => !r.removed && (r.file === n || r.look?.shots?.includes(n) || r.look?.match?.ours?.includes(n))) ? { file: p, type: REF_TYPES[extname(n).slice(1).toLowerCase()] || 'application/octet-stream' } : null
   }
   // what the crew's brief says about the store (the uploads are listed apart, as before)
   function brief(pid) {
@@ -137,5 +148,5 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     return clip(`Use ${what} for ${section}.${r.kind === 'image' ? ' Place it as it is (<img src="…">, no data-gen) or match its look, whichever fits the section.' : ' Match its look and feel.'} Keep everything else.`, 600)
   }
 
-  return { list, all, addFile, addLink, remove, restore, setUse, setLook, file, brief, useText, dir }
+  return { list, all, addFile, addLink, remove, restore, setUse, setLook, setMatch, file, brief, useText, dir }
 }

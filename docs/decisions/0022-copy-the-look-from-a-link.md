@@ -41,4 +41,8 @@ owner asked how a look with "multiple animation… and 3js" could come from a pi
   `POST …/refs/link` and a link in a project's talk start a walk; `POST …/refs/:id/look` walks again.
 - The walk needs the browser the video tools install. Without it, the card says so and the link stays plain.
 - The vision model is the reviewer's, else the planner's; with neither, the look is the measured words.
+- The match check is built (`engine/lookmatch.mjs`, `web/lookmatch.js`): **Compare with build** on a link's card walks
+  the newest build's own exported pages with the same measurements, shows Reference beside Yours, a score and at
+  most three style differences. **Fix** on a difference sends that one instruction to the crew like a comment;
+  nothing is fixed without that press.
 - The `/next/` React Studio doesn't show looks yet; the current Studio's References card does.

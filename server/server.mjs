@@ -58,6 +58,7 @@ import { storyRoutes } from './story.mjs'
 import { deckRoutes } from './deck.mjs'
 import { refRoutes } from './refs.mjs'
 import { pictureAsk, vagueAsk, gensOf, newPrompt } from '../engine/picask.mjs'
+import { fixText as lookFixText } from '../engine/lookmatch.mjs'
 import { studioRoutes } from './studio.mjs'
 import { studioStore } from '../engine/studio.mjs'
 import { assetStore } from '../engine/assetstore.mjs'
@@ -1574,7 +1575,35 @@ function walkLook(pid, ref) {
   })()
   return now
 }
-const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input), walk: walkLook })
+// the match check (decision 0022): the newest build's own pages, walked like the reference, compared by style.
+// It reports only; a difference is fixed when the person presses Fix (refs route, …/fix).
+function matchLook(pid, ref, run) {
+  const key = `${pid}/${ref.id}/match`
+  if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
+  const now = refs.setMatch(pid, ref.id, { state: 'checking', run, at: Date.now() })
+  lookWalks.add(key)
+  ;(async () => {
+    try {
+      const { walkBuild, judgeMatch } = await import('../engine/lookmatch.mjs')
+      const events = readEvents(run)
+      if (!events) throw new Error('that build is gone')
+      const out = await exportRun({ events, runId: run, runDir: join(runsDir, run), sections: [], name: nameFor(run)?.name, fill: fillExport(run) })
+      const ours = await walkBuild({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir, signal: AbortSignal.timeout(120000) })
+      if (!ours.tokens) return refs.setMatch(pid, ref.id, { state: 'failed', note: ours.note || 'the pages did not open', run, at: Date.now() })
+      const live = refs.list(pid).find(x => x.id === ref.id)
+      const L = live.look
+      const shots = (L.shots || []).slice(0, 2).map(s => { const f = refs.file(pid, s.split('/').pop()); return f ? readFileSync(f.file) : null }).filter(Boolean)
+      const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
+      const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look-match' }, model: modelFor(v), maxTokens: 900, temperature: 0.2, signal: AbortSignal.timeout(90000), messages })).text : null
+      const m = await judgeMatch({ ref: { tokens: L.tokens, motion: L.motion, shots }, ours, want: live.use || '', avoid: [L.from?.host, L.from?.url], chat })
+      refs.setMatch(pid, ref.id, { state: 'ready', run, at: Date.now(), ...m }, ours.pages.flatMap(p => p.shots.slice(0, 1)).slice(0, 2))
+    } catch (err) {
+      try { refs.setMatch(pid, ref.id, { state: 'failed', note: String(err.message || err).split('\n')[0].slice(0, 160), run, at: Date.now() }) } catch {}
+    } finally { lookWalks.delete(key) }
+  })()
+  return now
+}
+const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input), walk: walkLook, match: matchLook, fixText: lookFixText })
 // The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
 const studios = studioStore({ projectsDir: projects.projectsDir })
 const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
