@@ -8,14 +8,15 @@ import { makeSetup } from './setup.js'
 import { openSettings } from './settings.js'
 import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
 import { templatePicker } from './templatepick.js'
+import { bringEntry } from './bringin.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
 const SORTS = [['edited', 'Last edited'], ['name', 'Name'], ['created', 'Created']]
 // the filter beside sort: what a build is, or how far it got (the server's own words in project.state)
 const KINDS = ['Website', 'App', 'Game', 'Video']
-const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Live']
-const STATUS_ICON = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', Live: 'globe' }
+const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Brought in', 'Live']
+const STATUS_ICON = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', 'Brought in': 'download', Live: 'globe' }
 const KIND_ICON = { Website: 'site', App: 'code', Game: 'game', Video: 'film' }
 
 export function makeHome({ sw, C, root }) {
@@ -723,7 +724,7 @@ export function makeHome({ sw, C, root }) {
   kindBtn.onclick = () => { showKind(); return showMenu([
     // only things to make (how pictures are made is Setup's, not a kind)
     ...offered().map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); closePop(); showIdeas(); input.focus() } })),
-  ], kindBtn) }
+  ...bringEntry({ api: (path, body) => (body ? post(path, body) : api(path)), esc, refresh, toast, kind: () => make.k, atHome: () => H.on, open: (kind, run, pid) => { C.open(run, pid); return kind === 'game' ? C.toGame(run) : C.go('station', 'app') } })], kindBtn) }
 
   // what the Make box asks the server for once: the showcases and the interview (engine/intake.mjs)
   let intakeP = null

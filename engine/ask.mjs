@@ -1,4 +1,4 @@
-// Ask mode for a website, or with nothing built yet (docs/specs/45-chat-modes.md): the planner answers
+// Ask mode for a website, or with nothing built yet (docs/specs/46-chat-modes.md): the planner answers
 // the question and nothing else happens. No build is offered, no talk is left open, no chat is saved and
 // no link is walked: the answer comes from the open project, the Studio's state and what was said in
 // this session. An app or game that is built is asked through dyad's own ask mode instead

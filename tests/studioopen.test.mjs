@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MODES, modeOf, studioMode, modesShown } from '../web/modes.js'
 import { brandFromLook, loadableFont } from '../engine/sitelook.mjs'
+import { sweep, wanderOn, noAppYet, goOnAsk } from '../web/canvas/wander.js'
 
 const ctl = (view, extra = {}) => {
   const calls = []
@@ -85,4 +86,57 @@ test('POST …/brand/pick { part: look } makes a sheet with no model, puts the l
     const bad = await fetch(`http://127.0.0.1:${srv.address().port}/api/projects/p1/brand/pick`, { method: 'POST', body: JSON.stringify({ part: 'look', look: {} }) })
     assert.equal(bad.status, 400)
   } finally { srv.close() }
+})
+
+test('a game\'s own room is Game: the label, the option list, and picking Game stays put', () => {
+  assert.equal(modeOf('app', 'game'), 'game'); assert.equal(modeOf('app', 'site'), 'app'); assert.equal(modeOf('deck', 'game'), 'canvas')
+  const C = ctl({ room: 'app', project: 'p1' })
+  assert.equal(studioMode('game', C, 'game'), true); assert.deepEqual(C.calls, [], 'already there: no wizard, no move')
+  const D = ctl({ room: 'deck', project: 'p1' })
+  assert.equal(studioMode('game', D, 'game'), true); assert.deepEqual(D.calls, [['go', 'station', 'app']])
+  assert.equal(studioMode('game', ctl({ room: 'app', project: 'p1' }), 'site'), false, 'a site still goes to its game or the wizard')
+  const opts = MODES.map(([mode]) => ({ dataset: { mode }, hidden: false }))
+  modesShown(opts, ctl({ room: 'app', project: 'p1' }), 'game')
+  assert.deepEqual(opts.filter(o => o.hidden).map(o => o.dataset.mode), ['studio', 'brand', 'app'], 'a game is offered no Studio, Brand or App')
+})
+
+test('the Studio always has the way back to the build the person came from', async () => {
+  const C = ctl({ room: 'overview', project: 'p1', version: 'run7' })
+  studioMode('studio', C)
+  assert.deepEqual(C.cameFrom, { pid: 'p1', run: 'run7' })
+  // in the Studio, before (or without) its record loading: the build's rooms still show, and work
+  C.nav.view = { room: 'studio', project: 'p1' }; C.scaffoldView = { head: null }; C.calls.length = 0
+  const opts = MODES.map(([mode]) => ({ dataset: { mode }, hidden: false }))
+  modesShown(opts, C)
+  assert.equal(opts.every(o => !o.hidden), true)
+  assert.equal(studioMode('overview', C), true); await new Promise(r => setTimeout(r, 0))
+  assert.deepEqual(C.calls, [['open', 'run7', 'p1']])
+})
+
+test('a working wall cursor sweeps across its tile and back, inside it, out of step with the others', () => {
+  assert.equal(sweep(0), 0); assert.equal(sweep(0.5), 1); assert.equal(sweep(0.25), 0.5); assert.equal(sweep(1.75), 0.5)
+  const tile = { left: 100, top: 200, width: 400, height: 300 }
+  const at = (i, ms) => wanderOn(tile, i, ms)
+  for (const ms of [0, 1500, 4000, 9000, 20000, 61000]) for (const i of [0, 1, 2, 3]) {
+    const p = at(i, ms)
+    assert.ok(p.x >= 100 + 400 * 0.13 && p.x <= 100 + 400 * 0.81, `x inside at ${ms}`); assert.ok(p.y >= 200 + 300 * 0.29 && p.y <= 200 + 300 * 0.71, `y inside at ${ms}`)
+  }
+  assert.ok(Math.abs(at(0, 0).x - at(0, 3000).x) > 20, 'it moves')
+  assert.ok(Math.abs(at(0, 5000).x - at(1, 5000).x) > 10, 'two cursors are not in step')
+})
+
+test('a message with nothing built yet gets a true answer: the thing by name, and Go on for a stopped build', () => {
+  assert.match(noAppYet({ kind: 'game', state: 'stopped', steps: [1, 2] }), /game build is stopped partway.*Go on/)
+  assert.match(noAppYet({ kind: 'site', state: 'failed', message: 'stopped', steps: [1] }), /app build is stopped partway/)
+  assert.match(noAppYet({ kind: 'game', state: 'failed', steps: [1] }), /game build did not finish/)
+  assert.match(noAppYet({ kind: 'game', steps: [] }), /no game here yet/)
+  assert.match(noAppYet({ kind: 'site', steps: [] }), /Build the app first/)
+})
+
+test('"go on" in the chat picks a stopped build up again; a question does not', () => {
+  const stopped = { kind: 'game', state: 'stopped', steps: [1] }
+  for (const t of ['go on', 'Continue', 'resume it please', 'keep going', 'try again', 'build it again']) assert.equal(goOnAsk(t, stopped), true, t)
+  for (const t of ['do you need a video model or?', 'make the jump higher', 'continue but make the hero taller and change every enemy to crows']) assert.equal(goOnAsk(t, stopped), false, t)
+  assert.equal(goOnAsk('go on', { kind: 'game', state: 'done', steps: [1] }), false)
+  assert.equal(goOnAsk('go on', { kind: 'game', state: 'stopped', steps: [] }), false)
 })

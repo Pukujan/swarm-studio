@@ -1,4 +1,4 @@
-# 45. The chat's modes: Ask, Plan, Build, Fix
+# 46. The chat's modes: Ask, Plan, Build, Fix
 
 Status: **owner approved the four modes in the chat, 2026-11-13.** First slice built (this page says what is in it and what is left).
 

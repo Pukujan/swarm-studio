@@ -1,4 +1,4 @@
-// Fix mode (docs/specs/45-chat-modes.md): what is wrong with Swarm Studio's own working parts, as
+// Fix mode (docs/specs/46-chat-modes.md): what is wrong with Swarm Studio's own working parts, as
 // opposed to the project. The doctor only gathers facts and says what they mean. It installs nothing,
 // restarts nothing and changes nothing: the next step is either an action the person presses (or types
 // yes to), which runs a route that already exists, or a command the person runs themselves.

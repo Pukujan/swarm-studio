@@ -66,6 +66,7 @@ import { studioRoutes } from './studio.mjs'
 import { studioStore } from '../engine/studio.mjs'
 import { assetStore } from '../engine/assetstore.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
+import { bringInRoutes } from './bringin.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
@@ -725,6 +726,8 @@ function runCard(id) {
       kind: start.kind || (isApp ? 'app' : 'site'),
       // a game made from a site: that site's run, so the game joins its version
       from: start.from || null,
+      // brought in from outside (docs/specs/45-intake.md), not built here
+      intake: start.intake ? (events.some(e => e.type === 'intake') ? 'in' : 'coming') : null,
       brief: start.brief,
       t: start.t,
       updated: events.at(-1)?.t || start.t,
@@ -1500,7 +1503,7 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
   } catch { return { queued: false, state: st.state, answer: fallback } }
 }
 
-// ---------- the chat's modes (docs/specs/45-chat-modes.md): Ask and Fix
+// ---------- the chat's modes (docs/specs/46-chat-modes.md): Ask and Fix
 // Ask, for an app or game that is built: dyad's own ask mode reads the code and changes nothing
 // (engine/appjob.mjs ask). While the crew builds, Talk answers instead: it knows what the crew is doing.
 // When dyad cannot take the question (no engine installed yet, or it failed), Talk reads the app's files.
@@ -1759,6 +1762,8 @@ async function readClip(file, kind) {
     return { ...r, says: readSays(r) }
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 }
+// Bring a game or app in (docs/specs/45-intake.md): POST /api/intake
+const bringInRoute = bringInRoutes({ runsDir, projects, apps: () => apps(), record, readEvents, broadcast })
 const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
 const brands = brandRoutes({
   chats,
@@ -3075,7 +3080,7 @@ const server = createServer((req, res) => {
         const said = Array.isArray(input.said) ? input.said.slice(-40) : []
         const inRun = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
         const inPid = typeof input.project === 'string' ? input.project : inRun ? projects.projectOf(inRun) : null
-        // Ask mode (docs/specs/45-chat-modes.md): the planner answers and nothing else happens. No chat is made or
+        // Ask mode (docs/specs/46-chat-modes.md): the planner answers and nothing else happens. No chat is made or
         // saved, no link is read or walked, no brief is written: only the answer goes back.
         if (input.ask === true) {
           const [{ answerOnly }, { factLines }, facts] = await Promise.all([import('../engine/ask.mjs'), import('../engine/doctor.mjs'), studioFacts(inRun, { light: true }).catch(() => null)])
@@ -3282,7 +3287,7 @@ const server = createServer((req, res) => {
     return
   }
   // Stop: everything in flight for a build's project ({run} or {project}), or all of it ({})
-  // Fix mode (docs/specs/45-chat-modes.md): POST /api/doctor { run?, text? } -> { reply, actions, by, facts }.
+  // Fix mode (docs/specs/46-chat-modes.md): POST /api/doctor { run?, text? } -> { reply, actions, by, facts }.
   // What is wrong with the Studio's own working parts, from facts; it changes nothing. With no Hermes or no
   // planner model the facts are listed plainly: Fix has to answer exactly when things are broken.
   if (url.pathname === '/api/doctor' && req.method === 'POST') {
@@ -3760,6 +3765,7 @@ const server = createServer((req, res) => {
   if (studioRoute(req, res, url)) return
   if (filmRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
+  if (bringInRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 
@@ -3977,7 +3983,7 @@ const server = createServer((req, res) => {
         // Ask mode: an answer about the app, and nothing else (askApp above)
         if (sub === 'ask') return askApp(a, id, input.text)
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
-        if (sub === 'open') return a.open(id)
+        if (sub === 'open') return a.open(id, input)
         if (sub === 'seen') return a.seen(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')

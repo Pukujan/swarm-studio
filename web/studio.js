@@ -318,7 +318,7 @@ function chrome() {
 // game's room, or the wizard that makes one.
 // the game's own room is the App view on the game's run: the menu calls it Game
 const onGame = () => nav.view.room === 'game'
-const modeNow = () => modeOf(nav.view.room)
+const modeNow = () => modeOf(nav.view.room, sw.kind)
 // the game's room: the App view on the game's run (the label says Game once that run is open)
 C.toGame = (run = C.pair.game) => {
   C.go('game', run)
@@ -348,7 +348,7 @@ function modeMenu() {
     const r = btn.getBoundingClientRect()
     list.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 158))}px`
     list.style.top = `${r.bottom + 6}px`
-    modesShown(opts(), C)
+    modesShown(opts(), C, sw.kind)
     list.hidden = false
     btn.setAttribute('aria-expanded', 'true')
     for (const o of opts()) o.setAttribute('aria-selected', String(o.dataset.mode === modeNow()))
@@ -357,7 +357,7 @@ function modeMenu() {
   }
   const pick = id => {
     close()
-    if (studioMode(id, C)) return renderMode()
+    if (studioMode(id, C, sw.kind)) return renderMode()
     if (id === 'overview') return C.go('project')
     // Game: the project's game, when it has one; else the wizard that makes one
     if (id === 'game') {

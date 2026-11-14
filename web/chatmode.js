@@ -1,5 +1,5 @@
 // @ts-check
-// The chat's modes (docs/specs/45-chat-modes.md): Ask, Plan, Build, Fix. One select in the chat box, and the
+// The chat's modes (docs/specs/46-chat-modes.md): Ask, Plan, Build, Fix. One select in the chat box, and the
 // same switch typed (/ask, /plan, /build, /fix, or "switch to ask mode"). The mode lasts for this browser
 // session and is not saved with the project.
 //   Ask    an answer, and nothing changes: a built app or game is asked through dyad's own ask mode (the crew

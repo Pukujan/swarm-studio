@@ -168,7 +168,9 @@ export function stepOf(line) {
 // final JSON result ({ ok, gatesPassed, turns, files, commits, ... }).
 // mode 'ask' (dyad's own ask mode) is one read-only turn on an app that is already there: the result
 // is { ok, answer, changed } and nothing is seeded, watched, gated or committed.
-export async function runEngine({ workspace, prompt, provider, model, turns = 4, viewRender = true, mode = 'local-agent', onStep = () => {}, onLog = () => {}, signal }) {
+// appKeys: false for a project brought in from outside (docs/specs/45-intake.md): its build script runs under the
+// engine, and code the Studio did not write is never handed the person's database or payment keys
+export async function runEngine({ workspace, prompt, provider, model, turns = 4, viewRender = true, mode = 'local-agent', onStep = () => {}, onLog = () => {}, signal, appKeys = true }) {
   const talk = mode === 'ask' || mode === 'plan'
   if (talk && !['package.json', '.git'].every(f => existsSync(join(workspace, f)))) throw new Error('no app here yet')
   // a stop pressed while the engine was still being set up (or between stages)
@@ -196,7 +198,7 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
     // the app's keys are there because the engine starts the app to look at it. ABA_ENV_FILE names a file
     // that does not exist, so the engine loads no .env: left alone it walks up from its bundle and, in an
     // installed plugin, the first .env it meets is Hermes's own ($HERMES_HOME/.env, every provider key).
-    env: { ...gitEnv(), ...appEnv(), ABA_API_KEY: provider.apiKey || '', ABA_ENV_FILE: NO_ENV_FILE, ELECTRON_RUN_AS_NODE: '1' },
+    env: { ...gitEnv(), ...(appKeys ? appEnv() : {}), ABA_API_KEY: provider.apiKey || '', ABA_ENV_FILE: NO_ENV_FILE, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   running++

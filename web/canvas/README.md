@@ -12,7 +12,7 @@ loads them. **Edit the area's file, not `web/canvas.js`.** The table says which 
 | `panels.js` | The panels: theme, layer tree, agents, status, toolbar, and the chat feed (`feed`, `botMsg`). |
 | `loop.js` | The frame loop and the keyboard and pointer input, the brief form and slash commands. |
 | `talk.js` | Talks before a build: talk first, the game talk, Chats. |
-| `../chatmode.js` | The chat's modes (spec 45): the switch, the typed switch, and where Ask, Plan and Fix send a message. Not in this folder: it imports only the icons, so node tests it; `loop.js` hands it what it needs. |
+| `../chatmode.js` | The chat's modes (spec 46): the switch, the typed switch, and where Ask, Plan and Fix send a message. Not in this folder: it imports only the icons, so node tests it; `loop.js` hands it what it needs. |
 | `player.js` | Play mode and visitor tours. |
 | `design.js` | The Design panel, editing next to the agents, undo and redo, export. |
 | `publish.js` | Publishing a live link. |
