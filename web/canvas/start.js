@@ -179,8 +179,8 @@ function crewJob() {
   if (game.el && game.busy) return { key: 'game', host: game.el, spots: '.gbody, .spin, h3, .gspec', n: 3, lines: ['inventing the world', 'naming the hero', 'drafting enemies', 'picking the engine', 'tuning game feel', 'writing win and lose'], tool: ['text', 'comment', 'frame'] }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun() && cw.el && !cw.el.hidden) {
     return cw.thinking
-      ? { key: `app-plan|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
-      : { key: `app-${cw.mode || 'code'}|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile', n: CW_TILES, lines: [cw.mode === 'art' ? 'painting' : 'writing code'], tool: cw.mode === 'art' ? ['image', 'image', 'image', 'text'] : ['text', 'text', 'connect', 'frame'], pin: cwPin }
+      ? { key: `app-plan|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile:not(.cw-off)', n: CW_TILES, lines: ['planning the next files', 'rereading the design', 'checking what is there', 'weighing the next step'], tool: ['text', 'text', 'connect', 'frame'], pin: cwPin }
+      : { key: `app-${cw.mode || 'code'}|${wallNames().map(n => n[0])}`, names: wallNames(), radio: true, host: appEls.view, spots: '.cw-tile:not(.cw-off)', n: CW_TILES, lines: [cw.mode === 'art' ? 'painting' : 'writing code'], tool: cw.mode === 'art' ? ['image', 'image', 'image', 'text'] : ['text', 'text', 'connect', 'frame'], pin: cwPin }
   }
   if (view === 'app' && appv.state === 'working' && appv.run === shownRun()) {
     const done = appv.steps.filter(s => s.kind === 'write' || s.kind === 'gate' || s.kind === 'render').slice(-6).map(s => s.text.replace(/^(wrote|writing|write)\s+/i, '').slice(0, 34))

@@ -4,11 +4,13 @@ import { dataStore } from '../data.js'
 import { noAppYet, goOnAsk } from './wander.js'
 import { stageNow, stagePick, stageAsk, stageNone, stageSwitch, playFail } from './stage.js'
 import { autoplayRoom } from './autoplay.js'
+import { mapAsk, mapNone } from './mapask.js'
+import { mapWindow } from './mapwin.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
 import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
 import { toggleVideo, video, shownRun, showRun } from './film.js'
-import { cw, CW_CODE, wallNames, paintv, artPhase } from './auto.js'
+import { cw, CW_CODE, CW_MAP, wallNames, paintv, artPhase } from './auto.js'
 import { setText, botMsg, feed, push } from './panels.js'
 import { esc } from './design.js'
 import { saveModel, modelsInfo, loadModels, showTab } from './settings.js'
@@ -30,6 +32,13 @@ export const appv = appStore.state
 const sheetv = { run: null, data: null, t: 0, busy: false }
 /** @type {{ v: import('./stage.js').StageView | null }} */
 const stagePin = { v: null }
+// The Map window (spec 44, web/canvas/mapwin.js): the build as diagrams. One window: the wall's first while the crew
+// builds (web/canvas/dock.js), alone on the stage when it is picked in the switch or asked for in the chat.
+// mapv is the standing map as last read (undefined: not read yet; null: no plan to draw) and whether the chat
+// asked for a diagram of its own; both belong to one run.
+/** @type {{ run: string | null, data: any, t: number, busy: boolean, asked: boolean, host: HTMLElement | null }} */
+const mapv = { run: null, data: undefined, t: 0, busy: false, asked: false, host: null }
+export const mapWin = mapWindow({ src: `${BASE}/vendor/mermaid/mermaid.min.js`, cursor: cursor('Hermia'), icons: { grow: ico('maximize-2'), shrink: ico('minimize-2') } })
 export const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
 // The Game room's Autoplay switch and the AI player's screen over the game (web/canvas/autoplay.js)
 const aiPlayer = autoplayRoom({
@@ -72,6 +81,7 @@ export const appApi = (path = '', body) => api(`/api/runs/${encodeURIComponent(a
 export function resetApp(run) {
   appStore.reset({ run })
   stagePin.v = null
+  mapFresh(run)
   appEls.frame.removeAttribute('src')
 }
 
@@ -276,6 +286,8 @@ function renderApp() {
   // what fills the stage: it follows the build, or holds the view pinned in the bar's switch (web/canvas/stage.js)
   const now = stageOf(), empty = now.empty, sheet = now.sheet && !!shownRun()
   stageSwitch($('#app-stageview'), now, v => stageSet(stagePick(stagePin.v, v)))
+  if (shownRun() && appv.run === shownRun()) mapLoad(shownRun(), false)
+  mapStage(now.shown === 'map')
   if (now.open && shownRun() && !document.hidden) return openApp(shownRun())
   appEls.empty.hidden = !empty
   if (appv.kind === 'game' && shownRun()) sheetLoad(shownRun(), working || sheet)
@@ -345,7 +357,7 @@ function sheetLoad(run, live) {
 }
 // The stage now (web/canvas/stage.js): which views the switch offers, which one shows, and the pin, dropped
 // here once its view is gone. The wall (web/canvas/dock.js codeWall) hides itself unless the crew is shown.
-const stageBuild = () => ({ working: appv.state === 'working' && appv.run === shownRun(), state: appv.state, kind: appv.kind, hasApp: !!appv.hasApp, url: appv.url, canServe: !!appv.canServe, opening: !!appv.opening, openFailed: !!appv.openFailed || needsRun(), steps: appv.steps.length, painted: sheetv.run === appv.run ? (sheetv.data?.sheet || []).filter(c => c.src).length : 0 })
+const stageBuild = () => ({ working: appv.state === 'working' && appv.run === shownRun(), state: appv.state, kind: appv.kind, hasApp: !!appv.hasApp, url: appv.url, canServe: !!appv.canServe, opening: !!appv.opening, openFailed: !!appv.openFailed || needsRun(), steps: appv.steps.length, painted: sheetv.run === appv.run ? (sheetv.data?.sheet || []).filter(c => c.src).length : 0, hasMap: mapv.run === appv.run && (!!mapv.data || mapv.asked) })
 export function stageOf() {
   const now = stageNow(stageBuild(), stagePin.v)
   stagePin.v = now.pin
@@ -364,6 +376,103 @@ function stageSet(v) {
   if (v === 'live' && !appv.url) appv.openSay = true
   if (appv.mode !== 'preview') appMode('preview')
   renderApp()
+}
+// ---------- the Map window's room: its data, where it sits, and the chat's way to it
+/** Another run: nothing of the last one's map stays.  @param {string | null} run */
+function mapFresh(run) {
+  Object.assign(mapv, { run, data: undefined, t: 0, asked: false })
+  mapWin.ask(null)
+  mapWin.show()
+  mapWin.set(undefined)
+}
+// The standing map is read once when the room opens (it decides whether the switch offers Map), then again every
+// 4 s while the build works or the Map is on the stage, so it is always current.
+/** @param {string} run  @param {boolean} live */
+function mapLoad(run, live) {
+  if (mapv.run !== run) mapFresh(run)
+  if (mapv.busy || (mapv.t && !(live && Date.now() - mapv.t > 4000))) return Promise.resolve()
+  mapv.busy = true
+  return api(`/api/runs/${encodeURIComponent(run)}/map`).then(r => (r.ok ? r.json() : null)).then(d => {
+    if (mapv.run !== run || !d) return
+    const had = !!mapv.data
+    mapv.data = d.map || null
+    mapWin.set(mapv.data)
+    if (had !== !!mapv.data && view === 'app') renderApp()
+  }).catch(() => {}).finally(() => { mapv.busy = false; mapv.t = Date.now() })
+}
+setInterval(() => {
+  const run = view === 'app' ? shownRun() : null
+  if (!run || appv.run !== run || document.hidden) return
+  mapLoad(run, appv.state === 'working' || stagePin.v === 'map')
+  // (the theme may have turned: the diagram takes the Studio's colours)
+  mapWin.draw()
+}, 1500)
+// The wall gives the Map its first window when there is one to draw: a plan, an asked diagram, or a game's map
+// still being read (a game always has one). An app with no kept plan keeps the wall's own four windows.
+export const mapOnWall = () => mapv.run === appv.run && (!!mapv.data || mapv.asked || (mapv.data === undefined && appv.kind === 'game'))
+/** The Map alone on the stage (picked in the switch, or asked for with no build running).  @param {boolean} on */
+function mapStage(on) {
+  if (!on) { if (mapv.host) mapv.host.hidden = true; return }
+  if (!mapv.host) {
+    mapv.host = document.createElement('div')
+    mapv.host.className = 'mapstage'
+    appEls.preview.append(mapv.host)
+  }
+  if (mapWin.el.parentElement !== mapv.host) mapv.host.append(mapWin.el)
+  mapWin.el.hidden = false
+  mapWin.alone(true)
+  mapWin.big(false)
+  mapv.host.hidden = false
+  mapWin.draw()
+}
+// Put the Map in front, at once: enlarged on the wall while the crew's windows are up, else alone on the stage.
+function mapFront() {
+  if (appv.mode !== 'preview') appMode('preview')
+  if (stageOf().shown === 'crew' && cw.el && !cw.el.hidden) { cw.big = CW_MAP; renderApp() }
+  else stageSet('map')
+}
+/** A diagram the planner wrote, from any of the chat's answers: drawn in the Map's Asked tab.  @param {string} text */
+export function mapShow(text) {
+  if (!shownRun() || appv.run !== shownRun()) return
+  mapv.asked = true
+  mapWin.ask({ text })
+  if (view === 'app') mapFront()
+}
+// The Map, typed in the chat (web/canvas/mapask.js): "show the map", "show me how the game will run as mermaid
+// charts", "what's going on?" open the standing map at once, with Hermia's one line under it; "show the enemy AI
+// as a state chart" asks the planner for that diagram (POST …/app/ask { chart }: an answer, nothing changes), with
+// its skeleton and Hermia's cursor in the Map meanwhile. Never sent to the builder.
+export function mapSay(text) {
+  const run = view === 'app' ? shownRun() : null
+  const want = run && appv.run === run ? mapAsk(text) : null
+  if (!want) return false
+  feed(null, text, 'you')
+  mapAnswer(run, want, text)
+  return true
+}
+/** @param {string} run  @param {'map' | 'chart'} want  @param {string} text */
+async function mapAnswer(run, want, text) {
+  if (mapv.run !== run || mapv.data === undefined) { mapv.t = 0; await mapLoad(run, false) }
+  if (mapv.run !== run) return
+  if (want === 'map') {
+    if (!mapv.data) return void botMsg(mapNone(appv.kind))
+    mapWin.show()
+    mapFront()
+    return void botMsg(mapv.data.say || 'This is the map.')
+  }
+  mapv.asked = true
+  mapWin.ask({ busy: true })
+  mapFront()
+  const wait = botMsg('Drawing it in the Map', true)
+  try {
+    const r = await appApi('/ask', { text, chart: true }).finally(() => wait.remove())
+    if (mapv.run !== run) return
+    mapWin.ask(r.chart ? { text: r.chart } : { fail: true })
+    botMsg(r.chart ? r.answer || 'It is in the Map.' : `${r.answer ? `${r.answer} ` : ''}I could not draw that as a diagram.`)
+  } catch (err) {
+    if (mapv.run === run) mapWin.ask({ fail: true })
+    botMsg(`Map: ${err.message}`)
+  }
 }
 // The switch, typed in the chat: "show the crew", "show the art", "show the game", "follow the build". A message
 // that is one of these is answered here and never reaches the builder.
@@ -491,6 +600,8 @@ async function tellCrew(text) {
     const item = botMsg(who ? `${who}: ${answer}` : answer)
     if (r.media) item.append(mediaBlock(r.media))
     if (r.proposal) item.append(changeBlock(r.proposal))
+    // the crew answered with a diagram: it is drawn in the Map at once
+    if (r.chart) mapShow(r.chart)
   } catch (err) { cwSay(k, ''); botMsg(`App: ${err.message}`) }
 }
 // a change Talk wrote out for the builder: sent only when the person confirms it, at the next

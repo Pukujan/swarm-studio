@@ -2045,3 +2045,54 @@ body.side-min .tabs .chats-btn { display: none; }
 /* a project being brought in (docs/specs/45-intake.md): the page's shape with a crew cursor at work on it */
 .bring-skel { position: relative; }
 .bring-skel .cur { left: 52%; top: 46%; }
+/* The Map window (spec 44, web/canvas/mapwin.js): the build as Mermaid diagrams. On the wall it is the first of the
+   four windows: the wall's own grid (.cw-grid) hands its layout to .cw-wall, which holds the Map and then the
+   tiles, and the tile that gives up its place (.cw-off) is not drawn. */
+.codewall .cw-wall { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.codewall .cw-grid { display: contents; }
+.codewall .cw-tile.cw-off { display: none; }
+.codewall .cw-wall.zoom { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); grid-template-rows: repeat(3, minmax(0, 1fr)); }
+.codewall .cw-wall.zoom .cw-map.big { grid-column: 1; grid-row: 1 / -1; }
+@media (max-width: 900px) {
+  .codewall .cw-wall { grid-template-columns: 1fr; grid-template-rows: repeat(4, minmax(120px, 1fr)); overflow: auto; }
+  .codewall .cw-wall.zoom { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: minmax(120px, auto); }
+  .codewall .cw-wall.zoom .cw-map.big { grid-row: auto; order: -1; min-height: 60vh; }
+}
+.cw-map { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: rgb(var(--deep-rgb) / .5); border: 1px solid var(--panel-edge); border-radius: 12px; overflow: hidden; }
+.cw-map[hidden] { display: none; }
+.cw-map .cw-file { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--panel-edge); background: rgb(var(--glass-rgb) / .03); font: 11.5px var(--mono); color: var(--muted); }
+.cw-map .cw-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cw-map .mp-tabs { display: flex; gap: 2px; }
+.cw-map .mp-tabs[hidden] { display: none; }
+.cw-map .mp-tabs button, .cw-map .mp-zoom { border: 0; background: none; color: var(--muted); font: 600 11px/1.6 var(--mono); padding: 1px 8px; border-radius: 99px; cursor: pointer; }
+.cw-map .mp-tabs button.on { background: var(--text); color: var(--void); }
+.cw-map .mp-zoom { display: grid; place-items: center; padding: 3px; }
+.cw-map .mp-zoom[hidden] { display: none; }
+.cw-map .mp-zoom .ico { width: 14px; height: 14px; }
+.cw-map .mp-tabs button:hover, .cw-map .mp-zoom:hover { color: var(--text); }
+.cw-map .mp-tabs button.on:hover { color: var(--void); }
+.cw-map .mp-tabs button:focus-visible, .cw-map .mp-zoom:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.cw-map .mp-body { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px; overflow: auto; cursor: zoom-in; }
+.cw-map.big .mp-body { cursor: zoom-out; }
+.cw-map.alone .mp-body { cursor: default; }
+.cw-map .mp-pic { width: 100%; height: 100%; display: grid; place-items: center; }
+/* Mermaid gives its SVG a max-width (the diagram's own size): it is never drawn larger, and it shrinks to fit the window whole */
+.cw-map .mp-pic svg { display: block; width: 100%; height: 100%; }
+.cw-map .mp-none { margin: 0; font: 12px/1.5 var(--mono); color: var(--muted); }
+/* the diagram as a list, for a screen reader only */
+.cw-map .mp-alt { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; list-style: none; }
+/* a diagram being fetched or written: its shape, with Hermia's cursor at work on it */
+.cw-map .mp-skel { position: relative; display: flex; align-items: center; gap: 0; width: min(520px, 86%); }
+.cw-map .mp-skel i { flex: 1; height: 44px; border-radius: 8px; background: var(--surface-2, rgb(var(--glass-rgb) / .08)); animation: app-skel 1.6s ease-in-out infinite alternate; }
+.cw-map .mp-skel b { flex: none; width: 28px; height: 2px; background: var(--surface-2, rgb(var(--glass-rgb) / .08)); }
+.cw-map .mp-skel .cur { left: 58%; top: 46%; transition: none; }
+@media (prefers-reduced-motion: reduce) { .cw-map .mp-skel i { animation: none; } }
+/* alone on the stage: picked in the switch, or asked for in the chat with no build running */
+.mapstage { position: absolute; inset: 0; z-index: 5; display: flex; padding: 16px; background: rgb(var(--void-rgb) / .96); }
+.mapstage[hidden] { display: none; }
+.mapstage .cw-map { flex: 1; }
+/* the small play-test card would sit on the diagram: with the Map alone on the stage it waits */
+#app-preview:has(> .mapstage:not([hidden])) > .playclip { display: none; }
+/* Mermaid shades a data table's rows by its own arithmetic (a light stripe on the dark theme): the Studio's surfaces instead */
+.cw-map .mp-pic .row-rect-odd path { fill: var(--void); }
+.cw-map .mp-pic .row-rect-even path { fill: var(--deep); }

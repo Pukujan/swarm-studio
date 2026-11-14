@@ -1,5 +1,6 @@
 // @ts-check
-// What fills the stage of the App room (Game, for a game), and the one switch that picks it: Crew · Art · Live.
+// What fills the stage of the App room (Game, for a game), and the one switch that picks it: Crew · Art · Live · Map
+// (Map, spec 44: the build as diagrams, web/canvas/mapwin.js; never taken by itself, only picked or asked for).
 // By itself the stage follows the build: the crew's four windows while it builds, the live game or app once it
 // has an address, a game's art sheet before there is anything to play. The owner (2026-11-14): "no where to
 // change between views manually which is bad, i do like that it automatically took me here to show whats
@@ -7,7 +8,7 @@
 // picks another, un-pins it, or it stops existing. Pure rules here, with tests (tests/stage.test.mjs); the
 // room (web/canvas/rooms.js) and the wall (web/canvas/dock.js) only do what stageNow says.
 
-/** @typedef {'crew' | 'art' | 'live'} StageView */
+/** @typedef {'crew' | 'art' | 'live' | 'map'} StageView */
 /**
  * The build, as the stage sees it.
  * @typedef {object} StageBuild
@@ -21,9 +22,10 @@
  * @property {boolean} [openFailed] the last try to start it failed
  * @property {number} [painted] pictures of the game's art plan that are painted
  * @property {number} [steps] steps the build has taken so far
+ * @property {boolean} [hasMap] the build has a Map to draw: its plan as diagrams, or a diagram the chat asked for (web/canvas/mapwin.js)
  */
 
-export const STAGE_VIEWS = /** @type {StageView[]} */ (['crew', 'art', 'live'])
+export const STAGE_VIEWS = /** @type {StageView[]} */ (['crew', 'art', 'live', 'map'])
 
 /** The running app can be shown: it has an address, and it is not the empty starter of a build that never worked.  @param {StageBuild} b */
 const liveOk = b => !!b.url && !(b.state === 'failed' && !b.hasApp)
@@ -41,7 +43,7 @@ const sheetFirst = b => b.kind === 'game' && !b.hasApp && b.state !== 'failed' &
  * @param {StageBuild} b  @returns {StageView[]}
  */
 export function stageOffers(b) {
-  const has = { crew: !!b.working, art: b.kind === 'game' && (b.painted || 0) > 0, live: liveOk(b) || canOpen(b) }
+  const has = { crew: !!b.working, art: b.kind === 'game' && (b.painted || 0) > 0, live: liveOk(b) || canOpen(b), map: !!b.hasMap }
   return STAGE_VIEWS.filter(v => has[v])
 }
 
@@ -59,7 +61,8 @@ export function stageAuto(b) {
  * ended, the app stopped) the pin is dropped and the stage follows the build again.
  * `empty`: the card or the sheet covers the frame. `sheet`: that cover is the art sheet. Under the crew's wall
  * lies what lay there before: the live app, or the sheet, or the card. `open`: Live is shown and nothing serves
- * the app, so the room starts it (the card is the "Starting" skeleton meanwhile).
+ * the app, so the room starts it (the card is the "Starting" skeleton meanwhile). The Map, like the wall, lies over
+ * what was there; the stage never turns to it by itself (stageAuto), only when it is picked or asked for.
  * @param {StageBuild} b  @param {StageView | null} [pin]
  * @returns {{ offers: StageView[], auto: StageView | 'card', shown: StageView | 'card', pin: StageView | null, empty: boolean, sheet: boolean, open: boolean }}
  */
@@ -67,7 +70,7 @@ export function stageNow(b, pin = null) {
   const offers = stageOffers(b), auto = stageAuto(b)
   const held = pin && offers.includes(pin) ? pin : null
   const shown = held || auto
-  const under = shown === 'crew' ? (liveOk(b) ? 'live' : sheetFirst(b) ? 'art' : 'card') : shown
+  const under = shown === 'crew' || shown === 'map' ? (liveOk(b) ? 'live' : sheetFirst(b) ? 'art' : 'card') : shown
   return { offers, auto, shown, pin: held, empty: under !== 'live' || !liveOk(b), sheet: under === 'art', open: shown === 'live' && canOpen(b) && !b.opening }
 }
 
@@ -77,7 +80,7 @@ export function stageNow(b, pin = null) {
  */
 export const stagePick = (pin, v) => (pin === v ? null : v)
 
-const STAGE_SAID = { crew: 'crew|windows|four windows|wall|build wall', art: 'art|sheet|art sheet|pictures', live: 'game|app|preview|live|live game|live app|live preview' }
+const STAGE_SAID = { crew: 'crew|windows|four windows|wall|build wall', art: 'art|sheet|art sheet|pictures', live: 'game|app|preview|live|live game|live app|live preview', map: 'map|plan map|diagrams' }
 /**
  * The same switch, typed: "show the crew", "show the windows", "show the art", "show the sheet", "show the
  * game", "show the app", "show the preview", "show it live", and "follow the build" to let go. Only a message
@@ -100,6 +103,7 @@ export function stageNone(v, b) {
   const what = b.kind === 'game' ? 'game' : 'app'
   if (v === 'crew') return 'The crew is not building right now.'
   if (v === 'art') return b.kind === 'game' ? 'No art is painted for this game yet.' : 'Only a game has an art sheet.'
+  if (v === 'map') return `There is no plan to draw for this ${what} yet.`
   if (b.working) return `The ${what} is not running yet; it shows here once the crew has it up.`
   return b.state === 'paused' && !b.canServe ? `The ${what}'s files are not on this machine, so it cannot be started here.` : `There is no ${what} to run yet.`
 }

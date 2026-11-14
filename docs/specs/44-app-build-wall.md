@@ -1,6 +1,6 @@
 # 44. The app build wall: four windows
 
-Status: **owner decided 2026-11-13** ("Yes write it down"). **Built in `/next/`** (issue #451): the App room for an app build (`ui/src/screens/app/`), on a shared four-window `Wall` (`ui/src/shared/Wall.tsx`). The current Studio keeps its Preview/Code toggle.
+Status: **owner decided 2026-11-13** ("Yes write it down"). **Built in `/next/`** (issue #451): the App room for an app build (`ui/src/screens/app/`), on a shared four-window `Wall` (`ui/src/shared/Wall.tsx`). The current Studio keeps its Preview/Code toggle and its own wall; since 2026-11-14 that wall has the **Map** window too, for apps and for games ([The Map in the current Studio](#the-map-in-the-current-studio-and-for-games) below).
 
 Not in this first build, kept for later: agents' notes pinned on the Map's nodes, each crew member's cursor in their own window, the diff in the Code window (it shows the file as written), and the game wall moving onto the shared `Wall` (it is still `web/canvas.js`). `plugin.yaml` has no field for a vendored library, so Mermaid is disclosed in the README only.
 
@@ -57,3 +57,41 @@ An app build's App view becomes a wall of **four fixed windows**, the same patte
 - [x] Phone layout: one window at a time, with a switcher.
 - [x] `ui-audit` and motion-check pass, and INVENTORY.md and SITEMAP.md are updated.
 - [x] Built in the React app (`/next/`). The current app keeps its toggle: the game wall there is not shared code yet.
+- [x] The current Studio's wall has the Map as its first window, for an app build and a game build, and the chat shows it when asked.
+
+## The Map in the current Studio, and for games
+
+The owner, 2026-11-14, in the Game room of a big game being built, asked "can you show me how the game will run as mermaid charts?" and got words back ("Mermaid charts are text diagrams, not pictures… Confirm and I'll write it out"). Then: "yeah i wanted things like this where it visually instantly gives me feedback on whats going on always, in one of these windows i believe i mentioned one of these is for instant visual feedback to the user to show whats going on with the project or human communication".
+
+**What it is.** One Map window (`web/canvas/mapwin.js`), drawn with the same pinned Mermaid as `/next/`. It holds the standing map, a tab per diagram, made by the server from what it already knows with no model call (`GET /api/runs/<id>/map`, `engine/gamemap.mjs`), read again every 4 s while the build works:
+
+| Build | Tab | Shows |
+|---|---|---|
+| Game | **Build** | The art ("14 of 20 painted"), then each slice ("Slice 2 of 4" and its name). Finished slices are ticked and quiet, the one being built is filled with the accent. The last play test is a node of its own, hung off the slice it played: red with its one-line reason when it failed |
+| Game | **Loop** | Title → play a stage → pause → win or lose → next stage → ending, with the spec's own words (its loop, progression and goal) and its places in order |
+| App | **Screens** | The plan's screens and the ways between them (`engine/appmap.mjs`, the text `/app/map` gives); the screen whose file is being written is filled, the ones the kit's checks passed are ticked quiet |
+| App | **Data** | The plan's tables as an ER diagram, when it has any |
+
+A game's facts: the `game:spec` event and `stagesFor` (engine/game.mjs) for the slices, the `app:stage` events for the ones finished, the build's "stage n of N" step for the one being built, the art list against the pictures on disk (the Art sheet's own count), and the last `play test passed / failed / skipped` step. A mini game (no slices) is one step.
+
+**Where it sits.** Decisions made in this slice, for the owner to confirm:
+
+- **The wall keeps four windows; the Map is the first.** The third of the older four gives up its place in both modes (`mapYields`, web/canvas/mapask.js): while the crew writes code that is the second picture window (the first then shows every new picture); while it paints, the third painter's window (their picture still lands on the Art sheet). A build with no plan to draw (an app made without the advisor or a kit) keeps the older four.
+- **Enlarges like the others:** a click on the diagram, or its button, makes it about three quarters of the wall; again, or Esc, puts it back.
+- **Phones:** the current Studio's wall has no dots. At 900 px and narrower its windows are one column, as before, with the Map first. The 4-dot switcher is `/next/`'s.
+- **The switch is Crew · Art · Live · Map** (web/canvas/stage.js). Map is offered whenever the build has one. The stage never turns to it by itself; picked, it shows the Map alone over whatever was there, building or not, until another view is picked or it is clicked again.
+
+**The chat shows it** (web/canvas/mapask.js `mapAsk`; the whole message has to be the request, in any chat mode):
+
+- "show the map", "show me how the game will run", "draw this as a chart / diagram / mermaid", "what's going on?" put the Map in front at once (enlarged on the wall while the crew's windows are up, alone on the stage otherwise) and Hermia answers with one line made from the same facts ("Slice 3 of 4, the extras: building. Art 18 of 18. Last play test failed: …"). No model call, nothing to confirm.
+- "show the enemy AI as a state chart" (one thing, as a diagram) asks the planner for it: `POST /api/runs/<id>/app/ask { chart: true }`, one Talk turn (engine/talk.mjs) that may read the code first. It is an answer; nothing changes, so every mode allows it. Meanwhile the Map's **Asked** tab shows a diagram's skeleton with Hermia's cursor; the diagram replaces it, and the standing tabs are the way back.
+- Talk's prompt now says the Map window exists and that a diagram goes in `"chart"` in the same answer, never an offer to write one. Any answer that carries a diagram (a named crew member's, Ask mode's) is drawn the same way.
+- "add a map page", "show a map of nearby stores" and "show sales as a chart" are changes for the builder and stay so.
+
+**A model's diagram is untrusted text.** The server cuts it down before it leaves (`cleanChart`: at most 6,000 characters and 200 lines, a first line that is a Mermaid diagram, no code fence, no front matter or `%%{init}%%` directive, no `click` line); the page hands Mermaid nothing over 12,000 characters, renders with `securityLevel: 'strict'`, parses before drawing (a diagram that does not parse is the line "Could not draw that.", not Mermaid's error picture), and puts Mermaid's SVG in as nodes with scripts, event attributes and outside links removed. The standing map's labels are the person's words with quotes and brackets taken out by the server.
+
+**Looks.** Mermaid's `base` theme with the Studio's tokens (web/canvas/mapask.js `mapLook`): graphite surfaces and lines, the one accent for the step being built, red only for a failed play test; it is drawn again when the theme turns. The diagram's nodes are also a list for a screen reader.
+
+**Human communication.** This slice is the standing map, asked diagrams and the play-test failure node. Notes pinned on nodes stay deferred, as above.
+
+**Mermaid.** `web/vendor/mermaid/mermaid.min.js`, the package's own browser build of the version `ui/package.json` pins (12.2.0), copied from the same npm tarball by `scripts/vendor.mjs` (a test holds the version and integrity equal to `ui/package-lock.json`'s). The page fetches it from the plugin's own server the first time a Map is on screen, never before: nothing loads on Projects or the Overview. A release also carries `/next/`'s copy in `ui/dist/vendor/`; serving `/next/vendor/` from `web/vendor/` would make it one file, and is left for the owner to decide.

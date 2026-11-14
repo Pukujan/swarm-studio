@@ -681,6 +681,8 @@ Chatter?.watch?.(() => renderSoundPop())
 // tile is the asset pane, always: the build's pictures turning on a card, one after another.
 export const CW_TILES = 4
 export const CW_CODE = CW_TILES - 1 // the one code tile, in both modes; the other three are pictures
+// the Map window (web/canvas/mapwin.js) is the wall's first window but not one of its tiles: enlarged, cw.big is this
+export const CW_MAP = CW_TILES
 const CW_TURN = 2600 // ms per asset
 // ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
 // and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
@@ -716,7 +718,7 @@ export function wallNames() {
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
 export const heardIn = (x, ms) => x && Date.now() - x.t < ms
-export const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, av: [] }
+export const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, av: [], map: false }
 export const CW_FRESH = { assets: null, assetsAt: 0, av: [], mode: '', reads: null, readAt: 0 }
 // ---------- the art wall: while a game's art is painted, the wall is mostly pictures. Three
 // painters (the server's PAINTERS) each get a tile with the picture they are on: painting,

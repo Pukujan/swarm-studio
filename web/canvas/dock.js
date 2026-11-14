@@ -2,11 +2,12 @@
 // web/canvas.js, split by area (web/canvas/README.md): Hermia's dock and sign-in connectors.
 import { $, HERMIA, ico, Crew, api } from './core.js'
 import { workSpot } from './wander.js'
-import { radioOn, radio, cw, CW_FRESH, cwZoom, artPhase, CW_CODE, autoM, setAutoMin, CW_TILES, wallNames, cwZoomShow, cwHighlight, cwPlan, heardIn, clock, kTokens, paintv, ART_STATE, artEvent } from './auto.js'
+import { mapYields } from './mapask.js'
+import { radioOn, radio, cw, CW_FRESH, cwZoom, artPhase, CW_CODE, CW_MAP, autoM, setAutoMin, CW_TILES, wallNames, cwZoomShow, cwHighlight, cwPlan, heardIn, clock, kTokens, paintv, ART_STATE, artEvent } from './auto.js'
 import { crewQuiet } from './deck.js'
 import { setText, feed } from './panels.js'
 import { esc } from './design.js'
-import { playClip, view, appv, appEls, appApi, stageOf } from './rooms.js'
+import { playClip, view, appv, appEls, appApi, stageOf, mapWin, mapOnWall } from './rooms.js'
 import { shownRun, allowBox, allowWire } from './film.js'
 import { nextFrame } from './loop.js'
 
@@ -61,11 +62,12 @@ function codeWall() {
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
+    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span></div><div class="cw-plan" hidden></div><div class="cw-wall"><div class="cw-grid"></div></div>`
     // a click on a tile makes it big, the others line up beside it; a second click (or Esc) puts it back
     const g = cw.el.querySelector('.cw-grid')
     g.onclick = ev => { const t = ev.target.closest('.cw-tile'); if (t) cwZoom([...g.children].indexOf(t)) }
     g.onkeydown = ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList?.contains('cw-tile')) { ev.preventDefault(); cwZoom([...g.children].indexOf(ev.target)) } }
+    mapWin.onZoom(() => cwZoom(CW_MAP))
     appEls.preview.append(cw.el)
   }
   if (cw.run !== appv.run) {
@@ -142,6 +144,16 @@ function codeWall() {
     grid.append(d)
   }
   cwZoomShow(grid)
+  // the Map is the wall's first window (spec 44), and one of the older four gives up its place to it
+  // (web/canvas/mapask.js mapYields); with no plan to draw, the wall keeps its four
+  const wall = cw.el.querySelector('.cw-wall'), mapOn = mapOnWall(), off = mapYields(mapOn)
+  cw.map = mapOn
+  if (mapOn && !cw.hide && mapWin.el.parentElement !== wall) { wall.prepend(mapWin.el); mapWin.alone(false); mapWin.draw() }
+  if (mapWin.el.parentElement === wall) mapWin.el.hidden = !mapOn
+  ;[...grid.children].forEach((d, i) => d.classList.toggle('cw-off', i === off))
+  if (cw.big === off || (cw.big === CW_MAP && !mapOn)) cwZoom(cw.big)
+  wall.classList.toggle('zoom', cw.big >= 0)
+  mapWin.big(cw.big === CW_MAP && mapOn)
   if (mode === 'art') {
     cwAssets()
     for (let i = 0; i < CW_TILES - 1; i++) cwPaintTile(grid.children[i], i, names[i])
@@ -277,7 +289,8 @@ function cwSlide(a, k, pool, now) {
   if (a.top !== top) { a.top = top; a.n = 0; a.turn = now + CW_EVERY + k * 1700 }
   else if (now >= (a.turn || 0)) { a.n = (a.n || 0) + 1; a.turn = now + CW_EVERY }
   // k 1 and 2 take turns over the pool (the newest on 1, the next on 2); k 0 walks all of it
-  const own = k === 0 ? pool : pool.filter((_, i) => i % 2 === (k === 1 ? 0 : 1))
+  // (with the Map on the wall there is one picture window beside the play test: it walks all of the pool too)
+  const own = k === 0 || cw.map ? pool : pool.filter((_, i) => i % 2 === (k === 1 ? 0 : 1))
   const list = own.length ? own : pool
   return list[(a.n || 0) % list.length]
 }

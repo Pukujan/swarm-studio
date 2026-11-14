@@ -144,11 +144,11 @@ test('a start that failed is said in the chat, short', () => {
   assert.ok(playFail('game', 'x'.repeat(900)).length < 260)
 })
 
-test('the room is wired to the switch: the bar has the three options, the wall has no button of its own', () => {
+test('the room is wired to the switch: the bar has its options, the wall has no button of its own', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8')
   const group = html.match(/<div class="seg" id="app-stageview"[^>]*>(.*?)<\/div>/s)
   assert.ok(group, 'the switch is in the App bar')
-  assert.deepEqual([...group[1].matchAll(/data-stage="(\w+)"[^>]*>(\w+)</g)].map(m => [m[1], m[2]]), [['crew', 'Crew'], ['art', 'Art'], ['live', 'Live']])
+  assert.deepEqual([...group[1].matchAll(/data-stage="(\w+)"[^>]*>(\w+)</g)].map(m => [m[1], m[2]]), [['crew', 'Crew'], ['art', 'Art'], ['live', 'Live'], ['map', 'Map']])
   assert.ok(!/title=/.test(group[0]), 'names only: no title attribute')
   assert.ok(html.indexOf('id="app-stageview"') < html.indexOf('id="app-mode"'), 'beside Preview / Code')
   const read = f => readFileSync(new URL(`../web/canvas/${f}`, import.meta.url), 'utf8')

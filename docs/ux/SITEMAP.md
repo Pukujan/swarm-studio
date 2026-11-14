@@ -345,7 +345,8 @@ logo (back to Home) and Esc.
 
 An app build's Engine room, in the next UI, is the app build wall (spec 44): four windows, Map, Live app, Code and
 Shipped; a click enlarges one, Esc puts it back, and Ask the crew sends a question to the window of the crew member it
-names.
+names. In the current Studio the build wall's first window is the Map too, for an app and for a game (spec 44): the
+build as diagrams, also reached from the stage switch (Crew · Art · Live · Map) and by asking in the chat.
 
 ## 9. Progress, versions, share
 
@@ -511,7 +512,7 @@ flowchart LR
 
 The 7-step game wizard is gone. Its questions become the Tweak branch, asked after the first playable build.
 
-A game build's wall follows what the crew is doing: three painters and one code tile while the art is painted, four code tiles after. When the build stops:
+A game build's wall follows what the crew is doing, after the Map in its first window (spec 44): two painters and one code tile while the art is painted, the play test, a picture window and one code tile after. When the build stops:
 
 ```mermaid
 flowchart LR

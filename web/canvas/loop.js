@@ -12,7 +12,7 @@ import { drawComment, review, cmt, reviewRun, sendLayers } from './marks.js'
 import { paintReplay, viewing, files, loadFiles, fileMatch, fileInfo, saveMeta, traceView, fileInto } from './replay.js'
 import { pub, liveUrl, publishNow } from './publish.js'
 import { shownRun, video, VIDEO_STYLES, makeVideo, showRun, runNow } from './film.js'
-import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view, stageSay, mediaBlock } from './rooms.js'
+import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view, stageSay, mediaBlock, mapSay, mapShow } from './rooms.js'
 import { tour, stopTour, closePlayer, watchVisitor, setMotion, openPlayer } from './player.js'
 import { talk, talkSay, readTalk, talkStart, talkAsk, openAsk } from './talk.js'
 import { links, refLines } from './base.js'
@@ -391,7 +391,7 @@ els.form.addEventListener('submit', async e => {
 // The chat's mode (web/chatmode.js): a typed switch, and Ask, Plan and Fix take the message. Build, and a
 // send made in code (a Build button under a brief, a project's dock: nextRoute), go on below as ever.
 const modeHelp = {
-  box: els.brief, form: els.form, api, botMsg, feed, hermesReady, hermesSays, appAsk, talkStart, resume: resumeRun, media: mediaBlock,
+  box: els.brief, form: els.form, api, botMsg, feed, hermesReady, hermesSays, appAsk, talkStart, resume: resumeRun, media: mediaBlock, chart: mapShow,
   quiet: () => { slashPop.hidden = true }, next: v => setNextRoute(v), run: () => shownRun(), runNow: () => runNow(), app: () => appv,
   site: () => S.kind !== 'game' && S.frames.length > 0, kind: () => (S.kind === 'game' ? 'game' : 'site'), chat: () => talk.chat,
   // @ts-ignore
@@ -399,6 +399,9 @@ const modeHelp = {
 }
 mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, off: !!BOOT.hosted })
 async function sendDock() {
+  // the Map, asked for in any mode ("show the map", "what's going on?", "show the enemy AI as a state chart"): shown
+  // at once, before a mode or the room could take the words as a change for the builder
+  if (!nextRoute && !talk.on && mapSay(els.brief.value.trim())) { els.brief.value = ''; return }
   if (!nextRoute && await modeSend(modeHelp)) return
   const brief = els.brief.value.trim()
   if (!brief) return
