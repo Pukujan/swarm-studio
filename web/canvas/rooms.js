@@ -1,6 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the views and rooms: Canvas, Video, App, the big game, the app advisor, game mode, cast, art, the bench.
 import { dataStore } from '../data.js'
+import { noAppYet } from './wander.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
 import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
@@ -346,7 +347,7 @@ export async function appAsk(ask, extra = {}) {
   // while it builds, the crew still listens: a question gets an answer from what it is doing,
   // a change is queued for the start of the next stage
   if (appv.state === 'working') return tellCrew(ask)
-  if (ask && !appv.hasApp) return botMsg('Build the app first (the button in the App view), then change it by chatting.')
+  if (ask && !appv.hasApp) return botMsg(noAppYet(appv))
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
   try {
     const st = await appApi('', { ask, sections, ...extra })

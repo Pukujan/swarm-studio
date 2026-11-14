@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MODES, modeOf, studioMode, modesShown } from '../web/modes.js'
 import { brandFromLook, loadableFont } from '../engine/sitelook.mjs'
-import { sweep, wanderOn } from '../web/canvas/wander.js'
+import { sweep, wanderOn, noAppYet } from '../web/canvas/wander.js'
 
 const ctl = (view, extra = {}) => {
   const calls = []
@@ -123,4 +123,12 @@ test('a working wall cursor sweeps across its tile and back, inside it, out of s
   }
   assert.ok(Math.abs(at(0, 0).x - at(0, 3000).x) > 20, 'it moves')
   assert.ok(Math.abs(at(0, 5000).x - at(1, 5000).x) > 10, 'two cursors are not in step')
+})
+
+test('a message with nothing built yet gets a true answer: the thing by name, and Go on for a stopped build', () => {
+  assert.match(noAppYet({ kind: 'game', state: 'stopped', steps: [1, 2] }), /game build is stopped partway.*Go on/)
+  assert.match(noAppYet({ kind: 'site', state: 'failed', message: 'stopped', steps: [1] }), /app build is stopped partway/)
+  assert.match(noAppYet({ kind: 'game', state: 'failed', steps: [1] }), /game build did not finish/)
+  assert.match(noAppYet({ kind: 'game', steps: [] }), /no game here yet/)
+  assert.match(noAppYet({ kind: 'site', steps: [] }), /Build the app first/)
 })

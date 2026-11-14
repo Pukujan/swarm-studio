@@ -33,3 +33,17 @@ export function workSpot(pin, tileEl, i, working, now = performance.now()) {
   const r = tileEl.getBoundingClientRect()
   return r.width > 80 && r.height > 60 ? wanderOn(r, i, now) : pin
 }
+
+/**
+ * What the room says to a message when there is nothing built to change yet. It names the thing (game or app)
+ * and, when a build was stopped partway, says so and what continues it. (It used to answer every message with
+ * "Build the app first", on a game, with a stopped build on screen.)
+ * @param {{ kind?: string, state?: string, message?: string, steps?: unknown[] }} app
+ */
+export function noAppYet(app) {
+  const what = app.kind === 'game' ? 'game' : 'app'
+  const partway = (app.steps || []).length > 0
+  if (partway && (app.state === 'stopped' || app.message === 'stopped')) return `The ${what} build is stopped partway; what is painted and written is kept. Press Go on to continue it. Once it is building again I can answer questions and take changes.`
+  if (partway && app.state === 'failed') return `The ${what} build did not finish. Try again from its card; once it is building I can answer questions and take changes.`
+  return what === 'game' ? 'There is no game here yet. Start it from this view, then ask or change it by chatting.' : 'Build the app first (the button in this view), then change it by chatting.'
+}
