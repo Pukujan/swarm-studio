@@ -51,6 +51,19 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .ab.sc-frame u + u { width: 70%; }
 .ab.sc-frame > em { font-variant-numeric: tabular-nums; }
 
+/* a link's look (decision 0022) */
+.ab.sc-thumb img { object-fit: cover; object-position: top; }
+.ab.sc-walking { animation: lk-pulse 1.6s ease-in-out infinite; }
+@keyframes lk-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .ab.sc-walking { animation: none; opacity: .7; } }
+.lk-shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.lk-shots img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
+.br-sw.lk-sw { grid-template-columns: repeat(6, 1fr); height: 24px; }
+.lk-row { margin: 0; display: grid; grid-template-columns: 56px 1fr; gap: 8px; font: 13px/1.45 var(--body); color: var(--text); }
+.lk-row b { font-weight: 500; color: var(--muted); }
+.lk-state, .lk-from { margin: 0; font: 13px var(--body); color: var(--muted); }
+.lk-from a { color: var(--text); }
+
 /* the inspector's actions */
 .sc-body { display: flex; flex-direction: column; gap: 12px; }
 .sc-acts { display: flex; flex-wrap: wrap; gap: 8px; }
