@@ -38,7 +38,8 @@ const tryAct = async (act, fn) => { const n = calls.length; try { await fn(n) } 
 const deck = async (run, extra = '') => {
   await page.goto(`${s.BASE}/next/?version=${run}&room=deck${extra}`)
   await page.locator('[role="region"][aria-label="Canvas"]').waitFor({ timeout: 30000 })
-  await page.waitForFunction(() => document.querySelectorAll('iframe').length > 0, null, { timeout: 30000 })
+  // a page shows as its frame, or on the image-first board as its photo (or its place) until it goes live
+  await page.waitForFunction(() => document.querySelectorAll('iframe, [data-page]').length > 0, null, { timeout: 30000 })
   await wait(2500)
 }
 
