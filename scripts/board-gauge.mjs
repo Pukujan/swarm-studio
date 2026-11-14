@@ -242,6 +242,10 @@ async function scene(browser, sc, BASE) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, colorScheme: 'dark' })
   await ctx.addInitScript(PROBE)
   const page = await ctx.newPage()
+  // The Studio asks for the build's story when it opens one with a film, and the server answers by exporting the
+  // whole site first: a headless Chrome run, synchronously, for each page with no picture (about 4 s each; here 150
+  // of 250), which freezes the server for minutes. It has nothing to do with the board's frames, so it is not asked.
+  await page.route(url => /^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname), route => route.fulfill({ status: 200, json: {} }))
   const cdp = await ctx.newCDPSession(page)
   await within('Performance.enable', 15000, cdp.send('Performance.enable'))
   const t0 = Date.now()
