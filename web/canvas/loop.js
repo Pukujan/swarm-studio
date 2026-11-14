@@ -135,16 +135,17 @@ export function frameLoop(now) {
     for (const f of S.frames) f.el.classList.toggle('active', busyPages.has(f.id))
     els.play.disabled = els.playMore.disabled = !S.frames.length
     // with no reviewer model yet, Review opens Models to pick one instead of sitting greyed out
-    els.reviewBtn.disabled = review.busy || !S.done
+    // (a replay only plays: nothing that acts on the build is offered while it does)
+    els.reviewBtn.disabled = review.busy || !S.done || rec.on
     setLabel(els.reviewBtn, review.busy ? 'Reviewing…' : 'Review')
-    els.exportBtn.disabled = !S.done || exp.busy
+    els.exportBtn.disabled = !S.done || exp.busy || rec.on
     paintReplay()
     const pubbing = pub.run === shownRun() && pub.state === 'working'
     const deploying = appv.deploying && appv.run === shownRun()
-    els.publishBtn.disabled = (!S.done && !pubbing) || deploying
+    els.publishBtn.disabled = (!S.done && !pubbing) || deploying || rec.on
     setLabel(els.publishBtn, pubbing || deploying ? 'Publishing…' : liveUrl() ? 'Live' : 'Publish')
     const mine = video.run === shownRun()
-    els.videoBtn.disabled = !S.done && !(mine && video.src)
+    els.videoBtn.disabled = (!S.done && !(mine && video.src)) || rec.on
     setLabel(els.videoBtn, mine && video.busy ? `Video ${video.pct ? `${video.pct | 0}%` : 'writing…'}` : 'Video')
     if (S.progress) {
       const done = [...S.layers.values()].filter(l => l.status === 'done').length

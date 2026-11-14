@@ -67,7 +67,7 @@ export function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
     // the run is over: the summary card, after the live site has had a moment on screen
     // (not after a replay from the menu has ended: the finished build is back, and nothing more happens)
     const was = rec.n
-    if (prev?.state === 'working' && e.state === 'done' && e.url && prev.run === e.run) setTimeout(() => { if (rec.n === was) showSummary(autoM.last) }, ds.el ? 9000 : 1200)
+    if (prev?.state === 'working' && e.state === 'done' && e.url && prev.run === e.run) setTimeout(() => showSummary(autoM.last, was), ds.el ? 9000 : 1200)
   }
   renderAutoPanel()
 }
@@ -380,8 +380,8 @@ export function deployShow(e) {
 }
 
 // A4. The final screen: the time and the time per step, the counts, the live link and its QR code.
-async function showSummary(e) {
-  if (!e?.run) return
+async function showSummary(e, was = rec.n) {
+  if (!e?.run || rec.n !== was) return
   document.querySelector('.show-sum')?.remove()
   const r = await api(`/api/runs/${encodeURIComponent(e.run)}/show`).catch(() => null)
   const f = r?.ok ? await r.json() : {}

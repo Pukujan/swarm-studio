@@ -1,8 +1,8 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): saved runs (files) and traces, replay.
 import { REPLAY_WORD, REPLAY_SAYS, replayAsk, appPill } from '../replaytalk.js'
-import { api, S, els, ico, setReplayId, Q, WALL, $, replayId } from './core.js'
-import { feed, botMsg, setText } from './panels.js'
+import { api, S, els, ico, setReplayId, Q, WALL, $, replayId, BOOT } from './core.js'
+import { feed, botMsg, setText, push } from './panels.js'
 import { esc } from './design.js'
 import { talkEnd } from './talk.js'
 import { connect } from './start.js'
@@ -323,17 +323,27 @@ function paintMark() {
 // The finished build again, whole, after a replay: in the deck, where the replay began; `stay` keeps the room
 // the person is in (they asked for something there), and the App room then reads the real app.
 async function backToBuild(id, stay) {
+  const played = rec.on
   rec.on = false
   rec.n++
   if (replayAsked) endReplay()
   paintMark()
   if (!stay && view !== 'canvas') setView('canvas')
+  // the App room, when it is next looked at, starts from nothing the replay left: no Replay pill, no card, no Stop
   resetApp(id)
+  appEls.state.className = 'app-state pill'
+  setText(appEls.state, appPill({}))
+  appEls.empty.innerHTML = ''
+  appEls.stop.hidden = true
+  // what the person asked while it played, and the answers, stay in the chat; the replay's own lines go
+  const said = played ? [...els.feed.children].filter(x => x.classList.contains('item') && !x.classList.contains('replayed')) : []
   await openRun(id)
+  for (const x of said) push(els.feed, x)
   if (stay && view === 'app' && S.kind !== 'game') setView('app')
 }
 // "replay" typed, or the menu: false when there is no finished build to play
-function canReplay() { return !!S.done && !review.busy && !!shownRun() }
+// (the hosted studio has no Replay: its menu item is not there either)
+function canReplay() { return !!S.done && !review.busy && !!shownRun() && !BOOT.hosted }
 function startReplay() {
   const id = shownRun()
   if (!id || replayAsked) return
