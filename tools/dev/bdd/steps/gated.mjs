@@ -142,6 +142,7 @@ const trail = (build, room) => ['Home', 'Projects', build, room]
 // at 390 the name may be shortened, but no part is dropped
 const toHome = (build, room) => crumbIs(parts => !!parts && parts.length === 4 && parts[0] === 'Home' && parts[1] === 'Projects' && parts[3] === room && build.startsWith(parts[2].replace(/[…\s.]+$/, '')), `Home › Projects › ${build}… › ${room}`)
 const projectsHeld = p => p.startsWith('/api/projects')
+const boardHeld = p => /^\/api\/runs\/[^/]+\/board$/.test(p) || p.endsWith('/events')
 
 // scenario → its When and its Then
 const BIND = {
@@ -152,7 +153,10 @@ const BIND = {
   'projects › 390 px › No sideways scroll': [at('projects', 390), noSideways],
   'overview › Breadcrumb › At rest': [at('overview', 1440), crumbIs(trail('Alpha Tea', 'Overview'))],
   'overview › Breadcrumb › At 390': [at('overview', 390), toHome('Alpha Tea', 'Overview')],
-  'overview › Loading › The board loading': [at('overview', 1440, p => p.endsWith('/events')), loading('three site skeletons', d => d.siteSkeletons < 3 ? `${d.siteSkeletons} page skeletons showed in the Site section while the events were held, not three` : null)],
+  // what is held is the board's own request (/api/runs/<id>/board, in both Studios), with the event stream. Holding
+  // only /events held nothing the board waits for: the skeletons were up for the 42 to 55 ms the board took to
+  // answer, less than one 50 ms look of the watch, so now and then it saw none (bdd on main, twice)
+  'overview › Loading › The board loading': [at('overview', 1440, boardHeld), loading('three site skeletons', d => d.siteSkeletons < 3 ? `${d.siteSkeletons} page skeletons showed in the Site section while the board was held, not three` : null)],
   'overview › Accessible and console-clean › axe and console': [atBoth('overview'), clean()],
   'overview › 390 px › No sideways scroll': [at('overview', 390), noSideways],
   'design-deck › Breadcrumb › At rest': [at('design-deck', 1440), crumbIs(trail('Alpha Tea', 'Design deck'))],
