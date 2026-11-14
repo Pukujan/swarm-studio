@@ -192,7 +192,8 @@ try {
     await page.getByRole('menuitem', { name: 'Replay' }).click(); await wait(3000)
     const st = await page.locator('.deck-status').innerText().catch(() => '-')
     const url = page.url()
-    note('replay', /replay=1|replay=true|replay/.test(url), `address ${url.replace(s.BASE, '')} · status "${st}" · cursors ${await page.locator('.deck-crew .cursor').count()}`)
+    // the menu's Replay plays the saved build again at 1x from its start: the status counts the sections up again
+    note('replay', /building|planning|replay/i.test(st), `address ${url.replace(s.BASE, '')} · status "${st}" · cursors ${await page.locator('.deck-crew .cursor').count()}`)
     await wait(6000)
     note('replay, later', null, `status "${await page.locator('.deck-status').innerText().catch(() => '-')}" · address ${page.url().replace(s.BASE, '')}`)
   })
