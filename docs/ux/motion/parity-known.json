@@ -1,15 +1,5 @@
 [
   {
-    "key": "app cursor Ada: only in /",
-    "label": "later (#529)",
-    "why": "The current App room keeps the crew's cursors in the page; spec 44 puts each crew member's cursor in their own window, a later slice the /next/ wall has not built yet."
-  },
-  {
-    "key": "app cursor Bo: only in /",
-    "label": "later (#529)",
-    "why": "The current App room keeps the crew's cursors in the page; spec 44 puts each crew member's cursor in their own window, a later slice the /next/ wall has not built yet."
-  },
-  {
     "key": "app only in /: page @in 250ms x1 ease-out",
     "label": "intended (spec 44)",
     "why": "The App room is spec 44's four-window build wall (#477), a new design rather than the current room's code wall, so its entrance and Hermia's work on its loading window differ."
@@ -35,16 +25,6 @@
     "why": "The App room is spec 44's four-window build wall (#477), a new design rather than the current room's code wall, so its entrance and Hermia's work on its loading window differ."
   },
   {
-    "key": "app reduced cursor Ada: only in /",
-    "label": "later (#529)",
-    "why": "The current App room keeps the crew's cursors in the page; spec 44 puts each crew member's cursor in their own window, a later slice the /next/ wall has not built yet."
-  },
-  {
-    "key": "app reduced cursor Bo: only in /",
-    "label": "later (#529)",
-    "why": "The current App room keeps the crew's cursors in the page; spec 44 puts each crew member's cursor in their own window, a later slice the /next/ wall has not built yet."
-  },
-  {
     "key": "brand cursor Hermia: apart",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
@@ -63,16 +43,6 @@
     "key": "brand reduced cursor Hermia: apart",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
-  },
-  {
-    "key": "deck cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "deck cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
   },
   {
     "key": "deck only in /: page @radio-dash endless 800ms linear",
@@ -100,16 +70,6 @@
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
   },
   {
-    "key": "deck reduced cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "deck reduced cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
     "key": "game only in /: page @in 250ms x1 ease-out",
     "label": "drift",
     "why": "The current Studio draws the game's App room step list (div.st in #app-steps, @in .25s) in its canvas behind the Overview at this address, where no one sees it. No decision covers it."
@@ -120,14 +80,14 @@
     "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
   {
-    "key": "mid-build cursor Ada: only in /",
+    "key": "mid-build cursor Ada: only in /next/",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
   {
-    "key": "mid-build cursor Bo: only in /",
+    "key": "mid-build cursor Bo: only in /next/",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
   {
     "key": "mid-build only in /: page @pulse endless 1200ms ease-in-out",
@@ -165,49 +125,19 @@
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
   },
   {
-    "key": "mid-build reduced cursor Ada: only in /",
+    "key": "mid-build reduced cursor Ada: only in /next/",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
   {
-    "key": "mid-build reduced cursor Bo: only in /",
+    "key": "mid-build reduced cursor Bo: only in /next/",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "overview cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "overview cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "overview reduced cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "overview reduced cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
   {
     "key": "overview reduced cursor Hermia: apart",
     "label": "drift",
     "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
-  },
-  {
-    "key": "play cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "play cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
   },
   {
     "key": "play only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
@@ -243,26 +173,6 @@
     "key": "play only in /next/: page ~opacity 200ms x1 ease",
     "label": "intended (spec design-deck)",
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
-  },
-  {
-    "key": "play reduced cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "play reduced cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "publish cursor Ada: only in /",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish cursor Bo: only in /",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
   },
   {
     "key": "publish cursor Hermia: apart",
@@ -325,16 +235,6 @@
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
   },
   {
-    "key": "publish reduced cursor Ada: only in /",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
-    "key": "publish reduced cursor Bo: only in /",
-    "label": "drift",
-    "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
-  },
-  {
     "key": "publish reduced cursor Hermia: apart",
     "label": "intended (PATTERNS: the Design deck follows Figma)",
     "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
@@ -347,22 +247,22 @@
   {
     "key": "replay cursor Ada: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay cursor Bo: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay cursor Cy: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay cursor Di: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay cursor Hermia: only in /",
@@ -372,7 +272,7 @@
   {
     "key": "replay cursor Reviewer: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "The current deck's reviewer has a cursor of its own on the page while it reviews (web/canvas/auto.js rv-cursor); the /next/ deck draws none."
   },
   {
     "key": "replay only in /: page @radio-dash endless 800ms linear",
@@ -387,22 +287,22 @@
   {
     "key": "replay reduced cursor Ada: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay reduced cursor Bo: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay reduced cursor Cy: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay reduced cursor Di: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
     "key": "replay reduced cursor Hermia: only in /",
@@ -412,7 +312,7 @@
   {
     "key": "replay reduced cursor Reviewer: only in /",
     "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
+    "why": "The current deck's reviewer has a cursor of its own on the page while it reviews (web/canvas/auto.js rv-cursor); the /next/ deck draws none."
   },
   {
     "key": "studio cursor Hermia: apart",
@@ -423,16 +323,6 @@
     "key": "studio reduced cursor Hermia: apart",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
-  },
-  {
-    "key": "visitor cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "visitor cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
   },
   {
     "key": "visitor only in /: frame ~opacity 750ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
@@ -468,15 +358,5 @@
     "key": "visitor only in /next/: page ~opacity 200ms x1 ease",
     "label": "intended (spec design-deck)",
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
-  },
-  {
-    "key": "visitor reduced cursor Ada: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
-  },
-  {
-    "key": "visitor reduced cursor Bo: only in /",
-    "label": "drift",
-    "why": "At 0 ms the current deck draws each crew cursor at the canvas's top-left corner before placing it, while /next/ is still reading the build. No decision covers it: /next/ should draw its cursors from the first step, or the check should start after that frame."
   }
 ]

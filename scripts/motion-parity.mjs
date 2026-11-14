@@ -244,10 +244,15 @@ function diff(name, [c1, c2, n1, n2]) {
   const far = {}
   const steps = Math.min(...[c1, c2, n1, n2].map(r => r.steps.length))
   for (let i = 0; i < steps; i++) {
-    const at = r => Object.fromEntries(r.steps[i].cursors.map(c => [c.id, c]))
+    // what a person sees: a cursor outside the 1280 x 800 view (a docked one below the fold, say) is not on screen
+    const at = r => Object.fromEntries(r.steps[i].cursors.filter(c => c.x > -24 && c.y > -24 && c.x < 1280 && c.y < 800).map(c => [c.id, c]))
     const [A1, A2, B1, B2] = [c1, c2, n1, n2].map(at)
     const ids = either(both(Object.keys(A1), Object.keys(A2)), both(Object.keys(B1), Object.keys(B2)))
     for (const who of ids) {
+      // the crew's cursors from the first step on: at step 0 the current deck draws each one at the canvas's corner
+      // for a frame before it places it, while the next UI is still reading the build, so neither has them where
+      // they work yet. Hermia is on screen from the start in both, so she is compared there too
+      if (i === 0 && who.split(' ')[0] !== 'Hermia') continue
       let d = Infinity
       for (const A of [A1, A2]) for (const B of [B1, B2]) if (A[who] && B[who]) d = Math.min(d, Math.hypot(A[who].x - B[who].x, A[who].y - B[who].y))
       if (d > PX && (!far[who] || d > far[who].d)) far[who] = { d, t: c1.steps[i].t, a: A1[who] || A2[who], b: B1[who] || B2[who] }
