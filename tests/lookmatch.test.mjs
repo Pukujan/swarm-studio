@@ -7,6 +7,7 @@ import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
 import http from 'node:http'
 import { compareTokens, scoreOf, colourGap, judgeMatch, matchMessages, MATCH_RULES, walkBuild, fixText } from '../engine/lookmatch.mjs'
+import { lookWorker, lookReader, workLine, workHtml, lookPhase, lookSays, matchHtml } from '../web/lookmatch.js'
 import { refStore } from '../engine/refs.mjs'
 import { refRoutes } from '../server/refs.mjs'
 import { puppeteer } from '../engine/pageshots.mjs'
@@ -127,4 +128,47 @@ test('the build\'s own exported pages are walked from disk and measured', { skip
   const d = compareTokens(ref, w.tokens)
   assert.equal(d[0].part, 'Background')
   assert.equal((await walkBuild({ htmlDir: dir, files: ['nope.html'], dataDir })).note, 'nothing built yet')
+})
+
+// ---------- the crew at work on a link (web/lookmatch.js): who is on it, the step, and Hermia's two chat lines
+const link = (look, id = 'r1') => ({ id, kind: 'link', name: 'obvious.com', look })
+test('a link being read or compared names its worker and the step; nobody is on a finished one', () => {
+  const walking = link({ state: 'walking', step: 'Scrolling page 2 of 3', from: { host: 'obvious.com' } })
+  const w = lookWorker(walking)
+  assert.equal(w.name, lookReader(walking)); assert.equal(w.job, 'read')
+  assert.equal(workLine(w), `${w.name} · Scrolling page 2 of 3`)
+  assert.equal(lookWorker(link({ state: 'walking' })).step, 'Opening the site')
+  const checking = link({ state: 'ready', tokens: ref, match: { state: 'checking', step: 'Measuring' } })
+  assert.deepEqual(lookWorker(checking), { name: 'Ren', step: 'Measuring', job: 'match' })
+  assert.equal(lookWorker(link({ state: 'ready' })), null)
+  assert.equal(lookWorker({ id: 'f', kind: 'image' }), null)
+  // the card carries the sheen and that worker's cursor, by name only, with no tooltip
+  const html = workHtml(walking, 12345)
+  assert.match(html, /class="pl-work" aria-busy="true"/)
+  assert.ok(html.includes(`data-n="${w.name}"`) && html.includes(`<span>${w.name}</span>`))
+  assert.match(html, /animation-delay:-3345ms/)
+  assert.doesNotMatch(html, /title=|Scrolling/)
+  assert.equal(workHtml(link({ state: 'ready' })), '')
+  // the match block shows the step where "Comparing…" was
+  assert.match(matchHtml(checking, { built: true }), /<p class="lm-state"[^>]*>Ren · Measuring<\/p>/)
+})
+
+test('Hermia says one line when a reading or a comparing starts and one when it is done, each once', () => {
+  const from = { host: 'obvious.com' }
+  const walking = link({ state: 'walking', step: 'Opening obvious.com', from }), who = lookReader(walking)
+  assert.equal(lookSays('', walking), `${who} is reading obvious.com.`)
+  // a step moving is not a new state
+  assert.equal(lookSays(lookPhase(walking), link({ state: 'walking', step: 'Reading colours and type', from })), '')
+  const ready = link({ state: 'ready', from, words: { mood: 'dark, one bright accent' } })
+  assert.equal(lookSays(lookPhase(walking), ready), `${who} read obvious.com: dark, one bright accent. Use this look?`)
+  assert.equal(lookSays(lookPhase(ready), ready), '')
+  // a look that was already there when the Studio opened is not announced
+  assert.equal(lookSays('', ready), '')
+  assert.equal(lookSays(lookPhase(walking), link({ state: 'failed', note: 'the site did not open.', from })), `${who} could not read obvious.com: the site did not open.`)
+  const checking = link({ state: 'ready', from, match: { state: 'checking' } })
+  assert.equal(lookSays(lookPhase(ready), checking), 'Ren is comparing your build with obvious.com.')
+  assert.equal(lookSays(lookPhase(checking), link({ state: 'ready', from, match: { state: 'ready', score: 61.6, diffs: [{}, {}] } })), 'Ren compared your build with obvious.com: 62 of 100, 2 things to fix.')
+  assert.equal(lookSays(lookPhase(checking), link({ state: 'ready', from, match: { state: 'ready', score: 100, diffs: [] } })), 'Ren compared your build with obvious.com: 100 of 100, the style matches.')
+  assert.equal(lookSays(lookPhase(checking), link({ state: 'ready', from, match: { state: 'failed', note: 'that build is gone' } })), 'Ren could not compare: that build is gone.')
+  assert.equal(lookSays('', { id: 'f', kind: 'image' }), '')
 })

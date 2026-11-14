@@ -12,7 +12,7 @@
 //   look, save(data), select(key), say(text) }. state is the kit's own saved state; look the brand's
 //   picked colours and fonts ({ bg, text, accent, link, heading, body }) or null.
 import { ic } from './icons.js'
-import { matchHtml, matchClick, lookBusy } from './lookmatch.js'
+import { matchHtml, matchClick, lookBusy, lookWorker, workLine, workHtml, lookPhase, lookSays, LOOK_POLL } from './lookmatch.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
 import { layerTree, layerSheet } from './layers.js'
@@ -82,6 +82,7 @@ export function makeScaffold({ sw, C, root }) {
       const d = await api(at(''))
       if (pid !== A.pid) return
       A.d = d
+      sayLooks()
       // Three takes: the first three looks of the project's brand (the planner's picks first, then the brief's
       // words), the brand made from the idea first; three waiting cards until then
       if (d.studio.mode === 'takes' && d.studio.idea && A.takes?.pid !== pid) {
@@ -139,11 +140,13 @@ export function makeScaffold({ sw, C, root }) {
   const addCard = (key, name) => card(key, name, 'sc-add', `${ic('plus', 18)}<span>${esc(name)}</span>`)
   const thumb = (kind, x) => {
     const shot = x.kind === 'link' && x.look?.shots?.[0]
-    if (x.look?.state === 'walking' && !A.lookTimer) setTimeout(watchLooks)
+    if (lookBusy(x) && !A.lookTimer) setTimeout(watchLooks)
     const inner = shot ? `<img src="${esc((sw.base || '') + shot)}" alt="" draggable="false" loading="lazy">`
       : x.kind === 'image' && x.src ? `<img src="${esc((sw.base || '') + x.src)}" alt="" draggable="false" loading="lazy">`
       : `<div class="sc-file">${ic(x.kind === 'link' ? 'link' : x.kind === 'video' ? 'film' : x.kind === 'audio' ? 'music' : x.kind === 'font' ? 'type' : 'file', 22)}</div>`
-    return card(`${kind}:${x.id}`, x.name, `sc-thumb${x.look?.state === 'walking' ? ' sc-walking' : ''}`, `${inner}<em>${esc(x.role || x.name)}</em>`)
+    // someone on the crew is reading the link or comparing it: the sheen and their named cursor on the card
+    const work = kind === 'ref' ? workHtml(x) : ''
+    return card(`${kind}:${x.id}`, x.name, `sc-thumb${work ? ' sc-walking' : ''}`, `${inner}<em>${esc(x.role || x.name)}</em>${work}`)
   }
   function brandCard() {
     const b = A.d.brand, L = look(b)
@@ -314,10 +317,30 @@ export function makeScaffold({ sw, C, root }) {
       post(proj('/refs/link'), { url: url.value.trim(), use: use.value.trim() }).then(j => { A.d.refs = j.refs; select(`ref:${j.ref.id}`); watchLooks() }).catch(fail)
     }
   }
+  // Hermia says one chat line when a link's reading or comparing starts and one when it is done. A state is
+  // said once: A.looks keeps each link's last seen one, and the links there when the Studio opened say nothing.
+  function sayLooks() {
+    const first = !A.looks, seen = A.looks || (A.looks = new Map())
+    for (const r of A.d?.refs || []) {
+      if (r.kind !== 'link') continue
+      const line = first ? '' : lookSays(seen.get(r.id) || '', r)
+      seen.set(r.id, lookPhase(r))
+      if (line) sw.say?.(line)
+    }
+  }
+  // a link's look or match without the step it is on: the same while only the step moves
+  const lookShape = refs => JSON.stringify(refs, (k, v) => (k === 'step' ? undefined : v))
   function watchLooks() {
     clearTimeout(A.lookTimer)
+    sayLooks()
     if (!A.d?.refs?.some(r => lookBusy(r))) { A.lookTimer = null; return }
-    A.lookTimer = setTimeout(() => api(proj('/refs')).then(j => { A.d.refs = j.refs; render(); watchLooks() }).catch(() => {}), 3000)
+    A.lookTimer = setTimeout(() => api(proj('/refs')).then(j => {
+      const same = lookShape(j.refs) === lookShape(A.d.refs)
+      A.d.refs = j.refs
+      // only the step moved: its line is changed in place, so the card's cursor and sheen and a note being typed carry on
+      if (same) { const r = j.refs.find(x => `ref:${x.id}` === A.sel), w = r && lookWorker(r), el = w && insp.querySelector(w.job === 'match' ? '.lm-state' : '.lk-state'); if (el) el.textContent = workLine(w) } else render()
+      watchLooks()
+    }).catch(() => {}), LOOK_POLL)
   }
   function lookInsp(box, r) {
     const L = r.look || {}, w = L.words || {}, t = L.tokens || {}, f = t.fonts || {}
@@ -326,7 +349,7 @@ export function makeScaffold({ sw, C, root }) {
     const shots = (L.shots || []).slice(0, 6).map(s => `<img src="${esc((sw.base || '') + s)}" alt="" loading="lazy">`).join('')
     const sw2 = (t.palette || []).map(c => `<i style="background:${esc(c)}"></i>`).join('')
     const line = (k, v) => (v ? `<p class="lk-row"><b>${k}</b><span>${esc(v)}</span></p>` : '')
-    box.innerHTML = `${L.state === 'walking' ? '<p class="lk-state">Walking the site…</p>' : L.state === 'failed' ? `<p class="lk-state">${esc(L.note || 'Could not open it')}</p>` : ''}
+    box.innerHTML = `${L.state === 'walking' ? `<p class="lk-state" aria-live="polite">${esc(workLine(lookWorker(r)))}</p>` : L.state === 'failed' ? `<p class="lk-state">${esc(L.note || 'Could not open it')}</p>` : ''}
       ${shots ? `<div class="lk-shots">${shots}</div>` : ''}
       ${sw2 ? `<div class="br-sw lk-sw">${sw2}</div>` : ''}
       ${w.prompt ? `<p class="sc-idea-full">${esc(w.prompt)}</p>` : ''}
@@ -542,7 +565,7 @@ export function makeScaffold({ sw, C, root }) {
     async show(pid, step = null) {
       A.on = true
       root.hidden = false
-      if (pid !== A.pid) { A.pid = pid; A.d = null; A.sel = null; A.talked = null; path.innerHTML = '' }
+      if (pid !== A.pid) { A.pid = pid; A.d = null; A.looks = null; A.sel = null; A.talked = null; path.innerHTML = '' }
       A.framed = false
       render()
       await load()
