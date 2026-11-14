@@ -105,11 +105,9 @@ export function intakeSay(text) {
   const want = intakeAsk(text)
   const run = shownRun()
   if (!want || !run) return false
-  // "install and run it" and "not now" are answers only on a project that was brought in
-  const brought = appv.run === run && !!appv.intake?.done
-  if ((want.did === 'run' || want.did === 'norun') && !brought) return false
+  // all four are answers only on a project that was brought in; on any other project the words go to the crew
+  if (!(appv.run === run && appv.intake?.done)) return false
   feed(null, text, 'you')
-  if (!brought) { botMsg(INTAKE_SAY.notHere); return true }
   if (appv.intake?.fixed) { botMsg(INTAKE_SAY.plain); return true }
   if (want.did === 'run' && !needsRun()) { botMsg(INTAKE_SAY.already); if (!appv.url) openApp(run); return true }
   if (want.did === 'norun') { botMsg(INTAKE_SAY.norun); return true }
@@ -363,8 +361,9 @@ function renderApp() {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
-      // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
-      : (appv.opening || (appv.hasApp && !appv.message && st !== 'failed' && st !== 'stopped' && (appv.tries || 0) < 10)) && !working
+      // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold;
+      // never for a brought-in project that has not had the person's yes (it is not starting: it waits for them)
+      : (appv.opening || (appv.hasApp && !needsRun() && !appv.message && st !== 'failed' && st !== 'stopped' && (appv.tries || 0) < 10)) && !working
         ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span><em class="as-bot" aria-hidden="true">${cursor(painterOf('app'))}</em></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
       // being brought in: the shape of a page with a crew cursor on it, and the step it is on (no engine works here)
       : working && appv.intake

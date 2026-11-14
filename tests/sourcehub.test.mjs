@@ -231,6 +231,10 @@ test('the door: not linked, pushed, changes not pushed, new commits, pulled as t
     assert.equal(st.job.state, 'done', st.job.message); assert.match(st.job.message, /Pulled from me\/night-runner/)
     const next = st.job.run
     assert.deepEqual(S.known.p1.runs, ['2020-r1', next]); assert.equal(st.run, next)
+    // a pull is code from outside again: nothing of it runs, and no answer carries over, until the person says so
+    assert.deepEqual(S.jobs.state(next).intake, { shape: 'vite', fixed: false, ran: false, scripts: null, done: true })
+    await assert.rejects(S.jobs.open(next), /Install and run/)
+    await assert.rejects(S.jobs.start(next, { ask: 'make the header blue' }), /install and run it/)
     assert.equal(readFileSync(join(S.appOf(next), 'about.html'), 'utf8'), 'new')
     assert.equal(g(S.appOf(next), 'rev-parse', 'HEAD'), theirs)
     assert.ok(st.link.pulled > 0); assert.equal(st.link.fits, true); assert.equal(st.ahead, false)

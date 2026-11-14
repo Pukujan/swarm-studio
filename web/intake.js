@@ -31,6 +31,5 @@ export const INTAKE_SAY = {
   scriptsRunning: 'Running its install scripts',
   noscripts: 'Its install scripts stay off.',
   already: 'It runs here already.',
-  plain: 'It is plain files: nothing is installed and no install script runs.',
-  notHere: 'Open a project that was brought in first: this one runs as the Studio built it.'
+  plain: 'It is plain files: nothing is installed and no install script runs.'
 }
