@@ -69,10 +69,11 @@ export async function judgeMatch({ ref, ours, want = '', avoid = [], chat = null
 }
 
 // the build's exported pages, walked like the reference was. htmlDir: the export's html folder; files: its pages.
-export async function walkBuild({ htmlDir, files, dataDir, pages = 2, launch, signal }) {
+// onStep: as walkSite's, but only its measuring is passed on (its "Opening …" would name a file on disk).
+export async function walkBuild({ htmlDir, files, dataDir, pages = 2, launch, signal, onStep = null }) {
   const urls = files.filter(f => existsSync(join(htmlDir, f))).slice(0, pages).map(f => pathToFileURL(join(htmlDir, f)).href)
   if (!urls.length) return { pages: [], tokens: null, motion: null, note: 'nothing built yet' }
-  return walkSite(urls[0], { dataDir, pages, shots: 2, allowPrivate: true, urls, launch, signal })
+  return walkSite(urls[0], { dataDir, pages, shots: 2, allowPrivate: true, urls, launch, signal, onStep: onStep && (t => { if (/^Reading/.test(t)) onStep('Measuring') }) })
 }
 
 // what the crew is told when the person presses Fix on a difference
