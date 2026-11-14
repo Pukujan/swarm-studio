@@ -3,7 +3,7 @@
 import { routeMessage } from '../route.js'
 import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api } from './core.js'
-import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage } from './deck.js'
+import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage, slotFor } from './deck.js'
 import { lite, litePass, frameBusy, togglePanel, toggleModels } from './settings.js'
 import { renderAgents, setText, renderToolbar, treeSel, renderTree, renderStatus, botMsg, feed, hermesReady, hermesSays } from './panels.js'
 import { renderDesign, drawSelBox, exp, design, selectAt, exportRunNow, undo, redo, esc } from './design.js'
@@ -208,7 +208,7 @@ function prototypeClick(e) {
   else selectAt(f, x, wy)
 }
 
-els.viewport.addEventListener('dblclick', e => zoomToSection(e) || setAuto(true))
+els.viewport.addEventListener('dblclick', e => zoomToSection(e, { slotFor, setAuto }) || setAuto(true))
 els.camHint.addEventListener('click', () => setAuto(!cam.auto))
 els.viewport.addEventListener('wheel', e => {
   if (e.target.closest('.float')) return
