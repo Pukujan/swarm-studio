@@ -1,7 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the views and rooms: Canvas, Video, App, the big game, the app advisor, game mode, cast, art, the bench.
 import { dataStore } from '../data.js'
-import { noAppYet, goOnAsk } from './wander.js'
+import { noAppYet, goOnAsk, neverDrew, sliceSay, sliceWords } from './wander.js'
 import { stageNow, stagePick, stageAsk, stageNone, stageSwitch, playFail } from './stage.js'
 import { autoplayRoom } from './autoplay.js'
 import { painterOf, cursor } from '../icons.js'
@@ -143,22 +143,26 @@ setInterval(appSeen, 30000)
 document.addEventListener('visibilitychange', () => { if (!document.hidden && view === 'app') { if (appv.url) appSeen(); else loadApp() } })
 
 // the latest play test, filmed: the clip loops from the first key, with the key it pressed
-const clip = { el: null, src: '', keys: [], at: 0, shut: '' }
+const clip = { el: null, src: '', key: '', keys: [], at: 0, shut: '' }
 // While the code wall is up, the play test is one of its windows (the first tile, over that
 // tile's pictures); otherwise a small card over the game, which × hides.
 export function playClip() {
-  const s = appv.run === shownRun() ? appv.steps.findLast(x => x.clip) : null
+  // the last play test that left something to say: its film, or that the game never started (never an older
+  // slice's film over a newer test that did not start)
+  const s = appv.run === shownRun() ? appv.steps.findLast(x => x.clip || (x.kind === 'test' && neverDrew(x))) : null
+  const none = neverDrew(s)
   // its window on the wall: the first while the crew writes code, the code window while it paints
   // (the painters keep theirs); off the wall it is the small card over the game
   const grid = cw.el && !cw.el.hidden ? cw.el.querySelector('.cw-grid') : null
   const tile = grid ? (cw.mode === 'code' ? grid.children[0] : cw.mode === 'art' ? grid.children[CW_CODE] : null) || null : null
-  for (const t of cw.el?.querySelectorAll('.cw-tile.has-play') || []) if (t !== tile || !s) t.classList.remove('has-play')
-  if (!s || (!tile && clip.shut === s.clip)) { if (clip.el) clip.el.hidden = true; return }
+  for (const t of cw.el?.querySelectorAll('.cw-tile.has-play') || []) if (t !== tile || !s) t.classList.remove('has-play', 'no-start')
+  const shutKey = s ? (none ? `none:${s.t || ''}` : s.clip) : ''
+  if (!s || (!tile && clip.shut === shutKey)) { if (clip.el) clip.el.hidden = true; return }
   if (!clip.el) {
     clip.el = document.createElement('div')
     clip.el.className = 'playclip'
-    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline></video>`
-    clip.el.querySelector('.pc-x').onclick = () => { clip.shut = clip.src; clip.el.hidden = true }
+    clip.el.innerHTML = `<div class="pc-head"><b>Play test</b><span class="pc-key"></span><button class="pc-x" aria-label="Hide the play test">${ico('x')}</button></div><video muted playsinline></video><p class="pc-none"><b>The game did not start</b><span></span></p>`
+    clip.el.querySelector('.pc-x').onclick = () => { clip.shut = clip.key; clip.el.hidden = true }
     const v = clip.el.querySelector('video')
     v.addEventListener('loadedmetadata', () => { v.currentTime = clip.at })
     v.addEventListener('ended', () => { v.currentTime = clip.at; v.play().catch(() => {}) })
@@ -172,6 +176,18 @@ export function playClip() {
   if (clip.el.parentElement !== host) host.append(clip.el)
   tile?.classList.add('has-play')
   clip.el.classList.toggle('in-wall', !!tile)
+  tile?.classList.toggle('no-start', none)
+  clip.key = shutKey
+  // a game that never drew has no film worth the name: the error, plainly, where the clip would be
+  clip.el.classList.toggle('none', none)
+  if (none) {
+    setText(clip.el.querySelector('.pc-none span'), s.line || String(s.text || '').replace(/^[^:]*: /, ''))
+    setText(clip.el.querySelector('.pc-key'), '')
+    if (clip.src) { clip.src = ''; clip.el.querySelector('video').removeAttribute('src') }
+    clip.el.hidden = false
+    clip.el.classList.add('failed')
+    return
+  }
   clip.el.hidden = false
   clip.el.classList.toggle('failed', s.ok === false)
   if (clip.src !== s.clip) {
@@ -472,10 +488,20 @@ export async function appAsk(ask, extra = {}) {
   renderApp()
 }
 
+// what a reply did with the message, in the small words beside the name
+/** @param {HTMLElement} item  @param {string} did */
+function sayAs(item, did) {
+  const tag = item.querySelector('b small')
+  if (tag) tag.textContent = did
+  return item
+}
 async function tellCrew(text) {
   const t = String(text || '').trim()
   if (!t) return botMsg('The crew is building. Ask what it is doing, or say what to change next.')
   feed(null, t, 'you')
+  // a typed yes to a change waiting for its button presses that button (the chat does what the buttons do)
+  const waiting = /** @type {HTMLButtonElement | undefined} */ ([...els.feed.querySelectorAll('.tell-change:not(.sent) button.main:not(:disabled)')].at(-1))
+  if (waiting && /^(yes|y|yep|yeah|ok|okay|sure|do it|go ahead|send it|yes please|please do)[.!]?$/i.test(t)) return waiting.click()
   // a question to one of the crew by name ("Pip, what are you on?"): their window answers on the wall
   const names = cw.el && !cw.el.hidden ? wallNames() : []
   const k = names.findIndex(([n]) => n && new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(t))
@@ -488,7 +514,8 @@ async function tellCrew(text) {
     const r = await appApi('/tell', { text: t, ...(who ? { who, on } : {}) }).finally(() => wait.remove())
     const answer = r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next slice.' : 'The crew is working.')
     cwSay(k, answer)
-    const item = botMsg(who ? `${who}: ${answer}` : answer)
+    // the reply says first what was done with the message: answered, sent, or waiting for a yes
+    const item = sayAs(botMsg(who ? `${who}: ${answer}` : answer), r.proposal ? 'not sent yet · confirm below' : r.queued ? 'sent to the crew' : 'answer only · nothing changed')
     if (r.media) item.append(mediaBlock(r.media))
     if (r.proposal) item.append(changeBlock(r.proposal))
   } catch (err) { cwSay(k, ''); botMsg(`App: ${err.message}`) }
@@ -555,26 +582,32 @@ function cwSay(k, words, thinking = false) {
 // the person's own words start the next slice with that note.
 function sliceCard(s, run = shownRun()) {
   if (!s || !run) return
-  const key = `${run}:${s.i}:${s.clip || ''}`
+  const key = `${run}:${s.i}:${s.clip || ''}:${s.shot || ''}`
+  const w = sliceWords(s, run === appv.run ? appv.result : null, run === appv.run ? appv.steps : [])
   if (els.feed.querySelector(`.slice-card[data-key="${CSS.escape(key)}"]`)) return
   const item = document.createElement('div')
   item.className = 'item bot slice-card'
   item.dataset.key = key
   item.dataset.run = run
   item.dataset.i = s.i
-  const vid = s.clip ? `<video class="sc-clip" data-src="${esc(BASE + s.clip)}" data-auto muted playsinline loop></video>` : ''
+  // a game that never drew: its film is of an empty page, so the error stands where the clip would
+  const vid = w.noStart ? `<p class="sc-none"><b>The game did not start</b><span>${esc(w.line)}</span></p>` : s.clip && !w.noClip ? `<video class="sc-clip" data-src="${esc(BASE + s.clip)}" data-auto muted playsinline loop></video>` : ''
   const pic = s.shot ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
   item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${s.i + 1} of ${s.n}</small></b>`
-    + `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>`
+    + `<div class="sc-media">${w.noStart ? vid : `${vid || pic}${vid && pic ? pic : ''}`}</div>`
     + `<span class="txt"></span>`
     + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
-    + `<div class="sc-ideas">${(s.ideas || []).map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
+    + `<div class="sc-ideas">${w.ideas.map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
   adoptVideos(item)
-  item.querySelector('.txt').textContent = s.ask || `Slice ${s.i + 1} is built. Anything to change?`
+  // (a slice whose game never drew took no still either)
+  const still = /** @type {HTMLImageElement | null} */ (item.querySelector('.sc-shot'))
+  if (still) still.onerror = () => still.remove()
+  item.classList.toggle('failed', w.failed)
+  item.querySelector('.txt').textContent = w.ask
   // @ts-ignore
   item.querySelector('.sc-live').onclick = () => (run === shownRun() ? playLive() : setView('app'))
   // @ts-ignore
-  for (const b of item.querySelectorAll('.sc-ideas button')) b.onclick = () => sliceGo(s.ideas[+b.dataset.j])
+  for (const b of item.querySelectorAll('.sc-ideas button')) b.onclick = () => sliceGo(w.ideas[+b.dataset.j])
   push(els.feed, item)
 }
 // The hero's idle from a video clip (engine/idle.mjs), in the chat: Hermia asks once with the
@@ -645,11 +678,20 @@ export function idleCard(e) {
 export async function sliceGo(text) {
   const s = appv.slice
   if (appv.state !== 'paused' || !s) return botMsg('The game is not waiting on a slice right now.')
-  // the first suggestion is "go on": no note, the next slice as planned
-  const note = /^looks good/i.test(text) ? '' : String(text || '').trim()
+  const w = sliceWords(s, appv.result, appv.steps), said = String(text || '').trim()
+  // "fix it" sends the crew at the play test's error now; "go on" is the next slice as planned; anything else is
+  // its note. Words about something broken, after a play test that failed, are a fix with those words.
+  const route = w.failed && sliceSay(said) === 'note' && /\b(fix|broken|bugs?|crash\w*|errors?|issues?|not working|does ?n[o']?t work)\b/i.test(said) ? 'fix' : sliceSay(said)
   feed(null, text, 'you')
+  if (route === 'fix' && !w.failed) return sayAs(botMsg('The last play test passed, so there is no error to send the crew at. Say what is wrong and it goes into the next slice.'), 'waiting on you')
   for (const c of els.feed.querySelectorAll('.slice-card .sc-ideas')) c.remove()
-  await appAsk('', note ? { note } : {})
+  const note = route === 'go' || sliceSay(said) === 'fix' ? '' : said
+  const next = s.next || 'the next slice'
+  // the reply says first what happens to the message; the crew's windows then show the work
+  if (route === 'fix') sayAs(botMsg(`The crew goes at this now, then the bots play the game again: ${w.line}`), 'crew fixing now')
+  else sayAs(botMsg(`Starting ${next}${note ? ' with your note' : ''}${w.failed ? ': the crew fixes the play test\'s error first' : ''}.`), 'crew working now')
+  await appAsk('', { ...(note ? { note } : {}), ...(route === 'fix' ? { fix: true } : {}) })
+  if (appv.state !== 'working') sayAs(botMsg(`It did not start${appv.message ? `: ${appv.message}` : ''}. Type "${route === 'fix' ? 'fix it' : 'go on'}" to try again.`), 'waiting on you')
 }
 
 // ---------- the app advisor

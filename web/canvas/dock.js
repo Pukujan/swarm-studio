@@ -302,7 +302,7 @@ function cwAssetTile(d, member, now, k = 0) {
   const pool = ranked.slice(0, CW_SHOW)
   if (k === 0) {
     pic = cwSlide(a, 0, pool, now)
-    label = d.classList.contains('has-play') ? 'Play test' : `Play test · plays after ${slice ? `slice ${slice[1]} of ${slice[2]}` : 'this slice'}`
+    label = d.classList.contains('no-start') ? 'Play test · the game did not start' : d.classList.contains('has-play') ? 'Play test' : `Play test · plays after ${slice ? `slice ${slice[1]} of ${slice[2]}` : 'this slice'}`
     state = 'waiting'
   } else if (live) {
     pic = live.src ? { src: live.src, name: live.what } : null

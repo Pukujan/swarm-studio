@@ -19,6 +19,7 @@ import { playtest, loadPlaywright, launch } from './playtest.mjs'
 import { planMap } from './appmap.mjs'
 import { strangeLinks } from './links.mjs'
 import { checklist, checkLine, testDodges, dodgeProblem } from './playcheck.mjs'
+import { playAndFix, noStart } from './playtrace.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk, artBrief, viewOf } from './game.mjs'
 import { takeAsks, askedBefore, keepAsked, askBrief, ASKS_PER_STAGE } from './artask.mjs'
@@ -151,6 +152,14 @@ const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args
 // A big game stopped partway: the stage to go on from (0: start over). Only
 // stages since the last build from scratch count, and only with the app still there.
 // The count of slices is the spec's own (stagesFor), saved on each app:stage event; older runs had five.
+// What a slice's play test left for the room and the chat: its clip (only of a game that drew), whether the game
+// never started, the failure in one line and how many fixes were tried.
+export const playFacts = play => ({ ...(play?.clip ? { clip: play.clip } : {}), ...(play?.started === false ? { started: false } : {}), ...(play && !play.ok && play.line ? { line: play.line } : {}), ...(play?.tries ? { tries: play.tries } : {}), ...(play?.skipped ? { skipped: String(play.skipped).slice(0, 160) } : {}) })
+// The play test of the slice a build is waiting on (its last app:paused), for going on or fixing after a restart
+export const lastPlay = events => { const p = events.findLast(e => ['app:paused', 'app:done', 'app:failed'].includes(e.type)); return p?.type === 'app:paused' ? p.result?.stages?.at(-1)?.playtest || null : null }
+// A play test that still fails, as the first thing the next slice is told
+export const playCarry = play => (play && !play.ok && !play.skipped && play.problem ? `the play test of the slice before this one still fails${play.tries ? ` after ${play.tries} fix attempt${play.tries === 1 ? '' : 's'}` : ''}. Fix it before building anything new, and build nothing on top of it until the game starts and plays:\n\n${String(play.problem).slice(0, 6000)}` : '')
+
 export function bigResumeAt(events, dir) {
   if (!dir || !existsSync(join(dir, 'package.json'))) return 0
   const startIdx = events.findLastIndex(e => e.type === 'app:start' && e.fresh && !e.resume)
@@ -191,7 +200,8 @@ export const alive = pid => { try { process.kill(pid, 0); return true } catch (e
 // How a build runs, for Hermia's answers in the chat: without it she only sees the crew's last
 // lines and guesses (she once said the play test "isn't in the notes, so it isn't built").
 // slices: the plan's slice names in order, when the build has them (a game spec's stages)
-export function processNotes({ kind = 'site', state = 'idle', stage = '', done = [], slices = [] } = {}) {
+// failing: the waiting slice's play test failed (its one line, or true)
+export function processNotes({ kind = 'site', state = 'idle', stage = '', done = [], slices = [], failing = '' } = {}) {
   const game = kind === 'game'
   const at = String(stage).match(/stage (\d+) of (\d+)( done)?/)
   let where = ''
@@ -209,7 +219,7 @@ export function processNotes({ kind = 'site', state = 'idle', stage = '', done =
       ? 'How the Studio builds a game: the art is painted first, then the game is built in slices (stages), one at a time. Each slice: the crew writes the code in turns, the Studio checks the build (Godot: a headless run, then a web export), then the play test runs by itself: a bot plays the exported game and films it, and that clip fills the Play test window. The play test is the "autoplay"; nobody has to ask for it or add it to the notes. After the clip the build pauses so the owner can watch it and say go on or what to change, then the next slice starts. Words sent while the crew works are read at the start of the next slice.'
       : 'How the Studio builds an app: the crew writes the code in turns, the Studio runs its checks, then serves the app in the preview. Words sent while the crew works are read at the start of the next stage.',
     where,
-    state === 'paused' ? 'Right now the build is paused, waiting for the owner to watch the slice\'s play test and say go on.' : ''
+    state === 'paused' ? (failing ? `Right now the build is paused and waiting for the owner. The last slice's play test failed${failing === true ? '' : `: ${failing}`}. Nothing is being fixed while it waits: when they type "fix it" the crew goes at that error at once and plays the game again, and "go on" starts the next slice with the error as its first job. Tell them that plainly.` : 'Right now the build is paused, waiting for the owner to watch the slice\'s play test and say go on.') : ''
   ].filter(Boolean).join(' ')
 }
 export const isQuestion = text => QUESTION.test(String(text || '').trim())
@@ -223,11 +233,9 @@ export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v 
 
 // idleMs, maxApps: Settings › Background (numbers, or functions read each time): an app's server stops after idleMs
 // with no viewer and no build, and at most maxApps run at once (decision 0017, issue #450)
-// A game passed its play test only when the test ran and found nothing: one that could not run (`skipped`: no
-// browser on this machine) is never a pass, whatever else it says (docs/engines/godot.md, Limits).
-export const playPassed = (t, links = '', dodged = '') => !links && !dodged && !!t?.ok && !t.skipped
+export { playPassed } from './playtrace.mjs'
 
-export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null, idleMs = 120000, maxApps = 2, sweepEvery = 15000, now = Date.now }) {
+export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null, idleMs = 120000, maxApps = 2, sweepEvery = 15000, now = Date.now, fixSettle = 2500 }) {
   const jobs = new Map() // run id -> job
   // Each app's server (spec 44, "the dev server only while building"): the dev server runs while the crew builds
   // or someone edits; a finished app is served built (serveBuilt). Either one stops when no viewer has sent a
@@ -259,7 +267,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const at = steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number) || (events.findLast(e => e.type === 'app:step' && /^stage \d+ of \d+/.test(e.step?.text || ''))?.step.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number))
       return { ...(at ? { at } : {}), state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id), engineReady: engineReady() }
     }
-    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...broughtIn(id, events), ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: kindOf(), photo: events.findLast(e => e.type === 'app:photo')?.src || null, steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id, events), engineReady: engineReady() }
+    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...broughtIn(id, events), ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: kindOf(), photo: events.findLast(e => e.type === 'app:photo')?.src || null, steps, result: (last.type === 'app:paused' ? last.result : events.findLast(e => e.type === 'app:done')?.result) || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id, events), engineReady: engineReady() }
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
   // (a project brought in, docs/specs/45-intake.md, counts once its files are in: it may have no package.json)
@@ -495,7 +503,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const before = askedBefore(dir)
     const items = [...artList(spec), ...sheetList(spec)]
     for (const it of before) if (!items.some(x => x.id === it.id)) items.push(it)
-    if (paint && input.art !== false) {
+    // "fix it" after a slice whose play test failed (docs/specs/22-guided-game-maker.md): no new slice and no
+    // painting. The slice just built is played again, the crew is sent at what fails, and the build waits again.
+    const fixing = !!(from && input.fix)
+    if (paint && input.art !== false && !fixing) {
       step({ kind: 'setup', text: `painting the game's art: ${items.length} pictures` })
       try { art = await paint(id, spec, items, dir, step, j.controller.signal, { idle: idleInput(input.idle) }) } catch (err) { step({ kind: 'setup', text: `the art could not be painted: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
     }
@@ -517,6 +528,20 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     } else if (/godot/i.test(String((input.target ? input : spec)?.target ?? spec?.answers?.target ?? spec?.engine ?? ''))) {
       // asked for, not here: say so instead of quietly building for the browser
       step({ kind: 'setup', text: 'Godot 4 was asked for but is not installed on this machine: building it for the browser instead', ok: false })
+    }
+    if (fixing) {
+      const all = stagesFor(spec), i = Math.min(from, all.length) - 1, st = all[i]
+      // (the status line keeps naming this slice: "stage n of N")
+      step({ kind: 'setup', text: `stage ${i + 1} of ${all.length}: ${st.name}, playing it again to fix what fails` })
+      const heard = [input.note, ...takeTold(j)].filter(Boolean)
+      if (godot) await godotStage(id, j, dir, engineCall, step)
+      else await serve(id, j, step)
+      const play = await playGame(j, dir, model(), step, brand, spec, heard.length ? `The person asked for this fix and said: "${heard.join(' ').slice(0, 1200)}".` : '')
+      j.result.stages.push({ id: st.id, name: st.name, ok: true, fix: true, playtest: play })
+      send(id, 'app:stage', { stage: `stage ${i + 1} of ${all.length} played again: ${st.name}`, big: { i, n: all.length, name: st.name, ok: true, fix: true, play: !!play?.ok, ...playFacts(play), ...(godot ? { godot: true } : {}) } })
+      j.slice = { i, n: all.length, name: st.name, shot: `/img/${id}/snap.jpg?v=${Date.now()}`, ok: true, play: !!play?.ok, url: j.url || null, ...playFacts(play), ...sliceAsk(spec, i, play) }
+      j.result.paused = j.slice
+      return 'paused'
     }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
     // art asked for mid-build (engine/artask.mjs): only with painting on and the image model not out of quota
@@ -550,6 +575,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       }
     }
     let failed = from ? 'the last build stopped partway through this stage: some of its changes may already be in the code (git status shows them). Finish them or redo them.' : '', last = null
+    // a play test that still fails goes to the next slice first: nothing new is built on a game that does not run
+    // (going on after a pause: read back from the slice the build waited on)
+    let unplayed = from ? playCarry(lastPlay(readEvents(id) || [])) : ''
     // the slices are the game's own, planned with its spec from the person's answers and picks
     const stages = stagesFor(spec)
     if (from >= stages.length) from = 0
@@ -561,7 +589,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const heard = takeTold(j)
       // the engine itself can stop with an error (a helper that never reports): one more go at the stage, then on
       for (let go = 0; ; go++) {
-        try { j.inStage = true; last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed, note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); j.inStage = false; break } catch (err) {
+        try { j.inStage = true; last = await engineCall(`${(godot ? godotStagePrompt : bigStagePrompt)(spec, i, { art, failed: [unplayed, failed].filter(Boolean).join('\n\nThen: '), note: [i === from ? input.note : '', ...heard].filter(Boolean).join('\n') })}${canAsk() ? `\n\n${askBrief({ godot })}` : ''}`, input.turns || st.turns); j.inStage = false; break } catch (err) {
           j.inStage = false
           if (j.controller.signal.aborted) throw err
           // the person confirmed a change that cannot wait: this stage again, with their words, from where it got to
@@ -591,15 +619,16 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result.files = Math.max(j.result.files, last.files?.length || 0)
       if (!godot) await serve(id, j, step)
       const play = await playGame(j, dir, model(), step, brand, spec)
+      unplayed = playCarry(play)
       j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
       // each slice carries the bots' filmed play test, so the person sees it before the next one
-      send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}), ...(godot ? { godot: true } : {}) } })
+      send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...playFacts(play), ...(godot ? { godot: true } : {}) } })
       // guided (the default): stop after each slice but the last and ask in the left chat; the
       // person's answer starts the next slice (a resume) with their words in its prompt
       if (input.guided !== false && i < stages.length - 1) {
-        const talk = sliceAsk(spec, i)
+        const talk = sliceAsk(spec, i, play)
         // what the chat shows: the bots' filmed play, the game's still (img/snap.jpg) and the live game
-        j.slice = { i, n: stages.length, name: st.name, shot: `/img/${id}/snap.jpg?v=${Date.now()}`, ok: !!last.ok, play: !!play?.ok, url: j.url || null, ...(play?.clip ? { clip: play.clip } : {}), ...talk }
+        j.slice = { i, n: stages.length, name: st.name, shot: `/img/${id}/snap.jpg?v=${Date.now()}`, ok: !!last.ok, play: !!play?.ok, url: j.url || null, ...playFacts(play), ...talk }
         j.result.paused = j.slice
         return 'paused'
       }
@@ -663,7 +692,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // fix turn with them spelled out, then a second check. Vite reloads the fix.
   // spec: the game's spec, when its builder was told about the play checks (engine/playcheck.mjs):
   // each control it names is held and the game's state read, enemies are watched, companions counted
-  async function playGame(j, dir, model, step, brand, spec = null) {
+  // asked: the person's own words when they asked for this fix (they go into every fix request)
+  async function playGame(j, dir, model, step, brand, spec = null, asked = '') {
     const checks = spec ? checklist(spec) : []
     const dodge = () => (spec ? dodgeProblem(testDodges(dir, { godot: !!j.godot })) : '')
     const allowed = brand?.url ? [brand.url] : []
@@ -674,8 +704,6 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       return `The code links to web addresses nobody gave it, which belong to someone else: ${where}. Remove them. ${brand?.url ? `The only address for ${brand.name} is ${brand.url}; point those links there.` : `${brand?.name || 'The brand'} is not online yet: take out those buttons and links (keep the words of the call to action, no link).`}`
     }
     step({ kind: 'test', text: 'checking the game\'s links and play-testing it' })
-    let links = linkProblem()
-    if (links) step({ kind: 'test', text: 'the game links to a made-up web address', ok: false })
     // the title screen becomes the game's cover (img/snap.jpg, the run's snapshot)
     const shot = join(runsDir, j.id, 'img', 'snap.jpg')
     try { mkdirSync(join(runsDir, j.id, 'img'), { recursive: true }) } catch {}
@@ -684,36 +712,31 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     let n = 1
     try { n = 1 + Math.max(0, ...readdirSync(join(runsDir, j.id, 'img')).map(f => +(f.match(/^playtest-(\d+)\.webm$/)?.[1] || 0))) } catch {}
     if (n > 999) n = 999
-    const clip = join(runsDir, j.id, 'img', `playtest-${n}.webm`)
-    let t = await playtest(j.url, { shot, clip, secure: !!j.godot, checks })
-    let dodged = dodge()
-    if (dodged) step({ kind: 'test', text: 'the game plays differently when it is being tested', ok: false })
-    const film = t.clip ? { clip: `/img/${j.id}/playtest-${n}.webm`, keys: t.keys || [] } : {}
-    if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
-    else if (t.ok) step({ kind: 'test', text: `play test passed: ${t.checks?.length ? checkLine(t.checks) : `still playing after ${t.seconds.toFixed(1)} s`}`, ...film })
-    else step({ kind: 'test', text: `play test failed: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : t.problem.split('. ')[0]}`, ok: false, ...film })
-    const withClip = o => ({ ...o, ...(film.clip ? { clip: film.clip } : {}), ...(t.checks ? { checks: t.checks } : {}) })
-    // a play test that could not run is reported, not passed, and no fix turn is spent on it
-    if (t.skipped && !links && !dodged) return { ok: false, skipped: t.skipped }
-    if (playPassed(t, links, dodged)) return withClip({ ok: true, seconds: t.seconds })
-    // a skipped play test is played again after the fix turn, never assumed to pass
-    const problems = [t.ok || t.skipped ? '' : `A play test of this game failed. ${t.problem}`, dodged, links || ''].filter(Boolean).join('\n\n')
-    try {
-      const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
-      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal, appKeys: !intakeOf(readEvents(j.id) || []) })
-      if (j.godot) await exportWeb(dir)
-    } catch (err) {
-      step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
-      return withClip({ ok: false, problem: problems })
+    // what the fix turns changed, for the next request and the log (the engine commits its turns)
+    const git = (...a) => { try { return execFileSync('git', a, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').map(f => f.trimEnd()).filter(Boolean) } catch { return [] } }
+    // (files already changed before the attempt, the lock file and the engine's own notes are not the attempt's)
+    const head = () => ({ rev: git('rev-parse', 'HEAD')[0] || '', dirty: new Set(git('status', '--porcelain').map(l => l.slice(3))) })
+    const changedSince = from => [...new Set([...(from?.rev ? git('diff', '--name-only', from.rev, 'HEAD') : []), ...git('diff', '--name-only')])].filter(f => !from?.dirty?.has(f) && !/^(RUN_META\.json|pnpm-lock\.yaml|package-lock\.json)$/.test(f))
+    // every test is filmed, so the clip shown is always the last test's: never an earlier one beside a later verdict
+    const film = { clip: null, keys: [] }
+    const play = async () => {
+      const file = join(runsDir, j.id, 'img', `playtest-${n}.webm`)
+      const r = await playtest(j.url, { shot, clip: file, secure: !!j.godot, checks, root: dir })
+      // a game that never drew has no play test to watch: its film (an empty page) stays on disk and out of the way
+      Object.assign(film, r.clip ? { clip: `/img/${j.id}/playtest-${n}.webm`, keys: r.keys || [] } : { clip: null, keys: [] })
+      if (r.clip || r.blankClip) n = Math.min(999, n + 1)
+      return r
     }
-    await new Promise(r => setTimeout(r, 2500))
-    links = linkProblem()
-    // played again the same way (a Godot export only starts in a secure frame)
-    if (!t.ok || dodged) t = await playtest(j.url, { secure: !!j.godot, checks })
-    dodged = dodge()
-    const ok = playPassed(t, links, dodged)
-    step({ kind: 'test', text: ok ? `the game passes its checks after the fix${t.checks?.length ? `: ${checkLine(t.checks)}` : ''}` : `still wrong after the fix: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : (links || dodged || t.problem || (t.skipped && `play test skipped: ${t.skipped}`) || '').split('. ')[0]}`, ok })
-    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, ...(t.skipped ? { skipped: t.skipped } : {}), problem: [t.ok ? '' : (t.problem || t.skipped), dodged, links || ''].filter(Boolean).join(' ') })
+    const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
+    return playAndFix({
+      play, step, finish, head, changedSince, settle: fixSettle, line: checkLine,
+      film: () => (film.clip ? { clip: film.clip, keys: film.keys } : {}),
+      extras: () => ({ links: linkProblem() || '', dodged: dodge() }), asked,
+      fix: async prompt => {
+        await runEngine({ workspace: dir, prompt, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal, appKeys: !intakeOf(readEvents(j.id) || []) })
+        if (j.godot) await exportWeb(dir)
+      }
+    })
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).
@@ -1029,8 +1052,8 @@ export const wantsToSee = text => SEE.test(String(text || ''))
 const PIC = /^game-(?!.*-(?:raw|check|peek)\.)[a-z0-9-]{1,48}\.(png|webp|jpe?g)$/
 export function buildMedia({ id, files = [], slices = [], steps = [] } = {}) {
   const clips = [
-    ...steps.filter(s => s?.clip).map(s => ({ src: s.clip, t: s.t || 0, name: '' })),
-    ...slices.filter(b => b?.clip).map(b => ({ src: b.clip, t: b.t || 0, name: b.name ? `slice ${(b.i ?? 0) + 1}, ${b.name}` : '' }))
+    ...steps.filter(s => s?.clip && !noStart(s)).map(s => ({ src: s.clip, t: s.t || 0, name: '' })),
+    ...slices.filter(b => b?.clip && b.started !== false).map(b => ({ src: b.clip, t: b.t || 0, name: b.name ? `slice ${(b.i ?? 0) + 1}, ${b.name}` : '' }))
   ].sort((x, y) => y.t - x.t)
   const pics = files.filter(f => PIC.test(f.name)).sort((x, y) => y.mtime - x.mtime)
     .map(f => ({ src: `/img/${id}/${f.name}`, name: f.name.replace(/^game-/, '').replace(/\.\w+$/, '').replace(/-/g, ' ') }))

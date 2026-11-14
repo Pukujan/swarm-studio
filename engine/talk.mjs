@@ -17,6 +17,10 @@ const TEXT = /\.(tsx?|jsx?|mjs|cjs|css|html|json|md|gd|tscn|tres|cfg|godot|txt|v
 export const MAX_STEPS = 5
 const SEE = /\b(screen ?shots?|pictures?|pics?|images?|sprites?|clips?|videos?|previews?|footage|show me|let me see|can i see|looks? like)\b/i
 export const wantsToSee = text => SEE.test(String(text || ''))
+// a bare yes, and an answer that offered to show something: the yes performs the offer (the model once offered
+// the newest clip twice and showed nothing either time)
+export const saysYes = text => /^(?:yes|y|yep|yeah|ok|okay|sure|please|do it|go ahead|show me|show it|please do|yes please|yes,? (?:do|show) it)[.!]?$/i.test(String(text || '').trim())
+export const offeredToShow = answer => /\b(show|see|watch|under my answer)\b/i.test(String(answer || '')) && /\b(clip|picture|pictures|still|play test|art)\b/i.test(String(answer || '')) && /\?|\b(want|would you like|tell me|say|can show|shall)\b/i.test(String(answer || ''))
 const newest = m => (m.clips[0] || m.pics.length ? { clip: m.clips[0]?.src || null, pics: m.pics.slice(0, 4) } : null)
 
 // the app's own files, shortest paths first (what Talk can read)
@@ -107,7 +111,7 @@ You can use tools. Each turn, reply with ONE JSON object and nothing else:
 
 A change is never sent by you: you write it out and they confirm it with a button under your answer. In "say", say what you understood in a few words and ask them to confirm. "now": true only when it cannot wait for the next slice (the builder is going the wrong way right now); it stops the builder's turn and redoes the slice.
 
-Answer in one to four short plain sentences, no markdown, no lists. When they ask to see something, show it at once in this answer (the newest clip and pictures; never ask which, never say you cannot); when they ask how something works, read the code first. Never say a change is done or sent. At most ${MAX_STEPS} tool calls, then answer.
+Answer in one to four short plain sentences, no markdown, no lists. When they ask to see something, show it at once in this answer (the newest clip and pictures; never ask which, never say you cannot); when they ask how something works, read the code first. Never say a change is done or sent. Never offer to do something later that you can do in this answer; when their message answers your last one ("yes"), do what you offered now. At most ${MAX_STEPS} tool calls, then answer.
 
 ${HONEST_RULE}
 
@@ -123,10 +127,16 @@ ${files.slice(0, 60).join(', ') || 'none yet'}`
 // One answer. chat(messages) → text; look(src) → text (the vision model) or null; appDir: the app;
 // media: { pics: [{src,name}], clips: [{src,name}] }; building: the builder is working (a change can be sent)
 // → { answer, media: {clip, pics} | null, proposal: {change, now} | null, used: [tool names] }
-export async function talk({ chat, look = null, appDir, media = { pics: [], clips: [] }, text, notes = '', who = '', on = '', title = '', building = true, deadline = Date.now() + 60000 }) {
+// before: { text, answer } the exchange just before this one, so "yes" and "that one" mean something
+export async function talk({ chat, look = null, appDir, media = { pics: [], clips: [] }, text, notes = '', who = '', on = '', title = '', building = true, deadline = Date.now() + 60000, before = null }) {
+  if (before?.answer && saysYes(text) && offeredToShow(before.answer)) {
+    const m = newest(media)
+    if (m) return { answer: m.clip ? `Here is the newest play test clip${m.pics.length ? ' and the latest pictures' : ''}.` : 'Here are the latest pictures.', media: m, proposal: null, used: [] }
+  }
   const files = appFiles(appDir)
   const messages = [
     { role: 'system', content: talkPrompt({ who, on, title, notes, media, files, building }) },
+    ...(before?.answer ? [{ role: 'user', content: String(before.text || '') }, { role: 'assistant', content: JSON.stringify({ say: before.answer }) }] : []),
     { role: 'user', content: String(text) }
   ]
   const used = []

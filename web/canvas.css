@@ -1904,6 +1904,13 @@ body.view-video .video-pop .vmin { display: none; }
 .playclip .pc-x:hover { background: var(--panel-2); color: var(--text); }
 .playclip .pc-x svg { width: 14px; height: 14px; }
 .playclip video { width: 100%; aspect-ratio: 16 / 10; border-radius: 8px; background: var(--void); display: block; }
+.playclip .pc-none { display: none; margin: 0; padding: 14px 12px; border-radius: 8px; background: var(--void); color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.playclip .pc-none b { display: block; margin-bottom: 4px; color: var(--text); font-weight: 600; }
+.playclip .pc-none span { display: block; overflow-wrap: anywhere; font-family: var(--mono); font-size: 11.5px; }
+.playclip.none video { display: none; }
+.playclip.none .pc-none { display: block; }
+.playclip.none .pc-key { display: none; }
+.playclip.in-wall.none .pc-none { flex: 1; display: flex; flex-direction: column; justify-content: center; border-radius: 0; }
 @media (max-width: 700px) { .playclip { width: calc(100% - 28px); } }
 /* the play test as a window of the code wall: it fills the first tile, under a tile header */
 .codewall .cw-tile.has-play { position: relative; }
@@ -1925,6 +1932,9 @@ body.view-video .video-pop .vmin { display: none; }
 .feed .slice-card .sc-media { display: grid; gap: 6px; margin: 6px 0 8px; }
 .feed .slice-card video, .feed .slice-card img { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: var(--deep); display: block; aspect-ratio: 16 / 9; object-fit: cover; }
 .feed .slice-card .sc-media img:nth-child(2) { width: 40%; }
+.feed .slice-card .sc-none { margin: 0; padding: 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--deep); color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.feed .slice-card .sc-none b { display: block; margin-bottom: 4px; color: var(--text); font-weight: 600; }
+.feed .slice-card .sc-none span { display: block; overflow-wrap: anywhere; font-family: var(--mono); font-size: 11.5px; }
 .feed .slice-card .sc-live { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0 6px; padding: 5px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
 .feed .slice-card .sc-live svg { width: 12px; height: 12px; }
 .feed .slice-card .sc-ideas { display: flex; flex-wrap: wrap; gap: 6px; }
