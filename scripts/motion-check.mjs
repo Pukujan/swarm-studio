@@ -108,6 +108,8 @@ const TAKE = () => { const a = (window.__motion || []).splice(0); return a }
 // the endless animations running now (a spinner, a caret, the radio's dashes)
 const ENDLESS = () => document.getAnimations().filter(a => a.effect?.getTiming?.().iterations === Infinity).map(a => { const el = a.effect.target; return `@${a.animationName || 'animate'} endless ${el?.id ? `#${el.id}` : `${el?.tagName?.toLowerCase()}${el?.classList?.[0] ? `.${el.classList[0]}` : ''}`}` }).sort()
 const FROZEN = new Date('2026-11-01T12:00:00Z')
+// how much longer than its time a scene may run to come to rest before its end picture is taken
+const REST_MS = 5000
 
 async function record(out, { root = ROOT } = {}) {
   const { chromium } = await loadPlaywright()
@@ -141,6 +143,9 @@ async function record(out, { root = ROOT } = {}) {
       const settle = async () => {
         for (let i = 0; i < 500 && pending > 0; i++) await wait(20)
         await wait(80)
+        // a resting page's picture being taken (lite mode, window.swarm.photographing) is work on the real clock too:
+        // which pages were pictures by a given step was otherwise how fast the machine took them (docs/ux/MOTION.md)
+        for (let i = 0; i < 250 && await page.evaluate(() => !!window.swarm?.photographing).catch(() => false); i++) await wait(20)
         for (const f of page.frames()) await f.evaluate(() => document.fonts?.ready.then(() => 0)).catch(() => {})
       }
       const steps = []
@@ -148,7 +153,16 @@ async function record(out, { root = ROOT } = {}) {
       await page.goto(s.BASE + sc.at(ids), { waitUntil: 'load' })
       await settle()
       const every = sc.step || 500
-      for (let t = 0; t <= sc.ms; t += every) {
+      // The end picture is taken at rest (docs/ux/MOTION.md, "The end picture is taken at rest"): past the scene's
+      // time the clock runs on, a step at a time, while the deck's camera is still gliding (.world.moving) or the
+      // picture is not yet the one of the step before, for at most REST_MS more. A scene that never stops (the
+      // replay's crew goes on chatting) uses all of it, in every run alike, and says so
+      let rested = false, unsettled = 0
+      for (let t = 0; t <= sc.ms + REST_MS; t += every) {
+        if (t > sc.ms) {
+          rested = !(await page.evaluate(() => !!document.querySelector('.world.moving')).catch(() => false)) && steps.at(-1).png === steps.at(-2)?.png
+          if (rested) break
+        }
         if (t) await page.clock.runFor(every)
         await settle()
         const sig = []
@@ -160,12 +174,15 @@ async function record(out, { root = ROOT } = {}) {
         }
         // the frames draw on the real clock: a step is taken once two pictures in a row agree
         let png = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide' })
-        for (let k = 0, same = 0; k < 30 && same < (t ? 1 : 3); k++) {
+        let same = 0
+        for (let k = 0; k < 30 && same < (t ? 1 : 3); k++) {
           await wait(t ? 120 : 250)
           const next = await page.screenshot({ type: 'png', animations: 'disabled', caret: 'hide' })
           same = next.equals(png) ? same + 1 : 0
           png = next
         }
+        // thirty pictures and no two alike: something still draws on the real clock, and this step's picture is chance
+        if (same < (t ? 1 : 3)) unsettled++
         // the pictures restart the endless animations: those starts are not the page's own
         for (const f of page.frames()) await f.evaluate(TAKE).catch(() => {})
         sig.sort()
@@ -173,8 +190,9 @@ async function record(out, { root = ROOT } = {}) {
         writeFileSync(join(out, sc.id, file), png)
         steps.push({ t, sig, png: createHash('sha1').update(png).digest('hex').slice(0, 16), file })
       }
-      trace[sc.id] = { steps }
-      console.log(`· ${sc.id}: ${steps.length} steps, ${new Set(steps.flatMap(x => x.sig)).size} distinct animations`)
+      const last = steps.at(-1).t
+      trace[sc.id] = { steps, rested, unsettled }
+      console.log(`· ${sc.id}: ${steps.length} steps, ${new Set(steps.flatMap(x => x.sig)).size} distinct animations, ${rested ? `at rest${last > sc.ms ? ` ${last - sc.ms} ms after its ${sc.ms}` : ''}` : `still moving at ${last} ms`}${unsettled ? `; ${unsettled} of its pictures never held still` : ''}`)
       await ctx.close()
     }
   } finally {
@@ -238,7 +256,7 @@ async function compare(before, after, tolerance = 2000, looks = []) {
         if (n <= tolerance) break
       }
       if (n > tolerance && looks.includes(id)) console.log(`  ${id}: the picture it ends on differs by ${n} pixels, as the pull request says it should`)
-      else if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})`) }
+      else if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})${[A1, A2, B1, B2].every(t => t[id].rested) ? '' : '; the scene was still moving when it was taken'}`) }
       const declared = looks.includes(id) && n > tolerance
       console.log(`${bad ? '✗' : '✓'} ${id}: ${both(a1, a2).length} kinds of animation${bad ? ', differs' : declared ? ', changed as the pull request says' : ', the same'}`)
     }

@@ -3,6 +3,7 @@
 import { routeMessage } from '../route.js'
 import { modeSend, mountChatMode, MODE_LINE } from '../chatmode.js'
 import { mountAgentsChip } from '../composer.js'
+import { githubDoor } from '../github.js'
 import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api, $, BOOT } from './core.js'
 import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage, slotFor } from './deck.js'
@@ -402,7 +403,16 @@ const modeHelp = {
 mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, box: els.brief, agents: $('#agents-btn'), built: () => !!shownRun(), off: !!BOOT.hosted })
 // @ts-ignore
 mountAgentsChip({ select: els.agentsSel, button: $('#agents-btn') })
+// A project's source on GitHub (web/github.js): ☰ › GitHub opens its sheet, and the same moves typed here
+// ("push to github", "pull from github", "link owner/name", "where is this on github") are answered in the chat.
+// The project is the one open in the Studio, else the run on screen (the server finds its project).
+// (esc is handed over as a call: web/canvas/design.js runs after this file in the joined page.)
+export const github = githubDoor({ api, esc: s => esc(s), botMsg, youSaid: text => feed(null, text, 'you'), run: () => shownRun() || null, project: () => /** @type {any} */ (window).swarmCosmos?.project || shownRun() || null, off: !!BOOT.hosted })
+const githubBtn = $('#github-btn')
+if (githubBtn) { if (BOOT.hosted) githubBtn.remove(); else githubBtn.onclick = () => github.open() }
 async function sendDock() {
+  // a typed GitHub move is never a brief, in any mode and from any dock
+  if (!nextRoute?.fresh && github.say(els.brief.value)) { nextRoute?.done?.(null); nextRoute = null; els.brief.value = ''; return }
   if (!nextRoute && await modeSend(modeHelp)) return
   const brief = els.brief.value.trim()
   if (!brief) return

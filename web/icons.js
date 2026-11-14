@@ -2,6 +2,7 @@
 // Lucide-style line icons (ISC; licence in web/brand/LICENSE-lucide.txt) and the crew's cursor,
 // shared by the Projects browser (home.js) and the project's Overview (project.js).
 export const P = {
+branch:'<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
 home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
 compass:'<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36z"/>',
 plus:'<path d="M12 5v14M5 12h14"/>',

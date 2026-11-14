@@ -77,7 +77,10 @@ export async function litePass() {
   if (cam.s >= 0.2 && !playing && !els.viewport.classList.contains('behind')) for (const f of S.frames) {
     const x0 = f.x * cam.s + cam.x, x1 = x0 + FRAME_W * cam.s
     const seen = Math.min(vw, x1) - Math.max(0, x0)
-    if (seen > best) { best = seen; keep = f }
+    // by a whole pixel: at the fit every page shows the same width, and "the most visible" was then decided by
+    // the 13th decimal of a camera still creeping to its target. The page kept live changed every few seconds,
+    // so a finished build went on reloading one page and resting another for as long as it was open
+    if (seen > best + 1) { best = seen; keep = f }
   }
   for (const f of S.frames) {
     const wanted = f === keep || frameBusy(f) || (S.sel && S.sel.startsWith(`${f.id}/`))
