@@ -210,11 +210,12 @@ async function measure(out, { root, runs: N, only, cold }) {
       try { m = await within(`the ${sc.id} board`, 300000, scene(browser, sc, BASE)) } catch (e) {
         // whether the Studio's server still answers says which side is stuck, the server or the page
         const t0 = Date.now()
-        const server = await within('the server', 8000, fetch(`${BASE}/api/state`).then(r => r.status)).then(s => `answers ${s} in ${Date.now() - t0} ms`, () => 'does not answer')
+        const answer = await within('the server', 8000, fetch(`${BASE}/api/state`).then(r => r.status)).then(s => `answers ${s} in ${Date.now() - t0} ms`, e => `does not answer (${String(e?.message || e).slice(0, 60)})`)
+        const alive = server.exitCode === null && server.signalCode === null ? 'running' : `exited (code ${server.exitCode}, signal ${server.signalCode})`
         // and what it is doing: its CPU and memory (where `ps` exists)
         let ps = ''
         try { ps = execFileSync('ps', ['-o', '%cpu=,rss=', '-p', String(server.pid)], { encoding: 'utf8', timeout: 3000 }).trim() } catch {}
-        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server, ps }
+        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps }
       } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
       console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify({ ...m, ft: undefined })}`)
