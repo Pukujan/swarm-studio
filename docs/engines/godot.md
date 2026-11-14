@@ -80,11 +80,11 @@ file's source map to its source line with `@jridgewell/trace-mapping` when that 
 (`loadTracer`: the plugin's own, `PLAYWRIGHT_DIR`, or dyad's `node_modules`; without it the served file's line is
 given and said to be that; a built bundle or a Godot export gives the code around the column), and writes the
 builder's fix request (`fixBrief`): the failure, whether the game drew, the first error with its frames and the
-code at each, the console, and where to start reading (engine/playtrace.mjs:29, 46, 71, 134). `playAndFix` plays, sends the crew at what failed, plays
+code at each, the console, and where to start reading (engine/playtrace.mjs:29, 46, 71, 135). `playAndFix` plays, sends the crew at what failed, plays
 again and films it, up to `FIX_TRIES` (2) times; the second request says which files the first changed and
-whether the same error is still thrown (engine/playtrace.mjs:17, 184). Every step in the log says what was tried. What still fails goes to the
+whether the same error is still thrown (engine/playtrace.mjs:17, 188). Every step in the log says what was tried. What still fails goes to the
 next slice as its first job (engine/appjob.mjs `playCarry`), and "fix it" typed at the waiting slice plays and
-fixes the same slice again (`start` with `fix: true`, engine/appjob.mjs:161, 508). Not decided: the slice gate and three fix turns of
+fixes the same slice again (`start` with `fix: true`, engine/appjob.mjs:162, 509). Not decided: the slice gate and three fix turns of
 docs/specs/47-game-builder-loop.md.
 
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).

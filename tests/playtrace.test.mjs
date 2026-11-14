@@ -113,16 +113,17 @@ test('a game that throws while it starts and never draws: the play test says it 
     assert.equal(e.text, 'Tuning in…')
     const [top] = e.first.frames
     // (this page's script is not described to the sandboxed frame, so the stack is the debugger's: 0-based, put right)
-    assert.deepEqual([top.fn, top.file, top.line, top.own], ['update', 'src/game.js', 4, true])
+    // or, where the browser does describe it, V8's own, with the class: the same line either way
+    assert.deepEqual([top.fn.replace(/^Scene\./, ''), top.file, top.line, top.own], ['update', 'src/game.js', 4, true])
     assert.match(top.code, /this\.clouds\) c\.x \+= dt/)
     assert.ok(e.console.some(c => /art sheet missing/.test(c.text) && c.type === 'error'), 'the console around the crash')
     assert.equal(playLine(t), 'Cannot read properties of null (reading \'x\'), in src/game.js line 4')
     const brief = fixBrief(t, { finish: 'Finish with a working build.' })
-    assert.match(brief, /at update \(src\/game\.js:4\)\s+> for \(const c of this\.clouds\) c\.x \+= dt/)
+    assert.match(brief, /at (Scene\.)?update \(src\/game\.js:4\)\s+> for \(const c of this\.clouds\) c\.x \+= dt/)
     assert.match(brief, /before the test pressed anything/)
     assert.match(brief, /The game never drew anything/)
     assert.match(brief, /art sheet missing: clouds\.png/)
-    assert.match(brief, /Start at src\/game\.js:4, in update/)
+    assert.match(brief, /Start at src\/game\.js:4, in (Scene\.)?update/)
   } finally { srv.close(); rmSync(dir, { recursive: true, force: true }) }
 })
 
@@ -198,6 +199,12 @@ test('the crew is sent at a failed play test twice at most, each time played aga
   assert.equal(r.tries, 2)
   assert.equal(r.line, 'Cannot read properties of null (reading \'x\'), in src/game.js line 4')
   assert.match(r.problem, /This is fix attempt 3\./)
+  // what the next slice is told first: the findings, with no attempt count and no "keep everything else"
+  const carried = playCarry(r)
+  assert.match(carried, /^the play test of the slice before this one still fails after 2 fix attempts\. Fix it before building anything new/)
+  assert.match(carried, /The last fix attempt changed no file and did not cure it: the same error is still thrown/)
+  assert.match(carried, /at Scene\.update \(src\/game\.js:4\)/)
+  assert.doesNotMatch(carried, /fix attempt 3|Keep everything else as it is/)
   assert.deepEqual(playFacts(r), { started: false, line: r.line, tries: 2 })
 })
 
@@ -254,13 +261,17 @@ test('a play test that still fails is the next slice\'s first job, also after th
   const events = [{ type: 'app:start' }, { type: 'app:paused', result: { stages: [{ playtest: play }] } }, { type: 'app:ready' }, { type: 'app:start', resume: 1 }]
   assert.equal(lastPlay(events), play)
   assert.equal(lastPlay([...events, { type: 'app:done' }]), null)
+  // a Stop (or a failure) after the pause does not clear it: the error is still in the game
+  assert.equal(lastPlay([...events, { type: 'app:failed', message: 'stopped' }, { type: 'app:start', resume: 1 }]), play)
   assert.match(processNotes({ kind: 'game', state: 'paused', failing: 'boom' }), /play test failed: boom\. Nothing is being fixed while it waits: when they type "fix it"/)
 })
 
 test('typed at a waiting slice: "fix it" fixes, "go on" goes on, anything else is the next slice\'s note', () => {
   for (const t of ['fix it', 'can u fix', 'Fix it', 'fix the game', 'please fix it now', 'can you fix it?', 'fix', 'fix the error', 'try again']) assert.equal(sliceSay(t), 'fix', t)
   for (const t of ['go on', 'Go on to the stages', 'Looks good, go on to the stages', 'continue', 'next']) assert.equal(sliceSay(t), 'go', t)
-  for (const t of ['make Mika bigger', 'fix mode toggle in the menu and add a boss', 'hi??']) assert.equal(sliceSay(t), 'note', t)
+  for (const t of ['make Mika bigger', 'fix mode toggle in the menu and add a boss', 'lots of issues to fix with the game itself']) assert.equal(sliceSay(t), 'note', t)
+  // a question or a hello is answered: it starts neither a fix nor the next slice
+  for (const t of ['hi??', 'what is the error?', 'why did it crash', 'is it broken?', 'how do I play it']) assert.equal(sliceSay(t), 'ask', t)
 })
 
 test('a waiting slice an older Studio saved reads truthfully: no "the bots have played it" over a failed test', () => {
@@ -285,6 +296,9 @@ test('a yes to "shall I show the clip?" shows the clip', async () => {
   assert.equal(saysYes('yes make it bigger'), false)
   assert.equal(offeredToShow('The newest play test clip is playtest-2, so tell me if you want it under my answer.'), true)
   assert.equal(offeredToShow('The crew is on slice 3.'), false)
+  // the owner's other line: a yes to it is a yes to a change, never a clip
+  assert.equal(offeredToShow('The play test fails on a null x. Do you want me to send that as the change to fix before the next slice goes on?'), false)
+  assert.equal(offeredToShow('I can show you the newest play test clip. Want to see it?'), true)
   let asked = 0
   const r = await talk({ chat: async () => { asked++; return '{"say":"no"}' }, appDir: tmpdir(), media, text: 'yes', before: { text: 'can i see it', answer: 'The newest play test clip is playtest-2, so tell me if you want it under my answer.' } })
   assert.equal(asked, 0, 'no model is asked: the offer is carried out')

@@ -131,10 +131,14 @@ export function playLine(t) {
 // The fix request: what the builder is handed after a failed play test.
 // t: the play test's result; attempt: 1 for the first request; before: [{ changed: [files], same: bool }] the
 // earlier attempts on this slice; extra: other problems to fix with it (made-up links, a game that looks for the test)
-export function fixBrief(t, { attempt = 1, before = [], extra = [], finish = '' } = {}) {
+// carry: the same findings as the next slice's first job (no attempt count, no "keep everything else")
+export function fixBrief(t, { attempt = 1, before = [], extra = [], finish = '', carry = false } = {}) {
   const e = t?.evidence, first = e?.first
   const out = []
-  if (before.length) {
+  if (before.length && carry) {
+    const last = before.at(-1)
+    out.push(`The last fix attempt ${last.changed?.length ? `changed ${last.changed.slice(0, 8).join(', ')}` : 'changed no file'} and did not cure it${last.same ? ': the same error is still thrown, so that change did not touch the cause' : ''}.`)
+  } else if (before.length) {
     const last = before.at(-1)
     out.push(`This is fix attempt ${attempt}. The last attempt ${last.changed?.length ? `changed ${last.changed.slice(0, 8).join(', ')}` : 'changed no file'} and the play test, run again, ${last.same ? 'fails with the same error: that change did not touch the cause, so do not repeat it' : 'now fails differently'}.`)
   }
@@ -156,7 +160,7 @@ export function fixBrief(t, { attempt = 1, before = [], extra = [], finish = '' 
     else if (first) out.push('Find where that error is thrown before changing anything: search the code for the property it names, and read the code that runs when the page opens.')
   } else if (t?.skipped) out.push(`The play test could not run (${t.skipped}); fix what is listed below.`)
   for (const x of extra.filter(Boolean)) out.push(x)
-  out.push(`Keep everything else as it is.${finish ? ` ${finish}` : ''}`)
+  if (!carry) out.push(`Keep everything else as it is.${finish ? ` ${finish}` : ''}`)
   return out.join('\n\n')
 }
 
@@ -221,5 +225,5 @@ export async function playAndFix({ play, fix, step, film = () => ({}), extras = 
   }
   if (ok) return out({ ok: true, fixed: true, seconds: t.seconds, tries: before.length })
   // what is still wrong, whole: the next slice (or a typed "fix it") starts from it
-  return out({ ok: false, ...(t.skipped ? { skipped: t.skipped } : {}), problem: fixBrief(t, { attempt: before.length + 1, before, extra: [dodged, links] }), tries: before.length })
+  return out({ ok: false, ...(t.skipped ? { skipped: t.skipped } : {}), problem: fixBrief(t, { attempt: before.length + 1, before, extra: [dodged, links] }), carry: fixBrief(t, { before, extra: [dodged, links], carry: true }), tries: before.length })
 }

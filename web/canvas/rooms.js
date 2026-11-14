@@ -495,7 +495,7 @@ function sayAs(item, did) {
   if (tag) tag.textContent = did
   return item
 }
-async function tellCrew(text) {
+async function tellCrew(text, did = '') {
   const t = String(text || '').trim()
   if (!t) return botMsg('The crew is building. Ask what it is doing, or say what to change next.')
   feed(null, t, 'you')
@@ -515,7 +515,7 @@ async function tellCrew(text) {
     const answer = r.answer || (r.queued ? 'Got it: that goes to the crew at the start of the next slice.' : 'The crew is working.')
     cwSay(k, answer)
     // the reply says first what was done with the message: answered, sent, or waiting for a yes
-    const item = sayAs(botMsg(who ? `${who}: ${answer}` : answer), r.proposal ? 'not sent yet · confirm below' : r.queued ? 'sent to the crew' : 'answer only · nothing changed')
+    const item = sayAs(botMsg(who ? `${who}: ${answer}` : answer), r.proposal ? 'confirm below' : r.queued ? 'sent to the crew' : did || 'answer only')
     if (r.media) item.append(mediaBlock(r.media))
     if (r.proposal) item.append(changeBlock(r.proposal))
   } catch (err) { cwSay(k, ''); botMsg(`App: ${err.message}`) }
@@ -591,10 +591,11 @@ function sliceCard(s, run = shownRun()) {
   item.dataset.run = run
   item.dataset.i = s.i
   // a game that never drew: its film is of an empty page, so the error stands where the clip would
-  const vid = w.noStart ? `<p class="sc-none"><b>The game did not start</b><span>${esc(w.line)}</span></p>` : s.clip && !w.noClip ? `<video class="sc-clip" data-src="${esc(BASE + s.clip)}" data-auto muted playsinline loop></video>` : ''
+  // (the words under it say it did not start, and the error, once)
+  const vid = w.noStart ? '' : s.clip && !w.noClip ? `<video class="sc-clip" data-src="${esc(BASE + s.clip)}" data-auto muted playsinline loop></video>` : ''
   const pic = s.shot ? `<img class="sc-shot" src="${esc(BASE + s.shot)}" alt="">` : ''
   item.innerHTML = `<b>${HERMIA}Hermia<small>slice ${s.i + 1} of ${s.n}</small></b>`
-    + `<div class="sc-media">${w.noStart ? vid : `${vid || pic}${vid && pic ? pic : ''}`}</div>`
+    + (w.noStart ? '' : `<div class="sc-media">${vid || pic}${vid && pic ? pic : ''}</div>`)
     + `<span class="txt"></span>`
     + `<button class="sc-live">${ico('play')}<span>Play it live</span></button>`
     + `<div class="sc-ideas">${w.ideas.map((t, j) => `<button data-j="${j}">${esc(t)}</button>`).join('')}</div>`
@@ -682,6 +683,8 @@ export async function sliceGo(text) {
   // "fix it" sends the crew at the play test's error now; "go on" is the next slice as planned; anything else is
   // its note. Words about something broken, after a play test that failed, are a fix with those words.
   const route = w.failed && sliceSay(said) === 'note' && /\b(fix|broken|bugs?|crash\w*|errors?|issues?|not working|does ?n[o']?t work)\b/i.test(said) ? 'fix' : sliceSay(said)
+  // a question, or a hello, is answered and starts nothing: the build goes on waiting
+  if (route === 'ask') return tellCrew(said, w.failed ? 'answer only · type "fix it" or "go on"' : 'answer only · waiting on you')
   feed(null, text, 'you')
   if (route === 'fix' && !w.failed) return sayAs(botMsg('The last play test passed, so there is no error to send the crew at. Say what is wrong and it goes into the next slice.'), 'waiting on you')
   for (const c of els.feed.querySelectorAll('.slice-card .sc-ideas')) c.remove()
@@ -876,7 +879,9 @@ export function appEvent(e) {
     // a big game stops after each slice and asks in the chat (sliceCard)
     Object.assign(appv, { state: 'paused', result: e.result, slice: e.slice, stage: '' })
     if (e.url && fresh_) appv.url = e.url
-    sliceCard(e.slice, e.run)
+    // only as it happens: a reload replays the log, and an old pause's card would offer buttons for a slice long past
+    // (the slice a build waits on now is drawn from its state, loadApp)
+    if (fresh_) sliceCard(e.slice, e.run)
   } else if (e.type === 'app:failed') {
     Object.assign(appv, { state: 'failed', message: e.message })
     if (fresh_) feed(null, `🧩 app: ${e.message}`, 'err')

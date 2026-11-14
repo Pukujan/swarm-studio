@@ -1519,7 +1519,7 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
   const snap = snapOf(id)
   const media = { clips: m.clipList, pics: [...(snap ? [{ src: snap.split('?')[0], name: 'the game right now (a still)' }] : []), ...m.picList] }
   const notes = `${how} ${mediaNotes(m, false)}\n\nState: ${j?.state || st?.state || 'idle'}. Stage: ${j?.stage || stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}`
-  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}`
+  const fallback = (j?.state || st?.state) === 'paused' ? 'The build is waiting on you: type "fix it" to send the crew at the play test\'s error, or "go on" for the next slice.' : `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}`
   const model = modelFor('planner')
   if (!model) return { queued: false, state: st.state, answer: fallback }
   const chat = async messages => (await streamChat(provider('planner'), {
@@ -2112,13 +2112,13 @@ async function idleGate(runId, spec, pre, signal) {
   const said = (state, extra = {}) => record(runId, { type: 'game:idle', t: Date.now(), run: runId, state, who, ...extra })
   const interp = interpOf(heavyConfig(dataDir))
   const keys = why => {
-    if (!interp) { said('no', { text: why }); return [] }
+    if (!interp) { said('no', { text: `${why}: ${who} keeps the painted idle` }); return [] }
     said('keys', { text: `${why}; ${interp.name} will fill in the frames between close keyframes` })
     return g.idleSheets(spec, undefined, 'keys')
   }
   const options = pre === 'no' ? [] : await idleChoices()
   // (said whole: a bare "No clip" beside a slice's card read as "the play test has no clip")
-  if (!options.length) return keys(pre === 'no' ? `${who} keeps the painted idle (no video clip)` : `No video model, so ${who} keeps the painted idle`)
+  if (!options.length) return keys(pre === 'no' ? 'No idle clip' : 'No video model, so no idle clip')
   let chosen = null
   if (pre && typeof pre === 'object') { const o = optionOf(options, pre.video); if (priceOk(o, pre.usd)) chosen = o }
   if (!chosen) {
@@ -2132,7 +2132,7 @@ async function idleGate(runId, spec, pre, signal) {
       idleAsks.set(runId, { options, resolve: end })
     })
   }
-  if (!chosen) return signal?.aborted ? [] : keys(chosen === null ? `No answer in time, so ${who} keeps the painted idle` : `${who} keeps the painted idle (no video clip)`)
+  if (!chosen) return signal?.aborted ? [] : keys(chosen === null ? 'No answer, so no idle clip' : 'No idle clip')
   said('yes', { text: `Animating ${who}'s idle with ${chosen.by}`, line: chosen.line, usd: chosen.usd, option: chosen.id })
   const more = g.idleSheets(spec)
   for (const m of more) if (m.video) m.option = chosen

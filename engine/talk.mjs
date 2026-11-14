@@ -20,7 +20,7 @@ export const wantsToSee = text => SEE.test(String(text || ''))
 // a bare yes, and an answer that offered to show something: the yes performs the offer (the model once offered
 // the newest clip twice and showed nothing either time)
 export const saysYes = text => /^(?:yes|y|yep|yeah|ok|okay|sure|please|do it|go ahead|show me|show it|please do|yes please|yes,? (?:do|show) it)[.!]?$/i.test(String(text || '').trim())
-export const offeredToShow = answer => /\b(show|see|watch|under my answer)\b/i.test(String(answer || '')) && /\b(clip|picture|pictures|still|play test|art)\b/i.test(String(answer || '')) && /\?|\b(want|would you like|tell me|say|can show|shall)\b/i.test(String(answer || ''))
+export const offeredToShow = answer => { const a = String(answer || ''); return /\b(show (you|it|that|them|the)|can show|see (it|them|the clip|the pictures?)|watch (it|the)|want it under|under my answer)\b/i.test(a) && /\b(clip|pictures?|stills?|art)\b/i.test(a) && !/\b(send|change to|the builder)\b/i.test(a) }
 const newest = m => (m.clips[0] || m.pics.length ? { clip: m.clips[0]?.src || null, pics: m.pics.slice(0, 4) } : null)
 
 // the app's own files, shortest paths first (what Talk can read)

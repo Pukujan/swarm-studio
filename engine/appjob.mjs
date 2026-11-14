@@ -155,10 +155,11 @@ const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args
 // What a slice's play test left for the room and the chat: its clip (only of a game that drew), whether the game
 // never started, the failure in one line and how many fixes were tried.
 export const playFacts = play => ({ ...(play?.clip ? { clip: play.clip } : {}), ...(play?.started === false ? { started: false } : {}), ...(play && !play.ok && play.line ? { line: play.line } : {}), ...(play?.tries ? { tries: play.tries } : {}), ...(play?.skipped ? { skipped: String(play.skipped).slice(0, 160) } : {}) })
-// The play test of the slice a build is waiting on (its last app:paused), for going on or fixing after a restart
-export const lastPlay = events => { const p = events.findLast(e => ['app:paused', 'app:done', 'app:failed'].includes(e.type)); return p?.type === 'app:paused' ? p.result?.stages?.at(-1)?.playtest || null : null }
+// The play test of the slice a build last waited on (its last app:paused), for going on or fixing after a restart
+// (a Stop or a failure after it does not clear it: the error is still in the game)
+export const lastPlay = events => { const p = events.findLast(e => ['app:paused', 'app:done'].includes(e.type)); return p?.type === 'app:paused' ? p.result?.stages?.at(-1)?.playtest || null : null }
 // A play test that still fails, as the first thing the next slice is told
-export const playCarry = play => (play && !play.ok && !play.skipped && play.problem ? `the play test of the slice before this one still fails${play.tries ? ` after ${play.tries} fix attempt${play.tries === 1 ? '' : 's'}` : ''}. Fix it before building anything new, and build nothing on top of it until the game starts and plays:\n\n${String(play.problem).slice(0, 6000)}` : '')
+export const playCarry = play => (play && !play.ok && !play.skipped && (play.carry || play.problem) ? `the play test of the slice before this one still fails${play.tries ? ` after ${play.tries} fix attempt${play.tries === 1 ? '' : 's'}` : ''}. Fix it before building anything new, and build nothing on top of it until the game starts and plays. What the play test found:\n\n${String(play.carry || play.problem).slice(0, 6000)}\n\n(End of the play test's findings.)` : '')
 
 export function bigResumeAt(events, dir) {
   if (!dir || !existsSync(join(dir, 'package.json'))) return 0
@@ -503,7 +504,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const before = askedBefore(dir)
     const items = [...artList(spec), ...sheetList(spec)]
     for (const it of before) if (!items.some(x => x.id === it.id)) items.push(it)
-    // "fix it" after a slice whose play test failed (docs/specs/22-guided-game-maker.md): no new slice and no
+    // "fix it" after a slice whose play test failed (docs/engines/godot.md, "A failed play test"): no new slice and no
     // painting. The slice just built is played again, the crew is sent at what fails, and the build waits again.
     const fixing = !!(from && input.fix)
     if (paint && input.art !== false && !fixing) {

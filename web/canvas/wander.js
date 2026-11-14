@@ -71,14 +71,17 @@ export const neverDrew = x => !!x && (x.started === false || (x.ok === false && 
 
 /**
  * What a message typed at a waiting slice asks for: 'fix' sends the crew at the play test's error now, 'go'
- * starts the next slice as planned, 'note' starts it with the words as its note.
- * @param {string} text  @returns {'fix' | 'go' | 'note'}
+ * starts the next slice as planned, 'ask' is a question or a hello (answered, nothing starts), 'note' starts the
+ * next slice with the words as its note.
+ * @param {string} text  @returns {'fix' | 'go' | 'ask' | 'note'}
  */
 export function sliceSay(text) {
-  const t = String(text || '').trim().replace(/[.!?]+$/, '')
+  const raw = String(text || '').trim()
+  const t = raw.replace(/[.!?]+$/, '')
   if (/^(please\s+)?((can|could|will|would)\s+(u|you)\s+)?(just\s+)?(fix|repair|debug|sort)(\s+(it|this|that|them|the\s+(game|error|errors|bug|bugs|crash|issue|issues|problem|problems|play ?test)))?(\s+(now|first|please|then))*$/i.test(t)) return 'fix'
   if (/^(try|fix)\s+(it\s+)?again$/i.test(t)) return 'fix'
   if (/^(looks good\b.*|(please\s+)?(go on|go ahead|continue|carry on|keep going|next( slice)?|go on to .{1,60}|finish it)(\s+anyway)?)$/i.test(t)) return 'go'
+  if (/\?\s*$/.test(raw) || /^(what|what's|whats|why|how|when|where|who|which|is|are|was|were|does|did|do|status|hi|hey|hello|yo)\b/i.test(t)) return 'ask'
   return 'note'
 }
 
