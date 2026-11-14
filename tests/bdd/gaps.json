@@ -1,0 +1,57 @@
+{
+ "projects › Breadcrumb › A view in the sidebar": {
+  "current": {
+   "why": "Projects has no breadcrumb (the audit's known `projects breadcrumb` violation), so no view's name is in one",
+   "match": "the breadcrumb reads"
+  },
+  "next": {
+   "why": "Projects' breadcrumb is empty (the audit's known `projects breadcrumb` violation), so no view's name is in one",
+   "match": "the breadcrumb reads"
+  }
+ },
+ "projects › Breadcrumb › The breadcrumb's parts go where they say": {
+  "current": {
+   "why": "Projects has no breadcrumb (the audit's known `projects breadcrumb` violation), so there is no Projects part to press and the view stays",
+   "match": [
+    "no Projects part to press",
+    "the breadcrumb reads",
+    "Recent is not the view shown",
+    "Esc from Recent changed the breadcrumb"
+   ]
+  },
+  "next": {
+   "why": "Projects' breadcrumb is empty (the audit's known `projects breadcrumb` violation), so there is no Projects part to press and the view stays",
+   "match": [
+    "no Projects part to press",
+    "the breadcrumb reads",
+    "Recent is not the view shown",
+    "Esc from Recent changed the breadcrumb"
+   ]
+  }
+ },
+ "projects › Project cards › Deleting forever asks first": {
+  "current": {
+   "why": "the dialog says `this project`, not the project's name; it does say its files can't be brought back, and nothing is deleted until `delete` is typed",
+   "match": "does not name what will be deleted"
+  },
+  "next": {
+   "why": "the dialog says `this project`, not the project's name; it does say its files can't be brought back, and nothing is deleted until `delete` is typed",
+   "match": "does not name what will be deleted"
+  }
+ },
+ "projects › 390 px › The drawer": {
+  "current": {
+   "why": "the drawer has no × button; Esc, the scrim and a pick close it",
+   "match": "× did not close it"
+  },
+  "next": {
+   "why": "the drawer opens with no scrim and no ×, and Esc leaves it open; a pick closes it",
+   "match": [
+    "opened without a scrim",
+    "Esc did not close it",
+    "the scrim did not close it",
+    "× did not close it"
+   ]
+  }
+ }
+}

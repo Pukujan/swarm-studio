@@ -15,7 +15,8 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const testDir = defineBddConfig({
   featuresRoot: `${ROOT}tests/bdd/features`,
   features: `${ROOT}tests/bdd/features/*.feature`,
-  steps: `${ROOT}tools/dev/bdd/steps/*.mjs`,
+  // the steps, and the kit that holds the test they use (its fixtures: the Studio, the app, what a When saw)
+  steps: [`${ROOT}tools/dev/bdd/steps/*.mjs`, `${ROOT}tools/dev/bdd/kit.mjs`],
   // inside tools/dev, a "type": "module" package, so the generated tests load as modules
   outputDir: `${ROOT}tools/dev/bdd/.gen`,
   tags: 'not @pending and not @manual',

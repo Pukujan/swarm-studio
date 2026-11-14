@@ -81,6 +81,16 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     if (!seen.has(k)) problems.push(`tests/bdd/pending.json lists "${k}", which no spec has`)
     if (!/^#\d+$/.test(v)) problems.push(`tests/bdd/pending.json marks "${k}" with "${v}": a mark is an issue number, "#N"`)
   }
+  // tests/bdd/gaps.json: a bound scenario one Studio does not meet yet, { "<scenario>": { "current"|"next": { "why": what differs, "match": the words its failure has } } }
+  const gaps = JSON.parse(readFileSync(join(ROOT, 'tests/bdd/gaps.json'), 'utf8'))
+  for (const [k, v] of Object.entries(gaps)) {
+    if (!seen.has(k)) problems.push(`tests/bdd/gaps.json lists "${k}", which no spec has`)
+    if (pending[k]) problems.push(`tests/bdd/gaps.json lists "${k}", which is pending: a gap is for a bound scenario`)
+    for (const [app, g] of Object.entries(v || {})) {
+      const okMatch = typeof g?.match === 'string' ? g.match.trim() : Array.isArray(g?.match) && g.match.length && g.match.every(m => typeof m === 'string' && m.trim())
+      if (!['current', 'next'].includes(app) || typeof g?.why !== 'string' || !g.why.trim() || !okMatch) problems.push(`tests/bdd/gaps.json: "${k}" › "${app}" should be "current" or "next", with { "why": what differs, "match": the words of the failure it passes }`)
+    }
+  }
   if (problems.length) { console.log(problems.join('\n')); process.exit(1) }
   console.log(`${n} scenarios from ${readdirSync(SPECS).length} specs: ${n - marked - manual} to run, ${marked} pending, ${manual} manual (with the reason in the spec)`)
 }
