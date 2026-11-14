@@ -4,6 +4,7 @@
 //   GET  /api/brand/:chat                             -> { chat, brand, theme }
 //   POST /api/brand/:chat/pick { part, id | words }   -> { chat, brand, theme }  words: one more option, picked
 //   POST /api/brand/:chat/pick { part: 'pack', id, parts? } -> a pack fills the sheet (or only the parts named)
+//   POST /api/brand/:chat/pick { part: 'look', look, host } -> a reference's look as the picked palette and type
 //   POST /api/brand/:chat/edit { part, id, values }   -> { chat, brand, theme }  an option's colours, fonts or the story
 //   POST /api/brand/:chat/lock | /unlock              -> { chat, brand, theme }
 // One brand per project (docs/specs/37-studio-first.md): the same routes answer for a project's
@@ -13,6 +14,7 @@
 import { CHAT_ID } from '../engine/chats.mjs'
 import { brandOptions, brandTheme, brandBrief, fixPalette, paletteFromWords } from '../engine/brand.mjs'
 import { packCards, applyPack, packOf, PARTS } from '../engine/brandpacks.mjs'
+import { brandFromLook } from '../engine/sitelook.mjs'
 
 const HEXC = /^#[0-9a-f]{6}$/i
 const FONT = /^[A-Za-z][\w ]{1,38}$/
@@ -52,6 +54,12 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
     const opts = await brandOptions({ brief, chat: model() })
     return store.update(id, chat => {
       chat.brand = { brief, story: opts.story, palettes: opts.palettes, types: opts.types, suggest: opts.suggest || [], pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null }
+      // what the person chose themselves stays through a new brief: a reference's look (Use this look) and
+      // options made from their own words, still picked
+      const kept = { p: (have?.palettes || []).filter(x => x.by === 'look' || x.by === 'person'), t: (have?.types || []).filter(x => x.by === 'look' || x.by === 'person') }
+      if (kept.p.length) { chat.brand.palettes.unshift(...kept.p); if (kept.p.some(x => x.id === have.pick?.palette)) chat.brand.pick.palette = have.pick.palette }
+      if (kept.t.length) { chat.brand.types.unshift(...kept.t); if (kept.t.some(x => x.id === have.pick?.type)) chat.brand.pick.type = have.pick.type }
+      if (kept.p.length && have.radius) chat.brand.radius = have.radius
     }).then(view)
   }
 
@@ -61,6 +69,19 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
       const parts = Array.isArray(input.parts) ? input.parts.filter(p => PARTS.includes(p)) : PARTS
       if (!parts.length) throw bad('name a part')
       return change(id, b => { applyPack(b, input.id, parts) }, S)
+    }
+    // "Use this look" on a reference link (decision 0022): its measured colours and type become one palette and
+    // one type on the sheet, picked; the person can still change either. Its own font files are never used.
+    if (input.part === 'look') {
+      const made = brandFromLook(input.look, String(input.host || '').replace(/[^\w.-]/g, '').slice(0, 60))
+      if (!made) throw bad('that look has no colours yet')
+      return change(id, b => {
+        b.palettes = (b.palettes || []).filter(x => x.id !== 'plook'); b.types = (b.types || []).filter(x => x.id !== 'tlook')
+        b.palettes.unshift({ ...fixPalette(made.palette), id: 'plook', by: 'look' })
+        b.types.unshift({ ...made.type, id: 'tlook', by: 'look' })
+        b.pick = { ...(b.pick || {}), palette: 'plook', type: 'tlook' }
+        if (made.radius) b.radius = made.radius
+      }, S)
     }
     const part = input.part === 'type' ? 'type' : input.part === 'palette' ? 'palette' : null
     if (!part) throw bad('part is palette, type or pack')
@@ -131,8 +152,20 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
       body(req).then(input => {
         if (!pm[2]) {
           const brief = String(input.brief || '').trim().slice(0, 4000)
-          if (!brief) throw bad('a brief is needed')
+          // A project with no idea yet still gets a sheet to pick from: the built-in palettes and pairings, with
+          // no model call. (It opened blank with "a brief is needed".) Once there is an idea, the sheet is made for it.
+          if (!brief) {
+            if (rec.brand) return view(rec)
+            return brandOptions({ brief: '', chat: null }).then(opts => projectBrands.update(pm[1], chat => { chat.brand = { brief: '', story: { ...opts.story, pages: [] }, palettes: opts.palettes, types: opts.types, suggest: opts.suggest || [], pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null } })).then(view)
+          }
           return fill(projectBrands, pm[1], brief)
+        }
+        // "Use this look" on a project with no sheet yet: one is made from the built-in options, with no model
+        // call, and the look goes on top of it. It names no pages, so the project's own page list stands
+        if (pm[2] === 'pick' && input.part === 'look' && !rec.brand) {
+          const brief = String(input.brief || '').trim().slice(0, 4000) || 'A website'
+          return brandOptions({ brief, chat: null }).then(opts => projectBrands.update(pm[1], chat => { chat.brand = { brief, story: { ...opts.story, pages: [] }, palettes: opts.palettes, types: opts.types, suggest: opts.suggest || [], pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null } }))
+            .then(() => op('pick', pm[1], input, projectBrands))
         }
         return op(pm[2], pm[1], input, projectBrands)
       }).then(v => json(res, 200, v)).catch(err => json(res, err.status || 400, { error: String(err.message || err) }))

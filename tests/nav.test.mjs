@@ -203,9 +203,10 @@ test('the door: go() moves it, a move it does not have is logged and changes not
 
 test('the Studio opens a project on a step, moves between steps, and Esc goes up one then home (spec 37)', () => {
   const S = { type: 'studio', project: 'pn' }
-  assert.deepEqual(pick(v(S), ['room', 'project', 'step', 'version', 'run']), ['studio', 'pn', 'brand', null, null])
+  // with no step named it opens on the whole board (the board-style Studio), so no step is current
+  assert.deepEqual(pick(v(S), ['room', 'project', 'step', 'version', 'run']), ['studio', 'pn', null, null, null])
   assert.equal(v({ ...S, step: 'assets' }).step, 'assets')
-  assert.equal(v({ ...S, step: 'nope' }).step, 'brand')
+  assert.equal(v({ ...S, step: 'nope' }).step, null)
   assert.equal(v(A, S).version, null, 'the Studio is not a build: none stays open')
   no([], { type: 'studio' })
   assert.equal(v(S, { type: 'studio.step', step: 'plan' }).step, 'plan')

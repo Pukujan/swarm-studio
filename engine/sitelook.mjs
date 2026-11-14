@@ -215,3 +215,27 @@ export function lookBrief(ref) {
     L.words.threeD ? `- Instead of their 3D piece: ${L.words.threeD}` : '',
   ].filter(Boolean).join('\n')
 }
+
+// ---------- a look as a brand: "Use this look" on a reference fills the project's brand sheet with one palette
+// and one type made from it (server/brand.mjs, pick part 'look'). The reference's own font files are not used:
+// a font the builders can load keeps its name; a system or unknown one becomes the closest by kind.
+const LOADABLE = { serif: 'Fraunces', mono: 'JetBrains Mono', 'condensed sans': 'Oswald', 'display sans': 'Space Grotesk', sans: 'Inter' }
+const SYSTEM_FONT = /^(-apple-system|blinkmacsystemfont|system-ui|ui-[a-z-]+|segoe ui|helvetica( neue)?|arial|sans-serif|serif|monospace|times( new roman)?|georgia|courier( new)?|verdana|tahoma|roboto|sf pro[\w ]*|inherit)$/i
+export function loadableFont(f = {}) {
+  const name = String(f.name || '').replace(/\s+(variable|var|vf)$/i, '').trim()
+  return name && !SYSTEM_FONT.test(name) && /^[A-Za-z][\w ]{1,38}$/.test(name) ? name : LOADABLE[f.kind] || LOADABLE.sans
+}
+// tokens: a look's measured tokens; host: where it came from. Null when the look has no colours.
+export function brandFromLook(tokens, host = '') {
+  const hex = c => (/^#[0-9a-f]{6}$/i.test(String(c || '')) ? String(c).toLowerCase() : null)
+  const bg = hex(tokens?.bg), text = hex(tokens?.text)
+  if (!bg || !text) return null
+  const accent = hex(tokens.accent) || text
+  const name = clip(host ? `From ${host}` : 'From your reference', 40)
+  const r = String(tokens.radius || '')
+  return {
+    palette: { name, bg, text, accent, link: accent },
+    type: { name, heading: loadableFont(tokens.fonts?.display), body: loadableFont(tokens.fonts?.body) },
+    radius: r === 'pill' ? '9999px' : /^\d{1,2}px$/.test(r) ? r : null,
+  }
+}

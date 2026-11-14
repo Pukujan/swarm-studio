@@ -4,7 +4,7 @@
 /* --cosmos-ease is web/tokens.css (tokens/*.tokens.json) */
 
 /* ---------- lean chrome: back, Projects › name, the crew, Play, Publish, ☰ */
-body.cosmos #views, body.cosmos #game-btn, body.cosmos .undo-redo, body.cosmos .clock,
+body.cosmos #views, body.cosmos #game-btn, body.cosmos .clock,
 body.cosmos #more-btn .t, body.cosmos #more-btn .count { display: none !important; }
 body.cosmos #more-btn { padding: 4px 9px; }
 .cosmos-back { display: none; align-items: center; gap: 6px; }
@@ -85,7 +85,7 @@ body.cosmos .auto-panel { display: none !important; }
 
 /* the mode: Canvas, Video, App or Game, one menu button in a build's top bar */
 .mode-wrap { position: relative; display: none; }
-body.cosmos-project .mode-wrap, body.cosmos-station .mode-wrap { display: block; }
+body.cosmos-project .mode-wrap, body.cosmos-station .mode-wrap, body.cosmos-studio .mode-wrap { display: block; }
 .mode-btn { display: inline-flex; align-items: center; gap: 6px; }
 .topbar .mode-btn .t { display: inline !important; }
 .mode-btn .ico { width: 14px; height: 14px; color: var(--muted); transition: transform .15s var(--ease); }
