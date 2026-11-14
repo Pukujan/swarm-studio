@@ -4,7 +4,10 @@
 // the Studio's project. server/page.mjs joins this file in its own closure, so its names stay its own.
 import { ic } from './icons.js'
 
-const GUESS = ['Home', 'About', 'Contact']
+// No pages by default: the crew decides them from the idea unless the person adds their own (the owner,
+// 2026-11-13: "people are allowed to choose and they shouldnt be default"). Home, About and Contact used to be
+// filled in and then forced into every build.
+const GUESS = []
 const pagesOf = ctx => ctx.state.pages || (ctx.brand?.story?.pages?.length ? ctx.brand.story.pages : GUESS)
 const MAX = 12
 
@@ -37,7 +40,7 @@ export const siteKit = {
         render: el => frame(el, ctx, name, i),
         // the Layers row's Rename and Delete (web/scaffold.js)
         rename: v => save(pages.map((p, j) => (j === i ? v.slice(0, 40) : p))),
-        remove: pages.length > 1 ? () => save(pages.filter((_, j) => j !== i)).then(() => ctx.select(null)) : null,
+        remove: () => save(pages.filter((_, j) => j !== i)).then(() => ctx.select(null)),
         inspect: box => {
           const esc = ctx.sw.esc
           box.innerHTML = `<label class="pl-f"><span>Name</span><input value="${esc(name)}" maxlength="40"></label>
@@ -74,7 +77,7 @@ export const siteKit = {
   // the person's press: the idea and its pages, built inside the Studio's project
   build: async (spec, ctx) => {
     const pages = spec.kits?.site?.pages || pagesOf(ctx)
-    const brief = `${spec.idea || ctx.studio.idea}\n\nPages: ${pages.join(', ')}.`
+    const brief = pages.length ? `${spec.idea || ctx.studio.idea}\n\nPages: ${pages.join(', ')}.` : String(spec.idea || ctx.studio.idea)
     const run = await ctx.sw.submit(brief, false, ctx.project.id, null, { chat: ctx.chat })
     return { run: typeof run === 'string' ? run : null }
   }

@@ -7,7 +7,7 @@
 body.cosmos-studio .sc-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
 body.cosmos-studio .sc-primary:not([hidden]) { display: inline-flex !important; align-items: center; justify-content: center; min-width: 120px; }
 body.cosmos-studio .sc-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-body.cosmos-studio .brand, body.cosmos-studio .file-name, body.cosmos-studio .playwrap, body.cosmos-studio .pubwrap, body.cosmos-studio .mode-wrap,
+body.cosmos-studio .brand, body.cosmos-studio .file-name, body.cosmos-studio .playwrap, body.cosmos-studio .pubwrap,
 body.cosmos-studio .pl-crumb, body.cosmos-studio .pl-primary, body.cosmos-studio .br-crumb, body.cosmos-studio .br-primary { display: none !important; }
 body.cosmos-studio .cosmos-back { display: none; }
 body.cosmos-studio .topbar { background: var(--void); backdrop-filter: none; }
@@ -43,7 +43,11 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .ab.pcard.sc-idea > span { font: 500 16px/1.4 var(--body); -webkit-line-clamp: 4; }
 .sc-idea-full { margin: 0; font: 14px/1.5 var(--body); color: var(--text); }
 
-/* the board's facts (top left): the idea, then what is set so far, three cards to a row like the game's Plan board */
+/* the board reads like the steps: sections left to right, then the next row */
+.scaffold .sc-row { display: flex; gap: 72px; align-items: flex-start; }
+.scaffold .sc-row .pj-sec .abs { max-width: 540px; }
+.scaffold .sc-none { color: var(--muted); font-weight: 500; }
+/* Lock, the last section: the idea, then what is set so far, three cards to a row like the game's Plan board */
 .scaffold .pj-sec.sc-facts .abs { max-width: 700px; gap: 16px; }
 .scaffold .sc-facts .ab.pcard.sc-idea { width: 436px; min-height: 118px; }
 .ab.pcard.sc-fact { position: relative; cursor: pointer; }

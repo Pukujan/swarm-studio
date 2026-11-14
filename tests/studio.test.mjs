@@ -126,7 +126,8 @@ const v = (...events) => view(at(...events).getSnapshot())
 const S = { type: 'studio', project: 's-1' }
 
 test('the Studio is a room with one step in view; the brand sheet comes back to it', () => {
-  assert.deepEqual([v(S).room, v(S).project, v(S).step], ['studio', 's-1', 'brand'])
+  // with no step named, the whole board is in view and no step is current
+  assert.deepEqual([v(S).room, v(S).project, v(S).step], ['studio', 's-1', null])
   assert.equal(v({ type: 'studio', project: 's-1', step: 'plan' }).step, 'plan')
   assert.equal(v(S, { type: 'studio.step', step: 'assets' }).step, 'assets')
   assert.equal(v(S, { type: 'studio.step', step: 'proposal' }).step, 'proposal')

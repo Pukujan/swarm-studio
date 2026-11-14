@@ -19,7 +19,7 @@ import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
-import { extendBase, followUp, rehomeImages } from '../engine/extend.mjs'
+import { extendBase, followUp, rehomeImages, baseBrief } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
 import { reviewPage, fixSection, routeComment, reviewAgain, REVIEW_PASS, REVIEW_ROUNDS } from '../engine/review.mjs'
@@ -1608,7 +1608,17 @@ const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null
 // The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
 const studios = studioStore({ projectsDir: projects.projectsDir })
 const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
-const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats })
+// what a project's newest build was made with, for its Studio (server/studio.mjs): websites only for now
+function builtOf(pid) {
+  const head = projects.get(pid)?.head
+  const events = head ? readEvents(head) : null
+  const start = events?.find(e => e.type === 'run:start')
+  const pages = (events || []).filter(e => e.type === 'page' && e.title).map(e => String(e.title).slice(0, 60))
+  if (!start || !pages.length) return null
+  const th = events.findLast(e => e.type === 'theme')
+  return { kind: 'site', idea: baseBrief(start.brief).split('\n\nPages: ')[0].slice(0, 4000), pages: [...new Set(pages)], theme: th ? { accent: th.vars?.['--accent'] || th.vars?.['--primary'] || null, heading: th.fonts?.heading || null, name: th.name || null } : null }
+}
+const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats, builtOf })
 // a film from a project's brand, References and Assets, no website (spec 40): the Video kit's Build press
 const filmRoute = filmRoutes({
   projectsDir: projects.projectsDir, refs, known: pid => !!projects.get(pid),
@@ -2820,6 +2830,8 @@ const server = createServer((req, res) => {
       if (typeof input.from === 'string' && typeof input.project !== 'string' && RUN_ID.test(input.from)) input.project = projects.projectOf(input.from) || undefined
       // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
       // and the art director matches the new pictures to them (art.styleGuide reads the brief)
+      // links in the person's own words (before anything is added to the brief): pages named as what to make
+      const askedLinks = linksIn(String(input.brief || ''), 2)
       if (typeof input.project === 'string') {
         const ups = projects.uploadsOf(input.project).filter(u => /^image\//.test(u.type)).slice(0, 12)
         if (ups.length) input.brief = `${String(input.brief).trim()}\n\nThe owner uploaded these pictures. Use them where they fit, as they are (<img src="…">, no data-gen), and make every new picture match their look:\n${ups.map(u => `- ${u.name}: ${u.src}`).join('\n')}`
@@ -2829,6 +2841,14 @@ const server = createServer((req, res) => {
         // and its Assets (spec 37): placed as they are
         const ab = projectAssets.brief(input.project)
         if (ab) input.brief = `${String(input.brief).trim()}\n\n${ab}`
+      }
+      // "recreate this: <link>": the page is read, so the crew writes from what it says and not from an address.
+      // A link kept as a reference is a look to learn from, not this; only public pages are read (spec 29).
+      const asLook = typeof input.project === 'string' ? new Set(refs.list(input.project).filter(r => r.kind === 'link').map(r => r.url)) : new Set()
+      for (const u of askedLinks) {
+        if (asLook.has(u) || asLook.has(`${u}/`)) continue
+        const p = await readPage(u).catch(() => null)
+        if (p && (p.title || p.text)) input.brief = `${String(input.brief).trim()}\n\nThe owner linked ${u} as what this is about. What that page says (write the site from this; its design is not the reference):\n${[p.title && `Title: ${p.title}`, p.description && `Description: ${p.description}`, p.text && `Words: ${p.text}`].filter(Boolean).join('\n')}`.slice(0, 12000)
       }
       // A message inside an open build (from: its run) is that project's next version: the
       // last version is kept as it stands and the crew adds only what the message asks for
