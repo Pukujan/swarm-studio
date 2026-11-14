@@ -395,11 +395,6 @@
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
   },
   {
-    "key": "replay only in /: page ~opacity 600ms x1 ease",
-    "label": "drift",
-    "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
-  },
-  {
     "key": "replay only in /: page ~transform 100ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "drift",
     "why": "/next/ does not move like / here, and the PR that moved the screen does not leave it for later."
