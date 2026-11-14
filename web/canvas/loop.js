@@ -10,7 +10,8 @@ import { lite, litePass, frameBusy, togglePanel, toggleModels } from './settings
 import { renderAgents, setText, renderToolbar, treeSel, renderTree, renderStatus, botMsg, feed, hermesReady, hermesSays, resumeRun } from './panels.js'
 import { renderDesign, drawSelBox, exp, design, selectAt, exportRunNow, undo, redo, esc } from './design.js'
 import { drawComment, review, cmt, reviewRun, sendLayers } from './marks.js'
-import { paintReplay, viewing, files, loadFiles, fileMatch, fileInfo, saveMeta, traceView, fileInto } from './replay.js'
+import { paintReplay, viewing, files, loadFiles, fileMatch, fileInfo, saveMeta, traceView, fileInto, rec, replaySay } from './replay.js'
+import { progressLine } from '../replaytalk.js'
 import { pub, liveUrl, publishNow } from './publish.js'
 import { shownRun, video, VIDEO_STYLES, makeVideo, showRun, runNow } from './film.js'
 import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view, stageSay, mediaBlock } from './rooms.js'
@@ -135,22 +136,21 @@ export function frameLoop(now) {
     for (const f of S.frames) f.el.classList.toggle('active', busyPages.has(f.id))
     els.play.disabled = els.playMore.disabled = !S.frames.length
     // with no reviewer model yet, Review opens Models to pick one instead of sitting greyed out
-    els.reviewBtn.disabled = review.busy || !S.done
+    // (a replay only plays: nothing that acts on the build is offered while it does)
+    els.reviewBtn.disabled = review.busy || !S.done || rec.on
     setLabel(els.reviewBtn, review.busy ? 'Reviewing…' : 'Review')
-    els.exportBtn.disabled = !S.done || exp.busy
+    els.exportBtn.disabled = !S.done || exp.busy || rec.on
     paintReplay()
     const pubbing = pub.run === shownRun() && pub.state === 'working'
     const deploying = appv.deploying && appv.run === shownRun()
-    els.publishBtn.disabled = (!S.done && !pubbing) || deploying
+    els.publishBtn.disabled = (!S.done && !pubbing) || deploying || rec.on
     setLabel(els.publishBtn, pubbing || deploying ? 'Publishing…' : liveUrl() ? 'Live' : 'Publish')
     const mine = video.run === shownRun()
-    els.videoBtn.disabled = !S.done && !(mine && video.src)
+    els.videoBtn.disabled = (!S.done && !(mine && video.src)) || rec.on
     setLabel(els.videoBtn, mine && video.busy ? `Video ${video.pct ? `${video.pct | 0}%` : 'writing…'}` : 'Video')
     if (S.progress) {
       const done = [...S.layers.values()].filter(l => l.status === 'done').length
-      setText(S.progress.querySelector('.txt'), S.layers.size
-        ? `${S.planText ? `${S.planText} ` : ''}${working} agents building · ${done}/${S.layers.size} sections across ${S.frames.length} pages`
-        : 'Planning the pages…')
+      setText(S.progress.querySelector('.txt'), progressLine({ replay: rec.on, plan: S.planText, working, done, total: S.layers.size, pages: S.frames.length }))
       if (!S.progress.querySelector('.pbar')) S.progress.insertAdjacentHTML('beforeend', '<span class="pbar"><i></i></span>')
       S.progress.querySelector('.pbar i').style.width = `${S.layers.size ? (done / S.layers.size * 100).toFixed(1) : 4}%`
     }
@@ -407,6 +407,8 @@ export const github = githubDoor({ api, esc: s => esc(s), botMsg, youSaid: text 
 const githubBtn = $('#github-btn')
 if (githubBtn) { if (BOOT.hosted) githubBtn.remove(); else githubBtn.onclick = () => github.open() }
 async function sendDock() {
+  // a replay comes first (web/replaytalk.js): "stop", "is this building?", "replay"; anything else ends it, then goes on
+  if (!nextRoute && await replaySay(els.brief.value)) return
   // a typed GitHub move is never a brief, in any mode and from any dock
   if (!nextRoute?.fresh && github.say(els.brief.value)) { nextRoute?.done?.(null); nextRoute = null; els.brief.value = ''; return }
   if (!nextRoute && await modeSend(modeHelp)) return
