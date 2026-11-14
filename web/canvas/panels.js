@@ -314,11 +314,15 @@ export function hermesSays(h) {
   return item
 }
 
+// a reply on its way with no words yet ('…') is a skeleton of her lines, marked busy: Hermia's cursor shows she is
+// working while it waits (web/pet.js PET_NEAR, #392); it is removed when the reply comes
 export function botMsg(text, working = false) {
   const item = document.createElement('div')
+  const replying = working && text === '…'
   item.className = `item bot${working ? ' working' : ''}`
-  item.innerHTML = `<b>${HERMIA}Hermia<small>planner</small></b><span class="txt"></span>`
-  item.querySelector('.txt').textContent = text
+  item.innerHTML = `<b>${HERMIA}Hermia<small>planner</small></b><span class="txt"></span>${replying ? '<span class="sk-lines" aria-hidden="true"><i></i><i></i></span>' : ''}`
+  if (replying) item.setAttribute('aria-busy', 'true')
+  else item.querySelector('.txt').textContent = text
   push(els.feed, item)
   return item
 }

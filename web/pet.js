@@ -137,6 +137,8 @@ export const PET_BUSY = '.wait-in, [aria-busy="true"], .ab .sk:not(.over), .app-
 // where she does not go: a crew cursor already paints there, a dialog sits above her, or the chat (she keeps
 // clear of it; its own dot says a reply is coming)
 export const PET_NOT = '.pt, .pl-work, .su-spin, .side, .ui-overlay, .ui-popover, .pet'
+// what is on its way where she does not go (a chat reply, a dialog's wait): she shows she is working, where she is
+export const PET_NEAR = ['.side', '.ui-overlay', '.ui-popover', '[role="dialog"]'].map(s => `${s} [aria-busy="true"]`).join(', ')
 /**
  * Where she works on a placeholder: inside it, near its top left, never past the screen's edge.
  * @param {{ left: number, top: number, width: number, height: number }} r
@@ -334,7 +336,8 @@ export function makePet({ sw, C, doc = document }) {
     if (next && !next.hasAttribute('aria-busy')) next.setAttribute('aria-busy', 'true')
     const r = next?.getBoundingClientRect()
     const at = r ? `${r.left | 0},${r.top | 0}` : ''
-    el.classList.toggle('working', !!next)
+    const near = !next && !P.building && [...doc.querySelectorAll(PET_NEAR)].some(n => n.getClientRects().length)
+    el.classList.toggle('working', !!next || near)
     const moved = next !== P.work || at !== P.workAt
     P.work = next
     P.workAt = at

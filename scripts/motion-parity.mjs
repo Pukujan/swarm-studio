@@ -14,7 +14,8 @@
 //
 //   node scripts/motion-parity.mjs run <dir> [--root <tree>] [--only a,b] [--px 24]   record both apps, compare
 //   node scripts/motion-parity.mjs compare <dir> [--px 24] [--update]                 compare what run recorded
-//     A difference already known is in docs/ux/motion/parity-known.json, labelled "intended (PR #N)" or "drift"
+//     A difference already known is in docs/ux/motion/parity-known.json, labelled "intended (decision NNNN)",
+//     "later (#issue)" or "drift"
 //     with a why; a new one fails. --update writes what was found there (new ones as "drift", to be labelled).
 //   node scripts/motion-parity.mjs clips <dir> [--root <tree>] [--only a,b]           side-by-side videos
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check; clips needs ffmpeg on PATH to put the two side by side)
@@ -260,7 +261,7 @@ function diff(name, [c1, c2, n1, n2]) {
   return out
 }
 
-// differences already known, each labelled "intended (PR #N)" or "drift" with a why, like the audit gates'
+// differences already known, each labelled "intended (decision NNNN)", "later (#issue)" or "drift" with a why, like the audit gates'
 // known list: a new one fails, a known one that no longer happens is printed to delete
 const KNOWN = join(ROOT, 'docs/ux/motion/parity-known.json')
 const known = () => existsSync(KNOWN) ? JSON.parse(readFileSync(KNOWN, 'utf8')) : []

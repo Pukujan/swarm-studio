@@ -19,11 +19,11 @@ test("the parity check plays the motion check's scenes, crew and seed, word for 
   ]) assert.equal(block(parity, from, to), block(check, from, to), from)
 })
 
-test('every known difference is labelled intended (with its PR) or drift, with a why', () => {
+test('every known difference is labelled intended (citing a decision, spec or pattern), later (with its issue) or drift, with a why', () => {
   const known = JSON.parse(read('docs/ux/motion/parity-known.json'))
   assert.ok(known.length)
   for (const k of known) {
-    assert.match(k.label, /^(intended \(PR #\d+\)|drift)$/, k.key)
+    assert.match(k.label, /^(intended \((decision \d{4}|spec [\w-]+|PATTERNS: [^)]+)\)|later \(#\d+\)|drift)$/, k.key)
     assert.ok(k.why && k.why.length > 20, k.key)
   }
   assert.equal(new Set(known.map(k => k.key)).size, known.length)
