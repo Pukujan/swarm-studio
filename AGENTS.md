@@ -43,7 +43,9 @@ by nothing that runs (the servers, the page's lists in `server/page.mjs`, a test
 `npm run --prefix tools/dev orphans:ui` ([knip](https://knip.dev), after `npm ci --prefix ui`) when `ui/` has a file
 nothing imports, an export nothing uses or a package nothing needs. To fix a failure, delete the dead code or use
 it: a new web module goes in `server/page.mjs`'s list, a new program somebody runs by hand is named as an entry in
-`.dependency-cruiser-orphans.mjs`. Never add to the known lists (`.dependency-cruiser-orphans-known.json`, the
+`.dependency-cruiser-orphans.mjs`. knip sees only `ui/`: something in `ui/src` that only a test in the root `tests/`
+uses is reported, since the page never uses it; test it through what the page does use, or move the test to `ui/test/`.
+Never add to the known lists (`.dependency-cruiser-orphans-known.json`, the
 `ignoreIssues` in `ui/knip.jsonc`) to pass: they hold what was there when the check arrived and only get shorter.
 The Studio's theme variables are design tokens: change `tokens/*.tokens.json`, run `npm run --prefix tools/dev tokens`
 and commit `web/tokens.css` and `ui/src/theme.css` with them; never edit either by hand (`tokens:check` fails a stale one).
