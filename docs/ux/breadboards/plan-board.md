@@ -2,8 +2,8 @@
 
 A game's plan before anything costly is made: nine cards, the starter, the systems, sketches, mocks, the world and
 close-ups, locked at a shown price ([spec 21](../../specs/21-plan-before-spend.md), [spec 27](../../specs/27-plan-conversation.md),
-[spec 38](../../specs/38-game-starters.md); OBJECTS.md: Plan, Lock). A game's Guided way opens it (spec 42): the talk on
-the left, the cards taking shape on the right. Statechart: `planBoard` (`board`, `gate`). Code: `web/plan.js`, the
+[spec 38](../../specs/38-game-starters.md); OBJECTS.md: Plan, Lock). A game's **Studio** way opens it (spec 42, decision 0020): the talk on the
+left, the cards taking shape on the right. Statechart: `planBoard` (`board`, `gate`). Code: `web/plan.js`, the
 shared board `web/board.js`, `engine/plan.mjs`, `engine/planart.mjs`, `server/plans.mjs`.
 
 ## Places and affordances
@@ -53,7 +53,7 @@ Gate  (planBoard.gate, a dialog)
 
 | Press | Event | Goes to |
 |---|---|---|
-| A game's Guided on Make, or a game's chat on Projects | `plan` | here |
+| A game's Studio on Make, or a game's chat on Projects | `plan` | here |
 | Lock · N | `lock` | the Gate |
 | Build / Build one once locked | `build { run }` | the Game room |
 | Esc with nothing selected | `up` | Projects |

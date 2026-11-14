@@ -4,7 +4,7 @@
 /* --cosmos-ease is web/tokens.css (tokens/*.tokens.json) */
 
 /* ---------- lean chrome: back, Projects › name, the crew, Play, Publish, ☰ */
-body.cosmos #views, body.cosmos #game-btn, body.cosmos .undo-redo, body.cosmos .clock,
+body.cosmos #views, body.cosmos #game-btn, body.cosmos .clock,
 body.cosmos #more-btn .t, body.cosmos #more-btn .count { display: none !important; }
 body.cosmos #more-btn { padding: 4px 9px; }
 .cosmos-back { display: none; align-items: center; gap: 6px; }

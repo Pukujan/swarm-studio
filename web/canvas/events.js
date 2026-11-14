@@ -29,7 +29,8 @@ export function on(e) {
       if (e.kind === 'game') { S.kind = 'game'; if (e.from) S.link = { run: e.from, label: `↔ ${e.fromName || 'the site'}` }; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
       if (!viewing) els.agentsSel.value = String(e.agents.length)
       for (const a of e.agents) addAgent(a)
-      setTitle(e.brief.slice(0, 60))
+      // a project brought in (docs/specs/45-intake.md) goes by its name; its brief only says where it is from
+      setTitle(e.intake && e.title ? e.title : e.brief.slice(0, 60))
       feed(null, e.ask || e.brief, 'you')
       S.extend = e.extend ? { kept: e.kept } : null
       S.progress = botMsg(e.extend ? 'Planning what to add…' : 'Planning the pages…', true)

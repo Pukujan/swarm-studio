@@ -77,8 +77,8 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   const canvas = canvasSource()
   const project = readFileSync(new URL('../web/project.js', import.meta.url), 'utf8')
   // Make opens its menu at once (spec 42): the last way picked for the kind, else the words, pre-select;
-  // a vague idea or one about the look leans Studio, a clear ask Just build, a game Guided
-  assert.match(home, /const fit = make\.k === 'game' \? 'guided' : text && !studioFits\(text\) \? 'now' : 'studio'/)
+  // a vague idea or one about the look leans Studio, a clear ask Just make it, a game its Plan board (Studio)
+  assert.match(home, /const fit = make\.k === 'game' \? 'studio' : text && !studioFits\(text\) \? 'now' : 'studio'/)
   assert.match(home, /const pick = \[makeModeOf\(modeOf\(make\.k\)\), fit\]\.find\(k => ways\.some\(w => w\.k === k\)\) \|\| ways\[0\]\.k/)
   assert.match(home, /const ways = makeWays\(make\.k, !!text\)/)
   // an answer typed in your own words is checked before it becomes brief text (Next and Just build)

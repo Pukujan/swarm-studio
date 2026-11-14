@@ -63,8 +63,8 @@ each removed step. Each chip SHALL carry a state dot whose `aria-label` is Empty
 - **THEN** no Skip or Remove is offered
 - Gate: `manual`
 
-#### Scenario: A Scaffold project
-- **WHEN** a project begun as Scaffold opens
+#### Scenario: A project with only its Plan step
+- **WHEN** a project whose record has only the Plan step opens
 - **THEN** the path shows Plan and Lock, and `+ Brand`, `+ References`, `+ Assets`
 - Gate: `manual`
 
@@ -96,6 +96,40 @@ Build SHALL be the top bar's one primary button, and nothing SHALL build until i
 #### Scenario: Build does not move
 - **WHEN** a build is starting
 - **THEN** Build is disabled in place, at the same size (RULES rule 29)
+- Gate: `manual`
+
+### Requirement: The chat leads a website's Studio
+
+Before a website's build, the planner SHALL ask in the chat what the person has not said, one question at a time, each
+answerable by typing: `Which pages? Name them, or say "you choose".`, then `Pictures: painted, stock photos or drawn?
+Or say "you choose".` A typed answer SHALL set the same state as the board (the Plan's pages, the Pictures card).
+"You choose" SHALL leave the pages to the crew and take Setup's recommendation for pictures. "Skip all, just build" at
+any point SHALL take the recommended defaults, say in one line what it picked, and build. A line that is not an answer
+SHALL go to the planner as before. There SHALL be no row of reply buttons (decisions 0015 and 0020).
+
+#### Scenario: Build with nothing said
+- **WHEN** the person presses Build, or types "build", on a new website project with no pages and no pictures chosen
+- **THEN** nothing builds; the chat asks which pages, and the chat box has the focus
+- Gate: `manual`
+
+#### Scenario: Pages typed
+- **WHEN** the chat has asked which pages and the person types "Home, Work, Contact"
+- **THEN** the Plan shows Home, Work and Contact, and the chat asks about pictures
+- Gate: `manual`
+
+#### Scenario: You choose
+- **WHEN** the chat has asked which pages and the person types "you choose"
+- **THEN** no page is added, the Pages fact reads Crew decides, and the build's brief carries no Pages line
+- Gate: `manual`
+
+#### Scenario: Pictures typed
+- **WHEN** the chat has asked about pictures and the person types "stock photos"
+- **THEN** the Pictures fact reads Stock photos, Setup's Pictures pick is Stock photos, and a build that was waiting starts
+- Gate: `manual`
+
+#### Scenario: Skip all, just build
+- **WHEN** the person types "skip all, just build" while either question is open
+- **THEN** the chat says `Building it now:` with what it picked in one line, and the crew starts
 - Gate: `manual`
 
 ### Requirement: Accessible and console-clean

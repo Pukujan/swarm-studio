@@ -217,6 +217,8 @@ export function serveStatic(root, port, { spa = false } = {}) {
     const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '')
     let file = join(root, path || 'index.html')
     if (spa && file.startsWith(root) && !extname(file) && !existsSync(file)) file = join(root, 'index.html')
+    // a folder is its own index.html (a game brought in may open on web/): never read as a file
+    try { if (file.startsWith(root) && statSync(file).isDirectory()) file = join(file, 'index.html') } catch {}
     if (!file.startsWith(root) || !existsSync(file)) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end('not found') }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-store' })
     res.end(readFileSync(file))
