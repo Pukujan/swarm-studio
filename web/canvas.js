@@ -7,6 +7,7 @@
 // This file only loads them, in the order the inlined page runs them (server/page.mjs).
 
 import './canvas/base.js'
+import './canvas/carry.js'
 import './canvas/events.js'
 import './canvas/deck.js'
 import './canvas/panels.js'

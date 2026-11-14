@@ -93,6 +93,7 @@ import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engi
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
 import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idleMessages, IDLE_SAY } from '../engine/idle.mjs'
 import { heavyConfig, runHeavy, interpOf } from '../engine/heavy.mjs'
+import { makeImages } from '../engine/images.mjs'
 import { snapStore } from './snaps.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -805,6 +806,27 @@ function pieceName(e, pageTitle) {
 // the pages' saved snapshots (server/snaps.mjs): the Overview paints from them, the cover is the first page's
 let snaps = null
 const snapsOf = () => (snaps ||= snapStore(runsDir))
+
+// The image service (engine/images.mjs): every picture by its content hash, on a size ladder, with a ThumbHash.
+// SWARM_IMAGE_SERVICE=0 turns it off; every picture is then served as it is, as before.
+const imagesOn = process.env.SWARM_IMAGE_SERVICE !== '0'
+let imageStore = null
+const imagesOf = () => (imageStore ||= makeImages({ dataDir }))
+const IMG_HEAD = { 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff' }
+// a picture's ThumbHash by its /img/<run>/<file> address, once it has been served (nothing is read for it here)
+const pictureTh = src => { if (!imagesOn) return null; const f = imgFileOf(src); return f ? imagesOf().lookup(f)?.th || null : null }
+// A picture the studio already serves by its own address, on the ladder: with ?w= the size asked for, else the
+// file as it is. Either way it moves into the store the first time (the old addresses migrate lazily).
+function sendPicture(req, res, url, file, type, head = IMG_HEAD) {
+  const asIs = () => { res.writeHead(200, { ...head, 'content-type': type }); res.end(readFileSync(file)) }
+  if (!imagesOn) return asIs()
+  const w = url.searchParams.get('w')
+  if (!w) { asIs(); imagesOf().addFile(file).catch(() => {}); return }
+  imagesOf().addFile(file)
+    .then(m => (m ? imagesOf().sized(m.hash, w) : null))
+    .then(s => { if (!s) return asIs(); res.writeHead(200, { ...head, 'content-type': s.type }); res.end(readFileSync(s.file)) })
+    .catch(() => { if (!res.headersSent) asIs() })
+}
 // the saved first-page snapshot, versioned so a newer one is not served from cache
 function snapOf(id) {
   const f = join(runsDir, id, 'img', 'snap.jpg')
@@ -1564,16 +1586,20 @@ function walkLook(pid, ref) {
   const key = `${pid}/${ref.id}`
   if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
   const from = { host: ref.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], url: ref.url, source: ref.source, chat: ref.from || null, at: ref.added }
-  const now = refs.setLook(pid, ref.id, { state: 'walking', at: Date.now(), from })
+  const started = Date.now()
+  const now = refs.setLook(pid, ref.id, { state: 'walking', step: `Opening ${from.host}`, at: started, from })
   lookWalks.add(key)
+  // what the walk is doing now, kept on the look so the Studio shows it under the crew's cursor
+  const step = text => { try { refs.setLook(pid, ref.id, { state: 'walking', step: text, at: started, from }) } catch {} }
   ;(async () => {
     try {
       const { walkSite, describeLook } = await import('../engine/sitelook.mjs')
-      const w = await walkSite(ref.url, { dataDir, signal: AbortSignal.timeout(150000) })
+      const w = await walkSite(ref.url, { dataDir, signal: AbortSignal.timeout(150000), onStep: step })
       if (!w.tokens) return refs.setLook(pid, ref.id, { state: 'failed', note: w.note || 'the site did not open', at: Date.now(), from })
       const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
       const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look' }, model: modelFor(v), maxTokens: 900, temperature: 0.3, signal: AbortSignal.timeout(90000), messages })).text : null
       const live = refs.list(pid).find(x => x.id === ref.id)
+      step('Writing the look')
       const words = await describeLook(w, { want: live?.use || ref.use || '', chat })
       refs.setLook(pid, ref.id, { state: 'ready', at: Date.now(), from, pages: w.pages.map(p => p.url), tokens: w.tokens, motion: w.motion, words }, w.pages.flatMap(p => p.shots.slice(0, 3)))
     } catch (err) {
@@ -1587,21 +1613,24 @@ function walkLook(pid, ref) {
 function matchLook(pid, ref, run) {
   const key = `${pid}/${ref.id}/match`
   if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
-  const now = refs.setMatch(pid, ref.id, { state: 'checking', run, at: Date.now() })
+  const started = Date.now()
+  const now = refs.setMatch(pid, ref.id, { state: 'checking', step: 'Opening your pages', run, at: started })
   lookWalks.add(key)
+  const step = text => { try { refs.setMatch(pid, ref.id, { state: 'checking', step: text, run, at: started }) } catch {} }
   ;(async () => {
     try {
       const { walkBuild, judgeMatch } = await import('../engine/lookmatch.mjs')
       const events = readEvents(run)
       if (!events) throw new Error('that build is gone')
       const out = await exportRun({ events, runId: run, runDir: join(runsDir, run), sections: [], name: nameFor(run)?.name, fill: fillExport(run) })
-      const ours = await walkBuild({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir, signal: AbortSignal.timeout(120000) })
+      const ours = await walkBuild({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir, signal: AbortSignal.timeout(120000), onStep: step })
       if (!ours.tokens) return refs.setMatch(pid, ref.id, { state: 'failed', note: ours.note || 'the pages did not open', run, at: Date.now() })
       const live = refs.list(pid).find(x => x.id === ref.id)
       const L = live.look
       const shots = (L.shots || []).slice(0, 2).map(s => { const f = refs.file(pid, s.split('/').pop()); return f ? readFileSync(f.file) : null }).filter(Boolean)
       const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
       const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look-match' }, model: modelFor(v), maxTokens: 900, temperature: 0.2, signal: AbortSignal.timeout(90000), messages })).text : null
+      step('Comparing')
       const m = await judgeMatch({ ref: { tokens: L.tokens, motion: L.motion, shots }, ours, want: live.use || '', avoid: [L.from?.host, L.from?.url], chat })
       refs.setMatch(pid, ref.id, { state: 'ready', run, at: Date.now(), ...m }, ours.pages.flatMap(p => p.shots.slice(0, 1)).slice(0, 2))
     } catch (err) {
@@ -3092,7 +3121,7 @@ const server = createServer((req, res) => {
     assets.file(url.searchParams.get('id')).then(got => {
       if (!got) return json(404, { error: 'no such picture' })
       const type = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }[extname(got.file).toLowerCase()] || 'image/jpeg'
-      res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=86400' }).end(readFileSync(got.file))
+      sendPicture(req, res, url, got.file, type, { 'cache-control': 'private, max-age=86400' })
     })
     return
   }
@@ -3161,13 +3190,13 @@ const server = createServer((req, res) => {
   if (runBoard && req.method === 'GET') {
     const id = runBoard[1], events = readEvents(id)
     if (!events) return json(404, { error: 'no such build' })
-    const b = boardOf(id, events, runsDir, current?.id === id && !current.done)
+    const b = boardOf(id, events, runsDir, current?.id === id && !current.done, pictureTh)
     // the game made from this site lives in its own run: it shows here, as part of this version
     const linked = events.findLast(e => e.type === 'game:linked' && e.game)
     if (!b.game && linked && RUN_ID.test(linked.game)) {
       const gev = readEvents(linked.game)
       if (gev) {
-        const g = boardOf(linked.game, gev, runsDir, false)
+        const g = boardOf(linked.game, gev, runsDir, false, pictureTh)
         const work = workOf(linked.game)
         b.game = { ...(g.game || { title: linked.title || 'Game', cover: null }), run: linked.game, work }
         // no title screen yet: the site's key art stands in
@@ -4106,7 +4135,7 @@ const server = createServer((req, res) => {
   if (lib) {
     const dir = join(dataDir, 'standins', 'lib'), file = join(dir, lib[1])
     const send = buf => { res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' }); res.end(buf) }
-    if (existsSync(file)) return send(readFileSync(file))
+    if (existsSync(file)) return sendPicture(req, res, url, file, 'image/jpeg')
     fetch(`https://files.design-bakery.com/${lib[1]}`, { signal: AbortSignal.timeout(20000) })
       .then(async r => {
         if (!r.ok || !/^image\//.test(r.headers.get('content-type') || '')) throw new Error(`HTTP ${r.status}`)
@@ -4168,8 +4197,14 @@ const server = createServer((req, res) => {
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
-    res.writeHead(200, { 'content-type': `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
-    res.end(readFileSync(file))
+    return sendPicture(req, res, url, file, `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`)
+  }
+  // A picture by its content hash, at a rung of the ladder (?w=64 … 2048), or the original without one
+  const byHash = url.pathname.match(/^\/img\/([a-f0-9]{32})$/)
+  if (byHash && imagesOn) {
+    imagesOf().sized(byHash[1], url.searchParams.get('w'))
+      .then(s => (s && existsSync(s.file) ? (res.writeHead(200, { ...IMG_HEAD, 'content-type': s.type }), res.end(readFileSync(s.file))) : res.writeHead(404).end('not found')))
+      .catch(() => { if (!res.headersSent) res.writeHead(500).end('not served') })
     return
   }
 
@@ -4178,9 +4213,7 @@ const server = createServer((req, res) => {
   if (snapFile) {
     const file = snapsOf().file(snapFile[1], snapFile[2])
     if (!file || !existsSync(file)) return res.writeHead(404).end('not found')
-    res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
-    res.end(readFileSync(file))
-    return
+    return sendPicture(req, res, url, file, 'image/jpeg')
   }
 
   // A project's uploads, open like the images (the crew's pages and the art director use them).
@@ -4188,7 +4221,10 @@ const server = createServer((req, res) => {
   if (up) {
     const f = projects.uploadFile(up[1], up[2])
     if (!f) return res.writeHead(404).end('not found')
-    res.writeHead(200, { 'content-type': f.type, 'cache-control': 'no-cache', 'access-control-allow-origin': '*', 'content-security-policy': 'sandbox' })
+    const head = { 'cache-control': 'no-cache', 'access-control-allow-origin': '*', 'content-security-policy': 'sandbox' }
+    // a picture moves into the image service like any other; anything else (an svg, a pdf) is sent as it is
+    if (/^image\/(png|jpeg|webp|gif)$/.test(f.type)) return sendPicture(req, res, url, f.file, f.type, head)
+    res.writeHead(200, { ...head, 'content-type': f.type })
     return createReadStream(f.file).pipe(res)
   }
 

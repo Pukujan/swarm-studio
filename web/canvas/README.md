@@ -9,6 +9,7 @@ loads them. **Edit the area's file, not `web/canvas.js`.** The table says which 
 | `wander.js` | Pure helpers the build wall and the App room call: a working cursor's sweep over its tile, and the room's answers when there is nothing built to change. Imports nothing from the other areas. |
 | `stage.js` | The App room's stage: which of Crew, Art and Live a build offers, what shows by itself, what a pin does and when it lets go, the typed phrases, and the switch in the App bar. Pure rules (`tests/stage.test.mjs`); imports nothing from the other areas. |
 | `base.js` | The build on the canvas: `fresh`, `setTitle`, `navBrand` (the `navbrand:` lines that `tests/launch.test.mjs` compares with `engine/naming.mjs`), the frame sandbox, and media dragged into the chat. |
+| `carry.js` | A picture being painted: its card beside the page, held by its painter's cursor, then carried to its slot. Imports only `core.js`. |
 | `events.js` | Engine events drawn on the canvas (`on`). |
 | `deck.js` | Agents and their cursors, frames and layers, geometry, design gestures, the break room, wires and the camera moves (`fit`, `focusPage`). |
 | `panels.js` | The panels: theme, layer tree, agents, status, toolbar, and the chat feed (`feed`, `botMsg`). |
