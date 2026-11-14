@@ -249,9 +249,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const ready = events.slice(events.lastIndexOf(last)).findLast(e => e.type === 'app:ready')
       const stage = steps.findLast(s => /^stage \d+ of \d+/.test(s.text || ''))?.text || steps.at(-1)?.text || ''
       const at = steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number) || (events.findLast(e => e.type === 'app:step' && /^stage \d+ of \d+/.test(e.step?.text || ''))?.step.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number))
-      return { ...(at ? { at } : {}), state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
+      return { ...(at ? { at } : {}), state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id), engineReady: engineReady() }
     }
-    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...broughtIn(id, events), ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: kindOf(), steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
+    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...broughtIn(id, events), ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: kindOf(), steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id, events), engineReady: engineReady() }
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
   // (a project brought in, docs/specs/45-intake.md, counts once its files are in: it may have no package.json)
@@ -261,7 +261,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   const broughtIn = (id, events = readEvents(id) || []) => { const it = intakeOf(events); return it ? { intake: { shape: it.shape, fixed: it.fixed, ran: it.ran, done: it.done } } : {} }
   // (asked of a job once: a run the Studio built never becomes one that was brought in)
   const broughtJob = j => (j.brought === false ? {} : (j.brought = !!intakeOf(readEvents(j.id) || [])) ? broughtIn(j.id) : {})
-  const view = j => ({ ...broughtJob(j), state: j.state, kind: j.kind, stage: j.stage, served: j.mode || null, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
+  // the app's own files are there, so it can be served (open): true for a big game waiting after a slice, which
+  // is not an app yet (no build finished) but is there to play
+  const servable = (id, events) => existsSync(join(dirOf(id), 'package.json')) || !!intakeOf(events || readEvents(id) || [])?.done
+  const view = j => ({ ...broughtJob(j), state: j.state, kind: j.kind, stage: j.stage, served: j.mode || null, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), canServe: servable(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
 
   // Start the first build, or one more turn on the same app.
   async function start(id, input = {}) {
@@ -832,7 +835,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (input.run !== true) throw new Error('press Install and run first')
       send(id, 'intake:run', {})
     }
-    const k = j || { id, kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
+    // a big game waiting after a slice stays waiting: opening it to play must not end the wait (it read as done,
+    // and the next slice could no longer be asked for)
+    const was = j ? null : state(id)
+    const k = j || { id, kind: was.kind, steps: was.steps || [], asks: [], state: was.state === 'paused' ? 'paused' : 'done', ...(was.state === 'paused' && was.slice ? { slice: was.slice } : {}) }
     jobs.set(id, k)
     // plain files brought in: served as they are from this process, on the page that was found
     if (brought?.done && brought.shape === 'static') { await serveFiles(id, k, brought.page); return view(k) }
@@ -840,7 +846,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (isGodotFirst(dirOf(id)) && existsSync(join(webBuild(dirOf(id)), 'index.html'))) await serveGodot(id, k)
     else if (k.state === 'working') await serve(id, k)
     else await serveBuilt(id, k)
-    k.state = k.state === 'working' ? 'working' : 'done'
+    k.state = k.state === 'working' || k.state === 'paused' ? k.state : 'done'
     return view(k)
   }
 
