@@ -11,7 +11,7 @@ import { drawComment, review, cmt, reviewRun, sendLayers } from './marks.js'
 import { paintReplay, viewing, files, loadFiles, fileMatch, fileInfo, saveMeta, traceView, fileInto } from './replay.js'
 import { pub, liveUrl, publishNow } from './publish.js'
 import { shownRun, video, VIDEO_STYLES, makeVideo, showRun, runNow } from './film.js'
-import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view } from './rooms.js'
+import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view, stageSay } from './rooms.js'
 import { tour, stopTour, closePlayer, watchVisitor, setMotion, openPlayer } from './player.js'
 import { talk, talkSay, readTalk, talkStart, talkAsk } from './talk.js'
 import { links, refLines } from './base.js'
@@ -398,6 +398,8 @@ async function sendDock() {
   // a talk with the planner before anything is built: the message is part of it
   // while Hermia is answering, the words wait in the box
   if (talk.on) { skip(); if (talk.busy) return; els.brief.value = ''; talkSay(brief); return }
+  // "show the crew", "show the art", "show the game", "follow the build": the room's own switch, never the builder's
+  if (stageSay(brief)) { skip(); els.brief.value = ''; return }
   // a big game waiting after a slice: the answer goes into the next slice, from any view
   if (appv.state === 'paused' && shownRun() && appv.run === shownRun()) { skip(); els.brief.value = ''; return sliceGo(brief) }
   if (view === 'app' && shownRun()) { skip(); els.brief.value = ''; return appAsk(brief) }

@@ -57,24 +57,3 @@ export function goOnAsk(text, app) {
   const partway = (app.steps || []).length > 0 && (app.state === 'stopped' || app.state === 'failed' || app.message === 'stopped')
   return partway && /^\s*(please\s+)?(go on|continue|resume|keep going|carry on|pick (it )?up|try again|retry|start (it )?again|build( it)?( again)?)\b[\w ,.!]{0,24}$/i.test(String(text || ''))
 }
-
-/**
- * The way back to the build wall. Its Preview button hides the four windows to show what is being made; while
- * they are hidden and the build is still running, one button, "Crew", sits where the wall was and brings them
- * back. (The owner, 2026-11-13: "i clicked on preview something it took me here now i cant go back?")
- * @param {Element | null | undefined} host where the wall lives  @param {boolean} hidden the wall is hidden while building
- * @param {() => void} [show]
- */
-export function wallBack(host, hidden, show) {
-  if (!host) return
-  let b = /** @type {HTMLButtonElement | null} */ (host.querySelector(':scope > .cw-back'))
-  if (!hidden) { b?.remove(); return }
-  if (b) return
-  b = document.createElement('button')
-  b.className = 'cw-back'
-  b.type = 'button'
-  b.textContent = 'Crew'
-  b.setAttribute('aria-label', 'Show the crew at work')
-  b.onclick = () => { show?.(); b?.remove() }
-  host.append(b)
-}
