@@ -10,7 +10,7 @@
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
-import { execFile, hermesEnv, pick } from '../engine/proc.mjs'
+import { execFile, hermesEnv, pick, respawnSelf } from '../engine/proc.mjs'
 import { hermesBridge, imageBody, videoBody } from '../engine/bridge.mjs'
 import { hermesLlm, roleModel } from '../engine/hermesllm.mjs'
 import { hermesHealth, HERMES_SAYS } from '../engine/hermeshealth.mjs'
@@ -76,7 +76,7 @@ import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '..
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { makePoster, posterFfmpeg } from '../engine/poster.mjs'
-import { idleWatch } from '../engine/lifecycle.mjs'
+import { idleWatch, codeStamp, staleCode } from '../engine/lifecycle.mjs'
 import { findFfmpeg } from '../engine/playtest.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES, checkBoard } from '../engine/storyboard.mjs'
 import { checkKit, kitBoard, kitPrompt, checkStory, storySource, storyBoard } from '../engine/filmkit.mjs'
@@ -2723,6 +2723,9 @@ const server = createServer((req, res) => {
 
   if (url.pathname === '/' || url.pathname === '/index.html') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    // the code changed under this server (an update): the page's parts would no longer fit. With no work
+    // running, a new server takes over and the page opens again on it
+    if (replaceSelf()) return res.end('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>Swarm Studio</title><body style="margin:0;background:#0f0f0f">')
     res.end(canvasPage())
     return
   }
@@ -4177,6 +4180,24 @@ function serverBusy() {
   if ((current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working') return true
   if ([...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working')) return true
   return !!appsNow?.busy()
+}
+// An update changed this server's code on disk while it ran. The launcher replaces an idle stale server on
+// Hermes's next call (launcher.py stale/_retire), but a pane reloaded before that got new web files from an old
+// server. So the server does it itself, once, when the page is asked for and no work is running: the port is
+// freed, the same program starts again with the same environment, and this one exits. Hermes's bridge attaches
+// to the new one by itself. SWARM_NO_REPLACE=1 turns it off.
+let replacing = false
+function replaceSelf() {
+  if (replacing) return true
+  if (process.env.SWARM_NO_REPLACE === '1' || !staleCode(BOOTED, codeStamp([join(root, 'server'), join(root, 'engine')]))) return false
+  const working = (current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working' || [...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working') || !!appsNow?.busy()
+  if (working) return false
+  replacing = true
+  console.log('swarm studio: the code changed on disk, starting again on it')
+  server.close(() => { try { respawnSelf() } catch (err) { console.error('could not start again:', err.message) } shutdown() })
+  server.closeIdleConnections?.()
+  setTimeout(() => server.closeAllConnections?.(), 300).unref()
+  return true
 }
 const POLLS = /^\/api\/(state|hermes(\/attach)?)$/
 // checked every 30 s, or a quarter of the time when it is shorter (a test sets SWARM_SERVER_IDLE_MIN to seconds)
