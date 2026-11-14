@@ -166,4 +166,6 @@ route (the person still presses Post in TikTok). The tokens would live with Herm
 1. The beats, the check, the cards and the routes (this PR), with `tests/story.test.mjs`.
 2. The Story lane on the Overview, editing, and the launch kit's captions from the story.
 3. Post to Feed carries the story; the Feed shows it (Feed session).
-4. Per-network share: caption, shape, Share, Download; Connect and Post only once a network is connected.
+4. Per-network share: caption, shape, Share, Download (`cardFor` in engine/launch.mjs: tall for TikTok and
+   Instagram, square for Threads, wide for the rest). Connect and Post only once a network is connected: none
+   is until the owner decides which apps to register (table above).

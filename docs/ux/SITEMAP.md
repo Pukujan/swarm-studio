@@ -343,6 +343,10 @@ flowchart LR
 The way home is always there and is not a branch: the breadcrumb (`Projects › project ▾`, then Back from a room), the
 logo (back to Home) and Esc.
 
+An app build's Engine room, in the next UI, is the app build wall (spec 44): four windows, Map, Live app, Code and
+Shipped; a click enlarges one, Esc puts it back, and Ask the crew sends a question to the window of the crew member it
+names.
+
 ## 9. Progress, versions, share
 
 ```mermaid

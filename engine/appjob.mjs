@@ -15,7 +15,8 @@ import { seoFromEvents, shareApp } from './seo.mjs'
 import { deployName, isScreenName, projectName } from './naming.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
-import { playtest } from './playtest.mjs'
+import { playtest, loadPlaywright, launch } from './playtest.mjs'
+import { planMap } from './appmap.mjs'
 import { strangeLinks } from './links.mjs'
 import { checklist, checkLine, testDodges, dodgeProblem } from './playcheck.mjs'
 import { planBrief } from './advisor.mjs'
@@ -254,7 +255,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const at = steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number) || (events.findLast(e => e.type === 'app:step' && /^stage \d+ of \d+/.test(e.step?.text || ''))?.step.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number))
       return { ...(at ? { at } : {}), state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id), engineReady: engineReady() }
     }
-    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...broughtIn(id, events), ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: kindOf(), steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id, events), engineReady: engineReady() }
+    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...broughtIn(id, events), ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: kindOf(), photo: events.findLast(e => e.type === 'app:photo')?.src || null, steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), canServe: servable(id, events), engineReady: engineReady() }
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
   // (a project brought in, docs/specs/45-intake.md, counts once its files are in: it may have no package.json)
@@ -267,7 +268,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // the app's own files are there, so it can be served (open): true for a big game waiting after a slice, which
   // is not an app yet (no build finished) but is there to play
   const servable = (id, events) => existsSync(join(dirOf(id), 'package.json')) || !!intakeOf(events || readEvents(id) || [])?.done
-  const view = j => ({ ...broughtJob(j), state: j.state, kind: j.kind, stage: j.stage, served: j.mode || null, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), canServe: servable(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
+  const view = j => ({ ...broughtJob(j), state: j.state, kind: j.kind, stage: j.stage, served: j.mode || null, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, photo: j.photo || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), canServe: servable(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
 
   // Start the first build, or one more turn on the same app.
   async function start(id, input = {}) {
@@ -325,6 +326,12 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     j ||= { id, kind, steps: [], asks: [], proc: null, url: null, port: null }
     // a locked App kit's keys (names only), kept for every later serve of this app, restarts included
     if (Array.isArray(input.plan?.keys)) { j.keys = input.plan.keys.filter(n => typeof n === 'string').slice(0, 8); try { mkdirSync(join(runsDir, id), { recursive: true }); writeFileSync(join(runsDir, id, 'app-keys.json'), JSON.stringify(j.keys)) } catch {} }
+    // an app's plan (the advisor's or a locked App kit's), kept with the run for the app build wall's Map (spec 44):
+    // its screens, the ways between them and its data, never its keys
+    if (kind !== 'game' && input.plan && typeof input.plan === 'object') {
+      const { keys, ...plan } = input.plan
+      try { mkdirSync(join(runsDir, id), { recursive: true }); writeFileSync(join(runsDir, id, 'app-plan.json'), JSON.stringify({ t: Date.now(), plan })) } catch {}
+    }
     Object.assign(j, { kind, state: 'working', stage: 'starting', result: null, message: null, controller: new AbortController(), t: Date.now() })
     j.asks.push(ask || (kind === 'game' ? 'build the game' : 'make it a working app'))
     jobs.set(id, j)
@@ -808,6 +815,34 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       Object.assign(j, { mode: 'files', url: j.files.url })
     }
     send(id, 'app:ready', { url: j.url, built: true })
+    if (j.kind !== 'game') photo(id, j).catch(() => {})
+  }
+
+  // The app as built, photographed once: the app build wall's Live window shows it when the app is not live (spec 44,
+  // image-first). Dyad's own view_render shows its screenshots to the model only and keeps none. The browser is the
+  // one the play test uses (engine/playtest.mjs launch: Playwright's, an installed Chrome, or a shell it has already):
+  // with none there is no photo and the window says the app is built, with Open; nothing is downloaded for it.
+  async function photo(id, j) {
+    const pw = await loadPlaywright()
+    if (!pw || !j.url) return
+    const browser = await launch(pw.chromium)
+    try {
+      const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+      await page.goto(j.url, { waitUntil: 'load', timeout: 20000 })
+      await page.waitForTimeout(800)
+      mkdirSync(join(runsDir, id, 'img'), { recursive: true })
+      await page.screenshot({ path: join(runsDir, id, 'img', 'app.jpg'), type: 'jpeg', quality: 80 })
+      j.photo = `/img/${id}/app.jpg?v=${Date.now()}`
+      send(id, 'app:photo', { src: j.photo })
+    } finally { await browser.close().catch(() => {}) }
+  }
+
+  // The app build wall's Map (spec 44): the plan kept with the run, as Mermaid text (engine/appmap.mjs), and its
+  // photo when there is one. Null when the run has no plan (a site made into an app without the advisor or a kit).
+  function map(id) {
+    let saved = null
+    try { saved = JSON.parse(readFileSync(join(runsDir, id, 'app-plan.json'), 'utf8')) } catch {}
+    return saved?.plan ? { ...planMap(saved.plan), at: saved.t } : null
   }
 
   // a viewer's heartbeat (the App view, every 30 s while it shows the app): the app's server is kept
@@ -975,7 +1010,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // a build is running somewhere (the server's idle exit waits for it)
   const busy = () => asking.size > 0 || [...jobs.values()].some(j => j.state === 'working')
 
-  return { start, bring, state, stop, tell, redirect, ask, open, seen, files, deploy, close, busy, dirOf, jobs, pool }
+  return { start, bring, state, stop, tell, redirect, ask, open, seen, files, map, deploy, close, busy, dirOf, jobs, pool }
 }
 
 // "can I see it", "show me the pictures": the person wants to look, not to change anything

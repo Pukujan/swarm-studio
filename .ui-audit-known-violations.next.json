@@ -1,21 +1,5 @@
 [
   {
-    "key": "app@1440 breadcrumb",
-    "detail": "reads \"Engine room\", should read \"Home › Projects › Shift Log › App\""
-  },
-  {
-    "key": "app@1440 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
-    "key": "app@390 breadcrumb",
-    "detail": "reads \"Engine room\", should read \"Home › Projects › Shift Log › App\""
-  },
-  {
-    "key": "app@390 loading",
-    "detail": "nothing showed it was loading, and the screen asked for no data"
-  },
-  {
     "key": "brand@1440 axe color-contrast",
     "detail": "Elements must meet minimum color contrast ratio thresholds: div[data-key=\"pack:bold-event\"] > .br-pk-row > .br-btn, div[data-key=\"pack:playful-community\"] > .br-pk-row > .br-btn"
   },
