@@ -15,6 +15,7 @@ import { Layers, StepDot, type LayerGroup } from '../shared/Layers'
 import { startPet, type KitCard as KitCardDef } from '../legacy'
 import { useNav, useNavMachine } from '../nav/NavProvider'
 import { useTrail } from '../shell/Trail'
+import { FoundLine, Importer } from './studio/Importer'
 import { KitCard } from './studio/KitCard'
 import { StepPath } from './studio/StepPath'
 import './studio/brand-step.css'
@@ -24,6 +25,7 @@ import { createCamera } from '../board/camera'
 import { boardMode } from '../board/flag'
 import { StudioInspector } from './studio/StudioInspector'
 import { STEP_NAME, TAKES, lookOf, useStudio, walkOf, type Pack } from './studio/useStudio'
+import type { StoreItem } from '../legacy'
 
 const FILE_ICON: Record<string, string> = { link: '🔗', video: '🎞', audio: '♪', font: 'Aa' }
 // the talk's kind for each Studio kind (web/scaffold.js CHAT_KIND)
@@ -153,13 +155,23 @@ export function StudioFirst() {
   const head = (step: string) => (
     <span className="al flex items-center gap-2"><StepDot state={stateOf(step)} />{STEP_NAME[step]}
       {step === walk[0] && step !== 'proposal' && <Button role="ghost" className="ml-2 min-h-8 px-3 text-xs" onPress={() => skip(step)}>{stateOf(step) === 'skipped' ? 'Undo skip' : 'Skip'}</Button>}
+      {step === 'proposal' && lookOf(d?.brand ?? null) && <Button role={d?.brand?.lockedAt ? 'ghost' : 'primary'} className="ml-2 min-h-8 px-3 text-xs" onPress={() => { actions.lock(!d?.brand?.lockedAt).catch(S.fail) }}>{d?.brand?.lockedAt ? 'Unlock' : 'Lock the look'}</Button>}
     </span>
   )
   const card = (key: string, name: string, cls: string, inner: React.ReactNode, def?: KitCardDef) =>
     <KitCard key={key} id={key} name={name} cls={cls} selected={sel === key} onPress={() => press(key)} draw={def?.render} ctx={ctx} version={tick + (d ? 0 : 1)}>{inner}</KitCard>
-  const thumb = (kind: 'ref' | 'asset', x: { id: string, name: string, kind?: string, src?: string, role?: string }) => card(`${kind}:${x.id}`, x.name, 'sc-thumb', <>
+  const thumb = (kind: 'ref' | 'asset', x: StoreItem) => card(`${kind}:${x.id}`, x.name, 'sc-thumb', <>
     {x.kind === 'image' && x.src ? <img src={x.src} alt="" draggable={false} loading="lazy" /> : <div className="sc-file"><span aria-hidden>{FILE_ICON[x.kind || ''] || '▤'}</span></div>}
-    <em>{x.role || x.name}</em></>)
+    <em>{x.role || x.name}</em>{x.found && <FoundLine r={x} />}</>)
+  // Lock (decision 0015): the look only, the colours, heading font and corners the build is held to
+  const lockCard = () => {
+    const b = d?.brand, L = lookOf(b ?? null)
+    if (!b || !L) return card('lock:look', 'Look', 'pcard', <><b>Look</b><span>Pick a mood on Brand first</span></>)
+    return card('lock:look', 'Look', 'sc-brand sc-lock', <>
+      <div className="br-sw">{(['bg', 'text', 'accent', 'link'] as const).map(k => <i key={k} style={{ background: L[k] }} />)}</div>
+      <div className="sc-type" style={{ background: L.bg, color: L.text }}><b style={{ fontFamily: `'${L.heading}'` }}>Aa</b><span style={{ fontFamily: `'${L.heading}'` }}>{L.heading}</span><i className="sc-corner" style={{ borderRadius: b.radius || '12px', borderColor: `${L.accent} ${L.accent} transparent transparent` }} aria-hidden /></div>
+      <em>{b.lockedAt ? 'Locked' : 'Open'}</em></>)
+  }
   const add = (key: string, name: string) => card(key, name, 'sc-add', <><span aria-hidden className="text-lg">+</span><span>{name}</span></>)
   const brandCard = () => {
     const b = d?.brand, L = lookOf(b ?? null)
@@ -212,10 +224,11 @@ export function StudioFirst() {
     </div></section>}
     {walk.map(step => {
       if (step === 'brand') return sec('brand', brandStep())
-      if (step === 'references') return sec('references', <>{d.refs.map(r => thumb('ref', r))}{add('ref:add', 'Add reference')}</>)
+      // What you have: the importer first (choices first), then what was brought
+      if (step === 'references') return sec('references', <><Importer onChoose={() => { pickTo.current = 'ref'; picker.current?.click() }} onLink={actions.addLink} />{d.refs.map(r => thumb('ref', r))}</>)
       if (step === 'assets') return sec('assets', <>{d.assets.map(a => thumb('asset', a))}{add('asset:add', 'Add asset')}</>)
       if (step === 'plan' && kit.plan) return sec('plan', planSections.flatMap(s => s.cards).map(x => card(x.key, x.name, kitLook(x), x.render ? null : <b>{x.name}</b>, x)), `sc-plan-${kit.kind}`)
-      if (step === 'proposal') return sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', <><b>Idea</b><span>{d.studio.idea}</span></>))
+      if (step === 'proposal') return sec('proposal', lockCard())
       return null
     })}
   </>
@@ -225,7 +238,7 @@ export function StudioFirst() {
   if (d) {
     if (d.studio.mode === 'takes' && takes?.packs.length) groups.push({ id: 'takes', title: 'Three takes', rows: takes.packs.map(p => ({ key: `take:${p.slug}`, name: p.name })) })
     for (const step of walk) {
-      if (step === 'proposal') groups.push({ id: 'proposal', title: STEP_NAME.proposal, state: stateOf('proposal'), rows: [{ key: 'lock:idea', name: 'Idea' }] })
+      if (step === 'proposal') groups.push({ id: 'proposal', title: STEP_NAME.proposal, state: stateOf('proposal'), rows: [{ key: 'lock:look', name: 'Look' }] })
       if (step === 'brand') groups.push({ id: 'brand', title: STEP_NAME.brand, state: stateOf('brand'), rows: [{ key: 'brand:open', name: 'Brand sheet' }] })
       if (step === 'references') groups.push({ id: 'references', title: STEP_NAME.references, state: stateOf('references'), rows: d.refs.map(r => ({ key: `ref:${r.id}`, name: r.name })) })
       if (step === 'assets') groups.push({ id: 'assets', title: STEP_NAME.assets, state: stateOf('assets'), rows: d.assets.map(a => ({ key: `asset:${a.id}`, name: a.name })) })
@@ -283,7 +296,8 @@ export function StudioFirst() {
         assetRef: id => { actions.assetAsRef(id).then(r => select(`ref:${r.id}`)).catch(fail) },
         removeAsset: id => { actions.removeAsset(id).then(() => select(null)).catch(fail) },
         useTake: slug => { actions.useTake(slug).then(() => { select(null); board.current?.focus('brand') }).catch(fail) },
-        mix: () => go({ type: 'brand' })
+        mix: () => go({ type: 'brand' }),
+        lock: on => { actions.lock(on).catch(fail) }
       }} />}
 
       <button type="button" className="ib pj-files-btn sc-layers-btn" aria-label="Layers" aria-expanded={sheet} onClick={() => setSheet(v => !v)}><svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z" /><path d="m3 13 9 5 9-5" /></svg></button>

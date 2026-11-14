@@ -3,6 +3,8 @@
 //   POST /api/projects/:pid/refs?name=&use=  (bytes)   -> { ref, refs }   a file
 //   POST /api/projects/:pid/refs/link { url, use? }    -> { ref, refs }   a link; its look is walked (decision 0022)
 //   POST /api/projects/:pid/refs/:id/look              -> { ref, refs }   walk the link again (after a new `use`)
+//   (source=import, or { source: 'import' } for a link: brought to the Studio's first step, so it is also read for
+//   what it says, and `found` fills in the walk; decision 0015)
 //   POST /api/projects/:pid/refs/:id/match             -> { ref, refs }   check the newest build against the look
 //   POST /api/projects/:pid/refs/:id/fix { i }         -> { ref, refs, sent }  send difference i to the crew, on the person's word
 //   POST /api/projects/:pid/refs/:id/remove | restore  -> { ref, refs }   undo brings a removed one back
@@ -13,7 +15,8 @@ import { createReadStream } from 'node:fs'
 // refs: the store; head(pid): the project's newest run id or null; comment(run, { text }): the crew's comment route
 // walk(pid, ref): start reading a link's look in the background (engine/sitelook.mjs); null: links stay plain
 // match(pid, ref, run): start the match check in the background (engine/lookmatch.mjs)
-export function refRoutes({ refs, head = () => null, comment = null, walk = null, match = null, fixText = d => d.fix }) {
+// read(pid, ref): start reading what a reference brought to the first step says (engine/importer.mjs); null: not read
+export function refRoutes({ refs, head = () => null, comment = null, walk = null, match = null, read = null, fixText = d => d.fix }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const fail = (res, err) => json(res, err.status || 400, { error: String(err.message || err) })
   const body = (req, max) => new Promise((resolve, reject) => {
@@ -38,14 +41,15 @@ export function refRoutes({ refs, head = () => null, comment = null, walk = null
     if (!m) return false
     const [, pid, link, id, op] = m
     const out = ref => ({ ref, refs: refs.list(pid) })
+    const brought = r => (read && r.source === 'import' ? read(pid, r) || r : r)
     if (req.method === 'GET' && !link && !id) { json(res, 200, { refs: refs.list(pid) }); return true }
     if (req.method !== 'POST') { json(res, 405, { error: 'GET or POST' }); return true }
     if (!link && !id) {
-      body(req, 60e6).then(buf => json(res, 200, out(refs.addFile(pid, { name: url.searchParams.get('name'), use: url.searchParams.get('use'), source: url.searchParams.get('source') || 'upload' }, buf)))).catch(err => fail(res, err))
+      body(req, 60e6).then(buf => json(res, 200, out(brought(refs.addFile(pid, { name: url.searchParams.get('name'), use: url.searchParams.get('use'), source: url.searchParams.get('source') || 'upload' }, buf))))).catch(err => fail(res, err))
       return true
     }
     const walked = r => (walk && r.kind === 'link' ? walk(pid, r) || refs.list(pid).find(x => x.id === r.id) || r : r)
-    if (link) { jsonBody(req).then(input => json(res, 200, out(walked(refs.addLink(pid, input))))).catch(err => fail(res, err)); return true }
+    if (link) { jsonBody(req).then(input => json(res, 200, out(brought(walked(refs.addLink(pid, input)))))).catch(err => fail(res, err)); return true }
     jsonBody(req).then(async input => {
       if (op === 'remove') return json(res, 200, out(refs.remove(pid, id)))
       if (op === 'restore') return json(res, 200, out(refs.restore(pid, id)))

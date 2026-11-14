@@ -1789,7 +1789,38 @@ function matchLook(pid, ref, run) {
   })()
   return now
 }
-const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input), walk: walkLook, match: matchLook, fixText: lookFixText })
+// What you have (decision 0015): a file or a site brought to the Studio's first step is read in the background,
+// one read per reference at a time, and what it says fills in the walk: the idea while the Studio has none, and
+// the brand's story where it is still empty. The planner's model reads it; with none, its first words do.
+const readings = new Set()
+function readWhatYouHave(pid, ref) {
+  // a picture, a clip or a sound has no words: it stays a reference, unread
+  if (ref.kind !== 'link' && !/\.(pdf|txt|md)$/i.test(ref.name || '')) return null
+  const key = `${pid}/${ref.id}`
+  if (readings.has(key)) return null
+  readings.add(key)
+  const now = refs.setFound(pid, ref.id, { state: 'reading', at: Date.now() })
+  ;(async () => {
+    try {
+      const { textOf, findIn } = await import('../engine/importer.mjs')
+      const got = await textOf(ref, { file: ref.file ? join(refs.dir(pid), ref.file) : null })
+      if (!got.text) return refs.setFound(pid, ref.id, { state: 'failed', note: got.note, at: Date.now() })
+      const chat = models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+        trace: { kind: 'read' }, model: modelFor('planner'), maxTokens: 600, temperature: 0.2, signal: AbortSignal.timeout(60000),
+        extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+      })).text : null
+      const found = await findIn(got.text, { chat })
+      if (!found) return refs.setFound(pid, ref.id, { state: 'failed', note: 'nothing to read in it', at: Date.now() })
+      if (found.idea) try { studioRoute.setIdea(pid, found.idea) } catch {}
+      await brands.story(pid, studios.get(pid)?.idea || found.idea, found)
+      refs.setFound(pid, ref.id, { state: 'ready', at: Date.now(), ...found })
+    } catch (err) {
+      try { refs.setFound(pid, ref.id, { state: 'failed', note: String(err.message || err).split('\n')[0].slice(0, 160), at: Date.now() }) } catch {}
+    } finally { readings.delete(key) }
+  })()
+  return now
+}
+const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input), walk: walkLook, match: matchLook, read: readWhatYouHave, fixText: lookFixText })
 // The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
 const studios = studioStore({ projectsDir: projects.projectsDir })
 const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })

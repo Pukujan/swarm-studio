@@ -180,7 +180,22 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
       .then(v => json(res, 200, v)).catch(err => json(res, err.status || 400, { error: String(err.message || err) }))
     return true
   }
-  return routes
+  // what the person brought to the first step (engine/importer.mjs): the project's sheet gets the story it found. A
+  // sheet made now, for the idea, takes it over its first guesses; a sheet already made (the person may have picked
+  // or typed on it) is never made again, and only its empty fields are filled
+  async function story(pid, brief, found) {
+    const rec = projectBrands?.get(pid)
+    if (!rec) return null
+    const made = !rec.brand
+    if (made) await fill(projectBrands, pid, String(brief || '').trim().slice(0, 4000) || found.what)
+    return projectBrands.update(pid, chat => {
+      const s = chat.brand.story || (chat.brand.story = { what: '', who: '', pages: [] })
+      if ((made || !s.what) && found.what) s.what = found.what.slice(0, 200)
+      if ((made || !s.who) && found.who) s.who = found.who.slice(0, 200)
+      if ((made || !s.pages?.length) && found.pages?.length) s.pages = found.pages.slice(0, 8)
+    }).then(view)
+  }
+  return Object.assign(routes, { story })
 }
 
 // the locked sheet of a chat (or of a project, with its brands store), as runSwarm takes it; null when

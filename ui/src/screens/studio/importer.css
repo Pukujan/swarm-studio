@@ -1,0 +1,8 @@
+/* What you have (decision 0015): the importer card that opens the Studio's first step, the line under each thing
+   brought that says what the crew read in it, and the Lock card's corner sample. Tokens only. */
+.ab.sc-import { width: 520px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; background: var(--surface); border-style: dashed; border-color: var(--line-2); cursor: default; }
+.ab.sc-import > b { font: 600 18px var(--body); color: var(--text); }
+.ab.sc-import > span { font: 400 13px/1.45 var(--body); }
+.ab.sc-thumb > .sc-found { position: absolute; left: 0; top: calc(100% + 24px); width: 220px; display: flex; align-items: center; gap: 6px; font: 400 12px/1.35 var(--body); color: var(--muted); }
+.sc-type .sc-corner { position: absolute; right: 16px; bottom: 14px; width: 30px; height: 30px; border: 3px solid; }
+.ab.sc-lock .sc-type { position: relative; }
