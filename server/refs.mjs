@@ -1,14 +1,16 @@
 // A project's References store, served (engine/refs.mjs, docs/specs/29-chats-references-marks.md):
 //   GET  /api/projects/:pid/refs                       -> { refs }
 //   POST /api/projects/:pid/refs?name=&use=  (bytes)   -> { ref, refs }   a file
-//   POST /api/projects/:pid/refs/link { url, use? }    -> { ref, refs }   a link
+//   POST /api/projects/:pid/refs/link { url, use? }    -> { ref, refs }   a link; its look is walked (decision 0022)
+//   POST /api/projects/:pid/refs/:id/look              -> { ref, refs }   walk the link again (after a new `use`)
 //   POST /api/projects/:pid/refs/:id/remove | restore  -> { ref, refs }   undo brings a removed one back
 //   POST /api/projects/:pid/refs/:id/use { use, send } -> { ref, refs, sent }  send: tell the crew, like a comment
 //   GET  /ref/:pid/:file                               the file (open like /up/: the crew's pages use it)
 import { createReadStream } from 'node:fs'
 
 // refs: the store; head(pid): the project's newest run id or null; comment(run, { text }): the crew's comment route
-export function refRoutes({ refs, head = () => null, comment = null }) {
+// walk(pid, ref): start reading a link's look in the background (engine/sitelook.mjs); null: links stay plain
+export function refRoutes({ refs, head = () => null, comment = null, walk = null }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const fail = (res, err) => json(res, err.status || 400, { error: String(err.message || err) })
   const body = (req, max) => new Promise((resolve, reject) => {
@@ -29,7 +31,7 @@ export function refRoutes({ refs, head = () => null, comment = null }) {
       createReadStream(f.file).pipe(res)
       return true
     }
-    const m = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/refs(?:\/(link)|\/(r[0-9a-z]{4,16})\/(remove|restore|use))?$/)
+    const m = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/refs(?:\/(link)|\/(r[0-9a-z]{4,16})\/(remove|restore|use|look))?$/)
     if (!m) return false
     const [, pid, link, id, op] = m
     const out = ref => ({ ref, refs: refs.list(pid) })
@@ -39,10 +41,18 @@ export function refRoutes({ refs, head = () => null, comment = null }) {
       body(req, 60e6).then(buf => json(res, 200, out(refs.addFile(pid, { name: url.searchParams.get('name'), use: url.searchParams.get('use'), source: url.searchParams.get('source') || 'upload' }, buf)))).catch(err => fail(res, err))
       return true
     }
-    if (link) { jsonBody(req).then(input => json(res, 200, out(refs.addLink(pid, input)))).catch(err => fail(res, err)); return true }
+    const walked = r => (walk && r.kind === 'link' ? walk(pid, r) || refs.list(pid).find(x => x.id === r.id) || r : r)
+    if (link) { jsonBody(req).then(input => json(res, 200, out(walked(refs.addLink(pid, input))))).catch(err => fail(res, err)); return true }
     jsonBody(req).then(async input => {
       if (op === 'remove') return json(res, 200, out(refs.remove(pid, id)))
       if (op === 'restore') return json(res, 200, out(refs.restore(pid, id)))
+      if (op === 'look') {
+        const r = refs.list(pid).find(x => x.id === id)
+        if (!r || r.kind !== 'link') throw Object.assign(new Error('only a link has a look'), { status: 400 })
+        if (!walk) throw Object.assign(new Error('no browser here to open the site with'), { status: 503 })
+        if (typeof input.use === 'string' && input.use.trim()) refs.setUse(pid, id, input.use)
+        return json(res, 200, out(walked(refs.list(pid).find(x => x.id === id))))
+      }
       const use = String(input.use || '').trim()
       if (!use) throw Object.assign(new Error('say which part it is for'), { status: 400 })
       const r = refs.setUse(pid, id, use)

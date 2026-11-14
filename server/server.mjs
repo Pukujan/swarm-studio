@@ -1529,7 +1529,32 @@ const appKit = appKitRoutes({
 // The brand sheet (docs/specs/31-brand-sheet.md): a website's or app's story, palette and type, locked before it is designed
 // A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
 const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
-const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input) })
+// a link's look (decision 0022): walked in the background, one walk per reference at a time. The vision model
+// is the reviewer's when it has one, else the planner's; with neither, the look is the measured words only.
+const lookWalks = new Set()
+function walkLook(pid, ref) {
+  const key = `${pid}/${ref.id}`
+  if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
+  const from = { host: ref.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], url: ref.url, source: ref.source, chat: ref.from || null, at: ref.added }
+  const now = refs.setLook(pid, ref.id, { state: 'walking', at: Date.now(), from })
+  lookWalks.add(key)
+  ;(async () => {
+    try {
+      const { walkSite, describeLook } = await import('../engine/sitelook.mjs')
+      const w = await walkSite(ref.url, { dataDir, signal: AbortSignal.timeout(150000) })
+      if (!w.tokens) return refs.setLook(pid, ref.id, { state: 'failed', note: w.note || 'the site did not open', at: Date.now(), from })
+      const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
+      const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look' }, model: modelFor(v), maxTokens: 900, temperature: 0.3, signal: AbortSignal.timeout(90000), messages })).text : null
+      const live = refs.list(pid).find(x => x.id === ref.id)
+      const words = await describeLook(w, { want: live?.use || ref.use || '', chat })
+      refs.setLook(pid, ref.id, { state: 'ready', at: Date.now(), from, pages: w.pages.map(p => p.url), tokens: w.tokens, motion: w.motion, words }, w.pages.flatMap(p => p.shots.slice(0, 3)))
+    } catch (err) {
+      try { refs.setLook(pid, ref.id, { state: 'failed', note: String(err.message || err).split('\n')[0].slice(0, 160), at: Date.now(), from }) } catch {}
+    } finally { lookWalks.delete(key) }
+  })()
+  return now
+}
+const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input), walk: walkLook })
 // The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
 const studios = studioStore({ projectsDir: projects.projectsDir })
 const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
@@ -2845,6 +2870,8 @@ const server = createServer((req, res) => {
             const known = had.find(r => r.kind === 'link' && r.url === u)
             if (known) { now.push(known); continue }
             const read = await readPage(u).then(pageRead).catch(err => ({ by: 'none', text: String(err.message || err).slice(0, 120) }))
+            // in a project the link is also walked for its look (below): the planner says so instead of "I can't browse"
+            if (inPid && projects.get(inPid)) read.text = `${read.text ? `${read.text}\n` : ''}The crew is opening this site in a browser now to take its look (colours, type, motion); it shows on the References card when done.`.slice(0, 1600)
             const ref = { id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, kind: 'link', name: u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 80), file: null, url: u, src: null, read, at: Date.now() }
             now.push(ref); fresh.push(ref)
           }
@@ -2859,6 +2886,14 @@ const server = createServer((req, res) => {
           const pid = typeof input.project === 'string' ? input.project : typeof input.from === 'string' && RUN_ID.test(input.from) ? projects.projectOf(input.from) : null
           if (!id) id = chats.create({ kind, project: pid }).id
           if (fresh.length) await chats.update(id, c => { c.refs = [...(c.refs || []), ...fresh].slice(-60) })
+          // a link given in a project's talk goes to its References with what the person wrote around it, and
+          // its look is walked (decision 0022); the chat and the turn are kept so the look traces back to them
+          const lp = pid || inPid
+          if (lp && projects.get(lp)) for (const r of fresh.filter(r => r.kind === 'link')) {
+            if (refs.list(lp).some(x => x.kind === 'link' && x.url === r.url)) continue
+            const note = String(last.text || '').replace(/\bhttps?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim()
+            try { walkLook(lp, refs.addLink(lp, { url: r.url, use: note, source: 'chat', from: id })) } catch (err) { console.warn('look:', err.message) }
+          }
           if (!input.brief && last && last.who !== 'hermia') await chats.say(id, { who: 'person', text: last.text, refs: now.map(r => r.id) })
           if (out.reply) await chats.say(id, { who: 'planner', text: out.reply })
           if (out.brief) await chats.update(id, c => { c.spec = { brief: String(out.brief).slice(0, 8000), open: [], art: [], engine: null, time: null, cost: null, lockedAt: null, ...(c.spec || {}), ...{ brief: String(out.brief).slice(0, 8000) } } })
