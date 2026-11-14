@@ -123,6 +123,8 @@ export function githubDoor(host) {
     /** @type {GitHubState | null} */
     let st = null
     let piece = '', kind = 'game', busy = false, said = ''
+    // what was typed stays in the fields when the sheet is drawn again (a refusal leaves it there to mend)
+    const typed = { repo: '', path: '' }
     const body = /** @type {HTMLElement} */ (d.body)
     /** @param {any} move */
     const go = async move => {
@@ -153,17 +155,17 @@ export function githubDoor(host) {
         ${at ? `<p class="gh-repo"><a href="${esc(at.url)}" target="_blank" rel="noopener">${esc(at.repo)}</a><span>${at.private ? 'Private' : 'Public'}</span></p>` : ''}
         <ul class="gh-lines">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
         ${mid ? working(job) : ''}
-        ${!mid && !s.source ? `<label class="ui-field"><span class="ui-label">Repository</span><input class="ui-input" name="repo" placeholder="owner/name" maxlength="200" required></label>
-          <label class="ui-field"><span class="ui-label">Subfolder</span><input class="ui-input" name="path" placeholder="games/ares" maxlength="300"></label>
+        ${!mid && !s.source ? `<label class="ui-field"><span class="ui-label">Repository</span><input class="ui-input" name="repo" value="${esc(typed.repo)}" placeholder="owner/name" maxlength="200" required></label>
+          <label class="ui-field"><span class="ui-label">Subfolder</span><input class="ui-input" name="path" value="${esc(typed.path)}" placeholder="games/ares" maxlength="300"></label>
           ${toggle('Kind', [['game', 'Game'], ['app', 'App']], kind, 'kind')}` : ''}
-        ${!mid && needsName ? `<label class="ui-field"><span class="ui-label">Repository</span><input class="ui-input" name="repo" value="${esc(s.suggest)}" placeholder="name or owner/name" maxlength="200" required></label>
+        ${!mid && needsName ? `<label class="ui-field"><span class="ui-label">Repository</span><input class="ui-input" name="repo" value="${esc(typed.repo || s.suggest)}" placeholder="name or owner/name" maxlength="200" required></label>
           ${toggle('Who can see it', [['private', 'Private'], ['public', 'Public']], 'private', 'see')}` : ''}
         ${job?.state === 'done' && job.message ? `<p class="gh-done" role="status">${esc(job.message)}${job.url ? ` <a href="${esc(job.url)}" target="_blank" rel="noopener">${esc(String(job.url).replace(/^https:\/\//, ''))}</a>` : ''}</p>` : ''}
         ${said || job?.state === 'failed' ? `<p class="bring-err" role="alert">${esc(said || job?.message || '')}</p>` : ''}
         <button type="submit" hidden></button>
       </form>`
       // the move a refusal offers leads: Pull after "has commits this project does not have"
-      const pullFirst = !!(job?.pull || (s.behind && !s.ahead))
+      const pullFirst = !!(job?.pull || s.behind)
       const canPull = s.source && !!(at || s.origin)
       const btn = (/** @type {string} */ k, /** @type {string} */ n, /** @type {boolean} */ lead) => `<button type="button" class="ui-btn ${lead ? 'ui-btn-default' : 'ui-btn-outline'}" data-go="${k}"${mid ? ' disabled' : ''}>${n}</button>`
       d.setFooter(!s.source ? btn('bring', 'Bring in', true) : `${canPull ? btn('pull', 'Pull', pullFirst) : ''}${btn('push', 'Push', !pullFirst || !canPull)}`)
@@ -177,6 +179,7 @@ export function githubDoor(host) {
       const move = (/** @type {string} */ k) => {
         const repo = field('repo')
         if (k !== 'pull' && repo && !repo.value.trim()) return repo.focus()
+        Object.assign(typed, { repo: repo?.value.trim() || '', path: field('path')?.value.trim() || '' })
         if (k === 'bring') return go({ action: 'bring', repo: repo?.value.trim(), path: field('path')?.value.trim() || '', kind })
         if (k === 'pull') return go({ action: 'pull' })
         go({ action: 'push', ...(repo ? { repo: repo.value.trim(), public: form.querySelector('[data-see="public"]')?.getAttribute('aria-checked') === 'true' } : {}) })
@@ -189,6 +192,8 @@ export function githubDoor(host) {
       try {
         st = await ask(project || '', null, `?check=1${piece ? `&piece=${piece}` : runQ()}`)
         if (st.job?.state === 'working') { draw(); st = await follow(project || '', st.piece, s => { st = s; draw() }) }
+        // what an earlier push or pull said is not news in a sheet opened later
+        else st = { ...st, job: null }
       } catch (e) { body.innerHTML = `<p class="bring-err" role="alert">${esc(String(/** @type {any} */ (e)?.message || 'That did not work'))}</p>`; return }
       if (!d.closed) draw()
     }
@@ -213,7 +218,7 @@ export function githubDoor(host) {
       item.classList.remove('working', 'crew-wait')
       if (head) head.innerHTML = hermia
       txt.textContent = words
-      if (url) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = url.replace(/^https:\/\//, ''); txt.append(' ', a) }
+      if (url) { const a = document.createElement('a'); a.className = 'gh-link'; a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = url.replace(/^https:\/\//, ''); txt.append(' ', a) }
     }
     ;(async () => {
       const first = await ask(project, null, `?check=1${runQ()}`)

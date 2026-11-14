@@ -39,6 +39,8 @@ HELP = """Swarm Studio commands
   /swarm export [n|id]            files: static HTML, a React + Tailwind project, an ABA handoff
   /swarm publish [n|id] [github|vercel|cloudflare|local]   a live link (GitHub Pages by default)
   /swarm hosts                    where you can publish, and how to connect Vercel or Cloudflare
+  /swarm github [n] [push|pull] [owner/name|name] [public]   a build's source on GitHub: where it is; push it
+                                  (a private repository under your gh login unless you say public); pull what is new
   /swarm video [n] [style] [cut] [voice|off] [nomusic] [idea]  cut a video with a Kokoro voiceover and music
                                   styles: promo kinetic slideshow teaser story · cuts: wipe fade zoom slide flash
   /swarm app [n] [change]         make a build a working full-stack app (React + shadcn, server routes),
@@ -73,7 +75,7 @@ CTX = None
 def outward(args: dict | None) -> tuple[str, str] | None:
     """(what, rule) when this swarm_studio call would put something on the internet, else None.
 
-    Publishing (any host but this computer), deploying an app and posting to the Swarm Feed each need a
+    Publishing (any host but this computer), deploying an app, pushing source to GitHub and posting to the Swarm Feed each need a
     person's OK before the model may do them: approval_hook() hands them to Hermes's own approval gate."""
     a = args or {}
     action, build = str(a.get("action") or ""), str(a.get("build") or "the latest build")
@@ -84,6 +86,14 @@ def outward(args: dict | None) -> tuple[str, str] | None:
         return f"publish {build} as a public website on {HOSTS[target]}", f"swarm-studio:publish:{target}"
     if action == "deploy":
         return f"deploy the app of {build} to Vercel", "swarm-studio:deploy"
+    if action == "github" and a.get("move") == "push":
+        # three rules, so an "always" for a private push never makes source public or sends it to a named repository
+        repo = str(a.get("repo") or "").strip()
+        if "/" in repo:
+            return f"push the source of {build} to the GitHub repository {repo}", "swarm-studio:github:push:named"
+        if a.get("public") is True:
+            return f"push the source of {build} to a new PUBLIC GitHub repository under your login", "swarm-studio:github:push:public"
+        return f"push the source of {build} to a private GitHub repository under your login", "swarm-studio:github:push:private"
     if action == "post":
         return f"post {build} to the Swarm Feed, where anyone can see it", "swarm-studio:post"
     return None
@@ -110,7 +120,7 @@ def _unattended() -> bool:
     except Exception:
         return False
 
-SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "seo", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall", "connect", "post", "remix", "login", "stop"}
+SUBCOMMANDS = {"help", "files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "seo", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game", "deploy", "auto", "pro", "wall", "connect", "post", "remix", "login", "stop", "github"}
 
 
 def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
@@ -349,6 +359,13 @@ def _dispatch(cmd: str, args: list[str]) -> str:
         rest = [a for a in args if a.lower() not in TARGETS]
         return _publish(rest[0] if rest else "", hosts[0] if hosts else "github")
 
+    if cmd == "github":
+        # the person's own typed words: /swarm github [n] [push|pull] [owner/name|name] [public]
+        moves = [a.lower() for a in args if a.lower() in ("push", "pull", "status")]
+        rest = [a for a in args if a.lower() not in ("push", "pull", "status", "public", "private")]
+        ref = rest.pop(0) if rest and (rest[0].isdigit() or _pick_run(rest[0])) and "/" not in rest[0] else ""
+        return _github(ref, moves[0] if moves else "status", rest[0] if rest else "", "public" in [a.lower() for a in args])
+
     if cmd == "hosts":
         h = _api("/api/publish")
         lines = [f"github      {'signed in as ' + h['github'] if h.get('github') else 'not signed in: run `gh auth login`'}"]
@@ -550,6 +567,53 @@ def _publish(ref: str, target: str) -> str:
     return f"“{r['title']}” is hosted on this computer: {job.get('url')}{note}"
 
 
+def _github(ref: str, move: str, repo: str = "", public: bool = False) -> str:
+    """A build's source on GitHub (docs/specs/45-intake.md): where it is, push it, pull what is new."""
+    r = _pick_run(ref)
+    if not r:
+        return "No such build. See /swarm files."
+    path = f"/api/projects/{r['id']}/github"
+    st = _api(f"{path}?check=1&run={r['id']}", timeout=40)
+
+    def lines(s: dict) -> str:
+        if not s.get("source"):
+            return f"“{r['title']}” has no app or game source yet, so there is nothing to push."
+        link, origin = s.get("link"), s.get("origin")
+        out = [f"https://github.com/{link['repo']} ({'private' if link.get('private') else 'public'})" if link
+               else f"Brought in from github.com/{origin['repo']}{'/' + origin['path'] if origin.get('path') else ''}; not pushed anywhere" if origin
+               else "Not on GitHub yet"]
+        if link and not link.get("fits"):
+            out.append("this version needs a repository of its own")
+        if s.get("ahead"):
+            out.append("changes not pushed")
+        if s.get("behind"):
+            out.append("new commits to pull")
+        if s.get("unreachable"):
+            out.append(s["unreachable"])
+        if not s.get("login"):
+            out.append("GitHub CLI is not signed in (run `gh auth login`)")
+        return f"“{r['title']}”: " + "; ".join(out)
+
+    if move not in ("push", "pull"):
+        return lines(st)
+    body = {"action": move, "piece": st.get("piece")}
+    if move == "push" and repo:
+        body["repo"] = repo
+    if move == "push" and public:
+        body["public"] = True
+    st = _api(path, body, timeout=60)
+    deadline = time.time() + 600
+    while (st.get("job") or {}).get("state") == "working" and time.time() < deadline:
+        time.sleep(2)
+        st = _api(f"{path}?piece={st.get('piece')}")
+    job = st.get("job") or {}
+    if job.get("state") == "working":
+        return f"Still {move}ing; ask again in a moment."
+    if job.get("state") == "failed":
+        return f"Not done: {job.get('message')}" + (" Pull first (action github, move pull), then push again." if job.get("pull") else "")
+    return f"{job.get('message') or lines(st)}" + (f"\n{job['url']}" if job.get("url") else "")
+
+
 def _app(ref: str, ask: str) -> str:
     r = _pick_run(ref)
     if not r:
@@ -690,11 +754,11 @@ def _video(ref: str, wait: bool, voice: str = "", music: bool = True, style: str
 # The tool: the same commands for the Hermes agent, with plain arguments.
 TOOL_SCHEMA = {
     "name": "swarm_studio",
-    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, file builds in folders, read the trace of every model call an agent made (the prompt and raw answer, to see why a section came out as it did), show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, `seo`: the crew's SEO pass on a build (text: what the person wants, e.g. 'target people searching for ramen in Porto' or 'a better description for the menu page'; it edits each page's search title, description and copy where needed and says what changed; every build already ships titles, descriptions, share cards, JSON-LD, robots.txt and sitemap.xml), export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, set the models, image generation and lite mode. `app` turns a build into a working full-stack app (React + shadcn, server routes, an admin page) or, with text, changes the app; it waits until the app runs and returns its local URL. For a game: call `game_questions`, ask the person those questions one at a time in chat (offer the chips, keep their words), then `game` with `answers` and `text` (their idea); it writes an original spec and builds a playable game. `deploy` puts the app on Vercel. The Swarm Feed (the community site): `connect` links this Hermes to the person's feed account (it returns a code and a link they approve in their browser; call it again, or with text 'status', to see if they did), `post` shares a published build in the feed with its files (text: a caption; jam: a jam id to enter), `remix` starts a new build from a feed build (build: its b_… id; text: what to change), `login` opens a one-time link that signs their browser in. `stop` stops everything the crew are doing (or one build's project, with build): the build, pictures, review and fixes, a film, an app or game build, Auto; what is built is kept. Use it when the person asks to stop.",
+    "description": "Control Swarm Studio after a build: list, search (by name, brief, theme, tag, folder, host) or open builds, file builds in folders, read the trace of every model call an agent made (the prompt and raw answer, to see why a section came out as it did), show a build's details, play the prototype, run the visual review (a vision model checks each page and agents fix issues live), pass on a person's comment so an agent rewrites that part of the design live, `seo`: the crew's SEO pass on a build (text: what the person wants, e.g. 'target people searching for ramen in Porto' or 'a better description for the menu page'; it edits each page's search title, description and copy where needed and says what changed; every build already ships titles, descriptions, share cards, JSON-LD, robots.txt and sitemap.xml), export a build as files (static HTML, a React + Tailwind project, an ABA spec and blueprint), publish it as a live website (GitHub Pages, Vercel, Cloudflare Pages or this computer; waits and returns the URL; `hosts` shows where the person is signed in), cut a promo video of a build with a local Kokoro voiceover and music (MP4, waits until it is rendered and returns the file path), turn the prototype's motion on or off, set the models, image generation and lite mode. `app` turns a build into a working full-stack app (React + shadcn, server routes, an admin page) or, with text, changes the app; it waits until the app runs and returns its local URL. For a game: call `game_questions`, ask the person those questions one at a time in chat (offer the chips, keep their words), then `game` with `answers` and `text` (their idea); it writes an original spec and builds a playable game. `deploy` puts the app on Vercel. `github` is a build's source on GitHub through the person's gh login (move: status, push or pull): push sends the app's or game's own git history to a private repository (made on the first push, the same one after; never a force push, and refused when a file looks like a key or the repository has commits the project lacks: pull first), pull brings new commits in as the project's next version. The Swarm Feed (the community site): `connect` links this Hermes to the person's feed account (it returns a code and a link they approve in their browser; call it again, or with text 'status', to see if they did), `post` shares a published build in the feed with its files (text: a caption; jam: a jam id to enter), `remix` starts a new build from a feed build (build: its b_… id; text: what to change), `login` opens a one-time link that signs their browser in. `stop` stops everything the crew are doing (or one build's project, with build): the build, pictures, review and fixes, a film, an app or game build, Auto; what is built is kept. Use it when the person asks to stop.",
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "seo", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game_questions", "game", "deploy", "connect", "post", "remix", "login", "stop", "help"]},
+            "action": {"type": "string", "enum": ["files", "folders", "folder", "trace", "info", "open", "play", "review", "fix", "seo", "export", "publish", "hosts", "video", "motion", "models", "images", "lite", "app", "game_questions", "game", "deploy", "github", "connect", "post", "remix", "login", "stop", "help"]},
             "build": {"type": "string", "description": "for open/info/review/fix/seo/export/publish/video: a number from `files` (1 = latest) or a build id; default the open or latest build"},
             "text": {"type": "string", "description": "for app: what to change in the app (omit for the first build); for game: the person's game idea; for folder: the folder name ('none' to take it out); for trace: words to filter calls (a layer, page, agent or kind like build/fix/review), or 'call <id>' for one call in full, or on/off; for files: search words (tag:x, folder:x, on:vercel, has:video work too); for video: the person's idea for it; for fix: what to change, in the person's words (\"make the hero darker\", \"shorter footer\")"},
             "role": {"type": "string", "enum": ["planner", "builders", "reviewer"], "description": "for models: which role to change; omit to list"},
@@ -707,6 +771,9 @@ TOOL_SCHEMA = {
             "music": {"type": "boolean", "description": "for video: false for no music bed (default true)"},
             "answers": {"type": "object", "description": "for game: the person's answers by question id (type, like, goal, controls, look, length, world); missing ones get defaults", "additionalProperties": {"type": "string"}},
             "jam": {"type": "string", "description": "for post: the id of a jam to enter the build in (from the jam's page on the feed)"},
+            "move": {"type": "string", "enum": ["status", "push", "pull"], "description": "for github: status (where the build's source is on GitHub, changes not pushed, new commits; the default), push (the person is asked first), or pull (what is new there becomes the project's next version; nothing of it is run)"},
+            "repo": {"type": "string", "description": "for github push: owner/name to link a repository that exists (it must be empty or already this project's), or a bare name for a new one; omit to use the project's own or make one named after it"},
+            "public": {"type": "boolean", "description": "for github push: true to make a new repository public (default false: private)"},
             "target": {"type": "string", "enum": ["github", "vercel", "cloudflare", "local"], "description": "for publish: github (a public GitHub Pages link through the gh login, the default), vercel or cloudflare (the person's own account, once connected on the canvas), or local (hosted on this computer)"},
         },
         "required": ["action"],
@@ -722,8 +789,10 @@ def tool(args: dict | None = None, **_: object) -> str:
     if out and _unattended():
         # Hermes's approval gate already refuses here; this keeps the refusal plain if it was skipped
         return f"Swarm Studio: not done. To {out[0]} needs a person's OK, and this cron job has nobody to give it. Ask in a chat instead."
-    if action in ("video", "fix", "seo", "publish", "app", "game", "game_questions", "deploy"):
+    if action in ("video", "fix", "seo", "publish", "app", "game", "game_questions", "deploy", "github"):
         try:
+            if action == "github":
+                return _github(str(a.get("build") or ""), str(a.get("move") or "status"), str(a.get("repo") or "").strip(), a.get("public") is True)
             if action == "game_questions":
                 qs = _api("/api/game")["questions"]
                 return "\n".join(f"{q['id']}: {q['q']}  [{' / '.join(q['chips'])}]" for q in qs)

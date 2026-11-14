@@ -102,6 +102,9 @@ get /api/runs/none/autoplay; has '"on":false'
 # without the token the API refuses
 [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/api/runs)" != 200 ] || { echo 'the API answered without a token'; exit 1; }
 
+# a project's source on GitHub (docs/specs/45-intake.md): the door answers, and a project that is not there is said so
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' http://127.0.0.1:$port/api/projects/nope/github)" = 404 ] || { echo 'the GitHub door answered for a project that is not there'; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"action":"push"}' http://127.0.0.1:$port/api/projects/nope/github)" = 404 ] || { echo 'a push was taken for a project that is not there'; exit 1; }
 echo "· hosted studio starts"
 hport=${CHECK_HOSTED_PORT:-4392}
 SWARM_DATA_DIR=$tmp/hosted PORT=$hport HOSTED_BASE=/studio/app node server/hosted.mjs > $tmp/hosted.log 2>&1 &
@@ -114,6 +117,9 @@ curl -sf http://127.0.0.1:$hport/studio/app/api/intake > "$tmp/reply"; has '"sho
 # bring a project in (docs/specs/45-intake.md) reads a folder and fetches a repository: never on the hosted studio
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"folder":"/tmp","kind":"game"}' http://127.0.0.1:$hport/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }
 [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"repo":"a/b","kind":"game"}' http://127.0.0.1:$hport/studio/app/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }
+# and it has no GitHub door: no state, no push, no pull (the person's gh login is never the host's)
+[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$hport/api/projects/p1/github)" = 403 ] || { echo 'the hosted studio answered the GitHub door'; exit 1; }
+for act in push pull bring; do [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d "{\"action\":\"$act\",\"repo\":\"a/b\"}" http://127.0.0.1:$hport/studio/app/api/projects/p1/github)" = 403 ] || { echo "the hosted studio took a GitHub $act"; exit 1; }; done
 # a build needs a guest (and a model key): refused, never started
 curl -s -X POST -H 'content-type: application/json' -d '{"brief":"a bakery site with an order form"}' http://127.0.0.1:$hport/api/run > "$tmp/reply"; has '"error"'
 echo "all checks passed"

@@ -81,6 +81,7 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - Pexels and Octo stand-in photos: `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL` (plugin.yaml:28-40).
 - Vercel and Cloudflare Pages: pasted token checked with the provider, kept mode 0600 in `connections.json`, or env `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`, or an Octo vault grant (engine/connect.mjs:1-24, 128-141).
 - GitHub Pages: the `gh` login; Swarm Feed: `feed.json` (docs/specs/25-connections.md:29, 31).
+- A project's source on GitHub (☰ › GitHub; docs/specs/45-intake.md): the same `gh` login, through `gh` and `git` with `credential.helper=!gh auth git-credential`; no token is read or kept, and the repository a project goes to is in `github-source.json` in the data folder (engine/sourcehub.mjs, server/sourcehub.mjs). The model's push goes through Hermes's approval prompt (`commands.py` `outward`: `swarm-studio:github:push:private`, `:public`, `:named`).
 
 ## The Setup model picker (hermes_models.py)
 

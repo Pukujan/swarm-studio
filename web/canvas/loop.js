@@ -402,8 +402,8 @@ mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[
 // A project's source on GitHub (web/github.js): ☰ › GitHub opens its sheet, and the same moves typed here
 // ("push to github", "pull from github", "link owner/name", "where is this on github") are answered in the chat.
 // The project is the one open in the Studio, else the run on screen (the server finds its project).
-// @ts-ignore
-export const github = githubDoor({ api, esc, botMsg, youSaid: text => feed(null, text, 'you'), run: () => shownRun() || null, project: () => window.swarmCosmos?.project || shownRun() || null, off: !!BOOT.hosted })
+// (esc is handed over as a call: web/canvas/design.js runs after this file in the joined page.)
+export const github = githubDoor({ api, esc: s => esc(s), botMsg, youSaid: text => feed(null, text, 'you'), run: () => shownRun() || null, project: () => /** @type {any} */ (window).swarmCosmos?.project || shownRun() || null, off: !!BOOT.hosted })
 const githubBtn = $('#github-btn')
 if (githubBtn) { if (BOOT.hosted) githubBtn.remove(); else githubBtn.onclick = () => github.open() }
 async function sendDock() {
