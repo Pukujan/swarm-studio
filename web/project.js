@@ -18,10 +18,10 @@ import { swEdit } from './edit/patches.js'
 import { setVideoHtml } from './video.js'
 import { layerSheet } from './layers.js'
 import { matchHtml, matchWire, lookBusy } from './lookmatch.js'
+import { storyLane } from './story.js'
+import { REF_FROM, fmtTime, clamp01, ptsPath } from './project-parts.js'
 
-const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
-const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
-const fmtTime = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : ''
+const SECTIONS = [['site', 'Site'], ['story', 'Story'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
 
 export function makeProject({ sw, C, root }) {
   const esc = sw.esc, store = sw.store
@@ -138,15 +138,20 @@ export function makeProject({ sw, C, root }) {
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
     P.refs = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/refs`).catch(() => ({ refs: [] }))).refs : []
     render()
+    lane.load(run, board)
     clearTimeout(P.timer)
     P.timer = setTimeout(() => P.on && load(), board?.busy ? 2000 : board?.live ? 3000 : 15000)
   }
+
+  // ---------- the Story lane (spec 39): web/story.js holds it, with its own inspector events
+  const lane = storyLane({ api, post, toast, esc, store, insp, hosted, base, on: () => P.on, run: () => P.run, selected: () => find(P.sel), pick: key => { P.sel = key }, render, renderStage, renderInsp })
 
   // every file, grouped the way the panel and the stage show them
   function groups() {
     const b = P.board || {}
     const g = {}
     if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, sharp: P.sharp.get(p.id), snap: P.thumbs.has(p.id), cover: p.cover, plan: p.plan }, ...draftsOf(p.id)])
+    lane.into(g)
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, pitch: b.game.pitch || '', src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
@@ -192,7 +197,7 @@ export function makeProject({ sw, C, root }) {
   }
   const thumbHtml = x => x.src ? `<span class="t" style="background-image:url('${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}')"></span>`
     : x.kind === 'page' && P.board?.theme?.colors?.length ? `<span class="t tcs" style="--tc-bg:${esc(P.board.theme.colors[0])};--tc-pr:${esc(P.board.theme.colors[1] || P.board.theme.colors[0])}"></span>`
-    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', draft: 'pencil', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
+    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', draft: 'pencil', story: 'film', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
   function renderList() {
     const g = groups()
     listEl.innerHTML = SECTIONS.filter(([k]) => g[k]).map(([k, label]) => {
@@ -248,7 +253,7 @@ export function makeProject({ sw, C, root }) {
     const low = at(x.src), full = at(x.sharp) || low
     const img = x.kind === 'page' && !x.snap ? skeleton(x)
       : x.src ? `<img src="${esc(picNow(full, low))}" data-full="${esc(full)}"${low !== full ? ` data-low="${esc(low)}"` : ''} alt="" draggable="false" loading="lazy" decoding="async">${x.kind === 'page' ? skeleton(x, true) : ''}`
-      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
+      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', story: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
@@ -256,12 +261,11 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'draft') return draftBoard(x, sel, img)
     const rv = x.kind === 'page' ? reviewOf(x) : null
     const work = x.kind === 'art' && (x.pending || P.landed.has(x.key)) ? painting(x) : ''
-    return `<div class="ab ${x.kind}${x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}<svg class="mk" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${markPaths(x.page)}</svg>` : ''}${sel}</div>`
+    return `<div class="ab ${x.kind}${x.kind === 'story' ? ` st-${x.shape}${x.pending || lane.writing() ? ' st-wait' : ''}` : x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src && x.kind !== 'story' ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}<svg class="mk" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${markPaths(x.page)}</svg>` : ''}${sel}</div>`
   }
   // ---------- Scribble (spec 29): marks on a page's artboard, kept as fractions of the page
   // a page's artboard shows at most 9 widths of it: y on the artboard = y on the page × this
   const pageK = page => { const r = P.aspect.get(page); return r ? Math.max(1, (124 * r) / pageH(r)) : 1 }
-  const ptsPath = (pts, k) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${(x * 1000).toFixed(1)} ${(y * k * 1000).toFixed(1)}`).join('')
   function markD(m) {
     const k = pageK(m.page)
     if (m.kind === 'box') { const b = m.box, x0 = b.x * 1000, y0 = b.y * k * 1000, x1 = (b.x + b.w) * 1000, y1 = (b.y + b.h) * k * 1000; return `M${x0} ${y0}H${x1}V${y1}H${x0}Z` }
@@ -427,7 +431,7 @@ export function makeProject({ sw, C, root }) {
     const g = groups()
     if (P.boardOf !== P.run || (!P.board && !P.uploads.length && !P.refs.length)) { world.innerHTML = P.boardOf !== P.run ? `<div class="col"><section class="pj-sec site"><span class="al">Site</span><div class="abs">${[0, 1, 2].map(() => `<div class="ab page wait-in" aria-busy="true">${skeleton({})}</div>`).join('')}</div></section></div>` : ''; return }
     const sec = (k, label) => g[k] ? `<section class="pj-sec ${k}"><span class="al">${label}</span><div class="abs">${g[k].map(board).join('')}</div></section>` : ''
-    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
+    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('story', 'Story')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
     applyCam()
     measurePages()
     if (!P.framed && world.offsetWidth) { P.framed = true; frameAll(false) }
@@ -444,6 +448,7 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'page' && P.layer && P.el && sw.layers?.get(P.layer)?.done && !hosted()) { const r = renderElement(x); if (r !== false) return r }
     if (x.kind === 'page' && P.layer && sw.layers?.get(P.layer)) return renderLayer(x)
     P.layer = null
+    if (lane.inspect(x)) return
     if (dims.has(x.key)) x.dims = dims.get(x.key)
     const kv = [
       x.dims && ['Size', x.dims],
@@ -475,7 +480,7 @@ export function makeProject({ sw, C, root }) {
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
     const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}" draggable="true">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
     setVideoHtml(insp, `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
-      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}${x.kind === 'ref' && !hosted() ? matchHtml(x.ref, { base: base(), built: !!P.board }) : ''}<div class="btns">${btns}</div>`)
+      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}${x.kind === 'ref' && !hosted() ? matchHtml(x.ref, { base: base(), built: !!P.board }) : ''}<div class="btns">${btns}</div>`, true)
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
   }
@@ -1508,7 +1513,6 @@ export function makeProject({ sw, C, root }) {
 
   let toastEl = null
   // ---------- Scribble: draw on a page's artboard (a stroke, a ring, or with Shift a box), a note at its end
-  const clamp01 = v => Math.max(0, Math.min(1, v))
   world.addEventListener('pointerdown', e => {
     if (P.tool === 'move' || e.button !== 0 || hosted()) return
     const a = e.target.closest('.ab.page'), x = a && find(a.dataset.key)

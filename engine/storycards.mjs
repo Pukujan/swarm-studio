@@ -7,7 +7,7 @@
 
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
-import { execFileSync } from './proc.mjs'
+import { execFile } from './proc.mjs'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -133,12 +133,14 @@ y += 24; sf = font(int(size * 0.4), False)
 for l in wrap(sub, sf)[:4]: d.text((pad, y), l, fill=fg, font=sf); y += int(size * 0.55)
 im.save(dst, 'JPEG', quality=86)
 `
+// asynchronous, so drawing a story's cards never holds up the server's other requests
 function pilCard(file, story, beat, shape) {
   const b = story.brand || {}, { w, h } = SHAPES[shape]
-  try {
-    execFileSync('python3', ['-E', '-c', PY_CARD, file, String(w), String(h), b.bg || '#111111', b.text || '#ffffff', b.accent || '#ffffff', beat.kicker || '', beat.headline || '', beat.line || ''], { stdio: 'ignore', timeout: 30000, cwd: tmpdir() })
-    return existsSync(file)
-  } catch { return false }
+  return new Promise(resolve => {
+    try {
+      execFile('python3', ['-E', '-c', PY_CARD, file, String(w), String(h), b.bg || '#111111', b.text || '#ffffff', b.accent || '#ffffff', beat.kicker || '', beat.headline || '', beat.line || ''], { timeout: 30000, cwd: tmpdir() }, err => resolve(!err && existsSync(file)))
+    } catch { resolve(false) }
+  })
 }
 
 // Draw every card of a story into outDir (runs/<id>/story/). screens: { [pageId]: { desktop, phone } }
@@ -183,7 +185,7 @@ export async function drawCards(story, { outDir, runDir, screens = {}, dataDir, 
       rmSync(tmp, { recursive: true, force: true })
     }
   } else {
-    for (const j of jobs) if (pilCard(join(outDir, j.name), story, j.beat, j.shape)) { keys[j.name] = j.key; drawn++ }
+    for (const j of jobs) if (await pilCard(join(outDir, j.name), story, j.beat, j.shape)) { keys[j.name] = j.key; drawn++ }
   }
   // cards of beats that no longer exist
   const want = new Set(shapes.flatMap(s => story.beats.map(b => cardName(s, b.id))))
