@@ -1500,6 +1500,66 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
   } catch { return { queued: false, state: st.state, answer: fallback } }
 }
 
+// ---------- the chat's modes (docs/specs/45-chat-modes.md): Ask and Fix
+// Ask, for an app or game that is built: dyad's own ask mode reads the code and changes nothing
+// (engine/appjob.mjs ask). While the crew builds, Talk answers instead: it knows what the crew is doing.
+// When dyad cannot take the question (no engine installed yet, or it failed), Talk reads the app's files.
+async function askApp(a, id, text) {
+  const t = String(text || '').trim().slice(0, 4000)
+  if (!t) throw new Error('ask something')
+  if (a.state(id).state === 'working') return { ...(await tellBuilder(a, id, t)), by: 'crew' }
+  const gate = await hermesGate()
+  if (gate) throw new Error(`${gate.message} ${gate.action}`)
+  const { honestly } = await import('../engine/honest.mjs')
+  let r = { answer: '', by: '', why: '' }
+  try { r = await a.ask(id, t) } catch (err) { if (err.busy) throw err; r = { answer: '', by: '', why: String(err.message || err).slice(0, 200) } }
+  if (r.changed) console.warn(`ask: the app of ${id} changed during an Ask turn`)
+  if (r.answer) return { answer: `${await honestly({ answer: r.answer, text: t })}${r.changed ? ' (The app\'s files changed while this was answered, which Ask is not meant to do: look at the Code view.)' : ''}`, by: 'dyad' }
+  if (!modelFor('planner')) throw new Error('No planner model yet: pick one in Models.')
+  const said = await tellBuilder(a, id, t)
+  // Talk's own fallback line is about a build in progress: not an answer to a question
+  if (!said.used) throw new Error(`The crew could not answer${r.why ? ` (${r.why})` : ''}. Ask again.`)
+  return { answer: said.answer, ...(said.media ? { media: said.media } : {}), by: 'talk' }
+}
+// Fix: the facts about the Studio's own working parts (engine/doctor.mjs says what each is). Every lookup
+// has a few seconds: a part that does not answer in time reads "not known yet", and the rest still show.
+const CUT_PROBE = "import importlib.util, json; print(json.dumps([m for m in ['numpy', 'scipy', 'PIL'] if importlib.util.find_spec(m) is None]))"
+async function studioFacts(runId = null, { light = false } = {}) {
+  const d = await import('../engine/doctor.mjs')
+  const { GROUPS } = await import('../web/setup-parts.js')
+  const soon = (p, ms = 6000) => Promise.race([Promise.resolve().then(p).catch(() => null), new Promise(r => { setTimeout(() => r(null), ms).unref?.() })])
+  const win = process.platform === 'win32'
+  // light (Ask's one-paragraph view of the Studio): nothing that starts a program or calls a model
+  const skip = () => null
+  const [view, health, media, login, conn, connList, gw, image, python] = await Promise.all([
+    // the tiny model test the Setup sheet runs when it opens (kept ten minutes), then the sheet's own view
+    soon(async () => { if (!light) await soon(() => setup.test(), 15000); return setup.view() }, 20000),
+    soon(() => health.now()), soon(() => mediaNow()), soon(light ? skip : () => githubLogin()), soon(() => connections(dataDir)),
+    soon(() => connectors.list()), soon(light ? skip : () => gatewayTargets()), soon(() => imageChoice()),
+    // the cutters' Python, looked at now: cutPy (below) keeps its first answer until the Studio restarts
+    soon(light ? skip : async () => d.pythonFacts({
+      candidates: [process.env.SWARM_CUT_PY, win ? 'python' : 'python3', win ? '' : '/usr/bin/python3', PY],
+      missing: py => new Promise((ok, no) => execFile(py, ['-c', CUT_PROBE], { timeout: 15000 }, (err, out) => { try { if (err) throw err; ok(JSON.parse(String(out).trim().split('\n').pop())) } catch (e) { no(e) } })),
+      inUse: cutPyP ? await cutPy() : undefined
+    }), 40000)
+  ])
+  const st = hermes.status()
+  const F = {
+    view, hermes: { ...st, health }, models: { roles: Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), picked: picks[r] || null }])) },
+    local: setup.local(), media, publish: conn || login ? { github: login, ...(conn || {}) } : null, conn: connList, gateway: gw ? { platforms: gw } : null
+  }
+  const events = runId ? readEvents(runId) : null
+  const kind = events ? (events.findLast(e => e.type === 'app:start')?.kind === 'game' || events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : events.some(e => e.type === 'app:start') ? 'app' : 'site') : ''
+  const named = m => (m && !ROLES.includes(m) ? String(m).replace(/^[a-z]+\//, '') : '')
+  return {
+    parts: d.partStates(GROUPS, F),
+    run: events ? { id: runId, kind, working: (current?.id === runId && !current.done) || appsNow?.jobs.get(runId)?.state === 'working', failures: d.failuresOf(events) } : null,
+    python,
+    hermes: { attached: !!st.attached, message: health && !health.ok ? `${health.message || ''} ${health.action || ''}`.trim() : '' },
+    models: { planner: named(modelFor('planner')), worker: named(modelFor('worker')), reviewer: picks.reviewer === 'off' ? '' : named(modelFor('reviewer')), image: image ? String(image.model || image.provider || '') : '', video: media?.clips?.on ? String(media.clips.by || '') : '' }
+  }
+}
+
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
@@ -3013,6 +3073,14 @@ const server = createServer((req, res) => {
         const said = Array.isArray(input.said) ? input.said.slice(-40) : []
         const inRun = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
         const inPid = typeof input.project === 'string' ? input.project : inRun ? projects.projectOf(inRun) : null
+        // Ask mode (docs/specs/45-chat-modes.md): the planner answers and nothing else happens. No chat is made or
+        // saved, no link is read or walked, no brief is written: only the answer goes back.
+        if (input.ask === true) {
+          const [{ answerOnly }, { factLines }, facts] = await Promise.all([import('../engine/ask.mjs'), import('../engine/doctor.mjs'), studioFacts(inRun, { light: true }).catch(() => null)])
+          const plan = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? String(chats.get(input.chat)?.spec?.brief || '').slice(0, 1500) : ''
+          const project = [projectState(inPid), plan ? `The plan agreed so far in the chat:\n${plan}` : ''].filter(Boolean).join('\n\n')
+          return json(200, await answerOnly({ said, kind, chat: talk, project, studio: facts ? factLines(facts).join('\n').slice(0, 2400) : '' }))
+        }
         // media (spec 29): the pictures attached to this turn, and its links read as pages; the planner is
         // told how each one was read, and the ones from earlier turns stay in view
         const had = (typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat)?.refs) || []
@@ -3212,6 +3280,24 @@ const server = createServer((req, res) => {
     return
   }
   // Stop: everything in flight for a build's project ({run} or {project}), or all of it ({})
+  // Fix mode (docs/specs/45-chat-modes.md): POST /api/doctor { run?, text? } -> { reply, actions, by, facts }.
+  // What is wrong with the Studio's own working parts, from facts; it changes nothing. With no Hermes or no
+  // planner model the facts are listed plainly: Fix has to answer exactly when things are broken.
+  if (url.pathname === '/api/doctor' && req.method === 'POST') {
+    return readJson(1e4, async input => {
+      try {
+        const run = typeof input.run === 'string' && RUN_ID.test(input.run) ? input.run : null
+        const [d, facts, gate] = await Promise.all([import('../engine/doctor.mjs'), studioFacts(run), hermesGate().catch(() => null)])
+        const model = modelFor('planner')
+        const chat = model && models.planner.apiKey && !gate ? async messages => (await streamChat(provider('planner'), {
+          trace: { kind: 'doctor' }, model, maxTokens: 500, temperature: 0.2, signal: AbortSignal.timeout(45000),
+          extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+        })).text : null
+        const out = await d.diagnose({ facts, text: String(input.text || '').slice(0, 1200), chat })
+        json(200, { ...out, facts })
+      } catch (err) { json(500, { error: String(err.message || err) }) }
+    })
+  }
   if (url.pathname === '/api/stop' && req.method === 'POST') {
     readJson(4096, input => stopWork(input || {}).then(r => json(200, r), err => json(400, { error: String(err.message || err) })))
     return
@@ -3869,7 +3955,7 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|seen|deploy|tell|idle))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|seen|deploy|tell|idle|ask))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
@@ -3886,6 +3972,8 @@ const server = createServer((req, res) => {
       apps().then(async a => {
         if (sub === 'stop') return a.stop(id)
         if (sub === 'idle') return idleAnswer(id, input)
+        // Ask mode: an answer about the app, and nothing else (askApp above)
+        if (sub === 'ask') return askApp(a, id, input.text)
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id)
         if (sub === 'seen') return a.seen(id)
