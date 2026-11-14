@@ -127,12 +127,22 @@
   {
     "key": "mid-build reduced cursor Ada: apart",
     "label": "drift",
-    "why": "The /next/ deck sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma) with its own camera, so a cursor on the same section is drawn at another place on screen than in the current deck."
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
+  },
+  {
+    "key": "mid-build reduced cursor Ada: only in /next/",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
   },
   {
     "key": "mid-build reduced cursor Bo: apart",
     "label": "drift",
-    "why": "The /next/ deck sits on the narrower canvas between its two Figma panels (PATTERNS: the Design deck follows Figma) with its own camera, so a cursor on the same section is drawn at another place on screen than in the current deck."
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
+  },
+  {
+    "key": "mid-build reduced cursor Bo: only in /next/",
+    "label": "drift",
+    "why": "A build opened half way: depending on when the step falls, the current deck's cursors are still gliding up from the break room below the fold (so only /next/ has them on screen) or already near their sections at another place on the narrower /next/ canvas (apart); either way the same cursors, timed and placed differently."
   },
   {
     "key": "overview reduced cursor Hermia: apart",
