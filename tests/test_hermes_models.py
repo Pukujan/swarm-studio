@@ -1,7 +1,7 @@
 """The Setup sheet's model picker (hermes_models.py), against fake Hermes modules.
 
 It lists what Hermes lists and reads the studio's two slots without their credentials. It changes nothing:
-picks and keys go through Hermes's CLI (server/setup.mjs; tests/setup.test.mjs)."""
+picks go through Hermes's CLI (server/setup.mjs; tests/setup.test.mjs) and keys never reach the studio."""
 import io
 import json
 import sys
@@ -19,7 +19,8 @@ PAYLOAD = {
     "providers": [
         {"slug": "inferhub", "name": "Inferhub", "authenticated": True, "is_current": True, "models": ["cb/flash", "cb/pro"], "featured_models": []},
         {"slug": "nous", "name": "Nous Portal", "authenticated": True, "auth_type": "oauth_device_code", "models": [{"id": "a"}, {"id": "b"}], "featured_models": [{"id": "b"}]},
-        {"slug": "anthropic", "name": "Anthropic", "authenticated": False, "auth_type": "api_key", "models": []},
+        {"slug": "anthropic", "name": "Anthropic", "authenticated": False, "auth_type": "api_key", "key_env": "ANTHROPIC_API_KEY", "models": []},
+        {"slug": "custom", "name": "Custom endpoint", "authenticated": False, "auth_type": "api_key", "key_env": "", "models": []},
         {"slug": "minimax-oauth", "name": "MiniMax", "authenticated": False, "auth_type": "oauth_external", "models": []},
         {"slug": "vertex", "name": "Vertex", "authenticated": False, "auth_type": "vertex", "models": []},
         {"slug": "auto", "name": "Auto", "authenticated": True, "auth_type": "virtual", "models": ["x"]},
@@ -28,7 +29,7 @@ PAYLOAD = {
 
 
 class Hermes:
-    """hermes_cli.config / inventory / auth / credential_lifecycle, enough for the picker."""
+    """hermes_cli.config / inventory / credential_lifecycle, enough for the picker (no hermes_cli.auth: it is not read)."""
 
     def __init__(self, cfg):
         self.cfg, self.saved, self.cleared, self.keys = cfg, None, [], []
@@ -39,15 +40,10 @@ class Hermes:
         inventory = types.ModuleType("hermes_cli.inventory")
         inventory.load_picker_context = lambda: "ctx"
         inventory.build_model_options_payload = lambda ctx, include_unconfigured, refresh: PAYLOAD
-        auth = types.ModuleType("hermes_cli.auth")
-        auth.PROVIDER_REGISTRY = {
-            "anthropic": types.SimpleNamespace(auth_type="api_key", api_key_env_vars=["ANTHROPIC_API_KEY"]),
-            "nous": types.SimpleNamespace(auth_type="oauth_device_code", api_key_env_vars=[]),
-        }
         cred = types.ModuleType("hermes_cli.credential_lifecycle")
         cred.save_provider_env_credential = lambda name, value: self.keys.append((name, value))
         self.modules = {"hermes_cli": types.ModuleType("hermes_cli"), "hermes_cli.config": config, "hermes_cli.inventory": inventory,
-                        "hermes_cli.auth": auth, "hermes_cli.credential_lifecycle": cred}
+                        "hermes_cli.credential_lifecycle": cred}
 
 
 class Picker(unittest.TestCase):
@@ -59,7 +55,7 @@ class Picker(unittest.TestCase):
         self.assertEqual(o["slots"]["planner"], {"provider": "nous", "model": "b"})
         self.assertEqual(o["slots"]["worker"], {"provider": "", "model": ""})
         rows = {r["slug"]: r for r in o["providers"]}
-        # virtual rows and providers set up only in Hermes itself are left out
+        # virtual rows and providers set up only in Hermes itself (a key with no key hint: custom) are left out
         self.assertEqual(sorted(rows), ["anthropic", "inferhub", "minimax-oauth", "nous"])
         self.assertEqual(rows["nous"]["models"], ["b", "a"])  # featured first
         self.assertEqual((rows["anthropic"]["sign"], rows["minimax-oauth"]["sign"], rows["inferhub"]["sign"]), ("key", "browser", ""))
@@ -77,12 +73,13 @@ class Picker(unittest.TestCase):
         self.assertEqual(s["planner"], {"slot": "swarm_studio_planner", "provider": "nous", "model": "b", "keep": {}, "base_url": ""})
         self.assertNotIn("SECRET", json.dumps(s))
 
-    def test_a_key_provider_names_where_hermes_keeps_its_key(self):
+    def test_a_key_provider_is_only_named_never_given_a_key(self):
+        # the sheet shows `hermes auth add <slug> --type api-key`; nothing here knows or keeps a key name
         h = Hermes({})
         with mock.patch.dict(sys.modules, h.modules):
             rows = {r["slug"]: r for r in hermes_models.options_json()["providers"]}
-        self.assertEqual(rows["anthropic"]["keyEnv"], "ANTHROPIC_API_KEY")
-        self.assertNotIn("keyEnv", rows["nous"])
+        self.assertEqual(rows["anthropic"]["sign"], "key")
+        self.assertFalse(any("keyEnv" in r for r in rows.values()))
         self.assertIsNone(h.saved)
 
 

@@ -19,6 +19,7 @@ export const hosted = BOOT.hosted && (() => {
   // the crew picker offers only what a guest may use
   for (const o of [...els.agentsSel.options]) if (Number(o.value) > H.limits.agents) o.remove()
   els.agentsSel.value = String(H.limits.agents)
+  els.agentsSel.dispatchEvent(new Event('change'))
   els.brief.maxLength = H.limits.promptChars
   els.brief.placeholder = `Describe a product (up to ${H.limits.promptChars} characters). A crew of ${H.limits.agents} builds its site.`
 

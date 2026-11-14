@@ -203,6 +203,38 @@ class Bridge(unittest.TestCase):
         self.b.HOME = None  # no Hermes home known (an older Hermes): the call runs as it is
         self.assertEqual(self.b.in_profile(lambda x: x + 1, 1), 2)
 
+    def test_the_profile_binding_ends_with_the_call_even_when_it_fails(self):
+        # the workaround for hermes-agent#132887 is bound for one call only: a call that raises leaves no scope
+        # and no Hermes home behind on the thread
+        scope, bound, homes = self.fake_hermes()
+        self.b.keep_profile()
+
+        def boom():
+            self.assertIsNotNone(bound.get())
+            raise ValueError("provider down")
+        with self.assertRaises(ValueError):
+            self.b.in_profile(boom)
+        self.assertIsNone(bound.get())
+        self.assertIsNone(homes.get())
+
+    def test_only_the_bridge_binds_a_profile_and_only_through_hermes_public_modules(self):
+        # agent.secret_scope and hermes_constants are on Hermes's public plugin API (v0.23.1
+        # hermes_cli/data/plugin_api.json). Only launcher.py reads a secret (get_secret), and only bridge.py
+        # binds a profile scope (in_profile, the #132887 workaround); nothing else touches either.
+        uses = re.compile(r"^\s*from\s+(agent\.secret_scope|agent|hermes_constants)\s+import\s+([\w, ]+?)(?:\s+as\s+\w+)?\s*$", re.M)
+        found = {}
+        for f in [*ROOT.glob("*.py"), *(ROOT / "engine").glob("*.py")]:
+            for mod, names in uses.findall(f.read_text("utf-8")):
+                found.setdefault(f.name, set()).update((mod, n.strip()) for n in names.split(","))
+        self.assertEqual(found, {
+            "launcher.py": {("agent.secret_scope", "get_secret")},
+            "bridge.py": {("agent", "secret_scope"), ("hermes_constants", "get_hermes_home"), ("hermes_constants", "set_hermes_home_override")},
+        })
+        src = (ROOT / "bridge.py").read_text("utf-8")
+        # the binding sits behind both conditions, multiplexing on and nothing bound, and nowhere else
+        self.assertEqual(src.count("set_secret_scope("), 1)
+        self.assertIn("scope.is_multiplex_active() and scope.current_secret_scope() is None", src)
+
     def test_the_server_binds_the_profile_for_model_calls(self):
         scope, _, _ = self.fake_hermes()
         self.b.keep_profile()
@@ -254,14 +286,14 @@ class Bridge(unittest.TestCase):
         imported = set(re.findall(r"^\s*from\s+(hermes_cli\.\w+)\s+import\s+([\w, ]+)", src, re.M))
         self.assertEqual({(m, n.strip()) for m, names in imported for n in names.split(",")},
                          {("hermes_cli.config", "load_config"), ("hermes_cli.inventory", "build_model_options_payload"),
-                          ("hermes_cli.inventory", "load_picker_context"), ("hermes_cli.auth", "PROVIDER_REGISTRY")})
+                          ("hermes_cli.inventory", "load_picker_context")})
         self.assertIsNone(re.search(r"\b(save|set|write|clear|remove|delete)_\w*\(|open\(", src))
-        # `hermes config set` from the plugin: only the studio's own two model slots and a provider key named
-        # by Hermes's list (server/setup.mjs), never the plugin's allowlist or any other setting
+        # `hermes config set` from the plugin: only the studio's own two model slots (server/setup.mjs), never a
+        # key (the person gives Hermes a key in their own terminal), the plugin's allowlist or any other setting
         for f in [*(ROOT / "engine").glob("*.mjs"), *(ROOT / "server").glob("*.mjs"), *ROOT.glob("*.py")]:
             src = f.read_text("utf-8")
             targets = re.findall(r"\[\s*'config'\s*,\s*'set'\s*,\s*([^,\]]+)", src)
-            allowed = {"`auxiliary.${s.slot}.model`", "`auxiliary.${s.slot}`", "row.keyEnv"} if f.name == "setup.mjs" else set()
+            allowed = {"`auxiliary.${s.slot}.model`", "`auxiliary.${s.slot}`"} if f.name == "setup.mjs" else set()
             self.assertTrue(set(t.strip() for t in targets) <= allowed, (f.name, targets))
             self.assertNotIn("_mcp_envelope", src, f.name)
             self.assertNotIn("discover_mcp_tools", src, f.name)

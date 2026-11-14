@@ -32,4 +32,6 @@ export interface Group { k: string, name: string, parts: Part[] }
 
 export declare const GROUPS: Group[]
 export declare function statesOf(F: Facts, g: Group): { p: Part, s: PartState }[]
+// the command a model provider's key is given to Hermes with (Hermes asks for the key itself)
+export declare function keyCommand(slug: string): string
 export declare function tally(rows: { s: PartState }[]): { ok: number, all: number, bad: boolean }
