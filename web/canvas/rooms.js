@@ -99,9 +99,16 @@ function openApp(run) {
   if (appv.opening || appv.run !== run) return
   Object.assign(appv, { opening: true, openFailed: false })
   renderApp()
-  appApi('/open', {}).then(o => { if (appv.run !== run) return; if (!o.url) throw new Error('nothing answered at its address'); appv.url = o.url })
-    .catch(err => { if (appv.run !== run) return; Object.assign(appv, { message: err.message, openFailed: true }); if (appv.openSay) botMsg(playFail(appv.kind, err.message)) })
-    .finally(() => { if (appv.run === run) Object.assign(appv, { opening: false, openSay: false }); renderApp() })
+  let again = false
+  appApi('/open', {}).then(async o => {
+    if (appv.run !== run) return
+    if (o.url) return void Object.assign(appv, { url: o.url, tries: 0, openSay: false })
+    // it is still starting: ask again in a moment, ten times at most (the skeleton stays meanwhile)
+    if ((appv.tries = (appv.tries || 0) + 1) >= 10) throw new Error('It did not start. Open it again to retry.')
+    await new Promise(r => setTimeout(r, 2500))
+    again = appv.run === run && !appv.url
+  }).catch(err => { if (appv.run !== run) return; if (appv.openSay) botMsg(playFail(appv.kind, err.message)); Object.assign(appv, { message: err.message, openFailed: true, openSay: false }) })
+    .finally(() => { if (appv.run === run) appv.opening = false; if (again) openApp(run); else renderApp() })
 }
 // "Play it live" on a slice's chat card, and "show the game" typed: the room shows the Live view, pinned, and
 // starts the game's server again if it stopped. When there is nothing to start, the chat says why.
@@ -109,7 +116,7 @@ export async function playLive() {
   if (!shownRun()) return
   if (view !== 'app') setView('app')
   if (appv.run !== shownRun()) resetApp(shownRun())
-  appv.openFailed = false
+  Object.assign(appv, { openFailed: false, tries: 0 })
   await loadApp()
   if (!stageOf().offers.includes('live')) return botMsg(stageNone('live', stageBuild()))
   stageSet('live')
@@ -270,7 +277,7 @@ function renderApp() {
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
       // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
-      : appv.opening && !working
+      : (appv.opening || (appv.hasApp && !appv.message && st !== 'failed' && st !== 'stopped' && (appv.tries || 0) < 10)) && !working
         ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span><em class="as-bot" aria-hidden="true">${cursor(painterOf('app'))}</em></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
       // being brought in: the shape of a page with a crew cursor on it, and the step it is on (no engine works here)
       : working && appv.intake
@@ -297,7 +304,7 @@ function renderApp() {
     // out of quota: another image model, then build again (pictures already painted are kept)
     for (const b of appEls.empty.querySelectorAll('[data-image]')) b.addEventListener('click', async () => { b.disabled = true; await saveModel({ role: 'image', provider: b.dataset.image, model: b.dataset.model || '' }); buildApp() })
     appEls.empty.querySelector('[data-incode]')?.addEventListener('click', () => appAsk('', { art: false }))
-    appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { Object.assign(appv, { message: '', openFailed: false }); loadApp() })
+    appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { Object.assign(appv, { message: '', openFailed: false, tries: 0 }); loadApp() })
     // the person's own press: the project's packages are installed and its build runs, then it opens
     appEls.empty.querySelector('[data-run]')?.addEventListener('click', () => {
       appv.opening = true
