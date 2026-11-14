@@ -117,8 +117,11 @@ test('the build\'s own exported pages are walked from disk and measured', { skip
   const page = (bg, h) => `<!doctype html><html><head><style>body{margin:0;background:${bg};color:#111;font-family:Georgia,serif}h1{font:700 60px Georgia,serif;margin:40px}p{font-size:18px;margin:40px}a{display:inline-block;margin:40px;padding:10px 16px;background:#2f4fe0;color:#fff;border-radius:8px}</style></head><body><h1>${h}</h1><p>Some words about the work that make a body paragraph.</p><a href="about.html">About</a></body></html>`
   writeFileSync(join(dir, 'index.html'), page('#f5f6f8', 'Selected works'))
   writeFileSync(join(dir, 'about.html'), page('#f5f6f8', 'About'))
-  const w = await walkBuild({ htmlDir: dir, files: ['index.html', 'about.html', 'missing.html'], dataDir })
+  const steps = []
+  const w = await walkBuild({ htmlDir: dir, files: ['index.html', 'about.html', 'missing.html'], dataDir, onStep: t => steps.push(t) })
   assert.equal(w.pages.length, 2)
+  // only the measuring is passed on: the walk's own "Opening …" would name a file on this disk
+  assert.deepEqual(steps, ['Measuring', 'Measuring'])
   assert.equal(w.tokens.bg, '#f5f6f8'); assert.equal(w.tokens.accent, '#2f4fe0'); assert.equal(w.tokens.fonts.display.kind, 'serif')
   assert.ok(w.pages[0].shots[0][0] === 0xff)
   const d = compareTokens(ref, w.tokens)

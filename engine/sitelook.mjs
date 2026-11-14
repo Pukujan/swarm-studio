@@ -124,13 +124,17 @@ export function plainLook(tokens, motion) {
 // url: the link. Returns { url, host, pages: [{ url, shots: [Buffer] , measured }], tokens, motion, note? }
 // allowPrivate is for the tests' local fixture page only; the server never sets it.
 // urls: walk exactly these pages and follow no links (the crew's own exported pages, engine/lookmatch.mjs).
-export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.shots, lookup, launch, signal, allowPrivate = false, urls = null } = {}) {
+// onStep(text): what the walk is doing now, in plain words, for whoever is watching it ("Opening obvious.com",
+// "Scrolling page 2 of 3", "Reading colours and type"). A step that throws never stops the walk.
+export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.shots, lookup, launch, signal, allowPrivate = false, urls = null, onStep = null } = {}) {
+  const step = text => { try { onStep?.(text) } catch {} }
   const check = u => (allowPrivate ? new URL(u) : publicUrl(u, lookup ? { lookup } : {}))
   const start = await check(url)
   const pp = launch ? null : puppeteer(dataDir), chrome = launch ? 'given' : findChrome() || chromePath()
   if (!launch && (!pp || !chrome)) return { url: start.href, host: hostOf(start.href), pages: [], tokens: null, motion: null, note: 'no browser here to open the site with' }
   const browser = launch ? await launch() : await pp.launch({ executablePath: chrome, headless: true, env: browserEnv(), args: ['--hide-scrollbars', '--disable-gpu-sandbox', '--mute-audio', '--enable-unsafe-swiftshader'] })
   const out = { url: start.href, host: hostOf(start.href), pages: [] }
+  step(`Opening ${out.host || 'the page'}`)
   try {
     const queue = urls ? urls.slice(0, pages) : [start.href], seen = new Set()
     while (queue.length && out.pages.length < pages) {
@@ -139,6 +143,7 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
       if (seen.has(next)) continue
       seen.add(next)
       if (out.pages.length) { try { await check(next) } catch { continue } }
+      if (out.pages.length) step(`Opening page ${out.pages.length + 1} of ${pages}`)
       const page = await browser.newPage()
       try {
         await page.setViewport(WALK.view)
@@ -151,12 +156,14 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
         const one = { url: page.url(), shots: [] }
         const h = await page.evaluate('document.documentElement.scrollHeight').catch(() => WALK.view.height)
         for (let i = 0; i < shots && i * WALK.view.height < h; i++) {
+          if (i === 1) step(`Scrolling page ${out.pages.length + 1} of ${pages}`)
           if (i) { await page.evaluate(y => scrollTo(0, y), i * WALK.view.height).catch(() => {}); await sleep(900) }
           one.shots.push(Buffer.from(await page.screenshot({ type: 'jpeg', quality: WALK.quality })))
           // the second screen is measured too, so a hero alone does not set the look
           if (i === 0) await page.evaluate(() => scrollTo(0, innerHeight)).then(() => sleep(500)).then(() => page.evaluate(() => scrollTo(0, 0))).catch(() => {})
         }
         await page.evaluate(() => scrollTo(0, 0)).catch(() => {})
+        step('Reading colours and type')
         one.measured = await page.evaluate(MEASURE).catch(() => null)
         if (one.measured) { if (!urls) for (const n of one.measured.nav) if (!seen.has(n)) queue.push(n); delete one.measured.nav }
         out.title = out.title || one.measured?.title || ''
