@@ -1,17 +1,18 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
+import { modeSend, mountChatMode } from '../chatmode.js'
 import { zoomToSection } from './zoom.js'
-import { cam, S, els, setLabel, FRAME_W, commandOps, api } from './core.js'
+import { cam, S, els, setLabel, FRAME_W, commandOps, api, $, BOOT } from './core.js'
 import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage, slotFor } from './deck.js'
 import { lite, litePass, frameBusy, togglePanel, toggleModels } from './settings.js'
-import { renderAgents, setText, renderToolbar, treeSel, renderTree, renderStatus, botMsg, feed, hermesReady, hermesSays } from './panels.js'
+import { renderAgents, setText, renderToolbar, treeSel, renderTree, renderStatus, botMsg, feed, hermesReady, hermesSays, resumeRun } from './panels.js'
 import { renderDesign, drawSelBox, exp, design, selectAt, exportRunNow, undo, redo, esc } from './design.js'
 import { drawComment, review, cmt, reviewRun, sendLayers } from './marks.js'
 import { paintReplay, viewing, files, loadFiles, fileMatch, fileInfo, saveMeta, traceView, fileInto } from './replay.js'
 import { pub, liveUrl, publishNow } from './publish.js'
 import { shownRun, video, VIDEO_STYLES, makeVideo, showRun, runNow } from './film.js'
-import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view, stageSay } from './rooms.js'
+import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view, stageSay, mediaBlock } from './rooms.js'
 import { tour, stopTour, closePlayer, watchVisitor, setMotion, openPlayer } from './player.js'
 import { talk, talkSay, readTalk, talkStart, talkAsk, openAsk } from './talk.js'
 import { links, refLines } from './base.js'
@@ -254,7 +255,10 @@ const SLASH = [
   ['help', '', 'what you can type here'],
   ['play', '', 'click through the prototype'],
   ['review', '', 'a vision model checks every page; agents fix what it finds'],
-  ['fix', '<what to change>', 'an agent rewrites the selected section, or the page'],
+  ['ask', '[question]', 'Ask mode: an answer, and nothing changes'],
+  ['plan', '[idea]', 'Plan mode: talk it through; nothing is built until you say'],
+  ['build', '[brief]', 'Build mode: the crew builds what you type'],
+  ['fix', '[what to change]', 'alone, Fix mode: what is wrong with the Studio. With words, an agent rewrites the selected section, or the page'],
   ['video', '[prompt]', 'cut a film from a prompt, e.g. a fast trailer, scary but cute'],
   ['app', '[change]', 'the App view: make this design a working app, or change it'],
   ['game', '[idea]', 'make an original browser game: a few questions, then it builds'],
@@ -384,7 +388,18 @@ els.form.addEventListener('submit', async e => {
   sending = true
   try { await sendDock() } finally { sending = false; const q = queued; queued = null; q?.() }
 })
+// The chat's mode (web/chatmode.js): a typed switch, and Ask, Plan and Fix take the message. Build, and a
+// send made in code (a Build button under a brief, a project's dock: nextRoute), go on below as ever.
+const modeHelp = {
+  box: els.brief, form: els.form, api, botMsg, feed, hermesReady, hermesSays, appAsk, talkStart, resume: resumeRun, media: mediaBlock,
+  quiet: () => { slashPop.hidden = true }, next: v => setNextRoute(v), run: () => shownRun(), runNow: () => runNow(), app: () => appv,
+  site: () => S.kind !== 'game' && S.frames.length > 0, kind: () => (S.kind === 'game' ? 'game' : 'site'), chat: () => talk.chat,
+  // @ts-ignore
+  setup: a => window.SwarmSetup?.open(...a)
+}
+mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, off: !!BOOT.hosted })
 async function sendDock() {
+  if (!nextRoute && await modeSend(modeHelp)) return
   const brief = els.brief.value.trim()
   if (!brief) return
   if (/^\/[a-z?]/i.test(brief)) {
