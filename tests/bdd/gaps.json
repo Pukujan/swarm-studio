@@ -53,5 +53,53 @@
     "× did not close it"
    ]
   }
+ },
+ "overview › Loading › Pages being built": {
+  "next": {
+   "why": "the skeleton has a block per planned section, but the built sections are not marked in it, so nothing shows the built parts taking their place",
+   "match": "the skeleton marks"
+  }
+ },
+ "overview › Empty project › Nothing built": {
+  "current": {
+   "why": "an Overview with nothing built shows nothing: no icon, no line, and the dock's input is not focused",
+   "match": [
+    "lines, not one",
+    "icons, not one",
+    "input is not focused"
+   ]
+  },
+  "next": {
+   "why": "an Overview with nothing built shows nothing: no icon, no line, and the dock's input is not focused",
+   "match": [
+    "lines, not one",
+    "icons, not one",
+    "input is not focused"
+   ]
+  }
+ },
+ "overview › One place per room › A page into the Design deck": {
+  "next": {
+   "why": "the deck opens on the page that was double-clicked, but has no Back control that reads Overview",
+   "match": "no Back control"
+  }
+ },
+ "overview › One place per room › Esc from a room": {
+  "next": {
+   "why": "Esc in the Design deck goes to Projects, not back to the Overview",
+   "match": "left the deck for Projects"
+  }
+ },
+ "overview › Inspector › Selecting a page": {
+  "next": {
+   "why": "the inspector has the preview, size, Open and Export, but no list of the page's sections",
+   "match": "lists sections"
+  }
+ },
+ "overview › Inspector › Closing it": {
+  "next": {
+   "why": "after a page is clicked on the stage, the first Esc goes to Projects instead of closing the inspector (from the Files list it closes the inspector)",
+   "match": "the first Esc left the Overview"
+  }
  }
 }
