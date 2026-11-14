@@ -199,13 +199,20 @@ Plain, concrete words from what it is and who it is for. Never quote or repeat t
 
 // the person's words to the crew ("do u wanna grill me first"), and any six of their words in a row
 const TO_CREW = /\?$|\b(grill me|don'?t build|dont build|let'?s talk|make me|i need|i want|can you|could you|please|wanna|gonna|build (it|me|this))\b/i
-function echoes(text, prompt) {
-  const words = squash(prompt).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean)
+// six of the person's words in a row, unless the brand or the pages say them too (then they are the
+// project's own words, like a name and what it is, not the person's instructions)
+const plain = x => ` ${squash(x).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ')} `
+function echoes(text, prompt, own = '') {
+  const words = plain(prompt).trim().split(' ').filter(Boolean)
   if (words.length < 6) return false
-  const t = ` ${squash(text).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ')} `
-  for (let i = 0; i + 6 <= words.length; i++) if (t.includes(` ${words.slice(i, i + 6).join(' ')} `)) return true
+  const t = plain(text), mine = plain(own)
+  for (let i = 0; i + 6 <= words.length; i++) {
+    const run = ` ${words.slice(i, i + 6).join(' ')} `
+    if (t.includes(run) && !mine.includes(run)) return true
+  }
   return false
 }
+const ownWords = f => [f.name, f.what, f.who, ...(f.pages || []).flatMap(p => [p.title, p.heading, p.lede])].filter(Boolean).join(' | ')
 const ZERO = /(^|[^\d.,])0\s+[\p{L}]|\bzero\b|\bnone yet\b|\bno (pages|images|pictures|users|sign-?ups|orders)\b/iu
 const LIVE = /\b(is live|are live|now live|live now|went live|go live|just launched|launched today|available now|out now)\b/i
 
@@ -224,7 +231,7 @@ export function checkStory(raw = {}, f = {}, { edited = false } = {}) {
     let _p, text = { kicker: clip(b.kicker, 32), headline: clip(b.headline, HEADLINE_MAX), line: clip(b.line, LINE_MAX) }
     const all = `${text.kicker} ${text.headline} ${text.line}`
     if (!text.headline) { ({ page: _p, ...text } = rulesText(role, f, type, n)); fixes.push(`beat ${i + 1}: no headline, wrote one`) }
-    else if (TO_CREW.test(text.headline) || TO_CREW.test(text.line) || echoes(all, f.prompt)) { ({ page: _p, ...text } = rulesText(role, f, type, n)); fixes.push(`beat ${i + 1}: it repeated the person's words to the crew`) }
+    else if (TO_CREW.test(text.headline) || TO_CREW.test(text.line) || echoes(all, f.prompt, ownWords(f))) { ({ page: _p, ...text } = rulesText(role, f, type, n)); fixes.push(`beat ${i + 1}: it repeated the person's words to the crew`) }
     for (const k of ['kicker', 'headline', 'line']) {
       if (ZERO.test(text[k])) { text[k] = k === 'headline' ? rulesText(role, f, type, n).headline : ''; fixes.push(`beat ${i + 1}: a count of zero`) }
       if (!f.url && LIVE.test(text[k])) { text[k] = k === 'headline' ? squash(text[k].replace(LIVE, '').replace(/^[\s,:—–-]+|[\s,:—–-]+$/g, '')) || `Meet ${f.name}` : text[k].replace(LIVE, '').trim(); fixes.push(`beat ${i + 1}: said it is live with nothing published`) }

@@ -30,11 +30,12 @@ export interface Item {
   used?: string, style?: string | null, art?: Pick<Art, 'page' | 'layer' | 'gen' | 'name'>, pending?: Painting,
   type?: string, size?: number, sending?: number, ref?: Ref
 }
-export type Section = 'site' | 'app' | 'game' | 'film' | 'art' | 'uploads' | 'refs' | 'code'
+// 'story' (spec 39) is listed so the order stays web/project.js's; its lane is not moved here yet, so nothing fills it
+export type Section = 'site' | 'story' | 'app' | 'game' | 'film' | 'art' | 'uploads' | 'refs' | 'code'
 export type Groups = Partial<Record<Section, Item[]>>
 
 // the Files panel's order, and each section's name
-export const SECTIONS: [Section, string][] = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
+export const SECTIONS: [Section, string][] = [['site', 'Site'], ['story', 'Story'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
 // the stage: two columns, pages and pictures on the left, the made things on the right
 export const COLUMNS: Section[][] = [['site', 'art', 'uploads', 'refs'], ['game', 'app', 'film', 'code']]
 export const SECTION_NAME = Object.fromEntries(SECTIONS) as Record<Section, string>

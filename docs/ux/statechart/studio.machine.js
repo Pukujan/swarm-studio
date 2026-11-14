@@ -499,7 +499,7 @@ export const studioMachine = setup({
                       '8. A project: the Overview › Top bar: Projects › name ▾, the mode menu (Overview, Canvas, Video, App, Game), the crew, Play, Publish',
                       '8. A project: the Overview › ☰ Review, Video, Export, Replay',
                       '8. A project: the Overview › Left panel',
-                      '8. A project: the Overview › Files: Site, App, Game, Film, Art, Uploads, Code',
+                      '8. A project: the Overview › Files: Site, Story, App, Game, Film, Art, Uploads, Code',
                       '8. A project: the Overview › Stage: artboards in sections',
                       '8. A project: the Overview › Inspector (while something is selected)',
                       '8. A project: the Overview › Dock: Move, Frame, Text, Image, Comment, Tell the crew…'
