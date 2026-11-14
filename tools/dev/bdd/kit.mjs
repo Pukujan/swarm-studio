@@ -132,6 +132,33 @@ export function judge({ app, $testInfo }, screen, width, check, problems) {
 // A When opens its screen and keeps what it saw; a Then checks it, on whatever screen the When opened. Each step
 // carries `what` it does, so the same words bound twice must do the same thing.
 export const step = (what, fn) => Object.assign(fn, { what })
+// The server's /api/projects answer, changed by  for this page only.
+export const reshape = (page, edit) => page.route(url => new URL(url).pathname === '/api/projects', async route => {
+  const res = await route.fetch()
+  await route.fulfill({ response: res, json: edit(await res.json()) })
+})
+// Alpha Tea, which has two versions in the test Studio, with a third, newest (Version 3, 2, 1)
+export const threeVersions = p => {
+  if (p.title !== 'Alpha Tea' || !p.versions?.length) return p
+  const versions = [{ ...p.versions[0], id: `${p.versions[0].id}-3` }, ...p.versions]
+  return { ...p, count: versions.length, versions: versions.map((v, i) => ({ ...v, title: `Version ${versions.length - i}` })) }
+}
+// A project's pages photographed and saved (their small and full snapshots on the server), the way they are for
+// anyone who has opened it before: only the current Studio takes them (its canvas behind the Overview), so a
+// scenario about what a snapshot gives (a preview, a size) on either Studio starts from here. A page of its own.
+export async function seedSnapshots({ page, studio }, run) {
+  const p = await page.context().newPage()
+  try {
+    await p.goto(`${studio.BASE}/?project=${studio.ids.site}&version=${run}`)
+    for (let i = 0; i < 100; i++) {
+      const got = await studio.api(`/api/runs/${run}/snaps`).catch(() => null)
+      const pages = Object.values(got?.pages || {})
+      if (pages.length && pages.every(d => d.s && d.f)) return true
+      await p.waitForTimeout(300)
+    }
+    return false
+  } finally { await p.close() }
+}
 // What a scenario says and the Studio does not: each falsy item is fine, each string a difference. The error
 // carries them, so a known gap (tests/bdd/gaps.json) can pass only when every one of them is the one it names.
 export const problems = list => {

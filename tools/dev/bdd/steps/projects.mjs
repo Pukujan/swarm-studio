@@ -3,7 +3,7 @@
 // so they find things by what a person reads (a name, a label, a line), not by either Studio's classes. A state the
 // test Studio does not have (no projects, an empty folder, three versions) is the server's own answer to
 // /api/projects, changed for that page only; whatever a step deletes is a project made for it.
-import { bind, open, problems, readCrumb, step } from '../kit.mjs'
+import { bind, open, problems, readCrumb, reshape, step, threeVersions } from '../kit.mjs'
 
 // a sidebar view (its count is part of the button's text: "All projects5"); the header's chats button is not one
 // (visible: /next/ keeps a hidden copy of the sidebar for the desktop layout beside the drawer's)
@@ -15,11 +15,6 @@ const focusCard = c => c.evaluate(el => (el.matches('[tabindex]') ? el : el.quer
 // All projects, where every card shows (Recent holds only what was opened)
 const allProjects = page => side(page, 'All projects').click()
 const shown = loc => loc.isVisible().catch(() => false)
-// the server's /api/projects answer, changed by `edit` for this page
-const reshape = (page, edit) => page.route(url => new URL(url).pathname === '/api/projects', async route => {
-  const res = await route.fetch()
-  await route.fulfill({ response: res, json: edit(await res.json()) })
-})
 // waits until the breadcrumb reads `parts`, up to 5 s; what it reads then
 const crumbAt = async (page, parts) => {
   for (let i = 0; i < 25; i++) { const now = await readCrumb(page); if (JSON.stringify(now) === JSON.stringify(parts)) return now; await page.waitForTimeout(200) }
@@ -199,11 +194,6 @@ const BIND = {
   'projects › Project cards › A stack of versions': [
     step('a card of three versions, its stack opened', async fx => {
       // Alpha Tea has two versions in the test Studio: the server's answer gets a third, newest
-      const threeVersions = p => {
-        if (p.title !== 'Alpha Tea' || !p.versions?.length) return p
-        const versions = [{ ...p.versions[0], id: `${p.versions[0].id}-3` }, ...p.versions]
-        return { ...p, count: versions.length, versions: versions.map((v, i) => ({ ...v, title: `Version ${versions.length - i}` })) }
-      }
       await reshape(fx.page, j => ({ ...j, projects: (j.projects || []).map(threeVersions) }))
       await projects()(fx)
       await allProjects(fx.page)
