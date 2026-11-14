@@ -2,7 +2,7 @@
 // build's name, its Pages and the chosen page's Layers (a dot on a layer an agent is writing); along the bottom the
 // toolbar, where a tool lights up while an agent uses it; on the right the crew, the progress and the zoom, and with
 // nothing selected the build's variables, the design tokens the planner set up.
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Button } from '../../primitives/Button'
 import { Menu, MenuItem } from '../../primitives/Menu'
 import { Icon } from '../../primitives/Icon'
@@ -15,7 +15,7 @@ import type { DeckModel, ToolId } from './model'
 function layerGroups(m: DeckModel): LayerGroup[] {
   const row = (k: string) => {
     const l = m.layers[k]
-    return { key: k, name: l.status === 'failed' ? `${l.role} · failed` : l.role, busy: l.status === 'assigned' || l.status === 'streaming' }
+    return { key: k, name: l.status === 'failed' ? `${l.role} · failed` : m.issues[k] ? `${l.role} · the Critic: ${m.issues[k].problem}` : l.role, busy: l.status === 'assigned' || l.status === 'streaming' }
   }
   const shared = m.order.filter(k => m.layers[k].page === '*')
   return [
@@ -26,8 +26,9 @@ function layerGroups(m: DeckModel): LayerGroup[] {
 
 // `sheet`: below 768 px the panel is a sheet over the canvas, opened from the Layers button (SITEMAP §10); × or Esc
 // closes it (Esc before the frame's, which goes up a level)
-export function LeftPanel({ model, page, onPage, sheet, onClose, id }: {
-  model: DeckModel, page: string | null, onPage: (id: string) => void, sheet: boolean, onClose: () => void, id?: string
+export function LeftPanel({ model, page, onPage, onLayer, selected, sheet, onClose, id }: {
+  model: DeckModel, page: string | null, onPage: (id: string) => void, onLayer: (key: string) => void, selected: string | null,
+  sheet: boolean, onClose: () => void, id?: string
 }) {
   useEffect(() => {
     if (!sheet) return
@@ -63,8 +64,8 @@ export function LeftPanel({ model, page, onPage, sheet, onClose, id }: {
       {model.pages.length > 0 && (
         <section aria-labelledby="deck-layers" className="px-2 py-3">
           <h3 id="deck-layers" className="px-2 pb-2 font-label text-xs font-semibold uppercase tracking-[.12em] text-muted">Layers</h3>
-          <Layers label="Layers" groups={layerGroups(model)} selected={null}
-            onSelect={k => { const l = model.layers[k]; onPage(l && l.page !== '*' ? l.page : page ?? model.pages[0].id) }}
+          <Layers label="Layers" groups={layerGroups(model)} selected={selected}
+            onSelect={onLayer}
             onGroup={id => { if (model.pages.some(p => p.id === id)) onPage(id) }} />
         </section>
       )}
@@ -123,9 +124,11 @@ export function progress(m: DeckModel): string {
 // the top row (Figma's): who is here, Play, Replay and the zoom. Play is the deck's one primary action (rule 17).
 // Publish's label is its state (the breadboard's "Publish", "Publishing…", "Live"); Replay and Export, both acts on
 // the build, are in the ⋯ menu beside it
-export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPublish, onExport }: {
+// With a section picked, `design` (its Design tab) takes the variables' place, as Figma's right panel does
+export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPublish, onExport, design, history }: {
   model: DeckModel, zoom: number, onFit: () => void, canPlay: boolean, onPlay: () => void,
-  replay: { on: boolean, can: boolean, toggle: () => void }, onPublish: () => void, onExport: () => void
+  replay: { on: boolean, can: boolean, toggle: () => void }, onPublish: () => void, onExport: () => void,
+  design?: ReactNode, history: { canUndo: boolean, canRedo: boolean, undo: () => void, redo: () => void, undoLabel?: string, redoLabel?: string, error: string }
 }) {
   const pubLabel = model.publish.state === 'working' ? 'Publishing…' : model.publish.liveTarget && model.publish.state !== 'failed' ? 'Live' : 'Publish'
   const vars = Object.entries(model.theme?.vars ?? {})
@@ -152,7 +155,13 @@ export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPubl
         </Menu>
       </div>
       <p role="status" className="border-b border-edge px-4 py-2.5 font-monospace text-[13px] text-muted">{progress(model)}</p>
-      <section aria-labelledby="deck-vars" className="px-4 py-3">
+      <div className="flex items-center gap-1 border-b border-edge px-3 py-1.5">
+        <Button role="ghost" aria-label={history.undoLabel ? `Undo ${history.undoLabel}` : 'Undo'} isDisabled={!history.canUndo} onPress={history.undo}><Icon name="restore" size={16} /></Button>
+        <Button role="ghost" aria-label={history.redoLabel ? `Redo ${history.redoLabel}` : 'Redo'} isDisabled={!history.canRedo} onPress={history.redo}><Icon name="restore" size={16} className="-scale-x-100" /></Button>
+        {history.error && <span role="alert" className="min-w-0 truncate font-monospace text-xs text-hot-text">{history.error}</span>}
+      </div>
+      {design}
+      <section aria-labelledby="deck-vars" className={`px-4 py-3 ${design ? 'hidden' : ''}`}>
         <h3 id="deck-vars" className="pb-2 font-label text-xs font-semibold uppercase tracking-[.12em] text-muted">Variables</h3>
         {!vars.length && <p className="font-monospace text-[13px] text-muted">The planner sets these up first.</p>}
         <dl className="flex flex-col gap-1.5 font-monospace text-[13px]">

@@ -88,6 +88,14 @@ export const BRAND_PACKS = [...OWN_PACKS, ...OD_PACKS]
 const BY_SLUG = new Map(BRAND_PACKS.map(p => [p.slug, p]))
 export const packOf = slug => BY_SLUG.get(slug) || null
 
+// each Open Design pack's whole system (scripts/import-od-systems.mjs, decision 0016): its tokens without the
+// colours, a digest of its rules and its components. Read once, the first time a theme asks
+let systems = null
+export function systemOf(slug) {
+  if (!systems) { try { systems = JSON.parse(readFileSync(new URL('./opendesign/systems.json', import.meta.url), 'utf8')).systems || {} } catch { systems = {} } }
+  return systems[slug] || null
+}
+
 // ---------- the sample pictures: three stock photos that fit the pack's mood (and the brief, when it says)
 let photos = null
 function library() {
@@ -117,13 +125,20 @@ export function packPhotos(pack, brief = '', { taken = new Set(), n = 3, list = 
   return pick.map(([, p]) => ({ url: p.url, alt: String(p.alt || p.caption || '').slice(0, 140), credit: p.credit || 'Pexels', aspect: p.aspect || 'wide' }))
 }
 
-// ---------- the cards the board shows: every pack, its look, its photos and, when suggested, why
+// a planner's line is shown to the person, who never sees the word pack (decision 0015): they are options
+export const noPack = s => String(s).replace(/\b([Aa]) pack\b/g, '$1n option').replace(/\bpack(s?)\b/gi, (w, pl) => `${w[0] === 'P' ? 'O' : 'o'}ption${pl}`)
+
+// ---------- the cards the board shows: three packs, each its look, its photos and, when suggested, why
 export function packCards(brief = '', suggest = [], picked = null) {
   const taken = new Set()
   const why = new Map((suggest || []).map(s => [s.slug, s.why]))
   const shown = BRAND_PACKS.filter(p => p.from !== 'opendesign' || why.has(p.slug) || p.slug === picked)
   const order = shown.sort((a, b) => (why.has(b.slug) ? 1 : 0) - (why.has(a.slug) ? 1 : 0))
-  return order.map(p => {
+  // three options, no more (decision 0015): the suggested ones first, and the picked one always among them
+  const three = order.slice(0, 3)
+  const mine = order.find(p => p.slug === picked)
+  if (mine && !three.includes(mine)) three[2] = mine
+  return three.map(p => {
     const pics = packPhotos(p, brief, { taken })
     pics.forEach(x => taken.add(x.url))
     return {
@@ -146,7 +161,7 @@ export function suggestByWords(brief = '') {
 // the planner's picks, kept only when they name real packs; at most three, at least two
 export function cleanSuggest(list, brief = '') {
   const seen = new Set()
-  const out = (Array.isArray(list) ? list : []).map(x => ({ slug: String(x?.slug || '').trim(), why: String(x?.why || '').trim().replace(/\s+/g, ' ').slice(0, 120) }))
+  const out = (Array.isArray(list) ? list : []).map(x => ({ slug: String(x?.slug || '').trim(), why: noPack(String(x?.why || '').trim().replace(/\s+/g, ' ')).slice(0, 120) }))
     .filter(x => packOf(x.slug) && x.why && !seen.has(x.slug) && seen.add(x.slug)).slice(0, 3)
   if (out.length >= 2) return out
   for (const x of suggestByWords(brief)) if (out.length < 2 && !out.some(o => o.slug === x.slug)) out.push(x)

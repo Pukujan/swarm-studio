@@ -42,6 +42,10 @@ def swarm_design(args: dict | None = None, **_: object) -> str:
     if not brief:
         return json.dumps({"error": "brief is required: describe the product the site is for"})
     started = launcher.start_run(brief, agents)
+    if started.get("ask"):
+        # a new website asks the person first (docs/decisions/0020-ask-before-build.md); only they answer it
+        return json.dumps({"started": False, "waiting": "person", "chat": started.get("chat"), "url": started.get("url"),
+                           "error": started["error"]})
     if started.get("talk"):
         # the person said not to build yet: talk with them here, and call again with the agreed brief
         return json.dumps({"started": False, "error": "Not started: the brief says to talk before building. Discuss it with the person first, then call swarm_design again with the brief you agreed once they say build."})
@@ -63,6 +67,8 @@ def _slash_swarm(raw_args: str = "", **_: object) -> str:
     if commands.is_command(brief):
         return commands.run(brief)
     result = launcher.start_run(brief) if brief else launcher.ensure_server()
+    if result.get("ask"):
+        return f"🐝 Swarm asked you in the Studio chat whether to skip the setup steps. Answer there: {result['url']}"
     if result.get("error"):
         return f"Swarm Studio: {result['error']}" + (f" {result['action']}" if result.get("action") else "")
     if not brief:
@@ -76,7 +82,7 @@ def _setup_cli(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-open", action="store_true", help="don't open the canvas in a browser")
     parser.add_argument("--wait", action="store_true", help="wait for the build and print its summary")
     parser.add_argument("--models", action="store_true", help="show which models the swarm will use, then exit")
-    parser.add_argument("--build", action="store_true", help="build even when the brief says to talk first")
+    parser.add_argument("--build", action="store_true", help="build now: no question first, even when the brief says to talk first")
     parser.add_argument("--stop", action="store_true", help="stop the crew: the build, pictures, review, film, app (kept as built)")
 
 
@@ -94,7 +100,13 @@ def _run_cli(args: argparse.Namespace) -> int:
     if commands.is_command(brief):
         print(commands.run(brief))
         return 0
-    result = launcher.start_run(brief, args.agents, force=args.build) if brief else launcher.ensure_server()
+    # --build is the explicit "I'm sure": it builds without the question in the Studio chat (decision 0020)
+    result = launcher.start_run(brief, args.agents, force=args.build, sure=args.build) if brief else launcher.ensure_server()
+    if result.get("ask"):
+        print(f"swarm: asked you in the Studio chat whether to skip the setup steps; answer there: {result['url']} (or add --build)")
+        if not args.no_open:
+            webbrowser.open(result["url"])
+        return 0
     if result.get("error"):
         print(f"swarm: {result['error']}")
         if result.get("action"):
@@ -148,7 +160,7 @@ def register(ctx) -> None:
     ctx.register_tool(
         name="swarm_design",
         toolset=TOOLSET,
-        schema={"name": "swarm_design", "description": "Design and build a multi-page website with a swarm of agents, live on the Swarm Studio canvas. Takes about 30-60s.", "parameters": {
+        schema={"name": "swarm_design", "description": "Design and build a multi-page website with a swarm of agents, live on the Swarm Studio canvas. Takes about 30-60s. A new site first asks the person in the Studio chat whether to skip the setup steps; it builds once they answer there (the result says waiting: person).", "parameters": {
             "type": "object",
             "properties": {
                 "brief": {"type": "string", "description": "What the product is and who it is for. The swarm plans and builds a 4-page site from it."},

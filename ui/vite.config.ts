@@ -14,6 +14,8 @@ const repo = fileURLToPath(new URL('..', import.meta.url))
 // package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
 export const alias: AliasOptions = [
   { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
+  // Setup › Parts: the current Studio's table of parts (src/screens/setup/studio-setup-parts.d.ts types it)
+  { find: '@studio/setup-parts', replacement: fileURLToPath(new URL('../web/setup-parts.js', import.meta.url)) },
   // the Studio's kits (spec 37: web/kit-*.js, listed by web/kits.js) and Hermia's cursor (spec 41, web/pet.js), hosted
   // as they are, not rewritten (src/legacy/)
   { find: '@studio/kits', replacement: fileURLToPath(new URL('../web/kits.js', import.meta.url)) },
@@ -22,6 +24,8 @@ export const alias: AliasOptions = [
   // Studio runs: src/primitives/Icon.tsx and src/screens/deck/ reach them, typed by their .d.ts
   { find: '@studio/icons', replacement: fileURLToPath(new URL('../web/icons.js', import.meta.url)) },
   { find: '@studio/crew', replacement: fileURLToPath(new URL('../web/crew.js', import.meta.url)) },
+  // the ways to make something, the same file as the current Studio's (src/studio/)
+  { find: '@studio/makeways', replacement: fileURLToPath(new URL('../web/makeways.js', import.meta.url)) },
   // by path: a bare 'xstate' would be looked up from web/, which has no node_modules
   { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) },
   // the sanitiser the current deck runs on every section before a frame shows it (web/clean.js): the Design deck's
@@ -29,7 +33,11 @@ export const alias: AliasOptions = [
   { find: '@studio/clean', replacement: fileURLToPath(new URL('../web/clean.js', import.meta.url)) },
   // the board video rules (web/video.js): posters, preload, teardown and the page's budget of playing clips, one
   // copy for both apps (src/primitives/BoardVideo.tsx)
-  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) }
+  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) },
+  // Open Design's Edit, ported (web/edit/patches.js, decision 0010): one part of a finished section changed by hand
+  { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) },
+  // where a message typed into a build's chat goes (web/route.js): the Design deck routes the same way
+  { find: '@studio/route', replacement: fileURLToPath(new URL('../web/route.js', import.meta.url)) }
 ]
 
 export default defineConfig({
