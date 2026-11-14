@@ -27,6 +27,7 @@ flowchart LR
   FEED --> CR["+ Create"]
   CR --> ORB["Studio: the new build in the Design deck"]
   PROJ --> GAL["Projects: a file browser"]
+  GAL --> BRING["Kind menu › Bring in a project: a sheet (repository or folder, subfolder, Game or App) → the card, coming in → its room"]
   GAL --> ORB2["Studio: that project's Overview"]
   ORB -.->|Share › Post to Feed| HOME
   HOME -.->|Remix| CR

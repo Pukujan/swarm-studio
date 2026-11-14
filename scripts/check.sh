@@ -62,6 +62,9 @@ get /api/runs
 get /api/game; has '"questions"'
 get /api/meshy; has '"ready"'; has '"credits":35'
 get /api/intake; has '"showcases"'; has '"game"'; has '"plan"'; has '"guides"'; has '"starters"'
+# bring a project in (docs/specs/45-intake.md): a folder outside the home folder is refused, and so is anything but a GitHub repository
+curl -s -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"repo":"https://example.com/a/b","kind":"game"}' http://127.0.0.1:$port/api/intake > "$tmp/reply"; has 'github.com'
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"kind":"game"}' http://127.0.0.1:$port/api/intake)" = 400 ] || { echo 'an intake with nothing to bring was taken'; exit 1; }
 # plan before spend (spec 21): a plan is free; a lock at a stale price and a build before the lock are refused
 curl -sf -H 'x-swarm-token: ci' -H 'content-type: application/json' -d '{"idea":"Check, a 3D test game","answers":{"size":"2"}}' http://127.0.0.1:$port/api/plans > "$tmp/reply"; has '"credits"'
 plan_id=$(sed -E 's/^\{"id":"(p-[a-z0-9]+)".*/\1/' "$tmp/reply")
@@ -99,6 +102,9 @@ for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:$hport/healthz &
 curl -sf http://127.0.0.1:$hport/healthz > "$tmp/reply" || { cat "$tmp/hosted.log"; echo 'hosted /healthz did not answer'; exit 1; }; has '"ok":true'
 curl -sf http://127.0.0.1:$hport/ > "$tmp/reply"; has '<title>Swarm Studio'; has '"hosted"'
 curl -sf http://127.0.0.1:$hport/studio/app/api/intake > "$tmp/reply"; has '"showcases"'
+# bring a project in (docs/specs/45-intake.md) reads a folder and fetches a repository: never on the hosted studio
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"folder":"/tmp","kind":"game"}' http://127.0.0.1:$hport/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{"repo":"a/b","kind":"game"}' http://127.0.0.1:$hport/studio/app/api/intake)" = 403 ] || { echo 'the hosted studio took an intake'; exit 1; }
 # a build needs a guest (and a model key): refused, never started
 curl -s -X POST -H 'content-type: application/json' -d '{"brief":"a bakery site with an order form"}' http://127.0.0.1:$hport/api/run > "$tmp/reply"; has '"error"'
 echo "all checks passed"
