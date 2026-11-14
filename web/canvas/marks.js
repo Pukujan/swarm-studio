@@ -11,6 +11,7 @@ import { modelsInfo, thaw, toggleModels } from './settings.js'
 import { post } from './deck.js'
 import { pageDoc } from './player.js'
 import { key } from './events.js'
+import { ladder } from '../ladder.js'
 
 // ---------- comments: tell an agent what to change
 // A 💬 pin sits on the selected section; open, it is a little composer. The
@@ -233,11 +234,11 @@ export function fillImages(l) {
         if (img.getAttribute('data-pt') !== state) { img.setAttribute('data-pt', state); changed = true }
       }
       const hold = standinFor(gen)
-      if (hold) { if (img.getAttribute('src') !== hold) { img.setAttribute('src', hold); img.setAttribute('data-sketch', 'photo'); changed = true } }
+      if (hold) { if (img.getAttribute('src') !== hold) { img.setAttribute('src', hold); ladder(img, hold); img.setAttribute('data-sketch', 'photo'); changed = true } }
       else if (!img.getAttribute('src')) { img.setAttribute('src', sketch(gen)); img.setAttribute('data-sketch', ''); changed = true }
       continue
     }
-    if (img.getAttribute('src') !== src || img.hasAttribute('data-pt')) { img.setAttribute('src', src); for (const a of ['data-sketch', 'data-painter', 'data-pt']) img.removeAttribute(a); changed = true }
+    if (img.getAttribute('src') !== src || img.hasAttribute('data-pt')) { img.setAttribute('src', src); ladder(img, src); for (const a of ['data-sketch', 'data-painter', 'data-pt']) img.removeAttribute(a); changed = true }
   }
   if (changed) { l.text = doc.body.innerHTML; l.ver++ }
 }
@@ -405,13 +406,17 @@ export async function reviewRun() {
   const run = viewing && viewing !== 'new' ? viewing : S.run
   if (!run || review.busy) return
   review.busy = true
+  // the scored review (engine/review.mjs): a page under the bar has its fixes made, then it is
+  // photographed and reviewed again, until it passes or the server's round limit says stop
+  const wait = ms => new Promise(r => setTimeout(r, ms))
+  const fixing = keys => keys.some(k => ['assigned', 'streaming'].includes(S.layers.get(k)?.status))
   try {
-    for (const [i, f] of S.frames.entries()) {
+    pages: for (const [i, f] of S.frames.entries()) for (let round = 1; ; round++) {
       if (f.frozen) thaw(f)
       // a page waking from rest needs its sections drawn before the photo, or the reviewer sees a blank page
-      for (let t = 0; t < 60 && !(f.ready && f.slots.size && f.geo.height > 400); t++) await new Promise(r => setTimeout(r, 200))
-      await new Promise(r => setTimeout(r, 1200))
-      if (!f.ready) continue
+      for (let t = 0; t < 60 && !(f.ready && f.slots.size && f.geo.height > 400); t++) await wait(200)
+      await wait(1200)
+      if (!f.ready) break
       const shot = await snapFrame(f)
       // the shared nav and footer are reviewed once, on the first page
       const sections = [...f.slots.keys()].map(k => S.layers.get(k))
@@ -421,7 +426,7 @@ export async function reviewRun() {
           return { key: l.key, role: l.role, top: Math.round(b[1] * shot.r), height: Math.round(b[3] * shot.r), html: l.text }
         })
         .sort((a, b) => a.top - b.top)
-      if (!sections.length) continue
+      if (!sections.length) break
       // measured, at desktop and phone width, one after the other to spare memory
       const desk = await checkPage(f.id, 1280, false)
       const phone = await checkPage(f.id, 390, true)
@@ -438,14 +443,21 @@ export async function reviewRun() {
       const res = await api(`/api/runs/${encodeURIComponent(run)}/review`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ page: f.id, title: f.title, image: shot.image, sections, measured, mobile })
+        body: JSON.stringify({ page: f.id, title: f.title, image: shot.image, sections, measured, mobile, round })
       })
+      const out = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const out = await res.json().catch(() => ({}))
         scanFrame(f.id, false)
         feed(null, `review: ${out.error || `HTTP ${res.status}`}`, 'err')
-        if (/no reviewer|no such run/.test(out.error || '')) break
+        if (/no reviewer|no such run/.test(out.error || '')) break pages
+        break
       }
+      if (!out.again) break
+      // the fixes start as the reply comes back: wait for them to begin, then to finish
+      const keys = (out.issues || []).map(x => x.section)
+      feed(null, `🔎 ${f.title} scored ${out.score}/10: fixing, then round ${round + 1}`, 'sys')
+      for (let t = 0; t < 25 && !fixing(keys); t++) await wait(200)
+      for (let t = 0; t < 900 && fixing(keys); t++) await wait(200)
     }
   } catch (err) {
     feed(null, `review: ${err.message || err}`, 'err')

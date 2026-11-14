@@ -6,14 +6,17 @@
 import { ic, cursor, logo, CREW } from './icons.js'
 import { makeSetup } from './setup.js'
 import { openSettings } from './settings.js'
+import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
+import { templatePicker } from './templatepick.js'
+import { bringEntry } from './bringin.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
 const SORTS = [['edited', 'Last edited'], ['name', 'Name'], ['created', 'Created']]
 // the filter beside sort: what a build is, or how far it got (the server's own words in project.state)
 const KINDS = ['Website', 'App', 'Game', 'Video']
-const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Live']
-const STATUS_ICON = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', Live: 'globe' }
+const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Brought in', 'Live']
+const STATUS_ICON = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', 'Brought in': 'download', Live: 'globe' }
 const KIND_ICON = { Website: 'site', App: 'code', Game: 'game', Video: 'film' }
 
 export function makeHome({ sw, C, root }) {
@@ -29,7 +32,7 @@ export function makeHome({ sw, C, root }) {
   // the one-time Setup sheet (docs/specs/06-onboarding.md); the plugin only
   const setup = makeSetup({ sw })
   // Settings (web/settings.js) opens the same sheet when its Crew rows become editable
-  window.SwarmSetup = { open: () => setup.open() }
+  window.SwarmSetup = { open: (row, pg, pp) => setup.open(row, pg, pp) }
   let setupAsked = false
 
   root.className = 'home'
@@ -49,11 +52,11 @@ export function makeHome({ sw, C, root }) {
         <button type="button" class="ib hm-ideas" aria-label="Examples" aria-haspopup="dialog">${ic('idea', 18)}</button><button type="submit" class="btn pri hm-make">${ic('up', 16)}Make</button></form>
       <div class="hm-pop" hidden></div>
       <div class="hm-bar"></div>
-      <div class="hm-body"></div>
+      <div class="hm-body grid">${'<div class="card wait-in" aria-busy="true"><div class="cv"></div><div class="nm"><b></b></div></div>'.repeat(4)}</div>
       <div class="hm-selbar" hidden></div>
     </main>`
   const $ = s => root.querySelector(s)
-  const side = $('.hm-side'), nav = $('.hm-nav'), foldersEl = $('.hm-folders'), bar = $('.hm-bar'), bodyEl = $('.hm-body'), selbar = $('.hm-selbar')
+  const side = $('.hm-side'), nav = $('.hm-nav'), foldersEl = $('.hm-folders'), bar = $('.hm-bar'), bodyEl = $('.hm-body'), selbar = $('.hm-selbar'), WAIT = bodyEl.innerHTML // WAIT: the waiting cards, for Assets' first visit too
   const form = $('.hm-ask'), input = form.q
 
   // ---------- data
@@ -202,12 +205,21 @@ export function makeHome({ sw, C, root }) {
   // a stack opened: each version is a card of its own, named Version n (as in the breadcrumb's menu):
   // "Night Runner 3, 2, 1" read as three projects
   const versionCards = p => p.versions.map((v, i) => ({ id: v.id, version: true, project: p.id, title: `Version ${p.versions.length - i}`, cover: v.cover, theme: v.theme, kinds: v.kinds, state: v.state || null, count: 1, live: v.live, work: v.work || null, progress: v.work?.pct ?? null, updated: v.updated || v.t, made: v.t }))
+  // an empty view says in one line what goes there; Make something puts the cursor in the Make box
+  const none = (icon, line, make = false) => `<div class="hm-none">${ic(icon, 28)}<p>${line}</p>${make && !hosted() ? `<button type="button" class="btn ghost hm-first">${ic('plus', 15)}Make something</button>` : ''}</div>`
+  const narrowed = () => !!(H.q || H.filter)
+  const NONE = {
+    recent: ['clock', 'Projects you open show up here', true],
+    all: ['grid', 'Every project the crew builds lives here', true],
+    folder: ['folder', 'Drag a project here to file it'],
+    trash: ['trash', 'Deleted projects wait here until you empty Trash']
+  }
   function renderCards() {
     let list
     if (H.stack) { const p = H.data.projects.find(x => x.id === H.stack); list = p ? versionCards(p) : [] }
     else list = shown()
     bodyEl.className = `hm-body ${H.layout}`
-    bodyEl.innerHTML = list.length ? list.map(card).join('') : ''
+    bodyEl.innerHTML = list.length ? list.map(card).join('') : H.stack ? '' : narrowed() ? none('search', 'Nothing matches') : none(...(NONE[H.view] || NONE.all))
     bodyEl.querySelectorAll('.card.live .crew').forEach(wander)
   }
   // Assets: grouped by the project each piece came from, in the same folders as Projects;
@@ -242,8 +254,9 @@ export function makeHome({ sw, C, root }) {
       if (!ids.length) continue
       html += `${f ? `<h3 class="as-folder">${ic('folder', 15)}<span>${esc(f)}</span></h3>` : ''}${ids.map(group).join('')}`
     }
-    bodyEl.className = 'hm-body assets'
-    bodyEl.innerHTML = html
+    // the first visit, before the list has come: the same waiting cards as Projects, not "nothing here"
+    bodyEl.className = H.assets ? 'hm-body assets' : 'hm-body grid'
+    bodyEl.innerHTML = !H.assets ? WAIT : html || (narrowed() ? none('search', 'Nothing matches') : none('image', 'Pictures, sections, films and files from every project, to reuse in later builds', true))
     H.assetList = flat
   }
   // Chats (spec 29): talks with the planner that have not built anything, newest first. One opens in
@@ -258,6 +271,7 @@ export function makeHome({ sw, C, root }) {
     bodyEl.innerHTML = `<div class="chat-row chat-new" data-new tabindex="0" role="button">${ic('plus', 16)}<b class="cr-nm">New chat</b></div>` + list.map(c => `<div class="chat-row" data-chat="${esc(c.id)}" tabindex="0" role="button" aria-label="${esc(c.title)}">
       ${ic(CHAT_ICON[c.kind] || 'msg', 16)}<b class="cr-nm">${esc(c.title)}</b>${c.state === 'locked' ? `<span class="cr-st">Locked</span>` : ''}<span class="cr-t">${ago(c.updated)}</span>
       <button class="ib sm more" aria-label="More" aria-haspopup="menu">${ic('more', 16)}</button></div>`).join('')
+      + (list.length || !H.chats ? '' : H.q ? none('search', 'Nothing matches') : none('msg', 'Talks with the planner that built nothing yet'))
   }
   async function openChat(id) {
     const chat = await api(`/api/chats/${encodeURIComponent(id)}`).catch(() => null)
@@ -293,6 +307,7 @@ export function makeHome({ sw, C, root }) {
     if (e.target.closest('.more')) return showMenu([{ k: 'rename', icon: 'pencil', label: 'Rename', run: () => renameChat(id) }, { k: 'del', icon: 'trash', label: 'Delete', red: true, run: () => deleteChat(id) }], e.target.closest('.more'))
     openChat(id)
   }, true)
+  bodyEl.addEventListener('click', e => { if (e.target.closest('.hm-first')) { drawer(false); input.focus() } })
   bodyEl.addEventListener('dblclick', e => { const n = e.target.closest('.chat-row:not(.chat-new) .cr-nm'); if (n) { e.preventDefault(); renameChat(n.closest('.chat-row').dataset.chat) } })
   bodyEl.addEventListener('keydown', e => {
     const r = e.target.closest('.chat-row')
@@ -324,7 +339,7 @@ export function makeHome({ sw, C, root }) {
     H.view = view; H.folder = folder; H.stack = null; H.sel.clear(); H.q = ''; H.searching = false
     store.set('home.view', view); store.set('home.folder', folder)
     drawer(false)
-    if (view === 'assets') { H.assets = H.assets || []; api('/api/assets').then(j => { H.assets = j.assets; if (H.view === 'assets') render() }).catch(() => {}) }
+    if (view === 'assets') api('/api/assets').then(j => { H.assets = j.assets || []; if (H.view === 'assets') render() }).catch(() => { H.assets = H.assets || []; if (H.view === 'assets') render() })
     if (view === 'chats') loadChats()
     render()
     bodyEl.scrollTop = 0
@@ -524,7 +539,7 @@ export function makeHome({ sw, C, root }) {
   // ---------- actions
   async function act(op, ids, extra = {}) {
     if (!ids.length) return
-    if (op === 'purge' && !(await confirmDelete(ids.length, false))) return
+    if (op === 'purge') { if (await confirmDelete(ids.length, false)) purge(ids); return }
     try {
       const out = await post('/api/projects', { op, ids, ...extra })
       H.data = { folders: out.folders, projects: out.projects }
@@ -559,9 +574,26 @@ export function makeHome({ sw, C, root }) {
   }
   async function emptyTrash() {
     const n = H.data.projects.filter(p => p.trashed).length
-    if (!n || !(await confirmDelete(n, true))) return
-    const out = await post('/api/projects', { op: 'empty' }).catch(() => null)
-    if (out) { H.data = { folders: out.folders, projects: out.projects }; render() }
+    if (n && (await confirmDelete(n, true))) purge(null)
+  }
+  // Delete forever (ids) or Empty Trash (null), once confirmed: the toast says how many went. A project the
+  // server could not remove (a file in it held open) stays in Trash, named, with Retry; so does a failed call
+  async function purge(ids) {
+    let out
+    try { out = await post('/api/projects', ids ? { op: 'purge', ids } : { op: 'empty' }) } catch (err) {
+      toast(`<span>${esc(err.body?.error || err.message)}</span>`, 'Retry', () => purge(ids))
+      return
+    }
+    H.data = { folders: out.folders, projects: out.projects }
+    H.sel.clear()
+    closeMenu()
+    render()
+    const n = out.removed || 0, failed = out.failed || []
+    const gone = n ? `${n} project${n > 1 ? 's' : ''} deleted forever` : ''
+    if (!failed.length) return toast(`${ic('check', 15)}<span>${gone || 'Nothing to delete'}</span>`)
+    const held = failed.every(f => f.code === 'EBUSY' || f.code === 'EPERM')
+    const kept = failed.length > 1 ? `${failed.length} stayed in Trash` : `${failed[0].title} stayed in Trash`
+    toast(`<span>${gone ? `${gone}. ` : ''}${esc(kept)}: ${esc(held ? 'a file in it is open' : failed[0].error)}</span>`, 'Retry', () => purge(failed.map(f => f.id)))
   }
   async function download(run) {
     toast(`${ic('download', 15)}<span>Preparing</span>`)
@@ -675,8 +707,8 @@ export function makeHome({ sw, C, root }) {
     { k: 'game', icon: 'game', label: 'Game', only: ['app', 'games', 'deploy'], games: 'big' },
     { k: 'video', icon: 'film', label: 'Video', only: ['review', 'video'], games: 'none' },
     // spec 37: a brand on its own (its Lock is the end), and a deck once its kit registers itself
-    { k: 'brand', icon: 'sliders', label: 'Brand', studioOnly: true },
-    { k: 'deck', icon: 'layers', label: 'Deck', studioOnly: true, kit: true }
+    { k: 'brand', icon: 'sliders', label: 'Brand' },
+    { k: 'deck', icon: 'layers', label: 'Deck', kit: true }
   ]
   // a kind whose kit has not landed yet is not shown (docs/ux/RULES.md rule 6)
   const offered = () => MAKES.filter(m => !m.kit || window.swarmKits?.[m.k])
@@ -692,7 +724,7 @@ export function makeHome({ sw, C, root }) {
   kindBtn.onclick = () => { showKind(); return showMenu([
     // only things to make (how pictures are made is Setup's, not a kind)
     ...offered().map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); closePop(); showIdeas(); input.focus() } })),
-  ], kindBtn) }
+  ...bringEntry({ api: (path, body) => (body ? post(path, body) : api(path)), esc, refresh, toast, kind: () => make.k, atHome: () => H.on, open: (kind, run, pid) => { C.open(run, pid); return kind === 'game' ? C.toGame(run) : C.go('station', 'app') } })], kindBtn) }
 
   // what the Make box asks the server for once: the showcases and the interview (engine/intake.mjs)
   let intakeP = null
@@ -706,15 +738,17 @@ export function makeHome({ sw, C, root }) {
       // The project opens on the build this box started. The canvas may still hold the build before
       // it (the server replays its last run to every canvas), and a project never lets a run that
       // started elsewhere take it over, so the new run is handed to it by id.
-      const made = await sw.submit(text, false, null, null, chat ? { ...sets, chat } : sets)
+      // with the design template the person picked in Examples, for a website (web/templatepick.js)
+      const made = await sw.submit(text, false, null, null, { ...sets, ...(run ? {} : tpl.take()), ...(chat ? { chat } : {}) })
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
       // A website the crew has just started opens in the Design deck, the one room where the swarm
       // can be watched at work (its Follow camera is on for a new build). Back shows the project's
       // Overview, as from any room. The hosted studio keeps its Overview.
       if (typeof made === 'string') return C.started(made)
       // Not started: Projects stays, with the words back in the box. Another build running is
-      // shown on the deck on request; anything else has said why in the chat (Hermes, a talk)
-      if (!input.value) input.value = text
+      // shown on the deck on request; anything else has said why in the chat (Hermes, a talk, the question
+      // before a new website: web/canvas/loop.js opens it, decision 0020)
+      if (!input.value && !made?.ask) input.value = text
       if (made?.busy) toast('<span>A build is running. Yours can start when it ends.</span>', made.run ? 'Watch it' : null, made.run ? () => C.started(made.run, { room: 'deck' }) : null)
       return
     }
@@ -731,8 +765,9 @@ export function makeHome({ sw, C, root }) {
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 
-  // Make: one small menu of the ways to begin, names only, with or without words in the box (spec 37).
-  // The last way picked for this kind, else what the words suggest, is pre-selected, quietly.
+  // Make: one small menu of the kind's two ways to make it (web/makeways.js, decision 0020): Just make it and
+  // Studio, as the kind offers them (a game's Studio is its Plan board); a kind with one way goes straight
+  // there. The last way picked for this kind, else what the words suggest, is pre-selected, quietly.
   const makeBtn = $('.hm-make')
   form.onsubmit = e => {
     e.preventDefault()
@@ -740,15 +775,11 @@ export function makeHome({ sw, C, root }) {
     closePop()
     // the hosted studio builds websites as it always did
     if (hosted()) return text ? confirmBuild(text) : input.focus()
-    const pick = modeOf(make.k) || (text && !studioFits(text) ? 'now' : 'studio')
-    const ways = [
-      { k: 'studio', icon: 'grid', label: 'Studio' },
-      // the brand board straight away (a game's look is decided on its Plan board)
-      ...(make.k === 'game' ? [] : [{ k: 'brand', icon: 'sliders', label: 'Brand sheet' }]),
-      // Build now needs the words, and a brand or a deck is made in the Studio only
-      ...(text && !make.studioOnly ? [{ k: 'now', icon: 'zap', label: 'Build now' }] : [])
-    ].map(w => ({ ...w, on: w.k === pick, run: () => begin(w.k, text) }))
-    showMenu(ways, makeBtn)
+    const ways = makeWays(make.k, !!text)
+    if (ways.length === 1) return begin(ways[0], text)
+    const fit = make.k === 'game' ? 'studio' : text && !studioFits(text) ? 'now' : 'studio'
+    const pick = [makeModeOf(modeOf(make.k)), fit].find(k => ways.some(w => w.k === k)) || ways[0].k
+    showMenu(ways.map(w => ({ k: w.k, icon: w.icon, label: w.label, on: w.k === pick, run: () => begin(w, text) })), makeBtn)
     document.querySelector('.hm-menu button.on, .hm-menu button')?.focus({ preventScroll: true })
   }
   async function begin(way, text) {
@@ -756,9 +787,9 @@ export function makeHome({ sw, C, root }) {
     const off = !sw.hermesReady ? null : await sw.hermesReady()
     if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => begin(way, text))
     G.sheet = false
-    store.set(`home.mode.${make.k}`, way === 'now' ? 'now' : 'studio')
-    if (way === 'now') return buildNow(text)
-    return studioFirst(text, way === 'brand' ? 'brand' : null)
+    store.set(`home.mode.${make.k}`, way.k)
+    if (way.k === 'now') return buildNow(text)
+    return studioFirst(text, way)
   }
 
   // ---------- Studio or Build now (spec 37)
@@ -774,22 +805,19 @@ export function makeHome({ sw, C, root }) {
     // a game skipped its Plan board; the talk's Build still starts it (nothing builds without a press)
     confirmBuild(text)
   }
-  // the Studio, until the scaffold (spec 37, slice 2) opens it: the game's Plan board, the brand sheet
-  // beside the talk, or the talk; Thorough asks the questions the prompt has not answered first
-  // sheet 'brand': the brand board straight away, inside the new project (an empty box opens the Studio
-  // on its Brand step, where the chat asks what it is first)
-  async function studioFirst(text, sheet = null) {
+  // Studio (decision 0020): a Studio project, opened beside its chat (an empty box's chat asks what it is
+  // first). A game's is its Plan board, where its talk asks. Without a kit (the hosted studio):
+  // the brand sheet, the talk, or Thorough's questions first
+  async function studioFirst(text, way = { k: 'studio' }) {
     closePop()
     if (make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
     // a kind with a Studio kit (spec 37): its project is made now, and its scaffold opens beside the chat
     if (!hosted() && window.swarmKits?.[make.k]) {
       try {
         const kit = window.swarmKits[make.k]
-        const j = await post('/api/studio', { kind: make.k, idea: text, depth, steps: kit.steps })
+        const j = await post('/api/studio', { kind: make.k, idea: text, mode: way.k, depth, steps: way.steps || kit.steps })
         input.value = ''
-        // the sheet opens from the project's Studio, so its Back lands there
-        if (sheet === 'brand' && text) { C.studio(j.project.id, 'brand'); return C.brand({ project: j.project.id, brief: text, kind: make.k === 'app' ? 'app' : 'site' }) }
-        return C.studio(j.project.id, sheet)
+        return C.studio(j.project.id, way.step || makeStudioStep(make.k))
       } catch (err) { return toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
     }
     if (make.k === 'brand') { input.value = ''; return window.swarmCosmos?.brand?.({ brief: text, kind: 'site' }) }
@@ -805,7 +833,8 @@ export function makeHome({ sw, C, root }) {
   // talking (the deck's chat, engine/talkplan.mjs for the talk). Nothing starts until Build.
   // The hosted studio's guests are limited already, and build as they always did.
   function confirmBuild(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}, steps = null, sheet = false) {
-    if (hosted() || !sw.talk) return start(text, run, sets)
+    // a website goes straight to the question before its build (decision 0020): it is the press, so no brief first
+    if (hosted() || !sw.talk || (!run && !sheet)) return start(text, run, sets)
     closePop()
     input.value = ''
     C.project = null
@@ -837,7 +866,8 @@ export function makeHome({ sw, C, root }) {
 
   // ---------- the pop under the Make box: the showcases, or the interview. One at a time;
   // it closes with ×, Esc and a click outside, and the prompt stays in the box.
-  const pop = $('.hm-pop'), ideasBtn = $('.hm-ideas')
+  // and Open Design's design templates, for the person to pick one for a website under the examples
+  const pop = $('.hm-pop'), ideasBtn = $('.hm-ideas'), tpl = templatePicker({ api, esc, form, input })
   let popOff = null
   function openPop(cls, html) {
     pop.className = `hm-pop ${cls}`
@@ -861,10 +891,10 @@ export function makeHome({ sw, C, root }) {
     const key = exampleKey()
     const list = key ? ((await intake()).starters?.[key] || []).slice(0, 4) : []
     if (!list.length) return input.focus()
-    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>`)
+    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>${hosted() || make.k !== 'site' ? '' : await tpl.html()}`); tpl.bind(pop, closePop)
     ideasBtn.classList.add('on')
     pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
-    for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
+    for (const b of pop.querySelectorAll('.hm-st')) b.onclick = () => {
       input.value = list[Number(b.dataset.st)]
       closePop()
       input.focus()
@@ -970,14 +1000,15 @@ export function makeHome({ sw, C, root }) {
   // ---------- you: theme, sound and models live in your menu; the globe opens the Feed
   $('.hm-who').onclick = e => {
     const light = (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')) === 'light'
-    const sound = sw.sound?.() || 'muted'
+    const sound = sw.sound?.() || 'muted', who = e.currentTarget
     showMenu([
-      { k: 'theme', icon: light ? 'moon' : 'sun', label: light ? 'Dark' : 'Light', run: () => document.querySelector('#theme-btn')?.click() },
-      { k: 'sound', icon: 'sound', label: sound === 'on' ? 'Mute' : 'Sound on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
-      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => document.querySelector('#models-btn')?.click() }, { k: 'setup', icon: 'check', label: 'Setup', run: () => setup.open() },
+      { k: 'theme', icon: light ? 'moon' : 'sun', label: light ? 'Dark' : 'Light', run: () => sw.theme?.() },
+      // the crew's voices and sounds (web/chatter.js), the same switch as ☰ → Crew sound; ✓ while on
+      { k: 'sound', icon: 'sound', label: 'Crew sound', on: sound === 'on', run: () => sw.sound?.(sound === 'on' ? 'muted' : 'on') },
+      ...(hosted() ? [] : [{ k: 'models', icon: 'sliders', label: 'Models', run: () => sw.models?.(who) }, { k: 'setup', ...($('.hm-who').classList.contains('warn') ? { icon: 'alert' } : { icon: 'check' }), label: 'Setup', run: () => setup.open() },
         // what the studio is connected to and where its data goes (docs/specs/25-connections.md)
         { k: 'settings', icon: 'link', label: 'Settings', run: () => openSettings({ sw, esc }) }])
-    ], e.currentTarget)
+    ], who)
   }
 
   // ---------- phones: the sidebar is a drawer

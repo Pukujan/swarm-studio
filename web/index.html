@@ -6,6 +6,7 @@
 <title>Swarm Studio</title>
 <link rel="icon" type="image/svg+xml" href="brand/hermia-mark.svg">
 <script>try { const t = localStorage.getItem('swarm-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t } catch {}</script>
+<link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="canvas.css">
 <link rel="stylesheet" href="studio.css">
 <link rel="stylesheet" href="home.css">
@@ -16,6 +17,7 @@
 <link rel="stylesheet" href="brand.css">
 <link rel="stylesheet" href="scaffold.css">
 <link rel="stylesheet" href="workshop.css">
+<link rel="stylesheet" href="pet.css">
 <script src="crew.js"></script>
 <script src="chatter.js"></script>
 <script src="show.js"></script>
@@ -33,7 +35,6 @@
     <button class="toggle game-btn" id="game-btn" aria-label="Game"><i data-i="gamepad-2"></i><span class="t">Game</span></button>
     <div class="spacer"></div>
     <button class="toggle crew-mute" id="crew-mute" data-mode="muted" aria-haspopup="dialog" aria-expanded="false" aria-label="Crew sound: muted"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><g class="cm-on"><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/></g><path class="cm-off" d="m22 9-6 6M16 9l6 6"/></svg><svg class="ico cm-quiet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12.5a7.5 6 0 0 1-10.7 5.4L4 19.5l1.4-3.6A6 6 0 0 1 4.5 12.5 7.8 6 0 0 1 12.3 6.5"/><path d="M3 3l18 18"/></svg><span class="t">Muted</span></button>
-    <div class="undo-redo"><button class="toggle" id="undo-btn" aria-label="Undo" disabled><i data-i="undo-2"></i></button><button class="toggle" id="redo-btn" aria-label="Redo" disabled><i data-i="redo-2"></i></button></div>
     <div class="more playwrap">
       <button class="toggle play" id="play-btn" aria-label="Play" disabled><i data-i="play"></i><span class="t">Play</span></button>
       <button class="toggle play play-caret" id="play-more" aria-label="Play options" aria-haspopup="menu" aria-expanded="false" disabled><i data-i="chevron-down"></i></button>
@@ -87,7 +88,8 @@
             <option value="4">4 agents</option><option value="5">5 agents</option><option value="6">6 agents</option><option value="8" selected>8 agents</option><option value="12">12 agents</option><option value="16">16 agents</option><option value="20">20 agents</option><option value="24">24 agents</option>
           </select>
           <select id="build-model" class="chip model" aria-label="Build model"><option value="">Hermes default</option></select>
-          <button type="submit">Build</button>
+          <span class="send-set"><select id="chat-mode" class="chip mode" aria-label="Mode"><option value="ask">Ask</option><option value="plan">Plan</option><option value="build" selected>Build</option><option value="fix">Fix</option></select>
+          <button type="submit">Build</button></span>
         </div>
       </form>
     </section>
@@ -96,8 +98,13 @@
       <div id="log" class="feed"></div>
     </section>
 
-    <!-- the page and section tree lives here unseen; the project canvas shows it in its Layers panel -->
-    <div class="tree-home" hidden><div id="tree" class="tree"></div></div>
+  </aside>
+
+  <!-- the Design deck's left panel: Layers, the page and section tree (web/layers.js); the Overview borrows the
+       same tree for its Layers tab. In a narrow pane it is a sheet from the Layers button on the canvas -->
+  <aside class="pj-side deck-layers" aria-label="Layers">
+    <div class="pj-tabs" role="tablist"><span class="pj-tab on" role="tab" aria-selected="true">Layers</span></div>
+    <div class="pj-layers"><div id="tree" class="tree"></div></div>
   </aside>
 
   <main id="viewport" class="viewport">
@@ -105,9 +112,15 @@
     <svg id="wires" class="wires"></svg>
     <div class="dock" id="dock"><span class="dock-title"><i data-i="coffee"></i>break room</span><button class="dock-hide" id="dock-hide" aria-label="Hide the break room"><i data-i="x"></i></button></div>
     <div id="cursors" class="cursors"></div>
-    <div class="toolbar" id="toolbar"></div>
+    <!-- the design tools (web/canvas/panels.js fills #toolbar), then Undo and Redo, which act on design edits -->
+    <div class="toolbar" role="toolbar" aria-label="Design tools" tabindex="0">
+      <div class="tools" id="toolbar"></div>
+      <span class="tsep undo-sep"></span>
+      <div class="undo-redo"><button type="button" class="tool" id="undo-btn" aria-label="Undo" disabled><i data-i="undo-2"></i></button><button type="button" class="tool" id="redo-btn" aria-label="Redo" disabled><i data-i="redo-2"></i></button></div>
+    </div>
     <div class="status" id="status">Ready</div>
     <button type="button" class="camera-hint auto" id="camera-hint" aria-label="Follow the crew" aria-pressed="true"><i data-i="users"></i>Follow</button>
+    <button type="button" class="ib deck-layers-btn" aria-label="Layers" aria-expanded="false"><i data-i="layers"></i></button>
 
     <div class="float planner" data-panel="planner">
       <h3>Planner <span id="plan-state" class="pill">idle</span></h3>
@@ -127,6 +140,7 @@
       <span class="app-stage" id="app-stage"></span>
       <button class="toggle" id="app-link" hidden></button>
       <div class="spacer"></div>
+      <div class="seg" id="app-stageview" role="group" aria-label="Stage" hidden><button data-stage="crew" aria-pressed="false" hidden>Crew</button><button data-stage="art" aria-pressed="false" hidden>Art</button><button data-stage="live" aria-pressed="false" hidden>Live</button></div>
       <div class="seg" id="app-mode"><button data-mode="preview" class="on">Preview</button><button data-mode="code">Code</button></div>
       <div class="seg" id="app-device"><button data-w="390">Phone</button><button data-w="820">Tablet</button><button data-w="0" class="on">Desktop</button></div>
       <button class="toggle" id="app-reload" aria-label="Reload the app"><i data-i="rotate-cw"></i></button>
@@ -139,7 +153,7 @@
         <section class="app-hermia" id="app-hermia" hidden></section>
       </div>
       <div class="app-main">
-        <div class="app-stagearea" id="app-preview"><div class="app-shell" id="app-shell"><iframe id="app-frame" aria-label="The app" sandbox="allow-scripts allow-forms"></iframe><div class="app-loading" id="app-loading" hidden role="status"><div class="spin"></div><span></span></div></div><div class="app-empty" id="app-empty"></div></div>
+        <div class="app-stagearea" id="app-preview"><div class="app-shell" id="app-shell"><iframe id="app-frame" aria-label="The app" sandbox="allow-scripts allow-forms"></iframe><div class="app-loading" id="app-loading" hidden role="status" aria-busy="true"><div class="spin"></div><span></span></div></div><div class="app-empty" id="app-empty"></div></div>
         <div class="app-code" id="app-code" hidden><div class="app-tree" id="app-tree"></div><pre class="app-file" id="app-file"></pre></div>
       </div>
     </div>

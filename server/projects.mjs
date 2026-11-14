@@ -85,6 +85,10 @@ export function stateOf(card, cards = [card]) {
   const status = out ? 'Live'
     : g?.art ? `Painting art · ${g.art[0]} of ${g.art[1]}`
     : g?.stage ? `Building · stage ${g.stage[0]} of ${g.stage[1]}`
+    // a project being brought in (docs/specs/45-intake.md) is not being built
+    // (once it is in, a later crew turn that fails reads as any failed build does)
+    : card.intake === 'coming' ? (card.work || busy || card.build === 'working' ? 'Coming in' : 'Did not come in')
+    : card.intake === 'in' && card.build === 'built' ? 'Brought in'
     : card.live || card.work ? 'Building'
     // a game build that was stopped (or whose server went away) keeps app:start as its last word
     : busy ? 'Building'
@@ -96,7 +100,8 @@ export function stateOf(card, cards = [card]) {
   return { kind, status, host: out ? hostOf(out) : null }
 }
 
-export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
+// removeDir: how a folder is deleted for good (a test hands in one that fails like a held file on Windows)
+export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive, removeDir = path => rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) }) {
   const file = () => join(runsDir, 'folders.json')
   const projectsDir = join(dataDir, 'projects')
   let cache = null // { mtime, data }
@@ -311,12 +316,20 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       case 'purge':
       case 'empty': {
         const gone = input.op === 'empty' ? Object.keys(data.projects).filter(id => data.projects[id].trashed) : ids.filter(id => data.projects[id].trashed)
+        // each project on its own: a file held open (EBUSY, EPERM on Windows) keeps that one in Trash, named in
+        // `failed`, and the rest still go
+        out.removed = 0
+        out.failed = []
         for (const id of gone) {
-          for (const run of data.projects[id].runs) if (RUN_ID.test(run) && !isLive(run)) rmSync(join(runsDir, run), { recursive: true, force: true })
-          rmSync(join(projectsDir, id), { recursive: true, force: true })
-          delete data.projects[id]
+          try {
+            for (const run of data.projects[id].runs) if (RUN_ID.test(run) && !isLive(run)) removeDir(join(runsDir, run))
+            removeDir(join(projectsDir, id))
+            delete data.projects[id]
+            out.removed++
+          } catch (err) {
+            out.failed.push({ id, title: data.projects[id].title || data.projects[id].name || id, code: err.code || '', error: err.message })
+          }
         }
-        out.removed = gone.length
         break
       }
       case 'duplicate': {

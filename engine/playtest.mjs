@@ -11,6 +11,7 @@ import { homedir, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { dyadDir } from './appbuild.mjs'
 import { runChecks, waitProbe } from './playcheck.mjs'
+import { makePoster, posterPath } from './poster.mjs'
 
 const START = /^(play|start|begin|go|new game|tap to (play|start)|press .* to (play|start))|\b(play|start|begin)\b/i
 const ENDED = /\b(game over|you (lost|died|fell|crashed|slipped)|try again|play again|retry|gate closed|out of lives|run over)\b/i
@@ -143,10 +144,11 @@ export async function playtest(url, opts = {}) {
   const r = await playtestRun(url, opts, box)
   return { ...r, ...(box.filmed || {}), ...(box.checks ? { checks: box.checks } : {}) }
 }
-async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false, ffmpeg = undefined, checks = null, probeWait = 25000 } = {}, box = {}) {
+async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false, ffmpeg = undefined, checks = null, probeWait = 25000, playwright = undefined } = {}, box = {}) {
   let film = async () => ({}), vdir = null, g = null
   const kept = box // (the canvas's own box takes the name further down)
-  const pw = await loadPlaywright()
+  // `playwright` is a test's stand-in for the package (null: none on this machine)
+  const pw = playwright === undefined ? await loadPlaywright() : playwright
   if (!pw) return { ok: false, skipped: 'no browser for the play test' }
   let browser
   // sound plays without a click first, so the film can record it
@@ -172,7 +174,9 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
           try { const a = join(vdir, 'sound.webm'); writeFileSync(a, Buffer.from(sound.b64, 'base64')); await mux(ff, f, a, sound.at - t00, join(vdir, 'with-sound.webm')); copyFileSync(join(vdir, 'with-sound.webm'), clip); sounded = true } catch {}
         }
         if (!sounded) copyFileSync(f, clip)
-        return { clip, keys: pressed.slice(0, 80), sound: sounded }
+        // its poster: a frame of the film itself, over the title-screen photo taken below (kept when there is no ffmpeg)
+        if (ff) await makePoster(clip, { ffmpeg: ff })
+        return { clip, keys: pressed.slice(0, 80), sound: sounded, ...(existsSync(posterPath(clip)) ? { poster: posterPath(clip) } : {}) }
       } catch {}
       return {}
     }
@@ -203,6 +207,7 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     const png = await page.screenshot({ type: 'png' }).catch(() => null)
     if (png && await blank(page, png)) return { ok: false, problem: `The game's screen is blank: one flat colour about a second after it opened, with no title, text or scene drawn.${why() ? ` Errors: ${why()}` : ''} Make the title screen draw straight away (title, start button, a scene behind), and check the canvas is sized to its container and the render loop runs.` }
     if (shot) await page.screenshot({ path: shot, type: 'jpeg', quality: 72 }).catch(() => {})
+    if (clip) await page.screenshot({ path: posterPath(clip), type: 'jpeg', quality: 70 }).catch(() => {})
     const textOf = () => g.evaluate(() => document.body.innerText || '')
     const before = await textOf()
 

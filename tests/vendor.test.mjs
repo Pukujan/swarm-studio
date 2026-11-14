@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, rmSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { VENDORED } from '../scripts/vendor.mjs'
+import { VENDORED, NODE_VENDORED } from '../scripts/vendor.mjs'
 import { joinModules } from '../server/page.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -42,4 +42,27 @@ test('xstate imports in node, and joined into a page script it works the same', 
   assert.doesNotMatch(code, /^import /m)
   await import(`data:text/javascript,${encodeURIComponent(code)}`)
   assert.deepEqual(globalThis.__vendorTest, { n: 3, same: 'function' })
+})
+
+test("the server's bundle (execa, tree-kill) is the file SOURCE.json records, every package pinned and licensed", async () => {
+  for (const lib of NODE_VENDORED) {
+    const dir = join(root, lib.out, '..')
+    const source = JSON.parse(readFileSync(join(dir, 'SOURCE.json'), 'utf8'))
+    // a Windows checkout may hold the file with \r\n; the recorded hash is of the file as built (\n)
+    const file = readFileSync(join(root, lib.out), 'utf8').replace(/\r\n/g, '\n')
+    assert.equal(createHash('sha256').update(file).digest('hex'), source.sha256)
+    const lock = JSON.parse(readFileSync(join(root, lib.dir, 'package-lock.json'), 'utf8'))
+    const locked = Object.entries(lock.packages).filter(([k]) => k)
+    assert.equal(source.packages.length, locked.length)
+    for (const [, v] of locked) assert.match(v.integrity, /^sha512-/, 'every package in the lockfile has its integrity')
+    const pinned = JSON.parse(readFileSync(join(root, lib.dir, 'package.json'), 'utf8')).dependencies
+    for (const v of Object.values(pinned)) assert.match(v, /^\d+\.\d+\.\d+$/, 'exact versions only')
+    const licence = readFileSync(join(dir, 'LICENSE'), 'utf8')
+    for (const p of source.packages) {
+      assert.match(p.license, /^(MIT|ISC|Apache-2\.0)$/, `${p.name}: a licence the plugin can ship`)
+      assert.ok(licence.includes(`${p.name} ${p.version} (${p.license})`), `${p.name}'s licence text is in LICENSE`)
+    }
+    const mod = await import(pathToFileURL(join(root, lib.out)).href)
+    assert.deepEqual(Object.keys(mod).sort(), [...lib.exports].sort())
+  }
 })

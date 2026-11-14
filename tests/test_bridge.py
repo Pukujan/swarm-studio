@@ -152,6 +152,77 @@ class Bridge(unittest.TestCase):
             if f.is_file():
                 self.assertNotIn(token.encode(), f.read_bytes(), f)
 
+    def fake_hermes(self, multiplex=True):
+        """A stand-in for Hermes's secret scope: on a multiplexed gateway a key read with no scope fails
+        closed (agent/secret_scope.py get_secret), as NousResearch/hermes-agent#132887 reports."""
+        import contextvars
+        import types
+        bound = contextvars.ContextVar("bound", default=None)
+        homes = contextvars.ContextVar("home", default=None)
+        scope = types.ModuleType("agent.secret_scope")
+        scope.is_multiplex_active = lambda: multiplex
+        scope.current_secret_scope = bound.get
+        scope.build_profile_secret_scope = lambda home: {"MODEL_KEY": f"key-of:{home}"}
+        scope.set_secret_scope = lambda mapping, profile_home=None: bound.set(mapping)
+
+        def get_secret(name):
+            if bound.get() is None and multiplex:
+                raise RuntimeError("Hermes could not read this profile's MODEL_KEY (an internal profile-scoping bug)")
+            return (bound.get() or {}).get(name, "from-env")
+        scope.get_secret = get_secret
+        agent = types.ModuleType("agent")
+        agent.secret_scope = scope
+        consts = types.ModuleType("hermes_constants")
+        consts.get_hermes_home = lambda: Path(self.home)
+        consts.set_hermes_home_override = homes.set
+        patch = mock.patch.dict(sys.modules, {"agent": agent, "agent.secret_scope": scope, "hermes_constants": consts})
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(setattr, self.b, "HOME", None)
+        return scope, bound, homes
+
+    def test_a_model_call_reads_its_key_on_a_multiplexed_gateway(self):
+        # Hermes Desktop multiplexes profiles: the bridge's own threads must carry the profile's keys
+        scope, bound, homes = self.fake_hermes()
+        self.b.keep_profile()
+        self.assertEqual(self.b.HOME, Path(self.home))
+        with self.assertRaises(RuntimeError):
+            scope.get_secret("MODEL_KEY")  # what every studio model call hit before
+        got = self.b.in_profile(lambda: (scope.get_secret("MODEL_KEY"), homes.get()))
+        self.assertEqual(got, (f"key-of:{self.home}", Path(self.home)))
+        self.assertIsNone(bound.get())  # bound for that call only, never left on the thread
+        # a scope Hermes already bound (its own fix, hermes-agent#132898) is kept as it is
+        token = bound.set({"MODEL_KEY": "hermes-bound"})
+        self.assertEqual(self.b.in_profile(scope.get_secret, "MODEL_KEY"), "hermes-bound")
+        bound.reset(token)
+
+    def test_a_single_profile_hermes_is_left_alone(self):
+        scope, bound, _ = self.fake_hermes(multiplex=False)
+        self.b.keep_profile()
+        self.assertEqual(self.b.in_profile(lambda: (scope.get_secret("MODEL_KEY"), bound.get())), ("from-env", None))
+        self.b.HOME = None  # no Hermes home known (an older Hermes): the call runs as it is
+        self.assertEqual(self.b.in_profile(lambda x: x + 1, 1), 2)
+
+    def test_the_server_binds_the_profile_for_model_calls(self):
+        scope, _, _ = self.fake_hermes()
+        self.b.keep_profile()
+
+        class Llm:
+            def complete(self, messages, **_):
+                return {"text": scope.get_secret("MODEL_KEY")}
+
+        class Ctx:
+            llm = Llm()
+        self.b.CTX = Ctx()
+        with mock.patch.object(self.b, "attach", return_value=False), mock.patch.object(self.b, "_attach_loop"):
+            self.assertTrue(self.b.start())
+        req = urllib.request.Request(self.b.url() + "/v1/chat/completions", method="POST",
+                                     data=json.dumps({"model": "worker", "messages": [{"role": "user", "content": "Say ok"}]}).encode(),
+                                     headers={"content-type": "application/json", "authorization": f"Bearer {self.b._token}"})
+        with mock.patch.object(self.b.bridge_llm, "complete", lambda ctx, body, timeout=None: ctx.llm.complete(body["messages"])):
+            with urllib.request.urlopen(req, timeout=5) as res:
+                self.assertEqual(json.loads(res.read()), {"text": f"key-of:{self.home}"})
+
     def test_mcp_calls_go_through_ctx_call_mcp_and_a_missing_grant_gives_the_command(self):
         class Ctx:
             calls = []
@@ -174,10 +245,24 @@ class Bridge(unittest.TestCase):
         self.assertFalse((ROOT / "engine" / "hermes_mcp.py").exists())
         private = re.compile(r"^\s*(from|import)\s+(tools|hermes_cli)\b", re.M)
         for f in [*ROOT.glob("*.py"), *(ROOT / "engine").glob("*.py")]:
+            if f.name == "hermes_models.py":
+                continue  # the one stopgap, read-only: below
             self.assertIsNone(private.search(f.read_text("utf-8")), f.name)
-        for f in [*(ROOT / "engine").glob("*.mjs"), ROOT / "server" / "server.mjs", *ROOT.glob("*.py")]:
+        # Setup's model list has no public API yet (docs/engines/hermes-and-connections.md). The file that
+        # reads it imports Hermes only to read: nothing in it saves, sets or writes.
+        src = (ROOT / "hermes_models.py").read_text("utf-8")
+        imported = set(re.findall(r"^\s*from\s+(hermes_cli\.\w+)\s+import\s+([\w, ]+)", src, re.M))
+        self.assertEqual({(m, n.strip()) for m, names in imported for n in names.split(",")},
+                         {("hermes_cli.config", "load_config"), ("hermes_cli.inventory", "build_model_options_payload"),
+                          ("hermes_cli.inventory", "load_picker_context"), ("hermes_cli.auth", "PROVIDER_REGISTRY")})
+        self.assertIsNone(re.search(r"\b(save|set|write|clear|remove|delete)_\w*\(|open\(", src))
+        # `hermes config set` from the plugin: only the studio's own two model slots and a provider key named
+        # by Hermes's list (server/setup.mjs), never the plugin's allowlist or any other setting
+        for f in [*(ROOT / "engine").glob("*.mjs"), *(ROOT / "server").glob("*.mjs"), *ROOT.glob("*.py")]:
             src = f.read_text("utf-8")
-            self.assertIsNone(re.search(r"\[\s*'config'\s*,\s*'set'", src), f.name)
+            targets = re.findall(r"\[\s*'config'\s*,\s*'set'\s*,\s*([^,\]]+)", src)
+            allowed = {"`auxiliary.${s.slot}.model`", "`auxiliary.${s.slot}`", "row.keyEnv"} if f.name == "setup.mjs" else set()
+            self.assertTrue(set(t.strip() for t in targets) <= allowed, (f.name, targets))
             self.assertNotIn("_mcp_envelope", src, f.name)
             self.assertNotIn("discover_mcp_tools", src, f.name)
 
@@ -227,6 +312,34 @@ class Bridge(unittest.TestCase):
         self.assertEqual(got["error"], "Hermes isn't connected.")
         self.assertEqual(got["code"], "hermes_closed")
         self.assertIn("hermes swarm", got["action"])
+
+    def test_a_new_site_waits_for_the_person_to_answer(self):
+        # docs/decisions/0020-ask-before-build.md: the server asks; the chat opens on the canvas and nothing builds
+        import io
+        launcher = load_package().launcher
+        body = {"error": "ask", "ask": "skips", "chat": "c-1", "text": "Before I build: skip the steps, or go through them?",
+                "options": [{"id": "go:pick", "label": "Pick steps to skip"}, {"id": "go:all", "label": "Skip all, build now"}], "recommended": "pick"}
+        asked = urllib.error.HTTPError("http://127.0.0.1:1/api/run", 409, "Conflict", {}, io.BytesIO(json.dumps(body).encode()))
+        sent = []
+
+        def request(path, **kw):
+            sent.append((path, kw.get("body")))
+            if path == "/api/run":
+                raise asked
+            return {}
+        with mock.patch.object(launcher, "ensure_server", return_value={"running": True, "url": "http://127.0.0.1:1/"}), \
+                mock.patch.object(launcher, "talk_first", return_value=False), \
+                mock.patch.object(launcher, "_request", side_effect=request):
+            got = launcher.start_run("a site for a plant shop")
+            self.assertTrue(got["ask"])
+            self.assertEqual(got["chat"], "c-1")
+            self.assertNotIn("run", got)
+            self.assertEqual(got["options"][0], "Pick steps to skip")
+            self.assertEqual(sent[0], ("/api/run", {"brief": "a site for a plant shop"}), "the tool never sends sure")
+            self.assertEqual(sent[1], ("/api/cmd", {"op": "chat", "target": "c-1"}))
+            sent.clear()
+            launcher.start_run("a site for a plant shop", sure=True)
+            self.assertTrue(sent[0][1]["sure"])
 
     def test_register_wires_the_bridge(self):
         src = (ROOT / "__init__.py").read_text("utf-8")

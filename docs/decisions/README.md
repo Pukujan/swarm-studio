@@ -20,6 +20,16 @@ one; don't edit the old one quietly.
 | [0009](0009-ux-rules-are-checks.md) | 2026-11-12 | The UX rules are checks, not prose |
 | [0010](0010-open-design-tools.md) | 2026-11-12 | Open Design's editing tools (Edit, Comment, Tweaks, Draw) |
 | [0011](0011-hyperframes-default-video.md) | 2026-11-12 | HyperFrames is the default film engine; the person picks another |
+| [0012](0012-design-tokens.md) | 2026-11-13 | The Studio's theme is design tokens, built with Style Dictionary |
+| [0013](0013-react-ui-coexists.md) | 2026-11-13 | The next UI is React, served beside the current Studio at /next/ |
+| [0014](0014-image-first-boards.md) | 2026-11-13 | Image-first boards: a photo unless touched, budgets for live pages, video and GPU memory |
+| [0015](0015-studio-walk-and-chat.md) | 2026-11-12 | The Studio walk and the chat: chat at the bottom, importer first, three options, no "pack" |
+| [0016](0016-open-design-intake.md) | 2026-11-13 | What Swarm takes from Open Design's runtime: full design systems, its library, slop linter; not its loop |
+| [0017](0017-processes-run-only-when-needed.md) | 2026-11-13 | Processes run only when needed: Dyad 2 min, server 20 min, one render, execa + tree-kill |
+| [0018](0018-next-ui-build-on-release.md) | 2026-11-13 | The next UI's build is made by CI and committed only on a release |
+| [0019](0019-how-swarm-is-tested.md) | 2026-11-13 | How Swarm is tested: specs bound to tests, BDD runs the OpenSpec scenarios, metamorphic relations, property tests, prompt evals gate prompt changes |
+| [0020](0020-ask-before-build.md) | 2026-11-13 | Ask before every build: skip all, step by step or pick steps, with a recommended path; every build is its own |
+| [0022](0022-copy-the-look-from-a-link.md) | 2026-11-13 | Copy the look from a link: the crew walks the site, 2D first, traced to where it was given |
 
 `tests/decisions.test.mjs` fails if the hosted studio, build credits or "paid per build" come back in
 `docs/brand/` or the README.

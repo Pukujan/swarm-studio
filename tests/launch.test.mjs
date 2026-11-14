@@ -74,3 +74,30 @@ test('the kit never opens on its own before there is something to launch', () =>
   assert.match(server, /if \(!launchable\(runFacts\(events, id\)\)\) throw/)
   assert.match(auto, /nothing to launch yet: no live link/)
 })
+
+test('with a story, the posts are written from it: its hook, what it is, its moments and how it was made', async () => {
+  const { rulesStory, storyFacts } = await import('../engine/story.mjs')
+  const events = [
+    { type: 'run:start', t: 1, brief: 'do u wanna grill me first? a supper club called Saffron & Smoke', title: 'Saffron & Smoke', agents: [{ id: 'a' }, { id: 'b' }] },
+    { type: 'page', id: 'home', title: 'Saffron & Smoke', index: 0 },
+    { type: 'page', id: 'menu', title: "Tonight's Menu", index: 1 },
+    { type: 'layer:done', page: 'menu', layer: 'hero', html: '<section><h2>Cooked once, eaten late</h2><p>Seven plates, one fire.</p></section>' }
+  ]
+  const story = rulesStory(storyFacts(events, 'r1', { brand: { story: { what: 'A late-night supper club in Lisbon', who: '' } } }))
+  const posts = writePosts(runFacts(events, 'r1'), story)
+  const x = posts.find(p => p.id === 'x')
+  assert.match(x.thread[0], /^Meet Saffron( & Smoke)?\. A late-night supper club in Lisbon\./)
+  assert.ok(x.thread.some(s => /Cooked once, eaten late: Seven plates, one fire\./.test(s)), x.thread.join(' | '))
+  assert.ok(x.thread.some(s => /Planned, designed and built by 2 AI agents/.test(s)))
+  for (const p of posts) assert.doesNotMatch(p.thread ? p.thread.join(' ') : p.text, /grill|\blive\b/i, p.id)
+})
+
+test('each network gets the story card in its shape: tall for TikTok and Instagram, square for Threads, wide for the rest', async () => {
+  const { cardFor } = await import('../engine/launch.mjs')
+  const media = ['tall-b3', 'tall-b1', 'square-b3', 'wide-b3'].map(n => ({ kind: 'image', src: `/story/r1/${n}.jpg`, shape: n.split('-')[0] }))
+  assert.deepEqual(cardFor('tiktok', media), { shape: 'tall', src: '/story/r1/tall-b3.jpg' }, 'the first in beat order, the hook')
+  assert.equal(cardFor('threads', media).shape, 'square')
+  assert.equal(cardFor('x', media).shape, 'wide')
+  assert.equal(cardFor('linkedin', media.slice(0, 2)).shape, 'tall', 'a missing shape falls back to the phone card')
+  assert.equal(cardFor('x', [{ kind: 'image', src: '/img/r1/1.png' }]), null, 'no story, no card')
+})

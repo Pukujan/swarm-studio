@@ -3,6 +3,7 @@
 // Painting itself happens in server/plans.mjs through imagegen.py (the person's own image login);
 // none of this spends Meshy credits.
 import { randomBytes } from 'node:crypto'
+import { join } from 'node:path'
 import { card, roster, is3d, sprites, CLOSEUP_RULE } from './plan.mjs'
 import { systemsAsk } from './systems.mjs'
 import { keyFor, keyGround } from './keycolor.mjs'
@@ -85,7 +86,7 @@ export function mockPrompt(plan, shot) {
     'A clean, readable HUD. It should look like a real shipped game.'
   ].filter(Boolean).join(' ')
 }
-const sheetRefs = (plan, dir) => (plan.sheets || []).filter(s => s.state === 'done' && s.file && s.picks?.length).map(s => `${dir}/${s.file}`)
+const sheetRefs = (plan, dir) => (plan.sheets || []).filter(s => s.state === 'done' && s.file && s.picks?.length).map(s => join(dir, s.file))
 export function addMocks(plan, dir, shots = shotsOf(plan).map(s => s[0])) {
   plan.mocks ||= []
   if (plan.mocks.some(m => m.state === 'painting')) throw fail('the mocks are being drawn', 409)
@@ -167,7 +168,7 @@ export function addCloseups(plan, dir, { name, missing = false } = {}) {
   plan.build ||= { characters: [], props: [], animations: null }
   const cast = roster(plan).filter(r => !name || r.name === name)
   if (!cast.length) throw fail('no such character', 404)
-  const refs = (plan.sheets || []).filter(s => s.kind === 'cast' && s.file && s.state === 'done').map(s => `${dir}/${s.file}`)
+  const refs = (plan.sheets || []).filter(s => s.kind === 'cast' && s.file && s.state === 'done').map(s => join(dir, s.file))
   const jobs = []
   for (const r of plan.gate.phase === 'first' && !name ? cast.slice(0, 1) : cast) {
     let c = plan.build.characters.find(x => x.name === r.name)
@@ -245,8 +246,8 @@ export function viewJob(plan, dir, r, view) {
   const id = newId(view[0] === 'f' ? 'v' : view[0] === 's' ? 'w' : 'k')
   c[view] = { id, state: 'painting', started: Date.now(), error: null }
   const refs = view === 'front'
-    ? (plan.sheets || []).filter(s => s.kind === 'cast' && s.file && s.state === 'done').map(s => `${dir}/${s.file}`)
-    : c.front?.file ? [`${dir}/${c.front.file}`] : []
+    ? (plan.sheets || []).filter(s => s.kind === 'cast' && s.file && s.state === 'done').map(s => join(dir, s.file))
+    : c.front?.file ? [join(dir, c.front.file)] : []
   return { list: 'views', id, prompt: turnaroundPrompt(plan, r, view), quality: 'high', aspect: 'portrait', refs }
 }
 
@@ -267,7 +268,7 @@ export function spritePrompt(plan, x) {
 export function spriteJobs(plan, dir, { missing = true } = {}) {
   plan.build ||= { characters: [], props: [], animations: null }
   plan.build.sprites ||= []
-  const refs = (plan.sheets || []).filter(s => s.state === 'done' && s.file && s.picks?.length).map(s => `${dir}/${s.file}`)
+  const refs = (plan.sheets || []).filter(s => s.state === 'done' && s.file && s.picks?.length).map(s => join(dir, s.file))
   let list = sprites(plan)
   if (plan.gate?.phase === 'first') list = list.slice(0, 1)
   const jobs = []

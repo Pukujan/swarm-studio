@@ -4,13 +4,67 @@ Everything in the Studio web UI that moves, with the code that owns it. It exist
 
 ## How a change is shown to keep the motion
 
-1. **The motion check** (`scripts/motion-check.mjs`, run by CI on every pull request as `motion-check`). It plays eleven scenes (Projects, an Overview, a replay of a crew of four building, reviewing and taking a comment, a half-done build, the deck, Play, a visitor's tour, and the App, Video, Game and Studio rooms) on Playwright's clock, paused so only the checker moves it, with `Math.random` seeded in the page and every frame. It logs every animation that starts (CSS animations and transitions by their start events, `element.animate` by wrapping it: name, target, duration) and the endless ones running, and keeps the picture each scene ends on. The page frames still draw on the real clock, so each side is recorded twice and a difference counts only when both runs agree: an animation that ran in both runs before and in neither after (or the reverse), or an end picture that matches neither run before. Recording the same code four times passes; turning off the reviewer's scan and the crew's speech bubbles fails with `frame @scan … #scan` and `page ~transform div.bubble` listed as "ran before, not after".
+1. **The motion check** (`scripts/motion-check.mjs`, run by CI on every pull request as `motion-check`). It plays eleven scenes (Projects, with Setup already seen so the first-run sheet does not cover it; an Overview, a replay of a crew of four building, reviewing and taking a comment, a half-done build, the deck, Play, a visitor's tour, and the App, Video, Game and Studio rooms) on Playwright's clock, paused so only the checker moves it, with `Math.random` seeded in the page and every frame. It logs every animation that starts (CSS animations and transitions by their start events, `element.animate` by wrapping it: name, target, duration) and the endless ones running, and keeps the picture each scene ends on. An animation already cancelled when its start event is heard (a spinner shown for one frame) is not logged: whether a frame was drawn in between is the machine's timing, and it logged as `@spin 0s 1` in some runs and not others. For the same reason the Studio starts on the tick its script runs (`web/studio.js`, `web/pet.js`), not on a timer that raced the server's first replies, and Hermia starts away on a replay address instead of fading out when its `run:start` arrives. The deck scene runs 4 s, not 3, so its last picture is taken after the camera has come to rest: while the camera glides the world keeps the pixels it has (`.world.moving`, `will-change`), and a picture taken mid-glide differed by about 12,000 pixels between two trees whose page, camera position and classes were identical. The page frames still draw on the real clock, so each side is recorded twice and a difference counts only when both runs agree: an animation that ran in both runs before and in neither after (or the reverse), or an end picture that matches neither run before. Recording the same code four times passes; turning off the reviewer's scan and the crew's speech bubbles fails with `frame @scan … #scan` and `page ~transform div.bubble` listed as "ran before, not after".
 2. **The split itself is a move.** The split moved code without changing it. The few lines that had to change are listed in its pull request: an import, an export, and an assignment to a `let` that another file owns, which now calls that file's setter. Since the split, the `file:line` references here point into `web/canvas/` ([web/canvas/README.md](../../web/canvas/README.md)).
 3. **Clips to watch** (`docs/ux/motion/clips/`): Projects, the replay, a half-done build, Play and a visitor's tour, 640 wide, recorded from this commit with `node scripts/motion-check.mjs clips <dir>`. Record them again after a split to compare by eye.
+
+A pull request that means to change how a scene looks (a new panel on the Studio scaffold, say) adds one line to its description, `Motion: looks change in studio` (scene names from the list above, comma-separated). CI then lets that scene's end picture differ and prints how much; its animations are still compared, so a change of motion fails as before (a change that means to add or remove animations lists them in `docs/ux/motion/accepted.json`, below). The line is bare (no bullet, backticks or full stop), and it is read from the description when the branch is pushed, so edit the description first.
 
 The motion check does not see the speed of JS-driven movement (a cursor gliding a little faster ends in the same place), so a split must not touch the numbers in the JS clocks and gestures below; the move-only rule is what covers them.
 
 How to read the tables. "Owned by" gives the keyframes or rule first, then the JS that triggers it (`css | js`). Reduced motion: "global" means the blanket rule at `web/canvas.css:1403` (`*` gets `animation-duration .01ms`, `animation-iteration-count 1`, `transition-duration .01ms`, all `!important`). It covers the whole app page but not the page frames, which are separate documents (`web/frame.html`, the Play frame, the exports). "none" means nothing is done for it beyond that. JS-driven movement (camera glide, cursor travel, tours, loops) is not touched by any reduced-motion rule unless a row says so.
+
+## The next UI moves the same
+
+A screen moved to the next UI (`ui/`, served at `/next/`, issue #404) has to move the way the current Studio
+does at `/`, which is the baseline. CI's `motion-parity` job checks this on every pull request that touches
+`ui/`, `web/` or `server/` (`scripts/motion-parity.mjs`). It runs the motion check's scenes and five more:
+- the Make menu (Projects, then type an idea and press Make);
+- the Plan board;
+- the Publish menu (the deck, then Publish);
+- the brand sheet (the Studio's Brand sheet card, then a palette and a type picked).
+
+It runs them in both apps from the same tree, on the same frozen clock and seed, and compares, per screen:
+
+- **Animations.** Every CSS animation, transition and Web Animation that starts, by name (or property),
+  duration, iterations and easing. The element it runs on is left out, since the port's elements have other
+  classes. A 0 ms transition moves nothing and is left out.
+- **Cursors.** Where Hermia's cursor (`.pet`) and each crew cursor (`.cursor` at `/`, `[data-agent]` in
+  `ui/`) are at every 500 ms step, within 24 px (`--px`). This is the movement the motion check can't see,
+  because a JS clock ends in the same place at another speed.
+- **Reduced motion.** The same again with `prefers-reduced-motion: reduce`. On top of that, nothing on the page
+  may move in `/next/` that `/` keeps still.
+
+The end pictures are not compared: a port is not pixel-identical, and the audit gates ([AUDIT.md](AUDIT.md))
+check how it looks. A screen whose `/next/` still shows its name and "Open in the Studio" is skipped as not
+moved yet. As in the motion check, each app is recorded twice, and a difference counts only when both runs
+agree. Nothing is retried.
+
+Known differences are in [motion/parity-known.json](motion/parity-known.json). Each one is labelled
+`intended (PR #N)`, a slice that leaves it for later on purpose, or `drift`, which is to be fixed, and each
+has a why. A new difference fails the job. A known one that no longer happens is printed so its entry can be
+deleted. To write the list again: `node scripts/motion-parity.mjs run <dir> --update`, then label the new
+entries.
+
+**Recordings.** `node scripts/motion-parity.mjs clips <dir>` films each moved scene in real time at 640 wide
+in both apps. It puts them side by side, `/` on the left and `/next/` on the right, with ffmpeg's `hstack`
+(the Studio already uses ffmpeg for sound, [docs/engines/video.md](../engines/video.md)). CI uploads them as
+the `motion-parity` artifact on every run.
+
+A reference set is committed:
+- [motion/parity/](motion/parity/): the moved screens, side by side;
+- [motion/demo/](motion/demo/): the owner's demo video, cut into short clips and key frames for beats 1, 2,
+  4, 5, 7 and 10, next to the same moment at `/` and `/next/` ([motion/demo/README.md](motion/demo/README.md)).
+
+## A change that changes the motion
+
+The motion check is for changes that keep the motion. A change meant to add or remove motion (a new cursor, a
+new skeleton) says so in [docs/ux/motion/accepted.json](motion/accepted.json): the animation kinds it gains
+(`gained`) or loses (`lost`), exactly as the check prints them under "ran after, not before" and "ran before, not
+after", and a `why`. Those kinds are excused in every scene; nothing else is, and the end pictures are still
+compared. The change also adds or removes its rows in the tables below. The check prints the kinds it excused,
+and any listed kind it did not see; the next change that touches motion empties the list, since after the merge
+those kinds run before as well.
 
 ## Design deck and camera
 
@@ -25,6 +79,7 @@ How to read the tables. "Owned by" gives the keyframes or rule first, then the J
 | Wires between pages: draw in | a `data-goto` link layer is `done`; `linkWires` adds `.fresh` | `wire-in` 1 s ease-out forwards (dashoffset 1 to 0); `.fresh` removed after 2600 ms; opacity transition 1.2 s | `web/canvas.css:180-181`, `183` ; `web/canvas/deck.js:512-534` | global; `lite` mode also sets `animation: none` (`web/canvas.css:423`) |
 | Wire path and end dot follow the pages | every frameLoop step | `d` attribute rewritten only when it changed | `web/canvas/deck.js:536-554` (`drawWires`), called at `web/canvas/loop.js:109` | not handled |
 | Agent cursor travel (world space) | agent has `act` (gesture) or a layer | position eased per frame: 0.22 toward the caret target (`agentTarget`), gestures follow their own timeline (below); written as `transform: translate()` only when it changed; off-screen cursors skip the write | `web/canvas/loop.js:67-106` | not handled |
+| A picture being painted: its card waits beside the page, held by its painter's cursor, then is carried to its slot | `image:queued` makes the card (`carryStart`); `image` lands it, `image:failed` takes it away (`carryEnd`); stepped by `frameLoop` (`carryStep`), which keeps its full rate while a card travels (`carryMoving`) | waiting: `carry-sheen` 2.4 s linear infinite over the card (its slot's stand-in photo under it once found, looked for every 900 ms); a card and its cursor ease 0.25 / 0.3 per frame to their spot (not dt-corrected); the carry is 700 ms, cubic ease-in-out, cursor pressed; the card then fades .25 s; the painter's cursor comes with `crew-in` .4 s and leaves over .6 s; a card waits at most 180 s; the slot is filled when the card is dropped, and by a timer at 950 ms whatever is drawn | `web/canvas/carry.js` ; `web/canvas.css` (`.carry`, `carry-sheen`, `.cursor.carrier`) ; called from `web/canvas/events.js` and `web/canvas/loop.js` | `carryCalm`: no carry, the card appears on its slot and the slot is filled at once, the cursor does not glide; the sheen stops with the global rule |
 | Cursor gestures: marquee, shape, component, swatch, pen, wire, type, menu, resize | `gestureFor(text)` picks one from the tail of the streamed HTML; `startGesture` runs it | `dur` per kind: marquee 900, shape 1100, component 1300, swatch 1300, pen 1500, wire 1400, type 900+55/char, menu 1700, resize 1000 ms; +700 ms when it walks to the toolbar first; cubic ease-in-out; rest 700-1800 ms after | `web/canvas/deck.js:251-443` (`gestureFor`, `startGesture`, `gestureStep`, `ease`) | not handled |
 | Gesture ghost (the drawn box, pen trail, text box, menu in the agent colour) | during a gesture; `.ghost.fade` at its end | opacity transition .35 s; contents cleared 400 ms after fade; caret `blink` 1 s steps(2) infinite | `web/canvas.css:199-200`, `217` ; `web/canvas/deck.js:280-285`, `web/canvas/deck.js:360-363`, `web/canvas/deck.js:445` (`drawSelection`) | global |
 | Toolbar tool lit when an agent clicks it | gesture with `via`; `toolFlash` | 600 ms flash, read on the 150 ms panel pass | `web/canvas/deck.js:352`, `web/canvas/deck.js:376`, `web/canvas/panels.js:173` ; `web/canvas.css:240`, `1140` (colour/background .16-.2 s) | global |
@@ -49,6 +104,12 @@ How to read the tables. "Owned by" gives the keyframes or rule first, then the J
 | Hermia radio line (dotted) | an order is heard in the last 7 s | `radio-dash` .8 s linear infinite; path rewritten every crewTick frame | `web/canvas.css:1447` (keyframes `1448`) ; `web/canvas/start.js:272-280` | global |
 | Reviewer cursor (hovers over the page under review) | `rvMove` on review events | ease 0.12 per frame (not dt-corrected); re-aims every 1100 ms; `leaving` removes it after 600 ms; `--inv` set each frame so boxes keep their pixel width | `web/canvas.css:1500` ; `web/canvas/auto.js:171-216` (`rvTick` `web/canvas/auto.js:193`, wander `web/canvas/auto.js:215`) | not handled |
 | Reviewer boxes: appear, then green flash and clear | `review:flag`, then fix lands | `rv-in` .35 s scale 1.04 to 1; `rv-fixed` 1.1 s ease-out (ring grows, fades); box removed at 1100 ms | `web/canvas.css:1501-1506` ; `web/canvas/auto.js:218-236` (`web/canvas/auto.js:235`, `web/canvas/auto.js:236`) | global |
+| Hermia's cursor (the pet, spec 41): travel | pointer moves (she trails it by 26/30 px), the pointer rests 1.7 s near the last-touched card (she walks to its top-right corner and follows it while the board pans), a resize, a new screen | ease 0.075 per 60 fps frame, dt-corrected; rAF only while more than 0.6 px from the target, never in a hidden tab; on a phone (≤ 760 px) she sits at the board's right edge above the chat and does not follow touches | `web/pet.js:241-264` (`step`, `go`, `rest`) | JS: snaps to the target, no easing (`web/pet.js:256`) |
+| Hermia's cursor: float and doze | always; `.doze` after 30 s with no pointer or key | `pet-bob` 2.6 s ease-in-out infinite; `pet-doze` 4.2 s infinite; avatar opacity and the `z` .3 s | `web/pet.css:13-19` ; `web/pet.js:266-277` (`wake`) | `web/pet.css:37-39` (no animation) and global |
+| Hermia's cursor: loading dots | `.loading` from a new screen until its view holds no `.wait-in` or `aria-busy` (checked every 250 ms, at most 12 s), or `pet.on('ready')` | `pet-dot` 1 s infinite, .15 s stagger; opacity .2 s | `web/pet.css:21-29` ; `web/pet.js:278-310` | `web/pet.css:37-39` and global |
+| Hermia's cursor: bubble and hand-over | `.talking` for 3.6 s per line (a burst of events within 0.9 s, at most 2.5 s, makes one; at most one bubble per 20 s); `.away` from `run:start` to `run:done` | bubble `opacity`/`transform` .25 s; the cursor's opacity .3 s | `web/pet.css:32-36`, `3-5` ; `web/pet.js:346-367` | global |
+| Hermia's cursor: working on something slow | a placeholder on screen (`PET_BUSY`: `.wait-in`, `aria-busy`, an Overview page's `.sk`, the app's frame loading) or one handed to `pet.working(el)`; checked every 500 ms; she goes to it while a screen loads or the pointer rests 1.2 s, and leaves when it is gone | `.working`: `pet-tap` .7 s ease-in-out infinite, the dots as above; travel as above | `web/pet.css:30-31` ; `web/pet.js:319-343` (`scan`), `web/pet.js:482` (`working`) | `web/pet.css:37-39` and global |
+| Board skeletons while a screen loads (Projects' cards, the Overview's pages, the Plan board, the Studio, the brand sheet) | `.wait-in` until the data arrives | `sk-wait` 1.6 s ease-in-out infinite alternate on `.ab.wait-in` | `web/project.css:90` ; `web/home.js:53`, `web/project.js:424`, `web/plan.js:104`, `web/scaffold.js:164` | `web/project.css:91` and global |
 
 ## Chat, feed and dock
 
@@ -175,7 +236,9 @@ How to read the tables. "Owned by" gives the keyframes or rule first, then the J
 | Projects: phone sidebar drawer | ☰ on phones (max 760 px), `.home.drawer` | `transform` .25 s | `web/home.css:130-131` ; `web/home.js:983-990` | not covered by `web/home.css:31` or `:206`; global rule only |
 | Projects data refresh (re-renders cards) | poll | 4000 ms while any project is live, else 20000 ms (setTimeout chain) | `web/home.js:104` | n/a |
 | Overview camera (`.pj-world`) glide | `fit`, `frameAll`, `zoomTo`, `board.js` `ease` | `.ease` class: `transform` .3 s ease; removed after 300 ms; `.moving` hint held 280 ms after a gesture | `web/project.css:58`, `60` ; `web/project.js:862-891`, `826`, `965`, `board.js:36-40` | `web/project.css:208` |
-| Overview: file sheet on phones | `sheet(on)` | `.pj-side` transform .22 s | `web/project.css:191` ; `web/project.js:807-812` | `web/project.css:206` |
+| Overview: file sheet on phones | `sheet(on)` → `layerSheet` | `.pj-side` transform .22 s | `web/project.css:191` ; `web/project.js:806-808`, `web/layers.js` (`layerSheet`) | `web/project.css:206` |
+| Next UI, Design deck behind `?board=tiers` or `?board=pixi`: a page going live ||pixi`: a page going live | its frame's first `geo` (it has laid out) | the frame fades in, opacity .2 s; the camera writes one transform per frame from the camera store (ui/src/board/camera.ts), will-change only while it moves | `ui/src/screens/deck/DeckBoard.tsx` | `motion-safe`: no fade with reduced motion; off by default |
+| Studio scaffold and Design deck: Layers sheet on phones | `layerSheet` (`web/scaffold.js`, `web/canvas/panels.js`) | the scaffold's `.pj-side` as the Overview's; the deck's `.deck-layers` transform .22 s | `web/project.css:191` ; `web/studio.css` (`.deck-layers`) | `web/project.css:206`, `web/studio.css` (`.deck-layers` reduced-motion rule) |
 | Overview: crew cursors | a build is working; `placeCrew` | place every 1400-2300 ms (random spot 20-80 % of a page); while the camera moves they are corrected about 10 times a second and `.cur.track` eases `left`/`top` .1 s linear | `web/project.css:108` ; `web/project.js:1396-1475` (random `1412`, `1429`; track `1466-1476`) | `web/project.css:109` |
 | Overview: reviewer scan sweep | a page in `checking` review | `rv-sweep` 4 s linear infinite; delay set from `Date.now() % 4000` so it matches the cursor | `web/project.css:246-247` ; `web/project.js:379`, `1486` (`scanAt`) | `web/project.css:266` |
 | Overview: picture slots being painted | pending art | `pt-shine` 2.4 s linear infinite; sketch strokes `pt-draw` 7 / 9 / 11 s forwards (delay `--ago`); bar `pt-buf` 1.3 s linear and width 1.8 s linear; stand-in `pt-in` .8 s | `web/project.css:214-232` | `web/project.css:266-268` (shine, bar shimmer off; strokes shown drawn) |
@@ -183,7 +246,7 @@ How to read the tables. "Owned by" gives the keyframes or rule first, then the J
 | Overview: "building" bars on artboards | live work | indeterminate `ab-work` 1.6 s infinite; width .6 s | `web/project.css:272-273` ; `web/project.js:238` | `web/project.css:275` |
 | Overview: skeleton and "now" dot | skeleton over a still-painting image; now-working beat | `sk-wait` 1.6 s alternate; `pj-beat` 1.2 s infinite | `web/project.css:86-87`, `259-260` ; `web/project.js` | `web/project.css:88`, `266` |
 | Overview: upload bar; plan cards fade in as they are written | upload; plan generation | upload width .2 s linear; `.ab.pcard.wait` to visible: opacity/transform .3 s, one card per 320 ms (0 ms when reduced) | `web/project.css:102` ; `web/plan.css:22`, `37` ; `web/plan.js:161-163` | `web/plan.css:39` and `web/plan.js:161` |
-| Plan: sheen on a card being painted | `.pl-work` | `pl-sheen` 2.4 s linear infinite | `web/plan.css:72-73` | `web/plan.css:74` |
+| Plan: sheen on a card being painted; the brand sheet's cards while its options are made | `.pl-work` | `pl-sheen` 2.4 s linear infinite | `web/plan.css:75-76` ; `web/brand.js` skeleton ; `ui/src/screens/brand/brand.css` (the next UI's brand sheet) | `web/plan.css:77` ; `ui/src/screens/brand/brand.css` |
 | Overview data refresh | poll | 2000 ms busy, 3000 ms live, else 15000 ms (setTimeout chain); `image`/`review` events re-load after 350 ms, others after 800 ms | `web/project.js:138`, `1692-1698` | n/a |
 
 ## Page frames (`web/frame.html`)
@@ -210,7 +273,8 @@ These run inside each frame (an iframe with its own origin, or the Play frame), 
 | Workshop poll while painting | `painting()` | every 3000 ms | `web/workshop.js:61-65` | n/a |
 | Workshop sound loop | Play sound | schedules `beat * 8` seconds of audio at a time (setInterval) | `web/workshop.js:296-305` | n/a |
 | Brand panel | n/a | no keyframes or transitions in `web/brand.css`; the three SVGs in `web/brand/` have no animation | `web/brand.css`, `web/brand/*.svg` | n/a |
-| Scaffold, Setup chrome | n/a | `web/scaffold.css` has no motion | `web/scaffold.css` | n/a |
+| Studio scaffold: a reference link being read or compared with the build | a link's look is `walking` or its match `checking` (`lookWorker`, `workHtml` in `web/lookmatch.js`); the card gets `.sc-walking` | the Plan board's sheen over the card (`.pl-work`, `pl-sheen` 2.4 s) and the worker's named cursor going between four spots (`lk-roam` 9 s infinite, started from the clock by a negative `animation-delay` so a card drawn again carries on); refs asked again every 1200 ms (`LOOK_POLL`), and a step that moved changes its line in place without drawing the board again | `web/scaffold.css` (`lk-roam`) ; `web/lookmatch.js` ; `web/scaffold.js` (`watchLooks`) | `web/scaffold.css`: the cursor stays on one spot; `web/plan.css:77` stops the sheen |
+| Setup chrome | n/a | no motion | `web/setup.css` | n/a |
 | Version check, reload | always | every 8000 ms: `location.reload()` once idle | `web/canvas/start.js:98-105` | n/a |
 | Wall tiles | `wall.html` | iframe tiles run the replay in `?replay=` mode; bar width .4 s linear | `web/wall.html:20`, `67-73` | none |
 | Live preview scale | a `.vlive` box resizes | `transform: scale()` rewritten on ResizeObserver and every 1000 ms | `web/canvas/start.js:350-356` | n/a |
@@ -228,6 +292,7 @@ Every `requestAnimationFrame` loop and `setInterval` in `web/*.js` and `web/*.ht
 | `cwLoop` (rAF through `nextFrame`) | every rAF while `view === 'app'` and the app is working; otherwise every 400 ms | code and art wall tiles (typing, scroll, picture turns) | `web/canvas/dock.js:356` |
 | `rvTick` (rAF) | every rAF while the reviewer cursor exists; stops when it leaves | reviewer cursor, `--inv` | `web/canvas/auto.js:193-202`, started `web/canvas/auto.js:216` |
 | `glide` step (rAF) | per rAF for 380-1100 ms per tour move | tour cursor | `web/canvas/player.js:331-347` |
+| Hermia's cursor `step` (rAF) | every rAF while she is more than 0.6 px from her target; stops at rest and in a hidden tab | the pet | `web/pet.js:241-253` |
 | `draw` in layerlink (rAF) | every rAF while any line is drawn (`wake()` restarts it) | dashed lines from chips to layers | `web/layerlink.js:95-128` |
 | One-shot rAF | once | `appKitArrows` after render (`web/kit-app.js:111`); Overview narrow-screen fit and zoom (`web/project.js:598`, `1019`) | |
 | `think` phrase timer | 1500 ms | tour thought bubble | `web/canvas/player.js:362` |
@@ -253,6 +318,7 @@ Not intervals but they run on a clock: setTimeout chains for data polls (`web/ho
 
 | File:line | What it varies |
 |---|---|
+| `web/pet.js:119` | which of an event's lines Hermia's cursor says (text only, no motion) |
 | `web/canvas/deck.js:24` | start offset of a new agent cursor above its dock seat |
 | `web/canvas/deck.js:88` | `--dx`, horizontal drift of each `spark` letter |
 | `web/canvas/deck.js:256` | whether an `<svg>` tail gets a `pen` gesture (50 %) |
@@ -293,4 +359,4 @@ Not intervals but they run on a clock: setTimeout chains for data polls (`web/ho
 
 ## Counts
 
-63 `@keyframes` (39 `web/canvas.css`, 9 `web/project.css`, 7 `web/frame.html`, 2 each `web/studio.css` and `web/ui.css`, 1 each `web/home.css`, `web/plan.css`, `web/setup.css`, `web/workshop.css`); 2 of the 39 repeat a name; 0 unused. 68 `transition:` declarations (39 `web/canvas.css`, 9 `web/project.css`, 6 `web/home.css`, 5 `web/ui.css`, 2 each `web/plan.css`, `web/setup.css`, `web/studio.css`, `web/workshop.css`, 1 `web/wall.html`; 9 of them are `none` inside reduced-motion blocks), plus one injected into the Play frame (`web/canvas/player.js:106`). 21 `prefers-reduced-motion` blocks in CSS and frame.html, 6 JS checks. 5 standing rAF loops (`frameLoop`, `crewTick`, `cwLoop`, `rvTick`, layerlink `draw`), 1 per-move rAF loop (`glide`) and 3 one-shot rAF calls. 14 `setInterval`s (9 in `web/canvas.js`, 3 in `web/workshop.js`, 2 in `web/frame.html`). 1 Web Animations call (`web/canvas/auto.js:145`). 25 `Math.random` sites that change motion or layout, 4 audio-only.
+66 `@keyframes` (41 `web/canvas.css`, 1 `web/scaffold.css`, 9 `web/project.css`, 7 `web/frame.html`, 2 each `web/studio.css` and `web/ui.css`, 1 each `web/home.css`, `web/plan.css`, `web/setup.css`, `web/workshop.css`); 2 of the 39 repeat a name; 0 unused. 68 `transition:` declarations (39 `web/canvas.css`, 9 `web/project.css`, 6 `web/home.css`, 5 `web/ui.css`, 2 each `web/plan.css`, `web/setup.css`, `web/studio.css`, `web/workshop.css`, 1 `web/wall.html`; 9 of them are `none` inside reduced-motion blocks), plus one injected into the Play frame (`web/canvas/player.js:106`). 21 `prefers-reduced-motion` blocks in CSS and frame.html, 6 JS checks. 5 standing rAF loops (`frameLoop`, `crewTick`, `cwLoop`, `rvTick`, layerlink `draw`), 1 per-move rAF loop (`glide`) and 3 one-shot rAF calls. 14 `setInterval`s (9 in `web/canvas.js`, 3 in `web/workshop.js`, 2 in `web/frame.html`). 1 Web Animations call (`web/canvas/auto.js:145`). 25 `Math.random` sites that change motion or layout, 4 audio-only.

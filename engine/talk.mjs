@@ -10,6 +10,7 @@
 // each turn the model sends one JSON object, a tool call or the answer.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
+import { HONEST_RULE, honestly } from './honest.mjs'
 
 const SKIP = /^(node_modules|\.git|dist|build|\.output|\.vercel|\.engine|\.nitro|\.cache|\.godot|\.import|exports?)$/
 const TEXT = /\.(tsx?|jsx?|mjs|cjs|css|html|json|md|gd|tscn|tres|cfg|godot|txt|vue|svelte|ya?ml|toml)$/
@@ -108,6 +109,8 @@ A change is never sent by you: you write it out and they confirm it with a butto
 
 Answer in one to four short plain sentences, no markdown, no lists. When they ask to see something, show it at once in this answer (the newest clip and pictures; never ask which, never say you cannot); when they ask how something works, read the code first. Never say a change is done or sent. At most ${MAX_STEPS} tool calls, then answer.
 
+${HONEST_RULE}
+
 ${notes}
 
 Pictures and clips you can show (newest first):
@@ -133,13 +136,18 @@ export async function talk({ chat, look = null, appDir, media = { pics: [], clip
     if (last) messages.push({ role: 'user', content: 'No more tools: answer now with {"say":…}.' })
     const a = parseAction(await chat(messages))
     if (a.say !== undefined || last || !a.tool) {
+      // an answer that says it installed or will restart something is asked again once, then put right (engine/honest.mjs)
+      const answer = String(await honestly({
+        answer: String(a.say || '').trim(), text,
+        again: async note => parseAction(await chat([...messages, { role: 'assistant', content: JSON.stringify(a) }, { role: 'user', content: `${note} Reply with {"say":…} only.` }])).say
+      }) || '').trim().slice(0, 700)
       const srcs = (Array.isArray(a.show) ? a.show : []).map(String).filter(s => shown.has(s.split('?')[0]))
       const clip = srcs.find(s => /\.(webm|mp4)$/i.test(s)) || null
       const pics = srcs.filter(s => !/\.(webm|mp4)$/i.test(s)).slice(0, 4).map(src => ({ src, name: media.pics.find(p => p.src === src)?.name || '' }))
       // asked to see and nothing shown: the newest clip and pictures go under the answer anyway
-      if (!clip && !pics.length && wantsToSee(text)) return { answer: String(a.say || '').trim().slice(0, 700), media: newest(media), proposal: null, used }
+      if (!clip && !pics.length && wantsToSee(text)) return { answer, media: newest(media), proposal: null, used }
       const change = building && typeof a.change === 'string' && a.change.trim() ? { change: a.change.trim().slice(0, 1200), now: a.now === true } : null
-      return { answer: String(a.say || '').trim().slice(0, 700), media: clip || pics.length ? { clip, pics } : null, proposal: change, used }
+      return { answer, media: clip || pics.length ? { clip, pics } : null, proposal: change, used }
     }
     used.push(a.tool)
     let result

@@ -35,6 +35,9 @@ DEFAULT_PORT = 4319
 KEY_ENV = "SWARM_STUDIO_API_KEY"
 # Optional keys and addresses, declared in plugin.yaml and read through Hermes's secret scope when the
 # server starts (start()). Nothing here is required: each one switches a service on.
+# What the server keeps of this process's own environment. GODOT is the second name engine/port.mjs
+# godotBin reads for the person's Godot (docs/engines/godot.md).
+KEEP_ENV = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME", "SWARM_GODOT", "GODOT", "SWARM_IMAGE_SERVICE")
 PASSED_KEYS = (
     "CKFF_API_KEY", "CKFF_BASE_URL", "CKFF_MODEL",              # pictures when Hermes's image tool cannot paint
     "MESHY_API_KEY",                                            # 3D characters (asks before spending credits)
@@ -198,7 +201,7 @@ def _ensure_server() -> dict:
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
     # On Windows, Node also needs the system folders (SYSTEMROOT for its sockets and
     # crypto, TEMP, APPDATA for npm and pnpm, PATHEXT for finding .cmd tools).
-    keep = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME", "SWARM_GODOT", "GODOT")
+    keep = KEEP_ENV
     if os.name == "nt":
         keep += ("SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "USERPROFILE",
                  "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",
@@ -285,12 +288,23 @@ def talk_first(brief: str) -> bool:
     return got.get("intent") == "talk"
 
 
-def refusal(exc: urllib.error.HTTPError) -> dict:
-    """A refused request as {error, code, action}: the server says why (engine/hermeshealth.mjs) and what to do."""
+ASKED = ("Swarm asked the person in the Studio chat whether to skip the setup steps or go through them, and waits "
+         "for their answer there. Don't answer for them: tell them to answer in the Studio chat.")
+
+
+def _error_body(exc: urllib.error.HTTPError) -> dict:
+    """The JSON body of a refused request, read once (the stream can be read only once)."""
     try:
         got = json.loads(exc.read().decode() or "{}")
     except (OSError, ValueError):
         got = {}
+    return got if isinstance(got, dict) else {}
+
+
+def refusal(exc: urllib.error.HTTPError, got: dict | None = None) -> dict:
+    """A refused request as {error, code, action}: the server says why (engine/hermeshealth.mjs) and what to do."""
+    if got is None:
+        got = _error_body(exc)
     message = got.get("message") or got.get("error") or f"the server answered HTTP {exc.code}"
     out = {"error": str(message), "code": str(got.get("code") or exc.code)}
     if got.get("action"):
@@ -298,7 +312,11 @@ def refusal(exc: urllib.error.HTTPError) -> dict:
     return out
 
 
-def start_run(brief: str, agents: int | None = None, force: bool = False) -> dict:
+def start_run(brief: str, agents: int | None = None, force: bool = False, sure: bool = False) -> dict:
+    """Start a website build. A new one asks the person first in the Studio chat (docs/decisions/0020-ask-before-build.md):
+    then this answers {ask: True, chat, error: ASKED} and nothing builds. ``sure`` is a script's explicit "I'm sure"
+    (``hermes swarm --build``, remix); the ``swarm_design`` tool never sets it, so Hermes's model can't answer for
+    the person."""
     up = ensure_server()
     if not up.get("running"):
         return up
@@ -307,12 +325,28 @@ def start_run(brief: str, agents: int | None = None, force: bool = False) -> dic
     body: dict = {"brief": brief}
     if agents:
         body["agents"] = max(2, min(24, int(agents)))
+    if sure:
+        body["sure"] = True
     try:
         # a Hermes that is starting up gets a few seconds to attach before the server says it is missing
         got = _request("/api/run", method="POST", body=body, timeout=15)
     except urllib.error.HTTPError as exc:
+        err = _error_body(exc)
+        if exc.code == 409 and err.get("error") == "ask":
+            if err.get("ask") == "talk":
+                return {"running": True, "talk": True, "error": TALK_FIRST, "url": up["url"]}
+            # the question waits in that chat: an open canvas shows it, for the person to answer
+            chat = err.get("chat")
+            if chat:
+                try:
+                    _request("/api/cmd", method="POST", body={"op": "chat", "target": chat}, timeout=5)
+                except (OSError, urllib.error.URLError, ValueError):
+                    pass
+            return {"running": True, "ask": True, "chat": chat, "question": err.get("text"),
+                    "options": [o.get("label") for o in err.get("options") or [] if isinstance(o, dict)],
+                    "error": ASKED, "url": up["url"]}
         # refused with a reason (Hermes not there, or running an older copy): the server's own words
-        return {"running": True, "url": up["url"], **refusal(exc)}
+        return {"running": True, "url": up["url"], **refusal(exc, err)}
     except (OSError, urllib.error.URLError, ValueError) as exc:
         return {"running": True, "error": f"could not start the run: {exc}"}
     # the person started it here: an open canvas shows it (a canvas never switches builds by itself)

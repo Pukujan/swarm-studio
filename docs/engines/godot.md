@@ -21,9 +21,13 @@ install it: it runs the person's own Godot 4 binary as a child process (engine/p
 ## How Swarm drives it
 
 **Finding Godot.** `godotBin(env)` takes `SWARM_GODOT`, then `GODOT`, then `godot` / `godot4` on `PATH`
-(`godot.exe`, `godot4.exe`, `godot_console.exe` on Windows) (engine/port.mjs:94-98). The launcher passes only
-`SWARM_GODOT` (plus `PATH`) into the server's environment, so a bare `GODOT` variable likely never reaches it
-(launcher.py:199). The server checks once at start and the planner is told yes, no or unknown (server/server.mjs:1450-1457, engine/talkplan.mjs:282).
+(`godot.exe`, `godot4.exe`, `godot_console.exe` on Windows), then on macOS the app itself,
+`Godot.app/Contents/MacOS/Godot` in `/Applications` or `~/Applications` (engine/port.mjs:94-103). Godot's command-line
+docs name that binary inside the bundle ([Command line tutorial](https://docs.godotengine.org/en/stable/tutorials/editor/command_line_tutorial.html)).
+A Mac's Godot is an app, from godotengine.org or `brew install --cask godot`. Homebrew's `godot` link in `/opt/homebrew/bin`
+is missing from the `PATH` an app opened from the Dock gets, so `PATH` alone missed it (issue #405; CI's `checks-macos`
+job installs the cask and checks that the app is found with `PATH=/usr/bin:/bin`). The launcher keeps both
+`SWARM_GODOT` and `GODOT` (plus `PATH`) in the server's environment (launcher.py `KEEP_ENV`; tests/test_manifest.py). The server checks once at start and the planner is told yes, no or unknown (server/server.mjs:1450-1457, engine/talkplan.mjs:282).
 
 **Not installed.** If the plan names Godot and none is found, the chat offers "Godot (install it first)" or "The
 browser for now" (engine/talkplan.mjs:207-208); the plan says to install Godot 4 (engine/planshape.mjs:365). At build
@@ -37,7 +41,7 @@ time it falls back to the browser and says so in a step (engine/appjob.mjs:409-4
      `assets/art/` (engine/godotfirst.mjs:86-95). `syncGodotArt` keeps files the crew changed (engine/godotfirst.mjs:102-124).
    - Each stage prompt is `godotStagePrompt`: the spec, the starter's `CREW.md`, the art brief, `GODOT_RULES`
      (Godot 4.7, GDScript 2, no Godot 3 syntax) and four Godot skills (engine/godotfirst.mjs:138-177).
-   - After each stage `godotStage` runs `checkGodot`; errors get one fix turn, then `exportWeb` and `serveStatic`
+   - After each stage `godotStage` runs `checkGodot`; errors get one fix turn, then `exportWeb` and `serveStatic` (files from Swarm's own process, no server of its own; a finished web app is served the same way since decision 0017, issue #450)
      on 127.0.0.1 with CORS (engine/appjob.mjs:512-530, engine/godotfirst.mjs:182-222).
    - `exportWeb` returns `{ ok, dir, error? }` and empties `persistentPaths` so the export does not touch
      IndexedDB in a sandboxed frame (engine/godotfirst.mjs:182-204).
@@ -62,17 +66,21 @@ an add-on folder up to 5 MB with `bringAddon`; native files mark it `web: false`
   move happen (engine/playtest.mjs:208-232, engine/playcheck.mjs:23);
 - keeps pressing keys and fails a run that ends within 2.5 s or throws errors (engine/playtest.mjs:234-252);
 - can film the run to `.webm` with the Web Audio sound muxed by ffmpeg (engine/playtest.mjs:58, 157-174).
+  The film gets a poster frame beside it, `playtest-N.poster.jpg`: a frame of the film made with ffmpeg, else the
+  title-screen photo the test takes (engine/playtest.mjs, engine/poster.mjs); the App view and the chat show it until the clip plays (web/video.js).
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).
-`testDodges` flags `.gd` files that check for the test (engine/playcheck.mjs:71-87).
+`testDodges` flags `.gd` files that check for the test, named with forward slashes on every system (engine/playcheck.mjs:71-87).
 
 **The browser path, for contrast.** Without Godot, `plan(answers)` picks three.js for a 3D look, PixiJS for
 hand-drawn, else Phaser 3, with matching skills (engine/game.mjs:41-57). It is built by the app engine and played
 in the Studio with the same play test (engine/appjob.mjs:329). ARES is a hand-written canvas 2D web game with no
 Godot in it (games/ares/web/ENGINE.md:1-10).
 
+**Brought-in projects.** A Godot project made outside the Studio is not opened yet ([spec 45](../specs/45-intake.md) "Not in this slice"). Bring in a project (engine/bringin.mjs `shapeOf`) takes a folder with `project.godot` only when it also has a web page of its own, and then plays that page as plain files; the Godot files come along untouched, and the `intake` event notes `godot: true`. With no page it is refused in words. `serveStatic` (engine/godotfirst.mjs) now answers a folder's address with that folder's `index.html` (a brought-in game opens on `web/`); a Godot export is served from its top as before (tests/bringin.test.mjs "the files server answers a folder…").
+
 ## What the person connects
 
-- The Godot 4 editor binary, on `PATH` as `godot`/`godot4` or named by `SWARM_GODOT` (engine/port.mjs:94-98, launcher.py:199). The prompts target 4.7 (engine/godotfirst.mjs:138); the starters say 4.3+ (starters/addons/swarm_rts/addon.json:7).
+- The Godot 4 editor binary, on `PATH` as `godot`/`godot4` or named by `SWARM_GODOT` or `GODOT` (engine/port.mjs:94-98, launcher.py `KEEP_ENV`). The prompts target 4.7 (engine/godotfirst.mjs:138); the starters say 4.3+ (starters/addons/swarm_rts/addon.json:7).
 - Godot's Web export templates, matching the editor version exactly (gameskills/gamedev/godot-export/SKILL.md:27-29, 98-99). Unchecked: Swarm has no code that installs or checks them (no match for "template" in engine/godotfirst.mjs); a missing template should surface as the `exportWeb` error. A real run without templates would settle it.
 - For the play test: the `playwright` package (from the plugin, `PLAYWRIGHT_DIR`, or dyad's `node_modules`) and a Chromium (Playwright's, installed Chrome, or a cached headless shell) (engine/playtest.mjs:18-42).
 - No keys and no Hermes connector are needed for Godot (plugin.yaml:11-57 lists none).
@@ -84,7 +92,7 @@ Godot in it (games/ares/web/ENGINE.md:1-10).
   own editor) is specified but not built (docs/specs/38-game-starters.md:138-139, docs/PLANS.md "Proposed" under Games).
 - The Studio preview is the Web export: no GDExtension, threads or C# there (docs/specs/38-game-starters.md:126-136).
 - Games must not depend on `user://` storage; the frame is sandboxed (engine/godotfirst.mjs:145, 194-204).
-- If Playwright or the browser is missing, the play test returns `ok: true` with `skipped`, so it passes silently (engine/playtest.mjs:150-153).
+- If Playwright or the browser is missing, or the test itself cannot run, the play test returns `ok: false` with `skipped` (engine/playtest.mjs `playtestRun`). The build goes on: the step says "play test skipped" with the reason, no fix turn is spent on it alone, and the slice is shown as not played. `playPassed` (engine/appjob.mjs) never counts a skipped test as a pass, also after a fix turn, when it is played again (tests/enginegaps.test.mjs).
 - Each headless step has a 300 s timeout; the run check 90 s (engine/godotfirst.mjs:187-188, engine/port.mjs:119-120).
 - The Feed shows the trailer and art, never hosts the game (docs/PLANS.md, Games section).
 - Open Design's edit tools are HTML-only and do not reach a game (docs/PLANS.md, Games section; docs/decisions/0010-open-design-tools.md).
@@ -94,7 +102,6 @@ Godot in it (games/ares/web/ENGINE.md:1-10).
 - Open in Godot: not built; comes with the first native starter or add-on (docs/specs/38-game-starters.md:138-139).
 - Proposed, not decided: Draw on a paused frame, config sliders, re-roll one asset, compare takes (docs/PLANS.md, Games; DECISIONS.md:250).
 - No pinned add-on ships yet (docs/specs/38-game-starters.md:201).
-- Unchecked: whether the launcher should pass `GODOT` too; `godotBin` reads it but launcher.py:199 drops it.
 - Unchecked: whether the guided board (spec 22) is finished (docs/PLANS.md, Games).
 
 ## Sources
@@ -106,5 +113,6 @@ Godot in it (games/ares/web/ENGINE.md:1-10).
 - starters/*/starter.json, starters/platformer-side/CREW.md, starters/addons/*/addon.json, starters/addons/swarm_rts/README.md
 - gameskills/README.md, gameskills/gamedev/NOTICE, gameskills/gamedev/godot-export/SKILL.md, gameskills/gamedev/godot-gdscript-headless-testing/SKILL.md
 - games/ares/web/ENGINE.md
+- engine/bringin.mjs, tests/bringin.test.mjs, docs/specs/45-intake.md
 - docs/specs/01-big-game-mode.md, 22-guided-game-maker.md, 23-art-on-request.md, 37-studio-first.md, 38-game-starters.md
 - https://godotengine.org/license/ (fetched 2026-11-12)

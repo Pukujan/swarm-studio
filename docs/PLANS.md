@@ -158,22 +158,40 @@ This follows the research report `reports/Agent era UI governance workflows.md` 
   - XState for navigation (#321, #322, #331);
   - type checking with TypeScript 7 and dependency-cruiser (#373, #376);
   - the canvas file split (#375 to #377);
+  - design tokens in W3C format with Style Dictionary: the Studio's theme
+    (#412, [decision 0012](decisions/0012-design-tokens.md)). Lock's variables and the kit's `--ui-*` are not in it yet;
   - `docs/decisions/`.
+- **In progress:**
+  - the first of the six design artifacts, the object map and glossary:
+    [docs/ux/OBJECTS.md](ux/OBJECTS.md), a draft for the owner to review. Its name picks are proposals.
+  - the second, the statechart: [docs/ux/statechart/](ux/statechart/README.md), every SITEMAP screen and the
+    way home from each, checked by `tests/statechart.test.mjs`; a draft for the owner to review.
+  - the move to Vite, React and TypeScript (#404, [decision 0013](decisions/0013-react-ui-coexists.md)): the
+    scaffold is in `ui/` and served at `/next/` beside the current Studio, with React Aria primitives, the
+    Tailwind theme from the tokens and Storybook. No screen has moved yet; [ui/README.md](../ui/README.md) is the
+    recipe for one.
+  - the third and fourth, breadboards and per-screen specs: [docs/ux/breadboards/](ux/breadboards/README.md) (places,
+    presses and where each goes, by the object map's names and the statechart's events) and
+    [openspec/specs/](../openspec/project.md) (requirements and WHEN/THEN scenarios, each tagged with the audit gate
+    that tests it) for Projects, Make, the Studio, the brand sheet, the Plan board, the Overview, the Design deck,
+    Setup and Settings, and Publish; a draft for the owner to review.
+- **In review:** Playwright audit gates in CI ([docs/ux/AUDIT.md](ux/AUDIT.md)). Every top-level screen, at 1440
+  and 390 wide, is checked for its breadcrumb (rule 7), axe-core violations, sideways scroll, console errors and
+  a loading state. What the app breaks today is in `.ui-audit-known-violations.json`, so CI fails only on a new
+  violation. AUDIT.md lists the rules not yet automated.
+- **Decided (owner, 2026-11-13), not built:** image-first boards ([decision 0014](decisions/0014-image-first-boards.md),
+  [spec 43](specs/43-image-first-boards.md)). Anything nobody is touching is a photo sized by the zoom: at most 3 live
+  pages and 2 playing videos, photo textures within a byte budget, Lite mode as the low-memory profile. PixiJS v8
+  paints the photos and video; live pages sit on a DOM overlay. A CI gauge (a 250-card fixture: p95 frame time, heap,
+  GPU memory) gates every board PR and lands first (`ci/board-gauge`), then `fix/video-teardown`,
+  `feat/image-service` (`@napi-rs/image`), `feat/inpage-capture`, `feat/tier-manager` and the ports.
 - **Not started:**
-  - Playwright audit gates in CI;
-  - the six design artifacts:
-    - an object map and glossary;
-    - a statechart in Stately;
-    - breadboards;
-    - per-screen specs in OpenSpec;
-    - Storybook mock-ups;
+  - the other two design artifacts:
+    - Storybook mock-ups (Storybook is set up in `ui/`; each moved screen adds its own);
     - an independent review;
-  - React Aria;
-  - design tokens in W3C format with Style Dictionary (Lock's variables are the first candidate);
   - feature flags with OpenFeature;
   - Danger JS;
   - screenshot review with Argos or Chromatic. Only the owner approves these.
-- **Decided, deferred:** move to Vite, React and TypeScript once the flows are designed.
 - The guided-walk prototype hand-writes screens and menus. It is a flow mock-up only. The real version is built
   from the six artifacts with mature libraries.
 

@@ -67,6 +67,9 @@ test('"is live" only with a real published link, and no counts of zero', () => {
   ] }, facts())
   assert.doesNotMatch(words(story), /\blive\b|\b0 reviews|grill|dont build/i)
   assert.ok(fixes.length >= 3, fixes.join('; '))
+  // the brand's own words are not an echo, even when the person used them too
+  const own = checkStory(rulesStory(facts()), facts(), { edited: true })
+  assert.ok(!own.fixes.some(x => /repeated/.test(x)), own.fixes.join('; '))
 })
 
 test('a model\'s story is checked: unknown pictures replaced, the shape repaired, lengths clipped', async () => {

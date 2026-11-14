@@ -6,7 +6,10 @@
 // animations held still. Two recordings are then compared step by step.
 //
 //   node scripts/motion-check.mjs record <dir> [--root <tree>] [--only a,b]   record this tree (or another)
-//   node scripts/motion-check.mjs compare <dir-a> <dir-b> [--tolerance <pixels>]
+//   node scripts/motion-check.mjs compare <dir-a> <dir-b> [--tolerance <pixels>] [--looks a,b]
+//     --looks: scenes whose end picture a pull request means to change (its description's "Motion: looks
+//     change in a, b" line, docs/ux/MOTION.md); their animations are still compared, only the picture is not.
+//     Animations a change means to add or remove go in docs/ux/motion/accepted.json instead
 //   node scripts/motion-check.mjs clips <dir> [--only a,b]                   short real-time clips to watch
 //   (PLAYWRIGHT_DIR and CHROMIUM_PATH as for open-check)
 //
@@ -16,7 +19,7 @@
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, renameSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { studio } from './walkthrough-fixtures.mjs'
 
@@ -69,7 +72,10 @@ const SCENES = [
   { id: 'overview', at: i => `/?project=${i.site}&version=${i.site2}`, ms: 3000 },
   { id: 'replay', at: i => `/?replay=${i.crew}&speed=2`, ms: 16000 },
   { id: 'mid-build', at: i => `/?project=${i.mid}&version=${i.mid}&room=deck`, ms: 3000 },
-  { id: 'deck', at: i => `/?project=${i.site}&version=${i.site}&room=deck`, ms: 3000 },
+  // 4 s, not 3: the camera's glide to its fit ends near 3.3 s. While it glides the world keeps the pixels it has
+  // (.world.moving, will-change), and which pixels those are is the browser's own timing: a picture taken before
+  // the camera rests differed by ~12,000 pixels between two trees whose page, camera and classes were the same
+  { id: 'deck', at: i => `/?project=${i.site}&version=${i.site}&room=deck`, ms: 4000 },
   { id: 'play', at: i => `/?project=${i.site}&version=${i.site}&room=deck&play=prototype`, ms: 3000 },
   { id: 'visitor', at: i => `/?project=${i.site}&version=${i.site}&room=deck&play=visitor`, ms: 10000 },
   { id: 'app', at: i => `/?project=${i.app}&version=${i.app}&room=app`, ms: 3000 },
@@ -88,8 +94,11 @@ const LOG = `(() => {
   const log = window.__motion = []
   const name = el => !el || !el.tagName ? '' : el.id ? '#' + el.id : el.tagName.toLowerCase() + [...el.classList].slice(0, 2).map(c => '.' + c).join('') + (el.parentElement && el.parentElement.id ? '<#' + el.parentElement.id : '')
   const ms = v => typeof v === 'number' ? Math.round(v / 10) * 10 : String(v)
-  // endless ones are restarted by every picture taken: they are counted as running, at the end of a step
-  const css = e => { const cs = getComputedStyle(e.target); if (e.type === 'animationstart' && cs.animationIterationCount.split(',').every(v => v.trim() === 'infinite')) return; log.push((e.type === 'animationstart' ? '@' + e.animationName + ' ' + cs.animationDuration + ' ' + cs.animationIterationCount : '~' + e.propertyName) + ' ' + name(e.target)) }
+  // endless ones are restarted by every picture taken: they are counted as running, at the end of a step.
+  // One already cancelled when its start is heard (a spinner shown for a frame, its class gone again)
+  // is not counted: whether a frame was drawn in between is the machine's timing, not the page's
+  const live = e => e.target.getAnimations?.().some(a => e.type === 'animationstart' ? a.animationName === e.animationName : a.transitionProperty === e.propertyName)
+  const css = e => { if (!live(e)) return; const cs = getComputedStyle(e.target); if (e.type === 'animationstart' && cs.animationIterationCount.split(',').every(v => v.trim() === 'infinite')) return; log.push((e.type === 'animationstart' ? '@' + e.animationName + ' ' + cs.animationDuration + ' ' + cs.animationIterationCount : '~' + e.propertyName) + ' ' + name(e.target)) }
   addEventListener('animationstart', css, true)
   addEventListener('transitionrun', css, true)
   const animate = Element.prototype.animate
@@ -106,7 +115,9 @@ async function record(out, { root = ROOT } = {}) {
   mkdirSync(out, { recursive: true })
   const T = Date.parse('2026-11-01T09:00:00Z')
   const crew = new Date(T).toISOString().replace(/[:.]/g, '-')
-  const s = await studio({ root, setup: ({ runs }) => crewRun(runs, crew, T) })
+  // Setup counts as seen, so Projects ends on Projects: the first-run sheet says what this throwaway
+  // studio has (no model, which parts are set up), and a new Setup row is not a change in motion
+  const s = await studio({ root, setup: ({ runs }) => { crewRun(runs, crew, T); writeFileSync(join(dirname(runs), 'setup.json'), '{"seen":true}') } })
   const ids = { ...s.ids, crew }
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
   const trace = {}
@@ -126,8 +137,9 @@ async function record(out, { root = ROOT } = {}) {
       page.on('requestfinished', r => { if (counts(r)) pending-- })
       page.on('requestfailed', r => { if (counts(r)) pending-- })
       // the page is settled when no request is out and the frames have drawn (real time, not the page's)
+      // (up to 10 s: the frames fetch Tailwind and their Google Fonts from the network)
       const settle = async () => {
-        for (let i = 0; i < 100 && pending > 0; i++) await wait(20)
+        for (let i = 0; i < 500 && pending > 0; i++) await wait(20)
         await wait(80)
         for (const f of page.frames()) await f.evaluate(() => document.fonts?.ready.then(() => 0)).catch(() => {})
       }
@@ -193,8 +205,17 @@ const kinds = steps => [...new Set(steps.flatMap(x => x.sig.map(kind)))].sort()
 const load = dir => JSON.parse(readFileSync(join(dir, 'trace.json'), 'utf8'))
 const both = (x, y) => x.filter(k => y.includes(k)), either = (x, y) => [...new Set([...x, ...y])]
 
-async function compare(before, after, tolerance = 2000) {
+// a change that means to move differently says so (docs/ux/MOTION.md, "A change that changes the motion"):
+// the animation kinds it gains or loses, in docs/ux/motion/accepted.json of the tree being checked. Nothing
+// else is excused, and the pictures are still compared.
+function accepted() {
+  try { const a = JSON.parse(readFileSync(join(ROOT, 'docs/ux/motion/accepted.json'), 'utf8')); return { gained: a.gained || [], lost: a.lost || [] } } catch { return { gained: [], lost: [] } }
+}
+
+async function compare(before, after, tolerance = 2000, looks = []) {
   const [A1, A2] = before.map(load), [B1, B2] = after.map(load)
+  const ok = accepted(), used = new Set()
+  const excuse = (list, k) => { const hit = list.includes(k); if (hit) used.add(k); return !hit }
   const { chromium } = await loadPlaywright()
   const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
   const page = await browser.newPage()
@@ -204,9 +225,10 @@ async function compare(before, after, tolerance = 2000) {
       const runs = [A1, A2, B1, B2].map(t => t[id]?.steps)
       if (runs.some(r => !r?.length)) { fails.push(`${id}: not recorded in every run`); continue }
       const [a1, a2, b1, b2] = runs.map(kinds)
-      const lost = both(a1, a2).filter(k => !either(b1, b2).includes(k)), gained = both(b1, b2).filter(k => !either(a1, a2).includes(k))
+      const lost = both(a1, a2).filter(k => !either(b1, b2).includes(k) && excuse(ok.lost, k)), gained = both(b1, b2).filter(k => !either(a1, a2).includes(k) && excuse(ok.gained, k))
       let bad = 0
-      if (lost.length || gained.length) { bad++; fails.push(`${id}: the animations differ\n    ran before, not after: ${lost.join('\n                           ') || '-'}\n    ran after, not before: ${gained.join('\n                           ') || '-'}`) }
+      const diff = `${id}: the animations differ\n    ran before, not after: ${lost.join('\n                           ') || '-'}\n    ran after, not before: ${gained.join('\n                           ') || '-'}`
+      if (lost.length || gained.length) { bad++; fails.push(diff) }
       // the picture it ends on: it differs only when neither after-run matches either before-run
       const end = (dir, r) => join(dir, id, r.at(-1).file)
       const pairs = [0, 1].flatMap(i => [2, 3].map(j => [i, j]))
@@ -215,10 +237,15 @@ async function compare(before, after, tolerance = 2000) {
         n = Math.min(n, runs[i].at(-1).png === runs[j].at(-1).png ? 0 : await pixelDiff(page, end(before[i], runs[i]), end(after[j - 2], runs[j])))
         if (n <= tolerance) break
       }
-      if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})`) }
-      console.log(`${bad ? '✗' : '✓'} ${id}: ${both(a1, a2).length} kinds of animation${bad ? ', differs' : ', the same'}`)
+      if (n > tolerance && looks.includes(id)) console.log(`  ${id}: the picture it ends on differs by ${n} pixels, as the pull request says it should`)
+      else if (n > tolerance) { bad++; fails.push(`${id}: the picture it ends on differs by ${n} pixels (${end(after[0], runs[2])} against ${end(before[0], runs[0])})`) }
+      const declared = looks.includes(id) && n > tolerance
+      console.log(`${bad ? '✗' : '✓'} ${id}: ${both(a1, a2).length} kinds of animation${bad ? ', differs' : declared ? ', changed as the pull request says' : ', the same'}`)
     }
   } finally { await browser.close() }
+  if (used.size) console.log(`\naccepted (docs/ux/motion/accepted.json): ${[...used].join(', ')}`)
+  const stale = [...ok.gained, ...ok.lost].filter(k => !used.has(k))
+  if (stale.length) console.log(`accepted but not seen, delete from docs/ux/motion/accepted.json: ${stale.join(', ')}`)
   if (fails.length) { console.log(`\n${fails.join('\n')}`); process.exit(1) }
   console.log('\nThe motion is the same.')
 }
@@ -253,6 +280,6 @@ async function clips(out) {
 }
 
 if (cmd === 'record' && pos[0]) await record(resolve(pos[0]), { root: resolve(flag('root', ROOT)) })
-else if (cmd === 'compare' && pos[1]) await compare(pos[0].split(',').map(d => resolve(d)), pos[1].split(',').map(d => resolve(d)), Number(flag('tolerance', 2000)))
+else if (cmd === 'compare' && pos[1]) await compare(pos[0].split(',').map(d => resolve(d)), pos[1].split(',').map(d => resolve(d)), Number(flag('tolerance', 2000)), (flag('looks', '') || '').split(',').map(x => x.trim()).filter(Boolean))
 else if (cmd === 'clips' && pos[0]) await clips(resolve(pos[0]))
 else { console.log('node scripts/motion-check.mjs record <dir> [--root <tree>] | compare <a> <b> | clips <dir>'); process.exit(2) }

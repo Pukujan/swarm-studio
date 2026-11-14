@@ -50,9 +50,11 @@ export function snapshot(events, given = [], { name = '' } = {}) {
   return { brief: start.brief || '', brand, theme, pages: pages.map(p => ({ ...p, seo: seo.get(p.id) || null, sections: [...top, ...sections.filter(s => s.page === p.id), ...bottom] })) }
 }
 
-// Pictures: server paths become files next to the site; empty ones get a placeholder.
+// Pictures: server paths become files next to the site; empty ones get a placeholder. The studio's size ladder
+// (srcset on /img/…, web/ladder.js) is the studio's own: a site on its own has one file per picture.
+const LADDERED = /(<img\b[^>]*?)\s(?:srcset="\/img\/[^"]*"|data-ladder(?:="")?)(?=[\s/>])/g
 function localImages(html, runId, runDir, imgDirs, prefix) {
-  return html.replace(/(<img\b[^>]*?\ssrc=")([^"]*)(")/g, (m, a, src, b) => {
+  return html.replace(LADDERED, '$1').replace(LADDERED, '$1').replace(/(<img\b[^>]*?\ssrc=")([^"]*)(")/g, (m, a, src, b) => {
     const own = src.match(new RegExp(`^/img/${runId}/([\\w.-]+)$`))
     if (own) {
       const file = join(runDir, 'img', own[1])

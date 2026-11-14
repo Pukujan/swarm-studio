@@ -1,0 +1,32 @@
+// The Studio's next UI (ui/, docs/decisions/0013-react-ui-coexists.md) at /next/: its build, ui/dist/ (carried by the
+// release the catalog pins, built by CI on every branch: docs/decisions/0018-next-ui-build-on-release.md),
+// as one document with the script and styles inline, like the canvas page (server/page.mjs), because the Desktop
+// pane's frame has an opaque origin and cannot import. The token goes in here, at serve time, never into ui/dist/.
+// Nothing is built or fetched: a plugin without ui/dist/ answers 404 at /next/ and the current Studio is unchanged.
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { webVersion } from './page.mjs'
+
+const SCRIPT = /<script type="module" crossorigin src="\/next\/(assets\/[\w.-]+\.js)"><\/script>/
+const STYLE = /<link rel="stylesheet" crossorigin href="\/next\/(assets\/[\w.-]+\.css)">/
+
+// boot: what the page finds as window.SWARM (the token); the build's version is added here
+// A file the next UI loads beside its page (ui/dist/vendor/: Mermaid, for the app build wall's Map), or null. Only the
+// names listed: nothing else under ui/dist/ is reachable this way.
+const VENDOR = new Set(['mermaid.min.js', 'mermaid.LICENSE'])
+export function nextVendor(uiDist, name) {
+  const file = join(uiDist, 'vendor', name)
+  return VENDOR.has(name) && existsSync(file) ? file : null
+}
+
+export function nextPage(uiDist, boot) {
+  if (!existsSync(join(uiDist, 'index.html'))) return null
+  const read = f => readFileSync(join(uiDist, f), 'utf8')
+  const page = read('index.html')
+    // a "</script" or "</style" inside the code would end the element early; the escaped form is the same string
+    .replace(SCRIPT, (_, f) => `<script type="module">${read(f).replace(/<\/script/gi, '<\\/script')}</script>`)
+    .replace(STYLE, (_, f) => `<style>${read(f).replace(/<\/style/gi, '<\\/style')}</style>`)
+    .replace('<!-- swarm:boot -->', () => `<script>window.SWARM = ${JSON.stringify({ ...boot, version: webVersion(uiDist) }).replace(/</g, '\\u003c')}</script>`)
+  if (/(src|href)="\/next\/assets\//.test(page)) throw new Error('ui/dist/index.html: a file left to load from /next/assets/; the page must be one document')
+  return page
+}

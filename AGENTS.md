@@ -38,7 +38,15 @@ Checks before a PR: `bash scripts/check.sh`; for code in `web/`, also `npm ci --
 `npm run --prefix tools/dev typecheck` (files that start with `// @ts-check`; a new web file starts with it) and
 `npm run --prefix tools/dev deps` (no new cycles beyond `.dependency-cruiser-known-violations.json`; an area
 folder under `web/canvas/` is used only through its `index.js`).
-CI's `motion-check` compares the Studio's motion before and after (docs/ux/MOTION.md).
+The Studio's theme variables are design tokens: change `tokens/*.tokens.json`, run `npm run --prefix tools/dev tokens`
+and commit `web/tokens.css` and `ui/src/theme.css` with them; never edit either by hand (`tokens:check` fails a stale one).
+The Studio is moving to React in `ui/`, served at `/next/` ([decision 0013](docs/decisions/0013-react-ui-coexists.md)).
+For code in `ui/`: `npm ci --prefix ui`, then `npm run --prefix tools/dev typecheck:ui`, `deps:ui` and `ui:check`
+(`npm run --prefix ui build` makes `ui/dist/` for `/next/`; never commit it: CI builds it and only a release carries it,
+[decision 0018](docs/decisions/0018-next-ui-build-on-release.md)). [ui/README.md](ui/README.md) is how a screen moves.
+CI's `motion-check` compares the Studio's motion before and after (docs/ux/MOTION.md), and `motion-parity` compares a screen moved to /next/ with / (docs/ux/motion/parity-known.json lists the known differences). CI's `ui-audit` checks
+every top-level screen against the rules a machine can check (docs/ux/AUDIT.md). A new violation fails; a
+known one is in `.ui-audit-known-violations.json`.
 
 Before changing anything a person sees (anything in `web/`, the Feed's screens, dialogs, menus, copy), read:
 

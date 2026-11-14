@@ -21,6 +21,7 @@ Film voiceover (server/server.mjs:1121-1131):
 Film music (server/server.mjs:1133-1163). First match wins:
 1. A track dropped in the Video kit (`video/music.*`) is used as is (server/server.mjs:1143-1144).
 2. ElevenLabs via Hermes's MCP connector (`mcpScore`) or a key (`elevenScore`), with a prompt of tempo, mood, instruments and the timed cue sheet, "No vocals", never a reference's melody (server/server.mjs:1145-1151, engine/score.mjs:162-166).
+   Through the MCP the saved file is found in the connector's reply, as a Unix or a Windows path; none found and the code score below plays (engine/media.mjs:102-107).
 3. Otherwise `scoreWav()` writes a stereo WAV in code to the cue sheet: sections, booms on hits, true silence in stops, nine synthesised effects (server/server.mjs:1153, engine/score.mjs:31, engine/storyboard.mjs:19).
 - Then `decode()`/`analyse()` measure tempo, onsets, drop and quiet passages, and `cutToMusic()` moves the cuts; the studio score is rewritten to the final cuts (server/server.mjs:1155-1162, engine/musiccut.mjs:31-39).
 - `mix()` lays music, voice lines and effects under the silent render with ffmpeg; music ducks under voice (sidechain compress), stop windows are muted, a limiter caps at 0.95 (engine/sound.mjs:184-210, server/server.mjs:1218).
@@ -37,7 +38,7 @@ Other uses:
 - Free, local, no key: Kokoro and the code score (engine/sound.mjs:1-3, engine/media.mjs:11-12). Kokoro needs Node's npm the first time (engine/sound.mjs:78-81).
 - ElevenLabs music: `ELEVENLABS_API_KEY` in Hermes's secret scope (plugin.yaml:15), which launcher.py passes to the server as `SWARM_ELEVENLABS_KEY` (launcher.py:219-223); or Hermes's ElevenLabs MCP connector (`elevenlabs`, `eleven-labs`, `elevenlabs-mcp`) (engine/media.mjs:30); or a key pasted in the Film panel, checked against `/v1/models` and stored in `media-keys.json` mode 0600 (engine/media.mjs:9-10, engine/media.mjs:46-50).
 - Other TTS: `SWARM_TTS_URL`, `SWARM_TTS_KEY`, `SWARM_TTS_MODEL`, `SWARM_TTS_VOICE` (engine/sound.mjs:50-52, engine/sound.mjs:75-76). Not declared in plugin.yaml (plugin.yaml:12-56).
-- Game voices: `FISH_API_KEY` or `ELEVENLABS_API_KEY` in the environment, else `OCTO_VAULT_GRANT` for an Octo vault lease called through the vault proxy (engine/voice.mjs:9-11, engine/voice.mjs:68-102). `FISH_API_KEY` and `OCTO_VAULT_GRANT` are not in plugin.yaml (plugin.yaml:12-56).
+- Game voices: `FISH_API_KEY` or `ELEVENLABS_API_KEY` in the environment (`FISH_API_KEY` is declared in plugin.yaml, optional and secret, and passed by launcher.py `PASSED_KEYS`; ElevenLabs reaches the server as `SWARM_ELEVENLABS_KEY`, which `speakLine` takes too: tests/enginegaps.test.mjs, tests/test_manifest.py), else `OCTO_VAULT_GRANT` for an Octo vault lease called through the vault proxy (engine/voice.mjs:9-11, engine/voice.mjs:68-102). `OCTO_VAULT_GRANT` is not in plugin.yaml, so the launcher does not pass it.
 
 ## Limits inside Swarm
 - Every source above except the local ones is keyed and paid; none is free. Unchecked: whether Fish offers a free model or tier; settle from Fish's pricing page.
@@ -48,7 +49,7 @@ Other uses:
 - `music()` in sound.mjs, an older bed, is exported but no caller was found by grep (engine/sound.mjs:102).
 
 ## Open questions
-- Unchecked: whether Hermes hands `FISH_API_KEY`, `OCTO_VAULT_GRANT` or `SWARM_TTS_*` to the server when they are not declared in plugin.yaml; settle by reading launcher.py's env handling (spec 25 notes plugin.yaml declares few keys: docs/specs/25-connections.md:129).
+- `OCTO_VAULT_GRANT` and `SWARM_TTS_*` do not reach a server Hermes starts: launcher.py builds the server's environment from names it lists (`KEEP_ENV`, `PASSED_KEYS`, the ElevenLabs key and the plugin's own settings), and none of them is these (launcher.py `_ensure_server`; read 2026-11-14). They work only when the server is started by hand with them set. Whether to declare them is the owner's call (spec 25 notes plugin.yaml declares few keys: docs/specs/25-connections.md:129).
 - Unchecked: kokoro-js's own library licence (the page shows only a badge); settle by reading its LICENSE file.
 - Which music engines to offer beyond ElevenLabs is not decided; PRODUCT lists "music tools" as borrowed and optional (docs/PRODUCT.md, "What is borrowed").
 

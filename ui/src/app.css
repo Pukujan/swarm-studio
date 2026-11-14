@@ -1,0 +1,12 @@
+/* The next UI's styles: the Studio's variables (web/tokens.css, built from tokens/), then Tailwind, then the
+   Tailwind theme built from the same tokens (theme.css), which takes out Tailwind's own colours and fonts. */
+@import '../../web/tokens.css';
+@import 'tailwindcss';
+/* the committed build is not a source: its script carries web/frame.html's text, whose words would read as classes */
+@source not '../dist';
+@import './theme.css';
+@import './fonts.css';
+/* Hermia's cursor (web/pet.js, spec 41), the same look as the current Studio's */
+@import '../../web/pet.css';
+
+html, body { background: var(--bg); color: var(--text); font-family: var(--font); }

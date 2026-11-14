@@ -1,0 +1,312 @@
+{
+  "id": "p-71f17ab5f5",
+  "v": 1,
+  "kind": "game",
+  "created": "2026-11-13T09:40:08.504Z",
+  "from": null,
+  "title": "New game",
+  "idea": "A small action RPG: rats with swords defend a night market",
+  "answers": {
+    "genre": "Action RPG",
+    "cast": "Mixed cast",
+    "size": "3",
+    "combat": "Stylish combos",
+    "enemies": "Minions, elites, bosses",
+    "progression": "Pick 1 of 3 level-ups",
+    "money": "Free",
+    "look": "Anime cel-shaded"
+  },
+  "given": {},
+  "shape": {
+    "family": "action",
+    "label": "action game",
+    "size": "small",
+    "art": "2d",
+    "engine": {
+      "target": "web",
+      "label": "the browser",
+      "asked": false
+    },
+    "view": "Side view",
+    "subject": "rat",
+    "setting": "",
+    "title": "",
+    "humanoid": true,
+    "closeups": true,
+    "backdrops": true,
+    "scale": {
+      "cast": 4,
+      "stages": 2,
+      "items": 4,
+      "mocks": 4,
+      "perStage": 2
+    }
+  },
+  "engine": {
+    "target": "web",
+    "label": "the browser",
+    "asked": false
+  },
+  "key": {
+    "name": "magenta",
+    "hex": "#FF00FF"
+  },
+  "sheets": [],
+  "mocks": [],
+  "backdrops": [],
+  "style": {
+    "name": "Anime cel-shaded",
+    "locked": false,
+    "refs": []
+  },
+  "gate": {
+    "locked": false,
+    "testFirst": false,
+    "price": null,
+    "lockedAt": null,
+    "phase": null
+  },
+  "build": {
+    "characters": [],
+    "props": [],
+    "animations": null,
+    "sprites": []
+  },
+  "cards": [
+    {
+      "id": "cast",
+      "name": "Cast",
+      "body": {
+        "count": "2",
+        "rule": "Mixed cast",
+        "roster": [
+          {
+            "name": "Hero 1",
+            "role": "Lead",
+            "look": "",
+            "weapon": "twin blades"
+          },
+          {
+            "name": "Hero 2",
+            "role": "Bruiser",
+            "look": "",
+            "weapon": "greatsword"
+          }
+        ]
+      }
+    },
+    {
+      "id": "story",
+      "name": "Story",
+      "body": {
+        "premise": "A small action RPG: rats with swords defend a night market",
+        "acts": "3",
+        "ending": "One ending, unlocked by the final boss"
+      }
+    },
+    {
+      "id": "combat",
+      "name": "Combat",
+      "body": {
+        "style": "Combos with a launcher, air juggles and a D–SSS style rank",
+        "ults": "Orb-charged cinematic ults with cut-ins",
+        "weapons": "Switch weapons mid-combo",
+        "tools": "Grenades",
+        "tactic": "Hit and run against strong enemies"
+      }
+    },
+    {
+      "id": "enemies",
+      "name": "Enemies",
+      "body": {
+        "tiers": "Minions, elites, bosses",
+        "boss": "3 stages, switches weapons each stage",
+        "final": "A final boss with asura arms",
+        "telegraphs": "Every attack is telegraphed"
+      }
+    },
+    {
+      "id": "progression",
+      "name": "Progression",
+      "body": {
+        "levelUp": "Pick 1 of 3 level-ups",
+        "ngPlus": "New Game+",
+        "growth": "An aura and wings that grow",
+        "pet": "A pet companion"
+      }
+    },
+    {
+      "id": "world",
+      "name": "World",
+      "body": {
+        "setting": "",
+        "stages": "2",
+        "camera": "Side view",
+        "backdrops": "2 painted panoramas a stage"
+      }
+    },
+    {
+      "id": "look",
+      "name": "Look",
+      "body": {
+        "style": "Anime cel-shaded",
+        "palette": "",
+        "locked": "no"
+      }
+    },
+    {
+      "id": "money",
+      "name": "Money",
+      "body": {
+        "model": "Free",
+        "gacha": "",
+        "subscription": "",
+        "carry": ""
+      }
+    },
+    {
+      "id": "systems",
+      "name": "Systems",
+      "body": {
+        "Logins": "on",
+        "Payments": "off",
+        "Subscriptions": "off",
+        "Leaderboard": "on",
+        "Gacha": "off",
+        "Autoplay pilot": "on",
+        "Enemy AI": "on",
+        "Loadout": "off"
+      }
+    }
+  ],
+  "systems": {
+    "logins": true,
+    "payments": false,
+    "subscriptions": false,
+    "leaderboard": true,
+    "gacha": false,
+    "pilot": true,
+    "enemyAI": true,
+    "loadout": false
+  },
+  "settings": {
+    "polycount": 40000,
+    "clips": 8,
+    "stages": 2,
+    "backdropsPerStage": 2
+  },
+  "art": {
+    "sheets": null,
+    "shots": null,
+    "sprites": []
+  },
+  "starter": {
+    "engine": {
+      "value": "web",
+      "why": "plays right here in the Studio and on any phone, nothing to install",
+      "by": "planner"
+    },
+    "template": {
+      "value": null,
+      "why": "no starter for this kind of game yet; the crew starts from an empty project",
+      "by": "planner"
+    },
+    "assets": {
+      "value": "paint",
+      "why": "the crew paints the art for this game once the plan is locked",
+      "by": "planner"
+    },
+    "systems": {}
+  },
+  "updated": "2026-11-13T09:40:08.513Z",
+  "price": {
+    "credits": 0,
+    "runs": 7,
+    "images": 15,
+    "pics": {
+      "sheets": 2,
+      "mocks": 5,
+      "backdrops": 4,
+      "closeups": 4,
+      "turnarounds": 0
+    },
+    "parts": [
+      {
+        "what": "Characters",
+        "n": 0,
+        "each": 30,
+        "credits": 0
+      },
+      {
+        "what": "Rigs",
+        "n": 0,
+        "each": 5,
+        "credits": 0
+      },
+      {
+        "what": "Animations",
+        "n": 0,
+        "each": 3,
+        "credits": 0
+      },
+      {
+        "what": "Weapons",
+        "n": 0,
+        "each": 15,
+        "credits": 0
+      }
+    ],
+    "first": {
+      "credits": 0,
+      "characters": 0
+    },
+    "rest": {
+      "credits": 0
+    }
+  },
+  "summary": "New game: a small action game for the browser. 2 casts: Hero 1, Hero 2. Combos with a launcher, air juggles and a D–SSS style rank. Seen side view. Art: 2D sprites on a magenta key, no 3D models.",
+  "first": null,
+  "starterView": {
+    "engine": {
+      "value": "web",
+      "why": "plays right here in the Studio and on any phone, nothing to install",
+      "by": "planner",
+      "name": "The browser",
+      "options": [
+        {
+          "id": "web",
+          "name": "The browser",
+          "why": "plays right here in the Studio and on any phone, nothing to install"
+        },
+        {
+          "id": "godot",
+          "name": "Godot 4",
+          "why": "a real engine project you can open, change and ship to desktop or consoles"
+        }
+      ]
+    },
+    "template": {
+      "value": null,
+      "why": "no starter for this kind of game yet; the crew starts from an empty project",
+      "by": "planner",
+      "name": "None",
+      "options": []
+    },
+    "assets": {
+      "value": "paint",
+      "why": "the crew paints the art for this game once the plan is locked",
+      "by": "planner",
+      "name": "Paint my own",
+      "options": [
+        {
+          "id": "paint",
+          "name": "Paint my own",
+          "why": "the crew paints the art for this game once the plan is locked"
+        }
+      ]
+    },
+    "systems": [],
+    "addons": [],
+    "web": ""
+  }
+}

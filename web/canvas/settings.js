@@ -25,6 +25,8 @@ function freeze(f, image) {
   if (f.frozen) return
   const img = document.createElement('img')
   img.className = 'snap'
+  // the picture stands in for the live page, so it is named as the page is
+  img.alt = f.title || 'Page'
   img.src = image
   img.style.height = `${f.h}px`
   f.el.append(img)
@@ -102,12 +104,23 @@ export async function litePass() {
 // plugin's own data dir; an empty one goes back to what Hermes is set to.
 
 export let modelsInfo = {}
+// Under Hermes the planner and builders are Hermes's own slots: their model comes from Hermes's list
+// (GET /api/setup/models/options) and is changed in Setup's picker, never typed here (spec 6)
+let hermesModels = null
 export async function loadModels() {
-  const res = await api('/api/models').catch(() => null)
+  const [res, h] = await Promise.all([api('/api/models').catch(() => null), api('/api/setup/models/options').catch(() => null)])
   if (res?.ok) modelsInfo = await res.json()
+  const opts = h?.ok ? await h.json().catch(() => null) : null
+  hermesModels = opts?.ok ? opts : null
   return modelsInfo
 }
+const hermesUses = role => {
+  const s = hermesModels?.slots?.[role]
+  return s?.model ? s : hermesModels?.main?.model ? hermesModels.main : null
+}
 loadModels()
+// Settings › Lite mode saved a pick: read it again
+addEventListener('swarm:models', () => { loadModels() })
 
 const ROLE_ROWS = [
   { role: 'planner', label: 'Planner', note: 'plans the pages and the design system', list: 'text' },
@@ -128,6 +141,10 @@ function renderModels() {
   const info = modelsInfo
   const rows = ROLE_ROWS.map(r => {
     const s = info.roles?.[r.role] || {}
+    const h = r.role !== 'reviewer' && hermesModels ? hermesUses(r.role) : null
+    if (h || (r.role !== 'reviewer' && hermesModels)) return `<div class="mrow"><span class="mlabel">${r.label}<small>${r.note}</small></span>
+      <span class="mfield"><b class="mnow-model">${esc(h?.model || 'None')}</b><button data-change>Change</button></span>
+      <small class="mnow">${h ? `Hermes · ${esc(h.provider)}` : 'not set in Hermes'}</small></div>`
     const off = s.picked === 'off'
     return `<label class="mrow"><span class="mlabel">${r.label}<small>${r.note}</small></span>
       <span class="mfield"><input data-role="${r.role}" data-list="${r.list}" autocomplete="off" spellcheck="false" placeholder="${esc(s.hermes || (r.off ? 'off' : 'model id'))}" value="${off ? '' : esc(s.picked || '')}" ${off ? 'disabled' : ''}>
@@ -138,7 +155,7 @@ function renderModels() {
   const cur = pick === 'off' ? 'off' : pick ? `${pick.provider}|${pick.model}` : ''
   const opts = (info.image?.providers || []).flatMap(p => (p.models.length ? p.models : [p.default || '']).map(m =>
     `<option value="${esc(`${p.provider}|${m}`)}" ${p.available ? '' : 'disabled'} ${cur === `${p.provider}|${m}` ? 'selected' : ''}>${esc(p.provider)}${m ? ` · ${esc(m)}` : ''}${p.available ? '' : ' (not signed in)'}</option>`)).join('')
-  models.el.innerHTML = `<div class="mhead pop-title">Pick the <em>models</em> <small>picks stay in Swarm Studio; Hermes's config is untouched</small></div>${rows}
+  models.el.innerHTML = `<div class="mhead pop-title">Pick the <em>models</em> <small>${hermesModels ? 'planner and builders are set in Hermes' : 'picks stay in Swarm Studio; Hermes\'s config is untouched'}</small></div>${rows}
     <label class="mrow"><span class="mlabel">Images<small>paints photos and illustrations into the pages, with your Hermes image login</small></span>
       <span class="mfield"><select data-image>
         <option value="" ${cur === '' ? 'selected' : ''}>Auto (Codex login, gpt-image-2-low)</option>
@@ -193,16 +210,26 @@ function modelCombo(root, signal) {
   root.addEventListener('scroll', close)
 }
 
-export function toggleModels(open = !models.el) {
+// anchor: what it opens from when that isn't ☰ (Projects' user menu, which has no ☰ of its own)
+export function toggleModels(open = !models.el, anchor = null) {
   if (!open) { models.ac?.abort(); document.querySelector('.combo-list')?.remove(); models.el?.remove(); models.el = null; els.modelsBtn.classList.remove('on'); return }
+  if (models.el) return
   models.el = document.createElement('div')
   models.el.className = 'models-pop'
   document.body.append(models.el)
-  const r = (els.modelsBtn.offsetParent ? els.modelsBtn : moreBtn).getBoundingClientRect()
-  models.el.style.top = `${r.bottom + 6}px`
-  models.el.style.right = `${Math.max(8, innerWidth - r.right)}px`
-  els.modelsBtn.classList.add('on')
-  closeable(models.el, () => toggleModels(false), { extra: [els.modelsBtn, moreBtn, '.combo-list', '#more-menu'] })
+  if (anchor) {
+    // beside the anchor, opening upward when it sits low on the screen (the user menu is bottom left)
+    const r = anchor.getBoundingClientRect()
+    models.el.style.left = `${Math.max(8, Math.min(r.left, innerWidth - models.el.offsetWidth - 8))}px`
+    if (r.top > innerHeight / 2) Object.assign(models.el.style, { bottom: `${innerHeight - r.top + 6}px`, maxHeight: `${r.top - 14}px` })
+    else models.el.style.top = `${r.bottom + 6}px`
+  } else {
+    const r = (els.modelsBtn.offsetParent ? els.modelsBtn : moreBtn).getBoundingClientRect()
+    models.el.style.top = `${r.bottom + 6}px`
+    models.el.style.right = `${Math.max(8, innerWidth - r.right)}px`
+    els.modelsBtn.classList.add('on')
+  }
+  closeable(models.el, () => toggleModels(false), { extra: [els.modelsBtn, moreBtn, '.combo-list', '#more-menu', anchor].filter(Boolean) })
   renderModels()
   loadModels().then(() => models.el && !models.el.contains(document.activeElement) && renderModels())
   models.ac = new AbortController()
@@ -221,6 +248,7 @@ export function toggleModels(open = !models.el) {
     }
   })
   models.el.addEventListener('click', e => {
+    if (e.target.closest('[data-change]')) { e.preventDefault(); toggleModels(false); window.SwarmSetup?.open('models'); return }
     const b = e.target.closest('[data-off]')
     if (!b) return
     e.preventDefault()
@@ -283,6 +311,7 @@ document.addEventListener('mousedown', e => { if (!moreMenu.hidden && !e.target.
 const themeBtn = $('#theme-btn'), sysLight = matchMedia('(prefers-color-scheme: light)')
 const theme = () => document.documentElement.dataset.theme || (sysLight.matches ? 'light' : 'dark')
 function themeLabel() { const next = theme() === 'light' ? 'dark' : 'light'; themeBtn.innerHTML = `${ico(next === 'light' ? 'sun' : 'moon')}${next === 'light' ? 'Light' : 'Dark'}` }
+export const toggleTheme = () => setTheme(theme() === 'light' ? 'dark' : 'light')
 function setTheme(t) {
   const before = theme()
   document.documentElement.dataset.theme = t
@@ -290,7 +319,7 @@ function setTheme(t) {
   themeLabel()
   if (theme() !== before) dispatchEvent(new CustomEvent('swarm:theme', { detail: theme() }))
 }
-themeBtn.onclick = () => setTheme(theme() === 'light' ? 'dark' : 'light')
+themeBtn.onclick = toggleTheme
 sysLight.addEventListener('change', () => { if (!document.documentElement.dataset.theme) themeLabel() })
 themeLabel()
 

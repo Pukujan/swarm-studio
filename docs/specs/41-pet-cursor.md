@@ -1,6 +1,7 @@
 # 41. Hermia's cursor, always there
 
-Status: **Spec only. Not built yet** (the owner, 2026-11-12: "add it to spec we dont build yet").
+Status: **Built** (2026-11-13: the owner asked for it to be built, overriding the 2026-11-12 "add it to spec we
+dont build yet"). `web/pet.js` (the lines table, the brain and the cursor), `web/pet.css`, `tests/pet.test.mjs`.
 
 The owner, 2026-11-12:
 - "cant we have 1 clicker always available 1 cursor even though its not working so it looks like a pet idk lol"
@@ -65,6 +66,46 @@ is made anyway, may carry one extra short `pet` line in its answer. She never ma
 - On a phone she sits at the edge of the board above the chat and does not follow touches.
 - One pet only, on every screen of the Studio. What a cursor means on a hosted Feed post stays Open
   (DECISIONS.md 2.6).
+
+## As built
+
+- One module, `web/pet.js`, joined into the studio's script before `web/studio.js` and started beside it, so no
+  screen file carries code for her. Screens (and the React port) talk to her with `pet.on(kind, data)`
+  (`window.swarmPet`, `swarmCosmos.pet`): `step`, `file`, `link`, `pick`, `skip`, `brief`, `back`, `built`, and
+  `loading` / `ready`.
+- She notices most events herself: the address (a screen, a Studio step; a step shown as Skipped gives the skip
+  line), a drop or a file picked, a link pasted, a click on a palette, type or pack card, the canvas's
+  `run:start` / `run:done`, the chat's own lines (so she never repeats one).
+- Loading: on every new screen she shows three dots until the view holds no `.wait-in` or `aria-busy`
+  placeholder (at most 12 seconds), or a screen calls `on('ready')`. This is also the cursor the brand sheet
+  had none of while it loaded.
+- During a build (`run:start` to `run:done`) she fades out and the crew's cursors work; a live build that ends
+  gives the `built` line.
+- Slow things (the owner, 2026-11-13: "slow loading things obviously need skeleton and a cursor like thing
+  working on them as the visual"). Each wait shows a skeleton in the shape of what is coming: the shared `wait-in`
+  cards, or the Overview's page skeleton (`.sk`). She goes onto it and works on it (a small tap and the dots)
+  while the screen loads or the pointer rests, and leaves when the content lands. A screen hands her one with
+  `const done = pet.working(el)`. She also finds placeholders herself (`PET_BUSY`). Every placeholder is
+  `aria-busy="true"` while it waits, so the audit gates can check that a loading state shows.
+- What waits, and how:
+
+  | Surface | Skeleton | Her |
+  |---|---|---|
+  | Projects, first load | four card skeletons (`web/home.js`) | works on the first |
+  | Overview, a build's board loading | three page skeletons; never the last build's pages (`web/project.js`) | works on the first |
+  | Plan board, a plan loading | three card skeletons (`web/plan.js`) | works on the first |
+  | Studio scaffold, brand sheet | their own `wait-in` card (the brand sheet's skeleton is the brand-fixes branch's) | works on it, marks it `aria-busy` |
+  | An Overview page's picture not made yet | its `.sk` page skeleton | works on it while the pointer rests |
+  | The app's frame loading | `.app-loading` (`aria-busy`) | works on it |
+  | Pictures being painted (Overview art, Plan sheets, mocks) | their sheen; `aria-busy` while painting | not her: the painter's crew cursor already works there |
+  | A build | the crew's cursors on the pages | hands over |
+  | Setup's model check | its spinner, `aria-busy` | not her: the Setup sheet sits above her layer |
+  | Chat replies | the reply's blinking dot | not her: she keeps clear of the chat |
+  | Not covered yet | video renders (the film's progress bar), publish and deploy (the button's own state), pack and palette loads on the brand sheet (left to the brand-fixes branch), the Feed (not in this app) | |
+- On the Design deck and the other rooms she stays at rest: their docked crew is hidden in the Studio
+  (`studio.css`, `body.cosmos .dock`).
+- The bubbles are an exception to RULES.md rule 24 ("speech bubbles … stay hidden until you open the crew
+  radio"), by the owner's words above: rules-made lines, one at most every 20 seconds.
 
 ## Open
 

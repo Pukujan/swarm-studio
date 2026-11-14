@@ -1,12 +1,13 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): talks before a build: talk first, the game talk, Chats.
-import { els, api, $, ico } from './core.js'
+import { els, api, $, ico, commandOps } from './core.js'
 import { viewing, setViewing } from './replay.js'
 import { fresh, links } from './base.js'
 import { botMsg, feed } from './panels.js'
 import { esc } from './design.js'
 import { nextRoute, slashPop, slashMatches, slashAt, renderSlash, pickSlash, setNextRoute, setSlashAt } from './loop.js'
 import { runNow, shownRun } from './film.js'
+import { paintSend } from '../chatmode.js'
 
 // ---------- talk first (engine/talkplan.mjs): the person asked not to build yet, or asked the crew
 // a question. Hermia answers here in the chat, the conversation goes on in this dock, and nothing is
@@ -15,21 +16,25 @@ import { runNow, shownRun } from './film.js'
 // project with nothing built yet. From a project's dock its pages stay and Build extends it.
 // The talk is kept in a chat (spec 29, engine/chats.mjs): the server makes it on the first turn and
 // answers with its id; an old chat opened from Studio home or a project's chats comes back here.
-export const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null, plan: null }
-const dockBtn = els.form.querySelector('button[type="submit"]')
-// while talking, the dock sends to Hermia: its button says Send, not Build
+// ask: the chat's skip question before a website's build is open (decision 0020): words and picks answer it
+export const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null, plan: null, ask: false }
+// while talking, the dock sends to Hermia: its button says Send, not the mode's word (web/chatmode.js
+// writes the button: the mode can change while a talk is open)
 function talkDock(on) {
-  if (on && !talk.dock) { talk.dock = { ph: els.brief.placeholder, btn: dockBtn.textContent }; els.brief.placeholder = 'Tell Hermia…'; dockBtn.textContent = 'Send' }
-  if (!on && talk.dock) { els.brief.placeholder = talk.dock.ph; dockBtn.textContent = talk.dock.btn; talk.dock = null }
+  if (on && !talk.dock) { talk.dock = { ph: els.brief.placeholder }; els.brief.placeholder = 'Tell Hermia…' }
+  if (!on && talk.dock) { els.brief.placeholder = talk.dock.ph; talk.dock = null }
+  paintSend()
 }
 export const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, answerTo, kind }) })
   .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')
 // brief: nothing to talk about yet, the brief is shown at once to read, edit and Build (a showcase, or a
 // Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
-// heard(text): told each line the person sends (the Studio takes its idea from the first)
+// heard(text): told each line the person sends (the Studio takes its idea from the first). When it answers with
+// words (a promise of them), the line was an answer to the Studio's own question (which pages, which pictures:
+// web/scaffold.js, decision 0020): those words are Hermia's reply, and the planner is not asked
 export function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false, heard = null }) {
   if (blank) { setViewing('new'); fresh(null) }
-  Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null, heard })
+  Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null, heard, ask: false })
   talkDock(true)
   els.feed.querySelector('.empty-chat')?.remove()
   let last = null
@@ -38,6 +43,8 @@ export function talkStart({ text = '', kind = 'site', build, blank = false, said
   if (text) return talkSay(text)
   // a game chat reopened: its open question's chips come back under the planner's last words
   if (kind === 'game' && chat) return gameResume(last)
+  // a website's chat with its skip question open: the question's answers come back, not Build
+  if (kind === 'site' && chat && last && said.at(-1)?.who === 'hermia') return siteResume(last)
   // an old chat reopened: its words are back, and the dock goes on from them
   if (last && said.at(-1)?.who === 'hermia') talkActs(last)
   els.brief.focus({ preventScroll: true })
@@ -47,9 +54,20 @@ export const saidOf = chat => (chat?.turns || []).filter(t => t.who !== 'crew').
 export const talkEnd = () => { talk.on = false; talk.busy = false; talkDock(false); els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove()) }
 export async function talkSay(text, brief = false) {
   if (talk.kind === 'game') return gameSay({ said: text })
+  if (talk.ask && !brief) return goSay({ said: text })
   const media = brief ? [] : links.take('ref')
-  if (!brief) { talk.said.push({ who: 'you', text }); feed(null, text, 'you', media.map(m => m.name).join(', ')); talk.heard?.(text) }
+  // layers dragged in (the Studio scaffold's Layers, web/layers.js): the planner is told what the turn is about
+  const about = brief ? [] : links.take('layer')
+  let took = null
+  if (!brief) { talk.said.push({ who: 'you', text: about.length ? `${text}\n(About: ${about.map(c => c.name).join(', ')})` : text }); feed(null, text, 'you', [...about, ...media].map(m => m.name).join(', ')); took = talk.heard?.(text) }
   els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
+  if (took && typeof took.then === 'function') {
+    talk.busy = true
+    const reply = await took.catch(() => null)
+    talk.busy = false
+    if (!talk.on) return
+    if (typeof reply === 'string' && reply) { for (const m of [...media, ...about]) links.add(m); talk.said.push({ who: 'hermia', text: reply }); return void botMsg(reply) }
+  }
   const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
   talk.busy = true
   const res = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: talk.said, kind: talk.kind, brief, ...(media.length ? { refs: media.map(m => m.key) } : {}), ...(talk.chat ? { chat: talk.chat } : talk.from ? { from: talk.from } : {}) }) }).catch(() => null)
@@ -63,6 +81,77 @@ export async function talkSay(text, brief = false) {
   talk.said.push({ who: 'hermia', text: j.reply })
   talkActs(botMsg(j.reply))
 }
+// ---------- the skip question before a website's build (docs/decisions/0020-ask-before-build.md, engine/askfirst.mjs):
+// Skip all, Step by step, or Pick steps to skip, the recommended one first. A pick or typed words answer it through
+// /api/talk (engine/talkplan.mjs say), and the answer says what happens next: the build starts, or the Studio walk
+// opens with the skipped steps marked. Only the person's press or words answer it.
+const isAsk = turn => (turn?.options || []).some(o => String(o.id).startsWith('go:'))
+async function siteResume(last) {
+  const j = await api(`/api/talk/${encodeURIComponent(talk.chat)}`).then(r => r.ok ? r.json() : null).catch(() => null)
+  if (!talk.on) return
+  const turn = j?.chat?.turns?.at(-1)
+  if (!j?.chat?.go && turn?.who === 'planner' && isAsk(turn)) { talk.ask = true; return askActs(last, turn) }
+  talkActs(last)
+  els.brief.focus({ preventScroll: true })
+}
+function askActs(item, turn) {
+  const opts = turn?.options || []
+  if (!item || !opts.length) return
+  const acts = document.createElement('div')
+  acts.className = 'talk-acts talk-opts'
+  acts.innerHTML = opts.map(o => `<button type="button" data-pick="${esc(o.id)}">${esc(o.label)}${o.why ? `<small>${esc(o.why)}</small>` : ''}</button>`).join('')
+  acts.onclick = e => {
+    // @ts-ignore
+    const b = e.target.closest('[data-pick]')
+    const o = b && opts.find(x => x.id === b.dataset.pick)
+    if (o && !talk.busy) goSay({ pick: o.id, label: o.label })
+  }
+  item.append(acts)
+}
+async function goSay({ said = '', pick = '', label = '' }) {
+  if (talk.busy || !talk.chat) return
+  const text = said || label
+  if (text) { talk.said.push({ who: 'you', text }); feed(null, text, 'you') }
+  els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
+  const wait = botMsg('…', true)
+  talk.busy = true
+  try {
+    const j = await talkPost(`/api/talk/${encodeURIComponent(talk.chat)}`, { said, pick })
+    if (!talk.on) return
+    const turn = j.turn || {}
+    talk.said.push({ who: 'hermia', text: turn.text })
+    const item = botMsg(turn.text)
+    talk.ask = isAsk(turn)
+    if (talk.ask) return askActs(item, turn)
+    if (turn.go) return goOn(turn.go, j.chat?.id || talk.chat)
+    talkActs(item)
+  } catch (err) { if (talk.on) botMsg(err.message || 'Hermia did not answer. Say it again.') } finally { talk.busy = false; wait.remove() }
+}
+// the answer: build now (this chat's brief, answered), or the Studio walk from it with the skipped steps marked
+async function goOn(go, chat) {
+  const brief = String(go.brief || '').trim()
+  const build = talk.build
+  talkEnd()
+  if (go.path === 'all') {
+    if (build) return build(brief, chat)
+    setNextRoute({ fresh: true, chat }); els.brief.value = brief; return els.form.requestSubmit()
+  }
+  const skip = Array.isArray(go.skip) ? go.skip : []
+  const start = skip.includes('brand') ? 'plan' : 'brand'
+  const res = await api('/api/studio', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'site', idea: brief, chat, skip, start }) }).catch(() => null)
+  const j = res ? await res.json().catch(() => ({})) : {}
+  if (!res?.ok || !j.project?.id) return botMsg(j.error || 'The Studio did not open. Say it again.')
+  window.swarmCosmos?.studio?.(j.project.id, start)
+}
+// the skip question asked before a build (server/server.mjs /api/run answered 409 ask): its chat opens here,
+// through Projects when it is there (it knows how a website builds), with the question's answers
+export function openAsk(chat) {
+  if (!chat) return
+  if (window.swarmCosmos?.openChat) return window.swarmCosmos.openChat(chat)
+  return openChatHere(chat)
+}
+// Hermes asked for a build: the chat with its question is shown for the person to answer (launcher.py)
+commandOps.chat = c => openAsk(c.target)
 // ---------- a game talk (docs/specs/27-plan-conversation.md, server/talk.mjs): the planner asks only
 // what the idea leaves open, each option with what it gets, costs and takes (its second line, on the
 // open question only); the plan takes shape on the board beside the chat. Lock makes the plan, or

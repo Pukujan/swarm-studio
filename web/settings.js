@@ -1,27 +1,14 @@
-// Settings (docs/specs/25-connections.md, slice 1): one place that says what the studio is connected
-// to and where its data goes. Read-only for now: every state comes from an endpoint that already
-// exists, and nothing here connects, changes or stores anything. It follows iOS Settings, as
-// docs/ux/PATTERNS.md assigns for Me › Settings: grouped lists, one level per tap, names and a state.
+// @ts-check
+// Settings (docs/specs/25-connections.md): the studio's own settings and where its data goes. It follows
+// iOS Settings, as docs/ux/PATTERNS.md assigns for Me › Settings: grouped lists, one level per tap, names
+// and a state.
 //
-// Layer 1: You, Crew, Publish, Data. Layer 2: a group's connections, each a name and a state
-// (a filled dot is connected, a ring is not). A row opens to its one "Goes to" line (layer 3).
+// Layer 1: You, Setup, Lite mode, Background, Data. You is the Feed account and its "Goes to" line. Setup opens the
+// Setup sheet on its Parts (web/setup-parts.js: every model, tool, connector, key and program a build
+// uses, its state and its fix; Crew and Publish moved there). Lite mode is the pick and what it does.
+// Background is when the studio's background work stops by itself (decision 0017, issue #450). Data is where data goes.
 import { ic } from './icons.js'
 
-// where each thing sends data, in the README's words ("What it does on your machine")
-const GOES = {
-  feed: 'Swarm Feed: an install id on connect, then only the builds you post',
-  model: 'The model provider you picked: your prompt, the plan, page screenshots for review',
-  media: 'The media model you picked: clips and sounds you attach, and the crew\'s finished films',
-  image: 'The image provider you picked: picture prompts',
-  film: 'The provider you picked: film prompts and clips',
-  standin: 'Openverse and Pexels: words from a picture prompt',
-  meshy: 'Meshy: the picture a 3D character is made from',
-  github: 'GitHub Pages: the site you publish, in a public repo',
-  vercel: 'Vercel: the site or app you publish',
-  cloudflare: 'Cloudflare Pages: the site you publish',
-  supabase: 'Your own Supabase project: an app\'s data',
-  gateway: 'The channels you set up in Hermes: launch posts you send'
-}
 const DATA = [
   ['Builds, settings, keys', 'Stay on this computer or with Hermes'],
   ['Prompts, plans, review screenshots', 'The model provider you picked'],
@@ -33,6 +20,23 @@ const DATA = [
   ['Swarm Feed', 'An install id on connect; then only what you post'],
   ['Everything else', 'Nowhere. No telemetry']
 ]
+const FEED_GOES = 'Swarm Feed: an install id on connect, then only the builds you post'
+
+// Lite mode, as web/canvas/settings.js does it (litePass, liteOn) and web/canvas.css draws it (body.lite)
+const LITE = [
+  ['What it does', 'Only the page you are reading stays live. Every other finished page becomes a still picture and its memory is freed; it comes back live when you zoom into it or the crew works on it.'],
+  ['What stops', 'The background grid, the moving wires and the speech-bubble animations.'],
+  ['Auto turns it on', 'When this device has 4 GB of memory or less, when more than one page is on the canvas and the crew has been quiet for 5 seconds, and while Play covers the canvas.'],
+  ['On', 'Always, on any device.'],
+  ['Off', 'Never, not even in Play. Every page stays live.']
+]
+// Background: the server's own picks (server/server.mjs STOP_PICKS), in minutes; 0 is never
+const STOPS = [
+  { k: 'app', name: 'Stop an app nobody is looking at', note: 'Opening it again takes a few seconds.', label: m => `${m} min` },
+  { k: 'server', name: 'Close the studio when nothing runs', note: 'It starts again when you next use it.', label: m => (m ? `${m} min` : 'Never') }
+]
+const LITE_PICKS = [{ k: 'auto', label: 'Auto', on: null }, { k: 'on', label: 'On', on: true }, { k: 'off', label: 'Off', on: false }]
+const small = () => (/** @type {any} */ (navigator).deviceMemory || 8) <= 4
 
 export function openSettings({ sw, esc }) {
   const ui = window.SwarmUI
@@ -40,51 +44,26 @@ export function openSettings({ sw, esc }) {
   const get = path => sw.api(path).then(r => (r.ok ? r.json() : null)).catch(() => null)
   const d = ui.dialog({ title: 'Settings', className: 'set', body: '<div class="set-list" role="list"></div>' })
   const list = d.body.querySelector('.set-list')
-  // each state fills in when its own answer comes (some ask Hermes and take seconds): the sheet never waits
-  const S = {}
-  let at = null, open = ''
+  // each state fills in when its own answer comes: the sheet never waits
+  const S = { me: null, lite: undefined, stops: null }
+  let at = null, open = false
 
-  // one row: a name, and its state on the right (an account, a model, or nothing but the dot)
+  // one row: a name, and its state on the right (an account, a pick, or nothing but the dot)
   const row = (k, name, { on = null, state = '', more = false } = {}) => `<button type="button" class="set-row" role="listitem" data-k="${esc(k)}"${more ? ' aria-haspopup="true"' : ' aria-expanded="false"'}>
     ${on === null ? '' : `<i class="set-dot${on ? ' on' : ''}" aria-label="${on ? 'Connected' : 'Not connected'}"></i>`}<b>${esc(name)}</b><span>${esc(state)}</span>${more ? ic('chr', 14) : ''}</button>`
 
-  function groups() {
-    const m = S.models?.roles || {}, img = S.models?.image || {}, md = S.models?.media || {}
-    const imgOn = (img.providers || []).some(p => p.available)
-    const crew = [
-      ['model:planner', 'Planner', { on: !!m.planner?.model, state: m.planner?.model || '' }, GOES.model],
-      ['model:worker', 'Builders', { on: !!m.worker?.model, state: m.worker?.model || '' }, GOES.model],
-      ['model:reviewer', 'Reviewer', { on: !!m.reviewer?.model, state: m.reviewer?.model || '' }, GOES.model],
-      // the media reader (spec 32): the model and, in its own words, what it can take
-      ['model:media', 'Media reader', { on: !!md.model, state: md.model || (md.pick === 'off' ? 'Off' : 'None') }, md.model && md.takes ? `${GOES.media}. It ${md.takes}` : GOES.media],
-      ['image', 'Pictures', { on: img.pick !== 'off' && imgOn, state: img.pick === 'off' ? 'Off' : (img.providers || []).filter(p => p.available).map(p => p.provider).join(', ') }, GOES.image],
-      ['film', 'Film', { on: !!(S.media?.music?.on || S.media?.clips?.on), state: [S.media?.music?.on && S.media.music.by, S.media?.clips?.on && S.media.clips.by].filter(Boolean).join(', ') }, GOES.film],
-      ['standin', 'Stand-in photos', { on: true, state: 'Openverse' }, GOES.standin],
-      ['meshy', '3D', { on: !!S.meshy?.ready }, GOES.meshy]
-    ]
-    const pub = S.publish || {}, sb = S.connectors?.supabase
-    // the gateway's platforms come as a list or as a map by name
-    const gp = S.gateway?.platforms, plats = (Array.isArray(gp) ? gp : Object.keys(gp || {})).map(p => String(p?.name || p))
-    const publish = [
-      ['github', 'GitHub Pages', { on: !!pub.github, state: pub.github || '' }, GOES.github],
-      ['vercel', 'Vercel', { on: !!pub.vercel, state: pub.vercel?.user || '' }, GOES.vercel],
-      ['cloudflare', 'Cloudflare Pages', { on: !!pub.cloudflare, state: pub.cloudflare?.user || '' }, GOES.cloudflare],
-      ['supabase', 'Supabase', { on: !!sb?.signed_in }, GOES.supabase],
-      ['gateway', 'Gateways', { on: plats.length > 0, state: plats.join(', ') }, GOES.gateway]
-    ]
-    // a Feed account has a handle; without one the server answers the computer's user name, which is not an account
-    const you = [['feed', 'Swarm Feed', { on: !!S.me?.handle, state: S.me?.handle ? S.me.name || `@${S.me.handle}` : '' }, GOES.feed]]
-    return { you, crew, publish }
-  }
-  const count = rows => `${rows.filter(r => r[2].on).length} of ${rows.length}`
+  // a Feed account has a handle; without one the server answers the computer's user name, which is not an account
+  const you = () => (S.me?.handle ? S.me.name || `@${S.me.handle}` : '')
+  const stopsState = () => (S.stops ? `${S.stops.app} min · ${S.stops.server ? `${S.stops.server} min` : 'never'}` : '')
+  const liteState = () => S.lite === undefined ? '' : S.lite === true ? 'On' : S.lite === false ? 'Off' : `Auto · ${small() ? 'on' : 'off'} here`
 
   function draw() {
-    const g = groups()
     if (!at) {
       d.setHead('', 'Settings')
-      list.innerHTML = row('you', 'You', { state: g.you[0][2].state || 'Not signed in', more: true })
-        + row('crew', 'Crew', { state: count(g.crew), more: true })
-        + row('publish', 'Publish', { state: count(g.publish), more: true })
+      list.innerHTML = row('you', 'You', { state: you() || 'Not signed in', more: true })
+        + row('setup', 'Setup', { more: true })
+        + row('lite', 'Lite mode', { state: liteState(), more: true })
+        + row('stops', 'Background', { state: stopsState(), more: true })
         + row('data', 'Data', { more: true })
       return
     }
@@ -94,35 +73,62 @@ export function openSettings({ sw, esc }) {
       list.innerHTML = back + `<dl class="set-data">${DATA.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`
       return
     }
-    d.setHead('', { you: 'You', crew: 'Crew', publish: 'Publish' }[at])
-    list.innerHTML = back + g[at].map(([k, name, st, goes]) => `${row(k, name, st)}<p class="set-goes" data-for="${esc(k)}"${open === k ? '' : ' hidden'}>${esc(goes)}</p>`).join('')
-    if (open) list.querySelector(`.set-row[data-k="${CSS.escape(open)}"]`)?.setAttribute('aria-expanded', 'true')
+    if (at === 'stops') {
+      d.setHead('', 'Background')
+      list.innerHTML = back + (S.stops ? STOPS.map(x => `<div class="set-stop"><b id="set-stop-${x.k}">${esc(x.name)}</b><div class="ui-toggle-group ui-block" role="radiogroup" aria-labelledby="set-stop-${x.k}">${S.stops.picks[x.k].map(m => `<button type="button" class="ui-toggle" role="radio" aria-checked="${m === S.stops[x.k]}" data-stop="${x.k}" data-min="${m}">${esc(x.label(m))}</button>`).join('')}</div><p class="set-goes">${esc(x.note)}</p></div>`).join('') : '')
+      return
+    }
+    if (at === 'lite') {
+      d.setHead('', 'Lite mode')
+      const now = S.lite === true ? 'on' : S.lite === false ? 'off' : 'auto'
+      list.innerHTML = back + `<div class="ui-toggle-group ui-block set-lite" role="radiogroup" aria-label="Lite mode">${LITE_PICKS.map(p => `<button type="button" class="ui-toggle" role="radio" aria-checked="${p.k === now}" data-lite="${p.k}">${p.label}</button>`).join('')}</div>`
+        + `<dl class="set-data set-litedl">${LITE.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`
+      return
+    }
+    d.setHead('', 'You')
+    list.innerHTML = back + `${row('feed', 'Swarm Feed', { on: !!S.me?.handle, state: you() })}<p class="set-goes"${open ? '' : ' hidden'}>${esc(FEED_GOES)}</p>`
+    if (open) list.querySelector('.set-row[data-k="feed"]')?.setAttribute('aria-expanded', 'true')
   }
+
+  async function pickLite(k) {
+    const p = LITE_PICKS.find(x => x.k === k)
+    if (!p) return
+    S.lite = p.on
+    draw()
+    list.querySelector(`[data-lite="${k}"]`)?.focus({ preventScroll: true })
+    await sw.api('/api/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: 'lite', on: p.on }) }).catch(() => null)
+    // the Design deck reads the pick again (web/canvas/settings.js loadModels)
+    dispatchEvent(new CustomEvent('swarm:models'))
+  }
+
+  async function pickStop(k, m) {
+    if (!S.stops) return
+    S.stops = { ...S.stops, [k]: m }
+    draw()
+    list.querySelector(`[data-stop="${k}"][data-min="${m}"]`)?.focus({ preventScroll: true })
+    await sw.api('/api/models', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role: 'stops', [k]: m }) }).catch(() => null)
+  }
+
   list.onclick = e => {
+    const l = e.target.closest('[data-lite]')
+    if (l) { pickLite(l.dataset.lite); return }
+    const st = e.target.closest('[data-stop]')
+    if (st) { pickStop(st.dataset.stop, Number(st.dataset.min)); return }
     const b = e.target.closest('.set-row')
     if (!b) return
     const k = b.dataset.k
-    if (!at || !k) { at = k || null; open = ''; draw(); list.querySelector('.set-row')?.focus({ preventScroll: true }); return }
-    // layer 3: the one line that says where this connection's data goes
-    open = open === k ? '' : k
+    // one sheet at a time: Settings closes and Setup opens on its Parts
+    if (!at && k === 'setup') { d.close(); window.SwarmSetup?.open('parts'); return }
+    if (!at || !k) { at = k || null; open = false; draw(); list.querySelector('.set-row')?.focus({ preventScroll: true }); return }
+    // layer 3: the one line that says where the account's data goes
+    open = !open
     draw()
     list.querySelector(`.set-row[data-k="${CSS.escape(k)}"]`)?.focus({ preventScroll: true })
   }
 
   draw()
   list.querySelector('.set-row')?.focus({ preventScroll: true })
-  // an answer that comes in changes the states in place: the rows are never rebuilt under a click
-  function patch() {
-    const g = groups()
-    const now = at ? (g[at] || []).map(([k, , st]) => [k, st]) : [['you', { state: g.you[0][2].state || 'Not signed in' }], ['crew', { state: count(g.crew) }], ['publish', { state: count(g.publish) }]]
-    for (const [k, st] of now) {
-      const r = list.querySelector(`.set-row[data-k="${CSS.escape(k)}"]`)
-      if (!r) continue
-      const dot = r.querySelector('.set-dot'), sp = r.querySelector('span')
-      if (dot && st.on !== undefined && st.on !== null) { dot.classList.toggle('on', !!st.on); dot.setAttribute('aria-label', st.on ? 'Connected' : 'Not connected') }
-      if (sp && sp.textContent !== (st.state || '')) sp.textContent = st.state || ''
-    }
-  }
-  for (const k of ['me', 'models', 'media', 'publish', 'connectors', 'meshy', 'gateway']) get(`/api/${k}`).then(v => { if (!d.closed) { S[k] = v; patch() } })
+  get('/api/me').then(v => { if (!d.closed) { S.me = v; if (!at || at === 'you') draw() } })
+  get('/api/models').then(v => { if (!d.closed) { S.lite = v ? v.lite ?? null : null; S.stops = v?.stops || null; if (!at || at === 'lite' || at === 'stops') draw() } })
   return d
 }
