@@ -664,11 +664,15 @@ export function render(opts) {
   return renders.run(() => renderNow(opts), () => opts.onProgress?.(0, 'queued'))
 }
 
+// What a render is started with: no skills install, no usage reports and no update check (HyperFrames 0.9.26
+// reads these three names; docs/engines/video.md), and nothing else of ours.
+export const renderEnv = path => ({ PATH: path, HYPERFRAMES_SKIP_SKILLS: '1', HYPERFRAMES_NO_TELEMETRY: '1', HYPERFRAMES_NO_UPDATE_CHECK: '1', DO_NOT_TRACK: '1', NO_COLOR: '1' })
+
 // A stop (signal) kills the render with its Chrome and ffmpeg, every process it started (stopTree)
 function renderNow({ tools: t, dir, out, quality = 'draft', onProgress = () => {}, signal }) {
   return new Promise((ok, fail) => {
     if (signal?.aborted) return fail(new Error('render stopped'))
-    const child = startProc(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { stdout: 'pipe', stderr: 'pipe', env: { PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' } })
+    const child = startProc(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { stdout: 'pipe', stderr: 'pipe', env: renderEnv(t.path) })
     const halt = () => { stopTree(child) }
     signal?.addEventListener('abort', halt, { once: true })
     let tail = ''

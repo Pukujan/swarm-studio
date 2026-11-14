@@ -29,6 +29,9 @@ optional_env:
     description: "Optional: ckff endpoint (default https://ckffai.com/v1)"
   - name: CKFF_MODEL
     description: "Optional: ckff image model"
+  - name: FISH_API_KEY
+    description: "Optional: Fish Audio key for game characters' voices (ElevenLabs works too, with ELEVENLABS_API_KEY)"
+    secret: true
   - name: MESHY_API_KEY
     description: "Optional: Meshy key for 3D characters (the studio asks before spending credits)"
     secret: true

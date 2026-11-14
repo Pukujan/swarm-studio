@@ -223,6 +223,10 @@ export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v 
 
 // idleMs, maxApps: Settings › Background (numbers, or functions read each time): an app's server stops after idleMs
 // with no viewer and no build, and at most maxApps run at once (decision 0017, issue #450)
+// A game passed its play test only when the test ran and found nothing: one that could not run (`skipped`: no
+// browser on this machine) is never a pass, whatever else it says (docs/engines/godot.md, Limits).
+export const playPassed = (t, links = '', dodged = '') => !links && !dodged && !!t?.ok && !t.skipped
+
 export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null, idleMs = 120000, maxApps = 2, sweepEvery = 15000, now = Date.now }) {
   const jobs = new Map() // run id -> job
   // Each app's server (spec 44, "the dev server only while building"): the dev server runs while the crew builds
@@ -689,8 +693,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     else if (t.ok) step({ kind: 'test', text: `play test passed: ${t.checks?.length ? checkLine(t.checks) : `still playing after ${t.seconds.toFixed(1)} s`}`, ...film })
     else step({ kind: 'test', text: `play test failed: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : t.problem.split('. ')[0]}`, ok: false, ...film })
     const withClip = o => ({ ...o, ...(film.clip ? { clip: film.clip } : {}), ...(t.checks ? { checks: t.checks } : {}) })
-    if (!links && !dodged && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
-    const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, dodged, links || ''].filter(Boolean).join('\n\n')
+    // a play test that could not run is reported, not passed, and no fix turn is spent on it
+    if (t.skipped && !links && !dodged) return { ok: false, skipped: t.skipped }
+    if (playPassed(t, links, dodged)) return withClip({ ok: true, seconds: t.seconds })
+    // a skipped play test is played again after the fix turn, never assumed to pass
+    const problems = [t.ok || t.skipped ? '' : `A play test of this game failed. ${t.problem}`, dodged, links || ''].filter(Boolean).join('\n\n')
     try {
       const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
       await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal, appKeys: !intakeOf(readEvents(j.id) || []) })
@@ -704,9 +711,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // played again the same way (a Godot export only starts in a secure frame)
     if (!t.ok || dodged) t = await playtest(j.url, { secure: !!j.godot, checks })
     dodged = dodge()
-    const ok = !links && !dodged && t.ok
-    step({ kind: 'test', text: ok ? `the game passes its checks after the fix${t.checks?.length ? `: ${checkLine(t.checks)}` : ''}` : `still wrong after the fix: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : (links || dodged || t.problem || '').split('. ')[0]}`, ok })
-    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, dodged, links || ''].filter(Boolean).join(' ') })
+    const ok = playPassed(t, links, dodged)
+    step({ kind: 'test', text: ok ? `the game passes its checks after the fix${t.checks?.length ? `: ${checkLine(t.checks)}` : ''}` : `still wrong after the fix: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : (links || dodged || t.problem || (t.skipped && `play test skipped: ${t.skipped}`) || '').split('. ')[0]}`, ok })
+    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, ...(t.skipped ? { skipped: t.skipped } : {}), problem: [t.ok ? '' : (t.problem || t.skipped), dodged, links || ''].filter(Boolean).join(' ') })
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).

@@ -59,6 +59,7 @@ Node server (detached)         │ Bearer <bridge token>
 | `POST /v1/chat/completions` | OpenAI-shaped | OpenAI-shaped, or SSE | `ctx.llm.complete(messages, task=<role's slot>, …)` |
 | `GET /v1/models` | — | the three roles | none |
 | `POST /mcp` | `{server, tool, args, timeout}` | `{ok, result}` or `{ok:false, error}` | `ctx.call_mcp(server, tool, args, timeout=…)` |
+| `POST /web` | `{search, limit}` or `{urls[]}` | `{ok, res}` or `{ok:false, error}` | `dispatch_tool("web_search", {query, limit})` or `dispatch_tool("web_extract", {urls})`; not called by the server yet |
 
 **Pictures and clips.** Hermes picks the provider and the model from its own config:
 `image_gen.provider` and `video_gen.provider`, set with `hermes tools`. The studio offers one image

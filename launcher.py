@@ -35,9 +35,13 @@ DEFAULT_PORT = 4319
 KEY_ENV = "SWARM_STUDIO_API_KEY"
 # Optional keys and addresses, declared in plugin.yaml and read through Hermes's secret scope when the
 # server starts (start()). Nothing here is required: each one switches a service on.
+# What the server keeps of this process's own environment. GODOT is the second name engine/port.mjs
+# godotBin reads for the person's Godot (docs/engines/godot.md).
+KEEP_ENV = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME", "SWARM_GODOT", "GODOT", "SWARM_IMAGE_SERVICE")
 PASSED_KEYS = (
     "CKFF_API_KEY", "CKFF_BASE_URL", "CKFF_MODEL",              # pictures when Hermes's image tool cannot paint
     "MESHY_API_KEY",                                            # 3D characters (asks before spending credits)
+    "FISH_API_KEY",                                             # game character voices (Fish Audio)
     "PEXELS_API_KEY", "PEXELS_OCTO_LEASE",                      # stand-in photos
     "OCTO_SWARM_WS", "OCTO_SWARM_WORKSPACE_ID", "OCTO_BASE_URL",  # public copies of stand-in photos
     "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",                # a generated app's data
@@ -197,7 +201,7 @@ def _ensure_server() -> dict:
     # A minimal environment: the child gets its own settings, not every secret Hermes holds.
     # On Windows, Node also needs the system folders (SYSTEMROOT for its sockets and
     # crypto, TEMP, APPDATA for npm and pnpm, PATHEXT for finding .cmd tools).
-    keep = ("PATH", "HOME", "TMPDIR", "LANG", "HERMES_HOME", "SWARM_GODOT", "SWARM_IMAGE_SERVICE")
+    keep = KEEP_ENV
     if os.name == "nt":
         keep += ("SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "USERPROFILE",
                  "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",
