@@ -218,6 +218,8 @@ async function measure(out, { root, runs: N, only, cold }) {
         // its open files (a server at its limit takes no more connections and says nothing), and with GAUGE_DIAG a
         // native stack sample of where it is blocked (macOS)
         try { ps += `; ${execFileSync('lsof', ['-p', String(server.pid)], { encoding: 'utf8', timeout: 10000, maxBuffer: 2e7 }).split('\n').length - 1} open files, limit ${execFileSync('sh', ['-c', 'ulimit -n'], { encoding: 'utf8' }).trim()}` } catch {}
+        // what it is waiting on: the commands of its children
+        try { ps += `; children: ${execFileSync('ps', ['-A', '-o', 'ppid=,pid=,etime=,command='], { encoding: 'utf8', timeout: 5000, maxBuffer: 2e7 }).split('\n').filter(l => l.trim().split(/\s+/)[0] === String(server.pid)).map(l => l.trim().slice(0, 220)).join(' | ') || 'none'}` } catch {}
         if (process.env.GAUGE_DIAG) try { console.log(execFileSync('sample', [String(server.pid), '1'], { encoding: 'utf8', timeout: 20000, maxBuffer: 2e7 }).split('\n').filter(l => /Thread_|uv_|node::|Call graph|main|fs_|read|wait/.test(l)).slice(0, 40).join('\n')) } catch {}
         m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps }
       } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
