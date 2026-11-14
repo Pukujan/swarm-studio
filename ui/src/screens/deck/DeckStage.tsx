@@ -19,6 +19,18 @@ type Cam = { x: number, y: number, k: number }
 const LABEL = 28
 const MIN_K = 0.04, MAX_K = 2
 
+// the box around every section the crew is writing (web/canvas/deck.js bboxActive); none at work: every page
+function activeBox(m: DeckModel, geo: Record<string, FrameGeo>) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  const add = (ax: number, ay: number, bx: number, by: number) => { x0 = Math.min(x0, ax); y0 = Math.min(y0, ay); x1 = Math.max(x1, bx); y1 = Math.max(y1, by) }
+  for (const a of m.agents) {
+    const b = a.layer ? sectionBox(m, geo, a.layer) : null
+    if (b) add(b.x, b.y, b.x + b.w, b.y + Math.max(b.h, 300))
+  }
+  if (x0 === Infinity) for (const p of m.pages) add(frameX(p), LABEL - 120, frameX(p) + FRAME_W, LABEL + (geo[p.id]?.height || 700))
+  return x0 === Infinity ? null : { x0, y0: y0 - 160, x1, y1: y1 + 80 }
+}
+
 // a section's box in the world's coordinates, on the first page that shows it
 function sectionBox(m: DeckModel, geo: Record<string, FrameGeo>, key: string) {
   const l = m.layers[key]
@@ -41,9 +53,6 @@ function target(m: DeckModel, geo: Record<string, FrameGeo>, a: DeckAgent): { x:
   if (!g.last) return { x: x0 + left + 40, y: y0 + top + 40 }
   return { x: x0 + g.last[0], y: y0 + g.last[1] - 6 }
 }
-
-// the agent the camera follows: one writing, else one just starting
-const followed = (m: DeckModel) => m.agents.find(a => a.layer && m.layers[a.layer]?.status === 'streaming') ?? m.agents.find(a => a.layer)
 
 // a section the person picked, on the page it was picked on (the nav and footer are on every page)
 export interface Picked { key: string, page: string }
@@ -70,12 +79,15 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     if (world.current) world.current.style.transform = `translate(${cam.x.toFixed(1)}px, ${cam.y.toFixed(1)}px) scale(${cam.k.toFixed(4)})`
   }, [cam, follow])
   useEffect(() => {
-    let raf = 0
+    let raf = 0, last = 0
     const still = matchMedia('(prefers-reduced-motion: reduce)')
     const tick = () => {
       const { cam: to, follow: ease } = want.current, s = shown.current
       if (ease && !still.matches) {
-        s.x += (to.x - s.x) * 0.12; s.y += (to.y - s.y) * 0.12; s.k += (to.k - s.k) * 0.12
+        // the same glide at any frame rate: 0.06 a frame at 60 fps, raised to the frames that passed
+        const t0 = performance.now(), f = 1 - Math.pow(1 - 0.06, Math.min(100, t0 - (last || t0 - 16.7)) / 16.7)
+        last = t0
+        s.x += (to.x - s.x) * f; s.y += (to.y - s.y) * f; s.k += (to.k - s.k) * f
         if (Math.abs(to.x - s.x) + Math.abs(to.y - s.y) < 0.5 && Math.abs(to.k - s.k) < 1e-4) Object.assign(s, to)
       } else Object.assign(s, to)
       const t = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) scale(${s.k.toFixed(4)})`
@@ -109,15 +121,27 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
   }, [frame, model.pages])
   useImperativeHandle(ref, () => ({ fit, focusPage }), [fit, focusPage])
 
-  // Follow: the page the agent is writing, at a width that reads, its cursor a third of the way down
+  // Follow (web/canvas/loop.js, deck.js bboxActive and fit): every 700 ms the camera takes in every section the crew
+  // is writing (each at least 300 tall, 160 of headroom above and 80 below), at least 1500 × 900 of the world and at
+  // most half scale, centred; it glides there a little each frame
+  const fitAt = useRef(0)
   useEffect(() => {
-    const s = stage.current, a = follow ? followed(model) : undefined
-    const t = a && target(model, geo, a)
-    if (!s || !t || !s.clientWidth) return
-    const vw = s.clientWidth, vh = s.clientHeight
-    const k = Math.min(1, Math.max(MIN_K, (vw - 48) / FRAME_W))
-    const next = { k, x: Math.round(vw / 2 - t.x * k), y: Math.round(vh / 3 - t.y * k) }
-    setCam(c => (Math.abs(c.x - next.x) + Math.abs(c.y - next.y) + Math.abs(c.k - next.k) * 1000 < 2 ? c : next))
+    const s = stage.current
+    if (!follow || !s || !s.clientWidth) return
+    const wait = fitAt.current - performance.now()
+    const run = () => {
+      fitAt.current = performance.now() + 700
+      const b = activeBox(model, geo)
+      if (!b) return
+      const vw = s.clientWidth, vh = s.clientHeight - 90
+      const w = Math.max(b.x1 - b.x0, 1500), h = Math.max(b.y1 - b.y0, 900)
+      const k = Math.max(0.06, Math.min(0.5, Math.min(vw / (w * 1.08), vh / (h * 1.08))))
+      const next = { k, x: vw / 2 - (b.x0 + b.x1) / 2 * k, y: vh / 2 + 10 - (b.y0 + b.y1) / 2 * k }
+      setCam(c => (Math.abs(c.x - next.x) + Math.abs(c.y - next.y) + Math.abs(c.k - next.k) * 1000 < 1 ? c : next))
+    }
+    if (wait <= 0) { run(); return }
+    const t = setTimeout(run, wait)
+    return () => clearTimeout(t)
   }, [follow, model, geo])
 
   // the first look fits every page; a page added later is fitted in until the person moves the camera
