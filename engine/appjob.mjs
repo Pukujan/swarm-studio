@@ -159,6 +159,24 @@ const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args
 export const playFacts = play => ({ ...(play?.clip ? { clip: play.clip } : {}), ...(play?.started === false ? { started: false } : {}), ...(play && !play.ok && play.line ? { line: play.line } : {}), ...(play?.tries ? { tries: play.tries } : {}), ...(play?.skipped ? { skipped: String(play.skipped).slice(0, 160) } : {}) })
 // The play test of the slice a build last waited on (its last app:paused), for going on or fixing after a restart
 // (a Stop or a failure after it does not clear it: the error is still in the game)
+// An app's versions (issue #542): its first build and each change after it, newest first, each with the commit its
+// files are at. A change's end names its commit (app:done rev); an app built before that is matched to the last
+// commit made by then (`commits`: { hash, t }, newest first, from its own git). Going back is a version too, so it
+// can be undone the same way. `now` is the commit the app is at.
+export function appVersions(events, commits = [], now = '') {
+  const out = []
+  let ask = null
+  for (const e of events) {
+    if (e.type === 'app:start') ask = e.fresh || !out.length ? null : String(e.ask || '').trim()
+    else if (e.type === 'app:done' && !e.intake) {
+      const rev = e.rev || commits.find(c => c.t <= (e.t || 0) + 2000)?.hash || ''
+      if (rev) out.push({ rev, t: e.t || 0, what: out.length ? ask || 'A change' : 'First build', files: e.result?.files || 0 })
+    } else if (e.type === 'app:back' && e.to) out.push({ rev: e.to, t: e.t || 0, what: `Back to: ${e.label || 'an earlier version'}`, back: e.rev })
+  }
+  const short = r => String(r || '').slice(0, 7)
+  return out.reverse().map(v => ({ ...v, now: !!now && short(v.rev) === short(now) }))
+}
+
 export const lastPlay = events => { const p = events.findLast(e => ['app:paused', 'app:done'].includes(e.type)); return p?.type === 'app:paused' ? p.result?.stages?.at(-1)?.playtest || null : null }
 // A play test that still fails, as the first thing the next slice is told
 export const playCarry = play => (play && !play.ok && !play.skipped && (play.carry || play.problem) ? `the play test of the slice before this one still fails${play.tries ? ` after ${play.tries} fix attempt${play.tries === 1 ? '' : 's'}` : ''}. Fix it before building anything new, and build nothing on top of it until the game starts and plays. What the play test found:\n\n${String(play.carry || play.problem).slice(0, 6000)}\n\n(End of the play test's findings.)` : '')
@@ -429,7 +447,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       if (target && !(target === 'godot' && isGodotFirst(dir))) j.result.port = await buildPort(dir, target, spec || events.findLast(e => e.type === 'game:spec')?.spec || {}, engineCall, step)
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
-      send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
+      // the app as this change left it, committed: a version the person can come back to (issue #542)
+      const rev = kind === 'game' ? '' : snap(dir, `Swarm: after "${String(input.ask || 'the first build').slice(0, 80)}"`)
+      send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t, ...(rev ? { rev } : {}) })
       // building stopped: the app is served built from here on, on the same address (spec 44)
       if (!j.gsrv) serveBuilt(id, j, step).catch(err => step({ kind: 'serve', text: `the app stays on its dev server: ${String(err.message || err).slice(0, 200)}`, ok: false }))
     })().catch(err => {
@@ -1009,6 +1029,48 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     return { path, text: readFileSync(f, 'utf8') }
   }
   // each engine turn is a commit in the app's own git
+  // everything not yet committed in the app (Swarm's own fixes after the engine's turns), committed now; the
+  // commit the app is at. Empty when the app has no git (a project brought in as plain files).
+  const snap = (dir, msg) => {
+    const g = (...a) => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    try {
+      g('add', '-A')
+      if (g('status', '--porcelain')) g('-c', 'user.name=Swarm Studio', '-c', 'user.email=swarm@localhost', 'commit', '-qm', msg)
+      return g('rev-parse', 'HEAD')
+    } catch { return '' }
+  }
+  const commitsOf = dir => { try { return execFileSync('git', ['log', '--format=%H|%ct', '-n', '200'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().split('\n').filter(Boolean).map(l => { const [hash, t] = l.split('|'); return { hash, t: Number(t) * 1000 } }) } catch { return [] } }
+  const headOf = dir => commitsOf(dir)[0]?.hash || ''
+
+  function versions(id) {
+    const dir = dirOf(id)
+    return { versions: appVersions(readEvents(id) || [], commitsOf(dir), headOf(dir)), working: jobs.get(id)?.state === 'working' }
+  }
+
+  // Back to a version (issue #542): the app's files as they were then, as one more commit, so the versions after it
+  // stay and going back can itself be undone. Then served again, built from those files.
+  async function back(id, rev) {
+    const j = jobs.get(id)
+    if (j?.state === 'working') throw new Error('the crew is changing the app; go back once it has finished')
+    const dir = dirOf(id), all = versions(id).versions
+    const v = all.find(x => x.rev === rev || (String(rev || '').length >= 7 && x.rev.startsWith(rev)))
+    if (!v) throw new Error('no such version of this app')
+    if (v.now) return { ...state(id), versions: all }
+    const g = (...a) => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    snap(dir, 'Swarm: the app before going back')
+    // the files the version had, and none it did not (byte for byte: no line-ending conversion on Windows)
+    for (const f of g('diff', '--name-only', '--diff-filter=A', v.rev, 'HEAD').split('\n').filter(Boolean)) g('rm', '-q', '--', f)
+    g('checkout', v.rev, '--', '.')
+    const to = snap(dir, `Swarm: back to "${v.what.slice(0, 80)}"`)
+    send(id, 'app:back', { rev: v.rev, to, label: v.what })
+    // the app as served is the newer one: stopped, and its build stamp dropped so it is built from these files
+    if (j) await unserve(id, j)
+    try { rmSync(join(dir, '.swarm-built.json'), { force: true }) } catch {}
+    let served = null
+    try { served = await open(id) } catch (err) { served = { ...state(id), message: String(err.message || err).slice(0, 300) } }
+    return { ...served, versions: versions(id).versions }
+  }
+
   const gitLog = dir => { try { return execFileSync('git', ['log', '--format=%h|%ct|%s', '-n', '30'], { cwd: dir, encoding: 'utf8' }).trim().split('\n').filter(Boolean).map(l => { const [hash, t, ...s] = l.split('|'); return { hash, t: Number(t) * 1000, subject: s.join('|') } }) } catch { return [] } }
 
   // The app on Vercel: the source goes up and Vercel builds it, so Nitro's
@@ -1068,7 +1130,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // a build is running somewhere (the server's idle exit waits for it)
   const busy = () => asking.size > 0 || [...jobs.values()].some(j => j.state === 'working')
 
-  return { start, bring, state, stop, tell, redirect, ask, open, scripts, seen, files, map, deploy, close, busy, dirOf, jobs, pool }
+  return { start, bring, state, stop, tell, redirect, ask, open, scripts, seen, files, map, versions, back, deploy, close, busy, dirOf, jobs, pool }
 }
 
 // "can I see it", "show me the pictures": the person wants to look, not to change anything
