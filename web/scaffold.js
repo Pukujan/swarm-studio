@@ -222,7 +222,7 @@ export function makeScaffold({ sw, C, root }) {
     // an empty idea says what to do (the chat asks the same); pressing it goes to the chat box
     const ideaText = d.studio.idea ? `<span>${esc(d.studio.idea)}</span>` : '<span class="sc-none">Tell Hermia what you are making</span>'
     // a card's accessible name holds the words it shows (axe label-content-name-mismatch)
-    const lock = sec('proposal', card('lock:idea', `Idea: ${d.studio.idea || 'Tell Hermia what you are making'}`.slice(0, 160), 'pcard sc-idea', `<b>Idea</b>${ideaText}`) + facts, 'sc-facts')
+    const lock = sec('proposal', card('lock:idea', `Idea: ${d.studio.idea || 'Tell Hermia what you are making'}`, 'pcard sc-idea', `<b>Idea</b>${ideaText}`) + facts, 'sc-facts')
     // Read like the steps: left to right, then the next row (the owner: "shouldnt things go from left to right
     // and then row to row?"). Row 1: Brand, References, Assets. Row 2: Plan, then Lock, the summary, last.
     const is = (/** @type {string} */ p, /** @type {string} */ re) => new RegExp(`data-sec="(${re})"`).test(p.slice(0, 120))
