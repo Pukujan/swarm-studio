@@ -28,7 +28,8 @@ import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixTe
 import { handChanges, keepHand } from '../engine/handedit.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
 import { seoPass, currentSeo, cleanSeo, thumbOf } from '../engine/seo.mjs'
-import { seoAsk } from '../web/route.js'
+import { seoAsk, lookAsk } from '../web/route.js'
+import { lookEdits, themeNow } from '../engine/lookask.mjs'
 import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
@@ -2534,6 +2535,9 @@ async function commentNow(id, input) {
   if (marked) return markRequest(id, { events, start, theme, sections, text, input, send })
   // "improve the SEO", "a better description for the menu page": the crew's SEO pass
   if (seoAsk(text)) return seoRequest(id, { events, start, theme, given, text, send })
+  // the look only ("change the brand colours", "make it darker"), with no section named: the theme changes in
+  // place and every page stays as it is
+  if (lookAsk(text) && !(Array.isArray(input.targets) && input.targets.length) && typeof input.target !== 'string') return lookRequest(id, { events, start, text, send })
   // layers dragged into the chat (web/layerlink.js): just those sections, and the turn keeps them
   const dragged = Array.isArray(input.targets) ? [...new Set(input.targets.filter(k => typeof k === 'string' && sections.some(s => s.key === k)))].slice(0, 12) : []
   let keys = dragged.length ? dragged : typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
@@ -2644,6 +2648,30 @@ function closeDraft(id, did, accept) {
 
 // The SEO pass on request (engine/seo.mjs): one planner call edits titles and descriptions,
 // and a builder rewrites at most two sections when the aim needs words the page lacks.
+// A look-only ask (engine/lookask.mjs): the planner names the new colours, fonts or corners, and they are
+// recorded as the same `edit` events the Design panel makes, so open canvases restyle at once, Undo-able there,
+// and exports carry them. A reference link whose look is ready is shown to the planner, for "use the reference's
+// colours". Nothing is rebuilt.
+async function lookRequest(id, { events, start, text, send }) {
+  if (!models.planner.apiKey) throw new Error('no model key yet: start a build from Hermes once')
+  const theme = themeNow(events)
+  if (!theme?.vars) throw new Error('nothing built yet')
+  const agents = start.agents || []
+  const agent = agents[(commentTurn++ * 3 + 1) % Math.max(1, agents.length)]?.id
+  send('comment', { text, target: null })
+  const pid = projects.projectOf(id)
+  const reference = pid ? refs.list(pid).find(r => r.kind === 'link' && r.look?.state === 'ready')?.look?.tokens || null : null
+  const chat = async messages => (await streamChat(provider('planner'), { trace: { kind: 'look-ask', agent }, model: modelFor('planner'), maxTokens: 700, temperature: 0.3, signal: AbortSignal.timeout(60000), extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages })).text
+  const { edits, reply } = await lookEdits({ theme, text, reference, chat })
+  if (!edits.length) { send('seo:pass', { text, agent, reply: 'I could not tell what to change in the look. Name the colours or fonts you want.', failed: true }); return { sections: [], reply: '' }
+  }
+  const stamp = Date.now().toString(36)
+  edits.forEach((e, i) => send('edit', { ...e, id: `lk${stamp}${i}` }))
+  const said = `${reply || 'The look is changed.'} Every page stays as it is.`
+  send('seo:pass', { text, agent, reply: said, changes: edits.map(e => (e.kind === 'var' ? `${e.name.replace(/^--/, '')} ${e.value}` : e.kind === 'font' ? `${e.role} font ${e.value}` : `corners ${e.value}`)) })
+  return { sections: [], reply: said }
+}
+
 async function seoRequest(id, { events, start, theme, given, text, send }) {
   if (!models.planner.apiKey) throw new Error('no model key yet: start a build from Hermes once')
   const snap = snapshot(events, given, { name: nameFor(id)?.name })
