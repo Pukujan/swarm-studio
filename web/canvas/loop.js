@@ -1,7 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
-import { modeSend, mountChatMode } from '../chatmode.js'
+import { modeSend, mountChatMode, MODE_LINE } from '../chatmode.js'
 import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api, $, BOOT } from './core.js'
 import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage, slotFor } from './deck.js'
@@ -255,10 +255,11 @@ const SLASH = [
   ['help', '', 'what you can type here'],
   ['play', '', 'click through the prototype'],
   ['review', '', 'a vision model checks every page; agents fix what it finds'],
-  ['ask', '[question]', 'Ask mode: an answer, and nothing changes'],
-  ['plan', '[idea]', 'Plan mode: talk it through; nothing is built until you say'],
-  ['build', '[brief]', 'Build mode: the crew builds what you type'],
-  ['fix', '[what to change]', 'alone, Fix mode: what is wrong with the Studio. With words, an agent rewrites the selected section, or the page'],
+  // the modes say here what their menu says (web/chatmode.js MODE_LINE)
+  ['ask', '[question]', MODE_LINE.ask],
+  ['plan', '[idea]', MODE_LINE.plan],
+  ['build', '[brief]', MODE_LINE.build],
+  ['fix', '[what to change]', `${MODE_LINE.fix} With words: an agent rewrites the selected section, or the page.`],
   ['video', '[prompt]', 'cut a film from a prompt, e.g. a fast trailer, scary but cute'],
   ['app', '[change]', 'the App view: make this design a working app, or change it'],
   ['game', '[idea]', 'make an original browser game: a few questions, then it builds'],

@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
+import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, MODE_LINE, modeMenuKey, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
 
 test('a typed switch is the whole message, or a slash with the rest to send', () => {
   assert.deepEqual(CHAT_MODES, ['ask', 'plan', 'build', 'fix'])
@@ -150,13 +150,62 @@ test('Fix asks the doctor, shows its steps as buttons, and a typed yes takes the
   } finally { delete global.document; setChatMode('build') }
 })
 
-test('the page has the switch, names only, and loads the mode file before the chat', () => {
+test('the page has the switch, a menu button that says the name only, and loads the mode file before the chat', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8')
-  const sel = html.match(/<select id="chat-mode"[^>]*>([\s\S]*?)<\/select>/)
-  assert.ok(sel, 'the mode select is in the chat box')
-  assert.deepEqual([...sel[1].matchAll(/<option value="(\w+)"( selected)?>(\w+)<\/option>/g)].map(m => [m[1], m[3], !!m[2]]), [['ask', 'Ask', false], ['plan', 'Plan', false], ['build', 'Build', true], ['fix', 'Fix', false]])
+  const sel = html.match(/<button type="button" id="chat-mode"[^>]*>([\s\S]*?)<\/button>/)
+  assert.ok(sel, 'the mode button is in the chat box')
+  assert.match(sel[0], /value="build"/)
+  assert.match(sel[0], /aria-haspopup="menu"/)
+  assert.match(sel[0], /aria-expanded="false"/)
+  // its accessible name holds the word it shows
+  assert.match(sel[0], /aria-label="Mode: Build"/)
+  assert.equal(sel[1], '<span class="t">Build</span>')
+  assert.doesNotMatch(html, /<select id="chat-mode"/)
   assert.doesNotMatch(sel[0], /title=|data-tip/)
   const page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')
   const list = page.match(/joinModules\(webDir, \['route\.js'[^\]]*\]/)[0]
   assert.ok(list.indexOf("'chatmode.js'") > list.indexOf("'icons.js'") && list.indexOf("'chatmode.js'") < list.indexOf("'canvas/loop.js'"))
+})
+
+test('every mode has one short plain line, and the slash list says the same', () => {
+  assert.deepEqual(Object.keys(MODE_LINE), CHAT_MODES)
+  for (const m of CHAT_MODES) {
+    const words = MODE_LINE[m].split(/\s+/).length
+    assert.ok(words >= 4 && words <= 9, `${m}: ${words} words`)
+    assert.match(MODE_LINE[m], /\.$/)
+  }
+  // Fix is about the Studio's own parts, not the project (docs/specs/46-chat-modes.md "Fix")
+  assert.match(MODE_LINE.fix, /the Studio/)
+  assert.match(MODE_LINE.ask, /Changes nothing/)
+  const loop = readFileSync(new URL('../web/canvas/loop.js', import.meta.url), 'utf8')
+  for (const m of ['ask', 'plan', 'build']) assert.ok(loop.includes(`['${m}', `) && loop.includes(`MODE_LINE.${m}]`), m)
+  assert.match(loop, /\['fix', '\[what to change\]', `\$\{MODE_LINE\.fix\} With words: /)
+  const css = readFileSync(new URL('../web/canvas.css', import.meta.url), 'utf8')
+  assert.doesNotMatch(css.match(/\.mode-pop[^\n]*/g).join('\n'), /animation|transition/)
+})
+
+test('the open menu: arrows go round, Home and End jump, other keys are left alone', () => {
+  assert.equal(modeMenuKey('ArrowDown', 0, 4), 1)
+  assert.equal(modeMenuKey('ArrowDown', 3, 4), 0)
+  assert.equal(modeMenuKey('ArrowUp', 0, 4), 3)
+  assert.equal(modeMenuKey('ArrowUp', -1, 4), 2)
+  assert.equal(modeMenuKey('Home', 2, 4), 0)
+  assert.equal(modeMenuKey('End', 1, 4), 3)
+  assert.equal(modeMenuKey('Enter', 1, 4), -1)
+  assert.equal(modeMenuKey('a', 1, 4), -1)
+  assert.equal(modeMenuKey('ArrowDown', 0, 0), -1)
+})
+
+test('the mode button is painted with the mode: its value, its word and its name', () => {
+  const attrs = {}, word = { textContent: 'Build' }
+  const button = { value: 'build', hidden: false, addEventListener() {}, querySelector: q => (q === '.t' ? word : null), setAttribute: (k, v) => { attrs[k] = v } }
+  mountChatMode({ select: button, button: { textContent: 'Build' }, talking: () => false })
+  try {
+    setChatMode('fix')
+    assert.deepEqual([button.value, word.textContent, attrs['aria-label'], chatMode.button.textContent], ['fix', 'Fix', 'Mode: Fix', 'Fix'])
+    // a hosted studio has no switch
+    const off = { value: 'build', hidden: false, addEventListener() { throw new Error('not wired') } }
+    mountChatMode({ select: off, button: { textContent: 'Build' }, talking: () => false, off: true })
+    assert.equal(off.hidden, true)
+  } finally { mountChatMode({ select: null, button: null, talking: () => false }); setChatMode('build') }
 })

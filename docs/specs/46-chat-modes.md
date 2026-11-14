@@ -12,7 +12,20 @@ Why now: one night a sprite cut-out failed with "No module named 'PIL'" because 
 
 ## The switch
 
-One select in the chat box's control row, beside the send button: **Ask, Plan, Build, Fix**. Build is the default. Names only. The send button's word is the mode's (Send while a talk with the planner has the box). The mode lasts for the browser session; it is not saved with the project. A hosted studio has no switch.
+One menu button in the chat box's control row, beside the send button: **Ask, Plan, Build, Fix**. Build is the default. Closed, it says the mode's name only.
+
+Open, the menu says what sending does in each mode: the name and one plain line under it (the owner, 2026-11-14: "im not sure what fix mode build mode and what mode does i wish, there was tooltip on hover to help?"). There are no tooltips (docs/ux/RULES.md, standing rule 1), so the explanation is one layer down, in the menu itself (rule 9). The lines (`MODE_LINE`, web/chatmode.js) show only there and beside `/ask`, `/plan`, `/build` and `/fix` in the slash list; nothing pops up when the chat opens or the mode changes.
+
+| Mode | Its line |
+|---|---|
+| Ask | Answers your question. Changes nothing. |
+| Plan | Talks it through. Nothing is built until you say. |
+| Build | The crew builds or changes what you describe. |
+| Fix | Checks the Studio itself: what failed, what to do. |
+
+It is a menu of radio items (`role="menu"`, `menuitemradio` with `aria-checked`; the button has `aria-haspopup="menu"` and `aria-expanded`). Up and Down go round, Home and End jump, Enter or Space picks, Esc or a click outside closes, and the focus goes back to the button. It opens above the button and stays on screen at 390 px. Nothing in it animates.
+
+The send button's word is the mode's (Send while a talk with the planner has the box). The mode lasts for the browser session; it is not saved with the project. A hosted studio has no switch.
 
 Typed, the same switch: `/ask`, `/plan` or `/build` (with words after it, they are sent in that mode), `/fix` alone, or a message that is only the switch ("switch to ask mode", "plan mode", "go back to build mode"). A brief that merely mentions a mode ("add a dark mode") is a brief. `/fix <words>` is still the section rewrite it was before the modes.
 
