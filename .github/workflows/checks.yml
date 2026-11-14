@@ -265,6 +265,10 @@ jobs:
           name: bdd
           path: test-results/bdd
           retention-days: 7
+  # The base a pull request is compared with is the main it is merged with for the run (the first parent of
+  # the merge commit that is checked out), not `pull_request.base.sha`, which is main as it was when the pull
+  # request was last pushed: with that, whatever landed on main since read as this pull request's change
+  # (2026-11-13: a Studio layout change on main failed three later pull requests' motion checks).
   # the Studio moves the same before and after (docs/ux/MOTION.md, scripts/motion-check.mjs): the base
   # and the head are each recorded twice in this runner and compared; skipped when web/, server/ and the check itself are untouched
   motion-check:
@@ -280,7 +284,7 @@ jobs:
           node-version: 24
       - id: touched
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if git diff --quiet "$base" HEAD -- web server scripts/motion-check.mjs scripts/walkthrough-fixtures.mjs; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'web/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
       - if: steps.touched.outputs.run == 'yes'
         run: npm install --no-save --no-package-lock playwright@1.64.1 && npx playwright install --with-deps chromium-headless-shell
@@ -293,7 +297,8 @@ jobs:
         run: |
           looks=$(printf '%s\n' "$BODY" | tr -d '\r' | sed -n 's/^Motion: looks change in \([a-z, -]*\)$/\1/p' | head -1 | tr -d ' ')
           echo "looks change in: ${looks:-none}"
-          git worktree add "$RUNNER_TEMP/base" ${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
+          git worktree add "$RUNNER_TEMP/base" "$base"
           m=$RUNNER_TEMP/motion
           node scripts/motion-check.mjs record $m/before1 --root "$RUNNER_TEMP/base"
           node scripts/motion-check.mjs record $m/after1
@@ -323,7 +328,7 @@ jobs:
           node-version: 24
       - id: touched
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if git diff --quiet "$base" HEAD -- engine/prompts.mjs engine/review.mjs engine/pagetype.mjs engine/lint bench/evals; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'no crew prompt changed'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
       - if: steps.touched.outputs.run == 'yes'
         run: npm ci --prefix tools/dev --no-audit --no-fund && npx --prefix tools/dev playwright install --with-deps chromium-headless-shell
@@ -331,7 +336,7 @@ jobs:
         env:
           SWARM_API_KEY: ${{ secrets.SWARM_EVAL_API_KEY }}
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if [ -n "$SWARM_API_KEY" ]; then node bench/evals/run.mjs gate --base "$base"; else node bench/evals/run.mjs check --base "$base"; fi
       - if: steps.touched.outputs.run == 'yes' && (success() || failure())
         uses: actions/upload-artifact@v4
@@ -356,7 +361,7 @@ jobs:
           node-version: 24
       - id: touched
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if git diff --quiet "$base" HEAD -- ui web server scripts/motion-check.mjs scripts/motion-parity.mjs scripts/walkthrough-fixtures.mjs; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'ui/, web/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       - if: steps.touched.outputs.run == 'yes'
