@@ -215,6 +215,36 @@
   // at `scale` (less, when `fit` caps the picture's height), its top `maxHeight` px, transferred out. The library (snapDOM, web/vendor/snapdom/) comes in the first
   // request that finds none here; a page never photographed never loads it. The painters' marks and the review's
   // scan line are left out of the picture.
+  // snapDOM's copy of the page (an SVG) drawn at its size: the part asked for, x y w h in the SVG's own units, at
+  // `scale`. snapDOM's own toCanvas does the same, and leaves its image behind: Chromium keeps an image loaded
+  // from a data: address in its memory cache, and an SVG image is a second document with a copy of every node of
+  // the page, held in the frame long after the picture is out (the board gauge: about 30 more nodes in each
+  // photographed page, in one run of three). Drawn here, its address is known, and asking for that address
+  // again past the cache makes Chromium drop the image. A blob: address would not be kept at all, but it taints
+  // the canvas in a sandboxed frame. A canvas that cannot be read back is refused, and snapDOM draws the picture.
+  async function paint(shot, x, y, w, h, scale) {
+    const raw = await shot.toRaw()
+    const cut = raw.indexOf(',') + 1, svg = decodeURIComponent(raw.slice(cut))
+    const head = svg.match(/<svg\b[^>]*>/)?.[0] || ''
+    if (!/^data:image\/svg\+xml/.test(raw) || !/\bwidth="[^"]*"/.test(head) || !/\bheight="[^"]*"/.test(head) || !/\bviewBox="[^"]*"/.test(head)) throw new Error('not an SVG to draw')
+    const W = Math.max(1, Math.round(w * scale)), H = Math.max(1, Math.round(h * scale))
+    const sized = head.replace(/\bwidth="[^"]*"/, `width="${W}"`).replace(/\bheight="[^"]*"/, `height="${H}"`).replace(/\bviewBox="[^"]*"/, `viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="none"`)
+    const url = raw.slice(0, cut) + encodeURIComponent(svg.replace(head, () => sized))
+    try {
+      const im = new Image()
+      im.decoding = 'sync'
+      im.src = url
+      await im.decode()
+      const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H })
+      const g = canvas.getContext('2d')
+      g.fillStyle = getComputedStyle(document.body).backgroundColor
+      g.fillRect(0, 0, W, H)
+      g.drawImage(im, 0, 0, W, H)
+      g.getImageData(0, 0, 1, 1)
+      return canvas
+    } finally { await fetch(url, { cache: 'no-store' }).then(r => r.body?.cancel(), () => {}) }
+  }
+
   async function capture(m) {
     const say = msg => parent.postMessage({ type: 'capture', seq: m.seq, ...msg }, '*', msg.bitmap ? [msg.bitmap] : [])
     try {
@@ -231,7 +261,7 @@
       const { contentX, contentY, w0, h0 } = shot.meta
       const height = Math.min(h0, m.maxHeight || h0)
       const scale = Math.min(m.scale || 0.25, m.fit ? m.fit / height : Infinity)
-      const canvas = await shot.toCanvas({ scale, dpr: 1, crop: { x: contentX, y: contentY, width: w0, height } })
+      const canvas = await paint(shot, contentX, contentY, w0, height, scale).catch(() => shot.toCanvas({ scale, dpr: 1, crop: { x: contentX, y: contentY, width: w0, height } }))
       const bitmap = await createImageBitmap(canvas)
       // the canvas's pixels go now, not when the collector gets to them
       canvas.width = canvas.height = 0

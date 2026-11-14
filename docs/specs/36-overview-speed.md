@@ -151,12 +151,19 @@ data URL that the Overview decoded and encoded again. Now:
   `web/vendor/snapdom/` by `scripts/vendor.mjs` (the package's own browser build, pinned by its npm integrity). The
   library is not in every page: the first request finds none, and the next one brings its text, which the plugin's
   own server serves. Nothing is fetched from the internet. A page is photographed at most nine widths long, as long
-  as the Overview shows it. The painters' marks and the review's scan line stay out of the picture. snapDOM is
-  called with `burst: false`, so it keeps nothing of the page once the picture is out. Left on, it holds a
-  session per photographed element (its copy of the page, a map of every node, observers on the body) for a faster
-  next capture, which a page photographed once per version never uses. On the 250-page board gauge (155 pages
-  photographed) that copy made 26,376 DOM nodes against `main`'s 21,323, about 33 a page; with it off, 21,528
-  (`main` and the last are medians of three runs).
+  as the Overview shows it. The painters' marks and the review's scan line stay out of the picture.
+- **Nothing of the page is kept after the picture.** Two copies of the page used to stay in each photographed
+  frame, and failed the board gauge (250 pages, 155 photographed; `main` reads about 21,300 DOM nodes).
+  - snapDOM's burst mode keeps a session per photographed element (its copy of the page, a map of every node,
+    observers on the body) for a faster next capture, which a page photographed once per version never uses:
+    26,376 nodes. It is called with `burst: false`.
+  - snapDOM's `toCanvas` loads its SVG from a `data:` address, and Chromium keeps such an image in its memory
+    cache: a second document with every node of the page, for minutes. It showed in three gauge runs of nine
+    (24,104 to 26,486 nodes; the others 21,500 to 21,605). `html-to-image` left the same on `main`, less often
+    (about 23,000 in two runs of some twenty). The frame now draws snapDOM's SVG itself (`paint` in `web/frame.html`, the same
+    pixels) and asks for the image's address again past the cache, which makes Chromium drop it. A `blob:`
+    address is never kept, but it taints the canvas in a sandboxed frame. When the frame's own drawing fails,
+    snapDOM draws the picture as before.
 - **In a worker.** `web/capture.js` makes each size from that one bitmap with
   `createImageBitmap(…, { resizeWidth, resizeHeight })` and `OffscreenCanvas.convertToBlob()`, as JPEGs, and closes
   every bitmap it is given or makes. The worker is made from a Blob, so it also starts in the Desktop pane's opaque

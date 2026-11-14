@@ -24,6 +24,11 @@ test('the frame photographs itself with the vendored library, and fetches nothin
   assert.match(frame, /exclude: \['#scan', '\.pt-mark'\]/)
   // and snapDOM keeps no copy of the page after the picture (155 photographed pages each holding one failed the board gauge)
   assert.match(frame, /window\.snapdom\(document\.body, \{[^\n]*burst: false/)
+  // nor does Chromium: the frame draws snapDOM's SVG itself and has its data: image dropped from the memory cache
+  // (snapDOM's own toCanvas left one in a third of the gauge's runs); snapDOM draws it only when that fails
+  assert.match(frame, /await paint\(shot, contentX, contentY, w0, height, scale\)\.catch\(\(\) => shot\.toCanvas\(/)
+  assert.match(frame, /finally \{ await fetch\(url, \{ cache: 'no-store' \}\)/)
+  assert.match(frame, /g\.getImageData\(0, 0, 1, 1\)/)
 })
 
 test('the library is vendored, pinned and served from web/vendor/', () => {
