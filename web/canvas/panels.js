@@ -2,13 +2,14 @@
 // web/canvas.js, split by area (web/canvas/README.md): the panels: theme, layer tree, agents, status, toolbar, and the chat feed with its messages.
 import { layerDrag } from '../layerlink.js'
 import { layerTree, layerSheet } from '../layers.js'
-import { S, els, TOOL, TOOLS, Crew, HERMIA, api } from './core.js'
+import { statusWords, REPLAY_WORD } from '../replaytalk.js'
+import { S, els, TOOL, TOOLS, Crew, HERMIA, api, WALL } from './core.js'
 import { slotFor, setAuto, fit, post, focusPage, toolFlash } from './deck.js'
 import { design, showDtab, esc } from './design.js'
 import { USER_TOOLS, cmt, txt } from './marks.js'
 import { links } from './base.js'
 import { hosted } from './hosted.js'
-import { viewing } from './replay.js'
+import { viewing, rec } from './replay.js'
 import { showRun } from './film.js'
 import { openPlayer, watchVisitor } from './player.js'
 
@@ -132,12 +133,16 @@ export function renderAgents() {
 
 // The strip at the top left of the canvas: what is happening, and how far along it is.
 export function renderStatus(working, done) {
-  if (!els.status.firstElementChild) els.status.innerHTML = '<span class="st-dot"></span><span class="st-txt"></span><span class="st-num"></span><span class="st-bar"><i></i></span>'
+  if (!els.status.firstElementChild) els.status.innerHTML = '<span class="st-dot"></span><span class="st-txt"></span><span class="st-num"></span><span class="st-bar"><i></i></span><button type="button" class="st-stop" aria-label="Stop replay" hidden>Stop</button>'
   const total = S.layers.size, pct = total ? done / total : 0
   const state = !total ? (S.run && !S.tEnd ? 'planning' : 'idle') : done >= total ? 'done' : working ? 'working' : 'paused'
   if (els.status.dataset.state !== state) els.status.dataset.state = state
-  setText(els.status.children[1], { idle: 'Ready', planning: 'Planning the pages', done: `${S.frames.length} pages built`, working: `${working} agent${working === 1 ? '' : 's'} building`, paused: 'Stopped' }[state])
-  setText(els.status.children[2], total ? `${done}/${total}` : '')
+  // a replay's strip reads Replay and how far along it is, never "3 agents building" (web/replaytalk.js); Stop ends it
+  // (a Wall tile has the words and no Stop: the Wall is not pressed)
+  const replay = rec.on, words = statusWords({ replay, at: rec.at, state, working, pages: S.frames.length, done, total })
+  if (els.status.dataset.replay !== String(replay)) { els.status.dataset.replay = String(replay); /** @type {HTMLElement} */ (els.status.children[4]).hidden = !replay || WALL }
+  setText(els.status.children[1], words.text)
+  setText(els.status.children[2], words.num)
   const w = `${(pct * 100).toFixed(1)}%`
   if (els.status.children[3].firstChild.style.width !== w) els.status.children[3].firstChild.style.width = w
 }
@@ -196,6 +201,8 @@ export function chatAgent(a, text, where = '', keys = null) {
 export function push(f, item) {
   f.querySelector('.empty-chat')?.remove()
   const stick = f.scrollHeight - f.scrollTop - f.clientHeight < 60
+  // a line a replay adds is the recording's, not the crew speaking now: marked, and gone with the replay
+  if (rec.event) { item.classList.add('replayed'); item.insertAdjacentHTML('afterbegin', `<small class="rp-tag">${REPLAY_WORD}</small>`) }
   f.append(item)
   while (f.children.length > 200) f.firstChild.remove()
   if (stick) f.scrollTop = f.scrollHeight

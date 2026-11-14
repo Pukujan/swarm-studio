@@ -1,9 +1,9 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): engine events drawn on the canvas.
-import { cosmosHooks, S, els, replayId } from './core.js'
+import { cosmosHooks, S, els } from './core.js'
 import { fresh, setTitle, navBrand, links } from './base.js'
 import { feed, botMsg, renderTheme, chatAgent, logSay, summarize, STOP_PILL, stoppedMsg, STOPPED } from './panels.js'
-import { viewing, loadFiles, traceLive } from './replay.js'
+import { viewing, loadFiles, traceLive, rec } from './replay.js'
 import { addAgent, live, applyTheme, addFrame, addLayer, setTool, detectTool, gestureFor, spark, say, startGesture, banter } from './deck.js'
 import { renderAppLink, idleCard, appEvent } from './rooms.js'
 import { loadThemeFonts, design, showDtab, restyle, remember, CLIENT, applyEdit, showExport } from './design.js'
@@ -301,8 +301,9 @@ export function on(e) {
       traceLive(e)
       break
     case 'auto':
-      // a replay moves between views as the live run did
-      autoEvent(e, replayId ? true : undefined)
+      // a replay moves between views as the live run did (its own events only: the same run opened as a file,
+      // on an address that names a replay, stays where it is and shows no summary)
+      autoEvent(e, rec.event ? true : undefined)
       break
     case 'game:spec':
       S.spec = e.spec
