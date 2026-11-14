@@ -74,8 +74,8 @@ test('/site/ and /video/…/live/ are served with a sandbox CSP', () => {
   const live = server.slice(server.indexOf('const live = url.pathname.match'), server.indexOf('const vid = url.pathname.match'))
   assert.match(live, /'content-security-policy': SITE_CSP/)
   assert.ok(read('.github/workflows/checks.yml').includes('node scripts/sandbox-check.mjs'))
-  // the hosted Feed's /site/ is the same: scripts only, in an opaque origin
+  // the hosted Feed's /site/: scripts and its new-tab links, in an opaque origin; never forms or same origin
   const hosted = read('server/hosted.mjs')
-  assert.match(hosted.slice(hosted.indexOf('const site = path.match')), /'content-security-policy': 'sandbox allow-scripts' \}/)
-  assert.doesNotMatch(hosted, /sandbox allow-scripts allow-/)
+  assert.match(hosted.slice(hosted.indexOf('const site = path.match')), /'content-security-policy': 'sandbox allow-scripts allow-popups' \}/)
+  for (const [, tokens] of hosted.matchAll(/'sandbox ([^']*)'/g)) assert.doesNotMatch(tokens, /allow-(same-origin|forms|modals|top-navigation|popups-to-escape)/)
 })

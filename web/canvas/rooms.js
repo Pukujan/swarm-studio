@@ -118,6 +118,7 @@ export function intakeSay(text) {
     return true
   }
   const allow = want.did === 'scripts'
+  intakeAsked.add(`scripts:${run}`) // answered before it was asked: not asked after
   const item = botMsg(allow ? INTAKE_SAY.scriptsRunning : INTAKE_SAY.noscripts, allow)
   appApi('/scripts', { allow }).then(st => {
     if (appv.intake && st.intake) appv.intake.scripts = st.intake.scripts
