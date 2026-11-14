@@ -438,6 +438,8 @@ export function makeProject({ sw, C, root }) {
     crewAtWork()
     drawMarks()
   }
+  // what this build took from a reference, or that it did not read it (added later, or past the brief's limit)
+  const usedHere = r => { const u = P.board?.refsUsed?.find(x => x.id === r.id); return u ? `Took ${u.what.join(', ')}` : 'Not used (added after it, or not read)' }
   function renderInsp() {
     const x = P.sel && find(P.sel)
     insp.hidden = !x
@@ -461,7 +463,10 @@ export function makeProject({ sw, C, root }) {
       ...(x.kind === 'draft' ? (x.draft.marks || []).map(id => P.reads.get(id)).filter(Boolean).map(r => [r.mark, r.read]) : []),
       x.kind === 'ref' && ['From', REF_FROM[x.ref.source] || x.ref.source],
       x.kind === 'ref' && x.ref.use && ['Use', x.ref.use],
-      x.kind === 'ref' && x.ref.kind === 'link' && ['Link', x.ref.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)]
+      x.kind === 'ref' && x.ref.kind === 'link' && ['Link', x.ref.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)],
+      // which references this build read (issue #543): on its pages, and on each reference
+      ['page', 'game', 'app'].includes(x.kind) && P.board?.refsUsed && ['References', P.board.refsUsed.length ? P.board.refsUsed.map(r => r.name).join(', ') : 'None'],
+      x.kind === 'ref' && P.board?.refsUsed && ['This build', usedHere(x.ref)]
     ].filter(Boolean)
     const pv = x.kind === 'film' && x.video ? `<video data-src="${esc(base() + x.video)}"${x.src ? ` data-poster="${esc(base() + x.src)}"` : ''} controls playsinline></video>`
       : x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="">` : typeCover(x) ? `<div class="pv-tc">${typeCover(x)}</div>` : `<span class="blank">${ic('file', 28)}</span>`

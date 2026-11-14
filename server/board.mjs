@@ -1,6 +1,6 @@
 // A project's canvas: everything one build made, grouped the way the Files panel shows it.
 // Shared by the local server and the hosted studio.
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import * as art from '../engine/artdirect.mjs'
 
@@ -8,6 +8,12 @@ const snapAt = (runsDir, id) => { try { return `/img/${id}/snap.jpg?v=${Math.rou
 
 // `thumb` gives a picture's ThumbHash from its address once the image service has it (engine/images.mjs), so each
 // tile can show a blurred preview before the picture comes; without one, none is sent
+// refs-used.json, written when a project's build starts (server.mjs): [{ id, name, kind, what }]; null for a build
+// outside a project, or one made before builds kept it (then nobody knows)
+function refsUsedOf(runsDir, id) {
+  try { const j = JSON.parse(readFileSync(join(runsDir, id, 'refs-used.json'), 'utf8')); return Array.isArray(j) ? j.slice(0, 40) : null } catch { return null }
+}
+
 export function runBoard(id, events, runsDir, live = false, thumb = () => null) {
   const start = events.find(e => e.type === 'run:start') || {}
   const pages = events.filter(e => e.type === 'page').map(p => ({ id: p.id, title: p.title }))
@@ -98,6 +104,8 @@ export function runBoard(id, events, runsDir, live = false, thumb = () => null) 
     app: app && !isGame, code: existsSync(join(runsDir, id, 'app')),
     painting, paintCount: { done: batch.filter(s => s.state === 'done').length, total: batch.length },
     review,
+    // the project's references that went into this build's brief, as they were when it started (issue #543)
+    refsUsed: refsUsedOf(runsDir, id),
     // something is still happening on the canvas: the canvas checks back often
     busy: live || waiting.length > 0 || !!review?.active
   }
