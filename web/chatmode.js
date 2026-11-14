@@ -132,6 +132,8 @@ async function modeAskApp(h, text, run) {
   if (!res?.ok || !j.answer) return void h.botMsg(j.error || 'No answer came back. Ask again.')
   const item = h.botMsg(j.answer)
   if (j.media) item.append(h.media(j.media))
+  // the answer came with a diagram: the room draws it in its Map window (web/canvas/mapwin.js)
+  if (j.chart) h.chart?.(j.chart)
 }
 
 // Ask, a website or nothing built: the planner answers (POST /api/discuss { ask: true }); no talk is left

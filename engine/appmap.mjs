@@ -13,7 +13,7 @@
 // Every label is the person's words: quotes, brackets and the like are taken out before they reach Mermaid.
 import { createHash } from 'node:crypto'
 
-const words = s => String(s ?? '').replace(/["'`<>{}[\]()|#;\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
+export const words = s => String(s ?? '').replace(/["'`<>{}[\]()|#;\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
 const slug = s => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'x'
 // a field's own name, as one word Mermaid's ER attributes take
 const field = s => String(s ?? '').replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'field'
