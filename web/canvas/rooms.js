@@ -427,7 +427,8 @@ function cwSay(k, words, thinking = false) {
   const host = k >= 0 ? cw.el?.querySelector('.cw-grid')?.children[k] : cw.el?.querySelector('.cw-head')
   if (!host) return
   let b = host.querySelector(':scope > .cw-say')
-  if (!words) { b?.remove(); return }
+  // with the chat column open the answer is already there: it is not said a second time over the wall
+  if (!words || (!thinking && document.body.classList.contains('cosmos-chat'))) { b?.remove(); return }
   if (!b) { b = document.createElement('p'); b.className = 'cw-say'; host.append(b) }
   b.classList.toggle('thinking', thinking)
   setText(b, words)

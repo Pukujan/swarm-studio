@@ -1,6 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): Hermia's dock and sign-in connectors.
 import { $, HERMIA, ico, Crew, api } from './core.js'
+import { workSpot } from './wander.js'
 import { radioOn, radio, cw, CW_FRESH, cwZoom, artPhase, CW_CODE, autoM, setAutoMin, CW_TILES, wallNames, cwZoomShow, cwHighlight, cwPlan, heardIn, clock, kTokens, paintv, ART_STATE, artEvent } from './auto.js'
 import { crewQuiet } from './deck.js'
 import { setText, feed } from './panels.js'
@@ -339,11 +340,11 @@ export function cwPin(i) {
   if (cw.mode === 'art' && i < CW_TILES - 1) {
     const sl = paintv.run === cw.run ? paintv.slots[i] : null
     const pin = cw.el?.querySelector('.cw-grid')?.children[i]?.querySelector('.cw-pin')?.getBoundingClientRect()
-    return pin?.width ? { x: pin.left, y: pin.top, text: sl ? `${ART_STATE[sl.state] || ''} ${sl.what}`.trim() : 'waiting', typing: sl?.state === 'painting' } : null
+    return pin?.width ? { ...workSpot({ x: pin.left, y: pin.top }, cw.el?.querySelector('.cw-grid')?.children[i], i, sl?.state === 'painting' || sl?.state === 'checking' || sl?.state === 'cutting'), text: sl ? `${ART_STATE[sl.state] || ''} ${sl.what}`.trim() : 'waiting', typing: sl?.state === 'painting' } : null
   }
   if (cw.mode !== 'art' && i !== CW_CODE) {
     const d = cw.el?.querySelector('.cw-grid')?.children[i], pin = d?.querySelector('.cw-pin')?.getBoundingClientRect()
-    return pin?.width ? { x: pin.left, y: pin.top, text: d.classList.contains('has-play') ? 'play testing' : cw.av[i]?.name || 'Art', typing: true } : null
+    return pin?.width ? { ...workSpot({ x: pin.left, y: pin.top }, d, i, true), text: d.classList.contains('has-play') ? 'play testing' : cw.av[i]?.name || 'Art', typing: true } : null
   }
   const t = cw.tiles[i], d = cw.el?.querySelector('.cw-grid')?.children[i]
   // while painting, the code window is the play test's (playClip): its cursor sits on the clip's header
