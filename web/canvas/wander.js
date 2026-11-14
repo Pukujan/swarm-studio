@@ -57,3 +57,58 @@ export function goOnAsk(text, app) {
   const partway = (app.steps || []).length > 0 && (app.state === 'stopped' || app.state === 'failed' || app.message === 'stopped')
   return partway && /^\s*(please\s+)?(go on|continue|resume|keep going|carry on|pick (it )?up|try again|retry|start (it )?again|build( it)?( again)?)\b[\w ,.!]{0,24}$/i.test(String(text || ''))
 }
+
+// ---------- a big game waiting after a slice whose play test failed
+// (the owner, 2026-11-14: a white clip shown as the play test, "can u fix" that fixed nothing, "not sure what its answering")
+
+const PLAY_NO_START = /^(play test failed|still wrong after [^:]*): (No game canvas appeared|The game's screen is blank|The Godot web export did not start|The game did not start)/
+/**
+ * A play test's step, or a slice: the game never drew, so its film is of an empty page (an older Studio's steps
+ * say so only in their words).
+ * @param {{ started?: boolean, ok?: boolean, text?: string } | null | undefined} x
+ */
+export const neverDrew = x => !!x && (x.started === false || (x.ok === false && PLAY_NO_START.test(String(x.text || ''))))
+
+/**
+ * What a message typed at a waiting slice asks for: 'fix' sends the crew at the play test's error now, 'go'
+ * starts the next slice as planned, 'ask' is a question or a hello (answered, nothing starts), 'note' starts the
+ * next slice with the words as its note.
+ * @param {string} text  @returns {'fix' | 'go' | 'ask' | 'note'}
+ */
+export function sliceSay(text) {
+  const raw = String(text || '').trim()
+  const t = raw.replace(/[.!?]+$/, '')
+  if (/^(please\s+)?((can|could|will|would)\s+(u|you)\s+)?(just\s+)?(fix|repair|debug|sort)(\s+(it|this|that|them|the\s+(game|error|errors|bug|bugs|crash|issue|issues|problem|problems|play ?test)))?(\s+(now|first|please|then))*$/i.test(t)) return 'fix'
+  if (/^(try|fix)\s+(it\s+)?again$/i.test(t)) return 'fix'
+  if (/^(looks good\b.*|(please\s+)?(go on|go ahead|continue|carry on|keep going|next( slice)?|go on to .{1,60}|finish it)(\s+anyway)?)$/i.test(t)) return 'go'
+  if (/\?\s*$/.test(raw) || /^(what|what's|whats|why|how|when|where|who|which|is|are|was|were|does|did|do|status|hi|hey|hello|yo)\b/i.test(t)) return 'ask'
+  return 'note'
+}
+
+/**
+ * How a waiting slice reads in the chat: whether its play test failed, whether the game never started, the
+ * failure in one line, the question and the answers offered. A slice an older Studio saved has only
+ * `play: false` and the build's result, so the words are made here; a newer one brings its own.
+ * @param {{ i: number, n: number, name?: string, play?: boolean, started?: boolean, line?: string, skipped?: string, failed?: boolean, ask?: string, ideas?: string[], next?: string, clip?: string }} s
+ * @param {{ stages?: { playtest?: { ok?: boolean, problem?: string, skipped?: string, started?: boolean } }[] } | null} [result]
+ * @param {{ kind?: string, ok?: boolean, text?: string, clip?: string, started?: boolean }[]} [steps] the build's steps (an older slice's clip may be the film of a test that never drew)
+ * noClip: the slice's clip is such a film, so it is not shown
+ */
+export function sliceWords(s, result = null, steps = []) {
+  const pt = result?.stages?.at(-1)?.playtest || null
+  const skipped = !!(s.skipped || pt?.skipped)
+  const failed = s.play === false && !skipped
+  if (!failed) return { failed: false, noStart: false, noClip: false, line: '', ask: s.ask || `Slice ${s.i + 1} is built. Anything to change?`, ideas: s.ideas || [] }
+  const lastTest = steps.findLast(x => x.kind === 'test' && x.ok === false && /^(play test failed|still wrong after)/.test(String(x.text || '')))
+  const problem = String(pt?.problem || String(lastTest?.text || '').replace(/^[^:]*: /, ''))
+  const noStart = s.started === false || pt?.started === false || /No game canvas appeared|The game's screen is blank|web export did not start/.test(problem.split('\n')[0])
+  const noClip = noStart || (!!s.clip && steps.some(x => x.clip === s.clip && neverDrew(x)))
+  const line = String(s.line || problem.replace(/^A play test of this game failed\. /, '').split(/\. |\n/)[0] || 'the play test failed').slice(0, 200)
+  if (s.failed) return { failed, noStart, noClip, line, ask: s.ask || '', ideas: s.ideas || [] }
+  const next = s.next ? `start ${s.next} with this as its first job` : 'go on with this as the first job'
+  return {
+    failed, noStart, noClip, line,
+    ask: `Slice ${s.i + 1} of ${s.n}${s.name ? `, ${s.name},` : ''} is built, but ${noStart ? 'the game did not start' : 'its play test failed'}: ${line}. Type "fix it" and the crew goes at this error now, or "go on" to ${next}.`,
+    ideas: ['Fix it', s.next ? `Go on to ${s.next}` : 'Go on']
+  }
+}

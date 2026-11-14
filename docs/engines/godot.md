@@ -1,6 +1,6 @@
 # Godot 4
 
-Glue: engine/godotfirst.mjs, engine/port.mjs, engine/starters.mjs, engine/appjob.mjs, engine/playtest.mjs, engine/playcheck.mjs, engine/aiplayer.mjs, engine/talkplan.mjs, engine/planshape.mjs, starters/strategy-topdown/starter.json, starters/platformer-side/starter.json, starters/addons/swarm_rts/addon.json, starters/addons/feel_platform/addon.json
+Glue: engine/godotfirst.mjs, engine/port.mjs, engine/starters.mjs, engine/appjob.mjs, engine/playtest.mjs, engine/playtrace.mjs, engine/playcheck.mjs, engine/aiplayer.mjs, engine/talkplan.mjs, engine/planshape.mjs, starters/strategy-topdown/starter.json, starters/platformer-side/starter.json, starters/addons/swarm_rts/addon.json, starters/addons/feel_platform/addon.json
 Status: optional (person connects)
 
 Godot is a game engine under the MIT licence (https://godotengine.org/license/, fetched 2026-11-12). Swarm does not ship or
@@ -59,15 +59,34 @@ Measured: 500 units at 60 fps in the Web export on an M1 (docs/specs/38-game-sta
 an add-on folder up to 5 MB with `bringAddon`; native files mark it `web: false` (engine/starters.mjs:213-226).
 
 **Play-testing.** `playtest(url)` opens the served export in Playwright's Chromium inside a sandboxed iframe
-(`allow-scripts`, no same origin), as Hermes shows it (engine/playtest.mjs:141-192). It:
-- waits for a canvas, then for `window.__swarm` (a Godot export boots for seconds) (engine/playtest.mjs:194-197);
-- fails on Godot's own `#status-notice` start error or a blank one-colour screen (engine/playtest.mjs:200-204);
+(`allow-scripts`, no same origin), as Hermes shows it (engine/playtest.mjs:167-240). It:
+- waits for a canvas, then for `window.__swarm` (a Godot export boots for seconds) (engine/playtest.mjs:240-249);
+- fails on Godot's own `#status-notice` start error or a blank one-colour screen (engine/playtest.mjs:252-255);
 - clicks a Play/Start button or the canvas, holds each control the spec names and reads the game state to see the
-  move happen (engine/playtest.mjs:208-232, engine/playcheck.mjs:23);
-- keeps pressing keys and fails a run that ends within 2.5 s or throws errors (engine/playtest.mjs:234-252);
-- can film the run to `.webm` with the Web Audio sound muxed by ffmpeg (engine/playtest.mjs:58, 157-174).
+  move happen (engine/playtest.mjs:263-283, engine/playcheck.mjs:23);
+- keeps pressing keys and fails a run that ends within 2.5 s or throws errors (engine/playtest.mjs:291-308);
+- can film the run to `.webm` with the Web Audio sound muxed by ffmpeg (engine/playtest.mjs:63, 185-202).
   The film gets a poster frame beside it, `playtest-N.poster.jpg`: a frame of the film made with ffmpeg, else the
   title-screen photo the test takes (engine/playtest.mjs, engine/poster.mjs); the App view and the chat show it until the clip plays (web/video.js).
+
+**A failed play test, and the fix request.** The result says whether the game ever drew (`started`: false for no
+canvas, one flat colour, or Godot's start notice) and carries `evidence`: the first error the page threw with its
+stack and when (before or after the first key), later errors, and the console's errors and warnings
+(engine/playtest.mjs:204-232). A film of a game that never drew is a film of an empty page: it is kept on disk as
+`blankClip` and never handed on as the play test's `clip` (engine/playtest.mjs:147-163). `engine/playtrace.mjs` reads the stack into frames
+(`parseStack`; a page whose script the browser will not describe to the sandboxed frame gets Playwright's rebuilt
+stack, counted from 0, which is put back to 1-based), maps each of the game's own frames through the served
+file's source map to its source line with `@jridgewell/trace-mapping` when that package is on the machine
+(`loadTracer`: the plugin's own, `PLAYWRIGHT_DIR`, or dyad's `node_modules`; without it the served file's line is
+given and said to be that; a built bundle or a Godot export gives the code around the column), and writes the
+builder's fix request (`fixBrief`): the failure, whether the game drew, the first error with its frames and the
+code at each, the console, and where to start reading (engine/playtrace.mjs:29, 46, 71, 135). `playAndFix` plays, sends the crew at what failed, plays
+again and films it, up to `FIX_TRIES` (2) times; the second request says which files the first changed and
+whether the same error is still thrown (engine/playtrace.mjs:17, 188). Every step in the log says what was tried. What still fails goes to the
+next slice as its first job (engine/appjob.mjs `playCarry`), and "fix it" typed at the waiting slice plays and
+fixes the same slice again (`start` with `fix: true`, engine/appjob.mjs:162, 509). Not decided: the slice gate and three fix turns of
+docs/specs/47-game-builder-loop.md.
+
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).
 `testDodges` flags `.gd` files that check for the test, named with forward slashes on every system (engine/playcheck.mjs:71-87).
 
