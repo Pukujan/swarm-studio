@@ -181,22 +181,22 @@
   },
   {
     "key": "overview cursor Ada: only in /",
-    "label": "intended (PR #NEW)",
+    "label": "intended (PR #527)",
     "why": "At 0 ms / creates each crew cursor of the open build at the page's top-left corner (0,52), then hides it on the Overview: the crew works on the Design deck, and the current Studio's frame has no break room (web/studio.css hides .dock and .cursor.docked under body.cosmos). /next/'s Overview draws no crew cursor, and from the next step neither app shows one."
   },
   {
     "key": "overview cursor Bo: only in /",
-    "label": "intended (PR #NEW)",
+    "label": "intended (PR #527)",
     "why": "At 0 ms / creates each crew cursor of the open build at the page's top-left corner (0,52), then hides it on the Overview: the crew works on the Design deck, and the current Studio's frame has no break room (web/studio.css hides .dock and .cursor.docked under body.cosmos). /next/'s Overview draws no crew cursor, and from the next step neither app shows one."
   },
   {
     "key": "overview reduced cursor Ada: only in /",
-    "label": "intended (PR #NEW)",
+    "label": "intended (PR #527)",
     "why": "At 0 ms / creates each crew cursor of the open build at the page's top-left corner (0,52), then hides it on the Overview: the crew works on the Design deck, and the current Studio's frame has no break room (web/studio.css hides .dock and .cursor.docked under body.cosmos). /next/'s Overview draws no crew cursor, and from the next step neither app shows one."
   },
   {
     "key": "overview reduced cursor Bo: only in /",
-    "label": "intended (PR #NEW)",
+    "label": "intended (PR #527)",
     "why": "At 0 ms / creates each crew cursor of the open build at the page's top-left corner (0,52), then hides it on the Overview: the crew works on the Design deck, and the current Studio's frame has no break room (web/studio.css hides .dock and .cursor.docked under body.cosmos). /next/'s Overview draws no crew cursor, and from the next step neither app shows one."
   },
   {
