@@ -154,10 +154,20 @@ export function adoptVideos(root) {
   }
 }
 
-/** Replace `el`'s HTML: its videos are freed first, and the new `<video data-src>` ones adopted. @param {Element} el @param {string} html */
-export function setVideoHtml(el, html) {
+/** What setVideoHtml last wrote into each element. @type {WeakMap<Element, string>} */
+const VIDEO_HTML = new WeakMap()
+
+/**
+ * Replace `el`'s HTML: its videos are freed first, and the new `<video data-src>` ones adopted. With `keep`, the
+ * same HTML again is not written while one of its videos holds a player: a panel redrawn on every poll (the
+ * Overview's inspector) would take the film out of the page while someone watches it.
+ * @param {Element} el @param {string} html @param {boolean} [keep]
+ */
+export function setVideoHtml(el, html, keep = false) {
+  if (keep && VIDEO_HTML.get(el) === html && [...el.querySelectorAll('video')].some(v => VIDEOS.clips.get(v)?.armed)) return
   for (const v of /** @type {NodeListOf<HTMLVideoElement>} */ (el.querySelectorAll('video'))) dropVideo(v)
   el.innerHTML = html
+  VIDEO_HTML.set(el, html)
   adoptVideos(el)
 }
 

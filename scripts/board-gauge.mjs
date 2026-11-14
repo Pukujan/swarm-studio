@@ -114,8 +114,9 @@ const PROBE = `(() => {
   const make = Document.prototype.createElement
   Document.prototype.createElement = function (n, o) { const el = make.call(this, n, o); if (/^(video|audio)$/i.test(n)) media.add(el); return el }
 })()`
-// players still holding media: not torn down (an emptied one has networkState NETWORK_EMPTY)
-const PLAYERS = () => [...(window.__media || [])].filter(m => m.networkState !== m.NETWORK_EMPTY || m.currentSrc).length
+// players still holding media: not torn down. An emptied one (pause, remove src, load) has networkState
+// NETWORK_EMPTY; its currentSrc is no sign either way, since Chromium keeps the last address after the load
+const PLAYERS = () => [...(window.__media || [])].filter(m => m.networkState !== m.NETWORK_EMPTY).length
 
 const SCENES = [
   { id: 'overview', at: '/?project=RUN&version=RUN', ready: n => document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)').length >= n, film: true },
@@ -199,10 +200,14 @@ async function scene(browser, sc, BASE) {
   if (sc.film) {
     const clicked = await page.click('.pj-list .row[data-key="film:0"]', { timeout: 30000 }).then(() => true, e => String(e.message).split(/\r?\n/)[0])
     await page.waitForSelector('.pj-insp video', { timeout: 30000 }).catch(() => {})
-    const played = await within('playing the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (!v) return 'no video'; v.muted = true; v.loop = true; return v.play().then(() => 'ok', e => `play: ${e.name}`) })).catch(e => e.message)
+    // a board video holds no player until it is hovered, focused or pressed (web/video.js): the pointer goes
+    // over it, as a person's does, and it plays once it has its source
+    const hovered = await page.hover('.pj-insp video', { timeout: 15000 }).then(() => true, e => String(e.message).split(/\r?\n/)[0])
+    await page.waitForFunction(() => !!document.querySelector('.pj-insp video')?.currentSrc, null, { timeout: 15000, polling: 100 }).catch(() => {})
+    const played = await within('playing the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); if (!v) return 'no video'; v.muted = true; v.loop = true; return v.play().then(() => 'ok', e => `play: ${e.name} ${e.message}`) })).catch(e => e.message)
     filmPlaying = await page.waitForFunction(() => { const v = document.querySelector('.pj-insp video'); return v && !v.paused && v.readyState >= 2 && v.currentTime > 0 }, null, { timeout: 30000, polling: 100 }).then(() => 1, () => 0)
     // when it did not play, where it stopped: the Files row, the inspector, or the media itself
-    if (!filmPlaying) filmWhy = { clicked, played, ...await within('reading the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return { row: !!document.querySelector('.pj-list .row[data-key="film:0"]'), sel: window.swarmCosmos?.projectView ? document.querySelector('.pj-list .row.on')?.dataset.key || null : null, video: !!v, src: v?.currentSrc || v?.getAttribute('src') || null, readyState: v?.readyState ?? null, networkState: v?.networkState ?? null, error: v?.error ? `${v.error.code} ${v.error.message}` : null } })).catch(e => ({ read: e.message })) }
+    if (!filmPlaying) filmWhy = { clicked, hovered, played, ...await within('reading the film', 15000, page.evaluate(() => { const v = document.querySelector('.pj-insp video'); return { row: !!document.querySelector('.pj-list .row[data-key="film:0"]'), sel: window.swarmCosmos?.projectView ? document.querySelector('.pj-list .row.on')?.dataset.key || null : null, video: !!v, src: v?.currentSrc || v?.getAttribute('src') || null, readyState: v?.readyState ?? null, networkState: v?.networkState ?? null, error: v?.error ? `${v.error.code} ${v.error.message}` : null } })).catch(e => ({ read: e.message })) }
   }
   // the path: pan right and down, zoom out to see it all, zoom in on a corner, pan back; the same every time
   const box = await within('the window size', 15000, page.evaluate(() => ({ w: innerWidth, h: innerHeight })))
