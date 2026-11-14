@@ -271,7 +271,7 @@
   },
   {
     "key": "publish cursor Hermia: apart",
-    "label": "intended (PR #532)",
+    "label": "intended (PATTERNS: the Design deck follows Figma)",
     "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
   },
   {
@@ -346,7 +346,7 @@
   },
   {
     "key": "publish reduced cursor Hermia: apart",
-    "label": "intended (PR #532)",
+    "label": "intended (PATTERNS: the Design deck follows Figma)",
     "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
   },
   {
