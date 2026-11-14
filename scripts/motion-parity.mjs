@@ -259,9 +259,11 @@ function diff(name, [c1, c2, n1, n2]) {
     }
   }
   for (const [who, f] of Object.entries(far)) {
-    out.push(!f.a ? { key: `${name} cursor ${who}: only in /next/`, detail: `first at ${f.t} ms, ${f.b.x},${f.b.y}` }
-      : !f.b ? { key: `${name} cursor ${who}: only in /`, detail: `at ${f.t} ms, ${f.a.x},${f.a.y}` }
-      : { key: `${name} cursor ${who}: apart`, detail: `${Math.round(f.d)} px at ${f.t} ms (/ ${f.a.x},${f.a.y}; /next/ ${f.b.x},${f.b.y})` })
+    // one key per cursor: which form it takes (only in one app, or apart) depends on which step the widest
+    // difference falls on, and that moves from run to run, so the form is in the detail
+    out.push({ key: `${name} cursor ${who}: differs`, detail: !f.a ? `only in /next/, first at ${f.t} ms, ${f.b.x},${f.b.y}`
+      : !f.b ? `only in /, at ${f.t} ms, ${f.a.x},${f.a.y}`
+      : `apart, ${Math.round(f.d)} px at ${f.t} ms (/ ${f.a.x},${f.a.y}; /next/ ${f.b.x},${f.b.y})` })
   }
   return out
 }
