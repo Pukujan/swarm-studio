@@ -16,7 +16,7 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 ## How Swarm drives it
 
 - launcher.py starts a detached Node server with a minimal env plus the declared keys read through Hermes's secret scope (launcher.py:200-233).
-- That minimal env keeps `PATH`, `HOME`, `TMPDIR`, `LANG`, `HERMES_HOME`, `SWARM_GODOT` and `SWARM_IMAGE_SERVICE` (the image service's off switch, engine/images.mjs), plus the Windows system folders (launcher.py:199-202).
+- That minimal env keeps `PATH`, `HOME`, `TMPDIR`, `LANG`, `HERMES_HOME`, `SWARM_GODOT`, `GODOT` and `SWARM_IMAGE_SERVICE` (the image service's off switch, engine/images.mjs), plus the Windows system folders (launcher.py:199-202).
 - bridge.py runs a loopback server inside each Hermes process and attaches with `POST /api/hermes/attach {url, token, pid, code}`; Node keeps 4 bridges, drops one silent 45 s (engine/bridge.mjs:1-20). Attach interval: 5 s (engine/bridge.mjs:3, docs/specs/33-hermes-bridge.md:148-149); spec 33 also says 15 s (docs/specs/33-hermes-bridge.md:44).
 - `call(path, body)` for `/image`, `/video`, `/mcp`; `send` streams model calls (engine/bridge.mjs:25-62).
 - `/llm/v1` on the studio's port, with a per-process key, forwards to the bridge; `model` is the role (`planner`, `worker`, `reviewer`), optionally `role:pick` (engine/hermesllm.mjs:3-9, 22-24, 94). The app engine (Dyad) uses the same endpoint (engine/hermesllm.mjs:3-5).
@@ -60,9 +60,10 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 
 - First choice: Hermes's `image_generate` through the bridge; provider is Hermes's `image_gen.provider` (docs/specs/33-hermes-bridge.md:56, 63-65, server/server.mjs:191).
 - ckff (OpenAI-shaped image API, default `gpt-image-2.5`, base `https://ckffai.com/v1`) is listed beside Hermes when `CKFF_API_KEY` is set, and is the fallback when Hermes cannot paint (engine/ckff.mjs:1-14, server/server.mjs:193-207, 1437-1448). Keys: `CKFF_API_KEY`, `CKFF_BASE_URL`, `CKFF_MODEL` (plugin.yaml:18-24).
-- `ckffCreds` also reads `CKFF_IMAGE_KEY`, but launcher.py does not pass it (engine/ckff.mjs:11, launcher.py:39).
+- `ckffCreds` reads only `CKFF_API_KEY`, the name plugin.yaml declares and launcher.py passes (engine/ckff.mjs, tests/enginegaps.test.mjs). The `CKFF_IMAGE_KEY` alias it also read was never passed and is gone.
 - engine/paint-ckff.mjs is a developer command line (sprite sheets), not called by the server. It reads `CKFF_IMAGE_KEY` or an Octo vault item via `OCTO_AGENT_KEY`, and `CKFF_BASE` / `OCTO_URL`; none declared in plugin.yaml (engine/paint-ckff.mjs:1-33).
 - Tools outside the server paint through `POST /api/hermes/image` (server/server.mjs:3292-3305).
+- The bridge also has `POST /web`: `{search, limit}` runs Hermes's own `web_search` and `{urls}` its `web_extract` through `ctx.dispatch_tool`, at most 20 results or 5 http(s) addresses a call (bridge.py `web`, tests/test_bridge.py). Nothing in the server calls it yet: it is the ground for the app engine's search, fetch and clone routes, which are not built (docs/engines/dyad.md, Limits).
 - Clips: Hermes `video_generate` only (server/server.mjs:209-213). FAL is Hermes's own `FAL_KEY` (docs/specs/33-hermes-bridge.md:70-71).
 
 ### Posting (Postiz and others)
@@ -121,7 +122,7 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 
 ## What the person connects
 
-- All keys optional, names only: `SWARM_STUDIO_API_KEY`, `ELEVENLABS_API_KEY`, `CKFF_API_KEY`, `CKFF_BASE_URL`, `CKFF_MODEL`, `MESHY_API_KEY`, `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, `VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN` (plugin.yaml:11-57).
+- All keys optional, names only: `SWARM_STUDIO_API_KEY`, `ELEVENLABS_API_KEY`, `CKFF_API_KEY`, `CKFF_BASE_URL`, `CKFF_MODEL`, `MESHY_API_KEY`, `PEXELS_API_KEY`, `PEXELS_OCTO_LEASE`, `OCTO_SWARM_WS`, `OCTO_SWARM_WORKSPACE_ID`, `OCTO_BASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, `VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN`, `JEV_KEY` (plugin.yaml:11-70).
 - Hermes connector: Supabase, plus the allowlist command the canvas shows (engine/hermes_connect.mjs:34-38).
 - Hermes itself running (Desktop, gateway or `hermes swarm`) for any build (engine/hermeshealth.mjs:18-21).
 

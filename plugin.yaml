@@ -29,6 +29,9 @@ optional_env:
     description: "Optional: ckff endpoint (default https://ckffai.com/v1)"
   - name: CKFF_MODEL
     description: "Optional: ckff image model"
+  - name: FISH_API_KEY
+    description: "Optional: Fish Audio key for game characters' voices (ElevenLabs works too, with ELEVENLABS_API_KEY)"
+    secret: true
   - name: MESHY_API_KEY
     description: "Optional: Meshy key for 3D characters (the studio asks before spending credits)"
     secret: true
@@ -61,6 +64,9 @@ optional_env:
     secret: true
   - name: CLOUDFLARE_API_TOKEN
     description: "Optional: Cloudflare token for Publish to Cloudflare Pages"
+    secret: true
+  - name: JEV_KEY
+    description: "Optional: an OpenRouter key kept for the Game room's Autoplay. With it, Jev (OpenRouter Decisions) chooses the AI player's moves, and what is on the game's screen (scene, button labels, dialogue, the hero's health, enemy and object names, the page's text, and a game's own published state) is sent to OpenRouter; without it the moves are scripted and nothing is sent"
     secret: true
 license: FSL-1.1-ALv2
 # Bundled, nothing installed (built by scripts/vendor.mjs, version, licence and SHA-256 beside each):
