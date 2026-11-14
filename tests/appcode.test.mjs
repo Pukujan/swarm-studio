@@ -41,5 +41,10 @@ test('the built app\'s photo is served at the address its event names', async ()
     const r = await fetch(`${base}/img/${RUN}/app.jpg?v=1`)
     assert.equal(r.status, 200)
     assert.match(r.headers.get('content-type') || '', /image\/jpeg/)
-  } finally { child.kill(); rmSync(data, { recursive: true, force: true }) }
+  } finally {
+    const gone = new Promise(r => child.once('exit', r))
+    child.kill()
+    await gone
+    rmSync(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  }
 })
