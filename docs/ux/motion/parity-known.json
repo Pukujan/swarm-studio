@@ -30,7 +30,7 @@
     "why": "The App room is spec 44's four-window build wall (#477), a new design rather than the current room's code wall, so its entrance and Hermia's work on its loading window differ."
   },
   {
-    "key": "brand cursor Hermia: apart",
+    "key": "brand cursor Hermia: differs",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
   },
@@ -45,7 +45,7 @@
     "why": "On opening, the next UI draws Hermia, then the sheet's skeleton with her crew-cursor stand-in, so she fades out over 300 ms (web/pet.js away()); the current Studio has the stand-in up before she is first drawn, so she starts hidden and works (pet-tap). Same code, a different order at load."
   },
   {
-    "key": "brand reduced cursor Hermia: apart",
+    "key": "brand reduced cursor Hermia: differs",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
   },
@@ -80,17 +80,17 @@
     "why": "The current Studio draws the game's App room step list (div.st in #app-steps, @in .25s) in its canvas behind the Overview at this address, where no one sees it. No decision covers it."
   },
   {
-    "key": "game reduced cursor Hermia: apart",
+    "key": "game reduced cursor Hermia: differs",
     "label": "drift",
     "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
   {
-    "key": "mid-build cursor Ada: only in /next/",
+    "key": "mid-build cursor Ada: differs",
     "label": "drift",
     "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
   {
-    "key": "mid-build cursor Bo: only in /next/",
+    "key": "mid-build cursor Bo: differs",
     "label": "drift",
     "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
@@ -130,17 +130,17 @@
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
   },
   {
-    "key": "mid-build reduced cursor Ada: only in /next/",
+    "key": "mid-build reduced cursor Ada: differs",
     "label": "drift",
     "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
   {
-    "key": "mid-build reduced cursor Bo: only in /next/",
+    "key": "mid-build reduced cursor Bo: differs",
     "label": "drift",
     "why": "A build opened half way: the current deck keeps the crew docked in the break room below the fold, while the /next/ deck puts each cursor on the section it last wrote."
   },
   {
-    "key": "overview reduced cursor Hermia: apart",
+    "key": "overview reduced cursor Hermia: differs",
     "label": "drift",
     "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
@@ -180,7 +180,7 @@
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
   },
   {
-    "key": "publish cursor Hermia: apart",
+    "key": "publish cursor Hermia: differs",
     "label": "intended (PATTERNS: the Design deck follows Figma)",
     "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
   },
@@ -240,7 +240,7 @@
     "why": "The deck's spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); the current deck shows nothing while a build loads (its known 'deck loading' audit violation)."
   },
   {
-    "key": "publish reduced cursor Hermia: apart",
+    "key": "publish reduced cursor Hermia: differs",
     "label": "intended (PATTERNS: the Design deck follows Figma)",
     "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
   },
@@ -250,32 +250,32 @@
     "why": "Slice 5b (Publish, Share, Export) has landed (#441), so this is no longer work to come: /next/'s Publish should move as the current one does."
   },
   {
-    "key": "replay cursor Ada: only in /",
+    "key": "replay cursor Ada: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay cursor Bo: only in /",
+    "key": "replay cursor Bo: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay cursor Cy: only in /",
+    "key": "replay cursor Cy: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay cursor Di: only in /",
+    "key": "replay cursor Di: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay cursor Hermia: only in /",
+    "key": "replay cursor Hermia: differs",
     "label": "later (#530)",
     "why": "Hermia's own cursor on the deck during a build, where the current deck shows her; the /next/ deck does not draw her there yet."
   },
   {
-    "key": "replay cursor Reviewer: only in /",
+    "key": "replay cursor Reviewer: differs",
     "label": "drift",
     "why": "The current deck's reviewer has a cursor of its own on the page while it reviews (web/canvas/auto.js rv-cursor); the /next/ deck draws none."
   },
@@ -290,42 +290,42 @@
     "why": "The chat docks open along the bottom of the deck (decision 0015, #458 and #472), so its lines show and arrive with the chat's fade; in the current Studio the deck's chat starts shut, so none show."
   },
   {
-    "key": "replay reduced cursor Ada: only in /",
+    "key": "replay reduced cursor Ada: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay reduced cursor Bo: only in /",
+    "key": "replay reduced cursor Bo: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay reduced cursor Cy: only in /",
+    "key": "replay reduced cursor Cy: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay reduced cursor Di: only in /",
+    "key": "replay reduced cursor Di: differs",
     "label": "drift",
     "why": "In the current deck a crew cursor stays on screen between sections, resting near its last one; the /next/ deck draws a cursor only while its agent writes a section, so in a replay it is missing in between."
   },
   {
-    "key": "replay reduced cursor Hermia: only in /",
+    "key": "replay reduced cursor Hermia: differs",
     "label": "later (#530)",
     "why": "Hermia's own cursor on the deck during a build, where the current deck shows her; the /next/ deck does not draw her there yet."
   },
   {
-    "key": "replay reduced cursor Reviewer: only in /",
+    "key": "replay reduced cursor Reviewer: differs",
     "label": "drift",
     "why": "The current deck's reviewer has a cursor of its own on the page while it reviews (web/canvas/auto.js rv-cursor); the /next/ deck draws none."
   },
   {
-    "key": "studio cursor Hermia: apart",
+    "key": "studio cursor Hermia: differs",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
   },
   {
-    "key": "studio reduced cursor Hermia: apart",
+    "key": "studio reduced cursor Hermia: differs",
     "label": "intended (decision 0015)",
     "why": "The chat docks along the bottom (decision 0015), so the Studio's board starts about 300 px further left than in the current Studio, where the chat takes the left column; Hermia rests beside the same card, which is that much further left."
   },
