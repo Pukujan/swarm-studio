@@ -157,9 +157,34 @@ export function studioOpen(state = {}, { planSkipped = false, built = false } = 
 const YOU_CHOOSE = /\b(you|u|ya)\s+(choose|pick|decide|do it|do you)\b|\byou\s+can\s+(choose|pick|decide)\b|\b(up\s+to|upto)\s+(you|u)\b|\byour\s+(call|choice|pick)\b|\bsurprise\s+me\b|\bwhatever(\s+(you|u)\s+(think|want|like)|\s+works|\s+is\s+best)?[.!]*$|\b(i\s+)?(do\s*n'?t|dont)\s+(care|mind|know)\b|\bidk\b|\bno\s+(preference|idea)\b|\bnot\s+sure\b|\b(the\s+)?crew\s+(decides?|picks?|chooses?|can\s+(decide|pick|choose))\b|\blet\s+(the\s+crew|hermia|them)\s+(decide|pick|choose)\b|\b(dealer'?s|your)\s+choice\b|\b(any|anything|either)(\s+(is|works|will\s+do))?(\s+fine)?[.!]*$|\b(the\s+)?(default|recommended)s?(\s+one)?[.!]*$/
 export const readYouChoose = (text = '') => YOU_CHOOSE.test(tidy(text))
 
-// "skip all, just build", "skip everything", "just generate it from my prompt", "no questions", "stop asking"
-const SKIP_ALL = /\bskip\s+(it\s+|them\s+|this\s+)?(all|everything|both|the\s+(questions|rest|steps))\b|\bskip\s+all\b|\bjust\s+(build|make|generate|create|do|ship)\b|\b(build|make|generate)\s+(it\s+)?(now|already|anyway|right\s+away|straight\s+away)\b|\bno\s+(more\s+)?questions\b|\b(stop|quit)\s+asking\b|\b(do\s*n'?t|dont)\s+ask\b|\b(from|based\s+on|with)\s+(just\s+)?(my|the)\s+prompt\b|\b(you|u)\s+(choose|pick|decide)\s+(everything|it\s+all|all(\s+of\s+it)?|the\s+rest)\b/
-export const readSkipAll = (text = '') => SKIP_ALL.test(tidy(text))
+// "skip all, just build", "skip everything", "just generate it from my prompt", "no questions", "stop asking".
+// The whole line has to be the command: every clause is one of these, and at least one is a skip. "just make the
+// hero bigger", "don't ask me about fonts" and "use the logo from my prompt" are words for the planner, never a build.
+const IT = "(?:\\s+(?:it|this|that|the\\s+(?:site|website|page)))?"
+const FROM_PROMPT = "(?:\\s+(?:from|based\\s+on|off|with|using)\\s+(?:just\\s+)?(?:my|the)\\s+(?:prompt|words|idea))?"
+const SKIP_CLAUSES = [
+  "skip\\s+(?:it\\s+|them\\s+|this\\s+)?(?:all|everything|both|all\\s+of\\s+(?:it|that|them)|(?:all\\s+)?the\\s+(?:questions|rest|steps))",
+  `just\\s+(?:build|make|generate|create|do|ship)${IT}(?:\\s+(?:now|already|please))?${FROM_PROMPT}`,
+  `(?:build|make|generate|create)${IT}\\s+(?:now|already|anyway|right\\s+away|straight\\s+away)${FROM_PROMPT}`,
+  `(?:build|make|generate|create)${IT}\\s+(?:from|based\\s+on|off|with|using)\\s+(?:just\\s+)?(?:my|the)\\s+(?:prompt|words|idea)`,
+  "no\\s+(?:more\\s+)?questions",
+  "(?:stop|quit)\\s+asking(?:\\s+me)?(?:\\s+questions)?",
+  "(?:do\\s*n'?t|dont|do\\s+not)\\s+ask(?:\\s+me)?(?:\\s+(?:anything|questions|any\\s+questions|any\\s+more))?",
+  "(?:you|u)\\s+(?:choose|pick|decide)\\s+(?:everything|it\\s+all|all(?:\\s+of\\s+it)?|the\\s+rest)"
+].map(c => new RegExp(`^(?:please\\s+)?${c}(?:\\s+please)?$`))
+// what may stand beside a skip in the same line: "ok", "build it", "go"
+const BESIDE = /^(ok(ay)?|please|yes|yeah|sure|no|nah|go|go\s+ahead|(and\s+)?(build|make|generate)(\s+(it|this|that))?)$/
+export function readSkipAll(text = '') {
+  const t = tidy(text)
+  if (!t || t.length > 90 || /\?\s*$/.test(t)) return false
+  const clauses = t.split(/\s*(?:[,.;!]+|\band\b|\bthen\b)\s*/).map(c => c.trim()).filter(Boolean)
+  let skip = false
+  for (const c of clauses) {
+    if (SKIP_CLAUSES.some(re => re.test(c))) skip = true
+    else if (!BESIDE.test(c)) return false
+  }
+  return skip
+}
 
 // "build", "build it", "go", "go ahead", "make it", "start": the same as pressing Build (what is open is asked first)
 const BUILD = /^(ok(ay)?[,.!]?\s+)?(please\s+)?((let'?s\s+)?(build|make|generate|create|start)(\s+(it|this|that|the\s+(site|website)))?|go|go\s+ahead|do\s+it|ship\s+it|ready|i'?m\s+ready)(\s+please)?[.!]*$/
@@ -201,19 +226,19 @@ const NOT_A_NAME = /\b(it|its|is|are|was|be|feels?|makes?|should|would|could|can
 const LEAD = /^(ok(ay)?|sure|yes|yeah|hmm+|well|so|um+|maybe|how about|what about|i think|i guess|i(\s+would|'d)?\s+(want|need|like)|i\s+(want|need)|let'?s\s+(have|do|go\s+with|say)|give\s+me|make\s+it|make|just|only|with|it\s+should\s+have|it\s+needs?|we\s+need|have)\b[\s,:]*/
 const titled = s => s.charAt(0).toUpperCase() + s.slice(1)
 // readPages(text, { asked }) -> { pages: [...] } | { count: n } | null
-// asked: the pages question is the open one. Without it only a line that says "pages" is read, so a comma list
-// inside an idea is never taken for pages.
+// asked: the pages question is the open one. Without it only "pages: a, b" or a count ("3 pages") is read, so a
+// comma list inside an idea is never taken for pages.
 export function readPages(text = '', { asked = false } = {}) {
   const raw = String(text || '').replace(/[’‘]/g, "'").replace(/[“”"]/g, '').trim()
   if (!raw || raw.length > 400 || /\?\s*$/.test(raw)) return null
-  let t = raw, said = false, count = 0
+  let t = raw, said = false, count = 0, colon = false
   for (let i = 0; i < 4; i++) {
     const before = t
     t = t.replace(new RegExp(LEAD.source, 'i'), '')
     const n = new RegExp(`^(?:about\\s+|around\\s+|maybe\\s+|just\\s+|only\\s+)?${NUM}\\s+pages?\\b(?:\\s+(?:is|are|will\\s+do|is\\s+enough|total|in\\s+total|please))*[\\s:,\\-–.]*`, 'i').exec(t)
-    if (n) { count = numOf(n[1].toLowerCase()); said = true; t = t.slice(n[0].length) }
+    if (n) { count = numOf(n[1].toLowerCase()); said = true; colon ||= /:/.test(n[0]); t = t.slice(n[0].length) }
     const p = /^(the\s+)?pages?\s*(are|should\s+be|will\s+be|is|=)?\s*[:\-–]?\s*/i.exec(t)
-    if (p && p[0]) { said = true; t = t.slice(p[0].length) }
+    if (p && p[0]) { said = true; colon ||= /[:=]/.test(p[0]); t = t.slice(p[0].length) }
     if (t === before) break
   }
   if (!asked && !said) return null
@@ -234,6 +259,9 @@ export function readPages(text = '', { asked = false } = {}) {
     if (!names.some(n => n.toLowerCase() === part.toLowerCase())) names.push(titled(part))
   }
   if (!names.length) return count ? { count } : null
+  // with no pages question open, names are read only from the plain form "pages: Home, Work" ("the pages are too
+  // long" is about the pages, not a list of them)
+  if (!asked && !colon) return null
   // one name of several words with nothing that marks a list is a sentence, not a page ("make it feel calm")
   if (names.length === 1 && !said && names[0].split(/\s+/).length > 2) return null
   return { pages: names.slice(0, MAX_PAGES) }

@@ -83,6 +83,10 @@ test('a line that is not an answer is left for the planner, and sets nothing', (
   assert.deepEqual(readPages('pages: Home, Work, Contact'), { pages: ['Home', 'Work', 'Contact'] })
   assert.equal(turn('Home, Work, Contact', 'pictures').read, false)
   assert.equal(turn('Home, Work, Contact', null).read, false)
+  // talk about the pages is not a list of them
+  for (const said of ['the pages are too long', 'pages should be more colourful', 'make the pages shorter', 'pages are too long and boring'])
+    for (const asked of ['pictures', null]) assert.equal(turn(said, asked).read, false, said)
+  assert.deepEqual(turn('3 pages', null).set, { pagesBy: 'crew', pageCount: 3, pages: null })
   assert.deepEqual(turn('pages: Home, Work', 'pictures').set.pages, ['Home', 'Work'])
   // a built project keeps its pages: they are not set from the chat
   assert.equal(turn('pages: Home, Work', null, {}, { built: true }).read, false)
@@ -130,8 +134,11 @@ test('"skip all, just build" at any point: the recommended defaults, said in one
   assert.equal(kept.text, 'Building it now: the crew picks the look, pages Home, Work, pictures painted.')
   assert.equal(pickedLine({ pageCount: 3, pagesBy: 'crew', pictures: 'stock' }, { look: true }), '3 pages, the crew picks which, pictures stock photos')
   assert.equal(pickedLine({ pictures: 'drawn' }, { built: true, look: true }), 'pictures drawn')
-  // plain words are not a skip
-  for (const said of ['skip the hero', 'Home, Work', 'a site that just works']) assert.equal(readSkipAll(said), false, said)
+  // plain words are not a skip: a line for the planner never starts a build, whatever question is open
+  for (const said of ['skip the hero', 'Home, Work', 'a site that just works', 'just make the hero bigger', 'just do a darker version', "don't ask me about fonts", 'use the logo from my prompt', 'just make it one page', 'just make it pop', 'build it now with a dark hero', 'can you just build it?', 'no questions on the contact page']) {
+    assert.equal(readSkipAll(said), false, said)
+    for (const asked of ['pages', 'pictures', null]) for (const built of [false, true]) assert.equal(turn(said, asked, {}, { built }).build, false, `${asked}: ${said}`)
+  }
   // the question before a new website says what Skip all picks, too
   assert.match(GO_TEXT.all, /^Building it now: the crew picks the look and the pages/)
 })
@@ -241,4 +248,13 @@ test('the Studio and its chat: the question is asked in the chat, typed answers 
   assert.equal(sent.at(-1), 'a tea shop\n\nPages: 3, the crew picks which.')
   await siteKit.build({}, ctx({ pagesBy: 'crew' }))
   assert.equal(sent.at(-1), 'a tea shop', 'you choose: no Pages line in the brief')
+  // the brand story's pages are a suggestion: "you choose" does not send them as the person's
+  const branded = state => ({ ...ctx(state), brand: { story: { pages: ['Home', 'Menu', 'Visit'] } } })
+  await siteKit.build({}, branded({ pagesBy: 'crew' }))
+  assert.equal(sent.at(-1), 'a tea shop')
+  assert.deepEqual(siteKit.lock(branded({ pagesBy: 'crew' })), {})
+  await siteKit.build({}, branded({ pagesBy: 'crew', pageCount: 4 }))
+  assert.equal(sent.at(-1), 'a tea shop\n\nPages: 4, the crew picks which.')
+  await siteKit.build({}, branded({}))
+  assert.match(sent.at(-1), /Pages: Home, Menu, Visit\.$/)
 })
