@@ -63,8 +63,8 @@ each removed step. Each chip SHALL carry a state dot whose `aria-label` is Empty
 - **THEN** no Skip or Remove is offered
 - Gate: `manual`
 
-#### Scenario: A Scaffold project
-- **WHEN** a project begun as Scaffold opens
+#### Scenario: A project with only its Plan step
+- **WHEN** a project whose record has only the Plan step opens
 - **THEN** the path shows Plan and Lock, and `+ Brand`, `+ References`, `+ Assets`
 - Gate: `manual`
 

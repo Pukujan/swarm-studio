@@ -193,25 +193,26 @@ flowchart LR
 ## 5c. The Studio's scaffold (spec 37)
 
 **Make** offers the kind's ways to make it, each by its plain name, the last one picked pre-selected; a kind with
-one way has no menu ([spec 42](../specs/42-ways-to-make.md)). Scaffold, Studio and Three takes open a Studio project
-here. Nothing builds before the person presses **Build**.
+one way has no menu ([decision 0020](../decisions/0020-ask-before-build.md), [spec 42](../specs/42-ways-to-make.md)).
+Studio opens a Studio project here. Nothing builds before the person presses **Build** or answers the question.
 
-| Kind | Make's ways (an empty box: only the ways that can ask) |
+| Kind | Make's ways (an empty box: Studio only, so no menu) |
 |---|---|
-| Website | Just build · Guided · Three takes · Scaffold (Pages) · Studio |
-| App | Just build · Guided · Three takes · Scaffold (Screens) · Studio |
-| Video | Just build · Guided · Three takes · Scaffold (Storyboard) · Studio |
-| Deck | Three takes · Scaffold (Outline and slides) · Studio |
-| Brand | Three takes · Studio |
-| Game | Just build · Guided (the Plan board's talk, section 5b) |
+| Website | Just make it · Studio |
+| App | Just make it · Studio |
+| Video | Just make it · Studio |
+| Deck | Studio only |
+| Brand | Studio only |
+| Game | Just make it · Studio (the Plan board's talk, section 5b) |
 
-Just build → the brief in the Design deck's chat → Build. Guided → the open questions in Make's pop, one at a time
-→ the brief → Build. Three takes → this board's Takes section → Use one or Mix (the brand sheet) → the Studio.
-Scaffold → this board with only Plan and Lock. Studio → every step, with the step path across the top.
+Just make it → a new website: the one question before a build (Skip all, Step by step, Pick steps to skip); an App,
+Video or Game: the brief in the Design deck's chat → Build. Studio → every step, with the step path across the top;
+a game's Studio is its Plan board. Skipping Brand when asked opens this board with Plan and Lock; Three takes is the
+Brand step's three options. Nothing in Make opens either of those directly.
 
 ```mermaid
 flowchart LR
-  MK["Make › Three takes, Scaffold or Studio"] --> SC["Projects › name · Build"]
+  MK["Make › Studio"] --> SC["Projects › name · Build"]
   CH["Left chat: Start with X, and why"] --- SC
   SC --> LY["Layers (left panel; a sheet from the Layers button ≤ 760 px): a group per section with its dot and count, a row per card; click flies and selects, double-click opens, F2 / right-click Rename, Delete, drag into the chat"]
   SC --> PA["Step path: a chip per step (dot, name) → Skip, Bring back, Remove; + Name brings a removed step back"]
@@ -235,9 +236,9 @@ flowchart LR
   PROJ --> FO["Folders +"]
   PROJ --> ASK["What should the crew build? → Make"]
   ASK --> SC["💡 Starting prompts for the kind, then its showcases"]
-  ASK --> GR["Guided prompt: only the unanswered questions → The brief (editable) → Build or Keep talking"]
+  ASK --> GR["Guided prompt (not in the Make menu now; only a Thorough depth reaches it): only the unanswered questions → The brief (editable) → Build or Keep talking"]
   ASK --> TK["Don't build yet, talk first, a question → Design deck chat: Hermia talks, nothing built → Build → The brief → Build or Keep talking"]
-  ASK --> TU["Make: Just build, Guided, Three takes, Scaffold, Studio, as the kind offers (5c); one way goes straight there"]
+  ASK --> TU["Make: Just make it, Studio, as the kind offers (5c); one way goes straight there"]
   ASK --> KM["Kind menu: Website, App, Game, Video, Brand, Deck, Pictures ›"]
   KM --> KMP["Pictures: Painted, Stock photos, Drawn (the Setup pick; not for Game)"]
   PROJ --> BD[Boards]

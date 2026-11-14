@@ -1,7 +1,7 @@
 // The one input on Projects: pick what to make, say it, then Make (docs/specs/42-ways-to-make.md). Make offers the
-// kind's ways in one small menu (Just build, Guided, Three takes, Scaffold, Studio, as the kind offers them); a kind
+// kind's ways in one small menu (Just make it and Studio, as the kind offers them); a kind
 // with one way goes straight there, and the way picked last for the kind is pre-selected. Under the box, one panel
-// at a time: the Examples, the guided questions, or the brief before Build. Nothing builds without Build.
+// at a time: the Examples, or the brief before Build. Nothing builds without Build.
 import { useRef, useState } from 'react'
 import { Button, IconButton } from '../../primitives/Button'
 import { Icon } from '../../primitives/Icon'
@@ -11,7 +11,7 @@ import { useToast } from '../../primitives/Toast'
 import { useNav } from '../../nav/NavProvider'
 import { ApiError, api, post, said, store, useStored } from './api'
 import { makeModeOf, makeStudioStep, makeWays, type MakeWay } from '@studio/makeways'
-import { EXAMPLES, KIT_STEPS, MAKES, guideBrief, guideKind, guidePending, guideSets, makeOf, pickWay, runOf, type Kind, type Question } from './make'
+import { EXAMPLES, KIT_STEPS, MAKES, guideBrief, guideSets, makeOf, pickWay, runOf, type Kind, type Question } from './make'
 
 interface Intake { starters?: Record<string, string[]>, guides?: Record<string, Question[]> }
 let intakeP: Promise<Intake> | null = null
@@ -65,13 +65,9 @@ export function MakeBox({ inputRef }: { inputRef: React.RefObject<HTMLInputEleme
     if (h?.needed && h.health && !h.health.ok) return toast(`${h.health.message} ${String(h.health.action || '').replace(/`/g, '')}`, { action: 'Check again', onAction: () => begin(way, words) })
     store.set(`home.mode.${make.k}`, way.k)
     if (way.k === 'now') return setPop({ k: 'brief', text: words, back: null })
-    // a game's questions are its Plan board's talk (spec 27)
-    if (way.k === 'guided' && make.k === 'game') return go({ type: 'plan' })
-    if (way.k === 'guided') {
-      const qs = guidePending((await intake()).guides?.[guideKind(make.k)] || [], words)
-      return setPop(qs.length ? { k: 'ask', text: words, qs, i: 0, answers: {} } : { k: 'brief', text: words, back: null })
-    }
-    // Three takes, Scaffold or Studio: a Studio project made in that way, opened on the way's step
+    // a game's Studio is its Plan board, where its talk asks (spec 27)
+    if (make.k === 'game') return go({ type: 'plan' })
+    // Studio: a Studio project, opened on the step the kind starts with
     try {
       const j = await post<{ project: { id: string } }>('/api/studio', { kind: make.k, idea: words, mode: way.k, depth: store.get<string>('home.depth', 'light') === 'thorough' ? 'thorough' : 'light', steps: way.steps || KIT_STEPS[make.k] })
       setText('')

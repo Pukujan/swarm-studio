@@ -62,8 +62,9 @@ the one kit with no Plan step: its Lock is the end.
 
 ### How each kind is made
 
-The ways to make each kind (Just build, Guided, Three takes, Scaffold, Studio), which kinds offer which, and how
-they map onto this spec are [spec 42](42-ways-to-make.md). It replaces this spec's question on Make.
+The ways to make each kind (Just make it and Studio), which kinds offer which, and how they map onto this spec are
+[spec 42](42-ways-to-make.md) and [decision 0020](../decisions/0020-ask-before-build.md). They replace this spec's
+question on Make.
 
 ## The kit contract
 

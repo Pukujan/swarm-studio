@@ -764,8 +764,8 @@ export function makeHome({ sw, C, root }) {
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 
-  // Make: one small menu of the kind's ways to make it (web/makeways.js, docs/specs/42-ways-to-make.md): Just
-  // build, Guided, Three takes, Scaffold, Studio, as the kind offers them; a kind with one way goes straight
+  // Make: one small menu of the kind's two ways to make it (web/makeways.js, decision 0020): Just make it and
+  // Studio, as the kind offers them (a game's Studio is its Plan board); a kind with one way goes straight
   // there. The last way picked for this kind, else what the words suggest, is pre-selected, quietly.
   const makeBtn = $('.hm-make')
   form.onsubmit = e => {
@@ -776,7 +776,7 @@ export function makeHome({ sw, C, root }) {
     if (hosted()) return text ? confirmBuild(text) : input.focus()
     const ways = makeWays(make.k, !!text)
     if (ways.length === 1) return begin(ways[0], text)
-    const fit = make.k === 'game' ? 'guided' : text && !studioFits(text) ? 'now' : 'studio'
+    const fit = make.k === 'game' ? 'studio' : text && !studioFits(text) ? 'now' : 'studio'
     const pick = [makeModeOf(modeOf(make.k)), fit].find(k => ways.some(w => w.k === k)) || ways[0].k
     showMenu(ways.map(w => ({ k: w.k, icon: w.icon, label: w.label, on: w.k === pick, run: () => begin(w, text) })), makeBtn)
     document.querySelector('.hm-menu button.on, .hm-menu button')?.focus({ preventScroll: true })
@@ -788,9 +788,6 @@ export function makeHome({ sw, C, root }) {
     G.sheet = false
     store.set(`home.mode.${make.k}`, way.k)
     if (way.k === 'now') return buildNow(text)
-    // a game's questions are its Plan board's talk (spec 27); the rest ask in Make's pop, then the brief
-    if (way.k === 'guided' && make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
-    if (way.k === 'guided') return guide(text)
     return studioFirst(text, way)
   }
 
@@ -807,9 +804,8 @@ export function makeHome({ sw, C, root }) {
     // a game skipped its Plan board; the talk's Build still starts it (nothing builds without a press)
     confirmBuild(text)
   }
-  // Three takes, Scaffold or Studio (spec 42): a Studio project made in that mode, opened beside its chat (an
-  // empty box's chat asks what it is first). Three takes opens on its looks (web/scaffold.js); Scaffold has
-  // only its Plan step. A game's is its Plan board. Without a kit (the hosted studio):
+  // Studio (decision 0020): a Studio project, opened beside its chat (an empty box's chat asks what it is
+  // first). A game's is its Plan board, where its talk asks. Without a kit (the hosted studio):
   // the brand sheet, the talk, or Thorough's questions first
   async function studioFirst(text, way = { k: 'studio' }) {
     closePop()

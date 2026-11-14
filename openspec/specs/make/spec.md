@@ -2,10 +2,10 @@
 
 ## Purpose
 
-Make is the one way to start something in the Studio: the Make box on Projects, the kind menu, and the five ways to
-make (Just build, Guided, Three takes, Scaffold, Studio), each offered only for the kinds that support it. Nothing
-builds without the person's press (specs 42 and 27, decision 0004). Breadboard: docs/ux/breadboards/make.md.
-Statechart: `projects.make` and its ways.
+Make is the one way to start something in the Studio: the Make box on Projects, the kind menu, and the two ways to
+make (Just make it, Studio), each offered only for the kinds that support it. Nothing builds without the person's
+press or answer (specs 42 and 27, decisions 0004 and 0020). Breadboard: docs/ux/breadboards/make.md. Statechart:
+`projects.make` and its ways.
 
 Gate tags: `breadcrumb`, `axe`, `scroll`, `console`, `loading` are the `ui-audit` checks (docs/ux/AUDIT.md); `manual`
 has no gate yet. Make lives on Projects, so its page-level gates are Projects'.
@@ -31,44 +31,45 @@ has them, and Make. No other control on Projects SHALL start a build (RULES rule
 
 ### Requirement: The ways each kind offers
 
-Make SHALL offer exactly the ways spec 42's table gives for the kind, each by its plain name, and no two items SHALL
-lead to the same screen. A kind left with one way SHALL go straight there with no menu.
+Make SHALL offer exactly the ways decision 0020 gives for the kind, each by its plain name, and no two items SHALL
+lead to the same screen. A Website, App, Video or Game offers Just make it and Studio; a Deck and a Brand offer
+Studio only. Just make it needs words in the box. A kind left with one way SHALL go straight there with no menu.
 
 #### Scenario: A website with words
 - **WHEN** the kind is Website, the box reads "A tea shop in Kyoto with an online menu", and the person presses Make
-- **THEN** a menu offers Just build, Guided, Three takes, Scaffold and Studio, with one pre-selected
+- **THEN** a menu offers Just make it and Studio, with one pre-selected
 - Gate: `manual`
 
 #### Scenario: An empty box
 - **WHEN** the box is empty and the kind is Website
-- **THEN** Make offers only Scaffold and Studio
+- **THEN** Make goes straight to the Studio, with no menu
 - Gate: `manual`
 
 #### Scenario: A brand
 - **WHEN** the kind is Brand
-- **THEN** Make offers Three takes and Studio only
+- **THEN** Make goes straight to the Studio, with no menu
 - Gate: `manual`
 
 #### Scenario: Remembered per kind
-- **WHEN** the person last picked Scaffold for an App and presses Make on an App again
-- **THEN** Scaffold is pre-selected
+- **WHEN** the person last picked Studio for an App and presses Make on an App again
+- **THEN** Studio is pre-selected
 - Gate: `manual`
 
 ### Requirement: Nothing builds without a press
 
-Just build SHALL open the brief in the Design deck's chat with Build and Keep talking; the crew SHALL start only on
-Build. For a new website, Just build is the press: it SHALL go straight to the question before a new website (below),
-and the crew SHALL start only on its answer. A stop or a wish to talk, in the prompt or an answer, SHALL never start a
-build (REQUIREMENTS 2026-11-11).
+Just make it SHALL open the brief in the Design deck's chat with Build and Keep talking for an App, Video or Game;
+the crew SHALL start only on Build. For a new website, Just make it SHALL go straight to the question before a new
+website (below), and the crew SHALL start only on its answer. A stop or a wish to talk, in the prompt or an answer,
+SHALL never start a build (REQUIREMENTS 2026-11-11).
 
-#### Scenario: Just build
-- **WHEN** the person picks Just build
+#### Scenario: Just make it
+- **WHEN** the person picks Just make it
 - **THEN** the Design deck's chat shows the brief and the steps it will take, with Build and Keep talking (for a new
   website: the question before the build, with its three answers), and no agent is working
 - Gate: `manual`
 
 #### Scenario: "Don't build yet"
-- **WHEN** the box reads "a habit tracker, don't build yet, let's talk" and the person picks Just build
+- **WHEN** the box reads "a habit tracker, don't build yet, let's talk" and the person picks Just make it
 - **THEN** the chat talks; Build appears only after the brief is written
 - Gate: `manual`
 
@@ -101,20 +102,13 @@ model SHALL never answer it. Nothing SHALL build until the person answers (decis
 - **THEN** the build starts without the question
 - Gate: `manual`
 
-### Requirement: Guided
+### Requirement: A game's Studio
 
-Guided SHALL ask only the questions the words left open, one at a time, as chips or the person's own words, then show
-the brief to edit with Build, Keep talking and, for a website or app, Brand sheet. A game's Guided SHALL open its Plan
-board's talk instead.
+A game's Studio SHALL open its Plan board, where the planner asks only what the idea leaves open.
 
 #### Scenario: Only the open questions
-- **WHEN** the words already name the audience
-- **THEN** Guided does not ask who it is for
-- Gate: `manual`
-
-#### Scenario: A question as an answer
-- **WHEN** the person types a question into an answer
-- **THEN** the Design deck's chat opens and answers it; it is not added to the brief
+- **WHEN** a game's words already name its genre and the person picks Studio
+- **THEN** the Plan board opens and the planner does not ask for the genre
 - Gate: `manual`
 
 ### Requirement: Loading and refusals
@@ -128,14 +122,8 @@ Hermes is not answering, Watch it when another build is running.
 - Gate: `manual`
 
 #### Scenario: Another build running
-- **WHEN** a build is running and the person starts another with Just build's Build
+- **WHEN** a build is running and the person starts another with Just make it's Build
 - **THEN** a toast reads `A build is running. Yours can start when it ends.` with Watch it
-- Gate: `manual`
-
-#### Scenario: Three takes being made
-- **WHEN** the person picks Three takes
-- **THEN** the Studio scaffold opens on its Takes with three waiting cards marked `aria-busy="true"` until the looks
-  land
 - Gate: `manual`
 
 ### Requirement: 390 px
