@@ -3,8 +3,9 @@
 import { Button } from '../primitives/Button'
 import { Menu, MenuItem } from '../primitives/Menu'
 import { useNav } from '../nav/NavProvider'
-import { SCREEN_NAMES } from '../screens'
+import { CRUMB_NAMES, SCREEN_NAMES } from '../screens'
 import { useSheets } from '../screens/setup/Sheets'
+import { useCrumb } from './crumb'
 import { useTrailShown } from './Trail'
 
 // the same key the current Studio's ☰ → Light / Dark writes (web/index.html reads it before the first paint)
@@ -13,26 +14,29 @@ function setTheme(theme: 'light' | 'dark') {
   try { localStorage.setItem('swarm-theme', theme) } catch { /* private window: this page only */ }
 }
 
-// a room's name in the trail, where it reads shorter than the screen's own name (openspec/specs/studio)
-const CRUMB_ROOM: Partial<Record<keyof typeof SCREEN_NAMES, string>> = { studio: 'Studio' }
-
 export function TopBar() {
   const { view, go } = useNav()
-  const { name, action } = useTrailShown()
+  const { name, action, menu, onName } = useTrailShown()
   const sheets = useSheets()
+  // a screen that draws a whole crumb of its own (the Overview's Projects › name ▾) stands in for the trail
+  const crumb = useCrumb()
   return (
     <header className="flex h-14 items-center gap-2 border-b border-edge px-3">
       <Button role="ghost" onPress={() => go({ type: 'home' })} className="font-display text-xl font-extrabold">Swarm</Button>
       {/* a screen that names its build gets the whole trail, Home › Projects › build › room (Home is the Feed,
           which has no address here yet, so it is the trail's start, not a link) */}
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 overflow-hidden font-monospace text-sm text-muted">
+        {crumb ?? <>
         {view.room !== 'home' && name && <>
           <span className="flex-none">Home</span><span aria-hidden>›</span>
           <button type="button" onClick={() => go({ type: 'home' })} className="flex-none cursor-pointer rounded-[6px] px-1 hover:text-text">Projects</button><span aria-hidden>›</span>
-          <b className="min-w-0 truncate font-semibold text-text">{name}</b>
+          <span className="flex min-w-0 items-center gap-1">{onName
+            ? <button type="button" onClick={onName} className="min-w-0 cursor-pointer truncate rounded-[6px] px-1 font-semibold text-text hover:bg-panel-2">{name}</button>
+            : <b className="min-w-0 truncate font-semibold text-text">{name}</b>}{menu}</span>
         </>}
         {view.room !== 'home' && <span aria-hidden>›</span>}
-        {view.room !== 'home' && <span aria-current="page" className="flex-none text-text">{name ? CRUMB_ROOM[view.room] ?? SCREEN_NAMES[view.room] : SCREEN_NAMES[view.room]}</span>}
+        {view.room !== 'home' && <span aria-current="page" className="flex-none text-text">{name ? CRUMB_NAMES[view.room] : SCREEN_NAMES[view.room]}</span>}
+        </>}
       </nav>
       {action && <span className="ml-auto flex-none">{action}</span>}
       <span aria-label="Next Studio" className={`${action ? '' : 'ml-auto '}flex-none rounded-full border border-line-2 px-2 py-0.5 font-label text-xs font-semibold uppercase tracking-[.07em] text-muted max-[760px]:hidden`}>Next</span>

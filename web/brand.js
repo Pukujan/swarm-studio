@@ -118,7 +118,7 @@ export function makeBrand({ sw, C, root }) {
     const own = (part, ph) => `<form class="ab br-own" data-own="${part}"><input name="w" placeholder="${ph}" aria-label="${ph}" maxlength="300"></form>`
     // one sheet, read top to bottom: what it is, then its colours, then its type
     world.innerHTML = `<div class="col">
-      ${packs ? `<section class="pj-sec br-packs" data-sec="packs"><span class="al">Packs</span><div class="abs">${packs}</div></section>` : ''}
+      ${packs ? `<section class="pj-sec br-packs" data-sec="packs"><span class="al">Options</span><div class="abs">${packs}</div></section>` : ''}
       <section class="pj-sec br-story" data-sec="story"><span class="al">Story</span><div class="abs">${story}</div></section>
       <section class="pj-sec br-pals" data-sec="palette"><span class="al">Palette</span><div class="abs">${pals}${own('palette', 'Your own colours')}</div></section>
       <section class="pj-sec br-types" data-sec="type"><span class="al">Type</span><div class="abs">${types}${own('type', 'Your own fonts')}</div></section>

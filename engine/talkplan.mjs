@@ -8,6 +8,7 @@
 // spec, state and lead.
 import { familyOf, sizeOf, titleFrom, FAMILIES, FAMILY_IDS, SIZES, planSummary } from './planshape.mjs'
 import { planFromAnswers, planPrice } from './plan.mjs'
+import { askedOf, askOptions, pickOptions, readAnswer, recommend, ASK_TEXT, PICK_TEXT, GO_TEXT, SKIPS } from './askfirst.mjs'
 
 // Talk first: a person who says "don't build yet", "let's talk", "grill me first" or asks the crew a
 // question gets a conversation with the planner (Hermia) in the Design deck's chat, on a project
@@ -296,7 +297,10 @@ export async function say(chat, { said = '', pick = '' } = {}, { model = null, e
   const text = clean(said, 2000) || option?.label || ''
   if (!text) throw Object.assign(new Error('say something first'), { status: 400 })
   const turn = { id: nextId(chat), who: 'person', at: now, text, ...(option ? { pick } : {}), refs: [], marks: [], layers: [] }
+  // a website's open skip question (decision 0020) is answered here, before any model is needed
+  const asked = chat.kind === 'site' && !chat.go ? askedOf(last) : null
   chat.turns.push(turn)
+  if (asked) { const back = goTurn(chat, { pick: option ? pick : '', said: option ? '' : text, asked, now }); if (back) return back }
   if (chat.kind !== 'game') return siteTurn(chat, { model, now })
   if (pick === 'talk') {
     const back = { id: nextId(chat), who: 'planner', at: now, text: 'What should change? Say it in your own words.', refs: [], marks: [], layers: [], made: [], reads: [] }
@@ -342,6 +346,31 @@ async function plannerSays(chat, { model, env, now, first, changed = true, asked
     const { pictures, credits } = chat.spec.cost || {}
     const priceLine = pictures == null ? '' : ` Price: about ${pictures} pictures${credits ? ` and ${credits} Meshy credits` : ', no credits'}.`
     Object.assign(turn, { text: clean(`${said}${chat.spec.brief}${priceLine}`, 1500), options: [{ id: 'lock', label: 'Lock', why: '', made: [] }, { id: 'talk', label: 'Keep talking', why: '', made: [] }] })
+  }
+  chat.turns.push(turn)
+  return turn
+}
+
+// ---------- the skip question before a website's build (docs/decisions/0020-ask-before-build.md, engine/askfirst.mjs)
+// Only the person's turn answers it: a pick of one of the question's own options, or their typed words. The final
+// answer is kept on the chat (chat.go); the turn says what the screen does next (turn.go). A "don't build yet" goes
+// to the talk (null: siteTurn); anything else that is not an answer asks again, in one line.
+const firstPersonText = chat => chat.ask?.brief || (chat.turns || []).find(t => t.who === 'person')?.text || ''
+function goTurn(chat, { pick = '', said = '', asked, now }) {
+  const path = pick ? pick.slice(3) : readAnswer(said, asked)
+  if (!path && said && STOP.test(said)) return null
+  const turn = { id: nextId(chat), who: 'planner', at: now, text: '', refs: [], marks: [], layers: [], made: [], reads: [] }
+  const brief = firstPersonText(chat)
+  if (path === 'pick') Object.assign(turn, { text: PICK_TEXT, options: pickOptions(brief) })
+  else if (path && SKIPS[path]) {
+    chat.go = { path, skip: SKIPS[path], at: now, turn: chat.turns.at(-1)?.id || null }
+    Object.assign(turn, { text: GO_TEXT[path], go: { path, skip: SKIPS[path], brief } })
+  } else {
+    // not an answer: the same question again, its recommendation from everything they said
+    const all = (chat.turns || []).filter(t => t.who === 'person').map(t => t.text).join('\n')
+    let options
+    try { options = asked === 'pick' ? pickOptions(brief) : askOptions(recommend(all)) } catch { options = askOptions(null) }
+    Object.assign(turn, { text: asked === 'pick' ? PICK_TEXT : ASK_TEXT, options })
   }
   chat.turns.push(turn)
   return turn

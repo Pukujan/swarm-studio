@@ -180,7 +180,7 @@ export function makePet({ sw, C, doc = document }) {
     px: -1, py: -1, movedAt: Date.now(), active: 0,
     card: '', raf: 0, settle: 0, doze: 0, dozing: false, dozedAt: 0,
     queue: /** @type {{ kind: string, data: PetData }[]} */ ([]), batch: 0, batchFirst: 0, sayTimer: 0,
-    room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, briefed: '', step: '',
+    phoned: false, room: '', loading: false, loadTimer: 0, loadSince: 0, building: false, buildAt: 0, briefed: '', step: '',
     // what she works on: the placeholders screens hand her (newest last), and the one she is at
     jobs: /** @type {Set<Element>} */ (new Set()), work: /** @type {Element | null} */ (null), workAt: '', scanT: 0
   }
@@ -190,7 +190,7 @@ export function makePet({ sw, C, doc = document }) {
   // read at most twice a second: a pointermove must not force a layout each time
   let zones = { at: 0, rects: /** @type {DOMRect[]} */ ([]) }
   const avoid = () => {
-    if (Date.now() - zones.at > 500) zones = { at: Date.now(), rects: [...doc.querySelectorAll('body.cosmos-chat .side, .pj-insp:not([hidden]), .ui-overlay, .ui-popover')].map(n => n.getBoundingClientRect()).filter(r => r.width && r.height) }
+    if (Date.now() - zones.at > 500) zones = { at: Date.now(), rects: [...doc.querySelectorAll('body.cosmos-chat .side, .pj-insp:not([hidden]), aside[aria-label="Inspector"]:not([hidden]), .ui-overlay, .ui-popover')].map(n => n.getBoundingClientRect()).filter(r => r.width && r.height) }
     return zones.rects
   }
   function clear(x, y) {
@@ -217,13 +217,17 @@ export function makePet({ sw, C, doc = document }) {
       return
     }
     if (phone()) {
-      // a phone: the edge of the board, above the chat; touches are not followed
-      const side = doc.querySelector('body.cosmos-chat .side')
+      // a phone: the edge of the board, above the chat or an open inspector sheet; touches are not followed
+      const side = doc.querySelector('aside[aria-label="Inspector"]:not([hidden])') || doc.querySelector('body.cosmos-chat .side')
       const top = side ? side.getBoundingClientRect().top : win.innerHeight
       ;[P.tx, P.ty] = [Math.max(8, win.innerWidth - 44), Math.max(70, Math.min(win.innerHeight - 110, top - 48))]
       el.classList.add('flip')
+      P.phoned = true
       return
     }
+    // the screen grew past a phone's before the pointer moved: her desktop spot, not the phone's edge
+    if (P.phoned && P.px < 0) [P.tx, P.ty] = [win.innerWidth - 120, win.innerHeight - 160]
+    P.phoned = false
     const c = Date.now() - P.movedAt > 1600 && cardEl()
     if (c) { const r = c.getBoundingClientRect(); [P.tx, P.ty] = clear(r.right + 6, r.top - 12) }
     else if (P.px >= 0) [P.tx, P.ty] = clear(P.px + 26, P.py + 30)
@@ -334,7 +338,8 @@ export function makePet({ sw, C, doc = document }) {
     const moved = next !== P.work || at !== P.workAt
     P.work = next
     P.workAt = at
-    if (next ? moved || Date.now() - P.movedAt > 1200 : moved) go()
+    // on a phone her spot moves with the sheets that open under her (the chat, an inspector)
+    if (next ? moved || Date.now() - P.movedAt > 1200 : moved || phone()) go()
   }
 
   // ---------- what she says: a burst of events makes one reaction, at most one bubble every ~20 s
@@ -491,6 +496,12 @@ export function makePet({ sw, C, doc = document }) {
         scan()
       }
     },
+    /**
+     * A line the chat shows, so she never says it: the next UI's chat (ui/src/chat/) tells her each one, since
+     * hearChat only watches the #feed already on the page when she starts.
+     * @param {string} text
+     */
+    hear(text) { const t = norm(text); if (t) chatSaid.add(t) },
     get state() { return { dozing: P.dozing, loading: P.loading, away: el.classList.contains('away'), room: P.room, working: !!P.work } }
   }
   win.swarmPet = pet

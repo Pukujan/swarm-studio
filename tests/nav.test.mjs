@@ -158,8 +158,19 @@ test('the address carries the same state, and a reload shows exactly it', () => 
     const back = view(at(...fromAddress(toAddress(s))).getSnapshot())
     for (const k of ['room', 'project', 'version', 'run', 'plan', 'player', 'page']) assert.equal(back[k], s[k], `${toAddress(s)} ${k}`)
   }
-  // the brand sheet is not an address of its own: a reload shows where it was opened from
+  // a brand sheet opened from a chat or a build is not an address of its own: a reload shows where it was opened from
   assert.equal(toAddress(v(A, { type: 'brand' })), toAddress(v(A)))
+})
+
+test("a project's brand sheet, opened from its Studio, is an address: a reload reopens it over that step", () => {
+  const S = [{ type: 'studio', project: 'pn', step: 'references' }, { type: 'brand' }]
+  assert.equal(toAddress(v(...S)), '?room=brand&project=pn&step=references')
+  const back = view(at(...fromAddress('?room=brand&project=pn&step=references')).getSnapshot())
+  assert.deepEqual(pick(back, ['room', 'from', 'project', 'step']), ['brand', 'studio', 'pn', 'references'])
+  // Back from it is the Studio, on that step
+  assert.deepEqual(pick(view(at(...fromAddress('?room=brand&project=pn&step=references'), { type: 'back' }).getSnapshot()), ['room', 'step']), ['studio', 'references'])
+  // no project: Projects
+  assert.equal(makeNav({ search: '?room=brand', log: () => {} }).view.room, 'home')
 })
 
 test('an address that asks for something impossible opens what fits, never a mixed screen', () => {
@@ -192,9 +203,10 @@ test('the door: go() moves it, a move it does not have is logged and changes not
 
 test('the Studio opens a project on a step, moves between steps, and Esc goes up one then home (spec 37)', () => {
   const S = { type: 'studio', project: 'pn' }
-  assert.deepEqual(pick(v(S), ['room', 'project', 'step', 'version', 'run']), ['studio', 'pn', 'brand', null, null])
+  // with no step named it opens on the whole board (the board-style Studio), so no step is current
+  assert.deepEqual(pick(v(S), ['room', 'project', 'step', 'version', 'run']), ['studio', 'pn', null, null, null])
   assert.equal(v({ ...S, step: 'assets' }).step, 'assets')
-  assert.equal(v({ ...S, step: 'nope' }).step, 'brand')
+  assert.equal(v({ ...S, step: 'nope' }).step, null)
   assert.equal(v(A, S).version, null, 'the Studio is not a build: none stays open')
   no([], { type: 'studio' })
   assert.equal(v(S, { type: 'studio.step', step: 'plan' }).step, 'plan')

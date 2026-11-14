@@ -4,6 +4,7 @@
 // kit or the pet moves to React, it leaves here.
 import { KITS } from '@studio/kits'
 import { makePet, type Pet } from '@studio/pet'
+export type { Pet, PetKind, PetData } from '@studio/pet'
 import type { Nav } from '../nav/nav'
 // the current Studio's styles the hosted kits' cards and inspectors are drawn with: the board and its cards
 // (project.css, plan.css, scaffold.css), the brand's swatches (brand.css), the kit's buttons, menus and toast
@@ -23,8 +24,10 @@ export type { Kit, KitCard, KitCtx, StoreItem, Studio } from '@studio/kits'
 // as hers to watch for loading. She has no stop of her own, so she starts once and stays.
 let pet: Pet | null = null
 const view: { el: HTMLElement | null } = { el: null }
-export function startPet(nav: Nav, screen: HTMLElement | null): Pet | null {
-  view.el = screen
+// a screen that has its own element to watch gives it (the Studio scaffold); the frame's PetProvider gives none, and
+// leaves the screen's in place
+export function startPet(nav: Nav, screen?: HTMLElement | null): Pet | null {
+  if (screen !== undefined) view.el = screen
   if (!pet && typeof document !== 'undefined') pet = makePet({ sw: null, C: { nav, get scaffoldView() { return view.el ? { el: view.el } : null } } })
   return pet
 }

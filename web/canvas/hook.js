@@ -40,7 +40,7 @@ window.swarm = {
   // ☰'s items, called straight from any screen (never a click on a ☰ button that may be hidden):
   // models(anchor) opens the models pop beside anchor, theme() swaps Light and Dark,
   // game() opens the game wizard, tab(name) shows a side tab (chat, log)
-  models: anchor => toggleModels(true, anchor), theme: toggleTheme, game: () => openGame(), tab: showTab,
+  models: anchor => toggleModels(true, anchor), theme: toggleTheme, game: () => openGame(), get kind() { return S.kind }, tab: showTab,
   // a page's picture for its artboard: the resting snapshot, or a small fresh one
   async thumb(id, scale = 0.25) {
     const f = S.frames.find(x => x.id === id)
@@ -179,7 +179,7 @@ window.swarm = {
     talkEnd()
     return new Promise(done => {
       els.brief.value = text
-      setNextRoute(project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done, chat: opts.chat } : { fresh: true, done, pictures: opts.pictures, chat: opts.chat })
+      setNextRoute(project || from ? { project, from, route: from ? 'extend' : 'new', selected: false, done, chat: opts.chat } : { fresh: true, done, pictures: opts.pictures, chat: opts.chat, template: opts.template })
       if (view !== 'canvas') setView('canvas')
       els.form.requestSubmit()
     })

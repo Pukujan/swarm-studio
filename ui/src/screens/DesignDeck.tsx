@@ -9,6 +9,8 @@ import { Icon } from '../primitives/Icon'
 import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
 import { DeckStage, type Picked, type StageHandle } from './deck/DeckStage'
+import { CommentPin } from './deck/Comment'
+import { DeckChat } from './deck/DeckChat'
 import { DesignTab } from './deck/DesignTab'
 import { useEdits } from './deck/edit'
 import { DeckBoard } from './deck/DeckBoard'
@@ -72,7 +74,9 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   }
 
   return (
-    <div className="relative flex h-[calc(100dvh-3.5rem)] min-w-0 overflow-hidden">
+    <>
+    {/* the chat docks along the bottom (decision 0015); the deck takes the height above it */}
+    <div className="relative flex min-w-0 overflow-hidden" style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))' }}>
       <LeftPanel id="deck-layers-panel" model={model} page={page} sheet={sheet} onClose={closeSheet} selected={sel?.key ?? null}
         onPage={id => { setPicked(id); setFollow(false); setSheet(false); stage.current?.focusPage(id) }}
         onLayer={k => { const l = model.layers[k]; const on = l && l.page !== '*' ? l.page : page ?? model.pages[0]?.id; if (!on) return; select({ key: k, page: on }); setPicked(on); setSheet(false); stage.current?.focusPage(on) }} />
@@ -98,18 +102,22 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
                 {studio}
               </div>
             : board === 'dom'
-              ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select} />
+              ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select}
+                pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} /> : null} />
               // the image-first board, behind ?board=tiers until the gauge says (src/board/flag.ts); a picked section's page is live
               : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel?.page ?? picked ?? null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
         onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} history={edits}
-        design={pickedLayer && <DesignTab layer={pickedLayer} part={part} onPart={setPart} onClose={() => select(null)}
+        design={pickedLayer && <DesignTab layer={pickedLayer} issue={model.issues[pickedLayer.key]?.problem} part={part} onPart={setPart} onClose={() => select(null)}
           onEdit={(patch, why) => { edits.edit(pickedLayer.key, patch, why).then(id => { if (id !== undefined) setPart(id) }) }} />} />
       {view.player !== 'closed' && model.pages.length > 0 && <Player model={model} />}
       {model.run && <PublishDialog model={model} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
       {model.run && <ExportDialog model={model} isOpen={dialog === 'export'} onOpenChange={o => setDialog(o ? 'export' : null)} />}
     </div>
+    {model.run && <DeckChat model={model} picked={sel?.key ?? null}
+      onCommand={c => { if (c === 'play') play(); else if (c === 'replay') replay.toggle(); else setDialog(c) }} />}
+    </>
   )
 }
