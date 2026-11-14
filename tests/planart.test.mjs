@@ -10,7 +10,7 @@ import { planFromAnswers, setSystems, planPrice, lockPlan, pickCell, CLOSEUP_RUL
 import { sheetPrompt, addSheet, addMocks, lockStyle, addBackdrops, addCloseups, stageNames, entryFor, settleStale, artBrief, SHOTS } from '../engine/planart.mjs'
 import { planRoutes } from '../server/plans.mjs'
 
-const ares = () => setSystems(planFromAnswers({ idea: 'ARES, a girls-only action RPG', answers: { cast: 'Girls only', size: '6', look: 'Anime cel-shaded', enemies: 'Minions, elites, bosses' } }), { logins: true, payments: true, leaderboard: true, gacha: true, pilot: true })
+const ares = () => setSystems(planFromAnswers({ idea: 'ARES, a girls-only 3D action RPG', answers: { cast: 'Girls only', size: '6', look: 'Anime cel-shaded', enemies: 'Minions, elites, bosses' } }), { logins: true, payments: true, leaderboard: true, gacha: true, pilot: true })
 
 test('a sketch sheet is one medium picture of a numbered 5 × 4 grid; drawn again it keeps its picks and notes', () => {
   const p = ares()
@@ -36,7 +36,7 @@ test('mocks: five in-game frames with the picked sheets as references', () => {
   const jobs = addMocks(p, '/d')
   assert.deepEqual(p.mocks.map(m => m.shot), SHOTS.map(s => s[0]))
   assert.equal(jobs.length, 5)
-  assert.deepEqual(jobs[0].refs, ['/d/s.png'])
+  assert.deepEqual(jobs[0].refs.map(r => r.replaceAll('\\', '/')), ['/d/s.png'])
   assert.match(jobs.find(j => j.id === p.mocks.find(m => m.shot === 'ult').id).prompt, /cut-in/)
 })
 
@@ -124,7 +124,7 @@ test('routes: pictures paint in the background and land in the plan; no image lo
   const base = `http://127.0.0.1:${srv.address().port}`
   const post = (path, body) => fetch(base + path, { method: 'POST', body: JSON.stringify(body || {}) }).then(async r => ({ status: r.status, data: await r.json() }))
   try {
-    const { data: plan } = await post('/api/plans', { idea: 'ARES, a test', answers: { size: '2' } })
+    const { data: plan } = await post('/api/plans', { idea: 'ARES, a 3D test', answers: { size: '2' } })
     const r = await post(`/api/plans/${plan.id}/sheet`, { kind: 'cast' })
     assert.equal(r.status, 200)
     assert.equal(r.data.sheets[0].state, 'painting')
@@ -161,7 +161,7 @@ test('the build: views from the front, close-ups, then three views to Meshy; tes
   const post = (path, body) => fetch(base + path, { method: 'POST', body: JSON.stringify(body || {}) }).then(async r => ({ status: r.status, data: await r.json() }))
   const get = id => fetch(`${base}/api/plans/${id}`).then(r => r.json())
   try {
-    const { data: plan } = await post('/api/plans', { idea: 'ARES, a test', answers: { size: '3', cast: 'Girls only' } })
+    const { data: plan } = await post('/api/plans', { idea: 'ARES, a 3D test', answers: { size: '3', cast: 'Girls only' } })
     assert.equal((await post(`/api/plans/${plan.id}/build`)).status, 409)
     const first = plan.price.first.credits
     assert.equal((await post(`/api/plans/${plan.id}/lock`, { credits: first, testFirst: true })).status, 200)
@@ -199,7 +199,7 @@ test('the build without a Meshy key paints the views and stops before any credit
   const base = `http://127.0.0.1:${srv.address().port}`
   const post = (path, body) => fetch(base + path, { method: 'POST', body: JSON.stringify(body || {}) }).then(r => r.json())
   try {
-    const plan = await post('/api/plans', { answers: { size: '1' } })
+    const plan = await post('/api/plans', { idea: 'a 3D test', answers: { size: '1' } })
     await post(`/api/plans/${plan.id}/lock`, { credits: plan.price.credits })
     await post(`/api/plans/${plan.id}/build`)
     let p

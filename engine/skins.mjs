@@ -11,15 +11,17 @@
 //   node engine/skins.mjs games/ares/data/heroes.json --hero runner [--outfit gala] [--only o-idle,o-run]
 //        [--from <folder of already painted <sheet>.png>] [--fx] [--dry]
 //
-// Painting goes through imagegen.py (the person's own image login, e.g. openai-codex);
-// SWARM_HERMES_PY is the Python that runs it and SWARM_IMAGEGEN another launcher if
-// needed. Cutting runs games/ares/tools/sheets/cut.py (numpy, scipy, Pillow).
+// Painting goes through Hermes's own image tool, by way of the running studio server (POST
+// /api/hermes/image, which asks the attached Hermes bridge): Hermes picks the provider and keeps its
+// key. SWARM_STUDIO_URL is the server (default http://127.0.0.1:4319) and the token is read from
+// $HERMES_HOME/swarm-studio/token. Cutting runs games/ares/tools/sheets/cut.py (numpy, scipy, Pillow).
 // Output: <game>/assets/skins/<hero>/<outfit>/<sheet>.webp + .json, and pack.json.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { homedir } from 'node:os'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const run = (cmd, args, opts = {}) => new Promise(ok => execFile(cmd, args, { maxBuffer: 1 << 22, timeout: 600000, ...opts }, (err, out, errOut) => ok({ err, out: String(out || ''), errOut: String(errOut || '') })))
@@ -60,13 +62,16 @@ export function fxAt(move, level) {
   return keys.length ? { level: keys.at(-1), ...levels[keys.at(-1)] } : null
 }
 
-async function paint(job, { py, script }) {
-  const args = [script, job.prompt, '--aspect', 'landscape']
-  for (const r of job.refs) args.push('--ref', r)
-  if (job.refs.length) args.push('--edit')
-  const r = await run(py, args)
-  const j = lastJson(r.out)
-  if (!j?.ok) throw new Error(`painting ${job.sheet} failed: ${j?.error || r.errOut.slice(-200) || r.err?.message}`)
+const studioToken = () => { try { return readFileSync(join(process.env.HERMES_HOME || join(homedir(), '.hermes'), 'swarm-studio', 'token'), 'utf8').trim() } catch { return '' } }
+async function paint(job, { server = process.env.SWARM_STUDIO_URL || 'http://127.0.0.1:4319', fetcher = fetch } = {}) {
+  const res = await fetcher(`${server}/api/hermes/image`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-swarm-token': studioToken() },
+    body: JSON.stringify({ prompt: job.prompt, aspect: 'landscape', refs: job.refs, edit: job.refs.length > 0 }),
+    signal: AbortSignal.timeout(600000)
+  }).catch(err => ({ json: async () => ({ ok: false, error: `no studio server at ${server} (${err.message})` }) }))
+  const j = await res.json().catch(() => null)
+  if (!j?.ok) throw new Error(`painting ${job.sheet} failed: ${j?.error || 'no answer'}`)
   return j.path
 }
 
@@ -81,12 +86,12 @@ async function cutSheet(src, job, py) {
 }
 
 // Paint (or take from `from`), cut and check every job; writes pack.json beside them.
-export async function buildPack(jobs, { from, dry = false, py = process.env.SWARM_HERMES_PY || 'python3', cutPy = process.env.SWARM_CUT_PY || 'python3', script = process.env.SWARM_IMAGEGEN || join(here, '..', 'imagegen.py'), log = console.log } = {}) {
+export async function buildPack(jobs, { from, dry = false, cutPy = process.env.SWARM_CUT_PY || 'python3', painter = paint, log = console.log } = {}) {
   const res = []
   for (const job of jobs) {
     if (dry) { log(`would paint ${job.sheet}: ${job.prompt.slice(0, 120)}…`); res.push({ ...job, status: 'dry' }); continue }
     try {
-      const painted = from ? join(from, `${job.sheet}.png`) : await paint(job, { py, script })
+      const painted = from ? join(from, `${job.sheet}.png`) : await painter(job)
       if (!existsSync(painted)) throw new Error(`no painting at ${painted}`)
       mkdirSync(dirname(job.out), { recursive: true })
       const meta = await cutSheet(painted, job, cutPy)

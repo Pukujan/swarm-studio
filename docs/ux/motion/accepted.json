@@ -1,0 +1,15 @@
+{
+  "why": "The Studio opens on its whole board (no step zoomed in), laid out in rows, with the mode menu in its top bar (the owner, 2026-11-13: the board like the game's Plan board, left to right then row to row, the Studio as the expanded Overview). The scene now ends with the board loaded and the planner's first line in the chat, where it used to end on a waiting card.",
+  "gained": [
+    "page @in 0.3s 1 div.item<#feed",
+    "page @pet-bob endless span.pet-body",
+    "page ~border-bottom-color #brief-form",
+    "page ~border-left-color #brief-form",
+    "page ~border-right-color #brief-form",
+    "page ~border-top-color #brief-form",
+    "page ~opacity span.pet-dots"
+  ],
+  "lost": [
+    "page @sk-wait endless div.ab"
+  ]
+}

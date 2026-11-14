@@ -6,7 +6,7 @@
 // no logos, no names, no characters. The notes are kept with the run so anyone
 // can see what was taken from the reference.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { streamChat } from './llm.mjs'
@@ -194,14 +194,21 @@ export function plainNotes(kind, m = {}) {
 }
 
 // Strip any name the reference brought along (its title words, its host, file name) from the notes.
-export function scrub(notes, avoid = []) {
+// a cleaner that takes out the reference's names (capitalised words of its title, its host) and quotes
+export function scrubber(avoid = []) {
   const bad = [...new Set(avoid.flatMap(a => String(a || '').split(/[^\p{L}\p{N}']+/u)).filter(w => w.length > 3 && /^\p{Lu}/u.test(w) || /\./.test(w)))]
   const hosts = avoid.filter(a => /\./.test(String(a || '')))
-  const clean = s => {
+  return s => {
     let x = String(s ?? '')
+    const esc = w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    for (const h of hosts) x = x.replace(new RegExp(`(https?:\\/\\/)?(www\\.)?${esc(String(h).replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, ''))}\\S*`, 'gi'), '')
     for (const w of [...bad, ...hosts]) x = x.replace(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), '')
     return x.replace(/["“”][^"“”]{2,80}["“”]/g, '').replace(/\s+([,.;])/g, '$1').replace(/\s{2,}/g, ' ').trim()
   }
+}
+
+export function scrub(notes, avoid = []) {
+  const clean = scrubber(avoid)
   const out = {
     palette: (Array.isArray(notes.palette) ? notes.palette : []).filter(h => /^#[0-9a-f]{6}$/i.test(h)).slice(0, 6),
     type: clip(clean(notes.type), 120), pacing: clip(clean(notes.pacing), 120),

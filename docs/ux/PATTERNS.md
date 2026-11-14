@@ -40,7 +40,7 @@ panel, a dock or a strip (rules 27 and 28).
 |---|---|---|
 | Nav | Five slots: Home, Discover, + Create, Projects, Me. A left rail on desktop, a bottom bar on a phone | Always (in the Design deck it folds into the logo menu, as in Figma) |
 | Top bar | The breadcrumb on the left, the one primary button on the right | Always, except on Home, where the build fills the screen |
-| Stage | The content: the project grid, a project's canvas, a page, a game, a clip | Always |
+| Stage | The content: the project grid, a project's Overview, a page, a game, a clip | Always |
 | Inspector | Whatever is selected, on the right | Only while something is selected. It slides over the stage instead of shrinking it, and a phone shows it as a half sheet |
 | Sheet | One sheet: peek, half, full | When you open something. One at a time |
 | Input | The one input: "What should the crew build?" on Projects, "Tell the crew…" in the dock of a project and the rooms | In + Create, Projects, a project and the rooms |
@@ -56,7 +56,7 @@ one, so a designer already knows it (rule 32).
 
 | Figma | Design deck |
 |---|---|
-| Left panel: the file name and main menu, Pages, Layers | The same. The logo menu holds the five-slot nav, Versions and Export all. A dot on a layer means an agent is working on it |
+| Left panel: the file name and main menu, Pages, Layers | The same. The logo menu holds the five-slot nav, Versions and Export all. A dot on a layer means an agent is working on it. The Design deck's Layers panel (left of the canvas; a sheet from the Layers button in a narrow pane), the Overview's Layers tab and the Studio scaffold's left panel draw the same tree (web/layers.js); on the scaffold a dot means the planner is still drafting that section |
 | The bottom toolbar: Move, Frame, Shape, Pen, Text, Comment, Actions, Dev Mode | Move, Frame, Shape, Pen, Text, Comment, **Hermia** (in place of Actions: ⌘K, search any action or ask the crew), **Code** (in place of Dev Mode) |
 | Right panel, top row: who's here, Present, Share, zoom | The crew's avatars, the progress pill, **Play**, **Share**, zoom |
 | Right panel with nothing selected: page colour, variables, styles, export | The same; our variables are the design tokens the planner set up |

@@ -74,6 +74,10 @@ class StandIn(BaseHTTPRequestHandler):
         if self.path == "/api/feed/builds":
             if not self._authed():
                 return self._send(401, {"ok": False, "code": "UNAUTHORIZED", "message": "Send your token."})
+            if s.get("small_limit") and len(json.dumps(body)) > 400:
+                return self._send(413, {"ok": False, "code": "PAYLOAD_TOO_LARGE", "message": "too big"})
+            if s.get("no_shots") and ("posterTall" in body or any("shot" in p or "phoneShot" in p for p in body.get("pages") or [])):
+                return self._send(400, {"ok": False, "code": "BAD_REQUEST", "message": "unknown field shot"})
             if s.get("old_feed") and any(k in body for k in ("project", "into", "piece")):
                 return self._send(400, {"ok": False, "code": "BAD_REQUEST", "message": "unknown field"})
             s.setdefault("posts", []).append(body)
@@ -141,7 +145,8 @@ class FeedClientTest(unittest.TestCase):
             self.assertNotIn("/swarm login", feed.connect(["status"]))
         finally:
             StandIn.state.pop("identities", None)
-        self.assertEqual(oct(feed._settings_path().stat().st_mode & 0o777), "0o600")
+        if os.name != "nt":  # Windows has no owner-only file mode; the file sits in the person's profile there
+            self.assertEqual(oct(feed._settings_path().stat().st_mode & 0o777), "0o600")
         self.assertIn("100 credits", feed.connect([]))
         self.assertNotIn("sfp_test", feed.connect([]))  # the token is never shown
         self.assertIn("Forgot", feed.connect(["forget"]))
@@ -265,6 +270,64 @@ class FeedClientTest(unittest.TestCase):
         for body in posts:
             self.assertFalse({"project", "into", "piece"} & set(body))
             self.assertEqual(body["title"], "ARES")
+
+    SHOT = "data:image/webp;base64,UklGRg=="
+
+    def _shots(self, zip_path):
+        return lambda rid: {"zip": str(zip_path), "pages": [
+            {"file": "index.html", "path": "/", "shot": self.SHOT, "phoneShot": self.SHOT + "p"},
+            {"file": "tickets.html", "path": "/tickets.html", "phoneShot": "javascript:alert(1)"}]}
+
+    def test_post_sends_page_shots_and_a_tall_poster(self):
+        self._connect()
+        zip_path = Path(self.home.name) / "shots.zip"
+        zip_path.write_bytes(ZIP)
+        run = {"id": "2026-11-12T10-00-00-000Z", "title": "Lantern", "brief": "x", "pageTitles": ["Home", "Tickets", "About"],
+               "sites": {"github": "https://me.github.io/lantern/"}}
+        exported = []
+        feed.post(run, [], lambda rid: exported.append(rid), self._shots(zip_path))
+        body = StandIn.state["posts"][-1]
+        self.assertEqual(body["pages"][0], {"slug": "home", "title": "Home", "path": "/", "shot": self.SHOT, "phoneShot": self.SHOT + "p"})
+        self.assertEqual(body["pages"][1], {"slug": "tickets", "title": "Tickets", "path": "/tickets.html"})  # not a picture: dropped
+        self.assertEqual(body["pages"][2], {"slug": "about", "title": "About"})
+        self.assertEqual(body["posterTall"], self.SHOT + "p")
+        self.assertEqual(exported, [])  # the shots' export is the one uploaded
+        self.assertEqual(StandIn.state["uploads"][-1][1], ZIP)
+
+    def test_feed_without_shots_still_gets_the_post(self):
+        self._connect()
+        StandIn.state["no_shots"] = True
+        zip_path = Path(self.home.name) / "shots.zip"
+        zip_path.write_bytes(ZIP)
+        run = {"id": "2026-11-12T10-00-01-000Z", "title": "Lantern", "brief": "x", "pageTitles": ["Home"], "sites": {"github": "https://me.github.io/l/"}}
+        self.assertIn("Posted", feed.post(run, [], lambda rid: None, self._shots(zip_path)))
+        body = StandIn.state["posts"][-1]
+        self.assertNotIn("posterTall", body)
+        self.assertEqual(body["pages"], [{"slug": "home", "title": "Home", "path": "/"}])
+        self.assertEqual(body["project"], {"name": "Lantern"})  # the project fields stay
+
+    def test_post_over_the_feeds_body_limit_goes_without_shots(self):
+        self._connect()
+        StandIn.state["small_limit"] = True
+        zip_path = Path(self.home.name) / "shots.zip"
+        zip_path.write_bytes(ZIP)
+        run = {"id": "2026-11-12T10-00-03-000Z", "title": "L", "brief": "x", "pageTitles": ["Home"], "sites": {"github": "https://me.github.io/n/"}}
+        big = lambda rid: {"zip": str(zip_path), "pages": [{"path": "/", "shot": "data:image/webp;base64," + "A" * 2000}]}
+        orig = feed.poster_of
+        feed.poster_of = lambda r, folder: "data:image/png;base64,AA"
+        try:
+            self.assertIn("Posted", feed.post(run, [], lambda rid: None, big))
+        finally:
+            feed.poster_of = orig
+        self.assertNotIn("shot", StandIn.state["posts"][-1]["pages"][0])
+
+    def test_shots_failing_never_stops_a_post(self):
+        self._connect()
+        def broken(rid):
+            raise RuntimeError("no browser")
+        run = {"id": "2026-11-12T10-00-02-000Z", "title": "Lantern", "brief": "x", "pageTitles": ["Home"], "sites": {"github": "https://me.github.io/m/"}}
+        self.assertIn("Posted", feed.post(run, [], lambda rid: None, broken))
+        self.assertEqual(StandIn.state["posts"][-1]["pages"], [{"slug": "home", "title": "Home"}])
 
     def test_gone_project_build_starts_a_new_post(self):
         self._connect()

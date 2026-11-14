@@ -6,7 +6,7 @@
 // The engine is built once on first use (pnpm install, then a vite bundle) and
 // reused after that. Its log lines become steps the App tab shows as it works.
 
-import { spawn, execFileSync } from 'node:child_process'
+import { spawn, execFileSync, appEnv } from './proc.mjs'
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, statSync, watch } from 'node:fs'
 import { join, dirname, relative, delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,6 +16,8 @@ export const scaffoldDir = join(dyadDir, 'scaffold')
 const bundle = join(dyadDir, '.vite', 'build', 'aba_headless.cjs')
 
 export const engineReady = () => existsSync(bundle)
+// a path that is never a file: the engine reads no .env (see runEngine)
+export const NO_ENV_FILE = join(dyadDir, '.no-env', 'none.env')
 
 // npm-installed tools (pnpm, npx) are .cmd shims on Windows, and Node runs a
 // .cmd only through a shell. The arguments passed this way are plain words.
@@ -50,12 +52,15 @@ function run(cmd, args, opts, onLine) {
 // Hermes may start this server on its own, newer Node, so the engine runs on the
 // first Node that can load them: this one, then the one on PATH, then common installs.
 let nodeFor = null
-export function engineNode() {
-  if (nodeFor) return nodeFor
-  // every node on PATH, not only the first: Hermes puts its own Node in front
+// every node on PATH, not only the first: Hermes puts its own Node in front
+function nodes() {
   const onPath = (process.env.PATH || process.env.Path || '').split(delimiter).filter(Boolean).map(d => join(d, WIN ? 'node.exe' : 'node'))
   const login = WIN ? '' : (() => { try { return execFileSync('/bin/sh', ['-lc', 'command -v node'], { encoding: 'utf8' }).trim() } catch { return '' } })()
-  const candidates = [process.execPath, ...onPath, login, '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
+  return [process.execPath, ...onPath, login, '/opt/homebrew/bin/node', '/usr/local/bin/node'].filter((x, i, a) => x && a.indexOf(x) === i && existsSync(x))
+}
+export function engineNode() {
+  if (nodeFor) return nodeFor
+  const candidates = nodes()
   for (const n of candidates) {
     try {
       execFileSync(n, ['-e', "new (require('better-sqlite3'))(':memory:')"], { cwd: dyadDir, stdio: 'ignore', timeout: 20000 })
@@ -65,18 +70,38 @@ export function engineNode() {
   return (nodeFor = process.execPath)
 }
 
+// The Node versions the engine supports (dyad/package.json "engines"), and the first such Node here
+const ENGINE_NODE = (() => {
+  let range = ''
+  try { range = JSON.parse(readFileSync(join(dyadDir, 'package.json'), 'utf8')).engines?.node || '' } catch {}
+  const lo = Number((range.match(/>=\s*(\d+)/) || [])[1]) || 0, hi = Number((range.match(/<\s*(\d+)/) || [])[1]) || Infinity
+  return { lo, hi, label: range || 'any' }
+})()
+export const nodeFits = (version, { lo, hi } = ENGINE_NODE) => { const major = Number(String(version).replace(/^v/, '').split('.')[0]); return major >= lo && major < hi }
+export function installNode(list = nodes(), versionOf = n => execFileSync(n, ['-v'], { encoding: 'utf8', timeout: 10000 }).trim()) {
+  for (const n of list) {
+    try { if (nodeFits(versionOf(n))) return n } catch {}
+  }
+  return null
+}
+
 let setting = null
 // Install and bundle the engine once. The install exits non-zero when dugite's
 // git download fails; the modules are still there, so only the bundle decides.
 export function setupEngine(onStage = () => {}) {
   if (engineReady()) return Promise.resolve()
   return setting ??= (async () => {
-    const env = { ...process.env, ELECTRON_SKIP_BINARY_DOWNLOAD: '1', CI: '1' }
+    // the install and the bundle run on a Node the engine accepts (its native modules have no build
+    // for a newer one, and pnpm refuses it): Hermes may put its own, newer Node first on PATH
+    const node = installNode()
+    if (!node) throw new Error(`The app engine needs Node ${ENGINE_NODE.label}, and none was found (this one is ${process.version}). Install Node 24 from nodejs.org, then try again.`)
+    const env = { ELECTRON_SKIP_BINARY_DOWNLOAD: '1', CI: '1', PATH: [dirname(node), process.env.PATH || process.env.Path || ''].join(delimiter) }
     onStage('installing the app engine (once, about a minute)')
-    await run('pnpm', ['install', '--frozen-lockfile'], { cwd: dyadDir, env })
+    const i = await run('pnpm', ['install', '--frozen-lockfile'], { cwd: dyadDir, env })
     onStage('bundling the app engine')
     const b = await run('npx', ['vite', 'build', '--config', 'vite.aba-headless.config.mts'], { cwd: dyadDir, env })
-    if (!engineReady()) throw new Error(`engine build failed: ${b.tail.slice(-400)}`)
+    // the install's own words when it is what failed (a bundle that cannot find its packages says less)
+    if (!engineReady()) throw new Error(`engine build failed: ${(i.code ? i.tail : b.tail).slice(-400)}`)
   })().finally(() => { setting = null })
 }
 
@@ -93,7 +118,9 @@ export function stepOf(line) {
 
 // Run the engine on a seeded workspace with a prompt. Resolves with the engine's
 // final JSON result ({ ok, gatesPassed, turns, files, commits, ... }).
-export async function runEngine({ workspace, prompt, provider, model, turns = 4, viewRender = true, onStep = () => {}, onLog = () => {}, signal }) {
+// appKeys: false for a project brought in from outside (docs/specs/45-intake.md): its build script runs under the
+// engine, and code the Studio did not write is never handed the person's database or payment keys
+export async function runEngine({ workspace, prompt, provider, model, turns = 4, viewRender = true, onStep = () => {}, onLog = () => {}, signal, appKeys = true }) {
   // a stop pressed while the engine was still being set up (or between stages)
   if (signal?.aborted) throw new Error('stopped')
   await setupEngine(t => onStep({ kind: 'setup', text: t }))
@@ -117,7 +144,11 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
   // engine's pnpm probe fail, and it then falls back to npm on a pnpm project
   const p = spawn(engineNode(), args, {
     cwd: meta,
-    env: { ...process.env, ...gitEnv(), ABA_API_KEY: provider.apiKey || '', ELECTRON_RUN_AS_NODE: '1' },
+    // The engine's model key is the studio's own /llm/v1 key (engine/hermesllm.mjs), never a provider's;
+    // the app's keys are there because the engine starts the app to look at it. ABA_ENV_FILE names a file
+    // that does not exist, so the engine loads no .env: left alone it walks up from its bundle and, in an
+    // installed plugin, the first .env it meets is Hermes's own ($HERMES_HOME/.env, every provider key).
+    env: { ...gitEnv(), ...(appKeys ? appEnv() : {}), ABA_API_KEY: provider.apiKey || '', ABA_ENV_FILE: NO_ENV_FILE, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   signal?.addEventListener('abort', () => p.kill('SIGTERM'), { once: true })

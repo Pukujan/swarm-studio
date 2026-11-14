@@ -1,0 +1,11 @@
+{
+  "name": "Swarm RTS",
+  "version": "1.0.0",
+  "source": "ours",
+  "licence": "MIT",
+  "credits": "Swarm Studio",
+  "engine": "godot 4.3+",
+  "web": true,
+  "native": false,
+  "files": ["swarm.gd", "flow_field.gd", "box_select.gd", "rts_camera.gd", "fog_of_war.gd", "placeholder_art.gd", "plugin.cfg", "plugin.gd", "README.md"]
+}

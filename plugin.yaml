@@ -8,24 +8,22 @@ provides_tools:
   - swarm_design
   - swarm_canvas
   - swarm_studio
-requires_env:
-  - name: SWARM_STUDIO_API_KEY
-    description: "API key for an OpenAI-compatible chat endpoint (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"
-    secret: true
+provides_hooks:
+  - pre_tool_call
 optional_env:
+  - name: SWARM_STUDIO_API_KEY
+    description: "Optional: a key for an OpenAI-compatible chat endpoint, used only when Hermes cannot run the crew's model calls (set SWARM_STUDIO_BASE_URL to change the endpoint; default InferHub)"
+    secret: true
   - name: ELEVENLABS_API_KEY
     description: "Optional: ElevenLabs key for the Film studio's music and sound effects (without it the studio writes its own score)"
     secret: true
   - name: CKFF_API_KEY
-    description: "Optional: ckff image key, used for pictures when no Hermes image login can paint"
+    description: "Optional: ckff image key, used for pictures when Hermes's image tool cannot paint"
     secret: true
   - name: CKFF_BASE_URL
     description: "Optional: ckff endpoint (default https://ckffai.com/v1)"
   - name: CKFF_MODEL
     description: "Optional: ckff image model"
-  - name: FAL_KEY
-    description: "Optional: FAL key for Hermes's FAL image and video providers"
-    secret: true
   - name: MESHY_API_KEY
     description: "Optional: Meshy key for 3D characters (the studio asks before spending credits)"
     secret: true
@@ -50,6 +48,9 @@ optional_env:
   - name: STRIPE_SECRET_KEY
     description: "Optional: a Stripe test key (sk_test_ or rk_test_) for generated apps' checkout; live keys are refused"
     secret: true
+  - name: RESEND_API_KEY
+    description: "Optional: a Resend key for a generated app's email (sign-in links, receipts), handed only to an app whose locked plan chose Resend; without it, emails go to the app's Outbox"
+    secret: true
   - name: VERCEL_TOKEN
     description: "Optional: Vercel token for Publish and app deploys"
     secret: true
@@ -57,3 +58,9 @@ optional_env:
     description: "Optional: Cloudflare token for Publish to Cloudflare Pages"
     secret: true
 license: FSL-1.1-ALv2
+# Bundled, nothing installed (built by scripts/vendor.mjs, version, licence and SHA-256 beside each):
+#   web/vendor/xstate/xstate.mjs   XState 5.33.3 (MIT): the studio page's navigation
+#   engine/vendor/procs/procs.mjs  execa 9.6.1 (MIT) and tree-kill 1.2.2 (MIT), with their 22 dependencies (MIT,
+#                                  ISC, Apache-2.0; every one pinned in scripts/vendor/procs/package-lock.json):
+#                                  the server starts its child processes with execa and stops each with all of
+#                                  its children (tree-kill: taskkill /T on Windows, ps/pgrep elsewhere)

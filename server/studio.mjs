@@ -1,0 +1,198 @@
+// The Studio's routes (docs/specs/37-studio-first.md, engine/studio.mjs, engine/assetstore.mjs).
+//   POST /api/studio { kind, idea, mode?, depth?, steps?, start?, skip?, chat? }  -> { project, chat, studio }  a project with no runs yet
+//        (an empty idea is fine: the chat's first words become it, through /idea). skip: the steps the person
+//        skipped when asked before the build (decision 0020; 'brand' or 'plan'), marked skipped, the walk starting
+//        on the first one left. chat: the loose chat that asked, moved into the project instead of a new one
+//   POST /api/studio/:pid/idea { idea }                -> the studio  the idea, once, while it is empty
+//   GET  /api/studio/:pid                                  -> { project, studio, brand, refs, assets }
+//   POST /api/studio/:pid/step { step, state }             -> the same
+//   POST /api/studio/:pid/depth { depth }                  -> the same
+//   POST /api/studio/:pid/mode { mode }                    -> the same (studio, scaffold or takes; spec 42)
+//   POST /api/studio/:pid/kit { data }                     -> the same  the kit's own state, merged
+//   POST /api/studio/:pid/ask { said?, asked?, building? } -> the same + ask: { read, set, text, next, build, building }
+//        the chat leads a website's Studio (decision 0020, engine/askfirst.mjs studioTurn): with no words, what to
+//        ask next (which pages, which pictures); with the person's typed words, their answer set on the kit's
+//        state and the planner's one line, both kept in the Studio's chat. A line that is not an answer changes
+//        nothing (read: false) and goes to the planner as before
+// The project's Assets ("use this as given"; References are "like this"):
+//   GET    /api/projects/:pid/assets                       -> { assets }
+//   POST   /api/projects/:pid/assets?name=&role=  (bytes)  -> { asset, assets }  an upload
+//   POST   /api/projects/:pid/assets { ref }               -> { asset, assets, refs }  a reference, moved over (Use as given)
+//   POST   /api/projects/:pid/assets/:id/reference         -> { ref, assets, refs }  moved to the References (Use as reference)
+//   POST   /api/projects/:pid/assets/:id/role { role }     -> { asset, assets }
+//   POST   /api/projects/:pid/assets/:id/restore           -> { asset, assets }
+//   DELETE /api/projects/:pid/assets/:id                   -> { asset, assets }  kept as removed, so undo works
+//   GET    /asset/:pid/:file                               the file (sandboxed, like /ref/)
+import { createReadStream, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { STUDIO_KINDS, STEPS } from '../engine/studio.mjs'
+import { projectName } from '../engine/naming.mjs'
+import { studioTurn } from '../engine/askfirst.mjs'
+
+// "A website for a tiny ramen bar" is named for the ramen bar, not "Website"
+const nameOf = idea => projectName({ brief: String(idea).replace(/^\s*(?:make|build|create)?\s*(?:me\s+)?(?:an?\s+)?(?:\w+\s+)?(?:website|site|app|game|film|video|deck|brand|logo)\s+(?:for|about|of)\s+/i, '') })
+
+const CHAT_KIND = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
+
+// studios: engine/studio.mjs; assets: engine/assetstore.mjs; refs: engine/refs.mjs; projects: server/projects.mjs; chats: engine/chats.mjs
+// builtOf(pid): for a project that has a build, { kind, idea, pages, theme } read from its newest version; else null
+// picturesDefault(): what Setup recommends for pictures ('painted' with an image model ready, else 'drawn'; a pick is kept)
+export function studioRoutes({ studios, assets, refs, projects, chats, builtOf = () => null, picturesDefault = async () => 'painted' }) {
+  const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+  const fail = (res, err) => json(res, err.status || 400, { error: String(err.message || err) })
+  const bad = (msg, status = 400) => Object.assign(new Error(msg), { status })
+  const raw = (req, max) => new Promise((resolve, reject) => {
+    const chunks = []
+    let n = 0
+    req.on('data', c => { n += c.length; if (n > max) { req.destroy(); reject(bad('too big', 413)) } else chunks.push(c) })
+    req.on('end', () => resolve(Buffer.concat(chunks)))
+    req.on('error', reject)
+  })
+  const jsonBody = req => raw(req, 2e4).then(b => { try { return JSON.parse(b.toString() || '{}') } catch { return {} } })
+
+  // everything the scaffold draws, in one answer
+  function whole(pid) {
+    const p = projects.get(pid)
+    let studio = studios.get(pid)
+    // A built project that never had a Studio (made from one prompt) gets one from what it was built with: its
+    // idea and pages. The Studio is the expanded Overview: what was chosen before the design, open again.
+    const built = p ? builtOf(pid) : null
+    if (p && !studio && built) {
+      const kind = STUDIO_KINDS.includes(built.kind) ? built.kind : 'site'
+      const chat = chats.create({ kind: CHAT_KIND[kind], text: built.idea, project: pid })
+      studios.make(pid, { kind, idea: built.idea, chat: chat.id })
+      if (kind === 'site' && built.pages?.length) studios.kit(pid, { pages: built.pages.slice(0, 12) })
+      studio = studios.get(pid)
+    }
+    if (!p || !studio) throw bad('no such studio', 404)
+    return {
+      project: { id: pid, name: p.name, title: p.title, head: p.head },
+      built: built ? { theme: built.theme || null, pages: built.pages || [] } : null,
+      studio,
+      brand: studios.brands.get(pid)?.brand || null,
+      refs: refs.list(pid),
+      assets: assets.list(pid)
+    }
+  }
+
+  async function make(input) {
+    const kind = STUDIO_KINDS.includes(input.kind) ? input.kind : 'site'
+    const idea = String(input.idea || '').trim().slice(0, 4000)
+    const pid = projects.makeStudio({ name: idea ? nameOf(idea) : 'New project', kind })
+    const asked = typeof input.chat === 'string' ? chats.get(input.chat) : null
+    const chat = asked && !asked.project && asked.kind === CHAT_KIND[kind] ? await chats.moveTo(asked.id, pid) : chats.create({ kind: CHAT_KIND[kind], text: idea, project: pid })
+    const steps = Array.isArray(input.steps) ? input.steps.filter(s => STEPS.includes(s)) : STEPS
+    const shown = steps.length ? steps : STEPS
+    const skip = Array.isArray(input.skip) ? input.skip.filter(s => shown.includes(s)) : []
+    const start = shown.includes(input.start) && !skip.includes(input.start) ? input.start : skip.length ? shown.find(s => !skip.includes(s)) || null : input.start
+    studios.make(pid, { kind, idea, mode: input.mode, depth: input.depth, chat: chat.id, steps: shown, start })
+    for (const s of skip) studios.step(pid, s, 'skipped')
+    return { ...whole(pid), chat: chat.id }
+  }
+
+  // the chat leads: what to ask next, or the person's typed answer read and set (engine/askfirst.mjs)
+  async function ask(pid, input) {
+    const { studio, brand } = whole(pid)
+    const building = input.building === true
+    if (studio.kind !== 'site') return { ...whole(pid), ask: { read: false, set: {}, text: '', next: null, build: building, building: false } }
+    const said = typeof input.said === 'string' ? input.said.trim().slice(0, 2000) : ''
+    const out = studioTurn({
+      said, asked: input.asked, state: studio.kit || {}, building,
+      planSkipped: studio.steps?.plan === 'skipped', built: !!builtOf(pid), look: !!brand?.lockedAt,
+      defaults: { pictures: await Promise.resolve(picturesDefault()).catch(() => 'painted') }
+    })
+    if (out.read && Object.keys(out.set).length) studios.kit(pid, out.set)
+    // the answer and the planner's line stay in the Studio's chat, so they are there when it is opened again
+    if (out.read && studio.chat && chats.get(studio.chat)) {
+      await chats.update(studio.chat, c => {
+        c.turns ||= []
+        const turn = (who, text) => c.turns.push({ id: `t${c.turns.length + 1}`, who, at: Date.now(), text, refs: [], marks: [], layers: [], ...(who === 'planner' ? { made: [], reads: [] } : {}) })
+        turn('person', said)
+        if (out.text) turn('planner', out.text)
+      }).catch(() => {})
+    }
+    return { ...whole(pid), ask: out }
+  }
+
+  // the chat's first words, when the Studio was opened with an empty box: the idea, and the project's name
+  function setIdea(pid, text) {
+    const idea = String(text || '').trim().slice(0, 4000)
+    if (!idea) throw bad('say what it is')
+    let set = false
+    studios.update(pid, s => { if (!s.idea) { s.idea = idea; set = true } })
+    if (set && projects.get(pid)?.name === 'New project') projects.op({ op: 'rename', id: pid, title: nameOf(idea) })
+  }
+
+  // a reference moved over to the assets, or an asset to the references: one action, the other store keeps it as removed
+  function refToAsset(pid, id) {
+    const r = refs.list(pid).find(x => x.id === id)
+    if (!r || !r.file) throw bad('that reference has no file', 404)
+    const asset = assets.addCopy(pid, { name: r.name, source: 'upload', w: r.w, h: r.h }, join(refs.dir(pid), r.file))
+    refs.remove(pid, id)
+    return { asset, assets: assets.list(pid), refs: refs.list(pid) }
+  }
+  function assetToRef(pid, id) {
+    const at = assets.path(pid, id)
+    if (!at) throw bad('no such asset', 404)
+    const ref = refs.addFile(pid, { name: at.asset.name, source: 'upload' }, readFileSync(at.file))
+    assets.remove(pid, id)
+    return { ref, assets: assets.list(pid), refs: refs.list(pid) }
+  }
+
+  return function handle(req, res, url) {
+    const file = url.pathname.match(/^\/asset\/([\w-]{1,64})\/([^/]{1,400})$/)
+    if (file) {
+      const f = assets.file(file[1], file[2])
+      if (!f) { res.writeHead(404).end('not found'); return true }
+      res.writeHead(200, { 'content-type': f.type, 'cache-control': 'no-cache', 'access-control-allow-origin': '*', 'content-security-policy': 'sandbox' })
+      createReadStream(f.file).pipe(res)
+      return true
+    }
+
+    if (url.pathname === '/api/studio') {
+      if (req.method !== 'POST') { json(res, 405, { error: 'POST' }); return true }
+      jsonBody(req).then(make).then(v => json(res, 200, v)).catch(err => fail(res, err))
+      return true
+    }
+    const sm = url.pathname.match(/^\/api\/studio\/([\w-]{1,64})(?:\/(step|depth|mode|kit|idea|ask))?$/)
+    if (sm) {
+      const [, pid, op] = sm
+      if (req.method === 'GET' && !op) { try { json(res, 200, whole(pid)) } catch (err) { fail(res, err) } return true }
+      if (req.method !== 'POST' || !op) { json(res, 405, { error: 'GET or POST' }); return true }
+      jsonBody(req).then(async input => {
+        if (op === 'ask') return json(res, 200, await ask(pid, input))
+        if (op === 'step') studios.step(pid, String(input.step || ''), String(input.state || ''))
+        else if (op === 'kit') studios.kit(pid, input.data)
+        else if (op === 'idea') setIdea(pid, input.idea)
+        else if (op === 'mode') studios.mode(pid, String(input.mode || ''))
+        else studios.depth(pid, String(input.depth || ''))
+        json(res, 200, whole(pid))
+      }).catch(err => fail(res, err))
+      return true
+    }
+
+    const am = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/assets(?:\/(a[0-9a-z]{4,16})(?:\/(reference|role|restore))?)?$/)
+    if (!am) return false
+    const [, pid, id, op] = am
+    const out = asset => ({ asset, assets: assets.list(pid) })
+    if (req.method === 'GET' && !id) { json(res, 200, { assets: assets.list(pid) }); return true }
+    if (req.method === 'DELETE' && id && !op) { try { json(res, 200, out(assets.remove(pid, id))) } catch (err) { fail(res, err) } return true }
+    if (req.method !== 'POST') { json(res, 405, { error: 'GET, POST or DELETE' }); return true }
+    if (!id) {
+      // a reference moved over (JSON { ref }), else the bytes of an upload
+      if (/json/.test(req.headers['content-type'] || '')) {
+        jsonBody(req).then(input => json(res, 200, refToAsset(pid, String(input.ref || '')))).catch(err => fail(res, err))
+        return true
+      }
+      raw(req, 60e6).then(buf => json(res, 200, out(assets.addFile(pid, { name: url.searchParams.get('name'), role: url.searchParams.get('role'), source: url.searchParams.get('source') || 'upload' }, buf)))).catch(err => fail(res, err))
+      return true
+    }
+    jsonBody(req).then(input => {
+      if (op === 'reference') return json(res, 200, assetToRef(pid, id))
+      if (op === 'restore') return json(res, 200, out(assets.restore(pid, id)))
+      if (op === 'role') return json(res, 200, out(assets.setRole(pid, id, String(input.role || ''))))
+      throw bad('no such action', 404)
+    }).catch(err => fail(res, err))
+    return true
+  }
+}

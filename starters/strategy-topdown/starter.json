@@ -1,0 +1,20 @@
+{
+  "id": "strategy-topdown",
+  "name": "Top-down strategy",
+  "version": "1.0.0",
+  "engines": ["godot"],
+  "families": ["rts"],
+  "why": "made for hundreds of units on one map, with the systems an RTS needs already working",
+  "systems": [
+    { "id": "pool", "name": "Unit pool", "why": "hundreds of units appear and die without the game stalling", "required": true },
+    { "id": "flowfield", "name": "Flow-field paths", "why": "one path map steers the whole army, cheap even for 500 units", "required": true },
+    { "id": "select", "name": "Box selection and orders", "why": "drag a box to pick units, right-click to send them", "required": true },
+    { "id": "camera", "name": "Strategy camera", "why": "pan with the screen edges or the keys, zoom with the wheel" },
+    { "id": "fog", "name": "Fog of war", "why": "the map stays dark where your units have not been", "on": "fog" }
+  ],
+  "assets": [
+    { "id": "placeholder", "name": "Placeholder units", "why": "a map with your units moving before any art is painted, free" }
+  ],
+  "addons": ["swarm_rts"],
+  "web": "the Web export plays in the Studio; it runs everything in this starter"
+}

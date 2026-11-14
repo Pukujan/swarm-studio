@@ -5,9 +5,10 @@
 // plays in the Studio; the port is source to open in that engine, checked for
 // the files the engine needs to open it, not compiled here.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { delimiter, join, relative } from 'node:path'
+import { homedir } from 'node:os'
 import { skillText } from './game.mjs'
 import { castPrompt, cleanCast } from './cast.mjs'
 
@@ -90,12 +91,15 @@ export function checkPort(dir, target) {
   return { ok: missing.length === 0, files: files.length, missing }
 }
 
-// A Godot binary to check ports with: SWARM_GODOT or GODOT, else godot / godot4 on PATH.
-export function godotBin(env = process.env) {
+// A Godot binary to check ports with: SWARM_GODOT or GODOT, else godot / godot4 on PATH, else on macOS the
+// app itself (Godot.app/Contents/MacOS/Godot in /Applications or ~/Applications): a Mac's Godot is an app,
+// and an app opened from the Dock gets a PATH without Homebrew's folder.
+export const godotApps = (home = homedir()) => ['/Applications', join(home, 'Applications')].map(d => join(d, 'Godot.app', 'Contents', 'MacOS', 'Godot'))
+export function godotBin(env = process.env, apps = process.platform === 'darwin' ? godotApps(env.HOME || homedir()) : []) {
   for (const k of ['SWARM_GODOT', 'GODOT']) if (env[k] && existsSync(env[k])) return env[k]
   const exe = process.platform === 'win32' ? ['godot.exe', 'godot4.exe', 'godot_console.exe'] : ['godot', 'godot4']
   for (const d of String(env.PATH || env.Path || '').split(delimiter).filter(Boolean)) for (const n of exe) if (existsSync(join(d, n))) return join(d, n)
-  return null
+  return apps.find(a => existsSync(a)) || null
 }
 
 // Godot's own errors from output lines: script and parse errors, failed loads

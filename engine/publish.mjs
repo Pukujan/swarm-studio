@@ -3,19 +3,19 @@
 // Vercel and Cloudflare Pages through a token the person connected (connect.mjs).
 // Without any of them, the canvas server hosts it on this computer (see /site/ in the server).
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { createHash } from 'node:crypto'
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { ownProjects, rememberProject } from './connect.mjs'
+import { claimRepo, ownProjects, rememberProject, siteRepos } from './connect.mjs'
 
 // Repos this makes say so in their description; a repo without it is never touched.
 const MARK = 'made with Swarm Studio'
 
 function run(cmd, args, { cwd, timeout = 60000, env = {} } = {}) {
   return new Promise((ok, fail) => {
-    execFile(cmd, args, { cwd, timeout, maxBuffer: 4e6, env: { ...process.env, GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0', ...env } }, (err, stdout, stderr) => {
+    execFile(cmd, args, { cwd, timeout, maxBuffer: 4e6, env: { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0', ...env } }, (err, stdout, stderr) => {
       if (err) {
         const why = String(stderr || err.message).trim().split('\n').filter(Boolean).pop() || 'failed'
         return fail(Object.assign(new Error(`${cmd} ${args[0]}: ${why}`), { stderr: String(stderr || '') }))
@@ -38,11 +38,15 @@ export async function githubLogin() {
   return login
 }
 
-// The repo for this site: its own name if free or already ours, otherwise a variant.
-async function pickRepo(login, name) {
-  for (const cand of [name, `${name}-site`, ...[2, 3, 4, 5].map(n => `${name}-${n}`)]) {
+// The repo for this site: the one this build published to before, else its own name if free, else a
+// variant. A repo another build already publishes to is skipped (two projects named Bot Wiki get
+// bot-wiki and bot-wiki-site), and a repo this studio didn't make is never touched.
+export async function pickRepo(login, name, { mine = '', taken = new Set(), check = repo => gh(['api', `repos/${login}/${repo}`, '--jq', '.description // ""'], { timeout: 15000 }) } = {}) {
+  const was = mine.split('/')[0].toLowerCase() === login.toLowerCase() ? mine.split('/')[1] : ''
+  for (const cand of [...(was ? [was] : []), name, `${name}-site`, ...[2, 3, 4, 5].map(n => `${name}-${n}`)]) {
+    if (cand !== was && taken.has(cand.toLowerCase())) continue
     try {
-      const desc = await gh(['api', `repos/${login}/${cand}`, '--jq', '.description // ""'], { timeout: 15000 })
+      const desc = await check(cand)
       if (desc.includes(MARK)) return { repo: cand, fresh: false }
     } catch (err) {
       if (/404|Not Found/i.test(err.message + err.stderr)) return { repo: cand, fresh: true }
@@ -52,29 +56,42 @@ async function pickRepo(login, name) {
   throw new Error(`every repo name for ${name} is taken`)
 }
 
-export async function publishGitHub({ dir, name, title, onStage = () => {} }) {
+// rebase(url): writes the site's address into its pages (canonical, share tags, sitemap,
+// robots: engine/seo.mjs) before the files go up; called again if the host answers elsewhere.
+// key: the build (its run id), so publishing it again goes back to the same repo.
+export async function publishGitHub({ dir, name, title, key = '', dataDir = '', rebase = null, onStage = () => {} }) {
   const login = await githubLogin()
   if (!login) throw new Error('GitHub CLI is not signed in (run `gh auth login`), so the site is hosted on this computer only')
   onStage('repo')
-  const { repo, fresh } = await pickRepo(login, name)
+  const claims = dataDir ? siteRepos(dataDir) : {}
+  const taken = new Set(Object.entries(claims).filter(([k, r]) => k !== key && r.split('/')[0].toLowerCase() === login.toLowerCase()).map(([, r]) => r.split('/')[1].toLowerCase()))
+  const { repo, fresh } = await pickRepo(login, name, { mine: claims[key] || '', taken })
   const full = `${login}/${repo}`
+  if (dataDir && key) claimRepo(dataDir, key, full)
   if (fresh) await gh(['repo', 'create', full, '--public', '--description', `${title} · ${MARK}`.slice(0, 340)])
+  // a project site lives at <login>.github.io/<repo>/ unless the account has its own domain
+  const guess = repo.toLowerCase() === `${login.toLowerCase()}.github.io` ? `https://${repo.toLowerCase()}/` : `https://${login.toLowerCase()}.github.io/${repo}/`
+  if (rebase) rebase(guess)
 
   onStage('push')
-  const pushed = Date.now()
-  const work = mkdtempSync(join(tmpdir(), 'swarm-publish-'))
-  try {
-    cpSync(dir, work, { recursive: true })
-    writeFileSync(join(work, '.nojekyll'), '')
-    const git = args => run('git', ['-c', `user.name=${login}`, '-c', `user.email=${login}@users.noreply.github.com`, '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', ...args], { cwd: work, timeout: 120000 })
-    await git(['init', '-q', '-b', 'main'])
-    await git(['add', '-A'])
-    await git(['commit', '-q', '-m', `Publish ${title} from Swarm Studio`])
-    // the repo holds only the published site, so each publish replaces it
-    await git(['push', '-q', '-f', `https://github.com/${full}.git`, 'main'])
-  } finally {
-    rmSync(work, { recursive: true, force: true })
+  let pushed = Date.now()
+  const push = async () => {
+    pushed = Date.now()
+    const work = mkdtempSync(join(tmpdir(), 'swarm-publish-'))
+    try {
+      cpSync(dir, work, { recursive: true })
+      writeFileSync(join(work, '.nojekyll'), '')
+      const git = args => run('git', ['-c', `user.name=${login}`, '-c', `user.email=${login}@users.noreply.github.com`, '-c', 'credential.helper=', '-c', 'credential.helper=!gh auth git-credential', ...args], { cwd: work, timeout: 120000 })
+      await git(['init', '-q', '-b', 'main'])
+      await git(['add', '-A'])
+      await git(['commit', '-q', '-m', `Publish ${title} from Swarm Studio`])
+      // the repo holds only the published site, so each publish replaces it
+      await git(['push', '-q', '-f', `https://github.com/${full}.git`, 'main'])
+    } finally {
+      rmSync(work, { recursive: true, force: true })
+    }
   }
+  await push()
 
   onStage('pages')
   try {
@@ -84,6 +101,7 @@ export async function publishGitHub({ dir, name, title, onStage = () => {} }) {
   }
   const url = (await gh(['api', `repos/${full}/pages`, '--jq', '.html_url'])).replace(/\/?$/, '/')
   if (fresh) gh(['repo', 'edit', full, '--homepage', url]).catch(() => {})
+  if (rebase && url !== guess) { rebase(url); await push() }
 
   // GitHub builds the site, then its CDN starts answering: wait for both
   onStage('building')
@@ -141,7 +159,7 @@ async function rest(base, token, path, init = {}) {
 // the files are the finished static site.
 const SKIP = /(^|\/)(node_modules|\.git|dist|\.output|\.vercel|\.engine)(\/|$)|\.DS_Store$/
 
-export async function publishVercel({ dir, name, creds, dataDir, build = false, env = null, onStage = () => {}, onLog = null }) {
+export async function publishVercel({ dir, name, creds, dataDir, build = false, env = null, rebase = null, guessed = null, onStage = () => {}, onLog = null }) {
   const api = (path, init) => rest(creds.base || 'https://api.vercel.com', creds.token, path + (creds.teamId ? `${path.includes('?') ? '&' : '?'}teamId=${creds.teamId}` : ''), init)
   onStage('project')
   const own = ownProjects(dataDir, 'vercel')
@@ -154,6 +172,9 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
   }
   if (!project) throw new Error(`every Vercel project name for ${name} is taken`)
 
+  // the address it will most likely have; checked once it is live
+  const guess = guessed || `https://${project}.vercel.app/`
+  if (rebase && !guessed) rebase(guess)
   onStage('upload')
   const list = files(dir).filter(f => !build || !SKIP.test(f.rel)).map(f => {
     const data = readFileSync(f.path)
@@ -218,7 +239,10 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
   const ordered = [...new Set([...names.filter(a => a.endsWith('.vercel.app')).sort((a, b) => a.length - b.length), ...names, d.url].filter(Boolean))]
   let url = null
   for (const n of ordered) if (await live(`https://${n}/`, 15000)) { url = `https://${n}/`; break }
-  return { url: url || (ordered[0] ? `https://${ordered[0]}/` : null), repo: `vercel:${project}`, pending: !url, ...(envSaved === null ? {} : { envSaved }) }
+  const final = url || (ordered[0] ? `https://${ordered[0]}/` : null)
+  // a static site that answers at another address goes up once more with that one written in
+  if (rebase && !build && final && final !== guess && !guessed) { rebase(final); return publishVercel({ dir, name, creds, dataDir, build, env, rebase, guessed: final, onStage, onLog }) }
+  return { url: final, repo: `vercel:${project}`, pending: !url, ...(envSaved === null ? {} : { envSaved }) }
 }
 
 // ---------- Cloudflare Pages: direct upload, the way wrangler does it, without wrangler.
@@ -229,7 +253,7 @@ export async function publishVercel({ dir, name, creds, dataDir, build = false, 
 const CF = 'https://api.cloudflare.com/client/v4'
 const TYPES = { html: 'text/html', css: 'text/css', js: 'application/javascript', mjs: 'application/javascript', json: 'application/json', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', ico: 'image/x-icon', txt: 'text/plain', woff2: 'font/woff2' }
 
-export async function publishCloudflare({ dir, name, creds, dataDir, onStage = () => {} }) {
+export async function publishCloudflare({ dir, name, creds, dataDir, rebase = null, onStage = () => {} }) {
   const api = (path, init) => rest(creds.base || CF, creds.token, `/accounts/${creds.accountId}/pages/projects${path}`, init)
   const why = r => r.body.errors?.[0]?.message || r.status
   onStage('project')
@@ -248,6 +272,8 @@ export async function publishCloudflare({ dir, name, creds, dataDir, onStage = (
   }
   if (!project) throw new Error(`every Cloudflare Pages name for ${name} is taken`)
 
+  if (!sub) sub = (await api(`/${project}`)).body?.result?.subdomain || null
+  if (rebase && sub) rebase(`https://${sub}/`)
   onStage('upload')
   const tok = await api(`/${project}/upload-token`)
   const jwt = tok.body.result?.jwt

@@ -7,7 +7,7 @@
 body.cosmos-plan .pl-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
 body.cosmos-plan .pl-primary { display: inline-flex !important; align-items: center; justify-content: center; min-width: 168px; }
 body.cosmos-plan .pl-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-body.cosmos-plan .brand, body.cosmos-plan .file-name, body.cosmos-plan #play-btn, body.cosmos-plan .pubwrap, body.cosmos-plan .mode-wrap { display: none !important; }
+body.cosmos-plan .brand, body.cosmos-plan .file-name, body.cosmos-plan .playwrap, body.cosmos-plan .pubwrap, body.cosmos-plan .mode-wrap { display: none !important; }
 body.cosmos-plan .cosmos-back { display: inline-flex; }
 body.cosmos-plan .cosmos-back .t { display: none; }
 body.cosmos-plan .topbar { background: var(--void); backdrop-filter: none; }
@@ -22,6 +22,17 @@ body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
 .ab.pcard { width: 210px; height: 118px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; background: var(--surface); transition: opacity .3s var(--ease), transform .3s var(--ease); }
 .ab.pcard b { font: 600 13px var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .ab.pcard > span { font: 600 22px/1.15 var(--display); color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ab.pcard.st { height: 132px; }
+.ab.pcard.st > span { font-size: 18px; -webkit-line-clamp: 1; }
+.ab.pcard.st > i { font: 12px/1.35 var(--body); font-style: normal; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ab.pcard.st.off > span, .ab.pcard.st.off > i { opacity: .45; }
+.plan .pj-sec.pl-starter .abs, .plan .pj-sec.pl-systems .abs { max-width: 700px; gap: 16px; }
+.pl-opts { display: flex; flex-direction: column; gap: 6px; }
+.pl-opt { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 600 13px/1.3 var(--body); cursor: pointer; }
+.pl-opt small { display: block; margin-top: 2px; font: 400 12px/1.35 var(--body); color: var(--muted); }
+.pl-opt.on, .pl-opt:hover:not(:disabled), .pl-opt:focus-visible { border-color: var(--accent); outline: none; }
+.pl-opt:disabled { opacity: .45; cursor: default; }
+.pl-addons { margin-top: 12px; color: var(--muted); font-size: 12px; }
 .ab.pcard:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 .ab.pcard.wait { opacity: 0; transform: translateY(6px); }
 .ab.pcard .cur { left: 70%; top: 62%; }
@@ -31,6 +42,9 @@ body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
 .pl-f { display: flex; flex-direction: column; gap: 4px; font: 12px var(--mono); color: var(--muted); }
 .pl-f input, .pl-r input { height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px var(--body); padding: 0 10px; outline: none; min-width: 0; }
 .pl-f input:focus, .pl-r input:focus { border-color: var(--text); }
+/* a field whose value can be long: it wraps and grows with its text (web/brand.js sizes it where field-sizing is missing) */
+.pl-f textarea { display: block; width: 100%; box-sizing: border-box; min-height: 32px; max-height: 240px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px/1.4 var(--body); padding: 6px 10px; outline: none; min-width: 0; resize: none; overflow-wrap: anywhere; field-sizing: content; }
+.pl-f textarea:focus { border-color: var(--text); }
 .pl-sw { display: flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; font: 13px var(--body); color: var(--text); }
 .pl-sw input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 .pl-roster { display: flex; flex-direction: column; gap: 10px; }
@@ -73,6 +87,15 @@ body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
 .ab.ppic.view { width: 84px; height: 125px; }
 
 .pl-err { margin: 0; font: 13px var(--body); color: var(--muted); }
+.pl-sum { margin: 0; font: 13px/1.45 var(--body); color: var(--ink, inherit); }
 .pl-grp { display: flex; gap: 8px; align-items: flex-start; }
 .plan .pl-build .abs, .plan .pl-close .abs { gap: 30px 22px; max-width: 760px; }
 .pl-crumb .pl-menu { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); min-width: 0; }
+
+/* a phone: the price keeps its words; the crumb gives way */
+@media (max-width: 720px) {
+  body.cosmos-plan .topbar .pl-primary .t { display: inline; }
+  body.cosmos-plan .pl-primary { min-width: 0; padding: 0 14px; white-space: nowrap; }
+  .pl-crumb .pl-up, .pl-crumb > .i { display: none; }
+  .pl-crumb .pl-name { max-width: 40vw; }
+}

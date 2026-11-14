@@ -49,6 +49,31 @@ export function modelError(err) {
   return text.replace(/(sk|key|Bearer)[-_ ]?[A-Za-z0-9_-]{12,}/g, '…') || 'No answer'
 }
 
+// What went wrong, as the Models row says it: one plain line, and the one fix that fits (rule 10: the
+// raw message stays behind Details). `fix` is
+//   hermes   Hermes's own model setup (`hermes model`): no model, a refused key, a model it does not have
+//   restart  Hermes has to start again (its keys could not be read, or it is not connected)
+//   again    nothing to change: the model was busy or slow, test again
+// Read from the provider's own message; a message no rule knows still gets a line and Hermes's setup.
+const PROBLEMS = [
+  { re: /profile-scoping|UnscopedSecretError|could not read this profile/i, line: 'Hermes can\'t read your model key. Restart Hermes.', fix: 'restart' },
+  // engine/hermeshealth.mjs's own reasons (closed, updated) and engine/hermesllm.mjs's WAITING: before
+  // the HTTP rules, since Hermes sends them as a 503
+  { re: /was updated\. Restart Hermes|hermes_updated/i, line: 'Swarm Studio was updated. Restart Hermes.', fix: 'restart' },
+  { re: /Hermes isn't connected|Waiting for Hermes|Hermes is not open|ECONNREFUSED|ECONNRESET/i, line: 'Hermes isn\'t connected. Open Hermes.', fix: 'again' },
+  { re: /^No model yet$/, line: 'No model is set up.', fix: 'hermes' },
+  { re: /\b(401|403)\b|invalid[^.]{0,20}(api )?key|incorrect api key|unauthori[sz]ed|authentication|no (api )?key/i, line: 'Your model key was refused.', fix: 'hermes' },
+  { re: /\b404\b|model[^.]{0,30}(not found|does not exist|unknown|not available)/i, line: 'Hermes doesn\'t have this model.', fix: 'hermes' },
+  { re: /\b402\b|quota|insufficient|billing|credit|spending/i, line: 'Your model account is out of credit.', fix: 'hermes' },
+  { re: /\b(429|503)\b|rate.?limit|overloaded|capacity|busy/i, line: 'The model is busy. Test again in a minute.', fix: 'again' },
+  { re: /timed? ?out|timeout|aborted|No answer|fetch failed|socket hang up/i, line: 'The model didn\'t answer. Test again.', fix: 'again' }
+]
+export function modelProblem(error) {
+  const raw = oneLine(error)
+  const hit = PROBLEMS.find(p => p.re.test(raw))
+  return { line: hit?.line || 'The model didn\'t work.', fix: hit?.fix || 'hermes' }
+}
+
 // The Models row: one tiny call to the planner and one to the builders. `roles` is
 // { planner: { model, baseUrl, apiKey }, worker: … }; `call(provider, model)` makes the call and
 // throws when the model does not answer. A result is kept for `keepMs`, so opening the sheet
@@ -61,7 +86,7 @@ export function modelTester({ call, keepMs = 10 * 60e3, now = Date.now } = {}) {
     if (had && now() - had.at < keepMs) return had.result
     const t = now()
     let result
-    try { await call({ baseUrl: r.baseUrl, apiKey: r.apiKey }, r.model); result = { model: r.model, ok: true, ms: Math.round(now() - t) } }
+    try { await call({ baseUrl: r.baseUrl, apiKey: r.apiKey, hermes: r.hermes }, r.model); result = { model: r.model, ok: true, ms: Math.round(now() - t) } }
     catch (err) { result = { model: r.model, ok: false, error: modelError(err) } }
     kept.set(key, { at: now(), result })
     return result
@@ -70,7 +95,9 @@ export function modelTester({ call, keepMs = 10 * 60e3, now = Date.now } = {}) {
     async test(roles, { again = false } = {}) {
       if (again) kept.clear()
       const [planner, worker] = await Promise.all([one('planner', roles?.planner), one('worker', roles?.worker)])
-      return { ok: planner.ok && worker.ok, planner, worker }
+      const ok = planner.ok && worker.ok
+      // the first role that failed says what to do; both usually fail the same way
+      return { ok, planner, worker, problem: ok ? null : modelProblem(planner.ok ? worker.error : planner.error) }
     }
   }
 }

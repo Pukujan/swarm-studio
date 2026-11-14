@@ -77,7 +77,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   let model = null, provider = null
   if (args.includes('--model')) {
     model = arg('--model-name') || env.SWARM_PLANNER_MODEL
-    provider = { baseUrl: (env.SWARM_PLANNER_BASE_URL || env.SWARM_BASE_URL || 'https://api.inferhub.dev/v1').replace(/\/$/, ''), apiKey: env.SWARM_PLANNER_API_KEY || env.SWARM_API_KEY || env.HERMES_CUSTOM_INFERHUB_API_KEY }
+    provider = { baseUrl: (env.SWARM_PLANNER_BASE_URL || env.SWARM_BASE_URL || 'https://api.inferhub.dev/v1').replace(/\/$/, ''), apiKey: env.SWARM_PLANNER_API_KEY || env.SWARM_API_KEY }
     if (!model || !provider.apiKey) { console.error('--model needs SWARM_PLANNER_MODEL and a key (SWARM_PLANNER_API_KEY or SWARM_API_KEY)'); process.exit(2) }
   }
   const out = await runSet({ model, provider, music: !args.includes('--no-music'), seed: Number(arg('--seed')) || 1, only: arg('--only')?.split(','), log: s => process.stderr.write(`  ${s}\n`) })

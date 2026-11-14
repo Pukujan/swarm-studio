@@ -65,6 +65,17 @@
   img[data-gen]:not([data-sketch]) { animation: develop .9s ease-out; }
   @keyframes develop { from { filter: blur(14px) saturate(.3); opacity: .4; } to { filter: none; opacity: 1; } }
   @keyframes paint { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+  /* a picture still to come: the painter's name and "real picture coming" over its stand-in, as on the Overview */
+  .pt-mark { position: absolute; z-index: 60; pointer-events: none; box-sizing: border-box; overflow: hidden; border-radius: 0 0 var(--radius) var(--radius);
+    padding: 10px 14px 18px; color: #f4f4f5; background: color-mix(in srgb, #0b0b0c 80%, transparent); font: 500 13px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .pt-mark b { display: block; font: 700 13px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+  .pt-mark i { position: absolute; left: 14px; right: 14px; bottom: 8px; height: 3px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, #f4f4f5 22%, transparent); }
+  .pt-mark i::after { content: ''; position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 3px; background: #f4f4f5; animation: pt-run 1.6s ease-in-out infinite; }
+  .pt-mark.failed i { display: none; }
+  .pt-mark.failed { padding-bottom: 10px; }
+  .pt-mark.small { padding: 6px 8px 12px; font-size: 10px; } .pt-mark.small b { font-size: 10px; } .pt-mark.small i { left: 8px; right: 8px; bottom: 5px; }
+  @keyframes pt-run { from { left: -40%; } to { left: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .pt-mark i::after { animation: none; left: 0; width: 60%; } }
   /* the reviewer looking at the page */
   #scan { position: absolute; inset: 0; pointer-events: none; z-index: 99; overflow: hidden; }
   #scan::before { content: ''; position: absolute; left: 0; right: 0; height: 240px; top: -240px; background: linear-gradient(180deg, transparent, #7c9cff38 85%, #7c9cffcc); animation: scan 2.4s cubic-bezier(.45,0,.55,1) infinite; }
@@ -156,7 +167,30 @@
     c.style.height = `${Math.max(14, Math.round(t.height))}px`
   }
 
+  // pictures still being painted (canvas.js fillImages sets data-pt and data-painter): a tag along the
+  // foot of each, so a stand-in photo never reads as the finished site. Never in a screenshot.
+  const marks = new Map()
+  function markPictures() {
+    const seen = new Set()
+    for (const img of document.body.querySelectorAll('[data-slot] img[data-pt]')) {
+      const r = img.getBoundingClientRect()
+      if (r.width < 60 || r.height < 40) continue
+      seen.add(img)
+      let m = marks.get(img)
+      if (!m) { m = document.createElement('div'); m.className = 'pt-mark'; m.setAttribute('aria-hidden', 'true'); document.body.append(m); marks.set(img, m) }
+      const failed = img.dataset.pt === 'failed', who = img.dataset.painter || ''
+      const html = `<b>${who.replace(/[<&]/g, '')}</b>${failed ? 'no picture' : 'real picture coming'}${failed ? '' : '<i></i>'}`
+      if (m.dataset.html !== html) { m.innerHTML = html; m.dataset.html = html }
+      m.classList.toggle('failed', failed)
+      m.classList.toggle('small', r.width < 260)
+      const rad = getComputedStyle(img).borderBottomLeftRadius
+      m.style.cssText = `left:${Math.round(r.left + scrollX)}px;top:${Math.round(r.bottom + scrollY)}px;width:${Math.round(r.width)}px;transform:translateY(-100%);border-radius:0 0 ${rad} ${rad}`
+    }
+    for (const [img, m] of marks) if (!seen.has(img)) { m.remove(); marks.delete(img) }
+  }
+
   function report() {
+    markPictures()
     const geo = { type: 'geo', height: document.body.scrollHeight, slots: {}, gotos: [] }
     for (const [key, el] of slots) {
       const r = el.getBoundingClientRect()
@@ -210,7 +244,7 @@
     for (const el of document.body.querySelectorAll('*')) for (const at of [...el.attributes]) if (!/^[A-Za-z_:][\w.:-]*$/.test(at.name)) el.removeAttribute(at.name)
     const h = document.body.scrollHeight, r = Math.min(m.scale || 0.625, (m.scale ? 5000 : 3000) / h)
     const bg = getComputedStyle(document.body).backgroundColor
-    const opts = { width: 1280, height: h, pixelRatio: r, quality: 0.72, backgroundColor: bg, filter: n => n.id !== 'scan' }
+    const opts = { width: 1280, height: h, pixelRatio: r, quality: 0.72, backgroundColor: bg, filter: n => n.id !== 'scan' && !n.classList?.contains('pt-mark') }
     Promise.all([lib, fontEmbedCSS(), document.fonts?.ready])
       .then(([h2i, css]) => h2i.toJpeg(document.body, css ? { ...opts, fontEmbedCSS: css } : opts).catch(() => h2i.toJpeg(document.body, { ...opts, skipFonts: true })))
       .then(image => parent.postMessage({ type: 'snap', seq: m.seq, ok: true, image, r }, '*'))

@@ -14,8 +14,13 @@
 // reaches anyone else on the same build (room for working together later).
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage } from './route.js'
+import { swEdit } from './edit/patches.js'
+import { setVideoHtml } from './video.js'
+import { layerSheet } from './layers.js'
+import { matchHtml, matchWire, lookBusy } from './lookmatch.js'
 
-const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['code', 'Code']]
+const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
+const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
 const fmtTime = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : ''
 
 export function makeProject({ sw, C, root }) {
@@ -23,10 +28,22 @@ export function makeProject({ sw, C, root }) {
   const base = () => sw.base || ''
   const hosted = () => document.body.classList.contains('hosted')
   const P = {
-    on: false, pid: null, run: null, proj: null, board: null, uploads: [], sending: new Map(),
-    sel: null, layer: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(),
-    standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0
+    on: false, seen: null, shown: '', proj: null, board: null, uploads: [], refs: [], sending: new Map(),
+    sel: null, layer: null, el: null, aspect: new Map(), tab: 'files', q: '', open: store.get('project.open', { code: false }), cam: { x: 0, y: 0, k: 1 }, follow: true, followSig: '', followRun: '', tool: 'move', thumbs: new Map(), sharp: new Map(), stale: new Set(), shot: new Map(), want: { s: new Map(), f: new Map() }, failed: new Set(), camAt: 0, visit: 0,
+    standin: new Map(), landed: new Map(), pendingKeys: new Set(), toGame: new Set(), tick: 0,
+    // Scribble (spec 29): unsent marks, what Eraser and Clear took (for ⌘Z), the run's sent marks, its drafts
+    marks: [], mkN: 0, mkUndo: [], sent: new Map(), drafts: new Map(), drafting: new Map(), reads: new Map(), rendering: new Set()
   }
+  // the version shown and its project are the navigation machine's (spec 34). A project opened with
+  // no version yet shows the build the canvas holds; one too new to name its project takes it from
+  // the project list.
+  const nav = C.nav
+  Object.defineProperties(P, {
+    run: { get: () => nav.view.version || P.seen },
+    pid: { get: () => nav.view.project || P.proj?.id || null }
+  })
+  // P.visit counts the views: a page picture asked for in an earlier one is not drawn or kept in this one
+  const forget = () => { P.visit++; P.sel = null; P.framed = false; P.thumbs.clear(); P.sharp.clear(); P.stale.clear(); P.shot.clear(); P.want.s.clear(); P.want.f.clear(); P.failed.clear(); P.thumbTries = 0 }
 
   root.className = 'project'
   root.hidden = true
@@ -35,10 +52,11 @@ export function makeProject({ sw, C, root }) {
       <div class="pj-tabs" role="tablist"><button class="pj-tab on" data-tab="files" role="tab">Files</button><button class="pj-tab" data-tab="layers" role="tab">Layers</button>
         <button class="ib sm pj-find" aria-label="Search">${ic('search', 16)}</button><button class="ib sm pj-add" aria-label="Add" aria-haspopup="menu">${ic('plus', 16)}</button></div>
       <label class="pj-search" hidden><input type="search" placeholder="Search" aria-label="Search files"></label>
+      <form class="pj-search pj-link" hidden autocomplete="off"><input type="text" inputmode="url" name="u" placeholder="Paste a link" aria-label="Reference link" maxlength="1000"></form>
       <div class="pj-list" role="tree"></div>
       <div class="pj-layers" hidden></div>
     </aside>
-    <div class="pj-stage" tabindex="-1" aria-label="Canvas">
+    <div class="pj-stage" tabindex="-1" aria-label="Overview">
       <div class="pj-world"></div>
       <div class="pj-cursors" aria-hidden="true"></div>
       <div class="pj-drop" hidden><span>${ic('upload', 22)}</span></div>
@@ -47,14 +65,17 @@ export function makeProject({ sw, C, root }) {
     <div class="pj-dock">
       <button class="ib pj-files-btn" data-tool="files" aria-label="Files" aria-expanded="false">${ic('folder')}</button>
       <button class="ib on" data-tool="move" aria-label="Move">${ic('move')}</button>
+      <button class="ib pj-mk" data-tool="scribble" aria-label="Scribble" aria-pressed="false">${ic('pencil')}</button>
+      <button class="ib pj-mk" data-tool="eraser" aria-label="Eraser" aria-pressed="false">${ic('eraser')}</button>
       <button class="ib" data-tool="frame" aria-label="Frame all">${ic('frame')}</button>
       <button class="ib pj-follow" data-tool="follow" aria-label="Follow the crew" aria-pressed="true" disabled>${ic('users')}</button>
       <button class="ib" data-tool="text" aria-label="New page">${ic('type')}</button>
       <button class="ib" data-tool="image" aria-label="Upload files">${ic('image')}</button>
       <button class="ib" data-tool="comment" aria-label="Chat">${ic('msg')}</button>
-      <form class="pj-ask" autocomplete="off"><button type="button" class="pj-scope" hidden aria-label="Talk to the crew about the whole project"><span></span>${ic('x', 12)}</button><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
+      <form class="pj-ask" autocomplete="off"><button type="button" class="pj-scope" hidden aria-label="Talk to the crew about the whole project"><span></span>${ic('x', 12)}</button><button type="button" class="pj-scope pj-mkchip" hidden aria-label="Clear the marks"><span></span>${ic('x', 12)}</button><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>
     </div>
-    <input type="file" class="pj-file" multiple hidden>`
+    <input type="file" class="pj-file" multiple hidden>
+    <input type="file" class="pj-reffile" multiple hidden accept="image/*,video/*,audio/*,.pdf,.txt,.md">`
   const $ = s => root.querySelector(s)
   const listEl = $('.pj-list'), layersEl = $('.pj-layers'), stage = $('.pj-stage'), world = $('.pj-world'), insp = $('.pj-insp'), curEl = $('.pj-cursors')
   const ask = $('.pj-ask'), input = ask.q, fileIn = $('.pj-file')
@@ -87,9 +108,10 @@ export function makeProject({ sw, C, root }) {
   const post = (path, body) => api(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 
   async function load() {
-    const run = P.run || sw.viewing || sw.S?.run || sw.liveId
-    if (!run || run === 'new') { P.board = null; render(); return }
-    P.run = run
+    // never the server's current run: an Overview shows the build that was opened or started here
+    const run = P.run || sw.viewing || sw.S?.run
+    if (!run || run === 'new') { P.board = null; P.boardOf = P.run; render(); return }
+    if (run !== nav.view.version) P.seen = run
     const [board, list] = await Promise.all([api(`/api/runs/${encodeURIComponent(run)}/board`).catch(() => null), hosted() ? null : api('/api/projects').catch(() => null)])
     // the view moved to another run while this one loaded: its answer is not drawn over the new one
     if (!P.on || P.run !== run) return
@@ -97,7 +119,9 @@ export function makeProject({ sw, C, root }) {
     const now = new Set((board?.painting || []).filter(w => w.state !== 'failed').map(w => `art:${w.page}/${w.layer}/${w.gen}`))
     for (const k of P.pendingKeys) if (!now.has(k) && board?.art?.some(a => `art:${a.page}/${a.layer}/${a.gen}` === k)) { P.landed.set(k, Date.now()); setTimeout(() => { P.landed.delete(k); P.standin.delete(k.split('/').slice(2).join('/')); if (P.on) renderStage() }, 1600) }
     P.pendingKeys = now
-    P.board = board
+    P.board = board; P.boardOf = run
+    // the pages' saved snapshots paint at once, before the canvas behind has drawn anything
+    fromDisk(board?.snaps)
     // a site and the game made from it are two runs of one version: the rooms switch between them
     C.pair = board?.game?.run ? { site: run, game: board.game.run } : board?.kind === 'game' ? { site: null, game: run } : { site: run, game: null }
     // a game still being built opens on its build (art painting, code, play test), once per open:
@@ -107,12 +131,12 @@ export function makeProject({ sw, C, root }) {
     P.toGame.add(run)
     // the project is the one this run belongs to; the one it was opened from only when the run is
     // too new to be listed (so a name never sits over another project's pages)
-    P.proj = list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || list?.projects.find(p => p.id === P.pid) || null
+    P.proj = list?.projects.find(p => p.versions?.some(v => v.id === run) || p.parts?.[run]) || list?.projects.find(p => p.id === nav.view.project) || null
     // back from a site's game: the project shows the site's version, which holds the game
     const up = P.proj?.parts?.[run]
-    if (up && up !== run) { P.run = up; P.sel = null; P.framed = false; P.thumbs.clear(); C.load(up); return load() }
-    if (P.proj) P.pid = P.proj.id
+    if (up && up !== run) { nav.go({ type: 'open.version', version: up, project: P.proj.id }); return }
     P.uploads = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/files`).catch(() => ({ files: [] }))).files : []
+    P.refs = P.pid && !hosted() ? (await api(`/api/projects/${encodeURIComponent(P.pid)}/refs`).catch(() => ({ refs: [] }))).refs : []
     render()
     clearTimeout(P.timer)
     P.timer = setTimeout(() => P.on && load(), board?.busy ? 2000 : board?.live ? 3000 : 15000)
@@ -122,7 +146,7 @@ export function makeProject({ sw, C, root }) {
   function groups() {
     const b = P.board || {}
     const g = {}
-    if (b.pages?.length) g.site = b.pages.map(p => ({ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, snap: P.thumbs.has(p.id) }))
+    if (b.pages?.length) g.site = b.pages.flatMap(p => [{ key: `page:${p.id}`, kind: 'page', name: p.title?.split(/\s[—–|:-]\s/)[0] || p.id, full: p.title, page: p.id, src: P.thumbs.get(p.id) || p.cover, sharp: P.sharp.get(p.id), snap: P.thumbs.has(p.id), cover: p.cover, plan: p.plan }, ...draftsOf(p.id)])
     if (b.app) g.app = [{ key: 'app', kind: 'app', name: 'App' }]
     if (b.game) g.game = [{ key: 'game', kind: 'game', name: b.game.title, pitch: b.game.pitch || '', src: b.game.cover, run: b.game.run || null, work: b.game.work || null }]
     if (b.films?.length) g.film = b.films.map((f, i) => ({ key: `film:${i}`, kind: 'film', name: f.name, src: f.poster, video: f.src, seconds: f.seconds }))
@@ -138,11 +162,22 @@ export function makeProject({ sw, C, root }) {
     const ups = [...P.uploads.map(u => ({ key: `up:${u.name}`, kind: 'upload', name: u.name, src: /^image\//.test(u.type) ? u.src : null, type: u.type, size: u.size })),
       ...[...P.sending.values()].map(s => ({ key: `up:${s.name}`, kind: 'upload', name: s.name, sending: s.pct, src: s.preview }))]
     if (ups.length) g.uploads = ups
+    // the References store (spec 29): pictures, clips and links kept for what they show
+    if (P.refs.length) g.refs = P.refs.map(r => ({ key: `rf:${r.id}`, kind: 'ref', name: r.name, src: r.kind === 'image' ? r.src : null, ref: r }))
     if (b.code) g.code = [{ key: 'code', kind: 'code', name: 'App code' }]
     if (P.q) for (const k of Object.keys(g)) { g[k] = g[k].filter(x => x.name.toLowerCase().includes(P.q.toLowerCase())); if (!g[k].length) delete g[k] }
     return g
   }
   const find = key => Object.values(groups()).flat().find(x => x.key === key)
+  // a page's drafts (Scribble): beside it, each level with the section it redoes; one being written shows as pending
+  function draftsOf(page) {
+    const run = P.run
+    const done = [...P.drafts.values()].filter(d => d.page === page && d.run === run)
+      .map(d => ({ key: `dr:${d.id}`, kind: 'draft', name: `Draft · ${d.role || d.layer}`, page, src: d.image || null, draft: d }))
+    const busy = [...P.drafting.values()].filter(d => d.page === page && d.run === run && !done.some(x => x.draft.layer === d.layer))
+      .map(d => ({ key: `dr:~${d.page}/${d.layer}`, kind: 'draft', name: `Draft · ${d.role || d.layer}`, page, pending: true, draft: d }))
+    return [...done, ...busy]
+  }
 
   // ---------- render
   function render() {
@@ -157,7 +192,7 @@ export function makeProject({ sw, C, root }) {
   }
   const thumbHtml = x => x.src ? `<span class="t" style="background-image:url('${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}')"></span>`
     : x.kind === 'page' && P.board?.theme?.colors?.length ? `<span class="t tcs" style="--tc-bg:${esc(P.board.theme.colors[0])};--tc-pr:${esc(P.board.theme.colors[1] || P.board.theme.colors[0])}"></span>`
-    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image' }[x.kind] || 'file', 14)}</span>`
+    : `<span class="t ic">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: /^audio\//.test(x.type || '') ? 'music' : 'file', code: 'code', art: 'image', draft: 'pencil', ref: x.ref?.kind === 'link' ? 'ext' : x.ref?.kind === 'audio' ? 'music' : 'file' }[x.kind] || 'file', 14)}</span>`
   function renderList() {
     const g = groups()
     listEl.innerHTML = SECTIONS.filter(([k]) => g[k]).map(([k, label]) => {
@@ -172,6 +207,34 @@ export function makeProject({ sw, C, root }) {
     if (x.kind !== 'page' || !th?.colors?.length) return ''
     return `<div class="tc" style="--tc-bg:${esc(th.colors[0])};--tc-pr:${esc(th.colors[1] || th.colors[0])};--tc-fg:${esc(th.colors[3] || th.colors.at(-1))};--tc-font:'${esc(th.fonts?.heading || th.fonts?.display || '')}'"><i></i><b>${esc(x.name)}</b><span></span></div>`
   }
+  // A page before its picture comes: a block per planned section, in the project's colours and in
+  // the section's planned proportions (a page with no plan, from before plans were kept, gets a
+  // usual one). Over a picture taken mid-build, the sections not built yet stay blocks, so each
+  // block gives way to the real page as its section is built.
+  const USUAL = [{ id: 'hero', role: 'hero', h: 720 }, { id: 'a', h: 520 }, { id: 'b', h: 520 }, { id: 'c', h: 300 }]
+  const planOf = x => (x.plan?.length ? x.plan : USUAL)
+  // never a thin strip: a page's tile is at least a little taller than wide
+  const planRatio = x => Math.max(1.25, planOf(x).reduce((a, l) => a + l.h, 0) / 1280)
+  function skeleton(x, over = false) {
+    const plan = planOf(x), total = plan.reduce((a, l) => a + l.h, 0)
+    const cs = P.board?.theme?.colors || []
+    // where each section is on the page: the canvas's own layout once it has one, else the plan's
+    const laid = over ? sw.layers?.list(x.page) || [] : []
+    let top = 0
+    const blocks = plan.map((l, i) => {
+      const box = laid.find(y => y.key?.endsWith(`/${l.id}`))?.box
+      const b = { l, i, top: box ? box.top : top / total, h: box ? box.height : l.h / total }
+      top += l.h
+      return b
+    }).filter(b => !over || (!b.l.done && x.plan?.length))
+    if (over && !blocks.length) return ''
+    const vars = cs.length ? `--sk-bg:${esc(cs[0])};--sk-a:${esc(cs[1] || cs[0])};--sk-b:${esc(cs[2] || cs[1] || cs[0])};--sk-fg:${esc(cs[3] || cs.at(-1))}` : ''
+    const hero = !over && x.cover ? ` style="background-image:url('${esc(base() + x.cover)}')"` : ''
+    return `<div class="sk${over ? ' over' : ''}"${vars ? ` style="${vars}"` : ''}>${blocks.map(b => {
+      const first = b.i === 0 || b.l.role === 'hero'
+      return `<i class="${first ? 'hero' : b.i % 2 ? 'odd' : ''}${b.l.done ? ' done' : ''}" style="top:${(b.top * 100).toFixed(2)}%;height:${(b.h * 100).toFixed(2)}%"${first ? hero : ''}><b></b></i>`
+    }).join('')}</div>`
+  }
   // a piece still being made: a thin bar along its foot (it slides when the job cannot say how far)
   const WORK = { site: 'the site', app: 'the app', game: 'the game', film: 'the film' }
   function workBar(w) {
@@ -180,17 +243,61 @@ export function makeProject({ sw, C, root }) {
   }
   function board(x) {
     const sel = P.sel === x.key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : ''
-    const full = x.src ? (x.src.startsWith('data:') ? x.src : base() + x.src) : ''
-    const img = x.src ? `<img src="${esc(picNow(full))}" data-full="${esc(full)}" alt="" draggable="false" loading="lazy" decoding="async">`
-      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code' }[x.kind] || 'file', 26)}</span>`
+    const at = u => u ? (u.startsWith('data:') ? u : base() + u) : ''
+    // a page shows its small picture first and its full one once the camera comes close (sizePics)
+    const low = at(x.src), full = at(x.sharp) || low
+    const img = x.kind === 'page' && !x.snap ? skeleton(x)
+      : x.src ? `<img src="${esc(picNow(full, low))}" data-full="${esc(full)}"${low !== full ? ` data-low="${esc(low)}"` : ''} alt="" draggable="false" loading="lazy" decoding="async">${x.kind === 'page' ? skeleton(x, true) : ''}`
+      : typeCover(x) || `<span class="blank">${ic({ page: 'site', app: 'code', game: 'game', film: 'film', upload: 'file', code: 'code', ref: x.ref?.kind === 'link' ? 'ext' : 'file' }[x.kind] || 'file', 26)}</span>${x.kind === 'ref' && !x.src ? `<span class="ab-cap">${esc(x.name)}</span>` : ''}`
     const extra = x.kind === 'film' ? `<span class="play"></span>${x.seconds ? `<span class="dur">${fmtTime(x.seconds)}</span>` : ''}`
       : x.kind === 'game' ? `${x.work ? workBar(x.work) : '<span class="play"></span>'}<span class="ab-cap">${esc(x.name)}</span>`
         : x.sending != null ? `<span class="upl"><i style="width:${Math.round(x.sending * 100)}%"></i></span>` : ''
-    const tall = x.kind === 'page' && x.snap && P.aspect.get(x.page)
+    const tall = x.kind === 'page' && ((x.snap && P.aspect.get(x.page)) || (!x.snap && planRatio(x)))
+    if (x.kind === 'draft') return draftBoard(x, sel, img)
     const rv = x.kind === 'page' ? reviewOf(x) : null
     const work = x.kind === 'art' && (x.pending || P.landed.has(x.key)) ? painting(x) : ''
-    return `<div class="ab ${x.kind}${x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}` : ''}${sel}</div>`
+    return `<div class="ab ${x.kind}${x.pending ? ` pt-${x.pending.state}` : ''}${rv ? ` rv-${rv.state}` : ''}" data-key="${esc(x.key)}" tabindex="-1"${tall ? ` style="height:${pageH(tall)}px"` : ''}>${x.pending && !x.src ? '' : img}${work}${extra}${x.kind === 'page' ? `<div class="lys">${outline(x)}</div>${rv ? reviewMarks(x, rv) : ''}<svg class="mk" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${markPaths(x.page)}</svg>` : ''}${sel}</div>`
   }
+  // ---------- Scribble (spec 29): marks on a page's artboard, kept as fractions of the page
+  // a page's artboard shows at most 9 widths of it: y on the artboard = y on the page × this
+  const pageK = page => { const r = P.aspect.get(page); return r ? Math.max(1, (124 * r) / pageH(r)) : 1 }
+  const ptsPath = (pts, k) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${(x * 1000).toFixed(1)} ${(y * k * 1000).toFixed(1)}`).join('')
+  function markD(m) {
+    const k = pageK(m.page)
+    if (m.kind === 'box') { const b = m.box, x0 = b.x * 1000, y0 = b.y * k * 1000, x1 = (b.x + b.w) * 1000, y1 = (b.y + b.h) * k * 1000; return `M${x0} ${y0}H${x1}V${y1}H${x0}Z` }
+    return ptsPath(m.pts, k)
+  }
+  function markPaths(page) {
+    const mine = P.marks.filter(m => m.page === page && m.run === P.run)
+    const sent = [...P.sent.values()].filter(m => m.page === page && m.run === P.run && m.status === 'open')
+    return [...sent.map(m => [m, 'sent']), ...mine.map(m => [m, ''])].map(([m, cls]) => { const d = markD(m); return `<g data-mk="${esc(m.id)}" data-sent="${cls ? 1 : ''}" class="${cls}"><path class="hit" d="${d}"/><path class="halo" d="${d}"/><path class="ln" d="${d}"/></g>` }).join('')
+  }
+  function drawMarks() {
+    for (const a of world.querySelectorAll('.ab.page')) { const x = find(a.dataset.key), svg = a.querySelector('.mk'); if (x && svg) svg.innerHTML = markPaths(x.page) }
+    const n = P.marks.filter(m => m.run === P.run).length, chip = $('.pj-mkchip')
+    chip.hidden = !n
+    if (n) chip.querySelector('span').textContent = `${n} mark${n > 1 ? 's' : ''}`
+  }
+  function setTool(t) {
+    P.tool = P.tool === t && t !== 'move' ? 'move' : t
+    for (const b of root.querySelectorAll('.pj-dock [data-tool="move"], .pj-dock .pj-mk')) { const on = b.dataset.tool === P.tool; b.classList.toggle('on', on); if (b.classList.contains('pj-mk')) b.setAttribute('aria-pressed', String(on)) }
+    root.classList.toggle('scribbling', P.tool === 'scribble')
+    root.classList.toggle('erasing', P.tool === 'eraser')
+  }
+  // a draft beside its page, level with the section it redoes, drawn at the page's scale
+  function draftBoard(x, sel, img) {
+    const d = x.draft, r = P.aspect.get(x.page)
+    const sec = sw.layers?.list(x.page).find(l => l.key === `${d.page}/${d.layer}` || l.id === d.layer)
+    const top = sec?.box && r ? Math.min(pageH(r) - 40, sec.box.top * 124 * r) : 0
+    const h = x.pending || !d.height ? Math.max(40, (sec?.box?.height || 0.1) * 124 * (r || 1.9)) : d.height / 1280 * 124
+    if (!x.pending && !d.image && !P.rendering.has(d.id) && sw.marks) {
+      P.rendering.add(d.id)
+      sw.marks.render(d.page, d.html).then(out => { const now = P.drafts.get(d.id); if (now && out) { now.image = out.image; now.height = out.height; if (P.on) { renderStage(); renderList(); if (P.sel === x.key) renderInsp() } } }).finally(() => P.rendering.delete(d.id))
+    }
+    const inner = x.src ? img : `<span class="blank">${ic('pencil', 18)}</span>`
+    return `<div class="ab draft${x.pending ? ' pending' : ''}" data-key="${esc(x.key)}" tabindex="-1" style="margin-top:${top.toFixed(1)}px;height:${h.toFixed(1)}px">${inner}${sel}</div>`
+  }
+
   // ---------- pictures being made: a stand-in (a found picture, tinted toward the theme) or a drawn
   // sketch, the painter's name and "real picture coming", a slim bar; the real one fades in over it.
   // The stand-in is only ever shown here: it is never saved into the build, its cover, export or publish.
@@ -209,7 +316,7 @@ export function makeProject({ sw, C, root }) {
       ? `<span class="pt-tag"><b>${esc(who)}</b>no picture</span><button class="pt-again" data-again="${esc(x.key)}">${ic('restore', 12)}Try again</button>`
       : `<span class="pt-tag"><b>${esc(who)}</b>${w.state === 'again' ? 'painting it again' : 'real picture coming'}</span><i class="pt-bar" role="progressbar" aria-label="Painting" aria-valuenow="${pct}"><i style="width:${pct}%"></i></i>`
     const th = P.board?.theme?.colors || []
-    return `<div class="pt${over ? ' over' : ''}" style="--ago:-${ago.toFixed(1)}s${th[1] ? `;--pt-tint:${esc(th[1])}` : ''}">${under}${tag}</div>`
+    return `<div class="pt${over ? ' over' : ''}"${w.state === 'failed' ? '' : ' aria-busy="true"'} style=""--ago:-${ago.toFixed(1)}s${th[1] ? `;--pt-tint:${esc(th[1])}` : ''}">${under}${tag}</div>`
   }
   // a found stand-in for the slot, from the studio's picture service. The sketch shows at once; a new
   // subject can take the service 10-30 s (it searches and tags), so the call never blocks and the
@@ -295,7 +402,7 @@ export function makeProject({ sw, C, root }) {
     const ratio = P.aspect.get(x.page)
     if (!l?.box || !ratio || !x.snap) return ''
     const h = 124 * ratio
-    return `<div class="lsel" style="top:${(l.box.top * h).toFixed(1)}px;height:${Math.max(4, l.box.height * h).toFixed(1)}px"></div>`
+    return `<div class="lsel" draggable="true" data-layer="${esc(l.key)}" data-name="${esc(l.role)}" style="top:${(l.box.top * h).toFixed(1)}px;height:${Math.max(4, l.box.height * h).toFixed(1)}px"></div>`
   }
   function drawOutline() {
     for (const a of world.querySelectorAll('.ab.page')) { const lys = a.querySelector('.lys'); if (lys) lys.innerHTML = outline(find(a.dataset.key) || {}) }
@@ -318,13 +425,14 @@ export function makeProject({ sw, C, root }) {
   }
   function renderStage() {
     const g = groups()
-    if (!P.board && !P.uploads.length) { world.innerHTML = ''; return }
+    if (P.boardOf !== P.run || (!P.board && !P.uploads.length && !P.refs.length)) { world.innerHTML = P.boardOf !== P.run ? `<div class="col"><section class="pj-sec site"><span class="al">Site</span><div class="abs">${[0, 1, 2].map(() => `<div class="ab page wait-in" aria-busy="true">${skeleton({})}</div>`).join('')}</div></section></div>` : ''; return }
     const sec = (k, label) => g[k] ? `<section class="pj-sec ${k}"><span class="al">${label}</span><div class="abs">${g[k].map(board).join('')}</div></section>` : ''
-    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
+    world.innerHTML = `<div class="col">${sec('site', 'Site')}${sec('art', 'Art')}${sec('uploads', 'Uploads')}${sec('refs', 'References')}</div><div class="col">${sec('game', 'Game')}${sec('app', 'App')}${sec('film', 'Film')}${sec('code', 'Code')}</div>`
     applyCam()
     measurePages()
     if (!P.framed && world.offsetWidth) { P.framed = true; frameAll(false) }
     crewAtWork()
+    drawMarks()
   }
   function renderInsp() {
     const x = P.sel && find(P.sel)
@@ -333,6 +441,7 @@ export function makeProject({ sw, C, root }) {
     if (!x) return
     // never redraw under someone typing in it
     if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return
+    if (x.kind === 'page' && P.layer && P.el && sw.layers?.get(P.layer)?.done && !hosted()) { const r = renderElement(x); if (r !== false) return r }
     if (x.kind === 'page' && P.layer && sw.layers?.get(P.layer)) return renderLayer(x)
     P.layer = null
     if (dims.has(x.key)) x.dims = dims.get(x.key)
@@ -341,20 +450,32 @@ export function makeProject({ sw, C, root }) {
       x.style && ['Style', x.style],
       x.used && ['Used on', x.used],
       x.kind === 'film' && x.seconds && ['Length', fmtTime(x.seconds)],
-      x.kind === 'upload' && x.size && ['File', `${(x.size / 1024 / 1024).toFixed(x.size > 1048576 ? 1 : 2)} MB`]
+      x.kind === 'upload' && x.size && ['File', `${(x.size / 1024 / 1024).toFixed(x.size > 1048576 ? 1 : 2)} MB`],
+      x.kind === 'draft' && ['Section', x.draft.role || x.draft.layer],
+      x.kind === 'draft' && x.draft.marks?.length && ['Marks', x.draft.marks.join(', ')],
+      ...(x.kind === 'draft' ? (x.draft.marks || []).map(id => P.reads.get(id)).filter(Boolean).map(r => [r.mark, r.read]) : []),
+      x.kind === 'ref' && ['From', REF_FROM[x.ref.source] || x.ref.source],
+      x.kind === 'ref' && x.ref.use && ['Use', x.ref.use],
+      x.kind === 'ref' && x.ref.kind === 'link' && ['Link', x.ref.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)]
     ].filter(Boolean)
-    const pv = x.kind === 'film' && x.video ? `<video src="${esc(base() + x.video)}" poster="${x.src ? esc(base() + x.src) : ''}" controls preload="none"></video>`
+    const pv = x.kind === 'film' && x.video ? `<video data-src="${esc(base() + x.video)}"${x.src ? ` data-poster="${esc(base() + x.src)}"` : ''} controls playsinline></video>`
       : x.src ? `<img src="${esc(x.src.startsWith('data:') ? x.src : base() + x.src)}" alt="">` : typeCover(x) ? `<div class="pv-tc">${typeCover(x)}</div>` : `<span class="blank">${ic('file', 28)}</span>`
     const btns = [
       ['page', 'game', 'app', 'code', 'film', 'art'].includes(x.kind) && `<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button>`,
       (x.kind === 'art' || (x.kind === 'upload' && x.sending == null) || x.kind === 'film') && `<button class="btn ghost" data-act="export">${ic('download', 15)}Export</button>`,
       x.kind === 'page' && `<button class="btn ghost" data-act="zip">${ic('download', 15)}Export</button>`,
-      (x.kind === 'art' || (x.kind === 'upload' && x.sending == null)) && !hosted() && `<button class="btn ghost" data-act="replace">${ic('upload', 15)}Replace</button>`
+      (x.kind === 'art' || (x.kind === 'upload' && x.sending == null)) && !hosted() && `<button class="btn ghost" data-act="replace">${ic('upload', 15)}Replace</button>`,
+      x.kind === 'draft' && !x.pending && `<button class="btn" data-act="draft-accept">${ic('check', 15)}Accept</button>`,
+      x.kind === 'draft' && !x.pending && `<button class="btn ghost" data-act="draft-dismiss">${ic('x', 15)}Dismiss</button>`,
+      x.kind === 'ref' && `<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button>`,
+      x.kind === 'ref' && !hosted() && `<button class="btn ghost" data-act="ref-remove">${ic('trash', 15)}Remove</button>`
     ].filter(Boolean).join('')
+    // Use for…: the crew get the reference and the part it is for, like a comment on that section
+    const useFor = x.kind === 'ref' && !hosted() && P.board ? `<form class="pj-use" autocomplete="off"><input name="u" placeholder="Use for…" aria-label="Use for" maxlength="80" value="${esc(x.ref.use || '')}"><button class="btn" type="submit">Send</button></form>` : ''
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
-    const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
-    insp.innerHTML = `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
-      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}<div class="btns">${btns}</div>`
+    const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}" draggable="true">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
+    setVideoHtml(insp, `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
+      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}${x.kind === 'ref' && !hosted() ? matchHtml(x.ref, { base: base(), built: !!P.board }) : ''}<div class="btns">${btns}</div>`)
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
   }
@@ -376,8 +497,91 @@ export function makeProject({ sw, C, root }) {
       ${edit ? g('Type', `${cur.hsize ? stepper('hsize', 'Heading', cur.hsize) : ''}${['heading', 'body'].map(r => `<label class="pj-f row"><span>${r === 'heading' ? 'Heading' : 'Body'}</span><select data-font="${r}" aria-label="${r === 'heading' ? 'Heading' : 'Body'} font, every page">${[...new Set([th.fonts?.[r], ...sc.fonts].filter(Boolean))].map(f => `<option${f === th.fonts?.[r] ? ' selected' : ''}>${esc(f)}</option>`).join('')}</select></label>`).join('')}`) : ''}
       ${edit ? g('Spacing', `${stepper('pad', 'Padding', px(cur.py))}${cur.gap != null ? stepper('gap', 'Gap', px(cur.gap)) : ''}${cur.radius != null ? `<label class="pj-f row"><span>Corners</span><select data-radius aria-label="Corners">${sc.radius.map(r => `<option value="${r}"${r === (cur.radius || '') ? ' selected' : ''}>${r === 'theme' ? 'Theme' : r || 'base'}</option>`).join('')}</select></label>` : ''}`) : ''}
       ${edit && l.gens.length ? g('Pictures', l.gens.map((p, i) => `<div class="pj-pic" data-pic="${i}">${p.src ? `<img src="${esc(p.src.startsWith('data:') ? p.src : base() + p.src)}" alt="">` : standinOf(p.gen) ? `<img class="sb" src="${esc(standinOf(p.gen).url)}" alt="">` : `<span class="blank">${ic('image', 20)}</span>`}<textarea rows="2" aria-label="What the picture shows">${esc(p.gen)}</textarea>${!p.src && standinOf(p.gen) ? `<small class="pj-credit">Stand-in · ${esc(standinOf(p.gen).credit || 'from an earlier build')}</small>` : ''}<button class="btn ghost" data-paint="${i}"${p.busy ? ' disabled' : ''}>${ic('image', 15)}${p.busy ? 'Painting' : 'Paint'}</button></div>`).join('')) : ''}
+      ${edit ? g('Parts', partsList(l.html)) : ''}
       <div class="btns">${edit ? `<button class="btn ghost" data-act="code">${ic('code', 15)}Code</button>` : ''}<button class="btn ghost" data-act="open">${ic('ext', 15)}Open</button></div>
       ${edit ? `<form class="pj-ask pj-lask" autocomplete="off"><input name="q" placeholder="Tell the crew…" aria-label="Tell the crew about ${esc(l.role)}" maxlength="4000"><button type="submit" class="pj-send" aria-label="Send">${ic('up', 16)}</button></form>` : ''}`
+  }
+  // ---------- one part of a section, changed by hand (spec 29, "Manual edit"; web/edit/patches.js). Each
+  // change is a section version (undo, redo, Versions), and the crew is told to keep it on a rework.
+  const PART_IC = { image: 'image', link: 'link', container: 'frame', graphic: 'image', text: 'type' }
+  const STYLE_F = { fontSize: ['Size', '18px'], fontWeight: ['Weight', '600'], lineHeight: ['Line', '1.4'], letterSpacing: ['Letters', '0.02em'], color: ['Colour', '#1c1917'], textAlign: ['Align', 'center'], width: ['Width', '100%'], height: ['Height', 'auto'], padding: ['Padding', '12px 20px'], margin: ['Margin', '0 auto'], backgroundColor: ['Fill', '#ffffff'], borderRadius: ['Corners', '8px'], opacity: ['Opacity', '0.9'] }
+  function partsList(html) {
+    const rows = swEdit.tree(html, 60)
+    return rows.length ? `<div class="pj-parts" role="list" aria-label="Parts">${rows.map(r => `<button class="pj-part" role="listitem" data-el="${esc(r.id)}" style="--d:${Math.min(r.depth, 5)}">${ic(PART_IC[r.kind] || 'type', 13)}<span>${esc(r.label)}</span></button>`).join('')}</div>` : ''
+  }
+  function renderElement(x) {
+    const l = sw.layers.get(P.layer), e = swEdit.read(l.html, P.el)
+    if (!e) { P.el = null; return false }
+    const field = (k, label, v, long) => long ? `<label class="pj-f"><span>${label}</span><textarea rows="${Math.min(5, Math.ceil(v.length / 34) || 2)}" data-ef="${k}">${esc(v)}</textarea></label>` : `<label class="pj-f"><span>${label}</span><input data-ef="${k}" value="${esc(v)}"></label>`
+    const g = (title, body) => body ? `<div class="pj-g"><h4>${title}</h4>${body}</div>` : ''
+    const F = e.fields
+    const pic = e.kind === 'image' && F.src ? `<div class="pj-epic"><img src="${esc(/^(https?:|data:)/.test(F.src) ? F.src : base() + F.src)}" alt=""></div>` : ''
+    const content = [
+      e.wordsEditable ? field('text', 'Words', F.text, F.text.length > 40) : '',
+      e.kind === 'link' ? field('href', 'Link', F.href) : '',
+      e.kind === 'image' ? `${pic}${field('src', 'Address', F.src)}${field('alt', 'Alt text', F.alt)}<button class="btn ghost" data-eact="replace">${ic('upload', 15)}Replace</button>` : ''
+    ].join('')
+    const styles = `<div class="pj-estyle">${Object.entries(STYLE_F).map(([k, [label, ph]]) => `<label class="pj-f"><span>${label}</span><input data-es="${k}" value="${esc(e.styles[k] || '')}" placeholder="${esc(ph)}" spellcheck="false"></label>`).join('')}</div>`
+    const attrs = `${Object.entries(e.attributes).map(([k, v]) => `<label class="pj-f"><span>${esc(k)}</span><input data-ea="${esc(k)}" value="${esc(v)}" spellcheck="false"></label>`).join('')}<div class="pj-eattr"><input name="an" placeholder="name" aria-label="New attribute name" spellcheck="false"><input name="av" placeholder="value" aria-label="New attribute value" spellcheck="false"><button class="btn ghost" data-eact="attr">Add</button></div>`
+    insp.innerHTML = `<h3><button class="ib sm pj-eback" aria-label="Back to ${esc(l.role)}">${ic('chl', 16)}</button><span>${esc(e.label)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3>
+      <div class="kv"><span>${esc(e.tag)}</span><b>${esc(l.role)}</b></div>
+      ${g('Content', content)}${g('Style', styles)}${g('Attributes', attrs)}
+      <div class="btns"><button class="btn ghost" data-eact="up"${e.canUp ? '' : ' disabled'}>Up</button><button class="btn ghost" data-eact="down"${e.canDown ? '' : ' disabled'}>Down</button><button class="btn ghost" data-eact="remove"${e.canRemove ? '' : ' disabled'}>${ic('trash', 15)}Remove</button><button class="btn ghost" data-act="code">${ic('code', 15)}Code</button></div>`
+  }
+  // a hand change to the picked part: patched, saved as a section version, the panel follows the part
+  async function handEdit(x, patch, why) {
+    const key = P.layer, l = key && sw.layers.get(key)
+    if (!l?.done) return
+    const r = swEdit.apply(l.html, { id: P.el, ...patch })
+    if (!r.ok) { toast(`<span>${esc(r.error)}</span>`); renderInsp(); return }
+    if (r.html === l.html) return
+    P.el = r.id
+    if (await sw.layers.save(key, r.html, `hand: ${why}`)) edited(x.page)
+    else renderInsp()
+  }
+  function handChange(x, t) {
+    const v = n => insp.querySelector(`[data-ef="${n}"]`)?.value
+    if (t.dataset.es) return handEdit(x, { kind: 'set-style', styles: { [t.dataset.es]: t.value } }, 'style')
+    if (t.dataset.ea) return handEdit(x, { kind: 'set-attributes', attributes: { [t.dataset.ea]: t.value } }, 'attribute')
+    const kind = swEdit.read(sw.layers.get(P.layer).html, P.el)?.kind
+    if (kind === 'link') return handEdit(x, { kind: 'set-link', text: v('text'), href: v('href') }, 'link')
+    if (kind === 'image') return handEdit(x, { kind: 'set-image', src: v('src'), alt: v('alt') }, 'picture')
+    return handEdit(x, { kind: 'set-text', value: t.value }, 'words')
+  }
+  function partClick(e, x) {
+    const pt = e.target.closest('[data-el]')
+    if (pt) { P.el = pt.dataset.el; renderInsp(); return true }
+    if (e.target.closest('.pj-eback')) { P.el = null; renderInsp(); return true }
+    const b = e.target.closest('[data-eact]')
+    if (!b || !P.el) return false
+    const a = b.dataset.eact
+    if (a === 'up' || a === 'down') handEdit(x, { kind: 'move-element', dir: a === 'up' ? -1 : 1 }, 'move')
+    if (a === 'remove') handEdit(x, { kind: 'remove-element' }, 'remove')
+    if (a === 'attr') {
+      const n = insp.querySelector('[name="an"]').value.trim(), val = insp.querySelector('[name="av"]').value
+      if (n) handEdit(x, { kind: 'set-attributes', attributes: { [n]: val } }, 'attribute')
+    }
+    if (a === 'replace') {
+      // the new picture joins the project's References, and the part points at it
+      const fi = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*' })
+      fi.onchange = async () => { const f = fi.files[0]; const out = f && await refPost('', null, f); if (out?.ref?.src) handEdit(x, { kind: 'set-image', src: out.ref.src }, 'picture') }
+      fi.click()
+    }
+    return true
+  }
+  // a click inside the picked section on the page picks the part under it (the canvas reads the page)
+  function pointPick(a, e) {
+    const x = find(a.dataset.key), l = sw.layers.get(P.layer)
+    if (!x || !l?.done || hosted() || !sw.marks?.anchor) return false
+    const r = a.getBoundingClientRect(), ratio = P.aspect.get(x.page)
+    const fx = (e.clientX - r.left) / (r.width || 1), fy = (e.clientY - r.top) / (r.height || 1) * a.offsetHeight / (124 * ratio)
+    const key = P.layer
+    Promise.resolve(sw.marks.anchor(x.page, { x: Math.max(0, fx - 0.002), y: Math.max(0, fy - 0.0005), w: 0.004, h: 0.001 })).then(t => {
+      if (P.layer !== key || t?.section !== key) return
+      const id = swEdit.pathId(t.path), el = id && swEdit.read(sw.layers.get(key).html, id)
+      if (el && (!t.tag || el.tag === t.tag)) { P.el = id; renderInsp() }
+    }).catch(() => {})
+    return true
   }
   // narrow panes: the dock sits under the inspector sheet, so a picked section has its own line
   insp.addEventListener('submit', e => {
@@ -390,6 +594,7 @@ export function makeProject({ sw, C, root }) {
   })
   function pickLayer(key) {
     P.layer = key || null
+    P.el = null
     sw.layers?.select(P.layer)
     renderInsp()
     drawOutline()
@@ -412,11 +617,16 @@ export function makeProject({ sw, C, root }) {
     const x = find(P.sel), L = sw.layers
     if (!x || !P.layer || !L) return
     const t = e.target
+    if (P.el && (t.dataset.ef || t.dataset.es || t.dataset.ea)) { handChange(x, t); return }
     if (t.dataset.text != null) L.setText(P.layer, Number(t.dataset.text), t.value).then(ok => ok && edited(x.page))
     if (t.dataset.font) { L.token('font', t.dataset.font, t.value); edited(x.page) }
     if (t.hasAttribute('data-radius')) { L.edit(P.layer, 'radius', t.value); edited(x.page) }
   })
-  insp.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input[data-text]')) { e.preventDefault(); e.target.blur() } })
+  insp.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return
+    if (e.target.matches('.pj-eattr input')) { e.preventDefault(); insp.querySelector('[data-eact="attr"]')?.click(); return }
+    if (e.target.matches('[data-text], [data-ef], [data-es], [data-ea]')) { e.preventDefault(); e.target.blur() }
+  })
   function layerClick(e) {
     const x = find(P.sel), L = sw.layers
     if (!x || !L) return false
@@ -424,6 +634,7 @@ export function makeProject({ sw, C, root }) {
     if (ly) { pickLayer(ly.dataset.layer); return true }
     if (e.target.closest('.pj-back')) { pickLayer(null); return true }
     if (!P.layer) return false
+    if (partClick(e, x)) return true
     const bg = e.target.closest('[data-bg]')
     if (bg) { L.edit(P.layer, 'bg', bg.dataset.bg); edited(x.page); return true }
     const st = e.target.closest('[data-step]')
@@ -480,58 +691,142 @@ export function makeProject({ sw, C, root }) {
     if (first) first.before(row); else (insp.querySelector('.pj-secs') || insp.querySelector('.btns')).before(row)
   }
 
-  // a page's real look, once the canvas behind has drawn it
-  // the first page's snapshot becomes the build's cover on Projects (a picture cover still wins there)
-  async function saveCover(src) {
-    const run = P.run
-    if (!run || P.saved?.has(run)) return
-    ;(P.saved ||= new Set()).add(run)
+  // ---------- page snapshots (spec 36): saved to the run's folder per page and content version, in
+  // a small size (the Overview at rest) and a full one (zoomed in, and the build's cover). Opening a
+  // project paints them from disk; only a page whose content changed is photographed again, by the
+  // canvas behind, and its pictures are sent back to be kept.
+  // what the server says is saved: { first, pages: { [page]: { v, s?, f? } } }
+  const fromDisk = disk => {
+    let changed = false
+    for (const p of P.board?.pages || []) {
+      const d = disk?.pages?.[p.id]
+      if (!d?.s) continue
+      if (P.thumbs.get(p.id) !== d.s) { P.thumbs.set(p.id, d.s); changed = true }
+      if (d.f && P.sharp.get(p.id) !== d.f) { P.sharp.set(p.id, d.f); changed = true } else if (!d.f) P.sharp.delete(p.id)
+      P.stale.delete(p.id)
+    }
+    return changed
+  }
+  // a JPEG of a picture (the canvas's frozen frames can be PNG)
+  async function jpeg(src, q = 0.82) {
+    if (/^data:image\/jpeg/.test(src)) return src
     const im = new Image()
     await new Promise(r => { im.onload = r; im.onerror = r; im.src = src })
-    if (!im.naturalWidth) return
-    const c = document.createElement('canvas'), w = 800, h = 500
-    c.width = w; c.height = h
-    const k = w / im.naturalWidth
-    c.getContext('2d').drawImage(im, 0, 0, im.naturalWidth, Math.min(im.naturalHeight, h / k), 0, 0, w, Math.min(h, im.naturalHeight * k))
-    sw.api(`/api/runs/${encodeURIComponent(run)}/snap`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: c.toDataURL('image/jpeg', 0.82) }) }).catch(() => {})
+    if (!im.naturalWidth) return null
+    const c = document.createElement('canvas')
+    c.width = im.naturalWidth; c.height = im.naturalHeight
+    c.getContext('2d').drawImage(im, 0, 0)
+    return c.toDataURL('image/jpeg', q)
   }
+  const keep = (run, page, v, size, src) => jpeg(src).then(image => image && sw.api(`/api/runs/${encodeURIComponent(run)}/snaps`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ page, v, size, image }) })).catch(() => null)
+  // Which pages need a picture: the saved ones paint at once; a page with none of its current version
+  // waits in P.want for its small picture, then its full one (spec 36, PR 3)
   async function thumbs() {
     if (P.thumbBusy || !P.board?.pages?.length) return
     P.thumbBusy = true
+    const run = P.run
     try {
+      const disk = await sw.api(`/api/runs/${encodeURIComponent(run)}/snaps`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+      if (run !== P.run || !P.on) return
+      if (fromDisk(disk)) { renderList(); renderStage() }
       for (const p of P.board.pages) {
-        // the build's card on Projects: the first page's picture, else its snapshot (once per build)
-        if (p === P.board.pages[0] && (p.cover || P.thumbs.has(p.id))) saveCover(p.cover ? base() + p.cover : P.thumbs.get(p.id))
-        if (P.thumbs.has(p.id)) continue
-        const src = await sw.thumb(p.id).catch(() => null)
-        // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
-        const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
-        if (ok && P.on) { P.thumbs.set(p.id, src); renderList(); renderStage(); if (p === P.board.pages[0]) saveCover(await sw.thumb(p.id, 0.6).catch(() => null) || src) }
+        const d = disk?.pages?.[p.id]
+        if (d?.s) { P.want.s.delete(p.id); if (d.f) P.want.f.delete(p.id); else P.want.f.set(p.id, d.v); continue }
+        // photographed for this version already (its picture was not kept: the page moved on meanwhile)
+        if (P.thumbs.has(p.id) && !P.stale.has(p.id) && P.shot.get(p.id) === d?.v) continue
+        P.want.s.set(p.id, d?.v || '')
       }
     } finally { P.thumbBusy = false }
-    if (P.on && P.board.pages.some(p => !P.thumbs.has(p.id)) && (P.thumbTries = (P.thumbTries || 0) + 1) < 8) setTimeout(thumbs, 2500)
+    pump()
   }
+  // One page at a time: every small picture in view first, then the full ones. Nothing
+  // while the camera moves (it picks up when it rests), for a tile out of view, or in a hidden tab.
+  // pumping: the view a picture is being taken for (one left over from an earlier view does not hold this one up)
+  let pumpT = 0, pumping = -1
+  const idle = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 1500 }) : setTimeout(f, 50))
+  // a page with no picture at all is taken straight away; a page that changed, and the full pictures, wait for idle time
+  function pump(wait = 0) {
+    clearTimeout(pumpT)
+    pumpT = setTimeout(() => ([...P.want.s.keys()].some(id => !P.thumbs.has(id)) ? shootNext() : idle(shootNext)), wait)
+  }
+  const inView = id => {
+    const el = world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"]`)
+    if (!el) return false
+    const r = el.getBoundingClientRect(), v = stage.getBoundingClientRect()
+    return r.width > 0 && r.right > v.left && r.left < v.right && r.bottom > v.top && r.top < v.bottom
+  }
+  async function shootNext() {
+    if (pumping === P.visit || !P.on || !P.board || document.hidden) return
+    const rest = performance.now() - P.camAt
+    if (rest < 400) return pump(400 - rest)
+    const pick = size => [...P.want[size]].find(([id]) => inView(id))
+    const size = pick('s') ? 's' : 'f', job = pick(size)
+    if (!job) return retry()
+    const [id, v] = job, run = P.run, visit = P.visit
+    P.want[size].delete(id)
+    pumping = visit
+    try { await (size === 's' ? shootSmall(run, id, v, visit) : shootFull(run, id, v, visit)) } finally { if (pumping === visit) pumping = -1 }
+    if (visit === P.visit && P.on) pump()
+  }
+  // A picture can take seconds (the frame fetches its fonts first): one asked for before the person went
+  // elsewhere and came back to this build is not drawn over, or kept instead of, what this view painted
+  const current = (run, visit) => run === P.run && visit === P.visit && P.on
+  async function shootSmall(run, id, v, visit) {
+    P.stale.delete(id)
+    const src = await sw.thumb(id).catch(() => null)
+    // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
+    const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
+    if (!current(run, visit)) return
+    // a page that changed keeps its last picture until a new one comes (no blank artboard meanwhile)
+    if (!ok) { if (P.thumbs.has(id)) P.stale.add(id); P.failed.add(id); return }
+    const had = P.thumbs.has(id)
+    P.thumbs.set(id, src); P.sharp.delete(id)
+    const im = had && world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"] img[data-full]`)
+    if (im) { im.removeAttribute('data-low'); im.dataset.full = src; im.src = src } else { renderList(); renderStage() }
+    if (!v) return
+    P.shot.set(id, v)
+    keep(run, id, v, 's', src)
+    P.want.f.set(id, v)
+  }
+  async function shootFull(run, id, v, visit) {
+    const full = await sw.thumb(id, 0.6).catch(() => null)
+    if (!full || !current(run, visit)) return
+    await keep(run, id, v, 'f', full)
+    // the page changed again meanwhile: its new small picture comes first
+    const low = P.thumbs.get(id)
+    if (!current(run, visit) || !low || P.want.s.has(id) || P.stale.has(id)) return
+    P.sharp.set(id, full)
+    const im = world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"] img[data-full]`)
+    if (im) { im.dataset.low = low.startsWith('data:') ? low : base() + low; im.dataset.full = full; sizePics() }
+  }
+  // a page without a picture yet (its frame was still laying out) is tried again a few times;
+  // the count starts over whenever the crew finishes a section (layer:done) or the build reloads
+  function retry() {
+    if (!P.failed.size || (P.thumbTries = (P.thumbTries || 0) + 1) >= 8) return
+    P.failed.clear()
+    clearTimeout(P.retryT); P.retryT = setTimeout(thumbs, 2500)
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && P.on) pump() })
 
   // ---------- the stage: pan (drag empty space, wheel), zoom (pinch, ⌘ wheel), Frame fits all
   // narrow panes (a phone, Hermes Desktop's side pane): the canvas stays; Files and Layers are a sheet
-  const narrow = () => matchMedia('(max-width: 760px)').matches
-  let offSheet = null
-  function sheet(on) {
-    root.classList.toggle('files-on', on)
-    root.querySelector('.pj-files-btn')?.setAttribute('aria-expanded', String(on))
-    offSheet?.(); offSheet = null
-    if (on) offSheet = window.SwarmUI?.layer(root.querySelector('.pj-side'), () => sheet(false), { extra: [root.querySelector('.pj-files-btn')] })
-  }
+  const filesSheet = layerSheet(root, $('.pj-side'), $('.pj-files-btn'))
+  const narrow = filesSheet.narrow
+  const sheet = on => filesSheet.set(on)
   // While the camera moves the world keeps the pixels it has (will-change holds the raster scale) and
   // the pictures keep the copies they show; both are put right once it rests, in one go. The canvas
   // behind is told too, so it does not swap a page or take a screenshot in the middle of a gesture.
   let restT = 0
-  function applyCam() {
-    world.style.transform = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})`
+  // moving: a pan, pinch, wheel or glide (the camera's own framing jumps, and does not hold the pictures back)
+  function applyCam(moving = false) {
+    const t = `translate(${P.cam.x}px, ${P.cam.y}px) scale(${P.cam.k})`
+    if (moving) P.camAt = performance.now()
+    world.style.transform = t
     world.classList.add('moving')
     sw.moved?.()
+    trackCrew()
     clearTimeout(restT)
-    restT = setTimeout(() => { world.classList.remove('moving'); sizePics() }, 280)
+    restT = setTimeout(() => { world.classList.remove('moving'); sizePics(); pump() }, 280)
   }
   // Pictures at the size they are drawn: zoomed out, an artboard shows a 256 or 512 px wide copy
   // (web/ui.js small) instead of its full picture, so a whole project on screen holds a few MB of
@@ -539,7 +834,8 @@ export function makeProject({ sw, C, root }) {
   const TIERS = [256, 512]
   const picTier = new Map() // full src -> the tier last shown
   const tierFor = im => TIERS.find(t => im.offsetWidth * P.cam.k * (devicePixelRatio || 1) <= t * 0.9) || 0
-  const picNow = full => { const t = picTier.get(full); return (t && window.SwarmUI?.small?.(full, t, { by: 'width' })) || full }
+  // the small saved picture (320 px wide) stands for the 256 tier, and is shown until a sharper copy is ready
+  const picNow = (full, low) => { const t = picTier.get(full); return (t === 256 && low) || (t && window.SwarmUI?.small?.(full, t, { by: 'width' })) || low || full }
   function sizePics() {
     const small = window.SwarmUI?.small
     if (!small) return
@@ -547,6 +843,7 @@ export function makeProject({ sw, C, root }) {
       const full = im.dataset.full, t = tierFor(im)
       if (!im.offsetWidth) continue
       picTier.set(full, t)
+      if (t === 256 && im.dataset.low) { if (im.getAttribute('src') !== im.dataset.low) im.src = im.dataset.low; continue }
       if (!t) { if (im.getAttribute('src') !== full) im.src = full; continue }
       const url = small(full, t, { by: 'width', ready: u => { if (im.isConnected && picTier.get(full) === t && im.getAttribute('src') !== u) im.src = u } })
       if (url && im.getAttribute('src') !== url) im.src = url
@@ -619,14 +916,14 @@ export function makeProject({ sw, C, root }) {
       const k = Math.min(3, Math.max(0.15, pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d))
       const px = pinch.mx - r.left, py = pinch.my - r.top
       P.cam = { k, x: px - (px - pinch.cx) * k / pinch.k + ((a.x + b.x) / 2 - pinch.mx), y: py - (py - pinch.cy) * k / pinch.k + ((a.y + b.y) / 2 - pinch.my) }
-      applyCam()
+      applyCam(true)
       setFollow(false)
       return
     }
     if (!drag) return
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y
     if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true
-    if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(); stage.classList.add('panning'); setFollow(false) }
+    if (drag.moved) { P.cam.x = drag.cx + dx; P.cam.y = drag.cy + dy; applyCam(true); stage.classList.add('panning'); setFollow(false) }
   })
   const endDrag = e => {
     touches.delete(e.pointerId)
@@ -645,13 +942,13 @@ export function makeProject({ sw, C, root }) {
       const k = Math.min(3, Math.max(0.15, P.cam.k * Math.exp(-e.deltaY * 0.01)))
       P.cam.x = px - (px - P.cam.x) * k / P.cam.k; P.cam.y = py - (py - P.cam.y) * k / P.cam.k; P.cam.k = k
     } else { P.cam.x -= e.deltaX; P.cam.y -= e.deltaY }
-    applyCam()
+    applyCam(true)
     setFollow(false)
   }, { passive: false })
 
   // ---------- selecting and opening
   function select(key, { pan = false } = {}) {
-    if (key !== P.sel && P.layer) { P.layer = null; sw.layers?.select(null); scope() }
+    if (key !== P.sel && P.layer) { P.layer = null; P.el = null; sw.layers?.select(null); scope() }
     P.sel = key
     // in place: re-rendering would reload every picture on the stage
     for (const r of listEl.querySelectorAll('.row')) r.classList.toggle('on', r.dataset.key === key)
@@ -668,7 +965,7 @@ export function makeProject({ sw, C, root }) {
         const vw = s.width - (insp.hidden ? 0 : 272)
         if (r.left < s.left + 20 || r.right > s.left + vw - 20 || r.top < s.top + 20 || r.bottom > s.bottom - 100) {
           P.cam.x += s.left + vw / 2 - (r.left + r.width / 2); P.cam.y += s.top + (s.height - 90) / 2 - (r.top + r.height / 2)
-          world.classList.add('ease'); applyCam(); setTimeout(() => world.classList.remove('ease'), 300)
+          world.classList.add('ease'); applyCam(true); setTimeout(() => world.classList.remove('ease'), 300)
         }
       }
     }
@@ -678,9 +975,10 @@ export function makeProject({ sw, C, root }) {
     if (x.kind === 'page' || x.kind === 'art') { C.go('station', 'canvas'); setTimeout(() => sw.focusPage(x.page || x.art?.page), 60); return }
     if (x.kind === 'film') return C.go('station', 'video')
     // a game made from this site lives in its own run: open that one's App room
-    if (x.kind === 'game' && x.run && x.run !== P.run) { C.go('station', 'app'); return C.load(x.run).then(() => C.go('station', 'app')) }
+    if (x.kind === 'game' && x.run && x.run !== P.run) return C.toGame(x.run)
     if (x.kind === 'game' || x.kind === 'app' || x.kind === 'code') return C.go('station', 'app')
     if (x.kind === 'upload' && x.src) window.open(base() + x.src, '_blank', 'noopener')
+    if (x.kind === 'ref') window.open(x.ref.kind === 'link' ? x.ref.url : base() + x.ref.src, '_blank', 'noopener')
   }
   // an artboard the inspector would slide over: wait out a double-click, then select and pan it clear
   let clickT = 0
@@ -692,11 +990,12 @@ export function makeProject({ sw, C, root }) {
   }
   world.addEventListener('click', e => {
     const a = e.target.closest('.ab'); if (!a) return
+    if (P.tool !== 'move' && a.classList.contains('page')) return
     clearTimeout(clickT)
     // (not the second click of a double-click, which opens the page's room)
     if (a.classList.contains('page') && e.detail < 2 && (a.dataset.key === P.sel || e.metaKey || e.ctrlKey)) {
       const l = sectionAt(a, e)
-      if (l) { if (a.dataset.key !== P.sel) select(a.dataset.key); return pickLayer(l.key) }
+      if (l) { if (a.dataset.key !== P.sel) select(a.dataset.key); if (l.key === P.layer && pointPick(a, e)) return; return pickLayer(l.key) }
     }
     const r = a.getBoundingClientRect(), s = stage.getBoundingClientRect()
     if (insp.hidden && r.right > s.right - 292) clickT = setTimeout(() => select(a.dataset.key, { pan: true }), 280)
@@ -743,6 +1042,20 @@ export function makeProject({ sw, C, root }) {
     if (act === 'export') saveFile(x)
     if (act === 'zip') exportZip()
     if (act === 'replace') replace(x)
+    if (act === 'ref-remove') removeRef(x)
+    if (act === 'draft-accept' || act === 'draft-dismiss') {
+      e.target.closest('button').disabled = true
+      sw.marks.close(x.draft.id, act === 'draft-accept').then(ok => toast(ok ? `${ic('check', 15)}<span>${act === 'draft-accept' ? 'Accepted' : 'Dismissed'}</span>` : '<span>That draft could not close</span>'))
+    }
+  })
+  insp.addEventListener('submit', e => {
+    const f = e.target.closest('.pj-use'), x = find(P.sel)
+    if (!f || x?.kind !== 'ref') return
+    e.preventDefault()
+    const use = f.u.value.trim()
+    if (!use) return f.u.focus()
+    f.querySelector('button').disabled = true
+    refPost(`${x.ref.id}/use`, { use, send: true }).then(out => { if (out) toast(`${ic('check', 15)}<span>Sent to the crew</span>`) }).finally(() => { const b = f.querySelector('button'); if (b) b.disabled = false })
   })
 
   // ---------- the file menu
@@ -842,7 +1155,7 @@ export function makeProject({ sw, C, root }) {
     const items = [
       { k: 'rename', icon: 'type', label: 'Rename', run: renameProject },
       { k: 'dup', icon: 'layers', label: 'Duplicate', run: () => post('/api/projects', { op: 'duplicate', ids: [P.pid] }).then(out => { const np = out.projects.find(x => x.id === out.id); if (np) C.open(np.head, np.id) }).catch(() => {}) },
-      ...(p?.versions?.length > 1 ? ['-', ...p.versions.map((v, i) => ({ k: `v:${v.id}`, icon: 'clock', label: `Version ${p.versions.length - i}`, on: v.id === P.run, run: () => C.open(v.id, P.pid) }))] : [])
+      ...(p?.versions?.length > 1 ? ['-', ...p.versions.map((v, i) => ({ k: `v:${v.id}`, icon: 'clock', label: `Version ${p.versions.length - i}`, on: v.id === P.run, run: () => nav.go({ type: 'open.version', version: v.id }) }))] : [])
     ]
     showMenu(items, anchor)
   }
@@ -923,15 +1236,67 @@ export function makeProject({ sw, C, root }) {
     pickLayer(row.dataset.key)
     if (narrow()) sheet(false)
   }, true)
+  // the tree's keys (web/layers.js) pick here too: Enter, or ↑ ↓ to the next section, goes the same way as a click
+  layersEl.addEventListener('keydown', e => {
+    const at = e.target.closest('.ly[data-key], .pg-title[data-page]')
+    if (!at || e.target.closest('input') || !['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
+    e.preventDefault(); e.stopPropagation()
+    const rows = [...layersEl.querySelectorAll('.pg.open .ly[data-key]')], i = rows.indexOf(at)
+    const to = e.key === 'Enter' ? at : at.matches('.ly') ? rows[i + (e.key === 'ArrowDown' ? 1 : -1)] : null
+    if (!to) return
+    const key = to.dataset.key, page = to.dataset.page
+    to.click()
+    layersEl.querySelector(key ? `.ly[data-key="${CSS.escape(key)}"]` : `.pg-title[data-page="${CSS.escape(page)}"]`)?.focus({ preventScroll: true })
+  }, true)
   const search = $('.pj-search'), sInput = search.querySelector('input')
   $('.pj-find').onclick = () => { search.hidden = !search.hidden; if (!search.hidden) sInput.focus(); else { P.q = ''; sInput.value = ''; render() } }
   sInput.oninput = () => { P.q = sInput.value.trim(); renderList(); renderStage() }
   sInput.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); search.hidden = true; P.q = ''; sInput.value = ''; render() } }
   $('.pj-add').onclick = e => showMenu([
     { k: 'page', icon: 'file', label: 'New page', run: newPage },
-    ...(hosted() ? [] : [{ k: 'up', icon: 'upload', label: 'Upload files', run: () => fileIn.click() }])
+    ...(hosted() ? [] : [{ k: 'up', icon: 'upload', label: 'Upload files', run: () => fileIn.click() },
+      { k: 'ref', icon: 'image', label: 'Reference', run: () => refIn.click() },
+      { k: 'link', icon: 'ext', label: 'Link', run: () => { linkEl.hidden = false; linkEl.u.focus() } }])
   ], e.currentTarget)
   function newPage() { select(null); input.value = 'Add a page: '; input.focus() }
+
+  // ---------- References (spec 29): + → Reference or Link; Remove, and Undo in its toast
+  const refIn = $('.pj-reffile'), linkEl = $('.pj-link'), lookTick = matchWire(insp, { post: (path, body) => refPost(path, body), busy: () => !!P.pid && P.refs.some(lookBusy), sent: () => toast(`${ic('check', 15)}<span>Sent to the crew</span>`), reload: () => api(`/api/projects/${encodeURIComponent(P.pid)}/refs`).then(out => { if (out?.refs) { P.refs = out.refs; render() } }).catch(() => {}) })
+  async function refPost(path, body, raw = null) {
+    if (!P.pid || hosted()) { toast(`<span>References need a saved project</span>`); return null }
+    try {
+      const out = raw ? await api(`/api/projects/${encodeURIComponent(P.pid)}/refs?name=${encodeURIComponent(raw.name)}`, { method: 'POST', body: raw })
+        : await post(`/api/projects/${encodeURIComponent(P.pid)}/refs${path ? `/${path}` : ''}`, body)
+      P.refs = out.refs || P.refs
+      P.open.refs = true
+      render()
+      return out
+    } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`); return null }
+  }
+  // the match check on a link's look (web/lookmatch.js): Compare, Fix on a difference, and reading the references again while one runs
+  refIn.onchange = async () => {
+    const fs = [...refIn.files]
+    refIn.value = ''
+    let last = null
+    for (const f of fs) last = (await refPost('', null, f))?.ref || last
+    if (last) select(`rf:${last.id}`)
+  }
+  linkEl.onsubmit = async e => {
+    e.preventDefault()
+    const u = linkEl.u.value.trim()
+    if (!u) return
+    const out = await refPost('link', { url: /^https?:\/\//i.test(u) ? u : `https://${u}` })
+    if (out) { linkEl.u.value = ''; linkEl.hidden = true; select(`rf:${out.ref.id}`) }
+  }
+  linkEl.u.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); linkEl.hidden = true } }
+  function removeRef(x) {
+    refPost(`${x.ref.id}/remove`).then(out => {
+      if (!out) return
+      if (P.sel === x.key) select(null)
+      toast(`${ic('trash', 15)}<span>Removed</span><button class="btn sm ghost pj-undo">Undo</button>`)
+      toastEl?.querySelector('.pj-undo')?.addEventListener('click', () => { toastEl?.remove(); refPost(`${x.ref.id}/restore`).then(o => o && select(x.key)) })
+    })
+  }
 
   // ---------- the dock
   $('.pj-dock').addEventListener('click', e => {
@@ -939,6 +1304,7 @@ export function makeProject({ sw, C, root }) {
     if (!b) return
     const t = b.dataset.tool
     if (t === 'files') return sheet(!root.classList.contains('files-on'))
+    if (t === 'move' || t === 'scribble' || t === 'eraser') return setTool(t)
     if (t === 'frame') { setFollow(false); return frameAll() }
     if (t === 'follow') return setFollow(!P.follow)
     if (t === 'text') return newPage()
@@ -948,9 +1314,11 @@ export function makeProject({ sw, C, root }) {
   // "Tell the crew…": an edit of the selected page rewrites its section (/fix); about a picture, it is
   // painted again with those words; otherwise the project's next version keeps every page and adds
   // what was asked (web/route.js).
-  ask.onsubmit = e => {
+  ask.onsubmit = async e => {
     e.preventDefault()
     const text = input.value.trim()
+    const marked = P.marks.filter(m => m.run === P.run)
+    if (marked.length) return sendMarks(text, marked)
     if (!text) return input.focus()
     const x = P.sel && find(P.sel)
     if (x?.kind === 'art') return replace(x)
@@ -962,11 +1330,24 @@ export function makeProject({ sw, C, root }) {
     // no pages yet (its build failed) is still this project's: the server builds on its brief.
     // Each turn extends the one before it: the open version becomes the run that starts.
     const from = route === 'extend' || (route === 'new' && P.run && P.board?.kind !== 'game' && !hosted()) ? P.run : null
-    Promise.resolve(sw.submit(text, false, P.pid, from)).then(r => {
+    const send = (t, chat) => Promise.resolve(sw.submit(t, false, P.pid, from, chat ? { chat } : {})).then(r => {
       if (r?.busy) { if (!input.value) input.value = text; toast(`${ic('msg', 15)}<span>Still on the last change</span>`); return }
-      if (typeof r === 'string' && r !== P.run) { P.run = r; P.sel = null; P.framed = false; P.thumbs.clear() }
+      // the new version is the one shown: the machine names it, the Overview follows
+      if (typeof r === 'string' && r !== P.run) return C.started(r, { project: P.pid, room: 'overview' })
       load()
     })
+    // "don't build yet, let's talk" or a question for the crew: the planner answers in the Design
+    // deck's chat and nothing is built until the person says build there (engine/talkplan.mjs)
+    // no Hermes to answer the model: the chat says so and what to do, before anything starts
+    const off = hosted() || !sw.hermesReady ? null : await sw.hermesReady()
+    if (off) { C.go('station', 'canvas'); C.chat(true); return void sw.hermesSays(off) }
+    const read = hosted() || !sw.readTalk ? 'build' : await sw.readTalk(text)
+    if (read === 'build') return send(text)
+    C.go('station', 'canvas')
+    C.chat(true)
+    const build = (t, chat) => { C.go('project'); send(t, chat) }
+    if (read === 'talk') sw.talk.start({ text, build, from: P.run })
+    else sw.talk.ask(text, () => build(text), () => sw.talk.start({ text, build, from: P.run }))
   }
 
   // the section the dock is talking about; its × goes back to the whole project
@@ -1091,8 +1472,24 @@ export function makeProject({ sw, C, root }) {
     }
     for (const [c, x, y] of spots) {
       c.style.opacity = ''
+      c.classList.remove('track')
+      c.dataset.wx = x; c.dataset.wy = y
       c.style.left = `${world.offsetLeft + P.cam.x + x * P.cam.k}px`
       c.style.top = `${world.offsetTop + P.cam.y + y * P.cam.k}px`
+    }
+  }
+  // While the camera moves, the cursors keep to their spots about ten times a second; CSS eases each
+  // step (.cur.track), so the crew needs no per-frame work. The Design deck keeps its own smooth cursors.
+  function trackCrew() {
+    if (!curEl.children.length) return
+    const wait = 100 - (performance.now() - (P.trackAt || 0))
+    if (wait > 0) { clearTimeout(P.trackT); P.trackT = setTimeout(trackCrew, wait); return }
+    P.trackAt = performance.now()
+    for (const c of curEl.children) {
+      if (c.dataset.wx == null) continue
+      c.classList.add('track')
+      c.style.left = `${world.offsetLeft + P.cam.x + c.dataset.wx * P.cam.k}px`
+      c.style.top = `${world.offsetTop + P.cam.y + c.dataset.wy * P.cam.k}px`
     }
   }
   // an element's box in world units, from layout (offsets up to the world), not from the screen
@@ -1105,6 +1502,172 @@ export function makeProject({ sw, C, root }) {
   const scanAt = () => ((Date.now() / 4000) % 1) * 0.9 + 0.05
 
   let toastEl = null
+  // ---------- Scribble: draw on a page's artboard (a stroke, a ring, or with Shift a box), a note at its end
+  const clamp01 = v => Math.max(0, Math.min(1, v))
+  world.addEventListener('pointerdown', e => {
+    if (P.tool === 'move' || e.button !== 0 || hosted()) return
+    const a = e.target.closest('.ab.page'), x = a && find(a.dataset.key)
+    if (!x) return
+    e.preventDefault(); e.stopPropagation()
+    if (P.tool === 'eraser') { const g = e.target.closest('[data-mk]'); if (g) eraseMark(g.dataset.mk, !!g.dataset.sent); return }
+    if (!P.run) return toast('<span>Build it first</span>')
+    const r = a.getBoundingClientRect(), k = pageK(x.page)
+    const at = ev => [clamp01((ev.clientX - r.left) / r.width), clamp01((ev.clientY - r.top) / r.height / k)]
+    const d = { page: x.page, pts: [at(e)], shift: e.shiftKey }
+    const svg = a.querySelector('.mk'), live = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+    live.innerHTML = '<path class="halo"/><path class="ln"/>'
+    svg?.append(live)
+    a.setPointerCapture(e.pointerId)
+    const move = ev => {
+      const p = at(ev), q = d.pts.at(-1)
+      if (Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) < 0.002) return
+      d.pts.push(p)
+      const path = d.shift ? markD({ kind: 'box', page: x.page, box: boxOf([d.pts[0], p]) }) : ptsPath(d.pts, k)
+      for (const el of live.children) el.setAttribute('d', path)
+    }
+    const up = ev => {
+      a.removeEventListener('pointermove', move); a.removeEventListener('pointerup', up); a.removeEventListener('pointercancel', up)
+      live.remove()
+      if (ev.type === 'pointerup') finishMark(d, ev)
+    }
+    a.addEventListener('pointermove', move); a.addEventListener('pointerup', up); a.addEventListener('pointercancel', up)
+  }, true)
+  function boxOf(pts) {
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
+    const x0 = Math.min(...xs), y0 = Math.min(...ys)
+    return { x: x0, y: y0, w: Math.max(...xs) - x0, h: Math.max(...ys) - y0 }
+  }
+  function finishMark(d, ev) {
+    const pts = d.shift ? [d.pts[0], d.pts.at(-1)] : d.pts
+    const box = boxOf(pts)
+    if (box.w + box.h < 0.01) return
+    if (P.marks.length >= 40) return toast('<span>40 marks at most: send these first</span>')
+    const [a, b] = [pts[0], pts.at(-1)]
+    const closed = pts.length > 8 && Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.3 * Math.hypot(box.w, box.h)
+    const m = { id: `k${++P.mkN}`, run: P.run, page: d.page, kind: d.shift ? 'box' : closed ? 'ring' : 'stroke', pts: d.shift ? [] : pts, box, note: '', target: null }
+    P.marks.push(m)
+    drawMarks()
+    Promise.resolve(sw.marks?.anchor(m.page, box)).then(t => { if (t) m.target = t }).catch(() => {})
+    noteAt(m, ev.clientX, ev.clientY)
+  }
+  // the optional note, at the end of the mark; Enter or a click away closes it
+  function noteAt(m, x, y) {
+    root.querySelector('.mk-note')?.remove()
+    const f = document.createElement('input')
+    f.className = 'mk-note'
+    f.placeholder = 'Note'
+    f.setAttribute('aria-label', 'Note for this mark')
+    f.maxLength = 200
+    f.style.left = `${Math.min(innerWidth - 230, x + 10)}px`
+    f.style.top = `${Math.min(innerHeight - 44, y + 6)}px`
+    let shut = false
+    const done = () => { if (shut) return; shut = true; m.note = f.value.trim(); f.remove() }
+    f.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); done() } }
+    f.onblur = done
+    root.append(f)
+    setTimeout(() => f.focus(), 0)
+  }
+  // Eraser: an unsent mark goes (⌘Z brings it back); a sent one is closed on the run, so it is never sent again
+  function eraseMark(id, sent) {
+    if (sent) { sw.marks?.erase(id).then(ok => { if (!ok) toast('<span>That mark could not be erased</span>') }); return }
+    const m = P.marks.find(x => x.id === id)
+    if (!m) return
+    P.marks = P.marks.filter(x => x !== m)
+    P.mkUndo.push([m])
+    drawMarks()
+  }
+  function clearMarks() {
+    const gone = P.marks.filter(m => m.run === P.run)
+    if (!gone.length) return
+    P.marks = P.marks.filter(m => !gone.includes(m))
+    P.mkUndo.push(gone)
+    drawMarks()
+    toast(`${ic('trash', 15)}<span>Marks cleared</span><button class="btn sm ghost pj-undo">Undo</button>`)
+    toastEl?.querySelector('.pj-undo')?.addEventListener('click', () => { toastEl?.remove(); undoMarks() })
+  }
+  function undoMarks() {
+    const back = P.mkUndo.pop()
+    if (!back) return false
+    P.marks.push(...back)
+    drawMarks()
+    return true
+  }
+  $('.pj-mkchip').onclick = () => clearMarks()
+  // ⌘Z while Scribble or Eraser is out brings back what Eraser or Clear took, until the marks are sent
+  addEventListener('keydown', e => {
+    if (!P.on || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || P.tool === 'move' || !P.mkUndo.length) return
+    if (e.target.closest?.('input, textarea')) return
+    e.preventDefault(); e.stopImmediatePropagation()
+    undoMarks()
+  }, true)
+
+  // Sending: each page's picture with its marks drawn on it, a crop round each mark (its box and a quarter
+  // more, at least 256 px), the data and the words. The crew answer with drafts beside the original.
+  const loadImg = src => new Promise(ok => { if (!src) return ok(null); const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src })
+  function inkMark(g, m, W, H, lw) {
+    g.lineCap = g.lineJoin = 'round'
+    const path = () => {
+      g.beginPath()
+      if (m.kind === 'box') g.rect(m.box.x * W, m.box.y * H, m.box.w * W, m.box.h * H)
+      else m.pts.forEach(([x, y], i) => (i ? g.lineTo(x * W, y * H) : g.moveTo(x * W, y * H)))
+    }
+    path(); g.strokeStyle = 'rgba(11,11,12,.55)'; g.lineWidth = lw * 2; g.stroke()
+    path(); g.strokeStyle = '#ff5a36'; g.lineWidth = lw; g.stroke()
+  }
+  async function sendMarks(text, list) {
+    if (P.markBusy || !sw.marks) return
+    P.markBusy = true
+    root.querySelector('.mk-note')?.blur()
+    try {
+      const shots = {}, crops = {}
+      for (const page of new Set(list.map(m => m.page))) {
+        const im = await loadImg(await Promise.resolve(sw.thumb?.(page, 0.6)).catch(() => null) || (P.thumbs.get(page)?.startsWith('data:') ? P.thumbs.get(page) : null))
+        if (!im) continue
+        const W = im.naturalWidth, H = im.naturalHeight, c = document.createElement('canvas')
+        c.width = W; c.height = H
+        const g = c.getContext('2d')
+        g.drawImage(im, 0, 0)
+        for (const m of list.filter(m => m.page === page)) inkMark(g, m, W, H, Math.max(3, W / 240))
+        const s = Math.min(1, 1024 / W), o = document.createElement('canvas')
+        o.width = Math.round(W * s); o.height = Math.round(Math.min(H * s, 4000))
+        o.getContext('2d').drawImage(c, 0, 0, W * s, H * s)
+        shots[page] = o.toDataURL('image/jpeg', 0.8)
+        for (const m of list.filter(m => m.page === page)) {
+          const b = m.box, side = 256 * W / 1280
+          let w = Math.max(side, b.w * W * 1.5), h = Math.max(side, b.h * H * 1.5)
+          w = Math.min(w, W); h = Math.min(h, H)
+          const x0 = Math.max(0, Math.min(W - w, (b.x + b.w / 2) * W - w / 2)), y0 = Math.max(0, Math.min(H - h, (b.y + b.h / 2) * H - h / 2))
+          const cc = document.createElement('canvas'), z = Math.min(2, 768 / Math.max(w, h))
+          cc.width = Math.round(w * z); cc.height = Math.round(h * z)
+          cc.getContext('2d').drawImage(c, x0, y0, w, h, 0, 0, cc.width, cc.height)
+          crops[m.id] = cc.toDataURL('image/jpeg', 0.85)
+        }
+      }
+      const out = await sw.marks.send({ text, marks: list.map(({ id, kind, page, box, pts, note, target }) => ({ id, kind, page, box, pts, note, target })), shots, crops })
+      P.marks = P.marks.filter(m => !list.includes(m))
+      P.mkUndo = []
+      input.value = ''
+      drawMarks()
+      toast(`${ic('msg', 15)}<span>${esc((out.reply || 'On it').slice(0, 160))}</span>`)
+    } catch (err) { toast(`<span>${esc(err.message || 'The marks did not go')}</span>`) } finally { P.markBusy = false }
+  }
+  // what the run says about its marks and drafts (live, and replayed when it opens)
+  sw.on(e => {
+    if (e.type === 'reset') { P.sent.clear(); P.drafts.clear(); P.drafting.clear(); P.reads.clear(); return }
+    const run = e.run || sw.viewing
+    if (e.type === 'marks') for (const m of e.marks || []) P.sent.set(m.id, { ...m, run, status: 'open' })
+    else if (e.type === 'mark:status') { for (const id of e.ids || []) { const m = P.sent.get(id); if (m) m.status = e.status } }
+    else if (e.type === 'marks:read') { for (const r of e.reads || []) P.reads.set(r.mark, r) }
+    else if (e.type === 'draft:start') P.drafting.set(`${e.page}/${e.layer}`, { page: e.page, layer: e.layer, role: e.role, run })
+    else if (e.type === 'draft') { P.drafting.delete(`${e.page}/${e.layer}`); P.drafts.set(e.id, { id: e.id, page: e.page, layer: e.layer, role: e.role, html: e.html, marks: e.marks || [], run, image: null }) }
+    else if (e.type === 'draft:failed') { P.drafting.delete(`${e.page}/${e.layer}`); if (P.on && e.message !== 'stopped') toast(`<span>The draft did not come: ${esc(String(e.message || '').slice(0, 80))}</span>`) }
+    else if (e.type === 'draft:closed') P.drafts.delete(e.id)
+    else return
+    if (!P.on) return
+    clearTimeout(P.mkSoon)
+    P.mkSoon = setTimeout(() => { renderStage(); renderList(); if (P.sel && !find(P.sel)) select(null); else renderInsp() }, 120)
+  })
+
   function toast(html) {
     toastEl?.remove()
     const t = toastEl = document.createElement('div')
@@ -1118,10 +1681,13 @@ export function makeProject({ sw, C, root }) {
   addEventListener('keydown', e => {
     if (!P.on || e.defaultPrevented || e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return
     if (window.SwarmUI?.open?.() || document.querySelector('.hm-menu')) return
+    if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 's' || e.key === 'e') && !hosted()) { e.preventDefault(); return setTool(e.key === 's' ? 'scribble' : 'eraser') }
+    if (e.key === 'Escape' && P.tool !== 'move') { e.preventDefault(); e.stopPropagation(); return setTool('move') }
     if (e.key === 'Escape' && P.layer) { e.preventDefault(); e.stopPropagation(); pickLayer(null); return }
     if (e.key === 'Escape' && P.sel) { e.preventDefault(); e.stopPropagation(); select(null) }
     if (e.key === 'Enter' && P.sel) { e.preventDefault(); openItem(find(P.sel)) }
     if (e.key === 'f' && !e.metaKey && !e.ctrlKey) frameAll()
+    if ((e.key === 'Delete' || e.key === 'Backspace') && P.sel?.startsWith('rf:')) { const x = find(P.sel); if (x) { e.preventDefault(); removeRef(x) } }
     if ((e.key === 'Delete' || e.key === 'Backspace') && P.sel?.startsWith('up:')) { const x = find(P.sel); if (x) { e.preventDefault(); fileOp({ op: 'delete', name: x.name }).then(() => select(null)) } }
   }, true)
   addEventListener('resize', () => { if (P.on) crewAtWork() })
@@ -1142,20 +1708,44 @@ export function makeProject({ sw, C, root }) {
     if (/^(image|review)(:|$)/.test(e.type) && (!e.run || e.run === P.run)) { clearTimeout(P.soonP); P.soonP = setTimeout(load, 350) }
     // a run starting elsewhere (another project, another window) does not take over this one;
     // the dock's own turns switch to their run when it starts (above)
-    if (e.type === 'run:start' || e.type === 'reset') { if (e.run && !P.run) P.run = e.run; if (!e.run || e.run === P.run) { P.thumbs.clear(); setTimeout(load, 600) } }
+    if (e.type === 'run:start' || e.type === 'reset') { if (e.run && !P.run) P.seen = e.run; if (!e.run || e.run === P.run) { P.thumbs.clear(); P.stale.clear(); P.thumbTries = 0; setTimeout(load, 600) } }
     if (e.type === 'image' || e.type === 'page' || e.type === 'video:done' || e.type === 'run:done') { clearTimeout(P.soon); P.soon = setTimeout(load, 800) }
-    if (e.type === 'layer:done') { P.thumbs.clear(); clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
+    // a finished section changes its page (a shared one, '*', every page): those are taken again
+    if (e.type === 'layer:done') { for (const p of P.board?.pages || []) if (!e.page || e.page === '*' || e.page === p.id) P.stale.add(p.id); P.thumbTries = 0; clearTimeout(P.soonT); P.soonT = setTimeout(thumbs, 2000) }
   })
+
+  // Drag a layer into the chat (spec 29, web/layerlink.js): a section in the inspector's list, or a
+  // picked section's outline on its page, drags into the left chat as a chip
+  root.addEventListener('dragstart', e => {
+    const b = e.target.closest?.('.pj-ly[data-layer], .lsel[data-layer]')
+    if (!b) return
+    e.stopPropagation()
+    sw.layerDrag?.(e, b.dataset.layer, b.dataset.name || b.textContent.trim())
+  })
+  // where a layer is on screen while the Overview shows (false when it does not): its page's
+  // artboard, cut to the layer's band; a shared layer (nav, footer) on the selected page or the first
+  sw.overviewRect = key => {
+    if (!P.on || root.hidden) return false
+    const [pg] = String(key).split('/')
+    const page = pg === '*' ? (find(P.sel)?.page || P.board?.pages?.[0]?.id) : pg
+    const a = page && world.querySelector(`.ab[data-key="${CSS.escape(`page:${page}`)}"]`)
+    if (!a) return null
+    const r = a.getBoundingClientRect()
+    const l = sw.layers?.list(page).find(y => y.key === key), ratio = P.aspect.get(page)
+    if (!l?.box || !ratio) return { left: r.left, top: r.top, width: r.width, height: Math.min(r.height, 40) }
+    const full = r.width * ratio, top = Math.min(r.bottom - 4, r.top + l.box.top * full)
+    return { left: r.left, top, width: r.width, height: Math.max(4, Math.min(l.box.height * full, r.bottom - top)) }
+  }
 
   return {
     el: root,
-    show(run, pid) {
-      if (pid !== undefined && pid !== P.pid) { P.pid = pid; P.sel = null; P.framed = false; P.thumbs.clear() }
-      if (run && run !== P.run) { P.run = run; P.sel = null; P.framed = false; P.thumbs.clear() }
-      if (!run && pid === null) { P.run = null; P.framed = false }
+    // the machine's version and project (draw passes them); another one starts the view afresh
+    show() {
+      const shown = `${nav.view.project}|${nav.view.version}`
+      if (shown !== P.shown) { P.shown = shown; P.seen = null; forget() }
       root.hidden = false
       P.on = true
-      load()
+      if (P.boardOf !== P.run) render(); load()
     },
     hide() {
       P.on = false

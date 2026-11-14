@@ -3,7 +3,7 @@
 // bed written here, in code, to the theme's mood and the video's cuts. ffmpeg
 // lays both under the silent render, the music ducking while the voice speaks.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { existsSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
