@@ -10,7 +10,7 @@
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
-import { execFile, hermesEnv, pick } from '../engine/proc.mjs'
+import { execFile, hermesEnv, pick, respawnSelf } from '../engine/proc.mjs'
 import { hermesBridge, imageBody, videoBody } from '../engine/bridge.mjs'
 import { hermesLlm, roleModel } from '../engine/hermesllm.mjs'
 import { hermesHealth, HERMES_SAYS } from '../engine/hermeshealth.mjs'
@@ -28,7 +28,8 @@ import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixTe
 import { handChanges, keepHand } from '../engine/handedit.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
 import { seoPass, currentSeo, cleanSeo, thumbOf } from '../engine/seo.mjs'
-import { seoAsk } from '../web/route.js'
+import { seoAsk, lookAsk } from '../web/route.js'
+import { lookEdits, themeNow } from '../engine/lookask.mjs'
 import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
@@ -78,7 +79,7 @@ import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '..
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
 import { makePoster, posterFfmpeg } from '../engine/poster.mjs'
-import { idleWatch } from '../engine/lifecycle.mjs'
+import { idleWatch, codeStamp, staleCode } from '../engine/lifecycle.mjs'
 import { findFfmpeg } from '../engine/playtest.mjs'
 import { writeBoard, fallbackBoard, cueSheet, TEMPLATES, checkBoard } from '../engine/storyboard.mjs'
 import { checkKit, kitBoard, kitPrompt, checkStory, storySource, storyBoard } from '../engine/filmkit.mjs'
@@ -2562,6 +2563,9 @@ async function commentNow(id, input) {
   if (marked) return markRequest(id, { events, start, theme, sections, text, input, send })
   // "improve the SEO", "a better description for the menu page": the crew's SEO pass
   if (seoAsk(text)) return seoRequest(id, { events, start, theme, given, text, send })
+  // the look only ("change the brand colours", "make it darker"), with no section named: the theme changes in
+  // place and every page stays as it is
+  if (lookAsk(text) && !(Array.isArray(input.targets) && input.targets.length) && typeof input.target !== 'string') return lookRequest(id, { events, start, text, send })
   // layers dragged into the chat (web/layerlink.js): just those sections, and the turn keeps them
   const dragged = Array.isArray(input.targets) ? [...new Set(input.targets.filter(k => typeof k === 'string' && sections.some(s => s.key === k)))].slice(0, 12) : []
   let keys = dragged.length ? dragged : typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
@@ -2672,6 +2676,30 @@ function closeDraft(id, did, accept) {
 
 // The SEO pass on request (engine/seo.mjs): one planner call edits titles and descriptions,
 // and a builder rewrites at most two sections when the aim needs words the page lacks.
+// A look-only ask (engine/lookask.mjs): the planner names the new colours, fonts or corners, and they are
+// recorded as the same `edit` events the Design panel makes, so open canvases restyle at once, Undo-able there,
+// and exports carry them. A reference link whose look is ready is shown to the planner, for "use the reference's
+// colours". Nothing is rebuilt.
+async function lookRequest(id, { events, start, text, send }) {
+  if (!models.planner.apiKey) throw new Error('no model key yet: start a build from Hermes once')
+  const theme = themeNow(events)
+  if (!theme?.vars) throw new Error('nothing built yet')
+  const agents = start.agents || []
+  const agent = agents[(commentTurn++ * 3 + 1) % Math.max(1, agents.length)]?.id
+  send('comment', { text, target: null })
+  const pid = projects.projectOf(id)
+  const reference = pid ? refs.list(pid).find(r => r.kind === 'link' && r.look?.state === 'ready')?.look?.tokens || null : null
+  const chat = async messages => (await streamChat(provider('planner'), { trace: { kind: 'look-ask', agent }, model: modelFor('planner'), maxTokens: 700, temperature: 0.3, signal: AbortSignal.timeout(60000), extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages })).text
+  const { edits, reply } = await lookEdits({ theme, text, reference, chat })
+  if (!edits.length) { send('seo:pass', { text, agent, reply: 'I could not tell what to change in the look. Name the colours or fonts you want.', failed: true }); return { sections: [], reply: '' }
+  }
+  const stamp = Date.now().toString(36)
+  edits.forEach((e, i) => send('edit', { ...e, id: `lk${stamp}${i}` }))
+  const said = `${reply || 'The look is changed.'} Every page stays as it is.`
+  send('seo:pass', { text, agent, reply: said, changes: edits.map(e => (e.kind === 'var' ? `${e.name.replace(/^--/, '')} ${e.value}` : e.kind === 'font' ? `${e.role} font ${e.value}` : `corners ${e.value}`)) })
+  return { sections: [], reply: said }
+}
+
 async function seoRequest(id, { events, start, theme, given, text, send }) {
   if (!models.planner.apiKey) throw new Error('no model key yet: start a build from Hermes once')
   const snap = snapshot(events, given, { name: nameFor(id)?.name })
@@ -2751,6 +2779,9 @@ const server = createServer((req, res) => {
 
   if (url.pathname === '/' || url.pathname === '/index.html') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    // the code changed under this server (an update): the page's parts would no longer fit. With no work
+    // running, a new server takes over and the page opens again on it
+    if (replaceSelf()) return res.end('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>Swarm Studio</title><body style="margin:0;background:#0f0f0f">')
     res.end(canvasPage())
     return
   }
@@ -4221,6 +4252,24 @@ function serverBusy() {
   if ((current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working') return true
   if ([...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working')) return true
   return !!appsNow?.busy()
+}
+// An update changed this server's code on disk while it ran. The launcher replaces an idle stale server on
+// Hermes's next call (launcher.py stale/_retire), but a pane reloaded before that got new web files from an old
+// server. So the server does it itself, once, when the page is asked for and no work is running: the port is
+// freed, the same program starts again with the same environment, and this one exits. Hermes's bridge attaches
+// to the new one by itself. SWARM_NO_REPLACE=1 turns it off.
+let replacing = false
+function replaceSelf() {
+  if (replacing) return true
+  if (process.env.SWARM_NO_REPLACE === '1' || !staleCode(BOOTED, codeStamp([join(root, 'server'), join(root, 'engine')]))) return false
+  const working = (current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working' || [...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working') || !!appsNow?.busy()
+  if (working) return false
+  replacing = true
+  console.log('swarm studio: the code changed on disk, starting again on it')
+  server.close(() => { try { respawnSelf() } catch (err) { console.error('could not start again:', err.message) } shutdown() })
+  server.closeIdleConnections?.()
+  setTimeout(() => server.closeAllConnections?.(), 300).unref()
+  return true
 }
 const POLLS = /^\/api\/(state|hermes(\/attach)?)$/
 // checked every 30 s, or a quarter of the time when it is shorter (a test sets SWARM_SERVER_IDLE_MIN to seconds)
