@@ -1798,6 +1798,14 @@ body.view-video .video-pop .vmin { display: none; }
 .app-shell { position: relative; }
 .app-loading { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; background: var(--void); color: var(--muted); border-radius: 6px; z-index: 1; }
 .app-loading[hidden] { display: none; }
+/* Autoplay: the AI player's screen over the game, a crew cursor at work until its first picture, and one line for what it decided */
+.app-auto { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; background: var(--void); border-radius: 6px; overflow: hidden; }
+.app-auto[hidden], .app-auto [hidden] { display: none; }
+.app-auto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.app-auto-say { position: absolute; left: 16px; bottom: 16px; max-width: calc(100% - 32px); padding: 7px 12px; border-radius: 999px; font-size: 13px; line-height: 1.2; color: var(--text); background: var(--panel); border: 1px solid var(--line-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#app-auto { display: inline-flex; align-items: center; gap: 6px; }
+#app-auto[hidden] { display: none; }
+#app-auto .ico { width: 14px; height: 14px; }
 .app-loading .spin { width: 28px; height: 28px; border: 3px solid rgb(var(--glass-rgb) / .14); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
 
 /* Film studio: the prompt, its references, the storyboard's beats and the style notes */

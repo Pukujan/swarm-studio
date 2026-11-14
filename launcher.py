@@ -48,6 +48,7 @@ PASSED_KEYS = (
     "STRIPE_SECRET_KEY",                                        # a generated app's checkout (test keys only)
     "RESEND_API_KEY",                                           # a generated app's email (only when its App kit chose Resend)
     "VERCEL_TOKEN", "CLOUDFLARE_API_TOKEN",                     # publishing
+    "JEV_KEY",                                                  # Autoplay: Jev chooses the AI player's moves (else scripted)
 )
 # role -> the Hermes auxiliary slot it uses (registered in __init__.py)
 SLOTS = {"planner": "swarm_studio_planner", "worker": "swarm_studio_builder", "reviewer": "swarm_studio_reviewer"}

@@ -308,7 +308,7 @@ export function on(e) {
       S.spec = e.spec
       botMsg(`🎮 ${e.spec.title}: ${e.spec.pitch || ''} (${e.spec.engine})`)
       break
-    case 'app:start': case 'app:step': case 'app:ready': case 'app:done': case 'app:failed': case 'app:deployed': case 'app:parked':
+    case 'app:start': case 'app:step': case 'app:ready': case 'app:done': case 'app:failed': case 'app:deployed': case 'app:parked': case 'autoplay':
       appEvent(e)
       break
   }
