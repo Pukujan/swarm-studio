@@ -1930,7 +1930,10 @@ const OUT_OF_QUOTA = /\b(429|402)\b|usage limit|quota|insufficient|no capacity|r
 // goes to the reviewer on dark and on magenta. → { ok, path, problems, report }
 async function cutAndCheck(src, it, guide) {
   const cut = join(dirname(src), `${it.id}-cut.png`), view = join(dirname(src), `${it.id}-check.png`)
-  const c = await new Promise(ok => execFile(process.platform === 'win32' ? 'python' : 'python3', [join(root, 'scripts', 'cutout.py'), src, cut, '--preview', view], { timeout: 90000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
+  // the Python that has the image libraries (cutPy below), not whichever python3 is first on the PATH: under
+  // Hermes that is Hermes's own bare Python, and the cut failed with "No module named 'PIL'" (2026-11-13)
+  const py = (await cutPy()) || (process.platform === 'win32' ? 'python' : 'python3')
+  const c = await new Promise(ok => execFile(py, [join(root, 'scripts', 'cutout.py'), src, cut, '--preview', view], { timeout: 90000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
   if (!c.ok || !existsSync(cut)) return { ok: false, cutFailed: true, problems: [c.why.split('\n').pop().slice(0, 120) || 'the cut failed'] }
   let report = {}
   try { report = JSON.parse(c.out.trim().split('\n').pop()) } catch {}
@@ -1945,8 +1948,9 @@ async function cutAndCheck(src, it, guide) {
     : check.problems), ...(clash ? [clash.problem] : [])]
   return { ok: (check.skipped ? !looksOff : check.ok) && !clash, path: cut, view, problems, report, clash }
 }
-// The sheet cutter needs numpy and scipy, which the Python first on the PATH may lack (a
-// venv's): the first of SWARM_CUT_PY, python3 and the system Python that has them.
+// The cutters (sheets, single sprites, the key-colour measure) need numpy, scipy and Pillow, which the Python
+// first on the PATH may lack (a venv's, or Hermes's own): the first of SWARM_CUT_PY, python3, the system
+// Python and Hermes's Python that has them.
 let cutPyP = null
 const cutPy = () => (cutPyP ||= (async () => {
   const win = process.platform === 'win32'
@@ -2221,7 +2225,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     const pick = art.tierFor(choice, { hero: true })
     // the key the sheet is painted on comes from the figure's own picture: the key colour
     // furthest from its colours (the layout's key, guessed from the words, is the fallback)
-    const measured = kit ? null : await art.measureKey(ref)
+    const measured = kit ? null : await art.measureKey(ref, { py: (await cutPy()) || undefined })
     let layout = measured && measured.pick !== art.keyOf(it.layout) ? art.swapKey(it.layout, measured.pick) : it.layout
     if (layout !== it.layout) step({ kind: 'setup', text: `the ${it.what} is painted on ${art.keyOf(layout)}: the furthest key from the figure's colours` })
     // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
@@ -4027,7 +4031,7 @@ const server = createServer((req, res) => {
       // for the launcher: which process this is, when it started, and whether stopping it would lose work
       pid: process.pid,
       booted: BOOTED,
-      busy: !!(current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working',
+      busy: workRunning(),
       run: current?.id || null,
       done: current?.done ?? null,
       working: current?.working.size || 0,
@@ -4230,12 +4234,16 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, shutdown)
 // Nothing to do for Settings › Background's time (20 min): no pane open (an /events stream), no request, no
 // build, Auto run, film, publish or app build. The server exits; the launcher's ensure_server() starts it again
 // on next use (decision 0017, issue #450).
-function serverBusy() {
-  if (clients.size > 0) return true
+// Work that stopping the server would lose: a site build, an Auto run, a film, a publish, or an app or game being
+// built. One answer for everyone who asks: the idle stop, the server replacing itself, and /api/state's `busy`,
+// which the launcher reads before it retires a stale server. (`busy` used to leave out films, publishes and
+// app and game builds, so a restart that trusted it stopped a game mid-build, 2026-11-13.)
+function workRunning() {
   if ((current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working') return true
   if ([...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working')) return true
   return !!appsNow?.busy()
 }
+function serverBusy() { return clients.size > 0 || workRunning() }
 // An update changed this server's code on disk while it ran. The launcher replaces an idle stale server on
 // Hermes's next call (launcher.py stale/_retire), but a pane reloaded before that got new web files from an old
 // server. So the server does it itself, once, when the page is asked for and no work is running: the port is
@@ -4245,7 +4253,7 @@ let replacing = false
 function replaceSelf() {
   if (replacing) return true
   if (process.env.SWARM_NO_REPLACE === '1' || !staleCode(BOOTED, codeStamp([join(root, 'server'), join(root, 'engine')]))) return false
-  const working = (current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working' || [...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working') || !!appsNow?.busy()
+  const working = workRunning()
   if (working) return false
   replacing = true
   console.log('swarm studio: the code changed on disk, starting again on it')
