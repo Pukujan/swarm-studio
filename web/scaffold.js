@@ -28,7 +28,7 @@ const ROLE_NAME = { pack: 'Brand kit' }
 
 export function makeScaffold({ sw, C, root }) {
   const esc = sw.esc
-  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, asking: null, talked: null, cards: new Map(), takes: null }
+  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, asking: null, talked: null, cards: new Map(), takes: null, plannedAsk: /** @type {string | null} */ (null) }
 
   const bd = makeBoard({ root, cls: 'project plan scaffold', label: 'Studio', fit: [0.35, 1], on: () => A.on, selected: () => !!A.sel, clear: () => select(null) })
   const { world, insp } = bd
@@ -453,7 +453,20 @@ export function makeScaffold({ sw, C, root }) {
     // the step it is in is where the person is (the address follows)
     const step = key?.startsWith('step:') ? key.slice(5) : key && world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)?.closest('[data-sec]')?.dataset.sec
     if (step && C.nav.view.room === 'studio' && C.nav.view.step !== step) C.nav.go({ type: 'studio.step', step })
+    if (step === 'plan') askAtPlan()
     render()
+  }
+  // the pages are asked at the Plan step, once per project, before Build (#541): Build then builds when pressed.
+  // A question already open, or pages already said, asks nothing (engine/askfirst.mjs studioOpen)
+  function askAtPlan() {
+    if (!leads() || A.asking || !A.d?.studio.idea || A.plannedAsk === A.pid) return
+    A.plannedAsk = A.pid
+    const pid = A.pid
+    post(at('/ask'), {}).then(j => {
+      if (pid !== A.pid || A.asking || j?.ask?.next !== 'pages') return
+      A.asking = 'pages'
+      sw.say?.(j.ask.text)
+    }).catch(() => {})
   }
   function press(el) {
     const key = el.dataset.key
@@ -572,7 +585,8 @@ export function makeScaffold({ sw, C, root }) {
     // first build, then the pictures (also the board's Pictures card). The build goes on from the answer.
     if (leads()) {
       const j = await post(at('/ask'), { building: true }).catch(() => null)
-      const next = j?.ask?.next || (c.state.pictures ? null : 'pictures')
+      // the server's word stands: Setup's pictures count as said (server/studio.mjs), so they are not asked again
+      const next = j ? j.ask?.next || null : (c.state.pictures ? null : 'pictures')
       if (next) {
         A.wantsBuild = true
         A.asking = next
