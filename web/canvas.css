@@ -522,6 +522,19 @@ body.side-min .dock { left: auto; }
 #agents.chip { flex: none; }
 .composer select.chip.model { flex: 1 1 0; width: 0; max-width: 220px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .composer .row .grow { min-width: 0; }
+/* the chat's mode (web/chatmode.js): a small chip beside the send button, whose word follows it. The button
+   keeps one width whatever it says (Ask, Plan, Build, Fix, Send), so nothing beside it moves (rule 29). In a
+   narrow chat the pair takes the row's second line, so the model's name stays readable */
+.composer .row { flex-wrap: wrap; }
+.composer .send-set { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.composer select.chip.mode { flex: none; }
+.composer select.chip.model { flex: 1 1 96px; min-width: 96px; }
+.composer button[type=submit] { min-width: 62px; text-align: center; }
+/* a wait in the chat: the crew member's cursor and name beside what they are doing */
+.feed .item.bot.crew-wait .cur { position: relative; display: inline-flex; align-items: center; vertical-align: -3px; margin-right: 6px; transition: none; }
+.feed .item.bot.crew-wait .cur svg { width: 14px; height: 14px; }
+/* Fix's reply with no model is the facts, a line each */
+.feed .item.bot.fix-reply .txt { white-space: pre-line; }
 .fmenu .fnew { display: flex; gap: 6px; padding: 4px 6px; }
 .fmenu .fnew input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px; }
 .fmenu .fnew button { width: auto; background: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 5px 10px; }

@@ -407,7 +407,7 @@ function changeBlock(p) {
   return box
 }
 // what Hermia shows when asked to see the build: the newest play test clip and pictures
-function mediaBlock(m) {
+export function mediaBlock(m) {
   const box = document.createElement('div')
   box.className = 'tell-media'
   if (m.clip) {

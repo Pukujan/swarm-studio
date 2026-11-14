@@ -1531,10 +1531,12 @@ async function studioFacts(runId = null, { light = false } = {}) {
   const win = process.platform === 'win32'
   // light (Ask's one-paragraph view of the Studio): nothing that starts a program or calls a model
   const skip = () => null
-  const [view, health, media, login, conn, connList, gw, image, python] = await Promise.all([
-    // the tiny model test the Setup sheet runs when it opens (kept ten minutes), then the sheet's own view
-    soon(async () => { if (!light) await soon(() => setup.test(), 15000); return setup.view() }, 20000),
-    soon(() => health.now()), soon(() => mediaNow()), soon(light ? skip : () => githubLogin()), soon(() => connections(dataDir)),
+  const well = await soon(() => health.now())
+  const [view, media, login, conn, connList, gw, image, python] = await Promise.all([
+    // the tiny model test the Setup sheet runs when it opens (kept ten minutes), then the sheet's own view.
+    // With Hermes away there is no one to answer it, and the Hermes part already says so: no test, no wait.
+    soon(async () => { if (!light && well?.ok !== false) await soon(() => setup.test(), 15000); return setup.view() }, 20000),
+    soon(() => mediaNow()), soon(light ? skip : () => githubLogin()), soon(() => connections(dataDir)),
     soon(() => connectors.list()), soon(light ? skip : () => gatewayTargets()), soon(() => imageChoice()),
     // the cutters' Python, looked at now: cutPy (below) keeps its first answer until the Studio restarts
     soon(light ? skip : async () => d.pythonFacts({
@@ -1545,7 +1547,7 @@ async function studioFacts(runId = null, { light = false } = {}) {
   ])
   const st = hermes.status()
   const F = {
-    view, hermes: { ...st, health }, models: { roles: Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), picked: picks[r] || null }])) },
+    view, hermes: { ...st, health: well }, models: { roles: Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), picked: picks[r] || null }])) },
     local: setup.local(), media, publish: conn || login ? { github: login, ...(conn || {}) } : null, conn: connList, gateway: gw ? { platforms: gw } : null
   }
   const events = runId ? readEvents(runId) : null
@@ -1553,9 +1555,9 @@ async function studioFacts(runId = null, { light = false } = {}) {
   const named = m => (m && !ROLES.includes(m) ? String(m).replace(/^[a-z]+\//, '') : '')
   return {
     parts: d.partStates(GROUPS, F),
-    run: events ? { id: runId, kind, working: (current?.id === runId && !current.done) || appsNow?.jobs.get(runId)?.state === 'working', failures: d.failuresOf(events) } : null,
+    run: events ? { id: runId, kind, working: (current?.id === runId && !current.done) || appsNow?.jobs.get(runId)?.state === 'working', built: !!(await apps().then(a => a.state(runId).hasApp).catch(() => false)), failures: d.failuresOf(events) } : null,
     python,
-    hermes: { attached: !!st.attached, message: health && !health.ok ? `${health.message || ''} ${health.action || ''}`.trim() : '' },
+    hermes: { attached: !!st.attached, message: well && !well.ok ? `${well.message || ''} ${well.action || ''}`.trim() : '' },
     models: { planner: named(modelFor('planner')), worker: named(modelFor('worker')), reviewer: picks.reviewer === 'off' ? '' : named(modelFor('reviewer')), image: image ? String(image.model || image.provider || '') : '', video: media?.clips?.on ? String(media.clips.by || '') : '' }
   }
 }

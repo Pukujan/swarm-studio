@@ -7,6 +7,7 @@ import { botMsg, feed } from './panels.js'
 import { esc } from './design.js'
 import { nextRoute, slashPop, slashMatches, slashAt, renderSlash, pickSlash, setNextRoute, setSlashAt } from './loop.js'
 import { runNow, shownRun } from './film.js'
+import { paintSend } from '../chatmode.js'
 
 // ---------- talk first (engine/talkplan.mjs): the person asked not to build yet, or asked the crew
 // a question. Hermia answers here in the chat, the conversation goes on in this dock, and nothing is
@@ -18,10 +19,12 @@ import { runNow, shownRun } from './film.js'
 // ask: the chat's skip question before a website's build is open (decision 0020): words and picks answer it
 export const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null, plan: null, ask: false }
 const dockBtn = els.form.querySelector('button[type="submit"]')
-// while talking, the dock sends to Hermia: its button says Send, not Build
+// while talking, the dock sends to Hermia: its button says Send, not the mode's word (web/chatmode.js
+// writes the button: the mode can change while a talk is open)
 function talkDock(on) {
-  if (on && !talk.dock) { talk.dock = { ph: els.brief.placeholder, btn: dockBtn.textContent }; els.brief.placeholder = 'Tell Hermia…'; dockBtn.textContent = 'Send' }
-  if (!on && talk.dock) { els.brief.placeholder = talk.dock.ph; dockBtn.textContent = talk.dock.btn; talk.dock = null }
+  if (on && !talk.dock) { talk.dock = { ph: els.brief.placeholder }; els.brief.placeholder = 'Tell Hermia…' }
+  if (!on && talk.dock) { els.brief.placeholder = talk.dock.ph; talk.dock = null }
+  paintSend()
 }
 export const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discuss/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, answerTo, kind }) })
   .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')

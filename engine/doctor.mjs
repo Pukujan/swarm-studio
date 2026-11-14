@@ -99,7 +99,7 @@ export function pythonCommand(python) {
 //   setup      opens the Setup sheet on the part (window.SwarmSetup.open)
 //   repaint    POST /api/runs/<id>/image    one failed picture, painted again
 //   resume     POST /api/runs/<id>/resume   a website's unfinished sections, built in its next version
-//   app-again  POST /api/runs/<id>/app      the app or game build, tried again
+//   app-again  POST /api/runs/<id>/app      an app or game that never built, tried again (the App room's Try again)
 export function actionsFor(facts = {}) {
   const out = []
   const run = facts.run?.id || null
@@ -114,7 +114,8 @@ export function actionsFor(facts = {}) {
   const pic = fails.findLast(f => f.kind === 'picture' && f.page && f.layer && f.gen && rerun(f))
   if (run && pic) out.push({ id: 'repaint', kind: 'repaint', run, page: pic.page, layer: pic.layer, gen: pic.gen, label: 'Paint it again', does: `paints the picture "${clean(pic.gen, 60)}" again` })
   if (run && !facts.run.working && fails.some(f => f.kind === 'section' && rerun(f))) out.push({ id: 'resume', kind: 'resume', run, label: 'Finish the build', does: 'builds the sections that failed, in the project\'s next version' })
-  if (run && !facts.run.working && fails.some(f => f.kind === 'app' && rerun(f))) out.push({ id: 'app-again', kind: 'app-again', run, label: 'Build again', does: `builds the ${facts.run.kind === 'game' ? 'game' : 'app'} again from where it stopped` })
+  // (a failed change to an app that is built has no route that sends the same words again: it is typed again)
+  if (run && !facts.run.working && !facts.run.built && fails.some(f => f.kind === 'app' && rerun(f))) out.push({ id: 'app-again', kind: 'app-again', run, label: 'Build again', does: `builds the ${facts.run.kind === 'game' ? 'game' : 'app'} again` })
   return out
 }
 
