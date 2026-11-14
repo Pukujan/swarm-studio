@@ -2802,6 +2802,8 @@ const server = createServer((req, res) => {
       if (typeof input.from === 'string' && typeof input.project !== 'string' && RUN_ID.test(input.from)) input.project = projects.projectOf(input.from) || undefined
       // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
       // and the art director matches the new pictures to them (art.styleGuide reads the brief)
+      // links in the person's own words (before anything is added to the brief): pages named as what to make
+      const askedLinks = linksIn(String(input.brief || ''), 2)
       if (typeof input.project === 'string') {
         const ups = projects.uploadsOf(input.project).filter(u => /^image\//.test(u.type)).slice(0, 12)
         if (ups.length) input.brief = `${String(input.brief).trim()}\n\nThe owner uploaded these pictures. Use them where they fit, as they are (<img src="…">, no data-gen), and make every new picture match their look:\n${ups.map(u => `- ${u.name}: ${u.src}`).join('\n')}`
@@ -2811,6 +2813,14 @@ const server = createServer((req, res) => {
         // and its Assets (spec 37): placed as they are
         const ab = projectAssets.brief(input.project)
         if (ab) input.brief = `${String(input.brief).trim()}\n\n${ab}`
+      }
+      // "recreate this: <link>": the page is read, so the crew writes from what it says and not from an address.
+      // A link kept as a reference is a look to learn from, not this; only public pages are read (spec 29).
+      const asLook = typeof input.project === 'string' ? new Set(refs.list(input.project).filter(r => r.kind === 'link').map(r => r.url)) : new Set()
+      for (const u of askedLinks) {
+        if (asLook.has(u) || asLook.has(`${u}/`)) continue
+        const p = await readPage(u).catch(() => null)
+        if (p && (p.title || p.text)) input.brief = `${String(input.brief).trim()}\n\nThe owner linked ${u} as what this is about. What that page says (write the site from this; its design is not the reference):\n${[p.title && `Title: ${p.title}`, p.description && `Description: ${p.description}`, p.text && `Words: ${p.text}`].filter(Boolean).join('\n')}`.slice(0, 12000)
       }
       // A message inside an open build (from: its run) is that project's next version: the
       // last version is kept as it stands and the crew adds only what the message asks for

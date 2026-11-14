@@ -478,6 +478,16 @@ export function makeScaffold({ sw, C, root }) {
   async function build(idea) {
     const k = kit(), c = ctx()
     if (!k.build || A.busy) return
+    // Nothing is built from no idea. (A Studio opened with an empty box once built a made-up site from its
+    // reference's look alone, 2026-11-13.) Words typed in the chat box but not sent yet are the idea.
+    if (!String(idea || c.studio.idea || '').trim()) {
+      const box = /** @type {HTMLTextAreaElement | null} */ (document.querySelector('#brief'))
+      const typed = String(box?.value || '').trim()
+      if (!typed) { bd.toast('Say what to make first'); sw.say?.('What are you making?'); box?.focus(); return }
+      await post(at('/idea'), { idea: typed }).then(take)
+      if (box) box.value = ''
+      idea = typed
+    }
     A.busy = true
     render()
     try {
@@ -494,6 +504,8 @@ export function makeScaffold({ sw, C, root }) {
   return {
     el: root,
     get project() { return A.pid },
+    // the project's brand sheet, once the Studio has loaded (the mode menu's Brand)
+    async brand() { for (let i = 0; i < 60 && A.on && !A.d; i++) await new Promise(r => setTimeout(r, 100)); if (A.on && A.d) openBrand() },
     // the project's newest build, when it has one (the mode menu goes to its rooms from here)
     get head() { return A.d?.project?.head || null },
     // open the scaffold on a project: the whole board, or the step the address names

@@ -23,7 +23,7 @@ export function studioMode(id, C) {
   if (id === 'brand') {
     if (!pid || C.nav.view.room === 'brand') return true
     if (C.nav.view.room !== 'studio') C.studio(pid)
-    C.brand({ project: pid, done: () => {} })
+    C.scaffoldView?.brand?.()
     return true
   }
   if (!was) return false

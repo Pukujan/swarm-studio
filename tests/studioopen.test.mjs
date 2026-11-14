@@ -21,7 +21,8 @@ test('Studio and Brand open from a built project; the build\'s own rooms are lef
   const C = ctl({ room: 'overview', project: 'p1' })
   assert.equal(studioMode('studio', C), true); assert.deepEqual(C.calls, [['studio', 'p1']])
   const B = ctl({ room: 'overview', project: 'p1' })
-  assert.equal(studioMode('brand', B), true); assert.deepEqual(B.calls, [['studio', 'p1'], ['brand', 'p1']])
+  B.scaffoldView = { brand: () => B.calls.push(['sheet']) }
+  assert.equal(studioMode('brand', B), true); assert.deepEqual(B.calls, [['studio', 'p1'], ['sheet']])
   assert.equal(studioMode('video', ctl({ room: 'overview', project: 'p1' })), false)
 })
 
