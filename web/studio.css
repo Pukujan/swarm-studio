@@ -60,7 +60,8 @@ body.cosmos-home .appview, body.cosmos-project .appview { visibility: hidden; }
   font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .cosmos-chatbtn img { width: 24px; height: 24px; border-radius: 50%; }
 .cosmos-chatbtn:hover { border-color: var(--line-2); }
-body.cosmos-station:not(.cosmos-chat) .cosmos-chatbtn { display: inline-flex; }
+/* wherever the chat column can be folded (a build's rooms, the Studio, the Brand sheet), one button brings it back */
+body:is(.cosmos-station, .cosmos-studio, .cosmos-brand):not(.cosmos-chat) .cosmos-chatbtn { display: inline-flex; }
 body.cosmos .side-min-btn { display: none; }
 
 /* ---------- narrow windows and phones */
