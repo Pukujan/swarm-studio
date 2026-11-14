@@ -137,6 +137,7 @@ export function githubDoor(host) {
         const got = await ask(project, { ...move, piece: move.action === 'bring' ? undefined : before.piece })
         piece = got.piece
         st = await follow(project, got.piece, s => { st = s; draw() })
+        if (st.job?.state === 'done') Object.assign(typed, { repo: '', path: '' })
       } catch (e) {
         said = String(/** @type {any} */ (e)?.message || 'That did not work')
         st = { ...before, job: null }
@@ -182,7 +183,7 @@ export function githubDoor(host) {
         Object.assign(typed, { repo: repo?.value.trim() || '', path: field('path')?.value.trim() || '' })
         if (k === 'bring') return go({ action: 'bring', repo: repo?.value.trim(), path: field('path')?.value.trim() || '', kind })
         if (k === 'pull') return go({ action: 'pull' })
-        go({ action: 'push', ...(repo ? { repo: repo.value.trim(), public: form.querySelector('[data-see="public"]')?.getAttribute('aria-checked') === 'true' } : {}) })
+        go({ action: 'push', ...(repo ? { ...(repo.value.trim() === s.suggest ? {} : { repo: repo.value.trim() }), public: form.querySelector('[data-see="public"]')?.getAttribute('aria-checked') === 'true' } : {}) })
       }
       for (const b of /** @type {NodeListOf<HTMLElement>} */ (d.footer.querySelectorAll('[data-go]'))) b.onclick = () => move(b.dataset.go || '')
       form.onsubmit = e => { e.preventDefault(); move(!s.source ? 'bring' : pullFirst && canPull ? 'pull' : 'push') }

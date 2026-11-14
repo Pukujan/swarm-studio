@@ -28,11 +28,11 @@ class PublishConfirm(unittest.TestCase):
         self.assertEqual(len(keys), 3)
 
     def test_a_private_push_a_public_one_and_a_named_repository_are_each_their_own_always(self):
-        asks = ({"move": "push"}, {"move": "push", "public": True}, {"move": "push", "repo": "team/ares"}, {"move": "push", "repo": "team/ares", "public": True})
+        asks = ({"move": "push"}, {"move": "push", "public": True}, {"move": "push", "repo": "Team/Ares"}, {"move": "push", "repo": "team/other", "public": True})
         got = [commands.approval_hook(tool_name="swarm_studio", args={"action": "github", **a}) for a in asks]
-        self.assertEqual([g["rule_key"] for g in got], ["swarm-studio:github:push:private", "swarm-studio:github:push:public", "swarm-studio:github:push:named", "swarm-studio:github:push:named"])
+        self.assertEqual([g["rule_key"] for g in got], ["swarm-studio:github:push:private", "swarm-studio:github:push:public", "swarm-studio:github:push:named:team/ares", "swarm-studio:github:push:named:team/other"])
         self.assertIn("PUBLIC", got[1]["message"])
-        self.assertIn("team/ares", got[2]["message"])
+        self.assertIn("Team/Ares", got[2]["message"])
 
     def test_register_installs_the_hook(self):
         src = open(os.path.join(os.path.dirname(__file__), "..", "__init__.py"), encoding="utf-8").read()

@@ -49,7 +49,7 @@ test('the door is in a project\'s menu and on its card, typed moves are taken be
   assert.match(read('web/project.js'), /sw\.github\?\.say\(text\)/)
   assert.match(read('web/canvas/hook.js'), /github: BOOT\.hosted \? null/)
   assert.match(read('web/home.css'), /body\.hosted #github-btn \{ display: none !important; \}/)
-  assert.ok(read('server/page.mjs').includes("'chatmode.js', 'github.js'"))
+  assert.match(read('server/page.mjs'), /'github\.js'/)
   // no tooltip anywhere in the sheet
   assert.ok(!/title=|data-tip/.test(read('web/github.js')))
 })

@@ -219,13 +219,17 @@ github**. The answer is in the chat, with the crew's cursor while it works, and 
   credential helper. **Never `--force`.**
 - **The first push** makes the repository (`gh repo create`, **private** unless Public was picked; its
   description says "made with Swarm Studio") from the name in the field, only when that name is free. A name
-  that is taken is refused; it is never taken over.
+  the person typed that is taken is refused; it is never taken over. When no name was given (the field left as
+  it was, or "push to github" typed) and the project's own name is taken, which it is once Publish › Website has
+  made `<login>/<name>` for the site's pages, the next free one is made: `<name>-source`, then `-source-2` to `-5`.
 - **Or links one the person names** (`owner/name` or its https address), only when it is empty or its newest
   commit is already in this project's history. Otherwise: "already holds other work".
 - **Later pushes** go to the same repository, remembered per project and piece in the Studio's data folder
   (`github-source.json`: the repository, private or public, the last commit sent and when). Changes not yet in a
   commit are committed first ("Changes made in Swarm Studio"); untracked packages, build output and key files
-  are kept out of that commit by `.git/info/exclude`, so no file of the project changes.
+  are kept out of that commit by `.git/info/exclude`, so no file of the project changes. A key file that would
+  still get into that commit (another spelling, or one already tracked and changed) stops the push before the
+  commit is made, and the changes are left as they were: the Studio never commits a key file itself.
 - **The repository has commits the project lacks**: refused in words ("Pull them first"), and Pull leads.
 - **Keys.** Every file name in the commits being sent is read (`git rev-list --objects`, so a `.env` committed
   once and deleted later still counts). A key file (`.env`, `.env.*` except `.env.example`/`.sample`/`.template`,
@@ -249,6 +253,12 @@ event's `repo`, `path`, `sha`; a folder inside a git repository records its `ori
   carries its history on (above), so the next push is an ordinary one on top of what was pulled.
 - **Nothing is merged.** Changes made here and not pushed stay in the older version; the new version is what
   GitHub has.
+- **What a pulled version is.** It is a brought-in run, with everything that means above: a pulled **game**
+  joins the project's site as its game (the Overview keeps its pages). A pulled **app** is a version of its own
+  with the app only: the earlier version's designed pages are not in it, it is given none of the person's
+  database or Stripe keys, a Vite project waits for **Install and run**, and it is never built over. For an app
+  the Studio built itself that is a real cost of pulling, and the reason Push is the ordinary direction for
+  work made here. Seen in the walk-through: the card's status becomes **App · Brought in**.
 - A version whose history could not be carried on (files were left out on the way in) cannot be pushed to that
   repository; the sheet says so and offers a repository of its own.
 
@@ -264,8 +274,9 @@ Subfolder `games/ares`, Game. A subfolder is pull-only: its first push makes a r
 - The person's own click or typed words in the Studio, or `/swarm github [n] [push|pull] [owner/name|name] [public]`.
 - **The model** (the `swarm_studio` tool, `action: github`, `move: push`) goes through Hermes's approval
   prompt first, as publish, deploy and post do (`commands.py` `outward`, `approval_hook`), and is refused in a
-  cron job with nobody there. Three rules, so an "always" for one is never another: a private push
-  (`swarm-studio:github:push:private`), a new public repository (`…:public`), a named repository (`…:named`).
+  cron job with nobody there. A rule each, so an "always" for one is never another: a private push
+  (`swarm-studio:github:push:private`), a new public repository (`…:public`), and each named repository its own
+  (`…:named:<owner/name>`).
   `move: status` and `move: pull` are not asked about: nothing leaves the computer but the question, and
   nothing that comes in is run.
 - **Never on the hosted studio**: `server/hosted.mjs` answers 403 to GET and POST (`scripts/check.sh` checks

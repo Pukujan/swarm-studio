@@ -20,7 +20,7 @@ export const GITHUB = { url: slug => `https://github.com/${slug}.git`, page: slu
 
 const exec = (cmd, args, { cwd, timeout = 120000 } = {}) => new Promise(ok => {
   execFile(cmd, args, { cwd, timeout, maxBuffer: 64e6, windowsHide: true, env: { GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_ASKPASS: '', GCM_INTERACTIVE: 'never', GIT_LFS_SKIP_SMUDGE: '1' } },
-    (err, stdout, stderr) => ok({ ok: !err, out: String(stdout || ''), err: String(stderr || err?.message || '') }))
+    (err, stdout, stderr) => ok({ ok: !err, out: String(stdout || ''), err: err?.killed ? 'it took too long and was stopped' : String(stderr || err?.message || '') }))
 })
 /** gh, as the person: → { ok, out, err } */
 export const ghCli = (args, opts) => exec('gh', args, { timeout: 30000, ...opts })
@@ -41,15 +41,21 @@ export const keyFile = path => { const n = String(path).split('/').pop() || ''; 
 // Untracked build output and key files never get into a commit the Studio makes before a push (the app
 // scaffold's own .gitignore covers node_modules and dist, not .env). Written to .git/info/exclude, so no file
 // of the project changes.
-const EXCLUDE = ['node_modules/', '.output/', '.nitro/', '.next/', '.vite/', '.vercel/', '.dyad/', '.turbo/', '.cache/', '.parcel-cache/', '.godot/', '.import/', '.DS_Store', 'Thumbs.db', '.swarm-built.json', '.env', '.env.*', '!.env.example', '!.env.sample', '!.env.template', '.npmrc', '.netrc', '*.pem', '*.key']
+// The key names here are KEY_FILE's, as git patterns; what slips past them (another spelling) is caught by name
+// before the commit is made (pushSource), so a key file never enters the history by the Studio's own hand.
+const EXCLUDE = ['node_modules/', '.output/', '.nitro/', '.next/', '.vite/', '.vercel/', '.dyad/', '.turbo/', '.cache/', '.parcel-cache/', '.godot/', '.import/', '.DS_Store', 'Thumbs.db', '.swarm-built.json',
+  '.env', '.env.*', '!.env.example', '!.env.sample', '!.env.template', '.npmrc', '.netrc', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', '*.pem', '*.key', '*.p12', '*.pfx', '*.jks', '*.keystore']
+const EXCLUDE_MARK = '# swarm studio: never committed before a push'
 function exclude(dir) {
   const f = join(dir, '.git', 'info', 'exclude')
   let text = ''
   try { text = readFileSync(f, 'utf8') } catch {}
-  if (text.includes('# swarm studio')) return
+  // the Studio's own lines are written again each time (the list may have grown); the project's own stay
+  const own = text.split(EXCLUDE_MARK)[0].replace(/\n*$/, '\n')
   mkdirSync(join(dir, '.git', 'info'), { recursive: true })
-  writeFileSync(f, `${text.replace(/\n*$/, '\n')}# swarm studio: never committed before a push\n${EXCLUDE.join('\n')}\n`)
+  writeFileSync(f, `${own === '\n' ? '' : own}${EXCLUDE_MARK}\n${EXCLUDE.join('\n')}\n`)
 }
+const keysSay = keys => `Not pushed. ${keys.length === 1 ? 'This file looks' : 'These files look'} like keys: ${keys.slice(0, 8).join(', ')}${keys.length > 8 ? ` and ${keys.length - 8} more` : ''}. Take ${keys.length === 1 ? 'it' : 'them'} out of the project first.`
 
 /** Every key file named in the commits of `range` ('HEAD', or '<sha>..HEAD'): the whole history that would go
  * up, not only the newest files (a .env committed once and deleted later is still in it). → paths */
@@ -96,7 +102,7 @@ export async function ghLogin(gh = ghCli) {
   return /^[A-Za-z0-9-]{1,39}$/.test(login) ? login : null
 }
 /** a repository as the person's login sees it: { private, mine: the Studio made it } or null when there is none */
-export async function repoFacts(slug, gh = ghCli) {
+async function repoFacts(slug, gh = ghCli) {
   const r = await gh(['api', `repos/${slug}`, '--jq', '[.private, (.description // "")] | @json'])
   if (!r.ok) {
     if (/404|Not Found/i.test(r.err + r.out)) return null
@@ -153,6 +159,10 @@ export async function pushSource({ dir, link = null, want = {}, title = '', hub 
   if ((await localHead(dir, hub))?.dirty) {
     step('saving the latest changes')
     await git(dir, ['add', '-A'], hub)
+    // a key file among them (a name the patterns above missed, or one already tracked and changed) is never
+    // committed by the Studio: the changes are put back as they were, and the push stops with the names
+    const staged = (await git(dir, ['diff', '--cached', '--name-only', '--diff-filter=ACMR'], hub)).out.split('\n').filter(Boolean).filter(keyFile)
+    if (staged.length) { await git(dir, ['reset', '-q'], hub); throw fail(keysSay(staged), 422, { keys: staged }) }
     await git(dir, ['commit', '-qm', 'Changes made in Swarm Studio'], hub)
   }
   const local = await localHead(dir, hub)
@@ -160,10 +170,17 @@ export async function pushSource({ dir, link = null, want = {}, title = '', hub 
 
   const named = want.repo ? parseRepo(want.repo).slug : null
   const fresh = !named && (want.name || !link)
-  const slug = named || (fresh ? `${login}/${readTarget(want.name || repoName(title)).name}` : link.repo)
+  let slug = named || (fresh ? `${login}/${readTarget(want.name || repoName(title)).name}` : link.repo)
   step(`checking ${slug}`)
-  const facts = await repoFacts(slug, gh)
-  if (fresh && facts) throw fail(`${slug} is already on GitHub. Give another name, or name it whole (${slug}) if it is this project's`, 409)
+  let facts = await repoFacts(slug, gh)
+  // no name was given and the project's own is taken (Publish › Website makes <login>/<name> for the site's
+  // pages): the next free one, <name>-source first. One that exists is never taken over.
+  if (fresh && facts && !want.name) {
+    for (const cand of ['source', ...[2, 3, 4, 5].map(n => `source-${n}`)].map(s => `${slug}-${s}`)) {
+      if (!(await repoFacts(cand, gh))) { slug = cand; facts = null; break }
+    }
+  }
+  if (fresh && facts) throw fail(`${slug} is already on GitHub. Give another name.`, 409)
   if (!fresh && !facts) throw fail(`No repository ${slug} that your GitHub login can reach`, 404)
   let remote = { sha: null, branch: 'main' }
   if (!fresh) {
@@ -174,7 +191,7 @@ export async function pushSource({ dir, link = null, want = {}, title = '', hub 
     }
   }
   const keys = await keyFilesIn(dir, remote.sha ? `${remote.sha}..HEAD` : 'HEAD', hub)
-  if (keys.length) throw fail(`Not pushed. ${keys.length === 1 ? 'This file looks' : 'These files look'} like keys: ${keys.slice(0, 8).join(', ')}${keys.length > 8 ? ` and ${keys.length - 8} more` : ''}. Take ${keys.length === 1 ? 'it' : 'them'} out of the project first.`, 422, { keys })
+  if (keys.length) throw fail(keysSay(keys), 422, { keys })
 
   const isPrivate = fresh ? !want.public : facts.private
   if (fresh) {
@@ -187,7 +204,7 @@ export async function pushSource({ dir, link = null, want = {}, title = '', hub 
   if (remote.sha === local.sha) return { ...out, sha: local.sha, same: true }
   step(`pushing to ${slug}`)
   // by address and branch, never a remote kept in the project's own git config, and never with --force
-  const p = await git(dir, ['push', '--quiet', '--', hub.url(slug), `HEAD:refs/heads/${remote.branch}`], hub, { timeout: 300000 })
+  const p = await git(dir, ['push', '--quiet', '--', hub.url(slug), `HEAD:refs/heads/${remote.branch}`], hub, { timeout: 1800000 })
   if (!p.ok) {
     if (/non-fast-forward|fetch first|\[rejected\]/i.test(p.err)) throw fail(`${slug} has commits this project does not have. Pull them first.`, 409, { pull: true })
     if (/Authentication|could not read Username|denied|403/i.test(p.err)) throw fail(`GitHub would not take the push to ${slug}. ${SIGN_IN.split(': ')[1]}, with a login that may write there`, 424)

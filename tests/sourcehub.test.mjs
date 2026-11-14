@@ -76,6 +76,16 @@ test('the first push makes a private repository; later ones go to the same one, 
   assert.equal(G.calls.filter(c => c[1] === 'create').length, 1, 'one repository, made once')
   const tree = g(G.at('me/ares'), 'ls-tree', '-r', '--name-only', 'refs/heads/main').split('\n')
   assert.deepEqual(tree.sort(), ['game.js', 'index.html', 'notes.md'], 'the untracked key file and the packages stayed home')
+  // a key file under a name the ignore patterns do not know is never committed by the Studio: refused, and left as it was
+  g(dir, 'config', 'core.ignorecase', 'false') // as on Linux: the ignore patterns are small letters, these names are not
+  put(dir, { 'deploy/ID_RSA': 'k', 'Prod.PEM': 'k', 'ok.txt': 'fine' })
+  const before = g(dir, 'rev-parse', 'HEAD')
+  await assert.rejects(pushSource({ dir, link: first, title: 'ARES', hub: G.hub, gh: G.gh }), e => e.status === 422 && /look like keys: Prod\.PEM, deploy\/ID_RSA/.test(e.message))
+  assert.equal(g(dir, 'rev-parse', 'HEAD'), before, 'no commit was made'); assert.equal(g(dir, 'diff', '--cached', '--name-only'), '')
+  rmSync(join(dir, 'deploy'), { recursive: true }); rmSync(join(dir, 'Prod.PEM'))
+  put(dir, { 'deploy/id_rsa': 'k', 'store.p12': 'k' })
+  assert.equal((await pushSource({ dir, link: first, title: 'ARES', hub: G.hub, gh: G.gh })).same, false)
+  assert.deepEqual(g(G.at('me/ares'), 'ls-tree', '-r', '--name-only', 'refs/heads/main').split('\n').sort(), ['game.js', 'index.html', 'notes.md', 'ok.txt'])
   // public only when asked
   const pub = await pushSource({ dir: project({ 'index.html': 'x' }), title: 'Open One', want: { public: true }, hub: G.hub, gh: G.gh })
   assert.equal(pub.private, false); assert.ok(G.calls.findLast(c => c[1] === 'create').includes('--public'))
@@ -108,14 +118,18 @@ test('a repository is linked by name only when it is empty or already this proje
   const G = github(), dir = project({ 'index.html': 'x' })
   // a name that is taken is never taken over
   G.make('me/ares'); G.commit('me/ares', { 'README.md': 'someone else' })
-  await assert.rejects(pushSource({ dir, title: 'ARES', hub: G.hub, gh: G.gh }), /me\/ares is already on GitHub/)
+  await assert.rejects(pushSource({ dir, title: 'ARES', want: { name: 'ares' }, hub: G.hub, gh: G.gh }), /me\/ares is already on GitHub\. Give another name/)
+  // with no name given (the site's own pages may hold the project's name), the next free one is made
+  const side = await pushSource({ dir: project({ 'index.html': 'z' }), title: 'ARES', hub: G.hub, gh: G.gh })
+  assert.equal(side.repo, 'me/ares-source'); assert.equal(side.made, true)
+  assert.equal(g(G.at('me/ares'), 'log', '--format=%s', 'refs/heads/main'), 'from elsewhere', 'the one that was there is untouched')
   await assert.rejects(pushSource({ dir, title: 'ARES', want: { repo: 'me/ares' }, hub: G.hub, gh: G.gh }), /already holds other work/)
   await assert.rejects(pushSource({ dir, title: 'ARES', want: { repo: 'me/nowhere' }, hub: G.hub, gh: G.gh }), /No repository me\/nowhere/)
   // an empty one the person names: linked, and its own visibility is kept
   G.make('team/ares-game', { isPrivate: false })
   const out = await pushSource({ dir, title: 'ARES', want: { repo: 'team/ares-game' }, hub: G.hub, gh: G.gh })
   assert.equal(out.repo, 'team/ares-game'); assert.equal(out.made, false); assert.equal(out.private, false); assert.equal(out.fresh, false)
-  assert.equal(G.calls.filter(c => c[1] === 'create').length, 0)
+  assert.deepEqual(G.calls.filter(c => c[1] === 'create').map(c => c[2]), ['me/ares-source'], 'linking makes nothing')
   // one it was pushed to before (its newest commit is in this history) links again
   change(dir, { 'index.html': 'y' })
   assert.equal((await pushSource({ dir, title: 'ARES', want: { repo: 'team/ares-game' }, hub: G.hub, gh: G.gh })).same, false)

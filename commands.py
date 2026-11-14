@@ -87,10 +87,11 @@ def outward(args: dict | None) -> tuple[str, str] | None:
     if action == "deploy":
         return f"deploy the app of {build} to Vercel", "swarm-studio:deploy"
     if action == "github" and a.get("move") == "push":
-        # three rules, so an "always" for a private push never makes source public or sends it to a named repository
+        # a rule each, so an "always" for a private push never makes source public, and one for a named repository
+        # is for that repository alone
         repo = str(a.get("repo") or "").strip()
         if "/" in repo:
-            return f"push the source of {build} to the GitHub repository {repo}", "swarm-studio:github:push:named"
+            return f"push the source of {build} to the GitHub repository {repo}", f"swarm-studio:github:push:named:{repo.lower()}"
         if a.get("public") is True:
             return f"push the source of {build} to a new PUBLIC GitHub repository under your login", "swarm-studio:github:push:public"
         return f"push the source of {build} to a private GitHub repository under your login", "swarm-studio:github:push:private"
