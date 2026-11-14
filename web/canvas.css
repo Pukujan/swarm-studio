@@ -1116,11 +1116,11 @@ em { font-style: italic; }
 .tool .n { color: var(--accent); top: 1px; right: 4px; }
 .tool .lbl { font: 600 10.5px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; bottom: -20px; }
 .toolbar .tsep { background: var(--panel-edge); }
-/* a phone: the dock, with Undo and Redo at its end, still fits the screen */
+/* a phone: the dock, with Undo and Redo at its end, is wider than the screen; it keeps its tools' size
+   (rule 16) and scrolls sideways */
 @media (max-width: 500px) {
-  .toolbar { gap: 2px; }
-  .toolbar .tool { width: 32px; height: 32px; }
-  .toolbar .tsep { margin: 0 2px; }
+  .toolbar { max-width: calc(100% - 28px); overflow-x: auto; scrollbar-width: none; }
+  .toolbar .tool, .toolbar .tsep { flex: none; }
 }
 
 /* ---------- glass panels and popovers */

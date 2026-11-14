@@ -149,7 +149,7 @@ on the way down.
 | **Start** (typing) | the input, the lens chip, Build | lens options (below); "what happens" as a row of step icons | Pro packs list, models |
 | **A project** (one canvas) | the breadcrumb (Projects › name ▾), the crew, Play, Publish, Files, the artboards, the dock | the inspector for a selection; right-click menus; ▾ for versions | ☰ |
 | **Room** | the room's content, its one primary action, a ⋯ room menu, the breadcrumb, the input | an inspector panel on the right for whatever is selected | the room's power tools |
-| **Design deck** (follows Figma, see PATTERNS.md) | the left panel (logo menu, pages, layers), the canvas with the crew's cursors, the bottom toolbar (Move, Frame, Shape, Pen, Text, Comment, Hermia, Code), the right panel (crew, progress, Play, Share; page and variables) | the Design and Prototype tabs for a selection; comment threads; follow one agent | Figma's shortcut keys, ⌘K, ⌘\\ hides the panels |
+| **Design deck** (follows Figma, see PATTERNS.md) | the left panel (logo menu, pages, layers), the canvas with the crew's cursors, the bottom toolbar (Move, Frame, Shape, Pen, Text, Comment, Hermia, Code; then Undo and Redo), the right panel (crew, progress, Play, Share; page and variables) | the Design and Prototype tabs for a selection; comment threads; follow one agent | Figma's shortcut keys, ⌘K, ⌘\\ hides the panels |
 | **Details** | — | logs, reasoning, layers tree, files and code wall, traces, raw errors, per-role models | — |
 
 ## One home for each duplicate
