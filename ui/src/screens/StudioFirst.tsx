@@ -109,6 +109,23 @@ export function StudioFirst() {
     // it follows the idea the talk starts with (its turns are stamped as the chat draws them, just after this)
     return text ? [{ id: `start:${d.project.id}`, at: Date.now() + 1000, who: 'hermia', text }] : []
   }, [d?.project.id, !!d?.studio.idea]) // the start line, once per project
+  // no Hermes: the walk opens all the same (it builds nothing), and Hermia's line says why Build will wait and what
+  // to do. It stays until Hermes is there, looked at again every 5 s meanwhile (#541)
+  const [hermesOff, setHermesOff] = useState<ChatLine | null>(null)
+  useEffect(() => {
+    if (!pid) return
+    let on = true, timer = 0
+    const look = () => fetch(`${window.SWARM?.base || ''}/api/hermes?ready=1`, { headers: { 'x-swarm-token': window.SWARM?.token ?? '' } })
+      .then(r => (r.ok ? r.json() : null)).then((j: { needed?: boolean, health?: { ok?: boolean, message?: string, action?: string } } | null) => {
+        if (!on) return
+        const off = !!(j?.needed && j.health && !j.health.ok)
+        setHermesOff(cur => (!off ? null : cur ?? { id: `hermes:${pid}`, at: Date.now() + 2000, who: 'hermia', text: `${j!.health!.message} ${String(j!.health!.action || '').replace(/`/g, '')}` }))
+        if (off) timer = window.setTimeout(look, 5000)
+      }).catch(() => {})
+    look()
+    return () => { on = false; clearTimeout(timer) }
+  }, [pid])
+  const said = useMemo(() => (hermesOff ? [...lines, hermesOff] : lines), [lines, hermesOff])
   const heard = useCallback((text: string) => {
     if (!pid || d?.studio.idea) return
     fetch(`${window.SWARM?.base || ''}/api/studio/${encodeURIComponent(pid)}/idea`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': window.SWARM?.token ?? '' }, body: JSON.stringify({ idea: text }) })
@@ -313,7 +330,7 @@ export function StudioFirst() {
       <button type="button" className="ib pj-files-btn sc-layers-btn" aria-label="Layers" aria-expanded={sheet} onClick={() => setSheet(v => !v)}><svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z" /><path d="m3 13 9 5 9-5" /></svg></button>
       <input ref={picker} type="file" multiple hidden onChange={e => { const f = [...(e.currentTarget.files || [])]; e.currentTarget.value = ''; void actions.upload(pickTo.current, f) }} />
       {S.toast && <div className="hm-toast" role="status">{S.toast}</div>}
-      {d && <Chat talk={talk} project={pid} lines={lines} onHeard={heard}
+      {d && <Chat talk={talk} project={pid} lines={said} onHeard={heard}
         onBuild={({ brief }) => { if (kit.build) void runBuild(brief); else go({ type: 'brand' }) }}
         onBrandSheet={() => { go({ type: 'brand' }) }} />}
     </div>

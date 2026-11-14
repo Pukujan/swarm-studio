@@ -304,3 +304,5 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .gh-work .cur span { position: static; margin-left: 2px; }
 /* Projects has no project open, and the hosted studio has no such door */
 body.cosmos-home #github-btn, body.hosted #github-btn { display: none !important; }
+/* why a build waits while Hermes is not there, under the Make box until it is (web/hermesline.js, #541) */
+.hm-off { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 760px; margin: -18px auto 24px; color: var(--muted); font: 13px/1.45 var(--body); text-align: center; }

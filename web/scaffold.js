@@ -517,6 +517,9 @@ export function makeScaffold({ sw, C, root }) {
       post(at('/idea'), { idea: text }).then(() => { A.prepared = null; return load() }).catch(fail)
     }
     sw.talk.start({ kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat, blank: true, said: d.studio.idea ? [{ who: 'you', text: d.studio.idea }] : [], heard, build: brief => (k.build ? build(brief) : openBrand()) })
+    // no Hermes: the walk opens all the same (it builds nothing), and the chat says why Build will wait, with what
+    // to do and Check again (#541)
+    sw.hermesReady?.().then(off => { if (off && pid === A.pid && A.on) sw.hermesSays?.(off) }).catch(() => {})
     if (!d.studio.idea) return sw.say?.('What are you making?')
     // a kit with prepare() posts its own planner line
     const st = k.prepare ? null : startOf()

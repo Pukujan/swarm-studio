@@ -9,6 +9,7 @@ import { openSettings } from './settings.js'
 import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
 import { templatePicker } from './templatepick.js'
 import { bringEntry } from './bringin.js'
+import { hermesLine } from './hermesline.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
@@ -783,9 +784,10 @@ export function makeHome({ sw, C, root }) {
     document.querySelector('.hm-menu button.on, .hm-menu button')?.focus({ preventScroll: true })
   }
   async function begin(way, text) {
-    // no Hermes to answer the model: one calm line and what to do, before anything starts (the words stay)
+    // no Hermes to answer the model: a build waits, with why and what to do under the box until Hermes is there (the
+    // words stay; web/hermesline.js). A Studio builds nothing, so it opens, and its chat says the same (#541)
     const off = !sw.hermesReady ? null : await sw.hermesReady()
-    if (off) return toast(`<span>${esc(off.message)} ${esc(String(off.action || '').replace(/`/g, ''))}</span>`, 'Check again', () => begin(way, text))
+    if (hermesLine(form, off && !(way.k === 'studio' && make.k !== 'game') ? off : null, () => begin(way, text))) return
     G.sheet = false
     store.set(`home.mode.${make.k}`, way.k)
     if (way.k === 'now') return buildNow(text)
