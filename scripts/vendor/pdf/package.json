@@ -1,0 +1,8 @@
+{
+  "name": "swarm-vendor-pdf",
+  "private": true,
+  "description": "What scripts/vendor.mjs bundles into engine/vendor/pdf/pdf.mjs: unpdf (Mozilla's PDF.js, built to run without a browser) at this exact version, pinned by package-lock.json. The Studio's first step reads the text of a PDF the person drops (engine/importer.mjs). Development only: the plugin installs nothing from here.",
+  "dependencies": {
+    "unpdf": "2.2.0"
+  }
+}

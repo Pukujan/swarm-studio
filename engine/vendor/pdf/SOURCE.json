@@ -1,0 +1,19 @@
+{
+  "name": "pdf",
+  "lockfile": "scripts/vendor/pdf/package-lock.json",
+  "esbuild": "0.28.2",
+  "exports": [
+    "extractText",
+    "getDocumentProxy"
+  ],
+  "file": "pdf.mjs",
+  "packages": [
+    {
+      "name": "unpdf",
+      "version": "2.2.0",
+      "license": "MIT",
+      "integrity": "sha512-E33ir6FPxrLuRlhLJ3KbPwcOnHozd6ITe/uhr22+Oiis6e7YQ9N/9K7hfMe1aZ9yoO6eypgI1Cc7UuYP6BkyWw=="
+    }
+  ],
+  "sha256": "f134e468c80032dd4305bcc762e09cfc4082bb8ea8bbc9149b4c82351460a03f"
+}
