@@ -116,3 +116,12 @@ test('the headless runner\'s --mode: four modes, local-agent by default, and ask
   assert.equal(cleanAnswer('<think>look first</think>It has one page.\n<dyad-read path="src/App.tsx"></dyad-read>\n\n\n<dyad-status title="Read">done</dyad-status>Index is the only route.'), 'It has one page.\n\nIndex is the only route.')
   assert.equal(cleanAnswer(null), '')
 })
+
+test('an answer about code is not mistaken for a promise to install', async () => {
+  const { claimsDoing, asksStudio } = await import('../engine/honest.mjs')
+  // dyad's ask answer is checked only when the person asked for what nobody in the chat can do (server askApp)
+  assert.equal(asksStudio('where is the login route?'), false)
+  assert.equal(asksStudio('how does the service worker get registered?'), false)
+  assert.equal(asksStudio('can u install pillow then?'), true)
+  for (const fine of ['The dev server reloads when the file changes.', 'The route is in src/pages/Login.tsx.']) assert.equal(claimsDoing(fine), false, fine)
+})
