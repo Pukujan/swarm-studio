@@ -176,6 +176,12 @@ Starting numbers; the gauge tunes them.
 | Margin prepared around the screen | 1 screen | 0.5 screen |
 | Tier change delay | 300 ms | 300 ms |
 
+**How the texture budget is found.** No browser reports an adapter's video memory: WebGL names the renderer and no
+more, and WebGPU's adapter gives limits, not memory. So the budget is 25 % of the device memory the browser reports
+(`navigator.deviceMemory`, which tops out at 8), at most 512 MB, and the low-memory profile at 4 GB or less, or when
+nothing is reported and the browser asks to save data. `?board-mb=` and `?board-live=` override it for a trial
+(`ui/src/board/tiers.ts` `budgetsFor`, `ui/src/board/useTiers.ts`). The gauge tunes it.
+
 **Lite mode becomes the low-memory column.** Today it turns on by itself below 4 GB (`navigator.deviceMemory`,
 `web/canvas/settings.js:19`) or when the person picks it; both now pick this profile instead of a mode of its own.
 

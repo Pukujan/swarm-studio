@@ -36,6 +36,8 @@ jobs:
       - run: npm run --prefix tools/dev tokens:check
       # the next UI (ui/, docs/decisions/0013-react-ui-coexists.md): its type check and dependency rules, and its
       # build makes the one-document /next/ page (development only: the plugin installs none of it)
+      # ui/'s own tests (the boards' tier manager, its fast-check properties): they import ui/'s dependencies
+      - run: npm test --prefix ui
       - run: npm run --prefix tools/dev typecheck:ui
       - run: npm run --prefix tools/dev deps:ui
       - run: npm run --prefix tools/dev ui:check
