@@ -1,6 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the views and rooms: Canvas, Video, App, the big game, the app advisor, game mode, cast, art, the bench.
 import { dataStore } from '../data.js'
+import { noAppYet, goOnAsk } from './wander.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
 import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
@@ -82,7 +83,7 @@ async function loadApp() {
     if (!appv.url && appv.hasApp && appv.state !== 'working' && !appv.opening && !needsRun()) {
       appv.opening = true
       renderApp()
-      appApi('/open', {}).then(o => { if (appv.run === run && o.url) appv.url = o.url }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
+      appApi('/open', {}).then(o => { if (appv.run !== run) return; if (o.url) { appv.url = o.url; appv.tries = 0 } else if ((appv.tries = (appv.tries || 0) + 1) < 10) setTimeout(() => { if (appv.run === run && !appv.url) loadApp() }, 2500); else appv.message = 'It did not start. Open it again to retry.' }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
     }
   } catch (err) { appv.message = err.message }
   renderApp()
@@ -232,7 +233,7 @@ function renderApp() {
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   const empty = !appv.url || (st === 'failed' && !appv.hasApp)
   appEls.empty.hidden = !empty
-  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && (working || appv.steps.length)
+  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && st !== 'stopped' && (working || appv.steps.length)
   if (!sheet) appEls.empty.classList.remove('sheet')
   if (sheet) artSheet(shownRun())
   else if (empty) {
@@ -240,7 +241,7 @@ function renderApp() {
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
       // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
-      : appv.opening && !working
+      : (appv.opening || (appv.hasApp && !appv.message && st !== 'failed' && st !== 'stopped' && (appv.tries || 0) < 10)) && !working
         ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
       // being brought in: the shape of a page with a crew cursor on it, and the step it is on (no engine works here)
       : working && appv.intake
@@ -254,7 +255,7 @@ function renderApp() {
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>It did not <em>come in</em></h2><p class="fail-msg">${esc(String(appv.message || '').split('\n')[0].slice(0, 260))}</p></div>`
         : st === 'failed' && appv.result?.artStop
           ? artStopCard(appv.result.artStop)
-        : st === 'failed' && appv.message === 'stopped'
+        : st === 'stopped' || (st === 'failed' && appv.message === 'stopped')
           ? `<div class="fail-card stopped"><h2><em>Stopped</em></h2><p class="fail-msg">${esc(stopSummary())}</p><button class="big" data-build>${ico('rotate-ccw')}Go on</button></div>`
         : st === 'failed'
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
@@ -368,7 +369,8 @@ export async function appAsk(ask, extra = {}) {
   if (appv.state === 'working') return tellCrew(ask)
   if (fixedIn()) return botMsg('This one was brought in as plain files. It plays here and its code is in Code; the crew cannot change it yet.')
   if (appv.intake && !ask) return
-  if (ask && !appv.hasApp) return botMsg('Build the app first (the button in the App view), then change it by chatting.')
+  // the chat works for a stopped build too: "go on", "continue", "resume" pick it up again; anything else gets a true answer
+  if (ask && !appv.hasApp) { if (!goOnAsk(ask, appv)) return botMsg(noAppYet(appv)); ask = '' }
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
   try {
     const st = await appApi('', { ask, sections, ...extra })
@@ -449,7 +451,8 @@ function cwSay(k, words, thinking = false) {
   const host = k >= 0 ? cw.el?.querySelector('.cw-grid')?.children[k] : cw.el?.querySelector('.cw-head')
   if (!host) return
   let b = host.querySelector(':scope > .cw-say')
-  if (!words) { b?.remove(); return }
+  // with the chat column open the answer is already there: it is not said a second time over the wall
+  if (!words || (!thinking && document.body.classList.contains('cosmos-chat'))) { b?.remove(); return }
   if (!b) { b = document.createElement('p'); b.className = 'cw-say'; host.append(b) }
   b.classList.toggle('thinking', thinking)
   setText(b, words)
