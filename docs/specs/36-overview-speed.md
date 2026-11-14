@@ -151,7 +151,12 @@ data URL that the Overview decoded and encoded again. Now:
   `web/vendor/snapdom/` by `scripts/vendor.mjs` (the package's own browser build, pinned by its npm integrity). The
   library is not in every page: the first request finds none, and the next one brings its text, which the plugin's
   own server serves. Nothing is fetched from the internet. A page is photographed at most nine widths long, as long
-  as the Overview shows it. The painters' marks and the review's scan line stay out of the picture.
+  as the Overview shows it. The painters' marks and the review's scan line stay out of the picture. snapDOM is
+  called with `burst: false`, so it keeps nothing of the page once the picture is out. Left on, it holds a
+  session per photographed element (its copy of the page, a map of every node, observers on the body) for a faster
+  next capture, which a page photographed once per version never uses. On the 250-page board gauge (155 pages
+  photographed) that copy made 26,376 DOM nodes against `main`'s 21,323, about 33 a page; with it off, 21,528
+  (`main` and the last are medians of three runs).
 - **In a worker.** `web/capture.js` makes each size from that one bitmap with
   `createImageBitmap(…, { resizeWidth, resizeHeight })` and `OffscreenCanvas.convertToBlob()`, as JPEGs, and closes
   every bitmap it is given or makes. The worker is made from a Blob, so it also starts in the Desktop pane's opaque
@@ -187,6 +192,6 @@ only pages that answered with a picture.
 
 The time a page's pictures take is a third of what it was, and the studio's main thread is free while they are
 taken: html-to-image ran in the studio's own renderer and held it for 2.4 seconds over 14 pages. On these
-fixture pages, two in-page captures (92 ms) beat one at the larger scale (125 ms): snapDOM keeps its copy of the page
-between two captures, and rasterising at 0.6 costs more than at 0.26. Which is better on the crew's real pages, with
-pictures and web fonts, is for the gauge (image-first boards step 1) to settle.
+fixture pages, two in-page captures (92 ms) beat one at the larger scale (125 ms): snapDOM kept its copy of the page
+between two captures when these rows were taken, and rasterising at 0.6 costs more than at 0.26. It keeps none now
+(`burst: false`, above), so a second capture copies the page again, and one capture per version is the path.

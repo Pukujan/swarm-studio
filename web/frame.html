@@ -224,7 +224,10 @@
       // a half-written tag leaves attributes no XML parser takes, and the whole photo fails
       for (const el of document.body.querySelectorAll('*')) for (const at of [...el.attributes]) if (!/^[A-Za-z_:][\w.:-]*$/.test(at.name)) el.removeAttribute(at.name)
       await document.fonts?.ready
-      const shot = await window.snapdom(document.body, { dpr: 1, backgroundColor: getComputedStyle(document.body).backgroundColor, exclude: ['#scan', '.pt-mark'], excludeMode: 'remove', fast: false })
+      // burst: false: snapDOM otherwise keeps a session per photographed element (its copy of the page, a map of
+      // every node, observers on the body) to answer the next capture sooner. A page is photographed once per
+      // version, so that copy only weighs: about 33 more nodes in each photographed page of the board gauge
+      const shot = await window.snapdom(document.body, { dpr: 1, backgroundColor: getComputedStyle(document.body).backgroundColor, exclude: ['#scan', '.pt-mark'], excludeMode: 'remove', fast: false, burst: false })
       const { contentX, contentY, w0, h0 } = shot.meta
       const height = Math.min(h0, m.maxHeight || h0)
       const scale = Math.min(m.scale || 0.25, m.fit ? m.fit / height : Infinity)

@@ -22,6 +22,8 @@ test('the frame photographs itself with the vendored library, and fetches nothin
   assert.match(frame, /canvas\.width = canvas\.height = 0/)
   // the painters' marks and the review's scan line stay out of the picture
   assert.match(frame, /exclude: \['#scan', '\.pt-mark'\]/)
+  // and snapDOM keeps no copy of the page after the picture (155 photographed pages each holding one failed the board gauge)
+  assert.match(frame, /window\.snapdom\(document\.body, \{[^\n]*burst: false/)
 })
 
 test('the library is vendored, pinned and served from web/vendor/', () => {
