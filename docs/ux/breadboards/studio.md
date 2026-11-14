@@ -5,8 +5,7 @@ chat and Layers on the left ([spec 37](../../specs/37-studio-first.md), [spec 42
 SITEMAP §5c). Statechart: `scaffold` (steps `brand · references · assets · pages · lock`). Code: `web/scaffold.js`,
 the shared board `web/board.js`, the kits `web/kit-*.js`, `engine/studio.mjs`, `server/studio.mjs`.
 
-Reached from Make by **Studio**, **Scaffold** (only the Plan step) or **Three takes** (Takes first), and from a
-Studio project's card on Projects.
+Reached from Make by **Studio** (every step), and from a Studio project's card on Projects.
 
 ## Places and affordances
 
@@ -26,7 +25,8 @@ Studio scaffold  (scaffold.<step>)                 crumb: Home › Projects › 
   · Layers: a group per section, its cards as rows (arrows, Enter, F2 rename, Delete)
   · Layers (icon, ≤ 760 px)         ──(none)──▶ Layers sheet
   board (dotted stage: drag pans, wheel or pinch zooms, Esc or a click on the empty stage clears)
-  · Three takes section (mode takes): three take cards
+  · Three takes section (mode takes): three take cards (nothing in Make opens it now; the Brand step's options
+    are its place)
   · Brand section: the brand card   ──brand { from: scaffold }──▶ the brand sheet (brand-sheet.md)
   · References section: a reference card · + Add reference · drop files here
   · Assets section: an asset card · + Add asset · drop files here

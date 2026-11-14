@@ -333,11 +333,13 @@ export function makeSetup({ sw }) {
   const seen = () => { if (S.view && !S.view.seen) { S.view.seen = true; api('/api/setup', { seen: true }).catch(() => {}) } }
 
   // row: the row to open with (☰ → Models opens it on Models)
-  async function open(row = '') {
-    if (dlg && !dlg.closed) { if (row) { S.open = row; draw() } return }
+  // pg, pp: with row 'parts', the group and the part to open it on (Fix mode in the chat: web/chatmode.js)
+  async function open(row = '', pg = '', pp = '') {
+    if (dlg && !dlg.closed) { if (row) { S.open = row; if (pg) Object.assign(S, { pg, pp }); draw() } return }
     S.view = await api('/api/setup').catch(() => null)
     if (!S.view?.models) return
     Object.assign(S, { open: row || (S.view.account?.pending ? 'account' : ''), hermes: null, signError: '', details: false, opts: null, q: '', all: {}, more: false, keyFor: '', signing: null, picking: '', pickError: '', signError2: '', facts: {}, pg: '', pp: '', ask: null, connErr: '' })
+    if (pg) Object.assign(S, { pg, pp })
     dlg = window.SwarmUI.dialog({ title: 'Setup', className: 'su', body: '', footer: '<button type="button" class="ui-btn ui-btn-default su-start">Start</button>', onClose: seen })
     dlg.footer.querySelector('.su-start').onclick = () => dlg.close('start')
     S.test = S.view.test || undefined

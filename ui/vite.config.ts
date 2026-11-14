@@ -2,6 +2,7 @@
 // every branch and only a release commits (docs/decisions/0018-next-ui-build-on-release.md): the plugin's server serves
 // it at /next/ with the script and styles inlined (server/next.mjs), so installing the plugin builds nothing. File names are fixed and nothing is hashed or mapped, so the same source
 // builds the same bytes (`npm run check` compares them).
+import { copyFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type AliasOptions } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -14,6 +15,8 @@ const repo = fileURLToPath(new URL('..', import.meta.url))
 // package.json (tests/next.test.mjs checks the two agree), so both apps run one machine on one library.
 export const alias: AliasOptions = [
   { find: '@studio/nav', replacement: fileURLToPath(new URL('../web/nav.js', import.meta.url)) },
+  // Setup › Parts: the current Studio's table of parts (src/screens/setup/studio-setup-parts.d.ts types it)
+  { find: '@studio/setup-parts', replacement: fileURLToPath(new URL('../web/setup-parts.js', import.meta.url)) },
   // the Studio's kits (spec 37: web/kit-*.js, listed by web/kits.js) and Hermia's cursor (spec 41, web/pet.js), hosted
   // as they are, not rewritten (src/legacy/)
   { find: '@studio/kits', replacement: fileURLToPath(new URL('../web/kits.js', import.meta.url)) },
@@ -22,6 +25,8 @@ export const alias: AliasOptions = [
   // Studio runs: src/primitives/Icon.tsx and src/screens/deck/ reach them, typed by their .d.ts
   { find: '@studio/icons', replacement: fileURLToPath(new URL('../web/icons.js', import.meta.url)) },
   { find: '@studio/crew', replacement: fileURLToPath(new URL('../web/crew.js', import.meta.url)) },
+  // the ways to make something, the same file as the current Studio's (src/studio/)
+  { find: '@studio/makeways', replacement: fileURLToPath(new URL('../web/makeways.js', import.meta.url)) },
   // by path: a bare 'xstate' would be looked up from web/, which has no node_modules
   { find: /^(\.\.?\/)+vendor\/xstate\/xstate\.mjs$/, replacement: fileURLToPath(import.meta.resolve('xstate')) },
   // the sanitiser the current deck runs on every section before a frame shows it (web/clean.js): the Design deck's
@@ -29,7 +34,11 @@ export const alias: AliasOptions = [
   { find: '@studio/clean', replacement: fileURLToPath(new URL('../web/clean.js', import.meta.url)) },
   // the board video rules (web/video.js): posters, preload, teardown and the page's budget of playing clips, one
   // copy for both apps (src/primitives/BoardVideo.tsx)
-  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) }
+  { find: '@studio/video', replacement: fileURLToPath(new URL('../web/video.js', import.meta.url)) },
+  // Open Design's Edit, ported (web/edit/patches.js, decision 0010): one part of a finished section changed by hand
+  { find: '@studio/edit', replacement: fileURLToPath(new URL('../web/edit/patches.js', import.meta.url)) },
+  // where a message typed into a build's chat goes (web/route.js): the Design deck routes the same way
+  { find: '@studio/route', replacement: fileURLToPath(new URL('../web/route.js', import.meta.url)) }
 ]
 
 export default defineConfig({
@@ -42,7 +51,16 @@ export default defineConfig({
     { name: 'swarm:lf', transformIndexHtml: { order: 'post', handler: html => html.replace(/\r\n?/g, '\n') } },
     // the current Studio's stylesheets that src/legacy/ hosts load their fonts relative to web/; here they come from
     // the server's /fonts/, as src/fonts.css's do, never copied into ui/dist/
-    { name: 'swarm:web-fonts', enforce: 'pre', transform: (code, id) => (/[\\/]web[\\/][^\\/]+\.css$/.test(id) ? code.replace(/url\(\s*['"]?fonts\//g, 'url(/fonts/') : null) }
+    { name: 'swarm:web-fonts', enforce: 'pre', transform: (code, id) => (/[\\/]web[\\/][^\\/]+\.css$/.test(id) ? code.replace(/url\(\s*['"]?fonts\//g, 'url(/fonts/') : null) },
+    // Mermaid (pinned in package.json, MIT) for the app build wall's Map (spec 44): too big to go inline in every
+    // /next/ page, so its own classic script beside it, ui/dist/vendor/, which the server serves at /next/vendor/ and
+    // the Map loads when it first shows (src/shared/mermaid.ts). A release carries it with the rest of ui/dist/.
+    { name: 'swarm:vendor-mermaid', apply: 'build', closeBundle() {
+      const from = fileURLToPath(new URL('./node_modules/mermaid/', import.meta.url)), to = fileURLToPath(new URL('./dist/vendor/', import.meta.url))
+      mkdirSync(to, { recursive: true })
+      copyFileSync(`${from}dist/mermaid.min.js`, `${to}mermaid.min.js`)
+      copyFileSync(`${from}LICENSE`, `${to}mermaid.LICENSE`)
+    } }
   ],
   resolve: { alias },
   // web/nav.js and web/tokens.css live outside ui/
@@ -54,7 +72,9 @@ export default defineConfig({
     modulePreload: false,
     cssCodeSplit: false,
     rolldownOptions: {
-      output: { entryFileNames: 'assets/next.js', assetFileNames: 'assets/next[extname]' }
+      // one script: /next/ inlines it and serves nothing beside it, so a library's own lazy imports (PixiJS loads its
+      // renderers that way) go in too
+      output: { entryFileNames: 'assets/next.js', assetFileNames: 'assets/next[extname]', inlineDynamicImports: true }
     }
   }
 })

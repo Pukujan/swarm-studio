@@ -1,6 +1,8 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the views and rooms: Canvas, Video, App, the big game, the app advisor, game mode, cast, art, the bench.
 import { dataStore } from '../data.js'
+import { noAppYet, goOnAsk } from './wander.js'
+import { stageNow, stagePick, stageAsk, stageNone, stageSwitch, playFail } from './stage.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
 import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
@@ -19,9 +21,14 @@ import { adoptVideos, boardVideo } from '../video.js'
 // change; on Video, an idea for a new cut.
 export let view = 'canvas'
 // the App view's state (web/data.js): reset when another run is shown, keeping the preview mode and width
-const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
+const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, canServe: false, openFailed: false, openSay: false, opening: false, loaded: false, plan: null, slice: null, intake: null }, { keep: ['mode', 'w'] })
 /** @type {any} */
 export const appv = appStore.state
+// a game's art plan as last read (sheetLoad), and the view pinned in the bar's switch (stageOf); both belong to one run
+/** @type {{ run: string | null, data: any, t: number, busy: boolean }} */
+const sheetv = { run: null, data: null, t: 0, busy: false }
+/** @type {{ v: import('./stage.js').StageView | null }} */
+const stagePin = { v: null }
 export const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
 const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
 
@@ -55,8 +62,14 @@ export const appApi = (path = '', body) => api(`/api/runs/${encodeURIComponent(a
 
 export function resetApp(run) {
   appStore.reset({ run })
+  stagePin.v = null
   appEls.frame.removeAttribute('src')
 }
+
+// brought in (docs/specs/45-intake.md): a Vite project nobody has pressed Install and run for yet
+const needsRun = () => appv.intake?.done && appv.intake.shape === 'vite' && !appv.intake.ran
+// brought in as plain files: the crew cannot change it yet, and the room does not offer to
+const fixedIn = () => !!appv.intake?.fixed
 
 async function loadApp() {
   const run = shownRun()
@@ -65,21 +78,48 @@ async function loadApp() {
   try {
     const st = await appApi()
     if (appv.run !== run) return
-    Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
+    Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, canServe: !!st.canServe, loaded: true, engineReady: st.engineReady, intake: st.intake || null })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
     if (st.state === 'paused' && st.slice) { appv.slice = st.slice; sliceCard(st.slice, run) }
     // the server knows whether the app is running: an address from the log may be a dev server
     // that stopped with a restart, so it opens again rather than showing a dead page
     appv.url = st.url || null
-    // an app made before: start its dev server again
-    if (!appv.url && appv.hasApp && appv.state !== 'working' && !appv.opening) {
-      appv.opening = true
-      renderApp()
-      appApi('/open', {}).then(o => { if (appv.run === run && o.url) appv.url = o.url }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
-    }
+    // an app made before: start its server again. (A big game waiting after a slice is not started by looking at
+    // the room: that can mean an install and a build. Its Live option, Play it live or "show the game" start it.
+    // A Vite project brought in waits for the person's press: its install and build are code from outside.)
+    if (!appv.url && appv.hasApp && appv.state !== 'working' && !needsRun()) openApp(run)
   } catch (err) { appv.message = err.message }
   renderApp()
+}
+// Start the app's server again (POST …/app/open): the stage shows the "Starting" skeleton meanwhile. A try the
+// person asked for (the Live option, Play it live, "show the game") says in the chat why it failed; the room's
+// own try stays quiet.
+function openApp(run) {
+  if (appv.opening || appv.run !== run) return
+  Object.assign(appv, { opening: true, openFailed: false })
+  renderApp()
+  let again = false
+  appApi('/open', {}).then(async o => {
+    if (appv.run !== run) return
+    if (o.url) return void Object.assign(appv, { url: o.url, tries: 0, openSay: false })
+    // it is still starting: ask again in a moment, ten times at most (the skeleton stays meanwhile)
+    if ((appv.tries = (appv.tries || 0) + 1) >= 10) throw new Error('It did not start. Open it again to retry.')
+    await new Promise(r => setTimeout(r, 2500))
+    again = appv.run === run && !appv.url
+  }).catch(err => { if (appv.run !== run) return; if (appv.openSay) botMsg(playFail(appv.kind, err.message)); Object.assign(appv, { message: err.message, openFailed: true, openSay: false }) })
+    .finally(() => { if (appv.run === run) appv.opening = false; if (again) openApp(run); else renderApp() })
+}
+// "Play it live" on a slice's chat card, and "show the game" typed: the room shows the Live view, pinned, and
+// starts the game's server again if it stopped. When there is nothing to start, the chat says why.
+export async function playLive() {
+  if (!shownRun()) return
+  if (view !== 'app') setView('app')
+  if (appv.run !== shownRun()) resetApp(shownRun())
+  Object.assign(appv, { openFailed: false, tries: 0 })
+  await loadApp()
+  if (!stageOf().offers.includes('live')) return botMsg(stageNone('live', stageBuild()))
+  stageSet('live')
 }
 
 // a build another Studio drives has no live feed here: read the shared log again every few seconds
@@ -199,7 +239,7 @@ function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && app
 
 function renderApp() {
   // while the crew builds the box talks to it; a game's own examples are a game's
-  if (view === 'app') els.brief.placeholder = appv.state === 'working' ? 'Ask the crew, or say what to change…' : appv.kind === 'game' ? 'Change the game: “make the jump higher”, “add a boss”…' : PLACEHOLDER.app
+  if (view === 'app') els.brief.placeholder = fixedIn() ? 'Brought in: the crew cannot change it yet' : appv.state === 'working' ? 'Ask the crew, or say what to change…' : appv.kind === 'game' ? 'Change the game: “make the jump higher”, “add a boss”…' : PLACEHOLDER.app
   renderAppLink()
   renderBadges()
   if (view !== 'app') return
@@ -224,27 +264,38 @@ function renderApp() {
   // the preview, or what to do first
   if (appv.url && appEls.frame.dataset.src !== appv.url) { appEls.frame.dataset.src = appv.url; loadFrame() }
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
-  const empty = !appv.url || (st === 'failed' && !appv.hasApp)
+  // what fills the stage: it follows the build, or holds the view pinned in the bar's switch (web/canvas/stage.js)
+  const now = stageOf(), empty = now.empty, sheet = now.sheet && !!shownRun()
+  stageSwitch($('#app-stageview'), now, v => stageSet(stagePick(stagePin.v, v)))
+  if (now.open && shownRun() && !document.hidden) return openApp(shownRun())
   appEls.empty.hidden = !empty
-  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && (working || appv.steps.length)
-  if (!sheet) appEls.empty.classList.remove('sheet')
-  if (sheet) artSheet(shownRun())
+  if (appv.kind === 'game' && shownRun()) sheetLoad(shownRun(), working || sheet)
+  if (!sheet) { appEls.empty.classList.remove('sheet'); for (const a of ['tabindex', 'role', 'aria-label']) appEls.empty.removeAttribute(a) }
+  if (sheet) artSheet()
   else if (empty) {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
       // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
-      : appv.opening && !working
-        ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
+      : (appv.opening || (appv.hasApp && !appv.message && st !== 'failed' && st !== 'stopped' && (appv.tries || 0) < 10)) && !working
+        ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span><em class="as-bot" aria-hidden="true">${cursor(painterOf('app'))}</em></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
+      // being brought in: the shape of a page with a crew cursor on it, and the step it is on (no engine works here)
+      : working && appv.intake
+        ? `<div class="app-skel bring-skel" role="status" aria-busy="true" aria-label="Bringing it in"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span>${cursor('Pip')}</div><p>${esc(appv.stage || 'bringing it in')}</p>`
+      : needsRun() && !appv.message
+        ? `<h2>Brought in</h2><button class="big" data-run>${ico('play')}Install and run</button>`
       : working
         ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+        // it did not come in: why, and no Try again (it is brought in again from Projects)
+        : st === 'failed' && appv.intake && !appv.intake.done
+          ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>It did not <em>come in</em></h2><p class="fail-msg">${esc(String(appv.message || '').split('\n')[0].slice(0, 260))}</p></div>`
         : st === 'failed' && appv.result?.artStop
           ? artStopCard(appv.result.artStop)
-        : st === 'failed' && appv.message === 'stopped'
+        : st === 'stopped' || (st === 'failed' && appv.message === 'stopped')
           ? `<div class="fail-card stopped"><h2><em>Stopped</em></h2><p class="fail-msg">${esc(stopSummary())}</p><button class="big" data-build>${ico('rotate-ccw')}Go on</button></div>`
         : st === 'failed'
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
-          : appv.hasApp && appv.message
+          : (appv.hasApp || appv.openFailed) && appv.message
             ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>start</em></h2><p class="fail-msg">${esc(String(appv.message).split('\n')[0].slice(0, 220))}</p><button class="big" data-reopen>${ico('rotate-ccw')}Try again</button></div>`
           : appv.kind === 'game' && !appv.hasApp
             ? `<h2>A game starts with a few questions</h2><button class="big" data-game>🎮 Start a game</button>`
@@ -253,7 +304,13 @@ function renderApp() {
     // out of quota: another image model, then build again (pictures already painted are kept)
     for (const b of appEls.empty.querySelectorAll('[data-image]')) b.addEventListener('click', async () => { b.disabled = true; await saveModel({ role: 'image', provider: b.dataset.image, model: b.dataset.model || '' }); buildApp() })
     appEls.empty.querySelector('[data-incode]')?.addEventListener('click', () => appAsk('', { art: false }))
-    appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { appv.message = ''; loadApp() })
+    appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { Object.assign(appv, { message: '', openFailed: false, tries: 0 }); loadApp() })
+    // the person's own press: the project's packages are installed and its build runs, then it opens
+    appEls.empty.querySelector('[data-run]')?.addEventListener('click', () => {
+      appv.opening = true
+      renderApp()
+      appApi('/open', { run: true }).then(o => { if (o.url) appv.url = o.url; if (appv.intake) appv.intake.ran = true }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
+    })
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
   playClip()
@@ -266,19 +323,57 @@ function renderApp() {
 
 // A game being built: its whole art plan as one sheet, each picture landing in its cell as the
 // crew paints it, the cell being painted showing who is on it. Read again every 4 s while shown.
-const sheetv = { run: null, data: null, t: 0, busy: false }
-function artSheet(run) {
+// A game's art plan is read once when the room opens (it decides whether the switch offers Art), then again
+// every 4 s while the build works or the sheet is on screen.
+function sheetLoad(run, live) {
   if (sheetv.run !== run) Object.assign(sheetv, { run, data: null, t: 0 })
-  if (!sheetv.busy && Date.now() - sheetv.t > 4000) {
-    sheetv.busy = true
-    api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => (r.ok ? r.json() : null)).then(d => { if (sheetv.run === run && d) sheetv.data = d }).catch(() => {})
-      .finally(() => { sheetv.busy = false; sheetv.t = Date.now(); if (sheetv.run === run && !appEls.empty.hidden) renderApp() })
-  }
+  if (sheetv.busy || (sheetv.t && !(live && Date.now() - sheetv.t > 4000))) return
+  sheetv.busy = true
+  api(`/api/runs/${encodeURIComponent(run)}/assets`).then(r => (r.ok ? r.json() : null)).then(d => { if (sheetv.run === run && d) sheetv.data = d }).catch(() => {})
+    .finally(() => { sheetv.busy = false; sheetv.t = Date.now(); if (sheetv.run === run && view === 'app') renderApp() })
+}
+// The stage now (web/canvas/stage.js): which views the switch offers, which one shows, and the pin, dropped
+// here once its view is gone. The wall (web/canvas/dock.js codeWall) hides itself unless the crew is shown.
+const stageBuild = () => ({ working: appv.state === 'working' && appv.run === shownRun(), state: appv.state, kind: appv.kind, hasApp: !!appv.hasApp, url: appv.url, canServe: !!appv.canServe, opening: !!appv.opening, openFailed: !!appv.openFailed || needsRun(), steps: appv.steps.length, painted: sheetv.run === appv.run ? (sheetv.data?.sheet || []).filter(c => c.src).length : 0 })
+export function stageOf() {
+  const now = stageNow(stageBuild(), stagePin.v)
+  stagePin.v = now.pin
+  return now
+}
+// Preview or Code: the stage's views live in Preview
+function appMode(m) {
+  appv.mode = m
+  for (const x of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#app-mode button'))) x.classList.toggle('on', x.dataset.mode === m)
+  if (m === 'code') appv.files = null
+}
+/** Pin a view (or null: follow the build again) and show it.  @param {import('./stage.js').StageView | null} v */
+function stageSet(v) {
+  stagePin.v = v
+  // Live, asked for: if the app has to be started and cannot be, the chat says why
+  if (v === 'live' && !appv.url) appv.openSay = true
+  if (appv.mode !== 'preview') appMode('preview')
+  renderApp()
+}
+// The switch, typed in the chat: "show the crew", "show the art", "show the game", "follow the build". A message
+// that is one of these is answered here and never reaches the builder.
+export function stageSay(text) {
+  const want = view === 'app' && shownRun() ? stageAsk(text) : null
+  if (!want) return false
+  feed(null, text, 'you')
+  if (want === 'follow') stageSet(null)
+  // the game or the app: started again if its server stopped (the "Starting" skeleton), or the chat says why not
+  else if (want === 'live') playLive()
+  else if (stageOf().offers.includes(want)) stageSet(want)
+  else botMsg(stageNone(want, stageBuild()))
+  return true
+}
+function artSheet() {
+  const working = appv.state === 'working', mid = working || !appv.hasApp
   const cells = sheetv.data?.sheet || []
   const done = cells.filter(c => c.src).length
-  const next = cells.find(c => !c.src)
-  const last = appv.steps[appv.steps.length - 1]?.text || appv.stage || ''
-  const head = !cells.length ? 'Building the game' : done < cells.length ? `Painting the art · ${done}/${cells.length}` : 'Building the game'
+  const next = mid ? cells.find(c => !c.src) : null
+  const last = mid ? appv.steps[appv.steps.length - 1]?.text || appv.stage || '' : ''
+  const head = !mid ? `The art · ${done}/${cells.length}` : !cells.length ? 'Building the game' : done < cells.length ? `Painting the art · ${done}/${cells.length}` : 'Building the game'
   const cell = c => {
     const on = c === next
     const who = on ? painterOf(c.id) : ''
@@ -286,6 +381,10 @@ function artSheet(run) {
   }
   appEls.empty.innerHTML = `<div class="art-sheet"><h2>${esc(head)}</h2>${last ? `<p class="as-line">${esc(last)}</p>` : ''}<div class="as-grid">${cells.map(cell).join('')}</div></div>`
   appEls.empty.classList.add('sheet')
+  // the sheet scrolls: it takes the keyboard
+  appEls.empty.tabIndex = 0
+  appEls.empty.setAttribute('role', 'region')
+  appEls.empty.setAttribute('aria-label', 'Art')
 }
 
 async function renderCode() {
@@ -312,9 +411,7 @@ async function showFile(path) {
 // @ts-ignore
 for (const b of document.querySelectorAll('#app-mode button')) b.onclick = () => {
   // @ts-ignore
-  appv.mode = b.dataset.mode
-  for (const x of document.querySelectorAll('#app-mode button')) x.classList.toggle('on', x === b)
-  if (appv.mode === 'code') appv.files = null
+  appMode(b.dataset.mode)
   renderApp()
 }
 // @ts-ignore
@@ -346,7 +443,10 @@ export async function appAsk(ask, extra = {}) {
   // while it builds, the crew still listens: a question gets an answer from what it is doing,
   // a change is queued for the start of the next stage
   if (appv.state === 'working') return tellCrew(ask)
-  if (ask && !appv.hasApp) return botMsg('Build the app first (the button in the App view), then change it by chatting.')
+  if (fixedIn()) return botMsg('This one was brought in as plain files. It plays here and its code is in Code; the crew cannot change it yet.')
+  if (appv.intake && !ask) return
+  // the chat works for a stopped build too: "go on", "continue", "resume" pick it up again; anything else gets a true answer
+  if (ask && !appv.hasApp) { if (!goOnAsk(ask, appv)) return botMsg(noAppYet(appv)); ask = '' }
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
   try {
     const st = await appApi('', { ask, sections, ...extra })
@@ -407,7 +507,7 @@ function changeBlock(p) {
   return box
 }
 // what Hermia shows when asked to see the build: the newest play test clip and pictures
-function mediaBlock(m) {
+export function mediaBlock(m) {
   const box = document.createElement('div')
   box.className = 'tell-media'
   if (m.clip) {
@@ -427,7 +527,8 @@ function cwSay(k, words, thinking = false) {
   const host = k >= 0 ? cw.el?.querySelector('.cw-grid')?.children[k] : cw.el?.querySelector('.cw-head')
   if (!host) return
   let b = host.querySelector(':scope > .cw-say')
-  if (!words) { b?.remove(); return }
+  // with the chat column open the answer is already there: it is not said a second time over the wall
+  if (!words || (!thinking && document.body.classList.contains('cosmos-chat'))) { b?.remove(); return }
   if (!b) { b = document.createElement('p'); b.className = 'cw-say'; host.append(b) }
   b.classList.toggle('thinking', thinking)
   setText(b, words)
@@ -458,7 +559,7 @@ function sliceCard(s, run = shownRun()) {
   adoptVideos(item)
   item.querySelector('.txt').textContent = s.ask || `Slice ${s.i + 1} is built. Anything to change?`
   // @ts-ignore
-  item.querySelector('.sc-live').onclick = () => setView('app')
+  item.querySelector('.sc-live').onclick = () => (run === shownRun() ? playLive() : setView('app'))
   // @ts-ignore
   for (const b of item.querySelectorAll('.sc-ideas button')) b.onclick = () => sliceGo(s.ideas[+b.dataset.j])
   push(els.feed, item)
@@ -687,6 +788,7 @@ export function appEvent(e) {
   const fresh_ = !e.t || Date.now() - e.t < 8000
   if (e.type === 'app:start') {
     Object.assign(appv, { state: 'working', kind: e.kind || appv.kind, stage: 'starting', message: '' })
+    stagePin.v = null // a new build: the stage follows it again
     // a build from scratch: the painters' tiles from an earlier build (another game's art) go
     if (e.fresh) paintv.slots = []
     if (e.ask && appv.asks.at(-1) !== e.ask) appv.asks.push(e.ask)
@@ -711,6 +813,8 @@ export function appEvent(e) {
     Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
     if (e.url && fresh_) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
+    // brought in: no engine turned, so nothing to count; the room reads what came (its shape, its page)
+    if (e.intake) { if (fresh_ && view === 'app') loadApp() } else
     if (fresh_) feed(null, `🧩 the ${appv.kind === 'game' ? 'game' : 'app'} is ready (${e.result?.turns || 1} turn${e.result?.turns === 1 ? '' : 's'}, checks ${e.result?.gatesPassed ? 'passed' : 'not passed'}, ${Math.round((e.ms || 0) / 1000)}s). Open the App view to try it, or chat to change it.`, 'sys')
   } else if (e.type === 'app:paused') {
     // a big game stops after each slice and asks in the chat (sliceCard)

@@ -39,7 +39,8 @@ test('the next UI shows generated pages only in frames sandboxed with allow-scri
   const files = walk('ui/src')
   const tags = files.flatMap(f => (read(f).match(/<iframe\b[^>]*>/g) || []).map(tag => [f, tag]))
   assert.ok(tags.length >= 1, 'the Design deck draws its pages in iframes')
-  for (const [f, tag] of tags) assert.match(tag, /\ssandbox="allow-scripts"/, `${f}: ${tag.slice(0, 80)}`)
+  // the built app (the app build wall, spec 44) also keeps its forms, as the current Studio's #app-frame does
+  for (const [f, tag] of tags) assert.match(tag, f.endsWith('/app/AppWallView.tsx') ? /\ssandbox="allow-scripts allow-forms"/ : /\ssandbox="allow-scripts"/, `${f}: ${tag.slice(0, 80)}`)
   for (const f of files) assert.doesNotMatch(read(f), /allow-same-origin/, f)
   const frame = read('ui/src/screens/deck/PageFrame.tsx')
   assert.match(frame, /import \{ clean \} from '@studio\/clean'/)

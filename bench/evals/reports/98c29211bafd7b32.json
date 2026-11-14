@@ -1,0 +1,197 @@
+{
+  "base": "origin/main",
+  "before": {
+    "fingerprint": "0f1f1dd14b8aadfc",
+    "model": "cb/deepseek-v4.1-flash",
+    "reviewer": "ali/qwen3.8-omni-flash",
+    "runs": 2,
+    "at": "2026-11-13T17:21:20.333Z",
+    "sets": {
+      "harbour": {
+        "prompts": "237fd3ede5c4aaee",
+        "runs": [
+          {
+            "wallMs": 5983,
+            "tokensIn": 10113,
+            "tokensOut": 7099,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "all-caps-no-tracking"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-structured page with strong typography and a cohesive dark theme."
+          },
+          {
+            "wallMs": 6488,
+            "tokensIn": 10113,
+            "tokensOut": 7480,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "The page has a clean, professional design with strong typography and clear calls to action."
+          }
+        ],
+        "scored": true,
+        "wallMs": 6235.5,
+        "tokensIn": 10113,
+        "tokensOut": 7289.5,
+        "score": 8,
+        "findings": 0.13,
+        "p0": 0,
+        "errors": 0
+      },
+      "kiln": {
+        "prompts": "ec5aef6061accee0",
+        "runs": [
+          {
+            "wallMs": 10281,
+            "tokensIn": 11469,
+            "tokensOut": 10729,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "The page features a clean, professional layout with strong typography and consistent branding."
+          },
+          {
+            "wallMs": 14759,
+            "tokensIn": 11469,
+            "tokensOut": 10840,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 9,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-spaced hero with strong typography and a clear call to action."
+          }
+        ],
+        "scored": true,
+        "wallMs": 12520,
+        "tokensIn": 11469,
+        "tokensOut": 10784.5,
+        "score": 8.5,
+        "findings": 0.08,
+        "p0": 0,
+        "errors": 0
+      }
+    }
+  },
+  "after": {
+    "fingerprint": "98c29211bafd7b32",
+    "model": "cb/deepseek-v4.1-flash",
+    "reviewer": "ali/qwen3.8-omni-flash",
+    "runs": 2,
+    "at": "2026-11-13T17:22:11.909Z",
+    "sets": {
+      "harbour": {
+        "prompts": "31f73a1541792504",
+        "runs": [
+          {
+            "wallMs": 6852,
+            "tokensIn": 10113,
+            "tokensOut": 8884,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-structured page with strong typography and a cohesive dark theme."
+          },
+          {
+            "wallMs": 6343,
+            "tokensIn": 10113,
+            "tokensOut": 7637,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 0,
+            "ids": [],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-structured page with strong typography and a cohesive dark theme."
+          }
+        ],
+        "scored": true,
+        "wallMs": 6597.5,
+        "tokensIn": 10113,
+        "tokensOut": 8260.5,
+        "score": 8,
+        "findings": 0.06,
+        "p0": 0,
+        "errors": 0
+      },
+      "kiln": {
+        "prompts": "bc9094737137b6c6",
+        "runs": [
+          {
+            "wallMs": 7737,
+            "tokensIn": 11469,
+            "tokensOut": 9052,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 0,
+            "ids": [],
+            "score": null,
+            "error": "Unexpected non-whitespace character after JSON at position 136 (line 2 column 1)"
+          },
+          {
+            "wallMs": 8300,
+            "tokensIn": 11469,
+            "tokensOut": 9461,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 9,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A highly polished, professional landing page with excellent typography and a cohesive visual identity."
+          }
+        ],
+        "scored": false,
+        "wallMs": 8018.5,
+        "tokensIn": 11469,
+        "tokensOut": 9256.5,
+        "score": 9,
+        "findings": 0.04,
+        "p0": 0,
+        "errors": 0
+      }
+    }
+  },
+  "table": "| set | score | findings per section | P0 | wall time | prompt tokens |\n|---|---|---|---|---|---|\n| harbour | 8 → 8 | 0.13 → 0.06 | 0 → 0 | 6.2 s → 6.6 s (6%) | 10113 → 10113 (0%) |\n| kiln | 8.5 → 9 | 0.08 → 0.04 | 0 → 0 | 12.5 s → 8.0 s (-36%) | 11469 → 11469 (0%) |",
+  "fails": []
+}

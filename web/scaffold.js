@@ -12,18 +12,23 @@
 //   look, save(data), select(key), say(text) }. state is the kit's own saved state; look the brand's
 //   picked colours and fonts ({ bg, text, accent, link, heading, body }) or null.
 import { ic } from './icons.js'
+import { matchHtml, matchClick, lookBusy, lookWorker, workLine, workHtml, lookPhase, lookSays, LOOK_POLL } from './lookmatch.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
 import { layerTree, layerSheet } from './layers.js'
 
+// what a project's builds use for pictures (web/setup.js's three)
+const PICS = { painted: 'Painted', stock: 'Stock photos', drawn: 'Drawn' }
 const STEP_NAME = { brand: 'Brand', references: 'References', assets: 'Assets', plan: 'Plan', proposal: 'Lock' }
 const TAKES = 3
 const STATE_NAME = { empty: 'Empty', started: 'Started', done: 'Done', skipped: 'Skipped' }
 const CHAT_KIND = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
+// an asset's role as the person reads it: the role 'pack' (a set of brand files) is never called that (decision 0015)
+const ROLE_NAME = { pack: 'Brand kit' }
 
 export function makeScaffold({ sw, C, root }) {
   const esc = sw.esc
-  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, talked: null, cards: new Map(), takes: null }
+  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, asking: null, talked: null, cards: new Map(), takes: null }
 
   const bd = makeBoard({ root, cls: 'project plan scaffold', label: 'Studio', fit: [0.35, 1], on: () => A.on, selected: () => !!A.sel, clear: () => select(null) })
   const { world, insp } = bd
@@ -77,6 +82,7 @@ export function makeScaffold({ sw, C, root }) {
       const d = await api(at(''))
       if (pid !== A.pid) return
       A.d = d
+      sayLooks()
       // Three takes: the first three looks of the project's brand (the planner's picks first, then the brief's
       // words), the brand made from the idea first; three waiting cards until then
       if (d.studio.mode === 'takes' && d.studio.idea && A.takes?.pid !== pid) {
@@ -133,9 +139,14 @@ export function makeScaffold({ sw, C, root }) {
   const card = (key, name, cls, inner = '') => `<div class="ab ${cls}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(name)}">${inner}${sel(key)}</div>`
   const addCard = (key, name) => card(key, name, 'sc-add', `${ic('plus', 18)}<span>${esc(name)}</span>`)
   const thumb = (kind, x) => {
-    const inner = x.kind === 'image' && x.src ? `<img src="${esc((sw.base || '') + x.src)}" alt="" draggable="false" loading="lazy">`
+    const shot = x.kind === 'link' && x.look?.shots?.[0]
+    if (lookBusy(x) && !A.lookTimer) setTimeout(watchLooks)
+    const inner = shot ? `<img src="${esc((sw.base || '') + shot)}" alt="" draggable="false" loading="lazy">`
+      : x.kind === 'image' && x.src ? `<img src="${esc((sw.base || '') + x.src)}" alt="" draggable="false" loading="lazy">`
       : `<div class="sc-file">${ic(x.kind === 'link' ? 'link' : x.kind === 'video' ? 'film' : x.kind === 'audio' ? 'music' : x.kind === 'font' ? 'type' : 'file', 22)}</div>`
-    return card(`${kind}:${x.id}`, x.name, 'sc-thumb', `${inner}<em>${esc(x.role || x.name)}</em>`)
+    // someone on the crew is reading the link or comparing it: the sheen and their named cursor on the card
+    const work = kind === 'ref' ? workHtml(x) : ''
+    return card(`${kind}:${x.id}`, x.name, `sc-thumb${work ? ' sc-walking' : ''}`, `${inner}<em>${esc(x.role || x.name)}</em>${work}`)
   }
   function brandCard() {
     const b = A.d.brand, L = look(b)
@@ -183,7 +194,7 @@ export function makeScaffold({ sw, C, root }) {
     if (d.studio.mode === 'takes' && A.takes) parts.push(`<section class="pj-sec sc-step sc-takes" data-sec="takes"><span class="al">Three takes</span><div class="abs">${A.takes.packs.length ? A.takes.packs.map(takeCard).join('') : '<div class="ab sc-take wait-in"></div>'.repeat(TAKES)}</div></section>`)
     for (const step of k.steps.filter(s => s in d.studio.steps)) {
       if (step === 'brand') parts.push(sec('brand', brandCard()))
-      if (step === 'references') parts.push(sec('references', `${d.refs.map(r => thumb('ref', r)).join('')}${addCard('ref:add', 'Add reference')}`))
+      if (step === 'references') parts.push(sec('references', `${d.refs.map(r => thumb('ref', r)).join('')}${addCard('ref:add', 'Add reference')}${addCard('ref:link', 'Add link')}`))
       if (step === 'assets') parts.push(sec('assets', `${d.assets.map(a => thumb('asset', a)).join('')}${addCard('asset:add', 'Add asset')}`))
       if (step === 'plan' && k.plan) {
         const cards = k.plan.sections(c).flatMap(s => s.cards)
@@ -193,8 +204,33 @@ export function makeScaffold({ sw, C, root }) {
         parts.push(sec('plan', cards.map(x => card(x.key, x.name, look(x), x.render ? '' : `<b>${esc(x.name)}</b>`)).join(''), `sc-plan-${k.kind}`))
       }
     }
-    parts.push(sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', `<b>Idea</b><span>${esc(d.studio.idea)}</span>`)))
-    world.innerHTML = `<div class="col">${parts.join('')}</div>`
+    // The board (the owner, on the game's Plan board: "it looks better and much easy to track"): each step a
+    // section, in rows; Lock, last, holds the idea and what is set so far as fact cards. A fact card goes to its step.
+    const on = s => s in d.studio.steps
+    const fact = (step, name, value, extra = '') => `<div class="ab pcard sc-fact" data-key="fact:${step}:${name}" tabindex="0" role="button"><b>${name}</b><span>${esc(value)}</span>${extra}</div>`
+    // with no brand sheet yet, a built project shows the type and accent its newest version has
+    const was = d.built?.theme || null
+    const L = look(d.brand), seen = d.refs.find(r => r.look?.state === 'ready')?.look
+    const nPlan = [...A.cards.values()].filter(x => !x.add && x.cls !== 'sc-add').length
+    const facts = [
+      on('plan') && k.plan && fact('plan', k.kind === 'site' ? 'Pages' : 'Plan', nPlan || k.kind !== 'site' ? String(nPlan) : 'Crew decides'),
+      on('brand') && fact('brand', 'Type', L?.heading || was?.heading || 'Not set'),
+      on('brand') && fact('brand', 'Accent', L?.accent || was?.accent || 'Not set', L?.accent || was?.accent ? `<i class="sc-fsw" style="background:${esc(L?.accent || was.accent)}"></i>` : ''),
+      on('references') && fact('references', 'References', String(d.refs.length)),
+      on('assets') && fact('assets', 'Assets', String(d.assets.length)),
+      k.kind === 'site' && fact('pictures', 'Pictures', PICS[d.studio.kit?.pictures] || 'Not chosen'),
+      seen?.words?.motion && fact('references', 'Motion', seen.words.motion),
+      seen?.words?.threeD && fact('references', '3D', 'Flat stand-in'),
+    ].filter(Boolean).join('')
+    // an empty idea says what to do (the chat asks the same); pressing it goes to the chat box
+    const ideaText = d.studio.idea ? `<span>${esc(d.studio.idea)}</span>` : '<span class="sc-none">Tell Hermia what you are making</span>'
+    // these cards are named by the words they show, with no separate label (axe label-content-name-mismatch)
+    const lock = sec('proposal', `<div class="ab pcard sc-idea" data-key="lock:idea" tabindex="0" role="button"><b>Idea</b>${ideaText}${sel('lock:idea')}</div>` + facts, 'sc-facts')
+    // Read like the steps: left to right, then the next row (the owner: "shouldnt things go from left to right
+    // and then row to row?"). Row 1: Brand, References, Assets. Row 2: Plan, then Lock, the summary, last.
+    const is = (/** @type {string} */ p, /** @type {string} */ re) => new RegExp(`data-sec="(${re})"`).test(p.slice(0, 120))
+    const rows = [parts.filter(p => is(p, 'takes')), parts.filter(p => is(p, 'brand|references|assets')), [...parts.filter(p => is(p, 'plan')), lock]].filter(r => r.length)
+    world.innerHTML = `<div class="col">${rows.map(r => `<div class="sc-row">${r.join('')}</div>`).join('')}</div>`
     // the kit draws its own cards
     for (const [key, x] of A.cards) { const el = world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`); if (el) { x.render?.(el, c); if (A.sel === key) el.insertAdjacentHTML('beforeend', sel(key)) } }
     bd.applyCam()
@@ -230,7 +266,7 @@ export function makeScaffold({ sw, C, root }) {
   }
   const cardEl = key => world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)
   // what the inspector opens on (the Brand card opens the brand sheet instead)
-  const selectable = key => A.cards.has(key) || /^(ref|asset|lock|take):/.test(key)
+  const selectable = key => A.cards.has(key) || /^(ref|asset|lock|take|pics):/.test(key)
   function renderLayers() {
     if (!A.d) { tree.replaceChildren(); return }
     layerTree(tree, layerGroups(), {
@@ -269,6 +305,75 @@ export function makeScaffold({ sw, C, root }) {
     return r ? { left: r.left, top: r.top, width: r.width, height: r.height } : null
   }
 
+  // ---------- a link's look (decision 0022): the site walked in a browser, its shots, colours and type, the
+  // style words, and where it came from. The shots are only for seeing; they are never placed in a build.
+  function addLinkForm() {
+    insp.innerHTML = `<h3><span>Add link</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="sc-body"><input class="hm-free" name="url" type="url" placeholder="https://" aria-label="Link"><textarea class="hm-free" name="use" rows="3" placeholder="What you like about it" aria-label="What you like about it"></textarea><div class="sc-acts"><button class="btn pri" data-a="add">${ic('plus', 15)}Add</button></div></div>`
+    insp.querySelector('.pj-x').onclick = () => select(null)
+    const url = insp.querySelector('[name=url]'), use = insp.querySelector('[name=use]')
+    url.focus()
+    insp.querySelector('[data-a=add]').onclick = () => {
+      if (!url.value.trim()) return url.focus()
+      post(proj('/refs/link'), { url: url.value.trim(), use: use.value.trim() }).then(j => { A.d.refs = j.refs; select(`ref:${j.ref.id}`); watchLooks() }).catch(fail)
+    }
+  }
+  // Hermia says one chat line when a link's reading or comparing starts and one when it is done. A state is
+  // said once: A.looks keeps each link's last seen one, and the links there when the Studio opened say nothing.
+  function sayLooks() {
+    const first = !A.looks, seen = A.looks || (A.looks = new Map())
+    for (const r of A.d?.refs || []) {
+      if (r.kind !== 'link') continue
+      const line = first ? '' : lookSays(seen.get(r.id) || '', r)
+      seen.set(r.id, lookPhase(r))
+      if (line) sw.say?.(line)
+    }
+  }
+  // a link's look or match without the step it is on: the same while only the step moves
+  const lookShape = refs => JSON.stringify(refs, (k, v) => (k === 'step' ? undefined : v))
+  function watchLooks() {
+    clearTimeout(A.lookTimer)
+    sayLooks()
+    if (!A.d?.refs?.some(r => lookBusy(r))) { A.lookTimer = null; return }
+    A.lookTimer = setTimeout(() => api(proj('/refs')).then(j => {
+      const same = lookShape(j.refs) === lookShape(A.d.refs)
+      A.d.refs = j.refs
+      // only the step moved: its line is changed in place, so the card's cursor and sheen and a note being typed carry on
+      if (same) { const r = j.refs.find(x => `ref:${x.id}` === A.sel), w = r && lookWorker(r), el = w && insp.querySelector(w.job === 'match' ? '.lm-state' : '.lk-state'); if (el) el.textContent = workLine(w) } else render()
+      watchLooks()
+    }).catch(() => {}), LOOK_POLL)
+  }
+  function lookInsp(box, r) {
+    const L = r.look || {}, w = L.words || {}, t = L.tokens || {}, f = t.fonts || {}
+    const when = r.added ? new Date(r.added).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+    const from = `${r.source === 'chat' ? 'Chat' : 'References'}${when ? ` · ${when}` : ''}`
+    const shots = (L.shots || []).slice(0, 6).map(s => `<img src="${esc((sw.base || '') + s)}" alt="" loading="lazy">`).join('')
+    const sw2 = (t.palette || []).map(c => `<i style="background:${esc(c)}"></i>`).join('')
+    const line = (k, v) => (v ? `<p class="lk-row"><b>${k}</b><span>${esc(v)}</span></p>` : '')
+    box.innerHTML = `${L.state === 'walking' ? `<p class="lk-state" aria-live="polite">${esc(workLine(lookWorker(r)))}</p>` : L.state === 'failed' ? `<p class="lk-state">${esc(L.note || 'Could not open it')}</p>` : ''}
+      ${shots ? `<div class="lk-shots">${shots}</div>` : ''}
+      ${sw2 ? `<div class="br-sw lk-sw">${sw2}</div>` : ''}
+      ${w.prompt ? `<p class="sc-idea-full">${esc(w.prompt)}</p>` : ''}
+      ${line('Type', w.type || (f.display?.name ? `${f.display.name} · ${f.body?.name || ''}` : ''))}${line('Motion', w.motion)}${line('3D', w.threeD)}
+      <textarea class="hm-free" name="use" rows="2" placeholder="What you like about it" aria-label="What you like about it">${esc(r.use || '')}</textarea>
+      ${matchHtml(r, { base: sw.base || '', built: !!A.d.project?.head })}
+      <p class="lk-from">${esc(from)} · <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(L.from?.host || r.name)}</a></p>
+      <div class="sc-acts">${L.state === 'ready' && t.bg ? `<button class="btn pri" data-a="brand">${ic('check', 15)}Use this look</button>` : ''}<button class="btn ghost" data-a="look"${L.state === 'walking' ? ' disabled' : ''}>${ic('restore', 15)}Look again</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
+    box.onclick = e => {
+      const m = matchClick(e, (path, body) => post(proj(`/refs/${path}`), body))
+      if (m) return m.then(j => { A.d.refs = j.refs; if (!j.sent) render(); watchLooks() }).catch(fail)
+      const a = e.target.closest('[data-a]')?.dataset.a
+      // Use this look: the reference's colours and type become the project's brand, and the Brand step shows them
+      if (a === 'brand') {
+        const b = /** @type {HTMLButtonElement} */ (e.target.closest('[data-a]'))
+        b.disabled = true
+        return post(proj('/brand/pick'), { part: 'look', look: L.tokens, host: L.from?.host || r.name, brief: A.d.studio.idea || r.name }).then(() => load()).then(() => { select(null); bd.focus('brand') }).catch(err => { b.disabled = false; fail(err) })
+      }
+      if (a === 'look') post(proj(`/refs/${r.id}/look`), { use: box.querySelector('[name=use]').value }).then(j => { A.d.refs = j.refs; render(); watchLooks() }).catch(fail)
+      if (a === 'remove') post(proj(`/refs/${r.id}/remove`)).then(j => { A.d.refs = j.refs; select(null) }).catch(fail)
+    }
+    watchLooks()
+  }
+
   // ---------- the inspector: the selected card's own controls
   function renderInsp() {
     const key = A.sel
@@ -278,7 +383,8 @@ export function makeScaffold({ sw, C, root }) {
     const [part, id] = key.split(':')
     const x = A.cards.get(key)
     const pack = part === 'take' ? A.takes?.packs.find(p => p.slug === id) : null
-    const name = x?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? A.d.refs.find(r => r.id === id)?.name : part === 'asset' ? A.d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : '')
+    const name = x?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? A.d.refs.find(r => r.id === id)?.name : part === 'asset' ? A.d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : part === 'pics' ? 'Pictures' : '')
+    if (key === 'ref:link') return addLinkForm()
     if (!name) return select(null)
     insp.innerHTML = `<h3><span>${esc(name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="sc-body"></div>`
     const box = insp.querySelector('.sc-body')
@@ -304,6 +410,7 @@ export function makeScaffold({ sw, C, root }) {
       }
       return
     }
+    if (part === 'ref' && A.d.refs.find(r => r.id === id)?.kind === 'link') return lookInsp(box, A.d.refs.find(r => r.id === id))
     if (part === 'ref') {
       box.innerHTML = `<div class="sc-acts"><button class="btn ghost" data-a="given">${ic('pin', 15)}Use as given</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
       box.onclick = e => {
@@ -315,13 +422,25 @@ export function makeScaffold({ sw, C, root }) {
     }
     if (part === 'asset') {
       const as = A.d.assets.find(a => a.id === id)
-      box.innerHTML = `<label class="pl-f"><span>Role</span><select data-role>${['logo', 'product', 'photo', 'font', 'pack', 'other'].map(r => `<option value="${r}"${r === as.role ? ' selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></label>
+      box.innerHTML = `<label class="pl-f"><span>Role</span><select data-role>${['logo', 'product', 'photo', 'font', 'pack', 'other'].map(r => `<option value="${r}"${r === as.role ? ' selected' : ''}>${ROLE_NAME[r] || r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></label>
         <div class="sc-acts"><button class="btn ghost" data-a="ref">${ic('image', 15)}Use as reference</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
       box.querySelector('[data-role]').onchange = e => post(proj(`/assets/${id}/role`), { role: e.target.value }).then(j => { A.d.assets = j.assets; render() }).catch(fail)
       box.onclick = e => {
         const a = e.target.closest('[data-a]')?.dataset.a
         if (a === 'ref') post(proj(`/assets/${id}/reference`)).then(j => { A.d.refs = j.refs; A.d.assets = j.assets; select(`ref:${j.ref.id}`) }).catch(fail)
         if (a === 'remove') api(proj(`/assets/${id}`), { method: 'DELETE' }).then(j => { A.d.assets = j.assets; select(null) }).catch(fail)
+      }
+      return
+    }
+    // Pictures: what this project's builds use, chosen here (and asked before the first build): painted by the
+    // image model, stock photos, or drawn as SVG. The same three as Setup; the choice is the project's.
+    if (part === 'pics') {
+      const now = A.d.studio.kit?.pictures
+      box.innerHTML = `<div class="sc-acts sc-pics">${Object.entries(PICS).map(([v, n]) => `<button class="btn ${v === now ? 'pri' : 'ghost'}" data-pic="${v}">${n}</button>`).join('')}</div>`
+      box.onclick = e => {
+        const v = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-pic]'))?.dataset.pic
+        if (!v) return
+        post('/api/setup', { pictures: v }).catch(() => {}).then(() => post(at('/kit'), { data: { pictures: v } })).then(d => { take(d); if (A.asking === 'pictures') A.asking = null; if (A.wantsBuild) { A.wantsBuild = false; select(null); build() } }).catch(fail)
       }
       return
     }
@@ -340,6 +459,9 @@ export function makeScaffold({ sw, C, root }) {
     const key = el.dataset.key
     const x = A.cards.get(key)
     if (x?.press) return x.press(ctx())
+    if (key === 'fact:pictures:Pictures') return select('pics:choose')
+    if (key?.startsWith('fact:')) { const step = key.split(':')[1]; bd.focus(step); if (C.nav.view.step !== step) C.nav.go({ type: 'studio.step', step }); return }
+    if (key === 'lock:idea' && !A.d.studio.idea) { /** @type {HTMLElement | null} */ (document.querySelector('#brief'))?.focus(); C.chat?.(true); return }
     if (key === 'brand:open') return openBrand()
     if (key === 'ref:add' || key === 'asset:add') { picker.dataset.to = key.split(':')[0]; return picker.click() }
     select(key)
@@ -376,10 +498,13 @@ export function makeScaffold({ sw, C, root }) {
   // where the planner says to start: one of the kit's starts, from what the project has so far
   function startOf() {
     const k = kit()
-    const first = k.suggest?.(ctx()) || A.d.studio.start
-    return k.starts.find(s => s.id === first) || k.starts[0] || null
+    // a step the person skipped (asked before the build, decision 0020) or removed is never where to start
+    const steps = A.d.studio.steps || {}
+    const live = k.starts.filter(s => s.id in steps && steps[s.id] !== 'skipped')
+    const first = [k.suggest?.(ctx()), A.d.studio.start].find(id => live.some(s => s.id === id))
+    return live.find(s => s.id === first) || live[0] || k.starts[0] || null
   }
-  function talk() {
+  async function talk() {
     const d = A.d
     if (!sw.talk || A.talked === A.pid) return
     A.talked = A.pid
@@ -387,20 +512,79 @@ export function makeScaffold({ sw, C, root }) {
     // opened with an empty box: the chat asks, and the first words become the idea (and the project's name)
     const pid = A.pid
     const heard = text => {
-      if (A.d?.studio.idea || pid !== A.pid) return
+      if (pid !== A.pid) return
+      if (A.d?.studio.idea) return answer(text)
       post(at('/idea'), { idea: text }).then(() => { A.prepared = null; return load() }).catch(fail)
     }
     sw.talk.start({ kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat, blank: true, said: d.studio.idea ? [{ who: 'you', text: d.studio.idea }] : [], heard, build: brief => (k.build ? build(brief) : openBrand()) })
     if (!d.studio.idea) return sw.say?.('What are you making?')
     // a kit with prepare() posts its own planner line
     const st = k.prepare ? null : startOf()
+    // where a website starts on its pages, the chat's first line is the question itself
+    if (leads() && st?.id === 'plan') {
+      const j = await post(at('/ask'), {}).catch(() => null)
+      if (pid !== A.pid || !A.on) return
+      if (j?.ask?.next === 'pages') { A.asking = 'pages'; return sw.say?.(j.ask.text) }
+    }
     if (st) sw.say?.(st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`)
+  }
+
+  // ---------- the chat leads (docs/decisions/0020-ask-before-build.md, engine/askfirst.mjs): before a website's
+  // build, Hermia asks what the person has not said, one question at a time, each answered by typing: which
+  // pages (or "you choose": the crew decides), then pictures (painted, stock photos or drawn). "Skip all, just
+  // build" takes the recommended defaults and says what it picked. The server reads the words and sets the same
+  // state the board's cards set (the pages, the Pictures card); a line that is no answer goes to Hermia as before.
+  const leads = () => kit().kind === 'site'
+  /** @param {string} text @returns {Promise<string | null> | undefined} */
+  function answer(text) {
+    if (!leads() || A.busy) return
+    const pid = A.pid
+    return post(at('/ask'), { said: text, asked: A.asking, building: A.wantsBuild }).then(j => {
+      const a = j?.ask
+      if (pid !== A.pid || !a?.read) return null
+      A.asking = a.next || null
+      A.wantsBuild = !!a.building
+      take(j)
+      // the same as the Pictures card: the choice is Setup's too
+      if (a.set?.pictures) post('/api/setup', { pictures: a.set.pictures }).catch(() => {})
+      if (a.next === 'pictures' && a.building) select('pics:choose')
+      else if (A.sel === 'pics:choose') select(null)
+      if (a.build) setTimeout(() => build(), 0)
+      return a.text || null
+    }).catch(() => null)
   }
 
   // ---------- Build: the person's press, through the kit
   async function build(idea) {
     const k = kit(), c = ctx()
     if (!k.build || A.busy) return
+    // Nothing is built from no idea. (A Studio opened with an empty box once built a made-up site from its
+    // reference's look alone, 2026-11-13.) Words typed in the chat box but not sent yet are the idea.
+    if (!String(idea || c.studio.idea || '').trim()) {
+      const box = /** @type {HTMLTextAreaElement | null} */ (document.querySelector('#brief'))
+      const typed = String(box?.value || '').trim()
+      if (!typed) { bd.toast('Say what to make first'); sw.say?.('What are you making?'); box?.focus(); return }
+      await post(at('/idea'), { idea: typed }).then(take)
+      if (box) box.value = ''
+      idea = typed
+    }
+    // What the person has not said is asked first, in the chat, one question at a time: the pages before a
+    // first build, then the pictures (also the board's Pictures card). The build goes on from the answer.
+    if (leads()) {
+      const j = await post(at('/ask'), { building: true }).catch(() => null)
+      const next = j?.ask?.next || (c.state.pictures ? null : 'pictures')
+      if (next) {
+        A.wantsBuild = true
+        A.asking = next
+        if (next === 'pictures') select('pics:choose')
+        sw.say?.(j?.ask?.text || 'Pictures: painted, stock photos or drawn?')
+        /** @type {HTMLElement | null} */ (document.querySelector('#brief'))?.focus()
+        return
+      }
+    }
+    A.wantsBuild = false
+    A.asking = null
+    if (c.state.pictures) await post('/api/setup', { pictures: c.state.pictures }).catch(() => {})
     A.busy = true
     render()
     try {
@@ -411,15 +595,21 @@ export function makeScaffold({ sw, C, root }) {
   }
 
   addEventListener('resize', () => { if (A.on && A.d) bd.frameAll(false) })
+  // the stage also changes size when the chat column folds or opens: the board is framed again
+  if (typeof ResizeObserver === 'function') { let w0 = 0; new ResizeObserver(() => { const w = bd.stage.clientWidth; if (A.on && A.d && w && w0 && Math.abs(w - w0) > 40) bd.frameAll(); w0 = w || w0 }).observe(bd.stage) }
 
   return {
     el: root,
     get project() { return A.pid },
-    // open the scaffold on a project, with one step in view (the planner's start when none is named)
+    // the project's brand sheet, once the Studio has loaded (the mode menu's Brand)
+    async brand() { for (let i = 0; i < 60 && A.on && !A.d; i++) await new Promise(r => setTimeout(r, 100)); if (A.on && A.d) openBrand() },
+    // the project's newest build, when it has one (the mode menu goes to its rooms from here)
+    get head() { return A.d?.project?.head || null },
+    // open the scaffold on a project: the whole board, or the step the address names
     async show(pid, step = null) {
       A.on = true
       root.hidden = false
-      if (pid !== A.pid) { A.pid = pid; A.d = null; A.sel = null; A.talked = null; path.innerHTML = '' }
+      if (pid !== A.pid) { A.pid = pid; A.d = null; A.looks = null; A.sel = null; A.talked = null; A.asking = null; A.wantsBuild = false; path.innerHTML = '' }
       A.framed = false
       render()
       await load()
@@ -427,11 +617,10 @@ export function makeScaffold({ sw, C, root }) {
       talk()
       // Three takes: its looks first
       if (A.d.studio.mode === 'takes' && A.takes) return bd.focus('takes', false)
-      // the step named (the address, Back), else the planner's start, which the address then names
-      const to = step || startOf()?.id
-      if (!to) return
-      if (!step && C.nav.view.room === 'studio') C.nav.go({ type: 'studio.step', step: to })
-      bd.focus(to, false)
+      // the step named (the address, Back) is brought into view; with none, the whole board, so everything
+      // that is set and everything still empty is seen at once
+      if (!step) return bd.frameAll(false)
+      bd.focus(step, false)
     },
     hide() { A.on = false; root.hidden = true },
     focus: (target, animate = true) => bd.focus(target, animate)

@@ -264,44 +264,15 @@ export const studioMachine = setup({
           meta: {
             owner: 'studio',
             live: 'home',
-            sitemap: ['6. Projects › What should the crew build? → Make', '6. Projects › Kind menu: Website, App, Game, Video, Brand, Deck, Pictures ›', '5c. The Studio\'s scaffold (spec 37) › Make › Three takes, Scaffold or Studio', '5b. The Plan board (spec 21) › 💡 → a template: Remix']
+            sitemap: ['6. Projects › What should the crew build? → Make', '6. Projects › Kind menu: Website, App, Game, Video, Brand, Deck, Pictures ›', '5c. The Studio\'s scaffold (spec 37) › Make › Studio', '5b. The Plan board (spec 21) › 💡 → a template: Remix']
           },
-          // the five ways of making (planned: the make-menu spec is coming), each a sibling flow out of Make
+          // the two ways of making (decision 0020): Just make it, and the Studio. The question before a new
+          // website's build is asked in the chat, on the deck
           on: {
             up: 'browser',
             'way.just': { guard: 'hasRun', target: '#deck', actions: 'startRun' },
-            'way.guided': 'guided',
-            'way.takes': 'takes',
-            'way.blocks': 'blocks',
             'way.studio': { guard: 'hasProject', target: '#scaffold' }
           }
-        },
-        guided: {
-          description: 'Guided (planned): the chat asks questions, then the brief, then Build',
-          meta: { owner: 'studio', live: null, sitemap: [], planned: true },
-          initial: 'questions',
-          states: {
-            questions: {
-              description: 'Only the unanswered questions',
-              meta: { owner: 'studio', live: null, sitemap: [], planned: true },
-              on: { up: '#projects.make', answered: 'brief' }
-            },
-            brief: {
-              description: 'The brief, editable: Build or Keep talking',
-              meta: { owner: 'studio', live: null, sitemap: [], planned: true },
-              on: { up: 'questions', talk: 'questions', build: { guard: 'hasRun', target: '#deck', actions: 'startRun' } }
-            }
-          }
-        },
-        takes: {
-          description: 'Three takes (planned): pick one of three versions',
-          meta: { owner: 'studio', live: null, sitemap: [], planned: true },
-          on: { up: 'make', pick: { guard: 'hasRun', target: '#deck', actions: 'startRun' } }
-        },
-        blocks: {
-          description: "Scaffold (planned): the kind's bare structure as blocks to fill or delete",
-          meta: { owner: 'studio', live: null, sitemap: [], planned: true },
-          on: { up: 'make', build: { guard: 'hasRun', target: '#deck', actions: 'startRun' } }
         },
         setup: {
           description: 'Setup: once, then from the user menu (spec 6)',
@@ -528,7 +499,7 @@ export const studioMachine = setup({
                       '8. A project: the Overview › Top bar: Projects › name ▾, the mode menu (Overview, Canvas, Video, App, Game), the crew, Play, Publish',
                       '8. A project: the Overview › ☰ Review, Video, Export, Replay',
                       '8. A project: the Overview › Left panel',
-                      '8. A project: the Overview › Files: Site, App, Game, Film, Art, Uploads, Code',
+                      '8. A project: the Overview › Files: Site, Story, App, Game, Film, Art, Uploads, Code',
                       '8. A project: the Overview › Stage: artboards in sections',
                       '8. A project: the Overview › Inspector (while something is selected)',
                       '8. A project: the Overview › Dock: Move, Frame, Text, Image, Comment, Tell the crew…'

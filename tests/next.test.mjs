@@ -3,8 +3,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
-import { nextPage } from '../server/next.mjs'
+import { nextPage, nextVendor } from '../server/next.mjs'
 import * as nav from '../web/nav.js'
+import * as makeways from '../web/makeways.js'
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const json = f => JSON.parse(read(f))
@@ -40,6 +41,14 @@ test('a plugin without ui/dist/ has no /next/ page, and nothing is built for it'
   assert.equal(nextPage(new URL('./fixtures', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), {}), null)
 })
 
+test('the next UI serves only its listed vendored files: Mermaid, pinned, for the app build wall', needsBuild, () => {
+  assert.equal(json('ui/package.json').devDependencies.mermaid, '12.2.0')
+  const file = nextVendor(dist, 'mermaid.min.js')
+  assert.ok(file && readFileSync(file, 'utf8').includes('mermaid'))
+  assert.ok(nextVendor(dist, 'mermaid.LICENSE'))
+  for (const name of ['index.html', 'next.js', '../index.html', 'mermaid.js']) assert.equal(nextVendor(dist, name), null, name)
+})
+
 test('both apps run the same XState: the vendored file, tools/dev and ui/ pin one version', () => {
   const vendored = json('web/vendor/xstate/SOURCE.json').version
   assert.equal(json('ui/package.json').devDependencies.xstate, vendored)
@@ -58,8 +67,15 @@ test('every name ui/ declares for @studio/nav is one web/nav.js exports', () => 
   assert.deepEqual([...read('ui/src/nav/studio-nav.d.ts').match(/export type Room = (.*)/)[1].matchAll(/'(\w+)'/g)].map(m => m[1]).sort(), [...nav.ROOMS].sort())
 })
 
-test('every name ui/ declares for @studio/clean, @studio/icons and @studio/video is one the web file exports', async () => {
-  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js']]) {
+test('every name ui/ declares for @studio/makeways is one the current Studio\'s file exports', () => {
+  const declared = [...read('ui/src/studio/studio-makeways.d.ts').matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
+  assert.ok(declared.length >= 2)
+  for (const name of declared) assert.ok(name in makeways, `web/makeways.js: no export ${name}`)
+  assert.deepEqual([...read('ui/src/studio/studio-makeways.d.ts').match(/export type MakeMode = (.*)/)[1].matchAll(/'(\w+)'/g)].map(m => m[1]), makeways.MAKE_KINDS.site)
+})
+
+test('every name ui/ declares for @studio/clean, @studio/icons, @studio/video and @studio/edit is one the web file exports', async () => {
+  for (const [dts, file] of [['ui/src/screens/deck/studio-clean.d.ts', '../web/clean.js'], ['ui/src/primitives/studio-icons.d.ts', '../web/icons.js'], ['ui/src/legacy/studio-pet.d.ts', '../web/pet.js'], ['ui/src/primitives/studio-video.d.ts', '../web/video.js'], ['ui/src/screens/deck/studio-edit.d.ts', '../web/edit/patches.js'], ['ui/src/screens/deck/studio-route.d.ts', '../web/route.js']]) {
     const mod = await import(file)
     const declared = [...read(dts).matchAll(/^export declare (?:const|function) (\w+)/gm)].map(m => m[1])
     assert.ok(declared.length >= 1, dts)

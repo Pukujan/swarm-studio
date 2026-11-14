@@ -104,6 +104,29 @@ Post to Feed sends the story with the post: the beats as text and the cards in t
 Feed's 8 MB limit (tall first; wide and square dropped first if it would not fit). A Feed post is then a
 story you tap through, not a pile of pictures.
 
+`feed.py` `story_of` adds one field to the `POST /api/feed/builds` body:
+
+```
+"story": {
+  "type": "launch",                       // launch | about | walkthrough | trailer | event | making
+  "beats": [{ "id": "b1", "role": "hook", "kicker": "", "headline": "Meet Saffron & Smoke", "line": "…" }, …],
+  "cards": {                              // one JPEG data URL per beat, in beat order; a shape may be missing
+    "tall":   ["data:image/jpeg;base64,…", …],   // 1080 × 1920
+    "square": [ … ],                              // 1080 × 1080
+    "wide":   [ … ]                               // 1920 × 1080
+  }
+}
+```
+
+5 to 8 beats; roles `hook` first and `next` last; kicker ≤ 32, headline ≤ 60, line ≤ 140 characters. The
+cards are kept under 3 MB before encoding (about 4 MB in the body), phone first, then square, then wide; a
+shape that would not fit is left out whole, never cut part-way. A Feed that refuses the field (400, 413 or
+422) gets the post again without it, then without page shots, as before.
+
+What the Feed shows: the tall cards as a story you tap or swipe through on a phone (the hook first), the
+wide cards on a desktop (square where wide is missing), and the beats as the words under it and for
+screen readers (each card's `alt` is its headline and line). A post without `story` shows as today.
+
 ## Sharing to networks (slice 4)
 
 Nothing is ever posted without the person's own press, on their own account.
@@ -143,4 +166,6 @@ route (the person still presses Post in TikTok). The tokens would live with Herm
 1. The beats, the check, the cards and the routes (this PR), with `tests/story.test.mjs`.
 2. The Story lane on the Overview, editing, and the launch kit's captions from the story.
 3. Post to Feed carries the story; the Feed shows it (Feed session).
-4. Per-network share: caption, shape, Share, Download; Connect and Post only once a network is connected.
+4. Per-network share: caption, shape, Share, Download (`cardFor` in engine/launch.mjs: tall for TikTok and
+   Instagram, square for Threads, wide for the rest). Connect and Post only once a network is connected: none
+   is until the owner decides which apps to register (table above).

@@ -2,8 +2,8 @@
 
 declare global {
   interface Window {
-    /** inlined by the server (server/next.mjs): the API token and the build of the page */
-    SWARM?: { token?: string, version?: string }
+    /** inlined by the server (server/next.mjs): the API token, the build of the page and the hosted prefix */
+    SWARM?: { token?: string, version?: string, base?: string }
   }
 }
 export {}

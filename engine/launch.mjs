@@ -1,5 +1,6 @@
 // The launch kit (spec 07 C): posts for every network, written from the run's own facts
-// (the person's prompt, what was built, the counts, the link we deployed). Nothing here
+// (the person's prompt, what was built, the counts, the link we deployed), and from the build's
+// story when it has one (spec 39): its hook, moments and cards. Nothing here
 // posts anything. The canvas shows each post as a card: Post opens the network's own share
 // page, where the person presses Post themselves; a messaging send (Discord, Slack,
 // Telegram) goes through Hermes's gateway only after the person confirms the exact text.
@@ -73,7 +74,25 @@ export function runFacts(events, id, { pitch: given = '' } = {}) {
   }
 }
 
-export function writePosts(f) {
+// The story's words for the posts (docs/specs/39-story.md): its hook, what it is, its moments and how
+// it was made, already checked there (no prompt, no zeros, "live" only with a link).
+const dot = s => (s && !/[.!?…]$/.test(s) ? `${s}.` : s || '')
+function storyWords(story) {
+  const beats = story?.beats || []
+  if (!beats.length) return null
+  const of = role => beats.filter(b => b.role === role)
+  const hook = beats[0], what = of('what')[0], making = of('making')[0]
+  return {
+    hook: dot(hook.headline),
+    pitch: String((what || hook).headline === hook.headline ? hook.line || '' : what.headline).replace(/[.!?…]+$/, ''),
+    moments: [...of('moment'), ...of('who')].map(b => clip(`${b.headline}${b.line ? `: ${b.line}` : ''}`.replace(/\.?$/, '.'), 270)),
+    how: making ? [making.headline, making.line].filter(Boolean).map(dot).join(' ') : ''
+  }
+}
+
+export function writePosts(f, story = null) {
+  const told = storyWords(story)
+  if (told) f = { ...f, pitch: told.pitch || f.pitch }
   const link = f.url || ''
   const play = f.url && f.games ? `${f.url.replace(/\/?$/, '/')}play` : ''
   const h = hash(f.name + f.pitch)
@@ -88,11 +107,11 @@ export function writePosts(f) {
   ].filter(Boolean)
   const list = built.length > 1 ? `${built.slice(0, -1).join(', ')} and ${built.at(-1)}` : built[0] || 'the site'
   const how = f.minutes && f.agents ? `Built in about ${f.minutes} minute${f.minutes === 1 ? '' : 's'} by a swarm of ${f.agents} AI agents in Swarm Studio, from one prompt.` : 'Built by a swarm of AI agents in Swarm Studio, from one prompt.'
-  const feature = f.games === 'big' ? pick(['The trial on /play is a full run: fight, pick upgrades, beat the boss. Post your score.', 'Jump into /play: one full run, rooms, upgrades and a boss fight. Can you top the board?'])
+  const feature = told?.moments.length ? told.moments[0] : f.games === 'big' ? pick(['The trial on /play is a full run: fight, pick upgrades, beat the boss. Post your score.', 'Jump into /play: one full run, rooms, upgrades and a boss fight. Can you top the board?'])
     : f.games === 'mini' ? pick(['Three quick games on /play, each under a minute, with a leaderboard.', '/play has three tiny games. Beat my best score.'])
       : ''
   // "is live" only with a live link to go with it
-  const hook = link ? pick([`${f.name} is live.`, `Say hello to ${f.name}.`, `Just launched: ${f.name}.`]) : pick([`Say hello to ${f.name}.`, `Meet ${f.name}.`])
+  const hook = told?.hook || (link ? pick([`${f.name} is live.`, `Say hello to ${f.name}.`, `Just launched: ${f.name}.`]) : pick([`Say hello to ${f.name}.`, `Meet ${f.name}.`]))
   const tags = [tag(f.name), f.games ? '#indiegame' : '#webdesign', f.games ? '#gamedev' : '#buildinpublic', '#madewithAI'].filter(t => t.length > 1)
   const posts = []
   const add = (network, text, extra = {}) => {
@@ -103,8 +122,8 @@ export function writePosts(f) {
   const thread = [
     `${hook} ${f.pitch ? `${f.pitch}.` : ''}`.trim(),
     built.length ? `What's inside: ${list}.` : '',
-    feature,
-    how,
+    ...(told ? told.moments.slice(0, 2) : [feature]),
+    told?.how || how,
     link ? `Try it: ${play || link}` : ''
   ].filter(Boolean).map(s => clip(s, 270))
   add('x', thread[0], { thread })
@@ -112,7 +131,7 @@ export function writePosts(f) {
     `${hook}`,
     f.pitch ? `${f.pitch}.` : '',
     `It ships with ${list}.${f.data ? ' Orders, sign-ups and scores save to a real database.' : ''}`,
-    how,
+    told?.how || how,
     link ? `Have a look: ${link}` : '',
     tags.slice(0, 3).join(' ')
   ].filter(Boolean).join('\n\n'))
@@ -129,7 +148,28 @@ export function writePosts(f) {
 }
 
 // The media to attach by hand: the promo clip, 3 hero images, the live link.
-const mediaOf = f => [
+// and the story's cards: every beat as a phone card (a slide each), the first beat square and wide
+const storyMedia = (runDir, id, story) => {
+  if (!runDir || !story?.beats?.length) return []
+  const has = n => existsSync(join(runDir, 'story', n))
+  const b0 = story.beats[0].id
+  return [
+    ...story.beats.filter(b => has(`tall-${b.id}.jpg`)).map((b, i) => ({ kind: 'image', label: `Story ${i + 1}`, src: `/story/${id}/tall-${b.id}.jpg`, shape: 'tall' })),
+    ...['square', 'wide'].filter(s => has(`${s}-${b0}.jpg`)).map(s => ({ kind: 'image', label: s === 'square' ? 'Story, square' : 'Story, wide', src: `/story/${id}/${s}-${b0}.jpg`, shape: s }))
+  ]
+}
+// the card each network takes (spec 39, slice 4): phone-tall for TikTok and Instagram (Reels, Stories),
+// square for Threads, wide for the rest. The hook's card, so a post opens on the story's first beat.
+export const CARD_SHAPE = { tiktok: 'tall', instagram: 'tall', threads: 'square' }
+export const cardFor = (network, media) => {
+  const want = CARD_SHAPE[network] || 'wide'
+  const story = media.filter(m => m.kind === 'image' && m.shape && m.src.includes('/story/'))
+  // the media list is in beat order, so the first of a shape is the hook's
+  const pick = story.find(m => m.shape === want) || story.find(m => m.shape === 'tall')
+  return pick ? { shape: pick.shape, src: pick.src } : null
+}
+const mediaOf = (f, extra = []) => [
+  ...extra,
   ...(f.video ? [{ kind: 'video', label: 'Promo clip', src: f.video }] : []),
   ...(f.videoTall ? [{ kind: 'video', label: 'Phone clip', src: f.videoTall, shape: 'tall' }] : []),
   ...f.heroes.map((src, i) => ({ kind: 'image', label: `Hero image ${i + 1}`, src })),
@@ -138,7 +178,10 @@ const mediaOf = f => [
 
 export function writeLaunch(runDir, events, id, opts = {}) {
   const facts = runFacts(events, id, opts)
-  const kit = { v: 2, t: Date.now(), run: id, facts, media: mediaOf(facts), posts: writePosts(facts), log: [] }
+  const story = opts.story || null
+  const media = mediaOf(facts, storyMedia(runDir, id, story))
+  const posts = writePosts(facts, story).map(p => { const card = cardFor(p.network, media); return card ? { ...p, card } : p })
+  const kit = { v: 2, t: Date.now(), run: id, facts, media, posts, ...(story ? { story: story.t || true } : {}), log: [] }
   writeFileSync(join(runDir, 'launch.json'), JSON.stringify(kit, null, 2))
   return kit
 }

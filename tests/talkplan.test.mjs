@@ -77,8 +77,8 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   const canvas = canvasSource()
   const project = readFileSync(new URL('../web/project.js', import.meta.url), 'utf8')
   // Make opens its menu at once (spec 42): the last way picked for the kind, else the words, pre-select;
-  // a vague idea or one about the look leans Studio, a clear ask Just build, a game Guided
-  assert.match(home, /const fit = make\.k === 'game' \? 'guided' : text && !studioFits\(text\) \? 'now' : 'studio'/)
+  // a vague idea or one about the look leans Studio, a clear ask Just make it, a game its Plan board (Studio)
+  assert.match(home, /const fit = make\.k === 'game' \? 'studio' : text && !studioFits\(text\) \? 'now' : 'studio'/)
   assert.match(home, /const pick = \[makeModeOf\(modeOf\(make\.k\)\), fit\]\.find\(k => ways\.some\(w => w\.k === k\)\) \|\| ways\[0\]\.k/)
   assert.match(home, /const ways = makeWays\(make\.k, !!text\)/)
   // an answer typed in your own words is checked before it becomes brief text (Next and Just build)
@@ -87,7 +87,10 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   assert.match(home, /data-talk>Keep talking<\/button><button type="button" class="btn pri" data-go>/)
   // a talk in the deck builds only from its brief card's Build
   assert.match(canvas, /if \(talk\.on\) \{ skip\(\); if \(talk\.busy\) return; els\.brief\.value = ''; talkSay\(brief\); return \}/)
-  assert.match(canvas, /els\.brief\.placeholder = 'Tell Hermia…'; dockBtn\.textContent = 'Send'/)
+  // the send button's word has one writer (web/chatmode.js): Send while a talk has the box, else the mode's
+  assert.match(canvas, /els\.brief\.placeholder = 'Tell Hermia…'/)
+  assert.match(canvas, /talkDock\(on\) \{[\s\S]{0,400}paintSend\(\)/)
+  assert.match(readFileSync(new URL('../web/chatmode.js', import.meta.url), 'utf8'), /chatMode\.talking\(\) \? 'Send' : modeWord\(chatMode\.now\)/)
   // the brief's buttons: Build (or, inside a project, New project / Start over with Add here), then Keep talking
   assert.match(canvas, /<button class="primary" data-go="add">Build<\/button>/)
   assert.match(canvas, /\$\{acts\}\$\{sheetHtml\}<button data-more>Keep talking<\/button>/)

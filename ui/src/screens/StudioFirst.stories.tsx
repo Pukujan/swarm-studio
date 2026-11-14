@@ -38,3 +38,24 @@ export const NewProject: Story = {}
 export const WellAlong: Story = { parameters: { fetch: serving(ALONG), address: '?room=studio&project=p-cedar&step=plan' } }
 export const Loading: Story = { parameters: { fetch: () => new Promise<Response>(() => {}) } }
 export const ServerFails: Story = { parameters: { fetch: () => answer({ error: 'No such project' }, 404) } }
+
+// the Brand step (decision 0015): the three options to pick a mood from, the picked one's moodboard, and the story,
+// colours, type and voice that follow from it
+const photo = (c: string) => ({ url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 3"><rect width="4" height="3" fill="${c}"/></svg>`)}` })
+const option = (slug: string, name: string, bg: string, text: string, accent: string, heading: string, line: string, colours: string[]) =>
+  ({ slug, name, why: `For a cafe that wants to feel ${name.toLowerCase()}.`, palette: { bg, text, accent, link: accent }, type: { heading, body: 'Inter' }, voice: { lines: [line] }, pictures: { photos: colours.map(photo) } })
+const OPTIONS = [
+  option('warm-editorial', 'Warm editorial', '#f4eee3', '#2a241f', '#b5552f', 'DM Serif Display', 'Coffee by the water, slowly.', ['#c9b49a', '#8a6f55', '#d8c7ad', '#a58a6b', '#e6d6bd', '#6f5843']),
+  option('clean-product', 'Clean product', '#f5f5f2', '#1c1c1a', '#2f5d3a', 'Work Sans', 'Open at seven. Bread at eight.', ['#d7d6d0', '#a9a8a2', '#e8e7e2']),
+  option('playful-community', 'Playful community', '#fff7e8', '#1f2430', '#ff7a45', 'Fraunces', 'Bring a friend, stay a while.', ['#f2c38b', '#9fc4e8', '#f7dfb8'])
+]
+const PICKED = {
+  ...ALONG.brand, pack: 'warm-editorial', story: { what: 'Cedar Cafe, a small cafe by the river', who: 'neighbours and walkers' },
+  voice: { lines: OPTIONS[0].voice.lines }, pictures: { photos: OPTIONS[0].pictures.photos }
+}
+export const BrandStep: Story = {
+  parameters: {
+    fetch: (path: string) => (String(path).includes('/brand') ? answer({ brand: PICKED, packs: OPTIONS }) : answer({ ...ALONG, brand: PICKED })),
+    address: ADDRESS
+  }
+}
