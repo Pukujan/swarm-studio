@@ -148,6 +148,8 @@ async function measure(out, { root, runs: N, only }) {
   const data = mkdtempSync(join(tmpdir(), 'swarm-gauge-'))
   const runsDir = join(data, 'runs')
   mkdirSync(runsDir)
+  // the classic Studio at `/`, as the gauge measures it (decision 0024: `/` is the next UI unless the person chose it)
+  writeFileSync(join(data, 'ui.json'), JSON.stringify({ ui: 'classic' }))
   const fake = createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"no model here"}')) })
   // on a port the system picks and the fake keeps (asked for and let go, another process could take it first)
   await new Promise(r => fake.listen(0, '127.0.0.1', r))

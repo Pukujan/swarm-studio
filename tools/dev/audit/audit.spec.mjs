@@ -61,11 +61,11 @@ const SCREENS = [
     go: p => p.locator('.ab[data-key="brand:open"]').first().press('Enter'), ready: 'body.cosmos-brand .br-crumb' }
 ]
 
-// In /next/ each screen opens at its address. Until it has moved, every one is the same stand-in, so `main` is
-// what is on screen; a moved screen gives its own `nextReady`. A project's brand sheet has an address of its own
+// In /next/ each screen opens at its address. A moved screen gives its own `nextReady`; one that hasn't moved opens
+// in the classic Studio at /classic/ (decision 0024), so its own `ready` is what is on screen. A project's brand sheet has an address of its own
 // (?room=brand&project=…&step=…), opened there directly.
 const screens = APP !== 'next' ? SCREENS : SCREENS.filter(x => x.address).map(x => ({
-  ...x, pre: undefined, ready: x.nextReady || 'main',
+  ...x, pre: undefined, ready: x.nextReady || x.ready || 'main',
   go: (p, s) => p.goto(`${s.BASE}/next/${x.address(s)}`, { waitUntil: 'commit' })
 }))
 
