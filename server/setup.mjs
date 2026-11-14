@@ -236,5 +236,10 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
   // how a real paint went, for the Pictures row
   handle.notePaint = (choice, r) => { const n = paintNote(choice, r); if (n) { state.paint = n; save() } }
   handle.pictures = pictures
+  // what the Setup sheet reads, for the doctor (engine/doctor.mjs): the same view, the same local facts,
+  // and the tiny model test the sheet runs when it opens (kept ten minutes, so asking again costs nothing)
+  handle.view = view
+  handle.local = local
+  handle.test = async () => { lastTest = await tester.test(roles(), { again: false }); return lastTest }
   return handle
 }

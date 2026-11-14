@@ -32,7 +32,7 @@ export function makeHome({ sw, C, root }) {
   // the one-time Setup sheet (docs/specs/06-onboarding.md); the plugin only
   const setup = makeSetup({ sw })
   // Settings (web/settings.js) opens the same sheet when its Crew rows become editable
-  window.SwarmSetup = { open: row => setup.open(row) }
+  window.SwarmSetup = { open: (row, pg, pp) => setup.open(row, pg, pp) }
   let setupAsked = false
 
   root.className = 'home'
