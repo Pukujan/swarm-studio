@@ -3181,6 +3181,8 @@ const server = createServer((req, res) => {
       if (goChat?.go && !next) await chats.update(chatId, c => { if (c.go) c.go.run = run.id }).catch(() => {})
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (pid) projects.claim(run.id, pid)
+      // which references this build read (issue #543): the Overview shows them with its pages
+      if (pid) try { writeFileSync(join(runsDir, run.id, 'refs-used.json'), JSON.stringify(refs.used(pid))) } catch {}
       // the words go into a chat: the talk that led here, else a new one (or the project's newest)
       const chat = chatFor({ chat: chatId, text: typed, kind: 'site', project: pid })
       chatBuilt(chat, run.id, pid, typed)
