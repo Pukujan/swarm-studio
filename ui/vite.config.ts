@@ -3,8 +3,9 @@
 // it at /next/ with the script and styles inlined (server/next.mjs), so installing the plugin builds nothing. File names are fixed and nothing is hashed or mapped, so the same source
 // builds the same bytes (`npm run check` compares them).
 import { copyFileSync, mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig, type AliasOptions } from 'vite'
+import { defineConfig, type AliasOptions, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -55,12 +56,14 @@ export default defineConfig({
     // Mermaid (pinned in package.json, MIT) for the app build wall's Map (spec 44): too big to go inline in every
     // /next/ page, so its own classic script beside it, ui/dist/vendor/, which the server serves at /next/vendor/ and
     // the Map loads when it first shows (src/shared/mermaid.ts). A release carries it with the rest of ui/dist/.
-    { name: 'swarm:vendor-mermaid', apply: 'build', closeBundle() {
-      const from = fileURLToPath(new URL('./node_modules/mermaid/', import.meta.url)), to = fileURLToPath(new URL('./dist/vendor/', import.meta.url))
+    // It goes where this build writes (the release check builds into a folder of its own, scripts/release-ui.mjs
+    // --check via `npm run check`), not always ui/dist/: copied there, the check's own build never had it.
+    ((): Plugin => { let out = ''; return { name: 'swarm:vendor-mermaid', apply: 'build', configResolved(c) { out = resolve(c.root, c.build.outDir) }, closeBundle() {
+      const from = fileURLToPath(new URL('./node_modules/mermaid/', import.meta.url)), to = `${out}/vendor/`
       mkdirSync(to, { recursive: true })
       copyFileSync(`${from}dist/mermaid.min.js`, `${to}mermaid.min.js`)
       copyFileSync(`${from}LICENSE`, `${to}mermaid.LICENSE`)
-    } }
+    } } })()
   ],
   resolve: { alias },
   // web/nav.js and web/tokens.css live outside ui/
