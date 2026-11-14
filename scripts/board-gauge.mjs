@@ -214,15 +214,11 @@ async function measure(out, { root, runs: N, only, cold }) {
         const t0 = Date.now()
         const answer = await within('the server', 8000, fetch(`${BASE}/api/state`).then(r => r.status)).then(s => `answers ${s} in ${Date.now() - t0} ms`, e => `does not answer (${String(e?.message || e).slice(0, 60)})`)
         const alive = server.exitCode === null && server.signalCode === null ? 'running' : `exited (code ${server.exitCode}, signal ${server.signalCode})`
-        // and what it is doing: its CPU and memory (where `ps` exists)
+        // and what it is doing (where `ps` exists): its CPU and memory, and the commands of its children, which is
+        // what a server blocked on a synchronous child process is waiting for
         let ps = ''
         try { ps = execFileSync('ps', ['-o', '%cpu=,rss=', '-p', String(server.pid)], { encoding: 'utf8', timeout: 3000 }).trim() } catch {}
-        // its open files (a server at its limit takes no more connections and says nothing), and with GAUGE_DIAG a
-        // native stack sample of where it is blocked (macOS)
-        try { ps += `; ${execFileSync('lsof', ['-p', String(server.pid)], { encoding: 'utf8', timeout: 10000, maxBuffer: 2e7 }).split('\n').length - 1} open files, limit ${execFileSync('sh', ['-c', 'ulimit -n'], { encoding: 'utf8' }).trim()}` } catch {}
-        // what it is waiting on: the commands of its children
         try { ps += `; children: ${execFileSync('ps', ['-A', '-o', 'ppid=,pid=,etime=,command='], { encoding: 'utf8', timeout: 5000, maxBuffer: 2e7 }).split('\n').filter(l => l.trim().split(/\s+/)[0] === String(server.pid)).map(l => l.trim().slice(0, 220)).join(' | ') || 'none'}` } catch {}
-        if (process.env.GAUGE_DIAG) try { console.log(execFileSync('sample', [String(server.pid), '1'], { encoding: 'utf8', timeout: 20000, maxBuffer: 2e7 }).split('\n').filter(l => /Thread_|uv_|node::|Call graph|main|fs_|read|wait/.test(l)).slice(0, 40).join('\n')) } catch {}
         m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps, log: serverLog().trim().split('\n').slice(-14).map(l => l.slice(0, 160)) }
       } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
