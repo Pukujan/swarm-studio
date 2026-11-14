@@ -3,20 +3,26 @@
 // tab can show it. The server imports this file only when someone opens the
 // App tab, so a studio that never builds an app never loads it.
 
-import { spawn, execFile, execFileSync } from 'node:child_process'
+import { execFile, execFileSync, appEnv, start as startProc, stopTree } from './proc.mjs'
+import { previewPool } from './lifecycle.mjs'
+import { createHash } from 'node:crypto'
+import { createServer as httpServer, request } from 'node:http'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join, normalize } from 'node:path'
 import { snapshot, dyadApp, seedProject } from './export.mjs'
+import { seoFromEvents, shareApp } from './seo.mjs'
 import { deployName, isScreenName, projectName } from './naming.mjs'
 import { runEngine, appFiles, scaffoldDir, engineReady, viaShell } from './appbuild.mjs'
 import { crewRadio } from './radio.mjs'
 import { playtest } from './playtest.mjs'
 import { strangeLinks } from './links.mjs'
+import { checklist, checkLine, testDodges, dodgeProblem } from './playcheck.mjs'
 import { planBrief } from './advisor.mjs'
 import { gameSlug, isBig, artList, sheetList, stagesFor, bigStagePrompt, sliceAsk, artBrief, viewOf } from './game.mjs'
 import { takeAsks, askedBefore, keepAsked, askBrief, ASKS_PER_STAGE } from './artask.mjs'
 import { TARGETS, portTarget, portPrompt, checkPort, copyPortModels, checkGodot } from './port.mjs'
+import { intakeOf } from './bringin.mjs'
 import { godotFirst, isGodotFirst, seedGodot, syncGodotArt, godotArtBrief, godotStagePrompt, exportWeb, serveStatic, webBuild } from './godotfirst.mjs'
 
 const KEEP = `This project already holds a finished design made in Swarm Studio: every section is a component in src/components/swarm/, every page is in src/pages/, and the theme lives in the CSS variables in src/globals.css. The look is decided. Keep that markup, those Tailwind classes and those variables. Change a section only where it needs real behaviour, and then keep its look. New pages and components use the same variables and shadcn/ui components so they match. Don't read every section first: the page list below says what each page holds; open only the files you are about to change.`
@@ -78,12 +84,46 @@ const freePort = () => new Promise((ok, fail) => {
 const portFree = port => new Promise(ok => {
   const s = createServer().once('error', () => ok(false)).listen(port, '127.0.0.1', () => s.close(() => ok(true)))
 })
-const stopProc = p => new Promise(ok => {
-  if (p.exitCode !== null) return ok()
-  const t = setTimeout(() => { p.kill('SIGKILL'); ok() }, 5000)
-  p.once('exit', () => { clearTimeout(t); ok() })
-  p.kill()
-})
+// What a finished app's build depends on: every file of the app but its packages and build output, by name,
+// size and time. The build is redone only when this changes.
+const BUILD_SKIP = /^(node_modules|dist|\.output|\.nitro|\.git|\.vite|\.dyad|\.vercel|\.swarm-built\.json)$/
+export function sourceSig(dir) {
+  const h = createHash('sha1')
+  const walk = (d, rel) => {
+    let names = []
+    try { names = readdirSync(d).sort() } catch { return }
+    for (const n of names) {
+      if (BUILD_SKIP.test(n)) continue
+      const f = join(d, n)
+      let st
+      try { st = statSync(f) } catch { continue }
+      if (st.isDirectory()) walk(f, `${rel}${n}/`)
+      else h.update(`${rel}${n}:${st.size}:${st.mtimeMs}\n`)
+    }
+  }
+  walk(dir, '')
+  return h.digest('hex')
+}
+// An app with server routes (Dyad's Nitro layer) builds to .output/ and runs as `node .output/server/index.mjs`
+// (dyad/src/lib/framework_constants.ts:58); one without serves dist/ as files
+export const hasServer = dir => ['nitro.config.ts', 'nitro.config.js', 'server'].some(f => existsSync(join(dir, f)))
+
+// A built app's server behind a front on the app's own port that adds CORS: Hermes shows the Studio in a
+// sandboxed frame (origin null), and the app's module scripts need it to load there (the dev server's --cors)
+export function corsFront(port, to) {
+  const srv = httpServer((req, res) => {
+    const up = request({ host: '127.0.0.1', port: to, path: req.url, method: req.method, headers: { ...req.headers, host: `127.0.0.1:${to}` } }, r => {
+      res.writeHead(r.statusCode || 502, { ...r.headers, 'access-control-allow-origin': '*' })
+      r.pipe(res)
+    })
+    up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end() })
+    req.pipe(up)
+  })
+  return new Promise((ok, fail) => {
+    srv.once('error', fail)
+    srv.listen(port, '127.0.0.1', () => ok({ url: `http://127.0.0.1:${port}/`, close: () => new Promise(r => { srv.closeAllConnections?.(); srv.close(() => r()) }) }))
+  })
+}
 
 // What a running Vite dev server cannot take in without a restart: its
 // config, Nitro's, the packages, and a server/ folder appearing.
@@ -105,7 +145,7 @@ export function copyModels(dir, copy = {}) {
   return pairs.length
 }
 
-const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { ...process.env, CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
+const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
 
 // A big game stopped partway: the stage to go on from (0: start over). Only
 // stages since the last build from scratch count, and only with the app still there.
@@ -177,8 +217,17 @@ export const isQuestion = text => QUESTION.test(String(text || '').trim())
 // that must match the clip's price when it is asked (engine/idle.mjs priceOk)
 export const idleInput = v => (v === 'no' || v === false ? 'no' : v && typeof v === 'object' && Number.isFinite(Number(v.usd)) ? { usd: Number(v.usd), ...(typeof v.video === 'string' && /^[\w.\/:@+-]{1,160}$/.test(v.video) ? { video: v.video } : {}) } : null)
 
-export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null }) {
+// idleMs, maxApps: Settings › Background (numbers, or functions read each time): an app's server stops after idleMs
+// with no viewer and no build, and at most maxApps run at once (decision 0017, issue #450)
+export function appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint = null, fill = null, nameFor = () => null, idleMs = 120000, maxApps = 2, sweepEvery = 15000, now = Date.now }) {
   const jobs = new Map() // run id -> job
+  // Each app's server (spec 44, "the dev server only while building"): the dev server runs while the crew builds
+  // or someone edits; a finished app is served built (serveBuilt). Either one stops when no viewer has sent a
+  // heartbeat (seen) for idleMs and nobody is building it, and at most maxApps run, the least recently viewed
+  // stopped first. The next open serves it again, cold.
+  const pool = previewPool({ max: maxApps, idleMs, now, busy: id => jobs.get(id)?.state === 'working', stop: (id, why) => park(id, why) })
+  const sweeper = setInterval(() => { pool.sweep().catch(() => {}) }, sweepEvery)
+  sweeper.unref?.()
   const send = (id, type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const dirOf = id => join(runsDir, id, 'app')
 
@@ -191,6 +240,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const last = events.findLast(e => ['app:start', 'app:done', 'app:failed', 'app:paused'].includes(e.type))
     const steps = events.filter(e => e.type === 'app:step').slice(-200).map(e => e.step)
     if (!last) return { state: 'idle', engineReady: engineReady() }
+    const kindOf = () => events.find(e => e.type === 'app:start')?.kind || 'site'
     // a build another Studio drives (same runs folder): its log still moves, so it is working,
     // with the dev server it reported; this Studio only watches it
     // (a build that names its Studio's process counts only while that process lives: one killed mid-build stopped)
@@ -201,11 +251,17 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const at = steps.findLast(x => /^stage \d+ of \d+/.test(x.text || ''))?.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number) || (events.findLast(e => e.type === 'app:step' && /^stage \d+ of \d+/.test(e.step?.text || ''))?.step.text.match(/^stage (\d+) of (\d+)/)?.slice(1).map(Number))
       return { ...(at ? { at } : {}), state: 'working', elsewhere: true, kind: last.kind || events.find(e => e.type === 'app:start')?.kind || 'site', stage, steps, url: ready?.url || null, result: null, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
     }
-    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: events.find(e => e.type === 'app:start')?.kind || 'site', steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
+    return { state: last.type === 'app:failed' ? 'failed' : last.type === 'app:paused' ? 'paused' : last.type === 'app:start' ? 'stopped' : 'done', ...broughtIn(id, events), ...(last.type === 'app:paused' ? { slice: last.slice } : {}), kind: kindOf(), steps, result: events.findLast(e => e.type === 'app:done')?.result || null, message: last.message, deployed: events.findLast(e => e.type === 'app:deployed')?.url || null, hasApp: built(id, events), engineReady: engineReady() }
   }
   // an app counts once a build finished; a failed first build leaves only the empty starter
-  const built = (id, events = readEvents(id) || []) => events.some(e => e.type === 'app:done') && existsSync(join(dirOf(id), 'package.json'))
-  const view = j => ({ state: j.state, kind: j.kind, stage: j.stage, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
+  // (a project brought in, docs/specs/45-intake.md, counts once its files are in: it may have no package.json)
+  const built = (id, events = readEvents(id) || []) => events.some(e => e.type === 'app:done') && (existsSync(join(dirOf(id), 'package.json')) || !!intakeOf(events)?.done)
+  // a run that was brought in says so: its shape, whether the crew can change it (fixed: not yet) and whether
+  // the person has pressed for its install and build (ran); null for a run the Studio built
+  const broughtIn = (id, events = readEvents(id) || []) => { const it = intakeOf(events); return it ? { intake: { shape: it.shape, fixed: it.fixed, ran: it.ran, done: it.done } } : {} }
+  // (asked of a job once: a run the Studio built never becomes one that was brought in)
+  const broughtJob = j => (j.brought === false ? {} : (j.brought = !!intakeOf(readEvents(j.id) || [])) ? broughtIn(j.id) : {})
+  const view = j => ({ ...broughtJob(j), state: j.state, kind: j.kind, stage: j.stage, served: j.mode || null, ...(j.slice_at ? { at: j.slice_at } : {}), steps: j.steps.slice(-200), url: j.url || null, result: j.result, message: j.message, asks: j.asks, deployed: j.deployed || null, hasApp: j.state === 'done' || built(j.id), engineReady: engineReady(), ...(j.state === 'paused' && j.slice ? { slice: j.slice } : {}) })
 
   // Start the first build, or one more turn on the same app.
   async function start(id, input = {}) {
@@ -216,6 +272,13 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!j && state(id).elsewhere) throw new Error('another Swarm Studio is building this one; it shows here as it goes')
     if ([...jobs.values()].some(x => x.state === 'working')) throw new Error('another app is building; wait for it or stop it')
     const dir = dirOf(id)
+    // A project brought in (docs/specs/45-intake.md) is never built over: a first build would write the Studio's
+    // starter into its folder. One of plain files has no build for the engine to check (dyad/src/aba/headless_cli.ts
+    // runGates: no package.json is "not an ABA app", a failed turn), so the crew cannot change it yet.
+    const brought = intakeOf(events)
+    if (brought && !brought.done) throw new Error('This project did not come in. Bring it in again from Projects.')
+    if (brought?.fixed) throw new Error('This project was brought in as plain files. The crew cannot change those yet: it plays here, and its code is in Code.')
+    if (brought && (input.fresh || !String(input.ask || '').trim())) throw new Error('This project was brought in: say what to change.')
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
     // a first build that failed left only the starter: build again from the start
     const fresh = !built(id, events) || input.fresh
@@ -243,14 +306,17 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         const snap = snapshot(events, Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], { name: nameFor(id)?.name })
         if (!snap.pages.some(p => p.sections.length)) throw new Error('nothing built yet')
         dyadApp(snap, dir, { runId: id, runDir: join(runsDir, id), scaffold: scaffoldDir })
-        const games = [...new Map(events.filter(e => e.type === 'game:linked' && e.title).map(e => [e.game, { title: e.title, slug: gameSlug(e.title) }])).values()]
+        const games = [...new Map(events.filter(e => e.type === 'game:linked' && e.title && !e.intake).map(e => [e.game, { title: e.title, slug: gameSlug(e.title) }])).values()]
         prompt = sitePrompt(snap, ask, input.plan && typeof input.plan === 'object' ? input.plan : null, input.rewards === false ? [] : games)
       }
     } else {
       if (!ask) throw new Error('say what to change')
-      prompt = `${kind === 'game' ? 'This is a browser game made from a spec in GAME_SPEC.md. Keep what works.' : KEEP}\n\nDo this: ${ask}\n\n${kind === 'game' ? '' : `${BACKEND}\n\n`}Finish with a working build: the typecheck and build must pass.`
+      // brought in: the Studio's own rules for its apps (keep the converted design, add a Nitro server) do not apply
+      prompt = brought ? `This project was made outside this tool and brought in as it is. Read its files before changing anything, and keep its structure, tools and style.\n\nDo this: ${ask}\n\nFinish with a working build: \`npm run build\` must pass.` : `${kind === 'game' ? 'This is a browser game made from a spec in GAME_SPEC.md. Keep what works.' : KEEP}\n\nDo this: ${ask}\n\n${kind === 'game' ? '' : `${BACKEND}\n\n`}Finish with a working build: the typecheck and build must pass.`
     }
     j ||= { id, kind, steps: [], asks: [], proc: null, url: null, port: null }
+    // a locked App kit's keys (names only), kept for every later serve of this app, restarts included
+    if (Array.isArray(input.plan?.keys)) { j.keys = input.plan.keys.filter(n => typeof n === 'string').slice(0, 8); try { mkdirSync(join(runsDir, id), { recursive: true }); writeFileSync(join(runsDir, id, 'app-keys.json'), JSON.stringify(j.keys)) } catch {} }
     Object.assign(j, { kind, state: 'working', stage: 'starting', result: null, message: null, controller: new AbortController(), t: Date.now() })
     j.asks.push(ask || (kind === 'game' ? 'build the game' : 'make it a working app'))
     jobs.set(id, j)
@@ -302,7 +368,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         for (let i = chain.indexOf(used); ; i++) {
           try {
             used = chain[i]
-            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal })
+            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal, appKeys: !brought })
           } catch (err) {
             if (i + 1 >= chain.length || signal.aborted || !BUSY.test(err.message)) throw err
             step({ kind: 'setup', text: `${chain[i]} is busy at the provider; going on with ${chain[i + 1]}`, ok: false })
@@ -322,7 +388,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         if (!result.ok) throw new Error(result.error || 'the engine could not finish the app')
         if (fill && kind !== 'game') try { j.result.standins = (await fill(id, dir, step)).filled } catch (err) { step({ kind: 'setup', text: `empty picture slots could not be filled: ${String(err.message || err).slice(0, 160)}`, ok: false }) }
         await serve(id, j, step)
-        if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events))
+        // a new game was told about the play checks in its prompt; an older one being edited was not
+        if (kind === 'game') j.result.playtest = await playGame(j, dir, used, step, liveBrand(events), fresh ? events.findLast(e => e.type === 'game:spec')?.spec : null)
       }
       // Godot, Unity or Unreal asked for: the same game written as that engine's project too
       const target = kind === 'game' ? portTarget(input.target ? input : spec || events.findLast(e => e.type === 'game:spec')?.spec) : null
@@ -330,10 +397,36 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       Object.assign(j, { state: 'done', stage: 'ready' })
       await j.radio?.stop()
       send(id, 'app:done', { result: j.result, url: j.url, ms: Date.now() - j.t })
+      // building stopped: the app is served built from here on, on the same address (spec 44)
+      if (!j.gsrv) serveBuilt(id, j, step).catch(err => step({ kind: 'serve', text: `the app stays on its dev server: ${String(err.message || err).slice(0, 200)}`, ok: false }))
     })().catch(err => {
       Object.assign(j, { state: 'failed', message: String(err.message || err).slice(0, 400) })
       j.radio?.stop()
       send(id, 'app:failed', { message: j.message, result: j.result })
+    })
+    return view(j)
+  }
+
+  // A project brought in (docs/specs/45-intake.md): no engine and no build, only `work(step, signal)`, which puts
+  // its files in app/. While it runs the run is working like any build (its card, the App view, Stop); it ends
+  // as app:done or app:failed, so the rooms read it as they read a build.
+  function bring(id, { kind, work }) {
+    if (jobs.get(id)?.state === 'working') return view(jobs.get(id))
+    const j = { id, kind, steps: [], asks: [], proc: null, url: null, port: null, state: 'working', stage: 'bringing it in', result: null, message: null, controller: new AbortController(), t: Date.now() }
+    jobs.set(id, j)
+    send(id, 'app:start', { kind, intake: true, pid: process.pid })
+    const step = s => {
+      const item = { ...s, t: Date.now() }
+      j.steps.push(item)
+      j.stage = s.text
+      send(id, 'app:step', { step: item })
+    }
+    j.done = Promise.resolve().then(() => work(step, j.controller.signal)).then(() => {
+      Object.assign(j, { state: 'done', stage: 'ready' })
+      send(id, 'app:done', { intake: true, ms: Date.now() - j.t })
+    }, err => {
+      Object.assign(j, { state: 'failed', message: j.controller.signal.aborted ? 'stopped' : String(err.message || err).slice(0, 400) })
+      send(id, 'app:failed', { message: j.message, intake: true })
     })
     return view(j)
   }
@@ -402,6 +495,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const n = seedGodot(dir, spec)
       j.result.godot = true
       step({ kind: 'setup', text: `building it in Godot 4: ${n.length} pictures copied into the project` })
+    } else if (/godot/i.test(String((input.target ? input : spec)?.target ?? spec?.answers?.target ?? spec?.engine ?? ''))) {
+      // asked for, not here: say so instead of quietly building for the browser
+      step({ kind: 'setup', text: 'Godot 4 was asked for but is not installed on this machine: building it for the browser instead', ok: false })
     }
     if (from) step({ kind: 'setup', text: `stages 1–${from} are built already: going on from stage ${from + 1}` })
     // art asked for mid-build (engine/artask.mjs): only with painting on and the image model not out of quota
@@ -475,7 +571,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       j.result.commits += last.commits || 0
       j.result.files = Math.max(j.result.files, last.files?.length || 0)
       if (!godot) await serve(id, j, step)
-      const play = await playGame(j, dir, model(), step, brand)
+      const play = await playGame(j, dir, model(), step, brand, spec)
       j.result.stages.push({ id: st.id, name: st.name, ok: !!last.ok, gatesPassed: last.gatesPassed, turns: last.turns, playtest: play, ms: Date.now() - t })
       // each slice carries the bots' filmed play test, so the person sees it before the next one
       send(id, 'app:stage', { stage: `stage ${i + 1} of ${stages.length} done: ${st.name}`, big: { i, n: stages.length, name: st.name, ok: !!last.ok, play: !!play?.ok, ...(play?.clip ? { clip: play.clip } : {}), ...(godot ? { godot: true } : {}) } })
@@ -524,7 +620,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   async function serveGodot(id, j) {
     j.godot = true
     if (j.gsrv) return
-    if (j.proc && j.proc.exitCode === null) { await stopProc(j.proc); j.proc = null }
+    await unserve(id, j)
     j.port = j.port && await portFree(j.port) ? j.port : await freePort()
     j.gsrv = await serveStatic(webBuild(dirOf(id)), j.port)
     j.url = j.gsrv.url
@@ -546,7 +642,11 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // domain, which is someone else's), and a few seconds of play (the typecheck
   // and build pass a game whose run ends the moment it starts). Problems get one
   // fix turn with them spelled out, then a second check. Vite reloads the fix.
-  async function playGame(j, dir, model, step, brand) {
+  // spec: the game's spec, when its builder was told about the play checks (engine/playcheck.mjs):
+  // each control it names is held and the game's state read, enemies are watched, companions counted
+  async function playGame(j, dir, model, step, brand, spec = null) {
+    const checks = spec ? checklist(spec) : []
+    const dodge = () => (spec ? dodgeProblem(testDodges(dir, { godot: !!j.godot })) : '')
     const allowed = brand?.url ? [brand.url] : []
     const linkProblem = () => {
       const bad = strangeLinks(dir, allowed)
@@ -566,17 +666,19 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     try { n = 1 + Math.max(0, ...readdirSync(join(runsDir, j.id, 'img')).map(f => +(f.match(/^playtest-(\d+)\.webm$/)?.[1] || 0))) } catch {}
     if (n > 999) n = 999
     const clip = join(runsDir, j.id, 'img', `playtest-${n}.webm`)
-    let t = await playtest(j.url, { shot, clip, secure: !!j.godot })
+    let t = await playtest(j.url, { shot, clip, secure: !!j.godot, checks })
+    let dodged = dodge()
+    if (dodged) step({ kind: 'test', text: 'the game plays differently when it is being tested', ok: false })
     const film = t.clip ? { clip: `/img/${j.id}/playtest-${n}.webm`, keys: t.keys || [] } : {}
     if (t.skipped) step({ kind: 'test', text: `play test skipped: ${t.skipped}`, ok: false })
-    else if (t.ok) step({ kind: 'test', text: `play test passed: still playing after ${t.seconds.toFixed(1)} s`, ...film })
-    else step({ kind: 'test', text: `play test failed: ${t.problem.split('. ')[0]}`, ok: false, ...film })
-    const withClip = o => (film.clip ? { ...o, clip: film.clip } : o)
-    if (!links && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
-    const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, links || ''].filter(Boolean).join('\n\n')
+    else if (t.ok) step({ kind: 'test', text: `play test passed: ${t.checks?.length ? checkLine(t.checks) : `still playing after ${t.seconds.toFixed(1)} s`}`, ...film })
+    else step({ kind: 'test', text: `play test failed: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : t.problem.split('. ')[0]}`, ok: false, ...film })
+    const withClip = o => ({ ...o, ...(film.clip ? { clip: film.clip } : {}), ...(t.checks ? { checks: t.checks } : {}) })
+    if (!links && !dodged && t.ok) return t.skipped ? { skipped: t.skipped } : withClip({ ok: true, seconds: t.seconds })
+    const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, dodged, links || ''].filter(Boolean).join('\n\n')
     try {
       const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
-      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal, appKeys: !intakeOf(readEvents(j.id) || []) })
       if (j.godot) await exportWeb(dir)
     } catch (err) {
       step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
@@ -584,58 +686,160 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     }
     await new Promise(r => setTimeout(r, 2500))
     links = linkProblem()
-    if (!t.ok) t = await playtest(j.url)
-    const ok = !links && t.ok
-    step({ kind: 'test', text: ok ? 'the game passes its checks after the fix' : `still wrong after the fix: ${(links || t.problem || '').split('. ')[0]}`, ok })
-    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, links || ''].filter(Boolean).join(' ') })
+    // played again the same way (a Godot export only starts in a secure frame)
+    if (!t.ok || dodged) t = await playtest(j.url, { secure: !!j.godot, checks })
+    dodged = dodge()
+    const ok = !links && !dodged && t.ok
+    step({ kind: 'test', text: ok ? `the game passes its checks after the fix${t.checks?.length ? `: ${checkLine(t.checks)}` : ''}` : `still wrong after the fix: ${t.checks?.some(c => c.ok === false) ? checkLine(t.checks) : (links || dodged || t.problem || '').split('. ')[0]}`, ok })
+    return withClip(ok ? { ok: true, fixed: true, seconds: t.seconds } : { ok: false, problem: [t.ok ? '' : t.problem, dodged, links || ''].filter(Boolean).join(' ') })
   }
 
   // A dev server for the app (Vite, plus Nitro's routes when the app has them).
   // Kept running between turns: Vite picks up the engine's next edits itself.
   // Vite does not pick up a new plugin or package (a turn that adds Nitro, say):
   // when these files change the dev server starts over, on the same port.
+  // What an app's own processes are given (its dev server, its build, its built server): its database, a Stripe
+  // test key and its kit's keys (engine/proc.mjs appEnv). A project brought in gets none of them: its vite.config
+  // and its server are code from outside, running outside the engine's egress guard.
+  const appEnvFor = (id, j) => (intakeOf(readEvents(id) || []) ? {} : appEnv(process.env, keysOf(id, j)))
+  // a project brought in is installed without its packages' own scripts: code from outside runs only as the
+  // person's build and the app itself, never as an install hook
+  const installArgs = id => ['install', '--prefer-offline', ...(intakeOf(readEvents(id) || []) ? ['--ignore-scripts'] : [])]
+  const keysOf = (id, j) => { if (!j.keys) { try { j.keys = JSON.parse(readFileSync(join(runsDir, id, 'app-keys.json'), 'utf8')) } catch { j.keys = [] } } return j.keys }
   async function serve(id, j, step = () => {}) {
     const dir = dirOf(id)
     const sig = serveSig(dir)
-    if (j.proc && j.proc.exitCode === null) {
-      if (j.sig === sig) return
+    if (j.mode === 'dev' && j.proc && j.proc.exitCode === null) {
+      if (j.sig === sig) return pool.seen(id)
       step({ kind: 'serve', text: 'the app\'s setup changed: restarting it' })
-      await stopProc(j.proc)
-      j.url = null
     }
+    // the dev server, the app built, or none: whatever serves it now gives way
+    await unserve(id, j)
     step({ kind: 'serve', text: 'installing the app\'s packages' })
-    const inst = await sh('pnpm', ['install', '--prefer-offline'], dir)
+    const inst = await sh('pnpm', installArgs(id), dir)
     if (!inst.ok) throw new Error(`pnpm install failed: ${inst.out.slice(-300)}`)
     j.port = j.port && await portFree(j.port) ? j.port : await freePort()
     j.sig = sig
+    await pool.admit(id)
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
     // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
     // vite's own script under this Node: .bin/vite is a shell shim (vite.cmd on Windows)
-    const p = spawn(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, BROWSER: 'none' } })
-    j.proc = p
-    let log = ''
-    p.stdout.on('data', b => { log = (log + b).slice(-4000) })
-    p.stderr.on('data', b => { log = (log + b).slice(-4000) })
-    const url = `http://127.0.0.1:${j.port}/`
-    for (let i = 0; i < 60; i++) {
-      if (p.exitCode !== null) throw new Error(`the app stopped: ${log.slice(-300)}`)
-      if (await fetch(url, { signal: AbortSignal.timeout(2000) }).then(r => r.ok).catch(() => false)) { j.url = url; break }
-      await new Promise(r => setTimeout(r, 500))
-    }
-    if (!j.url) throw new Error('the app did not answer in 30 s')
+    const p = startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { BROWSER: 'none', ...appEnvFor(id, j) } })
+    j.url = await answers(id, j, p, `http://127.0.0.1:${j.port}/`, 'dev')
     send(id, 'app:ready', { url: j.url })
   }
 
-  async function open(id) {
+  // A process that serves the app: kept as j.proc, waited for until its address answers (30 s)
+  async function answers(id, j, p, url, mode) {
+    Object.assign(j, { proc: p, mode })
+    let log = ''
+    p.stdout?.on('data', b => { log = (log + b).slice(-4000) })
+    p.stderr?.on('data', b => { log = (log + b).slice(-4000) })
+    // it stopped by itself (a crash, a kill from outside): nothing serves the app now
+    p.once('exit', () => { if (j.proc === p) { Object.assign(j, { proc: null, url: null, mode: null }); pool.gone(id) } })
+    for (let i = 0; i < 60; i++) {
+      if (p.exitCode !== null && p.exitCode !== undefined) throw new Error(`the app stopped: ${log.slice(-300)}`)
+      if (await fetch(url, { signal: AbortSignal.timeout(2000) }).then(r => r.status < 500).catch(() => false)) return url
+      await new Promise(r => setTimeout(r, 500))
+    }
+    await stopTree(p)
+    throw new Error('the app did not answer in 30 s')
+  }
+
+  // Whatever serves the app now stops: its dev server or built server with all their children, its files, its
+  // front; the port is kept, so the next start has the same address
+  async function unserve(id, j) {
+    const p = j.proc, files = j.files, front = j.front
+    Object.assign(j, { proc: null, files: null, front: null, url: j.gsrv ? j.url : null, mode: null })
+    pool.gone(id)
+    if (front) await front.close()
+    if (files) await files.close()
+    if (p) await stopTree(p)
+  }
+
+  // Nobody has looked for a while, or another app needs the room: its server stops (spec 44). The App view hears
+  // it and opens the app again, served built, when someone comes back.
+  async function park(id, why) {
+    const j = jobs.get(id)
+    if (!j || j.state === 'working') return
+    await unserve(id, j)
+    broadcast({ type: 'app:parked', t: Date.now(), run: id, why })
+  }
+
+  // A finished app, served built (spec 44): the app's build when the app changed since the last one, then dist/
+  // as files from this process (no process of its own), or for an app with server routes its built Nitro server
+  // alone behind a CORS front. Editing or building again starts the dev server (serve).
+  async function serveBuilt(id, j, step = () => {}) {
+    const dir = dirOf(id), server = hasServer(dir), sig = sourceSig(dir)
+    const out = server ? join(dir, '.output', 'server', 'index.mjs') : join(dir, 'dist', 'index.html')
+    let stamp = null
+    try { stamp = JSON.parse(readFileSync(join(dir, '.swarm-built.json'), 'utf8')) } catch {}
+    if (stamp?.sig !== sig || !existsSync(out)) {
+      if (!existsSync(join(dir, 'node_modules', 'vite'))) {
+        step({ kind: 'serve', text: 'installing the app\'s packages' })
+        const inst = await sh('pnpm', installArgs(id), dir)
+        if (!inst.ok) throw new Error(`pnpm install failed: ${inst.out.slice(-300)}`)
+      }
+      step({ kind: 'serve', text: 'building the app to serve it' })
+      const b = await startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), 'build'], { cwd: dir, buffer: true, all: true, timeout: 300000, env: { CI: '1', ...appEnvFor(id, j) } })
+      if (b.exitCode !== 0 || !existsSync(out)) throw new Error(`the app's build failed: ${String(b.all || '').slice(-300)}`)
+      writeFileSync(join(dir, '.swarm-built.json'), JSON.stringify({ sig, server, t: Date.now() }))
+    }
+    await unserve(id, j)
+    j.port = j.port && await portFree(j.port) ? j.port : await freePort()
+    if (server) {
+      await pool.admit(id)
+      const inner = await freePort()
+      const p = startProc(process.execPath, [out], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { PORT: String(inner), HOST: '127.0.0.1', NITRO_PORT: String(inner), NITRO_HOST: '127.0.0.1', NODE_ENV: 'production', ...appEnvFor(id, j) } })
+      await answers(id, j, p, `http://127.0.0.1:${inner}/`, 'built')
+      j.front = await corsFront(j.port, inner)
+      j.url = j.front.url
+    } else {
+      // files from this process: no process to stop, so not one of the maxApps
+      j.files = await serveStatic(join(dir, 'dist'), j.port, { spa: true })
+      Object.assign(j, { mode: 'files', url: j.files.url })
+    }
+    send(id, 'app:ready', { url: j.url, built: true })
+  }
+
+  // a viewer's heartbeat (the App view, every 30 s while it shows the app): the app's server is kept
+  function seen(id) {
+    const j = jobs.get(id)
+    if (j?.url) pool.seen(id)
+    return { url: j?.url || null, served: j?.mode || null }
+  }
+
+  // Plain files (a project brought in): app/ as files from this process, opened on its page
+  async function serveFiles(id, j, page = '') {
+    await unserve(id, j)
+    j.port = j.port && await portFree(j.port) ? j.port : await freePort()
+    j.files = await serveStatic(dirOf(id), j.port)
+    Object.assign(j, { mode: 'files', url: `${j.files.url}${page}`, state: 'done' })
+    send(id, 'app:ready', { url: j.url, built: true })
+  }
+
+  async function open(id, input = {}) {
     const j = jobs.get(id)
     if (j?.url && j.gsrv) return view(j)
-    if (j?.url && j.proc?.exitCode === null && j.sig === serveSig(dirOf(id))) return view(j)
-    if (!existsSync(join(dirOf(id), 'package.json'))) throw new Error('no app yet')
+    // served built, or its dev server still up and current: kept
+    if (j?.url && (j.mode === 'files' || j.mode === 'built')) { pool.seen(id); return view(j) }
+    if (j?.url && j.mode === 'dev' && j.proc?.exitCode === null && j.sig === serveSig(dirOf(id))) { pool.seen(id); return view(j) }
+    const brought = intakeOf(readEvents(id) || [])
+    if (!existsSync(join(dirOf(id), 'package.json')) && !brought?.done) throw new Error('no app yet')
+    // a Vite project brought in is installed and built only on the person's own press (its packages and its
+    // build are code from outside): `run: true`, kept as intake:run
+    if (brought?.done && brought.shape === 'vite' && !brought.ran) {
+      if (input.run !== true) throw new Error('press Install and run first')
+      send(id, 'intake:run', {})
+    }
     const k = j || { id, kind: state(id).kind, steps: state(id).steps || [], asks: [], state: 'done' }
     jobs.set(id, k)
-    // a Godot-first game plays from its Web export
+    // plain files brought in: served as they are from this process, on the page that was found
+    if (brought?.done && brought.shape === 'static') { await serveFiles(id, k, brought.page); return view(k) }
+    // a Godot-first game plays from its Web export; one being built, from its dev server; a finished one, built
     if (isGodotFirst(dirOf(id)) && existsSync(join(webBuild(dirOf(id)), 'index.html'))) await serveGodot(id, k)
-    else await serve(id, k)
+    else if (k.state === 'working') await serve(id, k)
+    else await serveBuilt(id, k)
     k.state = k.state === 'working' ? 'working' : 'done'
     return view(k)
   }
@@ -693,14 +897,31 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const name = deployName(project || JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name || 'swarm', kind)
     // the tab title too: an engine turn may have named the page after its first screen
     if (project) titleApp(dir, project)
+    // a description and a share picture, so a shared link shows a card (engine/seo.mjs)
+    const share = shareMeta(id, project || name, kind)
     // the stages and Vercel's build log are saved with the run, so the Auto show's deploy shot replays too
-    const r = await publishVercel({ dir, name, creds, dataDir, build: true, env,
+    const r = await publishVercel({ dir, name, creds, dataDir, build: true, env, rebase: base => { try { shareApp(dir, { ...share, base }) } catch {} },
       onStage: stage => send(id, 'app:stage', { stage: `deploy: ${stage}` }),
       onLog: lines => send(id, 'app:stage', { stage: 'deploy: building', log: lines.slice(-12) }) })
     send(id, 'app:deployed', { url: r.url, project: r.repo, pending: !!r.pending })
     const j = jobs.get(id)
     if (j) j.deployed = r.url
     return { url: r.url, project: r.repo, pending: !!r.pending }
+  }
+
+  // what a shared link to the app or game says: the site's home description when it came from
+  // one, else the brief's first sentence; its picture: the game's title art, else the first picture
+  function shareMeta(id, name, kind) {
+    const events = readEvents(id) || []
+    const start = events.find(e => e.type === 'run:start') || {}
+    const home = events.find(e => e.type === 'page')?.id
+    const desc = seoFromEvents(events).get(home)?.description || String(start.brief || '').split('\n')[0].split(/(?<=[.!?])\s/)[0]
+    const img = join(runsDir, id, 'img')
+    let files = []
+    try { files = readdirSync(img) } catch {}
+    const pick = files.find(f => /^game-title\.(webp|png|jpe?g)$/.test(f)) || files.find(f => /^\d{1,3}\.(png|jpe?g|webp)$/.test(f))
+    const theme = events.findLast(e => e.type === 'theme') || null
+    return { name, description: desc, picture: pick ? join(img, pick) : null, kind, theme }
   }
 
   // the run's project name: the projects index, else the brief's brand (never a screen's title)
@@ -712,9 +933,15 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     return n === 'Swarm build' ? '' : n
   }
 
-  function close() { for (const j of jobs.values()) { j.controller?.abort(); j.proc?.kill() } }
+  // the server is stopping: every app's server and its children go with it
+  function close() {
+    clearInterval(sweeper)
+    return Promise.all([...jobs.entries()].map(([id, j]) => { j.controller?.abort(); return unserve(id, j) }))
+  }
+  // a build is running somewhere (the server's idle exit waits for it)
+  const busy = () => [...jobs.values()].some(j => j.state === 'working')
 
-  return { start, state, stop, tell, redirect, open, files, deploy, close, dirOf, jobs }
+  return { start, bring, state, stop, tell, redirect, open, seen, files, deploy, close, busy, dirOf, jobs, pool }
 }
 
 // "can I see it", "show me the pictures": the person wants to look, not to change anything

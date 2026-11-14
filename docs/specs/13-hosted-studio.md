@@ -1,6 +1,6 @@
 # 13. The hosted studio: try Swarm Studio in the browser, no install
 
-Anyone (hackathon judges first) opens `https://swarm.design-bakery.com/studio/app/`, types a guest name, and runs a
+Anyone (hackathon judges first) opens `https://swarm.design-bakery.com/studio/app/` and runs a
 real build with a small crew on the canvas. The owner chose **guest limit + cheap model**: a few builds a day per
 guest, a fast cheap model, a hard daily spending cap on the server, and "install the plugin or bring your own key for
 more" everywhere a limit is hit.
@@ -58,7 +58,10 @@ Identity **is** the Feed's guest session (swarm-feed `docs/data-model.md`): the 
 (HttpOnly, SameSite=Lax, Path=/), which the studio receives because `swarm-feed-web` serves it on the same origin.
 The studio never reads the Feed's data: it asks `GET /api/feed/whoami` on `swarm-feed-web:8080` with the visitor's
 cookie and keys every per-guest limit on the Feed user id (cached 30 s). The canvas sets the name through the Feed
-(`GET /api/feed/me` creates the guest and prefills its generated name, `POST /api/feed/me {name}` sets it). So one
+(`GET /api/feed/me` creates the guest and prefills its generated name, `POST /api/feed/me {name}` sets it).
+A build never waits for a name: the generated one is enough, and the name dialog opens once, the first time the
+guest posts to the Feed. A prompt handed over as `?prompt=` (START on the Feed's `/studio` page) starts its build
+at once and leaves the address, so a reload does not spend another build. So one
 guest has one name across the Feed and the studio, and connecting Hermes later keeps the same id and credit.
 The studio's own state is one file, `hosted-state.json` (today's spend, builds per guest and per IP).
 
@@ -69,12 +72,13 @@ All limits are environment settings with these defaults:
 | Builds per guest per day (UTC) | 3 | `HOSTED_GUEST_BUILDS` |
 | Builds per IP per day | 6 | `HOSTED_IP_BUILDS` |
 | Builds running at once, one guest | 1 | — |
+| Builds that made nothing, given back per guest per day | 3 | — |
 | Builds running at once, whole studio | 4 | `HOSTED_CONCURRENT` |
 | Crew size | 6 agents | `HOSTED_AGENTS` |
 | Pages per build | 2 | `HOSTED_PAGES` |
 | Sections per page | 6 | `HOSTED_SECTIONS` |
 | Prompt length | 500 characters | `HOSTED_PROMPT_CHARS` |
-| API requests per IP | 60 a minute | `HOSTED_RPM` |
+| API requests per IP | 240 a minute (a build with its canvas open makes about 35) | `HOSTED_RPM` |
 | **Spend per day, whole studio** | **$3.00** at list price | `HOSTED_DAILY_USD` |
 
 Every model call reports its token usage (`streamChat` calls `provider.onUsage`); the server adds it to today's
@@ -102,5 +106,5 @@ the hosted-studio PR). The build's owner and maker credit is the guest's own use
 ## Done when
 
 - `swarm.design-bakery.com/studio` has **Try it here** as its first action, opening the hosted studio with the prompt.
-- On the live site: enter a guest name, build, watch the crew on the canvas, get finished pages, play them, post to
+- On the live site: build, watch the crew on the canvas, get finished pages, play them, post to
   the Feed, and the fourth build of the day says the limit and points to the plugin.

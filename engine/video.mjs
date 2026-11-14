@@ -4,21 +4,24 @@
 // HyperFrames renders to MP4 in headless Chrome.
 //
 // HyperFrames and ffmpeg are fetched from npm into the plugin's data folder the
-// first time a video is made, unless they are already on PATH.
+// first time a video is made, unless they are already on PATH: exact versions, and
+// the ffmpeg and ffprobe binaries are checked against recorded SHA-256 sums first.
 
-import { spawn, execFile } from 'node:child_process'
+import { execFile, start as startProc, stopTree } from './proc.mjs'
+import { serialQueue } from './lifecycle.mjs'
 import { CAST, MOODS } from './sound.mjs'
-import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, copyFileSync, symlinkSync, chmodSync, rmSync } from 'node:fs'
 import { dirname, join, extname, basename } from 'node:path'
 import { streamChat } from './llm.mjs'
 import { checkLook, lookPrompt, lookCss, paletteVars, paletteCss, textureLayer, revealTween, cutTween, cutLayer, cutCss, rng, hash, MOTIONS, CUTS } from './look.mjs'
 
 const HYPERFRAMES = 'hyperframes@0.9.26'
 const FPS = 30
-// The film's shapes: the wide one for desktop and the tall one for phones, from the same storyboard.
-// The tall one is laid out again for its frame (stacked pictures and words), not cropped.
-export const SHAPES = { wide: { W: 1920, H: 1080, file: 'promo.mp4' }, tall: { W: 1080, H: 1920, file: 'promo-tall.mp4' } }
+// The film's shapes: the wide one for desktop, the tall one for phones and the square one for feeds,
+// from the same storyboard. The tall one is laid out again for its frame (stacked pictures and words),
+// not cropped; the square one keeps the wide layout with its type scaled to the narrower frame.
+export const SHAPES = { wide: { W: 1920, H: 1080, file: 'promo.mp4' }, tall: { W: 1080, H: 1920, file: 'promo-tall.mp4' }, square: { W: 1080, H: 1080, file: 'promo-square.mp4' } }
 const KINDS = new Set(['open', 'image', 'split', 'list', 'quote', 'cta', 'stat', 'mosaic', 'clip', 'title', 'black'])
 const LENGTH = { open: 3.2, image: 3.4, split: 3.6, list: 4.2, quote: 3.4, cta: 3.6, stat: 3.2, mosaic: 3.8, clip: 4.4, title: 1.6, black: 1 }
 
@@ -59,6 +62,13 @@ export function collect(events, runDir) {
     if (e.type !== 'image' || !e.src) continue
     const file = join(runDir, 'img', e.src.split('/').pop())
     if (existsSync(file) && !images.some(i => i.file === file)) images.push({ n: images.length + 1, gen: clip(e.gen, 160), page: e.page, file })
+  }
+  // a build whose pictures were placed without image events (a seeded or imported build): its picture folder
+  if (!images.length) {
+    try {
+      for (const f of readdirSync(join(runDir, 'img')).filter(f => /\.(png|webp|jpe?g)$/i.test(f) && !/^video-/.test(f)).sort((a, b) => parseInt(a) - parseInt(b) || a.localeCompare(b)).slice(0, 24))
+        images.push({ n: images.length + 1, gen: clip(`${start.brief || ''}`, 120) || 'a picture from the build', page: pages[0]?.id || 'home', file: join(runDir, 'img', f) })
+    } catch {}
   }
   const brand = clip((pages[0]?.title || start.brief || 'Our site').split(/\s[—–|:-]\s/)[0], 40)
   // footage recorded from the running app (gameplay, a scroll through the site), when there is some
@@ -374,7 +384,7 @@ export const sceneLength = (s, voice, pace = 1) => Math.max(Number(((LENGTH[s.ki
 export const VOICE_LEAD = 0.35
 
 export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn = scenes.look, { shape = 'wide' } = {}) {
-  const { W, H } = SHAPES[shape] || SHAPES.wide, tall = H > W
+  const { W, H } = SHAPES[shape] || SHAPES.wide, tall = H > W, square = W === H
   // a plan's cut, when the person picked one, leads; otherwise the look's own cuts
   const look = lookIn || checkLook({ layout: 'classic', cuts: [transition] }, 1)
   const cuts = lookIn && !look.pinned ? look.cuts : [transition]
@@ -392,7 +402,7 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
   const fam = n => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@400;600;700;800`
   const img = n => c.images.find(i => i.n === n)
   const clipOf = n => (c.clips || []).find(x => x.n === n)
-  const sz = (s, big) => size(s, big) * look.scale * (tall ? 0.72 : 1) | 0
+  const sz = (s, big) => size(s, big) * look.scale * (tall ? 0.72 : square ? 0.6 : 1) | 0
   let t = 0, splits = 0
   const html = [], tl = []
   scenes.forEach((s, i) => {
@@ -420,7 +430,7 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
       enter(`#${id}s`, '{opacity:0, y:30}', 1.2)
       if (kicker) enter(`#${id}k`, '{opacity:0, y:-20}', 0.1)
     } else if (s.kind === 'image') {
-      html.push(`<div id="${id}" class="clip scene" data-start="${t}" data-duration="${d}"><div class="frame" id="${id}f">${media(s.image, 'full', `${id}i`)}</div>${s.headline ? `<div class="shade"></div><div class="over">${kicker}<div><h2 class="head light" style="font-size:${sz(s.headline)}px">${words(s.headline, 'w', acc)}</h2>${s.sub ? `<p class="sub light" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>` : ''}</div>`)
+      html.push(`<div id="${id}" class="clip scene${s.sign ? ' sign' : ''}" data-start="${t}" data-duration="${d}"><div class="frame" id="${id}f">${media(s.image, 'full', `${id}i`)}</div>${s.headline ? `<div class="shade"></div><div class="over">${kicker}<div><h2 class="head light" style="font-size:${sz(s.headline)}px">${words(s.headline, 'w', acc)}</h2>${s.sub ? `<p class="sub light" id="${id}s">${esc(s.sub)}</p>` : ''}</div></div>` : ''}</div>`)
       cam(`#${id}i`, look.motion === 'drift' ? 'drift' : 'push-in')
       if (look.layout === 'collage' || look.layout === 'brutalist') enter(`#${id}f`, `{opacity:0, y:${r(-60, 60) | 0}, scale:.85}`, 0.05)
       rise(0.45)
@@ -504,7 +514,7 @@ export function composition(scenes, c, lengths = [], transition = 'wipe', lookIn
   return {
     seconds: total,
     look,
-    shape: tall ? 'tall' : 'wide',
+    shape: tall ? 'tall' : square ? 'square' : 'wide',
     html: `<!doctype html>
 <html><head><meta charset="utf-8">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
@@ -543,6 +553,10 @@ html,body{width:${W}px;height:${H}px;overflow:hidden;background:var(--background
 .footage{position:absolute;left:0;top:0;width:${W}px;height:${H}px;object-fit:cover}
 .clipscene{background:transparent}
 .rec{position:absolute;top:70px;right:80px;font:700 24px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#fff;background:rgba(0,0,0,.45);padding:12px 18px;border-radius:6px}
+/* a mood piece signs its last picture: the name small, low and quiet */
+.sign .over{left:0 !important;right:0 !important;top:auto !important;bottom:${tall ? 340 : 96}px !important;width:auto !important;text-align:center;display:block}
+.sign .over .head{font:600 ${tall ? 40 : 44}px/1.2 var(--fb) !important;letter-spacing:.32em !important;text-transform:uppercase;max-width:none;color:#fff;-webkit-text-stroke:0}
+.sign .shade{display:block !important;background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,.55)) !important}
 .card{background:#000;color:#fff}.card .head{color:#fff;-webkit-text-stroke:0;text-shadow:none}.card .sub{color:rgba(255,255,255,.7)}
 .acc>span{color:var(--primary);font-style:italic}.card .acc>span,.light .acc>span{color:var(--hl,#ffd23f)}
 .cta{background:var(--primary)}.cta .head{color:var(--primary-foreground)}.cta .kicker{color:var(--primary-foreground);opacity:.8}
@@ -583,35 +597,80 @@ let tools = null
 const run = (cmd, args, opts = {}) => new Promise((ok, fail) => execFile(cmd, args, { maxBuffer: 1 << 24, ...opts }, (err, out) => (err ? fail(err) : ok(out))))
 const which = name => run('/usr/bin/which', [name]).then(p => p.trim()).catch(() => '')
 
+// ffmpeg and ffprobe, when they are not on PATH: exact npm versions, and the binary each one unpacks is
+// checked against the SHA-256 recorded here (from those exact packages) before it is ever run. A platform
+// not listed here needs ffmpeg and ffprobe on PATH.
+export const FF_PACKAGES = { ffmpeg: '@ffmpeg-installer/ffmpeg@1.1.0', ffprobe: '@ffprobe-installer/ffprobe@2.1.2' }
+export const FF_SHA256 = {
+  'darwin-arm64': { ffmpeg: 'a2ad6f0fc42a3c8f5183ef1d53e906d6bb35478d14a6b67175c30ce6c17e9214', ffprobe: 'c846d5db9d3b5bc33f987725e21f3ea14953931221c191575918e907ad6c18ff' },
+  'darwin-x64': { ffmpeg: '69bddbabda0d4fbedf98fb01b6f964ee1c8346987ef7f6e70055b95339a78b17', ffprobe: '424ce5e9271085240e90bd27f9e3f0ce280d388ea4379a211f76b64fcc07ce33' },
+  'linux-arm': { ffmpeg: 'a3ff69b5959ed713e3316dbe2ad5b219e230312d7092339ac0be7e20d35dd2ee', ffprobe: '548df496bc5113e01658a84b5f504e3c59e00101c641416d146f21bbf6cc73fd' },
+  'linux-arm64': { ffmpeg: '115a825e246078acf820ea2afcaf1b3ff87f1b93f7035ecad38d3223cca55297', ffprobe: '9b63a1715f87c0c476dacf237a4adcb0bf26de29854b137dae4e79f69a98b624' },
+  'linux-ia32': { ffmpeg: '885628c27d97f5a7a74d2e8184d799ec7f1ef963b3fa755070f2cbfa28712e12', ffprobe: '9d3bae5ec09f1a492f6eac8e3e1de543738c8a87e622271b80a0c05fca8138da' },
+  'linux-x64': { ffmpeg: '6d0c625dbd3f604ed2618981ba6fee7e29678855ab741d654cfc9effb0226624', ffprobe: '576c21674291ec1948d507ea8ab0d78eb6621a0be8c6f1a6db0f50c5fcb1e0f9' },
+  'win32-ia32': { ffmpeg: '2d07c49c4b3a77e69cff16605411d3be14aec709ac96797f2206dc856d657700', ffprobe: 'a6526c753e607ab1780e1465fe64ed07374b5273958cb258ff5c5cc7a9fc8545' },
+  'win32-x64': { ffmpeg: 'c8abc49e7be62dde8e12972af373959e0076a7b8dc8040eb45978e0608f8781e', ffprobe: 'f28c4751e7367205267025aaf0fcfc921e34d9b7edaa46bd9c8abaf367fc9051' },
+}
+
+// Where npm unpacks the binary for this platform (read from the folder, not by loading the package's code).
+export function ffBinary(dir, name, plat = `${process.platform}-${process.arch}`) {
+  return join(dir, 'node_modules', `@${name}-installer`, plat, process.platform === 'win32' ? `${name}.exe` : name)
+}
+
+// Throws unless `file` is exactly the binary recorded for this platform.
+export function checkFf(file, name, plat = `${process.platform}-${process.arch}`) {
+  const want = FF_SHA256[plat]?.[name]
+  if (!want) throw new Error(`no checked ${name} for ${plat}: install ffmpeg and ffprobe on PATH to make films`)
+  if (!existsSync(file)) throw new Error(`${name} is missing at ${file}`)
+  const got = createHash('sha256').update(readFileSync(file)).digest('hex')
+  if (got !== want) throw new Error(`${name} at ${file} does not match its recorded checksum; not running it`)
+  return file
+}
+
 export function videoTools(dataDir, onStage = () => {}) {
   return (tools ||= (async () => {
     const dir = join(dataDir, 'video-tools'), bin = join(dir, 'bin')
     const hf = join(dir, 'node_modules', '.bin', 'hyperframes')
-    let ffmpeg = await which('ffmpeg'), ffprobe = await which('ffprobe')
-    if (!existsSync(hf) || ((!ffmpeg || !ffprobe) && !existsSync(join(bin, 'ffprobe')))) {
+    const ffmpeg = await which('ffmpeg'), ffprobe = await which('ffprobe')
+    const system = !!(ffmpeg && ffprobe) // both on PATH: those are used, nothing is fetched for them
+    const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
+    const install = pkgs => {
       onStage('setting up the video renderer (first time only)')
       mkdirSync(dir, { recursive: true })
       if (!existsSync(join(dir, 'package.json'))) writeFileSync(join(dir, 'package.json'), '{"private":true}\n')
-      const npm = [join(dirname(process.execPath), 'npm'), 'npm'].find(p => p === 'npm' || existsSync(p))
-      await run(npm, ['install', '--no-audit', '--no-fund', HYPERFRAMES, '@ffmpeg-installer/ffmpeg', '@ffprobe-installer/ffprobe'], { cwd: dir, timeout: 600000 })
+      return run(npm, ['install', '--no-audit', '--no-fund', '--save-exact', ...pkgs], { cwd: dir, timeout: 600000 })
     }
-    if (!ffmpeg || !ffprobe) {
-      const req = createRequire(join(dir, 'package.json'))
+    const checked = () => { try { for (const name of ['ffmpeg', 'ffprobe']) checkFf(ffBinary(dir, name), name); return true } catch { return false } }
+    if (!existsSync(hf)) await install(system ? [HYPERFRAMES] : [HYPERFRAMES, FF_PACKAGES.ffmpeg, FF_PACKAGES.ffprobe])
+    if (!system) {
+      // an earlier, unpinned copy (or a changed one) is replaced by the pinned packages, then checked again
+      if (!checked()) await install([FF_PACKAGES.ffmpeg, FF_PACKAGES.ffprobe])
       mkdirSync(bin, { recursive: true })
-      for (const [name, pkg] of [['ffmpeg', '@ffmpeg-installer/ffmpeg'], ['ffprobe', '@ffprobe-installer/ffprobe']]) {
-        const target = req(pkg).path, link = join(bin, name)
+      for (const name of ['ffmpeg', 'ffprobe']) {
+        const target = checkFf(ffBinary(dir, name), name), link = join(bin, name)
         chmodSync(target, 0o755) // npm may skip the package's own chmod script
         rmSync(link, { force: true })
         symlinkSync(target, link)
       }
     }
-    return { hf, path: `${bin}:${process.env.PATH || '/usr/bin:/bin'}`, ffmpeg: ffmpeg || join(bin, 'ffmpeg') }
+    return { hf, path: system ? (process.env.PATH || '/usr/bin:/bin') : `${bin}:${process.env.PATH || '/usr/bin:/bin'}`, ffmpeg: system ? ffmpeg : join(bin, 'ffmpeg') }
   })().catch(err => { tools = null; throw err }))
 }
 
-export function render({ tools: t, dir, out, quality = 'draft', onProgress = () => {}, signal }) {
+// One render at a time across every film (decision 0017, issue #450): HyperFrames drives a headless Chrome and ffmpeg per render,
+// so a second film waits its turn, told as onProgress(0, 'queued').
+export const renders = serialQueue(1)
+export function render(opts) {
+  return renders.run(() => renderNow(opts), () => opts.onProgress?.(0, 'queued'))
+}
+
+// A stop (signal) kills the render with its Chrome and ffmpeg, every process it started (stopTree)
+function renderNow({ tools: t, dir, out, quality = 'draft', onProgress = () => {}, signal }) {
   return new Promise((ok, fail) => {
-    const child = spawn(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { env: { ...process.env, PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' }, signal })
+    if (signal?.aborted) return fail(new Error('render stopped'))
+    const child = startProc(t.hf, ['render', dir, '-o', out, '-q', quality, '-f', String(FPS)], { stdout: 'pipe', stderr: 'pipe', env: { PATH: t.path, HYPERFRAMES_SKIP_SKILLS: '1', NO_COLOR: '1' } })
+    const halt = () => { stopTree(child) }
+    signal?.addEventListener('abort', halt, { once: true })
     let tail = ''
     const read = chunk => {
       const s = chunk.toString()
@@ -622,8 +681,12 @@ export function render({ tools: t, dir, out, quality = 'draft', onProgress = () 
     }
     child.stdout.on('data', read)
     child.stderr.on('data', read)
-    child.on('error', fail)
-    child.on('close', code => (code === 0 && existsSync(out) ? ok() : fail(new Error(`render failed (${code}): ${tail.replace(/\x1b\[[0-9;]*m/g, '').split('\n').filter(l => /error|✗|fail/i.test(l)).slice(-3).join(' ') || 'see the run folder'}`))))
+    child.on('error', err => { signal?.removeEventListener('abort', halt); fail(err) })
+    child.on('close', code => {
+      signal?.removeEventListener('abort', halt)
+      if (signal?.aborted) return fail(new Error('render stopped'))
+      code === 0 && existsSync(out) ? ok() : fail(new Error(`render failed (${code}): ${tail.replace(/\x1b\[[0-9;]*m/g, '').split('\n').filter(l => /error|✗|fail/i.test(l)).slice(-3).join(' ') || 'see the run folder'}`))
+    })
   })
 }
 

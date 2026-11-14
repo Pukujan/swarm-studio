@@ -1,0 +1,135 @@
+// @ts-check
+// The Studio's design tokens (tokens/*.tokens.json, W3C Design Tokens format) built with Style Dictionary into
+// web/tokens.css, the CSS variables every Studio stylesheet reads (docs/decisions/0012-design-tokens.md), and into
+// ui/src/theme.css, the Tailwind theme of the next UI (docs/decisions/0013-react-ui-coexists.md).
+//   npm run --prefix tools/dev tokens          writes both
+//   npm run --prefix tools/dev tokens:check    fails if either committed file is not a fresh build
+// Both are committed, so the plugin needs no build step when it is installed.
+//
+// A token's CSS variable is its own name (color.void is --void), not its path, so the names the stylesheets
+// already use stay as they are. Values are written exactly as they are in the token file: no colour or size
+// transform runs, and a reference ({color.text}) becomes var(--text), so the light theme's --text still reaches
+// --accent.
+import { readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import StyleDictionary from 'style-dictionary'
+
+const root = new URL('../../', import.meta.url)
+const path = (/** @type {string} */ p) => fileURLToPath(new URL(p, root))
+const OUT = 'web/tokens.css'
+const THEME = 'ui/src/theme.css'
+// a token group's Tailwind namespace: color.void is bg-void, text-void…; font.display is font-display; the rest
+// (channels, the radius) have no utility of their own and are read as var(--x)
+const TAILWIND = { color: 'color', font: 'font', easing: 'ease' }
+// Tailwind writes a theme variable onto :root once anything reads it (its preflight reads --font-mono), and the
+// Hermes host sets --font-mono and --font-sans, which the tokens read (font.mono is var(--font-mono, …)):
+// --font-mono: var(--mono) would loop. So font.mono is
+// font-monospace, and font.font, the default face, is no utility (ui/src/app.css sets it on the page).
+const TAILWIND_NAME = { 'font-mono': 'font-monospace', 'font-font': null }
+const LIGHT_SELECTORS = ['@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {', ':root[data-theme="light"] {']
+
+/** @param {import('style-dictionary/types').TransformedToken} t */
+const cssName = t => t.path[t.path.length - 1]
+/** @param {unknown} v */
+const cssValue = v => String(v).replace(/\{([^}]+)\}/g, (_, ref) => `var(--${ref.split('.').pop()})`)
+/** @param {string} s */
+const comment = s => `/* ${s.replace(/\*\//g, '* /')} */`
+
+// the declarations of one token file, in file order; a group's description comes before its first token
+/** @param {string} source @param {{ groups: boolean }} opts */
+async function declarations(source, { groups }) {
+  const raw = JSON.parse(readFileSync(path(source), 'utf8'))
+  const sd = new StyleDictionary({
+    source: [path(source)],
+    usesDtcg: true,
+    log: { verbosity: 'silent', warnings: 'error' },
+    platforms: { css: { transforms: [], files: [{ destination: 'tokens.css', format: 'swarm/declarations' }] } },
+    hooks: {
+      formats: {
+        'swarm/declarations': ({ dictionary }) => {
+          const seen = new Set(), lines = []
+          let group = ''
+          for (const t of dictionary.allTokens) {
+            const name = cssName(t)
+            if (seen.has(name)) throw new Error(`${source}: two tokens are both --${name}`)
+            seen.add(name)
+            const desc = raw[t.path[0]]?.$description
+            if (groups && t.path[0] !== group && desc) lines.push(`  ${comment(desc)}`)
+            group = t.path[0]
+            lines.push(`  --${name}: ${cssValue(t.original.$value)};${t.$description ? ` ${comment(t.$description)}` : ''}`)
+          }
+          return lines.join('\n')
+        }
+      }
+    }
+  })
+  const [file] = await sd.formatPlatform('css')
+  return { about: String(raw.$description || ''), body: String(file.output) }
+}
+
+// The Tailwind theme: every utility reads the token's own variable (bg-void is var(--void)), never a copy of its
+// value, so web/tokens.css's light theme and the Hermes host's fonts still reach it. `inline` keeps the var() in
+// the utility instead of resolving it where the theme is declared.
+export async function tailwindTheme() {
+  const source = 'tokens/studio.tokens.json'
+  const sd = new StyleDictionary({
+    source: [path(source)],
+    usesDtcg: true,
+    log: { verbosity: 'silent', warnings: 'error' },
+    platforms: { tailwind: { transforms: [], files: [{ destination: 'theme.css', format: 'swarm/tailwind' }] } },
+    hooks: {
+      formats: {
+        'swarm/tailwind': ({ dictionary }) => dictionary.allTokens
+          .filter(t => TAILWIND[t.path[0]])
+          .map(t => {
+            const key = `${TAILWIND[t.path[0]]}-${cssName(t)}`
+            const name = key in TAILWIND_NAME ? TAILWIND_NAME[key] : key
+            return name && `  --${name}: var(--${cssName(t)});`
+          })
+          .filter(Boolean)
+          .join('\n')
+      }
+    }
+  })
+  const [file] = await sd.formatPlatform('tailwind')
+  return [
+    `/* Generated by tools/dev/tokens.mjs from tokens/studio.tokens.json (built with Style Dictionary). Do not edit:`,
+    `   change the tokens, then run npm run --prefix tools/dev tokens (docs/decisions/0012-design-tokens.md, 0013).`,
+    `   The variables themselves come from web/tokens.css, which ui/src/app.css loads first. */`,
+    // Tailwind's own colours and fonts go: only the Studio's exist here (docs/ux/RULES.md, "Few colours"). Its
+    // spacing, type sizes and the rest stay.
+    `@theme inline {`, `  --color-*: initial;`, `  --font-*: initial;`, String(file.output), `}`,
+    ''
+  ].join('\n')
+}
+
+export async function build() {
+  const dark = await declarations('tokens/studio.tokens.json', { groups: true })
+  const light = await declarations('tokens/studio.light.tokens.json', { groups: false })
+  const lightBody = `  color-scheme: light;\n${light.body}`
+  return [
+    `/* Generated by tools/dev/tokens.mjs from tokens/*.tokens.json (W3C Design Tokens, built with Style Dictionary).`,
+    `   Do not edit: change the tokens, then run npm run --prefix tools/dev tokens (docs/decisions/0012-design-tokens.md).`,
+    `   ${dark.about} */`,
+    `:root {`, dark.body, `}`,
+    comment(light.about),
+    LIGHT_SELECTORS[0], lightBody, `} }`,
+    LIGHT_SELECTORS[1], lightBody, `}`,
+    `:root { color-scheme: dark; }`,
+    ''
+  ].join('\n')
+}
+
+for (const [out, css] of [[OUT, await build()], [THEME, await tailwindTheme()]]) {
+  if (process.argv.includes('--check')) {
+    const committed = readFileSync(path(out), 'utf8').replace(/\r\n/g, '\n')
+    if (committed !== css) {
+      console.error(`${out} is not a fresh build of tokens/*.tokens.json: run npm run --prefix tools/dev tokens and commit it`)
+      process.exit(1)
+    }
+    console.log(`${out} matches tokens/*.tokens.json`)
+  } else {
+    writeFileSync(path(out), css)
+    console.log(`wrote ${out}`)
+  }
+}

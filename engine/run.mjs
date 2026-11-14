@@ -3,13 +3,21 @@
 // Everything that happens is emitted as an event; the canvas only draws events.
 
 import { markStalled, streamChat } from './llm.mjs'
+import { pacer } from './pace.mjs'
 import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
-import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme } from './pagetype.mjs'
+import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme, namedColours, missingColours } from './pagetype.mjs'
 import { tidyFragment } from './tidy.mjs'
 import { fixSection } from './review.mjs'
+import { lintSection, forBuilder } from './lint/index.mjs'
+import { shortlist, catalogueLines, skillTexts, templateText } from './odlibrary.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
+import { cleanSeo, reviewSeo } from './seo.mjs'
+import { projectName } from './naming.mjs'
+import { checkBrand } from './brand.mjs'
 
 const NO_THINKING = { reasoning_effort: 'none', reasoning: { enabled: false } }
+// a follow-up that asks about the look, not only one that names a colour
+const LOOK_WORDS = /\b(colou?rs?|palette|theme|look|fonts?|typeface|typography|mood|vibe|styling|restyle)\b/i
 
 export const AGENT_NAMES = [
   // the crew: little alien workers with short, easy star-ish names
@@ -87,13 +95,15 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 16, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, brand = null, template = '', emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   // one page type per build, away from the last builds' types and colours
   // a follow-up (base: the project's last version) keeps that version's page type, theme and pages
   const type = PAGE_TYPES[base?.pageType] ? base.pageType : PAGE_TYPES[pageType] ? pageType : pickPageType(brief, recent.map(r => r.type).filter(Boolean))
-  const look = base ? null : pickLook(recent, Math.random, brief)
+  // a locked brand sheet (engine/brand.mjs) is the look: no variety pick, no fitting, its theme as it is
+  if (base || !brand?.theme?.vars) brand = null
+  const look = base || brand ? null : pickLook(recent, Math.random, brief)
   const plan = base
     ? { theme: base.theme, pages: base.pages.map(p => ({ ...p, layers: p.layers.map(l => ({ ...l })) })), shared: base.shared.map(l => ({ ...l })), pageType: type }
     : { theme: null, pages: [], shared: [], pageType: type }
@@ -108,7 +118,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     color: AGENT_COLORS[i]
   }))
 
-  emit('run:start', { brief, agents: pool, plannerModel, workerModel, ...(base ? { extend: true, ask, kept } : {}) })
+  emit('run:start', { brief, agents: pool, plannerModel, workerModel, ...(base ? { extend: true, ask, kept } : {}), ...(base && resume ? { resume: true } : {}) })
   // the last version as it stands, put back on the canvas as it was: nothing is rebuilt
   if (base) for (const c of base.carry) emit(c.type, c.data)
   else emit('pagetype', { key: type, name: PAGE_TYPES[type].name })
@@ -138,16 +148,25 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     queue.push({ kind: 'build', layer })
   }
 
+  // the page's search title, description and facts, written with its copy (engine/seo.mjs)
+  function addSeo(obj, page) {
+    const seo = cleanSeo(obj)
+    if (!Object.keys(seo).length) return
+    page.seo = { ...(page.seo || {}), ...seo }
+    emit('seo', { page: page.id, ...seo, by: 'planner' })
+  }
+
   function planPage(page, attempt = 1) {
-    const parser = lineParser(obj => addLayer(obj, page.id))
-    return new Promise(r => setTimeout(r, attempt === 1 ? (page.index - kept) * STAGGER_MS : 0))
+    const parser = lineParser(obj => (obj.type === 'seo' ? addSeo(obj, page) : addLayer(obj, page.id)))
+    return new Promise(r => setTimeout(r, attempt === 1 ? Math.max(0, page.index - kept) * STAGGER_MS : 0))
       .then(() => {
+        if (signal?.aborted) throw new Error('stopped')
         emit('page:planning', { page: page.id })
         return streamChat(provider, {
           trace: { kind: 'plan', page: page.id },
           model: plannerModel,
-          messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page }),
-          maxTokens: 3000,
+          messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page, skills: skillTexts(plan.skills), template: picked }),
+          maxTokens: 3400,
           temperature: 0.8,
           extra: NO_THINKING,
           signal,
@@ -165,13 +184,21 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         }
         emit('page:planned', { page: page.id, layers: page.layers.length, ms: elapsed() })
       })
-      .catch(err => emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }))
+      .catch(err => { if (!signal?.aborted) emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }) })
   }
 
+  // Open Design's library (engine/odlibrary.mjs): the skills that fit the brief, for the sitemap planner to choose
+  // from, and the template the person picked. The chosen skills' text and the template go to the page planners
+  const offered = base ? [] : shortlist(brief)
+  const picked = base ? '' : templateText(template)
+  if (picked) emit('template', { id: template })
   const onSitemap = obj => {
-    if (obj.type === 'theme') {
-      plan.theme = fitTheme(obj, look)
-      emit('theme', plan.theme)
+    if (obj.type === 'skills' && Array.isArray(obj.ids) && !plan.skills) {
+      plan.skills = obj.ids.filter(id => offered.some(e => e.id === id)).slice(0, 2)
+      if (plan.skills.length) emit('skills', { ids: plan.skills })
+    } else if (obj.type === 'theme') {
+      plan.theme = brand ? { ...brand.theme } : fitTheme(obj, look)
+      emit('theme', brand ? { ...plan.theme, by: 'brand' } : plan.theme)
     } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id) && !(maxPages && plan.pages.length >= maxPages)) {
       const page = { ...obj, index: plan.pages.length, layers: [] }
       plan.pages.push(page)
@@ -182,20 +209,21 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
   }
 
   // The sitemap is the one call everything waits on. A provider that stalls (no
-  // text for 20s) or returns nothing usable gets one more try.
+  // text for 20s) or returns nothing usable gets one more try. Hermes's ctx.llm sends the
+  // whole answer at once (engine/hermesllm.mjs), so through Hermes the first text may take longer.
   async function sitemap(attempt = 0) {
     const parser = lineParser(onSitemap)
     const stall = new AbortController()
     const onAbort = () => stall.abort()
     signal?.addEventListener('abort', onAbort)
-    let timer = setTimeout(() => stall.abort(), 20000)
+    let timer = setTimeout(() => stall.abort(), provider?.hermes ? 180000 : 20000)
     try {
       await streamChat(provider, {
         trace: { kind: 'sitemap' },
         model: plannerModel,
         messages: [
           { role: 'system', content: SITEMAP_SYSTEM },
-          { role: 'user', content: `Brief: ${brief}\n\n${lookBrief(type, recent, look)}` }
+          { role: 'user', content: [brand ? `Brief: ${brief}\n\n${lookBrief(type, [], null)}\n${brand.brief || ''}` : `Brief: ${brief}\n\n${lookBrief(type, recent, look)}`, picked, offered.length ? `Skills you may name (id: name, kind, what it is for):\n${catalogueLines(offered)}` : ''].filter(Boolean).join('\n\n') }
         ],
         maxTokens: 2000,
         temperature: 0.8,
@@ -262,24 +290,89 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     }
   }
 
-  const planning = (base ? extendPlan() : sitemap())
+  // The look follows the words. A follow-up that asks for another look (its colours, type or mood)
+  // gets a new theme for the whole project: every page reads the theme's variables, so every page
+  // changes. A new build whose theme lost the colours the brief names gets one more try. The check
+  // (missingColours) is the reviewer's: what is still missing after that is said in theme:check.
+  async function themeStep() {
+    if (resume || signal?.aborted) return
+    // the brand sheet's look: set when the planner wrote none, then checked against what was locked
+    if (brand) {
+      if (!plan.theme?.vars) { plan.theme = { ...brand.theme }; emit('theme', { ...plan.theme, by: 'brand' }) }
+      emit('theme:check', { named: namedColours(brief), missing: missingColours(brief, plan.theme.vars), brand: checkBrand(plan.theme, brand.theme) })
+      return
+    }
+    if (!plan.theme?.vars) return
+    const words = base ? ask : brief
+    const asksLook = base && (LOOK_WORDS.test(ask) || namedColours(ask).length > 0)
+    const missing = missingColours(words, plan.theme.vars)
+    if (base ? !asksLook : !missing.length) return
+    const shape = '{"type":"theme","name":"<2-3 word style name>","direction":"<one sentence visual direction>","vars":{"--background":"#hex","--foreground":"#hex","--primary":"#hex","--primary-foreground":"#hex","--muted":"#hex","--muted-foreground":"#hex","--border":"#hex","--accent":"#hex","--card":"#hex"},"fonts":{"heading":"<Google Font family>","body":"<Google Font family>"},"radius":"<e.g. 14px>"}'
+    const ask1 = need => [
+      `The website's theme now: ${JSON.stringify({ name: plan.theme.name, direction: plan.theme.direction, vars: plan.theme.vars, fonts: plan.theme.fonts, radius: plan.theme.radius })}`,
+      `What the person asked for: ${String(words).slice(0, 2000)}`,
+      need.length ? `The theme must use these colours they named: ${need.join(', ')}.` : '',
+      base ? 'If what they asked does not change the colours, type or mood, reply {"keep":true}.' : ''
+    ].filter(Boolean).join('\n\n')
+    let theme = plan.theme
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const need = missingColours(words, theme.vars)
+      if (attempt && !need.length) break
+      const out = await streamChat(provider, {
+        trace: { kind: 'theme' }, model: plannerModel, maxTokens: 500, temperature: 0.4, extra: NO_THINKING, signal,
+        messages: [
+          { role: 'system', content: `You set a website's theme from what the person asked. Reply with one JSON line and nothing else, in this shape:\n${shape}\nKeep every key. Text stays readable on its background and buttons. Use the colours the person named; never one they said they do not want.` },
+          { role: 'user', content: ask1(need) }
+        ]
+      })
+      const text = String(out?.text || '')
+      let j = null
+      try { j = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) } catch {}
+      if (!j || j.keep) break
+      const vars = Object.fromEntries(Object.entries(j.vars || {}).filter(([k, v]) => /^--[\w-]+$/.test(k) && /^#[0-9a-f]{3,8}$/i.test(String(v))))
+      if (!vars['--background'] || !vars['--primary']) continue
+      theme = { ...theme, name: j.name || theme.name, direction: j.direction || theme.direction, vars: { ...theme.vars, ...vars }, ...(j.fonts?.heading ? { fonts: j.fonts } : {}), ...(j.radius ? { radius: j.radius } : {}) }
+      delete theme.fitted
+    }
+    if (signal?.aborted || theme === plan.theme) return
+    plan.theme = theme
+    emit('theme', { ...theme, by: base ? 'ask' : 'check' })
+    const left = missingColours(words, theme.vars)
+    emit('theme:check', { named: namedColours(words), missing: left })
+  }
+
+  // Resume (a build that was stopped): no planner call; the sections it did not finish are built
+  // now, and a page stopped before it was planned is planned. Everything finished stays as it is.
+  async function resumePlan() {
+    for (const layer of [...plan.shared, ...plan.pages.flatMap(p => p.layers)]) {
+      if (layer.html) continue
+      stats.planned++
+      queue.push({ kind: 'build', layer })
+    }
+  }
+  const unplanned = () => resume ? plan.pages.filter(p => !p.layers.length) : []
+  const first = base ? (resume ? resumePlan() : extendPlan()) : sitemap()
+  const theming = first.then(themeStep, () => {}).catch(err => { if (!signal?.aborted) emit('error', { where: 'theme', message: String(err.message || err) }) })
+  const planning = first
     .then(() => {
       emit('sitemap:done', { ms: elapsed(), pages: plan.pages.length })
       // page planners need the whole page list (for links), so they start here
-      for (const page of plan.pages.slice(kept)) pagePlanners.push(planPage(page))
+      for (const page of [...unplanned(), ...plan.pages.slice(kept)]) pagePlanners.push(planPage(page))
       return Promise.all(pagePlanners)
     })
     .then(() => emit('plan:done', { ms: elapsed(), pages: plan.pages.length, layers: stats.planned }))
     .catch(err => {
-      emit('error', { where: 'planner', message: String(err.message || err) })
+      if (!signal?.aborted) emit('error', { where: 'planner', message: String(err.message || err) })
     })
     .finally(() => queue.close())
 
   // --- workers: each agent loops over the queue until the plan is finished and drained
   async function work(agent) {
     for (;;) {
+      // stopped: no more sections are taken
+      if (signal?.aborted) break
       const task = await queue.next()
-      if (!task) break
+      if (!task || signal?.aborted) break
       await (task.kind === 'fix' ? fixLayer(agent, task.layer, task.ask) : buildLayer(agent, task.layer))
     }
     emit('agent:idle', { agent: agent.id, reason: 'done' })
@@ -291,6 +384,9 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     const started = performance.now()
     let text = ''
     let saidCount = 0
+    // a section that arrives whole (Hermes's model call does not stream) is played out, so the agent types,
+    // draws and links on the canvas as it does with a streamed one (engine/pace.mjs)
+    const play = pacer(d => emit('layer:delta', { page: layer.page, layer: layer.id, agent: agent.id, text: d }), { signal })
     try {
       await streamChat(workerProvider, {
         trace: { kind: 'build', agent: agent.id, page: layer.page, layer: layer.id },
@@ -302,13 +398,14 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         signal,
         onDelta: d => {
           text += d
-          emit('layer:delta', { page: layer.page, layer: layer.id, agent: agent.id, text: d })
+          play.push(d)
           const says = [...text.matchAll(SAY_RE)]
           for (; saidCount < says.length; saidCount++) {
             emit('agent:say', { agent: agent.id, layer: layer.id, text: says[saidCount][1].trim() })
           }
         }
       })
+      await play.done()
       stats.done++
       // a builder sometimes writes a sentence before its markup, or runs out of
       // room mid-grid; an unclosed div pulls every later section into it
@@ -323,10 +420,36 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         planned: stats.planned,
         html: text
       })
+      // the slop linter (engine/lint, decision 0016) reads every section: model-free, so it costs no time
+      // to speak of. What it must have fixed (P0) goes back to this builder for one pass; the rest is
+      // the reviewer's to see
+      const found = lintSection(text, { content: layer.content, tokens: plan.theme?.system?.tokens })
+      if (found.length) emit('layer:lint', { page: layer.page, layer: layer.id, agent: agent.id, findings: found.map(({ severity, id, message }) => ({ severity, id, message })) })
+      const must = found.filter(f => f.severity === 'P0')
+      if (must.length && !signal?.aborted) await lintFix(agent, layer, must)
     } catch (err) {
+      // stopped: the section is left unbuilt (Resume builds it), not failed
+      if (signal?.aborted) return
       stats.failed++
       emit('layer:failed', { page: layer.page, layer: layer.id, agent: agent.id, message: String(err.message || err) })
     }
+  }
+
+  // the builder's fix pass for what the linter flagged P0: streamed back like a review fix. The rewrite is
+  // kept when it breaks fewer of those rules; when it is cut off, stopped or no better, the first one stays
+  async function lintFix(agent, layer, must) {
+    const page = layer.page, first = layer.html, started = performance.now()
+    emit('layer:reset', { page, layer: layer.id, agent: agent.id })
+    const play = pacer(d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d }), { signal })
+    try {
+      const html = tidyFragment(await fixSection({
+        provider: workerProvider, model: workerModel, theme: plan.theme || {}, html: first, role: layer.role || layer.id, ...forBuilder(must), images, kind: 'lint-fix',
+        signal, onDelta: play.push
+      }))
+      await play.done()
+      if (lintSection(html, { content: layer.content }).filter(f => f.severity === 'P0').length < must.length) layer.html = html
+    } catch { /* the first one stays */ }
+    emit('layer:done', { page, layer: layer.id, agent: agent.id, ms: Math.round(performance.now() - started), done: stats.done, planned: stats.planned, html: layer.html, fixed: true, lint: must.map(f => f.id) })
   }
 
   // a finished section rewritten for a follow-up (the /fix path): cleared, streamed back,
@@ -336,22 +459,47 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     const started = performance.now()
     emit('agent:assign', { agent: agent.id, page, layer: layer.id, role: layer.role, fixing: true })
     emit('layer:reset', { page, layer: layer.id, agent: agent.id })
+    const play = pacer(d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d }), { signal })
     try {
       const html = await fixSection({
         provider: workerProvider, model: workerModel, theme: plan.theme || {}, html: layer.html, role: layer.role || layer.id, comment, images,
-        signal, onDelta: d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d })
+        signal, onDelta: play.push
       })
+      await play.done()
       stats.done++
       layer.html = tidyFragment(html)
       emit('layer:done', { page, layer: layer.id, agent: agent.id, ms: Math.round(performance.now() - started), done: stats.done, planned: stats.planned, html: layer.html, fixed: true })
     } catch (err) {
       stats.failed++
-      emit('layer:failed', { page, layer: layer.id, agent: agent.id, message: String(err.message || err), keep: layer.html })
+      emit('layer:failed', { page, layer: layer.id, agent: agent.id, message: signal?.aborted ? 'stopped' : String(err.message || err), keep: layer.html })
     }
   }
 
   await Promise.all([planning, ...pool.map(work)])
-  const result = { ms: elapsed(), ...stats, pages: plan.pages.length, ...(base ? { extend: true, kept, added: added.map(p => ({ id: p.id, title: p.title })), changed: changed.map(c => c.layer.id) } : {}) }
+  // the reviewer checks every page's title, description, headings and alt text and fixes
+  // what fails, without another model round (engine/seo.mjs)
+  if (!signal?.aborted && plan.pages.some(p => p.layers.some(l => l.html))) {
+    try {
+      const shared = plan.shared.map(l => l.html || '').join('\n')
+      const review = reviewSeo(plan.pages.map(p => ({ id: p.id, title: p.title, purpose: p.purpose, seo: p.seo, html: `${shared}\n${p.layers.map(l => l.html || '').join('\n')}` })), { brand: projectName({ brief }) })
+      for (const id of review.changed) {
+        const page = plan.pages.find(p => p.id === id), s = review.seo.get(id)
+        page.seo = s
+        emit('seo', { page: id, title: s.title, description: s.description, by: 'reviewer' })
+      }
+      emit('seo:review', { pages: plan.pages.length, issues: review.issues.length, fixed: review.notes.map(n => n.text).slice(0, 24) })
+    } catch (err) {
+      emit('error', { where: 'seo', message: String(err.message || err) })
+    }
+  }
+  await theming
+  // stopped: the last word is run:stopped (what was built is kept); no run:done, so nothing more starts
+  if (signal?.aborted) {
+    const result = { ms: elapsed(), ...stats, pages: plan.pages.length, stopped: true }
+    emit('run:stopped', result)
+    return { plan, result }
+  }
+  const result = { ms: elapsed(), ...stats, pages: plan.pages.length, ...(base ? { extend: true, kept, added: added.map(p => ({ id: p.id, title: p.title })), changed: changed.map(c => c.layer.id) } : {}), ...(base && resume ? { resume: true } : {}) }
   emit('run:done', result)
   return { plan, result }
 }

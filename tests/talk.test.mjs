@@ -24,6 +24,12 @@ test('Talk reads only the app, never outside it or its dependencies', () => {
   assert.match(readAppFile(dir, '../../etc/passwd'), /outside the app/)
   assert.deepEqual(parseAction('sure: {"tool":"files"}'), { tool: 'files' })
   assert.deepEqual(parseAction('It is going well.'), { say: 'It is going well.' })
+  // prose, then several tool calls at once: the first call is the action (the loop asks again)
+  assert.deepEqual(parseAction('I will check both first.\n{"tool":"read","path":"a.gd"}\n{"tool":"read","path":"b.gd"}'), { tool: 'read', path: 'a.gd' })
+  // a model's own tool-call markup is read as the same action, and never shown as an answer
+  assert.deepEqual(parseAction('<｜DSML｜calls> <｜DSML｜invoke name="read"> <｜DSML｜parameter name="path" string="true">ports/kumo.gd</｜DSML｜parameter> </｜DSML｜invoke> </｜DSML｜calls>'), { tool: 'read', path: 'ports/kumo.gd' })
+  assert.deepEqual(parseAction('Some words <｜DSML｜calls> and nothing else'), { say: 'Some words and nothing else' })
+  assert.deepEqual(parseAction('{"say":"A brace } in text is fine.","now":false}'), { say: 'A brace } in text is fine.', now: false })
 })
 
 test('Talk reads the code before it answers, and shows only real media', async () => {

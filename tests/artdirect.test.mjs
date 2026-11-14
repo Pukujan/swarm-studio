@@ -112,6 +112,19 @@ test('a key-colour problem swaps the key for the second try', async () => {
   assert.equal(keyOf(swapKey(swapKey(sheetLayout()))), 'magenta')
   assert.match(swapKey('A figure'), /#00FF00/)
   assert.doesNotMatch(swapKey(spriteGround()), /\bmagenta\b/)
+  // the key can be named (the one measured from the picture), and blue is the third key
+  assert.equal(keyOf(swapKey(spriteGround(), 'blue')), 'blue')
+  assert.match(swapKey(spriteGround(), 'blue'), /solid blue \(#0000FF\).*no blue anywhere/)
+  assert.equal(keyOf(swapKey(swapKey(spriteGround(), 'blue'))), 'magenta')
+  // only the key's own words change: the figure keeps its green cloak
+  const cloak = swapKey(`A ranger in a green cloak. ${swapKey(spriteGround())}`, 'magenta')
+  assert.match(cloak, /green cloak/)
+  assert.equal(keyOf(cloak), 'magenta')
+  assert.doesNotMatch(cloak, /no green|green \(/)
+  // a second try on another key is said once, not fought by the prompt's own key
+  const { promptFor } = await import('../engine/artdirect.mjs')
+  const again = promptFor(swapKey(spriteGround(), 'blue'), {}, { aspect: 'square', cutout: true })
+  assert.doesNotMatch(again, /#FF00FF|#00FF00/)
 })
 
 test('a backdrop with no people says so up front and at the end, without the style\'s "moment"', async () => {
@@ -120,4 +133,20 @@ test('a backdrop with no people says so up front and at the end, without the sty
   assert.ok(p.startsWith(p.split(EMPTY_PLACE)[0]) && p.split(EMPTY_PLACE).length === 3)
   assert.doesNotMatch(p, /slice-of-life moment|Original characters/)
   assert.doesNotMatch(promptFor('A girl reading on a rooftop', STYLES['anime-cel']), /An empty place/)
+})
+
+test('a kit sheet says its six pieces and its layout; an effect sheet is light on black', async () => {
+  const { kitPrompt, kitMessages } = await import('../engine/artdirect.mjs')
+  const { artList } = await import('../engine/game.mjs')
+  const all = artList({ title: 'T', hero: 'Mika, a courier', setting: 'a rainy city of rooftops', view: 'side' })
+  const ui = all.find(a => a.id === 'kit-ui'), hit = all.find(a => a.id === 'fx-hit')
+  const guide = { guide: 'Cel-shaded anime, clean line art, flat colours. A character moment, cinematic framing.' }
+  const p = kitPrompt(ui, guide, { layout: ui.layout })
+  assert.match(p, /exactly six separate objects/); assert.match(p, /dialogue panel frame/); assert.match(p, /#FF00FF/); assert.match(p, /Cel-shaded anime/)
+  assert.doesNotMatch(p, /character moment|cinematic framing/)
+  assert.ok(p.length <= 1400)
+  const f = kitPrompt(hit, guide, { layout: hit.layout, strict: 'a frame is cut off' })
+  assert.match(f, /six frames of ONE effect/); assert.match(f, /pure black/); assert.match(f, /second try/)
+  assert.match(kitMessages('UI kit', 'data:x', ui.frames)[0].content, /leftover background/)
+  assert.doesNotMatch(kitMessages('hit effect', 'data:x', hit.frames, true)[0].content, /leftover background/)
 })

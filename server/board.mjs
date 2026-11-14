@@ -15,6 +15,21 @@ export function runBoard(id, events, runsDir, live = false) {
   const style = events.findLast(e => e.type === 'art')?.name || [...latest.values()].find(e => e.style)?.style || null
   const pics = [...latest.values()].map(e => ({ src: e.src, page: e.page, layer: e.layer, gen: e.gen, name: String(e.layer || 'picture').replace(new RegExp(`^${String(e.page || '').replace(/[^\w-]/g, '')}-`), '').replace(/[-_]+/g, ' '), used: titleOf(e.page), hero: art.isHero({ layer: e.layer }), style: e.style || style }))
   for (const p of pages) p.cover = pics.find(a => a.page === p.id && a.hero)?.src || pics.find(a => a.page === p.id)?.src || null
+  // each page's planned sections in order, with their planned height and whether each is built yet:
+  // the Overview draws a page from these until its picture comes (spec 36)
+  const plan = new Map()
+  for (const e of events) {
+    if (e.type === 'layer:plan' && e.page && e.page !== '*' && e.id) {
+      const list = plan.get(e.page) || []
+      const at = list.find(l => l.id === e.id)
+      const h = Math.max(60, Math.min(4000, Number(e.height) || 480))
+      if (at) Object.assign(at, { role: String(e.role || at.role), h })
+      else list.push({ id: String(e.id), role: String(e.role || ''), h, done: false })
+      plan.set(e.page, list)
+    }
+    if (e.type === 'layer:done' && e.page) for (const l of plan.get(e.page) || []) if (l.id === e.layer) l.done = true
+  }
+  for (const p of pages) p.plan = plan.get(p.id) || []
   const video = events.findLast(e => e.type === 'video:done')
   // tall: the 9:16 phone cut of the same film, when the run made one
   const tall = video && existsSync(join(runsDir, id, 'video', 'promo-tall.mp4')) ? `/video/${id}/promo-tall.mp4` : null

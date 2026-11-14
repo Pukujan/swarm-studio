@@ -5,13 +5,15 @@
 // play-tested in the browser like any other game, so the Studio still shows a
 // playable slice after every stage.
 
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
-import { stagesFor, viewOf, skillText } from './game.mjs'
+import { stagesFor, viewOf, skillText, kitBrief } from './game.mjs'
 import { portDir, godotBin, godotErrors } from './port.mjs'
+import { probeBrief } from './playcheck.mjs'
+import { assembleStarter, crewBrief, starterById } from './starters.mjs'
 
 export const GODOT_SKILLS = ['gamedev/godot-gdscript', 'gamedev/godot-nodes-scenes', 'gamedev/godot-2d-movement', 'gamedev/godot-signals-groups']
 
@@ -20,7 +22,7 @@ export const webBuild = dir => join(portDir(dir, 'godot'), 'build', 'web')
 
 // Godot-first when the spec (or the owner's answer) names Godot and a binary is found
 export function godotFirst(spec, env = process.env) {
-  const s = String(spec?.target ?? spec?.answers?.target ?? spec?.engine ?? '').toLowerCase()
+  const s = String(spec?.target ?? spec?.answers?.target ?? spec?.engine ?? spec?.starter?.engine ?? '').toLowerCase()
   return s.includes('godot') && !!godotBin(env)
 }
 
@@ -68,11 +70,22 @@ html/experimental_virtual_keyboard=false
 progressive_web_app/enabled=false
 `
 
-// The project skeleton and the painted art: project.godot (only when missing),
-// the Web preset (always ours), the app's public/art/ copied into assets/art/.
+// The starter the plan locked (docs/specs/38-game-starters.md): its Godot project and add-ons,
+// copied once into ports/godot/ before anything else (never over a file already there).
+// → the starter's id, or null when the spec has none
+export function seedStarter(dir, spec) {
+  const id = spec?.starter?.template?.id
+  if (!id || !starterById(id)) return null
+  assembleStarter(id, portDir(dir, 'godot'))
+  return id
+}
+
+// The project skeleton and the painted art: the locked starter first, then project.godot
+// (only when missing), the Web preset (always ours), the app's public/art/ copied into assets/art/.
 // → the art file names copied
 export function seedGodot(dir, spec) {
   const root = portDir(dir, 'godot')
+  seedStarter(dir, spec)
   for (const d of ['scenes', 'scripts', 'assets/art']) mkdirSync(join(root, d), { recursive: true })
   if (!existsSync(join(root, 'project.godot'))) writeFileSync(join(root, 'project.godot'), PROJECT(spec?.title || spec?.name))
   writeFileSync(join(root, 'export_presets.cfg'), WEB_PRESET)
@@ -115,10 +128,10 @@ export function godotArtBrief(files = [], view = 'side') {
   if (!files.length) return '- No painted art this time: draw every portrait, icon and backdrop with Godot nodes (ColorRect, Polygon2D, _draw()).'
   return `- Painted art is in res://assets/art/ (already imported). Load each with load("res://assets/art/<file>") and use it as named; if one fails to load, draw a stand-in so the game never breaks:
 ${files.map(f => f.kind === 'sheet' && f.cell
-    ? `  - ${f.file.replace(/^art\//, '')}: ${f.what}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px, played at ${f.fps} fps${f.loop ? ', looping' : ', once per move'}. The frames: ${f.frames}. Build its SpriteFrames in code: one AtlasTexture per frame (region = Rect2(n*${f.cell[0]}, 0, ${f.cell[0]}, ${f.cell[1]})), into an AnimatedSprite2D.`
+    ? `  - ${f.file.replace(/^art\//, '')}: ${f.what}${f.blend === 'add' ? ' (light on black: CanvasItemMaterial with blend_mode add)' : ''}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px, played at ${f.fps} fps${f.loop ? ', looping' : ', once per move'}. The frames: ${f.frames}. Build its SpriteFrames in code: one AtlasTexture per frame (region = Rect2(n*${f.cell[0]}, 0, ${f.cell[0]}, ${f.cell[1]})), into an AnimatedSprite2D.`
     : `  - ${f.file.replace(/^art\//, '')}: ${f.what}`).join('\n')}
   Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others the enemies or hazards they are named for. The hero is big and easy to read: at least a sixth of the 720 px screen height (about 130–160 px tall); enemies sized to match as solid filled figures, never thin outlines; the boss about twice the hero. Give every actor a dark outline or rim light (a small outline shader on the sprite, or a dark copy behind it offset 3 px) so it stands off the painting.
-  Backdrops (place-*, room-*) are scenery, not the play layer: ${view === 'side' ? 'a ParallaxBackground with two or more ParallaxLayers scrolling slower than the camera' : 'fill the screen behind the action'}, pushed back (modulate darker and cooler, lower contrast) so the actors and platforms read first. Platforms, ledges and obstacles are solid, opaque shapes with a bright top edge, clearly separate from the painting. Weather and particles (rain, sparks) go behind the actors (z_index below them), never over them. Portraits sit beside the dialogue box; item icons on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
+  Backdrops (place-*, room-*) are scenery, not the play layer: ${view === 'side' ? 'a ParallaxBackground with two or more ParallaxLayers scrolling slower than the camera' : 'fill the screen behind the action'}, pushed back (modulate darker and cooler, lower contrast) so the actors and platforms read first. Platforms, ledges and obstacles are solid, opaque shapes with a bright top edge, clearly separate from the painting. Weather and particles (rain, sparks) go behind the actors (z_index below them), never over them. Portraits sit beside the dialogue box; item icons on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${kitBrief(files)}${files.some(f => /^art\/sheet-/.test(f.file)) ? `
   The hero's sheets (sheet-hero-*) are its animation: play the looping one while it moves and the move frames for each action (jump, fall, slide, hurt, land), scaled to the hero's size, and keep sprite-hero only for stills. Flip it (flip_h) to face left.` : ''}`
 }
 
@@ -135,6 +148,13 @@ export const GODOT_RULES = `- Godot 4 (4.7) with GDScript 2: typed variables, @e
 
 const STEP_NOTE = 'Godot is run headless on the project after this turn (import, then the main scene for a few hundred frames); its script and parse errors come back as the next turn\'s first job, so keep the scripts parse-clean.'
 
+// the locked starter's crew brief (starters/<id>/CREW.md), when the game has one
+function starterBrief(spec) {
+  const id = spec?.starter?.template?.id
+  const text = id ? crewBrief(id) : ''
+  return text ? `\n\nThis game starts from a starter that is already in the project; build on it, never around it:\n${text.slice(0, 6000)}` : ''
+}
+
 // One stage of a Godot-first big game: the same stages as the web build, written in Godot
 export function godotStagePrompt(spec, i, { art = [], failed = '', note = '' } = {}) {
   const stages = stagesFor(spec)
@@ -147,6 +167,7 @@ export function godotStagePrompt(spec, i, { art = [], failed = '', note = '' } =
 Do only this slice; later slices add the rest, so leave clean places for them (a data table, a dialogue autoload) instead of building them now.
 ${godotArtBrief(art, viewOf(spec))}
 ${GODOT_RULES}
+${probeBrief(spec, { godot: true })}${starterBrief(spec)}
 - ${STEP_NOTE}
 
 Finish with the project opening in Godot with no errors and the game playable from the title.`
@@ -182,14 +203,22 @@ export function unpersist(file) {
   } catch {}
 }
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.png': 'image/png', '.json': 'application/json', '.css': 'text/css' }
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.pck': 'application/octet-stream', '.png': 'image/png', '.json': 'application/json', '.css': 'text/css',
+  // a built app's files too (engine/appjob.mjs serveBuilt)
+  '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.ico': 'image/x-icon', '.avif': 'image/avif',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml', '.webmanifest': 'application/manifest+json',
+  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.webm': 'video/webm', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json' }
 
 // A static server for the export, with CORS (the Studio shows games in a sandboxed frame,
 // origin null, and the engine fetches its .pck and .wasm). → { url, close }
-export function serveStatic(root, port) {
+// spa: an address with no file of its own is the app's index.html (a built app's client-side routes)
+export function serveStatic(root, port, { spa = false } = {}) {
   const srv = createServer((req, res) => {
     const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '')
-    const file = join(root, path || 'index.html')
+    let file = join(root, path || 'index.html')
+    if (spa && file.startsWith(root) && !extname(file) && !existsSync(file)) file = join(root, 'index.html')
+    // a folder is its own index.html (a game brought in may open on web/): never read as a file
+    try { if (file.startsWith(root) && statSync(file).isDirectory()) file = join(file, 'index.html') } catch {}
     if (!file.startsWith(root) || !existsSync(file)) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end('not found') }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-store' })
     res.end(readFileSync(file))

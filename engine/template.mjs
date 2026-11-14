@@ -27,6 +27,8 @@ export function planTemplate(plan, { id = `t-${randomBytes(4).toString('hex')}`,
     idea: plan.idea || '', answers: copy(plan.answers), cards: copy(plan.cards), systems: copy(plan.systems),
     style: { name: plan.style?.name || '', locked: !!plan.style?.locked, picks: plan.style?.picks || '' },
     settings: copy(plan.settings || SETTINGS),
+    // the plan's shape (genre family, 2D or 3D, engine) travels with it; a template made before shapes has none
+    ...(plan.shape ? { shape: copy(plan.shape), art: copy(plan.art), engine: copy(plan.engine) } : {}),
     sheets, parts,
     created: new Date().toISOString()
   }
@@ -42,7 +44,11 @@ export function remixPlan(t, { has = () => false } = {}) {
     cards: copy(t.cards),
     systems: copy(t.systems) || base.systems,
     style: { name: t.style?.name || base.style.name, locked: !!t.style?.locked, picks: t.style?.picks || '', refs: [] },
-    settings: { ...SETTINGS, ...(t.settings || {}) }
+    settings: { ...SETTINGS, ...(t.settings || {}) },
+    // a template from before plan shapes (the built-in ARES) keeps the shape it was made with: no shape, 3D by its look
+    shape: t.shape ? copy(t.shape) : undefined,
+    art: t.shape ? copy(t.art) : undefined,
+    engine: t.engine ? copy(t.engine) : base.engine
   }
   // the picked cells come along as finished sheets, so the style and the mocks start from them
   plan.sheets = (t.sheets || []).filter(s => has(s.file)).map((s, i) => ({ id: `s-r${i}${randomBytes(3).toString('hex')}`, kind: s.kind, grid: s.grid, picks: s.picks, notes: s.notes, file: s.file, state: 'done', carried: true }))

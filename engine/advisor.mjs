@@ -104,6 +104,19 @@ export function planBrief(plan) {
   const screens = plan.screens.map(s => `- ${s.name} at ${s.path}${s.for ? ` (for ${s.for})` : ''}: ${s.what}`).join('\n')
   const data = (plan.data || []).map(d => `- ${d.name}: ${d.fields.join(', ')}`).join('\n')
   const roles = (plan.roles || []).map(r => `- ${r.name}: ${r.can}`).join('\n')
+  // a plan locked in the App kit (engine/appkit.mjs): its screens are the whole app, public and admin,
+  // in the order a person meets them, with the arrows between them and what it connects to
+  if (plan.kit) {
+    const flow = (plan.flow || []).map(f => `- ${f}`).join('\n')
+    const conns = (plan.connects || []).map(c => `- ${c.name}${c.choice ? ` (${c.choice})` : ''}: ${c.how}`).join('\n')
+    const start = { screens: 'the main screen', signup: 'the sign-up flow', data: 'the data and its admin screens' }[plan.start]
+    return `The owner locked this app plan. Build all of it, exactly these screens at these paths; it is checked against this plan afterwards.
+${plan.summary ? `\n${plan.summary}\n` : ''}${roles ? `\nWho uses it:\n${roles}\n` : ''}${data ? `\nWhat it keeps (typed records in the server store, each with an id and created date):\n${data}\n` : ''}
+Screens (path, who it is for, what it does). Screens for an admin sit under /admin behind the admin's sign-in (or a passcode from the ADMIN_PASSCODE env var, "admin" in development, when there is no sign-in), with a shared sidebar layout in the site's theme:
+${screens}
+${flow ? `\nHow the screens lead to each other (a button or link for each arrow):\n${flow}\n` : ''}${conns ? `\nWhat it connects to (keys are read from process.env in server code only, never sent to the browser):\n${conns}\n` : ''}${start ? `\nBuild ${start} first and make it work end to end before the rest.\n` : ''}
+Every form writes into these records, and the screens read and change them through server routes.`
+  }
   return `The owner approved this app plan. Build all of it.
 ${plan.summary ? `\n${plan.summary}\n` : ''}${roles ? `\nWho uses it:\n${roles}\n` : ''}${data ? `\nWhat it stores (typed records in the server store, each with an id and created date):\n${data}\n` : ''}
 Screens behind the site, under /admin, not linked from the public nav, with a shared sidebar layout in the site's theme (shadcn Sidebar, Table, Card, Calendar, Dialog), and a simple passcode gate on /admin read from the ADMIN_PASSCODE env var (default "admin" in development):

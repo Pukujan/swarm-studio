@@ -14,6 +14,7 @@ import { idleItems, keyItems } from './idle.mjs'
 import { streamChat } from './llm.mjs'
 import { castPrompt, cleanCast } from './cast.mjs'
 import { workshopMarkdown } from './workshop.mjs'
+import { probeBrief } from './playcheck.mjs'
 
 const skillsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'gameskills')
 
@@ -78,7 +79,7 @@ Answer with JSON only:
 // picked (and their Shape it picks, which are written in later), names the parts that kind of
 // game needs, and plans its own build slices, each one playable, so the person sees every
 // slice and the bots play test it before the next one starts.
-const BIG_SPEC_RULES = `You design a showcase browser game, bigger than a mini game: several stages or levels, real progression and an ending. A coding agent builds it in slices (one engine call each, the game playable after every slice) and its art (a title picture, backdrops, sprites, icons, portraits) is painted from your spec, so be concrete.
+const BIG_SPEC_RULES = `You design a showcase browser game, bigger than a mini game: several stages or levels, real progression and an ending. A coding agent builds it in slices (one engine call each, the game playable after every slice) and its art (a title picture, backdrops, sprites, icons, portraits, props) is painted from your spec, so be concrete.
 
 Follow the person's answers. The genre, goal, controls, look and length are theirs: never turn their game into another genre (a runner stays a runner, a puzzle game stays a puzzle game) and never add systems their answers do not call for (no hub, weapons, boons, rooms or boss unless the answers or the genre need them). Their idea is the story.
 
@@ -86,10 +87,10 @@ Originality is required. If they name a game they like, take only its genre, pac
 
 Plan the build as 3–6 slices in "stages", in order. Slice 1 is the core loop playable from the title (the hero moving, the main action, one obstacle or enemy, a way to fail, the HUD). Each later slice adds one group of the game's own parts (more stages or levels, power-ups or items, enemies, story and people, the ending) and leaves it playable. The last slice adds the ending, the win and lose screens, pause, sound and a balance pass. Each slice's "what" says exactly what to build, using your names.
 
-"view" is how the camera sees the play: "side" for runners, platformers and side-scrollers, "top-down" for arenas and twin-stick games, "front" for card, puzzle and menu games. "places" are the backdrops to paint: the stages, levels or areas the game moves through, each as it looks from that view.
+"view" is how the camera sees the play: "side" for runners, platformers and side-scrollers, "top-down" for arenas and twin-stick games, "front" for card, puzzle and menu games. "places" are the backdrops to paint: the stages, levels or areas the game moves through, each as it looks from that view. "props" are six to twelve set pieces and obstacles those places are dressed with (single objects, no characters).
 
 Answer with JSON only:
-{"title": "...", "pitch": "one sentence", "genre": "the genre they picked", "view": "side | top-down | front", "setting": "...", "hero": "...", "loop": "what you do over and over", "progression": "what changes as you go", "goal": "what the player is working towards", "places": [{"name": "...", "what": "how it looks and plays"}], "enemies": [{"name": "...", "attack": "what it does", "look": "..."}], "items": [{"name": "...", "effect": "power-ups, pickups, upgrades or cards, if the game has them"}], "boss": {"name": "...", "look": "...", "phases": ["..."]}, "characters": [{"name": "...", "role": "...", "look": "what their portrait shows", "lines": ["..."]}], "stages": [{"name": "short name", "what": "what this slice builds"}], "controls": "...", "win": "...", "lose": "...", "look": "colours, shapes, lighting, mood", "sound": "...", "screens": ["title", "play", "pause", "win", "lose"], "original": "what is new compared with the game they named"}
+{"title": "...", "pitch": "one sentence", "genre": "the genre they picked", "view": "side | top-down | front", "setting": "...", "hero": "...", "loop": "what you do over and over", "progression": "what changes as you go", "goal": "what the player is working towards", "places": [{"name": "...", "what": "how it looks and plays"}], "enemies": [{"name": "...", "attack": "what it does", "look": "..."}], "items": [{"name": "...", "effect": "power-ups, pickups, upgrades or cards, if the game has them"}], "props": [{"name": "one or two words", "what": "how it looks"}], "boss": {"name": "...", "look": "...", "phases": ["..."]}, "characters": [{"name": "...", "role": "...", "look": "what their portrait shows", "lines": ["..."]}], "stages": [{"name": "short name", "what": "what this slice builds"}], "controls": "...", "win": "...", "lose": "...", "look": "colours, shapes, lighting, mood", "sound": "...", "screens": ["title", "play", "pause", "win", "lose"], "original": "what is new compared with the game they named"}
 Leave out "boss", "items" or "characters" when the game has none.`
 
 // What a big spec is missing, as words for a retry (empty when it is whole).
@@ -237,6 +238,7 @@ ${spec.workshop?.art?.length ? `- The person painted the art in the studio: load
 - Sound with the Web Audio API, synthesised in code (hits, pickups, a simple music loop); starts after the first click or key.
 - Game feel: hit-stop, screen shake, knockback, particles, easing, juicy feedback on every action.
 - Fixed timestep update loop; works at 60 fps on a laptop; resizes with the window; no console errors.
+${probeBrief(spec)}
 - Original content only: the names, characters, world and art in the spec are new. Never use names, characters or assets from existing games.
 ${spec.brand ? brandRules({ ...spec.brand, game: gameSlug(spec.title) }) : ''}
 ${castPrompt(cleanCast(spec.cast))}${assets.length ? `- 3D models already in public/models/ (load with GLTFLoader from /models/<file>, animate with AnimationMixer):\n${assets.map(a => `  - ${a.file}: ${a.what}`).join('\n')}\n` : ''}
@@ -262,13 +264,57 @@ const VIEW_SHOT = {
   front: (where, what) => `A wide scene of ${what}, in ${where}, calm in the middle so cards, tiles or menus read over it`
 }
 export const viewOf = spec => (VIEW_SHOT[spec?.view] ? spec.view : sideView(spec) ? 'side' : 'top-down')
-export function artList(spec, { max = 26 } = {}) {
+// How much art a game gets, from the spec's own size: a short game (three build slices) gets the
+// compact plan, a longer one the full plan. Each number is the most of that kind; a game with
+// fewer places or items paints fewer. tiles, ui, props and fx are pictures of their own kinds:
+// repeating tiles, a UI kit and a props sheet (six pieces a sheet, cut into single files) and
+// effect animations (six frames a sheet, light on black).
+export const ART_PLANS = {
+  compact: { portraits: 4, icons: 6, backdrops: 4, enemies: 4, tiles: 1, ui: 1, props: 1, fx: 2, enemySheets: 0, bossSheets: 0, max: 36 },
+  full: { portraits: 6, icons: 12, backdrops: 8, enemies: 8, tiles: 2, ui: 2, props: 2, fx: 4, enemySheets: 3, bossSheets: 1, max: 60 }
+}
+export const artScale = spec => (/^(compact|full)$/.test(String(spec?.art || '')) ? spec.art : stagesFor(spec).length >= 4 || (spec?.places || []).length >= 4 ? 'full' : 'compact')
+export const artPlan = spec => ART_PLANS[artScale(spec)]
+
+// A kit: six separate pieces on one painted sheet (a 3 by 2 grid on the key colour), cut into
+// six files the game loads one by one. A sheet costs one picture, so a UI kit and a set of
+// props cost two pictures, not twelve.
+export const KIT_LAYOUT = 'Six separate pieces in a 3 by 2 grid, read left to right, top to bottom, one piece per cell. Every piece is centred in its cell and fills about 70 percent of it, with a clear margin of empty background on every side, so nothing touches a cell edge or another piece. Solid shapes with bold clean outlines, no text, no letters, no numbers, no borders, no grid lines, no people, no floor shadow'
+export const FX_LAYOUT = 'Six frames of one effect in a 3 by 2 grid, read left to right, top to bottom, one step of the effect per cell, each centred and filling about half its cell so nothing touches a cell edge. Painted as light on a pure black (#000000) background: bright, glowing shapes with soft edges, no outlines, no characters, no ground, no text, no borders, no grid lines'
+const UI_KITS = [
+  [['panel', 'a wide dialogue panel frame with an empty middle'], ['button', 'a wide button, empty'], ['button-down', 'the same button pressed in, a little darker'], ['bar', 'an empty horizontal bar frame for health or progress'], ['bar-fill', 'the plain strip that fills that bar'], ['slot', 'a round slot that holds an icon']],
+  [['window', 'a square window frame for a menu, with an empty middle'], ['banner', 'a title banner ribbon, empty'], ['toggle', 'a small checkbox, ticked'], ['pointer', 'a pointer arrow'], ['badge', 'a reward badge or star'], ['life', 'a single life pip']]
+]
+const PROP_SETS = [
+  [['crate', 'a crate or container'], ['barrier', 'a barrier or piece of fence'], ['light', 'a lamp or light'], ['sign', 'a sign or marker with nothing written on it'], ['plant', 'a plant, rubble pile or small clutter'], ['landmark', 'one large set piece of this world']],
+  [['door', 'a door or gate'], ['machine', 'a machine or device of this world'], ['seat', 'a bench, stool or seat'], ['stack', 'a stack of goods or supplies'], ['hazard', 'a hazard to avoid'], ['treasure', 'a chest or cache']]
+]
+const EFFECTS = spec => [
+  ['hit', 14, 'a hit spark: a small bright flash that bursts outward into streaks and fades to nothing'],
+  ['pickup', 12, 'a pickup sparkle: a ring of glints that rises, widens and fades to nothing'],
+  ['burst', 12, 'a defeat burst: a puff of smoke and sparks that swells, breaks apart and thins to nothing'],
+  viewOf(spec) === 'front' ? ['glow', 10, 'a soft glow that swells around a card or tile and fades to nothing'] : ['dust', 12, viewOf(spec) === 'side' ? 'a dust puff from a landing: low, spreading sideways and thinning to nothing' : 'a ring of dust from a dash: spreading outward and thinning to nothing']
+]
+const kitItem = (spec, id, prefix, kind, pieces, what, of) => {
+  const key = keyFor('')
+  return {
+    id, kind: 'sheet', kit: kind, aspect: 'landscape', ref: 'sprite-hero', sheet: kind, what,
+    frames: pieces.map(([, w]) => w).join('; '),
+    layout: `${KIT_LAYOUT}. The background is ${key.name} (${key.hex}), flat chroma key, edge to edge, and no ${key.name} on the pieces`,
+    look: of, gen: what,
+    // the six files it is cut into
+    parts: pieces.map(([name, w]) => ({ id: `${prefix}-${slug(name)}`, kind, what: `${kind === 'ui' ? 'UI piece' : 'prop'}: ${w}` }))
+  }
+}
+export function artList(spec, { max } = {}) {
+  const plan = artPlan(spec)
+  max ??= plan.max
   const where = spec.setting || ''
   const shot = VIEW_SHOT[viewOf(spec)]
   const items = [{ id: 'title', kind: 'title', aspect: 'landscape', what: 'title screen picture', gen: `Key art for a game called ${spec.title}: ${spec.hero}, in ${where}${spec.pitch ? `. ${spec.pitch}` : ''}` }]
-  for (const c of (spec.characters || []).slice(0, 5)) if (c?.name) items.push({ id: `portrait-${slug(c.name)}`, kind: 'portrait', aspect: 'portrait', what: `portrait of ${c.name} (${c.role || 'character'}) for dialogue`, gen: `Chest-up character portrait of ${c.name}, ${c.role || ''}: ${c.look || ''}. Facing three-quarters, plain dark backdrop, from ${where}` })
-  for (const it of (spec.items || []).slice(0, 9)) if (it?.name) items.push({ id: `item-${slug(it.name)}`, kind: 'icon', aspect: 'square', what: `icon for ${it.name}`, gen: `A single emblem for "${it.name}": ${it.effect || ''}. One bold symbol centred on a plain dark circle, readable when small` })
-  for (const pl of (spec.places || []).slice(0, 6)) if (pl?.name) items.push({ id: `place-${slug(pl.name)}`, kind: 'backdrop', aspect: 'landscape', what: `backdrop for ${pl.name}`, gen: `${shot(where, `${pl.name}: ${pl.what || ''}`)}. ${NO_PEOPLE}` })
+  for (const c of (spec.characters || []).slice(0, plan.portraits)) if (c?.name) items.push({ id: `portrait-${slug(c.name)}`, kind: 'portrait', aspect: 'portrait', what: `portrait of ${c.name} (${c.role || 'character'}) for dialogue`, gen: `Chest-up character portrait of ${c.name}, ${c.role || ''}: ${c.look || ''}. Facing three-quarters, plain dark backdrop, from ${where}` })
+  for (const it of (spec.items || []).slice(0, plan.icons)) if (it?.name) items.push({ id: `item-${slug(it.name)}`, kind: 'icon', aspect: 'square', what: `icon for ${it.name}`, gen: `A single emblem for "${it.name}": ${it.effect || ''}. One bold symbol centred on a plain dark circle, readable when small` })
+  for (const pl of (spec.places || []).slice(0, plan.backdrops)) if (pl?.name) items.push({ id: `place-${slug(pl.name)}`, kind: 'backdrop', aspect: 'landscape', what: `backdrop for ${pl.name}`, gen: `${shot(where, `${pl.name}: ${pl.what || ''}`)}. ${NO_PEOPLE}` })
   // the hero, enemies and boss as sprites: one full figure each, cut out of a flat background after painting
   const sprite = (id, who, look) => items.push({ id: `sprite-${id}`, kind: 'sprite', aspect: 'square', cutout: true, what: `sprite of ${who}`, ...(look ? { look: String(look).slice(0, 300) } : {}), gen: `Game character sprite: the full body of ${who}${look ? `, ${look}` : ''}. ${viewOf(spec) === 'side' ? 'Side view facing right, mid-stride' : 'Standing, facing the viewer'}, head to feet in frame with space around, bold clean outline. ${keyGround(look || who)}` })
   if (spec.hero) sprite('hero', String(spec.hero).split(/[,—.;]/)[0].trim(), heroLook(spec))
@@ -276,13 +322,29 @@ export function artList(spec, { max = 26 } = {}) {
   // painted after the hero with the hero's picture as its style reference
   const pal = companionOf(spec)
   if (pal) { sprite(pal.id, `${pal.name}, the hero's ${pal.kind}`, pal.look); Object.assign(items.at(-1), { ref: 'sprite-hero', companion: true }) }
-  for (const e of (spec.enemies || []).slice(0, 5)) if (e?.name) sprite(slug(e.name), e.name, e.look)
+  for (const e of (spec.enemies || []).slice(0, plan.enemies)) if (e?.name) sprite(slug(e.name), e.name, e.look)
   if (spec.boss?.name) {
     sprite('boss', spec.boss.name, spec.boss.look)
     if (!items.some(i => i.id === `portrait-${slug(spec.boss.name)}`)) items.push({ id: `portrait-${slug(spec.boss.name)}`, kind: 'portrait', aspect: 'portrait', what: `portrait of the boss ${spec.boss.name}`, gen: `Menacing portrait of ${spec.boss.name}: ${spec.boss.look || ''}, plain dark backdrop` })
   }
+  // tiles the game repeats: the surface the play happens on, then the solid blocks
+  const side = viewOf(spec) === 'side'
+  const tiles = viewOf(spec) === 'front'
+    ? [['table', 'the table or board surface the cards, tiles or pieces lie on'], ['panel', 'the plain backing behind menus and lists']]
+    : [['ground', side ? 'the top surface the characters run on, seen flat-on as a texture' : 'the floor the characters walk on, seen straight from above'], ['wall', side ? 'the face of the platforms and solid blocks' : 'the top of the walls and solid blocks, seen straight from above']]
+  for (const [name, what] of tiles.slice(0, plan.tiles)) items.push({ id: `tile-${name}`, kind: 'tile', aspect: 'square', what: `${name} tile`, gen: `A seamless repeating game texture tile of ${where || 'this world'}: ${what}. It fills the whole square edge to edge and repeats in every direction (the left edge continues the right edge, the top continues the bottom), flat even lighting, no perspective, no horizon, no border, no vignette, no single object that would show the repeat. ${NO_PEOPLE}` })
+  // the UI kit, the props and the effects: one painted sheet each
+  UI_KITS.slice(0, plan.ui).forEach((pieces, i) => items.push(kitItem(spec, `kit-ui${i ? `-${i + 1}` : ''}`, 'ui', 'ui', pieces, `UI kit: ${pieces.map(([n]) => n).join(', ')}`, `game interface pieces that belong to ${where || 'this world'}: its materials and colours, flat-on, with no words on them`)))
+  // props the spec names ({ name, what }) come first; the rest are the kinds of thing any stage is dressed with
+  const named = (spec.props || []).filter(x => x?.name).map(x => [x.name, `${x.name}${x.what ? `: ${String(x.what).slice(0, 80)}` : ''}`])
+  const props = [...named, ...PROP_SETS.flat().filter(([n]) => !named.some(([m]) => slug(m) === n))].slice(0, plan.props * 6)
+  for (let i = 0; i < plan.props; i++) {
+    const six = props.slice(i * 6, i * 6 + 6)
+    if (six.length === 6) items.push(kitItem(spec, `kit-props${i ? `-${i + 1}` : ''}`, 'prop', 'prop', six, `props: ${six.map(([n]) => n).join(', ')}`, `props and set pieces found in ${where || 'this world'}, ${side ? 'seen from the side' : 'seen from a three-quarter view'}`))
+  }
+  for (const [name, fps, frames] of EFFECTS(spec).slice(0, plan.fx)) items.push({ id: `fx-${name}`, kind: 'sheet', fx: true, aspect: 'landscape', sheet: name, fps, loop: false, frames, layout: FX_LAYOUT, what: `${name} effect`, look: `one game effect: ${frames}`, gen: `${name} effect` })
   // the title, then one of each kind, then the rest: a cap keeps some of every kind
-  const order = ['title', 'sprite', 'backdrop', 'portrait', 'icon']
+  const order = ['title', 'sprite', 'backdrop', 'portrait', 'icon', 'tile', 'sheet']
   const byKind = order.map(k => items.filter(i => i.kind === k))
   const out = []
   for (let round = 0; out.length < Math.min(max, items.length); round++) for (const list of byKind) if (list[round] && out.length < max) out.push(list[round])
@@ -366,8 +428,14 @@ export function sheetList(spec) {
   // the companion keeps up with the hero: its own run (or walk) sheet, over its own sprite
   const pal = companionOf(spec)
   if (pal) out.push(sheetItem(spec, { owner: pal.id, who: pal.name, look: pal.look, move: side ? { name: 'run', ...companionRun(pal.kind) } : { name: 'walk', ...MOVES.walk }, what: `${side ? 'run' : 'walk'} sheet of ${pal.name}, the hero's ${pal.kind}` }))
+  // a longer game animates what the hero meets: the first few enemies move, the boss attacks
+  const plan = artPlan(spec)
+  for (const e of (spec.enemies || []).filter(e => e?.name).slice(0, plan.enemySheets)) out.push(sheetItem(spec, { owner: slug(e.name), who: e.name, look: e.look || e.name, move: { name: 'move', ...ENEMY_MOVE(side) } }))
+  if (spec.boss?.name && plan.bossSheets) out.push(sheetItem(spec, { owner: 'boss', who: spec.boss.name, look: spec.boss.look || spec.boss.name, move: { name: 'attack', ...BOSS_ATTACK(side) } }))
   return out
 }
+const ENEMY_MOVE = side => ({ fps: 10, loop: true, frames: `a looping movement cycle in six steps, the way this creature or machine gets about (walking, hovering, rolling or crawling), ${side ? 'side view facing right' : 'facing the viewer'}, its body clearly in a new place in the cycle each frame` })
+const BOSS_ATTACK = side => ({ fps: 10, loop: false, frames: `its main attack in six steps, ${side ? 'side view facing right' : 'facing the viewer'}: ready, wind-up, the peak of the wind-up, the strike, the follow-through, back to ready` })
 
 // The hero's animated idle (engine/idle.mjs): the painted idle sheet (unless the game paints one
 // already) and, by route, the video sheet (the owner said yes to its price) or the close
@@ -398,11 +466,24 @@ export function artBrief(files = []) {
   if (!files.length) return '- No painted art this time: draw every portrait, icon and backdrop in code (shapes, gradients, canvas textures).'
   return `- Painted art is in public/art/ (served at /art/…). Load these files and use them as named; keep a drawn-in-code stand-in if one fails to load, so the game never breaks:
 ${files.map(f => f.kind === 'sheet' && f.cell
-    ? `  - ${f.file}: ${f.what}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px (frame n starts at x = n×${f.cell[0]}, from 0), played at ${f.fps} fps${f.loop ? ', looping' : ', one frame per move'}. The frames: ${f.frames}`
+    ? `  - ${f.file}: ${f.what}${f.blend === 'add' ? ' (light on black: draw it with additive blending)' : ''}, an animation strip of ${f.count} frames side by side, each ${f.cell[0]}×${f.cell[1]} px (frame n starts at x = n×${f.cell[0]}, from 0), played at ${f.fps} fps${f.loop ? ', looping' : ', one frame per move'}. The frames: ${f.frames}`
     : `  - ${f.file}: ${f.what}`).join('\n')}
-  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for. Keep the hero big and easy to read: about a sixth of the screen height in a top-down or front view and about a third in a side-view game (never under 96 px), enemies sized to match, the boss about twice the hero; drawn shapes only for projectiles, effects and stand-ins. Backdrops (place-*.png) are the stages or areas they are named for, behind the action (a side-view game scrolls them with the camera, with a slower layer for depth; darken them a little so the characters read); portraits sit beside the dialogue box; item icons sit on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${files.some(f => f.kind === 'sheet') ? `
+  Load images with a relative path ("art/…", not "/art/…") and crossOrigin "anonymous". Sprites (sprite-*.png, transparent) are the characters' own textures: sprite-hero is the hero, sprite-boss the boss, the others are the enemies they are named for. Keep the hero big and easy to read: about a sixth of the screen height in a top-down or front view and about a third in a side-view game (never under 96 px), enemies sized to match, the boss about twice the hero; drawn shapes only for projectiles, effects and stand-ins. Backdrops (place-*.png) are the stages or areas they are named for, behind the action (a side-view game scrolls them with the camera, with a slower layer for depth; darken them a little so the characters read); portraits sit beside the dialogue box; item icons sit on the pickups, the HUD and the end screen; the title picture fills the title screen behind the menu.${kitBrief(files)}${files.some(f => /^art\/sheet-/.test(f.file)) ? `
   The hero's sheets (sheet-hero-*.webp) are its animation: cut each strip into frames (Phaser: load.spritesheet with that frame size; Pixi: Texture frames from the strip), play the looping one while it moves and the move frames for each action, scaled so the figure is as tall as sprite-hero would be, and keep sprite-hero only for stills. These frames replace the bob and lean tweens for the hero; flip it to face left.${files.some(f => /^art\/sheet-hero-idle\./.test(f.file)) ? ' sheet-hero-idle is the idle: loop it whenever the hero stands still, at its own fps (sheet-hero-idle-keys is not game art).' : ''}` : ''}${files.some(f => f.companion || /^art\/sheet-(?!hero-)/.test(f.file)) ? `
-  The hero's companion has its own sprite and run sheet (named for it above): it follows the hero a little behind, at about half the hero's height, playing its sheet while it moves.` : ''}`
+  The hero's companion has its own sprite and run sheet (named for it above): it follows the hero a little behind, at about half the hero's height, playing its sheet while it moves.` : ''}${files.some(f => /^art\/sheet-(?!hero-).*-(move|attack)\./.test(f.file)) ? `
+  An enemy's move sheet (sheet-<enemy>-move) loops while that enemy moves, and the boss's attack sheet (sheet-boss-attack) plays once for its main attack, each scaled to its own sprite's height.` : ''}`
+}
+
+// How the tiles, the UI kit, the props and the effects are used (the same words for the web
+// and the Godot brief): only the kinds that were painted are named.
+export function kitBrief(files = []) {
+  const has = re => files.some(f => re.test(String(f.file || '').replace(/^art\//, '')))
+  return [
+    has(/^tile-/) ? ' Tiles (tile-*) repeat: fill the ground, the platforms, the walls or the table with them as a tiled texture (Phaser: a TileSprite; Godot: a TextureRect or Sprite2D with texture_repeat on), never stretched.' : '',
+    has(/^ui-/) ? ' UI pieces (ui-*.png, transparent) are the interface: the panel behind dialogue and menus and the window frame are stretched as nine-slices (keep the corners), buttons carry your own text, the bar frame sits over its fill and the fill is cropped to the value, slots hold the item icons. Use them instead of drawn rectangles.' : '',
+    has(/^prop-/) ? ' Props (prop-*.png, transparent) dress the stages: place them on the ground and the platforms as scenery and obstacles, sized against the hero, several of each, never floating.' : '',
+    has(/^fx-/) ? ' Effects (fx-*, strips of frames painted as light on black) play once where the thing happens, drawn with additive blending so the black disappears: fx-hit on every hit, fx-pickup on a pickup, fx-burst when an enemy is defeated, fx-dust on a landing or a dash, fx-glow on a card or tile that is picked.' : ''
+  ].join('')
 }
 
 // The engine's prompt for one stage. The first stage also carries how to build
@@ -416,7 +497,7 @@ export function bigStagePrompt(spec, i, { art = [], failed = '', note = '' } = {
 
 Do only this slice; later slices add the rest (see "Build slices" in GAME_SPEC.md), so leave clean places for them instead of building them now.
 ${artBrief(art)}
-${FIGURE_RULES}
+${FIGURE_RULES}${i > 0 ? `\n${probeBrief(spec)}` : ''}
 - Keep the code in src/game/ with one module per system; no file over about 400 lines.
 - Original content only: the names, characters, world and art in the spec are new.
 

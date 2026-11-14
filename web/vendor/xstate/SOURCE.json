@@ -1,0 +1,16 @@
+{
+  "name": "xstate",
+  "version": "5.33.3",
+  "license": "MIT",
+  "tarball": "https://registry.npmjs.org/xstate/-/xstate-5.33.3.tgz",
+  "integrity": "sha512-AnDRjS/GyKHmbA1PyhVCYBqYsA7EGe3KGgeD0ht3NFsXzoz7leX/HQDFX9QlHFJ/ltLHPsgChJYwPzRvB/0b4g==",
+  "esbuild": "0.28.2",
+  "exports": [
+    "setup",
+    "createActor",
+    "assign",
+    "fromTransition"
+  ],
+  "file": "xstate.mjs",
+  "sha256": "cf063867973369669dd1bff999276e20038522275e31399e3f181c3708e426a6"
+}

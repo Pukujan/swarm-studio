@@ -9,15 +9,16 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { keyGround } from './keycolor.mjs'
-import { MOVES, NO_PEOPLE, viewOf, sheetItem, companionRun, heroLook } from './game.mjs'
+import { MOVES, NO_PEOPLE, FX_LAYOUT, viewOf, sheetItem, companionRun, heroLook } from './game.mjs'
 
 export const ASK_FILE = 'ART_REQUESTS.json'
 export const ASKED_FILE = 'ART_ASKED.json'
 // a cap per slice and per build, so asking can't run up a bill (SWARM_ART_ASKS sets the slice cap)
-export const ASKS_PER_STAGE = Math.max(0, Math.min(8, Number(process.env.SWARM_ART_ASKS ?? 4) || 0))
-export const ASKS_PER_BUILD = 16
-export const ASK_KINDS = ['sprite', 'prop', 'backdrop', 'icon', 'portrait', 'sheet']
-const PREFIX = { sprite: 'sprite', prop: 'prop', backdrop: 'place', icon: 'item', portrait: 'portrait' }
+// (three painters work at once, about a minute a picture: six asks hold a slice up for two to three minutes)
+export const ASKS_PER_STAGE = Math.max(0, Math.min(12, Number(process.env.SWARM_ART_ASKS ?? 6) || 0))
+export const ASKS_PER_BUILD = Math.max(ASKS_PER_STAGE, Math.min(60, Number(process.env.SWARM_ART_ASKS_BUILD ?? 24) || 0))
+export const ASK_KINDS = ['sprite', 'prop', 'backdrop', 'icon', 'portrait', 'sheet', 'tile', 'ui', 'effect']
+const PREFIX = { sprite: 'sprite', prop: 'prop', backdrop: 'place', icon: 'item', portrait: 'portrait', tile: 'tile', ui: 'ui', effect: 'fx' }
 
 const slug = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f"`<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n)
@@ -48,8 +49,17 @@ export function askItem(spec, ask, known = new Map()) {
     if (!move) return { error: `the move "${name}" needs its six frames in "frames"` }
     return { ...sheetItem(spec, { owner, who: what, look: look || pal.look || what, move, after: of, what: `${name} sheet of ${what}` }), asked: true }
   }
-  const id = `${PREFIX[kind]}-${slug(ask.id ? String(ask.id).replace(/^(sprite|prop|place|item|portrait)-/, '') : what) || 'x'}`
-  const base = { id, asked: true, what: `${kind === 'backdrop' ? 'backdrop for' : kind === 'icon' ? 'icon for' : kind === 'portrait' ? 'portrait of' : `${kind} of`} ${what}` }
+  // "from": "library" takes a picture from the asset library when one fits, and paints it otherwise
+  const lib = String(ask.from || '').toLowerCase() === 'library' && kind !== 'sheet' && kind !== 'effect' ? { library: true } : {}
+  const id = `${PREFIX[kind]}-${slug(ask.id ? String(ask.id).replace(/^(sprite|prop|place|item|portrait|tile|ui|fx)-/, '') : what) || 'x'}`
+  const base = { id, asked: true, ...lib, what: `${kind === 'backdrop' ? 'backdrop for' : kind === 'icon' ? 'icon for' : kind === 'portrait' ? 'portrait of' : kind === 'ui' ? 'UI piece:' : kind === 'effect' ? 'effect:' : kind === 'tile' ? 'tile of' : `${kind} of`} ${what}` }
+  // an effect: six frames of light on black, played once with additive blending
+  if (kind === 'effect') {
+    const frames = text(ask.frames, 400) || `${what}${look ? `, ${look}` : ''}: it appears, grows to its brightest and fades to nothing`
+    return { ...base, kind: 'sheet', fx: true, aspect: 'landscape', sheet: id.replace(/^fx-/, ''), fps: Number(ask.fps) > 0 ? Math.min(24, Number(ask.fps)) : 12, loop: !!ask.loop, frames, layout: FX_LAYOUT, look: `one game effect: ${frames}`, gen: `${what} effect` }
+  }
+  if (kind === 'tile') return { ...base, kind: 'tile', aspect: 'square', gen: `A seamless repeating game texture tile${where ? ` of ${where}` : ''}: ${what}${look ? `, ${look}` : ''}. It fills the whole square edge to edge and repeats in every direction (the left edge continues the right edge, the top continues the bottom), flat even lighting, no perspective, no horizon, no border, no vignette, no single object that would show the repeat. ${NO_PEOPLE}` }
+  if (kind === 'ui') return { ...base, kind: 'ui', aspect: 'square', cutout: true, ref: 'sprite-hero', gen: `A single game interface piece: ${what}${look ? `, ${look}` : ''}. Seen flat-on, the whole piece in frame with space around, bold clean outline, in the materials and colours of the reference picture's world, with no words, letters or numbers on it and no people. ${keyGround(look || what)}` }
   if (kind === 'sprite') return { ...base, kind: 'sprite', aspect: 'square', cutout: true, ref: 'sprite-hero', look: look || what, gen: `Game character sprite: the full body of ${what}${look ? `, ${look}` : ''}. ${side ? 'Side view facing right, mid-stride' : 'Standing, facing the viewer'}, head to feet in frame with space around, bold clean outline, drawn in the same style as the reference picture. ${keyGround(look || what)}` }
   if (kind === 'prop') return { ...base, kind: 'sprite', aspect: 'square', cutout: true, ref: 'sprite-hero', gen: `A single game prop: ${what}${look ? `, ${look}` : ''}. ${side ? 'Seen from the side' : 'Seen from a three-quarter view'}, the whole object in frame with space around, bold clean outline, drawn in the same style as the reference picture, no people. ${keyGround(look || what)}` }
   if (kind === 'backdrop') return { ...base, kind: 'backdrop', aspect: 'landscape', gen: `${side ? 'Side-on view, as a side-scrolling game sees it' : 'Top-down three-quarter view'}: ${what}${look ? `, ${look}` : ''}${where ? `, in ${where}` : ''}. ${side ? 'A wide horizontal stretch, the ground along the lower third, depth behind, clear open space in the middle for the characters' : 'Walls and props at the edges, open floor in the middle'}. ${NO_PEOPLE}` }
@@ -103,5 +113,5 @@ export function keepAsked(dir, items) {
 export function askBrief({ godot = false, cap = ASKS_PER_STAGE } = {}) {
   if (!cap) return ''
   const file = godot ? `ports/godot/${ASK_FILE}` : ASK_FILE
-  return `- Need a picture that is not in the painted art above (a prop, an obstacle, a backdrop, an icon, a new character, a run sheet for a sprite)? Ask for it instead of settling for a drawn shape: write ${file} as a JSON list, at most ${cap} per slice, for example [{"kind": "prop", "what": "a rusty rooftop water tower"}, {"kind": "sheet", "of": "sprite-kumo", "move": "run"}]. kind is one of ${ASK_KINDS.join(', ')}; "what" says what it is and "look" adds detail; a sheet names the sprite it animates in "of" and its "move" (run, jump, slide, climb, fix, hurt, idle, walk, or any move with its six poses in "frames"). The Studio paints them in the game's style when this slice ends and gives you a short turn to use them; draw a stand-in until then. ${ASKED_FILE} lists what was asked before: never ask twice.`
+  return `- Need a picture that is not in the painted art above (a prop, an obstacle, a backdrop, an icon, a new character, a run sheet for a sprite, a repeating tile, an interface piece, an effect)? Ask for it instead of settling for a drawn shape: write ${file} as a JSON list, at most ${cap} per slice, for example [{"kind": "prop", "what": "a rusty rooftop water tower"}, {"kind": "sheet", "of": "sprite-kumo", "move": "run"}]. kind is one of ${ASK_KINDS.join(', ')}; "what" says what it is and "look" adds detail; a sheet names the sprite it animates in "of" and its "move" (run, jump, slide, climb, fix, hurt, idle, walk, or any move with its six poses in "frames"); an effect is six frames of light on black, drawn with additive blending (say how it plays out in "frames"). Add "from": "library" to take a ready-made picture from the studio's asset library (about 14,600 pictures in many styles; credits are kept in public/art/CREDITS.md) when one fits, instead of painting it. The Studio paints them in the game's style when this slice ends and gives you a short turn to use them; draw a stand-in until then. ${ASKED_FILE} lists what was asked before: never ask twice.`
 }

@@ -44,7 +44,7 @@ const LIMITS = {
   pages: num('HOSTED_PAGES', 2),
   sections: num('HOSTED_SECTIONS', 6),
   promptChars: num('HOSTED_PROMPT_CHARS', 500),
-  rpm: num('HOSTED_RPM', 60), // API requests per IP per minute
+  rpm: num('HOSTED_RPM', 240), // API requests per IP per minute (one build with its canvas open is about 35)
   dailyUsd: num('HOSTED_DAILY_USD', 3),
   posts: num('HOSTED_GUEST_POSTS', 3) // Feed posts per guest per day
 }
@@ -80,7 +80,7 @@ const save = () => {
 function rollDay() {
   if (state.day === today()) return
   state.day = today(); state.usd = 0; state.calls = 0; state.builds = 0; state.ips = {}
-  for (const g of Object.values(state.guests)) { g.builds = 0; g.posts = 0 }
+  for (const g of Object.values(state.guests)) { g.builds = 0; g.posts = 0; g.refunds = 0 }
   save()
 }
 const isOpen = () => (rollDay(), state.usd < LIMITS.dailyUsd && !!MODEL.apiKey)
@@ -171,7 +171,7 @@ function stopRun(run, message) {
   run.done = true
 }
 
-function startRun(guest, brief, agents) {
+function startRun(guest, brief, agents, ip) {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(3).toString('hex')}`
   const dir = join(runsDir, id)
   mkdirSync(dir, { recursive: true })
@@ -198,6 +198,17 @@ function startRun(guest, brief, agents) {
     .catch(err => run.emit('error', { where: 'run', message: String(err.message || err).slice(0, 300) }))
     .finally(() => {
       run.done = true
+      // a build that made nothing (the model was down, the plan came back empty) does not count:
+      // the guest and their network get it back, up to 3 times a day, so a prompt that never plans
+      // cannot be retried for ever. The spend it did cause stays on the day's ledger.
+      const g = state.guests[guest.hash]
+      if (!(run.result?.done > 0) && state.day === today() && g && (g.refunds || 0) < 3) {
+        g.refunds = (g.refunds || 0) + 1
+        if (g.builds > 0) g.builds--
+        if (state.ips[ip] > 0) state.ips[ip]--
+        if (state.builds > 0) state.builds--
+        save()
+      }
       console.log(`run ${id} by ${guest.name}: $${run.usd.toFixed(4)} (today $${state.usd.toFixed(3)})`)
       // the live copy is dropped a while after the run; the saved file stays
       setTimeout(() => runs.delete(id), 10 * 60e3).unref()
@@ -220,7 +231,9 @@ function runCard(id) {
   const pages = events.filter(e => e.type === 'page')
   const done = events.find(e => e.type === 'run:done')
   const theme = events.findLast(e => e.type === 'theme') || {}
-  const title = pages[0]?.title && theme.name ? theme.name : start.brief.slice(0, 60)
+  // the build's name, the same one the project's breadcrumb shows: the first page's title before any
+  // " — Shop Index". Never the theme's name ("Cool Counter" says nothing about a bakery).
+  const title = String(pages[0]?.title || '').split(/\s[—–|:-]\s/)[0].trim() || start.brief.slice(0, 60)
   return {
     id, title, autoTitle: title, kind: 'site', brief: start.brief, t: start.t, updated: events.at(-1)?.t || start.t,
     pages: pages.length, pageTitles: pages.map(p => p.title),
@@ -369,7 +382,7 @@ const server = createServer(async (req, res) => {
     state.builds++
     save()
     const agents = Math.max(2, Math.min(LIMITS.agents, Number(input.agents) || LIMITS.agents))
-    const run = startRun(guest, brief, agents)
+    const run = startRun(guest, brief, agents, ip)
     return json(res, 200, { run: run.id, guest: guestView(state.guests[guest.hash] && { ...guest, ...state.guests[guest.hash] }) })
   }
 

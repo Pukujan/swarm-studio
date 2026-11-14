@@ -73,7 +73,7 @@ A small "Built for Hermes Agent" line in the footer and the README is fine.
   1. **The planner's seat:** at the top of the canvas when a build starts. She "draws" the sitemap, and the page frames fly out from her baton.
   2. **Orders:** each `agent:assign` is a speech bubble from her ("Ada, hero section, go!"), and a dotted line runs from her to the agent's cursor.
   3. **Auto narrator:** the step transition cards from [07-auto-show.md](07-auto-show.md) show her pointing to the next view.
-  4. **Onboarding host:** she greets people in [06-onboarding.md](06-onboarding.md), one line per step.
+  4. **Onboarding host:** she speaks her short orders during a first build ([06-onboarding.md](06-onboarding.md)); there is no welcome wizard.
   5. **Logo and avatar:** her helmeted face in a circle is the app icon, the favicon, the README hero, the catalog listing and the Arcade avatar.
 - **Voice:** in the chatter system she has a warmer, lower voice than the crew, and her TTS lines are rarer and sound like commands ("Launch!", "Good work, crew.").
 
@@ -181,7 +181,7 @@ The first thing you see is a slowly turning spiral galaxy, drawn with three.js. 
 
 ## Done when
 
-- [ ] Tokens, fonts and the frame are in `web/canvas.css`. The canvas uses the Hermes dashboard's `--color-*` variables when embedded, and `swarm-space.yaml` installs and works as a dashboard theme.
+- [ ] Fonts and the frame are in `web/canvas.css`; the tokens are `tokens/*.tokens.json`, built into `web/tokens.css`. The canvas uses the Hermes dashboard's `--color-*` variables when embedded, and `swarm-space.yaml` installs and works as a dashboard theme.
 - [ ] Hermia appears at the start of a build and gives orders in bubbles with dotted lines to cursors. She's also in the Auto transitions and the onboarding.
 - [ ] Each agent cursor has its SVG avatar: it blinks, its mouth moves with chatter, its wings flap while it moves, and it hops when done. Two runs with the same agent names look the same.
 - [ ] The app icon, favicon and README hero use Hermia's logo. The footer says "Built for Hermes Agent", with no Nous logo anywhere.

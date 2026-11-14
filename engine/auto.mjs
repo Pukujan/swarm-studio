@@ -8,10 +8,10 @@
 // The server passes in what it already has (the swarm, the video job, the App
 // tab's jobs, the publisher), so this file only orders the steps and keeps score.
 
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { loadPack, intakeValues, packBrief, packAsk, runTools, runChecks } from './packs.mjs'
+import { cleanKit, kitPlan, kitWords, kitChecks, haveOf } from './appkit.mjs'
 
 export const GAMES_ASK = `Add a 🎮 Play page at /play, linked in the nav, with three small original mini games set in this brand's world and wearing the site's theme (its CSS variables and fonts). Each game is a canvas game in its own module under src/games/, works with keyboard and touch, and one round takes under a minute:
 1. A tiny roguelike: one room at a time, move, dodge and hit; between rooms pick one of two upgrades; three rooms, then a boss.
@@ -61,20 +61,13 @@ export const supabaseAsk = app => `Keep the app's data in Supabase. Add @supabas
 // The table Supabase needs once, shown to the person when it is missing.
 export const SUPABASE_SQL = `create table swarm_records (id uuid primary key default gen_random_uuid(), app text not null, kind text not null, data jsonb not null, created_at timestamptz not null default now()); create index on swarm_records (app, kind, created_at desc);`
 
-// Keys from the server's own environment, or from ~/.hermes/.env (where Hermes
-// keeps the others).
+// Keys from the server's own environment. launcher.py puts them there from Hermes's secret scope
+// (the names are declared in plugin.yaml); the engine reads no .env file of its own.
 function keys(want) {
   const out = Object.fromEntries(want.filter(k => process.env[k]).map(k => [k, process.env[k]]))
-  const file = join(homedir(), '.hermes', '.env')
-  if (Object.keys(out).length < want.length && existsSync(file)) {
-    for (const line of readFileSync(file, 'utf8').split('\n')) {
-      const m = /^\s*(?:export\s+)?([A-Z_]+)\s*=\s*(.*)$/.exec(line)
-      if (m && want.includes(m[1]) && !out[m[1]]) out[m[1]] = m[2].trim().replace(/^(['"])(.*)\1$/, '$2')
-    }
-  }
   return want.every(k => out[k]) ? out : null
 }
-// one key from the environment or ~/.hermes/.env
+// one key from the environment
 export const hermesKey = k => keys([k])?.[k] || ''
 export const supabaseEnv = () => keys(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'])
 // Made through the person's Supabase sign-in, the app holds a publishable key, so the table lets
@@ -140,13 +133,17 @@ export function autoJob(d) {
 
   async function design() {
     set('design', 'working', 'the planner is writing the sitemap')
-    const run = d.startRun({ brief: job.brief || job.prompt, project: job.project, piece: job.piece })
+    const run = d.startRun({ brief: job.brief || job.prompt, project: job.project, piece: job.piece, brand: job.brand })
     job.run = run.id
     push()
     await until(() => {
       const err = run.events.find(e => e.type === 'error')
       if (err) throw new Error(err.message)
       if (d.current() !== run) throw new Error('another build replaced it')
+      // a build that stopped without the person's Stop (Hermes closed, the model refused) fails this step
+      // with the stop's own reason, instead of counting as a design with nothing in it
+      const stop = run.done && run.stopped && !job.stopped && run.events.findLast(e => e.type === 'run:stopped')?.reason
+      if (stop && stop.code !== 'person') throw new Error([stop.message, stop.action].filter(Boolean).join(' '))
       return run.done
     }, { ms: 15 * 60000, stop: () => run.controller.abort() })
     // the pictures paint after the sections land: wait for the queue to empty
@@ -247,11 +244,21 @@ export function autoJob(d) {
     set('checks', bad.length ? 'failed' : 'done', bad.length ? `${r.length - bad.length}/${r.length} passed; failing: ${bad.map(c => `${c.label} (${c.path} → ${c.status})`).join(', ')}` : `${r.length}/${r.length} passed: ${r.map(c => c.label).join(', ')}`)
   }
 
+  // the App kit's locked plan, checked on the built app's source (engine/appkit.mjs kitChecks)
+  async function spec() {
+    set('spec', 'working', 'checking the app against its plan')
+    const r = kitChecks(job.kit, join(d.runsDir, job.run, 'app'))
+    job.checks = r.map(c => ({ label: c.part, ok: c.ok, note: c.note }))
+    d.record(job.run, { type: 'appkit:checks', t: Date.now(), checks: r })
+    const bad = r.filter(c => !c.ok)
+    set('spec', bad.length ? 'failed' : 'done', bad.length ? `${r.length - bad.length}/${r.length} match the plan; missing: ${bad.map(c => c.note).join(', ')}` : `${r.length}/${r.length} match the plan`)
+  }
+
   async function data() {
     let env = supabaseEnv()
     // no keys: the person's Supabase sign-in through Hermes (🔌 Connect on the canvas)
     if (!env && d.connectors) env = await d.connectors.supabaseProject({ sql: SUPABASE_CONNECTOR_SQL, say: note => set('data', 'working', note) })
-    if (!env) return set('data', 'skipped', 'connect Supabase (🔌 in the Auto window) or add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to ~/.hermes/.env to keep the data in Supabase')
+    if (!env) return set('data', 'skipped', 'connect Supabase (🔌 in the Auto window) or put SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the Hermes secret store and start the studio again to keep the data in Supabase')
     const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY
     const probe = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/swarm_records?select=id&limit=1`, { headers: { apikey: key, authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) }).catch(err => ({ ok: false, status: String(err.message || err) }))
     if (!probe.ok) return set('data', 'skipped', `Supabase has no swarm_records table yet (${probe.status}); run this once in its SQL editor: ${SUPABASE_SQL}`)
@@ -284,11 +291,12 @@ export function autoJob(d) {
   async function go() {
     const plan = [
       ['design', design, true], ['review', review, false],
-      ['app', () => appTurn('app', job.pack ? { ask: packAsk(job.pack, 'app', job.intake) } : {}, 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
+      ['app', () => appTurn('app', job.pack ? { ask: packAsk(job.pack, 'app', job.intake) } : job.kit ? { plan: kitPlan(job.kit, haveOf()) } : {}, job.kit ? 'the app engine is building the locked screens, data and connections' : 'the app engine is wiring forms, routes and /admin').then(s => set('app', 'done', `${s.result?.files || 0} files, gates ${s.result?.gatesPassed ? 'passed' : 'checked'}`)), true],
       ...(job.pack ? [['tools', tools, false]] : []),
       ...(job.games !== 'none' ? [['games', games, false]] : []),
       ...(job.games !== 'none' ? [['shop', shop, false]] : []),
       ['data', data, false],
+      ...(job.kit ? [['spec', spec, false]] : []),
       ...(job.pack ? [['checks', checks, false]] : []),
       ['video', video, false]
     ]
@@ -296,6 +304,8 @@ export function autoJob(d) {
       if (!step(id)) continue  // a kind picked on Projects (App, Game, Video) runs only its own steps
       if (job.stopped) { set(id, 'skipped', 'stopped'); continue }
       try { await fn() } catch (err) {
+        // the step Stop caught part way is stopped, not failed
+        if (job.stopped) { set(id, 'skipped', 'stopped'); continue }
         set(id, 'failed', String(err.message || err))
         if (needed) { job.fatal = true; break }
       }
@@ -307,22 +317,25 @@ export function autoJob(d) {
     else set('deploy', 'skipped', 'stopped')
     // the optional launch kit: posts written from the run's facts, never posted from here
     if (step('launch')) {
-      if (job.stopped || !d.writeLaunch) set('launch', 'skipped', job.stopped ? 'stopped' : 'no launch kit writer')
+      // nothing is announced before it is there: no live link and no video, no kit
+      const nothing = !job.url && !job.steps.some(s => s.id === 'video' && s.state === 'done')
+      if (job.stopped || !d.writeLaunch || nothing) set('launch', 'skipped', job.stopped ? 'stopped' : nothing ? 'nothing to launch yet: no live link' : 'no launch kit writer')
       else {
         try {
           set('launch', 'working', 'writing the posts from what was built')
-          const kit = d.writeLaunch(job.run)
+          const kit = await d.writeLaunch(job.run)
           set('launch', 'done', `${kit.posts.length} posts ready in the launch kit. Nothing is posted until you press Post on each one.`)
         } catch (err) { set('launch', 'failed', String(err.message || err)) }
       }
     }
     job.end = Date.now()
-    job.state = job.url ? 'done' : 'failed'
-    job.message = job.url ? `live at ${job.url}` : (job.steps.find(s => s.state === 'failed')?.note || 'nothing deployed')
+    // Stop ends it as stopped: what was built is kept, and nothing failed
+    job.state = job.stopped ? 'stopped' : job.url ? 'done' : 'failed'
+    job.message = job.stopped ? 'stopped' : job.url ? `live at ${job.url}` : (job.steps.find(s => s.state === 'failed')?.note || 'nothing deployed')
     push()
   }
 
-  function start({ prompt, games, pack, intake, launch, only, project, piece }) {
+  function start({ prompt, games, pack, intake, launch, only, project, piece, brand, appkit }) {
     prompt = String(prompt || '').trim().slice(0, 1200)
     if (!prompt) throw new Error('say what to make')
     if (job?.state === 'working') throw new Error('auto mode is already running')
@@ -337,12 +350,16 @@ export function autoJob(d) {
       steps.splice(steps.findIndex(([id]) => id === 'video'), 0, ['checks', `✅ Check it works: ${(p.checks || []).map(c => c.label.toLowerCase()).join(', ')}`])
     }
     if (launch) steps.push(['launch', '📣 Write the launch kit'])
-    job = { state: 'working', launch: !!launch, prompt, brief: p ? packBrief(p, prompt, iv) : prompt, pack: p, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
+    // an app locked in the Studio's App kit (docs/specs/37-studio-first.md): built from its plan, then checked against it
+    const kit = !p && appkit && typeof appkit === 'object' ? cleanKit(appkit) : null
+    if (kit && !kit.screens.length) throw new Error('the app plan has no screens')
+    if (kit) steps.splice(steps.findIndex(([id]) => id === 'video'), 0, ['spec', '✅ Check it against the plan'])
+    job = { state: 'working', brand: brand || null, launch: !!launch, prompt, brief: p ? packBrief(p, prompt, iv) : kit ? `${prompt}\n\nThe locked app plan:\n${kitWords(kit)}` : prompt, pack: p, kit, intake: iv, games: mode, t0: Date.now(), run: null, url: null,
       // the project this run joins, by id or name (docs/specs/18-projects.md)
       project: typeof project === 'string' ? project.slice(0, 64) : null, piece: typeof piece === 'string' ? piece : null,
-      steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none') && (!Array.isArray(only) || id === 'design' || only.includes(id))).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
+      steps: steps.filter(([id]) => !((id === 'games' || id === 'shop') && mode === 'none') && (!Array.isArray(only) || id === 'design' || id === 'spec' || only.includes(id))).map(([id, label]) => ({ id, label: id === 'games' ? (mode === 'big' ? '🎮 One big game on /play' : '🎮 Three mini games on /play') : label, state: 'wait' })) }
     push()
-    go().catch(err => { Object.assign(job, { state: 'failed', message: String(err.message || err), end: Date.now() }); push() })
+    go().catch(err => { Object.assign(job, { state: job.stopped ? 'stopped' : 'failed', message: job.stopped ? 'stopped' : String(err.message || err), end: Date.now() }); push() })
     return view()
   }
 

@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { companionOf, heroLook, artList, sheetList, artBrief } from '../engine/game.mjs'
-import { askItem, takeAsks, askedBefore, keepAsked, askBrief, ASK_FILE, ASKED_FILE, ASKS_PER_STAGE } from '../engine/artask.mjs'
+import { askItem, takeAsks, askedBefore, keepAsked, askBrief, ASK_FILE, ASKED_FILE, ASKS_PER_STAGE, ASKS_PER_BUILD } from '../engine/artask.mjs'
 import { syncGodotArt } from '../engine/godotfirst.mjs'
 
 const rooftop = { title: 'Rooftop Signal', view: 'side', setting: 'a rainy city of rooftops', hero: 'Mika, a courier in a yellow coat who runs with her cat Kumo, a grey stray with a bell', pitch: 'A rooftop runner: climb and repair relays' }
@@ -124,4 +124,16 @@ test('the stage is told how to ask, with the cap', () => {
   assert.match(b, /ART_REQUESTS\.json/); assert.match(b, /at most 3 per slice/); assert.match(b, /ART_ASKED\.json/)
   assert.equal(askBrief({ cap: 0 }), '')
   assert.ok(ASKS_PER_STAGE >= 1)
+})
+
+test('a slice can ask for a tile, an interface piece and an effect', () => {
+  const tile = askItem(rooftop, { kind: 'tile', what: 'wet corrugated tin roof' })
+  assert.equal(tile.id, 'tile-wet-corrugated-tin-roof'); assert.equal(tile.kind, 'tile'); assert.match(tile.gen, /seamless repeating/i)
+  const ui = askItem(rooftop, { kind: 'ui', what: 'a relay signal meter frame' })
+  assert.equal(ui.kind, 'ui'); assert.ok(ui.cutout && /^ui-/.test(ui.id)); assert.match(ui.gen, /#FF00FF/); assert.match(ui.gen, /no words/)
+  const fx = askItem(rooftop, { kind: 'effect', what: 'relay spark', frames: 'a blue arc that jumps, forks and fades' })
+  assert.equal(fx.id, 'fx-relay-spark'); assert.ok(fx.fx && fx.kind === 'sheet' && !fx.after); assert.match(fx.layout, /pure black/)
+  assert.match(askItem(rooftop, { kind: 'effect', what: 'rain splash' }).frames, /fades to nothing/)
+  assert.match(askBrief(), /a repeating tile, an interface piece, an effect/)
+  assert.ok(ASKS_PER_STAGE >= 6 && ASKS_PER_BUILD >= 24)
 })

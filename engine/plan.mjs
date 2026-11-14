@@ -12,6 +12,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rename
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { PRICE } from './meshy.mjs'
+import { keyFor } from './keycolor.mjs'
+import { shapeOf, familyCards, noShooting, GUNS, planSummary, engineFrom } from './planshape.mjs'
+import { suggestStarter, setStarter, starterView, starterSpec } from './starters.mjs'
 
 // ---------- the questions: one at a time, 4–6 chips each, or your own words
 export const PLAN_QUESTIONS = [
@@ -54,13 +57,76 @@ const clean = (v, n = 300) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(
 const twoD = look => has(look, /pixel|flat|2d/i)
 const ROLES = ['Lead', 'Bruiser', 'Gunner', 'Blade', 'Caster', 'Support', 'Rogue', 'Lancer']
 const WEAPONS = { 'Stylish combos': ['twin blades', 'greatsword', 'gauntlets', 'scythe', 'katana', 'spear', 'whip blade', 'hammer'], Shooting: ['twin pistols', 'rifle', 'shotgun', 'launcher', 'bow', 'railgun', 'SMG', 'cannon'] }
-const weaponsFor = combat => WEAPONS[combat] || WEAPONS[has(combat, /shoot|gun/i) ? 'Shooting' : 'Stylish combos']
+// "no shooting" is not shooting: only a positive answer gets guns
+const weaponsFor = combat => WEAPONS[combat] || WEAPONS[!noShooting({ combat }) && has(combat, /shoot|gun|ranged/i) ? 'Shooting' : 'Stylish combos']
+const MELEE = WEAPONS['Stylish combos']
+
+// an answer that forbids something wins over every card: "no shooting" leaves no gun anywhere
+function scrub(cards, a) {
+  if (!noShooting(a)) return cards
+  for (const body of Object.values(cards)) {
+    for (const [k, v] of Object.entries(body)) {
+      if (k === 'roster') v.forEach((r, i) => { if (GUNS.test(r.weapon)) r.weapon = MELEE[i % MELEE.length]; if (GUNS.test(r.look)) r.look = '' })
+      else if (typeof v === 'string' && GUNS.test(v) && v !== a.combat) body[k] = ''
+    }
+  }
+  return cards
+}
 
 // ---------- answers -> cards
-export function planFromAnswers({ idea = '', answers = {}, title = '' } = {}) {
+// env: { godot } whether a Godot binary is on this machine (undefined: not checked);
+// hint: the planner model's reading of the idea (engine/planshape.mjs askShape), or null.
+// the plan, with the starter the planner suggests for it (engine/starters.mjs)
+export function planFromAnswers(input = {}, env = {}, hint = null) {
+  const plan = shapePlan(input, env, hint)
+  plan.starter = suggestStarter(plan)
+  return plan
+}
+function shapePlan({ idea = '', answers = {}, title = '', note = '', force = null } = {}, env = {}, hint = null) {
   const given = Object.fromEntries(Object.entries(answers || {}).map(([k, v]) => [k, clean(v)]).filter(([k, v]) => v && PLAN_QUESTIONS.some(q => q.id === k)))
   const a = { ...DEFAULTS, ...given }
-  const n = Math.max(1, Math.min(12, parseInt(a.size, 10) || 3))
+  const shape = shapeOf({ idea, given, answers: a, title, note, force: force || {} }, env, hint)
+  const key = keyFor(`${a.look} ${idea}`)
+  const base = {
+    title: shape.title || 'New game',
+    idea: clean(idea, 600),
+    answers: a,
+    given,
+    ...(force ? { decided: force, note: clean(note, 600) } : {}),
+    shape,
+    engine: shape.engine,
+    key,
+    sheets: [], mocks: [], backdrops: [],
+    style: { name: a.look, locked: false, refs: [] },
+    gate: { locked: false, testFirst: false, price: null, lockedAt: null, phase: null },
+    build: { characters: [], props: [], animations: null, sprites: [] }
+  }
+  const settings = { ...SETTINGS, ...(shape.size === 'normal' ? {} : { stages: shape.scale.stages, backdropsPerStage: shape.scale.perStage }) }
+  if (shape.family !== 'action') {
+    const fam = familyCards({ a, given, idea: clean(idea, 600), note: clean(note, 300), shape, hint })
+    const cards = scrub(Object.fromEntries(fam.cards.map(([id, , body]) => [id, body])), a)
+    const systems = {
+      logins: a.money !== 'Free',
+      payments: has(a.money, /cosmetic|premium|gacha/i),
+      subscriptions: has(a.money, /subscri/i),
+      leaderboard: false,
+      gacha: has(a.money, /gacha/i),
+      pilot: false,
+      enemyAI: false,
+      loadout: false,
+      ...fam.systems
+    }
+    const names = [...fam.cards.map(([id, name]) => [id, name]), ['systems', 'Systems']]
+    cards.systems = Object.fromEntries(SYSTEMS.map(([k, label]) => [label, systems[k] ? 'on' : 'off']))
+    return {
+      ...base,
+      cards: names.map(([id, name]) => ({ id, name, body: cards[id] })),
+      systems,
+      settings,
+      art: { sheets: fam.sheets, shots: fam.shots.slice(0, shape.scale.mocks), sprites: fam.sprites }
+    }
+  }
+  const n = Math.max(1, Math.min(shape.size === 'normal' || shape.size === 'big' ? 12 : 2, parseInt(a.size, 10) || 3))
   const girls = has(a.cast, /girl|women|female|heroine/i)
   const weapons = weaponsFor(a.combat)
   const roster = Array.from({ length: n }, (_, i) => ({ name: `${girls ? 'Heroine' : 'Hero'} ${i + 1}`, role: ROLES[i % ROLES.length], look: '', weapon: weapons[i % weapons.length] }))
@@ -72,13 +138,13 @@ export function planFromAnswers({ idea = '', answers = {}, title = '' } = {}) {
     cast: { count: String(n), rule: a.cast, roster },
     story: { premise: clean(idea, 400) || `An original ${a.genre.toLowerCase()} with ${girls ? 'a cast of heroines' : 'a new cast'}`, acts: '3', ending: 'One ending, unlocked by the final boss' },
     combat: combos
-      ? { style: 'Combos with a launcher, air juggles and a D–SSS style rank', ults: 'Orb-charged cinematic ults with cut-ins', weapons: 'Switch weapons mid-combo', tools: 'Grenades', tactic: 'Hit and run against strong enemies' }
+      ? { style: 'Combos with a launcher, air juggles and a D–SSS style rank', ults: 'Orb-charged cinematic ults with cut-ins', weapons: 'Switch weapons mid-combo', tools: noShooting(a) ? '' : 'Grenades', tactic: 'Hit and run against strong enemies' }
       : { style: a.combat, ults: 'One charged special', weapons: 'One weapon each', tools: '', tactic: '' },
     enemies: fights
       ? { tiers: bosses ? 'Minions, elites, bosses' : a.enemies, boss: bosses ? '3 stages, switches weapons each stage' : '', final: bosses ? 'A final boss with asura arms' : '', telegraphs: 'Every attack is telegraphed' }
       : { tiers: 'None', boss: '', final: '', telegraphs: '' },
     progression: { levelUp: a.progression, ngPlus: has(a.progression, /new game/i) || combos ? 'New Game+' : '', growth: 'An aura and wings that grow', pet: 'A pet companion' },
-    world: { setting: '', stages: String(SETTINGS.stages), camera: twoD(a.look) ? 'Side view' : 'Third person, over the shoulder', backdrops: `${SETTINGS.backdropsPerStage} painted panoramas a stage` },
+    world: { setting: shape.setting || '', stages: String(settings.stages), camera: shape.art === '2d' || twoD(a.look) ? 'Side view' : 'Third person, over the shoulder', backdrops: `${settings.backdropsPerStage} painted panoramas a stage` },
     look: { style: a.look, palette: '', locked: 'no' },
     money: { model: a.money, gacha: cosmetics ? 'Cosmetics only, published rates, a pity counter' : '', subscription: has(a.money, /subscri/i) ? 'Monthly, test mode' : '', carry: cosmetics ? 'Cosmetics carry into the game' : '' }
   }
@@ -93,23 +159,40 @@ export function planFromAnswers({ idea = '', answers = {}, title = '' } = {}) {
     loadout: cosmetics
   }
   cards.systems = Object.fromEntries(SYSTEMS.map(([k, label]) => [label, systems[k] ? 'on' : 'off']))
+  scrub(cards, a)
   return {
-    title: clean(title, 80) || (clean(idea, 400).match(/^([A-Z][\w'’ -]{1,30}?)(?:[,:.—–-]|\s+is\b)/)?.[1]?.trim() || 'New game'),
-    idea: clean(idea, 600),
-    answers: a,
+    ...base,
     cards: CARDS.map(([id, name]) => ({ id, name, body: cards[id] })),
     systems,
-    sheets: [], mocks: [], backdrops: [],
-    style: { name: a.look, locked: false, refs: [] },
-    settings: { ...SETTINGS },
-    gate: { locked: false, testFirst: false, price: null, lockedAt: null, phase: null },
-    build: { characters: [], props: [], animations: null }
+    settings,
+    art: { sheets: null, shots: null, sprites: [] }
   }
+}
+
+// ---------- re-plan in place: the same plan id, a fresh shape from the idea, the answers and a note
+// ("this is not what I asked for"). Pictures and the build of the old shape are dropped (their files
+// stay on disk); nothing is spent. A title the person typed is kept.
+// A planner conversation locked again (engine/talkplan.mjs) hands in its idea, answers and decisions.
+export function replan(plan, { note = '', idea, answers, force, title } = {}, env = {}, hint = null) {
+  if (plan.build?.state === 'building') throw Object.assign(new Error('the build is running'), { status: 409 })
+  // plans made before the fix kept only the answers merged with the defaults: a default is not an answer
+  const given = plan.given || Object.fromEntries(Object.entries(plan.answers || {}).filter(([k, v]) => DEFAULTS[k] !== v))
+  const fresh = planFromAnswers({ idea: idea ?? plan.idea, answers: answers ?? given, title: plan.titleSet ? plan.title : (title || ''), note, force: force ?? plan.decided ?? null }, env, hint)
+  const was = plan.shape?.family || 'action'
+  const keep = { id: plan.id, v: plan.v, kind: plan.kind, created: plan.created, from: plan.from ?? null, titleSet: plan.titleSet }
+  const starter = plan.starter
+  for (const k of Object.keys(plan)) delete plan[k]
+  Object.assign(plan, keep, fresh, { replanned: { at: new Date().toISOString(), note: clean(note, 300), was } })
+  // the starter choices the person made stay
+  plan.starter = suggestStarter(plan, starter)
+  return plan
 }
 
 export const card = (plan, id) => plan.cards.find(c => c.id === id)
 export const roster = plan => (card(plan, 'cast')?.body.roster || []).filter(r => r && clean(r.name))
-export const is3d = plan => !twoD(plan.answers?.look || card(plan, 'look')?.body.style)
+export const is3d = plan => plan.shape ? plan.shape.art === '3d' : !twoD(plan.answers?.look || card(plan, 'look')?.body.style)
+// the cut-out pictures a 2D plan paints at build time (engine/planart.mjs spriteJobs)
+export const sprites = plan => is3d(plan) ? [] : (plan.art?.sprites || [])
 
 // ---------- editing: never spends, and reopens the gate when the plan was locked
 export function editCard(plan, id, body = {}) {
@@ -130,6 +213,18 @@ export function setSystems(plan, on = {}) {
   for (const [k] of SYSTEMS) if (k in on) plan.systems[k] = !!on[k]
   const c = card(plan, 'systems')
   if (c) c.body = Object.fromEntries(SYSTEMS.map(([k, label]) => [label, plan.systems[k] ? 'on' : 'off']))
+  return reopen(plan)
+}
+// the person keeps, changes or removes a starter choice (engine/starters.mjs setStarter); the engine is the
+// build's target too, and stays decided through a re-plan
+export function editStarter(plan, change = {}) {
+  plan.starter ||= suggestStarter(plan)
+  setStarter(plan, change)
+  if (change.key === 'engine') {
+    plan.shape = { ...plan.shape, engine: engineFrom(change.value) }
+    plan.engine = plan.shape.engine
+    plan.decided = { ...(plan.decided || {}), engine: change.value }
+  }
   return reopen(plan)
 }
 function reopen(plan) {
@@ -157,16 +252,19 @@ export function planPrice(plan) {
   const sys = SYSTEMS.filter(([k]) => plan.systems?.[k]).length
   const bosses = has(card(plan, 'enemies')?.body.boss, /\w/)
   const runs = 2 + sys + (bosses ? 1 : 0)
-  const stages = Math.max(1, parseInt(card(plan, 'world')?.body.stages, 10) || SETTINGS.stages)
+  const stages = Math.max(1, parseInt(card(plan, 'world')?.body.stages, 10) || Number(plan.settings?.stages) || SETTINGS.stages)
+  const shape = plan.shape || {}
   // pictures still to paint (image runs on the person's own login, not credits)
   const done = list => (list || []).filter(x => x.state === 'done').length
   const art = new Map((plan.build?.characters || []).map(c => [c.name, c]))
+  const madeSprites = new Set((plan.build?.sprites || []).filter(x => x.state === 'done').map(x => x.name))
   const pics = {
-    sheets: Math.max(0, 2 - done(plan.sheets)),
-    mocks: Math.max(0, 5 - done(plan.mocks)),
-    backdrops: Math.max(0, stages * Number(plan.settings?.backdropsPerStage ?? SETTINGS.backdropsPerStage) - done(plan.backdrops)),
-    closeups: cast.reduce((n, r) => n + ['cutin', 'portrait'].filter(w => art.get(r.name)?.[w]?.state !== 'done').length, 0),
-    turnarounds: todo.reduce((n, r) => n + ['front', 'side', 'back'].filter(v => art.get(r.name)?.[v]?.state !== 'done').length, 0)
+    sheets: Math.max(0, (plan.art?.sheets ? Math.min(plan.art.sheets.length, shape.size === 'tiny' ? 2 : 4) : 2) - done(plan.sheets)),
+    mocks: Math.max(0, (plan.art?.shots?.length ?? 5) - done(plan.mocks)),
+    backdrops: shape.backdrops === false ? 0 : Math.max(0, stages * Number(plan.settings?.backdropsPerStage ?? SETTINGS.backdropsPerStage) - done(plan.backdrops)),
+    closeups: shape.closeups === false ? 0 : cast.reduce((n, r) => n + ['cutin', 'portrait'].filter(w => art.get(r.name)?.[w]?.state !== 'done').length, 0),
+    turnarounds: todo.reduce((n, r) => n + ['front', 'side', 'back'].filter(v => art.get(r.name)?.[v]?.state !== 'done').length, 0),
+    ...(sprites(plan).length ? { sprites: sprites(plan).filter(x => !madeSprites.has(x.name)).length } : {})
   }
   const images = Object.values(pics).reduce((s, n) => s + n, 0)
   const one = todo.length ? COST.model + COST.rig : 0
@@ -179,7 +277,7 @@ export function lockPlan(plan, { credits, testFirst = false } = {}) {
   const price = planPrice(plan)
   const ask = testFirst ? price.first.credits : price.credits
   if (Number(credits) !== ask) throw Object.assign(new Error(`the price is ${ask} credits now`), { status: 402, price })
-  plan.gate = { locked: true, testFirst: !!testFirst, price, lockedAt: new Date().toISOString(), phase: testFirst ? 'first' : 'all', credits: ask }
+  plan.gate = { locked: true, testFirst: !!testFirst, price, lockedAt: new Date().toISOString(), phase: testFirst ? 'first' : 'all', credits: ask, starter: starterSpec(plan.starter ? plan : { ...plan, starter: suggestStarter(plan) }) }
   return plan
 }
 // Every route that spends for a plan calls this first.
@@ -226,8 +324,8 @@ export function planStore(dir) {
       renameSync(tmp, file(plan.id))
       return plan
     },
-    create(input = {}) {
-      const plan = { id: `p-${randomBytes(5).toString('hex')}`, v: 1, kind: 'game', created: new Date().toISOString(), from: input.from || null, ...planFromAnswers(input) }
+    create(input = {}, env = {}, hint = null) {
+      const plan = { id: `p-${randomBytes(5).toString('hex')}`, v: 1, kind: 'game', created: new Date().toISOString(), from: input.from || null, ...planFromAnswers(input, env, hint) }
       return this.save(plan)
     },
     list() {
@@ -240,4 +338,11 @@ export function planStore(dir) {
 }
 
 // What the board needs: the plan and its price right now.
-export const planView = plan => ({ ...plan, price: planPrice(plan) })
+// The first picture (a cheap check of direction, gate phase "first"): shown with the plan in plain words.
+export function firstPicture(plan) {
+  const s = (plan.build?.sprites || [])[0]
+  if (s?.state === 'done' && s.src) return { name: s.name, src: s.src }
+  const c = (plan.build?.characters || []).find(x => x.front?.state === 'done' && x.front.src)
+  return c ? { name: c.name, src: c.front.src } : null
+}
+export const planView = plan => ({ ...plan, price: planPrice(plan), summary: planSummary(plan), first: firstPicture(plan), starterView: starterView(plan.starter ? plan : { ...plan, starter: suggestStarter(plan) }) })

@@ -30,8 +30,9 @@ Don't invent facts the person didn't give (prices, addresses, team names); the p
 
 ## Run it
 
-- Call `swarm_design` with `brief` (and `agents`, 8 to 24, default 16). It waits for the build and returns a summary: pages, layers built, time, and where the plan was saved.
+- Call `swarm_design` with `brief` (and `agents`, 2 to 24, default 8). It waits for the build and returns a summary: pages, layers built, time, and where the plan was saved.
 - Pass `wait: false` to return at once with the canvas URL, when the person wants to watch.
+- A new site asks the person first, in the Studio chat: skip the setup steps and build now, go step by step, or pick steps to skip. Then `swarm_design` returns `started: false, waiting: "person"`. Don't answer for them and don't call it again: tell them to answer in the Studio chat (the swarm pane shows it). `hermes swarm --build` is their own way to skip the question.
 - In Hermes Desktop the **swarm** pane shows the canvas live; elsewhere give the person the URL from the result (it only opens on this computer).
 - The person can also type `/swarm <brief>` or run `hermes swarm "<brief>"` themselves.
 

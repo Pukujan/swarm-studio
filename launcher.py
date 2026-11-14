@@ -4,14 +4,16 @@ Self-contained on purpose: the agent half (``__init__.py``) imports it as a
 package module, and the dashboard route (``dashboard/plugin_api.py``) loads it
 by path, because the dashboard loader imports that file standalone.
 
-The server is a Node process bound to 127.0.0.1. It holds model API keys in
-memory only (never on disk) and accepts runs only with a per-install token kept
-in ``$HERMES_HOME/swarm-studio/token``.
+The server is a Node process bound to 127.0.0.1. It accepts runs only with a
+per-install token kept in ``$HERMES_HOME/swarm-studio/token``.
 
-Models come from Hermes: the plugin registers two auxiliary model slots
-(``swarm_studio_planner`` and ``swarm_studio_builder``), so they show up in
-Hermes's model picker, and each run resolves them through Hermes's own provider
-routing. ``SWARM_STUDIO_*`` environment variables override that.
+Models stay in Hermes: the plugin registers three auxiliary model slots
+(``swarm_studio_planner``, ``swarm_studio_builder`` and ``swarm_studio_reviewer``),
+so they show up in Hermes's model picker, and the server's model calls go back
+to Hermes through the bridge (bridge.py, bridge_llm.py), which answers them with
+``ctx.llm``. No provider key reaches the server. The one key it may get is the
+plugin's own ``SWARM_STUDIO_API_KEY``, when the person set it (Nous catalog
+review, point 2).
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import signal
 import shutil
 import subprocess
 import sys
@@ -30,16 +33,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DEFAULT_PORT = 4319
 KEY_ENV = "SWARM_STUDIO_API_KEY"
-DEFAULT_ENDPOINT = "https://api.inferhub.dev/v1"
-DEFAULT_MODEL = "cb/deepseek-v4.1-flash"
-# role -> (Hermes auxiliary slot, model override variable)
-SLOTS = {
-    "planner": ("swarm_studio_planner", "SWARM_STUDIO_PLANNER_MODEL"),
-    "worker": ("swarm_studio_builder", "SWARM_STUDIO_WORKER_MODEL"),
-    # looks at screenshots of the finished pages; follows Hermes's vision model
-    "reviewer": ("swarm_studio_reviewer", "SWARM_STUDIO_REVIEWER_MODEL"),
-}
-OPTIONAL = {"reviewer"}
+# Optional keys and addresses, declared in plugin.yaml and read through Hermes's secret scope when the
+# server starts (start()). Nothing here is required: each one switches a service on.
+PASSED_KEYS = (
+    "CKFF_API_KEY", "CKFF_BASE_URL", "CKFF_MODEL",              # pictures when Hermes's image tool cannot paint
+    "MESHY_API_KEY",                                            # 3D characters (asks before spending credits)
+    "PEXELS_API_KEY", "PEXELS_OCTO_LEASE",                      # stand-in photos
+    "OCTO_SWARM_WS", "OCTO_SWARM_WORKSPACE_ID", "OCTO_BASE_URL",  # public copies of stand-in photos
+    "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",                # a generated app's data
+    "STRIPE_SECRET_KEY",                                        # a generated app's checkout (test keys only)
+    "RESEND_API_KEY",                                           # a generated app's email (only when its App kit chose Resend)
+    "VERCEL_TOKEN", "CLOUDFLARE_API_TOKEN",                     # publishing
+)
+# role -> the Hermes auxiliary slot it uses (registered in __init__.py)
+SLOTS = {"planner": "swarm_studio_planner", "worker": "swarm_studio_builder", "reviewer": "swarm_studio_reviewer"}
+# With SWARM_STUDIO_API_KEY set, the server calls this endpoint and these models with it, not Hermes.
+KEY_SETTINGS = ("SWARM_STUDIO_BASE_URL", "SWARM_STUDIO_PLANNER_MODEL", "SWARM_STUDIO_WORKER_MODEL", "SWARM_STUDIO_REVIEWER_MODEL")
 
 
 def data_dir() -> Path:
@@ -76,50 +85,12 @@ def _secret(name: str) -> str | None:
     return get_secret(name)
 
 
-def _from_hermes(slot: str) -> dict:
-    """Resolve one auxiliary slot through Hermes's provider routing.
-
-    The swarm streams chat completions from its own process, so only providers
-    with an OpenAI-compatible endpoint work; others report why instead."""
-    try:
-        from agent.auxiliary_client import get_text_auxiliary_client
-    except ImportError:
-        return {"error": "not running inside Hermes"}
-    try:
-        client, model = get_text_auxiliary_client(slot)
-    except Exception as exc:  # provider setup errors come back as messages, not crashes
-        return {"error": f"Hermes could not resolve a model: {exc}"}
-    if client is None or not model:
-        return {"error": "no model is configured in Hermes"}
-    endpoint = str(getattr(client, "base_url", "") or "").rstrip("/")
-    key = getattr(client, "api_key", None)
-    if not endpoint.startswith("http") or not isinstance(key, str) or not key or type(client).__module__.split(".")[0] != "openai":
-        return {"error": f"{type(client).__name__} has no OpenAI-compatible endpoint; pick a chat-completions provider for {slot}"}
-    return {"base_url": endpoint, "api_key": key, "model": model, "source": f"Hermes auxiliary.{slot}"}
-
-
-def resolve_models() -> dict:
-    """{role: {base_url, api_key, model, source} | {error}} for the planner and the builders.
-
-    Precedence: SWARM_STUDIO_API_KEY (with its base URL and models) when set, then
-    the Hermes slot, with SWARM_STUDIO_*_MODEL overriding the model either way."""
-    key = _secret(KEY_ENV)
-    out = {}
-    for role, (slot, model_env) in SLOTS.items():
-        if key:
-            got = {"base_url": (os.environ.get("SWARM_STUDIO_BASE_URL") or DEFAULT_ENDPOINT).rstrip("/"),
-                   "api_key": key, "model": DEFAULT_MODEL, "source": KEY_ENV}
-        else:
-            got = _from_hermes(slot)
-        if "error" not in got and os.environ.get(model_env):
-            got["model"] = os.environ[model_env]
-        out[role] = got
-    return out
-
-
 def describe_models() -> dict:
-    """resolve_models() without keys, for people and logs."""
-    return {role: {k: v for k, v in m.items() if k != "api_key"} for role, m in resolve_models().items()}
+    """Where each role's model calls go, for people and logs. Never a key."""
+    if _secret(KEY_ENV):
+        base = (os.environ.get("SWARM_STUDIO_BASE_URL") or "https://api.inferhub.dev/v1").rstrip("/")
+        return {role: {"base_url": base, "model": os.environ.get(f"SWARM_STUDIO_{role.upper()}_MODEL") or "cb/deepseek-v4.1-flash", "source": KEY_ENV} for role in SLOTS}
+    return {role: {"base_url": "Hermes (ctx.llm)", "model": f"auxiliary.{slot}", "source": "Hermes"} for role, slot in SLOTS.items()}
 
 
 def token() -> str:
@@ -155,15 +126,70 @@ def state() -> dict | None:
     return got if got.get("app") == "swarm-studio" else None
 
 
+def code_stamp() -> float:
+    """When the server's own code last changed on disk (the newest file under server/ and engine/)."""
+    newest = 0.0
+    for folder in ("server", "engine"):
+        for f in (ROOT / folder).glob("*.mjs"):
+            try:
+                newest = max(newest, f.stat().st_mtime)
+            except OSError:
+                pass
+    return newest
+
+
+def stale(st: dict, stamp: float | None = None) -> bool:
+    """True when the running server was started before its code on disk last changed: the plugin was
+    updated under it. A server too old to say when it started is left alone (it cannot be asked to stop)."""
+    booted = st.get("booted")
+    if not isinstance(booted, (int, float)) or not st.get("pid"):
+        return False
+    return (code_stamp() if stamp is None else stamp) > booted / 1000 + 1
+
+
+def _retire(st: dict) -> bool:
+    """Stop an idle, outdated server so the next one runs the code now on disk. Never a busy one."""
+    if st.get("busy"):
+        return False
+    try:
+        os.kill(int(st["pid"]), signal.SIGTERM)
+    except (OSError, ValueError, KeyError):
+        return False
+    for _ in range(50):  # ~5s for the port to come free
+        if not state():
+            return True
+        time.sleep(0.1)
+    return False
+
+
+# Set by the package (``__init__.py``) to bridge.start: once the server answers, this Hermes process attaches
+# its bridge, so the server can ask Hermes for pictures and clips. None when this file is loaded on its own.
+on_server = None
+
+
+def _bridged(result: dict) -> dict:
+    if result.get("running") and on_server is not None:
+        try:
+            on_server()
+        except Exception:  # the build still runs; pictures fall back as when Hermes is closed
+            pass
+    return result
+
+
 def ensure_server() -> dict:
-    """Start the canvas server if it is not already up. Returns {url} or {error}."""
-    if state():
+    """Start the canvas server if it is not already up, and attach this process's Hermes bridge.
+    Returns {url} or {error}.
+
+    A server left running from before a plugin update is replaced when it is idle, so an update
+    takes effect without the person finding and stopping a background process."""
+    return _bridged(_ensure_server())
+
+
+def _ensure_server() -> dict:
+    st = state()
+    if st and not (stale(st) and _retire(st)):
         return {"running": True, "started": False, "url": canvas_url()}
 
-    models = resolve_models()
-    problems = [f"{role}: {m['error']}" for role, m in models.items() if "error" in m and role not in OPTIONAL]
-    if problems:
-        return {"running": False, "error": "Swarm Studio has no usable model. " + "; ".join(problems)}
     node = os.environ.get("SWARM_STUDIO_NODE") or shutil.which("node")
     if not node:
         return {"running": False, "error": "Node.js 20+ is required (no `node` on PATH)."}
@@ -178,15 +204,16 @@ def ensure_server() -> dict:
                  "HOMEDRIVE", "HOMEPATH", "NVM_HOME", "NVM_SYMLINK")
     env = {k: os.environ[k] for k in keep if k in os.environ}
     env.update(SWARM_TOKEN=token(), SWARM_RUNS_DIR=str(data_dir() / "runs"), SWARM_DATA_DIR=str(data_dir()))
-    # Images come from Hermes's own image providers (your Codex login, for one):
-    # the server runs imagegen.py with this Python and these import paths.
+    # Pictures and clips come from Hermes's own image and video tools through the bridge (bridge.py),
+    # which attaches itself once the server is up. The Python and its import paths are for the Feed and
+    # connector helpers.
     env.update(SWARM_HERMES_BIN=shutil.which("hermes") or "", SWARM_HERMES_PY=sys.executable, SWARM_HERMES_PYTHONPATH=os.pathsep.join(p for p in sys.path if p and os.path.isdir(p)))
-    # Defaults for builds started from the canvas itself; Hermes sends fresh ones with each run.
-    for role, m in models.items():
-        if "error" in m:
-            continue
-        prefix = f"SWARM_{role.upper()}_"
-        env.update({prefix + "BASE_URL": m["base_url"], prefix + "API_KEY": m["api_key"], prefix + "MODEL": m["model"]})
+    # Model calls go back to Hermes through the bridge, so no provider key is handed over. The one
+    # exception is the plugin's own key, when the person set it (Nous catalog review, point 2).
+    own = _secret(KEY_ENV)
+    if own:
+        env[KEY_ENV] = own
+        env.update({k: os.environ[k] for k in KEY_SETTINGS if os.environ.get(k)})
     # Optional: ElevenLabs music and sound effects for the Film studio, from Hermes's secret scope.
     try:
         eleven = _secret("ELEVENLABS_API_KEY")
@@ -194,6 +221,16 @@ def ensure_server() -> dict:
         eleven = None
     if eleven:
         env["SWARM_ELEVENLABS_KEY"] = eleven
+    # Every other optional key the studio can use (plugin.yaml, optional_env) reaches the server the
+    # same way: read here through Hermes's secret scope and handed over in its environment. The
+    # server and the engine read no .env file and no other credential store (catalog rule 11).
+    for name in PASSED_KEYS:
+        try:
+            value = _secret(name)
+        except Exception:  # an unscoped read under multiplexing: that service is simply not connected
+            value = None
+        if value:
+            env[name] = value
     if os.environ.get("SWARM_STUDIO_AGENTS"):
         env["SWARM_AGENTS"] = os.environ["SWARM_STUDIO_AGENTS"]
 
@@ -211,7 +248,9 @@ def ensure_server() -> dict:
             try:
                 subprocess.Popen(
                     [node, str(ROOT / "server" / "server.mjs"), "--port", str(port())],
-                    cwd=str(ROOT),
+                    # Not the plugin's folder: Windows locks a running program's working folder, and
+                    # `hermes plugins install --force` / update must be able to replace that folder.
+                    cwd=str(data_dir()),
                     env=env,
                     stdin=subprocess.DEVNULL,
                     stdout=log,
@@ -232,18 +271,86 @@ def ensure_server() -> dict:
     return {"running": False, "error": f"server did not answer on {base_url()}; see {data_dir() / 'server.log'}"}
 
 
-def start_run(brief: str, agents: int | None = None) -> dict:
+TALK_FIRST = ("Not started: the brief asks to talk before anything is built. Talk it through first, then send the "
+              "agreed brief without that line (or add --build). In the studio, the Make box opens that talk with the planner.")
+
+
+def talk_first(brief: str) -> bool:
+    """True when the brief says not to build yet (the planner model reads it; engine/talkplan.mjs)."""
+    try:
+        got = _request("/api/discuss/read", method="POST", body={"text": brief, "kind": "site"}, timeout=12)
+    except (OSError, urllib.error.URLError, ValueError):
+        return False
+    return got.get("intent") == "talk"
+
+
+ASKED = ("Swarm asked the person in the Studio chat whether to skip the setup steps or go through them, and waits "
+         "for their answer there. Don't answer for them: tell them to answer in the Studio chat.")
+
+
+def _error_body(exc: urllib.error.HTTPError) -> dict:
+    """The JSON body of a refused request, read once (the stream can be read only once)."""
+    try:
+        got = json.loads(exc.read().decode() or "{}")
+    except (OSError, ValueError):
+        got = {}
+    return got if isinstance(got, dict) else {}
+
+
+def refusal(exc: urllib.error.HTTPError, got: dict | None = None) -> dict:
+    """A refused request as {error, code, action}: the server says why (engine/hermeshealth.mjs) and what to do."""
+    if got is None:
+        got = _error_body(exc)
+    message = got.get("message") or got.get("error") or f"the server answered HTTP {exc.code}"
+    out = {"error": str(message), "code": str(got.get("code") or exc.code)}
+    if got.get("action"):
+        out["action"] = str(got["action"])
+    return out
+
+
+def start_run(brief: str, agents: int | None = None, force: bool = False, sure: bool = False) -> dict:
+    """Start a website build. A new one asks the person first in the Studio chat (docs/decisions/0020-ask-before-build.md):
+    then this answers {ask: True, chat, error: ASKED} and nothing builds. ``sure`` is a script's explicit "I'm sure"
+    (``hermes swarm --build``, remix); the ``swarm_design`` tool never sets it, so Hermes's model can't answer for
+    the person."""
     up = ensure_server()
     if not up.get("running"):
         return up
-    models = resolve_models()
-    body: dict = {"brief": brief, "models": {r: m for r, m in models.items() if "error" not in m}}
+    if not force and talk_first(brief):
+        return {"running": True, "talk": True, "error": TALK_FIRST, "url": up["url"]}
+    body: dict = {"brief": brief}
     if agents:
         body["agents"] = max(2, min(24, int(agents)))
+    if sure:
+        body["sure"] = True
     try:
-        got = _request("/api/run", method="POST", body=body, timeout=5)
+        # a Hermes that is starting up gets a few seconds to attach before the server says it is missing
+        got = _request("/api/run", method="POST", body=body, timeout=15)
+    except urllib.error.HTTPError as exc:
+        err = _error_body(exc)
+        if exc.code == 409 and err.get("error") == "ask":
+            if err.get("ask") == "talk":
+                return {"running": True, "talk": True, "error": TALK_FIRST, "url": up["url"]}
+            # the question waits in that chat: an open canvas shows it, for the person to answer
+            chat = err.get("chat")
+            if chat:
+                try:
+                    _request("/api/cmd", method="POST", body={"op": "chat", "target": chat}, timeout=5)
+                except (OSError, urllib.error.URLError, ValueError):
+                    pass
+            return {"running": True, "ask": True, "chat": chat, "question": err.get("text"),
+                    "options": [o.get("label") for o in err.get("options") or [] if isinstance(o, dict)],
+                    "error": ASKED, "url": up["url"]}
+        # refused with a reason (Hermes not there, or running an older copy): the server's own words
+        return {"running": True, "url": up["url"], **refusal(exc, err)}
     except (OSError, urllib.error.URLError, ValueError) as exc:
         return {"running": True, "error": f"could not start the run: {exc}"}
+    # the person started it here: an open canvas shows it (a canvas never switches builds by itself)
+    if got.get("run"):
+        try:
+            _request("/api/cmd", method="POST", body={"op": "open", "run": got["run"]}, timeout=5)
+        except (OSError, urllib.error.URLError, ValueError):
+            pass
     return {"running": True, "run": got.get("run"), "url": up["url"]}
 
 

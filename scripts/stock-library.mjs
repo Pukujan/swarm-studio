@@ -6,15 +6,14 @@
 // matcher in engine/standins.mjs reads). Resumable: queries already in the
 // manifest are skipped, and the manifest is saved after every query.
 //
-// Keys (names only; values come from the environment, ~/.hermes/.env or
-// ~/Documents/projects/.env): PEXELS_OCTO_LEASE or PEXELS_API_KEY, OCTO_SWARM_WS,
+// Keys (names only; values come from the environment only, never Hermes's own .env; e.g.
+// `set -a; . ~/Documents/projects/.env; set +a` first): PEXELS_OCTO_LEASE or PEXELS_API_KEY, OCTO_SWARM_WS,
 // and STOCK_VISION_KEY or inferhub_lease for the tagger (through Octo's proxy).
 //
 //   node scripts/stock-library.mjs [--limit N] [--only cafe,bakery] [--jobs 4] [--dry]
 
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -31,19 +30,7 @@ const limit = Number(arg('limit', 0)) || Infinity
 const only = arg('only') ? String(arg('only')).split(',').map(s => s.trim()) : null
 const dry = process.argv.includes('--dry')
 
-function envFiles() {
-  const out = {}
-  for (const f of [join(homedir(), 'Documents', 'projects', '.env'), join(homedir(), '.hermes', '.env')]) {
-    if (!existsSync(f)) continue
-    for (const line of readFileSync(f, 'utf8').split('\n')) {
-      const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line)
-      if (m) out[m[1]] = m[2].trim().replace(/^(['"])(.*)\1$/, '$2')
-    }
-  }
-  return out
-}
-const files = envFiles()
-const key = k => process.env[k] || files[k] || ''
+const key = k => process.env[k] || ''
 
 const pexels = key('PEXELS_API_KEY') ? { url: 'https://api.pexels.com', auth: key('PEXELS_API_KEY') }
   : key('PEXELS_OCTO_LEASE') ? { url: `${OCTO}/api/vault/proxy/https://api.pexels.com`, auth: `Bearer ${key('PEXELS_OCTO_LEASE')}` } : null
