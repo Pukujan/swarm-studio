@@ -4,7 +4,7 @@ import { layerDrag } from '../layerlink.js'
 import { clean } from '../clean.js'
 import { S, Q, WALL, BASE, BOOT, store, api, cosmosHooks, cam, els } from './core.js'
 import { view, setView, openGame } from './rooms.js'
-import { toggleModels, toggleTheme, showTab } from './settings.js'
+import { toggleModels, toggleTheme, showTab, lite } from './settings.js'
 import { viewing, files, openRun, loadFiles, stopReplay } from './replay.js'
 import { holds, shownRun } from './film.js'
 import { esc, sectionProps, commitEdit, remember, restoreLayer, design, SPACE, SIZES, FONTS, tw, layoutEl, sizeOf, SIZE_RE } from './design.js'
@@ -25,6 +25,9 @@ window.swarm = {
   layerDrag,
   get S() { return S }, get view() { return view }, get viewing() { return viewing }, holds, get files() { return files },
   replay: !!Q.get('replay'), wall: WALL, base: BASE, store, api, esc,
+  // a resting page's picture is being taken (lite mode): work on the real clock, which the motion check waits for
+  // before it moves the page's clock again (scripts/motion-check.mjs, docs/ux/MOTION.md)
+  get photographing() { return lite.busy },
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer, closePlayer, followPlayer,
   // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
