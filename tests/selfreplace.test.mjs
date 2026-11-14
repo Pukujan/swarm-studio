@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { codeStamp, staleCode } from '../engine/lifecycle.mjs'
 import { readFileSync } from 'node:fs'
-import { respawnSelf, SERVER_ENV, serverEnv } from '../engine/proc.mjs'
+import { respawnSelf, SERVER_ENV, SERVER_SETTINGS, serverEnv } from '../engine/proc.mjs'
 
 test('codeStamp is the newest .mjs change in the folders given; other files and missing folders do not count', () => {
   const d = mkdtempSync(join(tmpdir(), 'stamp-')), a = join(d, 'server'), b = join(d, 'engine')
@@ -58,4 +58,7 @@ test('the replacement\'s environment is exactly what launcher.py hands the serve
   const win = strings(start.match(/keep \+= \(([\s\S]*?)\)\n/)[1])
   const all = Object.fromEntries([...SERVER_ENV, ...win].map(k => [k, 'x']))
   assert.deepEqual(Object.keys(serverEnv(all, 'win32')).sort(), [...new Set([...SERVER_ENV, ...win])].sort())
+  // the few settings a hand-started server keeps for its successor (where it listens and writes) hold no secret
+  for (const k of SERVER_SETTINGS) assert.doesNotMatch(k, /KEY|TOKEN|SECRET|PASS/, k)
+  assert.deepEqual(serverEnv({ SWARM_PORT: '4397', SWARM_OUTPUT_DIR: '/o', OPENAI_API_KEY: 'SENTINEL' }, 'darwin'), { SWARM_PORT: '4397', SWARM_OUTPUT_DIR: '/o' })
 })

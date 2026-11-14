@@ -98,11 +98,14 @@ export const SERVER_ENV = [
   'PEXELS_OCTO_LEASE', 'OCTO_SWARM_WS', 'OCTO_SWARM_WORKSPACE_ID', 'OCTO_BASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
   'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'VERCEL_TOKEN', 'CLOUDFLARE_API_TOKEN', 'JEV_KEY'
 ]
+// and, from a server started by hand (a developer, a test), the settings that say where it listens and writes, so
+// its replacement does not move to the default port or folders. Not secrets: names only, no key, token or secret.
+export const SERVER_SETTINGS = ['SWARM_PORT', 'SWARM_OUTPUT_DIR', 'SWARM_SERVER_IDLE_MIN']
 // and on Windows, the system folders the launcher keeps there
 const SERVER_WINDOWS = ['SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA',
   'LOCALAPPDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'PROGRAMDATA', 'HOMEDRIVE', 'HOMEPATH', 'NVM_HOME', 'NVM_SYMLINK']
 export const serverEnv = (from = process.env, platform = process.platform) =>
-  pick(platform === 'win32' ? [...SERVER_ENV, ...SERVER_WINDOWS] : SERVER_ENV, from)
+  pick([...SERVER_ENV, ...SERVER_SETTINGS, ...(platform === 'win32' ? SERVER_WINDOWS : [])], from)
 
 // The server's own replacement, the same program started again after its code changed on disk (server/server.mjs,
 // replaceSelf). It gets serverEnv() only, never the server's whole environment. It is detached and keeps the log

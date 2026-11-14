@@ -76,6 +76,8 @@ def options_json(refresh: bool = False) -> dict:
         sign = "" if signed else _sign(r.get("auth_type"))
         if not signed and not sign:
             continue  # set up only in Hermes itself (cloud consoles, local servers)
+        if sign == "key" and not r.get("key_env"):
+            continue  # Hermes gives no key hint for it (``custom``: an endpoint first): Hermes's own setup covers it
         featured = _ids(r.get("featured_models"))
         models = featured + [m for m in _ids(r.get("models")) if m not in featured]
         row = {"slug": slug, "name": str(r.get("name") or slug), "signedIn": signed, "sign": sign,

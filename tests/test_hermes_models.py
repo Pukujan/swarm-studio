@@ -19,7 +19,8 @@ PAYLOAD = {
     "providers": [
         {"slug": "inferhub", "name": "Inferhub", "authenticated": True, "is_current": True, "models": ["cb/flash", "cb/pro"], "featured_models": []},
         {"slug": "nous", "name": "Nous Portal", "authenticated": True, "auth_type": "oauth_device_code", "models": [{"id": "a"}, {"id": "b"}], "featured_models": [{"id": "b"}]},
-        {"slug": "anthropic", "name": "Anthropic", "authenticated": False, "auth_type": "api_key", "models": []},
+        {"slug": "anthropic", "name": "Anthropic", "authenticated": False, "auth_type": "api_key", "key_env": "ANTHROPIC_API_KEY", "models": []},
+        {"slug": "custom", "name": "Custom endpoint", "authenticated": False, "auth_type": "api_key", "key_env": "", "models": []},
         {"slug": "minimax-oauth", "name": "MiniMax", "authenticated": False, "auth_type": "oauth_external", "models": []},
         {"slug": "vertex", "name": "Vertex", "authenticated": False, "auth_type": "vertex", "models": []},
         {"slug": "auto", "name": "Auto", "authenticated": True, "auth_type": "virtual", "models": ["x"]},
@@ -54,7 +55,7 @@ class Picker(unittest.TestCase):
         self.assertEqual(o["slots"]["planner"], {"provider": "nous", "model": "b"})
         self.assertEqual(o["slots"]["worker"], {"provider": "", "model": ""})
         rows = {r["slug"]: r for r in o["providers"]}
-        # virtual rows and providers set up only in Hermes itself are left out
+        # virtual rows and providers set up only in Hermes itself (a key with no key hint: custom) are left out
         self.assertEqual(sorted(rows), ["anthropic", "inferhub", "minimax-oauth", "nous"])
         self.assertEqual(rows["nous"]["models"], ["b", "a"])  # featured first
         self.assertEqual((rows["anthropic"]["sign"], rows["minimax-oauth"]["sign"], rows["inferhub"]["sign"]), ("key", "browser", ""))
