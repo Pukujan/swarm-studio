@@ -20,12 +20,12 @@ const PHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWe
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-function puppeteer(dataDir) {
+export function puppeteer(dataDir) {
   try { return createRequire(join(dataDir, 'video-tools', 'package.json'))('puppeteer-core') } catch { return null }
 }
 
 // fonts and pictures in, back at the top, and a fixed or sticky banner's accept or close button pressed
-async function settle(page) {
+export async function settle(page) {
   await page.evaluate(async () => {
     const wait = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))])
     await wait(document.fonts?.ready || Promise.resolve(), 4000)

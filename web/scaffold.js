@@ -12,6 +12,7 @@
 //   look, save(data), select(key), say(text) }. state is the kit's own saved state; look the brand's
 //   picked colours and fonts ({ bg, text, accent, link, heading, body }) or null.
 import { ic } from './icons.js'
+import { matchHtml, matchClick, lookBusy } from './lookmatch.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
 import { layerTree, layerSheet } from './layers.js'
@@ -135,9 +136,12 @@ export function makeScaffold({ sw, C, root }) {
   const card = (key, name, cls, inner = '') => `<div class="ab ${cls}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(name)}">${inner}${sel(key)}</div>`
   const addCard = (key, name) => card(key, name, 'sc-add', `${ic('plus', 18)}<span>${esc(name)}</span>`)
   const thumb = (kind, x) => {
-    const inner = x.kind === 'image' && x.src ? `<img src="${esc((sw.base || '') + x.src)}" alt="" draggable="false" loading="lazy">`
+    const shot = x.kind === 'link' && x.look?.shots?.[0]
+    if (x.look?.state === 'walking' && !A.lookTimer) setTimeout(watchLooks)
+    const inner = shot ? `<img src="${esc((sw.base || '') + shot)}" alt="" draggable="false" loading="lazy">`
+      : x.kind === 'image' && x.src ? `<img src="${esc((sw.base || '') + x.src)}" alt="" draggable="false" loading="lazy">`
       : `<div class="sc-file">${ic(x.kind === 'link' ? 'link' : x.kind === 'video' ? 'film' : x.kind === 'audio' ? 'music' : x.kind === 'font' ? 'type' : 'file', 22)}</div>`
-    return card(`${kind}:${x.id}`, x.name, 'sc-thumb', `${inner}<em>${esc(x.role || x.name)}</em>`)
+    return card(`${kind}:${x.id}`, x.name, `sc-thumb${x.look?.state === 'walking' ? ' sc-walking' : ''}`, `${inner}<em>${esc(x.role || x.name)}</em>`)
   }
   function brandCard() {
     const b = A.d.brand, L = look(b)
@@ -185,7 +189,7 @@ export function makeScaffold({ sw, C, root }) {
     if (d.studio.mode === 'takes' && A.takes) parts.push(`<section class="pj-sec sc-step sc-takes" data-sec="takes"><span class="al">Three takes</span><div class="abs">${A.takes.packs.length ? A.takes.packs.map(takeCard).join('') : '<div class="ab sc-take wait-in"></div>'.repeat(TAKES)}</div></section>`)
     for (const step of k.steps.filter(s => s in d.studio.steps)) {
       if (step === 'brand') parts.push(sec('brand', brandCard()))
-      if (step === 'references') parts.push(sec('references', `${d.refs.map(r => thumb('ref', r)).join('')}${addCard('ref:add', 'Add reference')}`))
+      if (step === 'references') parts.push(sec('references', `${d.refs.map(r => thumb('ref', r)).join('')}${addCard('ref:add', 'Add reference')}${addCard('ref:link', 'Add link')}`))
       if (step === 'assets') parts.push(sec('assets', `${d.assets.map(a => thumb('asset', a)).join('')}${addCard('asset:add', 'Add asset')}`))
       if (step === 'plan' && k.plan) {
         const cards = k.plan.sections(c).flatMap(s => s.cards)
@@ -271,6 +275,49 @@ export function makeScaffold({ sw, C, root }) {
     return r ? { left: r.left, top: r.top, width: r.width, height: r.height } : null
   }
 
+  // ---------- a link's look (decision 0022): the site walked in a browser, its shots, colours and type, the
+  // style words, and where it came from. The shots are only for seeing; they are never placed in a build.
+  function addLinkForm() {
+    insp.innerHTML = `<h3><span>Add link</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="sc-body"><input class="hm-free" name="url" type="url" placeholder="https://" aria-label="Link"><textarea class="hm-free" name="use" rows="3" placeholder="What you like about it" aria-label="What you like about it"></textarea><div class="sc-acts"><button class="btn pri" data-a="add">${ic('plus', 15)}Add</button></div></div>`
+    insp.querySelector('.pj-x').onclick = () => select(null)
+    const url = insp.querySelector('[name=url]'), use = insp.querySelector('[name=use]')
+    url.focus()
+    insp.querySelector('[data-a=add]').onclick = () => {
+      if (!url.value.trim()) return url.focus()
+      post(proj('/refs/link'), { url: url.value.trim(), use: use.value.trim() }).then(j => { A.d.refs = j.refs; select(`ref:${j.ref.id}`); watchLooks() }).catch(fail)
+    }
+  }
+  function watchLooks() {
+    clearTimeout(A.lookTimer)
+    if (!A.d?.refs?.some(r => lookBusy(r))) { A.lookTimer = null; return }
+    A.lookTimer = setTimeout(() => api(proj('/refs')).then(j => { A.d.refs = j.refs; render(); watchLooks() }).catch(() => {}), 3000)
+  }
+  function lookInsp(box, r) {
+    const L = r.look || {}, w = L.words || {}, t = L.tokens || {}, f = t.fonts || {}
+    const when = r.added ? new Date(r.added).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''
+    const from = `${r.source === 'chat' ? 'Chat' : 'References'}${when ? ` · ${when}` : ''}`
+    const shots = (L.shots || []).slice(0, 6).map(s => `<img src="${esc((sw.base || '') + s)}" alt="" loading="lazy">`).join('')
+    const sw2 = (t.palette || []).map(c => `<i style="background:${esc(c)}"></i>`).join('')
+    const line = (k, v) => (v ? `<p class="lk-row"><b>${k}</b><span>${esc(v)}</span></p>` : '')
+    box.innerHTML = `${L.state === 'walking' ? '<p class="lk-state">Walking the site…</p>' : L.state === 'failed' ? `<p class="lk-state">${esc(L.note || 'Could not open it')}</p>` : ''}
+      ${shots ? `<div class="lk-shots">${shots}</div>` : ''}
+      ${sw2 ? `<div class="br-sw lk-sw">${sw2}</div>` : ''}
+      ${w.prompt ? `<p class="sc-idea-full">${esc(w.prompt)}</p>` : ''}
+      ${line('Type', w.type || (f.display?.name ? `${f.display.name} · ${f.body?.name || ''}` : ''))}${line('Motion', w.motion)}${line('3D', w.threeD)}
+      <textarea class="hm-free" name="use" rows="2" placeholder="What you like about it" aria-label="What you like about it">${esc(r.use || '')}</textarea>
+      ${matchHtml(r, { base: sw.base || '', built: !!A.d.project?.head })}
+      <p class="lk-from">${esc(from)} · <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(L.from?.host || r.name)}</a></p>
+      <div class="sc-acts"><button class="btn ghost" data-a="look"${L.state === 'walking' ? ' disabled' : ''}>${ic('restore', 15)}Look again</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
+    box.onclick = e => {
+      const m = matchClick(e, (path, body) => post(proj(`/refs/${path}`), body))
+      if (m) return m.then(j => { A.d.refs = j.refs; if (!j.sent) render(); watchLooks() }).catch(fail)
+      const a = e.target.closest('[data-a]')?.dataset.a
+      if (a === 'look') post(proj(`/refs/${r.id}/look`), { use: box.querySelector('[name=use]').value }).then(j => { A.d.refs = j.refs; render(); watchLooks() }).catch(fail)
+      if (a === 'remove') post(proj(`/refs/${r.id}/remove`)).then(j => { A.d.refs = j.refs; select(null) }).catch(fail)
+    }
+    watchLooks()
+  }
+
   // ---------- the inspector: the selected card's own controls
   function renderInsp() {
     const key = A.sel
@@ -281,6 +328,7 @@ export function makeScaffold({ sw, C, root }) {
     const x = A.cards.get(key)
     const pack = part === 'take' ? A.takes?.packs.find(p => p.slug === id) : null
     const name = x?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? A.d.refs.find(r => r.id === id)?.name : part === 'asset' ? A.d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : '')
+    if (key === 'ref:link') return addLinkForm()
     if (!name) return select(null)
     insp.innerHTML = `<h3><span>${esc(name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="sc-body"></div>`
     const box = insp.querySelector('.sc-body')
@@ -306,6 +354,7 @@ export function makeScaffold({ sw, C, root }) {
       }
       return
     }
+    if (part === 'ref' && A.d.refs.find(r => r.id === id)?.kind === 'link') return lookInsp(box, A.d.refs.find(r => r.id === id))
     if (part === 'ref') {
       box.innerHTML = `<div class="sc-acts"><button class="btn ghost" data-a="given">${ic('pin', 15)}Use as given</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
       box.onclick = e => {

@@ -17,6 +17,7 @@ import { routeMessage } from './route.js'
 import { swEdit } from './edit/patches.js'
 import { setVideoHtml } from './video.js'
 import { layerSheet } from './layers.js'
+import { matchHtml, matchWire, lookBusy } from './lookmatch.js'
 
 const REF_FROM = { upload: 'Added here', chat: 'A chat', feed: 'The Feed', link: 'A link', plan: 'The plan', film: 'A film' }
 const SECTIONS = [['site', 'Site'], ['app', 'App'], ['game', 'Game'], ['film', 'Film'], ['art', 'Art'], ['uploads', 'Uploads'], ['refs', 'References'], ['code', 'Code']]
@@ -474,7 +475,7 @@ export function makeProject({ sw, C, root }) {
     const secs = x.kind === 'page' && sw.layers ? sw.layers.list(x.page) : []
     const secHtml = secs.length ? `<div class="pj-secs" role="list" aria-label="Sections">${secs.map(l => `<button class="pj-ly" role="listitem" data-layer="${esc(l.key)}" draggable="true">${ic(l.shared ? 'layers' : 'frame', 14)}<span>${esc(l.role)}</span></button>`).join('')}</div>` : ''
     setVideoHtml(insp, `<h3><span>${esc(x.name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv">${pv}</div>${x.pitch ? `<p class="pj-pitch">${esc(x.pitch)}</p>` : ''}
-      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}<div class="btns">${btns}</div>`)
+      ${kv.map(([k, v]) => `<div class="kv"><span>${k}</span><b>${esc(v)}</b></div>`).join('')}${secHtml}${useFor}${x.kind === 'ref' && !hosted() ? matchHtml(x.ref, { base: base(), built: !!P.board }) : ''}<div class="btns">${btns}</div>`)
     const im = insp.querySelector('.pv img')
     if (im && !x.dims) im.onload = () => { dims.set(x.key, `${im.naturalWidth} × ${im.naturalHeight}`); if (P.sel === x.key) renderInspSoon() }
   }
@@ -1260,7 +1261,7 @@ export function makeProject({ sw, C, root }) {
   function newPage() { select(null); input.value = 'Add a page: '; input.focus() }
 
   // ---------- References (spec 29): + → Reference or Link; Remove, and Undo in its toast
-  const refIn = $('.pj-reffile'), linkEl = $('.pj-link')
+  const refIn = $('.pj-reffile'), linkEl = $('.pj-link'), lookTick = matchWire(insp, { post: (path, body) => refPost(path, body), busy: () => !!P.pid && P.refs.some(lookBusy), sent: () => toast(`${ic('check', 15)}<span>Sent to the crew</span>`), reload: () => api(`/api/projects/${encodeURIComponent(P.pid)}/refs`).then(out => { if (out?.refs) { P.refs = out.refs; render() } }).catch(() => {}) })
   async function refPost(path, body, raw = null) {
     if (!P.pid || hosted()) { toast(`<span>References need a saved project</span>`); return null }
     try {
@@ -1272,6 +1273,7 @@ export function makeProject({ sw, C, root }) {
       return out
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`); return null }
   }
+  // the match check on a link's look (web/lookmatch.js): Compare, Fix on a difference, and reading the references again while one runs
   refIn.onchange = async () => {
     const fs = [...refIn.files]
     refIn.value = ''
