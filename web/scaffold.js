@@ -12,6 +12,7 @@
 //   look, save(data), select(key), say(text) }. state is the kit's own saved state; look the brand's
 //   picked colours and fonts ({ bg, text, accent, link, heading, body }) or null.
 import { ic } from './icons.js'
+import { matchHtml, matchClick, lookBusy } from './lookmatch.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
 import { layerTree, layerSheet } from './layers.js'
@@ -288,7 +289,7 @@ export function makeScaffold({ sw, C, root }) {
   }
   function watchLooks() {
     clearTimeout(A.lookTimer)
-    if (!A.d?.refs?.some(r => r.look?.state === 'walking')) { A.lookTimer = null; return }
+    if (!A.d?.refs?.some(r => lookBusy(r))) { A.lookTimer = null; return }
     A.lookTimer = setTimeout(() => api(proj('/refs')).then(j => { A.d.refs = j.refs; render(); watchLooks() }).catch(() => {}), 3000)
   }
   function lookInsp(box, r) {
@@ -304,9 +305,12 @@ export function makeScaffold({ sw, C, root }) {
       ${w.prompt ? `<p class="sc-idea-full">${esc(w.prompt)}</p>` : ''}
       ${line('Type', w.type || (f.display?.name ? `${f.display.name} · ${f.body?.name || ''}` : ''))}${line('Motion', w.motion)}${line('3D', w.threeD)}
       <textarea class="hm-free" name="use" rows="2" placeholder="What you like about it" aria-label="What you like about it">${esc(r.use || '')}</textarea>
+      ${matchHtml(r, { base: sw.base || '', built: !!A.d.project?.head })}
       <p class="lk-from">${esc(from)} · <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(L.from?.host || r.name)}</a></p>
       <div class="sc-acts"><button class="btn ghost" data-a="look"${L.state === 'walking' ? ' disabled' : ''}>${ic('restore', 15)}Look again</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
     box.onclick = e => {
+      const m = matchClick(e, (path, body) => post(proj(`/refs/${path}`), body))
+      if (m) return m.then(j => { A.d.refs = j.refs; if (!j.sent) render(); watchLooks() }).catch(fail)
       const a = e.target.closest('[data-a]')?.dataset.a
       if (a === 'look') post(proj(`/refs/${r.id}/look`), { use: box.querySelector('[name=use]').value }).then(j => { A.d.refs = j.refs; render(); watchLooks() }).catch(fail)
       if (a === 'remove') post(proj(`/refs/${r.id}/remove`)).then(j => { A.d.refs = j.refs; select(null) }).catch(fail)

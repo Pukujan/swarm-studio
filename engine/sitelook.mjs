@@ -123,7 +123,8 @@ export function plainLook(tokens, motion) {
 // ---------- the walk
 // url: the link. Returns { url, host, pages: [{ url, shots: [Buffer] , measured }], tokens, motion, note? }
 // allowPrivate is for the tests' local fixture page only; the server never sets it.
-export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.shots, lookup, launch, signal, allowPrivate = false } = {}) {
+// urls: walk exactly these pages and follow no links (the crew's own exported pages, engine/lookmatch.mjs).
+export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.shots, lookup, launch, signal, allowPrivate = false, urls = null } = {}) {
   const check = u => (allowPrivate ? new URL(u) : publicUrl(u, lookup ? { lookup } : {}))
   const start = await check(url)
   const pp = launch ? null : puppeteer(dataDir), chrome = launch ? 'given' : findChrome() || chromePath()
@@ -131,7 +132,7 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
   const browser = launch ? await launch() : await pp.launch({ executablePath: chrome, headless: true, env: browserEnv(), args: ['--hide-scrollbars', '--disable-gpu-sandbox', '--mute-audio', '--enable-unsafe-swiftshader'] })
   const out = { url: start.href, host: hostOf(start.href), pages: [] }
   try {
-    const queue = [start.href], seen = new Set()
+    const queue = urls ? urls.slice(0, pages) : [start.href], seen = new Set()
     while (queue.length && out.pages.length < pages) {
       if (signal?.aborted) break
       const next = queue.shift()
@@ -142,7 +143,7 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
       try {
         await page.setViewport(WALK.view)
         await page.setRequestInterception(true)
-        page.on('request', req => { let h = ''; try { h = new URL(req.url()).hostname } catch {} if (/^(data|blob):/.test(req.url()) || (h && (allowPrivate || !PRIVATE_HOST.test(h)))) req.continue().catch(() => {}); else req.abort().catch(() => {}) })
+        page.on('request', req => { let h = ''; try { h = new URL(req.url()).hostname } catch {} if (/^(data|blob):/.test(req.url()) || (allowPrivate && /^file:/.test(req.url())) || (h && (allowPrivate || !PRIVATE_HOST.test(h)))) req.continue().catch(() => {}); else req.abort().catch(() => {}) })
         await page.goto(next, { waitUntil: 'load', timeout: WALK.timeout }).catch(() => {})
         // a page that keeps drawing (a 3D scene, a ticker) is never fully idle: wait a little, not forever
         await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => {})
@@ -157,7 +158,7 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
         }
         await page.evaluate(() => scrollTo(0, 0)).catch(() => {})
         one.measured = await page.evaluate(MEASURE).catch(() => null)
-        if (one.measured) { for (const n of one.measured.nav) if (!seen.has(n)) queue.push(n); delete one.measured.nav }
+        if (one.measured) { if (!urls) for (const n of one.measured.nav) if (!seen.has(n)) queue.push(n); delete one.measured.nav }
         out.title = out.title || one.measured?.title || ''
         if (one.measured) delete one.measured.title
         out.pages.push(one)
