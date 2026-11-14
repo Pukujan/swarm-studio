@@ -32,7 +32,12 @@ test('a failed play test is a node of its own, marked failed, with its one-line 
   const steps = [{ kind: 'test', text: 'play test passed: still playing after 8.0 s' }, { kind: 'write', text: 'src/main.ts' }, { kind: 'test', text: 'play test failed: the hero "fell" through the [roof]\nmore', ok: false }]
   const test1 = lastPlayTest(steps)
   assert.deepEqual(test1, { state: 'failed', reason: 'the hero fell through the roof' })
-  const m = gameMap({ spec, stages, done: [0], now: 1, state: 'working', test: test1 })
+  // it belongs to the slice whose "stage n of N" step came before it, not to the one being built now
+  const said = lastPlayTest([{ kind: 'setup', text: 'stage 2 of 4: the stages' }, steps[2], { kind: 'setup', text: 'stage 3 of 4: the extras' }, { kind: 'write', text: 'src/a.ts' }])
+  assert.equal(said.slice, 2)
+  assert.match(gameMap({ spec, stages, done: [0, 1], now: 2, state: 'working', test: said }).tabs[0].text, /s2 -\.-> test/)
+  assert.match(gameMap({ spec, stages, done: [0, 1], now: 2, state: 'working', test: test1 }).tabs[0].text, /s2 -\.-> test/, 'not said: the last slice finished')
+  const m = gameMap({ spec, stages, done: [], now: 1, state: 'working', test: test1 })
   const build = m.tabs[0]
   assert.match(build.text, /test\["Play test failed<br\/>the hero fell through the roof"\]/)
   assert.match(build.text, /s2 -\.-> test/, 'it hangs off the slice that was played')

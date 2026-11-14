@@ -392,10 +392,11 @@ function mapLoad(run, live) {
   if (mapv.run !== run) mapFresh(run)
   if (mapv.busy || (mapv.t && !(live && Date.now() - mapv.t > 4000))) return Promise.resolve()
   mapv.busy = true
-  return api(`/api/runs/${encodeURIComponent(run)}/map`).then(r => (r.ok ? r.json() : null)).then(d => {
-    if (mapv.run !== run || !d) return
+  // (a read that fails is "no map": the wall keeps its own four windows instead of a skeleton that never ends)
+  return api(`/api/runs/${encodeURIComponent(run)}/map`).then(r => (r.ok ? r.json() : null)).catch(() => null).then(d => {
+    if (mapv.run !== run) return
     const had = !!mapv.data
-    mapv.data = d.map || null
+    mapv.data = d?.map || (had && !d ? mapv.data : null)
     mapWin.set(mapv.data)
     if (had !== !!mapv.data && view === 'app') renderApp()
   }).catch(() => {}).finally(() => { mapv.busy = false; mapv.t = Date.now() })

@@ -2050,6 +2050,8 @@ body.side-min .tabs .chats-btn { display: none; }
    tiles, and the tile that gives up its place (.cw-off) is not drawn. */
 .codewall .cw-wall { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .codewall .cw-grid { display: contents; }
+/* (the enlarge glide the grid had is the wall's now) */
+.codewall .cw-wall { transition: grid-template-columns .25s var(--ease, ease-out); }
 .codewall .cw-tile.cw-off { display: none; }
 .codewall .cw-wall.zoom { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); grid-template-rows: repeat(3, minmax(0, 1fr)); }
 .codewall .cw-wall.zoom .cw-map.big { grid-column: 1; grid-row: 1 / -1; }

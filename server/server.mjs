@@ -1496,9 +1496,12 @@ async function runMap(id) {
   const spec = events.findLast(e => e.type === 'game:spec')?.spec
   if (spec) {
     const g = await gameMod()
-    const stages = spec.big ? g.stagesFor(spec) : []
+    // a big game is built in slices (the spec says so, or its build did: engine/appjob.mjs start); a mini game in one go
+    const stages = g.isBig(spec) || st.at || events.some(e => e.type === 'app:stage' && e.big) ? g.stagesFor(spec) : []
     const done = [...new Set(events.filter(e => e.type === 'app:stage' && e.big?.ok && Number.isInteger(e.big.i)).map(e => e.big.i))].filter(i => i < stages.length)
-    const sheet = listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan: g.artList(spec), pieceName }).sheet || []
+    // (the art count is one fact of several: a list that cannot be read leaves the map without it)
+    let sheet = []
+    try { sheet = listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan: g.artList(spec), pieceName }).sheet || [] } catch {}
     return gameMap({ spec, stages, done, now: st.state === 'working' && st.at ? st.at[0] - 1 : -1, state: st.state || 'idle', art: sheet.length ? { done: sheet.filter(c => c.src).length, total: sheet.length } : null, test: lastPlayTest(steps) })
   }
   const m = a.map(id)

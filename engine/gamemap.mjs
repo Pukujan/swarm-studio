@@ -20,11 +20,13 @@ const tick = n => (n.state === 'done' ? '✓ ' : '')
 const brief = (s, max = 56) => { const w = words(s); return w.length <= max ? w : `${w.slice(0, max).replace(/\s+\S*$/, '')}…` }
 
 // "play test failed: the hero never moved" → { state: 'failed', reason }, from the build's steps (engine/appjob.mjs playGame)
+// `slice` is the slice it played (1-based): the last "stage n of N" step before it, when the steps still hold one
 export function lastPlayTest(steps = []) {
-  const s = steps.findLast(x => x?.kind === 'test' && /^play test (passed|failed|skipped)/.test(x.text || ''))
-  if (!s) return null
-  const [, state, rest = ''] = /^play test (passed|failed|skipped)(?::\s*(.*))?/s.exec(s.text)
-  return { state, reason: words(rest.split('\n')[0]) }
+  const at = steps.findLastIndex(x => x?.kind === 'test' && /^play test (passed|failed|skipped)/.test(x.text || ''))
+  if (at < 0) return null
+  const [, state, rest = ''] = /^play test (passed|failed|skipped)(?::\s*(.*))?/s.exec(steps[at].text)
+  const slice = Number(/^stage (\d+) of \d+/.exec(steps.slice(0, at).findLast(x => /^stage \d+ of \d+/.test(x?.text || ''))?.text || '')?.[1]) || 0
+  return { state, reason: words(rest.split('\n')[0]), ...(slice ? { slice } : {}) }
 }
 
 /**
@@ -36,7 +38,7 @@ export function lastPlayTest(steps = []) {
  * @param {number} [g.now] the slice being built (0-based), -1 when none is
  * @param {string} [g.state] the build's state: working, paused, done, failed, stopped, idle
  * @param {{ done: number, total: number } | null} [g.art] the art plan's progress
- * @param {{ state: string, reason: string } | null} [g.test] the last play test (lastPlayTest)
+ * @param {{ state: string, reason: string, slice?: number } | null} [g.test] the last play test (lastPlayTest)
  */
 export function gameMap({ spec, stages = [], done = [], now = -1, state = 'idle', art = null, test = null }) {
   const title = words(spec?.title) || 'The game'
@@ -45,8 +47,9 @@ export function gameMap({ spec, stages = [], done = [], now = -1, state = 'idle'
   if (art?.total) build.push({ id: 'art', name: `Art: ${art.done} of ${art.total} painted`, label: `Art<br/>${art.done} of ${art.total} painted`, state: art.done >= art.total ? 'done' : state === 'working' && now < 0 ? 'now' : '' })
   if (n) stages.forEach((s, i) => build.push({ id: `s${i + 1}`, name: `Slice ${i + 1} of ${n}: ${words(s?.name) || 'a slice'}`, label: `Slice ${i + 1} of ${n}<br/>${words(s?.name) || 'a slice'}`, state: done.includes(i) ? 'done' : i === now && state === 'working' ? 'now' : '' }))
   else build.push({ id: 's1', name: 'Build the game', label: 'Build the game', state: state === 'done' ? 'done' : state === 'working' ? 'now' : '' })
-  // the play test hangs off the slice it played: the one being built, else the last one finished
-  const played = n ? `s${(now >= 0 && state === 'working' ? now : Math.max(-1, ...done)) + 1 || 1}` : 's1'
+  // the play test hangs off the slice it played; when the steps no longer say which, the last one finished (a slice
+  // is played when its turns end), else the one being built
+  const played = !n ? 's1' : test?.slice >= 1 && test.slice <= n ? `s${test.slice}` : `s${(done.length ? Math.max(...done) : Math.max(0, now)) + 1}`
   const kind = ['passed', 'failed', 'skipped'].includes(test?.state) ? test.state : '', why = words(test?.reason)
   const testNode = kind ? { id: 'test', name: `Play test ${kind}${why ? `: ${why}` : ''}`, label: `Play test ${kind}${why ? `<br/>${why}` : ''}`, state: kind === 'failed' ? 'failed' : kind === 'passed' ? 'done' : '' } : null
   const chain = build.map(b => b.id)
