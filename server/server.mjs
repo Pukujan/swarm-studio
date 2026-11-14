@@ -68,6 +68,8 @@ import { assetStore } from '../engine/assetstore.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
 import { autoplayRoutes } from './autoplay.mjs'
 import { bringInRoutes } from './bringin.mjs'
+import { sourceRoutes } from './sourcehub.mjs'
+import { joinHistory } from '../engine/sourcehub.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
@@ -1799,7 +1801,9 @@ async function readClip(file, kind) {
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 }
 // Bring a game or app in (docs/specs/45-intake.md): POST /api/intake
-const bringInRoute = bringInRoutes({ runsDir, projects, apps: () => apps(), record, readEvents, broadcast })
+const bringInRoute = bringInRoutes({ runsDir, projects, apps: () => apps(), record, readEvents, broadcast, join: joinHistory })
+// A project's source on GitHub (the same spec): GET and POST /api/projects/<id>/github
+const sourceRoute = sourceRoutes({ runsDir, dataDir, projects, readEvents, record, broadcast, bringIn: bringInRoute.bringIn, working: async id => (await apps()).state(id)?.state === 'working' })
 const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
 const brands = brandRoutes({
   chats,
@@ -3816,6 +3820,7 @@ const server = createServer((req, res) => {
   if (chatMediaRoute(req, res, url)) return
   if (autoplayRoute(req, res, url)) return
   if (bringInRoute(req, res, url)) return
+  if (sourceRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 
@@ -4433,7 +4438,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, shutdown)
 // app and game builds, so a restart that trusted it stopped a game mid-build, 2026-11-13.)
 function workRunning() {
   if ((current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working') return true
-  if ([...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working')) return true
+  if ([...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working') || sourceRoute.busy()) return true
   return !!appsNow?.busy()
 }
 function serverBusy() { return clients.size > 0 || workRunning() }

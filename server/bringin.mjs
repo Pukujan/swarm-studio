@@ -16,10 +16,13 @@ const ownGit = dir => new Promise(ok => {
   g(['init', '-q'], () => g(['add', '-A'], () => g(['commit', '-qm', 'Brought in'], () => ok(true))))
 })
 
-export function bringInRoutes({ runsDir, projects, apps, record, readEvents, broadcast = () => {}, home = homedir(), fetch = fetchRepo }) {
+// `join` (engine/sourcehub.mjs joinHistory; the server passes it, a test may not): the whole of a repository
+// continues that repository's history when its files came in unchanged, so it can be pushed back later.
+export function bringInRoutes({ runsDir, projects, apps, record, readEvents, broadcast = () => {}, home = homedir(), fetch = fetchRepo, join: joinRepo = null }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
 
-  async function bringIn(input) {
+  // `onEnd(err)` is told when the files are in (or why they are not): the GitHub door waits on it (server/sourcehub.mjs)
+  async function bringIn(input, { onEnd = null } = {}) {
     const ask = readAsk(input, { home, deny: [runsDir] })
     // a folder is looked at before anything is made: a wrong one is refused in the sheet, with no run left behind
     if (ask.folder) { const from = ask.sub ? subFolder(ask.folder, ask.sub) : ask.folder, sh = shapeOf(from); if (sh.shape === 'static') checkReach(from, sh.page, realpathSync(home)) }
@@ -49,10 +52,12 @@ export function bringInRoutes({ runsDir, projects, apps, record, readEvents, bro
         // where it is from, for a later Pull: the repository, the folder in it and the commit
         const at = got ? { sha: got.sha } : (g => (g ? { sha: g.sha, ...(g.repo ? { origin: g.repo } : {}) } : {}))(gitFacts(ask.sub ? join(ask.folder, ask.sub) : ask.folder, home))
         step({ kind: 'setup', text: 'starting its history' })
-        await ownGit(join(runDir, 'app'))
-        record(id, doneEvent({ id, source: { ...source, ...at }, ...info }))
+        const joined = got && !ask.sub && joinRepo ? await joinRepo(join(runDir, 'app'), ask.repo.slug) : null
+        if (!joined) await ownGit(join(runDir, 'app'))
+        record(id, doneEvent({ id, source: { ...source, ...at, ...(joined ? { sha: joined, joined: true } : {}) }, ...info }))
         if (host) record(host, { type: 'game:linked', t: Date.now(), run: host, game: id, title: ask.name, intake: true })
-      } finally { got?.clean() }
+        onEnd?.(null)
+      } catch (err) { onEnd?.(err); throw err } finally { got?.clean() }
     } })
     broadcast({ type: 'files:changed', t: Date.now(), run: id })
     return { project: projects.projectOf(id) || pid || id, run: id }
