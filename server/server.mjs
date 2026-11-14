@@ -41,6 +41,8 @@ import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './pag
 import { nextPage } from './next.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { CHAT_ID } from '../engine/chats.mjs'
+import { askTurn, askedOf, askOptions, ASK_TEXT } from '../engine/askfirst.mjs'
+import { wordsRead } from '../engine/talkplan.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
@@ -64,6 +66,7 @@ import { studioRoutes } from './studio.mjs'
 import { studioStore } from '../engine/studio.mjs'
 import { assetStore } from '../engine/assetstore.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
+import { bringInRoutes } from './bringin.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
@@ -723,6 +726,8 @@ function runCard(id) {
       kind: start.kind || (isApp ? 'app' : 'site'),
       // a game made from a site: that site's run, so the game joins its version
       from: start.from || null,
+      // brought in from outside (docs/specs/45-intake.md), not built here
+      intake: start.intake ? (events.some(e => e.type === 'intake') ? 'in' : 'coming') : null,
       brief: start.brief,
       t: start.t,
       updated: events.at(-1)?.t || start.t,
@@ -899,7 +904,8 @@ function tours(id, input) {
 
 // ---------- visual review: the reviewer model looks at a screenshot of a finished
 // page (taken by the canvas, which owns the frames) and builders fix what it finds.
-const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion', 'publish'])
+// chat: open that chat in the Design deck (its target is the chat's id), where a question waits for the person
+const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion', 'publish', 'chat'])
 const reviewing = new Set()
 const REVIEW_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
 const review = (id, input) => withTrace(id, () => reviewNow(id, input))
@@ -1618,7 +1624,7 @@ function builtOf(pid) {
   const th = events.findLast(e => e.type === 'theme')
   return { kind: 'site', idea: baseBrief(start.brief).split('\n\nPages: ')[0].slice(0, 4000), pages: [...new Set(pages)], theme: th ? { accent: th.vars?.['--accent'] || th.vars?.['--primary'] || null, heading: th.fonts?.heading || null, name: th.name || null } : null }
 }
-const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats, builtOf })
+const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats, builtOf, picturesDefault: async () => (await setup.pictures()).mode })
 // a film from a project's brand, References and Assets, no website (spec 40): the Video kit's Build press
 const filmRoute = filmRoutes({
   projectsDir: projects.projectsDir, refs, known: pid => !!projects.get(pid),
@@ -1694,6 +1700,8 @@ async function readClip(file, kind) {
     return { ...r, says: readSays(r) }
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 }
+// Bring a game or app in (docs/specs/45-intake.md): POST /api/intake
+const bringInRoute = bringInRoutes({ runsDir, projects, apps: () => apps(), record, readEvents, broadcast })
 const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
 const brands = brandRoutes({
   chats,
@@ -1768,6 +1776,31 @@ function chatFor({ chat, text, kind = 'site', project = null }) {
     if (project) { const c = chats.forMessage(project, kind); chats.say(c.id, { who: 'person', text }).catch(() => {}); return c.id }
     return chats.create({ kind, text }).id
   } catch { return null }
+}
+// Ask before a new website build (docs/decisions/0020-ask-before-build.md): the person's words and the planner's
+// question go into the chat (the one the build came from, else a new one), in one write, and the reply says so:
+//   { error: 'ask', ask: 'skips', chat, text, options, recommended }   the question waits in that chat
+//   { error: 'ask', ask: 'talk', chat: null, text }                    "don't build yet": the talk opens instead
+// A question already open in that chat is not asked twice.
+async function askBeforeBuild({ chatId, typed, pid }) {
+  if (wordsRead(typed) === 'talk') return { error: 'ask', ask: 'talk', chat: null, text: "Let's talk it through first." }
+  const files = pid ? projects.uploadsOf(pid).length : 0
+  const known = chatId && chats.get(chatId) ? chatId : null
+  const id = known || chats.create({ kind: 'site', text: typed, project: pid && projects.get(pid) ? pid : null }).id
+  const turn = await chats.update(id, c => {
+    c.turns ||= []
+    const last = [...c.turns].reverse().find(t => t.who === 'planner')
+    if (last && askedOf(last) && c.turns.at(-1) === last) return last
+    const lastPerson = [...c.turns].reverse().find(t => t.who === 'person')
+    if (known && lastPerson?.text !== typed) c.turns.push({ id: `t${c.turns.length + 1}`, who: 'person', at: Date.now(), text: typed.slice(0, 8000), refs: [], marks: [], layers: [] })
+    // a new question: an earlier answer (used, or a walk's) no longer counts
+    delete c.go
+    c.ask = { brief: typed.slice(0, 8000), at: Date.now() }
+    const q = askTurn(`t${c.turns.length + 1}`, typed, { files })
+    c.turns.push(q)
+    return q
+  })
+  return { error: 'ask', ask: 'skips', chat: id, text: turn.text, options: turn.options, recommended: String(turn.options?.[0]?.id || 'go:pick').slice(3) }
 }
 // What a project's talk is told is there (engine/talkplan.mjs): its name, the pages its newest site
 // version has, the look, and what is running now. Empty outside a project.
@@ -2828,8 +2861,11 @@ const server = createServer((req, res) => {
       const typed = String(input.brief).trim(), chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
       // redo: this project from scratch, new pages and a new look; its old versions stay restorable
       const redo = input.redo === true
+      // sure: a script's explicit "I'm sure" (hermes swarm --build, remix, the evals); never a model's (decision 0020)
+      const sure = input.sure === true
       delete input.chat
       delete input.redo
+      delete input.sure
       // a message inside an open build belongs to that build's project
       if (typeof input.from === 'string' && typeof input.project !== 'string' && RUN_ID.test(input.from)) input.project = projects.projectOf(input.from) || undefined
       // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
@@ -2874,12 +2910,25 @@ const server = createServer((req, res) => {
         if (base) input.base = base
       }
       const pid = typeof input.project === 'string' ? input.project : null
+      // Ask before every new website build (docs/decisions/0020-ask-before-build.md): the next version of a
+      // build that exists (it resolved to that build, engine/extend.mjs followUp), a redo of a project that has versions, a Studio project's
+      // Build (the walk is the answer), a chat whose person answered "Skip all" (once), or a script's sure
+      // build. Anything else asks in the chat and builds nothing; an error while asking still asks.
+      const goChat = chatId ? chats.get(chatId) : null
+      const answered = sure || !!next || (redo && !!pid && (projects.get(pid)?.versions?.length || 0) > 0)
+        || (!!pid && !!studios.get(pid)) || (goChat?.go?.path === 'all' && !goChat.go.run)
+      if (!answered) {
+        const asked = await askBeforeBuild({ chatId, typed, pid }).catch(() => ({ error: 'ask', ask: 'skips', chat: null, text: ASK_TEXT, options: askOptions(null), recommended: 'pick' }))
+        return void res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify(asked))
+      }
       // the look, in Open Design's order (decision 0016 point 3): a design system the request names, then the
       // project's (a locked brand sheet, or a Studio project's own brand, spec 37), then the default (the planner's).
       // A follow-up keeps the project's
       const brand = !base ? requestedBrand(input.system, String(input.brief)) || lockedBrand(chats, chatId) || (pid ? lockedBrand(studios.brands, pid) : null) : null
       if (brand) input.brand = brand
       const run = startRun(input)
+      // one answer is one build: the chat's "Skip all" is used up by this run
+      if (goChat?.go && !next) await chats.update(chatId, c => { if (c.go) c.go.run = run.id }).catch(() => {})
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (pid) projects.claim(run.id, pid)
       // the words go into a chat: the talk that led here, else a new one (or the project's newest)
@@ -3628,6 +3677,7 @@ const server = createServer((req, res) => {
   if (studioRoute(req, res, url)) return
   if (filmRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
+  if (bringInRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 
@@ -3843,7 +3893,7 @@ const server = createServer((req, res) => {
         if (sub === 'stop') return a.stop(id)
         if (sub === 'idle') return idleAnswer(id, input)
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
-        if (sub === 'open') return a.open(id)
+        if (sub === 'open') return a.open(id, input)
         if (sub === 'seen') return a.seen(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')
@@ -3938,7 +3988,7 @@ const server = createServer((req, res) => {
     req.on('end', () => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
-      if (!CMD_OPS.has(input.op) || (input.run !== undefined && !RUN_ID.test(String(input.run)))) {
+      if (!CMD_OPS.has(input.op) || (input.run !== undefined && !RUN_ID.test(String(input.run))) || (input.op === 'chat' && !CHAT_ID.test(String(input.target)))) {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'bad command' }))
         return
       }

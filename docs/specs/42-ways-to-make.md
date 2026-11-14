@@ -1,7 +1,44 @@
 # 42. The ways to make something
 
-Status: agreed (owner, 2026-11-13). Built in PR make-menu-ways. This is the overall structure of how a thing is made in
-Swarm Studio. The Make menu offers exactly these ways, for the kinds that support them.
+Status: agreed (owner, 2026-11-13). Built in PR make-menu-ways. Superseded for the menu by
+[decision 0020](../decisions/0020-ask-before-build.md) on 2026-11-13: Make now has two ways, not five. The rest of
+this document is kept as history.
+
+## Now: two ways (decision 0020)
+
+| Way | What the person sees | Then |
+|---|---|---|
+| **Just make it** (needs words in the box) | One prompt. A new website goes straight to the one question asked before a build: Skip all, Step by step or Pick steps to skip. An App, Video or Game shows the brief in the Design deck's chat. | The answer starts the crew (website), or **Build** does (App, Video, Game; **Keep talking** is the other choice). |
+| **Studio** (works with an empty box) | The walk: a Studio project with every step the kind needs (Brand, References, Assets, Plan, Lock). For a Game, the Studio is its Plan board, where the planner's talk asks. | Lock, then Build. |
+
+| Kind | Ways | Why |
+|---|---|---|
+| Website, App, Video, Game | Just make it, Studio | Each can be built from one prompt or walked. |
+| Deck | Studio only | A deck is built from its Studio's Lock (`web/kit-deck.js`). |
+| Brand | Studio only | A brand is not built; its Lock is the end. |
+
+Rules:
+
+- **A kind with one way has no menu.** Make goes straight there.
+- **With an empty box only Studio is offered**, for every kind, so there is no menu. Just make it needs words.
+- **The last way picked is remembered per kind.** A remembered way that is no longer offered (guided, takes,
+  scaffold) is forgotten, and the words decide: a game leans Studio, a short or look-led idea leans Studio, a clear,
+  longer ask leans Just make it.
+- **Nothing builds without the person's press or answer.**
+
+What became of the old five:
+
+| Old way | Now |
+|---|---|
+| Just build | **Just make it**. |
+| Guided | The question's **Step by step** answer. A game's Guided talk is now its Studio. |
+| Scaffold (a bare Plan) | Skipping Brand when asked. |
+| Three takes | The Brand step's three options. |
+| Studio | **Studio**. |
+
+The code for Three takes inside the Studio board (a studio record with mode `takes`) and for a record with only a
+Plan step still exists, but nothing in Make opens it. The Make box's guided questions pop is no longer reached from
+the menu.
 
 ## The problem, in plain words
 
@@ -22,7 +59,7 @@ the same screen, the Studio on its Brand step. So did a Deck, which should start
 ways to make something already existed in the code (the guided prompt, the brief before a build, the Studio,
 the Plan board's talk), but the menu offered only some of them, and under names that did not say where they go.
 
-## The five ways
+## The five ways (before decision 0020)
 
 | Way | What the person sees | Then |
 |---|---|---|

@@ -8,7 +8,7 @@
 // A talk (the Chat's own) ends in a brief; its Build starts the build here. A new build takes the deck over.
 import { useCallback, useMemo, useState } from 'react'
 import { routeMessage } from '@studio/route'
-import { Chat, type BuildRoute, type ChatCommand, type ChatLine, type ChatTalk } from '../../chat'
+import { Chat, type BuildRoute, type ChatCommand, type ChatGo, type ChatLine, type ChatTalk } from '../../chat'
 import { useNav } from '../../nav/NavProvider'
 import { crew } from './crew'
 import { doneSections, type DeckModel, type DeckLine } from './model'
@@ -46,12 +46,28 @@ export function DeckChat({ model, picked, onCommand }: {
       brief, ...(agents ? { agents } : {}), ...(view.project ? { project: view.project } : {}),
       ...((route === 'extend' || route === 'add' || route === 'redo') && run ? { from: run } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(chat ? { chat } : {})
     }).catch(() => null)
-    const j = await r?.json().catch(() => ({})) as { run?: string, error?: string, message?: string, hermes?: boolean } | undefined
+    const j = await r?.json().catch(() => ({})) as { run?: string, error?: string, ask?: string, chat?: string | null, text?: string, message?: string, hermes?: boolean } | undefined
     if (r?.ok && j?.run) { setTalk(null); go({ type: 'started', run: j.run, project: view.project, room: 'deck' }); return }
+    // a new website asks first (docs/decisions/0020-ask-before-build.md): the question waits in its chat, here, with
+    // its answers in Suggestions; "don't build yet" opens the talk instead. Not busy, and not an error
+    if (r?.status === 409 && j?.error === 'ask') {
+      if (j.ask === 'talk' || !j.chat) return setTalk({ id: `deck:${Date.now()}`, kind: 'site', text: brief })
+      return setTalk({ id: `ask:${j.chat}:${Date.now()}`, kind: 'site', chat: j.chat, said: [{ who: 'you', text: brief }, { who: 'hermia', text: j.text || '' }] })
+    }
     if (r?.status === 409) return note('err', 'The crew are still on the last change.')
     if (r?.status === 503 && j?.hermes) return note('err', j.message || j.error || 'Hermes is not answering.')
     note('err', `Couldn't start the build${r ? ` (${j?.error || r.status})` : ''}. Is the studio server running?`)
   }, [run, view.project, go])
+
+  // the answer: all builds the brief now from its chat (answered); the rest open the Studio walk with steps skipped
+  const answered = useCallback(async ({ path, skip, brief, chat }: ChatGo) => {
+    if (path === 'all') return build({ brief, route: 'new', chat })
+    const start = skip.includes('brand') ? 'plan' : 'brand'
+    const r = await post('/api/studio', { kind: 'site', idea: brief, chat, skip, start }).catch(() => null)
+    const j = await r?.json().catch(() => ({})) as { project?: { id: string }, error?: string } | undefined
+    if (r?.ok && j?.project?.id) return go({ type: 'studio', project: j.project.id, step: start })
+    note('err', j?.error || 'The Studio did not open. Say it again.')
+  }, [build, go])
 
   const comment = async (text: string, body: { target?: string | null, targets?: string[] }) => {
     const r = await post(`/api/runs/${encodeURIComponent(run!)}/comment`, { text, sections: doneSections(model).map(s => ({ ...s, role: model.layers[s.key]?.role })), ...body }).catch(() => null)
@@ -79,6 +95,7 @@ export function DeckChat({ model, picked, onCommand }: {
       onSubmit={e => void submit(e)}
       onTalk={setTalk}
       onBuild={({ brief, chat, route }) => void build({ brief, route, chat })}
+      onGo={e => void answered(e)}
       onCommand={({ name }) => {
         if (name === 'play' || name === 'publish' || name === 'export' || name === 'replay') onCommand(name)
         else note('err', `/${name} is not a command here. Try /play, /publish, /export or /replay.`)
