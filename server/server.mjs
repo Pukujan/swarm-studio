@@ -57,7 +57,7 @@ import { appKitRoutes } from './appkit.mjs'
 import { brandRoutes, lockedBrand } from './brand.mjs'
 import { requestedBrand } from '../engine/brand.mjs'
 import { templates as odTemplates } from '../engine/odlibrary.mjs'
-import { storyRoutes } from './story.mjs'
+import { storyRoutes, readStory } from './story.mjs'
 import { deckRoutes } from './deck.mjs'
 import { refRoutes } from './refs.mjs'
 import { pictureAsk, vagueAsk, gensOf, newPrompt } from '../engine/picask.mjs'
@@ -1398,7 +1398,7 @@ async function launchKit(id) {
   if (!launchable(runFacts(events, id))) throw Object.assign(new Error('Nothing to launch yet: publish it first.'), { code: 409 })
   let pitch = ''
   try { pitch = await writePitch(events, id) } catch {}
-  return writeLaunch(join(runsDir, id), events, id, { pitch })
+  return writeLaunch(join(runsDir, id), events, id, { pitch, story: readStory(join(runsDir, id)) })
 }
 const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, connectors,
   writeLaunch: launchKit })
@@ -3217,6 +3217,8 @@ const server = createServer((req, res) => {
     b.work = workOf(id) || b.game?.work || null
     // each page's content version and its saved snapshots of it: the Overview paints these first
     b.snaps = snapsOf().list(id, events)
+    // whether the build has a story (spec 39): the Overview asks for it only then, so a build with none is no 404
+    b.story = !!readStory(join(runsDir, id))
     return json(200, b)
   }
   // the same, on its own: what the Overview checks before photographing a page again; and a page's
@@ -3710,7 +3712,8 @@ const server = createServer((req, res) => {
   if (talks(req, res, url)) return
   if (appKit(req, res, url)) return
   if (brands(req, res, url)) return
-  if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute(req, res, url); return }
+  if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute.handle(req, res, url); return }
+  if (url.pathname.startsWith('/story/') && storyRoute.file(req, res, url)) return
   if (decks(req, res, url)) return
   if (refsRoute(req, res, url)) return
   if (studioRoute(req, res, url)) return

@@ -669,7 +669,7 @@ body.cosmos .ah-feed { padding-bottom: 56px; }
 .app-empty h2 { margin: 0; color: var(--text); font-size: 20px; }
 .app-empty p { margin: 0; max-width: 520px; line-height: 1.5; }
 /* an app starting again, cold (decision 0017, issue #450): a page's shape, busy (Hermia works on it, web/pet.js PET_BUSY) */
-.app-skel { width: min(560px, 80%); display: grid; gap: 12px; }
+.app-skel { width: min(560px, 80%); display: grid; gap: 12px; position: relative; }
 .app-skel i { display: block; border-radius: 6px; background: var(--surface-2); animation: app-skel 1.6s ease-in-out infinite alternate; }
 .app-skel .bar { height: 14px; width: 40%; }
 .app-skel .hero { height: 150px; }
@@ -928,7 +928,6 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .codewall[hidden] { display: none; }
 .codewall .cw-head { display: flex; align-items: center; gap: 12px; font-size: 13px; }
 .codewall .cw-count { color: var(--muted); font: 11.5px var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.codewall .cw-peek { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 3px 9px; cursor: pointer; font: inherit; font-size: 12px; }
 .codewall .cw-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 900px) { .codewall .cw-grid { grid-template-columns: 1fr; grid-template-rows: repeat(4, minmax(120px, 1fr)); overflow: auto; } }
 .codewall .cw-tile { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--void); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; transition: border-color .3s; }
@@ -1272,7 +1271,6 @@ em { font-style: italic; }
 .codewall .cw-head { gap: 14px; }
 .codewall .cw-head .pop-title { font-size: 26px; }
 .codewall .cw-count { font: 11.5px var(--mono); }
-.codewall .cw-peek { display: inline-flex; align-items: center; gap: 6px; background: rgb(var(--glass-rgb) / .06); border: 1px solid rgb(var(--glass-rgb) / .3); border-radius: 999px; padding: 6px 12px; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .codewall .cw-tile { background: rgb(var(--deep-rgb) / .5); border: 1px solid var(--panel-edge); border-radius: 12px; }
 .codewall .cw-tile.typing { border-color: rgb(var(--frame-rgb) / .9); box-shadow: 0 0 0 1px rgb(var(--frame-rgb) / .5), 0 0 40px rgb(var(--frame-rgb) / .2); }
 .codewall .cw-file { background: rgb(var(--glass-rgb) / .03); border-color: var(--panel-edge); }
@@ -2014,10 +2012,12 @@ body.side-min .tabs .chats-btn { display: none; }
 .item.bot .txt .act { color: var(--muted, inherit); }
 .item.bot .txt .act code { font-size: 0.92em; background: var(--panel-2); border-radius: 4px; padding: 0 4px; }
 
-/* the way back to the build wall after its Preview button hid it (web/canvas/wander.js wallBack) */
-.cw-back { position: absolute; top: 14px; right: 14px; z-index: 6; display: inline-flex; align-items: center; gap: 6px; background: rgb(var(--glass-rgb) / .1); border: 1px solid rgb(var(--glass-rgb) / .3); border-radius: 999px; padding: 7px 14px; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; color: var(--text); cursor: pointer; }
-.cw-back:hover { border-color: rgb(var(--glass-rgb) / .6); }
-.cw-back:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+/* the stage switch in the App bar, Crew · Art · Live (web/canvas/stage.js): pinned is filled (.on, aria-pressed);
+   while the stage follows the build, the view on now carries a dot (.now, aria-current) */
+.seg button[hidden] { display: none; }
+#app-stageview button.now { color: var(--text); }
+#app-stageview button.now::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+#app-stageview button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 /* a project being brought in (docs/specs/45-intake.md): the page's shape with a crew cursor at work on it */
 .bring-skel { position: relative; }
 .bring-skel .cur { left: 52%; top: 46%; }
