@@ -8,11 +8,12 @@
 //
 // Exits 1 on the first failure, with what failed.
 import { execFileSync } from 'node:child_process'
-import { existsSync, lstatSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { FF_PACKAGES, FF_SHA256, ffBinary, checkFf, videoTools } from '../engine/video.mjs'
 import { godotBin } from '../engine/port.mjs'
+import { imageTools, makeImages } from '../engine/images.mjs'
 
 const [what, arg] = process.argv.slice(2)
 const fail = msg => { console.error(`✗ ${msg}`); process.exit(1) }
@@ -60,7 +61,26 @@ function godot() {
   ok(`Godot found as ${bin} (${v})`)
 }
 
+// the image service's first use, as on a Mac whose studio was opened from the Dock: the pinned libraries
+// installed into the data folder from engine/imagetools/package-lock.json (prebuilt, nothing compiled), then a
+// picture resized on the ladder and given its ThumbHash
+async function images() {
+  const data = mkdtempSync(join(tmpdir(), 'swarm-images-'))
+  const path = process.env.PATH
+  process.env.PATH = `${dirname(process.execPath)}:${DOCK_PATH}`
+  const t = await imageTools(data, { own: false }).finally(() => { process.env.PATH = path })
+  if (!t) fail('the image libraries did not install')
+  const px = new Uint8Array(600 * 300 * 4).fill(200)
+  const store = makeImages({ dataDir: data, tools: () => t })
+  const m = await store.add(await t.Transformer.fromRgbaPixels(px, 600, 300).png())
+  const s = await store.sized(m.hash, 256)
+  const got = await new t.Transformer(readFileSync(s.file)).metadata()
+  if (got.width !== 256 || !m.th) fail(`resize gave ${got.width} px, ThumbHash ${m.th}`)
+  ok(`${process.platform}-${process.arch}: @napi-rs/image installed from the lockfile into the data folder, resized 600 → 256 px, ThumbHash ${m.th}`)
+}
+
 if (what === 'tree') tree(arg)
 else if (what === 'ffmpeg') await ffmpeg()
 else if (what === 'godot') godot()
-else fail('usage: node scripts/macos-check.mjs tree <dir> | ffmpeg | godot')
+else if (what === 'images') await images()
+else fail('usage: node scripts/macos-check.mjs tree <dir> | ffmpeg | godot | images')

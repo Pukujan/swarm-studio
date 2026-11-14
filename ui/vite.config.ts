@@ -62,7 +62,9 @@ export default defineConfig({
     modulePreload: false,
     cssCodeSplit: false,
     rolldownOptions: {
-      output: { entryFileNames: 'assets/next.js', assetFileNames: 'assets/next[extname]' }
+      // one script: /next/ inlines it and serves nothing beside it, so a library's own lazy imports (PixiJS loads its
+      // renderers that way) go in too
+      output: { entryFileNames: 'assets/next.js', assetFileNames: 'assets/next[extname]', inlineDynamicImports: true }
     }
   }
 })
