@@ -3,7 +3,7 @@
 import { layerDrag } from '../layerlink.js'
 import { clean } from '../clean.js'
 import { S, Q, WALL, BASE, BOOT, store, api, cosmosHooks, cam, els } from './core.js'
-import { view, setView, openGame } from './rooms.js'
+import { view, setView, openGame, appAsk } from './rooms.js'
 import { toggleModels, toggleTheme, showTab, lite } from './settings.js'
 import { viewing, files, openRun, loadFiles, stopReplay } from './replay.js'
 import { holds, shownRun } from './film.js'
@@ -30,6 +30,8 @@ window.swarm = {
   get photographing() { return lite.busy },
   on: fn => cosmosHooks.add(fn),
   openRun, setView, loadFiles, focusPage, openPlayer, closePlayer, followPlayer,
+  // one more change to the open build's app (issue #542: the Overview's "Tell the crew…" on an app project)
+  appAsk,
   // talk first (engine/talkplan.mjs): readTalk(text, answerTo, kind) → build | talk | unsure;
   // talk.start({ text, kind, build, blank, said }) opens the talk in this chat; talk.end() leaves it
   // the planner's one line in the left chat (the Studio's "start with…", docs/specs/37-studio-first.md)
