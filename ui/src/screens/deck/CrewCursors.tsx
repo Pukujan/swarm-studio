@@ -76,20 +76,24 @@ export function CrewCursors({ model, cam, stage, target }: {
     return () => cancelAnimationFrame(raf)
   }, [stage])
 
-  // An agent that stops writing: its cursor fades out where it was (the current deck's .cursor opacity .6s) and goes
+  // An agent that stops writing: its cursor fades out where it was (the current deck's .cursor opacity .6s) and goes.
+  // Decided while drawing, so the same element stays and fades; a timer draws again once the fade is over.
   const working = model.agents.filter(a => a.layer && target(a)).map(a => a.id)
-  const key = working.join('|')
   const was = useRef<string[]>([])
-  const [leaving, setLeaving] = useState<string[]>([])
+  const leaving = useRef(new Map<string, number>())
+  const nowMs = Date.now()
+  for (const id of was.current) if (!working.includes(id) && !leaving.current.has(id)) leaving.current.set(id, nowMs + 600)
+  for (const id of working) leaving.current.delete(id)
+  for (const [id, until] of leaving.current) if (until <= nowMs) leaving.current.delete(id)
+  was.current = working
+  const [, redraw] = useState(0)
+  const next = Math.min(...leaving.current.values())
   useEffect(() => {
-    const gone = was.current.filter(id => !working.includes(id))
-    was.current = working
-    if (!gone.length) return
-    setLeaving(l => [...new Set([...l, ...gone])])
-    // each fade ends on its own clock: another agent stopping meanwhile does not hold this one
-    setTimeout(() => setLeaving(l => l.filter(id => !gone.includes(id))), 600)
-  }, [key])
-  const shown = model.agents.filter(a => working.includes(a.id) || leaving.includes(a.id))
+    if (!Number.isFinite(next)) return
+    const t = setTimeout(() => redraw(n => n + 1), Math.max(0, next - Date.now()) + 20)
+    return () => clearTimeout(t)
+  }, [next])
+  const shown = model.agents.filter(a => working.includes(a.id) || leaving.current.has(a.id))
 
   return (
     <div ref={layer} aria-hidden className="deck-crew pointer-events-none absolute inset-0">
