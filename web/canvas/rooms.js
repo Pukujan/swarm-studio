@@ -1,7 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the views and rooms: Canvas, Video, App, the big game, the app advisor, game mode, cast, art, the bench.
 import { dataStore } from '../data.js'
-import { noAppYet } from './wander.js'
+import { noAppYet, goOnAsk } from './wander.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
 import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
@@ -227,7 +227,7 @@ function renderApp() {
   // a build that failed before it ever worked shows the failure, not the empty starter's blank page
   const empty = !appv.url || (st === 'failed' && !appv.hasApp)
   appEls.empty.hidden = !empty
-  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && (working || appv.steps.length)
+  const sheet = empty && shownRun() && appv.kind === 'game' && !appv.hasApp && st !== 'failed' && st !== 'stopped' && (working || appv.steps.length)
   if (!sheet) appEls.empty.classList.remove('sheet')
   if (sheet) artSheet(shownRun())
   else if (empty) {
@@ -241,7 +241,7 @@ function renderApp() {
         ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
         : st === 'failed' && appv.result?.artStop
           ? artStopCard(appv.result.artStop)
-        : st === 'failed' && appv.message === 'stopped'
+        : st === 'stopped' || (st === 'failed' && appv.message === 'stopped')
           ? `<div class="fail-card stopped"><h2><em>Stopped</em></h2><p class="fail-msg">${esc(stopSummary())}</p><button class="big" data-build>${ico('rotate-ccw')}Go on</button></div>`
         : st === 'failed'
           ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>The ${appv.kind === 'game' ? 'game' : 'app'} didn't <em>build</em></h2><p class="fail-msg">${esc(String(appv.message || 'The engine stopped before the app built.').split('\n')[0].replace(/(\/[\w.@-]+){3,}/g, m => `…/${m.split('/').slice(-2).join('/')}`).slice(0, 220))}</p>${appv.message ? `<details class="fail-more"><summary>Show details</summary><pre>${esc(appv.message)}</pre></details>` : ''}<button class="big" data-build>${ico('rotate-ccw')}Try again</button></div>`
@@ -347,7 +347,8 @@ export async function appAsk(ask, extra = {}) {
   // while it builds, the crew still listens: a question gets an answer from what it is doing,
   // a change is queued for the start of the next stage
   if (appv.state === 'working') return tellCrew(ask)
-  if (ask && !appv.hasApp) return botMsg(noAppYet(appv))
+  // the chat works for a stopped build too: "go on", "continue", "resume" pick it up again; anything else gets a true answer
+  if (ask && !appv.hasApp) { if (!goOnAsk(ask, appv)) return botMsg(noAppYet(appv)); ask = '' }
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
   try {
     const st = await appApi('', { ask, sections, ...extra })

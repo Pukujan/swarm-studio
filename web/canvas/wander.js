@@ -47,3 +47,13 @@ export function noAppYet(app) {
   if (partway && app.state === 'failed') return `The ${what} build did not finish. Try again from its card; once it is building I can answer questions and take changes.`
   return what === 'game' ? 'There is no game here yet. Start it from this view, then ask or change it by chatting.' : 'Build the app first (the button in this view), then change it by chatting.'
 }
+
+/**
+ * "go on", "continue", "resume it", "keep going", "try again": the person asks in the chat for a build that
+ * stopped or failed partway to be picked up again (the chat works for everything a button does).
+ * @param {string} text  @param {{ state?: string, message?: string, steps?: unknown[] }} app
+ */
+export function goOnAsk(text, app) {
+  const partway = (app.steps || []).length > 0 && (app.state === 'stopped' || app.state === 'failed' || app.message === 'stopped')
+  return partway && /^\s*(please\s+)?(go on|continue|resume|keep going|carry on|pick (it )?up|try again|retry|start (it )?again|build( it)?( again)?)\b[\w ,.!]{0,24}$/i.test(String(text || ''))
+}

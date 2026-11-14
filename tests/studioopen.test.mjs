@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MODES, modeOf, studioMode, modesShown } from '../web/modes.js'
 import { brandFromLook, loadableFont } from '../engine/sitelook.mjs'
-import { sweep, wanderOn, noAppYet } from '../web/canvas/wander.js'
+import { sweep, wanderOn, noAppYet, goOnAsk } from '../web/canvas/wander.js'
 
 const ctl = (view, extra = {}) => {
   const calls = []
@@ -131,4 +131,12 @@ test('a message with nothing built yet gets a true answer: the thing by name, an
   assert.match(noAppYet({ kind: 'game', state: 'failed', steps: [1] }), /game build did not finish/)
   assert.match(noAppYet({ kind: 'game', steps: [] }), /no game here yet/)
   assert.match(noAppYet({ kind: 'site', steps: [] }), /Build the app first/)
+})
+
+test('"go on" in the chat picks a stopped build up again; a question does not', () => {
+  const stopped = { kind: 'game', state: 'stopped', steps: [1] }
+  for (const t of ['go on', 'Continue', 'resume it please', 'keep going', 'try again', 'build it again']) assert.equal(goOnAsk(t, stopped), true, t)
+  for (const t of ['do you need a video model or?', 'make the jump higher', 'continue but make the hero taller and change every enemy to crows']) assert.equal(goOnAsk(t, stopped), false, t)
+  assert.equal(goOnAsk('go on', { kind: 'game', state: 'done', steps: [1] }), false)
+  assert.equal(goOnAsk('go on', { kind: 'game', state: 'stopped', steps: [] }), false)
 })
