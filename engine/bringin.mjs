@@ -235,14 +235,15 @@ export function readAsk(input = {}, { home, deny = [] } = {}) {
 }
 
 // The first lines of a run that was brought in, and its last ones. The App and Game rooms read:
-//   run:start   kind and title (the card, the board); `intake: true` marks it as not built here
+//   run:start   kind and title (the card, the board); `intake: true` marks it as not built here; no crew
+//               designed it, so `agents` is empty (the canvas reads the list)
 //   intake:start where it is coming from, so a failed try can be made again
 //   intake      what came in: the source (repo, path, commit or folder), its shape, its page, the counts
 // The app:start / app:done (or app:failed) around the copy are written by the app jobs (engine/appjob.mjs bring).
 export function startEvents({ id, t = Date.now(), kind, name, source, from = null }) {
   const where = source.repo ? `github.com/${source.repo}${source.path ? `/${source.path}` : ''}` : `${basename(source.folder || '')}${source.path ? `/${source.path}` : ''}`
   return [
-    { type: 'run:start', t, run: id, brief: `${name}: brought in from ${where}`, kind, title: name, intake: true, ...(from ? { from } : {}) },
+    { type: 'run:start', t, run: id, brief: `${name}: brought in from ${where}`, kind, title: name, intake: true, agents: [], ...(from ? { from } : {}) },
     { type: 'intake:start', t, run: id, source }
   ]
 }

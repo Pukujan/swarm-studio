@@ -86,7 +86,7 @@ The run's log, the minimum the rooms read plus where it came from:
 
 | Event | What it says |
 |---|---|
-| `run:start` | `kind` (`game` or `app`), `title`, `intake: true`, and `from` when it joined a project as its game |
+| `run:start` | `kind` (`game` or `app`), `title`, `intake: true`, an empty `agents` list (no crew designed it), and `from` when it joined a project as its game |
 | `intake:start` | `source: { repo, path }` or `{ folder, path }`: what was asked for |
 | `app:start` | `intake: true` and this Studio's process: the run is working, like a build (`engine/appjob.mjs` `bring`) |
 | `app:step` | counting, copying n of N, starting its history |

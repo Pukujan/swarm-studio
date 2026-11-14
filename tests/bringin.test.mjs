@@ -142,7 +142,7 @@ test('a Swarm plan in the folder or beside it is found; any other plan.json is n
 test('the run\'s first lines and its last say what it is and where it came from', () => {
   const source = { repo: 'Pukujan/swarm-studio', path: 'games/ares' }
   const [start, began] = startEvents({ id: 'r1', t: 5, kind: 'game', name: 'ARES', source, from: 'r0' })
-  assert.deepEqual(start, { type: 'run:start', t: 5, run: 'r1', brief: 'ARES: brought in from github.com/Pukujan/swarm-studio/games/ares', kind: 'game', title: 'ARES', intake: true, from: 'r0' })
+  assert.deepEqual(start, { type: 'run:start', t: 5, run: 'r1', brief: 'ARES: brought in from github.com/Pukujan/swarm-studio/games/ares', kind: 'game', title: 'ARES', intake: true, agents: [], from: 'r0' })
   assert.deepEqual(began, { type: 'intake:start', t: 5, run: 'r1', source })
   assert.equal(startEvents({ id: 'r2', kind: 'app', name: 'Hub', source: { folder: '/Users/x/dev/hub', path: '' } })[0].brief, 'Hub: brought in from hub')
   const done = doneEvent({ id: 'r1', t: 9, source: { ...source, sha: 'abc' }, shape: 'static', page: 'web/', files: 3, bytes: 10, left: 1, links: 0, godot: true, plan: true })
