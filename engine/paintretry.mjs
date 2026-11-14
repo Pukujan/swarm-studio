@@ -25,24 +25,23 @@ export async function paintWithBackup(paint, { choice, backup = async () => null
   return good(other) ? { ...other, backup: alt } : { ...again, error: `${again?.error || 'no image'} (${alt.provider} could not paint it either)` }
 }
 
-// The image model for a build, from Hermes's provider list ({ provider, available, models, default })
-// and the person's pick ({ provider, model }, 'off' or nothing). A pick whose provider is not signed
-// in must not switch pictures off for the whole build (the builders are then told to draw blocks
-// instead of leaving picture slots): it falls back to the Codex login, else to any provider that is
-// signed in. A model the provider does not list gives way to the provider's default.
-const CODEX = { provider: 'openai-codex', model: 'gpt-image-2-low' }
+// The image model for a build, from the image sources ({ provider, available, models, default }): Hermes's
+// own image tool through the bridge ('hermes', engine/bridge.mjs) and the studio's ckff key, and the person's
+// pick ({ provider, model }, 'off' or nothing). A pick that is not available must not switch pictures off for
+// the whole build (the builders are then told to draw blocks instead of leaving picture slots): it falls
+// back to Hermes, else to ckff, else to any source that is available. A model the source does not list
+// gives way to its default.
+const HERMES = { provider: 'hermes', model: '' }
 export function chooseImage(list = [], pick = null) {
   if (pick === 'off') return null
   const ready = list.filter(x => x && x.available)
-  const want = pick && pick.provider ? pick : CODEX
+  const want = pick && pick.provider ? pick : HERMES
   const p = ready.find(x => x.provider === want.provider)
   if (p) {
     const known = !p.models?.length || p.models.includes(want.model)
     return { provider: p.provider, model: (known && want.model) || p.default || '' }
   }
-  // ckff (the studio's own image key, engine/ckff.mjs) comes first here: it is the one that still
-  // paints when a Hermes login is signed out or out of quota
-  const other = ready.find(x => x.provider === 'ckff') || ready.find(x => x.provider === CODEX.provider) || ready[0]
+  const other = ready.find(x => x.provider === HERMES.provider) || ready.find(x => x.provider === 'ckff') || ready[0]
   if (!other) return null
-  return { provider: other.provider, model: other.provider === CODEX.provider ? CODEX.model : other.default || '', insteadOf: pick?.provider || undefined }
+  return { provider: other.provider, model: other.default || '', insteadOf: pick?.provider || undefined }
 }

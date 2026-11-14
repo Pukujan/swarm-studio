@@ -3,7 +3,7 @@
 // call, the reports). This reads it, read-only, while a build runs and turns it
 // into studio events: the lead's thinking and orders come from Hermia, each
 // helper is one of the run's crew, and their real work shows on their cursor.
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, basename } from 'node:path'
 

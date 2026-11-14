@@ -27,6 +27,7 @@ flowchart LR
   FEED --> CR["+ Create"]
   CR --> ORB["Studio: the new build in the Design deck"]
   PROJ --> GAL["Projects: a file browser"]
+  GAL --> BRING["Kind menu › Bring in a project: a sheet (repository or folder, subfolder, Game or App) → the card, coming in → its room"]
   GAL --> ORB2["Studio: that project's Overview"]
   ORB -.->|Share › Post to Feed| HOME
   HOME -.->|Remix| CR
@@ -181,6 +182,8 @@ flowchart LR
   PB --> LOCK["Lock · N credits"]
   LOCK --> GATE["Gate: price by part, runs, pictures, Test one first"]
   GATE --> BUILD["Build / Build one"]
+  PB --> ST["Starter: Engine, Template, Assets (options with why)"]
+  PB --> SY["Systems: one card per system, On or Off"]
   PB --> SK["Sketches: Cast, Weapons (pick cells, a note each)"]
   PB --> MK["Mocks: five in-game frames"]
   PB --> WD["World: backdrops, after Lock style"]
@@ -188,20 +191,57 @@ flowchart LR
   BUILD --> BV["Build: front, side, back, the model (Download)"]
 ```
 
+## 5c. The Studio's scaffold (spec 37)
+
+**Make** offers the kind's ways to make it, each by its plain name, the last one picked pre-selected; a kind with
+one way has no menu ([decision 0020](../decisions/0020-ask-before-build.md), [spec 42](../specs/42-ways-to-make.md)).
+Studio opens a Studio project here. Nothing builds before the person presses **Build** or answers the question.
+
+| Kind | Make's ways (an empty box: Studio only, so no menu) |
+|---|---|
+| Website | Just make it · Studio |
+| App | Just make it · Studio |
+| Video | Just make it · Studio |
+| Deck | Studio only |
+| Brand | Studio only |
+| Game | Just make it · Studio (the Plan board's talk, section 5b) |
+
+Just make it → a new website: the one question before a build (Skip all, Step by step, Pick steps to skip); an App,
+Video or Game: the brief in the Design deck's chat → Build. Studio → every step, with the step path across the top;
+a game's Studio is its Plan board. Skipping Brand when asked opens this board with Plan and Lock; Three takes is the
+Brand step's three options. Nothing in Make opens either of those directly.
+
+```mermaid
+flowchart LR
+  MK["Make › Studio"] --> SC["Projects › name · Build"]
+  CH["Left chat: Start with X, and why"] --- SC
+  SC --> LY["Layers (left panel; a sheet from the Layers button ≤ 760 px): a group per section with its dot and count, a row per card; click flies and selects, double-click opens, F2 / right-click Rename, Delete, drag into the chat"]
+  SC --> PA["Step path: a chip per step (dot, name) → Skip, Bring back, Remove; + Name brings a removed step back"]
+  SC --> TK["Takes (Three takes): three looks → Use this take, or Mix in the brand sheet"]
+  SC --> BR["Brand: the brand card → Projects › name › Brand → Lock → back"]
+  SC --> RF["References: add, drop; Use as given, Remove"]
+  SC --> AS["Assets: add, drop; Role, Use as reference, Remove"]
+  SC --> PG["Pages (Website): storyboard strip; Add page; rename, Earlier, Later, Remove"]
+  SC --> LK["Lock: the idea"]
+  SC --> BU["Build → the build room"]
+```
+
 ## 6. Projects
 
 ```mermaid
 flowchart LR
   PROJ[Projects: a file browser] --> MB["Recent, All projects"]
+  PROJ --> CH["Chats: talks with the planner that built nothing yet; one opens in the Design deck's chat"]
   PROJ --> AS[Assets]
   PROJ --> TR[Trash]
   PROJ --> FO["Folders +"]
   PROJ --> ASK["What should the crew build? → Make"]
   ASK --> SC["💡 Starting prompts for the kind, then its showcases"]
-  ASK --> GR["Guided prompt: only the unanswered questions → The brief (editable) → Build or Keep talking"]
+  ASK --> GR["Guided prompt (not in the Make menu now; only a Thorough depth reaches it): only the unanswered questions → The brief (editable) → Build or Keep talking"]
   ASK --> TK["Don't build yet, talk first, a question → Design deck chat: Hermia talks, nothing built → Build → The brief → Build or Keep talking"]
-  ASK --> TU["Not sure → Build now or talk first?"]
-  ASK --> KM["Kind menu: Website, App, Game, Video, Grill me"]
+  ASK --> TU["Make: Just make it, Studio, as the kind offers (5c); one way goes straight there"]
+  ASK --> KM["Kind menu: Website, App, Game, Video, Brand, Deck, Pictures ›"]
+  KM --> KMP["Pictures: Painted, Stock photos, Drawn (the Setup pick; not for Game)"]
   PROJ --> BD[Boards]
   PROJ --> MO[Mood boards]
   PROJ --> SW[Shared with me]
@@ -209,6 +249,10 @@ flowchart LR
   SU --> SU0["Account: Skipped, or Google / GitHub / Discord → Feed sign-in → linked as you"]
   SU --> SU1["Models: tested ✓ or ⚠ → Let Hermes set this up"]
   SU --> SU2["Pictures: Painted, Stock photos, Drawn"]
+  SU --> SU4["Parts: n of m, ⚠ when one fails"]
+  SU4 --> SU5["Every build, Website, App, Game, Video, Brand, Deck, Publishing, Feed: n of m each"]
+  SU5 --> SU6["A part: a dot (working, not set up, installs on first use) or ⚠, its name and state"]
+  SU6 --> SU7["For, Uses, Needed, Without it, Sends; the reason it fails; the one fix: Pick a model, a command to copy, Connect, Sign in or a link"]
   SU --> SU3[Start]
   MB --> ST["A card: picture, title, kind icons"]
   MB --> MS["Search, sort, grid or list, multi-select"]
@@ -258,15 +302,11 @@ flowchart LR
   LA1 --> LA3[Promo video]
   LA1 --> LA4["Stats: views, plays, remixes"]
   SE --> SE1["Sound: mute, volume, voices"]
-  SE --> SE2[Models]
-  SE --> SE3[Connections]
-  SE --> SE4[Keys]
-  SE2 --> SE5[A role]
-  SE5 --> SE6[Pick a model]
-  SE6 --> SE7[Cost and speed]
-  SE3 --> SE8["Supabase, GitHub, Feed account"]
+  SE --> SE11["You: the Feed account and its Goes to line"]
+  SE --> SE12["Setup → the Setup sheet on Parts (models, tools, connectors, keys, programs)"]
+  SE --> SE13["Lite mode: Auto, On, Off; what it does, what stops, when Auto turns it on"]
+  SE --> SE14["Background: stop an app nobody is looking at (1, 2, 5, 15 min); close the studio when nothing runs (10, 20, 60 min, Never)"]
   SE --> SE9["Data: where each thing goes"]
-  SE3 --> SE10["A connection: name, state, its Goes to line"]
 ```
 
 ## 8. A project: the Overview
@@ -286,12 +326,13 @@ flowchart LR
   TOP --> VER["▾ Rename, Duplicate, Versions"]
   TOP --> MORE["☰ Review, Video, Export, Replay"]
   MORE --> RPD["Replay → Design deck"]
-  LEFT --> FIL["Files: Site, App, Game, Film, Art, Uploads, Code"]
+  LEFT --> FIL["Files: Site, Story, App, Game, Film, Art, Uploads, Code"]
   LEFT --> LAY["Layers: pages and sections"]
   FIL --> FM["Right-click: Open, Rename, Duplicate, Download, Show in Finder, Delete"]
   FIL --> UP["+ → New page, Upload files; or drop from Finder"]
   STG --> DD["Double-click a page → Design deck"]
   STG --> ER["Double-click the app or game → Engine room"]
+  STG --> STY["A story card → inspector: Phone, Desktop, Square; Kicker, Headline, Line; pictures; Type; Earlier, Later, Again"]
   PJ --> GB["A game still building opens on its build (Engine room) once; Back shows the Overview"]
   PJ --> WB["A website, app or video just started with Make opens in the Design deck (Follow on) while its pages are designed; Back shows the Overview"]
   STG --> FS["Double-click a film → Film studio"]
@@ -301,6 +342,10 @@ flowchart LR
 
 The way home is always there and is not a branch: the breadcrumb (`Projects › project ▾`, then Back from a room), the
 logo (back to Home) and Esc.
+
+An app build's Engine room, in the next UI, is the app build wall (spec 44): four windows, Map, Live app, Code and
+Shipped; a click enlarges one, Esc puts it back, and Ask the crew sends a question to the window of the crew member it
+names.
 
 ## 9. Progress, versions, share
 
@@ -338,6 +383,7 @@ flowchart LR
   S2 --> W2[Working app]
   S2 --> W3[Arcade]
   W1 --> W4[Address]
+  W1 --> WT["Thumbnail: picked, one click to swap"]
   W1 --> W5[Card look]
   W1 --> W6[Go live]
   W4 --> W7[Custom domain]
@@ -391,6 +437,7 @@ flowchart LR
   T2 -.-> PIN
   RP --> TOP["Crew, progress, Play, Share"]
   RP --> NS["Nothing selected: page and variables"]
+  NS --> SEO["Search & share: title, description, share picture"]
   RP --> DT[Design tab]
   RP --> PT[Prototype tab]
   DT --> LA["Layout: position, auto layout"]

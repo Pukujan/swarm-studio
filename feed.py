@@ -394,10 +394,12 @@ MIME = {".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg
 
 
 def poster_of(r: dict, folder: Path | None) -> str:
-    """A data URL for the feed card: the first page shot from the video, else the build's first picture, else a drawn card in its colours."""
+    """A data URL for the feed card: the site's thumbnail (the same picture its link preview shows, written at
+    export and publish by engine/seo.mjs), else the first page shot from the video, else the build's first picture,
+    else a drawn card in its colours."""
     candidates: list[Path] = []
     if folder:
-        candidates += [folder / "video" / "p1.webp", folder / "video" / "p1.png"]
+        candidates += [folder / "thumb.jpg", folder / "video" / "p1.webp", folder / "video" / "p1.png"]
         img = folder / "img"
         if img.is_dir():
             pics = [p for p in img.iterdir() if p.suffix.lower() in MIME and not p.name.startswith("video-")]
@@ -500,8 +502,71 @@ def piece_of(r: dict, url: str, poster: str) -> dict:
     return {"kind": kind, "title": str(r.get("title") or "Untitled")[:80], "liveUrl": url, "poster": poster, "runId": str(r["id"])[:120]}
 
 
+SHOT_FIELDS = ("shot", "phoneShot")
+
+
+def with_shots(pages: list[dict], shots: list[dict] | None) -> list[dict]:
+    """Each page with its path on the live site and its page shots (from the canvas server's
+    /api/runs/<id>/pageshots, in page order): a desktop shot and a phone shot, both optional."""
+    out = []
+    for i, page in enumerate(pages):
+        got = shots[i] if shots and i < len(shots) and isinstance(shots[i], dict) else {}
+        page = dict(page)
+        if isinstance(got.get("path"), str) and got["path"].startswith("/"):
+            page["path"] = got["path"][:200]
+        for k in SHOT_FIELDS:
+            v = got.get(k)
+            if isinstance(v, str) and v.startswith("data:image/"):
+                page[k] = v
+        out.append(page)
+    return out
+
+
+# The build's story (docs/specs/39-story.md, engine/story.mjs): its beats as words and its cards in three
+# shapes, phone first. The cards ride in the post as JPEG data URLs; a shape that would take the post past
+# STORY_BUDGET is left out (the Feed takes 8 MB a post, and the page shots need room too).
+STORY_BUDGET = 3 * 1024 * 1024
+STORY_SHAPES = ("tall", "square", "wide")
+STORY_ROLES = {"hook", "what", "who", "moment", "making", "next"}
+BEAT_FIELDS = (("kicker", 32), ("headline", 60), ("line", 140))
+
+
+def story_of(folder: Path | None, budget: int = STORY_BUDGET) -> dict | None:
+    """{type, beats: [{id, role, kicker, headline, line}], cards: {tall: [...], square: [...], wide: [...]}}
+    from the run's story.json and story/<shape>-<beat>.jpg, or None when the build has no story."""
+    if not folder:
+        return None
+    try:
+        raw = json.loads((folder / "story.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    beats = []
+    for b in raw.get("beats") or []:
+        if not isinstance(b, dict) or not re.match(r"^b\d{1,2}$", str(b.get("id") or "")) or b.get("role") not in STORY_ROLES:
+            continue
+        beat = {"id": b["id"], "role": b["role"]}
+        for k, n in BEAT_FIELDS:
+            beat[k] = str(b.get(k) or "")[:n]
+        beats.append(beat)
+    if not beats:
+        return None
+    cards: dict[str, list[str]] = {}
+    left = budget
+    for shape in STORY_SHAPES:
+        files = [folder / "story" / f"{shape}-{b['id']}.jpg" for b in beats]
+        if not all(f.is_file() for f in files):
+            continue
+        size = sum(f.stat().st_size for f in files)
+        if size > left:
+            continue
+        cards[shape] = ["data:image/jpeg;base64," + base64.b64encode(f.read_bytes()).decode() for f in files]
+        left -= size
+    kind = str(raw.get("type") or "launch")
+    return {"type": kind if re.match(r"^[a-z]{1,16}$", kind) else "launch", "beats": beats, "cards": cards}
+
+
 def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | None = None, unlisted: bool = False,
-                  into: str | None = None) -> dict:
+                  into: str | None = None, shots: list[dict] | None = None) -> dict:
     """The POST /api/feed/builds body. With the project fields (project, piece, and into for a later piece);
     ``plain_payload`` takes them off again for a Feed that does not know them."""
     folder = run_dir(r["id"])
@@ -518,9 +583,16 @@ def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | No
         "liveUrl": url,
         "poster": poster_of(r, folder),
         "runId": str(r["id"])[:120],
-        "pages": pages_of(r),
+        "pages": with_shots(pages_of(r), shots),
         "crew": crew_of(folder),
     }
+    # the home page on a phone: the portrait picture for a tall frame
+    tall = body["pages"][0].get("phoneShot") if body["pages"] else None
+    if tall:
+        body["posterTall"] = tall
+    story = story_of(folder)
+    if story:
+        body["story"] = story
     if parent and BUILD_ID.match(parent):
         body["parentId"] = parent
     if jam:
@@ -548,19 +620,56 @@ def plain_payload(body: dict) -> dict:
     return {k: v for k, v in body.items() if k not in PROJECT_FIELDS}
 
 
+def shotless_payload(body: dict) -> dict:
+    """The same body without page shots and the tall poster, for a Feed that does not take them yet."""
+    out = {k: v for k, v in body.items() if k != "posterTall"}
+    out["pages"] = [{k: v for k, v in p.items() if k not in SHOT_FIELDS} for p in body.get("pages") or []]
+    return out
+
+
+def storyless_payload(body: dict) -> dict:
+    """The same body without the story, for a Feed that does not take it yet."""
+    return {k: v for k, v in body.items() if k != "story"}
+
+
+def has_shots(body: dict) -> bool:
+    return "posterTall" in body or any(k in p for p in body.get("pages") or [] for k in SHOT_FIELDS)
+
+
+def _send_build(body: dict, token: str) -> dict:
+    """POST the build; a Feed that refuses the newer fields gets the post again without them: first without
+    the story, then without page shots, then also without the project fields, so posting never breaks."""
+    tries = [body]
+    if "story" in body:
+        body = storyless_payload(body)
+        tries.append(body)
+    if has_shots(body):
+        tries.append(shotless_payload(body))
+    tries.append(plain_payload(shotless_payload(body)))
+    for i, b in enumerate(tries):
+        try:
+            return _call("/api/feed/builds", b, token=token, timeout=120)
+        except FeedError as exc:
+            if i == len(tries) - 1 or not _refused_fields(exc):
+                raise
+    raise FeedError("Could not post")  # not reached
+
+
 def _refused_fields(exc: FeedError) -> bool:
-    """The Feed does not take the project fields yet: a 400, or a code or message about an unknown field."""
+    """The Feed does not take the newer fields yet: a 400, or a code or message about an unknown field;
+    or a 413, a body over its limit (page shots make a post bigger), so the post goes again without them."""
     text = f"{exc.code} {exc}".lower()
-    return exc.status in (400, 422) or "unknown" in text or "unrecognized" in text or "field" in text
+    return exc.status in (400, 413, 422) or "unknown" in text or "unrecognized" in text or "field" in text
 
 
-def post(r: dict, args: list[str], export) -> str:
-    """Post a build. ``export(run_id) -> zip path or None`` makes the export zip through the canvas server."""
-    out = post_result(r, args, export)
+def post(r: dict, args: list[str], export, shots=None) -> str:
+    """Post a build. ``export(run_id) -> zip path or None`` makes the export zip through the canvas server;
+    ``shots(run_id) -> {zip, pages}`` makes it and shoots every page (desktop and phone) in one go."""
+    out = post_result(r, args, export, shots)
     return out["message"]
 
 
-def post_result(r: dict, args: list[str], export) -> dict:
+def post_result(r: dict, args: list[str], export, shots=None) -> dict:
     """Like post, as {ok, url, message} for the canvas's Post to Feed button."""
     token = _token()
     _, jam, caption, again = parse_post_args(args)
@@ -574,28 +683,27 @@ def post_result(r: dict, args: list[str], export) -> dict:
     into = (cfg.get("projects") or {}).get(pid)
     if again and done == into:
         into = None  # --again on the head piece itself posts it once more, on its own
-    body = build_payload(r, jam=jam, caption=caption, parent=(cfg.get("remixes") or {}).get(r["id"]), unlisted=unlisted, into=into)
+    # a fresh export and every page shot at desktop and phone size; posting goes on without them
+    shot = {}
+    if shots:
+        try:
+            shot = shots(r["id"]) or {}
+        except (RuntimeError, OSError, ValueError):
+            shot = {}
+    pages = shot.get("pages") if isinstance(shot.get("pages"), list) else None
+    body = build_payload(r, jam=jam, caption=caption, parent=(cfg.get("remixes") or {}).get(r["id"]), unlisted=unlisted, into=into, shots=pages)
     joined = False
     try:
-        got = _call("/api/feed/builds", body, token=token, timeout=60)
+        got = _send_build(body, token)
         joined = bool(into) and got.get("id") == into
     except FeedError as exc:
-        if into and exc.status == 404:
-            # the project's build is gone from the Feed: this piece starts the project's post again
-            _update(lambda c: (c.get("projects") or {}).pop(pid, None))
-            into = None
-            body = build_payload(r, jam=jam, caption=caption, parent=body.get("parentId"), unlisted=unlisted)
-            try:
-                got = _call("/api/feed/builds", body, token=token, timeout=60)
-            except FeedError as again_exc:
-                if not _refused_fields(again_exc):
-                    raise
-                got = _call("/api/feed/builds", plain_payload(body), token=token, timeout=60)
-        elif _refused_fields(exc):
-            # a Feed without projects yet: today's single post, so posting never breaks
-            got = _call("/api/feed/builds", plain_payload(body), token=token, timeout=60)
-        else:
+        if not (into and exc.status == 404):
             raise
+        # the project's build is gone from the Feed: this piece starts the project's post again
+        _update(lambda c: (c.get("projects") or {}).pop(pid, None))
+        into = None
+        body = build_payload(r, jam=jam, caption=caption, parent=body.get("parentId"), unlisted=unlisted, shots=pages)
+        got = _send_build(body, token)
     build_id = got["id"]
 
     def remember(c: dict) -> None:
@@ -606,7 +714,7 @@ def post_result(r: dict, args: list[str], export) -> dict:
     _update(remember)
     note = ""
     try:
-        zip_path = export(r["id"])
+        zip_path = shot.get("zip") if shot.get("zip") and Path(shot["zip"]).is_file() else export(r["id"])
         if zip_path and Path(zip_path).is_file() and not got.get("uploadUrl"):
             note = "\nThe feed took no files for this piece; remixers start from the prompt."
         elif zip_path and Path(zip_path).is_file():

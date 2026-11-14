@@ -121,3 +121,18 @@ export function deployName(name, kind = 'site') {
 
 // a package name: the project's slug, never a screen's
 export const packageName = (name, fallback = 'swarm-app') => (!isScreenName(name) && slug(name)) || fallback
+
+// The brand a run gave itself: the wordmark in its shared nav (the first link, usually to home).
+// "Tidepool", "SkyLedger"; an aria-label "Hopliner home" names it too. '' when the nav has none.
+// navbrand:start (web/canvas.js has the same lines; tests/naming.test.mjs runs both)
+export function navBrand(html) {
+  const s = String(html || '').replace(/<!--[\s\S]*?-->/g, '').replace(/<svg\b[\s\S]*?<\/svg>/gi, '')
+  const a = s.match(/<a\b([^>]*)>([\s\S]*?)<\/a>/i)
+  if (!a) return ''
+  const label = (a[1].match(/aria-label="([^"]{2,60})"/i) || [])[1]?.replace(/\s+(home|homepage|logo)$/i, '').trim()
+  const bits = (label ? [label] : []).concat(a[2].split(/<[^>]+>/).map(t => t.replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim()))
+  const ok = bits.filter(t => (t.match(/\p{L}/gu) || []).length >= 2 && t.length <= 40 && t.split(' ').length <= 4)
+  // the wordmark comes first; a tagline after it ("loose-leaf tea, Portland") is not the name
+  return (ok[0] || '').replace(/[\s—–|:·-]+$/, '')
+}
+// navbrand:end

@@ -2,7 +2,7 @@
 // (SWARM_HEAVY_HOST, an SSH alias such as "mac-pro", or <data>/heavy.json { host, rife, interp, python })
 // the scripts and inputs are copied to a job folder there, run, and the outputs copied back; without
 // one they run here. Nothing secret goes over: only the files named.
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { existsSync, mkdtempSync, copyFileSync, readFileSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'

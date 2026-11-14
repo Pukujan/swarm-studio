@@ -36,7 +36,7 @@ test('mocks: five in-game frames with the picked sheets as references', () => {
   const jobs = addMocks(p, '/d')
   assert.deepEqual(p.mocks.map(m => m.shot), SHOTS.map(s => s[0]))
   assert.equal(jobs.length, 5)
-  assert.deepEqual(jobs[0].refs, ['/d/s.png'])
+  assert.deepEqual(jobs[0].refs.map(r => r.replaceAll('\\', '/')), ['/d/s.png'])
   assert.match(jobs.find(j => j.id === p.mocks.find(m => m.shot === 'ult').id).prompt, /cut-in/)
 })
 

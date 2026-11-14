@@ -3,22 +3,33 @@
 // engine event to the canvas over Server-Sent Events. Binds to 127.0.0.1 only.
 //
 //   node server/server.mjs [--port 4319]
-//   env: SWARM_API_KEY / SWARM_BASE_URL (or HERMES_CUSTOM_INFERHUB_API_KEY),
+//   Model calls go to Hermes through its bridge (engine/hermesllm.mjs). Without Hermes:
+//   env: SWARM_STUDIO_API_KEY or SWARM_API_KEY, SWARM_BASE_URL,
 //        SWARM_PLANNER_MODEL, SWARM_WORKER_MODEL, SWARM_AGENTS
 
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
-import { execFile } from 'node:child_process'
+import { execFile, hermesEnv, pick, respawnSelf } from '../engine/proc.mjs'
+import { hermesBridge, imageBody, videoBody } from '../engine/bridge.mjs'
+import { hermesLlm, roleModel } from '../engine/hermesllm.mjs'
+import { hermesHealth, HERMES_SAYS } from '../engine/hermeshealth.mjs'
+import { reasonFromAbort, reasonFromFailure } from '../engine/stopreason.mjs'
 import { basename, dirname, extname, join, normalize } from 'node:path'
 import { homedir, tmpdir, userInfo } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { runSwarm } from '../engine/run.mjs'
-import { followUp, rehomeImages } from '../engine/extend.mjs'
+import { extendBase, followUp, rehomeImages, baseBrief } from '../engine/extend.mjs'
 import { recentLooks } from '../engine/pagetype.mjs'
 import { writeTours } from '../engine/tours.mjs'
-import { reviewPage, fixSection, routeComment } from '../engine/review.mjs'
+import { reviewPage, fixSection, routeComment, reviewAgain, REVIEW_PASS, REVIEW_ROUNDS } from '../engine/review.mjs'
+import { lintSection } from '../engine/lint/index.mjs'
+import { cleanMarks, openMarks, nextMarkId, readMarksMessages, parseReads, fixText, markLine } from '../engine/marks.mjs'
+import { handChanges, keepHand } from '../engine/handedit.mjs'
 import { exportRun, snapshot } from '../engine/export.mjs'
+import { seoPass, currentSeo, cleanSeo, thumbOf } from '../engine/seo.mjs'
+import { seoAsk, lookAsk } from '../web/route.js'
+import { lookEdits, themeNow } from '../engine/lookask.mjs'
 import { standins as standinsMake } from '../engine/standins.mjs'
 import { githubLogin, publishGitHub, publishVercel, publishCloudflare } from '../engine/publish.mjs'
 import { connect, connections, credentials, PROVIDERS } from '../engine/connect.mjs'
@@ -27,7 +38,11 @@ import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
+import { nextPage, nextVendor } from './next.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
+import { CHAT_ID } from '../engine/chats.mjs'
+import { askTurn, askedOf, askOptions, ASK_TEXT } from '../engine/askfirst.mjs'
+import { wordsRead } from '../engine/talkplan.mjs'
 import { deployName, isScreenName, PIECES } from '../engine/naming.mjs'
 import { autoJob, hermesKey } from '../engine/auto.mjs'
 import * as art from '../engine/artdirect.mjs'
@@ -37,6 +52,23 @@ import { streamChat } from '../engine/llm.mjs'
 import { runFacts, writeLaunch, readLaunch, markLaunch } from '../engine/launch.mjs'
 import { hermesConnectors } from '../engine/hermes_connect.mjs'
 import { planRoutes } from './plans.mjs'
+import { talkRoutes } from './talk.mjs'
+import { appKitRoutes } from './appkit.mjs'
+import { brandRoutes, lockedBrand } from './brand.mjs'
+import { requestedBrand } from '../engine/brand.mjs'
+import { templates as odTemplates } from '../engine/odlibrary.mjs'
+import { storyRoutes, readStory } from './story.mjs'
+import { deckRoutes } from './deck.mjs'
+import { refRoutes } from './refs.mjs'
+import { pictureAsk, vagueAsk, gensOf, newPrompt } from '../engine/picask.mjs'
+import { fixText as lookFixText } from '../engine/lookmatch.mjs'
+import { studioRoutes } from './studio.mjs'
+import { studioStore } from '../engine/studio.mjs'
+import { assetStore } from '../engine/assetstore.mjs'
+import { chatMediaRoutes } from './chatmedia.mjs'
+import { bringInRoutes } from './bringin.mjs'
+import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
+import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
 import { setupRoutes } from './setup.mjs'
 import { pictureRun, isPictures } from '../engine/setup.mjs'
@@ -47,48 +79,77 @@ import { assetLib, readPicks, setPick, pickedItem, creditsFor, SLOT_CATEGORIES, 
 import { makeCharacter as planMakeCharacter, meshyKey as planMeshyKey } from '../engine/meshy.mjs'
 import { PLAN_QUESTIONS } from '../engine/plan.mjs'
 import { collect, composition, VOICE_LEAD, videoTools, render, stagePictures, TRANSITIONS, fxFor, SHAPES } from '../engine/video.mjs'
-import { writeBoard, fallbackBoard, cueSheet, TEMPLATES } from '../engine/storyboard.mjs'
+import { makePoster, posterFfmpeg } from '../engine/poster.mjs'
+import { idleWatch, codeStamp, staleCode } from '../engine/lifecycle.mjs'
+import { findFfmpeg } from '../engine/playtest.mjs'
+import { writeBoard, fallbackBoard, cueSheet, TEMPLATES, checkBoard } from '../engine/storyboard.mjs'
+import { checkKit, kitBoard, kitPrompt, checkStory, storySource, storyBoard } from '../engine/filmkit.mjs'
+import { filmRoutes, filmSourceOf, inside } from './film.mjs'
 import { scoreWav, elevenScore } from '../engine/score.mjs'
 import { decode, analyse, cutToMusic, planLengths, leastLengths, retime } from '../engine/musiccut.mjs'
+import { readMedia, readSays, mediaCaps, defaultMedia, takesSays } from '../engine/mediareader.mjs'
+import { reviewFilm } from '../engine/filmcritic.mjs'
 import { breakdown, merge as mergeRefs, refDir, safeName, kindOf } from '../engine/reference.mjs'
 import { mediaKeys, mediaSources, mcpScore, clipJobs, KEYS as MEDIA_KEYS, ELEVEN_MCP } from '../engine/media.mjs'
 import { idleOptions, optionOf, idleKey, priceOk, idleStartName, idlePrompt, idleMessages, IDLE_SAY } from '../engine/idle.mjs'
 import { heavyConfig, runHeavy, interpOf } from '../engine/heavy.mjs'
+import { makeImages } from '../engine/images.mjs'
+import { snapStore } from './snaps.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const BOOTED = Date.now()
 const webDir = join(root, 'web')
+const uiDist = join(root, 'ui', 'dist')
 const runsDir = process.env.SWARM_RUNS_DIR || join(root, 'runs')
 const dataDir = process.env.SWARM_DATA_DIR || root
 const argPort = process.argv.indexOf('--port')
 const port = Number(argPort >= 0 ? process.argv[argPort + 1] : process.env.SWARM_PORT || 4319)
 
-// Endpoint and model per role. Hermes resolves them from its own model slots and
-// sends them with each run (see launcher.py); the environment gives the defaults
-// that the canvas's own Build button uses before the first such run. Keys stay in
-// memory: they are never written to a run's files or sent back out.
+// Endpoint and model per role (Nous catalog review, point 2). By default every model call goes to Hermes:
+// the studio's own loopback endpoint /llm/v1 (engine/hermesllm.mjs) forwards it to the Hermes bridge, and
+// Hermes answers with its own provider, model and key, so no provider key ever reaches this process.
+// The one exception is the plugin's own SWARM_STUDIO_API_KEY, when the person set it: then the roles call
+// SWARM_STUDIO_BASE_URL with it directly. (SWARM_API_KEY / SWARM_<ROLE>_API_KEY do the same for running
+// the server by hand, without Hermes.) Keys stay in memory: they are never written to a run's files.
 const DEFAULT_BASE = 'https://api.inferhub.dev/v1'
 const DEFAULT_MODEL = 'cb/deepseek-v4.1-flash'
-const envRole = (role, fallback = DEFAULT_MODEL) => ({
-  baseUrl: process.env[`SWARM_${role}_BASE_URL`] || process.env.SWARM_BASE_URL || DEFAULT_BASE,
-  apiKey: process.env[`SWARM_${role}_API_KEY`] || process.env.SWARM_API_KEY || process.env.HERMES_CUSTOM_INFERHUB_API_KEY || '',
-  model: process.env[`SWARM_${role}_MODEL`] || fallback
-})
-// the reviewer follows Hermes's vision model; it has no default of its own
-let models = { planner: envRole('PLANNER'), worker: envRole('WORKER'), reviewer: envRole('REVIEWER', '') }
-const ROLES = ['planner', 'worker', 'reviewer']
-
-function setModels(given) {
-  const next = { ...models }
-  for (const role of ROLES) {
-    const m = given?.[role]
-    if (!m || typeof m !== 'object') continue
-    const baseUrl = String(m.base_url || '').replace(/\/$/, '')
-    if (!/^https?:\/\//.test(baseUrl) || !m.api_key || !m.model) continue
-    next[role] = { baseUrl, apiKey: String(m.api_key), model: String(m.model) }
-  }
-  models = next
+const hermes = hermesBridge()
+// Is Hermes there, and if not, why not (closed, or running an older copy of the plugin): asked before a
+// build starts, so a build with nobody to answer its model calls is refused at once, with the reason
+// (SWARM_HERMES_RUNNING=0|1 stands in for the process check in tests: a test server is never the one a
+// running Hermes attaches to, so the real check would call that Hermes outdated)
+const health = hermesHealth({ bridge: hermes, root, ...(/^[01]$/.test(process.env.SWARM_HERMES_RUNNING || '') ? { running: async () => process.env.SWARM_HERMES_RUNNING === '1' } : {}) })
+// a model call that found no Hermes for its grace period stops the build in flight with Hermes's reason
+const hermesGone = why => {
+  if (!current || current.done || current.controller.signal.aborted) return
+  // Hermes was there when this build started (it was checked), so "not connected" now means it closed
+  const said = why.code === 'hermes_closed' ? HERMES_SAYS.gone : why
+  current.controller.abort({ ...said, code: 'hermes' })
 }
-const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), apiKey: models[role].apiKey })
+const llm = hermesLlm({ bridge: hermes, port: () => port, broadcast: e => broadcast(e), health, onGone: hermesGone, graceMs: Number(process.env.SWARM_HERMES_GRACE_MS) || 20000 })
+const envRole = (role, fallback = DEFAULT_MODEL) => {
+  const apiKey = process.env[`SWARM_${role}_API_KEY`] || process.env.SWARM_API_KEY || process.env.SWARM_STUDIO_API_KEY || ''
+  if (!apiKey) return { ...llm.provider(), model: role.toLowerCase() }
+  return {
+    baseUrl: process.env[`SWARM_${role}_BASE_URL`] || process.env.SWARM_BASE_URL || process.env.SWARM_STUDIO_BASE_URL || DEFAULT_BASE,
+    apiKey,
+    model: process.env[`SWARM_${role}_MODEL`] || process.env[`SWARM_STUDIO_${role}_MODEL`] || fallback
+  }
+}
+// the reviewer follows Hermes's vision model; with a key of its own it has no default
+const models = { planner: envRole('PLANNER'), worker: envRole('WORKER'), reviewer: envRole('REVIEWER', '') }
+const ROLES = ['planner', 'worker', 'reviewer']
+const viaHermes = role => models[role].hermes === true
+const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), apiKey: models[role].apiKey, ...(viaHermes(role) ? { hermes: true } : {}) })
+// Before work that calls the model: null when it can go ahead, else the 503 body that says why not
+// ({error, code: 'hermes_closed' | 'hermes_updated', message, action, hermes: true}). Only roles that
+// go through Hermes are asked about; a build with its own key does not need Hermes.
+async function hermesGate() {
+  if (!ROLES.some(r => viaHermes(r) && picks[r] !== 'off')) return null
+  const h = await health.ready().catch(() => null)
+  if (!h || h.ok) return null
+  return { error: `${h.message} ${h.action}`, code: `hermes_${h.code}`, message: h.message, action: h.action, hermes: true }
+}
 
 // Picks made in the canvas's Models menu. Model names only (each role keeps the
 // endpoint and key Hermes gave it), kept in the plugin's data dir, never in
@@ -96,17 +157,28 @@ const provider = role => ({ baseUrl: models[role].baseUrl.replace(/\/$/, ''), ap
 const picksFile = join(dataDir, 'models.json')
 let picks = {}
 try { picks = JSON.parse(readFileSync(picksFile, 'utf8')) } catch {}
-const modelFor = role => (picks[role] === 'off' ? '' : picks[role] || models[role].model)
+const modelFor = role => (picks[role] === 'off' ? '' : viaHermes(role) ? roleModel(role, picks[role]) : picks[role] || models[role].model)
+// Settings › Background (decision 0017, issue #450): when an app's server stops with nobody looking (minutes) and when this
+// server exits with nothing to do (minutes, 0 never). SWARM_APP_IDLE_MIN / SWARM_SERVER_IDLE_MIN win over the pick.
+const STOP_PICKS = { app: [1, 2, 5, 15], server: [10, 20, 60, 0] }
+const envMin = k => (process.env[k] !== undefined && process.env[k] !== '' && Number.isFinite(Number(process.env[k])) ? Number(process.env[k]) : null)
+const idleStops = () => ({
+  app: envMin('SWARM_APP_IDLE_MIN') ?? (STOP_PICKS.app.includes(picks.stops?.app) ? picks.stops.app : 2),
+  server: envMin('SWARM_SERVER_IDLE_MIN') ?? (STOP_PICKS.server.includes(picks.stops?.server) ? picks.stops.server : 20)
+})
 
 // Model ids each endpoint offers, for the pickers. Fetched once per endpoint.
 const modelLists = new Map()
+// each listed model's row (its `modality` says what it takes), for the media reader
+const modelRows = new Map()
 function listModels(role) {
   const m = models[role]
-  if (!m.apiKey) return Promise.resolve([])
+  // through Hermes the model is Hermes's slot; there is no list to pick from
+  if (!m.apiKey || viaHermes(role)) return Promise.resolve([])
   if (!modelLists.has(m.baseUrl)) {
     modelLists.set(m.baseUrl, fetch(`${m.baseUrl.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${m.apiKey}` }, signal: AbortSignal.timeout(15000) })
       .then(r => r.json())
-      .then(j => (j.data || []).map(x => x.id).filter(Boolean).sort())
+      .then(j => { for (const x of j.data || []) if (x?.id) modelRows.set(x.id, x); return (j.data || []).map(x => x.id).filter(Boolean).sort() })
       .catch(() => { modelLists.delete(m.baseUrl); return [] }))
   }
   return modelLists.get(m.baseUrl)
@@ -122,23 +194,40 @@ const pyCommand = (call, timeout) => new Promise(resolve => {
   })
 })
 
-// ---------- images, from Hermes's own image providers (a Codex login, xAI, FAL…)
-// imagegen.py runs in Hermes's Python, so the provider tokens never reach this server.
-const PY = process.env.SWARM_HERMES_PY || ''
-const pyEnv = { ...process.env, PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '' }
-// keys pasted in the Film panel (engine/media.mjs): a FAL key switches on Hermes's own FAL providers
-const mediaKeyStore = mediaKeys(dataDir)
-const hermesPy = (script, what) => (args, timeout) => new Promise(resolve => {
-  if (!PY) return resolve({ ok: false, error: `start Swarm Studio from Hermes to use its ${what} providers` })
-  execFile(PY, [join(root, script), ...args], { env: { ...pyEnv, ...mediaKeyStore.env(pyEnv) }, timeout, maxBuffer: 1 << 20 }, (err, stdout) => {
+// hermes_models.py's helpers (the Setup sheet's model picker), run once in Hermes's Python under the
+// profile's HERMES_HOME; `input` goes in on stdin, so a pasted key is never a process argument
+const pyModels = (call, input = '', timeout = 60000) => new Promise(resolve => {
+  if (!PY) return resolve({ ok: false, message: 'Start Swarm Studio from Hermes to pick a model.' })
+  const code = `import sys, json; sys.path.insert(0, ${JSON.stringify(root)}); import hermes_models; print(json.dumps(hermes_models.${call}))`
+  const child = execFile(PY, ['-c', code], { env: pyEnv, cwd: root, timeout, maxBuffer: 4 << 20 }, (err, stdout) => {
     const line = String(stdout || '').trim().split('\n').pop()
-    try { resolve(JSON.parse(line)) } catch { resolve({ ok: false, error: String(err?.message || 'no answer').slice(0, 200) }) }
+    try { resolve(JSON.parse(line)) } catch { resolve({ ok: false, message: err ? String(err.message || err).split('\n')[0] : 'Hermes did not answer.' }) }
   })
+  child.stdin?.end(input)
 })
-const imagegenHermes = hermesPy('imagegen.py', 'image')
+
+// ---------- pictures and clips, through Hermes's own image_generate and video_generate tools
+// The Hermes bridge (engine/bridge.mjs, bridge.py, docs/specs/33-hermes-bridge.md): a Hermes process with the
+// plugin loaded attaches a loopback bridge, and Hermes paints with the provider and key it is set up with.
+// No provider key reaches this server.
+const PY = process.env.SWARM_HERMES_PY || ''
+// Hermes's Python finds Hermes by HERMES_HOME and its import paths (the Feed and connector helpers)
+const pyEnv = hermesEnv({ PYTHONPATH: process.env.SWARM_HERMES_PYTHONPATH || '' })
+// the ElevenLabs key pasted in the Film panel (engine/media.mjs)
+const mediaKeyStore = mediaKeys(dataDir)
+// Generated pages served from this origin (/site/, /video/…/live/) run in an opaque origin (Nous catalog review, point 4)
+const SITE_CSP = 'sandbox allow-scripts'
+const HERMES_IMAGE = { provider: 'hermes', available: true, models: [], default: '' }
+const imagegenHermes = async (args, timeout) => {
+  if (args[0] === '--list') {
+    const m = await hermes.call('/media', undefined, 10000)
+    return { ok: true, providers: [{ ...HERMES_IMAGE, available: !m.absent && m.image?.available !== false }] }
+  }
+  return hermes.call('/image', imageBody(args), timeout || 300000)
+}
 // ckff (engine/ckff.mjs) is an image provider of the studio's own: an OpenAI-shaped image API with
-// its own key (CKFF_API_KEY). With a key it is listed beside Hermes's image logins, so it can be
-// picked in the Images menu and a build can paint with it when no Hermes login works.
+// its own key (CKFF_API_KEY). With a key it is listed beside Hermes's image tool, so it can be
+// picked in the Images menu and a build can paint with it when Hermes cannot.
 const CKFF_MODELS = ['gpt-image-2.5', 'gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2-4k']
 const ckffProvider = () => (ckffCreds() ? { provider: 'ckff', available: true, models: CKFF_MODELS, default: process.env.CKFF_MODEL || CKFF_MODELS[0] } : null)
 const argAfter = (args, flag) => { const i = args.indexOf(flag); return i >= 0 ? String(args[i + 1] || '') : '' }
@@ -148,18 +237,29 @@ const imagegen = (args, timeout) => {
     return mine ? { ok: true, providers: [...listed, mine] } : r
   })
   if (argAfter(args, '--provider') !== 'ckff') return imagegenHermes(args, timeout)
-  // the same arguments imagegen.py takes; ckff has no centre-crop, so the picture comes back whole
+  // the same arguments as a Hermes picture; ckff has no centre-crop, so the picture comes back whole
   const refs = args.flatMap((x, i) => (x === '--ref' && args[i + 1] ? [args[i + 1]] : [])).filter(r => existsSync(r))
   return ckffPaint({ prompt: String(args[args.length - 1] || ''), aspect: argAfter(args, '--aspect') || 'landscape', refs, model: argAfter(args, '--model') || undefined, timeoutMs: timeout || 300000 })
 }
-// moving clips from a still, through Hermes's video providers (FAL's Veo 3.1, xAI…)
-const videogen = hermesPy('videogen.py', 'video')
+// moving clips from a still, through Hermes's own video_generate (the provider Hermes is set up with)
+const videogen = async (args, timeout) => {
+  if (args[0] === '--list') {
+    const m = await hermes.call('/media', undefined, 10000)
+    return { ok: true, providers: [{ provider: 'hermes', label: 'Hermes', model: '', available: !m.absent && m.video?.available !== false }] }
+  }
+  const { out, ...body } = videoBody(args)
+  const r = await hermes.call('/video', body, timeout || 600000)
+  if (!r.ok || !out) return r
+  // the bridge keeps the clip in Hermes's folder; the run gets its own copy
+  try { mkdirSync(dirname(out), { recursive: true }); copyFileSync(r.path, out) } catch (err) { return { ok: false, error: `could not keep the clip: ${err.message}` } }
+  return { ...r, path: out }
+}
 let imageProviders = null, videoProviders = null
 const loadImageProviders = () => (imageProviders ||= imagegen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
 const loadVideoProviders = () => (videoProviders ||= videogen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
 loadImageProviders()
 loadVideoProviders()
-// The image model for new builds: the pick, else your Codex login's cheapest tier when it is signed in.
+// The image model for new builds: the pick, else Hermes's own image tool when a Hermes process is attached.
 // A pick that is not signed in falls back to one that is (engine/paintretry.mjs chooseImage), so
 // a stale pick never leaves a build without pictures.
 async function imageChoice() {
@@ -172,9 +272,14 @@ async function imageChoice() {
 const setup = setupRoutes({
   dataDir,
   roles: () => ({ planner: { ...models.planner, model: modelFor('planner') }, worker: { ...models.worker, model: modelFor('worker') } }),
-  call: (p, model) => streamChat({ baseUrl: p.baseUrl.replace(/\/$/, ''), apiKey: p.apiKey }, { trace: { kind: 'setup-test' }, model, maxTokens: 16, temperature: 0, messages: [{ role: 'user', content: 'Say ok' }], signal: AbortSignal.timeout(30000) }),
+  call: (p, model) => streamChat({ baseUrl: p.baseUrl.replace(/\/$/, ''), apiKey: p.apiKey, ...(p.hermes ? { hermes: true } : {}) }, { trace: { kind: 'setup-test' }, model, maxTokens: 16, temperature: 0, messages: [{ role: 'user', content: 'Say ok' }], signal: AbortSignal.timeout(30000) }),
   image: async () => ({ providers: await loadImageProviders(), imagePick: picks.image || null, pick: picks.pictures || null }),
+  media: () => mediaState(),
   feed: PY ? call => pyCommand(call, 60000) : null,
+  hermesModels: PY ? pyModels : null,
+  // a pick in Hermes's slots replaces the canvas's own picks for those roles, so Hermes answers with it
+  clearPicks: () => { delete picks.planner; delete picks.worker; try { writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {} },
+  hermesEnv: () => pyEnv,
   setPictures: mode => { if (mode) picks.pictures = mode; else delete picks.pictures; try { writeFileSync(picksFile, JSON.stringify(picks, null, 2)) } catch {} }
 })
 // What one build does for pictures: its own `pictures`, else the Setup pick, else the default
@@ -219,12 +324,12 @@ async function checkArt(path, guide, messages = art.checkMessages) {
 }
 // One picture through the art director. A picture sent back is made once more with
 // the reasons in its prompt; the second one stands.
-// another signed-in image provider than the one in use: Codex first, then any other
+// another image source than the one in use: ckff first, then Hermes, then any other
 async function backupImage(choice) {
   const list = (await loadImageProviders()).filter(x => x.available && x.provider !== choice?.provider)
   // ckff first when it has a key: it is the one that still paints when a Hermes login is out of quota
-  const p = list.find(x => x.provider === 'ckff') || list.find(x => x.provider === 'openai-codex') || list[0]
-  return p ? { provider: p.provider, model: p.provider === 'openai-codex' ? 'gpt-image-2-low' : p.default || '' } : null
+  const p = list.find(x => x.provider === 'ckff') || list.find(x => x.provider === 'hermes') || list[0]
+  return p ? { provider: p.provider, model: p.default || '' } : null
 }
 async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false, cutout = false, ref = '' }, onSentBack) {
   // ref: a picture to match in style (the hero's sprite, for a figure or prop painted to stand beside it)
@@ -257,16 +362,35 @@ async function paintArt(choice, guide, { gen, aspect = 'landscape', hero = false
 // One picture for a finished section: a new one asked for in an edit, or a
 // replacement. It keeps the <img>'s data-gen as its key, so every canvas, the
 // export and the video pick up the newest one.
-function paintOne(send, runId, { page, layer, gen, prompt }, choice) {
-  send('image:queued', { page, layer, gen, provider: choice.provider, model: choice.model })
+// asked: a person asked for this picture in a comment, so the chat says when it lands ({ agent })
+function paintOne(send, runId, { page, layer, gen, prompt, asked = null }, choice) {
+  const who = asked ? { asked: true, agent: asked.agent } : {}
+  send('image:queued', { page, layer, gen, provider: choice.provider, model: choice.model, ...who })
   const sentBack = c => send('image:sent-back', { page, layer, gen, problems: c.problems, model: c.model })
   return paintArt(choice, guideFor(runId), { gen: prompt || gen, hero: art.isHero({ layer }) }, sentBack).then(r => {
-    if (!r.ok || !r.path || !existsSync(r.path)) return send('image:failed', { page, layer, gen, message: r.error || 'no image' })
+    if (!r.ok || !r.path || !existsSync(r.path)) return send('image:failed', { page, layer, gen, message: r.error || 'no image', ...who })
     const file = `edit-${Date.now().toString(36)}${extname(r.path) || '.png'}`
     mkdirSync(join(runsDir, runId, 'img'), { recursive: true })
     copyFileSync(r.path, join(runsDir, runId, 'img', file))
-    send('image', { page, layer, gen, src: `/img/${runId}/${file}`, model: r.model || choice.model, prompt: prompt || undefined })
+    send('image', { page, layer, gen, src: `/img/${runId}/${file}`, model: r.model || choice.model, prompt: prompt || undefined, ...who })
   })
+}
+// A comment that is only about a section's picture (engine/picask.mjs): the picture is painted again from a new
+// prompt and the section's HTML is not touched, so the layout the person had stays. One paint per section at a
+// time: asking again while it paints says so instead of starting another.
+const repainting = new Set()
+async function repaint(runId, send, s, agent, text, gen, choice) {
+  const layer = s.key.split('/').pop(), page = s.key.split('/')[0], key = `${runId}|${s.key}`, role = s.role || layer
+  if (repainting.has(key)) return send('comment:take', { text, page, layer, role, agent, picture: true, reply: `Still painting the last picture for the ${role}. It lands in a moment.` })
+  repainting.add(key)
+  send('comment:take', { text, page, layer, role, agent, picture: true, reply: `On it, painting a new picture for the ${role}. About a minute; the layout stays as it is.` })
+  try {
+    const chat = models.worker.apiKey && modelFor('worker') ? async messages => (await streamChat(provider('worker'), { trace: { kind: 'picture-prompt', agent, page, layer }, model: modelFor('worker'), maxTokens: 220, temperature: 0.7, signal: AbortSignal.timeout(30000), messages })).text : null
+    const prompt = await newPrompt({ gen, comment: text, role, chat })
+    await paintOne(send, runId, { page, layer, gen, prompt, asked: { agent } }, choice)
+  } catch (err) {
+    send('image:failed', { page, layer, gen, message: String(err.message || err).slice(0, 200), asked: true, agent })
+  } finally { repainting.delete(key) }
 }
 // After a rewrite: paint the <img data-gen> it added (ones painted before keep their picture).
 function paintNew(runId, send, page, layer, html, choice) {
@@ -310,6 +434,10 @@ function imageQueue(run, emit, choice) {
   add.start = () => { held = false; pump() }
   // a build that stopped before its layout was done paints nothing: its waiting slots are let go
   add.drop = message => { if (!held) return; for (const job of jobs.splice(0)) emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message }) }
+  // Stop: pictures not started are let go; one already with the image model is kept when it lands
+  add.stop = () => { held = true; for (const job of jobs.splice(0)) emit('image:failed', { page: job.page, layer: job.layer, gen: job.gen, message: 'stopped' }) }
+  // a stopped queue is not busy: the one picture already at the provider lands, nothing more starts
+  add.busy = () => !held && (active > 0 || jobs.length > 0)
   return add
 }
 const host = url => { try { return new URL(url).host } catch { return '' } }
@@ -324,6 +452,14 @@ const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`])
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }
 
 let current = null // { id, events: [], controller, done, result, working }
+
+// Stop: one switch per build. The review and fix passes and the film started for a build listen
+// to its signal; Stop aborts it (their model calls and renders end there), and work started
+// afterwards gets a fresh one. The build itself stops through its own controller.
+const stops = new Map()
+const stopSignal = id => { let c = stops.get(id); if (!c || c.signal.aborted) stops.set(id, c = new AbortController()); return c.signal }
+const stopOr = (sig, ms) => AbortSignal.any([sig, AbortSignal.timeout(ms)])
+const fixing = new Map() // run id -> sections being rewritten after a review or a comment
 const clients = new Set()
 
 function broadcast(event) {
@@ -332,9 +468,8 @@ function broadcast(event) {
 }
 
 const LATE_PICTURE = new Set(['image', 'image:failed', 'image:sent-back'])
-function startRun({ brief, agents, models: given, base = null, ask = '', project = null, piece = null, pageType = '', pictures = '' }) {
-  setModels(given)
-  current?.controller.abort()
+function startRun({ brief, agents, base = null, ask = '', resume = false, project = null, piece = null, pageType = '', pictures = '', brand = null, template = '' }) {
+  current?.controller.abort('replaced')
   const id = new Date().toISOString().replace(/[:.]/g, '-')
   const dir = join(runsDir, id)
   mkdirSync(dir, { recursive: true })
@@ -360,7 +495,18 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     // painted still belongs to it: it goes into this build's own file (and to anyone looking at it).
     // Before, these were dropped and a finished build sat at "0 of 8" with its pictures on disk.
     if (current !== run) { if (LATE_PICTURE.has(type)) record(id, { type, t: Date.now(), run: id, ...data }); return }
-    const event = { type, t: Date.now(), run: id, ...data }
+    // every stop names its cause: the person, a newer build, Hermes gone, or (below) the model
+    if (type === 'run:stopped' && !data?.reason) data = { ...data, reason: reasonFromAbort(run.controller.signal.reason) }
+    // a build that ended with nothing planned because the planner failed did not finish: it stopped, and
+    // the provider's own words say why (a 402 budget cap, a timeout); "0 sections" said nothing
+    if (type === 'run:done' && !data?.planned && !data?.extend) {
+      const failed = [...run.events].reverse().find(e => e.type === 'error' && (e.where === 'planner' || e.where === 'run'))
+      if (failed) { type = 'run:stopped'; data = { ...data, stopped: true, reason: reasonFromFailure(failed.message, { viaHermes: viaHermes('planner') }) } }
+    }
+    // stopped before its pictures: the slots keep their stand-ins, and run:stopped stays the last word
+    if (type === 'run:stopped') images?.drop('stopped')
+    // run:start says whether the pictures will be painted: the deck tags a stand-in "real picture coming" only then
+    const event = { type, t: Date.now(), run: id, ...data, ...(type === 'run:start' ? { paint: !!run.paint } : {}) }
     run.events.push(event)
     if (type === 'agent:assign') run.working.add(data.agent)
     if (type === 'layer:done' || type === 'layer:failed') run.working.delete(data.agent)
@@ -376,6 +522,7 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     if (type === 'layer:done' && images && !data.kept) images(event)
     // the layout pass is over: now the pictures are painted
     if (type === 'run:done' && images) images.start()
+    if (type === 'run:stopped') { run.done = true; run.stopped = true; run.working.clear() }
   }
 
   if (!models.planner.apiKey || !models.worker.apiKey) {
@@ -384,8 +531,10 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
   }
   picturesFor(pictures).then(pic => {
     if (current !== run) return
+    if (run.controller.signal.aborted) return emit('run:stopped', { ms: 0, planned: 0, done: 0, failed: 0, pages: 0, stopped: true })
     // painted: the slots are painted; stock: stand-in photos keep them; drawn: no slots at all
-    if (pic.paint) images = imageQueue(run, emit, pic.choice)
+    run.paint = pic.paint
+    if (pic.paint) { run.images = images = imageQueue(run, emit, pic.choice); painters.set(id, images) }
     return withTrace(id, () => runSwarm({
     images: pic.images,
     provider: provider('planner'),
@@ -393,10 +542,14 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
     brief,
     base,
     ask,
+    resume: !!base && resume === true,
+    brand,
     // the last builds' page types and colours, so this one looks different
     recent: recentLooks(runsDir),
     // a page type the request names (PAGE_TYPES key) wins over the pick
     pageType: typeof pageType === 'string' ? pageType : '',
+    // the design template the person picked (engine/odlibrary.mjs), for the planners
+    template: typeof template === 'string' ? template : '',
     agents: agents || defaultAgents,
     plannerModel: modelFor('planner'),
     workerModel: modelFor('worker'),
@@ -408,7 +561,13 @@ function startRun({ brief, agents, models: given, base = null, ask = '', project
       writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan, null, 2))
     })
   })
-    .catch(err => { emit('error', { where: 'run', message: String(err.message || err) }); images?.drop('the build stopped before its pictures') })
+    .catch(err => {
+      if (run.controller.signal.aborted) return emit('run:stopped', { stopped: true })
+      const message = String(err.message || err)
+      emit('error', { where: 'run', message })
+      images?.drop('the build stopped before its pictures')
+      emit('run:stopped', { stopped: true, ms: 0, planned: 0, done: 0, failed: 0, pages: 0, reason: reasonFromFailure(message, { viaHermes: viaHermes('planner') }) })
+    })
   return run
 }
 
@@ -464,6 +623,54 @@ const traceScope = id => ({
 })
 const withTrace = (id, fn) => traced(traceScope(id), fn)
 
+// Stop one build's work: its layout pass (workers take no more sections, the model calls in flight
+// are aborted), the pictures not started yet, review and fix passes, a film, an app or game build.
+// What is built is kept. Answers what was stopped; a build that was working gets a stop event.
+// every build's picture queue by run id (a newer build does not end an older one's painting)
+const painters = new Map()
+async function stopRun(id) {
+  const what = []
+  if (current?.id === id && !current.done && !current.controller.signal.aborted) { current.controller.abort('person'); what.push('build') }
+  // the pictures of any build, not only the newest: a project's older version may still be painting
+  const pics = painters.get(id)
+  if (pics?.busy()) { pics.stop(); what.push('pictures') }
+  const halt = stops.get(id)
+  if (halt && !halt.signal.aborted) {
+    if ([...reviewing].some(t => t.startsWith(`${id}/`))) what.push('review')
+    if (fixing.get(id) > 0) what.push('fixes')
+    if (videos.get(id)?.state === 'working') what.push('film')
+    halt.abort()
+  }
+  const a = appsNow?.jobs?.get(id)
+  if (a?.state === 'working') { await (await apps()).stop(id); what.push(a.kind === 'game' ? 'game' : 'app') }
+  // the build's own run:stopped comes from the engine; the rest say so here
+  const rest = what.filter(w => w !== 'build')
+  if (rest.length) record(id, { type: 'work:stopped', t: Date.now(), run: id, what: rest })
+  return what
+}
+// Stop everything in flight for a build's project (run or project named), or, with neither, all of it
+async function stopWork({ run, project } = {}) {
+  const ids = new Set()
+  if (RUN_ID.test(String(run || ''))) ids.add(run)
+  // the project named and the project of the run on screen (they differ right after New project)
+  const pids = [...new Set([typeof project === 'string' && project ? project : null, run && RUN_ID.test(run) ? projects.projectOf(run) : null].filter(Boolean))]
+  for (const p of pids.map(x => projects.get(x)).filter(Boolean)) for (const id of [...p.versions.map(v => v.id), ...Object.keys(p.parts || {})]) ids.add(id)
+  const all = !ids.size && !pids.length
+  if (all) {
+    if (current) ids.add(current.id)
+    for (const id of stops.keys()) ids.add(id)
+    for (const [id, a] of appsNow?.jobs || []) if (a.state === 'working') ids.add(id)
+  }
+  const stopped = []
+  const au = auto.state()
+  if (au?.state === 'working' && (all || ids.has(au.run))) { auto.stop(); stopped.push({ run: au.run, what: ['auto'] }); if (au.run) ids.add(au.run) }
+  for (const id of ids) {
+    const what = await stopRun(id)
+    if (what.length) stopped.push({ run: id, what })
+  }
+  return { stopped }
+}
+
 // What a run is working on right now, if anything: the site build, an app or game build, a film.
 // { what: site | app | game | film, stage, pct (0..1, or null when the job cannot say) }
 let appsNow = null // the app jobs, once loaded, so this can stay synchronous
@@ -474,6 +681,10 @@ function workOf(id) {
     const plan = current.events.filter(e => e.type === 'layer:plan').length
     return { what: 'site', stage: plan ? 'building pages' : 'planning', pct: Math.min(1, current.events.filter(e => e.type === 'layer:done').length / Math.max(1, plan || 12)) }
   }
+  if (painters.get(id)?.busy()) return { what: 'site', stage: 'painting pictures', pct: null }
+  if ([...reviewing].some(t => t.startsWith(`${id}/`)) || fixing.get(id) > 0) return { what: 'site', stage: 'reviewing', pct: null }
+  const au = auto.state()
+  if (au?.state === 'working' && au.run === id && !au.steps.some(s => s.state === 'working' && ['app', 'video'].includes(s.id))) return { what: 'site', stage: au.steps.find(s => s.state === 'working')?.label || 'auto', pct: null }
   const a = appsNow?.jobs?.get(id)
   if (a?.state === 'working') return { what: a.kind === 'game' ? 'game' : 'app', stage: clipStage(a.stage), pct: null, steps: a.steps?.length || 0, ...(a.kind === 'game' ? { progress: gameProgress(a.steps) } : {}) }
   const v = videos.get(id)
@@ -516,6 +727,8 @@ function runCard(id) {
       kind: start.kind || (isApp ? 'app' : 'site'),
       // a game made from a site: that site's run, so the game joins its version
       from: start.from || null,
+      // brought in from outside (docs/specs/45-intake.md), not built here
+      intake: start.intake ? (events.some(e => e.type === 'intake') ? 'in' : 'coming') : null,
       brief: start.brief,
       t: start.t,
       updated: events.at(-1)?.t || start.t,
@@ -536,9 +749,9 @@ function runCard(id) {
       published: Object.keys(sites),
       videoSeconds: video?.seconds ?? null,
       preview: events.some(e => e.type === 'layer:done' && e.html),
-      // the cover: the hero picture the art director made, else the first picture
-      // a game's own title picture once it is painted
-      cover: (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || gameCover(id),
+      // the cover: the share picture the person chose for the home page, else the hero picture
+      // the art director made, else the first picture; a game's own title picture once it is painted
+      cover: (thumbOf(events)?.chosen && thumbOf(events).src) || (events.find(e => e.type === 'image' && e.src && art.isHero({ layer: e.layer })) || events.find(e => e.type === 'image' && e.src))?.src || gameCover(id),
       game: events.some(e => e.type === 'game:spec') || pages.some(p => /\b(play|game|arcade|trial)\b/i.test(`${p.id} ${p.title}`)),
       app: events.some(e => e.type === 'app:ready' || e.type === 'app:done'),
       planned: events.filter(e => e.type === 'layer:plan').length,
@@ -569,7 +782,7 @@ function runCard(id) {
     progress: current?.id === id && !current.done ? Math.min(1, (current.events.filter(e => e.type === 'layer:done').length) / Math.max(1, current.events.filter(e => e.type === 'layer:plan').length || 12)) : null,
     work: workOf(id),
     // the cover: its hero picture, else a snapshot of its first page (saved by the canvas), else a film frame
-    cover: card.info.cover || snapOf(id) || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
+    cover: card.info.cover || snapsOf().cover(id) || snapOf(id) || (existsSync(join(runsDir, id, 'video', 'p1.webp')) ? `/video/${id}/live/p1.webp` : null),
   }
   out.state = stateOf(out)
   return out
@@ -590,6 +803,30 @@ function pieceName(e, pageTitle) {
   return rest.toLowerCase().startsWith(`${page.toLowerCase()} `) ? `${page}${rest.slice(page.length)}` : `${page} ${rest}`
 }
 
+// the pages' saved snapshots (server/snaps.mjs): the Overview paints from them, the cover is the first page's
+let snaps = null
+const snapsOf = () => (snaps ||= snapStore(runsDir))
+
+// The image service (engine/images.mjs): every picture by its content hash, on a size ladder, with a ThumbHash.
+// SWARM_IMAGE_SERVICE=0 turns it off; every picture is then served as it is, as before.
+const imagesOn = process.env.SWARM_IMAGE_SERVICE !== '0'
+let imageStore = null
+const imagesOf = () => (imageStore ||= makeImages({ dataDir }))
+const IMG_HEAD = { 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff' }
+// a picture's ThumbHash by its /img/<run>/<file> address, once it has been served (nothing is read for it here)
+const pictureTh = src => { if (!imagesOn) return null; const f = imgFileOf(src); return f ? imagesOf().lookup(f)?.th || null : null }
+// A picture the studio already serves by its own address, on the ladder: with ?w= the size asked for, else the
+// file as it is. Either way it moves into the store the first time (the old addresses migrate lazily).
+function sendPicture(req, res, url, file, type, head = IMG_HEAD) {
+  const asIs = () => { res.writeHead(200, { ...head, 'content-type': type }); res.end(readFileSync(file)) }
+  if (!imagesOn) return asIs()
+  const w = url.searchParams.get('w')
+  if (!w) { asIs(); imagesOf().addFile(file).catch(() => {}); return }
+  imagesOf().addFile(file)
+    .then(m => (m ? imagesOf().sized(m.hash, w) : null))
+    .then(s => { if (!s) return asIs(); res.writeHead(200, { ...head, 'content-type': s.type }); res.end(readFileSync(s.file)) })
+    .catch(() => { if (!res.headersSent) asIs() })
+}
 // the saved first-page snapshot, versioned so a newer one is not served from cache
 function snapOf(id) {
   const f = join(runsDir, id, 'img', 'snap.jpg')
@@ -628,7 +865,7 @@ function shelveVideo(id, shape = 'wide') {
   const src = join(runsDir, id, 'video', (SHAPES[shape] || SHAPES.wide).file)
   if (!existsSync(src)) return null
   try {
-    const { dir, claim } = shelf(id, 'video'), v = versions(dir, `${fileSlug(id)}-promo${shape === 'tall' ? '-tall' : ''}`, '.mp4')
+    const { dir, claim } = shelf(id, 'video'), v = versions(dir, `${fileSlug(id)}-promo${shape === 'wide' ? '' : `-${shape}`}`, '.mp4')
     if (v.last && statSync(v.last).mtimeMs >= statSync(src).mtimeMs) return v.last
     claim()
     copyFileSync(src, v.next)
@@ -662,6 +899,8 @@ function listRuns() {
   })
 }
 // the project's name and the run's piece, for package and deploy names
+// a build's version in its project: 1 for the first, 2 for the next…
+const versionOf = id => { try { return projects.runIndex().get(id)?.version || 1 } catch { return 1 } }
 const nameFor = id => { try { const at = projects.runIndex().get(id); return at ? { name: at.name, kind: at.piece } : null } catch { return null } }
 
 // Visitor tours for a finished run, written once and kept with the run. The
@@ -687,7 +926,8 @@ function tours(id, input) {
 
 // ---------- visual review: the reviewer model looks at a screenshot of a finished
 // page (taken by the canvas, which owns the frames) and builders fix what it finds.
-const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion', 'publish'])
+// chat: open that chat in the Design deck (its target is the chat's id), where a question waits for the person
+const CMD_OPS = new Set(['open', 'play', 'review', 'video', 'fix', 'export', 'motion', 'publish', 'chat'])
 const reviewing = new Set()
 const REVIEW_FALLBACKS = ['ali/qwen3.8-omni-flash', 'cc/claude-haiku-5-5', 'ag/gemini-3.8-flash-high']
 const review = (id, input) => withTrace(id, () => reviewNow(id, input))
@@ -706,6 +946,11 @@ async function reviewNow(id, input) {
   // overlaps the canvas measured at desktop and phone width: no model needed to see them
   const measured = (Array.isArray(input.measured) ? input.measured : []).filter(m => m && keys.has(m.section) && m.problem).slice(0, 6)
     .map(m => ({ section: m.section, problem: clip(m.problem, 160), fix: clip(m.fix, 220), measured: true }))
+  // what the slop linter (engine/lint) still finds after each builder's own fix pass: the worst in each
+  // section, handed on like the measured overlaps, and a section that ignores the design system's tokens (the
+  // rest of a section's findings are P1 advice)
+  const linted = sections.flatMap(s => lintSection(s.html, { tokens: theme?.system?.tokens }).filter(f => f.severity === 'P0' || f.id === 'tokens-unused').slice(0, 1)
+    .map(f => ({ section: s.key, problem: clip(f.message, 160), fix: clip(f.fix, 220), lint: f.id })))
   // the same page at phone width, for a second look
   const phone = input.mobile && /^data:image\/(jpeg|png|webp);base64,/.test(String(input.mobile.image || '')) && Array.isArray(input.mobile.sections)
     ? { image: String(input.mobile.image), sections: input.mobile.sections.filter(s => s && keys.has(s.key)).map(s => ({ key: s.key, role: String(s.role || s.key), top: Math.round(s.top) || 0, height: Math.round(s.height) || 0 })) }
@@ -714,6 +959,7 @@ async function reviewNow(id, input) {
   if (reviewing.has(tag)) throw new Error('this page is already being reviewed')
   reviewing.add(tag)
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  const halt = stopSignal(id)
   try {
     const page = sections.map(s => ({ key: s.key, role: String(s.role || s.key), top: Math.round(s.top) || 0, height: Math.round(s.height) || 0 }))
     send('review:start', { page: input.page, model })
@@ -722,9 +968,9 @@ async function reviewNow(id, input) {
     const look = async (img, secs, label) => {
       for (const m of chain) {
         try {
-          return { ...(await reviewPage({ provider: provider('reviewer'), model: m, brief: start.brief, page: label, sections: secs, image: img, signal: AbortSignal.timeout(60000) })), model: m }
+          return { ...(await reviewPage({ provider: provider('reviewer'), model: m, brief: start.brief, page: label, sections: secs, image: img, signal: stopOr(halt, 60000) })), model: m }
         } catch (err) {
-          if (m === chain.at(-1)) throw err
+          if (m === chain.at(-1) || halt.aborted) throw err
         }
       }
     }
@@ -733,6 +979,7 @@ async function reviewNow(id, input) {
     try {
       ;[result] = await Promise.all([look(image, page, title), phone?.sections.length ? look(phone.image, phone.sections, `${title} (on a phone, 390px wide)`).then(r => { phone.result = r }, err => { phone.error = String(err.message || err).slice(0, 160) }) : null])
     } catch (err) {
+      if (halt.aborted) { send('review:done', { page: input.page, model, verdict: 'stopped', issues: [], stopped: true }); return { verdict: 'stopped', issues: [] } }
       if (!measured.length) { send('review:done', { page: input.page, model, verdict: `review failed: ${String(err.message || err).slice(0, 120)}`, issues: [] }); throw err }
       result = { verdict: 'the reviewer model failed; fixing the measured overlaps', issues: [], ms: 0, model }
     }
@@ -745,7 +992,7 @@ async function reviewNow(id, input) {
     const real = i => !(BLANK.test(i.problem) && words(i.section) > 80)
     const seen = [...result.issues, ...(phone?.result?.issues || []).map(i => ({ ...i, problem: `On phones: ${i.problem}` }))]
     const dropped = seen.filter(i => !real(i)).length
-    const all = [...measured, ...seen.filter(real)]
+    const all = [...measured, ...seen.filter(real), ...linted]
     const bySection = new Map()
     for (const i of all) {
       const had = bySection.get(i.section)
@@ -754,7 +1001,12 @@ async function reviewNow(id, input) {
     }
     const issues = [...bySection.values()].slice(0, 4)
     const verdict = phone?.result ? `${result.verdict} On phones: ${phone.result.verdict}` : result.verdict
-    send('review:done', { page: input.page, model: result.model, verdict, issues, ms: result.ms, measured: measured.length, phone: !!phone?.result, phoneError: phone?.error, dropped })
+    // the page's score is the lower of desktop and phone; under the bar, the canvas reviews it again once fixed
+    const scores = [result.score, phone?.result?.score].filter(n => n != null)
+    const score = scores.length ? Math.min(...scores) : null
+    const round = Math.max(1, Math.min(REVIEW_ROUNDS, Number(input.round) || 1))
+    const again = reviewAgain({ score, issues, round })
+    send('review:done', { page: input.page, model: result.model, verdict, issues, ms: result.ms, measured: measured.length, linted: linted.length, phone: !!phone?.result, phoneError: phone?.error, dropped, score, pass: REVIEW_PASS, round, again })
     // each issue goes to a builder, in parallel; the agents are the run's own
     const agents = start.agents || []
     issues.forEach((issue, i) => {
@@ -764,7 +1016,7 @@ async function reviewNow(id, input) {
       send('review:issue', { page: pageId, layer, agent, problem: issue.problem, fix: issue.fix })
       rework(id, send, s, agent, theme, { problem: issue.problem, fix: issue.fix })
     })
-    return { ...result, verdict, issues }
+    return { ...result, verdict, issues, score, round, again }
   } finally {
     reviewing.delete(tag)
   }
@@ -772,6 +1024,8 @@ async function reviewNow(id, input) {
 
 // ---------- promo video: the planner storyboards the build, HyperFrames renders it
 const videos = new Map() // run id -> { state, pct, stage, src, file, seconds, message }
+// one film renders at a time (engine/video.mjs renders): the next one says so while it waits
+const QUEUED = 'waiting for another film to finish rendering'
 const makeVideo = (id, input) => withTrace(id, () => videoNow(id, input))
 // New pictures for the video: two at a time; a scene whose picture fails becomes a quote.
 // The film's style references: files the person added (kept in video/refs) and links in the prompt.
@@ -829,12 +1083,16 @@ async function shootScenes(id, c, scenes, choice, progress, notes = null) {
 
 async function videoNow(id, input = {}) {
   const events = readEvents(id)
-  if (!events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
+  // a film run (spec 40) has no pages: its brand, references and assets are its material
+  const filmRun = events?.find(e => e.type === 'run:start')?.kind === 'film'
+  if (!filmRun && !events?.some(e => e.type === 'layer:done')) throw new Error('no such build, or nothing built yet')
   if (videos.get(id)?.state === 'working') return videos.get(id)
+  const halt = stopSignal(id)
   const job = { state: 'working', pct: 0, stage: 'storyboard', t: Date.now() }
   videos.set(id, job)
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
   const progress = (pct, stage) => {
+    if (halt.aborted) return
     Object.assign(job, { pct, stage })
     broadcast({ type: 'video:progress', t: Date.now(), run: id, pct, stage })
   }
@@ -855,10 +1113,28 @@ async function videoNow(id, input = {}) {
         send('video:note', { message: `no footage this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
-    const c = collect(readEvents(id) || events, join(runsDir, id))
+    let c = (filmRun && filmSourceOf(readEvents(id) || events, join(runsDir, id))) || collect(readEvents(id) || events, join(runsDir, id))
     const model = modelFor('planner')
+    // the Video kit's locked spec, or the build's story (spec 40): their beats are the storyboard, in their words
+    const kit = input.kit ? checkKit(input.kit) : null
+    const story = input.story === true ? (() => { try { return checkStory(JSON.parse(readFileSync(join(runsDir, id, 'story.json'), 'utf8'))) } catch { return null } })() : input.story ? checkStory(input.story) : null
+    if (input.story && !story) throw new Error('no story for this build yet')
+    let fixedBoard = null
+    if (story) {
+      const pid = projects.projectOf(id)
+      // a story's picture: a file in the run (img/…, shots/…, footage/…, or its /img/<run>/<file> address),
+      // a page's shot from the Story cards (story/screens/<page>-desktop.jpg), or a reference (refs/<file>)
+      const runDir = join(runsDir, id)
+      const file = pic => (/^refs\//.test(pic.src) && pid ? refs.file(pid, pic.src.slice(5))?.file : null)
+        || inside(runDir, String(pic.src || '').replace(new RegExp(`^/img/${id}/`), 'img/'))
+        || (pic.kind === 'screen' && /^[\w-]{1,80}$/.test(pic.page || '') ? inside(runDir, `story/screens/${pic.page}-desktop.jpg`) : null)
+      const made = storySource(story, c, file)
+      c = made.c
+      if (story.title) c.brand = story.title
+      fixedBoard = storyBoard(story, c, made.at)
+    } else if (kit?.beats.length) fixedBoard = kitBoard(kit, c)
     // the prompt shapes the film; a template is only a starting point the writer may borrow from
-    const prompt = String(input.prompt || input.idea || '').trim().slice(0, 600)
+    const prompt = String(input.prompt || input.idea || (kit ? kitPrompt(kit) : '')).trim().slice(0, 600)
     const template = TEMPLATES[input.template || input.style] ? (input.template || input.style) : ''
     const seed = (Date.now() ^ (Math.random() * 2 ** 31)) >>> 0
     const pinned = TRANSITIONS.includes(input.transition)
@@ -886,11 +1162,18 @@ async function videoNow(id, input = {}) {
     }
     let scenes
     try {
-      if (!model || !models.planner.apiKey) throw new Error('no planner model')
       // with an image model, the storyboard may ask for new story stills
       const shooter = await imageChoice().catch(() => null)
-      scenes = await writeBoard({ provider: provider('planner'), model, c, prompt, template, notes, shots: !!shooter, seed, signal: AbortSignal.timeout(120000) })
+      if (fixedBoard) {
+        scenes = checkBoard(fixedBoard, c, { prompt, seed, shots: !!shooter })
+        if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress, notes)
+        for (const sc of scenes) if (sc.shot) { sc.kind = 'title'; sc.layer = 'type'; delete sc.shot }
+      } else {
+      if (!model || !models.planner.apiKey) throw new Error('no planner model')
+      scenes = await writeBoard({ provider: provider('planner'), model, c, prompt, template, notes, shots: !!shooter, seed, signal: stopOr(halt, 120000) })
+      if (halt.aborted) throw new Error('stopped')
       if (shooter && scenes.some(sc => sc.shot)) await shootScenes(id, c, scenes, shooter, progress, notes)
+      }
     } catch (err) {
       scenes = fallbackBoard(c, { prompt, notes, seed, template, fixes: [`no writer this time: ${String(err.message || err).slice(0, 80)}`] })
     }
@@ -925,7 +1208,7 @@ async function videoNow(id, input = {}) {
       const f = c.clips.find(x => x.n === sc.clip)
       const name = `c${sc.clip}x${sc.speed}-${fast++}.mp4`
       try {
-        await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-ss', String(sc.from || 0), '-i', f.file, '-t', String(Math.min(60, (sc.seconds + 0.5) * sc.speed)), '-an', '-vf', `setpts=PTS/${sc.speed},fps=30`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', join(dir, name)], { env: { ...process.env, PATH: t.path } }, err => (err ? fail(err) : ok())))
+        await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-ss', String(sc.from || 0), '-i', f.file, '-t', String(Math.min(60, (sc.seconds + 0.5) * sc.speed)), '-an', '-vf', `setpts=PTS/${sc.speed},fps=30`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', join(dir, name)], { env: { PATH: t.path } }, err => (err ? fail(err) : ok())))
         sc.speedName = name
       } catch { sc.speed = 1 }
     }
@@ -945,14 +1228,17 @@ async function videoNow(id, input = {}) {
     // measured, and every cut moves onto its beats, hits, drop and quiet passages
     const planned = planLengths(scenes, voices, VOICE_LEAD)
     let lengths = planned, musicFile = null, fx = [], scoredBy = null, musicCut = null
-    const tenv = { ...process.env, PATH: t.path }
+    const tenv = { PATH: t.path }
     if (input.music !== false) {
       progress(2, 'scoring')
       const seconds0 = planned.reduce((a, b) => a + b, 0), cues0 = cueSheet(scenes, planned)
       // Hermes's secret, else Hermes's ElevenLabs connector, else a pasted key
       const key = process.env.SWARM_ELEVENLABS_KEY || mediaKeyStore.get('elevenlabs')
       const via = media?.music.via
-      if (input.eleven !== false && (key || via === 'hermes-mcp')) {
+      // a film run's music reference (the Video kit's dropped track) is the score, cut to as it is
+      const ref = filmRun && ['mp3', 'wav', 'm4a', 'ogg', 'aac'].map(x => join(dir, `music.${x}`)).find(f => existsSync(f))
+      if (ref) { musicFile = ref; scoredBy = 'reference' }
+      if (!musicFile && input.eleven !== false && (key || via === 'hermes-mcp')) {
         try {
           progress(2, 'ElevenLabs is scoring the film')
           const e = via === 'hermes-mcp' && !process.env.SWARM_ELEVENLABS_KEY
@@ -966,7 +1252,7 @@ async function videoNow(id, input = {}) {
         progress(2, 'cutting to the music')
         const { samples, rate } = await decode(t.ffmpeg, musicFile, { env: tenv })
         const a = analyse(samples, rate, { bpm: scenes.music?.bpm })
-        const r = cutToMusic(scenes, planned, a, { min: leastLengths(scenes, voices, VOICE_LEAD), maxEnd: scoredBy === 'elevenlabs' ? a.seconds : null })
+        const r = cutToMusic(scenes, planned, a, { min: leastLengths(scenes, voices, VOICE_LEAD), maxEnd: scoredBy === 'elevenlabs' || scoredBy === 'reference' ? a.seconds : null })
         lengths = r.lengths; musicCut = r.report
         // the studio's own score is written again to the final cuts, so its booms sit on them; a generated track stays as it is
         if (scoredBy === 'studio') scoreWav({ seconds: lengths.reduce((x, y) => x + y, 0), music: scenes.music, cues: cueSheet(scenes, lengths), file: musicFile, seed })
@@ -983,8 +1269,18 @@ async function videoNow(id, input = {}) {
     writeFileSync(join(dir, 'index.html'), comp.html)
     writeFileSync(join(tallDir, 'index.html'), tallComp.html)
     const files = { wide: SHAPES.wide.file, tall: SHAPES.tall.file }
+    // the square cut for feeds (spec 40), when the kit or the story asks for it
+    const square = Array.isArray(input.shapes) && input.shapes.includes('square')
+    const squareDir = join(dir, 'square')
+    if (square) {
+      mkdirSync(squareDir, { recursive: true })
+      stagePictures(c, squareDir)
+      for (const sc of scenes) if (sc.speedName) copyFileSync(join(dir, sc.speedName), join(squareDir, sc.speedName))
+      writeFileSync(join(squareDir, 'index.html'), composition(scenes, c, lengths, transition, comp.look, { shape: 'square' }).html)
+      files.square = SHAPES.square.file
+    }
     const cues = cueSheet(scenes, lengths)
-    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, files, lengths, planned, musicCut, scoredBy, scenes }, null, 2))
+    writeFileSync(join(dir, 'storyboard.json'), JSON.stringify({ prompt, template: template || null, title: scenes.title, pace: scenes.pace, plan: scenes.plan, film: scenes.film || null, seed, look: comp.look, cast: scenes.cast, voice: scenes.voice, music: scenes.music, cues, fx: scenes.fx, notes, fixes: scenes.fixes, locked: kit || story ? { seconds: kit?.seconds || null, script: (story?.beats || kit?.beats || []).map(b => b.text).filter(Boolean) } : null, files, lengths, planned, musicCut, scoredBy, scenes }, null, 2))
     // the stills and motion lines for Flow (Veo): the flow-video skill animates them into <run>/flow/<still>.mp4,
     // and the next cut plays those clips instead of the stills
     writeFileSync(join(dir, 'flow-prompts.json'), JSON.stringify(scenes.filter(s => s.layer === 'story' && s.image).map(s => { const f = c.images.find(x => x.n === s.image); return { still: f.file, clip: join(runsDir, id, 'flow', `${basename(f.file).replace(/\.[^.]+$/, '')}.mp4`), camera: s.camera, seconds: s.seconds, action: `${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape` } }), null, 2))
@@ -992,14 +1288,25 @@ async function videoNow(id, input = {}) {
     const quality = ['draft', 'standard', 'high'].includes(input.quality) ? input.quality : 'draft'
     const silent = join(dir, 'promo-silent.mp4'), out = join(dir, SHAPES.wide.file)
     const tallSilent = join(dir, 'promo-tall-silent.mp4'), tallOut = join(dir, SHAPES.tall.file)
+    const squareSilent = join(dir, 'promo-square-silent.mp4'), squareOut = join(dir, SHAPES.square.file)
     rmSync(tallOut, { force: true }) // an older tall cut never sits beside a newer wide one
-    await render({ tools: t, dir, out: silent, quality, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'assemble' ? 'assembling' : 'rendering') })
-    let tall = true
-    try {
-      await render({ tools: t, dir: tallDir, out: tallSilent, quality, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
+    rmSync(squareOut, { force: true })
+    if (halt.aborted) throw new Error('stopped')
+    await render({ tools: t, dir, out: silent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(2, Math.min(64, pct * 0.64)), code === 'queued' ? QUEUED : code === 'assemble' ? 'assembling' : 'rendering') })
+    // the phone cut, unless the kit or the story named its shapes without it (the wide cut always renders: it carries the sound)
+    let tall = !Array.isArray(input.shapes) || input.shapes.includes('tall')
+    if (tall) try {
+      await render({ tools: t, dir: tallDir, out: tallSilent, quality, signal: halt, onProgress: (pct, code) => progress(Math.max(64, Math.min(96, 64 + pct * 0.32)), code === 'queued' ? QUEUED : code === 'assemble' ? 'assembling the phone cut' : 'rendering the phone cut') })
     } catch (err) {
       tall = false
       send('video:note', { message: `no phone cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
+    }
+    let squared = false
+    if (square) {
+      try {
+        await render({ tools: t, dir: squareDir, out: squareSilent, quality, signal: halt, onProgress: (pct, code) => progress(96, code === 'queued' ? QUEUED : code === 'assemble' ? 'assembling the square cut' : 'rendering the square cut') })
+        squared = true
+      } catch (err) { send('video:note', { message: `no square cut this time: ${String(err.message || err).split('\n')[0].slice(0, 160)}` }) }
     }
     let sound = false
     try {
@@ -1012,21 +1319,41 @@ async function videoNow(id, input = {}) {
     // the phone cut takes the wide cut's finished sound as it is (same scenes, same timing)
     if (tall) {
       try {
-        if (sound) await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-i', tallSilent, '-i', out, '-map', '0:v', '-map', '1:a?', '-c', 'copy', '-shortest', '-movflags', '+faststart', tallOut], { env: { ...process.env, PATH: t.path } }, err => (err ? fail(err) : ok())))
+        if (sound) await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-i', tallSilent, '-i', out, '-map', '0:v', '-map', '1:a?', '-c', 'copy', '-shortest', '-movflags', '+faststart', tallOut], { env: { PATH: t.path } }, err => (err ? fail(err) : ok())))
         else copyFileSync(tallSilent, tallOut)
       } catch (err) {
         copyFileSync(tallSilent, tallOut)
         send('video:note', { message: `the phone cut is silent: ${String(err.message || err).split('\n')[0].slice(0, 160)}` })
       }
     }
+    // the square cut takes the same finished sound
+    if (squared) {
+      try {
+        if (sound) await new Promise((ok, fail) => execFile(t.ffmpeg, ['-y', '-v', 'error', '-i', squareSilent, '-i', out, '-map', '0:v', '-map', '1:a?', '-c', 'copy', '-shortest', '-movflags', '+faststart', squareOut], { env: { PATH: t.path } }, err => (err ? fail(err) : ok())))
+        else copyFileSync(squareSilent, squareOut)
+      } catch { copyFileSync(squareSilent, squareOut) }
+    }
+    // a poster frame beside each cut, for the boards to show until the film is played (engine/poster.mjs)
+    for (const f of [out, tall && tallOut, squared && squareOut].filter(Boolean)) await makePoster(f, { ffmpeg: t.ffmpeg })
     const copy = shelveVideo(id)
-    shelveVideo(id, 'tall')
+    if (tall) shelveVideo(id, 'tall')
+    if (squared) shelveVideo(id, 'square')
     const v = Date.now()
     const tallSrc = tall ? `/video/${id}/${SHAPES.tall.file}?v=${v}` : null
-    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
-    send('video:done', { src: job.src, tall: tallSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound, scoredBy })
+    const squareSrc = squared ? `/video/${id}/${SHAPES.square.file}?v=${v}` : null
+    if (!squared) delete files.square
+    Object.assign(job, { state: 'done', pct: 100, src: `/video/${id}/promo.mp4?v=${v}`, tall: tallSrc, square: squareSrc, file: copy || out, tallFile: tall ? tallOut : null, seconds: comp.seconds })
+    send('video:done', { src: job.src, tall: tallSrc, square: squareSrc, file: copy || out, saved: out, savedTall: tall ? tallOut : null, files: tall ? files : { wide: files.wide, ...(squared ? { square: files.square } : {}) }, seconds: comp.seconds, ms: Date.now() - job.t, voice: voices.some(Boolean), music: input.music !== false && sound, scoredBy })
+    // the critic (spec 26 step 6, spec 32): the finished film is watched and listened to, and what is wrong
+    // is named. It runs after the film is handed over, so it never holds the film back.
+    if (!halt.aborted) {
+      send('video:review', { state: 'running' })
+      criticize({ ffmpeg: t.ffmpeg, file: out, dir, music: input.music !== false })
+        .then(review => send('video:review', { state: 'done', ...review }))
+        .catch(err => send('video:review', { state: 'failed', message: String(err.message || err).split('\n')[0].slice(0, 160) }))
+    }
   })().catch(err => {
-    Object.assign(job, { state: 'failed', message: String(err.message || err).slice(0, 300) })
+    Object.assign(job, { state: halt.aborted ? 'stopped' : 'failed', message: halt.aborted ? 'stopped' : String(err.message || err).slice(0, 300) })
     send('video:failed', { message: job.message })
   })
   return job
@@ -1034,11 +1361,11 @@ async function videoNow(id, input = {}) {
 
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
-const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp, nameFor }))))
+const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp, nameFor, idleMs: () => idleStops().app * 60000 }))))
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
-const connectors = hermesConnectors({ py: PY, pyEnv, broadcast })
+const connectors = hermesConnectors({ bridge: hermes, broadcast })
 
 // The Film studio's outside services (engine/media.mjs): what Hermes already has, else a
 // pasted key, else the built-in path. The canvas learns where each comes from, never a key.
@@ -1047,10 +1374,34 @@ async function mediaNow() {
     loadImageProviders(), loadVideoProviders(),
     Promise.all(ELEVEN_MCP.map(n => connectors.status(n).then(st => [n, st], () => [n, {}]))).then(Object.fromEntries),
   ])
-  return mediaSources({ env: process.env, keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
+  return mediaSources({ env: pick(['SWARM_ELEVENLABS_KEY']), keys: mediaKeyStore, mcp, images, videos, imagePick: picks.image })
+}
+// The launch kit's pitch (engine/launch.mjs): one line on what the product is and who it is for,
+// written by the planner from the pages the crew planned. Never the person's words to the crew.
+async function writePitch(events, id) {
+  const model = modelFor('planner')
+  if (!model || !models.planner.apiKey) return ''
+  const f = runFacts(events, id)
+  const pages = events.filter(e => e.type === 'page').map(p => `- ${p.title}${p.purpose ? `: ${p.purpose}` : ''}`).join('\n')
+  const r = await streamChat(provider('planner'), {
+    trace: { kind: 'launch-pitch' }, model, maxTokens: 80, temperature: 0.4, signal: AbortSignal.timeout(20000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } },
+    messages: [{ role: 'system', content: 'Write one plain line, under 110 characters, for a launch post: what this product is and who it is for. No hype words, no emoji, no hashtags, no quotes. Never mention AI, prompts, a crew or a build, and never repeat instructions the person gave.' },
+      { role: 'user', content: `Product: ${f.name}\nPages:\n${pages}\nWhat the person asked for: ${f.prompt}` }]
+  })
+  return String(r.text || '').split('\n')[0].replace(/^["'“]+|["'”]+$/g, '').trim().slice(0, 150)
+}
+// nothing to launch yet: no live link and no video. A design alone is not a launch.
+const launchable = f => !!(f.url || f.video)
+async function launchKit(id) {
+  const events = readEvents(id) || []
+  if (!launchable(runFacts(events, id))) throw Object.assign(new Error('Nothing to launch yet: publish it first.'), { code: 409 })
+  let pitch = ''
+  try { pitch = await writePitch(events, id) } catch {}
+  return writeLaunch(join(runsDir, id), events, id, { pitch, story: readStory(join(runsDir, id)) })
 }
 const auto = autoJob({ runsDir, startRun, current: () => current, readEvents, record, broadcast, clients, makeVideo, videos, apps, credentials, dataDir, publishVercel, connectors,
-  writeLaunch: id => writeLaunch(join(runsDir, id), readEvents(id), id) })
+  writeLaunch: launchKit })
 
 // ---------- the Auto show (spec 07): the summary card's numbers, the launch kit, chatter lines
 
@@ -1174,6 +1525,70 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
   } catch { return { queued: false, state: st.state, answer: fallback } }
 }
 
+// ---------- the chat's modes (docs/specs/46-chat-modes.md): Ask and Fix
+// Ask, for an app or game that is built: dyad's own ask mode reads the code and changes nothing
+// (engine/appjob.mjs ask). While the crew builds, Talk answers instead: it knows what the crew is doing.
+// When dyad cannot take the question (no engine installed yet, or it failed), Talk reads the app's files.
+async function askApp(a, id, text) {
+  const t = String(text || '').trim().slice(0, 4000)
+  if (!t) throw new Error('ask something')
+  if (a.state(id).state === 'working') return { ...(await tellBuilder(a, id, t)), by: 'crew' }
+  const gate = await hermesGate()
+  if (gate) throw new Error(`${gate.message} ${gate.action}`)
+  const { honestly, asksStudio } = await import('../engine/honest.mjs')
+  let r = { answer: '', by: '', why: '' }
+  try { r = await a.ask(id, t) } catch (err) { if (err.busy) throw err; r = { answer: '', by: '', why: String(err.message || err).slice(0, 200) } }
+  if (r.changed) console.warn(`ask: the app of ${id} changed during an Ask turn`)
+  // (dyad's answer cannot be asked again here, so it is checked only when the person asked for what nobody in the
+  // chat can do: an answer about code may well say "restarting the dev server picks up the change")
+  if (r.answer) return { answer: `${asksStudio(t) ? await honestly({ answer: r.answer, text: t }) : r.answer}${r.changed ? ' (The app\'s files changed while this was answered, which Ask is not meant to do: look at the Code view.)' : ''}`, by: 'dyad' }
+  if (!modelFor('planner')) throw new Error('No planner model yet: pick one in Models.')
+  const said = await tellBuilder(a, id, t)
+  // Talk's own fallback line is about a build in progress: not an answer to a question
+  if (!said.used) throw new Error(`The crew could not answer${r.why ? ` (${r.why})` : ''}. Ask again.`)
+  return { answer: said.answer, ...(said.media ? { media: said.media } : {}), by: 'talk' }
+}
+// Fix: the facts about the Studio's own working parts (engine/doctor.mjs says what each is). Every lookup
+// has a few seconds: a part that does not answer in time reads "not known yet", and the rest still show.
+const CUT_PROBE = "import importlib.util, json; print(json.dumps([m for m in ['numpy', 'scipy', 'PIL'] if importlib.util.find_spec(m) is None]))"
+async function studioFacts(runId = null, { light = false } = {}) {
+  const d = await import('../engine/doctor.mjs')
+  const { GROUPS } = await import('../web/setup-parts.js')
+  const soon = (p, ms = 6000) => Promise.race([Promise.resolve().then(p).catch(() => null), new Promise(r => { setTimeout(() => r(null), ms).unref?.() })])
+  const win = process.platform === 'win32'
+  // light (Ask's one-paragraph view of the Studio): nothing that starts a program or calls a model
+  const skip = () => null
+  const well = await soon(() => health.now())
+  const [view, media, login, conn, connList, gw, image, python] = await Promise.all([
+    // the tiny model test the Setup sheet runs when it opens (kept ten minutes), then the sheet's own view.
+    // With Hermes away there is no one to answer it, and the Hermes part already says so: no test, no wait.
+    soon(async () => { if (!light && well?.ok !== false) await soon(() => setup.test(), 15000); return setup.view() }, 20000),
+    soon(() => mediaNow()), soon(light ? skip : () => githubLogin()), soon(() => connections(dataDir)),
+    soon(() => connectors.list()), soon(light ? skip : () => gatewayTargets()), soon(() => imageChoice()),
+    // the cutters' Python, looked at now: cutPy (below) keeps its first answer until the Studio restarts
+    soon(light ? skip : async () => d.pythonFacts({
+      candidates: [process.env.SWARM_CUT_PY, win ? 'python' : 'python3', win ? '' : '/usr/bin/python3', PY],
+      missing: py => new Promise((ok, no) => execFile(py, ['-c', CUT_PROBE], { timeout: 15000 }, (err, out) => { try { if (err) throw err; ok(JSON.parse(String(out).trim().split('\n').pop())) } catch (e) { no(e) } })),
+      inUse: cutPyP ? await cutPy() : undefined
+    }), 40000)
+  ])
+  const st = hermes.status()
+  const F = {
+    view, hermes: { ...st, health: well }, models: { roles: Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), picked: picks[r] || null }])) },
+    local: setup.local(), media, publish: conn || login ? { github: login, ...(conn || {}) } : null, conn: connList, gateway: gw ? { platforms: gw } : null
+  }
+  const events = runId ? readEvents(runId) : null
+  const kind = events ? (events.findLast(e => e.type === 'app:start')?.kind === 'game' || events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : events.some(e => e.type === 'app:start') ? 'app' : 'site') : ''
+  const named = m => (m && !ROLES.includes(m) ? String(m).replace(/^[a-z]+\//, '') : '')
+  return {
+    parts: d.partStates(GROUPS, F),
+    run: events ? { id: runId, kind, working: (current?.id === runId && !current.done) || appsNow?.jobs.get(runId)?.state === 'working', built: !!(await apps().then(a => a.state(runId).hasApp).catch(() => false)), failures: d.failuresOf(events) } : null,
+    python,
+    hermes: { attached: !!st.attached, message: well && !well.ok ? `${well.message || ''} ${well.action || ''}`.trim() : '' },
+    models: { planner: named(modelFor('planner')), worker: named(modelFor('worker')), reviewer: picks.reviewer === 'off' ? '' : named(modelFor('reviewer')), image: image ? String(image.model || image.provider || '') : '', video: media?.clips?.on ? String(media.clips.by || '') : '' }
+  }
+}
+
 // ---------- game mode: answers → a spec → a new build whose app is the game
 let gameP = null
 const gameMod = () => (gameP ||= import('../engine/game.mjs'))
@@ -1186,7 +1601,7 @@ async function planPaint({ prompt, quality = 'medium', aspect = 'landscape', cro
   // ckff (engine/ckff.mjs) is the fallback when no Hermes image login works (Codex out of quota)
   const fallback = () => (ckffCreds() && !crop ? ckffPaint({ prompt, aspect, refs }) : null)
   if (!choice) return (await fallback()) || { ok: false, error: 'no image model' }
-  const model = choice.provider === 'openai-codex' ? `gpt-image-2-${quality === 'high' ? 'high' : 'medium'}` : choice.model
+  const model = choice.model
   const args = ['--provider', choice.provider, ...(model ? ['--model', model] : []), '--aspect', aspect, ...(crop ? ['--crop', crop] : [])]
   for (const r of refs.slice(0, 4)) if (existsSync(r)) args.push('--ref', r)
   const r = await imagegen([...args, prompt], quality === 'high' ? 300000 : 180000)
@@ -1203,6 +1618,303 @@ const plans = planRoutes({
   planner: () => models.planner.apiKey ? { provider: provider('planner'), model: modelFor('planner') } : null,
   godot: () => godotHere
 })
+// The planner conversation (docs/specs/27-plan-conversation.md): decide together in the left chat, then lock.
+// A locked game chat makes its plan through the Plan board's routes above.
+const talks = talkRoutes({
+  dataDir, plans, env: () => ({ godot: godotHere }),
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'talk' }, model: modelFor('planner'), maxTokens: 700, temperature: 0.3, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null
+})
+// Chats (docs/specs/29-chats-references-marks.md): conversations live apart from builds and move into
+// their project when they build. On start: empty old chats go, and game plans made before chats existed
+// each get a chat that points at them (the plan files stay where they are).
+const chats = talks.chats
+// the Studio's App kit (docs/specs/37-studio-first.md): the app's users, screens, data and connections
+const appKit = appKitRoutes({
+  dataDir,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'app-kit' }, model: modelFor('planner'), maxTokens: 2400, temperature: 0.3, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null,
+  supabase: async () => !!(await connectors.list())?.supabase?.signed_in
+})
+// The brand sheet (docs/specs/31-brand-sheet.md): a website's or app's story, palette and type, locked before it is designed
+// A project's References store (docs/specs/29-chats-references-marks.md): the Overview's References group
+const refs = refStore({ projectsDir: projects.projectsDir, uploadsOf: pid => projects.uploadsOf(pid), known: pid => !!projects.get(pid) })
+// a link's look (decision 0022): walked in the background, one walk per reference at a time. The vision model
+// is the reviewer's when it has one, else the planner's; with neither, the look is the measured words only.
+const lookWalks = new Set()
+function walkLook(pid, ref) {
+  const key = `${pid}/${ref.id}`
+  if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
+  const from = { host: ref.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], url: ref.url, source: ref.source, chat: ref.from || null, at: ref.added }
+  const started = Date.now()
+  const now = refs.setLook(pid, ref.id, { state: 'walking', step: `Opening ${from.host}`, at: started, from })
+  lookWalks.add(key)
+  // what the walk is doing now, kept on the look so the Studio shows it under the crew's cursor
+  const step = text => { try { refs.setLook(pid, ref.id, { state: 'walking', step: text, at: started, from }) } catch {} }
+  ;(async () => {
+    try {
+      const { walkSite, describeLook } = await import('../engine/sitelook.mjs')
+      const w = await walkSite(ref.url, { dataDir, signal: AbortSignal.timeout(150000), onStep: step })
+      if (!w.tokens) return refs.setLook(pid, ref.id, { state: 'failed', note: w.note || 'the site did not open', at: Date.now(), from })
+      const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
+      const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look' }, model: modelFor(v), maxTokens: 900, temperature: 0.3, signal: AbortSignal.timeout(90000), messages })).text : null
+      const live = refs.list(pid).find(x => x.id === ref.id)
+      step('Writing the look')
+      const words = await describeLook(w, { want: live?.use || ref.use || '', chat })
+      refs.setLook(pid, ref.id, { state: 'ready', at: Date.now(), from, pages: w.pages.map(p => p.url), tokens: w.tokens, motion: w.motion, words }, w.pages.flatMap(p => p.shots.slice(0, 3)))
+    } catch (err) {
+      try { refs.setLook(pid, ref.id, { state: 'failed', note: String(err.message || err).split('\n')[0].slice(0, 160), at: Date.now(), from }) } catch {}
+    } finally { lookWalks.delete(key) }
+  })()
+  return now
+}
+// the match check (decision 0022): the newest build's own pages, walked like the reference, compared by style.
+// It reports only; a difference is fixed when the person presses Fix (refs route, …/fix).
+function matchLook(pid, ref, run) {
+  const key = `${pid}/${ref.id}/match`
+  if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
+  const started = Date.now()
+  const now = refs.setMatch(pid, ref.id, { state: 'checking', step: 'Opening your pages', run, at: started })
+  lookWalks.add(key)
+  const step = text => { try { refs.setMatch(pid, ref.id, { state: 'checking', step: text, run, at: started }) } catch {} }
+  ;(async () => {
+    try {
+      const { walkBuild, judgeMatch } = await import('../engine/lookmatch.mjs')
+      const events = readEvents(run)
+      if (!events) throw new Error('that build is gone')
+      const out = await exportRun({ events, runId: run, runDir: join(runsDir, run), sections: [], name: nameFor(run)?.name, fill: fillExport(run) })
+      const ours = await walkBuild({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir, signal: AbortSignal.timeout(120000), onStep: step })
+      if (!ours.tokens) return refs.setMatch(pid, ref.id, { state: 'failed', note: ours.note || 'the pages did not open', run, at: Date.now() })
+      const live = refs.list(pid).find(x => x.id === ref.id)
+      const L = live.look
+      const shots = (L.shots || []).slice(0, 2).map(s => { const f = refs.file(pid, s.split('/').pop()); return f ? readFileSync(f.file) : null }).filter(Boolean)
+      const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
+      const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look-match' }, model: modelFor(v), maxTokens: 900, temperature: 0.2, signal: AbortSignal.timeout(90000), messages })).text : null
+      step('Comparing')
+      const m = await judgeMatch({ ref: { tokens: L.tokens, motion: L.motion, shots }, ours, want: live.use || '', avoid: [L.from?.host, L.from?.url], chat })
+      refs.setMatch(pid, ref.id, { state: 'ready', run, at: Date.now(), ...m }, ours.pages.flatMap(p => p.shots.slice(0, 1)).slice(0, 2))
+    } catch (err) {
+      try { refs.setMatch(pid, ref.id, { state: 'failed', note: String(err.message || err).split('\n')[0].slice(0, 160), run, at: Date.now() }) } catch {}
+    } finally { lookWalks.delete(key) }
+  })()
+  return now
+}
+const refsRoute = refRoutes({ refs, head: pid => projects.get(pid)?.head || null, comment: (run, input) => comment(run, input), walk: walkLook, match: matchLook, fixText: lookFixText })
+// The Studio (docs/specs/37-studio-first.md): a project's studio record, its one brand and its Assets store
+const studios = studioStore({ projectsDir: projects.projectsDir })
+const projectAssets = assetStore({ projectsDir: projects.projectsDir, known: pid => !!projects.get(pid) })
+// what a project's newest build was made with, for its Studio (server/studio.mjs): websites only for now
+function builtOf(pid) {
+  const head = projects.get(pid)?.head
+  const events = head ? readEvents(head) : null
+  const start = events?.find(e => e.type === 'run:start')
+  const pages = (events || []).filter(e => e.type === 'page' && e.title).map(e => String(e.title).slice(0, 60))
+  if (!start || !pages.length) return null
+  const th = events.findLast(e => e.type === 'theme')
+  return { kind: 'site', idea: baseBrief(start.brief).split('\n\nPages: ')[0].slice(0, 4000), pages: [...new Set(pages)], theme: th ? { accent: th.vars?.['--accent'] || th.vars?.['--primary'] || null, heading: th.fonts?.heading || null, name: th.name || null } : null }
+}
+const studioRoute = studioRoutes({ studios, assets: projectAssets, refs, projects, chats, builtOf, picturesDefault: async () => (await setup.pictures()).mode })
+// a film from a project's brand, References and Assets, no website (spec 40): the Video kit's Build press
+const filmRoute = filmRoutes({
+  projectsDir: projects.projectsDir, refs, known: pid => !!projects.get(pid),
+  makeRun: (pid, events, fill) => {
+    const id = new Date().toISOString().replace(/[:.]/g, '-')
+    const dir = join(runsDir, id)
+    mkdirSync(dir, { recursive: true })
+    fill(dir)
+    writeFileSync(join(dir, 'events.jsonl'), events.map(e => JSON.stringify({ ...e, run: id })).join('\n') + '\n')
+    projects.claim(id, pid)
+    return id
+  },
+  startFilm: (id, input) => makeVideo(id, input)
+})
+// Media in a chat (spec 29, server/chatmedia.mjs): a picture is read by the reviewer's vision model, with
+// reasoning off and the vision fallbacks after it, the same way Scribble's marks are read
+async function askVision(messages, { maxTokens = 300, kind = 'chat-media' } = {}) {
+  const first = models.reviewer.apiKey && modelFor('reviewer')
+  if (!first) return null
+  for (const m of [first, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? REVIEW_FALLBACKS.filter(x => x !== first) : [])]) {
+    try {
+      const res = await streamChat(provider('reviewer'), { trace: { kind }, model: m, messages, maxTokens, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(90000) })
+      if (String(res.text || '').trim()) return res.text
+    } catch {}
+  }
+  return null
+}
+const seePicture = image => askVision(pictureMessages(image))
+// The media reader (docs/specs/32-media-reader.md): the `media` pick is a model that hears and/or watches,
+// on the reviewer's endpoint and key (the planner's when there is no reviewer). With no pick, the first
+// tested one the endpoint offers; 'off' sends no clip or sound to any model. The person's media goes only
+// to that model, or to the reviewer's vision model as frames.
+const mediaRole = () => (models.reviewer.apiKey ? 'reviewer' : 'planner')
+async function mediaModel() {
+  if (picks.media === 'off' || !models[mediaRole()].apiKey) return ''
+  return picks.media || defaultMedia(await listModels(mediaRole()).catch(() => [])) || ''
+}
+async function mediaState() {
+  const model = await mediaModel()
+  const caps = mediaCaps(model, modelRows.get(model))
+  return { model, pick: picks.media || null, caps, takes: takesSays(caps), vision: !!(models.reviewer.apiKey && modelFor('reviewer')) }
+}
+// who: 'media' (the media pick) or 'vision' (the reviewer's vision model, for frames only)
+async function askMedia(who, messages, { maxTokens = 600, kind = 'media-read' } = {}) {
+  if (who === 'vision') { const t = await askVision(messages, { maxTokens, kind }); if (!t) throw new Error('the vision model did not answer'); return t }
+  const model = await mediaModel()
+  if (!model) throw new Error('no media model')
+  const res = await streamChat(provider(mediaRole()), { trace: { kind }, model, messages, maxTokens, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(150000) })
+  return res.text
+}
+// watch and listen to a finished film; the review is kept beside it as review.json
+async function criticize({ ffmpeg, file, dir, music = true }) {
+  const board = JSON.parse(readFileSync(join(dir, 'storyboard.json'), 'utf8'))
+  const tmp = mkdtempSync(join(tmpdir(), 'swarm-critic-'))
+  try {
+    const { model, caps, vision } = await mediaState()
+    const review = await reviewFilm({ ffmpeg, file, board, tmp, caps, vision, ask: (who, messages) => askMedia(who, messages, { kind: 'film-critic' }), music })
+    const kept = { ...review, model: model || null }
+    writeFileSync(join(dir, 'review.json'), JSON.stringify(kept, null, 2))
+    return kept
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+}
+// read one clip or sound from a chat: what it shows and sounds like, and what happened
+async function readClip(file, kind) {
+  const tmp = mkdtempSync(join(tmpdir(), 'swarm-read-'))
+  try {
+    const { model, caps, vision } = await mediaState()
+    const t = await videoTools(dataDir)
+    const r = await readMedia({ ffmpeg: t.ffmpeg, file, kind, tmp, caps, vision, ask: askMedia })
+    return { ...r, model: r.by === 'media' ? model : r.by === 'vision' ? modelFor('reviewer') : null, says: readSays(r) }
+  } catch (err) {
+    const r = { by: 'none', why: String(err.message || err).split('\n')[0].slice(0, 120) }
+    return { ...r, says: readSays(r) }
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+}
+// Bring a game or app in (docs/specs/45-intake.md): POST /api/intake
+const bringInRoute = bringInRoutes({ runsDir, projects, apps: () => apps(), record, readEvents, broadcast })
+const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
+const brands = brandRoutes({
+  chats,
+  projectBrands: studios.brands,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'brand' }, model: modelFor('planner'), maxTokens: 900, temperature: 0.6, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null
+})
+// The story (docs/specs/37-story.md): beats written from the project's brand and what was built, drawn
+// as cards in three shapes. The brand is the locked sheet of the chat that built this run.
+// The project's brand (spec 37: <data>/projects/<pid>/brand.json) first, then the chat's (spec 31).
+function brandOfRun(id) {
+  const pid = projects.projectOf(id)
+  if (pid && /^[\w-]{1,80}$/.test(pid)) { try { const b = JSON.parse(readFileSync(join(dataDir, 'projects', pid, 'brand.json'), 'utf8')); if (b?.story) return b } catch {} }
+  const ids = pid ? chats.forProject(pid).groups.flatMap(g => g.chats.map(c => c.id)) : []
+  const list = ids.map(c => chats.get(c)).filter(Boolean)
+  return (list.find(c => c.run === id && c.brand) || list.find(c => c.brand?.lockedAt) || list.find(c => c.brand))?.brand || null
+}
+const storyRoute = storyRoutes({
+  runsDir, dataDir, readEvents, brandOf: brandOfRun,
+  pitchOf: async id => writePitch(readEvents(id) || [], id),
+  chat: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'story' }, model: modelFor('planner'), maxTokens: 1400, temperature: 0.5, signal: AbortSignal.timeout(60000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null,
+  // the page shots a beat's screen uses: a fresh export, every page at desktop and phone size
+  shots: async id => {
+    const events = readEvents(id)
+    if (!events) return []
+    // the newest export on disk when there is one (Post to Feed and ⬇ Export leave one); else a fresh one
+    const changed = events.findLast(e => e.type === 'layer:done' || e.type === 'theme' || e.type === 'image')?.t || 0
+    const last = events.findLast(e => e.type === 'export' && e.t >= changed && e.dir && Array.isArray(e.html) && existsSync(join(e.dir, 'html', e.html[0] || '')))
+    const out = last ? { dir: last.dir, html: last.html } : await exportRun({ events, runId: id, runDir: join(runsDir, id), sections: [], name: nameFor(id)?.name, fill: fillExport(id) })
+    const { pageShots } = await import('../engine/pageshots.mjs')
+    const got = await pageShots({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir })
+    const pages = snapshot(events, [], { name: nameFor(id)?.name }).pages
+    return out.html.map((file, i) => { const s = got.shots.find(x => x.file === file) || {}; return { page: pages[i]?.id, desktop: s.shot, phone: s.phoneShot } }).filter(s => s.page)
+  }
+})
+// the Deck kit (docs/specs/35-open-design.md section 7): its slides written by the planner, through Hermes
+const decks = deckRoutes({
+  dataDir, runsDir, chats,
+  model: () => models.planner.apiKey && modelFor('planner') ? async messages => (await streamChat(provider('planner'), {
+    trace: { kind: 'deck' }, model: modelFor('planner'), maxTokens: 2500, temperature: 0.5, signal: AbortSignal.timeout(90000),
+    extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+  })).text : null
+})
+try {
+  chats.cleanup()
+  const pd = join(dataDir, 'plans')
+  if (existsSync(pd)) chats.importPlans(readdirSync(pd).filter(f => /^p-[a-z0-9]+\.json$/.test(f)).map(f => { try { return JSON.parse(readFileSync(join(pd, f), 'utf8')) } catch { return null } }).filter(Boolean))
+} catch (err) { console.warn('chats:', err.message) }
+// a chat that started a build: Locked on its brief, moved into the build's project once it has one
+function chatBuilt(chatId, runId, pid, brief) {
+  const c = chatId && chats.get(chatId)
+  if (!c) return
+  // Locked only on a brief the talk wrote: a build typed straight in keeps its chat open, with the run
+  const talked = (c.turns || []).some(t => t.who === 'planner') || !!c.spec?.brief
+  ;(talked ? chats.built(chatId, { run: runId, brief, project: pid || null })
+    : chats.update(chatId, x => { x.run = runId }).then(() => (pid ? chats.moveTo(chatId, pid) : null)))
+    // a new project (no pid yet): the chat follows the run into it, from wherever the talk was
+    .then(() => { if (!pid) setTimeout(() => { const p = projects.projectOf(runId); if (p) chats.moveTo(chatId, p).catch(() => {}) }, 2000) })
+    .catch(err => console.warn('chat:', err.message))
+}
+// a build typed straight into the Make box, or a message in a project's dock, without a talk first:
+// the words still go into a chat (a new one, or the project's newest in that group)
+function chatFor({ chat, text, kind = 'site', project = null }) {
+  try {
+    if (chat && chats.get(chat)) return chat
+    if (!String(text || '').trim()) return null
+    if (project) { const c = chats.forMessage(project, kind); chats.say(c.id, { who: 'person', text }).catch(() => {}); return c.id }
+    return chats.create({ kind, text }).id
+  } catch { return null }
+}
+// Ask before a new website build (docs/decisions/0020-ask-before-build.md): the person's words and the planner's
+// question go into the chat (the one the build came from, else a new one), in one write, and the reply says so:
+//   { error: 'ask', ask: 'skips', chat, text, options, recommended }   the question waits in that chat
+//   { error: 'ask', ask: 'talk', chat: null, text }                    "don't build yet": the talk opens instead
+// A question already open in that chat is not asked twice.
+async function askBeforeBuild({ chatId, typed, pid }) {
+  if (wordsRead(typed) === 'talk') return { error: 'ask', ask: 'talk', chat: null, text: "Let's talk it through first." }
+  const files = pid ? projects.uploadsOf(pid).length : 0
+  const known = chatId && chats.get(chatId) ? chatId : null
+  const id = known || chats.create({ kind: 'site', text: typed, project: pid && projects.get(pid) ? pid : null }).id
+  const turn = await chats.update(id, c => {
+    c.turns ||= []
+    const last = [...c.turns].reverse().find(t => t.who === 'planner')
+    if (last && askedOf(last) && c.turns.at(-1) === last) return last
+    const lastPerson = [...c.turns].reverse().find(t => t.who === 'person')
+    if (known && lastPerson?.text !== typed) c.turns.push({ id: `t${c.turns.length + 1}`, who: 'person', at: Date.now(), text: typed.slice(0, 8000), refs: [], marks: [], layers: [] })
+    // a new question: an earlier answer (used, or a walk's) no longer counts
+    delete c.go
+    c.ask = { brief: typed.slice(0, 8000), at: Date.now() }
+    const q = askTurn(`t${c.turns.length + 1}`, typed, { files })
+    c.turns.push(q)
+    return q
+  })
+  return { error: 'ask', ask: 'skips', chat: id, text: turn.text, options: turn.options, recommended: String(turn.options?.[0]?.id || 'go:pick').slice(3) }
+}
+// What a project's talk is told is there (engine/talkplan.mjs): its name, the pages its newest site
+// version has, the look, and what is running now. Empty outside a project.
+function projectState(pid) {
+  const p = pid && projects.get(pid)
+  if (!p) return ''
+  const lines = [`Project: "${String(p.title || p.name || 'untitled').slice(0, 80)}".`]
+  const site = (p.versions || []).find(v => (readEvents(v.id) || []).some(e => e.type === 'page'))
+  const ev = site ? readEvents(site.id) : null
+  if (ev) {
+    const pages = [...new Map(ev.filter(e => e.type === 'page').map(e => [e.id, e.title])).values()]
+    lines.push(`Built: ${pages.length} page${pages.length === 1 ? '' : 's'} (${pages.slice(0, 12).join('; ')}).`)
+    const th = ev.findLast(e => e.type === 'theme')
+    if (th?.vars) lines.push(`Its look: "${th.name || 'theme'}", background ${th.vars['--background']}, text ${th.vars['--foreground']}, main colour ${th.vars['--primary']}${th.fonts?.heading ? `, headings in ${th.fonts.heading}` : ''}.`)
+    const brief = ev.find(e => e.type === 'run:start')?.brief
+    if (brief) lines.push(`It was made from: ${String(brief).split('\n')[0].slice(0, 300)}`)
+  } else lines.push('No pages are built yet.')
+  const work = (p.versions || []).map(v => workOf(v.id)).filter(Boolean)
+  lines.push(work.length ? `Running now: ${work.map(w => `${w.what} (${w.stage || 'working'})`).join(', ')}.` : 'Nothing is running now.')
+  return lines.join('\n')
+}
 // Guided game making (engine/workshop.mjs): the spec walked one step at a time, with pictures
 const workshops = workshopRoutes({
   dataDir,
@@ -1337,7 +2049,10 @@ const OUT_OF_QUOTA = /\b(429|402)\b|usage limit|quota|insufficient|no capacity|r
 // goes to the reviewer on dark and on magenta. → { ok, path, problems, report }
 async function cutAndCheck(src, it, guide) {
   const cut = join(dirname(src), `${it.id}-cut.png`), view = join(dirname(src), `${it.id}-check.png`)
-  const c = await new Promise(ok => execFile(process.platform === 'win32' ? 'python' : 'python3', [join(root, 'scripts', 'cutout.py'), src, cut, '--preview', view], { timeout: 90000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
+  // the Python that has the image libraries (cutPy below), not whichever python3 is first on the PATH: under
+  // Hermes that is Hermes's own bare Python, and the cut failed with "No module named 'PIL'" (2026-11-13)
+  const py = (await cutPy()) || (process.platform === 'win32' ? 'python' : 'python3')
+  const c = await new Promise(ok => execFile(py, [join(root, 'scripts', 'cutout.py'), src, cut, '--preview', view], { timeout: 90000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
   if (!c.ok || !existsSync(cut)) return { ok: false, cutFailed: true, problems: [c.why.split('\n').pop().slice(0, 120) || 'the cut failed'] }
   let report = {}
   try { report = JSON.parse(c.out.trim().split('\n').pop()) } catch {}
@@ -1352,8 +2067,9 @@ async function cutAndCheck(src, it, guide) {
     : check.problems), ...(clash ? [clash.problem] : [])]
   return { ok: (check.skipped ? !looksOff : check.ok) && !clash, path: cut, view, problems, report, clash }
 }
-// The sheet cutter needs numpy and scipy, which the Python first on the PATH may lack (a
-// venv's): the first of SWARM_CUT_PY, python3 and the system Python that has them.
+// The cutters (sheets, single sprites, the key-colour measure) need numpy, scipy and Pillow, which the Python
+// first on the PATH may lack (a venv's, or Hermes's own): the first of SWARM_CUT_PY, python3, the system
+// Python and Hermes's Python that has them.
 let cutPyP = null
 const cutPy = () => (cutPyP ||= (async () => {
   const win = process.platform === 'win32'
@@ -1628,7 +2344,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     const pick = art.tierFor(choice, { hero: true })
     // the key the sheet is painted on comes from the figure's own picture: the key colour
     // furthest from its colours (the layout's key, guessed from the words, is the fallback)
-    const measured = kit ? null : await art.measureKey(ref)
+    const measured = kit ? null : await art.measureKey(ref, { py: (await cutPy()) || undefined })
     let layout = measured && measured.pick !== art.keyOf(it.layout) ? art.swapKey(it.layout, measured.pick) : it.layout
     if (layout !== it.layout) step({ kind: 'setup', text: `the ${it.what} is painted on ${art.keyOf(layout)}: the furthest key from the figure's colours` })
     // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
@@ -1733,6 +2449,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     const tag = randomBytes(4).toString('hex'), clipName = `idle-${tag}.mp4`, clip = join(imgDir, clipName)
     const v = await videogen(['--provider', o.provider, ...(o.model ? ['--model', o.model] : []), '--image', start, '--seconds', String(o.seconds), '--aspect', aspect, '--out', clip, idlePrompt({ who: it.who, look: it.look, key, tune: o.tune })], 900000)
     if (!v.ok || !existsSync(clip)) return fail(`the video model made no clip (${String(v.error || 'no answer').slice(0, 100)})`)
+    await makePoster(clip, { ffmpeg: posterFfmpeg(dataDir, findFfmpeg) })
     say('clip', { text: IDLE_SAY.clip(), clip: `/img/${runId}/${clipName}`, model: v.model || null })
     live(slot, it, 'cutting', { src: img(startName) })
     const heavy = heavyConfig(dataDir)
@@ -1878,9 +2595,13 @@ async function publish(id, input = {}) {
   const dir = join(out.dir, 'html')
   // a hosted site is named <project>-site, like ares-site
   const hostName = deployName(out.brand, 'site')
-  const go = target === 'vercel' ? publishVercel({ dir, name: hostName, creds, dataDir, onStage })
-    : target === 'cloudflare' ? publishCloudflare({ dir, name: hostName, creds, dataDir, onStage })
-    : publishGitHub({ dir, name: out.name, title, onStage })
+  // the site's address goes into its canonical links, share tags, sitemap and robots (engine/seo.mjs)
+  const rebase = base => { try { out.rebase(base) } catch (err) { send('error', { where: 'seo', message: String(err.message || err) }) } }
+  const go = target === 'vercel' ? publishVercel({ dir, name: hostName, creds, dataDir, rebase, onStage })
+    : target === 'cloudflare' ? publishCloudflare({ dir, name: hostName, creds, dataDir, rebase, onStage })
+    // each version of a project is its own site: Bot Wiki at <login>.github.io/bot-wiki, its version 2
+    // at …/bot-wiki-2, so publishing one never replaces another (owner, 2026-11-12)
+    : publishGitHub({ dir, name: versionOf(id) > 1 ? `${out.name}-${versionOf(id)}` : out.name, title, key: id, dataDir, rebase, onStage })
   go.then(r => finish(r.url, { repo: r.repo, pending: !!r.pending }))
     .catch(err => {
       // said out loud, never swapped for the local link: the person asked for a public one
@@ -1892,16 +2613,31 @@ async function publish(id, input = {}) {
 
 // A builder rewrites one finished section live: it is cleared on every canvas,
 // streams back in, and on failure the old section returns.
-async function rework(runId, send, s, agent, theme, args) {
+async function rework(runId, send, s, agent, theme, args, { draft = null } = {}) {
   const layer = s.key.split('/').pop(), page = s.key.split('/')[0], t0 = Date.now()
+  // a draft (Scribble): written beside the original, which stays as it is until the person accepts it
+  if (draft) {
+    const halt = stopSignal(runId)
+    if (halt.aborted) return
+    send('draft:start', { page, layer, agent, marks: draft.marks })
+    fixing.set(runId, (fixing.get(runId) || 0) + 1)
+    return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, images: false, ...args, signal: halt }))
+      .then(html => send('draft', { id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, page, layer, agent, role: s.role, html: html.replace(/^\s*```(?:html)?\s*/i, '').replace(/\s*```\s*$/, ''), marks: draft.marks, ms: Date.now() - t0 }))
+      .catch(err => send('draft:failed', { page, layer, agent, marks: draft.marks, message: halt.aborted ? 'stopped' : String(err.message || err).slice(0, 200) }))
+      .finally(() => fixing.set(runId, fixing.get(runId) - 1))
+  }
   send('agent:assign', { agent, page, layer, role: s.role, fixing: true })
   send('layer:reset', { page, layer, agent })
   // with an image model, a rewrite may add a photo ("add a picture of…"), painted once it is done
   const choice = await imageChoice().catch(() => null)
-  return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, images: !!choice, ...args,
+  const halt = stopSignal(runId)
+  if (halt.aborted) return
+  fixing.set(runId, (fixing.get(runId) || 0) + 1)
+  return traced({ agent, page, layer }, () => fixSection({ provider: provider('worker'), model: modelFor('worker'), theme, html: s.html, role: s.role || layer, images: !!choice, ...args, signal: halt,
     onDelta: d => send('layer:delta', { page, layer, agent, text: d }) }))
     .then(html => { send('layer:done', { page, layer, agent, ms: Date.now() - t0, html, fixed: true }); if (choice) paintNew(runId, send, page, layer, html, choice) })
-    .catch(err => send('layer:failed', { page, layer, agent, message: String(err.message || err), keep: s.html }))
+    .catch(err => send('layer:failed', { page, layer, agent, message: halt.aborted ? 'stopped' : String(err.message || err), keep: s.html }))
+    .finally(() => fixing.set(runId, fixing.get(runId) - 1))
 }
 
 // The finished sections of a saved run, as the last event left each one.
@@ -1924,19 +2660,29 @@ async function commentNow(id, input) {
   if (!start) throw new Error('no such build')
   if (!models.worker.apiKey) throw new Error('no model key yet: start a build from Hermes once')
   const text = String(input.text || '').replace(/\s+/g, ' ').trim().slice(0, 600)
-  if (!text) throw new Error('say what to change')
+  const marked = Array.isArray(input.marks) && input.marks.length > 0
+  if (!text && !marked) throw new Error('say what to change')
   // the same comment from two open canvases (a /swarm fix reaches every one) is taken once
-  const seen = `${id}|${text}`
-  if (recentComments.get(seen) > Date.now() - 8000) return { sections: [], reply: '', duplicate: true }
+  const seen = `${id}|${text}|${Array.isArray(input.targets) ? input.targets.join(',') : ''}`
+  if (!marked && recentComments.get(seen) > Date.now() - 8000) return { sections: [], reply: '', duplicate: true }
   recentComments.set(seen, Date.now())
   const theme = events.findLast(e => e.type === 'theme')
   // the canvas sends its own copy of the sections (with any edits); otherwise the saved ones
   const given = Array.isArray(input.sections) ? input.sections.filter(s => s && typeof s.key === 'string' && typeof s.html === 'string').slice(0, 60) : []
   const sections = given.length ? given.map(s => ({ key: s.key, role: String(s.role || s.key).slice(0, 80), html: s.html })) : runSections(events)
   const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
-  let keys = typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
+  // Scribble: marks drawn on the pages, read by the vision model, answered as drafts beside the original
+  if (marked) return markRequest(id, { events, start, theme, sections, text, input, send })
+  // "improve the SEO", "a better description for the menu page": the crew's SEO pass
+  if (seoAsk(text)) return seoRequest(id, { events, start, theme, given, text, send })
+  // the look only ("change the brand colours", "make it darker"), with no section named: the theme changes in
+  // place and every page stays as it is
+  if (lookAsk(text) && !(Array.isArray(input.targets) && input.targets.length) && typeof input.target !== 'string') return lookRequest(id, { events, start, text, send })
+  // layers dragged into the chat (web/layerlink.js): just those sections, and the turn keeps them
+  const dragged = Array.isArray(input.targets) ? [...new Set(input.targets.filter(k => typeof k === 'string' && sections.some(s => s.key === k)))].slice(0, 12) : []
+  let keys = dragged.length ? dragged : typeof input.target === 'string' && sections.some(s => s.key === input.target) ? [input.target] : null
   let reply = ''
-  send('comment', { text, target: keys?.[0] || null })
+  send('comment', { text, target: keys?.[0] || null, ...(dragged.length ? { layers: dragged.map(k => ({ run: id, page: k.split('/')[0], layer: k.split('/').pop() })) } : {}) })
   if (!keys) {
     const heads = sections.map(s => ({ key: s.key, role: s.role, head: (/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(s.html)?.[1] || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) }))
     const routed = await routeComment({ provider: provider('planner'), model: modelFor('planner'), text, sections: heads, signal: AbortSignal.timeout(45000) })
@@ -1945,13 +2691,153 @@ async function commentNow(id, input) {
     if (!keys.length) { send('comment:none', { text }); throw new Error('could not tell which section that is about: select one on the canvas and comment there') }
   }
   const agents = start.agents || []
+  // only about the picture: repaint it and leave the section as it is
+  // (or a short follow-up right after a picture ask on that section: "much more impactful")
+  const lastTake = k => events.findLast(e => e.type === 'comment:take' && `${e.page}/${e.layer}` === k)
+  const aboutPicture = k => pictureAsk(text) || (vagueAsk(text) && lastTake(k)?.picture && Date.now() - lastTake(k).t < 15 * 60000)
+  const picChoice = keys.some(aboutPicture) ? await imageChoice().catch(() => null) : null
   keys.forEach((k, i) => {
     const s = sections.find(x => x.key === k)
     const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
+    const gen = picChoice && aboutPicture(k) ? gensOf(s.html)[0] : null
+    if (gen) return void repaint(id, send, s, agent, text, gen, picChoice)
     send('comment:take', { text, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply : '' })
-    rework(id, send, s, agent, theme, { comment: text })
+    // a section the person changed by hand (web/edit/patches.js): its builder keeps those changes
+    rework(id, send, s, agent, theme, { comment: keepHand(text, handChanges(events, k.split('/')[0], k.split('/').pop())) })
   })
   return { sections: keys, reply }
+}
+
+// Scribble (engine/marks.mjs): the marks get ids on this run, their pictures are kept in marks/, the
+// vision model reads them (how it read each one is the reply), and each marked section's builder writes
+// a draft beside the original. Marks still open from earlier go along. A mark the model could not read
+// is asked about instead of changed.
+const MARK_PIC = /^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]{20,4000000}$/
+async function markRequest(id, { events, start, theme, sections, text, input, send }) {
+  const given = cleanMarks(input.marks)
+  if (!given.length) throw new Error('those marks did not come through')
+  const known = new Map(sections.map(s => [s.key, s]))
+  let n = nextMarkId(events)
+  const ids = {}
+  const marks = given.map(m => { ids[m.id] = `k${n++}`; return { ...m, id: ids[m.id], target: { ...m.target, section: known.has(m.target.section) ? m.target.section : null } } })
+  // the pictures: each page with its marks drawn on it, and a crop around each mark
+  const dir = join(runsDir, id, 'marks')
+  mkdirSync(dir, { recursive: true })
+  const pic = (name, data) => { if (!MARK_PIC.test(String(data || ''))) return null; writeFileSync(join(dir, name), Buffer.from(data.split(',')[1], 'base64')); return data }
+  const shots = Object.entries(input.shots || {}).slice(0, 6).flatMap(([page, data]) => /^[\w-]{1,64}$/.test(page) && pic(`${marks[0].id}-${page}.jpg`, data) ? [{ page, image: data }] : [])
+  const crops = given.flatMap(m => { const data = input.crops?.[m.id]; return pic(`${ids[m.id]}.jpg`, data) ? [{ id: ids[m.id], image: data }] : [] })
+  const open = openMarks(events)
+  send('marks', { text, marks, crops: crops.map(c => c.id) })
+  const roles = Object.fromEntries(sections.map(s => [s.key, s.role]))
+  // the vision model reads them; with none, the builder gets the data lines alone
+  let reads = []
+  const seeing = models.reviewer.apiKey && modelFor('reviewer')
+  if (seeing && (shots.length || crops.length)) {
+    // like the art check: no thinking (it ate the answer), and the next vision model when one reads nothing
+    const chain = [seeing, ...(host(models.reviewer.baseUrl) === 'api.inferhub.dev' ? REVIEW_FALLBACKS.filter(m => m !== seeing) : [])]
+    const messages = readMarksMessages({ text, marks, open, roles, shots, crops })
+    for (const m of chain) {
+      try {
+        const res = await streamChat(provider('reviewer'), { trace: { kind: 'marks' }, model: m, messages, maxTokens: 1500, temperature: 0.2, extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, signal: AbortSignal.timeout(60000) })
+        reads = parseReads(res.text, marks)
+        if (reads.length) break
+        console.error(`marks read: ${m} read nothing:`, String(res.text || '').slice(0, 200))
+      } catch (err) { console.error(`marks read: ${m}:`, err.message) }
+    }
+  }
+  const asked = new Set(reads.filter(r => r.ask && !r.change).map(r => r.mark))
+  const reply = reads.map(r => (r.ask && !r.change ? `${r.mark}: ${r.ask}` : r.read)).filter(Boolean).join(' ').slice(0, 600)
+  send('marks:read', { reads, reply })
+  // a mark on no section: the planner works out which one from the words and the mark lines
+  const bySection = new Map()
+  for (const m of marks) {
+    if (asked.has(m.id)) continue
+    let k = m.target.section
+    if (!k) {
+      const heads = sections.map(s => ({ key: s.key, role: s.role, head: (/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i.exec(s.html)?.[1] || '').replace(/<[^>]+>/g, '').trim().slice(0, 60) })).filter(s => s.key.startsWith(`${m.page}/`) || s.key.startsWith('*/'))
+      k = (await routeComment({ provider: provider('planner'), model: modelFor('planner'), text: `${text} ${markLine(m)}`, sections: heads, signal: AbortSignal.timeout(45000) }).catch(() => ({ sections: [] }))).sections[0] || null
+    }
+    if (k && known.has(k)) bySection.set(k, [...(bySection.get(k) || []), m])
+  }
+  const agents = start.agents || []
+  const keys = [...bySection.keys()]
+  keys.forEach((k, i) => {
+    const s = known.get(k), list = bySection.get(k)
+    const agent = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
+    send('comment:take', { text: text || `${list.length} mark${list.length > 1 ? 's' : ''}`, page: k.split('/')[0], layer: k.split('/').pop(), role: s.role, agent, reply: i === 0 ? reply.slice(0, 90) : '', marks: list.map(m => m.id) })
+    rework(id, send, s, agent, theme, { comment: keepHand(fixText({ text, marks: list, reads, role: s.role }), handChanges(events, k.split('/')[0], k.split('/').pop())) }, { draft: { marks: list.map(m => m.id) } })
+  })
+  if (!keys.length && !asked.size) send('comment:none', { text })
+  return { sections: keys, reply, reads, ids }
+}
+
+// A draft (Scribble) accepted becomes the section's new version; dismissed, it is dropped. Either way the
+// marks it answered are closed.
+function closeDraft(id, did, accept) {
+  const events = readEvents(id)
+  if (!events) throw Object.assign(new Error('no such build'), { status: 404 })
+  const d = events.findLast(e => e.type === 'draft' && e.id === did)
+  if (!d) throw Object.assign(new Error('no such draft'), { status: 404 })
+  if (events.some(e => e.type === 'draft:closed' && e.id === did)) throw Object.assign(new Error('that draft is already closed'), { status: 409 })
+  const send = (type, data) => record(id, { type, t: Date.now(), run: id, ...data })
+  if (accept) send('layer:done', { page: d.page, layer: d.layer, agent: d.agent, html: d.html, fixed: true, draft: did })
+  send('draft:closed', { id: did, page: d.page, layer: d.layer, accepted: !!accept })
+  if (d.marks?.length) send('mark:status', { ids: d.marks, status: 'closed', draft: accept ? 'accepted' : 'dismissed' })
+  return { ok: true }
+}
+
+// The SEO pass on request (engine/seo.mjs): one planner call edits titles and descriptions,
+// and a builder rewrites at most two sections when the aim needs words the page lacks.
+// A look-only ask (engine/lookask.mjs): the planner names the new colours, fonts or corners, and they are
+// recorded as the same `edit` events the Design panel makes, so open canvases restyle at once, Undo-able there,
+// and exports carry them. A reference link whose look is ready is shown to the planner, for "use the reference's
+// colours". Nothing is rebuilt.
+async function lookRequest(id, { events, start, text, send }) {
+  if (!models.planner.apiKey) throw new Error('no model key yet: start a build from Hermes once')
+  const theme = themeNow(events)
+  if (!theme?.vars) throw new Error('nothing built yet')
+  const agents = start.agents || []
+  const agent = agents[(commentTurn++ * 3 + 1) % Math.max(1, agents.length)]?.id
+  send('comment', { text, target: null })
+  const pid = projects.projectOf(id)
+  const reference = pid ? refs.list(pid).find(r => r.kind === 'link' && r.look?.state === 'ready')?.look?.tokens || null : null
+  const chat = async messages => (await streamChat(provider('planner'), { trace: { kind: 'look-ask', agent }, model: modelFor('planner'), maxTokens: 700, temperature: 0.3, signal: AbortSignal.timeout(60000), extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages })).text
+  const { edits, reply } = await lookEdits({ theme, text, reference, chat })
+  if (!edits.length) { send('seo:pass', { text, agent, reply: 'I could not tell what to change in the look. Name the colours or fonts you want.', failed: true }); return { sections: [], reply: '' }
+  }
+  const stamp = Date.now().toString(36)
+  edits.forEach((e, i) => send('edit', { ...e, id: `lk${stamp}${i}` }))
+  const said = `${reply || 'The look is changed.'} Every page stays as it is.`
+  send('seo:pass', { text, agent, reply: said, changes: edits.map(e => (e.kind === 'var' ? `${e.name.replace(/^--/, '')} ${e.value}` : e.kind === 'font' ? `${e.role} font ${e.value}` : `corners ${e.value}`)) })
+  return { sections: [], reply: said }
+}
+
+async function seoRequest(id, { events, start, theme, given, text, send }) {
+  if (!models.planner.apiKey) throw new Error('no model key yet: start a build from Hermes once')
+  const snap = snapshot(events, given, { name: nameFor(id)?.name })
+  const pages = currentSeo(snap)
+  if (!pages.length) throw new Error('nothing built yet')
+  const agents = start.agents || []
+  const agent = agents[(commentTurn++ * 3 + 1) % Math.max(1, agents.length)]?.id
+  send('seo:start', { text, agent })
+  let r
+  try {
+    r = await seoPass({ streamChat, provider: provider('planner'), model: modelFor('planner'), ask: text, brand: snap.brand, pages, signal: AbortSignal.timeout(60000) })
+  } catch (err) {
+    send('seo:pass', { text, agent, reply: `SEO pass failed: ${String(err.message || err).slice(0, 140)}`, failed: true })
+    throw err
+  }
+  for (const c of r.changes) send('seo', { page: c.page, ...(c.title ? { title: c.title } : {}), ...(c.description ? { description: c.description } : {}), by: 'crew' })
+  send('seo:pass', { text, agent, reply: r.reply, changes: r.summary, copy: r.copy.map(c => c.key) })
+  const sections = snap.pages.flatMap(p => p.sections)
+  r.copy.forEach((c, i) => {
+    const s = sections.find(x => x.key === c.key)
+    if (!s) return
+    const who = agents[(commentTurn++ * 3 + 2) % Math.max(1, agents.length)]?.id
+    send('comment:take', { text, page: c.key.split('/')[0], layer: c.key.split('/').pop(), role: s.role, agent: who, reply: i === 0 ? c.ask.slice(0, 90) : '' })
+    rework(id, send, s, who, theme, { comment: keepHand(c.ask, handChanges(events, c.key.split('/')[0], c.key.split('/').pop())) })
+  })
+  return { sections: r.copy.map(c => c.key), reply: r.reply, seo: r.changes }
 }
 
 function tokenOk(given) {
@@ -1977,10 +2863,14 @@ function sendFile(res, file) {
 
 const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
+  // a request is use, but not Hermes's bridge re-attaching every few seconds or a status look (bridge.py, launcher.py)
+  if (!POLLS.test(url.pathname)) idle.touch()
   if (!hosts.has(req.headers.host)) {
     res.writeHead(421).end('wrong host')
     return
   }
+  // model calls, forwarded to Hermes (engine/hermesllm.mjs); its own key, never a provider's
+  if (llm.handle(req, res)) return
 
   // The API answers any origin (the Desktop pane's is opaque) but needs the token.
   const api = url.pathname === '/events' || url.pathname.startsWith('/api/')
@@ -2001,7 +2891,34 @@ const server = createServer((req, res) => {
 
   if (url.pathname === '/' || url.pathname === '/index.html') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    // the code changed under this server (an update): the page's parts would no longer fit. With no work
+    // running, a new server takes over and the page opens again on it
+    if (replaceSelf()) return res.end('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>Swarm Studio</title><body style="margin:0;background:#0f0f0f">')
     res.end(canvasPage())
+    return
+  }
+
+  // the Studio's next UI, its screens moving over one at a time (docs/decisions/0013-react-ui-coexists.md). Same
+  // address as /: ?project=…&version=…&room=… opens the same place in either
+  if (url.pathname === '/next') {
+    res.writeHead(302, { location: `/next/${url.search}` }).end()
+    return
+  }
+  // a classic script the next UI loads beside its page (Mermaid, for the app build wall's Map; spec 44). Classic, not a
+  // module, and open to any origin, as the vendored files are, so the Desktop pane's frame can load it
+  const nv = url.pathname.match(/^\/next\/vendor\/([\w.-]+)$/)
+  if (nv) {
+    const file = nextVendor(uiDist, nv[1])
+    if (!file) return void res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': nv[1].endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/plain; charset=utf-8', 'access-control-allow-origin': '*', 'cache-control': 'max-age=86400' })
+    res.end(readFileSync(file))
+    return
+  }
+  if (url.pathname === '/next/' || url.pathname === '/next/index.html') {
+    const page = nextPage(uiDist, { token })
+    if (!page) return void res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(page)
     return
   }
 
@@ -2029,32 +2946,61 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/run' && req.method === 'POST') {
     let body = ''
     req.on('data', c => (body += c))
-    req.on('end', () => {
+    req.on('end', async () => {
+      // no Hermes to answer the model: refused at once, with why, instead of a build that "plans" for a minute
+      const gate = await hermesGate()
+      if (gate) return void res.writeHead(503, { 'content-type': 'application/json' }).end(JSON.stringify(gate))
       let input = {}
       try {
         input = JSON.parse(body || '{}')
       } catch {}
       delete input.base
       delete input.ask
+      delete input.brand
       if (!input.brief) {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'brief required' }))
         return
       }
+      const typed = String(input.brief).trim(), chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
+      // redo: this project from scratch, new pages and a new look; its old versions stay restorable
+      const redo = input.redo === true
+      // sure: a script's explicit "I'm sure" (hermes swarm --build, remix, the evals); never a model's (decision 0020)
+      const sure = input.sure === true
+      delete input.chat
+      delete input.redo
+      delete input.sure
       // a message inside an open build belongs to that build's project
       if (typeof input.from === 'string' && typeof input.project !== 'string' && RUN_ID.test(input.from)) input.project = projects.projectOf(input.from) || undefined
       // inside a project, the owner's uploaded pictures go to the crew: builders may place them as they are,
       // and the art director matches the new pictures to them (art.styleGuide reads the brief)
+      // links in the person's own words (before anything is added to the brief): pages named as what to make
+      const askedLinks = linksIn(String(input.brief || ''), 2)
       if (typeof input.project === 'string') {
         const ups = projects.uploadsOf(input.project).filter(u => /^image\//.test(u.type)).slice(0, 12)
         if (ups.length) input.brief = `${String(input.brief).trim()}\n\nThe owner uploaded these pictures. Use them where they fit, as they are (<img src="…">, no data-gen), and make every new picture match their look:\n${ups.map(u => `- ${u.name}: ${u.src}`).join('\n')}`
+        // the project's References store: pictures with what each is for, and links
+        const rb = refs.brief(input.project)
+        if (rb) input.brief = `${String(input.brief).trim()}\n\n${rb}`
+        // and its Assets (spec 37): placed as they are
+        const ab = projectAssets.brief(input.project)
+        if (ab) input.brief = `${String(input.brief).trim()}\n\n${ab}`
+      }
+      // "recreate this: <link>": the page is read, so the crew writes from what it says and not from an address.
+      // A link kept as a reference is a look to learn from, not this; only public pages are read (spec 29).
+      const asLook = typeof input.project === 'string' ? new Set(refs.list(input.project).filter(r => r.kind === 'link').map(r => r.url)) : new Set()
+      for (const u of askedLinks) {
+        if (asLook.has(u) || asLook.has(`${u}/`)) continue
+        const p = await readPage(u).catch(() => null)
+        if (p && (p.title || p.text)) input.brief = `${String(input.brief).trim()}\n\nThe owner linked ${u} as what this is about. What that page says (write the site from this; its design is not the reference):\n${[p.title && `Title: ${p.title}`, p.description && `Description: ${p.description}`, p.text && `Words: ${p.text}`].filter(Boolean).join('\n')}`.slice(0, 12000)
       }
       // A message inside an open build (from: its run) is that project's next version: the
       // last version is kept as it stands and the crew adds only what the message asks for
       // (engine/extend.mjs followUp). While the last turn is still building, the next one waits:
       // starting it would stop that build and lose what it was doing.
-      const from = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
+      const from = !redo && typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
+      if (redo) delete input.from
       const building = r => r && !r.done && !r.controller.signal.aborted && !r.events.some(e => e.type === 'error' && (e.where === 'run' || e.where === 'models'))
-      if (from && building(current) && (current.id === from || (input.project && projects.projectOf(current.id) === input.project))) {
+      if ((from || redo) && building(current) && (current.id === from || (input.project && projects.projectOf(current.id) === input.project))) {
         res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'busy', run: current.id }))
         return
       }
@@ -2067,11 +3013,32 @@ const server = createServer((req, res) => {
         if (base) input.base = base
       }
       const pid = typeof input.project === 'string' ? input.project : null
+      // Ask before every new website build (docs/decisions/0020-ask-before-build.md): the next version of a
+      // build that exists (it resolved to that build, engine/extend.mjs followUp), a redo of a project that has versions, a Studio project's
+      // Build (the walk is the answer), a chat whose person answered "Skip all" (once), or a script's sure
+      // build. Anything else asks in the chat and builds nothing; an error while asking still asks.
+      const goChat = chatId ? chats.get(chatId) : null
+      const answered = sure || !!next || (redo && !!pid && (projects.get(pid)?.versions?.length || 0) > 0)
+        || (!!pid && !!studios.get(pid)) || (goChat?.go?.path === 'all' && !goChat.go.run)
+      if (!answered) {
+        const asked = await askBeforeBuild({ chatId, typed, pid }).catch(() => ({ error: 'ask', ask: 'skips', chat: null, text: ASK_TEXT, options: askOptions(null), recommended: 'pick' }))
+        return void res.writeHead(409, { 'content-type': 'application/json' }).end(JSON.stringify(asked))
+      }
+      // the look, in Open Design's order (decision 0016 point 3): a design system the request names, then the
+      // project's (a locked brand sheet, or a Studio project's own brand, spec 37), then the default (the planner's).
+      // A follow-up keeps the project's
+      const brand = !base ? requestedBrand(input.system, String(input.brief)) || lockedBrand(chats, chatId) || (pid ? lockedBrand(studios.brands, pid) : null) : null
+      if (brand) input.brand = brand
       const run = startRun(input)
+      // one answer is one build: the chat's "Skip all" is used up by this run
+      if (goChat?.go && !next) await chats.update(chatId, c => { if (c.go) c.go.run = run.id }).catch(() => {})
       // "Tell the crew…" inside a project: the new run is that project's next version
       if (pid) projects.claim(run.id, pid)
+      // the words go into a chat: the talk that led here, else a new one (or the project's newest)
+      const chat = chatFor({ chat: chatId, text: typed, kind: 'site', project: pid })
+      chatBuilt(chat, run.id, pid, typed)
       broadcast({ type: 'reset', run: run.id })
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(base ? { extend: true, from: next.from } : {}) }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ run: run.id, ...(chat ? { chat } : {}), ...(base ? { extend: true, from: next.from } : {}) }))
     })
     return
   }
@@ -2104,24 +3071,105 @@ const server = createServer((req, res) => {
     if (req.method !== 'POST') return json(200, projects.list())
     return readJson(1e5, input => json(200, projects.op(input)))
   }
-  // Talk first (engine/discuss.mjs): the Make box asks whether a message means build, talk or unsure,
+  // Chats (spec 29): loose chats for Studio home, one chat, rename / move to a group / delete, and a
+  // project's chats grouped by category. The talk itself goes through /api/discuss.
+  // ?run=<id>: the chats of that build's project (the Design deck knows its run, not always its project)
+  const settled = () => chats.settle(id => projects.projectOf(id)).catch(() => {})
+  if (url.pathname === '/api/chats' && req.method === 'GET') {
+    const run = url.searchParams.get('run')
+    settled().then(() => {
+      const pid = run && RUN_ID.test(run) ? projects.projectOf(run) : null
+      json(200, pid ? { project: pid, ...chats.forProject(pid) } : { chats: chats.listLoose().filter(c => c.turns) })
+    })
+    return
+  }
+  const chatRoute = url.pathname.match(/^\/api\/chats\/(c-[0-9a-f]{10})$/)
+  if (chatRoute) {
+    const id = chatRoute[1]
+    if (req.method === 'GET') { const c = chats.get(id); return c ? json(200, c) : json(404, { error: 'no such chat' }) }
+    const fail = err => json(err.status || 400, { error: String(err.message || err) })
+    if (req.method === 'DELETE') return void chats.remove(id).then(r => json(200, r), fail)
+    if (req.method === 'POST') return readJson(1e4, input => {
+      Promise.resolve()
+        .then(() => typeof input.title === 'string' && chats.rename(id, input.title))
+        .then(() => typeof input.category === 'string' && chats.setCategory(id, input.category))
+        .then(() => json(200, chats.get(id)), fail)
+    })
+  }
+  const projectChats = url.pathname.match(/^\/api\/projects\/([\w-]{1,64})\/chats$/)
+  if (projectChats && req.method === 'GET') return void settled().then(() => json(200, chats.forProject(projectChats[1])))
+  // Talk first (engine/talkplan.mjs): the Make box asks whether a message means build, talk or unsure,
   // and a talk with the planner runs in the Design deck's chat with nothing built.
   // POST /api/discuss/read { text, kind, answerTo? } -> { intent, by }
   // POST /api/discuss { said: [{ who: 'you' | 'hermia', text }], kind, brief? } -> { reply } | { brief }
+  // These stay until the web side moves onto /api/talk (server/talk.mjs), which saves the chat.
   if ((url.pathname === '/api/discuss/read' || url.pathname === '/api/discuss') && req.method === 'POST') {
     const model = modelFor('planner')
     const chat = (maxTokens, ms) => model && models.planner.apiKey ? async messages => (await streamChat(provider('planner'), {
       trace: { kind: 'discuss' }, model, maxTokens, temperature: 0.3, signal: AbortSignal.timeout(ms),
       extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
     })).text : null
-    return readJson(1e5, input => {
+    return readJson(1e5, async input => {
+      // the talk itself needs the model; reading whether a message is a build or a talk has its own
+      // fallback without one, so only the talk is refused when Hermes is not there
+      if (url.pathname === '/api/discuss') { const gate = await hermesGate(); if (gate) return json(503, gate) }
       const kind = ['site', 'app', 'film', 'game'].includes(input.kind) ? input.kind : 'site'
-      import('../engine/discuss.mjs').then(async d => {
+      import('../engine/talkplan.mjs').then(async d => {
         if (url.pathname === '/api/discuss/read') return json(200, await d.readIntent({ text: String(input.text || '').slice(0, 4000), answerTo: String(input.answerTo || '').slice(0, 300), kind, chat: chat(8, 9000) }))
         const talk = chat(input.brief ? 400 : 600, 60000)
         if (!talk) return json(503, { error: 'No planner model yet: pick one in Models.' })
         const said = Array.isArray(input.said) ? input.said.slice(-40) : []
-        json(200, await (input.brief ? d.writeBrief : d.discuss)({ said, kind, chat: talk }))
+        const inRun = typeof input.from === 'string' && RUN_ID.test(input.from) ? input.from : null
+        const inPid = typeof input.project === 'string' ? input.project : inRun ? projects.projectOf(inRun) : null
+        // Ask mode (docs/specs/46-chat-modes.md): the planner answers and nothing else happens. No chat is made or
+        // saved, no link is read or walked, no brief is written: only the answer goes back.
+        if (input.ask === true) {
+          const [{ answerOnly }, { factLines }, facts] = await Promise.all([import('../engine/ask.mjs'), import('../engine/doctor.mjs'), studioFacts(inRun, { light: true }).catch(() => null)])
+          const plan = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? String(chats.get(input.chat)?.spec?.brief || '').slice(0, 1500) : ''
+          const project = [projectState(inPid), plan ? `The plan agreed so far in the chat:\n${plan}` : ''].filter(Boolean).join('\n\n')
+          return json(200, await answerOnly({ said, kind, chat: talk, project, studio: facts ? factLines(facts).join('\n').slice(0, 2400) : '' }))
+        }
+        // media (spec 29): the pictures attached to this turn, and its links read as pages; the planner is
+        // told how each one was read, and the ones from earlier turns stay in view
+        const had = (typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat)?.refs) || []
+        const ids = Array.isArray(input.refs) ? input.refs.filter(x => typeof x === 'string').slice(0, 8) : []
+        const now = had.filter(r => ids.includes(r.id))
+        const last = said.at(-1)
+        const fresh = []
+        if (!input.brief && last && last.who !== 'hermia') {
+          for (const u of linksIn(last.text)) {
+            const known = had.find(r => r.kind === 'link' && r.url === u)
+            if (known) { now.push(known); continue }
+            const read = await readPage(u).then(pageRead).catch(err => ({ by: 'none', text: String(err.message || err).slice(0, 120) }))
+            // in a project the link is also walked for its look (below): the planner says so instead of "I can't browse"
+            if (inPid && projects.get(inPid)) read.text = `${read.text ? `${read.text}\n` : ''}The crew is opening this site in a browser now to take its look (colours, type, motion); it shows on the References card when done.`.slice(0, 1600)
+            const ref = { id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, kind: 'link', name: u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 80), file: null, url: u, src: null, read, at: Date.now() }
+            now.push(ref); fresh.push(ref)
+          }
+        }
+        const before = had.filter(r => !now.includes(r)).slice(-6)
+        const told = now.length || before.length ? said.map((t, i) => i === said.length - 1 && t.who !== 'hermia' ? { ...t, text: withRefs(t.text, now) + (before.length ? `\n[Attached earlier in this talk]\n${before.map(r => `- ${r.kind === 'link' ? r.url : r.name}: ${r.read?.by === 'none' ? 'not read' : (r.read?.text || '').slice(0, 200)}`).join('\n')}` : '') } : t) : said
+        const out = await (input.brief ? d.writeBrief : d.discuss)({ said: told, kind, chat: talk, project: projectState(inPid || (chats.get(input.chat)?.project ?? null)) })
+        // the talk is kept in its chat (spec 29): made on the first turn, inside the project when it
+        // started in one; the person's newest words and Hermia's answer are added, a brief is the spec's
+        let id = typeof input.chat === 'string' && CHAT_ID.test(input.chat) && chats.get(input.chat) ? input.chat : null
+        try {
+          const pid = typeof input.project === 'string' ? input.project : typeof input.from === 'string' && RUN_ID.test(input.from) ? projects.projectOf(input.from) : null
+          if (!id) id = chats.create({ kind, project: pid }).id
+          if (fresh.length) await chats.update(id, c => { c.refs = [...(c.refs || []), ...fresh].slice(-60) })
+          // a link given in a project's talk goes to its References with what the person wrote around it, and
+          // its look is walked (decision 0022); the chat and the turn are kept so the look traces back to them
+          const lp = pid || inPid
+          if (lp && projects.get(lp)) for (const r of fresh.filter(r => r.kind === 'link')) {
+            if (refs.list(lp).some(x => x.kind === 'link' && x.url === r.url)) continue
+            const note = String(last.text || '').replace(/\bhttps?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim()
+            try { walkLook(lp, refs.addLink(lp, { url: r.url, use: note, source: 'chat', from: id })) } catch (err) { console.warn('look:', err.message) }
+          }
+          if (!input.brief && last && last.who !== 'hermia') await chats.say(id, { who: 'person', text: last.text, refs: now.map(r => r.id) })
+          if (out.reply) await chats.say(id, { who: 'planner', text: out.reply })
+          if (out.brief) await chats.update(id, c => { c.spec = { brief: String(out.brief).slice(0, 8000), open: [], art: [], engine: null, time: null, cost: null, lockedAt: null, ...(c.spec || {}), ...{ brief: String(out.brief).slice(0, 8000) } } })
+        } catch (err) { console.warn('chat:', err.message) }
+        json(200, id ? { ...out, chat: id } : out)
       }).catch(err => json(502, { error: String(err.message || err) }))
     })
   }
@@ -2149,11 +3197,13 @@ const server = createServer((req, res) => {
     return json(200, { results: results.map(r => ({ ...r, src: `/api/library/file?id=${encodeURIComponent(r.id)}` })) })
   }
   if (url.pathname === '/api/library/packs' && req.method === 'GET') return json(200, { packs: assets.packs() })
+  // Open Design's design templates, for the person to pick one for a build (engine/odlibrary.mjs, decision 0016)
+  if (url.pathname === '/api/library/templates' && req.method === 'GET') return json(200, { templates: odTemplates() })
   if (url.pathname === '/api/library/file' && req.method === 'GET') {
     assets.file(url.searchParams.get('id')).then(got => {
       if (!got) return json(404, { error: 'no such picture' })
       const type = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }[extname(got.file).toLowerCase()] || 'image/jpeg'
-      res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=86400' }).end(readFileSync(got.file))
+      sendPicture(req, res, url, got.file, type, { 'cache-control': 'private, max-age=86400' })
     })
     return
   }
@@ -2185,6 +3235,8 @@ const server = createServer((req, res) => {
         if (existsSync(join(runsDir, v.id, 'video', 'promo.mp4'))) out.push({ project: p.id, run: v.id, kind: 'film', name: 'Promo film', src: `/video/${v.id}/promo.mp4`, poster: existsSync(join(runsDir, v.id, 'video', 'p1.webp')) ? `/video/${v.id}/live/p1.webp` : null, t: v.updated })
       }
       for (const u of projects.uploadsOf(p.id)) out.push({ project: p.id, kind: 'upload', name: u.name, src: u.src, type: u.type, t: u.t })
+      // the References store: its pictures beside the uploads
+      for (const r of refs.list(p.id).filter(r => r.kind === 'image')) out.push({ project: p.id, kind: 'upload', name: r.name, src: r.src, type: 'image/*', t: r.added })
     }
     return json(200, { assets: out.sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 600) })
   }
@@ -2220,13 +3272,13 @@ const server = createServer((req, res) => {
   if (runBoard && req.method === 'GET') {
     const id = runBoard[1], events = readEvents(id)
     if (!events) return json(404, { error: 'no such build' })
-    const b = boardOf(id, events, runsDir, current?.id === id && !current.done)
+    const b = boardOf(id, events, runsDir, current?.id === id && !current.done, pictureTh)
     // the game made from this site lives in its own run: it shows here, as part of this version
     const linked = events.findLast(e => e.type === 'game:linked' && e.game)
     if (!b.game && linked && RUN_ID.test(linked.game)) {
       const gev = readEvents(linked.game)
       if (gev) {
-        const g = boardOf(linked.game, gev, runsDir, false)
+        const g = boardOf(linked.game, gev, runsDir, false, pictureTh)
         const work = workOf(linked.game)
         b.game = { ...(g.game || { title: linked.title || 'Game', cover: null }), run: linked.game, work }
         // no title screen yet: the site's key art stands in
@@ -2235,7 +3287,38 @@ const server = createServer((req, res) => {
       }
     }
     b.work = workOf(id) || b.game?.work || null
+    // each page's content version and its saved snapshots of it: the Overview paints these first
+    b.snaps = snapsOf().list(id, events)
+    // whether the build has a story (spec 39): the Overview asks for it only then, so a build with none is no 404
+    b.story = !!readStory(join(runsDir, id))
     return json(200, b)
+  }
+  // the same, on its own: what the Overview checks before photographing a page again; and a page's
+  // picture from the browser, { page, v, size: 's' | 'f', image: a JPEG data URL }
+  const runSnaps = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/snaps$/)
+  if (runSnaps && req.method === 'GET') {
+    const events = readEvents(runSnaps[1])
+    if (!events) return json(404, { error: 'no such build' })
+    return json(200, snapsOf().list(runSnaps[1], events))
+  }
+  if (runSnaps && req.method === 'POST') {
+    const id = runSnaps[1]
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 6e6) req.destroy() })
+    req.on('end', () => {
+      try {
+        const input = JSON.parse(body || '{}')
+        const m = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(input.image || '')
+        if (!m) return json(400, { error: 'send a JPEG data URL' })
+        const events = readEvents(id)
+        if (!events) return json(404, { error: 'no such build' })
+        const out = snapsOf().save(id, events, { page: input.page, v: input.v, size: input.size, jpeg: Buffer.from(m[1], 'base64') })
+        if (out === 'bad') return json(400, { error: 'bad page, version or size' })
+        if (out === 'stale') return json(409, { error: 'that page has changed since' })
+        json(200, { ok: true })
+      } catch (err) { json(400, { error: String(err.message || err) }) }
+    })
+    return
   }
   // a build's own pictures and models, and the ones still to come (the code wall's asset pane)
   const runAssets = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/assets$/)
@@ -2245,6 +3328,48 @@ const server = createServer((req, res) => {
     const spec = events.findLast(e => e.type === 'game:spec')?.spec
     gameMod().then(g => spec ? g.artList(spec) : []).catch(() => []).then(plan => json(200, { ...listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan, pieceName }), painting: (artJobs.get(id) || []).filter(Boolean) }))
     return
+  }
+  // Stop: everything in flight for a build's project ({run} or {project}), or all of it ({})
+  // Fix mode (docs/specs/46-chat-modes.md): POST /api/doctor { run?, text? } -> { reply, actions, by, facts }.
+  // What is wrong with the Studio's own working parts, from facts; it changes nothing. With no Hermes or no
+  // planner model the facts are listed plainly: Fix has to answer exactly when things are broken.
+  if (url.pathname === '/api/doctor' && req.method === 'POST') {
+    return readJson(1e4, async input => {
+      try {
+        const run = typeof input.run === 'string' && RUN_ID.test(input.run) ? input.run : null
+        const [d, facts, gate] = await Promise.all([import('../engine/doctor.mjs'), studioFacts(run), hermesGate().catch(() => null)])
+        const model = modelFor('planner')
+        const chat = model && models.planner.apiKey && !gate ? async messages => (await streamChat(provider('planner'), {
+          trace: { kind: 'doctor' }, model, maxTokens: 500, temperature: 0.2, signal: AbortSignal.timeout(45000),
+          extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
+        })).text : null
+        const out = await d.diagnose({ facts, text: String(input.text || '').slice(0, 1200), chat })
+        json(200, { ...out, facts })
+      } catch (err) { json(500, { error: String(err.message || err) }) }
+    })
+  }
+  if (url.pathname === '/api/stop' && req.method === 'POST') {
+    readJson(4096, input => stopWork(input || {}).then(r => json(200, r), err => json(400, { error: String(err.message || err) })))
+    return
+  }
+  // Resume a stopped website build: the next version keeps every finished section and builds the rest
+  const runResume = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/resume$/)
+  if (runResume && req.method === 'POST') {
+    const id = runResume[1], events = readEvents(id)
+    if (!events) return json(404, { error: 'no such build' })
+    if (current?.id === id && !current.done) return json(409, { error: 'busy', run: id })
+    let plan = null
+    try { plan = JSON.parse(readFileSync(join(runsDir, id, 'plan.json'), 'utf8')) } catch {}
+    const base = extendBase(events, plan)
+    if (!base) return json(400, { error: 'nothing to resume: no pages were planned yet' })
+    return void hermesGate().then(gate => {
+      if (gate) return json(503, gate)
+      const pid = projects.projectOf(id)
+      const run = startRun({ brief: base.brief, base, resume: true, ask: '' })
+      if (pid) projects.claim(run.id, pid)
+      broadcast({ type: 'reset', run: run.id })
+      json(200, { run: run.id, from: id })
+    })
   }
   // what the crew are working on right now, across projects: the Studio's queue
   if (url.pathname === '/api/work' && req.method === 'GET') {
@@ -2375,6 +3500,31 @@ const server = createServer((req, res) => {
     return
   }
 
+  // a page's search title, description and share picture, as the person sets them (Design panel)
+  const runSeo = url.pathname.match(/^\/api\/runs\/([^/]+)\/seo$/)
+  // the build's thumbnail (the home page's share picture) and the pictures it can be swapped for (Publish menu)
+  if (runSeo && req.method === 'GET' && RUN_ID.test(runSeo[1])) {
+    const events = readEvents(runSeo[1])
+    if (!events) return res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'no such build' }))
+    return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ thumb: thumbOf(events) }))
+  }
+  if (runSeo && req.method === 'POST' && RUN_ID.test(runSeo[1])) {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 20000) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const events = readEvents(runSeo[1])
+      const page = typeof input.page === 'string' && events?.some(e => e.type === 'page' && e.id === input.page) ? input.page : null
+      const fields = cleanSeo({ title: input.title, description: input.description, image: input.image })
+      for (const f of ['title', 'description', 'image']) if (input[f] === '') fields[f] = ''
+      if (!page || !Object.keys(fields).length) return res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: page ? 'nothing to change' : 'no such page' }))
+      record(runSeo[1], { type: 'seo', t: Date.now(), run: runSeo[1], page, ...fields, by: 'person' })
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true }))
+    })
+    return
+  }
+
   const runReview = url.pathname.match(/^\/api\/runs\/([^/]+)\/review$/)
   if (runReview && req.method === 'POST' && RUN_ID.test(runReview[1])) {
     let body = ''
@@ -2442,10 +3592,23 @@ const server = createServer((req, res) => {
     })
     return
   }
+  // Scribble: accept or dismiss a draft, erase a sent mark
+  const runDraft = req.method === 'POST' && url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/drafts\/(d[0-9a-z]{4,20})\/(accept|dismiss)$/)
+  if (runDraft) {
+    try { json(200, closeDraft(runDraft[1], runDraft[2], runDraft[3] === 'accept')) } catch (err) { json(err.status || 400, { error: String(err.message || err) }) }
+    return
+  }
+  const runMarkErase = req.method === 'POST' && url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/marks\/(k\d{1,4})\/erase$/)
+  if (runMarkErase) {
+    const ok = !!readEvents(runMarkErase[1]) && record(runMarkErase[1], { type: 'mark:status', t: Date.now(), run: runMarkErase[1], ids: [runMarkErase[2]], status: 'erased' })
+    json(ok ? 200 : 404, ok ? { ok } : { error: 'no such build' })
+    return
+  }
   const runComment = url.pathname.match(/^\/api\/runs\/([^/]+)\/comment$/)
   if (runComment && req.method === 'POST' && RUN_ID.test(runComment[1])) {
     let body = ''
-    req.on('data', c => { body += c; if (body.length > 4e6) req.destroy() })
+    // marks bring their pictures (a page each and a crop per mark)
+    req.on('data', c => { body += c; if (body.length > 16e6) req.destroy() })
     req.on('end', () => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
@@ -2503,11 +3666,51 @@ const server = createServer((req, res) => {
   // ⚡ Auto mode: GET its timeline, POST { prompt } to start, /stop to stop
   // The Film studio's services: GET where each comes from; POST /key {service, key|null}
   // to paste (or forget) a key; POST /allow to let the studio use Hermes's ElevenLabs connector.
+  // The Hermes bridge (engine/bridge.mjs): a Hermes process says where its loopback bridge is, every 15 s.
+  // The server's token guards this route like every other /api/ one.
+  if (url.pathname === '/api/hermes/attach' && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 4e3) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const was = hermes.status().attached, r = hermes.attach(input)
+      // Hermes is back: what it offers for pictures and clips is asked again
+      if (r.ok && !was) { imageProviders = null; videoProviders = null }
+      // Hermes is back: a canvas waiting on it (a build stopped because Hermes closed) can go on
+      if (r.ok && !was) broadcast({ type: 'hermes:back', attached: true })
+      res.writeHead(r.ok ? 200 : 400, { 'content-type': 'application/json' }).end(JSON.stringify(r))
+    })
+    return
+  }
+  // One picture through Hermes's image tool, for tools outside the server (engine/skins.mjs's command line):
+  // { prompt, aspect, refs, edit } -> { ok, path } | { ok:false, error }
+  if (url.pathname === '/api/hermes/image' && req.method === 'POST') {
+    let body = ''
+    req.on('data', c => { body += c; if (body.length > 2e4) req.destroy() })
+    req.on('end', () => {
+      let input = {}
+      try { input = JSON.parse(body || '{}') } catch {}
+      const refs = (Array.isArray(input.refs) ? input.refs : []).filter(r => typeof r === 'string' && existsSync(r)).slice(0, 4)
+      hermes.call('/image', { prompt: String(input.prompt || '').slice(0, 8000), aspect: String(input.aspect || 'landscape'), refs, edit: !!input.edit }, 300000)
+        .then(r => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(r)))
+    })
+    return
+  }
+  // whether Hermes is there to answer, and if not why not; ?ready=1 gives a Hermes that is starting up a
+  // few seconds to attach (the Make box asks this before it does anything)
+  if (url.pathname === '/api/hermes' && req.method === 'GET') {
+    const needed = ROLES.some(r => viaHermes(r) && picks[r] !== 'off')
+    ;(url.searchParams.get('ready') ? health.ready() : health.now()).catch(() => null).then(h => {
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ...hermes.status(), needed, health: h }))
+    })
+    return
+  }
   if (url.pathname === '/api/media' && req.method === 'GET') {
     mediaNow().then(m => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(m)), err => res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: String(err.message || err) })))
     return
   }
-  if ((url.pathname === '/api/media/key' || url.pathname === '/api/media/allow') && req.method === 'POST') {
+  if (url.pathname === '/api/media/key' && req.method === 'POST') {
     let body = ''
     req.on('data', c => { body += c; if (body.length > 1e4) req.destroy() })
     req.on('end', () => {
@@ -2515,11 +3718,6 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
       const done = () => { imageProviders = null; videoProviders = null; return mediaNow().then(m => reply(200, m)) }
-      if (url.pathname === '/api/media/allow') {
-        const name = ELEVEN_MCP.includes(input.name) ? input.name : null
-        if (!name) return reply(400, { error: 'unknown connector' })
-        return connectors.allow(name).then(done).catch(err => reply(400, { error: String(err.message || err) }))
-      }
       if (!MEDIA_KEYS[input.service]) return reply(400, { error: 'unknown service' })
       mediaKeyStore.set(input.service, typeof input.key === 'string' ? input.key : null).then(done).catch(err => reply(400, { error: String(err.message || err) }))
     })
@@ -2536,7 +3734,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const name = String(input.name || '')
       if (url.pathname === '/api/connectors/cancel') { connectors.cancel(name); return reply(200, { ok: true }) }
-      connectors.connect(name).then(s => reply(200, s), err => reply(400, { error: String(err.message || err) }))
+      connectors.connect(name, { confirm: input.confirm === true }).then(s => reply(200, s), err => reply(400, { error: String(err.message || err) }))
     })
     return
   }
@@ -2550,13 +3748,29 @@ const server = createServer((req, res) => {
   if (url.pathname === '/api/auto' || url.pathname === '/api/auto/stop') {
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (req.method === 'GET') return reply(200, auto.state() || { state: 'idle' })
-    if (url.pathname === '/api/auto/stop') return reply(200, auto.stop() || { state: 'idle' })
+    // the Auto run's step stops too (the build, pictures, review, film, app), not only the steps after it
+    if (url.pathname === '/api/auto/stop') { const au = auto.state(); return void (au?.state === 'working' && au.run ? stopWork({ run: au.run }) : Promise.resolve(auto.stop())).then(() => reply(200, auto.state() || { state: 'idle' }), () => reply(200, auto.stop() || { state: 'idle' })) }
     let body = ''
     req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
-    req.on('end', () => {
+    req.on('end', async () => {
+      const gate = await hermesGate()
+      if (gate) return reply(503, gate)
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
-      try { reply(200, auto.start(input)) } catch (err) { reply(400, { error: String(err.message || err) }) }
+      const chatId = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
+      delete input.chat
+      delete input.brand
+      const brand = lockedBrand(chats, chatId)
+      if (brand) input.brand = brand
+      try {
+        const job = auto.start(input)
+        // App, Game and Video from the Make box: the words go into a chat that moves into the build's project
+        const only = Array.isArray(input.only) ? input.only : []
+        const kind = only.includes('games') ? 'game' : only.includes('video') && !only.includes('app') ? 'film' : only.includes('app') ? 'app' : 'site'
+        const chat = job?.run ? chatFor({ chat: chatId, text: String(input.prompt || ''), kind }) : null
+        if (chat) chatBuilt(chat, job.run, projects.projectOf(job.run), String(input.prompt || ''))
+        reply(200, chat ? { ...job, chat } : job)
+      } catch (err) { reply(400, { error: String(err.message || err) }) }
     })
     return
   }
@@ -2585,6 +3799,17 @@ const server = createServer((req, res) => {
 
   // Plan before spend (spec 21): the Plan board's cards, previews and the lock gate (server/plans.mjs)
   if (plans(req, res, url)) return
+  if (talks(req, res, url)) return
+  if (appKit(req, res, url)) return
+  if (brands(req, res, url)) return
+  if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute.handle(req, res, url); return }
+  if (url.pathname.startsWith('/story/') && storyRoute.file(req, res, url)) return
+  if (decks(req, res, url)) return
+  if (refsRoute(req, res, url)) return
+  if (studioRoute(req, res, url)) return
+  if (filmRoute(req, res, url)) return
+  if (chatMediaRoute(req, res, url)) return
+  if (bringInRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 
@@ -2711,7 +3936,8 @@ const server = createServer((req, res) => {
     const dir = join(runsDir, id)
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     if (!existsSync(join(dir, 'events.jsonl'))) return reply(404, { error: 'no such run' })
-    if (req.method === 'GET' && !sub) { const kit = readLaunch(dir); return kit ? reply(200, kit) : reply(404, { error: 'no launch kit yet' }) }
+    // a kit written before it knew the product's name and whether anything was live is written again
+    if (req.method === 'GET' && !sub) { const kit = readLaunch(dir); return kit?.v >= 2 ? reply(200, kit) : reply(404, { error: 'no launch kit yet' }) }
     if (req.method !== 'POST') return reply(405, { error: 'POST' })
     let body = ''
     req.on('data', c => { body += c; if (body.length > 1e5) req.destroy() })
@@ -2719,7 +3945,7 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       try {
-        if (!sub) return reply(200, writeLaunch(dir, readEvents(id), id))
+        if (!sub) return reply(200, await launchKit(id))
         if (sub === 'mark') return reply(200, markLaunch(dir, input))
         // send: one post, one platform, confirmed by the person in the canvas's confirm box
         const kit = readLaunch(dir)
@@ -2738,7 +3964,7 @@ const server = createServer((req, res) => {
           if (err) return reply(502, { error: String(errOut || err.message).split('\n').filter(Boolean).at(-1)?.slice(0, 300) || 'the send failed' })
           reply(200, markLaunch(dir, { post: post.id, action: 'sent', target }))
         })
-      } catch (err) { reply(400, { error: String(err.message || err) }) }
+      } catch (err) { reply(err.code === 409 ? 409 : 400, { error: String(err.message || err) }) }
     })
     return
   }
@@ -2781,13 +4007,16 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|deploy|tell|idle))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|map|stop|open|seen|deploy|tell|idle|ask))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     const fail = err => reply(400, { error: String(err.message || err) })
     if (req.method === 'GET') {
-      apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : a.state(id))).catch(fail)
+      // map: the plan as diagrams for the app build wall (spec 44); null when the run kept no plan, which is not an error
+      if (sub === 'map') return void apps().then(a => reply(200, a.map(id))).catch(fail)
+      // the app's state carries its project's name, for the app build wall's breadcrumb (spec 44)
+      apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : { ...a.state(id), name: nameFor(id)?.name || null })).catch(fail)
       return
     }
     let body = ''
@@ -2798,8 +4027,11 @@ const server = createServer((req, res) => {
       apps().then(async a => {
         if (sub === 'stop') return a.stop(id)
         if (sub === 'idle') return idleAnswer(id, input)
+        // Ask mode: an answer about the app, and nothing else (askApp above)
+        if (sub === 'ask') return askApp(a, id, input.text)
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
-        if (sub === 'open') return a.open(id)
+        if (sub === 'open') return a.open(id, input)
+        if (sub === 'seen') return a.seen(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')
           if (!creds) throw new Error(`connect Vercel first: 🌐 Publish on the canvas → Connect, or set ${PROVIDERS.vercel.env}`)
@@ -2856,11 +4088,32 @@ const server = createServer((req, res) => {
       exportRun({ events, runId: id, runDir: join(runsDir, id), sections: Array.isArray(input.sections) ? input.sections.slice(0, 80) : [], name: nameFor(id)?.name, fill: fillExport(id) })
         .then(out => {
           const copy = shelveExport(id, out.zip)
-          record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections })
+          record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections, html: out.html })
           reply(200, { ...out, copy })
         })
         .catch(err => reply(400, { error: String(err.message || err) }))
     })
+    return
+  }
+
+  // Post to Feed's page shots (engine/pageshots.mjs): a fresh export, then every page at desktop and
+  // phone size. The export is the one the post then uploads, so the shots match its files.
+  const runShots = url.pathname.match(/^\/api\/runs\/([^/]+)\/pageshots$/)
+  if (runShots && RUN_ID.test(runShots[1]) && req.method === 'POST') {
+    const id = runShots[1]
+    const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    const events = readEvents(id)
+    if (!events) return reply(404, { error: 'no such build' })
+    exportRun({ events, runId: id, runDir: join(runsDir, id), sections: [], name: nameFor(id)?.name, fill: fillExport(id) })
+      .then(async out => {
+        const copy = shelveExport(id, out.zip)
+        record(id, { type: 'export', t: Date.now(), run: id, dir: out.dir, zip: out.zip, copy, pages: out.pages, sections: out.sections, html: out.html })
+        const { pageShots } = await import('../engine/pageshots.mjs')
+        const got = await pageShots({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir }).catch(err => ({ shots: [], note: String(err.message || err).slice(0, 200) }))
+        const pages = out.html.map((file, i) => ({ file, path: i === 0 ? '/' : `/${file}`, ...(got.shots.find(s => s.file === file) || {}) }))
+        reply(200, { zip: out.zip, pages, note: got.note || null })
+      })
+      .catch(err => reply(400, { error: String(err.message || err) }))
     return
   }
 
@@ -2872,7 +4125,7 @@ const server = createServer((req, res) => {
     req.on('end', () => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
-      if (!CMD_OPS.has(input.op) || (input.run !== undefined && !RUN_ID.test(String(input.run)))) {
+      if (!CMD_OPS.has(input.op) || (input.run !== undefined && !RUN_ID.test(String(input.run))) || (input.op === 'chat' && !CHAT_ID.test(String(input.target)))) {
         res.writeHead(400, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'bad command' }))
         return
       }
@@ -2883,11 +4136,11 @@ const server = createServer((req, res) => {
   }
 
   if (url.pathname === '/api/models' && req.method === 'GET') {
-    Promise.all([listModels('planner'), listModels('reviewer'), loadImageProviders(), idleChoices().catch(() => [])]).then(([text, vision, image, idleOpts]) => {
+    Promise.all([listModels('planner'), listModels('reviewer'), loadImageProviders(), idleChoices().catch(() => []), mediaState().catch(() => null)]).then(([text, vision, image, idleOpts, media]) => {
       const roles = Object.fromEntries(ROLES.map(r => [r, { model: modelFor(r), hermes: models[r].model, host: host(models[r].baseUrl), picked: picks[r] || null }]))
       // the idle's video model: the pick and every video model Hermes offers, with its price
       const idle = { pick: picks.idle || null, options: idleOpts, interp: interpOf(heavyConfig(dataDir))?.name || null }
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image }, idle }))
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ roles, text, vision, lite: picks.lite ?? null, image: { pick: picks.image || null, providers: image }, idle, media, stops: { ...idleStops(), picks: STOP_PICKS } }))
     })
     return
   }
@@ -2902,6 +4155,13 @@ const server = createServer((req, res) => {
       if (ROLES.includes(input.role) && (input.model === null || input.model === '' || name(input.model))) {
         if (input.model) picks[input.role] = input.model
         else delete picks[input.role]
+      } else if (input.role === 'media' && (input.model === null || input.model === '' || input.model === 'off' || name(input.model))) {
+        // the media reader's model (spec 32): 'off' reads no clip or sound with any model
+        if (input.model) picks.media = input.model
+        else delete picks.media
+      } else if (input.role === 'stops' && (input.app === undefined || STOP_PICKS.app.includes(input.app)) && (input.server === undefined || STOP_PICKS.server.includes(input.server))) {
+        // Settings › Background: the app's and the server's idle stops, in minutes
+        picks.stops = { ...picks.stops, ...(input.app !== undefined ? { app: input.app } : {}), ...(input.server !== undefined ? { server: input.server } : {}) }
       } else if (input.role === 'lite' && (input.on === null || typeof input.on === 'boolean')) {
         if (input.on === null) delete picks.lite
         else picks.lite = input.on
@@ -2946,6 +4206,12 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({
       app: 'swarm-studio',
       version: webVersion(),
+      // whether a Hermes process is attached (its bridge does pictures and clips); never its token
+      hermes: hermes.status().attached,
+      // for the launcher: which process this is, when it started, and whether stopping it would lose work
+      pid: process.pid,
+      booted: BOOTED,
+      busy: workRunning(),
       run: current?.id || null,
       done: current?.done ?? null,
       working: current?.working.size || 0,
@@ -2977,7 +4243,7 @@ const server = createServer((req, res) => {
   if (lib) {
     const dir = join(dataDir, 'standins', 'lib'), file = join(dir, lib[1])
     const send = buf => { res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' }); res.end(buf) }
-    if (existsSync(file)) return send(readFileSync(file))
+    if (existsSync(file)) return sendPicture(req, res, url, file, 'image/jpeg')
     fetch(`https://files.design-bakery.com/${lib[1]}`, { signal: AbortSignal.timeout(20000) })
       .then(async r => {
         if (!r.ok || !/^image\//.test(r.headers.get('content-type') || '')) throw new Error(`HTTP ${r.status}`)
@@ -2996,6 +4262,24 @@ const server = createServer((req, res) => {
     if (!file) return res.writeHead(404).end('not found')
     res.writeHead(200, { 'content-type': `image/${sti[2] === 'jpg' ? 'jpeg' : sti[2]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
     res.end(readFileSync(file))
+    return
+  }
+
+  // a clip's poster frame (engine/poster.mjs): written when the clip was made; a clip from before posters gets
+  // one the first time it is asked for, when there is an ffmpeg to make it with
+  const poster = url.pathname.match(/^\/img\/([\w-]{1,64})\/((playtest-\d{1,3}|idle-[a-f0-9]{8})\.poster\.jpg)$/)
+    || url.pathname.match(/^\/video\/([\w-]{1,64})\/((promo(?:-tall|-square)?)\.poster\.jpg)$/)
+  if (poster) {
+    const dir = join(runsDir, poster[1], url.pathname.startsWith('/img/') ? 'img' : 'video')
+    const file = join(dir, poster[2])
+    const send = () => {
+      if (!existsSync(file)) return res.writeHead(404).end('not found')
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'no-cache', 'access-control-allow-origin': '*' })
+      res.end(readFileSync(file))
+    }
+    const from = existsSync(file) ? null : [`${poster[3]}.mp4`, `${poster[3]}.webm`].map(n => join(dir, n)).find(f => existsSync(f))
+    if (!from) return send()
+    makePoster(from, { ffmpeg: posterFfmpeg(dataDir, findFfmpeg), out: file }).then(send, send)
     return
   }
 
@@ -3021,9 +4305,23 @@ const server = createServer((req, res) => {
   if (img) {
     const file = join(runsDir, img[1], 'img', img[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
-    res.writeHead(200, { 'content-type': `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`, 'cache-control': 'max-age=31536000, immutable', 'access-control-allow-origin': '*' })
-    res.end(readFileSync(file))
+    return sendPicture(req, res, url, file, `image/${img[3] === 'jpg' ? 'jpeg' : img[3]}`)
+  }
+  // A picture by its content hash, at a rung of the ladder (?w=64 … 2048), or the original without one
+  const byHash = url.pathname.match(/^\/img\/([a-f0-9]{32})$/)
+  if (byHash && imagesOn) {
+    imagesOf().sized(byHash[1], url.searchParams.get('w'))
+      .then(s => (s && existsSync(s.file) ? (res.writeHead(200, { ...IMG_HEAD, 'content-type': s.type }), res.end(readFileSync(s.file))) : res.writeHead(404).end('not found')))
+      .catch(() => { if (!res.headersSent) res.writeHead(500).end('not served') })
     return
+  }
+
+  // the pages' saved snapshots; a file's name holds its version, so it never changes
+  const snapFile = url.pathname.match(/^\/snaps\/([\w-]{1,64})\/([^/]{1,100})$/)
+  if (snapFile) {
+    const file = snapsOf().file(snapFile[1], snapFile[2])
+    if (!file || !existsSync(file)) return res.writeHead(404).end('not found')
+    return sendPicture(req, res, url, file, 'image/jpeg')
   }
 
   // A project's uploads, open like the images (the crew's pages and the art director use them).
@@ -3031,7 +4329,10 @@ const server = createServer((req, res) => {
   if (up) {
     const f = projects.uploadFile(up[1], up[2])
     if (!f) return res.writeHead(404).end('not found')
-    res.writeHead(200, { 'content-type': f.type, 'cache-control': 'no-cache', 'access-control-allow-origin': '*', 'content-security-policy': 'sandbox' })
+    const head = { 'cache-control': 'no-cache', 'access-control-allow-origin': '*', 'content-security-policy': 'sandbox' }
+    // a picture moves into the image service like any other; anything else (an svg, a pdf) is sent as it is
+    if (/^image\/(png|jpeg|webp|gif)$/.test(f.type)) return sendPicture(req, res, url, f.file, f.type, head)
+    res.writeHead(200, { ...head, 'content-type': f.type })
     return createReadStream(f.file).pipe(res)
   }
 
@@ -3049,7 +4350,9 @@ const server = createServer((req, res) => {
     const file = join(base, name, 'html', rel)
     if (!existsSync(file) || !statSync(file).isFile()) return res.writeHead(404).end('not found')
     const types = { html: 'text/html; charset=utf-8', css: 'text/css', js: 'text/javascript', svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', json: 'application/json' }
-    res.writeHead(200, { 'content-type': types[rel.split('.').pop()] || 'application/octet-stream', 'cache-control': 'no-cache' })
+    // model-written pages on the studio's own origin: sandboxed (scripts run, the origin is opaque, so
+    // they cannot read the studio or its token), and open to that opaque origin for their own files
+    res.writeHead(200, { 'content-type': types[rel.split('.').pop()] || 'application/octet-stream', 'cache-control': 'no-cache', 'content-security-policy': SITE_CSP, 'access-control-allow-origin': '*' })
     createReadStream(file).pipe(res)
     return
   }
@@ -3064,13 +4367,13 @@ const server = createServer((req, res) => {
     // HyperFrames shows each clip only between its data-start and its end; here a
     // tiny stand-in does the same on every frame of the looping timeline
     const loop = `<script>addEventListener('load',()=>{const tl=window.__timelines&&window.__timelines.promo;if(!tl)return;const clips=[...document.querySelectorAll('.clip[data-start]')].map(el=>({el,a:+el.dataset.start,b:+el.dataset.start+ +el.dataset.duration}));const show=()=>{const t=tl.time();for(const c of clips)c.el.style.visibility=t>=c.a&&t<c.b?'visible':'hidden'};tl.eventCallback('onUpdate',show);tl.repeat(-1);tl.play(0);show()})</script>`
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': SITE_CSP })
     return res.end(readFileSync(file, 'utf8').replace(/<\/body>/i, () => `${loop}</body>`))
   }
 
   // A run's promo video, with range requests so the player can seek; an earlier
   // cut by its file name in the build's video folder (…-promo-v2.mp4).
-  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo(?:-tall)?\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
+  const vid = url.pathname.match(/^\/video\/([\w-]{1,64})\/(promo(?:-tall|-square)?\.mp4|cut\/([a-z0-9-]{1,60}-promo-v\d{1,4}\.mp4))$/)
   if (vid) {
     const file = vid[3] ? join(shelf(vid[1], 'video').dir, vid[3]) : join(runsDir, vid[1], 'video', vid[2])
     if (!existsSync(file)) return res.writeHead(404).end('not found')
@@ -3111,5 +4414,46 @@ server.listen(port, '127.0.0.1', () => {
   console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
 })
 
-// app dev servers and engine runs stop with the studio
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { appsP?.then(a => a.close()).finally(() => process.exit(0)); setTimeout(() => process.exit(0), 1500).unref() })
+// app servers and engine runs stop with the studio, each with every process it started (engine/proc.mjs stopTree)
+const shutdown = () => { appsP?.then(a => a.close()).finally(() => process.exit(0)); if (!appsP) process.exit(0); setTimeout(() => process.exit(0), 8000).unref() }
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, shutdown)
+
+// Nothing to do for Settings › Background's time (20 min): no pane open (an /events stream), no request, no
+// build, Auto run, film, publish or app build. The server exits; the launcher's ensure_server() starts it again
+// on next use (decision 0017, issue #450).
+// Work that stopping the server would lose: a site build, an Auto run, a film, a publish, or an app or game being
+// built. One answer for everyone who asks: the idle stop, the server replacing itself, and /api/state's `busy`,
+// which the launcher reads before it retires a stale server. (`busy` used to leave out films, publishes and
+// app and game builds, so a restart that trusted it stopped a game mid-build, 2026-11-13.)
+function workRunning() {
+  if ((current && !current.done) || (current?.working.size || 0) > 0 || auto.state()?.state === 'working') return true
+  if ([...videos.values()].some(v => v.state === 'working') || [...publishes.values()].some(p => p.state === 'working')) return true
+  return !!appsNow?.busy()
+}
+function serverBusy() { return clients.size > 0 || workRunning() }
+// An update changed this server's code on disk while it ran. The launcher replaces an idle stale server on
+// Hermes's next call (launcher.py stale/_retire), but a pane reloaded before that got new web files from an old
+// server. So the server does it itself, once, when the page is asked for and no work is running: the port is
+// freed, the same program starts again with the same environment, and this one exits. Hermes's bridge attaches
+// to the new one by itself. SWARM_NO_REPLACE=1 turns it off.
+let replacing = false
+function replaceSelf() {
+  if (replacing) return true
+  if (process.env.SWARM_NO_REPLACE === '1' || !staleCode(BOOTED, codeStamp([join(root, 'server'), join(root, 'engine')]))) return false
+  const working = workRunning()
+  if (working) return false
+  replacing = true
+  console.log('swarm studio: the code changed on disk, starting again on it')
+  server.close(() => { try { respawnSelf() } catch (err) { console.error('could not start again:', err.message) } shutdown() })
+  server.closeIdleConnections?.()
+  setTimeout(() => server.closeAllConnections?.(), 300).unref()
+  return true
+}
+const POLLS = /^\/api\/(state|hermes(\/attach)?)$/
+// checked every 30 s, or a quarter of the time when it is shorter (a test sets SWARM_SERVER_IDLE_MIN to seconds)
+const idle = idleWatch({ ms: () => idleStops().server * 60000, busy: serverBusy, every: Math.max(200, Math.min(30000, (idleStops().server * 60000) / 4 || 30000)), onIdle: () => {
+  console.log(`swarm studio: nothing to do for ${idleStops().server} min, stopping (it starts again on next use)`)
+  // the port first: an ensure_server() from now on finds no server and starts a new one at once
+  server.close()
+  shutdown()
+} })

@@ -13,7 +13,8 @@ import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { PRICE } from './meshy.mjs'
 import { keyFor } from './keycolor.mjs'
-import { shapeOf, familyCards, noShooting, GUNS, planSummary } from './planshape.mjs'
+import { shapeOf, familyCards, noShooting, GUNS, planSummary, engineFrom } from './planshape.mjs'
+import { suggestStarter, setStarter, starterView, starterSpec } from './starters.mjs'
 
 // ---------- the questions: one at a time, 4–6 chips each, or your own words
 export const PLAN_QUESTIONS = [
@@ -75,16 +76,23 @@ function scrub(cards, a) {
 // ---------- answers -> cards
 // env: { godot } whether a Godot binary is on this machine (undefined: not checked);
 // hint: the planner model's reading of the idea (engine/planshape.mjs askShape), or null.
-export function planFromAnswers({ idea = '', answers = {}, title = '', note = '' } = {}, env = {}, hint = null) {
+// the plan, with the starter the planner suggests for it (engine/starters.mjs)
+export function planFromAnswers(input = {}, env = {}, hint = null) {
+  const plan = shapePlan(input, env, hint)
+  plan.starter = suggestStarter(plan)
+  return plan
+}
+function shapePlan({ idea = '', answers = {}, title = '', note = '', force = null } = {}, env = {}, hint = null) {
   const given = Object.fromEntries(Object.entries(answers || {}).map(([k, v]) => [k, clean(v)]).filter(([k, v]) => v && PLAN_QUESTIONS.some(q => q.id === k)))
   const a = { ...DEFAULTS, ...given }
-  const shape = shapeOf({ idea, given, answers: a, title, note }, env, hint)
+  const shape = shapeOf({ idea, given, answers: a, title, note, force: force || {} }, env, hint)
   const key = keyFor(`${a.look} ${idea}`)
   const base = {
     title: shape.title || 'New game',
     idea: clean(idea, 600),
     answers: a,
     given,
+    ...(force ? { decided: force, note: clean(note, 600) } : {}),
     shape,
     engine: shape.engine,
     key,
@@ -164,15 +172,19 @@ export function planFromAnswers({ idea = '', answers = {}, title = '', note = ''
 // ---------- re-plan in place: the same plan id, a fresh shape from the idea, the answers and a note
 // ("this is not what I asked for"). Pictures and the build of the old shape are dropped (their files
 // stay on disk); nothing is spent. A title the person typed is kept.
-export function replan(plan, { note = '' } = {}, env = {}, hint = null) {
+// A planner conversation locked again (engine/talkplan.mjs) hands in its idea, answers and decisions.
+export function replan(plan, { note = '', idea, answers, force, title } = {}, env = {}, hint = null) {
   if (plan.build?.state === 'building') throw Object.assign(new Error('the build is running'), { status: 409 })
   // plans made before the fix kept only the answers merged with the defaults: a default is not an answer
   const given = plan.given || Object.fromEntries(Object.entries(plan.answers || {}).filter(([k, v]) => DEFAULTS[k] !== v))
-  const fresh = planFromAnswers({ idea: plan.idea, answers: given, title: plan.titleSet ? plan.title : '', note }, env, hint)
+  const fresh = planFromAnswers({ idea: idea ?? plan.idea, answers: answers ?? given, title: plan.titleSet ? plan.title : (title || ''), note, force: force ?? plan.decided ?? null }, env, hint)
   const was = plan.shape?.family || 'action'
   const keep = { id: plan.id, v: plan.v, kind: plan.kind, created: plan.created, from: plan.from ?? null, titleSet: plan.titleSet }
+  const starter = plan.starter
   for (const k of Object.keys(plan)) delete plan[k]
   Object.assign(plan, keep, fresh, { replanned: { at: new Date().toISOString(), note: clean(note, 300), was } })
+  // the starter choices the person made stay
+  plan.starter = suggestStarter(plan, starter)
   return plan
 }
 
@@ -201,6 +213,18 @@ export function setSystems(plan, on = {}) {
   for (const [k] of SYSTEMS) if (k in on) plan.systems[k] = !!on[k]
   const c = card(plan, 'systems')
   if (c) c.body = Object.fromEntries(SYSTEMS.map(([k, label]) => [label, plan.systems[k] ? 'on' : 'off']))
+  return reopen(plan)
+}
+// the person keeps, changes or removes a starter choice (engine/starters.mjs setStarter); the engine is the
+// build's target too, and stays decided through a re-plan
+export function editStarter(plan, change = {}) {
+  plan.starter ||= suggestStarter(plan)
+  setStarter(plan, change)
+  if (change.key === 'engine') {
+    plan.shape = { ...plan.shape, engine: engineFrom(change.value) }
+    plan.engine = plan.shape.engine
+    plan.decided = { ...(plan.decided || {}), engine: change.value }
+  }
   return reopen(plan)
 }
 function reopen(plan) {
@@ -253,7 +277,7 @@ export function lockPlan(plan, { credits, testFirst = false } = {}) {
   const price = planPrice(plan)
   const ask = testFirst ? price.first.credits : price.credits
   if (Number(credits) !== ask) throw Object.assign(new Error(`the price is ${ask} credits now`), { status: 402, price })
-  plan.gate = { locked: true, testFirst: !!testFirst, price, lockedAt: new Date().toISOString(), phase: testFirst ? 'first' : 'all', credits: ask }
+  plan.gate = { locked: true, testFirst: !!testFirst, price, lockedAt: new Date().toISOString(), phase: testFirst ? 'first' : 'all', credits: ask, starter: starterSpec(plan.starter ? plan : { ...plan, starter: suggestStarter(plan) }) }
   return plan
 }
 // Every route that spends for a plan calls this first.
@@ -321,4 +345,4 @@ export function firstPicture(plan) {
   const c = (plan.build?.characters || []).find(x => x.front?.state === 'done' && x.front.src)
   return c ? { name: c.name, src: c.front.src } : null
 }
-export const planView = plan => ({ ...plan, price: planPrice(plan), summary: planSummary(plan), first: firstPicture(plan) })
+export const planView = plan => ({ ...plan, price: planPrice(plan), summary: planSummary(plan), first: firstPicture(plan), starterView: starterView(plan.starter ? plan : { ...plan, starter: suggestStarter(plan) }) })

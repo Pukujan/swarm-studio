@@ -4,7 +4,7 @@
 import { existsSync, readFileSync, copyFileSync, mkdirSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { join, extname } from 'node:path'
-import { planStore, planView, editCard, setSystems, lockPlan, assertLocked, pickCell, roster, is3d, replan, PLAN_ID } from '../engine/plan.mjs'
+import { planStore, planView, editCard, editStarter, setSystems, lockPlan, assertLocked, pickCell, roster, is3d, replan, PLAN_ID } from '../engine/plan.mjs'
 import { addSheet, addMocks, lockStyle, addBackdrops, addCloseups, entryFor, settleStale, buildScope, charEntry, viewJob, spriteJobs, VIEWS, gameBrief } from '../engine/planart.mjs'
 import { askShape } from '../engine/planshape.mjs'
 import { planTemplate, remixPlan, templateStore, TEMPLATE_ID } from '../engine/template.mjs'
@@ -177,8 +177,24 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
     return store.save(plan)
   }
 
+  // A locked planner conversation (engine/talkplan.mjs) makes its plan, or re-plans the one it already has
+  // in place (the same id; refused while that plan's build runs). input: planInput(chat).
+  async function fromTalk(input, planId = null) {
+    const hint = await hintFor(input.idea, input.answers || {})
+    const was = planId && store.get(planId)
+    if (!was) return view(store.create(input, env(), hint))
+    if (building.has(was.id)) throw Object.assign(new Error('the build is running'), { status: 409 })
+    queues.delete(was.id)
+    replan(was, input, env(), hint)
+    return view(store.save(was))
+  }
+
   // true when the request was a plan route (and has been answered)
-  return function handle(req, res, url) {
+  handle.fromTalk = fromTalk
+  // a plan as the board shows it, or null
+  handle.get = id => { const p = store.get(id); return p ? view(p) : null }
+  return handle
+  function handle(req, res, url) {
     if (servePicture(req, res, url)) return true
     if (url.pathname === '/api/plans') {
       if (req.method === 'GET') { json(res, 200, { plans: store.list() }); return true }
@@ -224,6 +240,7 @@ export function planRoutes({ dataDir, hooks = {}, paint = null, make = null, onP
         let after = null
         if (sub === 'card') editCard(plan, String(input.card || ''), input.body || {})
         else if (sub === 'systems') setSystems(plan, input || {})
+        else if (sub === 'starter') editStarter(plan, { key: input.key, value: input.value, system: input.system, on: input.on })
         else if (sub === 'title') { const t = String(input.title || '').trim().slice(0, 80); if (t) { plan.title = t; plan.titleSet = true } }
         else if (sub === 'replan') {
           if (building.has(plan.id)) throw Object.assign(new Error('the build is running'), { status: 409 })

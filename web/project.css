@@ -64,7 +64,7 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .pj-sec .abs { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
 .pj-sec.site .abs { max-width: 760px; }
 .pj-sec.art .abs { max-width: 760px; gap: 14px; }
-.pj-sec.uploads .abs { max-width: 760px; gap: 14px; }
+.pj-sec.uploads .abs, .pj-sec.refs .abs { max-width: 760px; gap: 14px; }
 .ab { position: relative; flex: none; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; outline: none; }
 .ab img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 3px; pointer-events: none; }
 .ab .tc { position: absolute; inset: 0; border-radius: 3px; overflow: hidden; background: var(--tc-bg); color: var(--tc-fg); padding: 22% 10% 0; display: flex; flex-direction: column; gap: 9px; pointer-events: none; }
@@ -74,11 +74,44 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab .blank { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
 .ab:hover { border-color: var(--line-2); }
 .ab.page { width: 124px; height: 233px; }
+/* a page before its picture (spec 36): a block per planned section, in the project's colours */
+.ab .sk { position: absolute; inset: 0; border-radius: 3px; overflow: hidden; pointer-events: none; --sk-bg: var(--panel-2, #2a2a2a); --sk-a: var(--line-2, #555); --sk-b: var(--line, #444); --sk-fg: var(--muted, #999); background: var(--sk-bg); }
+.ab .sk.over { background: none; }
+.ab .sk i { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--sk-b) 16%, var(--sk-bg)); border-top: 1px solid color-mix(in srgb, var(--sk-fg) 10%, transparent); background-size: cover; background-position: center; }
+.ab .sk i.odd { background-color: color-mix(in srgb, var(--sk-a) 12%, var(--sk-bg)); }
+.ab .sk i.hero { background-color: color-mix(in srgb, var(--sk-a) 34%, var(--sk-bg)); border-top: 0; }
+.ab .sk i b { position: absolute; left: 10%; top: 18%; width: 42%; height: 6px; max-height: 18%; border-radius: 99px; background: color-mix(in srgb, var(--sk-fg) 22%, transparent); }
+.ab .sk i.hero b { width: 58%; height: 9px; top: 30%; background: color-mix(in srgb, var(--sk-fg) 40%, transparent); }
+.ab .sk i[style*="background-image"] b { display: none; }
+.ab .sk.over i { animation: sk-wait 1.6s ease-in-out infinite alternate; }
+@keyframes sk-wait { from { opacity: .92; } to { opacity: .7; } }
+@media (prefers-reduced-motion: reduce) { .ab .sk.over i { animation: none; } }
+/* a board's cards on their way (.wait-in, web/pet.js works on them): their shape, nothing to click */
+.ab.wait-in { pointer-events: none; background: color-mix(in srgb, var(--text) 5%, transparent); animation: sk-wait 1.6s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .ab.wait-in { animation: none; } }
 .ab.game { width: 300px; height: 169px; }
 .ab.app, .ab.code { width: 300px; height: 169px; }
 .ab.film { width: 142px; height: 80px; }
 .ab.art { width: 112px; height: 112px; }
+/* the Story lane (spec 39): a card per beat, in the shape picked */
+.ab.story { overflow: hidden; }
+.ab.story img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
+.ab.st-tall { width: 72px; height: 128px; }
+.ab.st-wide { width: 142px; height: 80px; }
+.ab.st-square { width: 100px; height: 100px; }
+.ab.st-wait { background: linear-gradient(105deg, var(--surface-2) 30%, color-mix(in srgb, var(--text) 10%, var(--surface-2)) 50%, var(--surface-2) 70%); background-size: 260% 100%; animation: pt-shine 2.4s linear infinite; }
+.st-shapes { display: flex; gap: 4px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; }
+.st-shape { flex: 1; min-height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.st-shape.on { background: var(--surface-2); color: var(--text); }
+.st-f { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 12px; color: var(--muted); }
+.st-f input, .st-f textarea, .st-f select { font: inherit; font-size: 13px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; resize: vertical; }
+.st-pics { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.st-pic { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--muted); overflow: hidden; cursor: pointer; display: grid; place-items: center; }
+.st-pic img { width: 100%; height: 100%; object-fit: cover; }
+.st-pic.on { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ab.upload { width: 112px; height: 112px; }
+.ab.ref { width: 112px; height: 112px; }
+.ab.ref .blank { padding-bottom: 18px; }
 .ab .play { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: rgb(var(--void-rgb) / .7); }
 .ab .play::after { content: ''; position: absolute; left: 13px; top: 10px; border-left: 11px solid var(--text); border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
 .ab.film .play { width: 26px; height: 26px; margin: -13px 0 0 -13px; }
@@ -91,6 +124,8 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab .sel i:nth-of-type(1) { left: -5px; top: -5px } .ab .sel i:nth-of-type(2) { right: -5px; top: -5px }
 .ab .sel i:nth-of-type(3) { left: -5px; bottom: -5px } .ab .sel i:nth-of-type(4) { right: -5px; bottom: -5px }
 .pj-cursors { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.pj-cursors .cur.track { transition: left .1s linear, top .1s linear; }
+@media (prefers-reduced-motion: reduce) { .pj-cursors .cur.track { transition: none; } }
 .pj-drop { position: absolute; inset: 10px; z-index: 30; border: 1.5px dashed var(--text); border-radius: 14px; display: grid; place-items: center; pointer-events: none; background: rgb(var(--void-rgb) / .4); }
 .pj-drop[hidden] { display: none; }
 .pj-drop span { width: 54px; height: 54px; border-radius: 50%; background: var(--text); color: var(--void); display: grid; place-items: center; }
@@ -102,6 +137,14 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .pj-insp h3 span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pj-insp .pv { height: 180px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; display: grid; place-items: center; color: var(--dim); }
 .pj-insp .pv img, .pj-insp .pv video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.pj-insp .pv.st-pv { flex: none; height: 300px; background: transparent; border: 0; display: flex; justify-content: center; }
+/* while the story is being written or redrawn: the cards dim and the inspector waits */
+.ab.st-wait img { opacity: .45; }
+.pj-insp.st-busy .pv.st-pv { opacity: .5; transition: opacity .2s; }
+.pj-insp.st-busy :is(.st-pics, .st-type, .btns) { opacity: .5; pointer-events: none; }
+.pj-insp .pv.st-pv img { width: auto; height: 100%; max-width: 100%; border-radius: 6px; }
+.pj-insp .pv.st-wide { height: 136px; }
+.pj-insp .pv.st-square { height: 238px; }
 .pj-insp .pv-tc { position: relative; width: 96px; height: 100%; }
 .pj-insp .pv-tc .tc { position: absolute; inset: 0; border-radius: 3px; overflow: hidden; background: var(--tc-bg); color: var(--tc-fg); padding: 22% 10% 0; display: flex; flex-direction: column; gap: 7px; }
 .pj-insp .pv-tc .tc i { width: 30%; height: 3px; border-radius: 99px; background: var(--tc-pr); }
@@ -116,6 +159,7 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab .lys { position: absolute; inset: 0; overflow: hidden; border-radius: 3px; pointer-events: none; z-index: 4; }
 .ab .lsel, .ab .lhov { position: absolute; left: 0; right: 0; }
 .ab .lsel { box-shadow: inset 0 0 0 1.5px var(--text); background: rgb(var(--glass-rgb) / .08); }
+.ab .lsel[draggable="true"] { pointer-events: auto; cursor: grab; }
 .ab .lhov { box-shadow: inset 0 0 0 1px rgb(var(--glass-rgb) / .55); }
 .pj-secs { display: flex; flex-direction: column; gap: 1px; margin-top: 4px; }
 .pj-ly { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--muted); font: 12.5px var(--body); text-align: left; cursor: pointer; }
@@ -264,3 +308,51 @@ body.cosmos-project .pj-now:hover { border-color: var(--text); }
 
 /* Follow keeps its place in the dock and rests, greyed, while nobody is working */
 .pj-follow:disabled { opacity: .35; cursor: default; background: none; }
+/* References (spec 29): Use for… under the inspector's rows */
+.pj-use { display: flex; gap: 6px; margin: 4px 0 10px; }
+.pj-use input { flex: 1; min-width: 0; height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 12.5px var(--sans, inherit); padding: 0 10px; outline: none; }
+.pj-use input:focus { border-color: var(--line-2); }
+/* Scribble (spec 29): marks on a page's artboard, drafts beside it */
+.ab .mk { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 4; }
+.ab .mk path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.ab .mk .ln { stroke: #ff5a36; stroke-width: 2.5; }
+.ab .mk .halo { stroke: rgb(11 11 12 / .55); stroke-width: 5; }
+.ab .mk .hit { stroke: transparent; stroke-width: 16; }
+.ab .mk .sent .ln { stroke-dasharray: 5 4; }
+.ab .mk .sent .halo { stroke-opacity: .3; }
+.project.scribbling .ab.page { cursor: crosshair; }
+.project.erasing .ab .mk .hit { pointer-events: stroke; cursor: pointer; }
+.project.erasing .ab .mk g:hover .ln { stroke-opacity: .35; }
+.mk-note { position: fixed; z-index: 60; width: 220px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--deep); color: var(--text); font: 12.5px var(--mono); outline: none; box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
+.ab.draft { width: 124px; border-style: dashed; border-color: var(--line-2); }
+.ab.draft img { object-position: top; }
+.ab.draft.pending .blank { animation: mk-pulse 1.4s ease-in-out infinite; }
+@keyframes mk-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .ab.draft.pending .blank { animation: none; } }
+/* manual edit (spec 29): a picked section's parts, and one part's fields */
+.pj-parts { display: flex; flex-direction: column; gap: 1px; max-height: 240px; overflow: auto; margin: 0 -4px; }
+.pj-part { display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px calc(8px + var(--d, 0) * 12px); border: 0; border-radius: 6px; background: none; color: var(--muted); font: 12px var(--body); text-align: left; cursor: pointer; }
+.pj-part span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-part:hover, .pj-part:focus-visible { color: var(--text); background: rgb(var(--glass-rgb) / .06); }
+.pj-insp .pj-eback { margin-left: -6px; }
+.pj-estyle { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+.pj-epic { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+.pj-epic img { display: block; width: 100%; max-height: 140px; object-fit: contain; }
+.pj-eattr { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
+.pj-eattr input { min-width: 0; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 12.5px/1.35 var(--body); }
+.pj-eattr input:focus { outline: none; border-color: var(--text); }
+
+/* the match check on a link's look (web/lookmatch.js, decision 0022): the reference beside the build, the top
+   style differences, Fix on each. Used in the Overview's inspector and the Studio's References card. */
+.lm { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 10px; }
+.lm-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.lm-pair figure { margin: 0; }
+.lm-pair img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
+.lm-pair figcaption { margin-top: 4px; font: 500 11px var(--body); color: var(--muted); }
+.lm-score { margin: 0; display: flex; align-items: baseline; gap: 6px; color: var(--muted); font: 12px var(--body); }
+.lm-score b { font: 700 22px var(--body); color: var(--text); font-variant-numeric: tabular-nums; }
+.lm-diff { display: flex; align-items: flex-start; gap: 8px; }
+.lm-diff p { flex: 1; margin: 0; font: 13px/1.45 var(--body); color: var(--text); }
+.lm-diff b { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.lm-state { margin: 0; font: 13px var(--body); color: var(--muted); }
+.lm-acts, .lm .btn { display: inline-flex; align-items: center; gap: 6px; }

@@ -9,9 +9,13 @@ Agent half. Registers:
 - ``/swarm <brief>`` / ``/swarm <subcommand>``: from any chat without going through the model;
   ``connect``, ``post``, ``remix`` and ``login`` reach the Swarm Feed (``feed.py``)
 - ``hermes swarm``: the same from the command line
+- the Hermes bridge (``bridge.py``): a loopback server in this process through which the canvas server
+  gets pictures and clips from Hermes's own ``image_generate`` and ``video_generate`` tools
+- a ``pre_tool_call`` hook: when the model asks to publish (anywhere but this computer), deploy an app or
+  post to the Feed, Hermes asks the person first, and refuses when nobody is there (commands.approval_hook)
 - the ``swarm-studio:swarm-design`` skill: when and how to use the swarm
-- two model slots in Hermes's model picker: ``swarm_studio_planner`` (follows the
-  main model) and ``swarm_studio_builder`` (follows the compression model, which is
+- three model slots in Hermes's model picker (``MODEL_SLOTS``): ``swarm_studio_planner`` (follows the
+  main model), ``swarm_studio_reviewer`` (follows the vision model) and ``swarm_studio_builder`` (follows the compression model, which is
   usually a fast, cheap one: the builders make most of the calls)
 
 The build itself runs in a local Node server (``server/server.mjs``) that this
@@ -25,7 +29,7 @@ import json
 import webbrowser
 from pathlib import Path
 
-from . import commands, launcher
+from . import bridge, commands, launcher
 
 TOOLSET = "swarm-studio"
 
@@ -38,6 +42,10 @@ def swarm_design(args: dict | None = None, **_: object) -> str:
     if not brief:
         return json.dumps({"error": "brief is required: describe the product the site is for"})
     started = launcher.start_run(brief, agents)
+    if started.get("ask"):
+        # a new website asks the person first (docs/decisions/0020-ask-before-build.md); only they answer it
+        return json.dumps({"started": False, "waiting": "person", "chat": started.get("chat"), "url": started.get("url"),
+                           "error": started["error"]})
     if started.get("talk"):
         # the person said not to build yet: talk with them here, and call again with the agreed brief
         return json.dumps({"started": False, "error": "Not started: the brief says to talk before building. Discuss it with the person first, then call swarm_design again with the brief you agreed once they say build."})
@@ -59,8 +67,10 @@ def _slash_swarm(raw_args: str = "", **_: object) -> str:
     if commands.is_command(brief):
         return commands.run(brief)
     result = launcher.start_run(brief) if brief else launcher.ensure_server()
+    if result.get("ask"):
+        return f"🐝 Swarm asked you in the Studio chat whether to skip the setup steps. Answer there: {result['url']}"
     if result.get("error"):
-        return f"Swarm Studio: {result['error']}"
+        return f"Swarm Studio: {result['error']}" + (f" {result['action']}" if result.get("action") else "")
     if not brief:
         return f"Swarm Studio canvas is up: {result['url']}\n\n{commands.HELP}"
     return f"🐝 Swarm started. Watch it in the swarm pane, or open {result['url']}"
@@ -72,7 +82,8 @@ def _setup_cli(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-open", action="store_true", help="don't open the canvas in a browser")
     parser.add_argument("--wait", action="store_true", help="wait for the build and print its summary")
     parser.add_argument("--models", action="store_true", help="show which models the swarm will use, then exit")
-    parser.add_argument("--build", action="store_true", help="build even when the brief says to talk first")
+    parser.add_argument("--build", action="store_true", help="build now: no question first, even when the brief says to talk first")
+    parser.add_argument("--stop", action="store_true", help="stop the crew: the build, pictures, review, film, app (kept as built)")
 
 
 def _run_cli(args: argparse.Namespace) -> int:
@@ -80,46 +91,76 @@ def _run_cli(args: argparse.Namespace) -> int:
         for role, m in launcher.describe_models().items():
             name = {"planner": "planner ", "worker": "builders", "reviewer": "reviewer"}[role]
             print(f"{name}  {m['model']}  at {m['base_url']}  ({m['source']})" if "error" not in m else f"{name}  unavailable: {m['error']}")
-        print("Change them with `hermes model` (Swarm Studio planner / builders) or SWARM_STUDIO_* variables.")
+        print("Change them with `hermes model` (Swarm Studio planner / builders / reviewer), or set SWARM_STUDIO_API_KEY.")
+        return 0
+    if getattr(args, "stop", False):
+        print(commands.stop(" ".join(args.brief).strip()))
         return 0
     brief = " ".join(args.brief).strip()
     if commands.is_command(brief):
         print(commands.run(brief))
         return 0
-    result = launcher.start_run(brief, args.agents, force=args.build) if brief else launcher.ensure_server()
+    # --build is the explicit "I'm sure": it builds without the question in the Studio chat (decision 0020)
+    result = launcher.start_run(brief, args.agents, force=args.build, sure=args.build) if brief else launcher.ensure_server()
+    if result.get("ask"):
+        print(f"swarm: asked you in the Studio chat whether to skip the setup steps; answer there: {result['url']} (or add --build)")
+        if not args.no_open:
+            webbrowser.open(result["url"])
+        return 0
     if result.get("error"):
         print(f"swarm: {result['error']}")
+        if result.get("action"):
+            print(f"swarm: {result['action']}")
         return 1
     print(f"Swarm Studio canvas: {result['url']}")
     if not args.no_open:
         webbrowser.open(result["url"])
     if brief and args.wait:
         print(json.dumps(launcher.wait_run(result["run"]), indent=2))
+    elif brief and bridge.running() and not bridge.others():
+        # this process is the only Hermes the build can ask for its model and pictures: it stays until the build is done
+        print("Keeping Hermes open for the build's model calls and pictures until it is done (Ctrl-C leaves: the build pauses until Hermes is back, and what is built is kept).")
+        try:
+            done = launcher.wait_run(result["run"], timeout=3600)
+        except KeyboardInterrupt:
+            return 0
+        print(f"swarm: {done.get('status')}")
     return 0
 
 
+# The three model slots, in Hermes's model picker. Every studio model call goes through them (ctx.llm, by
+# way of the bridge: bridge_llm.py). Reasoning is off by default, as the studio always asked of its
+# providers: a builder writes one section per call, and thinking first makes a build about twice as slow.
+# The person's own auxiliary.<slot> config (reasoning_effort included) wins over these defaults.
+MODEL_SLOTS = (
+    ("swarm_studio_planner", "Swarm Studio planner", "site plan and page layouts (a few calls per build)", None),
+    ("swarm_studio_builder", "Swarm Studio builders", "the parallel agents that write each section (most calls; pick a fast model)", "compression"),
+    ("swarm_studio_reviewer", "Swarm Studio reviewer", "looks at screenshots of the finished pages and sends fixes (needs a vision model)", "vision"),
+)
+SLOT_DEFAULTS = {"reasoning_effort": "none"}
+
+
+def register_model_slots(ctx) -> None:
+    for key, name, description, base in MODEL_SLOTS:
+        ctx.register_auxiliary_task(key, display_name=name, description=description, defaults=dict(SLOT_DEFAULTS),
+                                    **({"inherit_from": base} if base else {}))
+
+
 def register(ctx) -> None:
-    ctx.register_auxiliary_task(
-        "swarm_studio_planner",
-        display_name="Swarm Studio planner",
-        description="site plan and page layouts (a few calls per build)",
-    )
-    ctx.register_auxiliary_task(
-        "swarm_studio_builder",
-        display_name="Swarm Studio builders",
-        description="the parallel agents that write each section (most calls; pick a fast model)",
-        inherit_from="compression",
-    )
-    ctx.register_auxiliary_task(
-        "swarm_studio_reviewer",
-        display_name="Swarm Studio reviewer",
-        description="looks at screenshots of the finished pages and sends fixes (needs a vision model)",
-        inherit_from="vision",
-    )
+    commands.CTX = ctx
+    # the Hermes bridge (bridge.py): the canvas server asks this process for pictures and clips, which
+    # Hermes makes with its own image_generate and video_generate tools and keys
+    bridge.CTX = ctx
+    bridge.keep_profile()
+    launcher.on_server = bridge.start
+    bridge.start_later()
+    # the model's publish, deploy and post wait for a person's OK (Hermes's approval gate)
+    ctx.register_hook("pre_tool_call", commands.approval_hook)
+    register_model_slots(ctx)
     ctx.register_tool(
         name="swarm_design",
         toolset=TOOLSET,
-        schema={"name": "swarm_design", "description": "Design and build a multi-page website with a swarm of agents, live on the Swarm Studio canvas. Takes about 30-60s.", "parameters": {
+        schema={"name": "swarm_design", "description": "Design and build a multi-page website with a swarm of agents, live on the Swarm Studio canvas. Takes about 30-60s. A new site first asks the person in the Studio chat whether to skip the setup steps; it builds once they answer there (the result says waiting: person).", "parameters": {
             "type": "object",
             "properties": {
                 "brief": {"type": "string", "description": "What the product is and who it is for. The swarm plans and builds a 4-page site from it."},

@@ -18,6 +18,7 @@ import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launch, loadPlaywright } from './playtest.mjs'
+import { browserEnv } from './proc.mjs'
 
 export const DECISIONS = 'https://openrouter.ai/api/alpha/decisions'
 
@@ -46,7 +47,7 @@ const median = a => (a.length ? [...a].sort((x, y) => x - y)[a.length >> 1] : 0)
 export async function autoplay(url, { seconds = 180, hero, model = 'typesafe/jev-1.14', every = 900, key = process.env.JEV_KEY || process.env.OPENROUTER_API_KEY, video, headed = false, log = console.log } = {}) {
   const pw = await loadPlaywright()
   if (!pw) throw new Error('playwright is not installed (set PLAYWRIGHT_DIR to a folder that has it)')
-  const browser = headed ? await pw.chromium.launch({ headless: false }) : await launch(pw.chromium)
+  const browser = headed ? await pw.chromium.launch({ headless: false, env: browserEnv() }) : await launch(pw.chromium)
   const ctxOpts = { viewport: { width: 1280, height: 720 } }
   if (video) { mkdirSync(video, { recursive: true }); ctxOpts.recordVideo = { dir: video, size: { width: 1280, height: 720 } } }
   const context = await browser.newContext(ctxOpts)

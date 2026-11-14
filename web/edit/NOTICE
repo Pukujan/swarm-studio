@@ -1,0 +1,12 @@
+Swarm Studio, manual edit (web/edit/patches.js)
+
+Portions of patches.js are adapted from Open Design
+Repository: https://github.com/nexu-io/open-design
+Files: apps/web/src/edit-mode/source-patches.ts and types.ts (commit 614795896e09a2c1682b24cc1406529baf531bd7)
+Copyright (c) Open Design contributors.
+License: Apache-2.0 (see LICENSE in this folder)
+
+Changes made for Swarm Studio: ported from TypeScript to plain JavaScript; works on one section's
+HTML fragment instead of a whole document; elements are addressed by their child-index path inside
+the section; the brand-kit and runtime-override parts were left out; a move-element patch and
+guards against script links, event-handler attributes and unsafe style values were added.

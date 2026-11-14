@@ -4,7 +4,10 @@
 // $HERMES_HOME/swarm-studio. A run's own folder is never touched here except by Empty Trash or
 // Delete forever, which the person asks for (and confirms) themself.
 //
-//   folders.json v2: { v: 2, folders: [name], projects: { <pid>: { runs: [id], name, title, folder, trashed, made } } }
+//   folders.json v2: { v: 2, folders: [name], projects: { <pid>: { runs: [id], name, title, folder, trashed, made, studio? } } }
+//
+// A Studio project (docs/specs/37-studio-first.md, `studio: kind`) is made before anything is built, so
+// it is kept with no runs and listed with the status Studio; its first build joins it like any run.
 //
 // A project has one name (engine/naming.mjs): its brand, never a screen title. A new run joins
 // a project it names (meta.project / meta.projectName, from the start request) or whose name its
@@ -82,6 +85,10 @@ export function stateOf(card, cards = [card]) {
   const status = out ? 'Live'
     : g?.art ? `Painting art · ${g.art[0]} of ${g.art[1]}`
     : g?.stage ? `Building · stage ${g.stage[0]} of ${g.stage[1]}`
+    // a project being brought in (docs/specs/45-intake.md) is not being built
+    // (once it is in, a later crew turn that fails reads as any failed build does)
+    : card.intake === 'coming' ? (card.work || busy || card.build === 'working' ? 'Coming in' : 'Did not come in')
+    : card.intake === 'in' && card.build === 'built' ? 'Brought in'
     : card.live || card.work ? 'Building'
     // a game build that was stopped (or whose server went away) keeps app:start as its last word
     : busy ? 'Building'
@@ -93,7 +100,8 @@ export function stateOf(card, cards = [card]) {
   return { kind, status, host: out ? hostOf(out) : null }
 }
 
-export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
+// removeDir: how a folder is deleted for good (a test hands in one that fails like a held file on Windows)
+export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive, removeDir = path => rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) }) {
   const file = () => join(runsDir, 'folders.json')
   const projectsDir = join(dataDir, 'projects')
   let cache = null // { mtime, data }
@@ -141,7 +149,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     for (const [pid, p] of Object.entries(data.projects)) {
       p.runs = (p.runs || []).filter(id => ids.includes(id) && !owner.has(id))
       for (const id of p.runs) owner.set(id, pid)
-      if (!p.runs.length) delete data.projects[pid]
+      if (!p.runs.length && !p.studio) delete data.projects[pid]
     }
     let changed = !!data.migrating
     for (const id of ids) {
@@ -198,6 +206,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
   const coverOf = card => card.cover || null
   function project(pid, p) {
     const all = p.runs.map(id => runCard(id)).filter(Boolean)
+    if (!all.length && p.studio) return studioCard(pid, p)
     if (!all.length) return null
     // a game made from a site in this project is part of that site's version, not a version of its own
     const ids = new Set(all.map(c => c.id))
@@ -252,6 +261,25 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       uploads: uploadsOf(pid).length
     }
   }
+  // a Studio project with nothing built yet: its name, its kind, the status Studio, no versions
+  const STUDIO_KIND = { site: 'Website', app: 'App', game: 'Game', video: 'Video', deck: 'Deck', brand: 'Brand' }
+  function studioCard(pid, p) {
+    return {
+      id: pid, name: p.name || 'New project', title: p.title || p.name || 'New project', studio: p.studio, pieces: [], folder: p.folder || null,
+      trashed: p.trashed || null, made: p.made, updated: p.made, cover: null, peek: null, theme: null, head: null, parts: {}, kinds: [],
+      state: { kind: STUDIO_KIND[p.studio] || 'Website', status: 'Studio', host: null }, live: false, progress: null, work: null, count: 0, versions: [],
+      uploads: uploadsOf(pid).length
+    }
+  }
+  // a new Studio project: { name, kind } -> its id
+  function makeStudio({ name = '', kind = 'site' } = {}) {
+    const { data } = load()
+    const pid = `s-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    // own: kept apart from the projects it shares a name with (no folding into an older one)
+    data.projects[pid] = { runs: [], name: clip(name, 48) || 'New project', title: null, folder: null, trashed: null, made: Date.now(), own: true, studio: STUDIO_KIND[kind] ? kind : 'site' }
+    write(data)
+    return pid
+  }
   function list() {
     const { data } = load()
     const projects = Object.entries(data.projects).map(([pid, p]) => project(pid, p)).filter(Boolean)
@@ -288,17 +316,25 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
       case 'purge':
       case 'empty': {
         const gone = input.op === 'empty' ? Object.keys(data.projects).filter(id => data.projects[id].trashed) : ids.filter(id => data.projects[id].trashed)
+        // each project on its own: a file held open (EBUSY, EPERM on Windows) keeps that one in Trash, named in
+        // `failed`, and the rest still go
+        out.removed = 0
+        out.failed = []
         for (const id of gone) {
-          for (const run of data.projects[id].runs) if (RUN_ID.test(run) && !isLive(run)) rmSync(join(runsDir, run), { recursive: true, force: true })
-          rmSync(join(projectsDir, id), { recursive: true, force: true })
-          delete data.projects[id]
+          try {
+            for (const run of data.projects[id].runs) if (RUN_ID.test(run) && !isLive(run)) removeDir(join(runsDir, run))
+            removeDir(join(projectsDir, id))
+            delete data.projects[id]
+            out.removed++
+          } catch (err) {
+            out.failed.push({ id, title: data.projects[id].title || data.projects[id].name || id, code: err.code || '', error: err.message })
+          }
         }
-        out.removed = gone.length
         break
       }
       case 'duplicate': {
         const src = data.projects[ids[0]]
-        if (!src) break
+        if (!src || !src.runs.length) break
         const from = src.runs.at(-1), to = new Date().toISOString().replace(/[:.]/g, '-')
         cpSync(join(runsDir, from), join(runsDir, to), { recursive: true, filter: s => !/[\\/](node_modules|\.git)$/.test(s) })
         // the copy is its own build: its events and pictures name the new id
@@ -335,7 +371,7 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     for (const p of Object.values(data.projects)) p.runs = p.runs.filter(r => r !== runId)
     data.projects[pid].runs.push(runId)
     data.projects[pid].runs.sort()
-    for (const [k, p] of Object.entries(data.projects)) if (!p.runs.length) delete data.projects[k]
+    for (const [k, p] of Object.entries(data.projects)) if (!p.runs.length && !p.studio) delete data.projects[k]
     write(data)
   }
 
@@ -413,17 +449,19 @@ export function makeProjects({ runsDir, dataDir, runCard, runMeta, isLive }) {
     return RUN_ID.test(pid) && UP_NAME.test(name) && existsSync(p) ? { file: p, type: UP_TYPES[extname(name).slice(1).toLowerCase()] || 'application/octet-stream' } : null
   }
 
-  // run id -> { project, name, piece } for every run (the run list, the Feed and deploy names read it)
+  // run id -> { project, name, piece, version (1 for the first build) } for every run (the run list, the Feed and deploy names read it)
   function runIndex() {
     const { data } = load()
     const out = new Map()
     for (const [pid, p] of Object.entries(data.projects)) {
       const name = nameOfProject(p)
-      for (const id of p.runs) { const c = runCard(id); out.set(id, { project: pid, name, piece: c ? pieceOfCard(c) : 'site' }) }
+      // version: the build's number among the project's builds of the same piece (its sites, its apps)
+      const seen = {}
+      for (const id of p.runs) { const c = runCard(id), piece = c ? pieceOfCard(c) : 'site'; seen[piece] = (seen[piece] || 0) + 1; out.set(id, { project: pid, name, piece, version: seen[piece] }) }
     }
     return out
   }
   const resolve = ref => findIn(load().data, ref)
 
-  return { list, get, op, claim, projectOf, runIndex, resolve, folderOp, uploadsOf, saveUpload, uploadOp, uploadFile, uploadsDir, projectsDir }
+  return { list, get, op, claim, makeStudio, projectOf, runIndex, resolve, folderOp, uploadsOf, saveUpload, uploadOp, uploadFile, uploadsDir, projectsDir }
 }

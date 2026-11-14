@@ -1,0 +1,80 @@
+Swarm Studio, brand packs and design systems (engine/opendesign/packs.json, engine/opendesign/systems.json)
+
+Portions of packs.json and systems.json are derived from Open Design
+Repository: https://github.com/nexu-io/open-design
+Files: design-systems/<id>/DESIGN.md, tokens.css, manifest.json and components.manifest.json for every
+system listed in CREDITS.md (commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582)
+Copyright (c) Open Design contributors.
+License: Apache-2.0 (see LICENSE in this folder)
+
+Most of those systems were themselves normalised by Open Design from bergside/awesome-design-skills
+(https://github.com/bergside/awesome-design-skills, commit f631a09b4fcc0166f2e2c1a8c81906ef680c57e8),
+Copyright (c) 2026 Bergside, License: MIT (see LICENSE.bergside in this folder).
+
+Changes made for Swarm Studio (scripts/import-od-systems.mjs; decision 0016):
+- packs.json keeps the colours (surface, text, primary, secondary), the heading and body font, the
+  medium corner radius (in px) and the first line of the visual theme.
+- systems.json keeps, per system: the tokens of the first :root block in tokens.css without its comments,
+  colours and fonts (the brand sheet's palette and type are the colours and fonts) and without the names
+  Swarm's pages already define; a digest of DESIGN.md (the first line of the visual theme, the first four
+  do's and don'ts or anti-patterns, shortened); and the labels of the component groups in
+  components.manifest.json. Dropped: the rest of DESIGN.md, components.html, previews and Tailwind files.
+- Fonts that are not Google Fonts families, and display faces used as body text, are replaced; each
+  replacement is listed in the pack's `dropped` field.
+- Who each look is for, the words that suggest it, the voice, the picture style and the storyboard
+  were written for Swarm Studio; they are not from either source.
+- Every system is imported, the ones named after a real company or product too (decision 0016); they
+  are Open Design's aesthetic inspirations, not official assets of those companies.
+
+----
+
+Swarm Studio, deck looks (engine/opendesign/decks.json) and the deck slide styles (engine/deck.mjs)
+
+decks.json is derived from html-ppt as shipped inside Open Design
+Repository: https://github.com/nexu-io/open-design, path design-templates/html-ppt/
+(commit bc06128813c99fa63f5af53ad2c903c27db057f2); upstream lewislulu/html-ppt-skill.
+Copyright (c) 2026 lewis. License: MIT (see LICENSE.html-ppt in this folder).
+
+Changes made for Swarm Studio (scripts/import-od-decks.mjs):
+- From each theme in assets/themes/, only the shape tokens (radius, shadow, letter spacing), the colour
+  tokens and the decoration rules are kept; colours in the rules that equal a theme token are pointed at
+  that token, and page-background rules are moved onto the slide. Comments, @import and @font-face
+  rules, the theme's font stacks and its animation and runtime files are dropped.
+- 25 of the 36 themes are kept: those with a look of their own. The eleven that differ only in colour are
+  left out, since a project's brand replaces the colours. Each kept look's one-line description is ours.
+- The slide styles in engine/deck.mjs reuse html-ppt's class names and the sizes of its type, grid,
+  card, pill and divider rules from assets/base.css, rescaled to a fixed 1920 x 1080 slide. The present
+  mode script, the layouts and the PDF route are ours; html-ppt's runtime.js, animations, presenter
+  window and templates are not used.
+
+----
+
+The slop linter (engine/lint/artifact.mjs) is ported from Open Design's apps/daemon/src/lint-artifact.ts
+(commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582), Apache-2.0; its notice and licence are in engine/lint/.
+
+----
+
+The builders' craft rules (engine/prompts.mjs WORKER_SYSTEM) and the reviewer's AI-default look
+(engine/review.mjs) are condensed, in our words, from Open Design's apps/daemon/src/prompts/core-slim.ts
+("Design Craft") and craft/anti-ai-slop.md, craft/typography.md and craft/color.md (commit
+59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582, Apache-2.0; craft/ adapts referodesign/refero_skill, MIT). The
+reviewer's 0-10 score, its pass mark of 8 and its 3 rounds follow the defaults of Open Design's Critique
+Theater (packages/contracts/src/critique.ts); none of its code is used.
+
+----
+
+Swarm Studio, Open Design's library (engine/opendesign/library.json, engine/opendesign/library-texts.json.gz)
+
+The catalogue and the texts are taken from Open Design (commit 59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582) by
+scripts/import-od-library.mjs: skills/<id>/SKILL.md (169 skills), design-templates/<id>/SKILL.md and
+open-design.json (115 design templates), plugins/**/SKILL.md and open-design.json (272 plugin skills) and
+prompt-templates/{image,video}/*.json (106 prompt templates). Each entry keeps the licence it declares, else
+Open Design's Apache-2.0; where an entry ships its own LICENSE file, that file's text is kept in
+library-texts.json.gz under "licence:<its path>" and the entry names it. Upstream sources an entry names
+(its "upstream") are kept in the catalogue.
+
+Changes made for Swarm Studio: each entry's one-line description is shortened to 140 characters; a SKILL.md
+is kept to its first 12,000 characters, and a prompt template to its prompt, aspect and model. The skills'
+references, scripts and assets, the templates' HTML, pictures and fonts, and the plugins' other files are not
+taken. How the library is used, and what each part of Swarm is given from it, is engine/odlibrary.mjs.
+

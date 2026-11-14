@@ -150,6 +150,17 @@ export async function connections(dataDir) {
   return out
 }
 
+// Which GitHub repo each build publishes to (run id -> 'login/repo'), so two builds, two versions
+// of one project or two projects with the same name, never share a repo and replace each other's site.
+export function siteRepos(dataDir) {
+  return load(dataDir)['github:repos'] || {}
+}
+export function claimRepo(dataDir, key, repo) {
+  const all = load(dataDir)
+  all['github:repos'] = { ...(all['github:repos'] || {}), [key]: repo }
+  save(dataDir, all)
+}
+
 // Projects this made, per provider, so a project it didn't make is never overwritten.
 export function ownProjects(dataDir, provider) {
   return load(dataDir)[`${provider}:projects`] || []

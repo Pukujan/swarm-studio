@@ -11,7 +11,7 @@ A crew you can watch builds everything a launch needs: the site, the live app, t
 We keep to three beliefs:
 1. **Show the work.** Agents shouldn't hide behind a chat box; you watch the crew build.
 2. **Make the whole thing.** A launch is many pieces made together, never one file.
-3. **Credit the crew.** Every build names the people and the agents that made it, and every remix credits the build it came from.
+3. **Credit the crew.** Every build names the people and the agents that made it, and every remix names the build it came from.
 
 ## Names
 
@@ -80,7 +80,8 @@ History: Hermes-blue glow (spec 08) → Ultraviolet (trial, 2026-11-09) → Grap
 2026-11-09). The rule lives in [docs/ux/RULES.md](../ux/RULES.md), standing rule 3.
 
 The studio follows the system's light or dark setting; ☰ → Light / Dark overrides it and is remembered. The
-tokens are in `web/canvas.css`: dark is `:root`, light is the block after it.
+tokens are `tokens/studio.tokens.json` (dark) and `tokens/studio.light.tokens.json` (light), built into
+`web/tokens.css` (decision 0012).
 
 | Token | Dark | Light | Job |
 |---|---|---|---|
@@ -129,7 +130,7 @@ Swarm talks like a good ship's captain: short, warm, sure, and specific.
 - One prompt. The *whole* launch.
 - Watch your crew build it.
 - Steer it like a design tool. Ship it from Hermes.
-- Every build credits its crew.
+- Every build names its crew.
 - A whole creative studio, inside Hermes.
 - Any tool Hermes can reach, the crew can use.
 

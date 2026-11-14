@@ -16,7 +16,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFile } from 'node:child_process'
+import { execFile } from './proc.mjs'
 import { RAW, CREDIT, terms } from './library.mjs'
 
 const IMG = /\.(png|webp|jpe?g|gif)$/i
