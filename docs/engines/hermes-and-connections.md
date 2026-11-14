@@ -23,7 +23,7 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - `streamChat` is the client for any OpenAI-shaped endpoint; through Hermes it drops provider hints and sends `x-swarm-timeout` (engine/llm.mjs:12, 58, 71).
 - `hermesHealth` tells `closed` from `updated` by `$HERMES_HOME/gateway.pid` and the plugin's `.py` mtimes (engine/hermeshealth.mjs:18-22, 26-47).
 - Every child process gets `childEnv` only (engine/proc.mjs:1-23). The long-running ones (an app's dev or built server, a film render) start through `start()`, execa with `extendEnv: false`, `cleanup` and `forceKillAfterDelay`, and stop through `stopTree()`, tree-kill, so their children go too (engine/proc.mjs, engine/vendor/procs/; decision 0017, issue #450).
-- A server whose code changed on disk under it (an update) replaces itself the next time the page is asked for, when no work is running: same program, same environment, same port; Hermes's bridge attaches again by itself (server/server.mjs `replaceSelf`, engine/proc.mjs `respawnSelf`, engine/lifecycle.mjs `codeStamp`). `SWARM_NO_REPLACE=1` turns it off.
+- A server whose code changed on disk under it (an update) replaces itself the next time the page is asked for, when no work is running: same program, same port, and only the environment the launcher builds (engine/proc.mjs `SERVER_ENV` / `serverEnv`: launcher.py's `KEEP_ENV`, the variables it sets, `SWARM_STUDIO_API_KEY` and its settings, `SWARM_ELEVENLABS_KEY`, `PASSED_KEYS`, and the Windows system folders), never the server's whole environment, so a server started by hand from a full shell does not hand its successor anything the launcher would not. tests/selfreplace.test.mjs reads launcher.py and fails if the two lists differ. Hermes's bridge attaches again by itself (server/server.mjs `replaceSelf`, engine/proc.mjs `respawnSelf`, engine/lifecycle.mjs `codeStamp`). `SWARM_NO_REPLACE=1` turns it off.
 - The server exits after 20 minutes with nothing to do: no pane (an `/events` stream), no request other than the bridge's re-attach and status looks, no build, Auto run, film, publish or app build (Settings › Background; server/server.mjs `serverBusy`, engine/lifecycle.mjs `idleWatch`). It closes its port first, so the next `ensure_server()` (the pane's `/canvas`, any `/swarm` command, `start_run`) starts a new one at once, and the bridge's attach loop attaches to it (launcher.py `_ensure_server`, bridge.py `_attach_loop`). A command refused in that moment starts it and asks once more (commands.py `_api`).
 
 ### Models / gateway
@@ -32,7 +32,12 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - Fallback: `SWARM_STUDIO_API_KEY` with `SWARM_STUDIO_BASE_URL`, default InferHub `https://api.inferhub.dev/v1`, model `cb/deepseek-v4.1-flash` (plugin.yaml:12-14, server/server.mjs:100-101).
 - InferHub route failover (cb/, ali/, alitp/, ocg/) only for an inferhub base URL (engine/llm.mjs:33-51).
 - `ctx.llm` does not stream (one SSE delta) and has no tool calls; bridge fakes tools with `<tool_call>` blocks in the prompt (docs/specs/33-hermes-bridge.md:84-104).
-- Multiplexed gateway (`gateway.multiplex_profiles`, Hermes Desktop's default): a `ctx.llm` call from the bridge's own threads has no profile secret scope, and Hermes refuses to read the model key (Hermes bug NousResearch/hermes-agent#132887; its fix #132898 is open). Until it ships, the bridge binds the profile Hermes loaded the plugin for around each request, only when multiplexing is on and nothing is bound (bridge.py:71-109, 411, 422; __init__.py:142). It imports Hermes's `agent.secret_scope`: remove it once #132898 is in the pinned Hermes.
+- Multiplexed gateway (`gateway.multiplex_profiles`, Hermes Desktop's default): a `ctx.llm` call from the bridge's own threads has no profile secret scope, and Hermes refuses to read the model key (Hermes bug NousResearch/hermes-agent#132887; its fix #132898 is still open, checked 2026-11-14). Until it ships, bridge.py `in_profile` binds the profile Hermes loaded the plugin for (`keep_profile`, from `register()`) around each bridge request (bridge.py `_route`, `_chat`). Its limits, each pinned by tests/test_bridge.py:
+  - only when `scope.is_multiplex_active()` is true **and** `scope.current_secret_scope()` is None; a single-profile Hermes, a scope Hermes already bound (its own fix), or an unknown home runs the call as it is;
+  - the binding is made in a copy of the call's context (`contextvars.copy_context().run`), so it ends with that call, a call that raises included, and never stays on the thread;
+  - it binds the same profile scope Hermes's own plugin host builds (`build_profile_secret_scope(HOME)`); Hermes still reads the keys, the plugin never does;
+  - it is the only `set_secret_scope` call in the plugin; `agent.secret_scope` and `hermes_constants` are on Hermes's public plugin API (v0.23.1 `hermes_cli/data/plugin_api.json`), and only launcher.py (`get_secret`) and bridge.py import them.
+  Remove it once #132898 is in the pinned Hermes.
 - Model override only when the operator grants `plugins.entries.swarm-studio.llm.allow_model_override` (docs/specs/33-hermes-bridge.md:80-83).
 
 ### Supabase
@@ -89,35 +94,54 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
   `swarm_studio_builder` slots (docs/specs/06-onboarding.md, Models). `hermes_models.py` runs as a short
   process in Hermes's Python (`SWARM_HERMES_PY`, `SWARM_HERMES_PYTHONPATH`, the profile's `HERMES_HOME`), started
   by server/server.mjs `pyModels`; routes in server/setup.mjs (`/api/setup/models/options`, `/pick`, `/signin`).
-- **Stopgap, read only: it imports Hermes internals to read**, against the Nous review's "public plugin API only"
-  (point 5), because Hermes has no public API for its model list yet. It reads with what Hermes's own dashboard
-  and Desktop picker use: `hermes_cli.inventory.build_model_options_payload` (web_routers/models.py
-  `/api/model/options`), `hermes_cli.config.load_config` (the two slots, credentials left out) and
-  `hermes_cli.auth.PROVIDER_REGISTRY` (the env name a provider's key is kept under). Nothing in it writes;
-  tests/test_bridge.py pins its imports and refuses any save, set or write in it. The dashboard's HTTP routes
-  need an in-process session token, so they are not used. Move to a public API when Hermes ships one (asked
-  for on NousResearch/hermes-agent).
-- **Every change is Hermes's public CLI** (server/setup.mjs):
-  - a pick: `hermes config set auxiliary.<slot>.model <model>` when the provider stays, else
-    `hermes config set auxiliary.<slot> '<json>'` with the new provider and model and the slot's other settings,
-    which drops the old endpoint and credentials as Hermes's own slot save does (web_server_config.py
-    `_apply_aux_assignment_sync`, config.py `clear_model_endpoint_credentials`);
-  - a key: `hermes config set <ENV_NAME> <key>`, which Hermes routes to `save_provider_env_credential`, the
-    same store as its `model.save_key`. The env name comes from Hermes's list, never from the page. The key is
-    on that process's command line for under two seconds (same user only); `hermes auth add --type api-key`
-    would read it from a prompt instead, but that prompt waits on a hidden console on Windows.
-- Browser sign-in is Hermes's public CLI, `hermes auth add <provider> --type oauth`, unbuffered; the sheet reads
-  the link after "Open" and the user code from what it prints (hermes_cli/auth_device_flow.py,
-  auth_codex_browser.py, auth_openrouter.py). Hermes opens the browser itself.
+- **Stopgap, read only: one import outside Hermes's public plugin API.** Hermes v0.23.1 lists the modules a
+  plugin may import in `hermes_cli/data/plugin_api.json` (docs: developer-guide/plugins/public-api.md), and its
+  own `hermes plugins validate` check (`hermes_cli/plugin_validate_private_imports.py`), run on this repo, flags
+  only `hermes_cli.inventory.build_model_options_payload` and `load_picker_context` in hermes_models.py.
+  `hermes_cli.config` (`load_config`, the two slots, credentials left out) is public. Checked for a public way to
+  list providers and models, none usable:
+  - no public module has it, and no `ctx` method: `ctx.llm` (agent/plugin_llm.py) has only `complete` and
+    `complete_structured`;
+  - no machine-readable CLI: `hermes model` is interactive only (hermes_cli/subcommands/model.py, no `--json`);
+    `hermes auth list` lists credentials, not models;
+  - the API server's documented `GET /api/model/options` (website/docs/user-guide/features/api-server.md) gives
+    the same payload, but the API server is off unless the person turns it on, and it needs `API_SERVER_KEY`,
+    a bearer key this plugin will not read; the dashboard's routes need an in-process session token.
+  So hermes_models.py reads the list with the one function that route, the dashboard and Desktop's picker call.
+  Nothing in it writes; tests/test_bridge.py pins its imports to those three names and refuses any save, set,
+  write or open in it. `hermes_cli.auth.PROVIDER_REGISTRY` (private) is no longer imported. Move to a public API
+  when Hermes ships one.
+- **Every change is Hermes's public CLI** (server/setup.mjs), and the only setting the studio sets is a pick:
+  `hermes config set auxiliary.<slot>.model <model>` when the provider stays, else
+  `hermes config set auxiliary.<slot> '<json>'` with the new provider and model and the slot's other settings,
+  which drops the old endpoint and credentials as Hermes's own slot save does (web_server_config.py
+  `_apply_aux_assignment_sync`, config.py `clear_model_endpoint_credentials`). tests/test_bridge.py refuses any
+  other `config set` target in the plugin.
+- **A provider key never reaches the studio.** Under More providers, a provider whose sign-in is a key shows the
+  command `hermes auth add <provider> --type api-key` with Copy, and **Check again**. The person runs it in their
+  own terminal; Hermes asks for the key itself with a hidden prompt (hermes_cli/auth_commands.py
+  `_add_api_key_credential`, `masked_secret_prompt`) and keeps it in its credential pool, which its provider list
+  counts as signed in (model_switch_providers.py `_credential_pool_is_usable`). So the key is on no command line,
+  not even the person's own. Check again asks Hermes's list afresh (`/api/setup/models/options?refresh=1`).
+  There is no route that takes a key: `POST /api/setup/models/signin` answers 400 to any body with `key`, and
+  runs nothing (tests/setup.test.mjs).
+- Browser sign-in is Hermes's public CLI, `hermes auth add <provider> --type oauth`, which the studio starts
+  (server/setup.mjs `signInBrowser`, unbuffered, `hermesEnv()` only: `HERMES_HOME`, no keys). Hermes runs the
+  provider's own flow (device code, or PKCE on a loopback port) and opens the browser itself
+  (hermes_cli/auth_device_flow.py, auth_codex_browser.py, auth_openrouter.py: `webbrowser.open`). The studio
+  only reads the link and user code Hermes prints, so the sheet can show them with Open and Cancel; Hermes
+  receives and keeps the token, and the studio never sees it. Cancel stops that process.
 - Setup › Parts (web/setup-parts.js) lists every part a build uses, grouped by what the person makes, with its
   state and one fix. `GET /api/setup/parts` (server/setup.mjs `partsLocal`) answers only whether each key in
   `PART_KEYS` is set (booleans), Stripe's `test`/`live`, and whether Godot (`godotBin`), Chrome (`findChrome`),
   ffmpeg, HyperFrames, Kokoro and the built Dyad engine are on this computer. A key's fix is the command
-  `hermes config set <NAME> <your key>` to copy, never a box to paste into; the launcher passes it at the
-  studio's next start (launcher.py PASSED_KEYS). Unchecked: that `hermes config set` stores a plugin's own
-  `optional_env` secret where `get_secret` reads it (verified only for provider keys, the `keyEnv` route above);
-  settle from Hermes's hermes_cli/config.py. Nothing restarts the studio yet, so a new key shows "Not set up"
-  until it next starts.
+  `hermes config set <NAME> <your key>` to copy and run in the person's own terminal, never a box to paste into; the launcher passes it at the
+  studio's next start (launcher.py PASSED_KEYS). `hermes config set` writes any UPPER_SNAKE name to the
+  profile's `.env` (Hermes v0.23.1 hermes_cli/config.py `set_config_value`: `save_env_setting`, or
+  `save_provider_env_credential` for a provider key), the file `build_profile_secret_scope` reads for
+  `get_secret` (website/docs/developer-guide/multiplexing-gateway.md). The studio never sees or runs it; the
+  key is on the person's own command line (and shell history) only. Nothing restarts the studio yet, so a new
+  key shows "Not set up" until it next starts.
 - Hermes caches its config by file time, so a pick applies without a restart. A pick is two CLI calls, about
   1.5 s each.
 
@@ -143,8 +167,8 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 
 ## Sources
 
-- plugin.yaml, launcher.py:10-85, 200-233, hermes_models.py, server/setup.mjs (model picker)
-- Hermes: hermes_cli/inventory.py, web_routers/models.py, web_server_config.py, config.py:765, credential_lifecycle.py, auth_device_flow.py:305-316
+- plugin.yaml, launcher.py:10-85, 200-233, hermes_models.py, server/setup.mjs (model picker), engine/proc.mjs (`serverEnv`)
+- Hermes v0.23.1: hermes_cli/data/plugin_api.json, plugin_validate_private_imports.py, inventory.py, web_routers/models.py, web_server_config.py, config.py, auth_commands.py, subcommands/model.py, subcommands/auth.py, model_switch_providers.py, auth_device_flow.py, agent/plugin_llm.py, gateway/platforms/api_server.py, website/docs/developer-guide/plugins/public-api.md, website/docs/user-guide/features/api-server.md
 - engine/bridge.mjs, hermesllm.mjs, llm.mjs, hermeshealth.mjs, hermes_connect.mjs, connect.mjs, proc.mjs, ckff.mjs, paint-ckff.mjs, auto.mjs, appkit.mjs, media.mjs:18-86
 - server/server.mjs:93-114, 190-213, 1334-1343, 1437-1448, 3290-3330, 3540-3576; web/show.js:164-176
 - docs/specs/25-connections.md, docs/specs/33-hermes-bridge.md, docs/decisions/0005, docs/PRODUCT.md, docs/PLANS.md, AGENTS.md, scripts/engine-docs-hook.mjs
