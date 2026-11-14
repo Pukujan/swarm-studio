@@ -28,11 +28,12 @@ export const PICKER = `<script data-swarm-pick>(() => {
   })
 })()</script>`
 
-// The picker in one HTML page: before </head>, else at the start of <body>, else first. Anything else unchanged.
+// The picker in one HTML document: before </head>, else at the start of <body>. Anything that is not a document
+// (no head or body: a fragment, a game's bare canvas) is left as it is.
 export function withPicker(html) {
   const s = String(html)
   if (s.includes('data-swarm-pick')) return s
   if (/<\/head>/i.test(s)) return s.replace(/<\/head>/i, `${PICKER}</head>`)
   if (/<body[^>]*>/i.test(s)) return s.replace(/<body[^>]*>/i, m => m + PICKER)
-  return PICKER + s
+  return s
 }

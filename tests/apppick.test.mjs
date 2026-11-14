@@ -18,6 +18,7 @@ test('the picker goes once into a page, before </head>, and is a script that sta
   assert.ok(out.indexOf('data-swarm-pick') < out.indexOf('</head>'))
   assert.equal(withPicker(out), out, 'never twice')
   assert.match(withPicker('<body class="x"><p>hi</p></body>'), /<body class="x"><script data-swarm-pick>/)
+  assert.equal(withPicker('<canvas></canvas>'), '<canvas></canvas>', 'not a document: left as it is')
   const js = PICKER.replace(/^<script data-swarm-pick>/, '').replace(/<\/script>$/, '')
   assert.doesNotThrow(() => new Function(js))
   // it answers its parent only, to the origin that asked, and sends what the element is, not the page

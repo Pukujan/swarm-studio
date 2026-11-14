@@ -860,12 +860,12 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       const inner = await freePort()
       const p = startProc(process.execPath, [out], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { PORT: String(inner), HOST: '127.0.0.1', NITRO_PORT: String(inner), NITRO_HOST: '127.0.0.1', NODE_ENV: 'production', ...appEnvFor(id, j) } })
       await answers(id, j, p, `http://127.0.0.1:${inner}/`, 'built')
-      j.front = await corsFront(j.port, inner, { html: withPicker })
+      j.front = await corsFront(j.port, inner, { html: j.kind === 'game' ? null : withPicker })
       j.url = j.front.url
     } else {
       // files from this process: no process to stop, so not one of the maxApps
       // its pages with the App room's picker (issue #542), on their way out only
-      j.files = await serveStatic(join(dir, 'dist'), j.port, { spa: true, html: withPicker })
+      j.files = await serveStatic(join(dir, 'dist'), j.port, { spa: true, html: j.kind === 'game' ? null : withPicker })
       Object.assign(j, { mode: 'files', url: j.files.url })
     }
     send(id, 'app:ready', { url: j.url, built: true })
