@@ -382,6 +382,9 @@ try {
   at = await where()
   ok(typeof made === 'string' && at.room === 'deck' && at.version === made && at.run === made, `Make opens the new build in the Design deck (${at.room}, ${at.run === made ? 'the new build' : at.run})`)
   ok(!(await page.evaluate(() => window.swarmCosmos.nav.view.pending)), 'its start on the stream clears the wait')
+  // the question's chat is open with the caret in its box (decision 0020), and Esc in a text box stays there
+  // (web/studio.js escUp): leave the box first, as a click on the deck does, then Esc goes up to the Overview
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() })
   await page.keyboard.press('Escape'); await wait(400)
   await home()
   await page.click('.home .card[aria-label="Alpha Tea"]')
