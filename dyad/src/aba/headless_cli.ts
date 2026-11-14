@@ -17,6 +17,10 @@
  *   --model <id>           model apiName (else ABA_MODEL)
  *   --gateway <url>        gateway base URL (else ABA_GATEWAY_URL)
  *   --turns <n>            max turns including the first (default 4)
+ *   --mode <mode>          dyad's chat mode: local-agent (default), build, ask or plan.
+ *                          ask and plan are one turn on an existing --workspace: no
+ *                          install, no gates, no RUN_META.json, and the assistant's
+ *                          words come back as `answer` in the result (headless_args.ts)
  *   --user-data-dir <dir>  where sqlite + settings live
  *   --smoke                boot, report the tool surface, dispose — no model call
  *   --view-render          expose the native view_render (screenshot) tool
@@ -34,139 +38,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { bootDyadHeadless, installEgressGuard } from "./headless";
+import { parseArgs, talkOnly, cleanAnswer, USAGE, type Args } from "./headless_args";
 import { abaImageConfig, abaOctoConfig } from "@/lib/aba_model_config";
-
-interface Args {
-  prompt?: string;
-  out?: string;
-  workspace?: string;
-  scaffold?: string;
-  adoptReason?: string;
-  model?: string;
-  gateway?: string;
-  turns: number;
-  userDataDir?: string;
-  smoke: boolean;
-  viewRender: boolean;
-  egressGuard: boolean;
-  json: boolean;
-}
-
-const USAGE = `Usage: aba-headless --prompt <file> (--out <dir> | --workspace <dir>) [options]
-
-  --prompt <file>        the task prose (required unless --smoke)
-  --out <dir>            generate mode: wiped, then scaffolded
-  --workspace <dir>      iterate mode: used as-is, never wiped
-  --scaffold <dir>       scaffold copied into an empty workspace
-  --adopt-reason <text>  record an ungateable iterate workspace as adopted
-  --model <id>           model apiName (else ABA_MODEL)
-  --gateway <url>        gateway base URL (else ABA_GATEWAY_URL)
-  --turns <n>            max turns including the first (default 4)
-  --user-data-dir <dir>  where sqlite + settings live
-  --smoke                boot, report the tool surface, dispose — no model call
-  --view-render          expose the native view_render (screenshot) tool
-  --no-egress-guard      record egress hosts but do not reject
-  --json                 print a machine-readable result line
-  -h, --help             print this usage and exit
-`;
-
-function parseArgs(argv: string[]): Args {
-  const args: Args = {
-    turns: 4,
-    smoke: false,
-    viewRender: false,
-    egressGuard: true,
-    json: false,
-  };
-  const take = (i: number, flag: string): [string, number] => {
-    const value = argv[i + 1];
-    if (value === undefined || value.startsWith("--")) {
-      throw new Error(`${flag} requires a value`);
-    }
-    return [value, i + 1];
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    switch (a) {
-      case "--prompt": {
-        const [v, n] = take(i, a);
-        args.prompt = v;
-        i = n;
-        break;
-      }
-      case "--out": {
-        const [v, n] = take(i, a);
-        args.out = v;
-        i = n;
-        break;
-      }
-      case "--workspace": {
-        const [v, n] = take(i, a);
-        args.workspace = v;
-        i = n;
-        break;
-      }
-      case "--scaffold": {
-        const [v, n] = take(i, a);
-        args.scaffold = v;
-        i = n;
-        break;
-      }
-      case "--adopt-reason": {
-        const [v, n] = take(i, a);
-        if (!v.trim()) {
-          throw new Error("--adopt-reason must not be empty");
-        }
-        args.adoptReason = v;
-        i = n;
-        break;
-      }
-      case "--model": {
-        const [v, n] = take(i, a);
-        args.model = v;
-        i = n;
-        break;
-      }
-      case "--gateway": {
-        const [v, n] = take(i, a);
-        args.gateway = v;
-        i = n;
-        break;
-      }
-      case "--user-data-dir": {
-        const [v, n] = take(i, a);
-        args.userDataDir = v;
-        i = n;
-        break;
-      }
-      case "--turns": {
-        const [v, n] = take(i, a);
-        const parsed = Number(v);
-        if (!Number.isFinite(parsed) || parsed < 1) {
-          throw new Error(`--turns must be a positive number, got "${v}"`);
-        }
-        args.turns = parsed;
-        i = n;
-        break;
-      }
-      case "--smoke":
-        args.smoke = true;
-        break;
-      case "--view-render":
-        args.viewRender = true;
-        break;
-      case "--no-egress-guard":
-        args.egressGuard = false;
-        break;
-      case "--json":
-        args.json = true;
-        break;
-      default:
-        throw new Error(`unknown argument: ${a}`);
-    }
-  }
-  return args;
-}
 
 function runScript(appDir: string, cmd: string, cmdArgs: string[]): {
   ok: boolean;
@@ -312,6 +185,19 @@ async function main(): Promise<number> {
 
   const appDir = path.resolve(args.workspace ?? args.out ?? ".");
   const generate = Boolean(args.out);
+  // ask and plan read an app that is already there. Booting on an empty or missing folder would
+  // create it and make a git commit in it, which a question must never do.
+  const talk = talkOnly(args.mode);
+  if (
+    talk &&
+    !args.smoke &&
+    !["package.json", ".git"].every((name) => fs.existsSync(path.join(appDir, name)))
+  ) {
+    process.stderr.write(
+      `aba-headless: --mode ${args.mode} needs an existing app in --workspace (no package.json or no .git in ${appDir})\n`,
+    );
+    return 2;
+  }
   // Whether the scaffold will populate this workspace. Must be read before the
   // generate wipe; an iterate workspace with only .git counts as empty.
   const startedEmpty =
@@ -404,6 +290,7 @@ async function main(): Promise<number> {
     // may already have them.
     const pkgJson = path.join(handle.appDir, "package.json");
     if (
+      !talk &&
       fs.existsSync(pkgJson) &&
       !fs.existsSync(path.join(handle.appDir, "node_modules"))
     ) {
@@ -441,7 +328,7 @@ async function main(): Promise<number> {
       turn += 1;
       process.stdout.write(`[aba-headless] ${label} (turn ${turn})\n`);
       const { event, errored, messages } = await handle.streamChat(text, {
-        requestedChatMode: "local-agent",
+        requestedChatMode: args.mode,
       });
       recordDenials(messages);
       const err = errored ?? event("chat:response:error")?.payload;
@@ -450,7 +337,54 @@ async function main(): Promise<number> {
           `${label} chat:response:error -> ${JSON.stringify(err).slice(0, 2000)}`,
         );
       }
+      return messages;
     };
+
+    if (talk) {
+      // One turn in dyad's ask or plan mode (chat_stream_handlers.ts: ask is the agent with
+      // readOnly, plan is the agent with planModeOnly). No gates, no repair turns, no
+      // RUN_META.json: the result is what the assistant said. `changed` is the app's own git
+      // saying whether anything moved, so a caller never has to take "read-only" on trust.
+      const head = () => handle.gitLog()[0] ?? "";
+      const dirty = () =>
+        spawnSync("git", ["status", "--porcelain"], {
+          cwd: handle.appDir,
+          encoding: "utf8",
+        }).stdout.trim();
+      const before = { head: head(), dirty: dirty() };
+      const messages = await stream(args.mode, prompt);
+      const last = [...messages]
+        .reverse()
+        .find((m) => m?.role === "assistant" && typeof m.content === "string");
+      const answer = cleanAnswer(last?.content);
+      const changed = head() !== before.head || dirty() !== before.dirty;
+      // plan mode's write_plan saves the plan beside the app (planPersistence.ts)
+      const planDir = path.join(handle.appDir, ".dyad", "plans");
+      const plans = fs.existsSync(planDir)
+        ? fs.readdirSync(planDir).filter((name) => name.endsWith(".md"))
+        : [];
+      const result = {
+        ok: Boolean(answer) || plans.length > 0,
+        engine: "dyad-headless (ABA-0005 Stage B)",
+        model,
+        chatMode: args.mode,
+        turns: turn,
+        answer,
+        changed,
+        ...(args.mode === "plan" ? { plans } : {}),
+        deniedTools: Object.fromEntries(deniedTools),
+        egressHosts: guard.hosts(),
+        egressViolations: guard.violations(),
+      };
+      if (args.json) {
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+      } else {
+        process.stdout.write(
+          `${answer}\n[aba-headless] ${args.mode}: turns=${turn}, changed=${changed}\n`,
+        );
+      }
+      return result.ok ? 0 : 1;
+    }
 
     await stream("build", prompt);
 
@@ -492,7 +426,7 @@ async function main(): Promise<number> {
     const meta = {
       engine: "dyad-headless (ABA-0005 Stage B)",
       model,
-      chatMode: "local-agent",
+      chatMode: args.mode,
       turns: turn,
       gatesPassed: workspaceOrigin === "adopted" ? null : gatePassed,
       gatesRun: [...gatesRan],

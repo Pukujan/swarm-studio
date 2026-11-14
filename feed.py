@@ -522,6 +522,49 @@ def with_shots(pages: list[dict], shots: list[dict] | None) -> list[dict]:
     return out
 
 
+# The build's story (docs/specs/39-story.md, engine/story.mjs): its beats as words and its cards in three
+# shapes, phone first. The cards ride in the post as JPEG data URLs; a shape that would take the post past
+# STORY_BUDGET is left out (the Feed takes 8 MB a post, and the page shots need room too).
+STORY_BUDGET = 3 * 1024 * 1024
+STORY_SHAPES = ("tall", "square", "wide")
+STORY_ROLES = {"hook", "what", "who", "moment", "making", "next"}
+BEAT_FIELDS = (("kicker", 32), ("headline", 60), ("line", 140))
+
+
+def story_of(folder: Path | None, budget: int = STORY_BUDGET) -> dict | None:
+    """{type, beats: [{id, role, kicker, headline, line}], cards: {tall: [...], square: [...], wide: [...]}}
+    from the run's story.json and story/<shape>-<beat>.jpg, or None when the build has no story."""
+    if not folder:
+        return None
+    try:
+        raw = json.loads((folder / "story.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    beats = []
+    for b in raw.get("beats") or []:
+        if not isinstance(b, dict) or not re.match(r"^b\d{1,2}$", str(b.get("id") or "")) or b.get("role") not in STORY_ROLES:
+            continue
+        beat = {"id": b["id"], "role": b["role"]}
+        for k, n in BEAT_FIELDS:
+            beat[k] = str(b.get(k) or "")[:n]
+        beats.append(beat)
+    if not beats:
+        return None
+    cards: dict[str, list[str]] = {}
+    left = budget
+    for shape in STORY_SHAPES:
+        files = [folder / "story" / f"{shape}-{b['id']}.jpg" for b in beats]
+        if not all(f.is_file() for f in files):
+            continue
+        size = sum(f.stat().st_size for f in files)
+        if size > left:
+            continue
+        cards[shape] = ["data:image/jpeg;base64," + base64.b64encode(f.read_bytes()).decode() for f in files]
+        left -= size
+    kind = str(raw.get("type") or "launch")
+    return {"type": kind if re.match(r"^[a-z]{1,16}$", kind) else "launch", "beats": beats, "cards": cards}
+
+
 def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | None = None, unlisted: bool = False,
                   into: str | None = None, shots: list[dict] | None = None) -> dict:
     """The POST /api/feed/builds body. With the project fields (project, piece, and into for a later piece);
@@ -547,6 +590,9 @@ def build_payload(r: dict, *, jam: str = "", caption: str = "", parent: str | No
     tall = body["pages"][0].get("phoneShot") if body["pages"] else None
     if tall:
         body["posterTall"] = tall
+    story = story_of(folder)
+    if story:
+        body["story"] = story
     if parent and BUILD_ID.match(parent):
         body["parentId"] = parent
     if jam:
@@ -581,14 +627,22 @@ def shotless_payload(body: dict) -> dict:
     return out
 
 
+def storyless_payload(body: dict) -> dict:
+    """The same body without the story, for a Feed that does not take it yet."""
+    return {k: v for k, v in body.items() if k != "story"}
+
+
 def has_shots(body: dict) -> bool:
     return "posterTall" in body or any(k in p for p in body.get("pages") or [] for k in SHOT_FIELDS)
 
 
 def _send_build(body: dict, token: str) -> dict:
     """POST the build; a Feed that refuses the newer fields gets the post again without them: first without
-    page shots, then also without the project fields, so posting never breaks."""
+    the story, then without page shots, then also without the project fields, so posting never breaks."""
     tries = [body]
+    if "story" in body:
+        body = storyless_payload(body)
+        tries.append(body)
     if has_shots(body):
         tries.append(shotless_payload(body))
     tries.append(plain_payload(shotless_payload(body)))

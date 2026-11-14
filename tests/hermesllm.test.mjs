@@ -92,7 +92,8 @@ test('the server and the app engine hold no provider key: their key is the studi
   assert.match(server, /if \(llm\.handle\(req, res\)\) return/)
   assert.match(server, /if \(!apiKey\) return \{ \.\.\.llm\.provider\(\)/)
   const app = readFileSync(`${root}engine/appbuild.mjs`, 'utf8')
-  assert.match(app, /'--gateway', provider\.baseUrl/)
+  assert.match(app, /gateway: provider\.baseUrl/)
+  assert.match(app, /'--gateway', gateway,/)
   assert.match(app, /ABA_API_KEY: provider\.apiKey/)
 })
 
