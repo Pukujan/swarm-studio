@@ -18,7 +18,6 @@ import { paintSend } from '../chatmode.js'
 // answers with its id; an old chat opened from Studio home or a project's chats comes back here.
 // ask: the chat's skip question before a website's build is open (decision 0020): words and picks answer it
 export const talk = { on: false, busy: false, said: [], kind: 'site', build: null, dock: null, chat: null, from: null, plan: null, ask: false }
-const dockBtn = els.form.querySelector('button[type="submit"]')
 // while talking, the dock sends to Hermia: its button says Send, not the mode's word (web/chatmode.js
 // writes the button: the mode can change while a talk is open)
 function talkDock(on) {

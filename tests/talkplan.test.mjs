@@ -87,7 +87,10 @@ test('the web side: Make box, answers, the brief step and both docks go through 
   assert.match(home, /data-talk>Keep talking<\/button><button type="button" class="btn pri" data-go>/)
   // a talk in the deck builds only from its brief card's Build
   assert.match(canvas, /if \(talk\.on\) \{ skip\(\); if \(talk\.busy\) return; els\.brief\.value = ''; talkSay\(brief\); return \}/)
-  assert.match(canvas, /els\.brief\.placeholder = 'Tell Hermia…'; dockBtn\.textContent = 'Send'/)
+  // the send button's word has one writer (web/chatmode.js): Send while a talk has the box, else the mode's
+  assert.match(canvas, /els\.brief\.placeholder = 'Tell Hermia…'/)
+  assert.match(canvas, /talkDock\(on\) \{[\s\S]{0,400}paintSend\(\)/)
+  assert.match(readFileSync(new URL('../web/chatmode.js', import.meta.url), 'utf8'), /chatMode\.talking\(\) \? 'Send' : modeWord\(chatMode\.now\)/)
   // the brief's buttons: Build (or, inside a project, New project / Start over with Add here), then Keep talking
   assert.match(canvas, /<button class="primary" data-go="add">Build<\/button>/)
   assert.match(canvas, /\$\{acts\}\$\{sheetHtml\}<button data-more>Keep talking<\/button>/)
