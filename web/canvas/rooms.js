@@ -83,14 +83,19 @@ export const appApi = (path = '', body) => api(`/api/runs/${encodeURIComponent(a
 
 // The app's versions (issue #542): its first build and each change, newest first, from the server (engine/appjob.mjs
 // versions). One press goes back to one; going back is a version too, so the one left stays there to come back to.
-const ver = { run: '', list: /** @type {any[]} */ ([]), busy: '' }
+const ver = { run: '', list: /** @type {any[]} */ ([]), busy: '', at: /** @type {string | null} */ (null) }
+// the screen the app's current version changed (engine/appjob.mjs screenOf): the Live app opens there
+const nowScreen = () => (ver.run === appv.run ? ver.list.find(v => v.now)?.screen || null : null)
+const fileName = f => String(f).split('/').pop()
 async function loadVersions(run) {
   if (!run || rec.on) return
   try {
     const r = await appApi('/versions')
     if (shownRun() !== run) return
     Object.assign(ver, { run, list: r.versions || [] })
+    if (appv.url && nowScreen() !== ver.at) appEls.frame.dataset.src = ''
     renderVersions()
+    renderApp()
   } catch {}
 }
 function renderVersions() {
@@ -99,9 +104,29 @@ function renderVersions() {
   const show = view === 'app' && ver.run === shownRun() && appv.kind !== 'game' && appv.state !== 'working' && !rec.on && ver.list.length > 1
   box.hidden = !show
   if (!show) return
-  box.innerHTML = `<h3>Versions</h3>${ver.list.slice(0, 12).map(v => `<div class="av${v.now ? ' now' : ''}"><span>${esc(v.what)}<small>${esc(githubAgo(v.t))}</small></span>${v.now ? '<em>Now</em>' : `<button type="button" data-rev="${esc(v.rev)}"${ver.busy ? ' disabled' : ''}>${ver.busy === v.rev ? 'Going back…' : 'Go back to this'}</button>`}</div>`).join('')}`
+  const last = ver.list[0], before = ver.list[1]
+  const pic = (src, label) => (src ? `<button type="button" class="av-pic" data-compare aria-label="${esc(label)}: show before and after large"><img src="${esc(BASE + src)}" alt="" loading="lazy"><span>${esc(label)}</span></button>` : '')
+  const lastHtml = last?.changed?.length ? `<div class="av-last"><h3>Last change</h3><p>${esc(last.what)}</p><p class="av-files">Changed ${esc(last.changed.slice(0, 4).map(fileName).join(', '))}${last.changed.length > 4 ? ` and ${last.changed.length - 4} more` : ''}${last.screen ? ` · on ${esc(last.screen)}` : ''}</p>${last.photo ? `<div class="av-ba">${pic(before?.photo, 'Before')}${pic(last.photo, 'After')}</div>` : ''}</div>` : ''
+  box.innerHTML = `${lastHtml}<h3>Versions</h3>${ver.list.slice(0, 12).map(v => `<div class="av${v.now ? ' now' : ''}"><span>${esc(v.what)}<small>${esc(githubAgo(v.t))}${v.changed?.length ? ` · ${esc(v.changed.slice(0, 3).map(fileName).join(', '))}` : ''}</small></span>${v.now ? '<em>Now</em>' : `<button type="button" data-rev="${esc(v.rev)}"${ver.busy ? ' disabled' : ''}>${ver.busy === v.rev ? 'Going back…' : 'Go back to this'}</button>`}</div>`).join('')}`
+  for (const b of box.querySelectorAll('[data-compare]')) /** @type {HTMLButtonElement} */ (b).onclick = () => compare(before?.photo, last.photo, last.what)
   for (const b of box.querySelectorAll('button[data-rev]')) /** @type {HTMLButtonElement} */ (b).onclick = () => goBack(/** @type {HTMLButtonElement} */ (b).dataset.rev || '')
 }
+// the last change's before and after, large, over the Live app
+function compare(before, after, what) {
+  closeCompare()
+  const box = document.createElement('div')
+  box.className = 'av-compare'
+  box.setAttribute('role', 'dialog')
+  box.setAttribute('aria-label', `Before and after: ${what}`)
+  const fig = (src, label) => (src ? `<figure><img src="${esc(BASE + src)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>` : '')
+  box.innerHTML = `<header><b>${esc(what)}</b><button type="button" class="toggle" data-close>Close</button></header><div>${fig(before, 'Before')}${fig(after, 'After')}</div>`
+  box.querySelector('[data-close]')?.addEventListener('click', closeCompare)
+  appEls.preview.append(box)
+  /** @type {HTMLElement | null} */ (box.querySelector('[data-close]'))?.focus()
+}
+function closeCompare() { appEls.preview.querySelector('.av-compare')?.remove() }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && appEls.preview.querySelector('.av-compare')) { e.stopPropagation(); closeCompare() } }, true)
+
 async function goBack(rev) {
   const run = shownRun(), v = ver.list.find(x => x.rev === rev)
   ver.busy = rev
@@ -341,7 +366,10 @@ function loadFrame() {
   const old = appEls.frame, f = old.cloneNode(false)
   f.dataset.src = old.dataset.src || ''
   f.addEventListener('load', frameLoad)
-  const src = frameUrl(appv.url)
+  // on the screen the last change is on (issue #542), else the app's own first screen
+  ver.at = nowScreen()
+  let src = frameUrl(appv.url)
+  if (ver.at) try { src = new URL(ver.at, src).href } catch {}
   f.setAttribute('sandbox', appSandbox(src)) // before the address, so the first load is sandboxed too
   f.src = src
   old.replaceWith(f)
