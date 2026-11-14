@@ -121,7 +121,10 @@ export function grillBrief(prompt, answers = {}, questions = BRIEF_QUESTIONS) {
 export const STARTERS = {
   site: ['A neighbourhood bakery', 'A portfolio for a photographer', 'A weekend music festival'],
   app: ['A booking app for a barber shop', 'A habit tracker for a running club', 'A sign-up sheet for a school fair'],
-  film: ['A promo for a coffee roaster', 'A teaser for a rooftop concert', 'A launch film for a sneaker drop']
+  film: ['A promo for a coffee roaster', 'A teaser for a rooftop concert', 'A launch film for a sneaker drop'],
+  // named by what the person gets (spec 27: Meshy is opt-in, so only the 3D one names it)
+  game: ['A 2D game that plays in the browser, with painted sprites', 'A 3D game with characters made in Meshy', 'A top-down strategy game from the strategy starter', 'A side-view platformer from the platformer starter'],
+  brand: ['A brand for a small coffee roaster', 'A brand for a yoga studio', 'A brand for a children\'s bookshop']
 }
 
 // The Make box asks for this once: the showcases (for the hosted studio, the ones it can build,

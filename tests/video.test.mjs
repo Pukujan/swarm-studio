@@ -68,5 +68,5 @@ test('a build whose pictures were never logged as events still gives the film it
   mkdirSync(join(d, 'img'))
   for (const f of ['2.png', '10.png', '1.png', 'video-x.png', 'notes.txt']) writeFileSync(join(d, 'img', f), 'x')
   const c = collect([{ type: 'run:start', brief: 'a wine bar' }, { type: 'page', id: 'home', title: 'Tidepool' }], d)
-  assert.deepEqual(c.images.map(i => i.file.split('/').pop()), ['1.png', '2.png', '10.png'])
+  assert.deepEqual(c.images.map(i => i.file.split(/[\\/]/).pop()), ['1.png', '2.png', '10.png'])
 })

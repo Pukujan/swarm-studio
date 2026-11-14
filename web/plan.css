@@ -42,6 +42,9 @@ body.cosmos-plan .crew-layer, body.cosmos-plan .cbox { display: none; }
 .pl-f { display: flex; flex-direction: column; gap: 4px; font: 12px var(--mono); color: var(--muted); }
 .pl-f input, .pl-r input { height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px var(--body); padding: 0 10px; outline: none; min-width: 0; }
 .pl-f input:focus, .pl-r input:focus { border-color: var(--text); }
+/* a field whose value can be long: it wraps and grows with its text (web/brand.js sizes it where field-sizing is missing) */
+.pl-f textarea { display: block; width: 100%; box-sizing: border-box; min-height: 32px; max-height: 240px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px/1.4 var(--body); padding: 6px 10px; outline: none; min-width: 0; resize: none; overflow-wrap: anywhere; field-sizing: content; }
+.pl-f textarea:focus { border-color: var(--text); }
 .pl-sw { display: flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; font: 13px var(--body); color: var(--text); }
 .pl-sw input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 .pl-roster { display: flex; flex-direction: column; gap: 10px; }

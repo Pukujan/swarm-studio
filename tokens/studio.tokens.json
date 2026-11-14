@@ -1,0 +1,58 @@
+{
+  "$description": "The Studio's own theme, dark (the default). Graphite, docs/brand/BRAND.md; the rules in docs/ux/RULES.md, \"Few colours\". Inside the Hermes dashboard the host's --color-* and --font-* variables win; these are the fallbacks. This theme dresses the studio only, never the sites it designs (those live in web/frame.html). Each token's CSS variable is its own name: color.void is --void. Values that W3C has no type for (rgb channels, rgb() mixes, var() fallbacks, font stacks) are CSS strings, kept as written.",
+  "channel": {
+    "$description": "channels, for the translucent mixes below (Graphite, docs/brand/BRAND.md)",
+    "void-rgb": { "$value": "11 11 12" },
+    "deep-rgb": { "$value": "22 22 24" },
+    "glass-rgb": { "$value": "244 244 245" },
+    "frame-rgb": { "$value": "58 58 63" },
+    "hot-rgb": { "$value": "242 0 0" },
+    "ink-rgb": { "$value": "11 11 12" },
+    "shade-rgb": { "$value": "0 0 0" }
+  },
+  "color": {
+    "$description": "the palette (docs/ux/RULES.md, \"Few colours\"): black, graphite and white plus ONE accent, --accent. The accent is the text colour (white buttons with black text in dark, black with white in light); the owner may pick a hue later, and that is the accent token (every tint is a color-mix of it). Dark is this file; light is studio.light.tokens.json, by prefers-color-scheme or the ☰ menu's Theme.",
+    "void": { "$type": "color", "$value": "#0b0b0c", "$description": "app background: flat" },
+    "deep": { "$type": "color", "$value": "#161618", "$description": "panels (surface)" },
+    "surface-2": { "$type": "color", "$value": "#1f1f22", "$description": "raised surface" },
+    "edge": { "$type": "color", "$value": "#2a2a2e", "$description": "card borders and rules (line)" },
+    "panel": { "$value": "rgb({channel.glass-rgb} / .03)", "$description": "glass fill" },
+    "panel-2": { "$value": "rgb({channel.glass-rgb} / .07)", "$description": "glass, raised or hovered" },
+    "panel-edge": { "$type": "color", "$value": "#2a2a2e" },
+    "glass": { "$value": "rgb({channel.deep-rgb} / .92)", "$description": "floating glass over the canvas" },
+    "line": { "$type": "color", "$value": "{color.panel-edge}" },
+    "line-2": { "$type": "color", "$value": "#3a3a3f" },
+    "frame": { "$type": "color", "$value": "#3a3a3f", "$description": "graphite: frames, secondary fills (white text 10:1)" },
+    "frame-hi": { "$type": "color", "$value": "#a1a1a6", "$description": "graphite lifted, for rings on the void" },
+    "text": { "$type": "color", "$value": "#f4f4f5" },
+    "muted": { "$type": "color", "$value": "#8e8e93" },
+    "code": { "$type": "color", "$value": "#c7c7cc" },
+    "accent": { "$type": "color", "$value": "{color.text}", "$description": "THE accent: the one main action, the active tab, the serif word" },
+    "accent-ink": { "$type": "color", "$value": "{color.void}", "$description": "text on an accent fill" },
+    "pink": { "$type": "color", "$value": "{color.accent}", "$description": "the serif accent word: the same accent" },
+    "ok": { "$type": "color", "$value": "{color.accent}" },
+    "hot": { "$type": "color", "$value": "#F20000", "$description": "red is for errors only" },
+    "hot-text": { "$type": "color", "$value": "#ff5c5c" },
+    "info": { "$type": "color", "$value": "{color.text}" },
+    "paper": { "$type": "color", "$value": "#FFFFFF", "$description": "the page frames' own background" },
+    "glow": { "$value": "transparent", "$description": "Graphite is flat: no glow" },
+    "bg": { "$type": "color", "$value": "{color.void}" },
+    "dim": { "$type": "color", "$value": "#5a5a60", "$description": "Projects (web/home.css)" },
+    "red": { "$type": "color", "$value": "#ff6b6b", "$description": "Projects (web/home.css)" }
+  },
+  "radius": {
+    "r": { "$value": "14px" }
+  },
+  "font": {
+    "display": { "$value": "'Big Shoulders Display', 'Antonio', Impact, 'Arial Narrow', sans-serif" },
+    "label": { "$value": "'Barlow Condensed', 'Arial Narrow', ui-sans-serif, sans-serif" },
+    "mono": { "$value": "var(--font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace)", "$description": "the Hermes host's --font-mono wins" },
+    "serif": { "$value": "'EB Garamond', Garamond, 'Times New Roman', serif" },
+    "font": { "$value": "var(--font-sans, {font.mono})", "$description": "the Hermes host's --font-sans wins" },
+    "body": { "$value": "'Inter', system-ui, sans-serif", "$description": "Projects (web/home.css)" }
+  },
+  "easing": {
+    "ease": { "$value": "cubic-bezier(.2, .7, .2, 1)" },
+    "cosmos-ease": { "$value": "cubic-bezier(.65, 0, .35, 1)", "$description": "the studio frame (web/studio.css)" }
+  }
+}

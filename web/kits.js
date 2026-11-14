@@ -1,3 +1,4 @@
+// @ts-check
 // The Studio's kits (docs/specs/37-studio-first.md, "The kit contract"): one module per kind, each
 // exporting one `<kind>Kit`. A new kit adds its import line here and its name to the list, nothing else.
 // (server/page.mjs joins every web/kit-<kind>.js in its own closure; only <kind>Kit leaves it.)

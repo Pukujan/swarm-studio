@@ -111,6 +111,13 @@ Each connection's "Goes to" value is its line from this table, so the honesty is
 | 4 | **Let Hermes connect + Copy command**: `/swarm setup`, a command per row, connectors beyond Supabase (Stripe and Vercel through Hermes's connectors) | `commands.py`, `engine/hermes_connect.mjs` | 1 day |
 | 5 | **Secrets through Hermes only** (below) | `plugin.yaml`, `launcher.py`, engine | ½–1 day |
 
+> Owner, 2026-11-13: "i still dont see setup for configuring models connectors what each thing needs for each
+> component and part and what its for". Built as Setup › Parts (web/setup-parts.js), grouped by what the person
+> makes rather than by You / Crew / Publish: each part says what it is for, what powers it, required or optional,
+> what stops without it, its live state and one fix. Settings' layer 1 is now You, Setup, Lite mode, Data; Crew and
+> Publish moved into Setup › Parts. Slice 2's token forms and media keys stay where they are: a key's fix is the
+> `hermes config set` command, so the key goes to Hermes, not the studio.
+
 Not real today, and not promised by this spec: **Google sign-in for generated apps**. Apps sign people in with
 Supabase Auth or a labelled guest pass, and the build prompts forbid a provider button that is not configured.
 Google sign-in means a Google OAuth client set up in the person's own Supabase project; it needs its own design.

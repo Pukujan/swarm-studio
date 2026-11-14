@@ -51,18 +51,20 @@ export const CONNECT = {
 }
 
 // The APIs people ask for by what they do, not by name: "an air booking api" is a flights API.
-// Each has one or two real services (a key each) and made-up data, which is always ready.
+// `options` are what a built app can really use: services with no key, and made-up data, which is
+// always ready. `later` names the keyed services people know (Duffel, Twilio, …): their keys are not
+// declared in plugin.yaml, so the studio never reads them and a built app never gets them (Nous review).
 export const APIS = [
-  { id: 'flights', name: 'Flights', words: /\b(flights?|air(line|port)?s?|air ?booking|plane|airfare)\b/i, options: [['duffel', 'Duffel', 'DUFFEL_API_KEY'], ['amadeus', 'Amadeus', 'AMADEUS_API_KEY']] },
-  { id: 'hotels', name: 'Hotels', words: /\b(hotels?|stays?|rooms? booking|lodging)\b/i, options: [['amadeus-hotels', 'Amadeus', 'AMADEUS_API_KEY']] },
-  { id: 'maps', name: 'Maps', words: /\b(maps?|directions|geocod\w*|locations? search)\b/i, options: [['mapbox', 'Mapbox', 'MAPBOX_TOKEN'], ['osm', 'OpenStreetMap', '']] },
-  { id: 'weather', name: 'Weather', words: /\bweather|forecast\b/i, options: [['open-meteo', 'Open-Meteo', '']] },
-  { id: 'sms', name: 'Text messages', words: /\b(sms|text messages?|whatsapp)\b/i, options: [['twilio', 'Twilio', 'TWILIO_AUTH_TOKEN']] },
-  { id: 'calendar', name: 'Calendar', words: /\b(google calendar|calendar sync|ical)\b/i, options: [['ics', 'Calendar file', '']] }
+  { id: 'flights', name: 'Flights', words: /\b(flights?|air(line|port)?s?|air ?booking|plane|airfare)\b/i, options: [], later: ['Duffel', 'Amadeus'] },
+  { id: 'hotels', name: 'Hotels', words: /\b(hotels?|stays?|rooms? booking|lodging)\b/i, options: [], later: ['Amadeus'] },
+  { id: 'maps', name: 'Maps', words: /\b(maps?|directions|geocod\w*|locations? search)\b/i, options: [['osm', 'OpenStreetMap']], later: ['Mapbox'] },
+  { id: 'weather', name: 'Weather', words: /\bweather|forecast\b/i, options: [['open-meteo', 'Open-Meteo']], later: [] },
+  { id: 'sms', name: 'Text messages', words: /\b(sms|text messages?|whatsapp)\b/i, options: [], later: ['Twilio'] },
+  { id: 'calendar', name: 'Calendar', words: /\b(google calendar|calendar sync|ical)\b/i, options: [['ics', 'Calendar file']], later: [] }
 ]
 const MOCK = { id: 'mock', name: 'Made-up data', needs: [], how: 'Made-up data in the same shape a real service returns, behind one server module, so a real service can replace it later without touching the screens.' }
 const apiOptions = a => [
-  ...a.options.map(([id, name, env]) => ({ id, name, needs: env ? [env] : [], how: `${a.name} from ${name}${env ? ` with process.env.${env} (server code only); with no key, the made-up data below` : ' (no key needed)'}, behind one server module.` })),
+  ...a.options.map(([id, name]) => ({ id, name, needs: [], how: `${a.name} from ${name} (no key needed), behind one server module.` })),
   MOCK
 ]
 export function optionsOf(c) {
@@ -206,7 +208,10 @@ export function askConnect(text, kit) {
     if (!k.connects.some(c => c.id === id)) k.connects = cleanKit({ ...k, connects: [...k.connects, { kind: 'api', api: a.id, choice: null }] }).connects
     const c = k.connects.find(x => x.id === id)
     const real = optionsOf(c).filter(o => o.id !== 'mock')
-    return { kit: k, connect: id, say: `Yes: ${a.name.toLowerCase()} come from a ${a.name.toLowerCase()} API. ${real.map(o => o.name).join(' or ')} (${real.some(o => o.needs.length) ? 'a key each' : 'no key'}), or made-up ${a.name.toLowerCase()} first and a real one later.`, options: optionsOf(c).map(o => ({ id: `${id}:${o.id}`, label: o.name })) }
+    const what = a.name.toLowerCase()
+    const known = a.later.length ? ` such as ${a.later.join(' or ')}` : ''
+    const free = real.length ? `${real.map(o => o.name).join(' or ')} (no key), or ` : ''
+    return { kit: k, connect: id, say: `Yes: ${what} come from a ${what} API${known}. ${a.later.length ? 'Their keys cannot reach a built app yet, so ' : ''}${free}made-up ${what} in the same shape first; a real one can replace it later.`, options: optionsOf(c).map(o => ({ id: `${id}:${o.id}`, label: o.name })) }
   }
   for (const kind of ['payments', 'email', 'signin', 'storage']) {
     const words = { payments: /\b(pay\w*|stripe|checkout)\b/i, email: /\b(e-?mails?|resend|newsletter)\b/i, signin: /\b(sign[- ]?in|log[- ]?in|auth\w*)\b/i, storage: /\b(upload\w*|files?|storage)\b/i }[kind]
@@ -319,6 +324,8 @@ export function kitPlan(kit, have = []) {
       return { kind: c.kind, name: c.name, choice: c.option || null, state: c.state, how: o ? o.how : `${c.name} is not chosen yet: leave a clearly marked stand-in.` }
     }),
     start: k.start,
+    // the declared keys the locked choices use (names only): engine/proc.mjs appEnv hands only these to the app
+    keys: [...new Set(k.connects.flatMap(c => optionsOf(c).find(x => x.id === c.choice)?.needs || []))].filter(n => KIT_KEYS.includes(n)),
     kit: true
   }
 }
@@ -379,7 +386,9 @@ export function kitChecks(kit, appDir) {
 
 // ---------- what is connected, by name only: the env names the studio holds (from Hermes's secret
 // scope) and 'supabase' when its keys or its connector are there. Never a value.
-const NAMES = ['STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'DUFFEL_API_KEY', 'AMADEUS_API_KEY', 'MAPBOX_TOKEN', 'TWILIO_AUTH_TOKEN']
+// Only keys declared in plugin.yaml optional_env and handed to a built app by engine/proc.mjs appEnv.
+export const KIT_KEYS = ['STRIPE_SECRET_KEY', 'RESEND_API_KEY']
+const NAMES = KIT_KEYS
 export function haveOf(env = process.env, { supabase = false } = {}) {
   const have = NAMES.filter(n => env[n])
   if (have.includes('STRIPE_SECRET_KEY') && !/^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY)) have.splice(have.indexOf('STRIPE_SECRET_KEY'), 1)

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runFacts, writePosts, pitchOf } from '../engine/launch.mjs'
 import { navBrand } from '../engine/naming.mjs'
+import { canvasSource } from './canvas-source.mjs'
 
 // the owner's App run (2026-11-12T03-08-56-302Z): page design done, the app step failed, nothing published
 const PROMPT = 'full stack saas app for ticket booking, do u wanna grill me first? Accounts: Email sign-in. The admin sees: booking orders members operations. dont build yet lets talk about specifications, i need an air booking api or something?'
@@ -52,7 +53,7 @@ test('the nav wordmark names the product; the deck uses the same lines', () => {
   assert.equal(navBrand('<nav><div>no link</div></nav>'), '')
   // Leaf & Kettle (2026-11-12): the wordmark, then a tagline in the same link
   assert.equal(navBrand('<nav><a href="#" data-goto="home"><span>Leaf &amp; Kettle</span> <span class="text-xs">loose-leaf tea, Portland</span></a></nav>'), 'Leaf & Kettle')
-  const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
+  const canvas = canvasSource()
   const naming = readFileSync(new URL('../engine/naming.mjs', import.meta.url), 'utf8')
   const body = src => src.slice(src.indexOf('// navbrand:start'), src.indexOf('// navbrand:end')).split('\n').slice(1).join('\n').replace(/^export /m, '')
   assert.equal(body(canvas), body(naming))
@@ -60,7 +61,7 @@ test('the nav wordmark names the product; the deck uses the same lines', () => {
 })
 
 test('the kit never opens on its own before there is something to launch', () => {
-  const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
+  const canvas = canvasSource()
   const auto = readFileSync(new URL('../engine/auto.mjs', import.meta.url), 'utf8')
   const server = readFileSync(new URL('../server/server.mjs', import.meta.url), 'utf8')
   // the summary pops up only for a finished job with a live link; a failed or stopped job does not interrupt

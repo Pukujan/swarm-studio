@@ -1079,6 +1079,191 @@ function selfTactic() {
   if (t.cast && Math.random() < 0.4) return 'cast'
   return 'pressure'
 }
+
+// ---------------------------------------------------------------- autopilot platforming
+// Where a heroine can stand: floor runs (cut by pits and walls) and every walkable top. A route
+// is a chain of them, each step a jump (one jump lifts ~195, a double ~355), a wall kick up a
+// tall wall, a drop through a platform or a walk off its edge. Routes come from the stage's
+// own platform data every frame, so broken columns and fallen crumble stones drop out.
+const NAV = { JUMP: 185, DJUMP: 345, ban: new Map(), from: null, edge: null, prog: null, stuckN: 0, un: null, skip: null }
+const navKey = s => Math.round(s.l) + ':' + Math.round(s.y)
+function navSurfaces() {
+  const lo = stage ? leftBound() : 30, hi = stage ? rightBound() : WORLD - 30, out = [], cuts = []
+  for (const [a, b] of (typeof pits !== 'undefined' ? pits : [])) cuts.push([a, b])
+  for (const p of plats) if (p.kind === 'wall' && !p.broken) cuts.push([p.l - 24, p.r + 24])
+  cuts.sort((a, b) => a[0] - b[0])
+  let x = lo
+  for (const [a, b] of cuts) { if (b <= x) continue; if (a > x) out.push({ l: x, r: Math.min(a, hi), y: GROUND, floor: true }); x = Math.max(x, b) }
+  if (x < hi) out.push({ l: x, r: hi, y: GROUND, floor: true })
+  // tops, cut where a wall rises through them
+  for (const p of plats) if (!p.broken && p.walk && p.r - p.l > 40 && !(p.kind === 'crumble' && p.fall > 0) && p.surf < GROUND - 20) {
+    let segs = [[Math.max(lo, p.l + 10), Math.min(hi, p.r - 10)]]
+    if (p.kind !== 'wall') for (const w of plats) if (w.kind === 'wall' && !w.broken && w.surf < p.surf - 6) segs = segs.flatMap(([a, b]) => b <= w.l - 24 || a >= w.r + 24 ? [[a, b]] : [[a, w.l - 24], [w.r + 24, b]])
+    for (const [a, b] of segs) out.push({ l: a, r: b, y: p.surf, p, wall: p.kind === 'wall' })
+  }
+  return out.filter(s => s.r > s.l + 10)
+}
+// the surface under (x, y): the highest top at or below y
+function navAt(S, x, y) {
+  let best = -1
+  for (let i = 0; i < S.length; i++) { const s = S[i]; if (x >= s.l - 14 && x <= s.r + 14 && s.y >= y - 10 && (best < 0 || s.y < S[best].y)) best = i }
+  if (best >= 0) return best
+  // off every top (against a wall, over a gap): the nearest one at or below
+  let bd = Infinity
+  for (let i = 0; i < S.length; i++) { const s = S[i], d = Math.max(0, s.l - x, x - s.r) + Math.abs(s.y - y) * 0.3; if (s.y >= y - 10 && d < bd) { bd = d; best = i } }
+  return best
+}
+// a wall standing between two tops, taller than both, blocks the way across
+function navWallBetween(A, B) {
+  const a = B.l > A.r ? A.r : B.r, b = B.l > A.r ? B.l : A.l
+  if (b <= a) return false
+  for (const p of plats) if (p.kind === 'wall' && !p.broken && p !== B.p && p !== A.p && p.r + 24 > a && p.l - 24 < b && p.surf < Math.min(A.y, B.y) - 40) return true
+  return false
+}
+function navCost(A, B) {
+  if (NAV.ban.get(navKey(B)) > T) return Infinity
+  const gap = Math.max(0, B.l - A.r, A.l - B.r), up = A.y - B.y
+  if (navWallBetween(A, B)) return Infinity
+  if (up > 8) {
+    if (up > NAV.DJUMP) return B.wall && gap < 70 && up < 560 ? 3 + up / 300 : Infinity   // kick up the wall's face
+    if (gap > (up <= NAV.JUMP ? 260 : 190)) return Infinity
+    return 1 + up / 300 + gap / 300
+  }
+  if (up < -8) return gap > 320 ? Infinity : 0.6 + gap / 300 - up / 1500
+  return gap > 280 ? Infinity : 1 + gap / 250
+}
+function navRoute(S, a, b) {
+  const n = S.length, dist = new Array(n).fill(Infinity), prev = new Array(n).fill(-1), done = new Array(n).fill(false)
+  dist[a] = 0
+  for (;;) {
+    let u = -1
+    for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i
+    if (u < 0 || u === b) break
+    done[u] = true
+    for (let v = 0; v < n; v++) if (!done[v] && v !== u) { const c = navCost(S[u], S[v]); if (dist[u] + c < dist[v]) { dist[v] = dist[u] + c; prev[v] = u } }
+  }
+  if (dist[b] === Infinity) return null
+  const path = [b]
+  while (path[0] !== a) path.unshift(prev[path[0]])
+  return path
+}
+// a foe's box, its middle, and whether it hangs in the air out of reach of a standing swing
+function navFoe(e) {
+  if (!e) return null
+  const b = e.box ? e.box() : { x: e.x - 40, y: e.y - 120, w: 80, h: 120 }
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2, bot = b.y + b.h
+  return { e, b, cx, cy, bot, air: bot < groundAt(cx, b.y) - 110 }
+}
+// the top to fight from: the one a walker stands on, or for a flyer the top a little under it
+function navGoal(S, f) {
+  const at = navAt(S, f.cx, f.bot)
+  if (!f.air) return at
+  const fy = f.cy + 60   // feet here put the air swing across its middle
+  let best = -1, bc = Infinity
+  for (let i = 0; i < S.length; i++) {
+    const s = S[i]
+    if (s.r < f.cx - 150 || s.l > f.cx + 150) continue
+    const h = s.y - fy
+    if (h < -30 || h > NAV.DJUMP + 60) continue
+    const c = Math.abs(h - 130) + Math.max(0, s.l - f.cx, f.cx - s.r) * 0.6
+    if (c < bc) { bc = c; best = i }
+  }
+  return best >= 0 ? best : at
+}
+// walk, jump, double jump, kick or drop toward standing at x on top g; true once there
+function navGo(S, g, gx) {
+  const go = d => { if (Math.abs(d) > 10) vkey(d > 0 ? 'arrowright' : 'arrowleft') }
+  if (!P.ground) {
+    const E = NAV.edge
+    if (!E) return false
+    const over = P.x > E.l + 6 && P.x < E.r - 6
+    go(E.lx - P.x)
+    if (E.up) {
+      if (P.vy < 0) vkey(' ')                                       // hold for full height
+      if (P.y > E.y + 2 && P.vy > -160 && P.jumps > 0) vtap(' ')    // still under it near the top of the arc: jump again
+      if (P.onWall && P.y > E.y) vtap(' ')                          // sliding down a wall: kick, swing back in, kick again
+      // above it but off to the side: dash across; over a narrow top, float down onto it with an air swing
+      if (AUTO.dashOn && P.y < E.y - 6 && !over && Math.abs(E.lx - P.x) > 150 && P.airDash > 0 && P.dashCD <= 0 && P.vy > -250) vtap('shift')
+      if (P.hero === 'messenger' && E.wall && P.y < E.y - 2 && over && P.vy > 300 && !P.act) vtap('j')
+    }
+    return false
+  }
+  const here = navAt(S, P.x, P.y)
+  NAV.edge = null
+  if (here < 0 || g < 0) return false
+  if (here === g || (S[here].y < S[g].y && S[g].y - S[here].y < 40 && P.x > S[g].l && P.x < S[g].r)) { go(clamp(gx, S[g].l + 20, S[g].r - 20) - P.x); return true }
+  const path = navRoute(S, here, g)
+  if (!path || path.length < 2) { go(gx - P.x); return false }
+  const A = S[here], N = S[path[1]], last = path[1] === g
+  const lx = clamp(last ? gx : clamp(P.x, N.l, N.r), N.l + 30, N.r - 30)
+  const ddx = lx - P.x, up = A.y - N.y
+  const atEdge = (ddx > 0 ? A.r - P.x : P.x - A.l) < 26
+  NAV.step = navKey(N)
+  if (up > 8) {
+    const kick = up > NAV.DJUMP
+    const wx = kick ? (N.l + N.r) / 2 : lx
+    const reach = kick ? 70 : up <= NAV.JUMP ? 130 : 210
+    const under = P.x > N.l - 10 && P.x < N.r + 10
+    go(kick ? wx - P.x : ddx)
+    if (Math.abs(kick ? wx - P.x : ddx) < reach || under || atEdge) { vtap(' '); vkey(' '); NAV.edge = { lx, y: N.y, l: N.l, r: N.r, up: true, kick, wx, wall: N.wall } }
+  } else if (up < -8) {
+    // down: walk off the edge onto the part that sticks out; drop through only when it lies wholly under,
+    // and far enough under that the drop does not carry her past it
+    const outL = N.l < A.l - 40, outR = N.r > A.r + 40
+    if (outL || outR) {
+      const ex = outR && (!outL || Math.abs(A.r - P.x) < Math.abs(A.l - P.x)) ? Math.min(N.r - 30, A.r + 50) : Math.max(N.l + 30, A.l - 50)
+      go(ex - P.x); NAV.edge = { lx: ex, y: N.y, l: N.l, r: N.r, up: false }
+    } else {
+      if (!A.floor && !A.wall && P.x > N.l + 10 && P.x < N.r - 10) { vkey('arrowdown'); vtap(' ') }
+      else go(ddx)
+      NAV.edge = { lx, y: N.y, l: N.l, r: N.r, up: false }
+    }
+  } else {
+    go(ddx)
+    if (atEdge) { vtap(' '); vkey(' ') }
+    NAV.edge = { lx, y: N.y, l: N.l, r: N.r, up: true }
+  }
+  return false
+}
+// no closer, no hits, hardly moved for a second: count it, close off the step being tried and
+// shake loose (jump high, back off, dash, drop) before planning again
+// a boss fight in reach is not 'stuck': dodging, a rest window or an untargetable phase all look like no progress
+function navBusyBoss(d) {
+  if (typeof B === 'undefined' || !B || B.dead) return false
+  if (AUTO.tactic === 'evade' || AUTO.tactic === 'reflect' || B.untargetable || B.window > 0) return true
+  return d < 420
+}
+function navStuck(d, hpSum) {
+  const S = NAV.prog
+  if (!S || hpSum < S.hp - 0.5 || d < S.d - 40 || Math.hypot(P.x - S.x, P.y - S.y) > 150 || P.chant || (typeof INTRO !== 'undefined' && INTRO) || navBusyBoss(d)) { NAV.prog = { t: T, d, x: P.x, y: P.y, hp: hpSum }; return }
+  S.hp = Math.min(S.hp, hpSum)
+  if (T - S.t < 1) return
+  NAV.stuckN++; AUTO.stuck = NAV.stuckN
+  if (NAV.step) NAV.ban.set(NAV.step, T + 4)
+  NAV.un = { t: T, until: T + 0.8, how: NAV.stuckN % 4 }
+  NAV.prog = null
+}
+function navUnstick(dx) {
+  const go = d => vkey(d > 0 ? 'arrowright' : 'arrowleft')
+  const u = NAV.un, k = T - u.t
+  if (u.how === 0) { go(dx); if (P.ground) vtap(' '); else if (P.vy > -150 && P.jumps > 0) vtap(' '); if (P.vy < 0) vkey(' ') }
+  else if (u.how === 1) { go(k < 0.45 ? -dx : dx); if (k > 0.45 && P.ground) vtap(' '); if (P.vy < 0) vkey(' ') }
+  else if (u.how === 2) { go(dx); if (P.dashCD <= 0 && (P.ground || P.airDash > 0)) vtap('shift'); else if (P.ground) vtap(' ') }
+  else { if (P.ground && P.onPlat) { vkey('arrowdown'); vtap(' ') } else { go(-dx); if (P.ground) vtap(' ') } }
+  if (P.onWall) vtap(' ')
+}
+// Baker in the air: rise to it, face it, string air swings (they float her and keep it up)
+function bakerAir(f, adx, side, canDash) {
+  const go = d => vkey(d > 0 ? 'arrowright' : 'arrowleft')
+  const top = P.y - 160, low = P.y + 10   // the air swing's reach, feet-relative
+  const inY = f.b.y < low && f.bot > top, inX = adx < 200 + f.b.w / 2
+  if (adx > 70 || P.face !== side) go(side)   // never step back: turning away aims the swing away
+  if (P.vy < 0 && f.b.y + f.b.h < P.y - 60) vkey(' ')
+  if (f.bot < top + 20 && P.vy > -200 && P.jumps > 0 && !(P.act && P.act.t < P.act.m.cancel)) { vtap(' '); return }
+  if (!inY && f.bot < top && adx > 150 && adx < 420 && canDash && P.vy > -100 && P.jumps === 0) { vtap('shift'); go(side); return }
+  if (inX && inY) { if (adx > 20) go(side); if (!P.act || P.act.t >= P.act.m.cancel * 0.7) vtap('j') }
+  else if (inY && adx < 420 && canDash) { vtap('shift'); go(side) }
+}
 function autopilot() {
   for (const k of AUTO.held) if (!['j'].includes(k) || !AUTO.keepJ) keys.delete(k)
   AUTO.held.clear()
@@ -1089,18 +1274,25 @@ function autopilot() {
   if (T - AUTO.at > 2.5 && T > AUTO.next) { AUTO.tactic = selfTactic(); AUTO.src = 'self'; AUTO.next = T + 0.9 }
   let tac = AUTO.tactic
   if (!tacticsNow()[tac]) tac = 'pressure'
-  const tgt = (B && B.active) ? B : nearestTarget(P.x, P.y)
-  const tx = tgt ? tgt.x : (cam.lock ? ARENA + ARW / 2 : P.x + 400), ty = tgt ? (tgt === B ? B.y - (B.h || 280) * 0.5 : tgt.y) : P.y - 60
+  // the target: the boss when it is up, else the nearest foe (one that just stalled her is skipped a while)
+  let tgt = (B && B.active) ? B : null
+  if (!tgt) { let d = Infinity; for (const e of targets()) { if (NAV.skip && NAV.skip.e === e && NAV.skip.until > T) continue; const dd = (e.x - P.x) ** 2 + ((e.y - P.y) * 1.6) ** 2; if (dd < d) { d = dd; tgt = e } } }
+  if (!tgt) tgt = nearestTarget(P.x, P.y)
+  const F = navFoe(tgt)
+  const tx = F ? F.cx : (cam.lock ? ARENA + ARW / 2 : P.x + 400), ty = F ? F.cy : P.y - 60
   const dx = tx - P.x, dy = ty - (P.y - 80)
   const go = d => vkey(d > 0 ? 'arrowright' : 'arrowleft')
   const canDash = P.dashCD <= 0 && (P.ground || P.airDash > 0)
+  const S = navSurfaces()
 
-  // the ground: jump pits and walls, kick off walls, keep moving over a hole
+  // no progress for a second: try another way
+  if (F || !cam.lock) navStuck(Math.hypot(dx, dy), targets().reduce((a, e) => a + (e.hp || 0), 0)); else NAV.prog = null
+
+  // the ground: jump pits, keep moving over a hole, kick off a wall she is sliding down
   const fwd = P.face
   if (P.ground && !inPit(P.x) && (inPit(P.x + fwd * 80) || inPit(P.x + fwd * 140))) { vtap(' '); vkey(fwd > 0 ? 'arrowright' : 'arrowleft') }
   if (!P.ground && inPit(P.x)) { go(fwd); if (P.jumps > 0 && P.vy > 120) vtap(' ') }
-  for (const p of plats) if (p.kind === 'wall' && !p.broken && P.ground && (fwd > 0 ? p.l - P.x : P.x - p.r) > 0 && (fwd > 0 ? p.l - P.x : P.x - p.r) < 110) { vtap(' '); break }
-  if (P.onWall) { vtap(' '); vkey(P.onWall < 0 ? 'arrowleft' : 'arrowright') }
+  if (P.onWall && !(NAV.edge && NAV.edge.up)) { vtap(' '); vkey(P.onWall < 0 ? 'arrowleft' : 'arrowright') }
   // black orbs: nothing stops them, so get over them or into the gap
   const dooms = bullets.filter(b => b.enemy && b.type === 'doom' && Math.abs(b.x - P.x) < 360 && (b.x - P.x) * b.vx < 0)
   if (dooms.length) {
@@ -1144,8 +1336,9 @@ function autopilot() {
   if (close.length >= 2 && canDash) { vtap('shift'); go(dx) }
   else if (close.length && P.ground && Math.random() < 0.15) vtap(' ')
 
+  if (NAV.un && T < NAV.un.until) { if (NAV.un.how === 1 && tgt && tgt !== B) NAV.skip = { e: tgt, until: T + 2.5 }; navUnstick(dx || 1); return }
   if (tac === 'swap') { vtap('tab'); AUTO.tactic = 'pressure'; return }
-  if (tac === 'ult') { vtap('r'); return }
+  if (tac === 'ult') { if (targets().some(e => Math.abs(e.x - P.x) < 640 && Math.abs(e.y - P.y) < 420)) { vtap('r'); return } tac = 'pressure' }
   if (tac === 'evade') {
     const n = nearBullets(260); const cx = n.reduce((a, b) => a + b.x, 0) / (n.length || 1)
     go(P.x > cx ? 1 : -1)
@@ -1155,23 +1348,60 @@ function autopilot() {
   }
   if (P.hero === 'messenger') {
     if (tac === 'reflect') { const n = nearBullets(260); if (n.length) { P.face = Math.sign(n[0].x - P.x) || P.face; if (n.length > 3) { AUTO.seq = ['j', 'k']; AUTO.si = 0 } autoString() } return }
-    // close in; jump to whatever floats above
-    if (Math.abs(dx) > 120) go(dx)
-    else if (Math.abs(dx) < 50) go(-dx)
-    if (dy < -140 && P.ground) vtap(' ')
-    else if (dy < -60 && !P.ground && P.vy > 0 && P.jumps > 0) vtap(' ')
-    if (Math.abs(dx) < 220 && Math.abs(dy) < 160) {
+    if (!F) { navGo(S, navAt(S, clamp(tx, P.x - 600, P.x + 600), GROUND), tx); return }   // nothing in view: on to the next gate
+    const side = Math.sign(F.cx - P.x) || P.face, adx = Math.abs(F.cx - P.x)
+    // a shield turns slowly: dash or jump past it and hit its back
+    const front = F.e.blockFront && F.e.air <= 0 && !(F.e.stun > 0) && (P.x - F.e.x) * F.e.face > 0
+    if (front && adx < 320 && Math.abs(F.bot - P.y) < 90) {
+      go(side)
+      if (canDash && adx < 260) vtap('shift')
+      else if (P.ground) { vtap(' '); vkey(' ') }
+      else { if (P.vy < 0) vkey(' '); if (P.vy > -100 && P.jumps > 0) vtap(' ') }
+      return
+    }
+    if (!P.ground) {
+      // airborne: fight what is up here, or finish the jump the route started
+      if (F.air || F.e.air > 0 || (adx < 260 && Math.abs(F.cy - (P.y - 80)) < 200)) { bakerAir(F, adx, side, canDash); if (P.vy < 0 && F.cy < P.y - 120) vkey(' '); return }
+      navGo(S, -1, tx); return
+    }
+    // close enough to swing from where she stands?
+    const reachUp = P.y - F.bot                              // >0: its feet are above hers
+    const groundSwing = adx < 190 + F.b.w / 2 && F.bot > P.y - 150 && F.b.y < P.y - 10
+    if (groundSwing && reachUp < 40) {
+      if (adx > 120 || P.face !== side) go(side)
       if (tac === 'punish' && P.meter >= SPECIAL_COST && P.str?.length >= 2) vtap('l')
-      else if (P.ground && dy < -80 && !P.act) { vkey('arrowup'); vtap('j') }
       else autoString()
-    } else if (Math.abs(dx) < 900 && Math.abs(dy) < 120 && Math.random() < 0.02) { AUTO.seq = ['j', 'j', 'k']; AUTO.si = 0; autoString() }
+      return
+    }
+    // above her and close: launcher (it jumps her up with it), or a jump into air swings
+    if (adx < 230 && reachUp > -10 && F.b.y < P.y - 60 && P.y - F.bot < NAV.DJUMP + 150) {
+      if (adx > 60) go(side)
+      if (adx < 140 && F.b.y > P.y - 220 && !P.act) { vkey('arrowup'); vtap('j') }
+      else if (!P.act || P.act.t >= P.act.m.cancel) { vtap(' '); vkey(' ') }
+      return
+    }
+    // otherwise walk the route to the top it is on (or under it, for a flyer)
+    const g = navGoal(S, F)
+    const gx = F.cx - side * 90
+    if (navGo(S, g, gx)) { if (adx > 120) go(side) }
+    if (adx < 900 && Math.abs(dy) < 120 && Math.random() < 0.01) { AUTO.seq = ['j', 'j', 'k']; AUTO.si = 0; autoString() }
     return
   }
-  // Oracle: keep her distance, aim at the target, shoot, cast
+  // Oracle: keep her distance on a top she can shoot from, aim at the target, shoot, cast
   const want = 430
-  if (!tgt) { go(1); if (P.ground && Math.random() < 0.03) vtap(' ') }   // nothing in view: walk on to the next gate
-  else if (Math.abs(dx) > want + 120) go(dx)
-  else if (Math.abs(dx) < want - 120) go(-dx)
+  if (!F) navGo(S, navAt(S, clamp(tx, P.x - 600, P.x + 600), GROUND), tx)   // nothing in view: walk on to the next gate
+  else if (!P.ground) navGo(S, -1, tx)
+  else {
+    const here = navAt(S, P.x, P.y), H = S[here]
+    const far = Math.abs(dx) > want + 120, near = Math.abs(dx) < want - 160
+    const high = F.cy < P.y - 520                     // too steep to aim well: climb toward it
+    if (far || high || !H) navGo(S, navGoal(S, F), F.cx - Math.sign(dx || 1) * want * (high ? 0.4 : 1))
+    else if (near) {
+      // back off, but never off the edge of her top into a pit or wall: hop over the foe instead
+      const away = -Math.sign(dx || 1), room = away > 0 ? H.r - P.x : P.x - H.l
+      if (room > 60) go(away); else if (P.ground && Math.random() < 0.05) { vtap(' '); vkey(' '); go(-away) }
+    }
+  }
   mouse.on = true; mouse.t = performance.now(); mouse.x = (tx - cam.x) * cam.z; mouse.y = (ty - cam.y) * cam.z
   vkey('j')
   if (tac === 'cast' || tac === 'punish') {
@@ -1180,7 +1410,6 @@ function autopilot() {
     else if (typeof spellReady === 'function' && RUN.spells.length && spellReady(RUN.spells[RUN.spell]) && !P.chant && Math.random() < 0.05) vtap('l')
     else if (!P.act || P.act.t >= P.act.m.cancel) { if (!AUTO.seq || AUTO.si >= AUTO.seq.length) { AUTO.seq = r('comet') && (tac === 'punish' || targets().length >= 3) ? ['k', 'k'] : r('halo') ? ['j', 'j', 'k'] : ['k']; AUTO.si = 0 } autoString() }
   }
-  if (dy < -200 && P.ground && Math.random() < 0.05) vtap(' ')
 }
 
 // ---------------------------------------------------------------- main loop

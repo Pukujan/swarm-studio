@@ -1,3 +1,4 @@
+// @ts-check
 // Model-written section HTML, made inert before the canvas shows it (Nous catalog review, point 4).
 // The browser parses it (a <template>, so nothing loads or runs while it is read), then every
 // <script> goes, every on* attribute goes, and every attribute whose value is a javascript:,

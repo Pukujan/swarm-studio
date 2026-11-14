@@ -86,6 +86,9 @@ body.cosmos-project .topbar { background: var(--void); backdrop-filter: none; }
 .ab .sk.over i { animation: sk-wait 1.6s ease-in-out infinite alternate; }
 @keyframes sk-wait { from { opacity: .92; } to { opacity: .7; } }
 @media (prefers-reduced-motion: reduce) { .ab .sk.over i { animation: none; } }
+/* a board's cards on their way (.wait-in, web/pet.js works on them): their shape, nothing to click */
+.ab.wait-in { pointer-events: none; background: color-mix(in srgb, var(--text) 5%, transparent); animation: sk-wait 1.6s ease-in-out infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .ab.wait-in { animation: none; } }
 .ab.game { width: 300px; height: 169px; }
 .ab.app, .ab.code { width: 300px; height: 169px; }
 .ab.film { width: 142px; height: 80px; }
@@ -338,3 +341,18 @@ body.cosmos-project .pj-now:hover { border-color: var(--text); }
 .pj-eattr { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
 .pj-eattr input { min-width: 0; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 12.5px/1.35 var(--body); }
 .pj-eattr input:focus { outline: none; border-color: var(--text); }
+
+/* the match check on a link's look (web/lookmatch.js, decision 0022): the reference beside the build, the top
+   style differences, Fix on each. Used in the Overview's inspector and the Studio's References card. */
+.lm { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 10px; }
+.lm-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.lm-pair figure { margin: 0; }
+.lm-pair img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
+.lm-pair figcaption { margin-top: 4px; font: 500 11px var(--body); color: var(--muted); }
+.lm-score { margin: 0; display: flex; align-items: baseline; gap: 6px; color: var(--muted); font: 12px var(--body); }
+.lm-score b { font: 700 22px var(--body); color: var(--text); font-variant-numeric: tabular-nums; }
+.lm-diff { display: flex; align-items: flex-start; gap: 8px; }
+.lm-diff p { flex: 1; margin: 0; font: 13px/1.45 var(--body); color: var(--text); }
+.lm-diff b { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.lm-state { margin: 0; font: 13px var(--body); color: var(--muted); }
+.lm-acts, .lm .btn { display: inline-flex; align-items: center; gap: 6px; }
