@@ -38,7 +38,15 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import { bootDyadHeadless, installEgressGuard } from "./headless";
-import { parseArgs, talkOnly, cleanAnswer, USAGE, type Args } from "./headless_args";
+import {
+  parseArgs,
+  talkOnly,
+  cleanAnswer,
+  offToolStop,
+  nobodyHere,
+  USAGE,
+  type Args,
+} from "./headless_args";
 import { abaImageConfig, abaOctoConfig } from "@/lib/aba_model_config";
 
 function runScript(appDir: string, cmd: string, cmdArgs: string[]): {
@@ -324,7 +332,7 @@ async function main(): Promise<number> {
         }
       }
     };
-    const stream = async (label: string, text: string) => {
+    const streamOnce = async (label: string, text: string) => {
       turn += 1;
       process.stdout.write(`[aba-headless] ${label} (turn ${turn})\n`);
       const { event, errored, messages } = await handle.streamChat(text, {
@@ -336,6 +344,23 @@ async function main(): Promise<number> {
         throw new Error(
           `${label} chat:response:error -> ${JSON.stringify(err).slice(0, 2000)}`,
         );
+      }
+      return messages;
+    };
+    // A turn that ended on a call to a tool nobody can answer here (offToolStop, headless_args.ts)
+    // is told so and goes on, at most twice for one ask.
+    const stream = async (label: string, text: string) => {
+      let messages = await streamOnce(label, text);
+      for (let again = 0; again < 2; again += 1) {
+        const last = [...messages]
+          .reverse()
+          .find((m) => m?.role === "assistant" && typeof m.content === "string");
+        const tool = offToolStop(last?.content);
+        if (!tool) break;
+        process.stdout.write(
+          `[aba-headless] ${tool} needs a person; going on without one\n`,
+        );
+        messages = await streamOnce(label, nobodyHere(tool));
       }
       return messages;
     };

@@ -1,6 +1,6 @@
 // Where the person is: the same XState machine the current Studio runs (web/nav.js, docs/specs/34-navigation-state.md),
 // imported, not copied, so both apps take the same moves and read and write the same address.
-export { makeNav, navMachine, view, toAddress, fromAddress, ROOMS, STEPS } from '@studio/nav'
+export { makeNav, view, toAddress } from '@studio/nav'
 export type { Nav, NavEvent, Room, View } from '@studio/nav'
 import type { View } from '@studio/nav'
 

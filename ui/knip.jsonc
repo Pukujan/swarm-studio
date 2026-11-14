@@ -1,0 +1,40 @@
+// The orphan check for the next UI (CI: tools/dev, `npm run orphans:ui`; knip, pinned in tools/dev): no file
+// nothing imports, no export nothing uses, no package nothing needs. knip finds the entry points itself from
+// package.json's scripts, vite.config.ts, the stories (.storybook/) and test/.
+// A new finding: delete the dead code, or use it. The studio's own code has its own check
+// (.dependency-cruiser-orphans.mjs). AGENTS.md says how to run both.
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // an export used inside its own file is not dead, only more public than it needs to be
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": [
+    // dependency-cruiser's parser here (.dependency-cruiser.cjs, parser: 'swc'): named in its options, never imported
+    "@swc/core",
+    // served as a file beside the page, not imported (.storybook/main.ts staticDirs, server/next.mjs)
+    "mermaid"
+  ],
+  // KNOWN: unused exports that were here when the check arrived (2026-11-14), kept until the owner decides.
+  // The check fails on a new one. knip lists by file, so a file named here is not checked for that kind of
+  // finding at all: take a file's line out when its entry is settled. Never add to this list to pass the check.
+  "ignoreIssues": {
+    // useSettledCamera: React's view of the settled camera; its own header says tiers read it, but useTiers and
+    // DeckBoard call camera.onSettled themselves
+    "src/board/camera.ts": ["exports"],
+    // layerDrag: "The Layers ports call layerDrag in their onDragStart" (ui/README.md too), and none does, so a
+    // layer cannot be dragged into the chat at /next/ as it can at / (web/layerlink.js). Wire it or drop it
+    "src/chat/layers.ts": ["exports"],
+    // the chat's front door: layerDrag and LAYER_TYPE again, and four types (ChatProps, ChatChip, ChatOption,
+    // ChatApi) every user takes from ./types instead
+    "src/chat/index.ts": ["exports", "types"],
+    // usePetSay: telling Hermia what happened; nothing tells her yet
+    "src/pet/Pet.tsx": ["exports"],
+    // useStored: this file is a copy of projects/api.ts until both move to one ui/src/api.ts (its header); only
+    // the Projects copy is used
+    "src/screens/overview/api.ts": ["exports"],
+    // guidePending: used only by tests/next-projects.test.mjs (it must agree with web/home.js's), and a test
+    // outside ui/ is out of knip's sight. The page itself never calls it
+    "src/screens/projects/make.ts": ["exports"],
+    // useTopBarParts: "stays for stories that draw a top bar of their own"; no story does
+    "src/shell/Slots.tsx": ["exports"]
+  }
+}
