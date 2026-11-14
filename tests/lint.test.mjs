@@ -109,18 +109,20 @@ test("the Studio's own CSS has no blue, purple or green", () => {
 
 // How long a lint takes is not asked of the clock: on a busy machine the same work took 1.7 s against a 50 ms
 // limit (the owner's MacBook Air, 2026-11-14). What is asked is how the work grows: four times the section,
-// about four times the CPU time of this process (process.cpuUsage, the least of several runs, so a pause for
+// about four times the CPU time of this process (process.cpuUsage, the least of three samples, so a pause for
 // someone else's work is not counted). One rule used to read the rest of the document from every heading, so
 // four times the section cost sixteen times the time (measured: 800 cards 390 ms, 3,200 cards 5,837 ms; now
 // 3 ms and 12 ms). The line between the two is drawn at eight.
 const cards = n => `<section class="py-24">${Array.from({ length: n }, (_, i) => `<div class="rounded-[var(--radius)] p-4 bg-[var(--card)]"><h3 style="font-family:var(--font-heading)">Item ${i}</h3><p class="text-[var(--muted-foreground)]">Leaves at ${i % 12 + 6}:00.</p></div>`).join('')}</section>`
+// A sample is many lints in a row, about a tenth of a second of work: Windows counts a process's CPU time in
+// steps of 15.6 ms, and one lint of 3 ms read as 0.
 const cpuMs = fn => { const from = process.cpuUsage(); fn(); const used = process.cpuUsage(from); return (used.user + used.system) / 1000 }
-const least = (fn, runs = 7) => Math.min(...Array.from({ length: runs }, () => cpuMs(fn)))
+const perLint = (html, times) => Math.min(...[0, 1, 2].map(() => cpuMs(() => { for (let i = 0; i < times; i++) lintSection(html) }))) / times
 test('four times the section takes about four times the work to lint, not sixteen', () => {
   const small = cards(800), big = cards(3200)
   lintSection(small); lintSection(big)
-  const a = least(() => lintSection(small)), b = least(() => lintSection(big))
-  assert.ok(b / a < 8, `800 cards ${a.toFixed(2)} ms of CPU, 3,200 cards ${b.toFixed(2)} ms: ${(b / a).toFixed(1)} times, where in step with the size is 4 and with its square 16`)
+  const a = perLint(small, 40), b = perLint(big, 10)
+  assert.ok(a > 0 && b / a < 8, `800 cards ${a.toFixed(2)} ms of CPU a lint, 3,200 cards ${b.toFixed(2)} ms: ${(b / a).toFixed(1)} times, where in step with the size is 4 and with its square 16`)
 })
 
 // the display-face rule reads the document once (engine/lint/artifact.mjs displaySans); upstream's one
