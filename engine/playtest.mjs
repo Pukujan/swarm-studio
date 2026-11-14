@@ -12,6 +12,7 @@ import { delimiter, join } from 'node:path'
 import { dyadDir } from './appbuild.mjs'
 import { runChecks, waitProbe } from './playcheck.mjs'
 import { makePoster, posterPath } from './poster.mjs'
+import { parseStack, mapFrames, loadTracer, noise } from './playtrace.mjs'
 
 const START = /^(play|start|begin|go|new game|tap to (play|start)|press .* to (play|start))|\b(play|start|begin)\b/i
 const ENDED = /\b(game over|you (lost|died|fell|crashed|slipped)|try again|play again|retry|gate closed|out of lives|run over)\b/i
@@ -133,7 +134,13 @@ function mux(ffmpeg, video, audio, delayMs, out) {
   return new Promise((ok, fail) => execFile(ffmpeg, ['-y', '-v', 'error', '-i', video, '-i', audio, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-af', `adelay=${d}:all=1,apad`, '-c:a', 'libopus', '-b:a', '96k', '-shortest', out], { timeout: 60000 }, err => (err ? fail(err) : ok(out))))
 }
 
-// { ok, skipped?, problem?, seconds } (a play test that could not run is ok: false with `skipped`, never a pass) — `problem` is one sentence for a fix turn
+// { ok, skipped?, problem?, seconds, started, evidence } (a play test that could not run is ok: false with `skipped`, never a pass)
+// problem: the failure in a sentence or two. started: false when the game never drew (no canvas, one flat colour,
+// Godot's own start notice): its film is then a recording of an empty page, kept as `blankClip`, never as `clip`.
+// evidence: { started, first: { message, t, count, frames }, others, console, firstKey, lastKey, text }: the first
+// error the page threw with its stack (mapped to the game's source by engine/playtrace.mjs), the console around
+// it and when the first key was pressed; engine/playtrace.mjs fixBrief makes the builder's fix request from it
+// root: the game's project on disk (source lines for the stack)
 // shot: a file to save the title screen to (the game's cover), as a JPEG
 // clip: a path to film the test to (.webm); the result then has clip and the keys pressed, in order
 // checks: the spec's play checks (engine/playcheck.mjs checklist): each control is held and the game's
@@ -142,9 +149,22 @@ function mux(ffmpeg, video, audio, delayMs, out) {
 export async function playtest(url, opts = {}) {
   const box = {}
   const r = await playtestRun(url, opts, box)
-  return { ...r, ...(box.filmed || {}), ...(box.checks ? { checks: box.checks } : {}) }
+  if (r.skipped) return r
+  const ev = box.evidence?.() || null
+  if (ev?.first) {
+    let origin = ''
+    try { origin = new URL(url).origin } catch {}
+    const fetchText = async u => { const res = await fetch(u, { signal: AbortSignal.timeout(5000) }); if (!res.ok) return null; const t = await res.text(); return t.length > 6e6 ? null : t }
+    ev.first.frames = await mapFrames(parseStack(ev.first.stack, origin), { fetchText, tracer: opts.tracer === undefined ? await loadTracer() : opts.tracer, root: opts.root || '' }).catch(() => parseStack(ev.first.stack, origin))
+    delete ev.first.stack
+  }
+  const started = r.ok || r.started !== false
+  if (ev) ev.started = started
+  // a film of a game that never drew is a film of an empty page: kept, but never shown as the play test
+  const { clip, poster, ...film } = box.filmed || {}
+  return { ...r, started, ...(started ? box.filmed || {} : { ...film, ...(clip ? { blankClip: clip } : {}) }), ...(box.checks ? { checks: box.checks } : {}), ...(ev ? { evidence: ev } : {}) }
 }
-async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false, ffmpeg = undefined, checks = null, probeWait = 25000, playwright = undefined } = {}, box = {}) {
+async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, clip = null, secure = false, ffmpeg = undefined, checks = null, probeWait = 25000, playwright = undefined, canvasWait = 15000 } = {}, box = {}) {
   let film = async () => ({}), vdir = null, g = null
   const kept = box // (the canvas's own box takes the name further down)
   // `playwright` is a test's stand-in for the package (null: none on this machine)
@@ -180,11 +200,33 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
       } catch {}
       return {}
     }
-    page.on('pageerror', e => errors.push(String(e.message).slice(0, 200)))
+    // every error the page throws, the first kept whole (its stack and when), and the console's errors and warnings
+    const thrown = new Map(), said = []
+    let pageText = ''
+    const secsIn = () => +((Date.now() - t00) / 1000).toFixed(1)
+    const threw = (message, stack) => {
+      const k = String(message).slice(0, 200)
+      errors.push(k)
+      const had = thrown.get(k)
+      if (had) had.count++
+      else if (thrown.size < 12) thrown.set(k, { message: String(message).slice(0, 300), stack: String(stack || '').slice(0, 4000), t: secsIn(), count: 1 })
+    }
+    kept.evidence = () => {
+      const [first, ...rest] = [...thrown.values()]
+      return { first: first ? { ...first } : null, others: rest.map(x => x.message), console: said.slice(0, 14), firstKey: pressed[0]?.t ?? null, lastKey: pressed.at(-1)?.k || '', text: pageText }
+    }
+    page.on('pageerror', e => threw(e.message, e.stack))
     page.on('console', m => {
-      if (m.type() !== 'error') return
+      const type = m.type()
+      if (type !== 'error' && type !== 'warning') return
       const t = m.text()
-      if (/^Uncaught/.test(t)) errors.push(t.slice(0, 200))
+      if (noise(t)) return
+      const loc = m.location?.() || {}
+      let where = ''
+      try { if (loc.url) where = `${new URL(loc.url).pathname.replace(/^\//, '')}${loc.lineNumber ? `:${loc.lineNumber + 1}` : ''}` } catch {}
+      if (said.length < 40) said.push({ t: secsIn(), type, text: t.replace(/\s+/g, ' ').slice(0, 300), ...(where ? { where } : {}) })
+      if (type !== 'error') return
+      if (/^Uncaught/.test(t)) threw(t, '')
       else if (/CORS|SecurityError|Failed to load module|localStorage|sessionStorage|indexedDB/i.test(t)) blocked.push(t.slice(0, 200))
     })
     // Hermes shows the Studio, and so the game, in a sandboxed frame (scripts only, origin null):
@@ -195,17 +237,22 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
     await page.setContent(`<!doctype html><body style="margin:0;background:#000"><iframe sandbox="allow-scripts allow-forms" src="${String(url).replace(/"/g, '&quot;')}" style="display:block;width:100vw;height:100vh;border:0"></iframe>`, { waitUntil: 'load', timeout })
     g = await (await page.$('iframe')).contentFrame()
     const why = () => [...new Set([...errors, ...blocked])].slice(0, 3).join(' | ')
-    const canvas = await g.waitForSelector('canvas', { timeout: 15000 }).catch(() => null)
-    if (!canvas) return { ok: false, problem: `No game canvas appeared within 15 s of opening the page inside a sandboxed frame (allow-scripts, no same origin), the way Hermes shows it.${why() ? ` Errors: ${why()}` : ''}${blocked.length ? ' Storage (localStorage, sessionStorage, IndexedDB) throws in a sandboxed frame: wrap every use in try/catch and fall back to memory.' : ''}` }
+    const canvas = await g.waitForSelector('canvas', { timeout: canvasWait }).catch(() => null)
+    if (!canvas) {
+      pageText = await g.evaluate(() => (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200)).catch(() => '')
+      // a crash while the game starts is the failure; the missing canvas is what it leaves behind
+      const crash = thrown.size ? `The game crashed while starting and never drew: ${[...thrown.values()][0].message}. ` : ''
+      return { ok: false, started: false, problem: `${crash}No game canvas appeared within ${Math.round(canvasWait / 1000)} s of opening the page inside a sandboxed frame (allow-scripts, no same origin), the way Hermes shows it.${why() ? ` Errors: ${why()}` : ''}${blocked.length ? ' Storage (localStorage, sessionStorage, IndexedDB) throws in a sandboxed frame: wrap every use in try/catch and fall back to memory.' : ''}` }
+    }
     // a game with play checks says when it is up (a Godot export boots for seconds: without this the
     // test pressed its keys at the loading screen and passed)
     const probed = checks?.length ? await waitProbe(page, g, probeWait) : false
     await page.waitForTimeout(1200)
     // a Godot export that cannot start shows its own notice over the canvas
     const notice = await g.evaluate(() => { const n = document.getElementById('status-notice'); return n && n.offsetParent !== null ? n.innerText.trim() : '' }).catch(() => '')
-    if (notice) return { ok: false, problem: `The Godot web export did not start: ${notice.replace(/\s+/g, ' ').slice(0, 300)}` }
+    if (notice) return { ok: false, started: false, problem: `The Godot web export did not start: ${notice.replace(/\s+/g, ' ').slice(0, 300)}` }
     const png = await page.screenshot({ type: 'png' }).catch(() => null)
-    if (png && await blank(page, png)) return { ok: false, problem: `The game's screen is blank: one flat colour about a second after it opened, with no title, text or scene drawn.${why() ? ` Errors: ${why()}` : ''} Make the title screen draw straight away (title, start button, a scene behind), and check the canvas is sized to its container and the render loop runs.` }
+    if (png && await blank(page, png)) return { ok: false, started: false, problem: `The game's screen is blank: one flat colour about a second after it opened, with no title, text or scene drawn.${why() ? ` Errors: ${why()}` : ''} Make the title screen draw straight away (title, start button, a scene behind), and check the canvas is sized to its container and the render loop runs.` }
     if (shot) await page.screenshot({ path: shot, type: 'jpeg', quality: 72 }).catch(() => {})
     if (clip) await page.screenshot({ path: posterPath(clip), type: 'jpeg', quality: 70 }).catch(() => {})
     const textOf = () => g.evaluate(() => document.body.innerText || '')
@@ -251,7 +298,12 @@ async function playtestRun(url, { seconds = 4, timeout = 30000, shot = null, cli
       if (m && ENDED.test(before) && now !== before && i > 2) { endedAt = Date.now(); break }
     }
     const lasted = ((endedAt || Date.now()) - t0) / 1000
-    if (errors.length) return { ok: false, seconds: lasted, problem: `The game threw errors while playing: ${why()}` }
+    if (errors.length) {
+      // said as it happened: an error thrown before the first key is not "while playing"
+      const first = [...thrown.values()][0], n = errors.length
+      const early = first && (pressed[0] == null || first.t < pressed[0].t)
+      return { ok: false, seconds: lasted, problem: early ? `The game throws an error as soon as it opens, before any key is pressed (first ${first.t} s after the page opened, ${n} time${n === 1 ? '' : 's'} in all): ${why()}` : `The game threw errors while playing: ${why()}` }
+    }
     if (endedAt && lasted < 2.5 && !checked?.probe) return { ok: false, seconds: lasted, problem: `The run ends about ${lasted.toFixed(1)} s after pressing start, before the player can do anything (the end screen appears with nothing achieved). Find why a fresh run is lost straight away: the player spawning off a platform, a camera or bounds check that already counts as a fall, a timer or health that starts at zero, or a lose condition checked before the first frame. Fix it so a new run starts safely and lasts until the player makes a mistake.` }
     if (checked?.problems.length) return { ok: false, seconds: lasted, problem: checked.problems.length === 1 ? checked.problems[0] : `The play test held each control and read the game's state; ${checked.problems.length} things are wrong:\n${checked.problems.map((p, i) => `${i + 1}. ${p}`).join('\n')}` }
     return { ok: true, seconds: lasted, ended: !!endedAt }

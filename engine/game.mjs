@@ -508,9 +508,19 @@ Finish with a working build: the typecheck and build must pass, and the game mus
 
 // After a slice the build stops and asks, in the left chat, before the next one: what was
 // built, what comes next, and a few things the person might want, in their game's own words.
-export function sliceAsk(spec, i) {
+// play: the slice's play test as the build keeps it (engine/appjob.mjs playGame). One that failed is said as it
+// is, the error in one line, with "Fix it" first: never "the bots have played it" over a game that did not run.
+export function sliceAsk(spec, i, play = null) {
   const all = stagesFor(spec), st = all[i], next = all[i + 1]
   const hero = String(spec?.hero || 'the hero').split(/[,—.;]/)[0].trim()
+  const on = next ? `go on to ${next.name}` : 'finish it'
+  if (play && !play.ok && !play.skipped) {
+    const tried = play.tries ? ` The crew tried ${play.tries} fix${play.tries === 1 ? '' : 'es'} and it is still there.` : ''
+    const line = play.line || String(play.problem || '').split(/\. |\n/)[0]
+    const what = play.started === false ? `is built, but the game did not start: ${line}.` : `is built, but its play test failed: ${line}.`
+    return { ask: `Slice ${i + 1} of ${all.length}, ${st.name}, ${what}${tried} Type "fix it" and the crew goes at this error now, or "go on" to ${next ? `start ${next.name} with this as its first job` : 'finish with this as the first job'}.`, ideas: ['Fix it', next ? `Go on to ${next.name}` : 'Finish it'], next: next?.name || '', failed: true }
+  }
+  if (play?.skipped) return { ask: `Slice ${i + 1} of ${all.length}, ${st.name}, is built. The bots could not play it here (${String(play.skipped).slice(0, 120)}), so play it yourself in the App window: anything to change before ${next ? next.name : 'the end'}?`, ideas: [next ? `Looks good, ${on}` : 'Looks good, finish it'], next: next?.name || '' }
   const ask = `Slice ${i + 1} of ${all.length}, ${st.name}, is built and the bots have played it. Watch their run here, or play it yourself in the App window: anything to change before ${next ? next.name : 'the end'}?`
   const ideas = [
     next ? `Looks good, go on to ${next.name}` : 'Looks good, finish it',

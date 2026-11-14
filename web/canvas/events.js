@@ -309,7 +309,8 @@ export function on(e) {
       S.spec = e.spec
       botMsg(`🎮 ${e.spec.title}: ${e.spec.pitch || ''} (${e.spec.engine})`)
       break
-    case 'app:start': case 'app:step': case 'app:ready': case 'app:done': case 'app:failed': case 'app:deployed': case 'app:parked': case 'autoplay':
+    // (app:paused was missing here: a slice's "your turn" and its card only showed after a reload)
+    case 'app:start': case 'app:step': case 'app:ready': case 'app:done': case 'app:failed': case 'app:paused': case 'app:deployed': case 'app:parked': case 'autoplay':
       appEvent(e)
       break
   }

@@ -1484,11 +1484,12 @@ async function lookAt(src) {
   })
   return String(res.text || '').trim() || null
 }
+const talked = new Map() // run id -> { text, answer, t }: Talk's last exchange with the person
 async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now = false } = {}) {
   // a confirmed change: to the builder, and nothing to answer but where it went
   if (confirm) {
     const r = now ? a.redirect(id, confirm) : a.tell(id, confirm)
-    if (!r.queued) return { ...r, answer: 'The crew is not building right now, so there is nothing to send it to: say it in your answer to the slice.' }
+    if (!r.queued) return { ...r, answer: (r.state || a.state(id).state) === 'paused' ? 'Not sent: the build is waiting on you. Type "fix it" to send the crew at the play test\'s error now, or "go on" to start the next slice.' : 'Not sent: the crew is not building right now.' }
     return { ...r, answer: r.now ? 'Sent. The builder stopped its turn and is doing this slice again with your change.' : now ? 'Sent. The builder is between turns, so it takes your change at the start of its next one.' : 'Sent. The builder takes it at the start of the next slice.' }
   }
   const t = String(text || '').trim().slice(0, 1200)
@@ -1512,14 +1513,15 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
     : [...(j?.steps || st?.steps || []).map(x => ({ t: x.t || 0, s: x.text || '' })), ...events.filter(e => e.type === 'app:stage').map(e => ({ t: e.t || 0, s: e.stage || '' }))]
       .filter(x => SLICE.test(x.s)).sort((x, y) => y.t - x.t)[0]?.s || ''
   const slices = (spec?.stages || []).map(x => x?.name).filter(Boolean)
-  const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage, done, slices })
+  const waiting = (j?.state || st?.state) === 'paused' ? (j?.slice || st?.slice) : null
+  const how = processNotes({ kind: j?.kind || st?.kind || (spec ? 'game' : 'site'), state: j?.state || st?.state, stage, done, slices, failing: waiting && waiting.play === false && !waiting.skipped ? waiting.line || true : '' })
   let files = []
   try { const dir = join(runsDir, id, 'img'); files = readdirSync(dir).map(name => ({ name, mtime: statSync(join(dir, name)).mtimeMs })) } catch {}
   const m = buildMedia({ id, files, slices: bigs.map(e => ({ ...e.big, t: e.t })), steps: j?.steps || [] })
   const snap = snapOf(id)
   const media = { clips: m.clipList, pics: [...(snap ? [{ src: snap.split('?')[0], name: 'the game right now (a still)' }] : []), ...m.picList] }
   const notes = `${how} ${mediaNotes(m, false)}\n\nState: ${j?.state || st?.state || 'idle'}. Stage: ${j?.stage || stage || 'none'}.\nRecent steps:\n${steps.join('\n') || '- none'}\nFiles written last: ${writes.join(', ') || 'none'}\nThe lead's last thoughts:\n${lead.join('\n') || '- none'}`
-  const fallback = `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}`
+  const fallback = (j?.state || st?.state) === 'paused' ? 'The build is waiting on you: type "fix it" to send the crew at the play test\'s error, or "go on" for the next slice.' : `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}`
   const model = modelFor('planner')
   if (!model) return { queued: false, state: st.state, answer: fallback }
   const chat = async messages => (await streamChat(provider('planner'), {
@@ -1527,7 +1529,11 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
   })).text
   try {
-    const r = await talk({ chat, look: lookAt, appDir: join(runsDir, id, 'app'), media, text: t, notes, who: String(who || '').slice(0, 40), on: String(on || '').slice(0, 160), title: spec?.title || '', building, deadline: Date.now() + 75000 })
+    // the exchange before this one (kept ten minutes), so a "yes" answers what was offered
+    const was = talked.get(id)
+    const r = await talk({ chat, look: lookAt, appDir: join(runsDir, id, 'app'), media, text: t, notes, who: String(who || '').slice(0, 40), on: String(on || '').slice(0, 160), title: spec?.title || '', building, deadline: Date.now() + 75000, before: was && Date.now() - was.t < 600e3 ? was : null })
+    if (r.answer) talked.set(id, { text: t, answer: r.answer, t: Date.now() })
+    if (talked.size > 40) talked.delete(talked.keys().next().value)
     return { queued: false, state: st.state, answer: r.answer || fallback, ...(r.media ? { media: r.media } : {}), ...(r.proposal ? { proposal: r.proposal } : {}), used: r.used }
   } catch { return { queued: false, state: st.state, answer: fallback } }
 }
@@ -1587,12 +1593,14 @@ async function studioFacts(runId = null, { light = false } = {}) {
   const events = runId ? readEvents(runId) : null
   const kind = events ? (events.findLast(e => e.type === 'app:start')?.kind === 'game' || events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : events.some(e => e.type === 'app:start') ? 'app' : 'site') : ''
   const named = m => (m && !ROLES.includes(m) ? String(m).replace(/^[a-z]+\//, '') : '')
+  const roleName = role => { const m = modelFor(role); return named(m) || (m && ROLES.includes(m) ? 'through Hermes' : '') }
   return {
     parts: d.partStates(GROUPS, F),
     run: events ? { id: runId, kind, working: (current?.id === runId && !current.done) || appsNow?.jobs.get(runId)?.state === 'working', built: !!(await apps().then(a => a.state(runId).hasApp).catch(() => false)), failures: d.failuresOf(events) } : null,
     python,
     hermes: { attached: !!st.attached, message: well && !well.ok ? `${well.message || ''} ${well.action || ''}`.trim() : '' },
-    models: { planner: named(modelFor('planner')), worker: named(modelFor('worker')), reviewer: picks.reviewer === 'off' ? '' : named(modelFor('reviewer')), image: image ? String(image.model || image.provider || '') : '', video: media?.clips?.on ? String(media.clips.by || '') : '' }
+    // a role Hermes routes has no model name of its own here: it is set up, and reads "through Hermes", never "none"
+    models: { planner: roleName('planner'), worker: roleName('worker'), reviewer: picks.reviewer === 'off' ? '' : roleName('reviewer'), image: image ? String(image.model || image.provider || '') : '', video: media?.clips?.on ? String(media.clips.by || '') : '' }
   }
 }
 
@@ -2108,12 +2116,13 @@ async function idleGate(runId, spec, pre, signal) {
   const said = (state, extra = {}) => record(runId, { type: 'game:idle', t: Date.now(), run: runId, state, who, ...extra })
   const interp = interpOf(heavyConfig(dataDir))
   const keys = why => {
-    if (!interp) { said('no', { text: why }); return [] }
+    if (!interp) { said('no', { text: `${why}: ${who} keeps the painted idle` }); return [] }
     said('keys', { text: `${why}; ${interp.name} will fill in the frames between close keyframes` })
     return g.idleSheets(spec, undefined, 'keys')
   }
   const options = pre === 'no' ? [] : await idleChoices()
-  if (!options.length) return keys(pre === 'no' ? 'No clip' : 'No video model, so no clip')
+  // (said whole: a bare "No clip" beside a slice's card read as "the play test has no clip")
+  if (!options.length) return keys(pre === 'no' ? 'No idle clip' : 'No video model, so no idle clip')
   let chosen = null
   if (pre && typeof pre === 'object') { const o = optionOf(options, pre.video); if (priceOk(o, pre.usd)) chosen = o }
   if (!chosen) {
@@ -2127,7 +2136,7 @@ async function idleGate(runId, spec, pre, signal) {
       idleAsks.set(runId, { options, resolve: end })
     })
   }
-  if (!chosen) return signal?.aborted ? [] : keys(chosen === null ? 'No answer, so no clip' : 'No clip')
+  if (!chosen) return signal?.aborted ? [] : keys(chosen === null ? 'No answer, so no idle clip' : 'No idle clip')
   said('yes', { text: `Animating ${who}'s idle with ${chosen.by}`, line: chosen.line, usd: chosen.usd, option: chosen.id })
   const more = g.idleSheets(spec)
   for (const m of more) if (m.video) m.option = chosen
@@ -4052,7 +4061,7 @@ const server = createServer((req, res) => {
         const spec = (readEvents(id) || []).findLast(e => e.type === 'game:spec')?.spec
         if (spec && !input.prompt && !a.state(id).hasApp) {
           const g = await gameMod()
-          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}), ...(input.idle !== undefined ? { idle: input.idle } : {}) }
+          input = { kind: 'game', fresh: true, title: spec.title, prompt: g.gamePrompt(spec), files: { 'GAME_SPEC.md': g.specMarkdown(spec) }, ...(input.art === false ? { art: false } : {}), ...(input.note ? { note: String(input.note).slice(0, 1200) } : {}), ...(input.guided === false ? { guided: false } : {}), ...(input.restart === true ? { restart: true } : {}), ...(input.fix === true ? { fix: true } : {}), ...(input.target ? { target: String(input.target).slice(0, 20) } : {}), ...(input.idle !== undefined ? { idle: input.idle } : {}) }
         }
         return a.start(id, input)
       }).then(s => reply(200, s)).catch(fail)
