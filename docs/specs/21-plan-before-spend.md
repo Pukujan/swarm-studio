@@ -186,7 +186,7 @@ The Systems card is a list of switches. Each module is a block of build instruct
 | Subscriptions | new, template | Stripe Checkout in `subscription` mode with `sk_test_` only; a demo plan without a key |
 | Leaderboard | new, template | `POST /api/scores`, `GET /api/scores?board=`, best per player, server-checked run length |
 | Gacha | new, template | spec 16's Oracle rules: published rates, a pity counter, no paid currency without the label; a pull animation |
-| Autoplay pilot | exists for ARES | `games/ares/jev` and `pilot.gd`; the web game's autoplay is PR #139's, wired as a switch once it lands |
+| Autoplay pilot | exists for ARES | `games/ares/jev` and `pilot.gd`; the web game's is the Game room's Autoplay switch (PR #139: `engine/aiplayer.mjs`, `server/autoplay.mjs`, `web/canvas/autoplay.js`), which plays any running game, and `engine/autoplay.mjs` on the command line for a game that opted in |
 | Enemy AI | new, template | state machines for minion, elite and a 3-stage boss: idle → telegraph → attack → recover, stage change at health thresholds, weapon switch per stage |
 | Loadout | new, template | `GET /api/loadout?player=` returns the cosmetics owned in the app; the game reads it at start |
 

@@ -66,6 +66,7 @@ import { studioRoutes } from './studio.mjs'
 import { studioStore } from '../engine/studio.mjs'
 import { assetStore } from '../engine/assetstore.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
+import { autoplayRoutes } from './autoplay.mjs'
 import { bringInRoutes } from './bringin.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
@@ -1362,6 +1363,10 @@ async function videoNow(id, input = {}) {
 // ---------- the App tab's jobs, loaded the first time someone uses it
 let appsP = null
 const apps = () => (appsP ||= import('../engine/appjob.mjs').then(m => (appsNow = m.appJobs({ runsDir, record, broadcast, readEvents, provider, modelFor, paint: paintGame, fill: fillApp, nameFor, idleMs: () => idleStops().app * 60000 }))))
+// Autoplay in the Game room (server/autoplay.mjs): an AI player plays the game that is already running, never
+// starts one. Jev decides only when the person set JEV_KEY, an OpenRouter key kept for this (plugin.yaml; the
+// first name engine/autoplay.mjs reads); without it the moves are scripted and nothing leaves the machine.
+const autoplayRoute = autoplayRoutes({ urlOf: id => apps().then(a => a.seen(id).url), broadcast, key: () => hermesKey('JEV_KEY') })
 
 // ---------- ⚡ Auto mode: one prompt → design, review, video, app, games, credit shop, data, deploy
 // sign-in connectors through Hermes (Supabase): no keys to paste
@@ -3809,6 +3814,7 @@ const server = createServer((req, res) => {
   if (studioRoute(req, res, url)) return
   if (filmRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
+  if (autoplayRoute(req, res, url)) return
   if (bringInRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
@@ -4415,7 +4421,7 @@ server.listen(port, '127.0.0.1', () => {
 })
 
 // app servers and engine runs stop with the studio, each with every process it started (engine/proc.mjs stopTree)
-const shutdown = () => { appsP?.then(a => a.close()).finally(() => process.exit(0)); if (!appsP) process.exit(0); setTimeout(() => process.exit(0), 8000).unref() }
+const shutdown = () => { autoplayRoute.stopAll(); appsP?.then(a => a.close()).finally(() => process.exit(0)); if (!appsP) process.exit(0); setTimeout(() => process.exit(0), 8000).unref() }
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, shutdown)
 
 // Nothing to do for Settings › Background's time (20 min): no pane open (an /events stream), no request, no

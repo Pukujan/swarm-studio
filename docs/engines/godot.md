@@ -1,6 +1,6 @@
 # Godot 4
 
-Glue: engine/godotfirst.mjs, engine/port.mjs, engine/starters.mjs, engine/appjob.mjs, engine/playtest.mjs, engine/playcheck.mjs, engine/talkplan.mjs, engine/planshape.mjs, starters/strategy-topdown/starter.json, starters/platformer-side/starter.json, starters/addons/swarm_rts/addon.json, starters/addons/feel_platform/addon.json
+Glue: engine/godotfirst.mjs, engine/port.mjs, engine/starters.mjs, engine/appjob.mjs, engine/playtest.mjs, engine/playcheck.mjs, engine/aiplayer.mjs, engine/talkplan.mjs, engine/planshape.mjs, starters/strategy-topdown/starter.json, starters/platformer-side/starter.json, starters/addons/swarm_rts/addon.json, starters/addons/feel_platform/addon.json
 Status: optional (person connects)
 
 Godot is a game engine under the MIT licence (https://godotengine.org/license/, fetched 2026-11-12). Swarm does not ship or
@@ -70,6 +70,16 @@ an add-on folder up to 5 MB with `bringAddon`; native files mark it `web: false`
   title-screen photo the test takes (engine/playtest.mjs, engine/poster.mjs); the App view and the chat show it until the clip plays (web/video.js).
 A Godot game publishes its state with `JavaScriptBridge.eval("window.__swarm=…")` about ten times a second (engine/playcheck.mjs:62).
 `testDodges` flags `.gd` files that check for the test, named with forward slashes on every system (engine/playcheck.mjs:71-87).
+
+**Autoplay.** The Game room's Autoplay switch runs an AI player on the game that is already served
+(server/autoplay.mjs, engine/aiplayer.mjs). It is not a test and changes nothing in the build:
+- it plays in the same sandboxed iframe as the play test, with an empty page on the game's own origin as the
+  parent, so the frame is a secure context for a Godot export (engine/aiplayer.mjs:348-356);
+- it reads `window.__swarm`, the state the game already publishes for the play test, before anything else; those
+  are the game's own coordinates, so it steers with the keys and aims the mouse at nothing (engine/aiplayer.mjs:141-165);
+- its screen reaches the room as a CDP screencast sent on as MJPEG (engine/aiplayer.mjs:343-347, server/autoplay.mjs:67-75);
+- Unchecked: it has been run against a small hand-written web game only (tests/aiplayer.test.mjs), never against
+  a real Godot Web export.
 
 **The browser path, for contrast.** Without Godot, `plan(answers)` picks three.js for a 3D look, PixiJS for
 hand-drawn, else Phaser 3, with matching skills (engine/game.mjs:41-57). It is built by the app engine and played

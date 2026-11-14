@@ -141,6 +141,7 @@
       <button class="toggle" id="app-link" hidden></button>
       <div class="spacer"></div>
       <div class="seg" id="app-stageview" role="group" aria-label="Stage" hidden><button data-stage="crew" aria-pressed="false" hidden>Crew</button><button data-stage="art" aria-pressed="false" hidden>Art</button><button data-stage="live" aria-pressed="false" hidden>Live</button></div>
+      <button class="toggle" id="app-auto" aria-pressed="false" hidden><i data-i="play"></i>Autoplay</button>
       <div class="seg" id="app-mode"><button data-mode="preview" class="on">Preview</button><button data-mode="code">Code</button></div>
       <div class="seg" id="app-device"><button data-w="390">Phone</button><button data-w="820">Tablet</button><button data-w="0" class="on">Desktop</button></div>
       <button class="toggle" id="app-reload" aria-label="Reload the app"><i data-i="rotate-cw"></i></button>
@@ -153,7 +154,7 @@
         <section class="app-hermia" id="app-hermia" hidden></section>
       </div>
       <div class="app-main">
-        <div class="app-stagearea" id="app-preview"><div class="app-shell" id="app-shell"><iframe id="app-frame" aria-label="The app" sandbox="allow-scripts allow-forms"></iframe><div class="app-loading" id="app-loading" hidden role="status" aria-busy="true"><div class="spin"></div><span></span></div></div><div class="app-empty" id="app-empty"></div></div>
+        <div class="app-stagearea" id="app-preview"><div class="app-shell" id="app-shell"><iframe id="app-frame" aria-label="The app" sandbox="allow-scripts allow-forms"></iframe><div class="app-loading" id="app-loading" hidden role="status" aria-busy="true"><div class="spin"></div><span></span></div><div class="app-auto" id="app-auto-view" hidden><img alt="The AI player's screen" hidden><div class="app-skel" role="status" aria-busy="true" aria-label="Starting the AI player"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span><em class="as-bot" aria-hidden="true"></em></div><span class="app-auto-say" role="status" hidden></span></div></div><div class="app-empty" id="app-empty"></div></div>
         <div class="app-code" id="app-code" hidden><div class="app-tree" id="app-tree"></div><pre class="app-file" id="app-file"></pre></div>
       </div>
     </div>

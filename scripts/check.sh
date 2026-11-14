@@ -2,6 +2,7 @@
 # The checks CI runs on every pull request, and you can run before pushing:
 # every file parses, every engine module loads (so a wrong import fails here,
 # not mid-build), the Python plugin compiles, and the server starts and answers.
+# CHECK_PORT and CHECK_HOSTED_PORT move the two servers it starts off 4391 and 4392 (two checks at once).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # Git Bash on Windows rewrites env values that look like Unix paths (HOSTED_BASE=/studio/app became
@@ -39,7 +40,7 @@ python3 -m unittest discover -s tests -q
 
 echo "· server starts"
 tmp=$(mktemp -d)
-port=4391
+port=${CHECK_PORT:-4391}
 SWARM_RUNS_DIR=$tmp/runs SWARM_DATA_DIR=$tmp/data SWARM_OUTPUT_DIR=$tmp/out SWARM_TOKEN=ci node server/server.mjs --port $port > $tmp/server.log 2>&1 &
 pid=$!
 trap 'kill $pid 2>/dev/null || true; rm -rf "$tmp"' EXIT
@@ -95,11 +96,14 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/img/000000
 get '/api/library?q=boots'; has '"results"'
 curl -sf http://127.0.0.1:$port/wall > "$tmp/reply"; has '<title>Swarm Wall'; grep -q '__SWARM_TOKEN__' "$tmp/reply" && { echo 'the wall has no token'; exit 1; }
 get /api/auto; has '"state"'
+# Autoplay (server/autoplay.mjs): nothing plays at rest, and a game that is not running is not started
+get /api/runs/none/autoplay; has '"on":false'
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H 'x-swarm-token: ci' -d '{"start":true}' http://127.0.0.1:$port/api/runs/none/autoplay)" = 400 ] || { echo 'autoplay started with no game running'; exit 1; }
 # without the token the API refuses
 [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/api/runs)" != 200 ] || { echo 'the API answered without a token'; exit 1; }
 
 echo "· hosted studio starts"
-hport=4392
+hport=${CHECK_HOSTED_PORT:-4392}
 SWARM_DATA_DIR=$tmp/hosted PORT=$hport HOSTED_BASE=/studio/app node server/hosted.mjs > $tmp/hosted.log 2>&1 &
 hpid=$!
 trap 'kill $pid $hpid 2>/dev/null || true; rm -rf "$tmp"' EXIT

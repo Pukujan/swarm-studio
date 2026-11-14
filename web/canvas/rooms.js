@@ -3,6 +3,7 @@
 import { dataStore } from '../data.js'
 import { noAppYet, goOnAsk } from './wander.js'
 import { stageNow, stagePick, stageAsk, stageNone, stageSwitch, playFail } from './stage.js'
+import { autoplayRoom } from './autoplay.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
 import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
@@ -30,6 +31,12 @@ const sheetv = { run: null, data: null, t: 0, busy: false }
 /** @type {{ v: import('./stage.js').StageView | null }} */
 const stagePin = { v: null }
 export const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
+// The Game room's Autoplay switch and the AI player's screen over the game (web/canvas/autoplay.js)
+const aiPlayer = autoplayRoom({
+  btn: /** @type {HTMLButtonElement | null} */ ($('#app-auto')), cover: $('#app-auto-view'), api, ico, cursor: cursor(painterOf('autoplay')),
+  stream: run => `${BASE}/api/runs/${encodeURIComponent(run)}/autoplay/stream?k=${encodeURIComponent(BOOT.token || '')}&t=${Date.now()}`,
+  showLive: () => stageSet('live'), botMsg, youSaid: text => feed(null, text, 'you'),
+})
 const PLACEHOLDER = { canvas: 'Describe a product. The swarm designs and builds its site.', video: 'An idea for the video: “faster, end on the crowd”, “for Instagram”…', app: 'Change the app: “add a FAQ page with search”, “let people pick a seat”…' }
 
 export function setView(v) {
@@ -42,6 +49,8 @@ export function setView(v) {
   // @ts-ignore
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === v)
   appEls.view.hidden = v !== 'app'
+  // Autoplay belongs to the room: leaving it ends the play
+  if (was === 'app' && v !== 'app') aiPlayer.leave()
   if (v === 'video') toggleVideo(true)
   else if (was === 'video') toggleVideo(false)
   if (v === 'app') loadApp()
@@ -313,6 +322,8 @@ function renderApp() {
     })
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
+  // Autoplay belongs to the live game (web/canvas/autoplay.js): there once it runs, stopped when the stage leaves it
+  aiPlayer.render({ run: shownRun() && appv.run === shownRun() ? appv.run : null, kind: appv.kind, url: appv.url, live: now.shown === 'live' && !now.empty && appv.mode === 'preview' })
   playClip()
   appEls.preview.hidden = appv.mode !== 'preview'
   appEls.code.hidden = appv.mode !== 'code'
@@ -357,6 +368,8 @@ function stageSet(v) {
 // The switch, typed in the chat: "show the crew", "show the art", "show the game", "follow the build". A message
 // that is one of these is answered here and never reaches the builder.
 export function stageSay(text) {
+  // Autoplay, typed: "play it for me", "stop playing"
+  if (view === 'app' && shownRun() && aiPlayer.say(text)) return true
   const want = view === 'app' && shownRun() ? stageAsk(text) : null
   if (!want) return false
   feed(null, text, 'you')
@@ -784,6 +797,7 @@ export async function deployApp() {
 
 export function appEvent(e) {
   if (e.run !== shownRun()) return
+  if (e.type === 'autoplay') return aiPlayer.event(e)
   if (appv.run !== e.run) resetApp(e.run)
   const fresh_ = !e.t || Date.now() - e.t < 8000
   if (e.type === 'app:start') {
