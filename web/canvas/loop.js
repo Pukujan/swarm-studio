@@ -13,7 +13,7 @@ import { pub, liveUrl, publishNow } from './publish.js'
 import { shownRun, video, VIDEO_STYLES, makeVideo, showRun, runNow } from './film.js'
 import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view } from './rooms.js'
 import { tour, stopTour, closePlayer, watchVisitor, setMotion, openPlayer } from './player.js'
-import { talk, talkSay, readTalk, talkStart, talkAsk } from './talk.js'
+import { talk, talkSay, readTalk, talkStart, talkAsk, openAsk } from './talk.js'
 import { links, refLines } from './base.js'
 import { carryStep, carryMoving } from './carry.js'
 import { hosted } from './hosted.js'
@@ -434,6 +434,20 @@ async function sendDock() {
   const media = links.take('ref')
   const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief: refLines(brief, media), agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.template ? { template: to.template } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
+  // a new website asks first (docs/decisions/0020-ask-before-build.md): the question waits in its chat, or "don't
+  // build yet" opens the talk. Not an error, and not busy. Whoever sent it moves to the deck first (web/home.js)
+  if (res?.status === 409 && j.error === 'ask') {
+    to.done?.({ ask: j.ask, chat: j.chat || null })
+    els.brief.value = ''
+    await new Promise(r => setTimeout(r, 0))
+    if (j.ask === 'talk') {
+      const from = to.from || null
+      // from the Make box: the talk is in the Design deck's chat, so it opens there (as the question's chat does)
+      if (!from) { window.swarmCosmos?.go?.('station', 'canvas'); window.swarmCosmos?.chat?.(true) }
+      return void talkStart({ text: brief, blank: !from, from, build: (text, chat) => { setNextRoute(from ? { from, route: 'extend', selected: false, chat } : { fresh: true, chat }); els.brief.value = text; els.form.requestSubmit() } })
+    }
+    return void openAsk(j.chat)
+  }
   to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true, run: j.run || null } : null)
   if (!res?.ok) for (const m of media) links.add(m)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }

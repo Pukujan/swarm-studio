@@ -46,7 +46,7 @@ studio                          starts on feed.home
 │  └─ assets · asset · story · suggest · liveCanvas
 ├─ discover                     index · search · pack · makers · profile · openBoards · openBoard · jams · jam · hostJam · events
 ├─ create                       idea · progress · result · planQuestions
-├─ projects                     browser · make · guided (questions · brief) · takes · blocks · setup · boards · hostBoard · board · pin · moodBoards · moodBoard · shared
+├─ projects                     browser · make · setup · boards · hostBoard · board · pin · moodBoards · moodBoard · shared
 ├─ me                           index · profile · notifications · launch · settings (index · models · role · connections)
 ├─ draft                        a new project talked through, nothing built
 ├─ planBoard                    board · gate
@@ -69,7 +69,7 @@ studio                          starts on feed.home
 | `live` | the matching state in web/nav.js, or `null` (61 states have none) |
 | `owner` | `feed` (Swarm Feed's code), `studio` (this plugin) or `hosted` (`/studio/app`) |
 | `terminal` | only on `hosted.limitReached`: the web app ends there and points to Hermes |
-| `planned` | a flow agreed but not specified yet (the five ways of making) |
+| `planned` | a flow agreed but not specified yet |
 
 ## Events
 
@@ -95,22 +95,18 @@ studio                          starts on feed.home
 | `lock`, `build { run }` | the plan board | the gate; the Game room |
 | `try.hosted`, `try`, `limit`, `posted` | the hosted studio | its steps; `posted` lands on Home |
 
-### The five ways of making (planned)
+### The two ways of making
 
-The owner wants five ways of making something; [spec 42](../../specs/42-ways-to-make.md) defines them and which
-kinds offer which. Here they are sibling flows out of `projects.make`, marked `meta.planned`, each with Esc back to
-Make:
+Make has two ways ([decision 0020](../../decisions/0020-ask-before-build.md), replacing spec 42's five): Just make
+it and the Studio. They are events out of `projects.make`:
 
 | Event from Make | Way | Flow |
 |---|---|---|
-| `way.just { run }` | Just build: the prompt, then the crew builds now | straight to the deck |
-| `way.guided` | Guided: the chat asks questions, then builds | `guided.questions` → `guided.brief` → `build { run }` → deck |
-| `way.takes` | Three takes: pick one of three versions | `takes` → `pick { run }` → deck |
-| `way.blocks` | Scaffold: the kind's bare structure as blocks to fill or delete | `blocks` → `build { run }` → deck |
-| `way.studio { project }` | Studio: every step as a clickable path | the existing `scaffold` (spec 37) |
+| `way.just { run }` | Just make it: the prompt; a new website's one question is asked in the chat, on the deck | straight to the deck |
+| `way.studio { project }` | Studio: the walk, every step as a clickable path | the existing `scaffold` (spec 37) |
 
-The owner's "Scaffold" is called `blocks` here, because `scaffold` already names spec 37's Studio first. Which ways
-each kind supports, and the Studio's later steps (Story, Design, Publish), wait for the spec.
+`scaffold` is the state's name for spec 37's Studio; the word is never shown to a person. Which ways each kind
+offers is `web/makeways.js`.
 
 The rest (`swipe`, `assets`, `story`, `remix`, `search`, `board`, `pin`, `jam`, `join` and so on) are the one way
 from a screen to the one below it, named after the SITEMAP node.

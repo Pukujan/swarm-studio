@@ -43,7 +43,7 @@ function Opened() {
     <>
       <Button ref={ref} role="primary" onPress={() => setOpen(true)}>Make</Button>
       <MenuAt name="Make" triggerRef={ref} isOpen={open} onClose={() => setOpen(false)}>
-        <MenuRow id="now" icon="zap" label="Just build" />
+        <MenuRow id="now" icon="zap" label="Just make it" />
         <MenuRow id="studio" icon="grid" label="Studio" on />
       </MenuAt>
     </>

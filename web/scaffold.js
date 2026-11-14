@@ -28,7 +28,7 @@ const ROLE_NAME = { pack: 'Brand kit' }
 
 export function makeScaffold({ sw, C, root }) {
   const esc = sw.esc
-  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, talked: null, cards: new Map(), takes: null }
+  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, asking: null, talked: null, cards: new Map(), takes: null }
 
   const bd = makeBoard({ root, cls: 'project plan scaffold', label: 'Studio', fit: [0.35, 1], on: () => A.on, selected: () => !!A.sel, clear: () => select(null) })
   const { world, insp } = bd
@@ -440,7 +440,7 @@ export function makeScaffold({ sw, C, root }) {
       box.onclick = e => {
         const v = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-pic]'))?.dataset.pic
         if (!v) return
-        post('/api/setup', { pictures: v }).catch(() => {}).then(() => post(at('/kit'), { data: { pictures: v } })).then(d => { take(d); if (A.wantsBuild) { A.wantsBuild = false; select(null); build() } }).catch(fail)
+        post('/api/setup', { pictures: v }).catch(() => {}).then(() => post(at('/kit'), { data: { pictures: v } })).then(d => { take(d); if (A.asking === 'pictures') A.asking = null; if (A.wantsBuild) { A.wantsBuild = false; select(null); build() } }).catch(fail)
       }
       return
     }
@@ -498,10 +498,13 @@ export function makeScaffold({ sw, C, root }) {
   // where the planner says to start: one of the kit's starts, from what the project has so far
   function startOf() {
     const k = kit()
-    const first = k.suggest?.(ctx()) || A.d.studio.start
-    return k.starts.find(s => s.id === first) || k.starts[0] || null
+    // a step the person skipped (asked before the build, decision 0020) or removed is never where to start
+    const steps = A.d.studio.steps || {}
+    const live = k.starts.filter(s => s.id in steps && steps[s.id] !== 'skipped')
+    const first = [k.suggest?.(ctx()), A.d.studio.start].find(id => live.some(s => s.id === id))
+    return live.find(s => s.id === first) || live[0] || k.starts[0] || null
   }
-  function talk() {
+  async function talk() {
     const d = A.d
     if (!sw.talk || A.talked === A.pid) return
     A.talked = A.pid
@@ -509,14 +512,46 @@ export function makeScaffold({ sw, C, root }) {
     // opened with an empty box: the chat asks, and the first words become the idea (and the project's name)
     const pid = A.pid
     const heard = text => {
-      if (A.d?.studio.idea || pid !== A.pid) return
+      if (pid !== A.pid) return
+      if (A.d?.studio.idea) return answer(text)
       post(at('/idea'), { idea: text }).then(() => { A.prepared = null; return load() }).catch(fail)
     }
     sw.talk.start({ kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat, blank: true, said: d.studio.idea ? [{ who: 'you', text: d.studio.idea }] : [], heard, build: brief => (k.build ? build(brief) : openBrand()) })
     if (!d.studio.idea) return sw.say?.('What are you making?')
     // a kit with prepare() posts its own planner line
     const st = k.prepare ? null : startOf()
+    // where a website starts on its pages, the chat's first line is the question itself
+    if (leads() && st?.id === 'plan') {
+      const j = await post(at('/ask'), {}).catch(() => null)
+      if (pid !== A.pid || !A.on) return
+      if (j?.ask?.next === 'pages') { A.asking = 'pages'; return sw.say?.(j.ask.text) }
+    }
     if (st) sw.say?.(st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`)
+  }
+
+  // ---------- the chat leads (docs/decisions/0020-ask-before-build.md, engine/askfirst.mjs): before a website's
+  // build, Hermia asks what the person has not said, one question at a time, each answered by typing: which
+  // pages (or "you choose": the crew decides), then pictures (painted, stock photos or drawn). "Skip all, just
+  // build" takes the recommended defaults and says what it picked. The server reads the words and sets the same
+  // state the board's cards set (the pages, the Pictures card); a line that is no answer goes to Hermia as before.
+  const leads = () => kit().kind === 'site'
+  /** @param {string} text @returns {Promise<string | null> | undefined} */
+  function answer(text) {
+    if (!leads() || A.busy) return
+    const pid = A.pid
+    return post(at('/ask'), { said: text, asked: A.asking, building: A.wantsBuild }).then(j => {
+      const a = j?.ask
+      if (pid !== A.pid || !a?.read) return null
+      A.asking = a.next || null
+      A.wantsBuild = !!a.building
+      take(j)
+      // the same as the Pictures card: the choice is Setup's too
+      if (a.set?.pictures) post('/api/setup', { pictures: a.set.pictures }).catch(() => {})
+      if (a.next === 'pictures' && a.building) select('pics:choose')
+      else if (A.sel === 'pics:choose') select(null)
+      if (a.build) setTimeout(() => build(), 0)
+      return a.text || null
+    }).catch(() => null)
   }
 
   // ---------- Build: the person's press, through the kit
@@ -533,13 +568,22 @@ export function makeScaffold({ sw, C, root }) {
       if (box) box.value = ''
       idea = typed
     }
-    // Pictures are asked once, before the first build, when not chosen on the board yet
-    if (k.kind === 'site' && !c.state.pictures) {
-      A.wantsBuild = true
-      select('pics:choose')
-      sw.say?.('Pictures: painted, stock photos or drawn? Pick one and I build.')
-      return
+    // What the person has not said is asked first, in the chat, one question at a time: the pages before a
+    // first build, then the pictures (also the board's Pictures card). The build goes on from the answer.
+    if (leads()) {
+      const j = await post(at('/ask'), { building: true }).catch(() => null)
+      const next = j?.ask?.next || (c.state.pictures ? null : 'pictures')
+      if (next) {
+        A.wantsBuild = true
+        A.asking = next
+        if (next === 'pictures') select('pics:choose')
+        sw.say?.(j?.ask?.text || 'Pictures: painted, stock photos or drawn?')
+        /** @type {HTMLElement | null} */ (document.querySelector('#brief'))?.focus()
+        return
+      }
     }
+    A.wantsBuild = false
+    A.asking = null
     if (c.state.pictures) await post('/api/setup', { pictures: c.state.pictures }).catch(() => {})
     A.busy = true
     render()
@@ -565,7 +609,7 @@ export function makeScaffold({ sw, C, root }) {
     async show(pid, step = null) {
       A.on = true
       root.hidden = false
-      if (pid !== A.pid) { A.pid = pid; A.d = null; A.looks = null; A.sel = null; A.talked = null; path.innerHTML = '' }
+      if (pid !== A.pid) { A.pid = pid; A.d = null; A.looks = null; A.sel = null; A.talked = null; A.asking = null; A.wantsBuild = false; path.innerHTML = '' }
       A.framed = false
       render()
       await load()

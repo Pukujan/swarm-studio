@@ -82,7 +82,10 @@ const SCENES = [
   { id: 'overview', at: i => `/?project=${i.site}&version=${i.site2}`, ms: 3000 },
   { id: 'replay', at: i => `/?replay=${i.crew}&speed=2`, ms: 16000 },
   { id: 'mid-build', at: i => `/?project=${i.mid}&version=${i.mid}&room=deck`, ms: 3000 },
-  { id: 'deck', at: i => `/?project=${i.site}&version=${i.site}&room=deck`, ms: 3000 },
+  // 4 s, not 3: the camera's glide to its fit ends near 3.3 s. While it glides the world keeps the pixels it has
+  // (.world.moving, will-change), and which pixels those are is the browser's own timing: a picture taken before
+  // the camera rests differed by ~12,000 pixels between two trees whose page, camera and classes were the same
+  { id: 'deck', at: i => `/?project=${i.site}&version=${i.site}&room=deck`, ms: 4000 },
   { id: 'play', at: i => `/?project=${i.site}&version=${i.site}&room=deck&play=prototype`, ms: 3000 },
   { id: 'visitor', at: i => `/?project=${i.site}&version=${i.site}&room=deck&play=visitor`, ms: 10000 },
   { id: 'app', at: i => `/?project=${i.app}&version=${i.app}&room=app`, ms: 3000 },
