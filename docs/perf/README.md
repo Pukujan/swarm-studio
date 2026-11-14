@@ -27,7 +27,7 @@ pull request in three that did not touch the board. `--gate-frame <ratio>` turns
   are saved first, through the server's own `/snaps`.
 - **The story.** The Studio asks for a build's story when it has a film, and the server exports the whole site before
   it answers (a headless Chrome run, synchronously, for each page with no picture), freezing the server for minutes
-  on a 250-page site. The gauge does not send that request.
+  on a 250-page site. The gauge does not send that request (the bug itself is issue #565).
 
 ## The soak
 
