@@ -1,0 +1,51 @@
+/* The Design deck's crew and status, as the current deck draws them (web/canvas.css .cursor, .status): the same
+   shapes, transitions and keyframes, so the next UI moves the same (docs/ux/MOTION.md, motion parity). Scoped to the
+   deck's own layers. */
+
+/* a crew cursor: the arrow in the agent's shade, a tag with its name and what it is doing, and a speech bubble */
+.deck-crew .cursor { position: absolute; left: 0; top: 0; will-change: transform; transition: opacity .6s; pointer-events: none; }
+.deck-crew .cursor svg.arrow { width: 20px; height: 20px; filter: drop-shadow(0 1px 2px rgb(var(--shade-rgb) / .58)); display: block; transition: transform .1s; transform-origin: 2px 1px; }
+.deck-crew .cursor .tag { position: absolute; left: 16px; top: 16px; display: flex; align-items: center; gap: 4px; padding: 2px 7px 2px 4px; border-radius: 99px;
+  font: 600 11px var(--font); color: var(--accent-ink); white-space: nowrap; box-shadow: 0 2px 6px rgb(var(--shade-rgb) / .45); }
+.deck-crew .cursor .tag .doing { font: 500 10.5px var(--font); opacity: .85; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+.deck-crew .cursor .tag .doing:empty { display: none; }
+.deck-crew .cursor .bubble { position: absolute; left: 16px; top: 40px; max-width: 230px; width: max-content; padding: 6px 9px; border-radius: 4px 10px 10px 10px;
+  background: rgb(var(--deep-rgb) / .94); color: var(--text); font-size: 11.5px; line-height: 1.35; border-left: 3px solid currentColor; box-shadow: 0 4px 14px rgb(var(--shade-rgb) / .5);
+  opacity: 0; transform: translateY(-4px); transition: opacity .25s, transform .25s; }
+.deck-crew .cursor .bubble span { color: var(--text); }
+.deck-crew .cursor.talking { z-index: 2; }
+.deck-crew .cursor.talking .bubble { opacity: 1; transform: none; }
+
+/* letters that fly off a cursor as its agent types */
+.deck-crew .spark { position: absolute; left: 0; top: 0; font: 800 15px var(--monospace, var(--mono)); pointer-events: none; text-shadow: 0 0 8px currentColor; animation: spark .8s ease-out forwards; }
+@keyframes spark { from { opacity: 1; translate: 6px -4px; scale: 1; } to { opacity: 0; translate: var(--dx) -46px; scale: .6; } }
+
+/* the build's status pill: a dot that pulses while the crew works, the words, the count and a bar that fills */
+.deck-status { display: flex; align-items: center; gap: 9px; min-width: 250px; padding: 8px 12px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--panel-edge); border-radius: 999px; color: var(--text); font: 600 12.5px/1 var(--label); letter-spacing: .07em; text-transform: uppercase; }
+.deck-status .st-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.deck-status[data-state="working"] .st-dot, .deck-status[data-state="planning"] .st-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+.deck-status[data-state="done"] .st-dot { background: var(--ok); }
+.deck-status .st-txt { white-space: nowrap; }
+.deck-status .st-num { margin-left: auto; font: 500 11px/1 var(--mono); color: var(--muted); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.deck-status .st-num:empty { display: none; }
+.deck-status .st-bar { position: relative; width: 84px; height: 4px; border-radius: 4px; background: rgb(var(--glass-rgb) / .12); overflow: hidden; flex: none; }
+.deck-status .st-bar i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 4px; background: var(--accent); transition: width .5s var(--ease); }
+.deck-status[data-state="done"] .st-bar i { background: var(--ok); }
+.deck-status[data-state="working"] .st-bar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgb(var(--glass-rgb) / .55), transparent); background-size: 50% 100%; background-repeat: no-repeat; animation: shimmer 1.4s linear infinite; }
+.deck-status[data-state="idle"] .st-bar { display: none; }
+@keyframes shimmer { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+
+/* one of the Critic's issues appears on its section (web/canvas.css .rv-flag) */
+.deck-flag { animation: rv-in .35s var(--ease) both; }
+@keyframes rv-in { from { opacity: 0; transform: scale(1.04); } }
+
+/* Play: a page fades in once it has loaded (web/canvas.css .device iframe), and a visitor's thought fades and lifts
+   as it changes (.think.swap) */
+.deck-play-frame { transition: opacity .18s; }
+.deck-think { transition: opacity .25s, transform .25s; }
+.deck-think.swap { opacity: 0; transform: translateY(3px); }
+
+/* reduced motion: nothing here moves (the current Studio stills every animation and transition, web/canvas.css) */
+@media (prefers-reduced-motion: reduce) {
+  .deck-crew .cursor, .deck-crew .cursor *, .deck-crew .spark, .deck-status, .deck-status *, .deck-status *::after, .deck-flag, .deck-play-frame, .deck-think { animation: none !important; transition: none !important; }
+}

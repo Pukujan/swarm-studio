@@ -117,6 +117,20 @@ export function Player({ model }: { model: DeckModel }) {
   const height = (mobile ? d.h : Math.max(400, (size.h - 56) / scale)) + border
   const title = model.pages.find(p => p.id === page)?.title ?? 'Page'
   const v = tour.view, finished = model.state === 'done'
+  // the page fades in once its frame has loaded (a new page, Restart, the other device)
+  const frameKey = `${page}:${restart}:${device}`
+  const [shownFrame, setShownFrame] = useState('')
+  // a new thought: the old one fades and lifts away, then the new words come in (web/canvas/player.js think)
+  const [thought, setThought] = useState('')
+  const [swap, setSwap] = useState(false)
+  useEffect(() => {
+    if (!v.thought) { setThought(''); return }
+    if (!thought) { setThought(v.thought); return }
+    if (v.thought === thought) return
+    setSwap(true)
+    const t = setTimeout(() => { setThought(v.thought); setSwap(false) }, 160)
+    return () => clearTimeout(t)
+  }, [v.thought])
 
   return (
     <section aria-label="Play" className="fixed inset-x-0 top-14 bottom-0 z-40 flex flex-col bg-void">
@@ -163,16 +177,17 @@ export function Player({ model }: { model: DeckModel }) {
           {page && (
             <div className={`absolute top-5 ${mobile ? 'rounded-[36px] border-[12px] border-surface-2' : ''}`}
               style={{ width: d.w + border, height, zoom: scale, left: Math.max(0, (size.w / scale - d.w - border) / 2) }}>
-              <iframe key={`${page}:${restart}:${device}`} ref={frame} title={title} srcDoc={doc} sandbox="allow-scripts" onLoad={onLoad} className={`block size-full border-0 bg-paper ${mobile ? 'rounded-[24px]' : ''}`} />
+              <iframe key={frameKey} ref={frame} title={title} srcDoc={doc} sandbox="allow-scripts" onLoad={() => { setShownFrame(frameKey); onLoad() }}
+                style={{ opacity: shownFrame === frameKey ? 1 : 0 }} className={`deck-play-frame block size-full border-0 bg-paper ${mobile ? 'rounded-[24px]' : ''}`} />
             </div>
           )}
         </div>
         {v.cursor && v.tour && (
           <div aria-hidden className="pointer-events-none absolute top-0 left-0 z-10" style={{ transform: `translate(${Math.round(v.cursor.x)}px, ${Math.round(v.cursor.y)}px)` }}>
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2l15 9.5-6.6 1.2 3.9 7.6-3 1.5-3.9-7.7L4 18.6z" fill="#F2F2F2" stroke="#05051a" strokeWidth="1.5" strokeLinejoin="round" /></svg>
-            {v.thought && (
-              <div className={`absolute top-6 w-max max-w-64 rounded-[12px] border border-edge bg-surface-2 px-3 py-1.5 font-monospace text-[13px] text-text ${v.cursor.x > size.w - 300 ? 'right-4' : 'left-4'}`}>
-                {v.tour.emoji} {v.thought}
+            {thought && (
+              <div className={`deck-think absolute top-6 w-max max-w-64 rounded-[12px] border border-edge bg-surface-2 px-3 py-1.5 font-monospace text-[13px] text-text ${swap ? 'swap' : ''} ${v.cursor.x > size.w - 300 ? 'right-4' : 'left-4'}`}>
+                {v.tour.emoji} {thought}
               </div>
             )}
           </div>

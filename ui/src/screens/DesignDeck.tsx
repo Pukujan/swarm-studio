@@ -15,7 +15,7 @@ import { DesignTab } from './deck/DesignTab'
 import { useEdits } from './deck/edit'
 import { DeckBoard } from './deck/DeckBoard'
 import { boardMode, type BoardMode } from '../board/flag'
-import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
+import { LeftPanel, RightPanel, StatusPill, Toolbar } from './deck/DeckPanels'
 import { ExportDialog } from './deck/ExportDialog'
 import { Player } from './deck/Player'
 import { PublishDialog } from './deck/PublishDialog'
@@ -25,7 +25,7 @@ import { useDeckRun } from './deck/source'
 export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   const { view, go } = useNav()
   // ☰ → Replay (the machine's `replay`): the saved build plays again, and ends on the finished build
-  const { model, loading, error } = useDeckRun(view.run ?? view.version, view.replay, useCallback(() => go({ type: 'replay', on: false }), [go]))
+  const { model, loading, error, unfinished = false } = useDeckRun(view.run ?? view.version, view.replay, useCallback(() => go({ type: 'replay', on: false }), [go]))
   const stage = useRef<StageHandle>(null)
   const [board] = useState(() => forced ?? boardMode())
   const [zoom, setZoom] = useState(1)
@@ -81,7 +81,8 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
         onPage={id => { setPicked(id); setFollow(false); setSheet(false); stage.current?.focusPage(id) }}
         onLayer={k => { const l = model.layers[k]; const on = l && l.page !== '*' ? l.page : page ?? model.pages[0]?.id; if (!on) return; select({ key: k, page: on }); setPicked(on); setSheet(false); stage.current?.focusPage(on) }} />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        <div className="absolute top-3 left-3 z-20 flex gap-2">
+        <div className="absolute top-3 left-3 z-20 flex flex-wrap items-center gap-2">
+          {!loading && model.state !== 'empty' && <StatusPill model={model} unfinished={unfinished} />}
           <Button role="secondary" aria-expanded={sheet} aria-controls="deck-layers-panel" onPress={() => setSheet(s => !s)} className="md:hidden">
             <Icon name="layers" size={16} />Layers
           </Button>

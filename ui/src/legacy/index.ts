@@ -24,10 +24,16 @@ export type { Kit, KitCard, KitCtx, StoreItem, Studio } from '@studio/kits'
 // as hers to watch for loading. She has no stop of her own, so she starts once and stays.
 let pet: Pet | null = null
 const view: { el: HTMLElement | null } = { el: null }
+// A build's events, as the current canvas hands them to her (sw.on, web/pet.js): a run:start sends her away while the
+// crew works, its run:done or run:stopped brings her back. The Design deck tells her each one it folds (buildEvent).
+type BuildEvent = { type: string, [k: string]: unknown }
+const heard = new Set<(e: BuildEvent) => void>()
+export const buildEvent = (e: BuildEvent) => { for (const fn of heard) fn(e) }
+const sw = { on: (fn: (e: BuildEvent) => void) => { heard.add(fn) } }
 // a screen that has its own element to watch gives it (the Studio scaffold); the frame's PetProvider gives none, and
 // leaves the screen's in place
 export function startPet(nav: Nav, screen?: HTMLElement | null): Pet | null {
   if (screen !== undefined) view.el = screen
-  if (!pet && typeof document !== 'undefined') pet = makePet({ sw: null, C: { nav, get scaffoldView() { return view.el ? { el: view.el } : null } } })
+  if (!pet && typeof document !== 'undefined') pet = makePet({ sw, C: { nav, get scaffoldView() { return view.el ? { el: view.el } : null } } })
   return pet
 }

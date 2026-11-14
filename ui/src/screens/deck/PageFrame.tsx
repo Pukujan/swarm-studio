@@ -24,8 +24,8 @@ const STREAM_MS = 90
 
 type Sent = { ver: number, status: LayerStatus | null, t: number }
 
-export function PageFrame({ page, layers, agents, theme, onGeo }: {
-  page: DeckPage, layers: DeckLayer[], agents: DeckAgent[], theme: DeckTheme | null,
+export function PageFrame({ page, layers, agents, theme, onGeo, scanning = false }: {
+  page: DeckPage, layers: DeckLayer[], agents: DeckAgent[], theme: DeckTheme | null, scanning?: boolean,
   onGeo: (page: string, geo: FrameGeo) => void
 }) {
   const ref = useRef<HTMLIFrameElement>(null)
@@ -59,6 +59,11 @@ export function PageFrame({ page, layers, agents, theme, onGeo }: {
   }, [host, page.id, onGeo])
 
   const post = (msg: { type: string, [k: string]: unknown }) => host?.post(page.id, msg)
+
+  // the Critic looking at this page: the frame's scan sweeps it (web/frame.html #scan, web/canvas/marks.js scanFrame)
+  useEffect(() => {
+    if (ready) post({ type: 'scan', on: scanning })
+  }, [ready, scanning])
 
   useEffect(() => {
     if (ready && theme) post({ type: 'theme', theme: { vars: theme.vars, fonts: theme.fonts, radius: theme.radius } })

@@ -3,10 +3,10 @@
 // every page (PATTERNS.md, "The Design deck follows Figma"). While Follow is on the camera goes to the agent at work;
 // a drag or the wheel turns it off and a double-click turns it back on (openspec/specs/design-deck/spec.md). The
 // pages only show here: they take no pointer.
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { BoardHostContext } from '../../board/host'
 import { iframeHost } from '../../board/iframeHost'
-import { crew } from './crew'
+import { CrewCursors } from './CrewCursors'
 import { FRAME_W, GAP, PageFrame, frameX, type FrameGeo } from './PageFrame'
 import { layersOf, type DeckAgent, type DeckModel } from './model'
 
@@ -46,6 +46,35 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
 }) {
   const stage = useRef<HTMLDivElement>(null)
   const [cam, setCam] = useState<Cam>({ x: 40, y: 40, k: 0.16 })
+  // The camera on screen: while Follow moves it, it eases a little each frame toward `cam` (web/canvas/loop.js), else
+  // it is `cam` at once. Written straight to the world element, so React draws nothing per frame; the crew's cursors
+  // read the same, so they stay on their sections while it moves.
+  const world = useRef<HTMLDivElement>(null)
+  const shown = useRef<Cam>({ ...cam })
+  const want = useRef({ cam, follow })
+  want.current = { cam, follow }
+  // not easing (no Follow, reduced motion): the camera is written at once, also where no frame runs (a hidden tab)
+  useLayoutEffect(() => {
+    if (follow && !matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    Object.assign(shown.current, cam)
+    if (world.current) world.current.style.transform = `translate(${cam.x.toFixed(1)}px, ${cam.y.toFixed(1)}px) scale(${cam.k.toFixed(4)})`
+  }, [cam, follow])
+  useEffect(() => {
+    let raf = 0
+    const still = matchMedia('(prefers-reduced-motion: reduce)')
+    const tick = () => {
+      const { cam: to, follow: ease } = want.current, s = shown.current
+      if (ease && !still.matches) {
+        s.x += (to.x - s.x) * 0.12; s.y += (to.y - s.y) * 0.12; s.k += (to.k - s.k) * 0.12
+        if (Math.abs(to.x - s.x) + Math.abs(to.y - s.y) < 0.5 && Math.abs(to.k - s.k) < 1e-4) Object.assign(s, to)
+      } else Object.assign(s, to)
+      const t = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) scale(${s.k.toFixed(4)})`
+      if (world.current && world.current.style.transform !== t) world.current.style.transform = t
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
   const [geo, setGeo] = useState<Record<string, FrameGeo>>({})
   const [panning, setPanning] = useState(false)
   const onGeo = useCallback((page: string, g: FrameGeo) => setGeo(all => ({ ...all, [page]: g })), [])
@@ -205,42 +234,30 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     for (const id of ids) host.requestLive(id, 'agent')
     return () => { for (const id of ids) host.releaseLive(id, 'agent') }
   }, [host, agentPages])
-  const working = model.agents.filter(a => a.layer)
 
   return (
     <BoardHostContext value={host}>
     <div ref={stage} role="region" aria-label="Canvas" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onDoubleClick={() => onFollow?.(true)}
       className={`relative min-h-0 min-w-0 flex-1 touch-none overflow-hidden bg-void outline-none [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px] ${panning ? 'cursor-grabbing' : 'cursor-default'}`}>
-      <div className={`absolute top-0 left-0 origin-top-left ${follow ? 'motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-out' : ''}`} style={{ transform: `translate(${cam.x}px, ${cam.y}px) scale(${cam.k})`, width: worldW }}>
+      <div ref={world} className="absolute top-0 left-0 origin-top-left" style={{ width: worldW }}>
         {model.pages.map(p => (
           <div key={p.id} className="absolute top-0" style={{ left: frameX(p), width: FRAME_W }}>
             <div className="flex h-7 items-baseline gap-3 truncate font-label text-[18px] font-semibold uppercase tracking-[.08em] text-muted">
               <span className="text-text">Page {p.index + 1} · {p.title}</span><small className="font-monospace normal-case">/{p.id}</small>
             </div>
-            <PageFrame page={p} layers={pageLayers[p.id]} agents={model.agents} theme={model.theme} onGeo={onGeo} />
+            <PageFrame page={p} layers={pageLayers[p.id]} agents={model.agents} theme={model.theme} onGeo={onGeo} scanning={model.reviewing.includes(p.id)} />
           </div>
         ))}
       </div>
       {pick && pickExtra && <div data-ui className="absolute z-20 flex justify-end" style={{ left: Math.max(8, pick.left + pick.width - 328), top: Math.max(8, pick.top + 8), width: 320 }}>{pickExtra}</div>}
+      <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} />
       <div aria-hidden className="pointer-events-none absolute inset-0">
         {pick && <div data-picked className="absolute border-[1.5px] border-text" style={pick} />}
         {flags.map(f => (
-          <span key={f.key} className="absolute flex max-w-64 -translate-y-full items-center gap-1 truncate rounded-t-[6px] bg-hot px-1.5 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[.06em] text-paper" style={{ left: f.left, top: f.top }}>
+          <span key={f.key} className="deck-flag absolute flex max-w-64 -translate-y-full items-center gap-1 truncate rounded-t-[6px] bg-hot px-1.5 py-0.5 font-label text-[11px] font-semibold uppercase tracking-[.06em] text-paper" style={{ left: f.left, top: f.top }}>
             Critic · {f.problem}
           </span>
         ))}
-        {working.map(a => {
-          const t = target(model, geo, a)
-          if (!t) return null
-          const c = crew().color(a.name)
-          return (
-            <div key={a.id} data-agent={a.name} className="absolute top-0 left-0 motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-out"
-              style={{ transform: `translate(${Math.round(cam.x + t.x * cam.k)}px, ${Math.round(cam.y + t.y * cam.k)}px)` }}>
-              <svg viewBox="0 0 10 10" className="block size-3.5"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill={c} stroke="#0b0b0c" strokeWidth="1" strokeLinejoin="round" /></svg>
-              <span className="ml-3 inline-flex items-center gap-1 rounded-full px-1.5 py-px font-label text-[11px] font-semibold uppercase tracking-[.06em]" style={{ background: c, color: crew().ink(c) }}>{a.name}</span>
-            </div>
-          )
-        })}
       </div>
     </div>
     </BoardHostContext>

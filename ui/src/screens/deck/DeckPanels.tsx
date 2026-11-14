@@ -8,6 +8,7 @@ import { Menu, MenuItem } from '../../primitives/Menu'
 import { Icon } from '../../primitives/Icon'
 import { Layers, type LayerGroup } from '../../shared/Layers'
 import { crew } from './crew'
+import './deck.css'
 import type { DeckModel, ToolId } from './model'
 
 // Layers (the shared tree, src/shared/Layers.tsx), as the breadboard draws the deck's: the nav and footer every page
@@ -109,8 +110,9 @@ export function Toolbar({ model }: { model: DeckModel }) {
 }
 
 // the status pill's words (openspec/specs/design-deck/spec.md, "Watching the crew")
-export function progress(m: DeckModel): string {
+export function progress(m: DeckModel, unfinished = false): string {
   const n = m.agents.filter(a => a.layer).length
+  if (unfinished) return `Stopped before it finished · ${m.done} of ${m.planned} sections`
   const pages = (k: number) => `${k} page${k === 1 ? '' : 's'}`
   switch (m.state) {
     case 'empty': return 'Ready'
@@ -119,6 +121,20 @@ export function progress(m: DeckModel): string {
     case 'done': return m.failed ? `${pages(m.pages.length)} built · ${m.failed} section${m.failed === 1 ? '' : 's'} failed` : `${pages(m.pages.length)} built`
     case 'stopped': return `Stopped · ${m.done} of ${m.planned} sections kept`
   }
+}
+
+// The build's status pill on the canvas (web/canvas.css .status, web/canvas/panels.js renderStatus): a dot that
+// pulses while the crew works, what is happening, the sections done of those planned, and a bar that fills
+export function StatusPill({ model, unfinished }: { model: DeckModel, unfinished: boolean }) {
+  const state = unfinished || model.state === 'stopped' || model.state === 'empty' ? 'idle' : model.state === 'done' ? 'done' : model.state === 'planning' ? 'planning' : 'working'
+  const pct = model.planned ? Math.round(100 * model.done / model.planned) : 0
+  return (
+    <div role="status" className="deck-status" data-state={state}>
+      <span aria-hidden className="st-dot" />
+      <span className="st-txt">{progress(model, unfinished)}</span>
+      <span aria-hidden className="st-bar"><i style={{ width: `${state === 'planning' ? 0 : pct}%` }} /></span>
+    </div>
+  )
 }
 
 // the top row (Figma's): who is here, Play, Replay and the zoom. Play is the deck's one primary action (rule 17).
@@ -154,7 +170,6 @@ export function RightPanel({ model, zoom, onFit, canPlay, onPlay, replay, onPubl
           <MenuItem id="export">Export</MenuItem>
         </Menu>
       </div>
-      <p role="status" className="border-b border-edge px-4 py-2.5 font-monospace text-[13px] text-muted">{progress(model)}</p>
       <div className="flex items-center gap-1 border-b border-edge px-3 py-1.5">
         <Button role="ghost" aria-label={history.undoLabel ? `Undo ${history.undoLabel}` : 'Undo'} isDisabled={!history.canUndo} onPress={history.undo}><Icon name="restore" size={16} /></Button>
         <Button role="ghost" aria-label={history.redoLabel ? `Redo ${history.redoLabel}` : 'Redo'} isDisabled={!history.canRedo} onPress={history.redo}><Icon name="restore" size={16} className="-scale-x-100" /></Button>

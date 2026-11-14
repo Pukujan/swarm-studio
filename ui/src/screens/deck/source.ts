@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { apply, empty, fold, type DeckEvent, type DeckModel } from './model'
 import { schedule, withTyping } from './replay'
+import { buildEvent } from '../../legacy'
 
 export interface DeckSource {
   events(run: string): Promise<DeckEvent[]>
@@ -35,7 +36,9 @@ export const serverSource: DeckSource = {
 
 export const DeckSourceContext = createContext<DeckSource>(serverSource)
 
-export type DeckLoad = { model: DeckModel, loading: boolean, error: string | null }
+// `unfinished`: a saved build that never finished and is not being made now (web/canvas/replay.js openRun says "This run
+// stopped before it finished"): drawn as it was left, the crew at the sections they were writing
+export type DeckLoad = { model: DeckModel, loading: boolean, error: string | null, unfinished?: boolean }
 
 // The build `run` as a model: loaded once, then kept up to date from the stream. The stream replays the server's
 // current build from its run:start to a late joiner, so a run:start of this build starts the fold again from it.
@@ -52,7 +55,8 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
     if (!run) { setLoad({ model: empty(null), loading: false, error: null }); return }
     if (replay) return play(run)
     let live = true, frame = 0
-    setLoad({ model: empty(run), loading: true, error: null })
+    // the same build again (a replay that ends, say) stays on screen while it is read again: no skeleton between
+    setLoad(l => (l.model.run === run && l.model.state !== 'empty' ? { ...l, error: null } : { model: empty(run), loading: true, error: null }))
     // stream events wait in a queue until the file is folded, then go in together every 33 ms (a build streams
     // fast). A timer, not requestAnimationFrame, which never runs in a hidden tab: the deck there would stop
     let ready = false
@@ -62,7 +66,7 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
       if (!batch.length || !live) return
       setLoad(l => {
         let m = l.model
-        for (const e of batch) m = e.run === run && e.type === 'run:start' ? apply(empty(run), e) : apply(m, e)
+        for (const e of batch) { m = e.run === run && e.type === 'run:start' ? apply(empty(run), e) : apply(m, e); buildEvent(e) }
         return { ...l, model: m }
       })
     }
@@ -73,11 +77,10 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
     })
     Promise.all([source.events(run), source.live?.(run).catch(() => false) ?? false]).then(([events, building]) => {
       if (!live) return
-      let m = fold(events, run)
-      // a saved build that never finished and is not being made now stopped half way (web/canvas/replay.js
-      // openRun): what it built is kept, and no one is still at work on it
-      if (!building && (m.state === 'planning' || m.state === 'building')) m = apply(m, { type: 'run:stopped', run, t: m.tEnd || m.t0 })
-      setLoad({ model: m, loading: false, error: null })
+      const m = fold(events, run)
+      // Hermia hears the build as the current canvas tells her (a run:start sends her away, its end brings her back)
+      for (const e of events) buildEvent(e)
+      setLoad({ model: m, loading: false, error: null, unfinished: !building && (m.state === 'planning' || m.state === 'building') })
       ready = true
       if (queue.current.length) frame = window.setTimeout(flush, 33)
     }, (err: unknown) => {
@@ -98,7 +101,7 @@ export function useDeckRun(run: string | null, replay = false, onReplayEnd?: () 
       const step = () => {
         if (!live) return
         const now = performance.now() - start
-        while (i < events.length && at[i] <= now) m = apply(m, { ...events[i++], t: Date.now() })
+        while (i < events.length && at[i] <= now) { const e = { ...events[i++], t: Date.now() }; m = apply(m, e); buildEvent(e) }
         setLoad(l => ({ ...l, model: m }))
         if (i < events.length) timer = window.setTimeout(step, Math.max(16, at[i] - now))
         else ended.current?.()

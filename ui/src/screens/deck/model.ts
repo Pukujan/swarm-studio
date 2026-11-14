@@ -12,7 +12,8 @@ export interface DeckLayer {
   key: string, page: string, id: string, role: string, height: number,
   status: LayerStatus, text: string, ver: number, agent: string | null
 }
-export interface DeckAgent { id: string, name: string, layer: string | null, tool: ToolId, idle: boolean }
+// `said`: the agent's last words and when (its speech bubble shows them for a moment, web/canvas/deck.js say())
+export interface DeckAgent { id: string, name: string, layer: string | null, tool: ToolId, idle: boolean, said?: { text: string, t: number } }
 export interface DeckTheme { name?: string, vars: Record<string, string>, fonts?: { heading?: string, body?: string }, radius?: string }
 export type Host = 'github' | 'vercel' | 'cloudflare' | 'local'
 // Publish (web/canvas/publish.js publishEvent): the steps while it goes, why it failed, or each host's live link
@@ -50,6 +51,8 @@ export interface DeckModel {
   threads: Record<string, Note[]>
   issues: Record<string, Issue>
   lines: DeckLine[]
+  // the pages the Critic is looking at now (review:start until review:done): their frames show the scan
+  reviewing: string[]
   planned: number
   done: number
   failed: number
@@ -75,7 +78,7 @@ const FRESH_MS = 8000
 export const belongs = (page: string, l: DeckLayer) => l.page === '*' || l.page === page
 
 export function empty(run: string | null = null): DeckModel {
-  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, lines: [], planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
+  return { run, kind: 'site', title: '', state: 'empty', pages: [], layers: {}, order: [], agents: [], theme: null, publish: NO_PUBLISH, exported: null, threads: {}, issues: {}, lines: [], reviewing: [], planned: 0, done: 0, failed: 0, t0: 0, tEnd: 0 }
 }
 
 // What a stream is "doing" right now, read off its tail (web/canvas/deck.js detectTool).
@@ -210,7 +213,7 @@ function step(m: DeckModel, e: DeckEvent): DeckModel {
     case 'agent:say': {
       if (!agentOf(m, e.agent)) return m
       const n = draft(m)
-      setAgent(n, String(e.agent), { tool: 'comment' })
+      setAgent(n, String(e.agent), { tool: 'comment', said: { text: str(e.text), t: num(e.t) } })
       return n
     }
     case 'layer:done': {
@@ -307,6 +310,14 @@ function step(m: DeckModel, e: DeckEvent): DeckModel {
       const mine = thread.some(x => x.you && x.text === str(e.text)) || !str(e.text) ? [] : [{ who: 'You', you: true, text: str(e.text), t: num(e.t) }]
       const reply = str(e.reply) || `On it, reworking the ${str(e.role) || str(e.layer)}.`
       n.threads = { ...m.threads, [k]: [...thread, ...mine, { who: a?.name ?? 'The crew', you: false, text: reply, t: num(e.t) }] }
+      return n
+    }
+    case 'review:start':
+    case 'review:done': {
+      const page = str(e.page)
+      if (!page) return m
+      const n = draft(m)
+      n.reviewing = e.type === 'review:start' ? [...new Set([...m.reviewing, page])] : m.reviewing.filter(p => p !== page)
       return n
     }
     case 'review:issue': {
