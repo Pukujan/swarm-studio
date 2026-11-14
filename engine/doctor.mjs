@@ -159,7 +159,7 @@ export function plainReply(facts = {}, actions = actionsFor(facts)) {
     const cmd = c.module && facts.python && !facts.python.use ? pythonCommand(facts.python) || `python3 -m pip install ${pipName(c.module)}` : ''
     if (cmd) out.push(`Next step: run this in a terminal on this computer, then restart Swarm Studio: ${cmd}`)
     else if (c.module && facts.python?.restart) out.push('Next step: restart Swarm Studio. The packages are there now, and it looked before they were.')
-    else if (c.module && facts.python?.use) out.push(`Next step: nothing to install. ${facts.python.use} has the packages; update Swarm Studio so its cutters use it, then build again.`)
+    else if (c.module && facts.python?.use) out.push(`Next step: nothing to install. ${facts.python.use} has the packages now and the cutters use it: build again.`)
   } else out.push(facts.run ? 'Nothing failed in this build\'s log.' : 'No build is open, so there is no log to read.')
   const rest = factLines(facts).filter(l => !/^The open |^No build is open|^- (section|picture|app|step) \(/.test(l))
   if (rest.length) out.push(rest.join('\n'))
