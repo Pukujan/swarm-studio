@@ -4,6 +4,8 @@
 // The question is a planner turn whose options have `go:` ids (engine/chats.mjs keeps options on a turn); the
 // answer (a pick, or typed words) is read in engine/talkplan.mjs say() before any model is needed, and recorded
 // on the chat as chat.go. server/server.mjs /api/run asks, and builds once the chat has its answer.
+// The Studio's chat then leads the rest (the second half of this file): which pages, which pictures, one question
+// at a time, each answered by typing, with "you choose" and "skip all, just build".
 // Pure functions only.
 
 export const PATHS = ['all', 'steps', 'pick']
@@ -114,8 +116,199 @@ export function readAnswer(text = '', asked = 'skips') {
 
 // one short line for each final answer
 export const GO_TEXT = {
-  all: 'Building it now.',
+  all: 'Building it now: the crew picks the look and the pages, pictures as in Setup.',
   steps: "Let's go step by step, starting with Brand.",
   'skip-brand': 'Brand skipped. On to the Plan.',
   'skip-plan': 'Plan skipped. Starting with Brand.'
+}
+
+// ---------- the Studio's chat leads (decision 0020; the owner, 2026-11-13: the chat "didnt ask how many pages i
+// want and what should they be and gave option for you choose"; it is "supposed to be very dynamic with its
+// question and guide the user so they never have to click a button but still feel guided, or give an option to
+// skip everything and just generated based on their prompt"). Before a website's build, when the person has not
+// said, Hermia asks in the chat, one question at a time, each answered by typing:
+//   pages     which pages, how many, or "you choose" (the crew decides: no Pages line in the brief)
+//   pictures  painted, stock photos or drawn, or "you choose" (what Setup recommends)
+// "Skip all, just build" at any point takes the recommended defaults and says in one line what it picked.
+// The answers are the Studio's kit state (web/kit-site.js): pages, pageCount, pagesBy: 'crew', pictures.
+// server/studio.mjs POST /api/studio/:pid/ask applies them; web/scaffold.js asks and builds.
+export const STUDIO_ASKS = ['pages', 'pictures']
+export const PICTURE_MODES = ['painted', 'stock', 'drawn']
+const PICTURE_SAYS = { painted: 'painted', stock: 'stock photos', drawn: 'drawn' }
+export const STUDIO_ASK_TEXT = {
+  pages: 'Which pages? Name them, or say "you choose".',
+  pictures: 'Pictures: painted, stock photos or drawn? Or say "you choose".'
+}
+export const MAX_PAGES = 12
+
+const tidy = s => String(s || '').toLowerCase().replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim()
+
+// what is still open, in the order it is asked. state: the kit's ({ pages, pageCount, pagesBy, pictures });
+// planSkipped: the person skipped the Plan when asked; built: the project has a build (its pages exist)
+export function studioOpen(state = {}, { planSkipped = false, built = false } = {}) {
+  const open = []
+  const pagesSaid = (Array.isArray(state?.pages) && state.pages.length > 0) || state?.pagesBy === 'crew'
+  if (!pagesSaid && !planSkipped && !built) open.push('pages')
+  if (!PICTURE_MODES.includes(state?.pictures)) open.push('pictures')
+  return open
+}
+
+// "you choose", "up to you", "surprise me", "whatever you think", "idk", "no preference", "the crew decides"
+const YOU_CHOOSE = /\b(you|u|ya)\s+(choose|pick|decide|do it|do you)\b|\byou\s+can\s+(choose|pick|decide)\b|\b(up\s+to|upto)\s+(you|u)\b|\byour\s+(call|choice|pick)\b|\bsurprise\s+me\b|\bwhatever(\s+(you|u)\s+(think|want|like)|\s+works|\s+is\s+best)?[.!]*$|\b(i\s+)?(do\s*n'?t|dont)\s+(care|mind|know)\b|\bidk\b|\bno\s+(preference|idea)\b|\bnot\s+sure\b|\b(the\s+)?crew\s+(decides?|picks?|chooses?|can\s+(decide|pick|choose))\b|\blet\s+(the\s+crew|hermia|them)\s+(decide|pick|choose)\b|\b(dealer'?s|your)\s+choice\b|\b(any|anything|either)(\s+(is|works|will\s+do))?(\s+fine)?[.!]*$|\b(the\s+)?(default|recommended)s?(\s+one)?[.!]*$/
+export const readYouChoose = (text = '') => YOU_CHOOSE.test(tidy(text))
+
+// "skip all, just build", "skip everything", "just generate it from my prompt", "no questions", "stop asking"
+const SKIP_ALL = /\bskip\s+(it\s+|them\s+|this\s+)?(all|everything|both|the\s+(questions|rest|steps))\b|\bskip\s+all\b|\bjust\s+(build|make|generate|create|do|ship)\b|\b(build|make|generate)\s+(it\s+)?(now|already|anyway|right\s+away|straight\s+away)\b|\bno\s+(more\s+)?questions\b|\b(stop|quit)\s+asking\b|\b(do\s*n'?t|dont)\s+ask\b|\b(from|based\s+on|with)\s+(just\s+)?(my|the)\s+prompt\b|\b(you|u)\s+(choose|pick|decide)\s+(everything|it\s+all|all(\s+of\s+it)?|the\s+rest)\b/
+export const readSkipAll = (text = '') => SKIP_ALL.test(tidy(text))
+
+// "build", "build it", "go", "go ahead", "make it", "start": the same as pressing Build (what is open is asked first)
+const BUILD = /^(ok(ay)?[,.!]?\s+)?(please\s+)?((let'?s\s+)?(build|make|generate|create|start)(\s+(it|this|that|the\s+(site|website)))?|go|go\s+ahead|do\s+it|ship\s+it|ready|i'?m\s+ready)(\s+please)?[.!]*$/
+export const readBuild = (text = '') => BUILD.test(tidy(text))
+
+// ---- pictures: "painted", "stock photos", "drawn", "real photos", "illustrations", "ai images", "no photos"
+const PIC = {
+  drawn: /\b(drawn|draw(ings?|n\s+ones)?|draw\s+them|illustrat(ed|ions?|e\s+them)|svg|vectors?|sketch(ed|es|y)?|line\s+art|no\s+(photos?|pictures|images))\b/,
+  stock: /\b(stock|photos?|photographs?|photography|real\s+(photos?|pictures|images)|pexels|unsplash)\b/,
+  painted: /\b(paint(ed|ings?)?|paint\s+them|a\.?i\.?[\s-]*(images?|pictures?|art|made|generated)?|generated?|image\s+model|made\s+up)\b/
+}
+// words a pictures answer may carry besides the choice itself
+const PIC_FILLER = /\b(pictures?|images?|pics?|use|using|with|go|for|them|the|ones?|i|i'd|want|would|like|prefer|let'?s|have|make|it|all|be|should|please|just|only|some|kind|of|and|them|to|are|is)\b|[:,.!=\-]/g
+// readPictures(text, { only }) -> 'painted' | 'stock' | 'drawn' | null. Two kinds named ("painted or stock?") is
+// not an answer. only: the whole line must be the choice (used while another question is open, so a page
+// called "Photos" is not read as stock photos)
+export function readPictures(text = '', { only = false } = {}) {
+  const t = tidy(text)
+  if (!t || /\?\s*$/.test(t)) return null
+  // "no photos" is drawn, not stock
+  const noPhotos = /\bno\s+(photos?|pictures|images)\b/.test(t)
+  const hits = PICTURE_MODES.filter(m => PIC[m].test(t) && !(noPhotos && m === 'stock'))
+  if (hits.length !== 1) return null
+  if (only) {
+    let rest = t
+    for (const m of PICTURE_MODES) rest = rest.replace(new RegExp(PIC[m].source, 'g'), ' ')
+    if (rest.replace(PIC_FILLER, ' ').trim()) return null
+  }
+  return hits[0]
+}
+
+// ---- pages: "Home, Work, Contact", "home work and contact", "3 pages", "5 pages: home, menu, ...", "pages: a, b"
+const NUMS = { one: 1, a: 1, single: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, couple: 2, few: 3 }
+const NUM = `(\\d{1,2}|${Object.keys(NUMS).join('|')})`
+const numOf = w => { const n = /^\d+$/.test(w) ? Number(w) : NUMS[w] || 0; return n >= 1 ? Math.min(MAX_PAGES, n) : 0 }
+// page names people type without commas between them
+const KNOWN = ['home', 'about', 'work', 'contact', 'pricing', 'menu', 'blog', 'faq', 'shop', 'store', 'gallery', 'services', 'portfolio', 'team', 'booking', 'events', 'news', 'projects', 'products', 'reviews', 'press', 'careers', 'jobs', 'story', 'visit', 'location', 'hours', 'features', 'docs', 'support', 'login', 'signup', 'cart', 'checkout', 'testimonials', 'cases', 'journal', 'studio', 'classes', 'rooms', 'plans', 'gifts', 'landing']
+const NOT_A_NAME = /\b(it|its|is|are|was|be|feels?|makes?|should|would|could|can|wants?|needs?|like|with|in|that|this|i|we|you|more|less|very|not|but|bigger|smaller|change|please|something|looks?|build|site|website)\b/i
+const LEAD = /^(ok(ay)?|sure|yes|yeah|hmm+|well|so|um+|maybe|how about|what about|i think|i guess|i(\s+would|'d)?\s+(want|need|like)|i\s+(want|need)|let'?s\s+(have|do|go\s+with|say)|give\s+me|make\s+it|make|just|only|with|it\s+should\s+have|it\s+needs?|we\s+need|have)\b[\s,:]*/
+const titled = s => s.charAt(0).toUpperCase() + s.slice(1)
+// readPages(text, { asked }) -> { pages: [...] } | { count: n } | null
+// asked: the pages question is the open one. Without it only a line that says "pages" is read, so a comma list
+// inside an idea is never taken for pages.
+export function readPages(text = '', { asked = false } = {}) {
+  const raw = String(text || '').replace(/[’‘]/g, "'").replace(/[“”"]/g, '').trim()
+  if (!raw || raw.length > 400 || /\?\s*$/.test(raw)) return null
+  let t = raw, said = false, count = 0
+  for (let i = 0; i < 4; i++) {
+    const before = t
+    t = t.replace(new RegExp(LEAD.source, 'i'), '')
+    const n = new RegExp(`^(?:about\\s+|around\\s+|maybe\\s+|just\\s+|only\\s+)?${NUM}\\s+pages?\\b(?:\\s+(?:is|are|will\\s+do|is\\s+enough|total|in\\s+total|please))*[\\s:,\\-–.]*`, 'i').exec(t)
+    if (n) { count = numOf(n[1].toLowerCase()); said = true; t = t.slice(n[0].length) }
+    const p = /^(the\s+)?pages?\s*(are|should\s+be|will\s+be|is|=)?\s*[:\-–]?\s*/i.exec(t)
+    if (p && p[0]) { said = true; t = t.slice(p[0].length) }
+    if (t === before) break
+  }
+  if (!asked && !said) return null
+  // a bare number while the question is open: "3", "three"
+  const bare = new RegExp(`^${NUM}[.!]*$`, 'i').exec(t.trim())
+  if (bare && asked && numOf(bare[1].toLowerCase()) && !/^a$/i.test(bare[1])) return { count: numOf(bare[1].toLowerCase()) }
+  t = t.replace(/[.!]+$/, '').trim()
+  if (!t) return count ? { count } : null
+  let parts = t.split(/\s*(?:,|;|\n|\/|\+|&|\band\b|\bthen\b|\bplus\b)\s*/i).map(x => x.trim()).filter(Boolean)
+  // "home work contact", "home work and contact": no commas, every word a page name people know
+  parts = parts.flatMap(part => { const ws = part.toLowerCase().split(/\s+/); return ws.length > 1 && ws.every(w => KNOWN.includes(w)) ? ws : [part] })
+  const names = []
+  for (let part of parts) {
+    part = part.replace(/^(a|an|the|one)\s+/i, '').replace(/\s+pages?$/i, '').replace(/^['`]+|['`.!]+$/g, '').trim()
+    if (!part) continue
+    // a sentence, not a page name: too long, or words a name does not carry ("make it feel calm", "a shop in Kyoto")
+    if (!/^[\p{L}\p{N}][\p{L}\p{N} '&\-]{0,39}$/u.test(part) || part.split(/\s+/).length > 4 || NOT_A_NAME.test(part)) return null
+    if (!names.some(n => n.toLowerCase() === part.toLowerCase())) names.push(titled(part))
+  }
+  if (!names.length) return count ? { count } : null
+  // one name of several words with nothing that marks a list is a sentence, not a page ("make it feel calm")
+  if (names.length === 1 && !said && names[0].split(/\s+/).length > 2) return null
+  return { pages: names.slice(0, MAX_PAGES) }
+}
+
+const pagesSays = state => (state.pages?.length ? `pages ${state.pages.join(', ')}` : state.pageCount ? `${state.pageCount} pages, the crew picks which` : 'the crew picks the pages')
+// one line of everything the build will use: "the crew picks the look and the pages, pictures painted"
+export function pickedLine(state = {}, { look = false, planSkipped = false, built = false } = {}) {
+  const crewPages = !state.pages?.length && !state.pageCount
+  const bits = []
+  if (!look && crewPages && !built) bits.push('the crew picks the look and the pages')
+  else {
+    if (!look) bits.push('the crew picks the look')
+    if (!built) bits.push(planSkipped && crewPages ? 'the crew picks the pages' : pagesSays(state))
+  }
+  bits.push(`pictures ${PICTURE_SAYS[state.pictures] || 'as in Setup'}`)
+  return bits.join(', ')
+}
+
+// studioTurn({ said, asked, state, ... }) -> { read, set, text, next, build, building }
+//   said      the person's typed line ('' asks what is next: the Build press, or the chat's opening line)
+//   asked     the question open in the chat now: 'pages', 'pictures' or null
+//   state     the kit's state; planSkipped, built: see studioOpen; look: the project has a look of its own
+//   defaults  { pictures }: what "you choose" and "skip all" take (Setup's recommendation)
+//   building  the person already asked for the build: when nothing is left open, it starts
+// read: the line was an answer (else it goes to the planner as before). set: the kit fields to merge (null
+// drops one). text: the planner's one line. next: the question now open. build: start the build now.
+export function studioTurn({ said = '', asked = null, state = {}, planSkipped = false, built = false, look = false, defaults = {}, building = false } = {}) {
+  const env = { planSkipped, built }
+  const dflt = PICTURE_MODES.includes(defaults?.pictures) ? defaults.pictures : 'painted'
+  const merged = set => { const s = { ...state, ...set }; for (const k of Object.keys(s)) if (s[k] == null) delete s[k]; return s }
+  const done = (set, lead, wants = building) => {
+    const now = merged(set), next = studioOpen(now, env)[0] || null
+    if (next) return { read: true, set, text: [lead, STUDIO_ASK_TEXT[next]].filter(Boolean).join(' '), next, build: false, building: wants }
+    if (wants) return { read: true, set, text: `Building it now: ${pickedLine(now, { look, ...env })}.`, next: null, build: true, building: false }
+    return { read: true, set, text: [lead, 'Say "build" when you are ready.'].filter(Boolean).join(' '), next: null, build: false, building: false }
+  }
+  const open = studioOpen(state, env)
+  const text = String(said || '').trim()
+  // nothing said: what to ask now
+  if (!text) {
+    const next = open[0] || null
+    return { read: false, set: {}, text: next ? STUDIO_ASK_TEXT[next] : '', next, build: !next && building, building: !!next && building }
+  }
+  if (!STUDIO_ASKS.includes(asked)) asked = null
+  // skip all: the recommended defaults for everything still open, said in one line
+  if (readSkipAll(text)) {
+    const set = {}
+    if (open.includes('pages')) set.pagesBy = 'crew'
+    if (open.includes('pictures')) set.pictures = dflt
+    return done(set, '', true)
+  }
+  if (readBuild(text)) return done({}, '', true)
+  const pagesSet = got => (got.pages ? { pages: got.pages, pagesBy: null, pageCount: null } : { pagesBy: 'crew', pageCount: got.count, pages: null })
+  const pagesLead = got => (got.pages ? `Pages: ${got.pages.join(', ')}.` : `${got.count} ${got.count === 1 ? 'page' : 'pages'}, the crew picks which.`)
+  if (asked === 'pages') {
+    const pic = readPictures(text, { only: true })
+    if (pic) return done({ pictures: pic }, `Pictures: ${PICTURE_SAYS[pic]}.`)
+    const got = readPages(text, { asked: true })
+    if (got && !(got.pages?.length === 1 && readYouChoose(text))) return done(pagesSet(got), pagesLead(got))
+    if (readYouChoose(text)) return done({ pagesBy: 'crew', pageCount: null, pages: null }, 'The crew picks the pages.')
+    return { read: false, set: {}, text: '', next: asked, build: false, building }
+  }
+  if (asked === 'pictures') {
+    const pic = readPictures(text)
+    if (pic) return done({ pictures: pic }, `Pictures: ${PICTURE_SAYS[pic]}.`)
+    if (readYouChoose(text)) return done({ pictures: dflt }, `Pictures: ${PICTURE_SAYS[dflt]}.`)
+    const got = readPages(text)
+    if (got && !built) return done(pagesSet(got), pagesLead(got))
+    return { read: false, set: {}, text: '', next: asked, build: false, building }
+  }
+  // no question open: only a line that says what it is about ("pages: Home, Work", "use stock photos")
+  const got = built ? null : readPages(text)
+  if (got) return done(pagesSet(got), pagesLead(got))
+  const pic = /\b(pictures?|photos?|images?|pics?)\b/i.test(text) ? readPictures(text, { only: true }) : null
+  if (pic) return done({ pictures: pic }, `Pictures: ${PICTURE_SAYS[pic]}.`)
+  return { read: false, set: {}, text: '', next: open[0] || null, build: false, building }
 }

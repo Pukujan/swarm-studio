@@ -27,7 +27,9 @@ export const readTalk = (text, answerTo = '', kind = 'site') => api('/api/discus
   .then(r => r.json()).then(j => j.intent || 'build').catch(() => 'build')
 // brief: nothing to talk about yet, the brief is shown at once to read, edit and Build (a showcase, or a
 // Make box prompt): nothing is built, and no token is spent, until Build. what: one line on what Build makes.
-// heard(text): told each line the person sends (the Studio takes its idea from the first)
+// heard(text): told each line the person sends (the Studio takes its idea from the first). When it answers with
+// words (a promise of them), the line was an answer to the Studio's own question (which pages, which pictures:
+// web/scaffold.js, decision 0020): those words are Hermia's reply, and the planner is not asked
 export function talkStart({ text = '', kind = 'site', build, blank = false, said = [], chat = null, from = null, brief = '', what = '', sheet = false, heard = null }) {
   if (blank) { setViewing('new'); fresh(null) }
   Object.assign(talk, { on: true, busy: false, said: [], kind, build, chat, from, plan: null, heard, ask: false })
@@ -54,8 +56,16 @@ export async function talkSay(text, brief = false) {
   const media = brief ? [] : links.take('ref')
   // layers dragged in (the Studio scaffold's Layers, web/layers.js): the planner is told what the turn is about
   const about = brief ? [] : links.take('layer')
-  if (!brief) { talk.said.push({ who: 'you', text: about.length ? `${text}\n(About: ${about.map(c => c.name).join(', ')})` : text }); feed(null, text, 'you', [...about, ...media].map(m => m.name).join(', ')); talk.heard?.(text) }
+  let took = null
+  if (!brief) { talk.said.push({ who: 'you', text: about.length ? `${text}\n(About: ${about.map(c => c.name).join(', ')})` : text }); feed(null, text, 'you', [...about, ...media].map(m => m.name).join(', ')); took = talk.heard?.(text) }
   els.feed.querySelectorAll('.talk-acts').forEach(x => x.remove())
+  if (took && typeof took.then === 'function') {
+    talk.busy = true
+    const reply = await took.catch(() => null)
+    talk.busy = false
+    if (!talk.on) return
+    if (typeof reply === 'string' && reply) { for (const m of [...media, ...about]) links.add(m); talk.said.push({ who: 'hermia', text: reply }); return void botMsg(reply) }
+  }
   const wait = botMsg(brief ? 'Writing the brief…' : '…', true)
   talk.busy = true
   const res = await api('/api/discuss', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ said: talk.said, kind: talk.kind, brief, ...(media.length ? { refs: media.map(m => m.key) } : {}), ...(talk.chat ? { chat: talk.chat } : talk.from ? { from: talk.from } : {}) }) }).catch(() => null)

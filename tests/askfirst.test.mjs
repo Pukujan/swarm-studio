@@ -83,7 +83,7 @@ test('say(): a pick answers the question offline and is kept on the chat', async
   assert.equal(pendingAsk(chat), 'skips')
   const turn = await say(chat, { pick: 'go:all' }, noModel)
   assert.deepEqual(turn.go, { path: 'all', skip: ['brand', 'plan'], brief: 'a bakery site' })
-  assert.equal(turn.text, 'Building it now.')
+  assert.match(turn.text, /^Building it now: the crew picks the look and the pages/)
   assert.equal(chat.go.path, 'all')
   assert.equal(chat.go.turn, 't3')
   assert.equal(pendingAsk(chat), null)

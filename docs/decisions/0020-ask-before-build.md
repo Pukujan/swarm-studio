@@ -57,6 +57,32 @@ person wanted from their words, and the old Make box's **Just build** didn't car
   With reduced motion it's a still outline.
 - The question follows 0015: in the chat at the bottom, one open question at a time, three answers, no "pack".
 
+## Added 2026-11-13: the chat leads, and Make's two ways are built
+
+The owner, after trying slice 1: "chat didnt ask how many pages i want and what should they be and gave option for
+you choose… chat is supposed to be very dynamic with its question and guide the user so they never have to click a
+button but still feel guided, or give an option to skip everything and just generated based on their prompt". And on
+the menu: "i dont get the difference between scaffold and studio sounds like the same thing so it makes no sense to
+me". The rest is *our wording*.
+
+- **Make's menu is the two ways** (`web/makeways.js`): **Just make it** and **Studio**. A game's Studio is its Plan
+  board; a deck and a brand have the Studio only, so no menu. "Scaffold" is never shown.
+- **In a website's Studio, Hermia asks before a build what the person has not said**, one question at a time, each
+  answered by typing (`engine/askfirst.mjs` `studioTurn`, `POST /api/studio/:pid/ask`, `web/scaffold.js`):
+  1. `Which pages? Name them, or say "you choose".` Names typed any way ("Home, Work, Contact", "home work and
+     contact", "5 pages: …") become the Plan's pages. A number alone ("3 pages") is passed to the crew, which picks
+     which. "You choose" leaves them to the crew: the brief carries no Pages line.
+  2. `Pictures: painted, stock photos or drawn? Or say "you choose".` The answer is the Studio's Pictures card and
+     Setup's pick. "You choose" takes what Setup recommends (painted with an image model ready, else drawn).
+- **"Skip all, just build" at any point** takes those defaults for whatever is still open, says what it picked in
+  one line ("Building it now: the crew picks the look and the pages, pictures drawn."), and builds.
+- **Typing "build" is the Build press**: what is open is asked first, then it builds from the answers.
+- The questions are asked on Build (the button or the word), and as the chat's first line when the Studio starts on
+  its pages (Brand skipped). A line that is not an answer goes to the planner as before. A project that already
+  has a build is not asked its pages.
+- Not built yet: these two questions in `/next/`'s Studio chat with the answers in its Suggestions drawer; the same
+  questions in the Design deck's chat after "Pick steps to skip"; per-step Do it / Skip lines; the guide shine.
+
 ## Consequences
 
 - `swarm_design`, `/swarm`, the Make box and the Studio chat stop starting a website build directly. They put the

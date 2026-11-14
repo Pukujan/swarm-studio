@@ -81,7 +81,9 @@ export const siteKit = {
   build: async (spec, ctx) => {
     const pages = spec.kits?.site?.pages || (planSkipped(ctx) ? null : pagesOf(ctx))
     const idea = String(spec.idea || ctx.studio.idea)
-    const brief = pages?.length ? `${idea}\n\nPages: ${pages.join(', ')}.` : idea
+    // "3 pages" said in the chat with no names (engine/askfirst.mjs): the count goes, the crew picks which
+    const n = !pages?.length && !planSkipped(ctx) ? Math.min(MAX, Number(ctx.state.pageCount) || 0) : 0
+    const brief = pages?.length ? `${idea}\n\nPages: ${pages.join(', ')}.` : n ? `${idea}\n\nPages: ${n}, the crew picks which.` : idea
     const run = await ctx.sw.submit(brief, false, ctx.project.id, null, { chat: ctx.chat })
     return { run: typeof run === 'string' ? run : null }
   }
