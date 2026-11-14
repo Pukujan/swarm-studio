@@ -6,7 +6,6 @@
 // every stop names its cause.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdtempSync, writeFileSync, utimesSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,6 +16,7 @@ import { hermesBridge } from '../engine/bridge.mjs'
 import { hermesLlm } from '../engine/hermesllm.mjs'
 import { streamChat } from '../engine/llm.mjs'
 import { reasonFromAbort, reasonFromFailure } from '../engine/stopreason.mjs'
+import { startStudio } from '../scripts/studio-child.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
@@ -133,27 +133,15 @@ test('every stop names its cause; the provider\'s own words are kept', () => {
 
 // ---------- the real server, on its own port and data folder, with no model key
 
-async function freePort() {
-  const s = createServer()
-  await new Promise(r => s.listen(0, '127.0.0.1', r))
-  const p = s.address().port
-  await new Promise(r => s.close(r))
-  return p
-}
-
 async function startServer(extra = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'hh-srv-'))
-  const port = await freePort()
   const env = { ...process.env, SWARM_TOKEN: 't', SWARM_DATA_DIR: join(dir, 'data'), SWARM_RUNS_DIR: join(dir, 'data', 'runs'), SWARM_OUTPUT_DIR: join(dir, 'out'), HERMES_HOME: join(dir, 'hermes'), SWARM_HERMES_RUNNING: '0', ...extra }
   for (const k of Object.keys(env)) if (/_API_KEY$/.test(k) || /^SWARM_(PLANNER|WORKER|REVIEWER)_/.test(k)) delete env[k]
-  const child = spawn(process.execPath, [join(root, 'server', 'server.mjs'), '--port', String(port)], { env, stdio: ['ignore', 'ignore', 'pipe'] })
-  let log = ''
-  child.stderr.on('data', b => { log += b })
-  const base = `http://127.0.0.1:${port}`
-  for (let i = 0; i < 80; i++) { if (await fetch(base + '/').then(() => true, () => false)) break; await new Promise(r => setTimeout(r, 100)) }
+  // on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+  const { child, base, log } = await startStudio({ env })
   const call = (path, init = {}) => fetch(base + path, { ...init, headers: { 'x-swarm-token': 't', 'content-type': 'application/json', ...(init.headers || {}) } })
   const stop = () => { child.kill(); try { rmSync(dir, { recursive: true, force: true }) } catch {} }
-  return { base, call, stop, dir, log: () => log }
+  return { base, call, stop, dir, log, child }
 }
 
 const runEvents = (s, id) => { try { return readFileSync(join(s.dir, 'data', 'runs', id, 'events.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) } catch { return [] } }

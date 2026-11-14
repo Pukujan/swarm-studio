@@ -4,7 +4,6 @@
 // it is sure, or the build is the next version of one that exists. "Don't build yet" still opens the talk.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { recommend, readAnswer, askTurn, askedOf, pendingAsk, pickOptions, answered, LONG_BRIEF } from '../engine/askfirst.mjs'
 import { say } from '../engine/talkplan.mjs'
 import { newChat } from '../engine/chats.mjs'
+import { startStudio } from '../scripts/studio-child.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
@@ -126,21 +126,12 @@ test('say(): typed answers work the same; anything else asks again; "don\'t buil
 
 // ---------- the gate on /api/run, on the real server with a fake Hermes bridge (tests/hermeshealth.test.mjs)
 
-async function freePort() {
-  const s = createServer()
-  await new Promise(r => s.listen(0, '127.0.0.1', r))
-  const p = s.address().port
-  await new Promise(r => s.close(r))
-  return p
-}
 async function startServer() {
   const dir = mkdtempSync(join(tmpdir(), 'ask-srv-'))
-  const port = await freePort()
   const env = { ...process.env, SWARM_TOKEN: 't', SWARM_DATA_DIR: join(dir, 'data'), SWARM_RUNS_DIR: join(dir, 'data', 'runs'), SWARM_OUTPUT_DIR: join(dir, 'out'), HERMES_HOME: join(dir, 'hermes'), SWARM_HERMES_RUNNING: '0' }
   for (const k of Object.keys(env)) if (/_API_KEY$/.test(k) || /^SWARM_(PLANNER|WORKER|REVIEWER)_/.test(k)) delete env[k]
-  const child = spawn(process.execPath, [join(root, 'server', 'server.mjs'), '--port', String(port)], { env, stdio: ['ignore', 'ignore', 'pipe'] })
-  const base = `http://127.0.0.1:${port}`
-  for (let i = 0; i < 80; i++) { if (await fetch(base + '/').then(() => true, () => false)) break; await new Promise(r => setTimeout(r, 100)) }
+  // on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+  const { child, base } = await startStudio({ env })
   const call = (path, body) => fetch(base + path, { method: body ? 'POST' : 'GET', headers: { 'x-swarm-token': 't', 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
   const stop = () => { child.kill(); try { rmSync(dir, { recursive: true, force: true }) } catch {} }
   return { call, stop, dir }

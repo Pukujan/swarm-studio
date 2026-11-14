@@ -17,12 +17,12 @@
 //   8. Make, then another project: the new build opens in the deck, and opening another keeps it
 // It never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
-import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { startStudio } from './studio-child.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 async function loadPlaywright() {
@@ -35,7 +35,6 @@ async function loadPlaywright() {
 const { chromium } = await loadPlaywright()
 
 const wait = ms => new Promise(r => setTimeout(r, ms))
-const freePort = () => new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
 const fails = []
 let passes = 0
 const ok = (cond, what) => { if (cond) { passes++; console.log(`  ✓ ${what}`) } else { fails.push(what); console.log(`  ✗ ${what}`) } }
@@ -73,19 +72,17 @@ writeFileSync(join(runs, 'folders.json'), JSON.stringify({ v: 2, folders: [], pr
 
 // ---------- a model that always fails: a build started elsewhere starts, fails and stays the server's run
 const fake = createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"no model here"}')) })
-const fakePort = await freePort()
-await new Promise(r => fake.listen(fakePort, '127.0.0.1', r))
+// on a port the system picks and the fake keeps (asked for and let go, another process could take it first)
+await new Promise(r => fake.listen(0, '127.0.0.1', r))
+const fakePort = fake.address().port
 
-const port = await freePort(), TOKEN = 'open-check'
-const BASE = `http://127.0.0.1:${port}`
-const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
-for (const k of ['SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
-const server = spawn(process.execPath, [join(ROOT, 'server/server.mjs')], { env, stdio: ['ignore', 'pipe', 'pipe'] })
-let log = ''
-server.stdout.on('data', d => { log += d })
-server.stderr.on('data', d => { log += d })
+const TOKEN = 'open-check'
+const env = { ...process.env, SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
+for (const k of ['SWARM_PORT', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
+// on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+const studio = await startStudio({ env })
+const server = studio.child, BASE = studio.base
 const api = (path, body) => fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json())
-for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r.ok, () => false)) break; await wait(150) }
 
 // the third build: started elsewhere before the page opens, so the server replays it to the canvas
 const elsewhere = async brief => {

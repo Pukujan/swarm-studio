@@ -2,8 +2,7 @@
 // The browser side (teardown, the budget, scrolling a board of 10 clips) is scripts/video-check.mjs.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn, execFileSync } from 'node:child_process'
-import { createServer } from 'node:http'
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { makePoster, posterPath, posterFfmpeg } from '../engine/poster.mjs'
 import { findFfmpeg } from '../engine/playtest.mjs'
 import { posterFor } from '../web/video.js'
+import { startStudio } from '../scripts/studio-child.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 
@@ -55,7 +55,6 @@ test('a clip\'s poster is a JPEG frame of it, beside it', { skip: !ff && 'no ffm
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-const freePort = () => new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
 test('the server serves a clip\'s poster, and a missing one is a 404', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'poster-srv-'))
   const runs = join(dir, 'runs')
@@ -63,12 +62,10 @@ test('the server serves a clip\'s poster, and a missing one is a 404', async () 
   mkdirSync(join(runs, 'r1', 'video'), { recursive: true })
   writeFileSync(join(runs, 'r1', 'img', 'playtest-2.poster.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]))
   writeFileSync(join(runs, 'r1', 'video', 'promo.poster.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]))
-  const port = await freePort()
   const env = { ...process.env, SWARM_TOKEN: 't', SWARM_DATA_DIR: join(dir, 'data'), SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(dir, 'out'), HERMES_HOME: join(dir, 'hermes'), SWARM_FFMPEG: join(dir, 'no-ffmpeg') }
-  const child = spawn(process.execPath, [join(root, 'server', 'server.mjs'), '--port', String(port)], { env, stdio: 'ignore' })
-  const base = `http://127.0.0.1:${port}`
+  // on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+  const { child, base } = await startStudio({ env })
   try {
-    for (let i = 0; i < 80; i++) { if (await fetch(base + '/').then(() => true, () => false)) break; await new Promise(r => setTimeout(r, 100)) }
     const got = await fetch(`${base}/img/r1/playtest-2.poster.jpg`)
     assert.equal(got.status, 200)
     assert.equal(got.headers.get('content-type'), 'image/jpeg')
