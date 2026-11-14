@@ -15,6 +15,52 @@ export type HeadlessChatMode = (typeof CHAT_MODES)[number];
 export const talkOnly = (mode: HeadlessChatMode): boolean =>
   mode === "ask" || mode === "plan";
 
+/**
+ * dyad's tools that wait for a person in its window: each parks a request in the user-input registry
+ * (src/user_input/registry.ts) that only an answer from the renderer settles. A headless run has no
+ * renderer, so the boot (headless.ts) sets their consent to "never", which is how dyad itself removes
+ * a tool from a turn (shouldIncludeTool, tool_definitions.ts) and from the prompt's questionnaire
+ * steps (chat_stream_handlers.ts). Left on, planning_questionnaire or exit_plan ended the run at once
+ * with exit code 0 and no result line (nothing keeps the process alive while it waits), and
+ * add_integration held it for its 30-minute deadline (suggest_plugin has the same deadline, and
+ * generate_test_assertions waits for a review of a recording made in dyad's window).
+ * Swarm Studio's tests/headlessasks.test.mjs fails when a tool that parks is missing from this list.
+ */
+export const HEADLESS_OFF_TOOLS = [
+  "planning_questionnaire",
+  "add_integration",
+  "suggest_plugin",
+  "exit_plan",
+  "generate_test_assertions",
+] as const;
+
+/**
+ * The off tool a turn ended on, if it did. dyad ends a turn on an add_integration or exit_plan call
+ * (stopWhen, local_agent_handler.ts), and its window then sends a hidden "continue" once the person is
+ * done. Headless the call is refused as unavailable and the turn still ends there, with the work not
+ * done, so the runner sends nobodyHere() instead (headless_cli.ts). `content` is the assistant message
+ * of the turn: a refused call is its last `<dyad-status title="Tool &quot;name&quot; failed">` block.
+ */
+export const offToolStop = (content: string | null | undefined): string | null => {
+  const blocks = [
+    ...String(content ?? "").matchAll(
+      /<dyad-status title="Tool &quot;([a-z_]+)&quot; failed" state="error">[\s\S]*?<\/dyad-status>/g,
+    ),
+  ];
+  const last = blocks.at(-1);
+  if (!last) return null;
+  const after = String(content).slice((last.index ?? 0) + last[0].length).trim();
+  return !after && (HEADLESS_OFF_TOOLS as readonly string[]).includes(last[1])
+    ? last[1]
+    : null;
+};
+
+/** What the runner says in place of the person, so the turn goes on. */
+export const nobodyHere = (tool: string): string =>
+  `Nobody is here to answer: this run has no person in it, and \`${tool}\` is not available. ` +
+  `Do not call it again. Decide for yourself from the request and what the app already has, ` +
+  `and go on until the work is done.`;
+
 export interface Args {
   prompt?: string;
   out?: string;

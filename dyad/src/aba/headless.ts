@@ -68,6 +68,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { type IpcHandler, type RendererEvent } from "./electron_shim";
 import { electronShimShared } from "./electron_module";
 import { applyStaticHeadlessEnv, HEADLESS_STATIC_ENV } from "./headless_env";
+import { HEADLESS_OFF_TOOLS } from "./headless_args";
 
 const BOOT_ONCE_ERROR =
   "bootDyadHeadless: one boot per process (the db is a process singleton). " +
@@ -126,6 +127,11 @@ const HEADLESS_TOOL_CONSENTS = {
   reinstall_and_restart_app: "always",
   web_search: "always",
   web_crawl: "always",
+  // The tools that wait for a person (HEADLESS_OFF_TOOLS, headless_args.ts) are never offered: nobody
+  // is here to answer, so the model plans with what it has.
+  ...(Object.fromEntries(
+    HEADLESS_OFF_TOOLS.map((name) => [name, "never"]),
+  ) as Record<(typeof HEADLESS_OFF_TOOLS)[number], "never">),
 } as const;
 
 export interface HeadlessBootOptions {
