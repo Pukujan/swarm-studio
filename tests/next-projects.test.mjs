@@ -81,8 +81,10 @@ test('Make pre-selects the way picked last for the kind, else what the words sug
   assert.equal(pickWay('site', site, 'a bakery', null), 'studio')
   assert.equal(pickWay('site', site, 'a site for my bakery with a menu page, opening hours and a map', null), 'now')
   assert.equal(pickWay('site', site, 'a site for my bakery with a menu page, opening hours, a map and a moody look', null), 'studio')
-  assert.equal(pickWay('site', site, 'a bakery', 'takes'), 'takes')
-  assert.equal(pickWay('game', makeWays('game', true), 'a platformer', null), 'guided')
+  assert.equal(pickWay('site', site, 'a bakery with a long clear ask, a menu page and a map', 'studio'), 'studio')
+  // a way remembered from the five that is no longer offered falls back to the words
+  assert.equal(pickWay('site', site, 'a bakery', 'takes'), 'studio')
+  assert.equal(pickWay('game', makeWays('game', true), 'a platformer', null), 'studio')
   // a remembered way the kind does not offer falls back
   assert.equal(pickWay('deck', makeWays('deck', true), 'a pitch', 'now'), 'studio')
   assert.equal(studioFits('game', 'a long description of a game with many words in it'), true)

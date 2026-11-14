@@ -16,12 +16,14 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 ## How Swarm drives it
 
 - launcher.py starts a detached Node server with a minimal env plus the declared keys read through Hermes's secret scope (launcher.py:200-233).
+- That minimal env keeps `PATH`, `HOME`, `TMPDIR`, `LANG`, `HERMES_HOME`, `SWARM_GODOT` and `SWARM_IMAGE_SERVICE` (the image service's off switch, engine/images.mjs), plus the Windows system folders (launcher.py:199-202).
 - bridge.py runs a loopback server inside each Hermes process and attaches with `POST /api/hermes/attach {url, token, pid, code}`; Node keeps 4 bridges, drops one silent 45 s (engine/bridge.mjs:1-20). Attach interval: 5 s (engine/bridge.mjs:3, docs/specs/33-hermes-bridge.md:148-149); spec 33 also says 15 s (docs/specs/33-hermes-bridge.md:44).
 - `call(path, body)` for `/image`, `/video`, `/mcp`; `send` streams model calls (engine/bridge.mjs:25-62).
 - `/llm/v1` on the studio's port, with a per-process key, forwards to the bridge; `model` is the role (`planner`, `worker`, `reviewer`), optionally `role:pick` (engine/hermesllm.mjs:3-9, 22-24, 94). The app engine (Dyad) uses the same endpoint (engine/hermesllm.mjs:3-5).
 - `streamChat` is the client for any OpenAI-shaped endpoint; through Hermes it drops provider hints and sends `x-swarm-timeout` (engine/llm.mjs:12, 58, 71).
 - `hermesHealth` tells `closed` from `updated` by `$HERMES_HOME/gateway.pid` and the plugin's `.py` mtimes (engine/hermeshealth.mjs:18-22, 26-47).
 - Every child process gets `childEnv` only (engine/proc.mjs:1-23). The long-running ones (an app's dev or built server, a film render) start through `start()`, execa with `extendEnv: false`, `cleanup` and `forceKillAfterDelay`, and stop through `stopTree()`, tree-kill, so their children go too (engine/proc.mjs, engine/vendor/procs/; decision 0017, issue #450).
+- A server whose code changed on disk under it (an update) replaces itself the next time the page is asked for, when no work is running: same program, same environment, same port; Hermes's bridge attaches again by itself (server/server.mjs `replaceSelf`, engine/proc.mjs `respawnSelf`, engine/lifecycle.mjs `codeStamp`). `SWARM_NO_REPLACE=1` turns it off.
 - The server exits after 20 minutes with nothing to do: no pane (an `/events` stream), no request other than the bridge's re-attach and status looks, no build, Auto run, film, publish or app build (Settings › Background; server/server.mjs `serverBusy`, engine/lifecycle.mjs `idleWatch`). It closes its port first, so the next `ensure_server()` (the pane's `/canvas`, any `/swarm` command, `start_run`) starts a new one at once, and the bridge's attach loop attaches to it (launcher.py `_ensure_server`, bridge.py `_attach_loop`). A command refused in that moment starts it and asks once more (commands.py `_api`).
 
 ### Models / gateway

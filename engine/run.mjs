@@ -3,11 +3,13 @@
 // Everything that happens is emitted as an event; the canvas only draws events.
 
 import { markStalled, streamChat } from './llm.mjs'
+import { pacer } from './pace.mjs'
 import { SITEMAP_SYSTEM, pagePlannerMessages, workerMessages } from './prompts.mjs'
 import { PAGE_TYPES, pickPageType, lookBrief, pickLook, fitTheme, namedColours, missingColours } from './pagetype.mjs'
 import { tidyFragment } from './tidy.mjs'
 import { fixSection } from './review.mjs'
 import { lintSection, forBuilder } from './lint/index.mjs'
+import { shortlist, catalogueLines, skillTexts, templateText } from './odlibrary.mjs'
 import { extendPlannerMessages, navAsk } from './extend.mjs'
 import { cleanSeo, reviewSeo } from './seo.mjs'
 import { projectName } from './naming.mjs'
@@ -93,7 +95,7 @@ function lineParser(onObject) {
 
 const SAY_RE = /<!--\s*say:\s*([\s\S]*?)-->/g
 
-export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, brand = null, emit, signal }) {
+export async function runSwarm({ provider, workerProvider = provider, brief, agents = 8, plannerModel, workerModel, images = false, maxPages = 0, maxSections = 0, recent = [], pageType = '', base = null, ask = '', resume = false, brand = null, template = '', emit, signal }) {
   const t0 = performance.now()
   const elapsed = () => Math.round(performance.now() - t0)
   // one page type per build, away from the last builds' types and colours
@@ -163,7 +165,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         return streamChat(provider, {
           trace: { kind: 'plan', page: page.id },
           model: plannerModel,
-          messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page }),
+          messages: pagePlannerMessages({ brief, theme: plan.theme, plan, page, skills: skillTexts(plan.skills), template: picked }),
           maxTokens: 3400,
           temperature: 0.8,
           extra: NO_THINKING,
@@ -185,8 +187,16 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
       .catch(err => { if (!signal?.aborted) emit('error', { where: `planner:${page.id}`, message: String(err.message || err) }) })
   }
 
+  // Open Design's library (engine/odlibrary.mjs): the skills that fit the brief, for the sitemap planner to choose
+  // from, and the template the person picked. The chosen skills' text and the template go to the page planners
+  const offered = base ? [] : shortlist(brief)
+  const picked = base ? '' : templateText(template)
+  if (picked) emit('template', { id: template })
   const onSitemap = obj => {
-    if (obj.type === 'theme') {
+    if (obj.type === 'skills' && Array.isArray(obj.ids) && !plan.skills) {
+      plan.skills = obj.ids.filter(id => offered.some(e => e.id === id)).slice(0, 2)
+      if (plan.skills.length) emit('skills', { ids: plan.skills })
+    } else if (obj.type === 'theme') {
       plan.theme = brand ? { ...brand.theme } : fitTheme(obj, look)
       emit('theme', brand ? { ...plan.theme, by: 'brand' } : plan.theme)
     } else if (obj.type === 'page' && obj.id && !plan.pages.some(p => p.id === obj.id) && !(maxPages && plan.pages.length >= maxPages)) {
@@ -213,7 +223,7 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         model: plannerModel,
         messages: [
           { role: 'system', content: SITEMAP_SYSTEM },
-          { role: 'user', content: brand ? `Brief: ${brief}\n\n${lookBrief(type, [], null)}\n${brand.brief || ''}` : `Brief: ${brief}\n\n${lookBrief(type, recent, look)}` }
+          { role: 'user', content: [brand ? `Brief: ${brief}\n\n${lookBrief(type, [], null)}\n${brand.brief || ''}` : `Brief: ${brief}\n\n${lookBrief(type, recent, look)}`, picked, offered.length ? `Skills you may name (id: name, kind, what it is for):\n${catalogueLines(offered)}` : ''].filter(Boolean).join('\n\n') }
         ],
         maxTokens: 2000,
         temperature: 0.8,
@@ -374,6 +384,9 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     const started = performance.now()
     let text = ''
     let saidCount = 0
+    // a section that arrives whole (Hermes's model call does not stream) is played out, so the agent types,
+    // draws and links on the canvas as it does with a streamed one (engine/pace.mjs)
+    const play = pacer(d => emit('layer:delta', { page: layer.page, layer: layer.id, agent: agent.id, text: d }), { signal })
     try {
       await streamChat(workerProvider, {
         trace: { kind: 'build', agent: agent.id, page: layer.page, layer: layer.id },
@@ -385,13 +398,14 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
         signal,
         onDelta: d => {
           text += d
-          emit('layer:delta', { page: layer.page, layer: layer.id, agent: agent.id, text: d })
+          play.push(d)
           const says = [...text.matchAll(SAY_RE)]
           for (; saidCount < says.length; saidCount++) {
             emit('agent:say', { agent: agent.id, layer: layer.id, text: says[saidCount][1].trim() })
           }
         }
       })
+      await play.done()
       stats.done++
       // a builder sometimes writes a sentence before its markup, or runs out of
       // room mid-grid; an unclosed div pulls every later section into it
@@ -426,11 +440,13 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
   async function lintFix(agent, layer, must) {
     const page = layer.page, first = layer.html, started = performance.now()
     emit('layer:reset', { page, layer: layer.id, agent: agent.id })
+    const play = pacer(d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d }), { signal })
     try {
       const html = tidyFragment(await fixSection({
         provider: workerProvider, model: workerModel, theme: plan.theme || {}, html: first, role: layer.role || layer.id, ...forBuilder(must), images, kind: 'lint-fix',
-        signal, onDelta: d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d })
+        signal, onDelta: play.push
       }))
+      await play.done()
       if (lintSection(html, { content: layer.content }).filter(f => f.severity === 'P0').length < must.length) layer.html = html
     } catch { /* the first one stays */ }
     emit('layer:done', { page, layer: layer.id, agent: agent.id, ms: Math.round(performance.now() - started), done: stats.done, planned: stats.planned, html: layer.html, fixed: true, lint: must.map(f => f.id) })
@@ -443,11 +459,13 @@ export async function runSwarm({ provider, workerProvider = provider, brief, age
     const started = performance.now()
     emit('agent:assign', { agent: agent.id, page, layer: layer.id, role: layer.role, fixing: true })
     emit('layer:reset', { page, layer: layer.id, agent: agent.id })
+    const play = pacer(d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d }), { signal })
     try {
       const html = await fixSection({
         provider: workerProvider, model: workerModel, theme: plan.theme || {}, html: layer.html, role: layer.role || layer.id, comment, images,
-        signal, onDelta: d => emit('layer:delta', { page, layer: layer.id, agent: agent.id, text: d })
+        signal, onDelta: play.push
       })
+      await play.done()
       stats.done++
       layer.html = tidyFragment(html)
       emit('layer:done', { page, layer: layer.id, agent: agent.id, ms: Math.round(performance.now() - started), done: stats.done, planned: stats.planned, html: layer.html, fixed: true })

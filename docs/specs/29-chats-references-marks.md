@@ -265,6 +265,10 @@ The Overview's Files panel gets a **References** group after Uploads:
   **Reference** (files) and **Link**. The inspector shows where it came from, its size and its use, with **Use for…**
   and **Send**, **Open** and **Remove**. Remove's toast has **Undo**, and Delete removes the selected one.
 - The crew's brief lists the store's pictures and links, with their use. Home › Assets lists the pictures.
+- A link's look ([decision 0022](../decisions/0022-copy-the-look-from-a-link.md)): the crew walks the site in a
+  browser (`engine/sitelook.mjs`), keeps shots, measured colours and type, motion and a style prompt on the link
+  (`refs.setLook`), and the brief gives that style with where it came from. **Add link** on References and a link in
+  a project's talk both start it; `POST …/refs/:id/look` walks again.
 - Uploads stay in `uploads/` and in their own group: `all()` reads them as references with source `upload`.
   Dropping a file on the Overview still uploads it.
 - Not yet:

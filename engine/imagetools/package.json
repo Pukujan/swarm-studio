@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "description": "The image service's libraries (engine/images.mjs), installed into the data folder on first use from this lockfile: npm ci --ignore-scripts. @napi-rs/image ships prebuilt binaries per platform; nothing is compiled.",
+  "dependencies": {
+    "@napi-rs/image": "1.16.0",
+    "thumbhash": "0.1.1"
+  }
+}

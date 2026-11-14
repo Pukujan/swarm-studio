@@ -47,7 +47,9 @@ Rules:
 - You are given a page type: its layout, voice and kind of sections decide the whole site. Build every page in that type's character; never fall back to the stock landing page (hero, three features, testimonial, call to action).
 - Vary the section roles so pages don't look alike. Give each page one memorable, unusual section.
 - A distinctive, characterful palette and font pairing that fits the product and the page type. Follow what you are told about the last builds' colours. No purple gradients. Good contrast.
-- Theme direction names the page type's layout in a few words, so builders keep to it.`
+- Theme direction names the page type's layout in a few words, so builders keep to it.
+- When you are given skills (Open Design's), after the pages add at most one line naming the ones this site needs, by id, none if none fits: {"type":"skills","ids":["<skill id>"]}. Their text goes to the page planners.
+- When the person picked a design template, the site follows it: its layout, its sections and its voice.`
 
 export const PAGE_PLANNER_SYSTEM = `You are a page planner in a design swarm. You plan the sections ("layers") of ONE page of a website; builder agents then build every layer in parallel from your plan, so each layer must carry all of its own copy.
 
@@ -64,7 +66,7 @@ Rules:
 - Write in the page type's voice (you are given it).
 ${VOICE_RULES}`
 
-export function pagePlannerMessages({ brief, theme, plan, page }) {
+export function pagePlannerMessages({ brief, theme, plan, page, skills = '', template = '' }) {
   const pageType = PAGE_TYPES[plan.pageType] ? plan.pageType : ''
   return [
     { role: 'system', content: PAGE_PLANNER_SYSTEM },
@@ -77,7 +79,10 @@ export function pagePlannerMessages({ brief, theme, plan, page }) {
         `Site pages: ${plan.pages.map(p => `${p.id} ("${p.title}": ${p.purpose})`).join('; ')}.`,
         `Navigation: ${plan.shared.find(l => l.id === 'nav')?.content || ''}`,
         `Plan this page: ${page.id} — "${page.title}": ${page.purpose}`,
-        `Sections, in order: ${page.sections || (pageType ? PAGE_TYPES[pageType].sections : 'hero, features, story, cta')}`
+        `Sections, in order: ${page.sections || (pageType ? PAGE_TYPES[pageType].sections : 'hero, features, story, cta')}`,
+        // the person's template and the skills the sitemap planner chose (engine/odlibrary.mjs): planners only
+        template,
+        skills ? `Use these skills where they help this page:\n${skills}` : ''
       ].filter(Boolean).join('\n')
     }
   ]

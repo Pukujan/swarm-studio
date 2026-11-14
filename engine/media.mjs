@@ -14,6 +14,7 @@
 import { chmodSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { musicPrompt, SFX_TEXT } from './score.mjs'
+import { templateHint } from './odlibrary.mjs'
 
 export const KEYS = {
   elevenlabs: { label: 'ElevenLabs', keyUrl: 'https://elevenlabs.io/app/settings/api-keys', env: 'SWARM_ELEVENLABS_KEY' },
@@ -139,7 +140,7 @@ export function clipJobs(scenes, images, flowDir, max = 3) {
     if (!still?.file || !existsSync(still.file)) continue
     const clip = join(flowDir, `${basename(still.file).replace(/\.[^.]+$/, '')}.mp4`)
     if (existsSync(clip) || out.some(j => j.clip === clip)) continue
-    out.push({ still: still.file, clip, seconds: s.seconds > 4.5 ? 8 : 4, prompt: `${still.gen ? `${still.gen}. ` : ''}${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape, no text` })
+    out.push({ still: still.file, clip, seconds: s.seconds > 4.5 ? 8 : 4, prompt: [`${still.gen ? `${still.gen}. ` : ''}${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape, no text`, templateHint('video', still.gen || '')].filter(Boolean).join('. ') })
   }
   return out
 }

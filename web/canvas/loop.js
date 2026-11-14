@@ -1,8 +1,9 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
+import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api } from './core.js'
-import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage } from './deck.js'
+import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage, slotFor } from './deck.js'
 import { lite, litePass, frameBusy, togglePanel, toggleModels } from './settings.js'
 import { renderAgents, setText, renderToolbar, treeSel, renderTree, renderStatus, botMsg, feed, hermesReady, hermesSays } from './panels.js'
 import { renderDesign, drawSelBox, exp, design, selectAt, exportRunNow, undo, redo, esc } from './design.js'
@@ -12,8 +13,9 @@ import { pub, liveUrl, publishNow } from './publish.js'
 import { shownRun, video, VIDEO_STYLES, makeVideo, showRun, runNow } from './film.js'
 import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view } from './rooms.js'
 import { tour, stopTour, closePlayer, watchVisitor, setMotion, openPlayer } from './player.js'
-import { talk, talkSay, readTalk, talkStart, talkAsk } from './talk.js'
+import { talk, talkSay, readTalk, talkStart, talkAsk, openAsk } from './talk.js'
 import { links, refLines } from './base.js'
+import { carryStep, carryMoving } from './carry.js'
 import { hosted } from './hosted.js'
 
 // ---------- loop
@@ -108,6 +110,7 @@ export function frameLoop(now) {
   }
   runBanter(now)
   drawWires()
+  carryStep(now)
 
   if (now - lite.last > 1000) { lite.last = now; litePass() }
   if (now - lastPanels > 150) {
@@ -154,7 +157,7 @@ export function frameLoop(now) {
   // nothing moving (camera settled, no cursor at work, no build running): a few frames a second
   // is enough; any input wakes it at once (wakeLoops)
   const still = Math.abs(cam.ts - cam.s) < 1e-4 && Math.abs(cam.tx - cam.x) < 0.2 && Math.abs(cam.ty - cam.y) < 0.2 &&
-    !S.frames.some(frameBusy) && ![...S.agents.values()].some(a => a.act || a.queued || now < (a.moving || 0) || now < (a.sayUntil || 0))
+    !S.frames.some(frameBusy) && !carryMoving() && ![...S.agents.values()].some(a => a.act || a.queued || now < (a.moving || 0) || now < (a.sayUntil || 0))
   nextFrame(frameLoop, still)
 }
 
@@ -207,7 +210,7 @@ function prototypeClick(e) {
   else selectAt(f, x, wy)
 }
 
-els.viewport.addEventListener('dblclick', () => setAuto(true))
+els.viewport.addEventListener('dblclick', e => zoomToSection(e, { slotFor, setAuto }) || setAuto(true))
 els.camHint.addEventListener('click', () => setAuto(!cam.auto))
 els.viewport.addEventListener('wheel', e => {
   if (e.target.closest('.float')) return
@@ -429,8 +432,22 @@ async function sendDock() {
   }
   setAuto(true)
   const media = links.take('ref')
-  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief: refLines(brief, media), agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
+  const res = await api('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ brief: refLines(brief, media), agents: Number(els.agentsSel.value), ...(to.project ? { project: to.project } : {}), ...(route === 'extend' || route === 'redo' ? { from: to.from } : {}), ...(route === 'redo' ? { redo: true } : {}), ...(to.pictures ? { pictures: to.pictures } : {}), ...(to.template ? { template: to.template } : {}), ...(to.chat ? { chat: to.chat } : {}) }) }).catch(() => null)
   const j = res ? await res.clone().json().catch(() => ({})) : {}
+  // a new website asks first (docs/decisions/0020-ask-before-build.md): the question waits in its chat, or "don't
+  // build yet" opens the talk. Not an error, and not busy. Whoever sent it moves to the deck first (web/home.js)
+  if (res?.status === 409 && j.error === 'ask') {
+    to.done?.({ ask: j.ask, chat: j.chat || null })
+    els.brief.value = ''
+    await new Promise(r => setTimeout(r, 0))
+    if (j.ask === 'talk') {
+      const from = to.from || null
+      // from the Make box: the talk is in the Design deck's chat, so it opens there (as the question's chat does)
+      if (!from) { window.swarmCosmos?.go?.('station', 'canvas'); window.swarmCosmos?.chat?.(true) }
+      return void talkStart({ text: brief, blank: !from, from, build: (text, chat) => { setNextRoute(from ? { from, route: 'extend', selected: false, chat } : { fresh: true, chat }); els.brief.value = text; els.form.requestSubmit() } })
+    }
+    return void openAsk(j.chat)
+  }
   to.done?.(res?.ok ? j.run || null : res?.status === 409 ? { busy: true, run: j.run || null } : null)
   if (!res?.ok) for (const m of media) links.add(m)
   if (res?.ok) { els.brief.value = ''; hosted?.refresh() }

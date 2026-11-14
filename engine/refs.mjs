@@ -4,12 +4,17 @@
 //   refs/index.json   [{ id, kind, name, file, url, w, h, source, use, read, from, added, removed }]
 //   refs/<file>
 //
+// A link can carry a `look` (engine/sitelook.mjs, decision 0022): the site walked in a browser, its shots
+// (refs/look-<id>-<n>.jpg), the measured tokens, the style words and `from` (where and how the person gave it).
+// The shots are for the person to see; they are never placed in a build.
+//
 // kind: image, video, audio, file or link. source: upload, chat, feed, link, plan or film. `use` is what
 // it is for ("hero mood", "the menu"); `removed` keeps the time it was removed, so undo brings it back.
 // The project's uploads (projects/<pid>/uploads) are references too, with source `upload`: `all()`
 // lists them beside the store, so every door (the crew's brief, Home › Assets) reads one list.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { join, extname } from 'node:path'
+import { lookBrief } from './sitelook.mjs'
 
 const PID = /^[\w-]{1,64}$/
 const REF_ID = /^r[0-9a-z]{4,16}$/
@@ -43,12 +48,12 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
   const ok = pid => PID.test(String(pid || '')) && known(pid)
   const read = pid => { try { return JSON.parse(readFileSync(join(dir(pid), 'index.json'), 'utf8')) } catch { return [] } }
   const write = (pid, list) => { mkdirSync(dir(pid), { recursive: true }); const f = join(dir(pid), 'index.json'); writeFileSync(`${f}.tmp`, JSON.stringify(list, null, 1)); renameSync(`${f}.tmp`, f) }
-  const view = (pid, r) => ({ ...r, src: r.file ? `/ref/${pid}/${encodeURIComponent(r.file)}` : null })
+  const view = (pid, r) => ({ ...r, src: r.file ? `/ref/${pid}/${encodeURIComponent(r.file)}` : null, ...(r.look ? { look: { ...r.look, shots: (r.look.shots || []).map(f => `/ref/${pid}/${encodeURIComponent(f)}`), ...(r.look.match ? { match: { ...r.look.match, ours: (r.look.match.ours || []).map(f => `/ref/${pid}/${encodeURIComponent(f)}`) } } : {}) } } : {}) })
   const newId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
   const need = pid => { if (!ok(pid)) throw Object.assign(new Error('no such project'), { status: 404 }) }
   const meta = input => ({
     source: SOURCES.has(input.source) ? input.source : 'upload',
-    use: clip(input.use, 80), from: clip(input.from, 64), read: clip(input.read, 400)
+    use: clip(input.use, 300), from: clip(input.from, 64), read: clip(input.read, 400)
   })
 
   // the live references, oldest first; with removed: the removed ones too
@@ -91,7 +96,26 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
   }
   const remove = (pid, id) => change(pid, id, r => { r.removed = Date.now() })
   const restore = (pid, id) => change(pid, id, r => { r.removed = null })
-  const setUse = (pid, id, use) => change(pid, id, r => { r.use = clip(use, 80) })
+  const setUse = (pid, id, use) => change(pid, id, r => { r.use = clip(use, 300) })
+  // a link's look: the walk's state, words and tokens; shots (Buffers) are kept as files beside the index
+  function setLook(pid, id, look, shots = []) {
+    return change(pid, id, r => {
+      if (r.kind !== 'link') throw Object.assign(new Error('only a link has a look'), { status: 400 })
+      const names = shots.slice(0, 9).map((buf, i) => { const f = `look-${id}-${i}.jpg`; mkdirSync(dir(pid), { recursive: true }); writeFileSync(join(dir(pid), f), buf); return f })
+      const kept = look.state === 'walking' ? r.look?.match : null
+      r.look = { ...look, ...(kept ? { match: kept } : {}), shots: names.length ? names : look.state === 'walking' ? (r.look?.shots || []) : [] }
+    })
+  }
+
+  // the match check (engine/lookmatch.mjs): how close a build is to the link's look. `ours` (Buffers) are shots
+  // of the build's own pages, kept as match-<id>-<n>.jpg; a new look clears the old match
+  function setMatch(pid, id, match, ours = []) {
+    return change(pid, id, r => {
+      if (!r.look) throw Object.assign(new Error('no look to match yet'), { status: 400 })
+      const names = ours.slice(0, 4).map((buf, i) => { const f = `match-${id}-${i}.jpg`; mkdirSync(dir(pid), { recursive: true }); writeFileSync(join(dir(pid), f), buf); return f })
+      r.look.match = { ...match, ours: names.length ? names : match.state === 'checking' ? (r.look.match?.ours || []) : [] }
+    })
+  }
 
   // the store and the uploads as one list (the uploads with source upload), for every door
   function all(pid) {
@@ -103,7 +127,7 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     const n = decodeURIComponent(String(name || ''))
     if (!PID.test(String(pid || '')) || !FILE.test(n)) return null
     const p = join(dir(pid), n)
-    return existsSync(p) && read(pid).some(r => r.file === n && !r.removed) ? { file: p, type: REF_TYPES[extname(n).slice(1).toLowerCase()] || 'application/octet-stream' } : null
+    return existsSync(p) && read(pid).some(r => !r.removed && (r.file === n || r.look?.shots?.includes(n) || r.look?.match?.ours?.includes(n))) ? { file: p, type: REF_TYPES[extname(n).slice(1).toLowerCase()] || 'application/octet-stream' } : null
   }
   // what the crew's brief says about the store (the uploads are listed apart, as before)
   function brief(pid) {
@@ -112,7 +136,10 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     const links = live.filter(r => r.kind === 'link')
     const out = []
     if (pics.length) out.push(`The owner's reference pictures. Match their look; place one as it is (<img src="…">, no data-gen) only where its use says so:\n${pics.slice(0, 12).map(r => `- ${r.name}${r.use ? ` (for ${r.use})` : ''}: ${r.src}`).join('\n')}`)
-    if (links.length) out.push(`Links the owner gave as references:\n${links.slice(0, 8).map(r => `- ${r.url}${r.use ? ` (for ${r.use})` : ''}`).join('\n')}`)
+    const looks = links.map(r => lookBrief(r)).filter(Boolean)
+    const plain = links.filter(r => !lookBrief(r))
+    if (looks.length) out.push(...looks.slice(0, 3))
+    if (plain.length) out.push(`Links the owner gave as references:\n${plain.slice(0, 8).map(r => `- ${r.url}${r.use ? ` (for ${r.use})` : ''}`).join('\n')}`)
     return out.join('\n\n')
   }
   // "use this for the hero": the line the crew is sent, like a comment on that section
@@ -121,5 +148,5 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     return clip(`Use ${what} for ${section}.${r.kind === 'image' ? ' Place it as it is (<img src="…">, no data-gen) or match its look, whichever fits the section.' : ' Match its look and feel.'} Keep everything else.`, 600)
   }
 
-  return { list, all, addFile, addLink, remove, restore, setUse, file, brief, useText, dir }
+  return { list, all, addFile, addLink, remove, restore, setUse, setLook, setMatch, file, brief, useText, dir }
 }

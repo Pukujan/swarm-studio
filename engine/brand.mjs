@@ -3,7 +3,7 @@
 // theme as it is (engine/run.mjs), and checkBrand is the reviewer's check that the build kept it.
 // Kept on the chat record as `brand` (engine/chats.mjs); server/brand.mjs serves it.
 import { namedColours, missingColours } from './pagetype.mjs'
-import { BRAND_PACKS, cleanSuggest, suggestByWords, packBrief, packOf, systemOf } from './brandpacks.mjs'
+import { BRAND_PACKS, cleanSuggest, suggestByWords, packBrief, packOf, systemOf, applyPack } from './brandpacks.mjs'
 
 const HEX = /^#[0-9a-f]{6}$/i
 const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
@@ -179,6 +179,16 @@ export function brandTheme(brand) {
     ...(sys ? { system: { slug, name: packOf(slug)?.name || slug, tokens: Object.keys(sys.tokens), rules: sys.rules, components: sys.components } } : {}),
     locked: true
   }
+}
+
+// The design system a build asks for by name (decision 0016 point 3: the request, then the project, then the
+// default): a pack's whole look as a brand of its own for this build, as if picked and locked on the sheet
+export function requestedBrand(slug, brief = '') {
+  if (typeof slug !== 'string' || !packOf(slug)) return null
+  const b = { palettes: [], types: [], pick: {}, brief, story: {} }
+  if (!applyPack(b, slug)) return null
+  const theme = brandTheme(b)
+  return theme ? { theme, brief: brandBrief(b) } : null
 }
 
 // what the sitemap planner is told when the sheet is locked
