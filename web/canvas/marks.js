@@ -4,7 +4,7 @@ import { painterOf } from '../icons.js'
 import { S, $, els, api, commandOps, BOOT, WALL, BASE } from './core.js'
 import { botMsg, feed, toolbarKey, setToolbarKey } from './panels.js'
 import { esc, remember, restoreLayer } from './design.js'
-import { viewing } from './replay.js'
+import { viewing, rec, stopReplay } from './replay.js'
 import { shownRun } from './film.js'
 import { links, refLines, FRAME_SANDBOX } from './base.js'
 import { modelsInfo, thaw, toggleModels } from './settings.js'
@@ -115,6 +115,8 @@ export function drawComment() {
 }
 
 export async function sendComment(text, target = null) {
+  // a comment is work for the real crew: a replay ends first, and the finished build takes it
+  if (rec.on) await stopReplay({ any: true })
   const run = viewing && viewing !== 'new' ? viewing : S.run
   if (!run) return feed(null, 'Open a build first.', 'err')
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text.trim()).map(l => ({ key: l.key, role: l.role, html: l.text }))

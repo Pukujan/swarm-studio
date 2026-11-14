@@ -37,6 +37,17 @@ export const VENDORED = [
     integrity: 'sha512-YUbc4psiyjTktuOkvCkuDNWHjZiqwJZ/SPpnYmOUFoKWi6nyjY3CgW7+uQSwVTVR9ka2/Swz1UiRM739j07kmQ==',
     copy: 'dist/snapdom.js',
     out: 'web/vendor/snapdom/snapdom.js'
+  },
+  // the Map window's diagrams (spec 44, web/canvas/mapwin.js): the package's own browser build, a classic script that
+  // sets window.mermaid, copied as it is. The same version and tarball as the next UI's (ui/package.json and its
+  // lockfile; tests/gamemap.test.mjs holds the two together). Fetched from the plugin's own server the first time a
+  // Map is drawn, never before.
+  {
+    name: 'mermaid',
+    version: '12.2.0',
+    integrity: 'sha512-w7nr/SFrLO7BaVTs3dQTvYSV6nYSBj0Yy9DjBhsIJtAcHqRzXSq4Pg32ujHZ/AdWsAMNEvvhbm5dt9E2tOiHzw==',
+    copy: 'dist/mermaid.min.js',
+    out: 'web/vendor/mermaid/mermaid.min.js'
   }
 ]
 

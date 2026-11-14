@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { stageOffers, stageAuto, stageNow, stagePick, stageAsk, stageNone, canOpen, playFail } from '../web/canvas/stage.js'
+import { stageOffers, stageAuto, stageNow, stagePick, stageAsk, stageNone, canOpen, playFail, mapDoor } from '../web/canvas/stage.js'
 
 const gameArt = { working: true, state: 'working', kind: 'game', hasApp: false, url: null, painted: 3, steps: 12 }
 const gameLive = { working: true, state: 'working', kind: 'game', hasApp: true, url: 'http://localhost:5173/', painted: 18, steps: 80 }
@@ -144,11 +144,11 @@ test('a start that failed is said in the chat, short', () => {
   assert.ok(playFail('game', 'x'.repeat(900)).length < 260)
 })
 
-test('the room is wired to the switch: the bar has the three options, the wall has no button of its own', () => {
+test('the room is wired to the switch: the bar has its options, the wall has no button of its own', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8')
   const group = html.match(/<div class="seg" id="app-stageview"[^>]*>(.*?)<\/div>/s)
   assert.ok(group, 'the switch is in the App bar')
-  assert.deepEqual([...group[1].matchAll(/data-stage="(\w+)"[^>]*>(\w+)</g)].map(m => [m[1], m[2]]), [['crew', 'Crew'], ['art', 'Art'], ['live', 'Live']])
+  assert.deepEqual([...group[1].matchAll(/data-stage="(\w+)"[^>]*>(\w+)</g)].map(m => [m[1], m[2]]), [['crew', 'Crew'], ['art', 'Art'], ['live', 'Live'], ['map', 'Map']])
   assert.ok(!/title=/.test(group[0]), 'names only: no title attribute')
   assert.ok(html.indexOf('id="app-stageview"') < html.indexOf('id="app-mode"'), 'beside Preview / Code')
   const read = f => readFileSync(new URL(`../web/canvas/${f}`, import.meta.url), 'utf8')
@@ -157,4 +157,16 @@ test('the room is wired to the switch: the bar has the three options, the wall h
   assert.match(read('loop.js'), /if \(stageSay\(brief\)\)/)
   const page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')
   assert.ok(page.indexOf("'canvas/stage.js'") > 0 && page.indexOf("'canvas/stage.js'") < page.indexOf("'canvas/rooms.js'"), 'stage.js loads before the room that uses it')
+})
+
+test('at rest the Map has its own door when the switch would not show it', () => {
+  const rest = { state: 'done', kind: 'game', steps: 4, hasMap: true }
+  assert.equal(mapDoor(stageNow(rest)), true, 'only Map is offered: the switch hides, the door shows')
+  assert.equal(mapDoor(stageNow(rest, 'map')), false, 'the Map is on the stage already')
+  assert.equal(mapDoor(stageNow({ ...rest, hasMap: false })), false, 'nothing to draw')
+  assert.equal(mapDoor(stageNow({ ...rest, url: 'http://localhost:5174/' })), false, 'Live and Map: the switch offers it')
+  const read = f => readFileSync(new URL(`../web/canvas/${f}`, import.meta.url), 'utf8')
+  assert.match(read('stage.js'), /el\.hidden = now\.offers\.length < 2 && !now\.pin/, 'the Map pinned alone keeps its pressed button: the way back')
+  assert.match(read('rooms.js'), /mapDoorShow\(mapDoor\(now\)\)/)
+  assert.ok(!/mapdoor[^\n]*title|setAttribute\('title'/.test(read('rooms.js')), 'a name only, no tooltip')
 })

@@ -7,6 +7,7 @@
 //   env: SWARM_STUDIO_API_KEY or SWARM_API_KEY, SWARM_BASE_URL,
 //        SWARM_PLANNER_MODEL, SWARM_WORKER_MODEL, SWARM_AGENTS
 
+import '../engine/socketsafe.mjs'
 import { createServer } from 'node:http'
 import { randomBytes, timingSafeEqual, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, statSync, copyFileSync, createReadStream, mkdtempSync, rmSync, openSync, readSync, closeSync } from 'node:fs'
@@ -223,10 +224,17 @@ const mediaKeyStore = mediaKeys(dataDir)
 // Generated pages served from this origin (/site/, /video/…/live/) run in an opaque origin (Nous catalog review, point 4)
 const SITE_CSP = 'sandbox allow-scripts'
 const HERMES_IMAGE = { provider: 'hermes', available: true, models: [], default: '' }
+// What Hermes offers for pictures and clips. Its bridge answers from memory, on a thread of its own (bridge.py
+// `media`, ThreadingHTTPServer), so the question gets MEDIA_MS and not a moment more: a build asks it before it
+// starts (picturesFor), and a Hermes that has hung must not hold the build's start (it was 25 s: 10 s, and the
+// 15 s every bridge call is given on top for the bridge's own timeout to answer first). A Hermes that is attached
+// and did not answer in time is taken to offer both, as before (`unsure`: that answer is not kept for long).
+const MEDIA_MS = 3000
+const mediaOffer = () => hermes.call('/media', undefined, MEDIA_MS, { grace: 0 })
 const imagegenHermes = async (args, timeout) => {
   if (args[0] === '--list') {
-    const m = await hermes.call('/media', undefined, 10000)
-    return { ok: true, providers: [{ ...HERMES_IMAGE, available: !m.absent && m.image?.available !== false }] }
+    const m = await mediaOffer()
+    return { ok: true, unsure: m.ok === false && !m.absent, providers: [{ ...HERMES_IMAGE, available: !m.absent && m.image?.available !== false }] }
   }
   return hermes.call('/image', imageBody(args), timeout || 300000)
 }
@@ -239,7 +247,7 @@ const argAfter = (args, flag) => { const i = args.indexOf(flag); return i >= 0 ?
 const imagegen = (args, timeout) => {
   if (args[0] === '--list') return imagegenHermes(args, timeout).then(r => {
     const mine = ckffProvider(), listed = (r?.ok ? r.providers : []).filter(x => x.provider !== 'ckff')
-    return mine ? { ok: true, providers: [...listed, mine] } : r
+    return mine ? { ...r, ok: true, providers: [...listed, mine] } : r
   })
   if (argAfter(args, '--provider') !== 'ckff') return imagegenHermes(args, timeout)
   // the same arguments as a Hermes picture; ckff has no centre-crop, so the picture comes back whole
@@ -249,8 +257,8 @@ const imagegen = (args, timeout) => {
 // moving clips from a still, through Hermes's own video_generate (the provider Hermes is set up with)
 const videogen = async (args, timeout) => {
   if (args[0] === '--list') {
-    const m = await hermes.call('/media', undefined, 10000)
-    return { ok: true, providers: [{ provider: 'hermes', label: 'Hermes', model: '', available: !m.absent && m.video?.available !== false }] }
+    const m = await mediaOffer()
+    return { ok: true, unsure: m.ok === false && !m.absent, providers: [{ provider: 'hermes', label: 'Hermes', model: '', available: !m.absent && m.video?.available !== false }] }
   }
   const { out, ...body } = videoBody(args)
   const r = await hermes.call('/video', body, timeout || 600000)
@@ -259,9 +267,25 @@ const videogen = async (args, timeout) => {
   try { mkdirSync(dirname(out), { recursive: true }); copyFileSync(r.path, out) } catch (err) { return { ok: false, error: `could not keep the clip: ${err.message}` } }
   return { ...r, path: out }
 }
-let imageProviders = null, videoProviders = null
-const loadImageProviders = () => (imageProviders ||= imagegen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
-const loadVideoProviders = () => (videoProviders ||= videogen(['--list'], 60000).then(r => (r.ok ? r.providers : [])))
+// Kept until Hermes attaches again. An answer that never came (r.unsure) is kept for 10 s only: long enough
+// for the questions of one build's start to share it (they would each wait MEDIA_MS), then asked again.
+const UNSURE_MS = 10000
+const offered = list => {
+  let kept = null, until = Infinity
+  return {
+    ask() {
+      if (Date.now() > until) kept = null
+      if (kept) return kept
+      until = Infinity
+      const asked = kept = list().then(r => { if (r.unsure && kept === asked) until = Date.now() + UNSURE_MS; return r.ok ? r.providers : [] })
+      return asked
+    },
+    forget() { kept = null }
+  }
+}
+const imageOffer = offered(() => imagegen(['--list'], 60000)), videoOffer = offered(() => videogen(['--list'], 60000))
+const loadImageProviders = () => imageOffer.ask()
+const loadVideoProviders = () => videoOffer.ask()
 loadImageProviders()
 loadVideoProviders()
 // The image model for new builds: the pick, else Hermes's own image tool when a Hermes process is attached.
@@ -1486,8 +1510,38 @@ async function lookAt(src) {
   })
   return String(res.text || '').trim() || null
 }
+// The Map window (spec 44): a build as Mermaid diagrams, from what is on hand (engine/gamemap.mjs), no model call.
+// A game: its slices, art and last play test, and its loop, from the spec and the build's steps. An app: its plan's
+// screens and data (engine/appmap.mjs through the app job), the screen being written and the ones checked marked.
+// null when the run has neither a game spec nor a kept app plan.
+async function runMap(id) {
+  const events = readEvents(id)
+  if (!events) return null
+  const { gameMap, appMapView, lastPlayTest, nowScreen } = await import('../engine/gamemap.mjs')
+  const a = await apps()
+  const st = a.state(id) || {}
+  const steps = st.steps || []
+  const spec = events.findLast(e => e.type === 'game:spec')?.spec
+  if (spec) {
+    const g = await gameMod()
+    // a big game is built in slices (the spec says so, or its build did: engine/appjob.mjs start); a mini game in one go
+    const stages = g.isBig(spec) || st.at || events.some(e => e.type === 'app:stage' && e.big) ? g.stagesFor(spec) : []
+    const done = [...new Set(events.filter(e => e.type === 'app:stage' && e.big?.ok && Number.isInteger(e.big.i)).map(e => e.big.i))].filter(i => i < stages.length)
+    // (the art count is one fact of several: a list that cannot be read leaves the map without it)
+    let sheet = []
+    try { sheet = listAssets({ id, events, files: assetFiles(join(runsDir, id)), plan: g.artList(spec), pieceName }).sheet || [] } catch {}
+    return gameMap({ spec, stages, done, now: st.state === 'working' && st.at ? st.at[0] - 1 : -1, state: st.state || 'idle', art: sheet.length ? { done: sheet.filter(c => c.src).length, total: sheet.length } : null, test: lastPlayTest(steps) })
+  }
+  const m = a.map(id)
+  if (!m) return null
+  const slug = x => `s_${String(x).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)}`
+  const done = (events.findLast(e => e.type === 'appkit:checks')?.checks || []).filter(c => c.ok && String(c.part || '').startsWith('screen:')).map(c => slug(String(c.part).slice(7)))
+  const file = steps.findLast(x => x.kind === 'write' && x.file !== false)
+  return appMapView(m, { now: nowScreen(m.screens, file?.path || file?.text || ''), done, state: st.state || 'idle' })
+}
+
 const talked = new Map() // run id -> { text, answer, t }: Talk's last exchange with the person
-async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now = false } = {}) {
+async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now = false, chart = false } = {}) {
   // a confirmed change: to the builder, and nothing to answer but where it went
   if (confirm) {
     const r = now ? a.redirect(id, confirm) : a.tell(id, confirm)
@@ -1526,17 +1580,22 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
   const fallback = (j?.state || st?.state) === 'paused' ? 'The build is waiting on you: type "fix it" to send the crew at the play test\'s error, or "go on" for the next slice.' : `${j?.stage ? `Right now: ${j.stage}.` : 'The crew is working.'}`
   const model = modelFor('planner')
   if (!model) return { queued: false, state: st.state, answer: fallback }
+  // a diagram for the Map window needs room: its Mermaid text comes in the same answer (engine/talk.mjs "chart")
+  const { cleanChart, wantsChart } = await import('../engine/gamemap.mjs')
+  const charting = chart || wantsChart(t)
   const chat = async messages => (await streamChat(provider('planner'), {
-    trace: { kind: 'talk' }, model, maxTokens: 500, temperature: 0.3, signal: AbortSignal.timeout(40000),
+    trace: { kind: 'talk' }, model, maxTokens: charting ? 1400 : 500, temperature: 0.3, signal: AbortSignal.timeout(charting ? 60000 : 40000),
     extra: { reasoning_effort: 'none', reasoning: { enabled: false } }, messages
   })).text
   try {
     // the exchange before this one (kept ten minutes), so a "yes" answers what was offered
     const was = talked.get(id)
-    const r = await talk({ chat, look: lookAt, appDir: join(runsDir, id, 'app'), media, text: t, notes, who: String(who || '').slice(0, 40), on: String(on || '').slice(0, 160), title: spec?.title || '', building, deadline: Date.now() + 75000, before: was && Date.now() - was.t < 600e3 ? was : null })
+    const r = await talk({ chat, look: lookAt, appDir: join(runsDir, id, 'app'), media, text: chart ? `${t}\n\n(They asked for this as a diagram in the Map window: answer with "chart".)` : t, notes, who: String(who || '').slice(0, 40), on: String(on || '').slice(0, 160), title: spec?.title || '', building, deadline: Date.now() + 75000, before: was && Date.now() - was.t < 600e3 ? was : null })
     if (r.answer) talked.set(id, { text: t, answer: r.answer, t: Date.now() })
     if (talked.size > 40) talked.delete(talked.keys().next().value)
-    return { queued: false, state: st.state, answer: r.answer || fallback, ...(r.media ? { media: r.media } : {}), ...(r.proposal ? { proposal: r.proposal } : {}), used: r.used }
+    // the model's diagram is untrusted text: cut to what Mermaid may be given, or said plainly that it could not be drawn
+    const drawn = r.chart ? cleanChart(r.chart) : null
+    return { queued: false, state: st.state, answer: r.answer || fallback, ...(r.media ? { media: r.media } : {}), ...(r.proposal ? { proposal: r.proposal } : {}), ...(drawn?.ok ? { chart: drawn.text } : drawn ? { chartFailed: true } : {}), used: r.used }
   } catch { return { queued: false, state: st.state, answer: fallback } }
 }
 
@@ -1544,10 +1603,20 @@ async function tellBuilder(a, id, text, { who = '', on = '', confirm = '', now =
 // Ask, for an app or game that is built: dyad's own ask mode reads the code and changes nothing
 // (engine/appjob.mjs ask). While the crew builds, Talk answers instead: it knows what the crew is doing.
 // When dyad cannot take the question (no engine installed yet, or it failed), Talk reads the app's files.
-async function askApp(a, id, text) {
+async function askApp(a, id, text, { chart = false } = {}) {
   const t = String(text || '').trim().slice(0, 4000)
   if (!t) throw new Error('ask something')
-  if (a.state(id).state === 'working') return { ...(await tellBuilder(a, id, t)), by: 'crew' }
+  if (a.state(id).state === 'working') return { ...(await tellBuilder(a, id, t, { chart })), by: 'crew' }
+  // a diagram for the Map window (web/canvas/maproom.js): dyad's ask answers in words only, so the crew's Talk
+  // draws it, built or not. It reads and answers; nothing changes.
+  if (chart) {
+    if (!modelFor('planner')) throw new Error('No planner model yet: pick one in Models.')
+    const gate = await hermesGate()
+    if (gate) throw new Error(`${gate.message} ${gate.action}`)
+    const said = await tellBuilder(a, id, t, { chart })
+    if (!said.used) throw new Error('The crew could not answer. Ask again.')
+    return { answer: said.answer, ...(said.chart ? { chart: said.chart } : { chartFailed: true }), by: 'talk' }
+  }
   const gate = await hermesGate()
   if (gate) throw new Error(`${gate.message} ${gate.action}`)
   const { honestly, asksStudio } = await import('../engine/honest.mjs')
@@ -1561,7 +1630,7 @@ async function askApp(a, id, text) {
   const said = await tellBuilder(a, id, t)
   // Talk's own fallback line is about a build in progress: not an answer to a question
   if (!said.used) throw new Error(`The crew could not answer${r.why ? ` (${r.why})` : ''}. Ask again.`)
-  return { answer: said.answer, ...(said.media ? { media: said.media } : {}), by: 'talk' }
+  return { answer: said.answer, ...(said.media ? { media: said.media } : {}), ...(said.chart ? { chart: said.chart } : {}), by: 'talk' }
 }
 // Fix: the facts about the Studio's own working parts (engine/doctor.mjs says what each is). Every lookup
 // has a few seconds: a part that does not answer in time reads "not known yet", and the rest still show.
@@ -3341,6 +3410,12 @@ const server = createServer((req, res) => {
     return
   }
   // a build's own pictures and models, and the ones still to come (the code wall's asset pane)
+  // the Map window: GET /api/runs/<id>/map -> { map } (runMap above); map is null when there is no plan to draw
+  const runMapAt = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/map$/)
+  if (runMapAt && req.method === 'GET') {
+    if (!readEvents(runMapAt[1])) return json(404, { error: 'no such build' })
+    return void runMap(runMapAt[1]).then(map => json(200, { map }), err => json(500, { error: String(err.message || err) }))
+  }
   const runAssets = url.pathname.match(/^\/api\/runs\/([\w-]{1,64})\/assets$/)
   if (runAssets && req.method === 'GET') {
     const id = runAssets[1], events = readEvents(id)
@@ -3696,7 +3771,7 @@ const server = createServer((req, res) => {
       try { input = JSON.parse(body || '{}') } catch {}
       const was = hermes.status().attached, r = hermes.attach(input)
       // Hermes is back: what it offers for pictures and clips is asked again
-      if (r.ok && !was) { imageProviders = null; videoProviders = null }
+      if (r.ok && !was) { imageOffer.forget(); videoOffer.forget() }
       // Hermes is back: a canvas waiting on it (a build stopped because Hermes closed) can go on
       if (r.ok && !was) broadcast({ type: 'hermes:back', attached: true })
       res.writeHead(r.ok ? 200 : 400, { 'content-type': 'application/json' }).end(JSON.stringify(r))
@@ -3737,7 +3812,7 @@ const server = createServer((req, res) => {
       let input = {}
       try { input = JSON.parse(body || '{}') } catch {}
       const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
-      const done = () => { imageProviders = null; videoProviders = null; return mediaNow().then(m => reply(200, m)) }
+      const done = () => { imageOffer.forget(); videoOffer.forget(); return mediaNow().then(m => reply(200, m)) }
       if (!MEDIA_KEYS[input.service]) return reply(400, { error: 'unknown service' })
       mediaKeyStore.set(input.service, typeof input.key === 'string' ? input.key : null).then(done).catch(err => reply(400, { error: String(err.message || err) }))
     })
@@ -4050,7 +4125,7 @@ const server = createServer((req, res) => {
         if (sub === 'stop') return a.stop(id)
         if (sub === 'idle') return idleAnswer(id, input)
         // Ask mode: an answer about the app, and nothing else (askApp above)
-        if (sub === 'ask') return askApp(a, id, input.text)
+        if (sub === 'ask') return askApp(a, id, input.text, { chart: input.chart === true })
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
         if (sub === 'open') return a.open(id, input)
         // a brought-in project's install scripts: the person's own answer, typed in the chat (docs/specs/45-intake.md)

@@ -3,7 +3,7 @@
 import { REVIEWER, painterOf } from '../icons.js'
 import { icon, WALL, ico, Q, api, replayId, Crew, HERMIA, els, ARROW, S, cam } from './core.js'
 import { shownRun, video, toggleVideo } from './film.js'
-import { viewing } from './replay.js'
+import { viewing, rec } from './replay.js'
 import { view, setView, appv, appEls, frameUrl } from './rooms.js'
 import { esc } from './design.js'
 import { closeable, crewMembers } from './start.js'
@@ -48,9 +48,11 @@ export function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
   if (live && e.state === 'working' && now && now.id !== autoM.step) {
     autoM.step = now.id
     if (!e.run || e.run === shownRun() || !viewing) {
-      const v = AUTO_VIEW[now.id]
+      const v = AUTO_VIEW[now.id], was = rec.n
       // a step card covers the change (spec 07 A1); the view switches under it
+      // (a replay that was stopped meanwhile changes nothing: the finished build is back in its own room)
       showStep(e, now, () => {
+        if (rec.n !== was) return
         if (v && v !== view) setView(v)
         if (v !== 'video' && video.el) toggleVideo(false)
       })
@@ -63,7 +65,9 @@ export function autoEvent(e, live = Date.now() - (e.t || 0) < 15000) {
     if (dep?.state === 'working' && e.run) dsOpen(e.run)
     if (dep?.state === 'done' && e.url && ds.run === e.run) { ds.games = e.steps.some(s => s.id === 'games' && s.state === 'done'); setTimeout(() => dsLive(e.url), 600) }
     // the run is over: the summary card, after the live site has had a moment on screen
-    if (prev?.state === 'working' && e.state === 'done' && e.url && prev.run === e.run) setTimeout(() => showSummary(autoM.last), ds.el ? 9000 : 1200)
+    // (not after a replay from the menu has ended: the finished build is back, and nothing more happens)
+    const was = rec.n
+    if (prev?.state === 'working' && e.state === 'done' && e.url && prev.run === e.run) setTimeout(() => showSummary(autoM.last, was), ds.el ? 9000 : 1200)
   }
   renderAutoPanel()
 }
@@ -379,8 +383,8 @@ export function deployShow(e) {
 }
 
 // A4. The final screen: the time and the time per step, the counts, the live link and its QR code.
-async function showSummary(e) {
-  if (!e?.run) return
+async function showSummary(e, was = rec.n) {
+  if (!e?.run || rec.n !== was) return
   document.querySelector('.show-sum')?.remove()
   const r = await api(`/api/runs/${encodeURIComponent(e.run)}/show`).catch(() => null)
   const f = r?.ok ? await r.json() : {}
@@ -684,6 +688,8 @@ Chatter?.watch?.(() => renderSoundPop())
 // tile is the asset pane, always: the build's pictures turning on a card, one after another.
 export const CW_TILES = 4
 export const CW_CODE = CW_TILES - 1 // the one code tile, in both modes; the other three are pictures
+// the Map window (web/canvas/mapwin.js) is the wall's first window but not one of its tiles: enlarged, cw.big is this
+export const CW_MAP = CW_TILES
 const CW_TURN = 2600 // ms per asset
 // ---------- crew radio: the app engine's lead (spoken by Hermia) gives orders, helpers answer
 // and work. On the code wall: Hermia's strip on top with a dotted line to the helper she is
@@ -719,7 +725,7 @@ export function wallNames() {
   return [...heard, ...crewMembers(CW_TILES + heard.length).filter(([n]) => !heard.some(h => h[0] === n))].slice(0, CW_TILES)
 }
 export const heardIn = (x, ms) => x && Date.now() - x.t < ms
-export const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, av: [] }
+export const cw = { el: null, run: null, seen: 0, queue: [], tiles: [], big: -1, hide: false, shown: false, thinking: false, planKey: '', assets: null, assetsAt: 0, av: [], map: false }
 export const CW_FRESH = { assets: null, assetsAt: 0, av: [], mode: '', reads: null, readAt: 0 }
 // ---------- the art wall: while a game's art is painted, the wall is mostly pictures. Three
 // painters (the server's PAINTERS) each get a tile with the picture they are on: painting,

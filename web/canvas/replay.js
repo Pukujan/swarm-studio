@@ -1,13 +1,14 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): saved runs (files) and traces, replay.
-import { api, S, els, ico, setReplayId, Q, replayId } from './core.js'
-import { feed, botMsg } from './panels.js'
+import { REPLAY_WORD, REPLAY_SAYS, replayAsk, appPill } from '../replaytalk.js'
+import { api, S, els, ico, setReplayId, Q, WALL, $, replayId, BOOT } from './core.js'
+import { feed, botMsg, setText, push } from './panels.js'
 import { esc } from './design.js'
 import { talkEnd } from './talk.js'
 import { connect } from './start.js'
 import { fresh } from './base.js'
 import { on } from './events.js'
-import { setView } from './rooms.js'
+import { setView, view, appEls, resetApp } from './rooms.js'
 import { setAuto } from './deck.js'
 import { navOf, followPlayer } from './player.js'
 import { review } from './marks.js'
@@ -245,44 +246,104 @@ function withTyping(events) {
 // Replay a saved run on its own clock, sped up: the Swarm Wall plays four of these side by side.
 // Long quiet gaps (a model thinking) are cut to 1.5 s of real time so the tile never looks stuck.
 let replaySeq = 0, replayAsked = false
+// The replay now. `on`: one is playing (from the menu, the chat or the address), so the canvas shows the mark and
+// starts nothing real (web/canvas/rooms.js opens no app, web/canvas/panels.js marks the lines it adds).
+// `at`: how far along, 0 to 1. `event`: a saved event is being drawn right now. `n` counts replays started and
+// ended, so a timer set by one (a view change under a step card) does nothing once it is over.
+export const rec = { on: false, run: '', at: 0, event: false, n: 0 }
+// the real time between two saved events: sped up, and a long quiet gap (a model thinking) cut to 1.5 s
+const gapOf = (e, prev, speed) => Math.min(Math.max(0, (e.t || prev) - prev) / speed, 1500)
 export async function replayRun(id, speed = 8) {
   const seq = ++replaySeq
   const res = await api(`/api/runs/${encodeURIComponent(id)}/events`).catch(() => null)
   if (!res?.ok) { if (replayAsked) endReplay(); return botMsg('That run could not be loaded.') }
   if (seq !== replaySeq) return
   const events = withTyping((await res.json()).filter(e => e.type !== 'cmd'))
+  let clock = 0, prev = events[0]?.t || 0, total = 0
+  for (const e of events) { total += gapOf(e, prev, speed); prev = e.t || prev }
+  prev = events[0]?.t || 0
+  Object.assign(rec, { on: true, run: id, at: 0, n: rec.n + 1 })
   viewing = id
+  // the App room starts empty too: its steps are the replay's, counted once
+  resetApp(id)
   fresh(id)
-  let clock = 0, prev = events[0]?.t || 0
+  paintMark()
   const start = performance.now()
   parent.postMessage?.({ wall: 'start', run: id, events: events.length }, '*')
   for (const [i, e] of events.entries()) {
-    clock += Math.min(Math.max(0, (e.t || prev) - prev) / speed, 1500)
+    clock += gapOf(e, prev, speed)
     prev = e.t || prev
     const wait = clock - (performance.now() - start)
     if (wait > 4) await new Promise(r => setTimeout(r, wait))
     if (seq !== replaySeq) return // stopped, or another replay started
+    rec.at = total ? clock / total : 1
     // stamped now, so the canvas treats it as happening (a saved time would mute the crew)
-    try { on({ ...e, t: Date.now() }) } catch (err) { console.error(err) }
+    rec.event = true
+    try { on({ ...e, t: Date.now() }) } catch (err) { console.error(err) } finally { rec.event = false }
     if (i % 25 === 0) parent.postMessage?.({ wall: 'tick', run: id, i, of: events.length, t: e.t - events[0].t }, '*')
   }
   parent.postMessage?.({ wall: 'done', run: id, ms: (events.at(-1)?.t || 0) - (events[0]?.t || 0) }, '*')
-  // a replay asked for from the menu ends on the finished build it started from
-  if (replayAsked) endReplay()
+  // a replay asked for from the menu or the chat ends on the finished build it started from, opened again whole:
+  // nothing the replay drew (its chat lines, the crew at work, the App room's steps) is left looking in progress
+  if (replayAsked) return void await backToBuild(id, false)
+  // one from the address (the Wall, a capture) stays on its last picture; if that is the App room, the app
+  // is read and started now, once, never while the replay played
+  rec.on = false
+  paintMark()
+  if (view === 'app') setView('app')
 }
 
 // ☰ → Replay: watch a finished build again exactly as it was built, from its saved run (no model,
-// no pictures painted). It plays in the Design deck, where the crew can be watched, with the camera
-// following, at the speed it happened. The same menu item stops it, and so does leaving the deck;
-// both put the finished build back. A replay from the address (?replay=) is not touched by this.
+// no pictures painted). It is a recording: nothing is built, and nothing is written to the run. It plays in the
+// Design deck, where the crew can be watched, with the camera following, at the speed it happened, and goes on
+// into the App room when the build did. The same menu item stops it, and so do Stop on the mark, "stop" in the
+// chat and leaving the deck; all put the finished build back. A replay from the address (?replay=) shows the
+// same mark; leaving the deck does not end it.
 export function paintReplay() {
   const b = els.replayBtn
   if (!b) return
   const on = replayAsked
   if (b.dataset.on !== String(on)) { b.dataset.on = String(on); b.innerHTML = `${ico(on ? 'square-stop' : 'rotate-ccw')}${on ? 'Stop replay' : 'Replay'}` }
-  b.disabled = !on && (!S.done || review.busy || !shownRun())
+  b.disabled = !on && !canReplay()
+  paintMark()
 }
 function endReplay() { replayAsked = false; setReplayId(Q.get('replay') || ''); paintReplay() }
+
+// The mark: for the whole replay the canvas strip (#status, web/canvas/panels.js renderStatus) and the App room's
+// pill (#app-state, web/canvas/rooms.js renderApp) read Replay and how far along it is, each with Stop beside it.
+// This pass keeps the pill's number moving between the room's own renders, and says "Replay" once, politely, to
+// a screen reader (the number is not announced as it ticks).
+const markLive = $('#replay-live')
+function paintMark() {
+  if (markLive) setText(markLive, rec.on ? REPLAY_WORD : '')
+  if (!rec.on || view !== 'app') return
+  appEls.state.classList.add('replay')
+  setText(appEls.state, appPill({ replay: true, at: rec.at }))
+}
+// The finished build again, whole, after a replay: in the deck, where the replay began; `stay` keeps the room
+// the person is in (they asked for something there), and the App room then reads the real app.
+async function backToBuild(id, stay) {
+  const played = rec.on
+  rec.on = false
+  rec.n++
+  if (replayAsked) endReplay()
+  paintMark()
+  if (!stay && view !== 'canvas') setView('canvas')
+  // the App room, when it is next looked at, starts from nothing the replay left: no Replay pill, no card, no Stop
+  resetApp(id)
+  appEls.state.className = 'app-state pill'
+  setText(appEls.state, appPill({}))
+  appEls.empty.innerHTML = ''
+  appEls.stop.hidden = true
+  // what the person asked while it played, and the answers, stay in the chat; the replay's own lines go
+  const said = played ? [...els.feed.children].filter(x => x.classList.contains('item') && !x.classList.contains('replayed')) : []
+  await openRun(id)
+  for (const x of said) push(els.feed, x)
+  if (stay && view === 'app' && S.kind !== 'game') setView('app')
+}
+// "replay" typed, or the menu: false when there is no finished build to play
+// (the hosted studio has no Replay: its menu item is not there either)
+function canReplay() { return !!S.done && !review.busy && !!shownRun() && !BOOT.hosted }
 function startReplay() {
   const id = shownRun()
   if (!id || replayAsked) return
@@ -295,11 +356,30 @@ function startReplay() {
   setAuto(true)
   setTimeout(() => { if (replayAsked) setAuto(true) }, 700)
 }
-export function stopReplay() {
-  if (!replayAsked) return
-  const id = replayId
+// Stop. By itself it ends a replay started here (the menu, the chat); `any` also ends one from the address (Stop
+// on the mark, "stop" typed). Resolves once the finished build is back.
+export async function stopReplay({ any = false, stay = false } = {}) {
+  if (!replayAsked && !(any && rec.on)) return false
+  const id = rec.on ? rec.run : replayId
   replaySeq++
-  endReplay()
-  if (id) openRun(id) // the finished build, whole
+  await backToBuild(id, stay)
+  return true
 }
 if (els.replayBtn) els.replayBtn.onclick = () => (replayAsked ? stopReplay() : startReplay())
+// Stop on the mark: beside the strip on the canvas, and the App bar's own Stop while a replay plays (rooms.js)
+els.status?.addEventListener('click', e => { if (/** @type {Element} */ (e.target).closest?.('.st-stop')) stopReplay({ any: true }) })
+
+// The chat during and about a replay (web/replaytalk.js replayAsk): true when the message was a replay's and is
+// answered; false when the chat goes on with it as ever (after ending the replay first, if one was playing).
+/** @param {string} text */
+export async function replaySay(text) {
+  const to = replayAsk(text, rec.on && !WALL)
+  if (!to) return false
+  if (to === 'first') { await stopReplay({ any: true, stay: true }); botMsg(REPLAY_SAYS.first); return false }
+  els.brief.value = ''
+  if (to === 'stop') await stopReplay({ any: true })
+  feed(null, String(text).trim(), 'you')
+  if (to === 'start') { if (canReplay()) startReplay(); else botMsg(REPLAY_SAYS.none); return true }
+  botMsg(to === 'stop' ? REPLAY_SAYS.stopped : REPLAY_SAYS[to])
+  return true
+}

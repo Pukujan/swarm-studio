@@ -71,6 +71,9 @@ optional_env:
 license: FSL-1.1-ALv2
 # Bundled, nothing installed (built by scripts/vendor.mjs, version, licence and SHA-256 beside each):
 #   web/vendor/xstate/xstate.mjs   XState 5.33.3 (MIT): the studio page's navigation
+#   web/vendor/snapdom/snapdom.js  snapDOM 3.7.0 (MIT): a page photographs itself for the Overview
+#   web/vendor/mermaid/mermaid.min.js  Mermaid 12.2.0 (MIT): the build wall's Map window, fetched from the plugin's own
+#                                  server when a Map first shows
 #   engine/vendor/procs/procs.mjs  execa 9.6.1 (MIT) and tree-kill 1.2.2 (MIT), with their 22 dependencies (MIT,
 #                                  ISC, Apache-2.0; every one pinned in scripts/vendor/procs/package-lock.json):
 #                                  the server starts its child processes with execa and stops each with all of

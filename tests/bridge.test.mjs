@@ -35,6 +35,54 @@ test('a call goes to the newest bridge with its token, and moves on when one has
   assert.deepEqual(h.status().pids, [1], 'the bridge that refused is dropped')
 })
 
+// Hermes quit with a call in flight: fetch says "fetch failed", and why is its cause. Each of these is a
+// connection that died, and the bridge behind it is not asked again (a Hermes that is there attaches again)
+for (const code of ['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET', 'ECONNABORTED']) {
+  test(`a bridge whose connection dies under a call (${code}) is dropped, and the call says Hermes is not open`, async () => {
+    let calls = 0
+    const h = hermesBridge({ fetcher: async () => { calls++; throw Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('other side closed'), { code }) }) } })
+    h.attach({ url: 'http://127.0.0.1:5000', token: TOKEN, pid: 1 })
+    const r = await h.call('/media')
+    assert.equal(r.absent, true)
+    assert.equal(h.status().attached, false)
+    await h.call('/media')
+    assert.equal(calls, 1, 'not asked again')
+    // the check before a build and a model call drop it the same way
+    h.attach({ url: 'http://127.0.0.1:5000', token: TOKEN, pid: 1 })
+    await h.ping()
+    assert.equal(h.status().attached, false)
+    h.attach({ url: 'http://127.0.0.1:5000', token: TOKEN, pid: 1 })
+    assert.equal(await h.send('/v1/chat/completions', { method: 'POST' }), null)
+    assert.equal(h.status().attached, false)
+  })
+}
+
+test('a bridge that is only slow is kept: a timeout is not a dead connection', async () => {
+  const h = hermesBridge({ fetcher: (url, init) => new Promise((_, no) => init.signal.addEventListener('abort', () => no(init.signal.reason))) })
+  h.attach({ url: 'http://127.0.0.1:5000', token: TOKEN, pid: 1 })
+  const r = await h.call('/media', undefined, 30, { grace: 0 })
+  assert.equal(r.ok, false)
+  assert.ok(!r.absent)
+  assert.equal(h.status().attached, true)
+})
+
+// How long a call may take is its timeout and, by default, 15 s more for the bridge's own timeout to answer
+// first. The pictures question is answered from memory and gets none (server.mjs mediaOffer): it was the
+// 25 s a build could wait before it started. Read from the time the call asks its signal for,
+// so no clock is asked.
+test('a call is given its timeout plus the grace, and with grace 0 the timeout alone', async () => {
+  const real = AbortSignal.timeout
+  const asked = []
+  AbortSignal.timeout = ms => { asked.push(ms); return new AbortController().signal }
+  try {
+    const h = hermesBridge({ fetcher: async () => answer({ ok: true }) })
+    h.attach({ url: 'http://127.0.0.1:5000', token: TOKEN, pid: 1 })
+    await h.call('/image', { prompt: 'x' }, 10000)
+    await h.call('/media', undefined, 3000, { grace: 0 })
+    assert.deepEqual(asked, [25000, 3000])
+  } finally { AbortSignal.timeout = real }
+})
+
 test('a bridge silent for 45 s is dropped; with none, the call says Hermes is not open', async () => {
   let t = 0
   const h = hermesBridge({ fetcher: async () => answer({ ok: true }), now: () => t })

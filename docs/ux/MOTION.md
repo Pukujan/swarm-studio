@@ -146,6 +146,7 @@ those kinds run before as well.
 | Hermia's cursor: bubble and hand-over | `.talking` for 3.6 s per line (a burst of events within 0.9 s, at most 2.5 s, makes one; at most one bubble per 20 s); `.away` from `run:start` to `run:done` | bubble `opacity`/`transform` .25 s; the cursor's opacity .3 s | `web/pet.css:32-36`, `3-5` ; `web/pet.js:346-367` | global |
 | Hermia's cursor: working on something slow | a placeholder on screen (`PET_BUSY`: `.wait-in`, `aria-busy`, an Overview page's `.sk`, the app's frame loading) or one handed to `pet.working(el)`; checked every 500 ms; she goes to it while a screen loads or the pointer rests 1.2 s, and leaves when it is gone | `.working`: `pet-tap` .7 s ease-in-out infinite, the dots as above; travel as above | `web/pet.css:30-31` ; `web/pet.js:319-343` (`scan`), `web/pet.js:482` (`working`) | `web/pet.css:37-39` and global |
 | Board skeletons while a screen loads (Projects' cards, the Overview's pages, the Plan board, the Studio, the brand sheet) | `.wait-in` until the data arrives | `sk-wait` 1.6 s ease-in-out infinite alternate on `.ab.wait-in` | `web/project.css:90` ; `web/home.js:53`, `web/project.js:424`, `web/plan.js:104`, `web/scaffold.js:164` | `web/project.css:91` and global |
+| The Map window's skeleton (the build wall's first window, or the Map alone on the stage), with Hermia's cursor on it | while the map is first read, while Mermaid itself is fetched, and while the planner writes an asked diagram (`.mp-skel`, web/canvas/mapwin.js `skeleton`) | `app-skel` 1.6 s ease-in-out infinite alternate on `.mp-skel i` (the App room's own skeleton keyframes) | `web/canvas.css` (`.cw-map .mp-skel i`) ; `web/canvas/mapwin.js` | `web/canvas.css` (the rule after it: none) |
 
 ## Chat, feed and dock
 
@@ -231,10 +232,11 @@ those kinds run before as well.
 
 | What moves | When | How long / how often | Owned by | Reduced motion |
 |---|---|---|---|---|
-| Replayed build: sections type back in | `withTyping` splits a saved layer into 6-40 deltas spread over its build time | event clock `(t - prev)/speed`, quiet gaps capped at 1500 ms; ☰ Replay uses speed 1, the wall `?speed=` (default 8, 1-60) | `web/canvas/replay.js:222-238`, `web/canvas/replay.js:243-270` | not handled |
-| Replay button label | `paintReplay` in the 150 ms pass | text swap, no animation | `web/canvas/replay.js:273-279` | n/a |
-| Camera follows the replay | `startReplay` | `setAuto(true)` now and at +700 ms | `web/canvas/replay.js:281-292` | not handled |
-| Wall tile progress bar | `wall:tick` message every 25 events | `width` transition .4 s linear; clock text updated | `web/wall.html:20`, `67-73` ; `web/canvas/replay.js:267` | none (no media rule in `wall.html`) |
+| Replayed build: sections type back in | `withTyping` splits a saved layer into 6-40 deltas spread over its build time | event clock `(t - prev)/speed`, quiet gaps capped at 1500 ms; ☰ Replay uses speed 1, the wall `?speed=` (default 8, 1-60) | `web/canvas/replay.js:228-244`, `web/canvas/replay.js:256-294` | not handled |
+| Replay button label | `paintReplay` in the 150 ms pass | text swap, no animation | `web/canvas/replay.js:302-309` | n/a |
+| Camera follows the replay | `startReplay` | `setAuto(true)` now and at +700 ms | `web/canvas/replay.js:337-348` | not handled |
+| Wall tile progress bar | `wall:tick` message every 25 events | `width` transition .4 s linear; clock text updated | `web/wall.html:20`, `67-73` ; `web/canvas/replay.js:283` | none (no media rule in `wall.html`) |
+| The Replay mark: the strip and the App room's pill read Replay and how far along | `paintMark` and `renderStatus` in the 150 ms pass, for the whole replay | text and fill swap, no animation of its own (the strip's dot and bar move as they do for a build; Stop has `transition: none`) | `web/canvas/replay.js:311-322`, `web/canvas/panels.js` (`renderStatus`), `web/canvas.css` (`.status[data-replay]`, `.app-state.replay`) | n/a |
 
 ## Models, settings and Setup
 

@@ -49,7 +49,7 @@ Comment composer  (layer)       the note · Send                ──(none)─�
 Right panel  (layer, from ☰ Design)
   · Design tab: the selected section's properties, or the page's Search & share; nothing selected: a hint
   · Variables tab: Theme, Colors, Typography, Scale, Type scale, Radius
-Replay  (build.playable.room.deck.replay)   the saved build plays again, Follow on · Stop replay ──replay.stop──▶ live
+Replay  (build.playable.room.deck.replay)   a recording of the build plays, Follow on; the strip reads Replay and how far (the App room's pill too) · Stop ──replay.stop──▶ live
 Player  (build.playable.player)  Close · page · Back · Restart · Watch a visitor / Stop watching · visitors ▾ · Motion · Desktop / Mobile
 ```
 
