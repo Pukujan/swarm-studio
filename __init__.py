@@ -11,8 +11,8 @@ Agent half. Registers:
 - ``hermes swarm``: the same from the command line
 - the Hermes bridge (``bridge.py``): a loopback server in this process through which the canvas server
   gets pictures and clips from Hermes's own ``image_generate`` and ``video_generate`` tools
-- a ``pre_tool_call`` hook: when the model asks to publish (anywhere but this computer), deploy an app or
-  post to the Feed, Hermes asks the person first, and refuses when nobody is there (commands.approval_hook)
+- a ``pre_tool_call`` hook: when the model asks to publish (anywhere but this computer), deploy an app, push a
+  project's source to GitHub or post to the Feed, Hermes asks the person first, and refuses when nobody is there (commands.approval_hook)
 - the ``swarm-studio:swarm-design`` skill: when and how to use the swarm
 - three model slots in Hermes's model picker (``MODEL_SLOTS``): ``swarm_studio_planner`` (follows the
   main model), ``swarm_studio_reviewer`` (follows the vision model) and ``swarm_studio_builder`` (follows the compression model, which is
@@ -154,7 +154,7 @@ def register(ctx) -> None:
     bridge.keep_profile()
     launcher.on_server = bridge.start
     bridge.start_later()
-    # the model's publish, deploy and post wait for a person's OK (Hermes's approval gate)
+    # the model's publish, deploy, GitHub push and post wait for a person's OK (Hermes's approval gate)
     ctx.register_hook("pre_tool_call", commands.approval_hook)
     register_model_slots(ctx)
     ctx.register_tool(
