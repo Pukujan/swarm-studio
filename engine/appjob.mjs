@@ -211,6 +211,9 @@ export function processNotes({ kind = 'site', state = 'idle', stage = '', done =
   ].filter(Boolean).join(' ')
 }
 export const isQuestion = text => QUESTION.test(String(text || '').trim())
+// What dyad's ask mode is handed: the person's question, and how Swarm's chat wants it answered.
+// dyad's own ask prompt already makes it read-only; this only sets the length and the honesty.
+export const askPrompt = text => `${String(text).trim()}\n\n(Answer the question asked, from this app's code: read what you need first. A few short plain sentences, no markdown, no code unless asked for it. You are in ask mode: you change nothing, so never say you did, will or can change, install or restart anything.)`
 
 // the video idle's go-ahead carried by the build itself: 'no', or a yes at a price ({ usd })
 // that must match the clip's price when it is asked (engine/idle.mjs priceOk)
@@ -263,6 +266,8 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (j?.state === 'working') return view(j)
     if (!j && state(id).elsewhere) throw new Error('another Swarm Studio is building this one; it shows here as it goes')
     if ([...jobs.values()].some(x => x.state === 'working')) throw new Error('another app is building; wait for it or stop it')
+    // an Ask (below) reads this app's engine chat right now: the build starts once it has answered
+    if (asking.has(id)) throw new Error('the app engine is answering a question about this app; try again in a moment')
     const dir = dirOf(id)
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
     // a first build that failed left only the starter: build again from the start
@@ -803,6 +808,29 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   }
   const takeTold = j => (j.told || []).splice(0).map(t => `The person said while you were building: "${t}"`)
 
+  // Ask mode (docs/engines/dyad.md, "Ask"): a question about a built app goes to dyad's own ask mode,
+  // which reads the code and changes nothing. One turn, no gates, no commit; never while this app is
+  // building (the crew's Talk answers then: server tellBuilder), and one question at a time per app.
+  // -> { answer, by: 'dyad', changed } | { answer: '', by: '', why } when dyad cannot take it (no engine
+  // installed yet, nothing built): the caller answers another way, and a question never installs the engine.
+  const asking = new Set()
+  async function ask(id, text, { signal } = {}) {
+    const t = String(text || '').trim().slice(0, 4000)
+    if (!t) throw new Error('ask something')
+    const st = state(id)
+    if (st.state === 'working') throw Object.assign(new Error('the crew is building this app'), { busy: true })
+    if (asking.has(id)) throw Object.assign(new Error('still answering the last question'), { busy: true })
+    const dir = dirOf(id), model = modelFor('worker')
+    if (!engineReady()) return { answer: '', by: '', why: 'the app engine is not installed yet' }
+    if (!model) return { answer: '', by: '', why: 'no builder model' }
+    if (!['package.json', '.git'].every(f => existsSync(join(dir, f)))) return { answer: '', by: '', why: 'no app is built yet' }
+    asking.add(id)
+    try {
+      const r = await runEngine({ workspace: dir, prompt: askPrompt(t), provider: provider('worker'), model, mode: 'ask', signal: signal || AbortSignal.timeout(180000) })
+      return { answer: String(r.answer || '').trim().slice(0, 4000), by: 'dyad', changed: r.changed === true }
+    } finally { asking.delete(id) }
+  }
+
   function stop(id) {
     const j = jobs.get(id)
     if (j?.state === 'working') j.controller.abort()
@@ -874,9 +902,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     return Promise.all([...jobs.entries()].map(([id, j]) => { j.controller?.abort(); return unserve(id, j) }))
   }
   // a build is running somewhere (the server's idle exit waits for it)
-  const busy = () => [...jobs.values()].some(j => j.state === 'working')
+  const busy = () => asking.size > 0 || [...jobs.values()].some(j => j.state === 'working')
 
-  return { start, state, stop, tell, redirect, open, seen, files, deploy, close, busy, dirOf, jobs, pool }
+  return { start, state, stop, tell, redirect, ask, open, seen, files, deploy, close, busy, dirOf, jobs, pool }
 }
 
 // "can I see it", "show me the pictures": the person wants to look, not to change anything
