@@ -40,6 +40,7 @@ and Hermia's cursor SHALL work on it (spec 41). Three takes SHALL show three wai
 - **THEN** the Three takes section shows three waiting cards, then three take cards, and the board brings that
   section into view
 - Gate: `manual`
+- Manual: the three takes are made by the models; the test Studio has no model
 
 ### Requirement: Step path
 
@@ -92,11 +93,13 @@ Build SHALL be the top bar's one primary button, and nothing SHALL build until i
 - **WHEN** the person presses Build on a website project
 - **THEN** the crew starts and the Design deck opens with Follow on
 - Gate: `manual`
+- Manual: the crew starting needs the planner and builders' models; the test Studio has no model
 
 #### Scenario: Build does not move
 - **WHEN** a build is starting
 - **THEN** Build is disabled in place, at the same size (RULES rule 29)
 - Gate: `manual`
+- Manual: needs a build starting, which needs a model; the test Studio has none
 
 ### Requirement: The chat leads a website's Studio
 
@@ -131,6 +134,7 @@ SHALL go to the planner as before. There SHALL be no row of reply buttons (decis
 - **WHEN** the person types "skip all, just build" while either question is open
 - **THEN** the chat says `Building it now:` with what it picked in one line, and the crew starts
 - Gate: `manual`
+- Manual: the crew starting needs the planner and builders' models; the test Studio has no model
 
 ### Requirement: Accessible and console-clean
 

@@ -5,7 +5,7 @@
 //
 // Two projects: the current Studio at / and the next UI at /next/, which runs a screen's scenarios once the
 // screen has moved (it is in ui/src/screens/index.ts's SCREENS) and needs ui/dist/ built. Scenarios marked
-// pending (tests/bdd/pending.json) are left out.
+// pending (tests/bdd/pending.json), or manual with the reason beside them in their spec, are left out.
 import { defineConfig } from '@playwright/test'
 import { defineBddConfig } from 'playwright-bdd'
 import { readFileSync } from 'node:fs'
@@ -18,7 +18,7 @@ const testDir = defineBddConfig({
   steps: `${ROOT}tools/dev/bdd/steps/*.mjs`,
   // inside tools/dev, a "type": "module" package, so the generated tests load as modules
   outputDir: `${ROOT}tools/dev/bdd/.gen`,
-  tags: 'not @pending',
+  tags: 'not @pending and not @manual',
   missingSteps: 'fail-on-gen'
 })
 

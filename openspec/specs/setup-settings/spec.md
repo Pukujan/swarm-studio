@@ -44,11 +44,13 @@ one plain line and the one fix that fits it, never the raw message at rest; the 
 - **THEN** the Models row opens by itself, shows ⚠, one line, and Let Hermes set this up (when Hermes can fix it),
   Test again and Details
 - Gate: `manual`
+- Manual: needs the builder's model to answer with an error, a real model call; the test Studio has no model
 
 #### Scenario: Picking another model
 - **WHEN** the person picks a model in the picker
 - **THEN** that model shows a spinner, then ✓, and the Models row's state names it
 - Gate: `manual`
+- Manual: the picker lists Hermes's own models and checks the one picked; the test Studio runs without Hermes
 
 ### Requirement: Pictures
 

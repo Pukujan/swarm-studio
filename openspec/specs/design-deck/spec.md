@@ -46,6 +46,7 @@ marked `aria-busy="true"`, with Hermia's cursor on it; it SHALL NOT read Ready b
 - **WHEN** Hermes's model is not answering yet
 - **THEN** the chat shows `Waiting for Hermes` until it does
 - Gate: `manual`
+- Manual: needs a Hermes whose model is slow to answer; the test Studio runs without Hermes
 
 ### Requirement: Empty states
 
@@ -69,11 +70,13 @@ turn it off, and a double-click on the canvas SHALL turn it back on. The status 
 - **THEN** the deck shows the crew's named cursors on the pages, Follow is on, and the pill reads `Planning the pages`
   then `n agents building`
 - Gate: `manual`
+- Manual: needs a running build (the planner and builders' models); the test Studio has no model
 
 #### Scenario: Stopped
 - **WHEN** the person presses Stop
 - **THEN** the pill reads `Stopped`, the chat says how much is kept and offers Resume
 - Gate: `manual`
+- Manual: needs a running build to stop; the test Studio has no model
 
 ### Requirement: Talk and brief before building
 
@@ -84,6 +87,7 @@ Before a build, the chat SHALL hold the talk with Hermia and end in the brief, e
 - **WHEN** the talk is ready to build
 - **THEN** the brief shows as an editable text with Build and Keep talking, and no agent is working
 - Gate: `manual`
+- Manual: the brief is written by the planner's model from the talk; the test Studio has no model
 
 #### Scenario: The skip question
 - **WHEN** Build is pressed on a brief for a new website
@@ -95,6 +99,7 @@ Before a build, the chat SHALL hold the talk with Hermia and end in the brief, e
 - **WHEN** the brief describes a different product than the open project's
 - **THEN** the chat offers New project and Add here instead of Build
 - Gate: `manual`
+- Manual: telling that a brief describes a different product is the planner model's reading; the test Studio has no model
 
 ### Requirement: Comments and the Critic
 
@@ -105,6 +110,7 @@ issues SHALL show as flags on their sections, at most three, and leave when fixe
 - **WHEN** the person pins a comment "Bigger headline" on the hero and presses Send
 - **THEN** the pin stays on the hero and a crew reply appears in its thread
 - Gate: `manual`
+- Manual: the crew's reply in the thread is a model's; the test Studio has no model
 
 ### Requirement: Replay
 
