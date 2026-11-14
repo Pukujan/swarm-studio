@@ -399,7 +399,7 @@ const modeHelp = {
   // @ts-ignore
   setup: a => window.SwarmSetup?.open(...a)
 }
-mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, box: els.brief, agents: $('#agents-btn'), off: !!BOOT.hosted })
+mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, box: els.brief, agents: $('#agents-btn'), built: () => !!shownRun(), off: !!BOOT.hosted })
 // @ts-ignore
 mountAgentsChip({ select: els.agentsSel, button: $('#agents-btn') })
 async function sendDock() {

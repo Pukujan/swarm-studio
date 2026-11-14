@@ -57,15 +57,17 @@ export const MODE_LINE = {
 // What the box says while empty, per mode (Build keeps the room's own words: "Describe a product…", "Change
 // the app…"); the cheapest way to say what sending will do.
 export const MODE_PLACEHOLDER = { ask: 'Ask the crew…', plan: 'Say what to plan…', fix: 'Say what went wrong…' }
-const MODE_PLACEHOLDERS = Object.values(MODE_PLACEHOLDER)
+// Build with a build open: sending changes it, so the box does not say "Describe a product" over a built site
+export const CHANGE_PLACEHOLDER = 'Say what to change…'
+const MODE_PLACEHOLDERS = [...Object.values(MODE_PLACEHOLDER), CHANGE_PLACEHOLDER]
 // The agents count does nothing in these modes: nothing is built
 const NO_BUILDERS = ['ask', 'fix']
 
 // ---------- the switch (the browser from here on)
 // select: the mode chip (it keeps the old select's name: its value is the mode); button: the send button;
 // box: the text box; agents: the agents chip; roomPh: the room's own placeholder, kept while a mode's shows
-/** @type {{ now: string, asked: { who: string, text: string }[], offer: any[], select: any, button: any, box: any, agents: any, roomPh: string, talking: () => boolean }} */
-export const chatMode = { now: 'build', asked: [], offer: [], select: null, button: null, box: null, agents: null, roomPh: '', talking: () => false }
+/** @type {{ now: string, asked: { who: string, text: string }[], offer: any[], select: any, button: any, box: any, agents: any, roomPh: string, talking: () => boolean, built: () => boolean }} */
+export const chatMode = { now: 'build', asked: [], offer: [], select: null, button: null, box: null, agents: null, roomPh: '', talking: () => false, built: () => false }
 // The send button is an arrow, like the "Tell the crew…" bar's; its name says what it sends to (the mode, or
 // plain Send while a talk has the box). One writer.
 export function paintSend() {
@@ -80,7 +82,8 @@ function paintPlaceholder() {
   const has = String(box.placeholder || ''), ours = MODE_PLACEHOLDERS.includes(has)
   if (chatMode.talking() || /^Tell Hermia/.test(has)) return
   if (!ours) chatMode.roomPh = has
-  const want = MODE_PLACEHOLDER[/** @type {keyof typeof MODE_PLACEHOLDER} */ (chatMode.now)] || chatMode.roomPh
+  const room = chatMode.built() && /^Describe a product/.test(chatMode.roomPh) ? CHANGE_PLACEHOLDER : chatMode.roomPh
+  const want = MODE_PLACEHOLDER[/** @type {keyof typeof MODE_PLACEHOLDER} */ (chatMode.now)] || room
   if (want && want !== has) box.placeholder = want
 }
 // the mode chip says the mode's name; the agents chip is off where nothing is built
@@ -101,9 +104,9 @@ export function setChatMode(mode) {
   paintSend()
 }
 // select: the mode chip; button: the form's send button; talking(): a talk has the box (web/canvas/talk.js);
-// box: the text box; agents: the agents chip
-export function mountChatMode({ select, button, talking, box = null, agents = null, off = false }) {
-  Object.assign(chatMode, { select, button, talking, box, agents, roomPh: '' })
+// box: the text box; agents: the agents chip; built(): a build is open
+export function mountChatMode({ select, button, talking, box = null, agents = null, built = () => false, off = false }) {
+  Object.assign(chatMode, { select, button, talking, box, agents, built, roomPh: '' })
   if (!select) return
   if (off) { select.hidden = true; return }
   // (talking() is not asked while the page is still loading: the button already carries the first mode's name)
@@ -112,7 +115,11 @@ export function mountChatMode({ select, button, talking, box = null, agents = nu
   // its open menu: each mode's name and, under it, its line
   chipMenu(select, { label: 'Mode', items: () => CHAT_MODES.map(m => ({ value: m, name: modeWord(m), line: MODE_LINE[/** @type {keyof typeof MODE_LINE} */ (m)] })), value: () => chatMode.now, pick: setChatMode })
   // a room that writes its placeholder while Ask, Plan or Fix is on: the mode's comes back over it
-  if (box) new MutationObserver(() => paintPlaceholder()).observe(box, { attributes: true, attributeFilter: ['placeholder'] })
+  if (!box) return
+  new MutationObserver(() => paintPlaceholder()).observe(box, { attributes: true, attributeFilter: ['placeholder'] })
+  // and when the chat comes into view or takes the focus: a build may have opened since (built())
+  new IntersectionObserver(() => paintPlaceholder()).observe(box)
+  box.addEventListener('focus', () => paintPlaceholder())
 }
 
 // A wait in the chat is a crew member at work (owner, 2026-11-13): their cursor, their name and what they

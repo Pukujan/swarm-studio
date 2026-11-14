@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, MODE_LINE, MODE_PLACEHOLDER, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
+import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, MODE_LINE, MODE_PLACEHOLDER, CHANGE_PLACEHOLDER, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
 import { chipMenuKey, builderModels, realModel, NO_MODEL_NAME } from '../web/composer.js'
 
 // the send button is an arrow: what it sends to is its accessible name
@@ -243,6 +243,17 @@ test('the box says what the mode will do, the room keeps its words in Build, and
     setChatMode('plan'); talking = true; box.placeholder = 'Tell Hermia…'; setChatMode('ask')
     assert.equal(box.placeholder, 'Tell Hermia…')
     for (const p of Object.values(MODE_PLACEHOLDER)) assert.ok(p.split(/\s+/).length <= 6, p)
+    // Build over an open build: sending changes it
+    talking = false
+    let built = false
+    const b2 = { placeholder: 'Describe a product. The swarm designs and builds its site.' }
+    mountChatMode({ select: { value: 'build', hidden: false }, button: sendFake(), talking: () => false, box: b2, built: () => built })
+    setChatMode('build')
+    assert.match(b2.placeholder, /^Describe a product/)
+    built = true; setChatMode('ask'); setChatMode('build')
+    assert.equal(b2.placeholder, CHANGE_PLACEHOLDER)
+    built = false; setChatMode('build')
+    assert.match(b2.placeholder, /^Describe a product/)
   } finally { mountChatMode({ select: null, button: null, talking: () => false }); setChatMode('build') }
 })
 

@@ -29,16 +29,16 @@ It is a menu of radio items (`role="menu"`, `menuitemradio` with `aria-checked`;
 
 The owner, 2026-11-14, of the row under the chat box ("8 AGENTS", "WORKER", then a second line with "BUILD" beside a filled "BUILD" button): "this needs work what is worker and build? and the arrangement here is bad", and "why does both worker and planner have worker and plan dropdown while build also has it its confusing and repeating the same thing".
 
-One row, in reading order, that never takes a second line: **mode** (what sending does), then the two quieter pickers, **agents** and **model**, then the **send arrow** at the right. One height and one radius. In the 300 px chat column the agents chip is its number and the model's name is cut with an ellipsis; from about 320 px the word "agents" shows.
+One row, in reading order, that never takes a second line: **mode** (what sending does), then the two quieter pickers, **agents** and **model**, then the **send arrow** at the right. One height and one radius. In the 300 px chat column the agents chip is a crew icon and its number and the model's name is cut with an ellipsis; from about 320 px the word "agents" shows.
 
 - **Send** is an arrow, like the "Tell the crew…" bar's, so the row never says Build twice. Its accessible name says where it sends: `Send: Build`, `Send: Ask`…, and plain `Send` while a talk has the box. Enter and the typed routes send as before.
 - **Agents** opens a menu headed "How many builders work at once". It is off (disabled, in place) in Ask and Fix, where nothing is built.
 - **Model** opens a menu headed "The model the builders use". It shows a model's own name, never a role's: under Hermes a role's model string is the role itself ("worker", "planner": engine/hermesllm.mjs `roleModel`), so the name comes from the list Setup shows (`GET /api/setup/models/options`: the builder slot, or Hermes's main model while the slot is empty; docs/engines/hermes-and-connections.md, "The Setup model picker"). When that cannot be known the chip says "Hermes’s model". The planner's model is listed only when it is a real, different model. "Other…" opens Models. The list is `builderModels` in web/composer.js.
-- **The box's placeholder** follows the mode: "Ask the crew…", "Say what to plan…", "Say what went wrong…". In Build the room's own words stay ("Describe a product…", "Change the app…"), and a talk's "Tell Hermia…" is left alone.
+- **The box's placeholder** follows the mode: "Ask the crew…", "Say what to plan…", "Say what went wrong…". In Build the room's own words stay ("Change the app…"), except that over an open build "Describe a product…" becomes "Say what to change…". A talk's "Tell Hermia…" is left alone.
 
 All three chips use one menu (web/composer.js `chipMenu`).
 
-The send button's word is the mode's (Send while a talk with the planner has the box). The mode lasts for the browser session; it is not saved with the project. A hosted studio has no switch.
+The send button is named for the mode ("The row" below; plain Send while a talk with the planner has the box). The mode lasts for the browser session; it is not saved with the project. A hosted studio has no switch.
 
 Typed, the same switch: `/ask`, `/plan` or `/build` (with words after it, they are sent in that mode), `/fix` alone, or a message that is only the switch ("switch to ask mode", "plan mode", "go back to build mode"). A brief that merely mentions a mode ("add a dark mode") is a brief. `/fix <words>` is still the section rewrite it was before the modes.
 
