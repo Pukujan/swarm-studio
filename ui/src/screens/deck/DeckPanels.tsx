@@ -85,27 +85,44 @@ const TOOLS: { id: ToolId, label: string, icon: string }[] = [
   { id: 'comment', label: 'Comment', icon: 'msg' }
 ]
 
-// Which tool each working agent holds. Display only in this slice: the person's own tools (Text, Comment) come
-// with the editing and the marks.
-export function Toolbar({ model }: { model: DeckModel }) {
+// The person's own tools (web/canvas/panels.js USER_TOOLS, web/canvas/marks.js): Move (pick and pan), Text (the
+// picked section's words, or the next section clicked) and Comment (the same, its comment). V, T and C press them.
+export const MINE = ['move', 'text', 'comment'] as const
+export type MyTool = typeof MINE[number]
+
+// The toolbar: the person's three tools, pressable, and every tool lit while an agent holds it (the rest are the
+// crew's alone, as in the current deck)
+export function Toolbar({ model, tool, onTool }: { model: DeckModel, tool: MyTool, onTool: (t: MyTool) => void }) {
+  const hint = tool === 'text' ? 'Click a section to change its words' : tool === 'comment' ? 'Click a section to comment on it' : ''
   return (
-    <ul aria-label="Tools" className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-[12px] border border-edge bg-deep p-1.5 shadow-[0_14px_40px_rgb(var(--shade-rgb)/.5)]">
-      {TOOLS.map(t => {
-        const who = model.agents.filter(a => a.layer && a.tool === t.id)
-        const names = who.map(a => a.name)
-        return (
-          <li key={t.id} aria-label={names.length ? `${t.label}: ${names.join(', ')}` : t.label}
-            className={`relative grid size-10 place-items-center rounded-[8px] ${who.length ? 'bg-panel-2 text-text' : 'text-muted'}`}>
-            <Icon name={t.icon} size={18} />
-            {who.length > 0 && (
-              <span aria-hidden className="absolute right-1 bottom-1 flex gap-0.5">
-                {who.slice(0, 3).map(a => <i key={a.id} className="size-1.5 rounded-full" style={{ background: crew().color(a.name) }} />)}
-              </span>
-            )}
-          </li>
-        )
-      })}
-    </ul>
+    <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
+      <p role="status" className={`rounded-[8px] border border-edge bg-deep px-2.5 py-1 font-monospace text-[13px] ${hint ? '' : 'sr-only'}`}>{hint}</p>
+      <ul aria-label="Tools" className="flex items-center gap-1 rounded-[12px] border border-edge bg-deep p-1.5 shadow-[0_14px_40px_rgb(var(--shade-rgb)/.5)]">
+        {TOOLS.map(t => {
+          const who = model.agents.filter(a => a.layer && a.tool === t.id)
+          const names = who.map(a => a.name)
+          const label = names.length ? `${t.label}: ${names.join(', ')}` : t.label
+          const dots = who.length > 0 && (
+            <span aria-hidden className="absolute right-1 bottom-1 flex gap-0.5">
+              {who.slice(0, 3).map(a => <i key={a.id} className="size-1.5 rounded-full" style={{ background: crew().color(a.name) }} />)}
+            </span>
+          )
+          const mine = (MINE as readonly string[]).includes(t.id) ? t.id as MyTool : null
+          return (
+            <li key={t.id} aria-label={mine ? undefined : label} className="relative">
+              {mine
+                ? (
+                    <Button role="ghost" aria-label={label} aria-pressed={tool === mine} aria-keyshortcuts={mine[0].toUpperCase()} onPress={() => onTool(mine)}
+                      className={`relative size-10 min-w-10 px-0 ${tool === mine ? 'bg-panel-2! text-text outline-1 outline-frame-hi' : who.length ? 'bg-panel-2 text-text' : 'text-muted'}`}>
+                      <Icon name={t.icon} size={18} />{dots}
+                    </Button>
+                  )
+                : <span className={`relative grid size-10 place-items-center rounded-[8px] ${who.length ? 'bg-panel-2 text-text' : 'text-dim'}`}><Icon name={t.icon} size={18} />{dots}</span>}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
