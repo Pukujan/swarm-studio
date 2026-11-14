@@ -93,7 +93,10 @@ function Line({ t, acts, onHover }: { t: Turn, acts?: FeedActs, onHover?: (el: H
     return (
       <div className={`item bot text-sm ${t.working ? 'working' : ''}`} aria-busy={t.working || undefined}>
         <b className="flex items-baseline gap-2 font-label text-xs font-semibold uppercase tracking-[.07em] text-text">Hermia<small className="font-monospace text-[11px] normal-case tracking-normal text-muted">planner</small></b>
-        <span className={`txt mt-1 block whitespace-pre-wrap ${t.working ? 'text-muted motion-safe:animate-pulse' : ''}`}>{t.text}</span>
+        {/* a reply on its way with no words yet: two lines in the shape of hers, not a dot (#392) */}
+        {t.working && t.text === '…'
+          ? <span aria-hidden className="mt-2 flex flex-col gap-[7px]"><i className="block h-[9px] w-[86%] rounded-full bg-[color-mix(in_srgb,var(--text)_9%,transparent)] motion-safe:animate-pulse" /><i className="block h-[9px] w-[54%] rounded-full bg-[color-mix(in_srgb,var(--text)_9%,transparent)] motion-safe:animate-pulse" /></span>
+          : <span className={`txt mt-1 block whitespace-pre-wrap ${t.working ? 'text-muted motion-safe:animate-pulse' : ''}`}>{t.text}</span>}
         {acts && <Brief t={t} a={acts} />}
       </div>
     )

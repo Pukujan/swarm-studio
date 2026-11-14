@@ -3,7 +3,7 @@
 // twice in a row and never repeats the chat.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PET_LINES, PET_ORDER, PET_MAX, PET_GAP, PET_BUSY, PET_NOT, petBrain, petSpot } from '../web/pet.js'
+import { PET_LINES, PET_ORDER, PET_MAX, PET_GAP, PET_BUSY, PET_NOT, PET_NEAR, petBrain, petSpot } from '../web/pet.js'
 
 const SAMPLES = {
   step: [{ step: 'brand' }, { step: 'references' }, { step: 'assets' }, { step: 'plan' }, { step: 'proposal' }, { step: 'nowhere' }, {}],
@@ -127,4 +127,11 @@ test('the placeholders she finds are the shared skeleton pattern and the aria-bu
   for (const s of ['.wait-in', '[aria-busy="true"]', '.ab .sk:not(.over)']) assert.ok(PET_BUSY.includes(s), `${s} missing`)
   // where a crew cursor already paints, the chat, and dialogs above her are not hers
   for (const s of ['.pt', '.pl-work', '.side', '.ui-overlay']) assert.ok(PET_NOT.includes(s), `${s} missing`)
+})
+
+test('a wait where she does not go (a chat reply, a dialog) still shows her working, without moving her there', () => {
+  // #392: the chat's reply on its way and a dialog's wait are aria-busy; she shows her dots where she is
+  for (const s of ['.side [aria-busy="true"]', '[role="dialog"] [aria-busy="true"]', '.ui-overlay [aria-busy="true"]']) assert.ok(PET_NEAR.includes(s), `${s} missing`)
+  // nothing there is a place she flies to: every container is one she keeps out of, or a dialog
+  for (const s of PET_NEAR.split(', ').map(x => x.split(' ')[0])) assert.ok(PET_NOT.includes(s) || s === '[role="dialog"]', `${s} is not kept out of`)
 })

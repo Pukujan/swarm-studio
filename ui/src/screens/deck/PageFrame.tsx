@@ -107,8 +107,17 @@ export function PageFrame({ page, layers, agents, theme, onGeo, scanning = false
     return () => clearTimeout(t)
   }, [ready, layers, agents, later])
 
+  // until its first section comes, the page is a skeleton marked busy (#392, web/canvas/deck.js addFrame): the crew's
+  // cursors, or Hermia's, work on it
   return (
-    <iframe ref={ref} title={page.title} srcDoc={frameHtml} sandbox="allow-scripts"
-      className="pointer-events-none block border-0 bg-paper" style={{ width: FRAME_W, height }} />
+    <div className="relative">
+      <iframe ref={ref} title={page.title} srcDoc={frameHtml} sandbox="allow-scripts"
+        className="pointer-events-none block border-0 bg-paper" style={{ width: FRAME_W, height }} />
+      {(!ready || !layers.length) && (
+        <div role="status" aria-busy="true" aria-label="This page, on its way" className="wait-in pointer-events-none absolute inset-0 grid grid-rows-[64px_1fr_180px] gap-8 bg-paper px-12 py-8">
+          <i className="block rounded-[6px] bg-[color-mix(in_srgb,var(--void)_8%,transparent)] motion-safe:animate-pulse w-2/5" /><i className="block rounded-[6px] bg-[color-mix(in_srgb,var(--void)_8%,transparent)] motion-safe:animate-pulse" /><i className="block rounded-[6px] bg-[color-mix(in_srgb,var(--void)_8%,transparent)] motion-safe:animate-pulse" />
+        </div>
+      )}
+    </div>
   )
 }
