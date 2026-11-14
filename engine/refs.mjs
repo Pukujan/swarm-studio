@@ -146,7 +146,17 @@ export function refStore({ projectsDir, uploadsOf = () => [], known = () => true
     const plain = links.filter(r => !lookBrief(r))
     if (looks.length) out.push(...looks.slice(0, 3))
     if (plain.length) out.push(`Links the owner gave as references:\n${plain.slice(0, 8).map(r => `- ${r.url}${r.use ? ` (for ${r.use})` : ''}`).join('\n')}`)
+    // documents the owner gave (a PDF, a text or Markdown file): what the crew read in them (issue #543)
+    const docs = live.filter(r => r.kind === 'file')
+    if (docs.length) out.push(`Documents the owner gave. Build from what they say (the facts, the names, the pages, who it is for); never copy their layout or quote them at length:\n${docs.slice(0, 6).map(docLine).join('\n')}`)
     return out.join('\n\n')
+  }
+  // one document in the brief: its name, the person's note, and what was read in it, or why it could not be
+  function docLine(r) {
+    const f = r.found || {}, note = r.use ? ` (for ${r.use})` : ''
+    if (f.state !== 'ready') return `- ${r.name}${note}: ${f.state === 'failed' ? `could not be read${f.note ? ` (${f.note})` : ''}` : 'not read yet'}`
+    const said = [f.what && `what: ${f.what}`, f.who && `for: ${f.who}`, f.pages?.length && `pages: ${f.pages.join(', ')}`].filter(Boolean).join('; ')
+    return clip(`- ${r.name}${note}: ${said ? `${said}. ` : ''}It says: ${f.words || f.idea || ''}`, 1800)
   }
   // "use this for the hero": the line the crew is sent, like a comment on that section
   function useText(r, section) {

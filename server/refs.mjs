@@ -41,7 +41,9 @@ export function refRoutes({ refs, head = () => null, comment = null, walk = null
     if (!m) return false
     const [, pid, link, id, op] = m
     const out = ref => ({ ref, refs: refs.list(pid) })
-    const brought = r => (read && r.source === 'import' ? read(pid, r) || r : r)
+    // what a reference says is read when it was brought to the first step, and when it is a file given anywhere
+    // (a PDF, a text or Markdown file): its words reach the crew's brief (issue #543)
+    const brought = r => (read && (r.source === 'import' || r.kind === 'file') ? read(pid, r) || r : r)
     if (req.method === 'GET' && !link && !id) { json(res, 200, { refs: refs.list(pid) }); return true }
     if (req.method !== 'POST') { json(res, 405, { error: 'GET or POST' }); return true }
     if (!link && !id) {

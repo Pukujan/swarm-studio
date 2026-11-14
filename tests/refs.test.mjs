@@ -60,6 +60,19 @@ test('the brief and the use line name the references', () => {
   assert.equal(store().brief('p1'), '')
 })
 
+test('a document reaches the brief with what was read in it, or why it could not be (#543)', () => {
+  const s = store()
+  const pdf = s.addFile('p1', { name: 'cedar-brief.pdf', use: 'the menu' }, Buffer.from('%PDF-1.4'))
+  assert.match(s.brief('p1'), /Documents the owner gave[\s\S]*- cedar-brief\.pdf \(for the menu\): not read yet/)
+  s.setFound('p1', pdf.id, { state: 'ready', what: 'Cedar Cafe brand brief', who: 'locals', pages: ['Home', 'Menu'], words: 'A small cafe by the river. Open 7am to 4pm.' })
+  const b = s.brief('p1')
+  assert.match(b, /cedar-brief\.pdf \(for the menu\): what: Cedar Cafe brand brief; for: locals; pages: Home, Menu\. It says: A small cafe by the river\. Open 7am to 4pm\./)
+  assert.match(b, /never copy their layout/)
+  const scan = s.addFile('p1', { name: 'scan.pdf' }, Buffer.from('%PDF-1.4'))
+  s.setFound('p1', scan.id, { state: 'failed', note: 'the PDF has no text in it (a scan?)' })
+  assert.match(s.brief('p1'), /- scan\.pdf: could not be read \(the PDF has no text in it \(a scan\?\)\)/)
+})
+
 test('the routes add, list, send a use to the crew, and serve the file', async () => {
   const s = store(), sent = []
   let head = null

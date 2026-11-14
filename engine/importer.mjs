@@ -55,11 +55,14 @@ export async function findIn(text, { chat = null } = {}) {
   }
   const lines = t.split(/\n+/).map(l => clip(l, 300)).filter(Boolean)
   const first = lines[0] || ''
-  const pages = Array.isArray(said?.pages) ? said.pages.map(p => clip(p, 40)).filter(Boolean).slice(0, 8) : []
+  // with no model, a line that says what it is is still read: "Pages: Home, Menu, Visit us", "For: locals" (#543)
+  const labelled = re => clip(lines.map(l => l.match(re)?.[1]).find(Boolean) || '', 300)
+  const listed = labelled(/^(?:pages?|sections?|sitemap)\s*:\s*(.+)$/i).split(/\s*[,;·|]\s*|\s+and\s+/).map(p => clip(p.replace(/\.$/, ''), 40)).filter(Boolean)
+  const pages = Array.isArray(said?.pages) ? said.pages.map(p => clip(p, 40)).filter(Boolean).slice(0, 8) : listed.slice(0, 8)
   return {
     idea: clip(said?.idea || lines.slice(0, 3).join(' '), 400),
     what: clip(said ? said.what : first, 120),
-    who: clip(said?.who || '', 120),
+    who: clip(said?.who || (said ? '' : labelled(/^(?:for|audience|who(?: it is for)?)\s*:\s*(.+)$/i).replace(/\.$/, '')), 120),
     pages,
     by: said ? 'model' : 'words'
   }

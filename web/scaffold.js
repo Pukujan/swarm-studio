@@ -12,7 +12,7 @@
 //   look, save(data), select(key), say(text) }. state is the kit's own saved state; look the brand's
 //   picked colours and fonts ({ bg, text, accent, link, heading, body }) or null.
 import { ic } from './icons.js'
-import { matchHtml, matchClick, lookBusy, lookWorker, workLine, workHtml, lookPhase, lookSays, LOOK_POLL } from './lookmatch.js'
+import { matchHtml, matchClick, lookBusy, lookWorker, workLine, workHtml, lookPhase, lookSays, foundSaid, LOOK_POLL } from './lookmatch.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
 import { layerTree, layerSheet } from './layers.js'
@@ -138,6 +138,13 @@ export function makeScaffold({ sw, C, root }) {
   const sel = key => (A.sel === key ? '<div class="sel"><i></i><i></i><i></i><i></i></div>' : '')
   const card = (key, name, cls, inner = '') => `<div class="ab ${cls}" data-key="${esc(key)}" tabindex="0" role="button" aria-label="${esc(name)}">${inner}${sel(key)}</div>`
   const addCard = (key, name) => card(key, name, 'sc-add', `${ic('plus', 18)}<span>${esc(name)}</span>`)
+  // under a document: what the crew is doing with it, or what it found (the same line as /next/'s FoundLine)
+  const foundLine = x => {
+    const f = x.found
+    if (!f) return ''
+    const said = f.state === 'reading' ? 'Reading…' : f.state === 'failed' ? `Could not read it${f.note ? `: ${f.note}` : ''}` : `Found: ${foundSaid(f) || 'nothing to fill in'}`
+    return `<span class="sc-found">${esc(said)}</span>`
+  }
   const thumb = (kind, x) => {
     const shot = x.kind === 'link' && x.look?.shots?.[0]
     if (lookBusy(x) && !A.lookTimer) setTimeout(watchLooks)
@@ -146,7 +153,7 @@ export function makeScaffold({ sw, C, root }) {
       : `<div class="sc-file">${ic(x.kind === 'link' ? 'link' : x.kind === 'video' ? 'film' : x.kind === 'audio' ? 'music' : x.kind === 'font' ? 'type' : 'file', 22)}</div>`
     // someone on the crew is reading the link or comparing it: the sheen and their named cursor on the card
     const work = kind === 'ref' ? workHtml(x) : ''
-    return card(`${kind}:${x.id}`, x.name, `sc-thumb${work ? ' sc-walking' : ''}`, `${inner}<em>${esc(x.role || x.name)}</em>${work}`)
+    return card(`${kind}:${x.id}`, x.name, `sc-thumb${work ? ' sc-walking' : ''}`, `${inner}<em>${esc(x.role || x.name)}</em>${kind === 'ref' ? foundLine(x) : ''}${work}`)
   }
   function brandCard() {
     const b = A.d.brand, L = look(b)
@@ -322,7 +329,7 @@ export function makeScaffold({ sw, C, root }) {
   function sayLooks() {
     const first = !A.looks, seen = A.looks || (A.looks = new Map())
     for (const r of A.d?.refs || []) {
-      if (r.kind !== 'link') continue
+      if (r.kind !== 'link' && r.kind !== 'file') continue
       const line = first ? '' : lookSays(seen.get(r.id) || '', r)
       seen.set(r.id, lookPhase(r))
       if (line) sw.say?.(line)
@@ -412,7 +419,13 @@ export function makeScaffold({ sw, C, root }) {
     }
     if (part === 'ref' && A.d.refs.find(r => r.id === id)?.kind === 'link') return lookInsp(box, A.d.refs.find(r => r.id === id))
     if (part === 'ref') {
-      box.innerHTML = `<div class="sc-acts"><button class="btn ghost" data-a="given">${ic('pin', 15)}Use as given</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
+      const r = A.d.refs.find(x => x.id === id), f = r?.found
+      // a document: what the crew read in it (issue #543), the same fields the walk fills in
+      const row = (k, v) => (v ? `<p class="lk-row"><b>${k}</b><span>${esc(v)}</span></p>` : '')
+      const read = !f ? '' : f.state === 'reading' ? `<p class="lk-state" aria-live="polite">${esc(workLine(/** @type {any} */ (lookWorker(r))))}</p>`
+        : f.state === 'failed' ? `<p class="lk-state">Could not read it${f.note ? `: ${esc(f.note)}` : ''}</p>`
+        : `${row('Found', f.what)}${row('For', f.who)}${row('Pages', (f.pages || []).join(', '))}${f.idea ? `<p class="sc-idea-full">${esc(f.idea)}</p>` : ''}`
+      box.innerHTML = `${read}<div class="sc-acts"><button class="btn ghost" data-a="given">${ic('pin', 15)}Use as given</button><button class="btn ghost" data-a="remove">${ic('trash', 15)}Remove</button></div>`
       box.onclick = e => {
         const a = e.target.closest('[data-a]')?.dataset.a
         if (a === 'given') post(proj('/assets'), { ref: id }).then(j => { A.d.refs = j.refs; A.d.assets = j.assets; select(`asset:${j.asset.id}`) }).catch(fail)
