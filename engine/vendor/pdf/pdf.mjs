@@ -40618,23 +40618,12 @@ async function getDocumentProxy(data, options = {}) {
     ...options
   }).promise;
 }
-async function withDocument(data, operation, options) {
-  const pdf = isPDFDocumentProxy(data) ? data : await getDocumentProxy(data, options);
-  try {
-    return await operation(pdf);
-  } finally {
-    if (pdf !== data) await pdf.loadingTask.destroy();
-  }
-}
 function getResolvedPDFJS() {
   resolvedModule ??= loadPDFJS(pdfjsLoader).catch((error) => {
     resolvedModule = void 0;
     throw error;
   });
   return resolvedModule;
-}
-function isPDFDocumentProxy(data) {
-  return typeof data === "object" && data !== null && "_pdfInfo" in data;
 }
 async function interopDefault(m2) {
   const resolved = await m2;
@@ -40670,23 +40659,6 @@ function canCompileWasm() {
 function isNodeProcess(nodeProcess) {
   return typeof nodeProcess === "object" && `${nodeProcess}` === "[object process]" && !nodeProcess.versions.nw && !(nodeProcess.versions.electron && nodeProcess.type && nodeProcess.type !== "browser");
 }
-async function extractText(data, options = {}) {
-  const { mergePages = false } = options;
-  return await withDocument(data, async (pdf) => {
-    const texts = await Promise.all(Array.from({ length: pdf.numPages }, (_2, i2) => getPageText(pdf, i2 + 1)));
-    return {
-      totalPages: pdf.numPages,
-      text: mergePages ? normalizeMergedText(texts) : texts
-    };
-  });
-}
-async function getPageText(document2, pageNumber) {
-  return (await (await document2.getPage(pageNumber)).getTextContent()).items.filter((item) => item.str != null).map((item) => item.str + (item.hasEOL ? "\n" : "")).join("");
-}
-function normalizeMergedText(texts) {
-  return texts.join("\n").replace(/[^\S\n]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n");
-}
 export {
-  extractText,
   getDocumentProxy
 };

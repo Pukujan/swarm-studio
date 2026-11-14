@@ -75,8 +75,8 @@ export const NODE_VENDORED = [
   {
     name: 'pdf',
     dir: 'scripts/vendor/pdf',
-    entry: "export { extractText, getDocumentProxy } from 'unpdf'\n",
-    exports: ['extractText', 'getDocumentProxy'],
+    entry: "export { getDocumentProxy } from 'unpdf'\n",
+    exports: ['getDocumentProxy'],
     out: 'engine/vendor/pdf/pdf.mjs'
   }
 ]

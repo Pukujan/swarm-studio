@@ -12,6 +12,8 @@ import { readPage } from './chatmedia.mjs'
 
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const READ_MAX = 8000
+// a long PDF is read from its start only: what the walk needs is on its first pages, and the rest is never parsed
+const PDF_PAGES = 20
 
 // the words in a reference: { text } or { note } when there are none to read
 export async function textOf(ref, { file = null, page = readPage } = {}) {
@@ -24,11 +26,15 @@ export async function textOf(ref, { file = null, page = readPage } = {}) {
   if (!file || !['pdf', 'txt', 'md'].includes(ext)) return { note: 'nothing to read in it' }
   const buf = readFileSync(file)
   if (ext !== 'pdf') return { text: buf.toString('utf8').slice(0, READ_MAX) }
-  const { extractText, getDocumentProxy } = await import('./vendor/pdf/pdf.mjs')
+  const { getDocumentProxy } = await import('./vendor/pdf/pdf.mjs')
   const doc = await getDocumentProxy(new Uint8Array(buf))
   try {
-    const { text } = await extractText(doc, { mergePages: true })
-    return String(text).trim() ? { text: String(text).slice(0, READ_MAX) } : { note: 'the PDF has no text in it (a scan?)' }
+    let text = ''
+    for (let i = 1; i <= Math.min(doc.numPages, PDF_PAGES) && text.length < READ_MAX; i++) {
+      const items = (await (await doc.getPage(i)).getTextContent()).items
+      text += `${items.map(x => `${x.str || ''}${x.hasEOL ? '\n' : ''}`).join('')}\n`
+    }
+    return text.trim() ? { text: text.slice(0, READ_MAX) } : { note: 'the PDF has no text in it (a scan?)' }
   } finally { doc.destroy?.() }
 }
 
