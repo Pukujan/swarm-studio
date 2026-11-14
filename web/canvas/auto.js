@@ -444,7 +444,7 @@ function renderLaunch(el, run, kit, gw) {
     <h3>Tell people. <em>You</em> press Post.</h3>
     <p class="lk-note">Written from this run's facts${url ? ` and its live link` : ''}. Post opens each network's own page with the text filled in; you post it there. Nothing is sent from here without your click.</p>
     ${media.length ? `<div class="lk-media"><span>Media to attach</span>${media.map(m => `<a href="${esc(m.src)}" download target="_blank" rel="noopener" data-kind="${m.kind}">${m.kind === 'image' ? `<img src="${esc(m.src)}" alt="">` : ico('clapperboard')}<small>${esc(m.label)}</small></a>`).join('')}</div>` : ''}
-    <div class="lk-cards">${kit.posts.map(p => launchCard(p, gw)).join('')}</div>`
+    <div class="lk-cards">${kit.posts.map(p => launchCard(p, gw, kit.media.some(m => m.kind === 'video') || !p.card)).join('')}</div>`
   el.querySelector('.gclose').onclick = () => el.remove()
   for (const card of el.querySelectorAll('.lk-card')) {
     const p = kit.posts.find(x => x.id === card.dataset.id)
@@ -466,6 +466,8 @@ function renderLaunch(el, run, kit, gw) {
       }
     }
     card.querySelector('.lk-skip').onclick = () => { mark(p.id, 'skipped'); status('skipped') }
+    const share = card.querySelector('.lk-share')
+    if (share) share.onclick = async () => { if (await shareCard(p, parts()[0])) { mark(p.id, 'opened'); status('opened') } }
     const post = card.querySelector('.lk-post')
     if (p.how === 'intent') {
       let part = 0
@@ -483,7 +485,7 @@ function renderLaunch(el, run, kit, gw) {
     } else if (p.how === 'download') {
       post.onclick = () => {
         navigator.clipboard?.writeText(parts()[0]).catch(() => {})
-        const v = media.find(m => m.kind === 'video') || media[0]
+        const v = media.find(m => m.kind === 'video') || p.card || media[0]
         if (v) { const a = document.createElement('a'); a.href = v.src; a.download = ''; a.click() }
         post.textContent = 'Caption copied'
         mark(p.id, 'downloaded'); status('opened')
@@ -494,13 +496,27 @@ function renderLaunch(el, run, kit, gw) {
     }
   }
 }
-function launchCard(p, gw) {
+// Share hands the story card and the caption to the device's own share sheet (Web Share with files: a
+// phone's Instagram, TikTok or Messages); the person picks where and presses Post there. Only where the
+// browser can share a picture.
+function canShareFiles() {
+  try { return !!navigator.canShare?.({ files: [new File([''], 'card.jpg', { type: 'image/jpeg' })] }) } catch { return false }
+}
+async function shareCard(p, text) {
+  const blob = await fetch(p.card.src).then(r => (r.ok ? r.blob() : null)).catch(() => null)
+  if (!blob) return false
+  const file = new File([blob], `${p.network}-${p.card.shape}.jpg`, { type: 'image/jpeg' })
+  if (!navigator.canShare?.({ files: [file] })) return false
+  return navigator.share({ files: [file], text }).then(() => true, () => false)
+}
+function launchCard(p, gw, hasFilm = true) {
   const texts = p.thread || [p.text]
   const gwOn = p.how === 'gateway' && gw[p.network]
-  const postLabel = p.how === 'intent' ? (p.thread ? `Post 1/${texts.length}` : 'Post') : p.how === 'download' ? 'Download video + copy caption' : gwOn ? 'Post…' : `Connect ${p.label} in Hermes to send`
+  const postLabel = p.how === 'intent' ? (p.thread ? `Post 1/${texts.length}` : 'Post') : p.how === 'download' ? (hasFilm ? 'Download video + copy caption' : 'Download card + copy caption') : gwOn ? 'Post…' : `Connect ${p.label} in Hermes to send`
   return `<div class="lk-card" data-id="${esc(p.id)}" data-status="${esc(p.status)}"><div class="lk-head"><span class="lk-net">${NET_ICON[p.network] || '•'}</span><b>${esc(p.label)}</b>${p.thread ? `<small>thread of ${texts.length}</small>` : ''}<em class="lk-status">${p.status === 'ready' ? '' : esc(p.status)}</em></div>
     ${texts.map((t, i) => `<label class="lk-text">${p.thread ? `<span class="lk-n">${i + 1}</span>` : ''}<textarea readonly rows="${Math.min(8, Math.max(2, Math.ceil(t.length / 46)))}" aria-label="${esc(p.label)} post${p.thread ? ` ${i + 1}` : ''}">${esc(t)}</textarea><small class="lk-count"></small></label>`).join('')}
-    <div class="lk-btns"><button class="primary lk-post"${p.how === 'gateway' && !gwOn ? ' disabled' : ''}>${esc(postLabel)}</button>${p.how === 'gateway' ? '<button class="lk-copy">Copy</button>' : ''}<button class="lk-edit">Edit</button><button class="lk-skip">Skip</button></div></div>`
+    ${p.card ? `<a class="lk-shot lk-${esc(p.card.shape)}" href="${esc(p.card.src)}" download aria-label="Download ${esc(p.label)} card"><img src="${esc(p.card.src)}" alt="" loading="lazy"></a>` : ''}
+    <div class="lk-btns"><button class="primary lk-post"${p.how === 'gateway' && !gwOn ? ' disabled' : ''}>${esc(postLabel)}</button>${p.card && canShareFiles() ? '<button class="lk-share">Share</button>' : ''}${p.how === 'gateway' ? '<button class="lk-copy">Copy</button>' : ''}<button class="lk-edit">Edit</button><button class="lk-skip">Skip</button></div></div>`
 }
 // the one way a post leaves through Hermes: this box, with the exact text, the channel and the attachments, then Send
 function launchConfirm(run, p, text, targets, kit, done) {

@@ -158,6 +158,16 @@ const storyMedia = (runDir, id, story) => {
     ...['square', 'wide'].filter(s => has(`${s}-${b0}.jpg`)).map(s => ({ kind: 'image', label: s === 'square' ? 'Story, square' : 'Story, wide', src: `/story/${id}/${s}-${b0}.jpg`, shape: s }))
   ]
 }
+// the card each network takes (spec 39, slice 4): phone-tall for TikTok and Instagram (Reels, Stories),
+// square for Threads, wide for the rest. The hook's card, so a post opens on the story's first beat.
+export const CARD_SHAPE = { tiktok: 'tall', instagram: 'tall', threads: 'square' }
+export const cardFor = (network, media) => {
+  const want = CARD_SHAPE[network] || 'wide'
+  const story = media.filter(m => m.kind === 'image' && m.shape && m.src.includes('/story/'))
+  // the media list is in beat order, so the first of a shape is the hook's
+  const pick = story.find(m => m.shape === want) || story.find(m => m.shape === 'tall')
+  return pick ? { shape: pick.shape, src: pick.src } : null
+}
 const mediaOf = (f, extra = []) => [
   ...extra,
   ...(f.video ? [{ kind: 'video', label: 'Promo clip', src: f.video }] : []),
@@ -169,7 +179,9 @@ const mediaOf = (f, extra = []) => [
 export function writeLaunch(runDir, events, id, opts = {}) {
   const facts = runFacts(events, id, opts)
   const story = opts.story || null
-  const kit = { v: 2, t: Date.now(), run: id, facts, media: mediaOf(facts, storyMedia(runDir, id, story)), posts: writePosts(facts, story), ...(story ? { story: story.t || true } : {}), log: [] }
+  const media = mediaOf(facts, storyMedia(runDir, id, story))
+  const posts = writePosts(facts, story).map(p => { const card = cardFor(p.network, media); return card ? { ...p, card } : p })
+  const kit = { v: 2, t: Date.now(), run: id, facts, media, posts, ...(story ? { story: story.t || true } : {}), log: [] }
   writeFileSync(join(runDir, 'launch.json'), JSON.stringify(kit, null, 2))
   return kit
 }

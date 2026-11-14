@@ -95,8 +95,8 @@ export function storyIntent(e, x, view) {
 // press (it only draws cards here; nothing is posted), and every change a card's inspector asks for.
 /** @param {StoryHost} d */
 export function storyLane(d) {
-  /** @type {{ view: any, run: string | null, shape: string, writing: Set<string>, asked: Set<string>, soon: any }} */
-  const S = { view: null, run: null, shape: d.store.get('story.shape', 'tall'), writing: new Set(), asked: new Set(), soon: 0 }
+  /** @type {{ view: any, run: string | null, shape: string, writing: Set<string>, asked: Set<string>, soon: any, looks: Map<string, number> }} */
+  const S = { view: null, run: null, shape: d.store.get('story.shape', 'tall'), writing: new Set(), asked: new Set(), soon: 0, looks: new Map() }
   const here = (/** @type {string} */ run) => d.on() && d.run() === run
   const url = (/** @type {string} */ run, path = '') => `/api/runs/${encodeURIComponent(run)}/story${path}`
 
@@ -112,17 +112,19 @@ export function storyLane(d) {
       if (got && d.on()) d.render()
     }
     clearTimeout(S.soon)
-    if (!S.view && !board.busy && !S.asked.has(run)) S.soon = setTimeout(() => auto(run, board.pages, 0), STORY_REST)
+    if (!S.view && !board.busy && !S.asked.has(run)) S.soon = setTimeout(() => auto(run, board.pages), STORY_REST)
   }
   // The story nobody asked for waits its turn: the Overview has rested on this build, and its pages have
   // their saved pictures in both sizes (spec 36). Writing it exports the site and draws every card, which
-  // slowed the photographs of the pages when the two ran together. After ten looks it is written anyway.
-  /** @param {string} run @param {{ id: string }[]} pages @param {number} n */
-  async function auto(run, pages, n) {
+  // slowed the photographs of the pages when the two ran together. After ten looks at a build it is written
+  // anyway (the looks are counted per build: every poll of the Overview starts the wait again).
+  /** @param {string} run @param {{ id: string }[]} pages */
+  async function auto(run, pages) {
+    const n = S.looks.get(run) || 0
     if (!here(run) || S.view || S.asked.has(run)) return
     const disk = n < 10 ? await d.api(`/api/runs/${encodeURIComponent(run)}/snaps`).catch(() => null) : null
     if (!here(run) || S.view || S.asked.has(run)) return
-    if (n < 10 && !pages.every(p => disk?.pages?.[p.id]?.s && disk.pages[p.id].f)) { clearTimeout(S.soon); S.soon = setTimeout(() => auto(run, pages, n + 1), STORY_REST); return }
+    if (n < 10 && !pages.every(p => disk?.pages?.[p.id]?.s && disk.pages[p.id].f)) { S.looks.set(run, n + 1); clearTimeout(S.soon); S.soon = setTimeout(() => auto(run, pages), STORY_REST); return }
     S.asked.add(run)
     write(run, { auto: true })
   }
