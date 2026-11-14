@@ -2,6 +2,8 @@
 # The checks CI runs on every pull request, and you can run before pushing:
 # every file parses, every engine module loads (so a wrong import fails here,
 # not mid-build), the Python plugin compiles, and the server starts and answers.
+# CI also runs, from tools/dev (AGENTS.md): the type check, the dependency rules and the orphan checks
+# (npm run --prefix tools/dev orphans, orphans:ui: no file nothing reaches, no export nothing uses).
 # CHECK_PORT and CHECK_HOSTED_PORT move the two servers it starts off 4391 and 4392 (two checks at once).
 set -euo pipefail
 cd "$(dirname "$0")/.."

@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { CANVAS_MODULES } from '../server/page.mjs'
 import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, MODE_LINE, MODE_PLACEHOLDER, CHANGE_PLACEHOLDER, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
 import { chipMenuKey, builderModels, realModel, NO_MODEL_NAME } from '../web/composer.js'
 
@@ -173,11 +174,11 @@ test('the page has one row: mode, agents, model, send; names only, and the files
   // a role's name is never shown as a model
   assert.doesNotMatch(row, />\s*(worker|planner)\s*</i)
   assert.doesNotMatch(row, /title=|data-tip/)
-  const page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')
-  const list = page.match(/joinModules\(webDir, \['route\.js'[^\]]*\]/)[0]
-  assert.ok(list.indexOf("'chatmode.js'") > list.indexOf("'icons.js'") && list.indexOf("'chatmode.js'") < list.indexOf("'canvas/loop.js'"))
-  assert.ok(list.indexOf("'composer.js'") > 0 && list.indexOf("'composer.js'") < list.indexOf("'chatmode.js'"))
-  assert.equal(page.split("'composer.js'").length, 2, 'listed once')
+  const list = CANVAS_MODULES
+  assert.ok(list.includes('chatmode.js') && list.indexOf('chatmode.js') > list.indexOf('icons.js') && list.indexOf('chatmode.js') < list.indexOf('canvas/loop.js'))
+  // the chip menu loads before the mode file that uses it, and is listed once
+  assert.ok(list.indexOf('composer.js') > 0 && list.indexOf('composer.js') < list.indexOf('chatmode.js'))
+  assert.equal(list.filter(f => f === 'composer.js').length, 1)
 })
 
 test('every mode has one short plain line, and the slash list says the same', () => {

@@ -182,11 +182,11 @@ for (const screen of screens) {
   })
 }
 
-// the loading check can see a loading state: while a build's events are on their way, the Overview draws a skeleton
+// the loading check can see a loading state: while a version's board is held (its own request, /api/runs/<id>/board), the Overview draws a skeleton
 // per planned page. Alpha Tea's first version, because no other test opens it: a page photographed once paints from
 // its picture instead. If this fails, the check is broken, not the screens.
 test('the loading check sees a skeleton', async ({ page, studio: s }) => {
   test.skip(APP === 'next', 'the check itself, on the current Studio only')
-  const { busy } = await whileHeld(page, url => url.pathname.endsWith('/events'), () => page.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site}`, { waitUntil: 'commit' }))
+  const { busy } = await whileHeld(page, url => /^\/api\/runs\/[^/]+\/board$/.test(url.pathname) || url.pathname.endsWith('/events'), () => page.goto(`${s.BASE}/?project=${s.ids.site}&version=${s.ids.site}`, { waitUntil: 'commit' }))
   expect(busy).toBe(true)
 })

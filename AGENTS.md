@@ -38,6 +38,15 @@ Checks before a PR: `bash scripts/check.sh`; for code in `web/`, also `npm ci --
 `npm run --prefix tools/dev typecheck` (files that start with `// @ts-check`; a new web file starts with it) and
 `npm run --prefix tools/dev deps` (no new cycles beyond `.dependency-cruiser-known-violations.json`; an area
 folder under `web/canvas/` is used only through its `index.js`).
+No orphan code: `npm run --prefix tools/dev orphans` fails when a file under `web/`, `engine/` or `server/` is reached
+by nothing that runs (the servers, the page's lists in `server/page.mjs`, a test, a script, a pack), and
+`npm run --prefix tools/dev orphans:ui` ([knip](https://knip.dev), after `npm ci --prefix ui`) when `ui/` has a file
+nothing imports, an export nothing uses or a package nothing needs. To fix a failure, delete the dead code or use
+it: a new web module goes in `server/page.mjs`'s list, a new program somebody runs by hand is named as an entry in
+`.dependency-cruiser-orphans.mjs`. knip sees only `ui/`: something in `ui/src` that only a test in the root `tests/`
+uses is reported, since the page never uses it; test it through what the page does use, or move the test to `ui/test/`.
+Never add to the known lists (`.dependency-cruiser-orphans-known.json`, the
+`ignoreIssues` in `ui/knip.jsonc`) to pass: they hold what was there when the check arrived and only get shorter.
 The Studio's theme variables are design tokens: change `tokens/*.tokens.json`, run `npm run --prefix tools/dev tokens`
 and commit `web/tokens.css` and `ui/src/theme.css` with them; never edit either by hand (`tokens:check` fails a stale one).
 The Studio is moving to React in `ui/`, served at `/next/` ([decision 0013](docs/decisions/0013-react-ui-coexists.md)).
