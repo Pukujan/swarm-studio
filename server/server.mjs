@@ -3200,6 +3200,8 @@ const server = createServer((req, res) => {
     b.work = workOf(id) || b.game?.work || null
     // each page's content version and its saved snapshots of it: the Overview paints these first
     b.snaps = snapsOf().list(id, events)
+    // whether the build has a story (spec 39): the Overview asks for it only then, so a build with none is no 404
+    b.story = !!readStory(join(runsDir, id))
     return json(200, b)
   }
   // the same, on its own: what the Overview checks before photographing a page again; and a page's

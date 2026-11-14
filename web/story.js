@@ -105,7 +105,8 @@ export function storyLane(d) {
   async function load(run, board) {
     if (d.hosted() || !board?.pages?.length) { S.view = null; S.run = run; return }
     if (S.run !== run || !S.view) {
-      const got = await d.api(url(run)).catch(() => null)
+      // the board says whether there is one to read (asking for a story not written yet is a 404)
+      const got = board.story ? await d.api(url(run)).catch(() => null) : null
       if (d.run() !== run) return
       S.view = got; S.run = run
       if (got && d.on()) d.render()
