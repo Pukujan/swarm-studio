@@ -21,6 +21,8 @@ move to Vite, React and TypeScript ([PLANS.md](../PLANS.md) §5).
 | scroll | 25 | The page scrolls sideways. |
 | console | | A console error, an uncaught page error or a request that answers 400 or more. |
 | loading | | The screen's data is held back for 2.5 s and no skeleton or busy marker (`aria-busy`, `role=progressbar`, `.sk`, `.skeleton`, `.wait-in`, `.spin`) shows meanwhile. |
+| words | [0015](../decisions/0015-studio-walk-and-chat.md) | The page's visible text says "pack" or "packs". People see options. |
+| chat | [0015](../decisions/0015-studio-walk-and-chat.md) | In the next UI (`AUDIT_APP=next`), a chat on screen is not docked along the bottom at the full width. |
 
 Two expected breadcrumbs are our reading of the rules, not the owner's words. Projects reads `Home › Projects`
 because Home is the Feed (rule 1). The Design deck keeps Figma's frame (rule 32), but rule 7 has no exception for

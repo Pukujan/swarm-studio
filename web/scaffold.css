@@ -7,7 +7,7 @@
 body.cosmos-studio .sc-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
 body.cosmos-studio .sc-primary:not([hidden]) { display: inline-flex !important; align-items: center; justify-content: center; min-width: 120px; }
 body.cosmos-studio .sc-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-body.cosmos-studio .brand, body.cosmos-studio .file-name, body.cosmos-studio .playwrap, body.cosmos-studio .pubwrap, body.cosmos-studio .mode-wrap,
+body.cosmos-studio .brand, body.cosmos-studio .file-name, body.cosmos-studio .playwrap, body.cosmos-studio .pubwrap,
 body.cosmos-studio .pl-crumb, body.cosmos-studio .pl-primary, body.cosmos-studio .br-crumb, body.cosmos-studio .br-primary { display: none !important; }
 body.cosmos-studio .cosmos-back { display: none; }
 body.cosmos-studio .topbar { background: var(--void); backdrop-filter: none; }
@@ -43,6 +43,17 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .ab.pcard.sc-idea > span { font: 500 16px/1.4 var(--body); -webkit-line-clamp: 4; }
 .sc-idea-full { margin: 0; font: 14px/1.5 var(--body); color: var(--text); }
 
+/* the board reads like the steps: sections left to right, then the next row */
+.scaffold .sc-row { display: flex; gap: 72px; align-items: flex-start; }
+.scaffold .sc-row .pj-sec .abs { max-width: 540px; }
+.scaffold .sc-none { color: var(--muted); font-weight: 500; }
+/* Lock, the last section: the idea, then what is set so far, three cards to a row like the game's Plan board */
+.scaffold .pj-sec.sc-facts .abs { max-width: 700px; gap: 16px; }
+.scaffold .sc-facts .ab.pcard.sc-idea { width: 436px; min-height: 118px; }
+.ab.pcard.sc-fact { position: relative; cursor: pointer; }
+.ab.pcard.sc-fact > span { font-size: 20px; overflow-wrap: anywhere; }
+.sc-fsw { position: absolute; right: 14px; top: 14px; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line-2); }
+
 /* a website's pages: a storyboard strip, each frame in the brand's own colours and heading */
 .ab.sc-frame { width: 200px; height: 140px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); color: var(--text); overflow: visible; }
 .ab.sc-frame .sc-nav { display: block; height: 4px; width: 44%; border-radius: 99px; background: var(--a, var(--muted)); opacity: .9; }
@@ -50,6 +61,19 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .ab.sc-frame u { display: block; height: 5px; border-radius: 99px; background: currentColor; opacity: .18; text-decoration: none; }
 .ab.sc-frame u + u { width: 70%; }
 .ab.sc-frame > em { font-variant-numeric: tabular-nums; }
+
+/* a link's look (decision 0022) */
+.ab.sc-thumb img { object-fit: cover; object-position: top; }
+.ab.sc-walking { animation: lk-pulse 1.6s ease-in-out infinite; }
+@keyframes lk-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .ab.sc-walking { animation: none; opacity: .7; } }
+.lk-shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.lk-shots img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
+.br-sw.lk-sw { grid-template-columns: repeat(6, 1fr); height: 24px; }
+.lk-row { margin: 0; display: grid; grid-template-columns: 56px 1fr; gap: 8px; font: 13px/1.45 var(--body); color: var(--text); }
+.lk-row b { font-weight: 500; color: var(--muted); }
+.lk-state, .lk-from { margin: 0; font: 13px var(--body); color: var(--muted); }
+.lk-from a { color: var(--text); }
 
 /* the inspector's actions */
 .sc-body { display: flex; flex-direction: column; gap: 12px; }

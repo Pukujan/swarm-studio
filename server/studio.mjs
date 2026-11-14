@@ -1,12 +1,19 @@
 // The Studio's routes (docs/specs/37-studio-first.md, engine/studio.mjs, engine/assetstore.mjs).
-//   POST /api/studio { kind, idea, mode?, depth?, steps?, start? }  -> { project, chat, studio }  a project with no runs yet
-//        (an empty idea is fine: the chat's first words become it, through /idea)
+//   POST /api/studio { kind, idea, mode?, depth?, steps?, start?, skip?, chat? }  -> { project, chat, studio }  a project with no runs yet
+//        (an empty idea is fine: the chat's first words become it, through /idea). skip: the steps the person
+//        skipped when asked before the build (decision 0020; 'brand' or 'plan'), marked skipped, the walk starting
+//        on the first one left. chat: the loose chat that asked, moved into the project instead of a new one
 //   POST /api/studio/:pid/idea { idea }                -> the studio  the idea, once, while it is empty
 //   GET  /api/studio/:pid                                  -> { project, studio, brand, refs, assets }
 //   POST /api/studio/:pid/step { step, state }             -> the same
 //   POST /api/studio/:pid/depth { depth }                  -> the same
 //   POST /api/studio/:pid/mode { mode }                    -> the same (studio, scaffold or takes; spec 42)
 //   POST /api/studio/:pid/kit { data }                     -> the same  the kit's own state, merged
+//   POST /api/studio/:pid/ask { said?, asked?, building? } -> the same + ask: { read, set, text, next, build, building }
+//        the chat leads a website's Studio (decision 0020, engine/askfirst.mjs studioTurn): with no words, what to
+//        ask next (which pages, which pictures); with the person's typed words, their answer set on the kit's
+//        state and the planner's one line, both kept in the Studio's chat. A line that is not an answer changes
+//        nothing (read: false) and goes to the planner as before
 // The project's Assets ("use this as given"; References are "like this"):
 //   GET    /api/projects/:pid/assets                       -> { assets }
 //   POST   /api/projects/:pid/assets?name=&role=  (bytes)  -> { asset, assets }  an upload
@@ -20,6 +27,7 @@ import { createReadStream, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { STUDIO_KINDS, STEPS } from '../engine/studio.mjs'
 import { projectName } from '../engine/naming.mjs'
+import { studioTurn } from '../engine/askfirst.mjs'
 
 // "A website for a tiny ramen bar" is named for the ramen bar, not "Website"
 const nameOf = idea => projectName({ brief: String(idea).replace(/^\s*(?:make|build|create)?\s*(?:me\s+)?(?:an?\s+)?(?:\w+\s+)?(?:website|site|app|game|film|video|deck|brand|logo)\s+(?:for|about|of)\s+/i, '') })
@@ -27,7 +35,9 @@ const nameOf = idea => projectName({ brief: String(idea).replace(/^\s*(?:make|bu
 const CHAT_KIND = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
 
 // studios: engine/studio.mjs; assets: engine/assetstore.mjs; refs: engine/refs.mjs; projects: server/projects.mjs; chats: engine/chats.mjs
-export function studioRoutes({ studios, assets, refs, projects, chats }) {
+// builtOf(pid): for a project that has a build, { kind, idea, pages, theme } read from its newest version; else null
+// picturesDefault(): what Setup recommends for pictures ('painted' with an image model ready, else 'drawn'; a pick is kept)
+export function studioRoutes({ studios, assets, refs, projects, chats, builtOf = () => null, picturesDefault = async () => 'painted' }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const fail = (res, err) => json(res, err.status || 400, { error: String(err.message || err) })
   const bad = (msg, status = 400) => Object.assign(new Error(msg), { status })
@@ -43,10 +53,21 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
   // everything the scaffold draws, in one answer
   function whole(pid) {
     const p = projects.get(pid)
-    const studio = studios.get(pid)
+    let studio = studios.get(pid)
+    // A built project that never had a Studio (made from one prompt) gets one from what it was built with: its
+    // idea and pages. The Studio is the expanded Overview: what was chosen before the design, open again.
+    const built = p ? builtOf(pid) : null
+    if (p && !studio && built) {
+      const kind = STUDIO_KINDS.includes(built.kind) ? built.kind : 'site'
+      const chat = chats.create({ kind: CHAT_KIND[kind], text: built.idea, project: pid })
+      studios.make(pid, { kind, idea: built.idea, chat: chat.id })
+      if (kind === 'site' && built.pages?.length) studios.kit(pid, { pages: built.pages.slice(0, 12) })
+      studio = studios.get(pid)
+    }
     if (!p || !studio) throw bad('no such studio', 404)
     return {
       project: { id: pid, name: p.name, title: p.title, head: p.head },
+      built: built ? { theme: built.theme || null, pages: built.pages || [] } : null,
       studio,
       brand: studios.brands.get(pid)?.brand || null,
       refs: refs.list(pid),
@@ -58,10 +79,39 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
     const kind = STUDIO_KINDS.includes(input.kind) ? input.kind : 'site'
     const idea = String(input.idea || '').trim().slice(0, 4000)
     const pid = projects.makeStudio({ name: idea ? nameOf(idea) : 'New project', kind })
-    const chat = chats.create({ kind: CHAT_KIND[kind], text: idea, project: pid })
+    const asked = typeof input.chat === 'string' ? chats.get(input.chat) : null
+    const chat = asked && !asked.project && asked.kind === CHAT_KIND[kind] ? await chats.moveTo(asked.id, pid) : chats.create({ kind: CHAT_KIND[kind], text: idea, project: pid })
     const steps = Array.isArray(input.steps) ? input.steps.filter(s => STEPS.includes(s)) : STEPS
-    studios.make(pid, { kind, idea, mode: input.mode, depth: input.depth, chat: chat.id, steps: steps.length ? steps : STEPS, start: input.start })
+    const shown = steps.length ? steps : STEPS
+    const skip = Array.isArray(input.skip) ? input.skip.filter(s => shown.includes(s)) : []
+    const start = shown.includes(input.start) && !skip.includes(input.start) ? input.start : skip.length ? shown.find(s => !skip.includes(s)) || null : input.start
+    studios.make(pid, { kind, idea, mode: input.mode, depth: input.depth, chat: chat.id, steps: shown, start })
+    for (const s of skip) studios.step(pid, s, 'skipped')
     return { ...whole(pid), chat: chat.id }
+  }
+
+  // the chat leads: what to ask next, or the person's typed answer read and set (engine/askfirst.mjs)
+  async function ask(pid, input) {
+    const { studio, brand } = whole(pid)
+    const building = input.building === true
+    if (studio.kind !== 'site') return { ...whole(pid), ask: { read: false, set: {}, text: '', next: null, build: building, building: false } }
+    const said = typeof input.said === 'string' ? input.said.trim().slice(0, 2000) : ''
+    const out = studioTurn({
+      said, asked: input.asked, state: studio.kit || {}, building,
+      planSkipped: studio.steps?.plan === 'skipped', built: !!builtOf(pid), look: !!brand?.lockedAt,
+      defaults: { pictures: await Promise.resolve(picturesDefault()).catch(() => 'painted') }
+    })
+    if (out.read && Object.keys(out.set).length) studios.kit(pid, out.set)
+    // the answer and the planner's line stay in the Studio's chat, so they are there when it is opened again
+    if (out.read && studio.chat && chats.get(studio.chat)) {
+      await chats.update(studio.chat, c => {
+        c.turns ||= []
+        const turn = (who, text) => c.turns.push({ id: `t${c.turns.length + 1}`, who, at: Date.now(), text, refs: [], marks: [], layers: [], ...(who === 'planner' ? { made: [], reads: [] } : {}) })
+        turn('person', said)
+        if (out.text) turn('planner', out.text)
+      }).catch(() => {})
+    }
+    return { ...whole(pid), ask: out }
   }
 
   // the chat's first words, when the Studio was opened with an empty box: the idea, and the project's name
@@ -104,12 +154,13 @@ export function studioRoutes({ studios, assets, refs, projects, chats }) {
       jsonBody(req).then(make).then(v => json(res, 200, v)).catch(err => fail(res, err))
       return true
     }
-    const sm = url.pathname.match(/^\/api\/studio\/([\w-]{1,64})(?:\/(step|depth|mode|kit|idea))?$/)
+    const sm = url.pathname.match(/^\/api\/studio\/([\w-]{1,64})(?:\/(step|depth|mode|kit|idea|ask))?$/)
     if (sm) {
       const [, pid, op] = sm
       if (req.method === 'GET' && !op) { try { json(res, 200, whole(pid)) } catch (err) { fail(res, err) } return true }
       if (req.method !== 'POST' || !op) { json(res, 405, { error: 'GET or POST' }); return true }
-      jsonBody(req).then(input => {
+      jsonBody(req).then(async input => {
+        if (op === 'ask') return json(res, 200, await ask(pid, input))
         if (op === 'step') studios.step(pid, String(input.step || ''), String(input.state || ''))
         else if (op === 'kit') studios.kit(pid, input.data)
         else if (op === 'idea') setIdea(pid, input.idea)

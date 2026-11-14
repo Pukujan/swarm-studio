@@ -3,7 +3,7 @@
 // theme as it is (engine/run.mjs), and checkBrand is the reviewer's check that the build kept it.
 // Kept on the chat record as `brand` (engine/chats.mjs); server/brand.mjs serves it.
 import { namedColours, missingColours } from './pagetype.mjs'
-import { BRAND_PACKS, cleanSuggest, suggestByWords, packBrief, packOf, systemOf } from './brandpacks.mjs'
+import { BRAND_PACKS, cleanSuggest, suggestByWords, packBrief, packOf, systemOf, applyPack } from './brandpacks.mjs'
 
 const HEX = /^#[0-9a-f]{6}$/i
 const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
@@ -125,7 +125,8 @@ export async function brandOptions({ brief = '', chat = null } = {}) {
  "types":[{"name":"<1-2 words>","heading":"<Google Font family>","body":"<Google Font family>"}, two more],
  "packs":[{"slug":"<a pack below>","why":"<one short line: why it fits this brief>"}, one or two more]}
 The packs: ${BRAND_PACKS.map(p => `${p.slug} (${p.for})`).join('; ')}.
-Three palettes that differ from each other (light and dark grounds), three type pairings that differ. 3 to 6 pages.${named.length ? `\nThe first palette uses the colours the brief names: ${named.join(', ')}. Never a colour they say they do not want.` : ''}`
+Three palettes that differ from each other (light and dark grounds), three type pairings that differ. 3 to 6 pages.
+Each "why" is shown to the person: never use the word "pack" in it (they are options).${named.length ? `\nThe first palette uses the colours the brief names: ${named.join(', ')}. Never a colour they say they do not want.` : ''}`
     try {
       const text = String(await chat([{ role: 'system', content: sys }, { role: 'user', content: String(brief).slice(0, 4000) }]) || '')
       const j = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
@@ -178,6 +179,16 @@ export function brandTheme(brand) {
     ...(sys ? { system: { slug, name: packOf(slug)?.name || slug, tokens: Object.keys(sys.tokens), rules: sys.rules, components: sys.components } } : {}),
     locked: true
   }
+}
+
+// The design system a build asks for by name (decision 0016 point 3: the request, then the project, then the
+// default): a pack's whole look as a brand of its own for this build, as if picked and locked on the sheet
+export function requestedBrand(slug, brief = '') {
+  if (typeof slug !== 'string' || !packOf(slug)) return null
+  const b = { palettes: [], types: [], pick: {}, brief, story: {} }
+  if (!applyPack(b, slug)) return null
+  const theme = brandTheme(b)
+  return theme ? { theme, brief: brandBrief(b) } : null
 }
 
 // what the sitemap planner is told when the sheet is locked

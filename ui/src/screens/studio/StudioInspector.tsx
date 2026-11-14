@@ -7,7 +7,8 @@ import { Select } from '../../primitives/Select'
 import type { KitCard, KitCtx } from '../../legacy'
 import { STEP_NAME, type Pack, type StudioData } from './useStudio'
 
-const ROLES = ['logo', 'product', 'photo', 'font', 'pack', 'other'].map(id => ({ id, name: id[0].toUpperCase() + id.slice(1) }))
+// an asset's role as the person reads it: the role 'pack' (a set of brand files) is never called that (decision 0015)
+const ROLES = ['logo', 'product', 'photo', 'font', 'pack', 'other'].map(id => ({ id, name: id === 'pack' ? 'Brand kit' : id[0].toUpperCase() + id.slice(1) }))
 
 interface Props {
   sel: string

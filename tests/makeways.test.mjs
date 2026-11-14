@@ -1,12 +1,11 @@
 // node --test tests/makeways.test.mjs
-// The ways to make something (docs/specs/42-ways-to-make.md, web/makeways.js): Make offers each kind's ways by
+// The ways to make something (docs/decisions/0020-ask-before-build.md, web/makeways.js): Make offers each kind's ways by
 // their plain names, never two to one screen; a kind with one way has no menu.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { makeWays, makeModeOf, makeStudioStep, MAKE_KINDS } from '../web/makeways.js'
 import { STEPS } from '../web/nav.js'
-import { STEPS as RECORD_STEPS } from '../engine/studio.mjs'
 
 const KINDS = ['site', 'app', 'game', 'video', 'deck', 'brand']
 const labels = (k, words) => makeWays(k, words).map(w => w.label)
@@ -17,15 +16,27 @@ test('every kind the Make menu offers has its ways', () => {
   for (const k of home.match(/const MAKES = \[[\s\S]*?\n  \]/)[0].matchAll(/\{ k: '([a-z]+)'/g)) assert.ok(MAKE_KINDS[k[1]], k[1])
 })
 
-test('each kind offers the ways spec 42 lists, by their plain names', () => {
+test('Make has two ways, by their plain names: Just make it and Studio (decision 0020)', () => {
   assert.deepEqual(Object.fromEntries(KINDS.map(k => [k, labels(k, true)])), {
-    site: ['Just build', 'Guided', 'Three takes', 'Scaffold', 'Studio'],
-    app: ['Just build', 'Guided', 'Three takes', 'Scaffold', 'Studio'],
-    game: ['Just build', 'Guided'],
-    video: ['Just build', 'Guided', 'Three takes', 'Scaffold', 'Studio'],
-    deck: ['Three takes', 'Scaffold', 'Studio'],
-    brand: ['Three takes', 'Studio']
+    site: ['Just make it', 'Studio'],
+    app: ['Just make it', 'Studio'],
+    game: ['Just make it', 'Studio'],
+    video: ['Just make it', 'Studio'],
+    // a deck is built from its Studio's Lock, and a brand is not built: one way, so no menu
+    deck: ['Studio'],
+    brand: ['Studio']
   })
+})
+
+test('no way is called Scaffold, Guided or Three takes any more, in the menu or in what a person reads', () => {
+  const old = /Scaffold|Guided|Three takes|Just build/
+  for (const k of KINDS) for (const w of makeWays(k, true)) assert.doesNotMatch(w.label, old)
+  const src = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  // the word is never put in front of a person: no quoted or rendered "Scaffold" in either app's screens
+  for (const f of ['web/home.js', 'web/scaffold.js', 'web/studio.js', 'web/makeways.js', 'ui/src/screens/projects/MakeBox.tsx', 'ui/src/screens/StudioFirst.tsx']) {
+    const code = src(f).split('\n').filter(l => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n').replace(/\/\/.*$/gm, '')
+    assert.doesNotMatch(code, /['"`>]\s*Scaffold\b/, f)
+  }
 })
 
 test('no two ways of a kind share a name or a key, and every one has an icon', () => {
@@ -37,25 +48,22 @@ test('no two ways of a kind share a name or a key, and every one has an icon', (
   }
 })
 
-test('an empty box offers only the ways that can ask; a kind left with one way has no menu', () => {
+test('an empty box offers only the Studio, whose chat asks what it is: one way, so no menu', () => {
   assert.deepEqual(Object.fromEntries(KINDS.map(k => [k, labels(k, false)])), {
-    site: ['Scaffold', 'Studio'], app: ['Scaffold', 'Studio'], video: ['Scaffold', 'Studio'], deck: ['Scaffold', 'Studio'],
-    // a game's Guided talk asks what it is
-    game: ['Guided'], brand: ['Studio']
+    site: ['Studio'], app: ['Studio'], video: ['Studio'], deck: ['Studio'], game: ['Studio'], brand: ['Studio']
   })
   assert.deepEqual(makeWays('nope', true), makeWays('site', true))
 })
 
-test('a Scaffold is a Studio with only its Plan step; the Studio opens where the kind starts', () => {
-  const scaffold = makeWays('deck', false).find(w => w.k === 'scaffold')
-  assert.deepEqual(scaffold.steps, ['plan']); assert.equal(scaffold.step, 'plan')
-  for (const s of scaffold.steps) assert.ok(RECORD_STEPS.includes(s))
+test('the Studio opens where the kind starts, and no way narrows its steps', () => {
+  for (const k of KINDS) for (const w of makeWays(k, true)) { assert.equal(w.steps, undefined); assert.equal(w.step, undefined) }
   assert.equal(makeStudioStep('site'), 'brand'); assert.equal(makeStudioStep('brand'), 'brand')
   for (const k of ['app', 'video', 'deck']) assert.equal(makeStudioStep(k), 'plan')
   for (const k of KINDS) assert.ok(STEPS.includes(makeStudioStep(k)))
 })
 
-test('a way remembered before spec 42 still pre-selects; anything else does not', () => {
+test('the way remembered for a kind pre-selects; one that is no longer offered is forgotten', () => {
   assert.equal(makeModeOf('now'), 'now'); assert.equal(makeModeOf('studio'), 'studio')
-  assert.equal(makeModeOf('brand'), null); assert.equal(makeModeOf(null), null)
+  for (const old of ['guided', 'takes', 'scaffold', 'brand']) assert.equal(makeModeOf(old), null)
+  assert.equal(makeModeOf(null), null)
 })
