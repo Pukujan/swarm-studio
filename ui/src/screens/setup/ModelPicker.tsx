@@ -1,14 +1,16 @@
 // The model picker in Setup › Models: Hermes's own providers and models (hermes_models.py, via
 // /api/setup/models/options), never a list of ours. Signed-in providers list their models, the one in use first;
-// a tap sets the planner and the builders. Everyone else is one tap in, under More providers: a key box where a
-// key is the only sign-in, the browser where the provider signs in there. A key typed here goes to Hermes's
-// secret store (`hermes config set`, server/setup.mjs saveKey) and is never shown again or kept in the page.
+// a tap sets the planner and the builders. Everyone else is one tap in, under More providers: where a key is the
+// only sign-in, the command that gives Hermes the key (`hermes auth add <provider> --type api-key`, Hermes asks for
+// it hidden) to copy and run, then Check again; the browser where the provider signs in there. No key is ever typed
+// into the studio or sent to it.
 import { useEffect, useRef, useState } from 'react'
 import { Button as AriaButton } from 'react-aria-components'
 import { Busy } from '../../primitives/Busy'
 import { Button, LinkButton } from '../../primitives/Button'
 import { SearchField } from '../../primitives/SearchField'
-import { TextField } from '../../primitives/TextField'
+import { Command } from '../../primitives/Command'
+import { keyCommand } from '@studio/setup-parts'
 import { get, post } from './api'
 import { Acts, Line, Mark, Note, Why } from './bits'
 import type { ModelTest, Options, Signing, Slot } from './types'
@@ -29,7 +31,7 @@ export function ModelPicker({ opts, setOpts, now, onPicked }: {
   const [pickError, setPickError] = useState('')
   const [more, setMore] = useState(false)
   const [keyFor, setKeyFor] = useState('')
-  const [key, setKey] = useState('')
+  const [checking, setChecking] = useState(false)
   const [signing, setSigning] = useState<Signing | null>(null)
   const [signError, setSignError] = useState('')
   const alive = useRef(true)
@@ -69,7 +71,7 @@ export function ModelPicker({ opts, setOpts, now, onPicked }: {
   async function signIn(slug: string) {
     const p = opts!.providers.find(x => x.slug === slug)
     setSignError('')
-    if (p?.sign === 'key') { setKeyFor(slug); setKey(''); return }
+    if (p?.sign === 'key') { setKeyFor(slug); return }
     setKeyFor('')
     setSigning({ slug, url: '', code: '', done: null })
     const r = await post<{ signing?: Signing | null }>('/api/setup/models/signin', { slug }) ?? { signing: { slug, done: false, error: 'Hermes did not answer.' } }
@@ -78,15 +80,16 @@ export function ModelPicker({ opts, setOpts, now, onPicked }: {
     else setSigning(r.signing ?? null)
   }
 
-  async function saveKey(slug: string) {
-    // the key is sent once and dropped from the page, whatever Hermes answers
-    const typed = key.trim()
-    setKey('')
-    if (!typed) return
-    setSignError('')
-    const r = await post<{ ok: boolean, message?: string, options?: Options }>('/api/setup/models/signin', { slug, key: typed }) ?? { ok: false, message: 'Hermes did not answer.' }
+  // Check again: ask Hermes afresh whether the provider is signed in now
+  async function keyAgain(slug: string) {
+    if (checking) return
+    setChecking(true); setSignError('')
+    const r = await get<Options>('/api/setup/models/options?refresh=1') ?? { ok: false, message: 'Hermes did not answer.', providers: [] }
     if (!alive.current) return
-    if (r.ok) { setKeyFor(''); if (r.options?.ok) setOpts(r.options) } else setSignError(r.message || 'Hermes did not save the key.')
+    setChecking(false)
+    if (r.ok) setOpts(r)
+    if (r.providers?.find(x => x.slug === slug)?.signedIn) setKeyFor('')
+    else setSignError(r.ok === false ? (r.message || 'Hermes did not answer.') : 'Not signed in yet.')
   }
 
   async function cancelSignIn() {
@@ -144,10 +147,10 @@ export function ModelPicker({ opts, setOpts, now, onPicked }: {
                     {keyFor === p.slug || (g?.slug === p.slug && !g.done) ? null : <Button role="ghost" onPress={() => signIn(p.slug)}>Sign in</Button>}
                   </Line>
                   {keyFor === p.slug && (
-                    <form className="flex items-end gap-2" onSubmit={e => { e.preventDefault(); saveKey(p.slug) }}>
-                      <div className="min-w-0 flex-1"><TextField label={`${p.name} API key`} type="password" autoComplete="off" placeholder="API key" value={key} onChange={setKey} autoFocus /></div>
-                      <Button role="secondary" type="submit">Save</Button>
-                    </form>
+                    <>
+                      <Command cmd={keyCommand(p.slug)} />
+                      <Acts>{checking ? <Busy label="Checking" /> : <Button role="secondary" onPress={() => keyAgain(p.slug)}>Check again</Button>}</Acts>
+                    </>
                   )}
                   {g?.slug === p.slug && !g.done && (
                     <>

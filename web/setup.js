@@ -10,7 +10,7 @@
 //   Parts     every part a build can use, grouped by what you make (web/setup-parts.js): a group opens
 //             its parts, a part opens what it is for, what powers it, what stops without it and its fix
 import { ic } from './icons.js'
-import { GROUPS, statesOf, tally } from './setup-parts.js'
+import { GROUPS, keyCommand, statesOf, tally } from './setup-parts.js'
 
 const PICTURE_ROWS = [
   { k: 'painted', label: 'Painted', note: 'About a minute each' },
@@ -73,7 +73,9 @@ export function makeSetup({ sw }) {
     const signing = g && !g.done ? `<p class="su-note">Finish in your browser.${g.code ? ` Code <b class="fg">${esc(g.code)}</b>` : ''}</p><div class="su-acts">${g.url ? `<a class="ui-btn ui-btn-outline ui-btn-sm" href="${esc(g.url)}" target="_blank" rel="noopener">Open</a>` : busy}<button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-signoff>Cancel</button></div>` : ''
     const one = p => {
       const head = `<div class="su-line"><span class="fg">${esc(p.name)}</span>${S.keyFor === p.slug || g?.slug === p.slug && !g.done ? '' : `<button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-signin="${esc(p.slug)}">Sign in</button>`}</div>`
-      const key = S.keyFor === p.slug ? `<div class="su-cmd"><input type="password" class="ui-input su-key" placeholder="API key" aria-label="${esc(p.name)} API key" autocomplete="off"><button type="button" class="ui-btn ui-btn-outline ui-btn-sm" data-savekey="${esc(p.slug)}">Save</button></div>` : ''
+      // a key is given to Hermes in the person's own terminal; Hermes asks for it, the studio never sees it
+      const cmd = keyCommand(p.slug)
+      const key = S.keyFor === p.slug ? `<div class="su-cmd"><code>${esc(cmd)}</code><button type="button" class="ui-btn ui-btn-ghost ui-btn-sm" data-copy="${esc(cmd)}">Copy</button></div><div class="su-acts"><button type="button" class="ui-btn ui-btn-outline ui-btn-sm" data-keyagain="${esc(p.slug)}">Check again</button></div>` : ''
       return `${head}${key}${g?.slug === p.slug ? signing : ''}`
     }
     const inner = S.more ? `<div class="su-others">${others.map(one).join('')}</div>` : ''
@@ -104,7 +106,7 @@ export function makeSetup({ sw }) {
   async function signIn(slug) {
     const p = S.opts?.providers.find(x => x.slug === slug)
     S.signError2 = ''
-    if (p?.sign === 'key') { S.keyFor = slug; draw(); dlg.body.querySelector('.su-key')?.focus(); return }
+    if (p?.sign === 'key') { S.keyFor = slug; draw(); return }
     S.keyFor = ''
     S.signing = { slug, url: '', code: '', done: null }
     draw()
@@ -129,12 +131,12 @@ export function makeSetup({ sw }) {
     }, 3000)
   }
 
-  async function saveKey(slug) {
-    const key = /** @type {HTMLInputElement|null} */ (dlg.body.querySelector('.su-key'))?.value || ''
-    if (!key.trim()) return
+  // Check again: ask Hermes afresh whether the provider is signed in now
+  async function keyAgain(slug) {
     S.signError2 = ''
-    const r = await api('/api/setup/models/signin', { slug, key }).catch(() => ({ ok: false, message: 'Hermes did not answer.' }))
-    if (r.ok) { S.keyFor = ''; if (r.options?.ok) S.opts = r.options } else S.signError2 = r.message || 'Hermes did not save the key.'
+    const r = await loadOptions(true)
+    if (r.providers?.find(x => x.slug === slug)?.signedIn) S.keyFor = ''
+    else S.signError2 = r.ok === false ? (r.message || 'Hermes did not answer.') : 'Not signed in yet.'
     draw()
   }
 
@@ -303,12 +305,10 @@ export function makeSetup({ sw }) {
     for (const b of dlg.body.querySelectorAll('[data-confirm]')) b.onclick = () => connect(b.dataset.confirm, true)
     on('[data-noask]', () => { S.ask = null; draw() })
     on('[data-moreprov]', () => { S.more = !S.more; draw() })
-    on('[data-savekey]', e => saveKey(e.currentTarget.dataset.savekey))
+    on('[data-keyagain]', e => keyAgain(e.currentTarget.dataset.keyagain))
     on('[data-signoff]', async () => { clearTimeout(polling); S.signing = null; draw(); await api('/api/setup/models/signin', { cancel: true }).catch(() => {}) })
     const q = /** @type {HTMLInputElement|null} */ (dlg.body.querySelector('.su-q'))
     if (q) q.oninput = () => { S.q = q.value; draw() }
-    const k = /** @type {HTMLInputElement|null} */ (dlg.body.querySelector('.su-key'))
-    if (k) k.onkeydown = e => { if (e.key === 'Enter') saveKey(S.keyFor) }
     // a redraw keeps the keyboard where it was
     if (focusQ) { const n = /** @type {HTMLInputElement|null} */ (dlg.body.querySelector('.su-q')); n?.focus({ preventScroll: true }); n?.setSelectionRange(caret, caret) }
     const again = focus && (focus.row ? `[data-row="${focus.row}"]` : focus.pg ? `[data-pg="${focus.pg}"]` : focus.pp ? `[data-pp="${focus.pp}"]` : focus.pic ? `[data-pic="${focus.pic}"]` : focus.sign ? `[data-sign="${focus.sign}"]` : null)

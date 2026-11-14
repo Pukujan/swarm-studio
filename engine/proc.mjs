@@ -82,11 +82,36 @@ export function stopTree(p, { ms = 5000, kill = treeKill } = {}) {
   })
 }
 
-// The one child that gets the server's whole environment: the server's own replacement, the same program
-// started again after its code changed on disk (server/server.mjs, replaceSelf). It is detached and keeps the
-// log the launcher gave this process.
-export function respawnSelf({ execPath = process.execPath, argv = process.argv.slice(1), env = process.env, cwd = process.cwd(), spawner = cp.spawn } = {}) {
-  const child = spawner(execPath, argv, { env, cwd, detached: true, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true })
+// What the server is started with: the launcher's own minimal environment (launcher.py _ensure_server), by name.
+// The server's replacement gets these and nothing else, so a server someone started by hand from a full shell
+// still hands its successor only what the launcher would (tests/selfreplace.test.mjs checks this list against
+// launcher.py, so the two never drift).
+export const SERVER_ENV = [
+  // KEEP_ENV: what the launcher keeps of Hermes's own environment
+  'PATH', 'HOME', 'TMPDIR', 'LANG', 'HERMES_HOME', 'SWARM_GODOT', 'GODOT', 'SWARM_IMAGE_SERVICE',
+  // what the launcher sets: the server's token and folders, and where Hermes's CLI and Python are
+  'SWARM_TOKEN', 'SWARM_RUNS_DIR', 'SWARM_DATA_DIR', 'SWARM_HERMES_BIN', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'SWARM_AGENTS',
+  // the plugin's own model key and its settings (KEY_ENV, KEY_SETTINGS)
+  'SWARM_STUDIO_API_KEY', 'SWARM_STUDIO_BASE_URL', 'SWARM_STUDIO_PLANNER_MODEL', 'SWARM_STUDIO_WORKER_MODEL', 'SWARM_STUDIO_REVIEWER_MODEL',
+  // the declared optional keys read through Hermes's secret scope (PASSED_KEYS; ElevenLabs as SWARM_ELEVENLABS_KEY)
+  'SWARM_ELEVENLABS_KEY', 'CKFF_API_KEY', 'CKFF_BASE_URL', 'CKFF_MODEL', 'MESHY_API_KEY', 'FISH_API_KEY', 'PEXELS_API_KEY',
+  'PEXELS_OCTO_LEASE', 'OCTO_SWARM_WS', 'OCTO_SWARM_WORKSPACE_ID', 'OCTO_BASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
+  'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'VERCEL_TOKEN', 'CLOUDFLARE_API_TOKEN', 'JEV_KEY'
+]
+// and, from a server started by hand (a developer, a test), the settings that say where it listens and writes, so
+// its replacement does not move to the default port or folders. Not secrets: names only, no key, token or secret.
+export const SERVER_SETTINGS = ['SWARM_PORT', 'SWARM_OUTPUT_DIR', 'SWARM_SERVER_IDLE_MIN']
+// and on Windows, the system folders the launcher keeps there
+const SERVER_WINDOWS = ['SYSTEMROOT', 'SYSTEMDRIVE', 'WINDIR', 'COMSPEC', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'APPDATA',
+  'LOCALAPPDATA', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'PROGRAMDATA', 'HOMEDRIVE', 'HOMEPATH', 'NVM_HOME', 'NVM_SYMLINK']
+export const serverEnv = (from = process.env, platform = process.platform) =>
+  pick([...SERVER_ENV, ...SERVER_SETTINGS, ...(platform === 'win32' ? SERVER_WINDOWS : [])], from)
+
+// The server's own replacement, the same program started again after its code changed on disk (server/server.mjs,
+// replaceSelf). It gets serverEnv() only, never the server's whole environment. It is detached and keeps the log
+// the launcher gave this process.
+export function respawnSelf({ execPath = process.execPath, argv = process.argv.slice(1), from = process.env, platform = process.platform, cwd = process.cwd(), spawner = cp.spawn } = {}) {
+  const child = spawner(execPath, argv, { env: serverEnv(from, platform), cwd, detached: true, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true })
   child.unref?.()
   return child
 }

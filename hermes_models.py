@@ -6,10 +6,18 @@ the picker shows what Hermes Desktop's own picker shows and a pick sets those sl
 - ``options_json()``  every provider Hermes knows, whether it is signed in, its models, and the two slots
 - ``slots_json()``    the two slots as they are now, without their credentials
 
-READ ONLY. Hermes has no public plugin API for its model list yet, so this reads it with the function its
-dashboard and Desktop picker use (hermes_cli/web_routers/models.py ``/api/model/options``). Everything that
-changes Hermes goes through its public CLI instead (server/setup.mjs: ``hermes config set``, ``hermes auth
-add``). It runs as a short-lived process under the profile's HERMES_HOME, not in the gateway.
+READ ONLY, and one import outside Hermes's public plugin API. Hermes v0.23.1 lists its public modules in
+hermes_cli/data/plugin_api.json (docs: developer-guide/plugins/public-api.md). ``hermes_cli.config`` is on it
+(``load_config``). The model list is not: no public module, no ``ctx`` method (``ctx.llm`` has only
+``complete`` and ``complete_structured``) and no machine-readable CLI (``hermes model`` is interactive only) gives
+it. The API server's ``GET /api/model/options`` does, but it is off unless the person turns the API server on
+and needs its bearer key, which this plugin will not read. So this reads the list with the one function that
+route, the dashboard and Desktop's picker all call: ``hermes_cli.inventory.build_model_options_payload``.
+Remove it when Hermes makes the list public. Everything that changes Hermes goes through its public CLI
+instead (server/setup.mjs: ``hermes config set`` for the two slots, ``hermes auth add --type oauth``), and a
+provider key is given to Hermes by the person in their own terminal (``hermes auth add <slug> --type
+api-key``); it never passes through here or the studio. It runs as a short-lived process under the
+profile's HERMES_HOME, not in the gateway.
 docs/engines/hermes-and-connections.md names it; tests/test_bridge.py keeps it read-only.
 """
 from __future__ import annotations
@@ -26,7 +34,8 @@ ENDPOINT = {"api_key", "api", "key_env", "api_key_env", "api_mode", "base_url"}
 
 
 def _sign(auth_type) -> str:
-    """How a provider signs in from the sheet: a pasted key, the browser, or only in Hermes itself."""
+    """How a provider signs in from the sheet: a key the person gives Hermes in their own terminal
+    (``hermes auth add <slug> --type api-key``), the browser, or only in Hermes itself."""
     kind = str(auth_type or "")
     if kind == "api_key":
         return "key"
@@ -53,15 +62,6 @@ def _slots(cfg: dict) -> dict:
     return out
 
 
-def _key_env(slug: str) -> str:
-    """The environment name Hermes keeps this provider's key under (its provider registry)."""
-    from hermes_cli.auth import PROVIDER_REGISTRY
-
-    p = PROVIDER_REGISTRY.get(slug)
-    names = list(getattr(p, "api_key_env_vars", None) or []) if p and getattr(p, "auth_type", "") == "api_key" else []
-    return str(names[0]) if names else ""
-
-
 def options_json(refresh: bool = False) -> dict:
     from hermes_cli.config import load_config
     from hermes_cli.inventory import build_model_options_payload, load_picker_context
@@ -76,14 +76,12 @@ def options_json(refresh: bool = False) -> dict:
         sign = "" if signed else _sign(r.get("auth_type"))
         if not signed and not sign:
             continue  # set up only in Hermes itself (cloud consoles, local servers)
+        if sign == "key" and not r.get("key_env"):
+            continue  # Hermes gives no key hint for it (``custom``: an endpoint first): Hermes's own setup covers it
         featured = _ids(r.get("featured_models"))
         models = featured + [m for m in _ids(r.get("models")) if m not in featured]
         row = {"slug": slug, "name": str(r.get("name") or slug), "signedIn": signed, "sign": sign,
                "current": bool(r.get("is_current")), "models": models[:MAX_MODELS]}
-        if sign == "key":
-            row["keyEnv"] = _key_env(slug)
-            if not row["keyEnv"]:
-                continue  # no key name to save it under: Hermes's own setup covers it
         rows.append(row)
     return {"ok": True, "main": {"provider": str(payload.get("provider") or ""), "model": str(payload.get("model") or "")},
             "slots": _slots(load_config()), "providers": rows}

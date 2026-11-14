@@ -52,7 +52,6 @@
 .su-pick.su-more { color: var(--ui-muted-foreground); }
 .su-toggle { align-self: flex-start; }
 .su-others { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
-.su-key { flex: 1; min-width: 0; }
 /* Parts (web/setup-parts.js): groups by what you make, then a part, then what it needs. A filled dot
    works, a ring is not set up, a dashed ring installs on first use, a ⚠ is not working. */
 .su-pgroups { display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) - 4px); overflow: hidden; }

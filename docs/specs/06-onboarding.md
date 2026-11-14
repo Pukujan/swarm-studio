@@ -59,13 +59,16 @@ The one primary action is **Start**, bottom right, fixed width.
   config, drops the canvas's own picks for those roles, and tests again. Hermes reads its config again when
   the file changes, so no restart.
 - **More providers** lists the providers that are not signed in, and the search box narrows them by name.
-  **Sign in** opens what that provider uses: a key box where a key is its only sign-in (saved where Hermes
-  keeps keys, sent on stdin, never shown again), or Hermes's own browser sign-in (`hermes auth add <provider>`;
-  the sheet shows its code and an **Open** link, and the list refreshes when Hermes says it is signed in).
+  **Sign in** opens what that provider uses. Where a key is its only sign-in: the command
+  `hermes auth add <provider> --type api-key` with **Copy**, and **Check again**. The person runs it in their
+  own terminal and Hermes asks for the key itself, hidden; the studio never sees the key and has no route that
+  takes one (owner, 2026-11-14, for the catalog review). Otherwise Hermes's own browser sign-in
+  (`hermes auth add <provider> --type oauth`, Hermes opens the browser; the sheet shows its code and an
+  **Open** link, and the list refreshes when Hermes says it is signed in).
   Providers Hermes sets up only in its own setup (cloud consoles, local servers, custom endpoints) are not
   listed; **Let Hermes set this up** covers them.
-- The list is read by `hermes_models.py`, run in Hermes's own Python; the pick and the key are Hermes's public
-  CLI (`hermes config set`). [hermes-and-connections.md](../engines/hermes-and-connections.md) names why the
+- The list is read by `hermes_models.py`, run in Hermes's own Python; the pick is Hermes's public CLI
+  (`hermes config set`). [hermes-and-connections.md](../engines/hermes-and-connections.md) names why the
   list reads Hermes internals and what keeps that read-only.
 - When the screen opens, the server makes one tiny call to each (a few tokens; `POST /api/setup/models`).
   A ✓ when both answer. The check is kept for ten minutes, so opening the screen again costs nothing.
@@ -77,8 +80,8 @@ The one primary action is **Start**, bottom right, fixed width.
     elsewhere the command to copy). The row tests again when the person comes back to the window.
   - Hermes can't read its keys, or Swarm Studio was updated: "Restart Hermes." and **Test again**.
   - Hermes not connected, the model busy or slow: **Test again**.
-  The plugin never stores a model key (catalog rule 11): a key pasted under More providers goes straight to
-  Hermes's key store, and the plugin's own files never hold it.
+  The plugin never stores or sees a model key (catalog rule 11): under More providers the person gives the key
+  to Hermes in their own terminal.
 - While the last check failed, the avatar keeps a small red dot and its menu's **Setup** item an ⚠, so closing
   the sheet never hides the problem. The server keeps the result (`modelsOk` in setup.json) until a check passes.
 - ☰ → Models on the canvas shows the planner and builder models Hermes uses, each with **Change**, which opens
