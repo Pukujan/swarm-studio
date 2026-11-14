@@ -2,7 +2,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, MODE_LINE, modeMenuKey, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
+import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, MODE_LINE, MODE_PLACEHOLDER, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
+import { chipMenuKey, builderModels, realModel, NO_MODEL_NAME } from '../web/composer.js'
+
+// the send button is an arrow: what it sends to is its accessible name
+const sendFake = () => ({ label: 'Send: Build', setAttribute(k, v) { if (k === 'aria-label') this.label = v } })
 
 test('a typed switch is the whole message, or a slash with the rest to send', () => {
   assert.deepEqual(CHAT_MODES, ['ask', 'plan', 'build', 'fix'])
@@ -58,7 +62,7 @@ const fake = (over = {}) => {
     app: () => over.appv || { run: null }, appAsk: async t => calls.push(['appAsk', t]), talkStart: o => calls.push(['talkStart', o.text, o.kind, o.from, o.blank]),
     next: v => calls.push(['next', v]), hermesReady: async () => null, hermesSays: () => {}, media: () => null, setup: a => calls.push(['setup', a]), resume: r => calls.push(['resume', r])
   }
-  mountChatMode({ select: { value: 'build', hidden: false, addEventListener() {} }, button: { textContent: 'Build' }, talking: () => !!over.talking })
+  mountChatMode({ select: { value: 'build', hidden: false, addEventListener() {} }, button: sendFake(), talking: () => !!over.talking })
   setChatMode('build')
   return { h, calls, send: text => { h.box.value = text; return modeSend(h) } }
 }
@@ -71,16 +75,16 @@ test('Build mode and slash commands are left to the chat; the switch changes the
   assert.deepEqual(c.calls, [])
   assert.equal(c.h.box.value, '/fix make the hero darker')
   assert.equal(await c.send('ask mode'), true)
-  assert.deepEqual([chatMode.now, chatMode.button.textContent, chatMode.select.value, c.h.box.value], ['ask', 'Ask', 'ask', ''])
+  assert.deepEqual([chatMode.now, chatMode.button.label, chatMode.select.value, c.h.box.value], ['ask', 'Send: Ask', 'ask', ''])
   // a slash command still runs in any mode
   assert.equal(await c.send('/review'), false)
   // /build with a brief: the mode is Build and the brief is left in the box for the chat to send
   assert.equal(await c.send('/build a bakery site'), false)
-  assert.deepEqual([chatMode.now, chatMode.button.textContent, c.h.box.value], ['build', 'Build', 'a bakery site'])
+  assert.deepEqual([chatMode.now, chatMode.button.label, c.h.box.value], ['build', 'Send: Build', 'a bakery site'])
   // while a talk has the box the button says Send, whatever the mode, and gets its word back after
   const t = fake({ talking: true })
   setChatMode('plan')
-  assert.equal(chatMode.button.textContent, 'Send')
+  assert.equal(chatMode.button.label, 'Send')
 })
 
 test('Ask: a website asks the planner and leaves nothing open; a built app asks dyad; a building one, the crew', async () => {
@@ -133,7 +137,7 @@ test('Fix asks the doctor, shows its steps as buttons, and a typed yes takes the
   global.document = { createElement: () => ({ append() {}, remove() {}, set className(v) {}, set textContent(v) {} }) }
   try {
     assert.equal(await c.send('/fix'), true)
-    assert.equal(chatMode.button.textContent, 'Fix')
+    assert.equal(chatMode.button.label, 'Send: Fix')
     assert.equal(await c.send('why did the picture fail?'), true)
     assert.deepEqual(c.calls.filter(x => x[0] === 'api'), [['api', '/api/doctor', { text: 'why did the picture fail?', run: 'r1' }]])
     assert.deepEqual(c.calls.filter(x => x[0] === 'wait' || x[0] === 'bot'), [['wait', 'Checking the Studio'], ['bot', 'Pictures are out of quota.']])
@@ -150,21 +154,30 @@ test('Fix asks the doctor, shows its steps as buttons, and a typed yes takes the
   } finally { delete global.document; setChatMode('build') }
 })
 
-test('the page has the switch, a menu button that says the name only, and loads the mode file before the chat', () => {
+test('the page has one row: mode, agents, model, send; names only, and the files load in order', () => {
   const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8')
-  const sel = html.match(/<button type="button" id="chat-mode"[^>]*>([\s\S]*?)<\/button>/)
-  assert.ok(sel, 'the mode button is in the chat box')
+  const row = html.match(/<form id="brief-form"[\s\S]*?<div class="row">([\s\S]*?)<\/div>/)[1]
+  assert.deepEqual([...row.matchAll(/<(?:button|select)[^>]* id="([\w-]+)"|<button type="(submit)"/g)].map(m => m[1] || m[2]), ['chat-mode', 'agents-btn', 'agents', 'build-model', 'submit'])
+  const sel = row.match(/<button type="button" id="chat-mode"[^>]*>([\s\S]*?)<\/button>/)
   assert.match(sel[0], /value="build"/)
-  assert.match(sel[0], /aria-haspopup="menu"/)
-  assert.match(sel[0], /aria-expanded="false"/)
   // its accessible name holds the word it shows
   assert.match(sel[0], /aria-label="Mode: Build"/)
   assert.equal(sel[1], '<span class="t">Build</span>')
-  assert.doesNotMatch(html, /<select id="chat-mode"/)
-  assert.doesNotMatch(sel[0], /title=|data-tip/)
+  // every chip opens a menu; the count's own select is kept only as the value the build reads
+  for (const id of ['chat-mode', 'agents-btn', 'build-model']) assert.match(row.match(new RegExp(`<button type="button" id="${id}"[^>]*>`))[0], /aria-haspopup="menu" aria-expanded="false"/)
+  assert.match(row, /<select id="agents" hidden /)
+  // the send button is an arrow with a name, so the row never says Build twice
+  const send = row.match(/<button type="submit"[^>]*>([\s\S]*?)<\/button>/)
+  assert.match(send[0], /aria-label="Send: Build"/)
+  assert.doesNotMatch(send[1].replace(/<svg[\s\S]*<\/svg>/, ''), /\S/)
+  // a role's name is never shown as a model
+  assert.doesNotMatch(row, />\s*(worker|planner)\s*</i)
+  assert.doesNotMatch(row, /title=|data-tip/)
   const page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')
   const list = page.match(/joinModules\(webDir, \['route\.js'[^\]]*\]/)[0]
   assert.ok(list.indexOf("'chatmode.js'") > list.indexOf("'icons.js'") && list.indexOf("'chatmode.js'") < list.indexOf("'canvas/loop.js'"))
+  assert.ok(list.indexOf("'composer.js'") > 0 && list.indexOf("'composer.js'") < list.indexOf("'chatmode.js'"))
+  assert.equal(page.split("'composer.js'").length, 2, 'listed once')
 })
 
 test('every mode has one short plain line, and the slash list says the same', () => {
@@ -181,31 +194,75 @@ test('every mode has one short plain line, and the slash list says the same', ()
   for (const m of ['ask', 'plan', 'build']) assert.ok(loop.includes(`['${m}', `) && loop.includes(`MODE_LINE.${m}]`), m)
   assert.match(loop, /\['fix', '\[what to change\]', `\$\{MODE_LINE\.fix\} With words: /)
   const css = readFileSync(new URL('../web/canvas.css', import.meta.url), 'utf8')
-  assert.doesNotMatch(css.match(/\.mode-pop[^\n]*/g).join('\n'), /animation|transition/)
+  assert.doesNotMatch(css.match(/\.chip-pop[^\n]*/g).join('\n'), /animation|transition/)
 })
 
 test('the open menu: arrows go round, Home and End jump, other keys are left alone', () => {
-  assert.equal(modeMenuKey('ArrowDown', 0, 4), 1)
-  assert.equal(modeMenuKey('ArrowDown', 3, 4), 0)
-  assert.equal(modeMenuKey('ArrowUp', 0, 4), 3)
-  assert.equal(modeMenuKey('ArrowUp', -1, 4), 2)
-  assert.equal(modeMenuKey('Home', 2, 4), 0)
-  assert.equal(modeMenuKey('End', 1, 4), 3)
-  assert.equal(modeMenuKey('Enter', 1, 4), -1)
-  assert.equal(modeMenuKey('a', 1, 4), -1)
-  assert.equal(modeMenuKey('ArrowDown', 0, 0), -1)
+  assert.equal(chipMenuKey('ArrowDown', 0, 4), 1)
+  assert.equal(chipMenuKey('ArrowDown', 3, 4), 0)
+  assert.equal(chipMenuKey('ArrowUp', 0, 4), 3)
+  assert.equal(chipMenuKey('ArrowUp', -1, 4), 2)
+  assert.equal(chipMenuKey('Home', 2, 4), 0)
+  assert.equal(chipMenuKey('End', 1, 4), 3)
+  assert.equal(chipMenuKey('Enter', 1, 4), -1)
+  assert.equal(chipMenuKey('a', 1, 4), -1)
+  assert.equal(chipMenuKey('ArrowDown', 0, 0), -1)
 })
 
 test('the mode button is painted with the mode: its value, its word and its name', () => {
   const attrs = {}, word = { textContent: 'Build' }
   const button = { value: 'build', hidden: false, addEventListener() {}, querySelector: q => (q === '.t' ? word : null), setAttribute: (k, v) => { attrs[k] = v } }
-  mountChatMode({ select: button, button: { textContent: 'Build' }, talking: () => false })
+  mountChatMode({ select: button, button: sendFake(), talking: () => false })
   try {
     setChatMode('fix')
-    assert.deepEqual([button.value, word.textContent, attrs['aria-label'], chatMode.button.textContent], ['fix', 'Fix', 'Mode: Fix', 'Fix'])
+    assert.deepEqual([button.value, word.textContent, attrs['aria-label'], chatMode.button.label], ['fix', 'Fix', 'Mode: Fix', 'Send: Fix'])
     // a hosted studio has no switch
     const off = { value: 'build', hidden: false, addEventListener() { throw new Error('not wired') } }
-    mountChatMode({ select: off, button: { textContent: 'Build' }, talking: () => false, off: true })
+    mountChatMode({ select: off, button: sendFake(), talking: () => false, off: true })
     assert.equal(off.hidden, true)
   } finally { mountChatMode({ select: null, button: null, talking: () => false }); setChatMode('build') }
+})
+
+test('the box says what the mode will do, the room keeps its words in Build, and agents is off where nothing is built', () => {
+  const box = { placeholder: 'Describe a product' }, agents = { disabled: false }
+  let talking = false
+  mountChatMode({ select: { value: 'build', hidden: false }, button: sendFake(), talking: () => talking, box, agents })
+  try {
+    setChatMode('ask')
+    assert.deepEqual([box.placeholder, agents.disabled], [MODE_PLACEHOLDER.ask, true])
+    setChatMode('plan')
+    assert.deepEqual([box.placeholder, agents.disabled], [MODE_PLACEHOLDER.plan, false])
+    // a room writes its own while Fix is on: it is kept for Build
+    setChatMode('fix')
+    box.placeholder = 'Change the app'
+    setChatMode('fix')
+    assert.deepEqual([box.placeholder, agents.disabled], [MODE_PLACEHOLDER.fix, true])
+    setChatMode('build')
+    assert.deepEqual([box.placeholder, agents.disabled], ['Change the app', false])
+    // a talk's own placeholder is left alone
+    setChatMode('plan'); talking = true; box.placeholder = 'Tell Hermia…'; setChatMode('ask')
+    assert.equal(box.placeholder, 'Tell Hermia…')
+    for (const p of Object.values(MODE_PLACEHOLDER)) assert.ok(p.split(/\s+/).length <= 6, p)
+  } finally { mountChatMode({ select: null, button: null, talking: () => false }); setChatMode('build') }
+})
+
+test('the model chip: real names only, never a role name; the planner only when it is another model', () => {
+  for (const m of ['worker', 'planner', 'reviewer', 'Worker', 'worker:gpt-9', 'off', '', null, undefined, 7]) assert.equal(realModel(m), '', String(m))
+  assert.equal(realModel(' nous/hermes-4 '), 'nous/hermes-4')
+  const names = r => r.items.map(i => i.name)
+  // under Hermes with nothing picked: the server only knows the role names; the slot's real name shows
+  let r = builderModels({ picked: null, base: 'worker', slot: 'anthropic/claude-sonnet-5', plannerBase: 'planner', plannerSlot: 'anthropic/claude-sonnet-5', recent: [] })
+  assert.deepEqual([r.now, r.name, names(r)], ['', 'claude-sonnet-5', ['claude-sonnet-5', 'Other…']])
+  // the planner runs on another model: it is offered, by its own name
+  r = builderModels({ base: 'worker', slot: 'a/builder-1', plannerBase: 'planner', plannerSlot: 'b/thinker-2', recent: ['worker', 'planner', 'c/old-3'] })
+  assert.deepEqual(names(r), ['builder-1', 'old-3', 'thinker-2', 'Other…'])
+  // the real name cannot be known: one plain name, nothing that reads as a mode or a role
+  r = builderModels({ base: 'worker', plannerBase: 'planner', plannerPicked: 'planner' })
+  assert.deepEqual([r.name, names(r)], [NO_MODEL_NAME, [NO_MODEL_NAME, 'Other…']])
+  assert.doesNotMatch(names(r).join(' '), /worker|planner|build/i)
+  // a pick is what the chip says, and is marked in the list; Other… is an action, not a choice
+  r = builderModels({ picked: 'x/fast-1', base: 'cb/deepseek-v4.1-flash', plannerBase: 'cb/deepseek-v4.1-flash', recent: ['x/fast-1'] })
+  assert.deepEqual([r.now, r.name, names(r)], ['x/fast-1', 'fast-1', ['deepseek-v4.1-flash', 'fast-1', 'Other…']])
+  assert.deepEqual(r.items.map(i => i.radio !== false), [true, true, false])
+  assert.deepEqual(builderModels().items.map(i => i.value), ['', '__other'])
 })

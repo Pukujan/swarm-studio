@@ -1,15 +1,15 @@
 // @ts-check
-// The chat's modes (docs/specs/46-chat-modes.md): Ask, Plan, Build, Fix. One menu button in the chat box (its
-// open menu says what each mode does), and the
-// same switch typed (/ask, /plan, /build, /fix, or "switch to ask mode"). The mode lasts for this browser
+// The chat's modes (docs/specs/46-chat-modes.md): Ask, Plan, Build, Fix. One chip in the chat box (its open
+// menu says what each mode does: web/composer.js chipMenu), and the same switch typed (/ask, /plan, /build, /fix, or "switch to ask mode"). The mode lasts for this browser
 // session and is not saved with the project.
 //   Ask    an answer, and nothing changes: a built app or game is asked through dyad's own ask mode (the crew
 //          answers while it builds), a website or an empty chat through the planner
 //   Plan   the planner's talk: nothing is built until the person presses Build under the brief
 //   Build  what the chat always did (web/canvas/loop.js): this file does not touch it
 //   Fix    the Studio's own working parts: what failed, whose fault, the one next step (engine/doctor.mjs)
-// This file imports only the icons, so node can test the pure parts; the canvas hands it what it needs (h).
+// This file imports only the icons and the chip menu, so node can test the pure parts; the canvas hands it what it needs (h).
 import { cursor } from './icons.js'
+import { chipMenu } from './composer.js'
 
 export const CHAT_MODES = ['ask', 'plan', 'build', 'fix']
 const MODE_WORD = { ask: 'Ask', plan: 'Plan', build: 'Build', fix: 'Fix' }
@@ -54,26 +54,36 @@ export const MODE_LINE = {
   build: 'The crew builds or changes what you describe.',
   fix: 'Checks the Studio itself: what failed, what to do.'
 }
-// The open menu's keys -> the option that takes the focus (at: the one that has it, n: how many), or -1.
-/** @param {string} key  @param {number} at  @param {number} n */
-export function modeMenuKey(key, at, n) {
-  if (n < 1) return -1
-  if (key === 'ArrowDown') return (at + 1) % n
-  if (key === 'ArrowUp') return (at + n - 1) % n
-  if (key === 'Home' || key === 'PageUp') return 0
-  if (key === 'End' || key === 'PageDown') return n - 1
-  return -1
-}
+// What the box says while empty, per mode (Build keeps the room's own words: "Describe a product…", "Change
+// the app…"); the cheapest way to say what sending will do.
+export const MODE_PLACEHOLDER = { ask: 'Ask the crew…', plan: 'Say what to plan…', fix: 'Say what went wrong…' }
+const MODE_PLACEHOLDERS = Object.values(MODE_PLACEHOLDER)
+// The agents count does nothing in these modes: nothing is built
+const NO_BUILDERS = ['ask', 'fix']
 
 // ---------- the switch (the browser from here on)
-// select: the mode button (it keeps the old select's name: its value is the mode); menu: its open menu
-/** @type {{ now: string, asked: { who: string, text: string }[], offer: any[], select: any, menu: any, button: any, talking: () => boolean }} */
-export const chatMode = { now: 'build', asked: [], offer: [], select: null, menu: null, button: null, talking: () => false }
-// The send button has one writer: its word is the mode's, or Send while a talk has the box.
+// select: the mode chip (it keeps the old select's name: its value is the mode); button: the send button;
+// box: the text box; agents: the agents chip; roomPh: the room's own placeholder, kept while a mode's shows
+/** @type {{ now: string, asked: { who: string, text: string }[], offer: any[], select: any, button: any, box: any, agents: any, roomPh: string, talking: () => boolean }} */
+export const chatMode = { now: 'build', asked: [], offer: [], select: null, button: null, box: null, agents: null, roomPh: '', talking: () => false }
+// The send button is an arrow, like the "Tell the crew…" bar's; its name says what it sends to (the mode, or
+// plain Send while a talk has the box). One writer.
 export function paintSend() {
-  if (chatMode.button) chatMode.button.textContent = chatMode.talking() ? 'Send' : modeWord(chatMode.now)
+  chatMode.button?.setAttribute?.('aria-label', chatMode.talking() ? 'Send' : `Send: ${modeWord(chatMode.now)}`)
+  paintPlaceholder()
 }
-// the mode button says the mode's name, and the open menu marks it
+// The box's placeholder follows the mode. Rooms and the talk write it too (web/canvas/rooms.js, talk.js):
+// theirs is remembered and comes back in Build; a talk's own ("Tell Hermia…") is left alone.
+function paintPlaceholder() {
+  const box = chatMode.box
+  if (!box || chatMode.select?.hidden) return
+  const has = String(box.placeholder || ''), ours = MODE_PLACEHOLDERS.includes(has)
+  if (chatMode.talking() || /^Tell Hermia/.test(has)) return
+  if (!ours) chatMode.roomPh = has
+  const want = MODE_PLACEHOLDER[/** @type {keyof typeof MODE_PLACEHOLDER} */ (chatMode.now)] || chatMode.roomPh
+  if (want && want !== has) box.placeholder = want
+}
+// the mode chip says the mode's name; the agents chip is off where nothing is built
 function paintModeButton() {
   const b = chatMode.select
   if (!b) return
@@ -81,7 +91,7 @@ function paintModeButton() {
   const word = b.querySelector?.('.t')
   if (word) word.textContent = modeWord(chatMode.now)
   b.setAttribute?.('aria-label', `Mode: ${modeWord(chatMode.now)}`)
-  for (const o of chatMode.menu?.querySelectorAll('[data-mode]') || []) o.setAttribute('aria-checked', String(o.dataset.mode === chatMode.now))
+  if (chatMode.agents) chatMode.agents.disabled = NO_BUILDERS.includes(chatMode.now)
 }
 export function setChatMode(mode) {
   if (!CHAT_MODES.includes(mode)) return
@@ -90,78 +100,19 @@ export function setChatMode(mode) {
   paintModeButton()
   paintSend()
 }
-let modeMenuOff = /** @type {(() => void) | null} */ (null)
-function modeMenuClose(focus = false) {
-  const menu = chatMode.menu, b = chatMode.select
-  if (!menu || menu.hidden) return
-  menu.hidden = true
-  b.setAttribute('aria-expanded', 'false')
-  modeMenuOff?.()
-  modeMenuOff = null
-  if (focus) b.focus({ preventScroll: true })
-}
-// The menu, made on its first opening: each mode's name and, under it, its line (MODE_LINE).
-function modeMenuMake() {
-  const menu = document.createElement('div')
-  menu.className = 'mode-pop'
-  menu.setAttribute('role', 'menu')
-  menu.setAttribute('aria-label', 'Mode')
-  menu.hidden = true
-  for (const mode of CHAT_MODES) {
-    const o = document.createElement('button')
-    o.type = 'button'
-    o.tabIndex = -1
-    o.dataset.mode = mode
-    o.setAttribute('role', 'menuitemradio')
-    const name = document.createElement('b'), line = document.createElement('span')
-    name.textContent = modeWord(mode)
-    line.textContent = MODE_LINE[/** @type {keyof typeof MODE_LINE} */ (mode)]
-    o.append(name, line)
-    menu.append(o)
-  }
-  menu.addEventListener('click', e => {
-    const o = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-mode]'))
-    if (!o) return
-    setChatMode(String(o.dataset.mode))
-    modeMenuClose(true)
-  })
-  menu.addEventListener('keydown', e => {
-    // Tab leaves the menu: it closes, and the focus goes on from the button
-    if (e.key === 'Tab') return modeMenuClose(true)
-    const all = /** @type {HTMLElement[]} */ ([...menu.querySelectorAll('[data-mode]')])
-    const to = modeMenuKey(e.key, all.indexOf(/** @type {HTMLElement} */ (document.activeElement)), all.length)
-    if (to < 0) return
-    e.preventDefault()
-    all[to].focus()
-  })
-  document.body.append(menu)
-  return menu
-}
-function modeMenuOpen() {
-  const b = chatMode.select
-  const menu = chatMode.menu || (chatMode.menu = modeMenuMake())
-  paintModeButton()
-  menu.hidden = false
-  b.setAttribute('aria-expanded', 'true')
-  // fixed to the button and kept on screen: above it (the chat box is at the bottom), below when there is no room
-  const r = b.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight
-  const y = r.top - 6 - h
-  menu.style.left = `${Math.round(Math.max(8, Math.min(innerWidth - w - 8, r.right - w)))}px`
-  menu.style.top = `${Math.round(y < 8 ? Math.min(innerHeight - h - 8, r.bottom + 6) : y)}px`
-  // Esc and a click outside close it, like every panel (web/ui.js); Esc hands the focus back to the button
-  // @ts-ignore
-  modeMenuOff = window.SwarmUI?.layer(menu, why => modeMenuClose(why === 'esc'), { extra: [b] }) || null
-  ;(menu.querySelector('[aria-checked="true"]') || menu.querySelector('[data-mode]')).focus({ preventScroll: true })
-}
-// select: the mode button; button: the form's send button; talking(): a talk has the box (web/canvas/talk.js)
-export function mountChatMode({ select, button, talking, off = false }) {
-  Object.assign(chatMode, { select, button, talking })
+// select: the mode chip; button: the form's send button; talking(): a talk has the box (web/canvas/talk.js);
+// box: the text box; agents: the agents chip
+export function mountChatMode({ select, button, talking, box = null, agents = null, off = false }) {
+  Object.assign(chatMode, { select, button, talking, box, agents, roomPh: '' })
   if (!select) return
   if (off) { select.hidden = true; return }
-  // (the button already carries the first mode's word; talking() is not asked while the page is still loading)
+  // (talking() is not asked while the page is still loading: the button already carries the first mode's name)
   paintModeButton()
-  select.addEventListener('click', () => (chatMode.menu && !chatMode.menu.hidden ? modeMenuClose() : modeMenuOpen()))
-  select.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!chatMode.menu || chatMode.menu.hidden) modeMenuOpen() } })
+  if (!select.addEventListener || typeof document === 'undefined') return
+  // its open menu: each mode's name and, under it, its line
+  chipMenu(select, { label: 'Mode', items: () => CHAT_MODES.map(m => ({ value: m, name: modeWord(m), line: MODE_LINE[/** @type {keyof typeof MODE_LINE} */ (m)] })), value: () => chatMode.now, pick: setChatMode })
+  // a room that writes its placeholder while Ask, Plan or Fix is on: the mode's comes back over it
+  if (box) new MutationObserver(() => paintPlaceholder()).observe(box, { attributes: true, attributeFilter: ['placeholder'] })
 }
 
 // A wait in the chat is a crew member at work (owner, 2026-11-13): their cursor, their name and what they

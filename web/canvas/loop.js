@@ -2,6 +2,7 @@
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
 import { modeSend, mountChatMode, MODE_LINE } from '../chatmode.js'
+import { mountAgentsChip } from '../composer.js'
 import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api, $, BOOT } from './core.js'
 import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage, slotFor } from './deck.js'
@@ -398,7 +399,9 @@ const modeHelp = {
   // @ts-ignore
   setup: a => window.SwarmSetup?.open(...a)
 }
-mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, off: !!BOOT.hosted })
+mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, box: els.brief, agents: $('#agents-btn'), off: !!BOOT.hosted })
+// @ts-ignore
+mountAgentsChip({ select: els.agentsSel, button: $('#agents-btn') })
 async function sendDock() {
   if (!nextRoute && await modeSend(modeHelp)) return
   const brief = els.brief.value.trim()
