@@ -54,6 +54,12 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
     const opts = await brandOptions({ brief, chat: model() })
     return store.update(id, chat => {
       chat.brand = { brief, story: opts.story, palettes: opts.palettes, types: opts.types, suggest: opts.suggest || [], pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null }
+      // what the person chose themselves stays through a new brief: a reference's look (Use this look) and
+      // options made from their own words, still picked
+      const kept = { p: (have?.palettes || []).filter(x => x.by === 'look' || x.by === 'person'), t: (have?.types || []).filter(x => x.by === 'look' || x.by === 'person') }
+      if (kept.p.length) { chat.brand.palettes.unshift(...kept.p); if (kept.p.some(x => x.id === have.pick?.palette)) chat.brand.pick.palette = have.pick.palette }
+      if (kept.t.length) { chat.brand.types.unshift(...kept.t); if (kept.t.some(x => x.id === have.pick?.type)) chat.brand.pick.type = have.pick.type }
+      if (kept.p.length && have.radius) chat.brand.radius = have.radius
     }).then(view)
   }
 
@@ -146,7 +152,12 @@ export function brandRoutes({ chats, model = () => null, projectBrands = null })
       body(req).then(input => {
         if (!pm[2]) {
           const brief = String(input.brief || '').trim().slice(0, 4000)
-          if (!brief) throw bad('a brief is needed')
+          // A project with no idea yet still gets a sheet to pick from: the built-in palettes and pairings, with
+          // no model call. (It opened blank with "a brief is needed".) Once there is an idea, the sheet is made for it.
+          if (!brief) {
+            if (rec.brand) return view(rec)
+            return brandOptions({ brief: '', chat: null }).then(opts => projectBrands.update(pm[1], chat => { chat.brand = { brief: '', story: { ...opts.story, pages: [] }, palettes: opts.palettes, types: opts.types, suggest: opts.suggest || [], pick: { palette: opts.palettes[0]?.id || null, type: opts.types[0]?.id || null }, radius: '12px', made: Date.now(), lockedAt: null } })).then(view)
+          }
           return fill(projectBrands, pm[1], brief)
         }
         // "Use this look" on a project with no sheet yet: one is made from the built-in options, with no model

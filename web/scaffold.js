@@ -17,6 +17,8 @@ import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
 import { layerTree, layerSheet } from './layers.js'
 
+// what a project's builds use for pictures (web/setup.js's three)
+const PICS = { painted: 'Painted', stock: 'Stock photos', drawn: 'Drawn' }
 const STEP_NAME = { brand: 'Brand', references: 'References', assets: 'Assets', plan: 'Plan', proposal: 'Lock' }
 const TAKES = 3
 const STATE_NAME = { empty: 'Empty', started: 'Started', done: 'Done', skipped: 'Skipped' }
@@ -26,7 +28,7 @@ const ROLE_NAME = { pack: 'Brand kit' }
 
 export function makeScaffold({ sw, C, root }) {
   const esc = sw.esc
-  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, talked: null, cards: new Map(), takes: null }
+  const A = { on: false, pid: null, d: null, sel: null, framed: false, busy: false, wantsBuild: false, talked: null, cards: new Map(), takes: null }
 
   const bd = makeBoard({ root, cls: 'project plan scaffold', label: 'Studio', fit: [0.35, 1], on: () => A.on, selected: () => !!A.sel, clear: () => select(null) })
   const { world, insp } = bd
@@ -199,9 +201,8 @@ export function makeScaffold({ sw, C, root }) {
         parts.push(sec('plan', cards.map(x => card(x.key, x.name, look(x), x.render ? '' : `<b>${esc(x.name)}</b>`)).join(''), `sc-plan-${k.kind}`))
       }
     }
-    // The board (the owner, on the game's Plan board: "it looks better and much easy to track"): the idea and
-    // what is set so far as fact cards at the top left, the pages under them, and the look, references and
-    // assets in a second column. A fact card goes to its step.
+    // The board (the owner, on the game's Plan board: "it looks better and much easy to track"): each step a
+    // section, in rows; Lock, last, holds the idea and what is set so far as fact cards. A fact card goes to its step.
     const on = s => s in d.studio.steps
     const fact = (step, name, value, extra = '') => `<div class="ab pcard sc-fact" data-key="fact:${step}:${name}" tabindex="0" role="button" aria-label="${name}"><b>${name}</b><span>${esc(value)}</span>${extra}</div>`
     // with no brand sheet yet, a built project shows the type and accent its newest version has
@@ -209,17 +210,23 @@ export function makeScaffold({ sw, C, root }) {
     const L = look(d.brand), seen = d.refs.find(r => r.look?.state === 'ready')?.look
     const nPlan = [...A.cards.values()].filter(x => !x.add && x.cls !== 'sc-add').length
     const facts = [
-      on('plan') && k.plan && fact('plan', k.kind === 'site' ? 'Pages' : 'Plan', String(nPlan)),
+      on('plan') && k.plan && fact('plan', k.kind === 'site' ? 'Pages' : 'Plan', nPlan || k.kind !== 'site' ? String(nPlan) : 'Crew decides'),
       on('brand') && fact('brand', 'Type', L?.heading || was?.heading || 'Not set'),
       on('brand') && fact('brand', 'Accent', L?.accent || was?.accent || 'Not set', L?.accent || was?.accent ? `<i class="sc-fsw" style="background:${esc(L?.accent || was.accent)}"></i>` : ''),
       on('references') && fact('references', 'References', String(d.refs.length)),
       on('assets') && fact('assets', 'Assets', String(d.assets.length)),
+      k.kind === 'site' && fact('pictures', 'Pictures', PICS[d.studio.kit?.pictures] || 'Not chosen'),
       seen?.words?.motion && fact('references', 'Motion', seen.words.motion),
       seen?.words?.threeD && fact('references', '3D', 'Flat stand-in'),
     ].filter(Boolean).join('')
-    const idea = sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', `<b>Idea</b><span>${esc(d.studio.idea)}</span>`) + facts, 'sc-facts')
-    const left = parts.filter(p => /data-sec="(plan|takes)"/.test(p.slice(0, 120))), right = parts.filter(p => !left.includes(p))
-    world.innerHTML = `<div class="col">${idea}${left.join('')}</div>${right.length ? `<div class="col">${right.join('')}</div>` : ''}`
+    // an empty idea says what to do (the chat asks the same); pressing it goes to the chat box
+    const ideaText = d.studio.idea ? `<span>${esc(d.studio.idea)}</span>` : '<span class="sc-none">Tell Hermia what you are making</span>'
+    const lock = sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', `<b>Idea</b>${ideaText}`) + facts, 'sc-facts')
+    // Read like the steps: left to right, then the next row (the owner: "shouldnt things go from left to right
+    // and then row to row?"). Row 1: Brand, References, Assets. Row 2: Plan, then Lock, the summary, last.
+    const is = (/** @type {string} */ p, /** @type {string} */ re) => new RegExp(`data-sec="(${re})"`).test(p.slice(0, 120))
+    const rows = [parts.filter(p => is(p, 'takes')), parts.filter(p => is(p, 'brand|references|assets')), [...parts.filter(p => is(p, 'plan')), lock]].filter(r => r.length)
+    world.innerHTML = `<div class="col">${rows.map(r => `<div class="sc-row">${r.join('')}</div>`).join('')}</div>`
     // the kit draws its own cards
     for (const [key, x] of A.cards) { const el = world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`); if (el) { x.render?.(el, c); if (A.sel === key) el.insertAdjacentHTML('beforeend', sel(key)) } }
     bd.applyCam()
@@ -255,7 +262,7 @@ export function makeScaffold({ sw, C, root }) {
   }
   const cardEl = key => world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`)
   // what the inspector opens on (the Brand card opens the brand sheet instead)
-  const selectable = key => A.cards.has(key) || /^(ref|asset|lock|take):/.test(key)
+  const selectable = key => A.cards.has(key) || /^(ref|asset|lock|take|pics):/.test(key)
   function renderLayers() {
     if (!A.d) { tree.replaceChildren(); return }
     layerTree(tree, layerGroups(), {
@@ -352,7 +359,7 @@ export function makeScaffold({ sw, C, root }) {
     const [part, id] = key.split(':')
     const x = A.cards.get(key)
     const pack = part === 'take' ? A.takes?.packs.find(p => p.slug === id) : null
-    const name = x?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? A.d.refs.find(r => r.id === id)?.name : part === 'asset' ? A.d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : '')
+    const name = x?.name || pack?.name || (part === 'step' ? STEP_NAME[id] : '') || (part === 'ref' ? A.d.refs.find(r => r.id === id)?.name : part === 'asset' ? A.d.assets.find(a => a.id === id)?.name : part === 'lock' ? 'Idea' : part === 'pics' ? 'Pictures' : '')
     if (key === 'ref:link') return addLinkForm()
     if (!name) return select(null)
     insp.innerHTML = `<h3><span>${esc(name)}</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="sc-body"></div>`
@@ -401,6 +408,18 @@ export function makeScaffold({ sw, C, root }) {
       }
       return
     }
+    // Pictures: what this project's builds use, chosen here (and asked before the first build): painted by the
+    // image model, stock photos, or drawn as SVG. The same three as Setup; the choice is the project's.
+    if (part === 'pics') {
+      const now = A.d.studio.kit?.pictures
+      box.innerHTML = `<div class="sc-acts sc-pics">${Object.entries(PICS).map(([v, n]) => `<button class="btn ${v === now ? 'pri' : 'ghost'}" data-pic="${v}">${n}</button>`).join('')}</div>`
+      box.onclick = e => {
+        const v = /** @type {HTMLElement | null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-pic]'))?.dataset.pic
+        if (!v) return
+        post('/api/setup', { pictures: v }).catch(() => {}).then(() => post(at('/kit'), { data: { pictures: v } })).then(d => { take(d); if (A.wantsBuild) { A.wantsBuild = false; select(null); build() } }).catch(fail)
+      }
+      return
+    }
     if (part === 'lock') box.innerHTML = `<p class="sc-idea-full">${esc(A.d.studio.idea)}</p>`
   }
 
@@ -416,7 +435,9 @@ export function makeScaffold({ sw, C, root }) {
     const key = el.dataset.key
     const x = A.cards.get(key)
     if (x?.press) return x.press(ctx())
+    if (key === 'fact:pictures:Pictures') return select('pics:choose')
     if (key?.startsWith('fact:')) { const step = key.split(':')[1]; bd.focus(step); if (C.nav.view.step !== step) C.nav.go({ type: 'studio.step', step }); return }
+    if (key === 'lock:idea' && !A.d.studio.idea) { /** @type {HTMLElement | null} */ (document.querySelector('#brief'))?.focus(); C.chat?.(true); return }
     if (key === 'brand:open') return openBrand()
     if (key === 'ref:add' || key === 'asset:add') { picker.dataset.to = key.split(':')[0]; return picker.click() }
     select(key)
@@ -488,6 +509,14 @@ export function makeScaffold({ sw, C, root }) {
       if (box) box.value = ''
       idea = typed
     }
+    // Pictures are asked once, before the first build, when not chosen on the board yet
+    if (k.kind === 'site' && !c.state.pictures) {
+      A.wantsBuild = true
+      select('pics:choose')
+      sw.say?.('Pictures: painted, stock photos or drawn? Pick one and I build.')
+      return
+    }
+    if (c.state.pictures) await post('/api/setup', { pictures: c.state.pictures }).catch(() => {})
     A.busy = true
     render()
     try {
