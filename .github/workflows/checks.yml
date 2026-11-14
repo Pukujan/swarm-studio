@@ -36,6 +36,9 @@ jobs:
       - run: npm ci --prefix tools/dev --no-audit --no-fund
       - run: npm run --prefix tools/dev typecheck
       - run: npm run --prefix tools/dev deps
+      # no orphan code: every file under web/, engine/ and server/ is reached from something that runs (the page's
+      # lists in server/page.mjs count); what was already unreached is in .dependency-cruiser-orphans-known.json
+      - run: npm run --prefix tools/dev orphans
       - run: npm run --prefix tools/dev tokens:check
       # the next UI (ui/, docs/decisions/0013-react-ui-coexists.md): its type check and dependency rules, and its
       # build makes the one-document /next/ page (development only: the plugin installs none of it)
@@ -43,6 +46,8 @@ jobs:
       - run: npm test --prefix ui
       - run: npm run --prefix tools/dev typecheck:ui
       - run: npm run --prefix tools/dev deps:ui
+      # the next UI's orphans (knip, ui/knip.jsonc): no unused file, export or package
+      - run: npm run --prefix tools/dev orphans:ui
       - run: npm run --prefix tools/dev ui:check
       # the vendored libraries are exactly what their npm tarballs build (scripts/vendor.mjs)
       - run: node scripts/vendor.mjs --check

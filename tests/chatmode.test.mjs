@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { readMode, modeRoute, modeWord, isYes, CHAT_MODES, chatMode, setChatMode, modeSend, mountChatMode } from '../web/chatmode.js'
+import { CANVAS_MODULES } from '../server/page.mjs'
 
 test('a typed switch is the whole message, or a slash with the rest to send', () => {
   assert.deepEqual(CHAT_MODES, ['ask', 'plan', 'build', 'fix'])
@@ -156,7 +157,6 @@ test('the page has the switch, names only, and loads the mode file before the ch
   assert.ok(sel, 'the mode select is in the chat box')
   assert.deepEqual([...sel[1].matchAll(/<option value="(\w+)"( selected)?>(\w+)<\/option>/g)].map(m => [m[1], m[3], !!m[2]]), [['ask', 'Ask', false], ['plan', 'Plan', false], ['build', 'Build', true], ['fix', 'Fix', false]])
   assert.doesNotMatch(sel[0], /title=|data-tip/)
-  const page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')
-  const list = page.match(/joinModules\(webDir, \['route\.js'[^\]]*\]/)[0]
-  assert.ok(list.indexOf("'chatmode.js'") > list.indexOf("'icons.js'") && list.indexOf("'chatmode.js'") < list.indexOf("'canvas/loop.js'"))
+  const list = CANVAS_MODULES
+  assert.ok(list.includes('chatmode.js') && list.indexOf('chatmode.js') > list.indexOf('icons.js') && list.indexOf('chatmode.js') < list.indexOf('canvas/loop.js'))
 })
