@@ -33,10 +33,10 @@ Hermes is the host: Swarm Studio is a Hermes plugin (`requires_hermes: ">=0.23"`
 - InferHub route failover (cb/, ali/, alitp/, ocg/) only for an inferhub base URL (engine/llm.mjs:33-51).
 - `ctx.llm` does not stream (one SSE delta) and has no tool calls; bridge fakes tools with `<tool_call>` blocks in the prompt (docs/specs/33-hermes-bridge.md:84-104).
 - Multiplexed gateway (`gateway.multiplex_profiles`, Hermes Desktop's default): a `ctx.llm` call from the bridge's own threads has no profile secret scope, and Hermes refuses to read the model key (Hermes bug NousResearch/hermes-agent#132887; its fix #132898 is still open, checked 2026-11-14). Until it ships, bridge.py `in_profile` binds the profile Hermes loaded the plugin for (`keep_profile`, from `register()`) around each bridge request (bridge.py `_route`, `_chat`). Its limits, each pinned by tests/test_bridge.py:
-  - only when `scope.is_multiplex_active()` is true **and** `scope.current_secret_scope()` is None; a single-profile Hermes, a scope Hermes already bound (its own fix), or an unknown home runs the call as it is;
-  - the binding is made in a copy of the call's context (`contextvars.copy_context().run`), so it ends with that call, a call that raises included, and never stays on the thread;
-  - it binds the same profile scope Hermes's own plugin host builds (`build_profile_secret_scope(HOME)`); Hermes still reads the keys, the plugin never does;
-  - it is the only `set_secret_scope` call in the plugin; `agent.secret_scope` and `hermes_constants` are on Hermes's public plugin API (v0.23.1 `hermes_cli/data/plugin_api.json`), and only launcher.py (`get_secret`) and bridge.py import them.
+  - only when `scope.is_multiplex_active()` is true **and** `scope.current_secret_scope()` is None; a single-profile Hermes, a scope Hermes already bound (its own fix), or an unknown home runs the call as it is (bridge.py:99, tests/test_bridge.py:184-205);
+  - the binding is made in a copy of the call's context (`contextvars.copy_context().run`), so it ends with that call, a call that raises included, and never stays on the thread (bridge.py:113, tests/test_bridge.py:206-218);
+  - it binds the same profile scope Hermes's own plugin host builds (`build_profile_secret_scope(HOME)`); Hermes still reads the keys, the plugin never does (bridge.py:111);
+  - it is the only `set_secret_scope` call in the plugin; `agent.secret_scope` and `hermes_constants` are on Hermes's public plugin API (v0.23.1 `hermes_cli/data/plugin_api.json`), and only launcher.py (`get_secret`) and bridge.py import them (tests/test_bridge.py:220).
   Remove it once #132898 is in the pinned Hermes.
 - Model override only when the operator grants `plugins.entries.swarm-studio.llm.allow_model_override` (docs/specs/33-hermes-bridge.md:80-83).
 
