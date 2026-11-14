@@ -215,6 +215,10 @@ async function measure(out, { root, runs: N, only, cold }) {
         // and what it is doing: its CPU and memory (where `ps` exists)
         let ps = ''
         try { ps = execFileSync('ps', ['-o', '%cpu=,rss=', '-p', String(server.pid)], { encoding: 'utf8', timeout: 3000 }).trim() } catch {}
+        // its open files (a server at its limit takes no more connections and says nothing), and with GAUGE_DIAG a
+        // native stack sample of where it is blocked (macOS)
+        try { ps += `; ${execFileSync('lsof', ['-p', String(server.pid)], { encoding: 'utf8', timeout: 10000, maxBuffer: 2e7 }).split('\n').length - 1} open files, limit ${execFileSync('sh', ['-c', 'ulimit -n'], { encoding: 'utf8' }).trim()}` } catch {}
+        if (process.env.GAUGE_DIAG) try { console.log(execFileSync('sample', [String(server.pid), '1'], { encoding: 'utf8', timeout: 20000, maxBuffer: 2e7 }).split('\n').filter(l => /Thread_|uv_|node::|Call graph|main|fs_|read|wait/.test(l)).slice(0, 40).join('\n')) } catch {}
         m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps }
       } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
