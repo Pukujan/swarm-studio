@@ -198,6 +198,17 @@ try {
     note('replay, later', null, `status "${await page.locator('.deck-status').innerText().catch(() => '-')}" · address ${page.url().replace(s.BASE, '')}`)
   })
 
+  // the image-first board (?board=tiers): a click on a page, a photo until then, picks the section under it
+  await deck(s.ids.site, '&board=tiers')
+  await tryAct('select on the image-first board', async () => {
+    const r = await page.locator('[role="region"][aria-label="Canvas"] [data-page]').first().boundingBox()
+    await page.mouse.click(r.x + r.width / 2, r.y + 40); await wait(4000)
+    const tab = await page.locator('section[aria-label="Design"]').count(), outline = await page.locator('[data-picked]').count()
+    const pin = await page.getByRole('button', { name: /^Comment on/ }).count()
+    note('select on the image-first board', tab > 0 && outline > 0, `Design tab ${tab > 0} · outline ${outline > 0} · Comment pin ${pin > 0}`)
+    await page.keyboard.press('Escape'); await wait(300)
+  })
+
   // Play, then Watch a visitor on the build with a visitor (opened afresh: the replay above may still be playing)
   await deck(s.ids.site)
   await tryAct('play', async n => {

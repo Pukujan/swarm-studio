@@ -141,7 +141,8 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
               ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select}
                 pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} ask={askComment} /> : null} />
               // the image-first board, behind ?board=tiers until the gauge says (src/board/flag.ts); a picked section's page is live
-              : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel?.page ?? picked ?? null} />}
+              : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel?.page ?? picked ?? null}
+                picked={sel} onSelect={select} pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} ask={askComment} /> : null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} tool={tool} onTool={pressTool} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
