@@ -98,8 +98,9 @@ The run's log, the minimum the rooms read plus where it came from:
 reads (`C.pair.game`), so the project's Game opens it. The mark keeps a later app build from wiring reward
 links to a game that was never told about them.
 
-A game's `run:start` is of kind `game`, which is what names its room **Game** in the mode menu (the canvas
-hook's `kind`, `web/modes.js` `modeOf(room, kind)`).
+A game's `run:start` is of kind `game`, which is what will name its room **Game** in the mode menu once PR #495
+lands (the canvas hook's `kind`, `modeOf(room, kind)` in `web/modes.js`; on main today `modeOf` takes the room
+alone and the Game room is named by the room).
 
 There is no `game:spec`: the Studio did not plan this game, and nothing pretends it did. Every reader of the
 spec already handles a game without one.
