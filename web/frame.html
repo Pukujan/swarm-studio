@@ -196,6 +196,9 @@
       const r = el.getBoundingClientRect()
       const t = lastText(el)
       geo.slots[key] = { box: round(r), last: t ? [Math.round(Math.min(t.right, r.right - 10)), Math.round(t.bottom)] : null }
+      // where each of the section's pictures is, in order: a painted picture is carried to its own box (web/canvas/carry.js)
+      const pics = [...el.querySelectorAll('img[data-gen]')].map(i => round(i.getBoundingClientRect()))
+      if (pics.length) geo.slots[key].pics = pics
       caret(key, el, t)
       for (const g of el.querySelectorAll('[data-goto]')) {
         geo.gotos.push({ key, target: g.dataset.goto, box: round(g.getBoundingClientRect()) })

@@ -117,13 +117,19 @@ def _api(path: str, body: dict | None = None, timeout: float = 15.0) -> dict:
     up = launcher.ensure_server()
     if not up.get("running"):
         raise RuntimeError(up.get("error") or "the canvas server is not running")
-    try:
-        return launcher._request(path, method="POST" if body is not None else "GET", body=body, timeout=timeout)
-    except urllib.error.HTTPError as exc:
+    for again in (False, True):
         try:
-            raise RuntimeError(json.loads(exc.read().decode()).get("error") or str(exc)) from None
-        except ValueError:
-            raise RuntimeError(str(exc)) from None
+            return launcher._request(path, method="POST" if body is not None else "GET", body=body, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            try:
+                raise RuntimeError(json.loads(exc.read().decode()).get("error") or str(exc)) from None
+            except ValueError:
+                raise RuntimeError(str(exc)) from None
+        except (urllib.error.URLError, ConnectionError):
+            # the server stopped after its idle time just as this was asked (decision 0017, issue #450): start it, ask once more
+            if again or not launcher.ensure_server().get("running"):
+                raise
+    raise RuntimeError("the canvas server is not running")
 
 
 def _canvas(op: str, **extra) -> str:
@@ -393,7 +399,8 @@ def _dispatch(cmd: str, args: list[str]) -> str:
         return feed.post(r, args, _export_zip, _page_shots)
 
     if cmd == "remix":
-        return feed.remix(args, lambda brief: launcher.start_run(brief))
+        # a remix is the person's own command: it builds without the question first (decision 0020)
+        return feed.remix(args, lambda brief: launcher.start_run(brief, sure=True))
 
     if cmd == "login":
         return feed.login()

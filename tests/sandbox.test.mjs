@@ -4,13 +4,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { canvasSource, canvasFiles } from './canvas-source.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const read = f => readFileSync(`${root}${f}`, 'utf8')
-const web = readdirSync(`${root}web`).filter(f => /\.(js|html)$/.test(f))
+const web = [...readdirSync(`${root}web`).filter(f => /\.(js|html)$/.test(f)), ...canvasFiles.filter(f => f.includes('/'))]
 
 test('every frame that shows a generated page is sandboxed without allow-same-origin', () => {
-  const canvas = read('web/canvas.js')
+  const canvas = canvasSource()
   assert.match(canvas, /const FRAME_SANDBOX = 'allow-scripts'\n/)
   // each frame the canvas makes gets its sandbox before it loads
   const made = canvas.split("document.createElement('iframe')").slice(1)
@@ -28,8 +29,21 @@ test('every frame that shows a generated page is sandboxed without allow-same-or
   }
   // allow-same-origin is granted in one place (a string, not a comment): the app preview, only while it is another origin
   const same = web.flatMap(f => (read(`web/${f}`).match(/['"`][^'"`\n]*allow-same-origin/g) || []).map(() => f))
-  assert.deepEqual(same, ['canvas.js'])
+  assert.equal(same.length, 1)
+  assert.match(same[0], /^canvas\//)
   assert.match(canvas, /new URL\(src, location\.href\)\.origin === location\.origin/)
+})
+
+test('the next UI shows generated pages only in frames sandboxed with allow-scripts, cleaned by web/clean.js', () => {
+  const walk = d => readdirSync(`${root}${d}`, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(`${d}/${e.name}`) : /\.tsx$/.test(e.name) ? [`${d}/${e.name}`] : [])
+  const files = walk('ui/src')
+  const tags = files.flatMap(f => (read(f).match(/<iframe\b[^>]*>/g) || []).map(tag => [f, tag]))
+  assert.ok(tags.length >= 1, 'the Design deck draws its pages in iframes')
+  for (const [f, tag] of tags) assert.match(tag, /\ssandbox="allow-scripts"/, `${f}: ${tag.slice(0, 80)}`)
+  for (const f of files) assert.doesNotMatch(read(f), /allow-same-origin/, f)
+  const frame = read('ui/src/screens/deck/PageFrame.tsx')
+  assert.match(frame, /import \{ clean \} from '@studio\/clean'/)
+  assert.match(frame, /msg\.html = clean\(/)
 })
 
 test('clean() works on the parsed DOM, not on regexes over the text', () => {
@@ -38,10 +52,10 @@ test('clean() works on the parsed DOM, not on regexes over the text', () => {
   assert.match(clean, /querySelectorAll\('script'\)/)
   assert.match(clean, /name\.startsWith\('on'\)/)
   assert.doesNotMatch(clean, /replace\(\/<script/)
-  const canvas = read('web/canvas.js')
-  assert.match(canvas, /import \{ clean \} from '\.\/clean\.js'/)
+  const canvas = canvasSource()
+  assert.match(canvas, /import \{[^}]*\bclean\b[^}]*\} from '\.\.\/clean\.js'/)
   assert.doesNotMatch(canvas, /function clean\(/)
-  assert.match(read('server/page.mjs'), /'clean\.js', 'canvas\.js'/, 'the inlined studio carries clean.js before canvas.js')
+  assert.match(read('server/page.mjs'), /'clean\.js', ('canvas\/[\w.-]+', )*'canvas\.js'/, 'the inlined studio carries clean.js before canvas.js')
 })
 
 test('/site/ and /video/…/live/ are served with a sandbox CSP', () => {

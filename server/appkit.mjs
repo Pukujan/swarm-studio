@@ -50,7 +50,7 @@ export function appKitRoutes({ dataDir, model = () => null, supabase = async () 
   async function sayTo(input) {
     const kit = cleanKit(input.kit)
     const said = String(input.said || '').slice(0, 2000)
-    // a picked chip: "api-flights:duffel"
+    // a picked chip: "api-flights:mock"
     const pick = said.match(/^([\w-]+):([\w-]+)$/)
     if (pick && kit.connects.some(c => c.id === pick[1])) return view(editKit(kit, { op: 'set', what: 'connect', id: pick[1], value: { choice: pick[2] } }), { say: '' })
     // "do I need an air booking api?" gets an answer and a choice, never a build

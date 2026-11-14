@@ -1,3 +1,4 @@
+// @ts-check
 // The Brand kit (docs/specs/37-studio-first.md): a brand on its own. No Plan step and no build: the brand
 // sheet, the references and the assets are the deliverable, and Lock is the end.
 export const brandKit = {

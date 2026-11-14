@@ -1,3 +1,4 @@
+// @ts-check
 // The Auto show's small helpers (spec 07): a QR code encoder for the summary card's live
 // link, and the share pages the launch kit's Post buttons open. A classic script
 // (window.SwarmShow), like crew.js, so it works inlined or on its own. No network calls.

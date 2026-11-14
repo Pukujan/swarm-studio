@@ -10,62 +10,8 @@
 @font-face { font-family: 'EB Garamond'; src: url(fonts/eb-garamond-latin-400-italic.woff2) format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
 @font-face { font-family: 'EB Garamond'; src: url(fonts/eb-garamond-latin-500-italic.woff2) format('woff2'); font-weight: 500 700; font-style: italic; font-display: swap; }
 
-:root {
-  /* channels, for the translucent mixes below (Graphite, docs/brand/BRAND.md) */
-  --void-rgb: 11 11 12; --deep-rgb: 22 22 24; --glass-rgb: 244 244 245; --frame-rgb: 58 58 63;
-  --hot-rgb: 242 0 0; --ink-rgb: 11 11 12; --shade-rgb: 0 0 0;
-  /* the palette (docs/ux/RULES.md, "Few colours"): black, graphite and white plus ONE accent, --accent.
-     The accent is the text colour (white buttons with black text in dark, black with white in light); the
-     owner may pick a hue later, and that is the --accent line below (every tint is a color-mix of it).
-     Dark is this block; light is the block after it, by prefers-color-scheme or the ☰ menu's Theme. */
-  --void: #0b0b0c;                                     /* app background: flat */
-  --deep: #161618;                                     /* panels (surface) */
-  --surface-2: #1f1f22;                                /* raised surface */
-  --edge: #2a2a2e;                                     /* card borders and rules (line) */
-  --panel: rgb(var(--glass-rgb) / .03);                /* glass fill */
-  --panel-2: rgb(var(--glass-rgb) / .07);              /* glass, raised or hovered */
-  --panel-edge: #2a2a2e;
-  --glass: rgb(var(--deep-rgb) / .92);                 /* floating glass over the canvas */
-  --line: var(--panel-edge);
-  --line-2: #3a3a3f;
-  --frame: #3a3a3f;                                    /* graphite: frames, secondary fills (white text 10:1) */
-  --frame-hi: #a1a1a6;                                 /* graphite lifted, for rings on the void */
-  --text: #f4f4f5;
-  --muted: #8e8e93;
-  --code: #c7c7cc;
-  --accent: var(--text);                               /* THE accent: the one main action, the active tab, the serif word */
-  --accent-ink: var(--void);                           /* text on an accent fill */
-  --pink: var(--accent);                               /* the serif accent word: the same accent */
-  --ok: var(--accent); --hot: #F20000; --hot-text: #ff5c5c; --info: var(--text); /* red is for errors only */
-  --paper: #FFFFFF;                                    /* the page frames' own background */
-  --glow: transparent;                                 /* Graphite is flat: no glow */
-  --bg: var(--void);
-  --r: 14px;
-  --display: 'Big Shoulders Display', 'Antonio', Impact, 'Arial Narrow', sans-serif;
-  --label: 'Barlow Condensed', 'Arial Narrow', ui-sans-serif, sans-serif;
-  --mono: var(--font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
-  --serif: 'EB Garamond', Garamond, 'Times New Roman', serif;
-  --font: var(--font-sans, var(--mono));
-  --ease: cubic-bezier(.2, .7, .2, 1);
-}
-/* Light: a white page, #f4f4f5 surfaces, #e4e4e7 lines, #0b0b0c text. Pictures are the only colour. */
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
-  color-scheme: light;
-  --void-rgb: 255 255 255; --deep-rgb: 244 244 245; --glass-rgb: 11 11 12; --frame-rgb: 212 212 216; --shade-rgb: 60 60 70;
-  --void: #ffffff; --deep: #f4f4f5; --surface-2: #ececef; --edge: #e4e4e7; --panel-edge: #e4e4e7;
-  --line-2: #d4d4d8; --frame: #e4e4e7; --frame-hi: #52525b;
-  --text: #0b0b0c; --muted: #636369; --code: #3f3f46; --hot-text: #c40000;
-  --nebula: #d4d4d8; --nebula-2: #a1a1aa;
-} }
-:root[data-theme="light"] {
-  color-scheme: light;
-  --void-rgb: 255 255 255; --deep-rgb: 244 244 245; --glass-rgb: 11 11 12; --frame-rgb: 212 212 216; --shade-rgb: 60 60 70;
-  --void: #ffffff; --deep: #f4f4f5; --surface-2: #ececef; --edge: #e4e4e7; --panel-edge: #e4e4e7;
-  --line-2: #d4d4d8; --frame: #e4e4e7; --frame-hi: #52525b;
-  --text: #0b0b0c; --muted: #636369; --code: #3f3f46; --hot-text: #c40000;
-  --nebula: #d4d4d8; --nebula-2: #a1a1aa;
-}
-:root { color-scheme: dark; }
+/* the theme's variables (--void, --text, --accent, the fonts, light and dark) are web/tokens.css, built from
+   tokens/*.tokens.json (docs/decisions/0012-design-tokens.md) */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 var(--font); overflow: hidden; }
 body { display: grid; grid-template: 44px 1fr / var(--side-w, 300px) 1fr; }
@@ -400,7 +346,7 @@ button { font: inherit; color: inherit; }
 .selbox { position: absolute; border: 2px solid var(--frame); box-shadow: 0 0 0 9999px transparent; pointer-events: none; border-radius: 2px; }
 
 /* ---------- models menu */
-.models-pop { position: fixed; z-index: 70; width: 400px; max-width: calc(100vw - 16px); max-height: calc(100vh - 70px); overflow: auto; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 16px 40px rgb(var(--shade-rgb) / .62); }
+.models-pop { position: fixed; z-index: 300; width: 400px; max-width: calc(100vw - 16px); max-height: calc(100vh - 70px); overflow: auto; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 16px 40px rgb(var(--shade-rgb) / .62); }
 .models-pop .mhead { font-weight: 700; margin-bottom: 10px; }
 .models-pop .mhead small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; margin-top: 2px; }
 .models-pop .mrow { display: block; padding: 9px 0; border-top: 1px solid var(--line); }
@@ -412,6 +358,8 @@ button { font: inherit; color: inherit; }
 .models-pop input:disabled { opacity: .45; }
 .models-pop .mfield button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; color: var(--text); cursor: pointer; font-weight: 600; }
 .models-pop .mfield button.on { color: var(--muted); }
+.models-pop .mnow-model { flex: 1; min-width: 0; align-self: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px var(--mono); color: var(--text); }
+.models-pop .mfield button[data-change] { padding: 5px 10px; }
 .models-pop .mnow { display: block; color: var(--muted); font: 10.5px var(--mono); margin-top: 4px; }
 .models-pop .mfoot { color: var(--muted); font-size: 11px; border-top: 1px solid var(--line); padding-top: 9px; }
 #review-btn:disabled { opacity: .45; cursor: default; }
@@ -607,9 +555,14 @@ body.side-min .dock { left: auto; }
 .finfo .tr-on { text-transform: none; letter-spacing: 0; display: flex; margin: 0; font-size: 12px; }
 
 /* undo / redo, section versions */
-.undo-redo { display: flex; gap: 2px; margin-right: 6px; }
-.undo-redo .toggle { padding: 4px 9px; font-size: 15px; }
-.undo-redo .toggle:disabled { opacity: .35; cursor: default; }
+/* Undo and Redo sit at the end of the tool dock, after its divider; #toolbar (the tools) is redrawn by
+   panels.js, so it is a box of its own that lays out as if it were not there */
+.toolbar .tools { display: contents; }
+.undo-redo { display: contents; }
+.undo-redo .tool { padding: 0; border: 0; background: none; font: inherit; color: var(--text); cursor: pointer; }
+.undo-redo .tool:hover:not(:disabled) { background: rgb(var(--glass-rgb) / .1); }
+.undo-redo .tool:focus-visible, .toolbar:focus-visible { outline: 2px solid var(--frame-hi); outline-offset: 1px; }
+.undo-redo .tool:disabled { opacity: .35; cursor: default; }
 .drow2 { display: flex; gap: 6px; margin: 6px 12px 4px; }
 .drow2 .dtrace, .drow2 .dversions { flex: 1; width: auto; margin: 0; background: var(--panel-2); border: 1px solid var(--line); color: inherit; border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12px; text-align: left; }
 .drow2 button:hover { border-color: var(--frame-hi); }
@@ -715,6 +668,15 @@ body.cosmos .ah-feed { padding-bottom: 56px; }
 .app-empty[hidden] { display: none; }
 .app-empty h2 { margin: 0; color: var(--text); font-size: 20px; }
 .app-empty p { margin: 0; max-width: 520px; line-height: 1.5; }
+/* an app starting again, cold (decision 0017, issue #450): a page's shape, busy (Hermia works on it, web/pet.js PET_BUSY) */
+.app-skel { width: min(560px, 80%); display: grid; gap: 12px; position: relative; }
+.app-skel i { display: block; border-radius: 6px; background: var(--surface-2); animation: app-skel 1.6s ease-in-out infinite alternate; }
+.app-skel .bar { height: 14px; width: 40%; }
+.app-skel .hero { height: 150px; }
+.app-skel span { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.app-skel span i { height: 70px; }
+@keyframes app-skel { from { opacity: 1; } to { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .app-skel i { animation: none; } }
 .app-empty .big { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 700; cursor: pointer; }
 .app-empty .spin { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg) } }
@@ -867,9 +829,19 @@ body.side-min .side > .resizer { display: none; }
 .tree .kid { display: flex; gap: 6px; align-items: baseline; padding: 2px 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; border-radius: 4px; }
 .tree .kid:hover { background: var(--panel-2); color: var(--text); }
 .tree .kid i { font-style: normal; font: 10px var(--mono); color: var(--accent); flex: 0 0 auto; }
+/* the same tree everywhere (web/layers.js): a count and a working dot on a group, keys, rename in place */
+.tree .pg-title .n { font: 11px var(--mono); letter-spacing: 0; color: var(--dim); }
+.tree .pg-title .caret { margin-left: 0; }
+.tree .pg-title .ttl { margin-right: auto; }
+.tree .pg-title .dot.busy { width: 7px; height: 7px; border-radius: 50%; background: var(--text); flex: none; }
+.tree .pg-title:focus-visible, .tree .ly:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--text); }
+.tree .ly { min-height: 28px; outline: none; }
+.tree .ly .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree .ly .nm input { width: 100%; background: var(--deep); color: var(--text); border: 1px solid var(--text); border-radius: 6px; padding: 2px 6px; font: inherit; outline: none; }
+.tree .ly .who:empty { display: none; }
 
 /* the model fields' own suggestion list (scrolls everywhere, unlike a datalist) */
-.combo-list { position: fixed; z-index: 95; overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 14px 34px rgb(var(--shade-rgb) / .68); padding: 4px; font: 12px var(--mono); }
+.combo-list { position: fixed; z-index: 310; overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 14px 34px rgb(var(--shade-rgb) / .68); padding: 4px; font: 12px var(--mono); }
 .combo-list div { padding: 5px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .combo-list div:hover, .combo-list div.on { background: var(--panel-2); }
 .combo-list small { display: block; padding: 6px 8px; color: var(--muted); }
@@ -877,6 +849,18 @@ body.side-min .side > .resizer { display: none; }
 body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !important; }
 .dock-hide { position: absolute; right: 6px; top: 4px; pointer-events: auto; background: none; border: 0; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 4px; }
 .dock-hide:hover { color: var(--text); background: rgb(var(--glass-rgb) / .08); }
+
+/* a picture being painted (web/canvas/carry.js): its card beside the page with the working sheen over it, held by
+   its painter's cursor, then carried to its slot */
+.carry { position: absolute; left: 0; top: 0; width: 120px; height: 80px; transform-origin: 0 0; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--text) 14%, var(--bg)); border: 2px solid color-mix(in srgb, var(--text) 55%, var(--bg)); box-shadow: 0 6px 18px rgb(var(--shade-rgb) / .5); transition: opacity .25s; }
+.carry[hidden] { display: none; }
+.carry img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.carry::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--text) 22%, transparent) 50%, transparent 70%) 0 0 / 260% 100%; animation: carry-sheen 2.4s linear infinite; }
+.carry.got::after { display: none; }
+.carry.gone { opacity: 0; }
+@keyframes carry-sheen { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+.cursor.carrier { animation: crew-in .4s ease-out; }
+.cursor.carrier.leaving { opacity: 0; }
 
 /* crews: agents working over the App, Game and Video screens */
 .crew-layer { position: fixed; inset: 0; pointer-events: none; z-index: 67; overflow: hidden; } /* above the video and export panels the crew work in */
@@ -944,7 +928,6 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .codewall[hidden] { display: none; }
 .codewall .cw-head { display: flex; align-items: center; gap: 12px; font-size: 13px; }
 .codewall .cw-count { color: var(--muted); font: 11.5px var(--mono); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.codewall .cw-peek { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 3px 9px; cursor: pointer; font: inherit; font-size: 12px; }
 .codewall .cw-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; }
 @media (max-width: 900px) { .codewall .cw-grid { grid-template-columns: 1fr; grid-template-rows: repeat(4, minmax(120px, 1fr)); overflow: auto; } }
 .codewall .cw-tile { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--void); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; transition: border-color .3s; }
@@ -1009,8 +992,6 @@ em { font-style: italic; }
 /* the main action owns the screen's one accent; Auto is a graphite pill, its icon in the accent while on */
 .game-btn { color: var(--text); border-color: rgb(var(--glass-rgb) / .3); }
 .toggle.play { border-color: rgb(var(--glass-rgb) / .3); }
-.undo-redo .toggle { padding: 6px 8px; font-size: 13px; }
-.undo-redo .toggle:disabled { opacity: .3; }
 .clock { font: 600 21px/1 var(--label); letter-spacing: .04em; color: var(--accent); min-width: 70px; font-variant-numeric: tabular-nums; }
 /* segmented controls: Canvas / Video / App, devices, preview or code */
 .seg { background: rgb(var(--glass-rgb) / .04); border: 1px solid var(--panel-edge); border-radius: 999px; padding: 3px; gap: 2px; }
@@ -1146,6 +1127,12 @@ em { font-style: italic; }
 .tool .n { color: var(--accent); top: 1px; right: 4px; }
 .tool .lbl { font: 600 10.5px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; bottom: -20px; }
 .toolbar .tsep { background: var(--panel-edge); }
+/* a phone: the dock, with Undo and Redo at its end, is wider than the screen; it keeps its tools' size
+   (rule 16) and scrolls sideways (the dock takes focus, so the arrow keys scroll it too) */
+@media (max-width: 500px) {
+  .toolbar { max-width: calc(100% - 28px); overflow-x: auto; scrollbar-width: none; }
+  .toolbar .tool, .toolbar .tsep { flex: none; }
+}
 
 /* ---------- glass panels and popovers */
 .float, .models-pop, .video-pop, .export-pop, .auto-panel, .finfo, .cbox.open {
@@ -1284,7 +1271,6 @@ em { font-style: italic; }
 .codewall .cw-head { gap: 14px; }
 .codewall .cw-head .pop-title { font-size: 26px; }
 .codewall .cw-count { font: 11.5px var(--mono); }
-.codewall .cw-peek { display: inline-flex; align-items: center; gap: 6px; background: rgb(var(--glass-rgb) / .06); border: 1px solid rgb(var(--glass-rgb) / .3); border-radius: 999px; padding: 6px 12px; font: 600 12px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; }
 .codewall .cw-tile { background: rgb(var(--deep-rgb) / .5); border: 1px solid var(--panel-edge); border-radius: 12px; }
 .codewall .cw-tile.typing { border-color: rgb(var(--frame-rgb) / .9); box-shadow: 0 0 0 1px rgb(var(--frame-rgb) / .5), 0 0 40px rgb(var(--frame-rgb) / .2); }
 .codewall .cw-file { background: rgb(var(--glass-rgb) / .03); border-color: var(--panel-edge); }
@@ -1456,6 +1442,8 @@ em { font-style: italic; }
 /* ---------- Swarm Wall tile (?wall=1): just the work, no chrome (web/wall.html) */
 html.wall body, html.wall body.design-on { grid-template-columns: 1fr !important; grid-template-rows: 1fr !important; }
 html.wall .topbar, html.wall .side, html.wall .design, html.wall .game-pop, html.wall .side-min-btn { display: none !important; }
+/* a wall tile is watched, not edited: its tool dock shows the tools the crew uses, without Undo and Redo */
+html.wall .undo-redo, html.wall .undo-sep { display: none !important; }
 html.wall .auto-panel { transform: scale(.72); transform-origin: top right; pointer-events: none; }
 
 /* ---------- Make / Pro switch in the Auto window (docs/specs/09-demo-modes.md) */
@@ -2023,3 +2011,13 @@ body.side-min .tabs .chats-btn { display: none; }
 /* the one thing to do after a stop or when Hermes is not there (stoppedMsg, hermesSays in web/canvas.js) */
 .item.bot .txt .act { color: var(--muted, inherit); }
 .item.bot .txt .act code { font-size: 0.92em; background: var(--panel-2); border-radius: 4px; padding: 0 4px; }
+
+/* the stage switch in the App bar, Crew · Art · Live (web/canvas/stage.js): pinned is filled (.on, aria-pressed);
+   while the stage follows the build, the view on now carries a dot (.now, aria-current) */
+.seg button[hidden] { display: none; }
+#app-stageview button.now { color: var(--text); }
+#app-stageview button.now::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+#app-stageview button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+/* a project being brought in (docs/specs/45-intake.md): the page's shape with a crew cursor at work on it */
+.bring-skel { position: relative; }
+.bring-skel .cur { left: 52%; top: 46%; }

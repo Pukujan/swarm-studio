@@ -1,0 +1,20 @@
+{
+  // The type check (CI: tools/dev, `npm run typecheck`). No compile step: the studio runs these files
+  // as they are. A file is checked when its first line is // @ts-check; scripts/check.sh keeps the
+  // number of web files without it under a cap that only goes down.
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "es2023",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "skipLibCheck": true,
+    "strict": false,
+    // the vendored XState's types, from the same version pinned in tools/dev
+    "paths": { "xstate": ["./tools/dev/node_modules/xstate"] }
+  },
+  "include": ["web/*.js", "web/**/*.js", "web/types.d.ts"],
+  "exclude": ["web/vendor"]
+}

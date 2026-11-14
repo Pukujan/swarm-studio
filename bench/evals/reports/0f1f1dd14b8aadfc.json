@@ -1,0 +1,198 @@
+{
+  "base": "origin/main",
+  "before": {
+    "fingerprint": "207d9828440575a2",
+    "model": "cb/deepseek-v4.1-flash",
+    "reviewer": "ali/qwen3.8-omni-flash",
+    "runs": 2,
+    "at": "2026-11-13T16:34:02.916Z",
+    "sets": {
+      "harbour": {
+        "prompts": "ee9aa4817c7f7a4e",
+        "runs": [
+          {
+            "wallMs": 8550,
+            "tokensIn": 7577,
+            "tokensOut": 6576,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-structured page with strong typography and clear navigation."
+          },
+          {
+            "wallMs": 5215,
+            "tokensIn": 7577,
+            "tokensOut": 5849,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 0,
+            "ids": [],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-designed page with strong typography and a cohesive dark theme."
+          }
+        ],
+        "scored": true,
+        "wallMs": 6882.5,
+        "tokensIn": 7577,
+        "tokensOut": 6212.5,
+        "score": 8,
+        "findings": 0.06,
+        "p0": 0,
+        "errors": 0
+      },
+      "kiln": {
+        "prompts": "ec5aef6061accee0",
+        "runs": [
+          {
+            "wallMs": 9309,
+            "tokensIn": 11469,
+            "tokensOut": 10235,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 2,
+            "ids": [
+              "accent-overuse",
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-designed landing page with strong typography and a cohesive visual identity."
+          },
+          {
+            "wallMs": 9891,
+            "tokensIn": 11469,
+            "tokensOut": 9318,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-designed landing page with strong typography and a cohesive visual identity."
+          }
+        ],
+        "scored": true,
+        "wallMs": 9600,
+        "tokensIn": 11469,
+        "tokensOut": 9776.5,
+        "score": 8,
+        "findings": 0.13,
+        "p0": 0,
+        "errors": 0
+      }
+    }
+  },
+  "after": {
+    "fingerprint": "0f1f1dd14b8aadfc",
+    "model": "cb/deepseek-v4.1-flash",
+    "reviewer": "ali/qwen3.8-omni-flash",
+    "runs": 2,
+    "at": "2026-11-13T16:34:55.380Z",
+    "sets": {
+      "harbour": {
+        "prompts": "237fd3ede5c4aaee",
+        "runs": [
+          {
+            "wallMs": 7114,
+            "tokensIn": 10113,
+            "tokensOut": 7621,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, well-structured page with strong typography and a clear visual hierarchy."
+          },
+          {
+            "wallMs": 6607,
+            "tokensIn": 10113,
+            "tokensOut": 7256,
+            "sections": 8,
+            "errors": 0,
+            "p0": 0,
+            "p1": 1,
+            "ids": [
+              "accent-overuse"
+            ],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, professional page with strong typography and a cohesive dark theme."
+          }
+        ],
+        "scored": true,
+        "wallMs": 6860.5,
+        "tokensIn": 10113,
+        "tokensOut": 7438.5,
+        "score": 8,
+        "findings": 0.13,
+        "p0": 0,
+        "errors": 0
+      },
+      "kiln": {
+        "prompts": "ec5aef6061accee0",
+        "runs": [
+          {
+            "wallMs": 8404,
+            "tokensIn": 11469,
+            "tokensOut": 9469,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 0,
+            "ids": [],
+            "score": 9,
+            "scored": true,
+            "issues": 0,
+            "verdict": "A clean, highly professional landing page with excellent typography and a cohesive visual identity."
+          },
+          {
+            "wallMs": 7509,
+            "tokensIn": 11469,
+            "tokensOut": 8700,
+            "sections": 12,
+            "errors": 0,
+            "p0": 0,
+            "p1": 0,
+            "ids": [],
+            "score": 8,
+            "scored": true,
+            "issues": 0,
+            "verdict": "The page has a clean, professional design with clear hierarchy and consistent branding."
+          }
+        ],
+        "scored": true,
+        "wallMs": 7956.5,
+        "tokensIn": 11469,
+        "tokensOut": 9084.5,
+        "score": 8.5,
+        "findings": 0,
+        "p0": 0,
+        "errors": 0
+      }
+    }
+  },
+  "table": "| set | score | findings per section | P0 | wall time | prompt tokens |\n|---|---|---|---|---|---|\n| harbour | 8 → 8 | 0.06 → 0.13 | 0 → 0 | 6.9 s → 6.9 s (0%) | 7577 → 10113 (33%) |\n| kiln | prompts unchanged on this set, not judged | | | | |",
+  "fails": []
+}

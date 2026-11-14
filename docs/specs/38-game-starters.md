@@ -146,10 +146,10 @@ unchanged:
   (`render: null`), and `inspect` selects them there.
 - **`proposal`**: the Lock price.
 - **`lock`**: the plan's gate and its starter. It is null until the plan is locked.
-- **`build`**: the board's own gate. It shows Lock with the price first, then Build.
+- **`gate`**: the studio's Lock opens the board's own Lock dialog, with the price.
+- **`build`**: once the plan is locked, the board's gate builds it. Before the lock it refuses.
 
-`web/plan.js` now also exposes `plan` and `gate`. The kit is listed in `web/kits.js` when that file
-exists (spec 37).
+`web/plan.js` now also exposes `plan` and `gate`. The kit is listed in `web/kits.js` (spec 37).
 
 ## Slice 4, built: the platformer starter and the other add-on sources
 

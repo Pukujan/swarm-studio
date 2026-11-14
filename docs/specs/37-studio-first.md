@@ -60,6 +60,12 @@ choice of **Light** or **Thorough**, set in the scaffold's chat and stored on th
 The Make menu offers Website, App, Game, Video, **Brand** and **Deck**. Each kind is a **kit**. Brand is
 the one kit with no Plan step: its Lock is the end.
 
+### How each kind is made
+
+The ways to make each kind (Just make it and Studio), which kinds offer which, and how they map onto this spec are
+[spec 42](42-ways-to-make.md) and [decision 0020](../decisions/0020-ask-before-build.md). They replace this spec's
+question on Make.
+
 ## The kit contract
 
 One module per kind, so sessions don't collide in `web/home.js`, `web/board.js` or `web/brand.js`:
@@ -91,8 +97,10 @@ export const appKit = {
   // its Plan step: sections of artboards on the shared board
   plan: {
     // a card: cls (its look) or the flags add (a + card) and wide; render(el), with null meaning the
-    // kit's own board draws it (the scaffold shows its name); inspect(box) for the inspector, or press()
-    sections: ctx => [{ sec: 'Screens', cards: [{ key, name, cls, add, wide, render(el), inspect(box), press() }] }],
+    // kit's own board draws it (the scaffold shows its name); inspect(box) for the inspector, or press().
+    // Optional for the left panel's Layers (web/layers.js): rename(name) and remove() make its row's Rename and
+    // Delete; busy puts a working dot on its row while the planner or crew is making it
+    sections: ctx => [{ sec: 'Screens', cards: [{ key, name, cls, add, wide, render(el), inspect(box), press(), rename(name), remove(), busy }] }],
     // the chat's questions for this kind (Studio talk, below); [] when the planner asks them (a game)
     questions: ctx => [{ id, q, options: [{ id, name, picture? }], free: true }],
     // a picked option or a typed line in the left chat, back to the kit (wired with the Studio talk)

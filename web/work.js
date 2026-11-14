@@ -1,3 +1,4 @@
+// @ts-check
 // What the crew are working on: a chip in the top bar while anything builds (a site, an app,
 // a game, a film), with one bar for how far the first job is. A click lists every job, each
 // with its own bar; a row opens that project, or the room the job runs in.

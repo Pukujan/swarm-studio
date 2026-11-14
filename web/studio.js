@@ -8,6 +8,7 @@ import { makePlan } from './plan.js'
 import { makeBrand } from './brand.js'
 import { makeScaffold } from './scaffold.js'
 import { makeNav, toAddress } from './nav.js'
+import { MODES, modeOf, studioMode, modesShown } from './modes.js'
 const sw = window.swarm
 const W = window
 const body = document.body
@@ -153,6 +154,7 @@ function draw(planId) {
     C.homeView.hide()
     C.projectView.hide()
     C.chat(true)
+    // the step named is brought into view; with none, the whole board
     C.scaffoldView.show(project, nav.actor.getSnapshot().context.step)
   } else if (room === 'brand') {
     // a website's or app's brand sheet (spec 31), beside the chat it came from
@@ -283,11 +285,11 @@ function chrome() {
   const menu = $('#more-menu')
   if (menu) {
     menu.insertAdjacentHTML('beforeend', `<div class="cosmos-sep" role="separator"></div>
-      <button class="toggle cosmos-only" id="cosmos-sound">${ico('sound')}<span>Sound</span></button>
+      <button class="toggle cosmos-only" id="cosmos-sound" aria-pressed="false">${ico('sound')}<span>Crew sound</span></button>
 `)
-    // the crew's voices: on or off from the menu
+    // the crew's voices and sounds (web/chatter.js): the same switch and words as the user menu's; ✓ while on
     const sound = $('#cosmos-sound')
-    const paint = () => { const on = sw.sound?.() === 'on'; sound.classList.toggle('on', on); sound.querySelector('span').textContent = on ? 'Sound on' : 'Sound off' }
+    const paint = () => { const on = sw.sound?.() === 'on'; sound.classList.toggle('on', on); sound.setAttribute('aria-pressed', String(on)) }
     sound.onclick = () => { sw.sound?.(sw.sound() === 'on' ? 'muted' : 'on'); paint() }
     $('#more-btn')?.addEventListener('click', paint)
     paint()
@@ -314,11 +316,9 @@ function chrome() {
 // The mode: one menu button in a build's top bar, Overview, Canvas, Video, App or Game. Overview is the
 // project's pages and files (web/project.js); Canvas, Video and App open that room; Game opens the
 // game's room, or the wizard that makes one.
-const MODES = [['overview', 'Overview'], ['canvas', 'Canvas'], ['video', 'Video'], ['app', 'App'], ['game', 'Game']]
 // the game's own room is the App view on the game's run: the menu calls it Game
 const onGame = () => nav.view.room === 'game'
-const PILL = { overview: 'overview', deck: 'canvas', draft: 'canvas', video: 'video', app: 'app', game: 'game' }
-const modeNow = () => PILL[nav.view.room] || 'overview'
+const modeNow = () => modeOf(nav.view.room, sw.kind)
 // the game's room: the App view on the game's run (the label says Game once that run is open)
 C.toGame = (run = C.pair.game) => {
   C.go('game', run)
@@ -348,6 +348,7 @@ function modeMenu() {
     const r = btn.getBoundingClientRect()
     list.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 158))}px`
     list.style.top = `${r.bottom + 6}px`
+    modesShown(opts(), C, sw.kind)
     list.hidden = false
     btn.setAttribute('aria-expanded', 'true')
     for (const o of opts()) o.setAttribute('aria-selected', String(o.dataset.mode === modeNow()))
@@ -356,10 +357,11 @@ function modeMenu() {
   }
   const pick = id => {
     close()
+    if (studioMode(id, C, sw.kind)) return renderMode()
     if (id === 'overview') return C.go('project')
     // Game: the project's game, when it has one; else the wizard that makes one
     if (id === 'game') {
-      if (!C.pair?.game) return $('#game-btn')?.click()
+      if (!C.pair?.game) return sw.game?.()
       return C.toGame()
     }
     // the other rooms show the site's run, not the game's (which has no pages or film)
@@ -381,7 +383,7 @@ function modeMenu() {
   }
   renderMode()
 }
-C.chat = on => { body.classList.toggle('cosmos-chat', on); if (on) $('.side .tabs [data-tab="chat"]')?.click() }
+C.chat = on => { body.classList.toggle('cosmos-chat', on); if (on) sw.tab?.('chat') }
 
 function start() {
   if (sw.wall || !sw) return
@@ -416,7 +418,8 @@ style.textContent = 'body:not(.cosmos) .cosmos-fold{display:none}.cosmos-fold{ba
 document.head.append(style)
 
 if (sw && !sw.wall) {
-  // the mode (C.mode, read from the machine) is known before the canvas's own start-up timers run
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
-  else setTimeout(start)
+  // the mode (C.mode, read from the machine) is known before the canvas's own start-up timers run.
+  // A module runs once the page is parsed, so start now: a timer here raced the first replies from
+  // the server, and the Studio booted before or after them by chance (scripts/motion-check.mjs)
+  start()
 }

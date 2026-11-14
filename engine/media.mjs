@@ -14,6 +14,7 @@
 import { chmodSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { musicPrompt, SFX_TEXT } from './score.mjs'
+import { templateHint } from './odlibrary.mjs'
 
 export const KEYS = {
   elevenlabs: { label: 'ElevenLabs', keyUrl: 'https://elevenlabs.io/app/settings/api-keys', env: 'SWARM_ELEVENLABS_KEY' },
@@ -102,7 +103,8 @@ export function mediaSources({ env = {}, keys, mcp = {}, images = [], videos = [
 // A path an MCP tool says it wrote (ElevenLabs's MCP saves files and answers with where).
 export function pathIn(result) {
   const text = typeof result === 'string' ? result : JSON.stringify(result ?? '')
-  return /(\/[^\s"'<>]+\.(?:mp3|wav|m4a|ogg))/i.exec(text)?.[1] || null
+  // a Unix path, or a Windows one (C:\... or C:/...), as the connector prints it on that system
+  return /((?:[A-Za-z]:[\\/]|\/)[^\s"'<>]+\.(?:mp3|wav|m4a|ogg))/i.exec(text)?.[1] || null
 }
 
 // The score through Hermes's ElevenLabs MCP connector: same prompt, same cue sheet as the
@@ -138,7 +140,7 @@ export function clipJobs(scenes, images, flowDir, max = 3) {
     if (!still?.file || !existsSync(still.file)) continue
     const clip = join(flowDir, `${basename(still.file).replace(/\.[^.]+$/, '')}.mp4`)
     if (existsSync(clip) || out.some(j => j.clip === clip)) continue
-    out.push({ still: still.file, clip, seconds: s.seconds > 4.5 ? 8 : 4, prompt: `${still.gen ? `${still.gen}. ` : ''}${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape, no text` })
+    out.push({ still: still.file, clip, seconds: s.seconds > 4.5 ? 8 : 4, prompt: [`${still.gen ? `${still.gen}. ` : ''}${(s.camera || 'slow push-in').replace('-', ' ')}, one continuous shot, small motions only, nothing appears or changes shape, no text`, templateHint('video', still.gen || '')].filter(Boolean).join('. ') })
   }
   return out
 }

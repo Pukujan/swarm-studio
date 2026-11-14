@@ -7,7 +7,7 @@
 body.cosmos-studio .sc-crumb { display: flex !important; align-items: center; gap: 4px; min-width: 0; color: var(--muted); }
 body.cosmos-studio .sc-primary:not([hidden]) { display: inline-flex !important; align-items: center; justify-content: center; min-width: 120px; }
 body.cosmos-studio .sc-primary.pri { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-body.cosmos-studio .brand, body.cosmos-studio .file-name, body.cosmos-studio .playwrap, body.cosmos-studio .pubwrap, body.cosmos-studio .mode-wrap,
+body.cosmos-studio .brand, body.cosmos-studio .file-name, body.cosmos-studio .playwrap, body.cosmos-studio .pubwrap,
 body.cosmos-studio .pl-crumb, body.cosmos-studio .pl-primary, body.cosmos-studio .br-crumb, body.cosmos-studio .br-primary { display: none !important; }
 body.cosmos-studio .cosmos-back { display: none; }
 body.cosmos-studio .topbar { background: var(--void); backdrop-filter: none; }
@@ -43,6 +43,17 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .ab.pcard.sc-idea > span { font: 500 16px/1.4 var(--body); -webkit-line-clamp: 4; }
 .sc-idea-full { margin: 0; font: 14px/1.5 var(--body); color: var(--text); }
 
+/* the board reads like the steps: sections left to right, then the next row */
+.scaffold .sc-row { display: flex; gap: 72px; align-items: flex-start; }
+.scaffold .sc-row .pj-sec .abs { max-width: 540px; }
+.scaffold .sc-none { color: var(--muted); font-weight: 500; }
+/* Lock, the last section: the idea, then what is set so far, three cards to a row like the game's Plan board */
+.scaffold .pj-sec.sc-facts .abs { max-width: 700px; gap: 16px; }
+.scaffold .sc-facts .ab.pcard.sc-idea { width: 436px; min-height: 118px; }
+.ab.pcard.sc-fact { position: relative; cursor: pointer; }
+.ab.pcard.sc-fact > span { font-size: 20px; overflow-wrap: anywhere; }
+.sc-fsw { position: absolute; right: 14px; top: 14px; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line-2); }
+
 /* a website's pages: a storyboard strip, each frame in the brand's own colours and heading */
 .ab.sc-frame { width: 200px; height: 140px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); color: var(--text); overflow: visible; }
 .ab.sc-frame .sc-nav { display: block; height: 4px; width: 44%; border-radius: 99px; background: var(--a, var(--muted)); opacity: .9; }
@@ -51,8 +62,60 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 .ab.sc-frame u + u { width: 70%; }
 .ab.sc-frame > em { font-variant-numeric: tabular-nums; }
 
+/* a link's look (decision 0022) */
+.ab.sc-thumb img { object-fit: cover; object-position: top; }
+/* the crew reading it or comparing it (web/lookmatch.js workHtml): the Plan board's sheen (.pl-work) and the
+   worker's named cursor, going between a few spots on the card */
+.ab.sc-walking .pl-work { border-radius: inherit; }
+.ab.sc-walking .cur { left: 62%; top: 58%; transition: none; animation: lk-roam 9s cubic-bezier(.4, 0, .2, 1) infinite; }
+@keyframes lk-roam { 0%, 14% { left: 62%; top: 58%; } 25%, 39% { left: 16%; top: 24%; } 50%, 64% { left: 68%; top: 18%; } 75%, 89% { left: 28%; top: 64%; } 100% { left: 62%; top: 58%; } }
+@media (prefers-reduced-motion: reduce) { .ab.sc-walking .cur { animation: none; } }
+.lk-shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.lk-shots img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
+.br-sw.lk-sw { grid-template-columns: repeat(6, 1fr); height: 24px; }
+.lk-row { margin: 0; display: grid; grid-template-columns: 56px 1fr; gap: 8px; font: 13px/1.45 var(--body); color: var(--text); }
+.lk-row b { font-weight: 500; color: var(--muted); }
+.lk-state, .lk-from { margin: 0; font: 13px var(--body); color: var(--muted); }
+.lk-from a { color: var(--text); }
+
 /* the inspector's actions */
 .sc-body { display: flex; flex-direction: column; gap: 12px; }
 .sc-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .sc-acts .btn { display: inline-flex; align-items: center; gap: 6px; }
 .sc-body select { width: 100%; height: 32px; background: var(--deep); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: 13px var(--body); padding: 0 8px; }
+
+/* the left panel: Layers (web/layers.js, the Overview's and the Design deck's tree). In a narrow pane it is a
+   sheet (web/project.css) from the Layers button at the board's top right (the chat is the bottom sheet), and
+   while it is open the board sits above the chat so the sheet runs the whole height */
+.scaffold .pj-side .pj-tabs .pj-tab { cursor: default; }
+.scaffold .pj-layers { padding-top: 2px; }
+.scaffold .pj-layers .pg-title { gap: 9px; }
+@media (max-width: 760px) { .scaffold.files-on { z-index: 141; } }
+.sc-layers-btn { position: absolute; right: 12px; top: 12px; z-index: 44; background: var(--deep); border: 1px solid var(--line); border-radius: 10px; width: 40px; height: 40px; place-items: center; color: var(--muted); cursor: pointer; }
+.sc-layers-btn[aria-expanded="true"] { color: var(--text); background: var(--surface-2); }
+
+/* the step path (docs/specs/42-ways-to-make.md): a chip per step floating over the board's top edge, above where
+   the board frames its first section (40px), then Lock, then a dashed + chip for each removed step; it scrolls on
+   its own on a phone, and takes no room from the board. No motion of its own (MOTION.md) */
+.sc-path { position: absolute; top: 8px; left: 16px; right: 16px; z-index: 10; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; pointer-events: none; }
+.sc-path::-webkit-scrollbar { display: none; }
+.project.insp-on .sc-path { right: 288px; }
+.sc-chip { pointer-events: auto; flex: none; display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 500 13px var(--body); cursor: pointer; }
+.sc-chip:hover { border-color: var(--line-2); }
+.sc-chip.on { border-color: var(--text); }
+.sc-chip:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.sc-chip.sc-gone { background: transparent; border-style: dashed; color: var(--muted); gap: 4px; }
+.sc-chip.sc-gone:hover { color: var(--text); }
+@media (max-width: 760px) { .project.insp-on .sc-path { right: 16px; } }
+
+/* Three takes: each look as a small page in its own ground, type and accent, its colours under it */
+.ab.sc-take { width: 300px; height: 250px; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); overflow: visible; }
+.sc-take-page { flex: 1; min-height: 0; border-radius: 4px; padding: 0 0 12px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; pointer-events: none; }
+.sc-take-page > * { margin: 0 14px; }
+.sc-take-page img { margin: 0 0 4px; width: 100%; height: 76px; flex: none; object-fit: cover; }
+.sc-take-page b { font-size: 18px; line-height: 1.15; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sc-take-page span { font-size: 12px; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-take-page i { display: block; width: 72px; height: 18px; flex: none; border-radius: 99px; margin-top: auto; }
+/* the step path starts right of the Layers panel; in a narrow pane it leaves room for the Layers button */
+.scaffold .sc-path { left: 288px; }
+@media (max-width: 760px) { .scaffold .sc-path { left: 16px; right: 64px; } .scaffold.insp-on .sc-path { right: 64px; } }

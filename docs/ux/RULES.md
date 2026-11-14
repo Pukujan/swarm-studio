@@ -18,7 +18,7 @@ These win over every rule below that disagrees.
 2. **Always minimal text.** A default screen is a headline, one input and one button. No eyebrows (kickers),
    helper sentences, sub-paragraphs or explanatory captions. Clear empty space beats words.
 3. **Few colours.** Black, graphite and white, plus **one** accent for the whole plugin, in one CSS variable,
-   `--accent` (`web/canvas.css`). No per-room, per-view or per-agent colours: the crew is told apart by shade.
+   `--accent` (`tokens/studio.tokens.json`, built into `web/tokens.css`). No per-room, per-view or per-agent colours: the crew is told apart by shade.
    The accent is the text colour: a white button with black text in dark mode, black with white text in light
    mode. The owner may pick a hue later, and that is the one line (every tint is a `color-mix` of `--accent`).
    Red is kept only for errors. Pictures (built pages, planets, art, video) are the only other colour.
@@ -178,6 +178,8 @@ We don't invent UX from scratch. These rules apply well-known guides to our app:
 - [ ] Every new panel closes with ×, Esc and an outside click; the logo and Esc take you home from every view.
 - [ ] `node scripts/ui-check.mjs` passes (overlaps, clickability, closing, way home, no sideways scroll, and
       the checks PATTERNS.md lists as landed).
+- [ ] `npm run --prefix tools/dev audit` passes: no new breadcrumb, axe, scroll, console or loading violation
+      beyond `.ui-audit-known-violations.json` ([AUDIT.md](AUDIT.md)).
 - [ ] `node scripts/ui-review.mjs` passes: the studio's own design review (`engine/review.mjs`) finds no real
       issue on the screens you touched.
 - [ ] You looked at the 1280 and 768 screenshots yourself, and the PR shows before and after.

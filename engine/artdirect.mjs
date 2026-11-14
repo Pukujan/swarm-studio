@@ -6,6 +6,7 @@
 //
 // Pure functions; the server owns the image calls and the vision check's model.
 import { keyBackground, keyNamed, keyOf } from './keycolor.mjs'
+import { templateHint } from './odlibrary.mjs'
 export { keyTrouble, keyOf, swapKey, keyClash, otherKey, measureKey } from './keycolor.mjs'
 
 // The styles. Photo is the default; the brief picks another by naming it.
@@ -166,6 +167,8 @@ export function promptFor(gen, guide, { aspect = 'landscape', strict = '', cutou
     empty ? EMPTY_PLACE : '',
     `${what}.`,
     empty ? style.replace(/,?\s*an? (everyday )?(slice-of-life )?moment\b/gi, '').replace(/\b(original )?characters?( and original designs)? only\.?/gi, '').trim() : style,
+    // a prompt template from Open Design's library that fits this picture strongly (engine/odlibrary.mjs)
+    cutout || empty ? '' : templateHint('image', what, { photo: /photograph/i.test(style) }),
     cutout
       ? `No text, letters, numbers, logos or brand marks anywhere in the picture. One figure alone on ${keyBackground(what, /#(FF00FF|00FF00|0000FF)/i.test(what) ? keyNamed(keyOf(what)) : undefined)}, with no floor, shadow, scenery or frame, so it can be cut out.`
       : 'No text, letters, numbers, logos or brand marks anywhere in the picture. No user interface: no screens, dashboards, apps, charts, nav bars, buttons or signs. A real scene only; the words live in the page, not the picture.',

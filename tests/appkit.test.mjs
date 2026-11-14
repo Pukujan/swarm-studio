@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { draftKit, cleanKit, editKit, askConnect, connectsOf, readKit, kitLeft, kitDone, kitWords, kitPlan, kitProposal, kitChecks, kitMessages, haveOf } from '../engine/appkit.mjs'
+import { readFileSync } from 'node:fs'
+import { draftKit, cleanKit, editKit, askConnect, connectsOf, readKit, kitLeft, kitDone, kitWords, kitPlan, kitProposal, kitChecks, kitMessages, haveOf, KIT_KEYS, optionsOf, APIS } from '../engine/appkit.mjs'
+import { appEnv, APP_KEYS } from '../engine/proc.mjs'
 import { planBrief } from '../engine/advisor.mjs'
 
 const OWNER = 'full stack saas app for ticket booking with email sign-in and an admin for booking orders, members and operations'
@@ -27,7 +29,9 @@ test('"i need an air booking api or something?" gets an answer and a choice, not
   const k = draftKit(OWNER)
   const a = askConnect('i need an air booking api or something?', k)
   assert.match(a.say, /Duffel or Amadeus/)
-  assert.deepEqual(a.options.map(o => o.id), ['api-flights:duffel', 'api-flights:amadeus', 'api-flights:mock'])
+  // their keys are not declared, so they are named, never offered as a choice
+  assert.deepEqual(a.options.map(o => o.id), ['api-flights:mock'])
+  assert.deepEqual(askConnect('do we need a maps api?', k).options.map(o => o.id), ['api-maps:osm', 'api-maps:mock'])
   const c = a.kit.connects.find(x => x.id === 'api-flights')
   assert.equal(c.choice, null)
   assert.ok(kitLeft(a.kit).includes('api-flights'))
@@ -52,6 +56,8 @@ test('a connection is ready, needs a key, or is not chosen', () => {
 test('names only: haveOf lists env names, a live Stripe key does not count', () => {
   assert.deepEqual(haveOf({ STRIPE_SECRET_KEY: 'sk_test_x', RESEND_API_KEY: 're_x', SUPABASE_URL: 'u', SUPABASE_SERVICE_ROLE_KEY: 'k' }), ['STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'supabase'])
   assert.deepEqual(haveOf({ STRIPE_SECRET_KEY: 'sk_live_x' }), [])
+  // a key not declared in plugin.yaml is never read
+  assert.deepEqual(haveOf({ DUFFEL_API_KEY: 'd', AMADEUS_API_KEY: 'a', MAPBOX_TOKEN: 'm', TWILIO_AUTH_TOKEN: 't' }), [])
   assert.deepEqual(haveOf({}, { supabase: true }), ['supabase'])
 })
 
@@ -138,4 +144,37 @@ test('anything that comes in is bounded', () => {
   assert.deepEqual(k.users, [])
   assert.deepEqual(k.data[0].fields, ['f'])
   assert.equal(k.start, 'screens')
+})
+
+test('every key a connection can need is declared in plugin.yaml, passed by the launcher, and handed to the app', () => {
+  const manifest = readFileSync(new URL('../plugin.yaml', import.meta.url), 'utf8')
+  const declared = new Set([...manifest.matchAll(/^  - name: (\S+)/gm)].map(m => m[1]))
+  const launcher = readFileSync(new URL('../launcher.py', import.meta.url), 'utf8')
+  const passed = launcher.match(/^PASSED_KEYS = \(([\s\S]*?)^\)/m)[1]
+  const kinds = { signin: 0, payments: 0, email: 0, storage: 0 }
+  const needs = new Set([...Object.keys(kinds).flatMap(kind => optionsOf({ kind })), ...APIS.flatMap(a => optionsOf({ kind: 'api', api: a.id }))].flatMap(o => o.needs).filter(n => n !== 'supabase'))
+  for (const n of needs) {
+    assert.ok(declared.has(n), `${n} is declared in plugin.yaml`)
+    assert.ok(KIT_KEYS.includes(n), `${n} is one the studio reads`)
+    assert.ok(n === 'STRIPE_SECRET_KEY' || APP_KEYS.includes(n), `${n} reaches the built app`)
+  }
+  for (const n of KIT_KEYS) {
+    assert.ok(declared.has(n), `${n} is declared in plugin.yaml`)
+    assert.ok(passed.includes(`"${n}"`), `${n} is passed by launcher.py`)
+  }
+})
+
+test('a connection marked ready reaches the app; one not chosen does not', () => {
+  const env = { RESEND_API_KEY: 're_x', DUFFEL_API_KEY: 'd', PATH: '/bin' }
+  let k = editKit(draftKit(OWNER), { op: 'set', what: 'connect', id: 'email', value: { choice: 'resend' } })
+  assert.equal(connectsOf(k, haveOf(env)).find(c => c.id === 'email').state, 'ready')
+  const plan = kitPlan(k, haveOf(env))
+  assert.deepEqual(plan.keys, ['RESEND_API_KEY'])
+  assert.deepEqual(appEnv(env, plan.keys), { RESEND_API_KEY: 're_x' })
+  // the outbox needs no key, and the app gets none
+  k = editKit(k, { op: 'set', what: 'connect', id: 'email', value: { choice: 'outbox' } })
+  assert.deepEqual(kitPlan(k, haveOf(env)).keys, [])
+  assert.deepEqual(appEnv(env, kitPlan(k, haveOf(env)).keys), {})
+  // a name that is not one of the app's keys is never handed over, even if asked for
+  assert.deepEqual(appEnv(env, ['DUFFEL_API_KEY', 'PATH']), {})
 })
