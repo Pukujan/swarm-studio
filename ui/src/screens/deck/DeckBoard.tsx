@@ -1,7 +1,8 @@
-// The Design deck's canvas as an image-first board (behind `?board=tiers`, src/board/flag.ts; spec 43 §2,
+// The Design deck's canvas as an image-first board (behind `?board=tiers|pixi`, src/board/flag.ts; spec 43 §2,
 // §3): the camera lives outside React (src/board/camera.ts) and moves the world with one transform; on every settled
 // frame the tier manager (src/board/tiers.ts) decides each page's tier. Only live pages are real pages (PageFrame,
-// sandboxed); the rest are their saved photos, as <img>. Going live, the photo stays until the frame has laid itself out (its first `geo`); going back, the
+// sandboxed); the rest are their saved photos, as <img> (`tiers`) or painted on one PixiJS canvas (`pixi`,
+// src/board/PixiBoard.tsx), with the live pages on the overlay above it. Going live, the photo stays until the frame has laid itself out (its first `geo`); going back, the
 // frame is removed and the last saved photo shows (the in-page capture of §3.7 has not been built, so nothing is
 // photographed again here yet). The crew's cursors stay HTML on top. Same props and handle as DeckStage.
 //
@@ -16,6 +17,8 @@ import { machineBudgets, useTiers } from '../../board/useTiers'
 import type { Item } from '../../board/tiers'
 import { BoardHostContext } from '../../board/host'
 import { tierHost } from '../../board/tierHost'
+// static: /next/ is one inlined script, with no chunks to fetch (server/next.mjs)
+import { PixiBoard } from '../../board/PixiBoard'
 import { crew } from './crew'
 import { FRAME_W, GAP, PageFrame, frameX, type FrameGeo } from './PageFrame'
 import { layersOf, type DeckAgent, type DeckModel } from './model'
@@ -131,7 +134,8 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   const stopFollow = useRef(() => {})
   stopFollow.current = () => { moved.current = true; if (follow) onFollow?.(false) }
   const down = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
+    // with the PixiJS layer, its viewport takes the pointer and the wheel
+    if (e.button !== 0 || mode === 'pixi') return
     const c = camera.get()
     drag.current = { x: e.clientX, y: e.clientY, cx: c.x, cy: c.y }
     stage.current?.setPointerCapture(e.pointerId)
@@ -148,7 +152,7 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   const up = () => { drag.current = null; setPanning(false) }
   useEffect(() => {
     const s = stage.current
-    if (!s) return
+    if (!s || mode === 'pixi') return
     const wheel = (e: WheelEvent) => {
       e.preventDefault()
       stopFollow.current()
@@ -161,7 +165,7 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
     }
     s.addEventListener('wheel', wheel, { passive: false })
     return () => s.removeEventListener('wheel', wheel)
-  }, [camera])
+  }, [camera, mode])
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (!(e.shiftKey && e.code === 'Digit1') || e.defaultPrevented) return
@@ -185,6 +189,12 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
   // a page that is no longer live has to paint again next time
   useEffect(() => { setPainted(s => { const keep = new Set([...s].filter(id => plan.get(id)?.tier === 'live')); return keep.size === s.size ? s : keep }) }, [plan])
 
+  // what the PixiJS layer paints: each page's photo for its tier, none for a live page once its frame has painted
+  const paints = model.pages.map(p => {
+    const d = plan.get(p.id)
+    const src = d && d.tier !== 'hidden' && !(d.tier === 'live' && painted.has(p.id)) ? photoFor(photos[p.id], d.px) : undefined
+    return { id: p.id, src, rect: { x: frameX(p), y: LABEL, w: FRAME_W, h: height(p.id) } }
+  })
   const pageLayers = useMemo(() => Object.fromEntries(model.pages.map(p => [p.id, layersOf(model, p.id)])), [model])
   const working = model.agents.filter(a => a.layer)
 
@@ -192,6 +202,7 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
     <BoardHostContext value={host}>
     <div ref={stage} role="region" aria-label="Canvas" data-board={mode} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onDoubleClick={() => onFollow?.(true)}
       className={`relative min-h-0 min-w-0 flex-1 touch-none overflow-hidden bg-void outline-none [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:24px_24px] ${panning ? 'cursor-grabbing' : 'cursor-default'}`}>
+      {mode === 'pixi' && <PixiBoard camera={camera} items={paints} onMove={() => stopFollow.current()} />}
       <div ref={world} className="pointer-events-none absolute top-0 left-0 origin-top-left" style={{ width: worldW }}>
         {model.pages.map(p => {
           const d = plan.get(p.id)
@@ -204,9 +215,10 @@ export function DeckBoard({ ref, model, mode, onZoom, follow = false, onFollow, 
                 <span className="text-text">Page {p.index + 1} · {p.title}</span><small className="font-monospace normal-case">/{p.id}</small>
               </div>
               <div className="relative" style={{ height: height(p.id) }}>
-                {!shown && (src
+                {mode === 'tiers' && !shown && (src
                   ? <img src={src} alt="" decoding="async" draggable={false} className="absolute inset-0 block size-full bg-paper object-cover object-top" />
                   : <div aria-hidden className="absolute inset-0 rounded-[2px] border border-line bg-surface-2" />)}
+                {mode === 'pixi' && !shown && !src && <div aria-hidden className="absolute inset-0 rounded-[2px] border border-line bg-surface-2" />}
                 {live && (
                   <div className={`absolute inset-0 motion-safe:transition-opacity motion-safe:duration-200 ${shown ? 'opacity-100' : 'opacity-0'}`}>
                     <PageFrame page={p} layers={pageLayers[p.id]} agents={model.agents} theme={model.theme} onGeo={onGeo} />

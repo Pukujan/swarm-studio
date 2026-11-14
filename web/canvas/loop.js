@@ -16,6 +16,7 @@ import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view,
 import { tour, stopTour, closePlayer, watchVisitor, setMotion, openPlayer } from './player.js'
 import { talk, talkSay, readTalk, talkStart, talkAsk, openAsk } from './talk.js'
 import { links, refLines } from './base.js'
+import { carryStep, carryMoving } from './carry.js'
 import { hosted } from './hosted.js'
 
 // ---------- loop
@@ -110,6 +111,7 @@ export function frameLoop(now) {
   }
   runBanter(now)
   drawWires()
+  carryStep(now)
 
   if (now - lite.last > 1000) { lite.last = now; litePass() }
   if (now - lastPanels > 150) {
@@ -156,7 +158,7 @@ export function frameLoop(now) {
   // nothing moving (camera settled, no cursor at work, no build running): a few frames a second
   // is enough; any input wakes it at once (wakeLoops)
   const still = Math.abs(cam.ts - cam.s) < 1e-4 && Math.abs(cam.tx - cam.x) < 0.2 && Math.abs(cam.ty - cam.y) < 0.2 &&
-    !S.frames.some(frameBusy) && ![...S.agents.values()].some(a => a.act || a.queued || now < (a.moving || 0) || now < (a.sayUntil || 0))
+    !S.frames.some(frameBusy) && !carryMoving() && ![...S.agents.values()].some(a => a.act || a.queued || now < (a.moving || 0) || now < (a.sayUntil || 0))
   nextFrame(frameLoop, still)
 }
 

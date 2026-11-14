@@ -1650,16 +1650,20 @@ function walkLook(pid, ref) {
   const key = `${pid}/${ref.id}`
   if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
   const from = { host: ref.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], url: ref.url, source: ref.source, chat: ref.from || null, at: ref.added }
-  const now = refs.setLook(pid, ref.id, { state: 'walking', at: Date.now(), from })
+  const started = Date.now()
+  const now = refs.setLook(pid, ref.id, { state: 'walking', step: `Opening ${from.host}`, at: started, from })
   lookWalks.add(key)
+  // what the walk is doing now, kept on the look so the Studio shows it under the crew's cursor
+  const step = text => { try { refs.setLook(pid, ref.id, { state: 'walking', step: text, at: started, from }) } catch {} }
   ;(async () => {
     try {
       const { walkSite, describeLook } = await import('../engine/sitelook.mjs')
-      const w = await walkSite(ref.url, { dataDir, signal: AbortSignal.timeout(150000) })
+      const w = await walkSite(ref.url, { dataDir, signal: AbortSignal.timeout(150000), onStep: step })
       if (!w.tokens) return refs.setLook(pid, ref.id, { state: 'failed', note: w.note || 'the site did not open', at: Date.now(), from })
       const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
       const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look' }, model: modelFor(v), maxTokens: 900, temperature: 0.3, signal: AbortSignal.timeout(90000), messages })).text : null
       const live = refs.list(pid).find(x => x.id === ref.id)
+      step('Writing the look')
       const words = await describeLook(w, { want: live?.use || ref.use || '', chat })
       refs.setLook(pid, ref.id, { state: 'ready', at: Date.now(), from, pages: w.pages.map(p => p.url), tokens: w.tokens, motion: w.motion, words }, w.pages.flatMap(p => p.shots.slice(0, 3)))
     } catch (err) {
@@ -1673,21 +1677,24 @@ function walkLook(pid, ref) {
 function matchLook(pid, ref, run) {
   const key = `${pid}/${ref.id}/match`
   if (lookWalks.has(key)) return refs.list(pid).find(x => x.id === ref.id) || null
-  const now = refs.setMatch(pid, ref.id, { state: 'checking', run, at: Date.now() })
+  const started = Date.now()
+  const now = refs.setMatch(pid, ref.id, { state: 'checking', step: 'Opening your pages', run, at: started })
   lookWalks.add(key)
+  const step = text => { try { refs.setMatch(pid, ref.id, { state: 'checking', step: text, run, at: started }) } catch {} }
   ;(async () => {
     try {
       const { walkBuild, judgeMatch } = await import('../engine/lookmatch.mjs')
       const events = readEvents(run)
       if (!events) throw new Error('that build is gone')
       const out = await exportRun({ events, runId: run, runDir: join(runsDir, run), sections: [], name: nameFor(run)?.name, fill: fillExport(run) })
-      const ours = await walkBuild({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir, signal: AbortSignal.timeout(120000) })
+      const ours = await walkBuild({ htmlDir: join(out.dir, 'html'), files: out.html, dataDir, signal: AbortSignal.timeout(120000), onStep: step })
       if (!ours.tokens) return refs.setMatch(pid, ref.id, { state: 'failed', note: ours.note || 'the pages did not open', run, at: Date.now() })
       const live = refs.list(pid).find(x => x.id === ref.id)
       const L = live.look
       const shots = (L.shots || []).slice(0, 2).map(s => { const f = refs.file(pid, s.split('/').pop()); return f ? readFileSync(f.file) : null }).filter(Boolean)
       const v = models.reviewer.apiKey && modelFor('reviewer') ? 'reviewer' : models.planner.apiKey && modelFor('planner') ? 'planner' : null
       const chat = v ? async messages => (await streamChat(provider(v), { trace: { kind: 'look-match' }, model: modelFor(v), maxTokens: 900, temperature: 0.2, signal: AbortSignal.timeout(90000), messages })).text : null
+      step('Comparing')
       const m = await judgeMatch({ ref: { tokens: L.tokens, motion: L.motion, shots }, ours, want: live.use || '', avoid: [L.from?.host, L.from?.url], chat })
       refs.setMatch(pid, ref.id, { state: 'ready', run, at: Date.now(), ...m }, ours.pages.flatMap(p => p.shots.slice(0, 1)).slice(0, 2))
     } catch (err) {

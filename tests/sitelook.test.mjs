@@ -128,6 +128,30 @@ test('the walk refuses the machine\'s own and private addresses', async () => {
   await assert.rejects(walkSite('file:///etc/passwd'), /not a link/)
 })
 
+// a browser that draws nothing: enough of puppeteer's page for the walk (engine/pageshots.mjs settle included)
+const fakeBrowser = (seen, height = 1600) => async () => ({
+  newPage: async () => ({
+    setViewport: async () => {}, setRequestInterception: async () => {}, on: () => {}, goto: async () => {}, waitForNetworkIdle: async () => {},
+    evaluate: async x => (typeof x !== 'string' ? undefined : /scrollHeight$/.test(x) ? height : structuredClone(seen)),
+    screenshot: async () => Buffer.from([0xff, 0xd8, 0xff]), url: () => 'http://127.0.0.1:9/', close: async () => {}
+  }),
+  close: async () => {}
+})
+test('the walk says what it is doing, step by step, and a step that throws does not stop it', async () => {
+  const steps = []
+  const first = { ...measured, nav: ['http://127.0.0.1:9/work'], title: 'Cool' }
+  const w = await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser(first), allowPrivate: true, pages: 2, shots: 2, onStep: t => steps.push(t) })
+  assert.equal(w.pages.length, 2)
+  assert.deepEqual(steps, ['Opening 127.0.0.1', 'Scrolling page 1 of 2', 'Reading colours and type', 'Opening page 2 of 2', 'Scrolling page 2 of 2', 'Reading colours and type'])
+  // a short page is never scrolled, so it says no scrolling
+  const short = []
+  await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser({ ...measured, nav: [], title: '' }, 600), allowPrivate: true, onStep: t => short.push(t) })
+  assert.deepEqual(short, ['Opening 127.0.0.1', 'Reading colours and type'])
+  const quiet = await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser({ ...measured, nav: [], title: '' }, 600), allowPrivate: true, onStep: () => { throw new Error('store gone') } })
+  assert.equal(quiet.pages.length, 1)
+  assert.ok(quiet.tokens)
+})
+
 // the real thing, when this machine has the browser the video tools install
 const dataDir = join(homedir(), '.hermes', 'swarm-studio')
 const canWalk = !!(puppeteer(dataDir) && findChrome())

@@ -863,6 +863,18 @@ body.no-breakroom .dock, body.no-breakroom .cursor.docked { display: none !impor
 .dock-hide { position: absolute; right: 6px; top: 4px; pointer-events: auto; background: none; border: 0; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 4px; }
 .dock-hide:hover { color: var(--text); background: rgb(var(--glass-rgb) / .08); }
 
+/* a picture being painted (web/canvas/carry.js): its card beside the page with the working sheen over it, held by
+   its painter's cursor, then carried to its slot */
+.carry { position: absolute; left: 0; top: 0; width: 120px; height: 80px; transform-origin: 0 0; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, var(--text) 14%, var(--bg)); border: 2px solid color-mix(in srgb, var(--text) 55%, var(--bg)); box-shadow: 0 6px 18px rgb(var(--shade-rgb) / .5); transition: opacity .25s; }
+.carry[hidden] { display: none; }
+.carry img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.carry::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--text) 22%, transparent) 50%, transparent 70%) 0 0 / 260% 100%; animation: carry-sheen 2.4s linear infinite; }
+.carry.got::after { display: none; }
+.carry.gone { opacity: 0; }
+@keyframes carry-sheen { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+.cursor.carrier { animation: crew-in .4s ease-out; }
+.cursor.carrier.leaving { opacity: 0; }
+
 /* crews: agents working over the App, Game and Video screens */
 .crew-layer { position: fixed; inset: 0; pointer-events: none; z-index: 67; overflow: hidden; } /* above the video and export panels the crew work in */
 .cursor.crew { animation: crew-in .4s ease-out; }
