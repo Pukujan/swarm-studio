@@ -2092,6 +2092,8 @@ body.side-min .tabs .chats-btn { display: none; }
 /* alone on the stage: picked in the switch, or asked for in the chat with no build running */
 .mapstage { position: absolute; inset: 0; z-index: 5; display: flex; padding: 16px; background: rgb(var(--void-rgb) / .96); }
 .mapstage[hidden] { display: none; }
+.mapdoor { position: absolute; top: 12px; left: 12px; z-index: 4; }
+.mapdoor[hidden] { display: none; }
 .mapstage .cw-map { flex: 1; }
 /* the small play-test card would sit on the diagram: with the Map alone on the stage it waits */
 #app-preview:has(> .mapstage:not([hidden])) > .playclip { display: none; }

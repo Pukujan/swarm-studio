@@ -80,6 +80,7 @@ A game's facts: the `game:spec` event and `stagesFor` (engine/game.mjs) for the 
 - **Enlarges like the others:** a click on the diagram, or its button, makes it about three quarters of the wall; again, or Esc, puts it back.
 - **Phones:** the current Studio's wall has no dots. At 900 px and narrower its windows are one column, as before, with the Map first. The 4-dot switcher is `/next/`'s.
 - **The switch is Crew · Art · Live · Map** (web/canvas/stage.js). Map is offered whenever the build has one. The stage never turns to it by itself; picked, it shows the Map alone over whatever was there, building or not, until another view is picked or it is clicked again.
+- **At rest the Map has its own door** (owner, 2026-11-14: visual feedback on what's going on, always). When Map is the switch's only option the switch stays hidden, so a plain button named "Map" sits where the wall would stand, top left of the stage (`mapDoor` in stage.js). It opens the Map alone. The switch then shows with Map pressed, and pressing it again goes back. A name only, no tooltip. It never shows beside the switch's own Map.
 
 **The chat shows it** (web/canvas/mapask.js `mapAsk`; the whole message has to be the request, in any chat mode):
 

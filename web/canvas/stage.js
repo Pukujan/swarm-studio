@@ -118,7 +118,15 @@ export function playFail(kind, message) {
 }
 
 /**
- * Draw the switch from stageNow. The group shows once there are two views to choose between. The pinned option
+ * The Map's own door at rest: one plain "Map" in the corner where the crew's wall stands while it builds. It shows
+ * when the Map has something to draw, is not on the stage already, and the switch is hidden (Map its only option),
+ * so the Map is always one press away, never only typed.
+ * @param {{ offers: string[], shown: string }} now  @returns {boolean}
+ */
+export const mapDoor = now => now.offers.includes('map') && now.offers.length < 2 && now.shown !== 'map'
+
+/**
+ * Draw the switch from stageNow. The group shows once there are two views to choose between, or one is pinned. The pinned option
  * is pressed (aria-pressed, filled); while the stage follows the build, the one on now is current
  * (aria-current, a dot before its name), so the two never look the same.
  * @param {Element | null | undefined} el the group, with one button[data-stage] per view
@@ -126,7 +134,8 @@ export function playFail(kind, message) {
  */
 export function stageSwitch(el, now, pick) {
   if (!(el instanceof HTMLElement)) return
-  el.hidden = now.offers.length < 2
+  // (one option, pinned, still shows: pressed again it lets go, so a Map opened alone at rest has its way back)
+  el.hidden = now.offers.length < 2 && !now.pin
   for (const b of /** @type {NodeListOf<HTMLButtonElement>} */ (el.querySelectorAll('button[data-stage]'))) {
     const v = /** @type {StageView} */ (b.dataset.stage)
     const pinned = now.pin === v, current = !now.pin && now.shown === v

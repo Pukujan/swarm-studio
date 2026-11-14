@@ -2,7 +2,7 @@
 // web/canvas.js, split by area (web/canvas/README.md): the views and rooms: Canvas, Video, App, the big game, the app advisor, game mode, cast, art, the bench.
 import { dataStore } from '../data.js'
 import { noAppYet, goOnAsk } from './wander.js'
-import { stageNow, stagePick, stageAsk, stageNone, stageSwitch, playFail } from './stage.js'
+import { stageNow, stagePick, stageAsk, stageNone, stageSwitch, playFail, mapDoor } from './stage.js'
 import { autoplayRoom } from './autoplay.js'
 import { mapAsk, mapNone } from './mapask.js'
 import { mapWindow } from './mapwin.js'
@@ -36,8 +36,8 @@ const stagePin = { v: null }
 // builds (web/canvas/dock.js), alone on the stage when it is picked in the switch or asked for in the chat.
 // mapv is the standing map as last read (undefined: not read yet; null: no plan to draw) and whether the chat
 // asked for a diagram of its own; both belong to one run.
-/** @type {{ run: string | null, data: any, t: number, busy: boolean, asked: boolean, host: HTMLElement | null }} */
-const mapv = { run: null, data: undefined, t: 0, busy: false, asked: false, host: null }
+/** @type {{ run: string | null, data: any, t: number, busy: boolean, asked: boolean, host: HTMLElement | null, door: HTMLButtonElement | null }} */
+const mapv = { run: null, data: undefined, t: 0, busy: false, asked: false, host: null, door: null }
 export const mapWin = mapWindow({ src: `${BASE}/vendor/mermaid/mermaid.min.js`, cursor: cursor('Hermia'), icons: { grow: ico('maximize-2'), shrink: ico('minimize-2') } })
 export const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
 // The Game room's Autoplay switch and the AI player's screen over the game (web/canvas/autoplay.js)
@@ -288,6 +288,7 @@ function renderApp() {
   stageSwitch($('#app-stageview'), now, v => stageSet(stagePick(stagePin.v, v)))
   if (shownRun() && appv.run === shownRun()) mapLoad(shownRun(), false)
   mapStage(now.shown === 'map')
+  mapDoorShow(mapDoor(now))
   if (now.open && shownRun() && !document.hidden) return openApp(shownRun())
   appEls.empty.hidden = !empty
   if (appv.kind === 'game' && shownRun()) sheetLoad(shownRun(), working || sheet)
@@ -425,6 +426,21 @@ function mapStage(on) {
   mapWin.big(false)
   mapv.host.hidden = false
   mapWin.draw()
+}
+// The Map's door at rest (stage.js mapDoor): a plain named button in the wall's corner of the stage.
+/** @param {boolean} on */
+function mapDoorShow(on) {
+  if (!on) { if (mapv.door) mapv.door.hidden = true; return }
+  if (!mapv.door) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'toggle mapdoor'
+    b.textContent = 'Map'
+    b.addEventListener('click', () => stageSet('map'))
+    appEls.preview.append(b)
+    mapv.door = b
+  }
+  mapv.door.hidden = false
 }
 // Put the Map in front, at once: enlarged on the wall while the crew's windows are up, else alone on the stage.
 function mapFront() {
