@@ -49,6 +49,15 @@ export const NODE_VENDORED = [
     entry: "export { execa } from 'execa'\nexport { default as treeKill } from 'tree-kill'\n",
     exports: ['execa', 'treeKill'],
     out: 'engine/vendor/procs/procs.mjs'
+  },
+  // ipaddr.js names the range an address is in (IPv4, IPv6 and IPv4-mapped IPv6): the site walk and link reads refuse
+  // anything that is not a public unicast address (engine/chatmedia.mjs privateAddress, engine/walkguard.mjs)
+  {
+    name: 'net',
+    dir: 'scripts/vendor/net',
+    entry: "export { default as ipaddr } from 'ipaddr.js'\n",
+    exports: ['ipaddr'],
+    out: 'engine/vendor/net/net.mjs'
   }
 ]
 

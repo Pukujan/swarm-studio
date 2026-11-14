@@ -2,8 +2,8 @@
 // only what should be copied is, the limits refuse in words, and the run's log says where it came from.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, realpathSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, realpathSync, rmSync, chmodSync } from 'node:fs'
+import { join, delimiter } from 'node:path'
 import { tmpdir } from 'node:os'
 import { parseRepo, cleanSub, checkFolder, subFolder, measure, copyIn, shapeOf, reachesUp, checkReach, planBeside, nameOf, readAsk, startEvents, doneEvent, intakeOf, gitFacts, fetchRepo, bringFolder, skipped, CAPS } from '../engine/bringin.mjs'
 import { appJobs } from '../engine/appjob.mjs'
@@ -148,10 +148,13 @@ test('the run\'s first lines and its last say what it is and where it came from'
   const done = doneEvent({ id: 'r1', t: 9, source: { ...source, sha: 'abc' }, shape: 'static', page: 'web/', files: 3, bytes: 10, left: 1, links: 0, godot: true, plan: true })
   assert.deepEqual(done, { type: 'intake', t: 9, run: 'r1', source: { repo: 'Pukujan/swarm-studio', path: 'games/ares', sha: 'abc' }, shape: 'static', page: 'web/', files: 3, bytes: 10, left: 1, links: 0, godot: true, plan: true })
   assert.equal(intakeOf([{ type: 'run:start' }]), null)
-  assert.deepEqual(intakeOf([start, began]), { source, done: false, shape: null, page: '', ran: false, fixed: true })
-  assert.deepEqual(intakeOf([start, began, done]), { source: done.source, done: true, shape: 'static', page: 'web/', ran: false, fixed: true })
+  assert.deepEqual(intakeOf([start, began]), { source, done: false, shape: null, page: '', ran: false, scripts: null, fixed: true })
+  assert.deepEqual(intakeOf([start, began, done]), { source: done.source, done: true, shape: 'static', page: 'web/', ran: false, scripts: null, fixed: true })
   const vite = { ...done, shape: 'vite', page: '' }
-  assert.deepEqual(intakeOf([start, began, vite, { type: 'intake:run' }]), { source: done.source, done: true, shape: 'vite', page: '', ran: true, fixed: false })
+  assert.deepEqual(intakeOf([start, began, vite, { type: 'intake:run' }]), { source: done.source, done: true, shape: 'vite', page: '', ran: true, scripts: null, fixed: false })
+  // the install scripts: the person's last answer stands
+  assert.equal(intakeOf([start, began, vite, { type: 'intake:scripts', allow: true }]).scripts, true)
+  assert.equal(intakeOf([start, began, vite, { type: 'intake:scripts', allow: true }, { type: 'intake:scripts', allow: false }]).scripts, false)
 })
 
 test('where a folder is from is read from its git files, never by running git', () => {
@@ -203,13 +206,13 @@ test('a run brought in reads as a finished build, plays as files, and is never b
   logs.set(id, startEvents({ id, kind: 'game', name: 'ARES', source: { folder: src, path: '' } }))
   try {
     const first = jobs.bring(id, { kind: 'game', work: async step => { const info = await bringFolder({ root: src, runDir, step }); logs.get(id).push(doneEvent({ id, source: { folder: src, path: '' }, ...info })) } })
-    assert.equal(first.state, 'working'); assert.equal(first.kind, 'game'); assert.deepEqual(first.intake, { shape: null, fixed: true, ran: false, done: false })
+    assert.equal(first.state, 'working'); assert.equal(first.kind, 'game'); assert.deepEqual(first.intake, { shape: null, fixed: true, ran: false, scripts: null, done: false })
     await jobs.jobs.get(id).done
     const types = logs.get(id).map(e => e.type)
     assert.deepEqual(types.filter(t => t !== 'app:step'), ['run:start', 'intake:start', 'app:start', 'intake', 'app:done'])
     assert.equal(logs.get(id).find(e => e.type === 'app:start').intake, true)
     const st = jobs.state(id)
-    assert.equal(st.state, 'done'); assert.equal(st.hasApp, true); assert.deepEqual(st.intake, { shape: 'static', fixed: true, ran: false, done: true })
+    assert.equal(st.state, 'done'); assert.equal(st.hasApp, true); assert.deepEqual(st.intake, { shape: 'static', fixed: true, ran: false, scripts: null, done: true })
     // the same after a restart, from the log alone
     const again = jobsFor(runsDir); again.logs.set(id, logs.get(id))
     assert.equal(again.jobs.state(id).hasApp, true); assert.equal(again.jobs.state(id).kind, 'game')
@@ -250,14 +253,54 @@ test('a Vite project brought in installs and builds only on the person\'s press,
   const source = { folder: '/x', path: '' }
   logs.set('r3', [...startEvents({ id: 'r3', kind: 'app', name: 'Hub', source }), { type: 'app:start', kind: 'app', intake: true }, doneEvent({ id: 'r3', source, shape: 'vite', page: '', files: 2, bytes: 2, left: 0, links: 0 }), { type: 'app:done', intake: true }])
   try {
-    assert.deepEqual(jobs.state('r3').intake, { shape: 'vite', fixed: false, ran: false, done: true })
+    assert.deepEqual(jobs.state('r3').intake, { shape: 'vite', fixed: false, ran: false, scripts: null, done: true })
     await assert.rejects(jobs.open('r3'), /Install and run/)
     assert.ok(!logs.get('r3').some(e => e.type === 'intake:run'))
     assert.ok(!existsSync(join(runsDir, 'r3', 'app', 'node_modules')), 'nothing was installed')
     // a first build or a start over would write the Studio's starter into it
     await assert.rejects(jobs.start('r3', { fresh: true }), /say what to change/)
     await assert.rejects(jobs.start('r3', {}), /say what to change/)
+    // a change runs its build and its dev server: not before the person's yes to running it
+    await assert.rejects(jobs.start('r3', { ask: 'make the header blue' }), /install and run it/)
+    assert.ok(!logs.get('r3').some(e => e.type === 'app:start' && !e.intake), 'no build started')
+    assert.ok(!existsSync(join(runsDir, 'r3', 'app', 'node_modules')), 'nothing was installed')
   } finally { jobs.close() }
+})
+
+// a stand-in pnpm on PATH that writes down how it was called, and whether a project's own hooks ran
+const fakePnpm = () => {
+  const bin = tmp()
+  writeFileSync(join(bin, 'pnpm'), `#!/usr/bin/env node
+const fs = require('fs'), path = require('path')
+fs.appendFileSync(path.join(process.cwd(), 'pnpm-calls.txt'), process.argv.slice(2).join(' ') + '\\n')
+if (process.argv[2] === 'install') fs.mkdirSync(path.join(process.cwd(), 'node_modules', 'vite', 'bin'), { recursive: true })
+if (process.argv[2] === 'install') fs.writeFileSync(path.join(process.cwd(), 'node_modules', 'vite', 'bin', 'vite.js'), "require('fs').mkdirSync('dist',{recursive:true});require('fs').writeFileSync('dist/index.html','built')")
+`)
+  chmodSync(join(bin, 'pnpm'), 0o755)
+  return bin
+}
+test('a brought-in project installs without its install scripts or .pnpmfile.cjs until the person allows them, for that project only', { skip: process.platform === 'win32' && 'the stand-in pnpm is a POSIX script' }, async () => {
+  const runsDir = tmp()
+  const { jobs, logs } = jobsFor(runsDir)
+  const PATH = process.env.PATH
+  process.env.PATH = `${fakePnpm()}${delimiter}${PATH}`
+  const source = { repo: 'a/b', path: '' }
+  put(join(runsDir, 'in', 'app'), { 'package.json': '{"devDependencies":{"vite":"^5"},"scripts":{"build":"vite build","postinstall":"echo hi"}}', 'index.html': 'x', '.pnpmfile.cjs': 'module.exports = {}' })
+  logs.set('in', [...startEvents({ id: 'in', kind: 'app', name: 'Hub', source }), { type: 'app:start', kind: 'app', intake: true }, doneEvent({ id: 'in', source, shape: 'vite', page: '', files: 3, bytes: 3, left: 0, links: 0 }), { type: 'app:done', intake: true }])
+  const calls = () => readFileSync(join(runsDir, 'in', 'app', 'pnpm-calls.txt'), 'utf8').trim().split('\n')
+  try {
+    await jobs.open('in', { run: true })
+    assert.deepEqual(calls(), ['install --prefer-offline --ignore-scripts --ignore-pnpmfile'])
+    // "run its install scripts" in the chat: on record, and run now since its packages are there
+    const st = await jobs.scripts('in', true)
+    assert.equal(st.intake.scripts, true)
+    assert.deepEqual(logs.get('in').filter(e => e.type === 'intake:scripts').map(e => e.allow), [true])
+    assert.deepEqual(calls().slice(1), ['install --prefer-offline', 'rebuild'])
+    // "no install scripts": off again, nothing runs
+    assert.equal((await jobs.scripts('in', false)).intake.scripts, false)
+    assert.equal(calls().length, 3)
+    await assert.rejects(jobs.scripts('nope', true), /only a project brought in/)
+  } finally { process.env.PATH = PATH; jobs.close() }
 })
 
 test('the files server answers a folder with its index.html and never reads one as a file', async () => {

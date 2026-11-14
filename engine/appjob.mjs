@@ -147,7 +147,9 @@ export function copyModels(dir, copy = {}) {
   return pairs.length
 }
 
-const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { CI: '1' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
+// a minimal environment (catalog review point 3), with PATH so pnpm is found where it is installed (without it
+// execFile looks only in the system folders)
+const sh = (cmd, args, cwd, ms = 300000) => new Promise(ok => execFile(cmd, args, { ...viaShell, cwd, timeout: ms, maxBuffer: 1 << 22, env: { CI: '1', PATH: process.env.PATH || process.env.Path || '' } }, (err, stdout, stderr) => ok({ ok: !err, out: String(stdout) + String(stderr) })))
 
 // A big game stopped partway: the stage to go on from (0: start over). Only
 // stages since the last build from scratch count, and only with the app still there.
@@ -275,7 +277,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   const built = (id, events = readEvents(id) || []) => events.some(e => e.type === 'app:done') && (existsSync(join(dirOf(id), 'package.json')) || !!intakeOf(events)?.done)
   // a run that was brought in says so: its shape, whether the crew can change it (fixed: not yet) and whether
   // the person has pressed for its install and build (ran); null for a run the Studio built
-  const broughtIn = (id, events = readEvents(id) || []) => { const it = intakeOf(events); return it ? { intake: { shape: it.shape, fixed: it.fixed, ran: it.ran, done: it.done } } : {} }
+  const broughtIn = (id, events = readEvents(id) || []) => { const it = intakeOf(events); return it ? { intake: { shape: it.shape, fixed: it.fixed, ran: it.ran, scripts: it.scripts, done: it.done } } : {} }
   // (asked of a job once: a run the Studio built never becomes one that was brought in)
   const broughtJob = j => (j.brought === false ? {} : (j.brought = !!intakeOf(readEvents(j.id) || [])) ? broughtIn(j.id) : {})
   // the app's own files are there, so it can be served (open): true for a big game waiting after a slice, which
@@ -301,6 +303,9 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (brought && !brought.done) throw new Error('This project did not come in. Bring it in again from Projects.')
     if (brought?.fixed) throw new Error('This project was brought in as plain files. The crew cannot change those yet: it plays here, and its code is in Code.')
     if (brought && (input.fresh || !String(input.ask || '').trim())) throw new Error('This project was brought in: say what to change.')
+    // a change runs the project's own build and then its dev server: code from outside, so only after the person's
+    // yes to running it (intake:run, the Install and run press or "install and run it" in the chat)
+    if (brought?.shape === 'vite' && !brought.ran) throw new Error('This project came from outside and has not run here yet. Say "install and run it" first, then what to change.')
     const kind = input.kind || j?.kind || events.find(e => e.type === 'app:start')?.kind || (events.some(e => e.type === 'run:start' && e.kind === 'game') ? 'game' : 'site')
     // a first build that failed left only the starter: build again from the start
     const fresh = !built(id, events) || input.fresh
@@ -396,7 +401,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         for (let i = chain.indexOf(used); ; i++) {
           try {
             used = chain[i]
-            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal, appKeys: !brought })
+            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal, appKeys: !brought, scripts: scriptsOk(id) })
           } catch (err) {
             if (i + 1 >= chain.length || signal.aborted || !BUSY.test(err.message)) throw err
             step({ kind: 'setup', text: `${chain[i]} is busy at the provider; going on with ${chain[i + 1]}`, ok: false })
@@ -734,7 +739,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
       film: () => (film.clip ? { clip: film.clip, keys: film.keys } : {}),
       extras: () => ({ links: linkProblem() || '', dodged: dodge() }), asked,
       fix: async prompt => {
-        await runEngine({ workspace: dir, prompt, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal, appKeys: !intakeOf(readEvents(j.id) || []) })
+        await runEngine({ workspace: dir, prompt, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal, appKeys: !intakeOf(readEvents(j.id) || []), scripts: scriptsOk(j.id) })
         if (j.godot) await exportWeb(dir)
       }
     })
@@ -748,9 +753,12 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // test key and its kit's keys (engine/proc.mjs appEnv). A project brought in gets none of them: its vite.config
   // and its server are code from outside, running outside the engine's egress guard.
   const appEnvFor = (id, j) => (intakeOf(readEvents(id) || []) ? {} : appEnv(process.env, keysOf(id, j)))
-  // a project brought in is installed without its packages' own scripts: code from outside runs only as the
-  // person's build and the app itself, never as an install hook
-  const installArgs = id => ['install', '--prefer-offline', ...(intakeOf(readEvents(id) || []) ? ['--ignore-scripts'] : [])]
+  // a project brought in is installed without its install scripts (its packages' lifecycle scripts and its own
+  // .pnpmfile.cjs, which pnpm runs even under --ignore-scripts): code from outside runs only as the person's build
+  // and the app itself, never as an install hook. The person may allow them for that one project, in the chat
+  // ("run its install scripts", intake:scripts); a project the Studio built installs as before.
+  const scriptsOk = id => { const it = intakeOf(readEvents(id) || []); return !it || it.scripts === true }
+  const installArgs = id => ['install', '--prefer-offline', ...(scriptsOk(id) ? [] : ['--ignore-scripts', '--ignore-pnpmfile'])]
   const keysOf = (id, j) => { if (!j.keys) { try { j.keys = JSON.parse(readFileSync(join(runsDir, id, 'app-keys.json'), 'utf8')) } catch { j.keys = [] } } return j.keys }
   async function serve(id, j, step = () => {}) {
     const dir = dirOf(id)
@@ -876,6 +884,25 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     return saved?.plan ? { ...planMap(saved.plan), at: saved.t } : null
   }
 
+  // The person's answer about a brought-in project's install scripts (docs/specs/45-intake.md), from the chat:
+  // allow: true runs them from the next install on (now, when its packages are already there: the install again
+  // and `pnpm rebuild`, so the scripts that were skipped run once); false keeps them off. Only for that project.
+  async function scripts(id, allow) {
+    const brought = intakeOf(readEvents(id) || [])
+    if (!brought?.done) throw new Error('only a project brought in asks about install scripts')
+    if (brought.shape !== 'vite') throw new Error('This project is plain files: nothing is installed, so there are no install scripts.')
+    send(id, 'intake:scripts', { allow: allow === true })
+    const dir = dirOf(id), j = jobs.get(id)
+    if (allow === true && existsSync(join(dir, 'node_modules')) && j?.state !== 'working') {
+      const inst = await sh('pnpm', installArgs(id), dir)
+      const re = inst.ok ? await sh('pnpm', ['rebuild'], dir) : inst
+      if (!re.ok) throw new Error(`its install scripts failed: ${re.out.slice(-300)}`)
+      // what was built before them is built again on the next open
+      try { rmSync(join(dir, '.swarm-built.json'), { force: true }) } catch {}
+    }
+    return j ? view(j) : state(id)
+  }
+
   // a viewer's heartbeat (the App view, every 30 s while it shows the app): the app's server is kept
   function seen(id) {
     const j = jobs.get(id)
@@ -903,7 +930,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     // a Vite project brought in is installed and built only on the person's own press (its packages and its
     // build are code from outside): `run: true`, kept as intake:run
     if (brought?.done && brought.shape === 'vite' && !brought.ran) {
-      if (input.run !== true) throw new Error('press Install and run first')
+      if (input.run !== true) throw new Error('This project came from outside: press Install and run, or say "install and run it"')
       send(id, 'intake:run', {})
     }
     // a big game waiting after a slice stays waiting: opening it to play must not end the wait (it read as done,
@@ -963,7 +990,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (!['package.json', '.git'].every(f => existsSync(join(dir, f)))) return { answer: '', by: '', why: 'no app is built yet' }
     asking.add(id)
     try {
-      const r = await runEngine({ workspace: dir, prompt: askPrompt(t), provider: provider('worker'), model, mode: 'ask', signal: signal || AbortSignal.timeout(180000), appKeys: !intakeOf(readEvents(id) || []) })
+      const r = await runEngine({ workspace: dir, prompt: askPrompt(t), provider: provider('worker'), model, mode: 'ask', signal: signal || AbortSignal.timeout(180000), appKeys: !intakeOf(readEvents(id) || []), scripts: scriptsOk(id) })
       return { answer: String(r.answer || '').trim().slice(0, 4000), by: 'dyad', changed: r.changed === true }
     } finally { asking.delete(id) }
   }
@@ -1041,7 +1068,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // a build is running somewhere (the server's idle exit waits for it)
   const busy = () => asking.size > 0 || [...jobs.values()].some(j => j.state === 'working')
 
-  return { start, bring, state, stop, tell, redirect, ask, open, seen, files, map, deploy, close, busy, dirOf, jobs, pool }
+  return { start, bring, state, stop, tell, redirect, ask, open, scripts, seen, files, map, deploy, close, busy, dirOf, jobs, pool }
 }
 
 // "can I see it", "show me the pictures": the person wants to look, not to change anything

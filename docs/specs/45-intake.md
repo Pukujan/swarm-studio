@@ -115,10 +115,24 @@ spec already handles a game without one.
 - **Plain files** (`shape: static`): `app/` is served as files from the Studio's own process on `127.0.0.1`
   (`engine/godotfirst.mjs` `serveStatic`, which now answers a folder with its `index.html`), opened on the page
   that was found. No process is started. It stops and reopens with the rest (decision 0017).
-- **A Vite project** (`shape: vite`: a `package.json` that depends on `vite`): the App view shows **Install
-  and run** first. Its packages and its build are code from outside, so they run only on that press (recorded
-  as `intake:run`), with `pnpm install --ignore-scripts` (no package's install hook runs), then `vite build`,
-  then served the way the Studio serves its own finished apps (spec 44).
+- **A Vite project** (`shape: vite`: a `package.json` that depends on `vite`): its packages, its build and its
+  servers are code from outside, so none of it runs until the person says yes, for that project (recorded as
+  `intake:run`): the App view's **Install and run**, or "install and run it" typed in the chat. The chat asks once
+  when the room shows it ("This project came from outside, so none of its code has run here…"); "not now" leaves
+  it as files. Then `pnpm install --ignore-scripts --ignore-pnpmfile`, `vite build`, and it is served the way the
+  Studio serves its own finished apps (spec 44). Until the yes, a change asked of the crew is refused in words
+  (`start` in `engine/appjob.mjs`): a change runs the project's build in the engine and then its dev server.
+- **Its install scripts.** `--ignore-scripts` keeps every package's lifecycle scripts from running, and
+  `--ignore-pnpmfile` its own `.pnpmfile.cjs`, which pnpm runs even under `--ignore-scripts` (checked with pnpm
+  12.14: a pnpmfile that writes a file did, until `--ignore-pnpmfile`). The app engine's own install for it (when
+  `node_modules` is missing, dyad/src/aba/headless_cli.ts:294-315) and its `add_dependency` run with the same two
+  settings in the environment (`NO_SCRIPTS_ENV`, engine/appbuild.mjs: `npm_config_*` for npm, `pnpm_config_*` for
+  pnpm 11 and later). After the yes to running it, the chat asks once: "Its packages were installed without their
+  own install scripts. If it needs them, say "run its install scripts"; "no install scripts" keeps them off." Only
+  the person's typed "run its install scripts" turns them on for that project (`intake:scripts { allow: true }`,
+  `POST /api/runs/<id>/app/scripts`), which installs again and runs `pnpm rebuild` so the skipped ones run once; "no
+  install scripts" records `allow: false`. The last answer stands. A pulled version is a new run, so new code is
+  asked about again. Words and typed routes: web/intake.js; the room's handling: `intakeSay` in web/canvas/rooms.js.
 - **No keys for outside code.** A Studio app's own processes are given the person's database and Stripe test
   key (`engine/proc.mjs` `appEnv`). A brought-in project's install, build, dev server and built server get
   none of them (`engine/appjob.mjs` `appEnvFor`), and neither does the engine when it runs that project's build

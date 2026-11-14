@@ -32,6 +32,13 @@ test('every frame that shows a generated page is sandboxed without allow-same-or
   assert.equal(same.length, 1)
   assert.match(same[0], /^canvas\//)
   assert.match(canvas, /new URL\(src, location\.href\)\.origin === location\.origin/)
+  // the least a built app needs, each token written down: never allow-modals, never the top of the studio's tab
+  assert.match(canvas, /return same \? 'allow-scripts allow-forms' : 'allow-scripts allow-same-origin allow-forms allow-popups'\n/)
+  for (const f of web) assert.doesNotMatch(read(`web/${f}`), /['"`][^'"`\n]*allow-(modals|top-navigation)/, f)
+  // the app frame in the markup starts with the strictest; the room sets its own before any address
+  assert.match(read('web/index.html'), /<iframe id="app-frame" aria-label="The app" sandbox="allow-scripts"><\/iframe>/)
+  // the live site's showcase is a picture of it working: scripts only
+  assert.equal((read('web/canvas/auto.js').match(/sandbox="allow-scripts"/g) || []).length, 2)
 })
 
 test('the next UI shows generated pages only in frames sandboxed with allow-scripts, cleaned by web/clean.js', () => {
@@ -67,4 +74,8 @@ test('/site/ and /video/…/live/ are served with a sandbox CSP', () => {
   const live = server.slice(server.indexOf('const live = url.pathname.match'), server.indexOf('const vid = url.pathname.match'))
   assert.match(live, /'content-security-policy': SITE_CSP/)
   assert.ok(read('.github/workflows/checks.yml').includes('node scripts/sandbox-check.mjs'))
+  // the hosted Feed's /site/ is the same: scripts only, in an opaque origin
+  const hosted = read('server/hosted.mjs')
+  assert.match(hosted.slice(hosted.indexOf('const site = path.match')), /'content-security-policy': 'sandbox allow-scripts' \}/)
+  assert.doesNotMatch(hosted, /sandbox allow-scripts allow-/)
 })

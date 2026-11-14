@@ -180,7 +180,13 @@ export function stepOf(line) {
 // is { ok, answer, changed } and nothing is seeded, watched, gated or committed.
 // appKeys: false for a project brought in from outside (docs/specs/45-intake.md): its build script runs under the
 // engine, and code the Studio did not write is never handed the person's database or payment keys
-export async function runEngine({ workspace, prompt, provider, model, turns = 4, viewRender = true, mode = 'local-agent', onStep = () => {}, onLog = () => {}, signal, appKeys = true }) {
+// scripts: false for a brought-in project whose install scripts the person has not allowed: the engine's own
+// install (when node_modules is missing, dyad/src/aba/headless_cli.ts) and its add_dependency run with
+// ignore-scripts and ignore-pnpmfile set in the environment: npm and pnpm before 11 read npm_config_*, pnpm 11 and
+// later pnpm_config_* (checked with pnpm 12.14 and npm 11: a postinstall and a .pnpmfile.cjs did not run). A script
+// named on purpose (`npm run build`, the engine's gate) still runs.
+export const NO_SCRIPTS_ENV = { npm_config_ignore_scripts: 'true', npm_config_ignore_pnpmfile: 'true', pnpm_config_ignore_scripts: 'true', pnpm_config_ignore_pnpmfile: 'true' }
+export async function runEngine({ workspace, prompt, provider, model, turns = 4, viewRender = true, mode = 'local-agent', onStep = () => {}, onLog = () => {}, signal, appKeys = true, scripts = true }) {
   const talk = mode === 'ask' || mode === 'plan'
   if (talk && !['package.json', '.git'].every(f => existsSync(join(workspace, f)))) throw new Error('no app here yet')
   // a stop pressed while the engine was still being set up (or between stages)
@@ -208,7 +214,7 @@ export async function runEngine({ workspace, prompt, provider, model, turns = 4,
     // the app's keys are there because the engine starts the app to look at it. ABA_ENV_FILE names a file
     // that does not exist, so the engine loads no .env: left alone it walks up from its bundle and, in an
     // installed plugin, the first .env it meets is Hermes's own ($HERMES_HOME/.env, every provider key).
-    env: { ...gitEnv(), ...(appKeys ? appEnv() : {}), ABA_API_KEY: provider.apiKey || '', ABA_ENV_FILE: NO_ENV_FILE, ELECTRON_RUN_AS_NODE: '1' },
+    env: { ...gitEnv(), ...(appKeys ? appEnv() : {}), ...(scripts ? {} : NO_SCRIPTS_ENV), ABA_API_KEY: provider.apiKey || '', ABA_ENV_FILE: NO_ENV_FILE, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe']
   })
   running++

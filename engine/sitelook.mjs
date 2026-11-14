@@ -11,6 +11,7 @@
 // Uses the puppeteer-core the video tools install and the Chrome engine/seo.mjs finds (engine/pageshots.mjs).
 // Without them the walk says so; it never pretends it looked.
 import { publicUrl } from './chatmedia.mjs'
+import { walkGuard } from './walkguard.mjs'
 import { puppeteer, settle } from './pageshots.mjs'
 import { findChrome } from './seo.mjs'
 import { chromePath } from './footage.mjs'
@@ -21,9 +22,6 @@ export const WALK = { pages: 3, shots: 3, view: { width: 1280, height: 800, devi
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return '' } }
-
-// literal private hosts a page may ask for (its own requests are not resolved one by one)
-const PRIVATE_HOST = /^(localhost|.*\.localhost|.*\.local|.*\.internal|.*\.ts\.net|127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|\[)/i
 
 // ---------- measured in the page: what the browser drew, weighted by how much of the screen it covers
 export const MEASURE = `(() => {
@@ -121,19 +119,28 @@ export function plainLook(tokens, motion) {
 }
 
 // ---------- the walk
-// url: the link. Returns { url, host, pages: [{ url, shots: [Buffer] , measured }], tokens, motion, note? }
-// allowPrivate is for the tests' local fixture page only; the server never sets it.
+// url: the link. Returns { url, host, pages: [{ url, shots: [Buffer] , measured }], tokens, motion, refused, note? }
+// The browser reaches the network only through engine/walkguard.mjs: every request it makes (redirects, iframes,
+// fetch, XHR, pictures, WebSockets) is resolved and checked there, and connected to the address that was checked.
+// allow: exact URL prefixes the walk may open although they are not public: the crew's own exported pages
+// (file:// under the export's folder, engine/lookmatch.mjs) and the tests' local page. Nothing else local is reached.
 // urls: walk exactly these pages and follow no links (the crew's own exported pages, engine/lookmatch.mjs).
 // onStep(text): what the walk is doing now, in plain words, for whoever is watching it ("Opening obvious.com",
 // "Scrolling page 2 of 3", "Reading colours and type"). A step that throws never stops the walk.
-export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.shots, lookup, launch, signal, allowPrivate = false, urls = null, onStep = null } = {}) {
+// lookup, dial: for tests (walkGuard's).
+export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.shots, lookup, dial, launch, signal, allow = [], urls = null, onStep = null } = {}) {
   const step = text => { try { onStep?.(text) } catch {} }
-  const check = u => (allowPrivate ? new URL(u) : publicUrl(u, lookup ? { lookup } : {}))
+  const allowed = u => allow.some(p => String(u).startsWith(p))
+  const check = u => (allowed(u) ? new URL(u) : publicUrl(u, lookup ? { lookup } : {}))
   const start = await check(url)
   const pp = launch ? null : puppeteer(dataDir), chrome = launch ? 'given' : findChrome() || chromePath()
   if (!launch && (!pp || !chrome)) return { url: start.href, host: hostOf(start.href), pages: [], tokens: null, motion: null, note: 'no browser here to open the site with' }
-  const browser = launch ? await launch() : await pp.launch({ executablePath: chrome, headless: true, env: browserEnv(), args: ['--hide-scrollbars', '--disable-gpu-sandbox', '--mute-audio', '--enable-unsafe-swiftshader'] })
-  const out = { url: start.href, host: hostOf(start.href), pages: [] }
+  const guard = await walkGuard({ allow: allow.filter(p => /^https?:/.test(p)), ...(lookup ? { lookup } : {}), ...(dial ? { dial } : {}) })
+  const out = { url: start.href, host: hostOf(start.href), pages: [], refused: guard.refused }
+  let browser
+  try {
+    browser = launch ? await launch({ args: guard.args }) : await pp.launch({ executablePath: chrome, headless: true, env: browserEnv(), args: ['--hide-scrollbars', '--disable-gpu-sandbox', '--mute-audio', '--enable-unsafe-swiftshader', ...guard.args] })
+  } catch (err) { await guard.close(); throw err }
   step(`Opening ${out.host || 'the page'}`)
   try {
     const queue = urls ? urls.slice(0, pages) : [start.href], seen = new Set()
@@ -148,7 +155,9 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
       try {
         await page.setViewport(WALK.view)
         await page.setRequestInterception(true)
-        page.on('request', req => { let h = ''; try { h = new URL(req.url()).hostname } catch {} if (/^(data|blob):/.test(req.url()) || (allowPrivate && /^file:/.test(req.url())) || (h && (allowPrivate || !PRIVATE_HOST.test(h)))) req.continue().catch(() => {}); else req.abort().catch(() => {}) })
+        // a first gate in the page, before the proxy: web addresses go on to the proxy's check, data: and blob:
+        // stay in the page, an allowed file:// page loads; any other scheme (file: elsewhere, chrome:, ftp:) is refused
+        page.on('request', req => { const u = req.url(); if (/^(https?|wss?|data|blob):/i.test(u) || allowed(u)) req.continue().catch(() => {}); else req.abort().catch(() => {}) })
         await page.goto(next, { waitUntil: 'load', timeout: WALK.timeout }).catch(() => {})
         // a page that keeps drawing (a 3D scene, a ticker) is never fully idle: wait a little, not forever
         await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => {})
@@ -171,7 +180,7 @@ export async function walkSite(url, { dataDir, pages = WALK.pages, shots = WALK.
         out.pages.push(one)
       } finally { await page.close().catch(() => {}) }
     }
-  } finally { await browser.close().catch(() => {}) }
+  } finally { await browser.close().catch(() => {}); await guard.close() }
   out.tokens = tokensOf(out.pages)
   out.motion = motionOf(out.pages)
   if (!out.pages.length || !out.tokens) out.note = 'the site did not open'

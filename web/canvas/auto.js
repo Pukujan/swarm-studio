@@ -295,6 +295,9 @@ function dsStage(stage) {
 }
 // the shot's crew, with a pill each
 const dsCursor = (name, color) => `<div class="ds-cur" data-name="${esc(name)}">${ARROW(color, name)}<div class="tag" style="background:${color};color:${Crew.ink(color)}"><span>${esc(name)}</span><em class="doing"></em></div></div>`
+// The live site, shown in a laptop and a phone while the crew "tries it": a picture of it working, not the place to
+// use it (Open is beside it). Sandboxed with allow-scripts only: an opaque origin, no forms, no popups, no dialogs
+// (Nous catalog review; docs/engines/dyad.md, "The app's frame").
 function dsLive(url) {
   if (!ds.el || ds.mode === 'live') return
   dsClear()
@@ -303,8 +306,8 @@ function dsLive(url) {
   ds.el.className = 'deployshot live'
   ds.el.innerHTML = `<div class="ds-head"><b class="pop-title">It's <em>live</em></b><span class="ds-sub">the crew is trying it</span><button class="ds-x" aria-label="Close">${ico('x')}</button></div>
     <div class="ds-stage"><div class="ds-laptop"><div class="ds-lid"><div class="ds-bar"><span class="ds-dots"><i></i><i></i><i></i></span><span class="ds-url">${esc(url)}</span><button class="ds-copy" aria-label="Copy the link">Copy</button><a class="ds-open" href="${esc(url)}" target="_blank" rel="noopener" aria-label="Open it in a new tab">${ico('external-link')}</a></div>
-      <div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-forms"></iframe></div><i class="ds-click"></i></div></div><div class="ds-base"></div></div>
-    <div class="ds-phone"><div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site on a phone" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-forms"></iframe></div><i class="ds-click"></i></div></div>
+      <div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts"></iframe></div><i class="ds-click"></i></div></div><div class="ds-base"></div></div>
+    <div class="ds-phone"><div class="ds-screen"><div class="ds-scroll"><iframe aria-label="The live site on a phone" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts"></iframe></div><i class="ds-click"></i></div></div>
     <div class="ds-curs">${crew3.map(([n, c]) => dsCursor(n, c)).join('')}</div></div>`
   ds.el.querySelector('.ds-x').onclick = dsClose
   ds.el.querySelector('.ds-copy').onclick = ev => { navigator.clipboard?.writeText(url).then(() => { ev.target.textContent = 'Copied' }, () => { ev.target.textContent = 'Copy failed' }) }

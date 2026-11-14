@@ -73,7 +73,8 @@ export async function judgeMatch({ ref, ours, want = '', avoid = [], chat = null
 export async function walkBuild({ htmlDir, files, dataDir, pages = 2, launch, signal, onStep = null }) {
   const urls = files.filter(f => existsSync(join(htmlDir, f))).slice(0, pages).map(f => pathToFileURL(join(htmlDir, f)).href)
   if (!urls.length) return { pages: [], tokens: null, motion: null, note: 'nothing built yet' }
-  return walkSite(urls[0], { dataDir, pages, shots: 2, allowPrivate: true, urls, launch, signal, onStep: onStep && (t => { if (/^Reading/.test(t)) onStep('Measuring') }) })
+  // only the export's own folder is opened from disk; anything the pages ask the network for is checked (walkguard)
+  return walkSite(urls[0], { dataDir, pages, shots: 2, allow: [pathToFileURL(htmlDir).href.replace(/\/?$/, '/')], urls, launch, signal, onStep: onStep && (t => { if (/^Reading/.test(t)) onStep('Measuring') }) })
 }
 
 // what the crew is told when the person presses Fix on a difference

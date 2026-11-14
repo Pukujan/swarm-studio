@@ -28,6 +28,7 @@ flowchart LR
   CR --> ORB["Studio: the new build in the Design deck"]
   PROJ --> GAL["Projects: a file browser"]
   GAL --> BRING["Kind menu › Bring in a project: a sheet (repository or folder, subfolder, Game or App) → the card, coming in → its room"]
+  BRING -.->|a Vite project| RUNQ["Its room: Install and run, or typed \"install and run it\" / \"not now\"; then, once, \"run its install scripts\" / \"no install scripts\""]
   GAL --> ORB2["Studio: that project's Overview"]
   GAL --> GH["Card menu › GitHub, or a project's ☰ › GitHub: a sheet (the repository, pushed or pulled when, Push, Pull; Bring in for a project with no app or game)"]
   ORB -.->|Share › Post to Feed| HOME

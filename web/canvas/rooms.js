@@ -6,6 +6,7 @@ import { stageNow, stagePick, stageAsk, stageNone, stageSwitch, playFail } from 
 import { autoplayRoom } from './autoplay.js'
 import { painterOf, cursor } from '../icons.js'
 import { openWorkshop } from '../workshop.js'
+import { intakeAsk, INTAKE_SAY } from '../intake.js'
 import { $, els, api, ico, BASE, S, BOOT, HERMIA, commandOps, Crew } from './core.js'
 import { toggleVideo, video, shownRun, showRun } from './film.js'
 import { cw, CW_CODE, wallNames, paintv, artPhase } from './auto.js'
@@ -79,6 +80,55 @@ export function resetApp(run) {
 const needsRun = () => appv.intake?.done && appv.intake.shape === 'vite' && !appv.intake.ran
 // brought in as plain files: the crew cannot change it yet, and the room does not offer to
 const fixedIn = () => !!appv.intake?.fixed
+
+// Its code runs only with the person's yes, asked once in the chat with the room's Install and run; its install
+// scripts only when they allow them, asked once after the yes (web/intake.js has the words, both typed answers).
+const intakeAsked = new Set()
+function intakeAskOnce(run, key = 'run', text = INTAKE_SAY.ask) {
+  if (!run || intakeAsked.has(`${key}:${run}`)) return
+  intakeAsked.add(`${key}:${run}`)
+  botMsg(text)
+}
+// the yes: install (scripts off unless allowed), build and open it; then the one question about its scripts
+function intakeRun() {
+  const run = appv.run
+  appv.opening = true
+  renderApp()
+  return appApi('/open', { run: true }).then(o => {
+    if (o.url) appv.url = o.url
+    if (appv.intake) appv.intake.ran = true
+    if (appv.intake?.scripts == null) intakeAskOnce(run, 'scripts', INTAKE_SAY.scriptsAsk)
+  }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
+}
+/** A typed answer to either question (web/intake.js): answered here, never sent to the crew. True when it was one. @param {string} text */
+export function intakeSay(text) {
+  const want = intakeAsk(text)
+  const run = shownRun()
+  if (!want || !run) return false
+  // "install and run it" and "not now" are answers only on a project that was brought in
+  const brought = appv.run === run && !!appv.intake?.done
+  if ((want.did === 'run' || want.did === 'norun') && !brought) return false
+  feed(null, text, 'you')
+  if (!brought) { botMsg(INTAKE_SAY.notHere); return true }
+  if (appv.intake?.fixed) { botMsg(INTAKE_SAY.plain); return true }
+  if (want.did === 'run' && !needsRun()) { botMsg(INTAKE_SAY.already); if (!appv.url) openApp(run); return true }
+  if (want.did === 'norun') { botMsg(INTAKE_SAY.norun); return true }
+  if (want.did === 'run') {
+    if (view !== 'app') setView('app')
+    const item = botMsg(INTAKE_SAY.running, true)
+    intakeRun().finally(() => { item.classList.remove('working'); item.remove() })
+    return true
+  }
+  const allow = want.did === 'scripts'
+  const item = botMsg(allow ? INTAKE_SAY.scriptsRunning : INTAKE_SAY.noscripts, allow)
+  appApi('/scripts', { allow }).then(st => {
+    if (appv.intake && st.intake) appv.intake.scripts = st.intake.scripts
+    item.classList.remove('working')
+    const txt = item.querySelector('.txt')
+    if (txt) txt.textContent = allow ? INTAKE_SAY.scripts : INTAKE_SAY.noscripts
+  }).catch(err => { item.classList.remove('working'); const txt = item.querySelector('.txt'); if (txt) txt.textContent = String(err.message || err) })
+  return true
+}
 
 async function loadApp() {
   const run = shownRun()
@@ -251,13 +301,25 @@ export function frameUrl(u) {
     return x.href
   } catch { return u }
 }
-// The app and the game run on their own port, so their origin is never the studio's: they keep their own
-// storage (an app's sign-in needs it) but cannot steer the studio's tab. Should the address ever be the
-// studio's own origin, the frame gets an opaque one instead (Nous catalog review, point 4).
+// The app's frame: the least a built app needs (Nous catalog review; docs/engines/dyad.md, "The app's frame").
+// The app and the game run on their own port, so their origin is never the studio's. Each token, and why:
+//   allow-scripts      the app is a React + Vite app: nothing shows without its scripts
+//   allow-forms        its forms (zod + react-hook-form, engine/appjob.mjs sitePrompt): without it Chrome never
+//                      fires `submit`, so even a form that calls preventDefault does nothing
+//   allow-same-origin  only while the address is another origin (its own port): the app keeps its own origin, so
+//                      its sign-in session cookie (engine/appkit.mjs AUTH, httpOnly) and supabase-js's stored
+//                      session work, and its module scripts load from its own server. It is the app's origin, never
+//                      the studio's; the local studio sets no cookie, and its API needs the page's token.
+//   allow-popups       only then too: its links that open a new tab (target=_blank, as in Dyad's scaffold) and a
+//                      payment page that refuses to load in a frame (Stripe Checkout). A popup keeps this sandbox.
+// Dropped: allow-modals (no alert, confirm or prompt in Dyad's scaffold or Swarm's prompts: dialogs and toasts are
+// in the page: the shadcn AlertDialog and sonner), allow-top-navigation (it never steers the studio's tab).
+// Should the address ever be the studio's own origin, the frame gets an opaque one: scripts and forms only, never
+// allow-scripts with allow-same-origin.
 function appSandbox(src) {
   let same = true
   try { same = new URL(src, location.href).origin === location.origin } catch {}
-  return same ? 'allow-scripts allow-forms' : 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals'
+  return same ? 'allow-scripts allow-forms' : 'allow-scripts allow-same-origin allow-forms allow-popups'
 }
 function frameLoaded() { clearTimeout(frameWait); const el = $('#app-loading'); if (el) el.hidden = true }
 function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && appEls.frame.src !== 'about:blank') { clearTimeout(frameWait); frameWait = setTimeout(frameLoaded, 700) } }
@@ -308,7 +370,7 @@ function renderApp() {
       : working && appv.intake
         ? `<div class="app-skel bring-skel" role="status" aria-busy="true" aria-label="Bringing it in"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span>${cursor('Pip')}</div><p>${esc(appv.stage || 'bringing it in')}</p>`
       : needsRun() && !appv.message
-        ? `<h2>Brought in</h2><button class="big" data-run>${ico('play')}Install and run</button>`
+        ? (intakeAskOnce(appv.run), `<h2>Brought in</h2><button class="big" data-run>${ico('play')}Install and run</button>`)
       : working
         ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
         // it did not come in: why, and no Try again (it is brought in again from Projects)
@@ -331,11 +393,7 @@ function renderApp() {
     appEls.empty.querySelector('[data-incode]')?.addEventListener('click', () => appAsk('', { art: false }))
     appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { Object.assign(appv, { message: '', openFailed: false, tries: 0 }); loadApp() })
     // the person's own press: the project's packages are installed and its build runs, then it opens
-    appEls.empty.querySelector('[data-run]')?.addEventListener('click', () => {
-      appv.opening = true
-      renderApp()
-      appApi('/open', { run: true }).then(o => { if (o.url) appv.url = o.url; if (appv.intake) appv.intake.ran = true }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
-    })
+    appEls.empty.querySelector('[data-run]')?.addEventListener('click', () => intakeRun())
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
   // Autoplay belongs to the live game (web/canvas/autoplay.js): there once it runs, stopped when the stage leaves it

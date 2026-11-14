@@ -1,0 +1,18 @@
+{
+  "name": "net",
+  "lockfile": "scripts/vendor/net/package-lock.json",
+  "esbuild": "0.28.2",
+  "exports": [
+    "ipaddr"
+  ],
+  "file": "net.mjs",
+  "packages": [
+    {
+      "name": "ipaddr.js",
+      "version": "2.5.0",
+      "license": "MIT",
+      "integrity": "sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w=="
+    }
+  ],
+  "sha256": "3540c8f91cef138791563f298f13ea7fd02db2e8bc1767772ea29916b145eb70"
+}

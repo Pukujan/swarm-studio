@@ -140,14 +140,14 @@ const fakeBrowser = (seen, height = 1600) => async () => ({
 test('the walk says what it is doing, step by step, and a step that throws does not stop it', async () => {
   const steps = []
   const first = { ...measured, nav: ['http://127.0.0.1:9/work'], title: 'Cool' }
-  const w = await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser(first), allowPrivate: true, pages: 2, shots: 2, onStep: t => steps.push(t) })
+  const w = await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser(first), allow: ['http://127.0.0.1:9/'], pages: 2, shots: 2, onStep: t => steps.push(t) })
   assert.equal(w.pages.length, 2)
   assert.deepEqual(steps, ['Opening 127.0.0.1', 'Scrolling page 1 of 2', 'Reading colours and type', 'Opening page 2 of 2', 'Scrolling page 2 of 2', 'Reading colours and type'])
   // a short page is never scrolled, so it says no scrolling
   const short = []
-  await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser({ ...measured, nav: [], title: '' }, 600), allowPrivate: true, onStep: t => short.push(t) })
+  await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser({ ...measured, nav: [], title: '' }, 600), allow: ['http://127.0.0.1:9/'], onStep: t => short.push(t) })
   assert.deepEqual(short, ['Opening 127.0.0.1', 'Reading colours and type'])
-  const quiet = await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser({ ...measured, nav: [], title: '' }, 600), allowPrivate: true, onStep: () => { throw new Error('store gone') } })
+  const quiet = await walkSite('http://127.0.0.1:9/', { launch: fakeBrowser({ ...measured, nav: [], title: '' }, 600), allow: ['http://127.0.0.1:9/'], onStep: () => { throw new Error('store gone') } })
   assert.equal(quiet.pages.length, 1)
   assert.ok(quiet.tokens)
 })
@@ -170,7 +170,7 @@ test('a local page is walked in a real browser: shots, colours, fonts, motion an
   const srv = http.createServer((req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end(page))
   await new Promise(r => srv.listen(0, r))
   try {
-    const w = await walkSite(`http://127.0.0.1:${srv.address().port}/`, { dataDir, pages: 2, shots: 2, allowPrivate: true })
+    const w = await walkSite(`http://127.0.0.1:${srv.address().port}/`, { dataDir, pages: 2, shots: 2, allow: [`http://127.0.0.1:${srv.address().port}/`] })
     assert.equal(w.pages.length, 2)
     assert.ok(w.pages[0].shots.length >= 1 && w.pages[0].shots[0][0] === 0xff)
     assert.equal(w.tokens.bg, '#101010'); assert.equal(w.tokens.accent, '#c6f432')

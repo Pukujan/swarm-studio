@@ -255,9 +255,12 @@ export function intakeOf(events = []) {
   const start = events.find(e => e.type === 'intake:start')
   if (!start) return null
   const done = events.findLast(e => e.type === 'intake')
-  // the person's own press to install and build a Vite project (never done for them)
+  // the person's own yes to install, build and run a Vite project (never done for them): the press or the chat
   const ran = events.some(e => e.type === 'intake:run')
-  return { source: done?.source || start.source, done: !!done, shape: done?.shape || null, page: done?.page || '', ran, fixed: done ? done.shape === 'static' : true }
+  // the person's answer about its install scripts (its packages' lifecycle scripts and a .pnpmfile.cjs): true only
+  // when they allowed them for this project, in their own words; the last answer stands; null when never answered
+  const said = events.findLast(e => e.type === 'intake:scripts')
+  return { source: done?.source || start.source, done: !!done, shape: done?.shape || null, page: done?.page || '', ran, scripts: said ? said.allow === true : null, fixed: done ? done.shape === 'static' : true }
 }
 
 // What a folder's own git says about where it is from, read from its files (git is not run in a folder from

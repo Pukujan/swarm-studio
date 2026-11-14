@@ -1,0 +1,8 @@
+{
+  "name": "swarm-vendor-net",
+  "private": true,
+  "description": "What scripts/vendor.mjs bundles into engine/vendor/net/net.mjs: ipaddr.js at this exact version, pinned by package-lock.json. The site walk's address check (engine/chatmedia.mjs privateAddress). Development only: the plugin installs nothing from here.",
+  "dependencies": {
+    "ipaddr.js": "2.5.0"
+  }
+}

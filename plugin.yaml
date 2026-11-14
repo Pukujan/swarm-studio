@@ -75,3 +75,5 @@ license: FSL-1.1-ALv2
 #                                  ISC, Apache-2.0; every one pinned in scripts/vendor/procs/package-lock.json):
 #                                  the server starts its child processes with execa and stops each with all of
 #                                  its children (tree-kill: taskkill /T on Windows, ps/pgrep elsewhere)
+#   engine/vendor/net/net.mjs      ipaddr.js 2.5.0 (MIT, no dependencies; pinned in scripts/vendor/net/package-lock.json):
+#                                  the range check on every address the site walk and link reads reach

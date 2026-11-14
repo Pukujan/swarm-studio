@@ -7,6 +7,7 @@
 import { lookup as dnsLookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import { extname } from 'node:path'
+import { ipaddr } from './vendor/net/net.mjs'
 
 export const MEDIA_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', ogg: 'audio/ogg' }
 // the most a file may weigh, by kind (spec 29's table)
@@ -40,20 +41,19 @@ export function linksIn(text, max = 2) {
 // ---------- links: read only public pages. The Studio also runs hosted, so a link must never reach the
 // machine's own services, the tailnet or a private network: every address it resolves to is checked,
 // and each redirect again.
+// The range check is ipaddr.js (bundled, engine/vendor/net/): only a public unicast address passes. IPv4-mapped
+// IPv6 (::ffff:127.0.0.1, ::ffff:7f00:1) is read as the IPv4 address it carries; an IPv6 address must also be in
+// the global unicast block 2000::/3, so IPv4-compatible (::7f00:1), NAT64 (64:ff9b::), 6to4, Teredo, unique-local
+// (fd00:ec2::254, a cloud's metadata over IPv6) and link-local are all refused. Anything that is not an address is
+// refused too.
+const GLOBAL6 = ipaddr.parseCIDR('2000::/3')
 export function privateAddress(ip) {
-  const v = isIP(ip)
-  if (v === 4) {
-    const [a, b] = ip.split('.').map(Number)
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224
-  }
-  if (v === 6) {
-    const s = ip.toLowerCase()
-    if (s === '::' || s === '::1') return true
-    const mapped = s.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-    if (mapped) return privateAddress(mapped[1])
-    return /^(fc|fd|fe[89ab]|ff)/.test(s) || s.startsWith('64:ff9b:') || s.startsWith('2001:db8')
-  }
-  return true
+  const s = String(ip || '').replace(/^\[|\]$/g, '')
+  if (!isIP(s.split('%')[0])) return true
+  let a
+  try { a = ipaddr.process(s) } catch { return true }
+  if (a.range() !== 'unicast') return true
+  return a.kind() === 'ipv6' && !a.match(GLOBAL6)
 }
 
 export async function publicUrl(raw, { lookup = dnsLookup } = {}) {
