@@ -168,8 +168,12 @@ const feedRefresh = () => (posted.alone ? feedPop() : pubShow())
 function feedRow() {
   const run = shownRun(), done = posted.runs.get(run)
   if (done) return `<div class="pfeed"><div class="pstate live"><b>In the Feed</b><span>${done.unlisted ? 'Unlisted' : 'Public'}</span></div><div class="plink"><a href="${esc(done.url)}" target="_blank" rel="noopener">${esc(shortUrl(done.url))}</a></div></div>`
-  if (posted.connect) return `<div class="pfeed"><div class="pstate"><b>Connect Hermes</b><span>${posted.connect.code ? esc(posted.connect.code) : ''}</span></div>
-    <div class="vfoot">${posted.connect.url ? `<a class="vagain" href="${esc(posted.connect.url)}" target="_blank" rel="noopener">Open ↗</a>` : ''}<button class="vagain pfpost">Post</button></div></div>`
+  // not signed in: the same sign-in as Setup's Account row (spec 6), never a quiet guest link
+  if (posted.connect?.pending) return `<div class="pfeed"><div class="pstate"><b>Finish in your browser</b><span>${esc(posted.connect.pending.code || '')}</span></div>
+    <div class="vfoot"><button class="vagain pfreopen">Open again</button><button class="vagain pfcancel">Cancel</button></div></div>`
+  if (posted.connect) return `<div class="pfeed"><div class="pstate"><b>Sign in to post</b></div>
+    <div class="vfoot">${FEED_SIGN_IN.map(p => `<button class="vagain" data-sign="${p.k}">${p.label}</button>`).join('')}</div>
+    ${posted.connect.message ? `<div class="pstate err"><span>${esc(shortReason(posted.connect.message))}</span></div>` : ''}</div>`
   return `<div class="pfeed"><div class="pseg" role="radiogroup" aria-label="Who can find it">
       <button role="radio" aria-checked="${!posted.unlisted}" class="${posted.unlisted ? '' : 'on'}" data-v="public">Public</button>
       <button role="radio" aria-checked="${posted.unlisted}" class="${posted.unlisted ? 'on' : ''}" data-v="unlisted">Unlisted</button></div>
@@ -180,6 +184,23 @@ function wireFeedRow(el) {
   el.querySelectorAll('.pseg button').forEach(b => { b.onclick = () => { posted.unlisted = b.dataset.v === 'unlisted'; feedRefresh() } })
   const go = el.querySelector('.pfpost')
   if (go) go.onclick = postToFeedNow
+  el.querySelectorAll('[data-sign]').forEach(b => { b.onclick = () => feedSignIn({ provider: b.dataset.sign }) })
+  const re = el.querySelector('.pfreopen'), no = el.querySelector('.pfcancel')
+  if (re) re.onclick = () => feedSignIn({ reopen: true })
+  if (no) no.onclick = () => feedSignIn({ cancel: true })
+}
+const FEED_SIGN_IN = [{ k: 'google', label: 'Google' }, { k: 'github', label: 'GitHub' }, { k: 'discord', label: 'Discord' }]
+// a sign-in step (POST /api/setup/account); while it waits in the browser, ask every 3 s, and post
+// the build as soon as it comes back signed in
+let feedWait = null
+async function feedSignIn(op) {
+  clearTimeout(feedWait)
+  const r = await api('/api/setup/account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(op) }).then(x => x.json()).catch(() => ({ ok: false, message: 'The Feed did not answer.' }))
+  const a = r.account || {}
+  if (a.connected) { posted.connect = null; return postToFeedNow() }
+  posted.connect = { pending: a.pending, message: r.ok === false ? r.message : '' }
+  feedRefresh()
+  if (a.pending) feedWait = setTimeout(() => feedSignIn({ check: true }), 3000)
 }
 async function postToFeedNow() {
   const run = shownRun()
@@ -188,14 +209,13 @@ async function postToFeedNow() {
   feedRefresh()
   const json = { method: 'POST', headers: { 'content-type': 'application/json' } }
   const post = () => api(`/api/runs/${encodeURIComponent(run)}/feed`, { ...json, body: JSON.stringify({ unlisted: posted.unlisted }) }).then(r => r.json()).catch(() => ({ ok: false }))
-  let out = await post()
-  if (!out.ok && out.connect) {
-    // not linked yet: start (or finish) Connect Hermes; once the code is approved, post straight away
-    const c = await api('/api/feed/connect', { ...json, body: '{}' }).then(r => r.json()).catch(() => ({}))
-    if (c.connected) out = await post()
-    else posted.connect = c
-  }
+  const out = await post()
   posted.busy = false
+  if (!out.ok && out.connect) {
+    // not linked yet: sign in first (a code already waiting in the browser is picked up again)
+    posted.connect = {}
+    return feedSignIn({ check: true })
+  }
   if (out.ok) {
     posted.connect = null
     posted.runs.set(run, { url: out.url, unlisted: !!out.unlisted || posted.unlisted })
