@@ -1,6 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
+import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api } from './core.js'
 import { syncSlots, bboxActive, fit, startGesture, gestureStep, toScreen, dockCell, agentTarget, DOCK, runBanter, drawWires, doing, setAuto, focusPage } from './deck.js'
 import { lite, litePass, frameBusy, togglePanel, toggleModels } from './settings.js'
@@ -207,7 +208,7 @@ function prototypeClick(e) {
   else selectAt(f, x, wy)
 }
 
-els.viewport.addEventListener('dblclick', () => setAuto(true))
+els.viewport.addEventListener('dblclick', e => zoomToSection(e) || setAuto(true))
 els.camHint.addEventListener('click', () => setAuto(!cam.auto))
 els.viewport.addEventListener('wheel', e => {
   if (e.target.closest('.float')) return
