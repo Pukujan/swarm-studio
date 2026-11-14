@@ -618,5 +618,50 @@
     "key": "studio only in /next/: page ~transform 300ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
     "label": "drift",
     "why": "The /next/ Studio eases its board into view (transform, 300 ms); the current Studio now frames its whole board at once when it opens, with no step zoomed in."
+  },
+  {
+    "key": "app cursor Ada: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
+  },
+  {
+    "key": "app cursor Bo: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
+  },
+  {
+    "key": "app only in /: page @in 250ms x1 ease-out",
+    "label": "drift",
+    "why": "The current App room fades each build step into its list (.app-steps .st, @in 250 ms); the /next/ wall has no step list: its Shipped window shows the last step, drawn at once."
+  },
+  {
+    "key": "app only in /: page @radio-dash endless 800ms linear",
+    "label": "intended (PR #477)",
+    "why": "The radio line (.radio-line) belongs to the crew's cursors over the current App room; the /next/ wall draws no crew cursor yet (spec 44 leaves them for a later slice), so it has no radio line."
+  },
+  {
+    "key": "app only in /next/: page @pet-dot endless 1000ms ease-in-out",
+    "label": "drift",
+    "why": "While the app builds and has no address yet, the /next/ wall's Live window says it is busy (aria-busy) and Hermia works on it (web/pet.js PET_BUSY); the current App room shows the same build with a step list and no placeholder she works on."
+  },
+  {
+    "key": "app only in /next/: page @pet-tap endless 700ms ease-in-out",
+    "label": "drift",
+    "why": "While the app builds and has no address yet, the /next/ wall's Live window says it is busy (aria-busy) and Hermia works on it (web/pet.js PET_BUSY); the current App room shows the same build with a step list and no placeholder she works on."
+  },
+  {
+    "key": "app only in /next/: page ~opacity 200ms x1 ease",
+    "label": "drift",
+    "why": "While the app builds and has no address yet, the /next/ wall's Live window says it is busy (aria-busy) and Hermia works on it (web/pet.js PET_BUSY); the current App room shows the same build with a step list and no placeholder she works on."
+  },
+  {
+    "key": "app reduced cursor Ada: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
+  },
+  {
+    "key": "app reduced cursor Bo: only in /",
+    "label": "intended (PR #477)",
+    "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."
   }
 ]
