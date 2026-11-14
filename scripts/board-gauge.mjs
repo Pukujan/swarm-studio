@@ -206,7 +206,12 @@ async function measure(out, { root, runs: N, only, cold }) {
       const browser = await within('launching Chromium', 60000, launch())
       // a page that crashes (out of memory, most likely) or stops answering is a result, not the end of the gauge
       let m
-      try { m = await within(`the ${sc.id} board`, 300000, scene(browser, sc, BASE)) } catch (e) { m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200) } } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
+      try { m = await within(`the ${sc.id} board`, 300000, scene(browser, sc, BASE)) } catch (e) {
+        // whether the Studio's server still answers says which side is stuck, the server or the page
+        const t0 = Date.now()
+        const server = await within('the server', 8000, fetch(`${BASE}/api/state`).then(r => r.status)).then(s => `answers ${s} in ${Date.now() - t0} ms`, () => 'does not answer')
+        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server }
+      } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
       console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify({ ...m, ft: undefined })}`)
     }
