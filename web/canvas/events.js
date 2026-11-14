@@ -28,7 +28,7 @@ export function on(e) {
       S.paint = e.paint !== false // older builds don't say: their pictures were painted
       // a game has no canvas build: its spec and the App view are the whole file
       if (e.kind === 'game') { S.kind = 'game'; if (e.from) S.link = { run: e.from, label: `↔ ${e.fromName || 'the site'}` }; setTitle(`🎮 ${e.title || e.brief.slice(0, 60)}`); feed(null, `🎮 ${e.brief}`, 'you'); break }
-      if (!viewing) els.agentsSel.value = String(e.agents.length)
+      if (!viewing) { els.agentsSel.value = String(e.agents.length); els.agentsSel.dispatchEvent(new Event('change')) }
       for (const a of e.agents) addAgent(a)
       // a project brought in (docs/specs/45-intake.md) goes by its name; its brief only says where it is from
       setTitle(e.intake && e.title ? e.title : e.brief.slice(0, 60))

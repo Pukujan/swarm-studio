@@ -33,15 +33,19 @@ test("Settings' first layer is the statechart's #me.settings index, and Setup th
 
 test('the next UI draws web/setup-parts.js itself: every name its types declare is one the file exports', () => {
   const declared = [...read('ui/src/screens/setup/studio-setup-parts.d.ts').matchAll(/export declare (?:const|function) (\w+)/g)].map(m => m[1])
-  assert.deepEqual(declared.sort(), ['GROUPS', 'statesOf', 'tally'])
+  assert.deepEqual(declared.sort(), ['GROUPS', 'keyCommand', 'statesOf', 'tally'])
   for (const name of declared) assert.ok(name in parts, name)
   assert.match(read('ui/vite.config.ts'), /'@studio\/setup-parts', replacement: fileURLToPath\(new URL\('\.\.\/web\/setup-parts\.js'/)
 })
 
-test('the sheets never show or keep a key: a key is typed only into a password box and sent once to Hermes', () => {
+test('the sheets never take, show or keep a key: a key is given to Hermes in the person\'s own terminal', () => {
   const src = ['ModelPicker', 'PartsRow', 'SetupSheet', 'SettingsSheet', 'fixtures'].map(f => read(`ui/src/screens/setup/${f}.${f === 'fixtures' ? 'ts' : 'tsx'}`)).join('\n')
-  assert.match(src, /type="password" autoComplete="off"/)
-  assert.match(src, /setKey\(''\)\n {4}if \(!typed\) return/)
+  // no box to type a key into, and nothing sends one: the command Hermes asks for it with, then Check again
+  assert.doesNotMatch(src, /type="password"/)
+  assert.doesNotMatch(src, /models\/signin', \{[^}]*\bkey\b/)
+  assert.match(read('ui/src/screens/setup/ModelPicker.tsx'), /<Command cmd=\{keyCommand\(p\.slug\)\} \/>/)
+  assert.equal(parts.keyCommand('anthropic'), 'hermes auth add anthropic --type api-key')
+  assert.doesNotMatch(read('web/setup.js'), /type="password"|models\/signin', \{[^}]*\bkey\b/)
   // the allowlist is never written by the studio: no route to it, only the command Parts shows
   assert.doesNotMatch(src, /mcp_allowlist/)
   assert.doesNotMatch(src, /\.env\b/)

@@ -5,13 +5,12 @@
 // just build" takes the recommended defaults and says what it picked. The owner's own phrasings are the cases.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
-import { createServer } from 'node:http'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { studioTurn, studioOpen, readPages, readPictures, readYouChoose, readSkipAll, readBuild, pickedLine, STUDIO_ASK_TEXT, GO_TEXT } from '../engine/askfirst.mjs'
+import { startStudio } from '../scripts/studio-child.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const turn = (said, asked, state = {}, more = {}) => studioTurn({ said, asked, state, defaults: { pictures: 'painted' }, ...more })
@@ -163,18 +162,13 @@ test('"build" is the Build press: what is open is asked first, then it builds fr
 })
 
 // ---------- over HTTP: the answers land on the Studio's own state and in its chat
-async function freePort() {
-  return new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
-}
 async function startServer() {
   const data = mkdtempSync(join(tmpdir(), 'swarm-studioask-'))
-  const port = await freePort()
-  const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: 't', SWARM_DATA_DIR: data, SWARM_RUNS_DIR: join(data, 'runs'), SWARM_NO_REPLACE: '1', HERMES_HOME: join(data, 'hermes') }
-  for (const k of ['SWARM_BASE_URL', 'SWARM_API_KEY', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH']) delete env[k]
-  const child = spawn(process.execPath, [join(root, 'server/server.mjs')], { env, stdio: 'ignore' })
-  const base = `http://127.0.0.1:${port}`
+  const env = { ...process.env, SWARM_TOKEN: 't', SWARM_DATA_DIR: data, SWARM_RUNS_DIR: join(data, 'runs'), SWARM_NO_REPLACE: '1', HERMES_HOME: join(data, 'hermes') }
+  for (const k of ['SWARM_PORT', 'SWARM_BASE_URL', 'SWARM_API_KEY', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH']) delete env[k]
+  // on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+  const { child, base } = await startStudio({ env })
   const call = (path, body) => fetch(base + path, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-swarm-token': 't' }, body: body ? JSON.stringify(body) : undefined })
-  for (let i = 0; i < 100; i++) { if (await fetch(`${base}/api/state`).then(r => r.ok, () => false)) break; await new Promise(r => setTimeout(r, 150)) }
   return { call, stop: () => { child.kill(); rmSync(data, { recursive: true, force: true }) } }
 }
 

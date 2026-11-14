@@ -8,12 +8,12 @@
 // The build is played into the page: each section is written to the run's file (so the server's
 // versions move as in a real build) and handed to the canvas as the stream would.
 import { createRequire } from 'node:module'
-import { spawn } from 'node:child_process'
 import { appendFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { startStudio } from './studio-child.mjs'
 
 const argv = process.argv.slice(2)
 const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d }
@@ -28,7 +28,6 @@ async function loadPlaywright() {
 }
 const { chromium } = await loadPlaywright()
 const wait = ms => new Promise(r => setTimeout(r, ms))
-const freePort = () => new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)] : NaN }
 
 // ---------- a 14-page site, three sections a page, in its own theme
@@ -58,15 +57,16 @@ writeFileSync(FILE, events.map(e => JSON.stringify(e)).join('\n') + '\n')
 writeFileSync(join(runs, 'folders.json'), JSON.stringify({ v: 2, folders: [], projects: { [RUN]: { runs: [RUN], name: 'Pier Fourteen', title: null, folder: null, trashed: null, made: t0, own: true } } }))
 
 const fake = createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"no model here"}')) })
-const fakePort = await freePort()
-await new Promise(r => fake.listen(fakePort, '127.0.0.1', r))
-const port = await freePort(), TOKEN = 'bench'
-const BASE = `http://127.0.0.1:${port}`
-const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
-for (const k of ['SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
-const server = spawn(process.execPath, [join(ROOT, 'server/server.mjs')], { env, stdio: ['ignore', 'ignore', 'ignore'] })
+// on a port the system picks and the fake keeps (asked for and let go, another process could take it first)
+await new Promise(r => fake.listen(0, '127.0.0.1', r))
+const fakePort = fake.address().port
+const TOKEN = 'bench'
+const env = { ...process.env, SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
+for (const k of ['SWARM_PORT', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
+// on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+const studio = await startStudio({ env })
+const server = studio.child, BASE = studio.base
 const api = (path, body) => fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json())
-for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r.ok, () => false)) break; await wait(150) }
 await api('/api/setup', { seen: true }).catch(() => {})
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})

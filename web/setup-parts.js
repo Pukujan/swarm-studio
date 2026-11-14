@@ -13,6 +13,10 @@
 
 // a key in Hermes's secret store: the launcher hands it to the studio when the studio starts (launcher.py)
 const key = name => ({ cmd: `hermes config set ${name} <your key>`, note: 'Swarm Studio reads it when it next starts.' })
+// a model provider signed in with a key (Setup › Models › More providers): Hermes asks for the key itself, hidden,
+// so it is on no command line and never reaches the studio (hermes_cli/auth_commands.py _add_api_key_credential)
+/** @param {string} slug */
+export const keyCommand = slug => `hermes auth add ${slug} --type api-key`
 const has = (F, name) => F.local ? !!F.local.keys?.[name] : undefined
 const wait = { st: 'wait', why: '' }
 const ok = (why = '') => ({ st: 'ok', why })
