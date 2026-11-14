@@ -54,7 +54,7 @@ function codeWall() {
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
     cw.shown = false
-    if (cw.el) cw.el.hidden = true
+    if (cw.el) { cw.el.hidden = true; wallBack(cw.el.parentElement, false) }
     if (appv.state !== 'working') Object.assign(cw, { run: null, seen: 0, queue: [], tiles: [], ...CW_FRESH })
     return
   }
