@@ -21,6 +21,7 @@
 // docs/perf/board-gauge.json keeps a baseline to read.
 // It starts its own throwaway Studio and never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -193,7 +194,7 @@ async function measure(out, { root, runs: N, only, cold }) {
   // The fixture's pictures carry the server's address, so the port is picked before the server starts; when
   // another process took it in between, the fixture is written and the server started again on another
   // (scripts/studio-child.mjs)
-  const { child: server, base: BASE } = await onFreePort(port => { fixture(runsDir, `http://127.0.0.1:${port}`, film); return startStudio({ root, env, port }) })
+  const { child: server, base: BASE } = await onFreePort(port => { fixture(runsDir, `http://127.0.0.1:${port}`, film); return startStudio({ root, env, port, show: !!process.env.GAUGE_SHOW }) })
   studio = server
   const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1, filmBytes: film.length }, scenes: {} }
   try {
@@ -210,7 +211,10 @@ async function measure(out, { root, runs: N, only, cold }) {
         // whether the Studio's server still answers says which side is stuck, the server or the page
         const t0 = Date.now()
         const server = await within('the server', 8000, fetch(`${BASE}/api/state`).then(r => r.status)).then(s => `answers ${s} in ${Date.now() - t0} ms`, () => 'does not answer')
-        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server }
+        // and what it is doing: its CPU and memory (where `ps` exists)
+        let ps = ''
+        try { ps = execFileSync('ps', ['-o', '%cpu=,rss=', '-p', String(server.pid)], { encoding: 'utf8', timeout: 3000 }).trim() } catch {}
+        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server, ps }
       } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
       console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify({ ...m, ft: undefined })}`)
