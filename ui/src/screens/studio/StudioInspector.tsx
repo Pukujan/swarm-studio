@@ -76,7 +76,7 @@ export function StudioInspector({ sel, d, card, pack, ctx, version, onClose, act
             return <>
               <p className="sc-idea-full">{d.brand?.lockedAt ? 'Locked: the build uses exactly these.' : 'Open: lock it so the build uses exactly these.'}</p>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-monospace text-xs"><dt className="text-muted">Colours</dt><dd>{[L.bg, L.text, L.accent, L.link].join(' ')}</dd><dt className="text-muted">Headings</dt><dd>{L.heading}</dd><dt className="text-muted">Corners</dt><dd>{d.brand?.radius || '12px'}</dd></dl>
-              <div className="flex flex-wrap gap-2"><Button role={d.brand?.lockedAt ? 'secondary' : 'primary'} onPress={() => act.lock(!d.brand?.lockedAt)}>{d.brand?.lockedAt ? 'Unlock' : 'Lock the look'}</Button><Button onPress={act.mix}>Change it on the brand sheet</Button></div>
+              <div className="flex flex-wrap gap-2"><Button role={d.brand?.lockedAt ? 'secondary' : 'primary'} onPress={() => act.lock(!d.brand?.lockedAt)}>{d.brand?.lockedAt ? 'Unlock' : 'Lock the look'}</Button><Button onPress={act.mix}>Brand sheet</Button></div>
             </>
           })()}
         </div>
