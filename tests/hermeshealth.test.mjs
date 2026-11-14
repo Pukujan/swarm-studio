@@ -186,12 +186,25 @@ test('a server with no Hermes refuses a build in under a second, with the reason
 // back), not for a count of polls: on a slow runner the polls ran out before the stop came. The time limit is
 // only for a hang.
 test('a Hermes that disappears mid-build stops the build with the reason; when one attaches again the canvas is told', { timeout: 60000 }, async () => {
+  // each wait names itself when it is the one that never ends, so a timeout says where (it had timed out whole,
+  // at 60 s, three times on the Mac runner with nothing to say which wait hung)
+  const within = (p, what, ms = 20000) => { let t; return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error(`still waiting for ${what} after ${ms / 1000} s; heard: ${events.map(e => e.type).join(' ') || 'nothing'}`)), ms) })]).finally(() => clearTimeout(t)) }
   const s = await startServer({ SWARM_HERMES_GRACE_MS: '300' })
   // a fake bridge that takes the model calls and never answers, then goes away
   const held = []
   let called
   const firstCall = new Promise(r => { called = r })
-  const bridge = createServer((req, res) => { held.push(res); req.resume(); called() })
+  // It answers what it offers for pictures (none) as a Hermes does, and holds the model calls; "the first call" is
+  // the build's first model call (a POST), not the check before a build (GET /v1/models) or the pictures question
+  // (GET /media). Closed on one of those, the build had not started, and on the Mac runner it sometimes did not
+  // start for the rest of the test (heard: "hermes:back reset" and nothing after). Why the pictures question was
+  // not refused at once there is not proven; the bridge's /media call gives up after 25 s (engine/bridge.mjs)
+  const bridge = createServer((req, res) => {
+    req.resume()
+    if (!req.url.includes('/v1/')) return res.writeHead(200, { 'content-type': 'application/json' }).end('{"image":false,"video":false}')
+    held.push(res)
+    if (req.method === 'POST') called()
+  })
   await new Promise(r => bridge.listen(0, '127.0.0.1', r))
   // the canvas's stream, as it arrives; hear(…) resolves with the first event that matches
   const events = [], waiting = new Set()
@@ -212,14 +225,17 @@ test('a Hermes that disappears mid-build stops the build with the reason; when o
     const res = await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A one-page site for a plant shop', sure: true }) })
     assert.equal(res.status, 200)
     const { run } = await res.json()
-    await firstCall
+    await within(firstCall, 'the first model call')
     assert.ok(held.length, 'the build called the model through the bridge')
     // Hermes closes: the call in flight breaks and the bridge refuses the next ones. Its connections go first:
     // close() alone waits for the server's idle keep-alive connections to time out, seconds later
+    // It stops listening first: the build tries a broken call again, and a connection that arrived after the
+    // sockets were destroyed and before close() stayed open and unanswered, so close() never called back
+    const closed = new Promise(r => bridge.close(r))
     for (const r of held) r.socket?.destroy()
     bridge.closeAllConnections?.()
-    await new Promise(r => bridge.close(r))
-    const stopped = await hear(e => e.type === 'run:stopped' && e.run === run)
+    await within(closed, 'the bridge closing')
+    const stopped = await within(hear(e => e.type === 'run:stopped' && e.run === run), 'run:stopped')
     assert.ok(!events.some(e => e.type === 'run:done' && e.run === run), 'a build that planned nothing did not "finish"')
     assert.equal(stopped.reason.code, 'hermes')
     assert.match(stopped.reason.message, /Hermes closed during the build/)
@@ -230,7 +246,7 @@ test('a Hermes that disappears mid-build stops the build with the reason; when o
     const again = createServer((req, res) => res.writeHead(200).end('{}'))
     await new Promise(r => again.listen(0, '127.0.0.1', r))
     await s.call('/api/hermes/attach', { method: 'POST', body: JSON.stringify({ url: `http://127.0.0.1:${again.address().port}`, token: 'bridge-token-0123456789', pid: 4243, code: 1e10 }) })
-    await hear(e => e.type === 'hermes:back' && e.attached)
+    await within(hear(e => e.type === 'hermes:back' && e.attached), 'hermes:back')
     again.close()
   } finally { ctl.abort(); await sse; bridge.close(); s.stop() }
 })
