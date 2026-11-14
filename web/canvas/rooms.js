@@ -80,13 +80,15 @@ async function loadApp() {
     // the server knows whether the app is running: an address from the log may be a dev server
     // that stopped with a restart, so it opens again rather than showing a dead page
     appv.url = st.url || null
-    // an app made before, or a big game waiting after a slice: its server stopped while nobody looked, start it again
-    if (!appv.url && (appv.hasApp || (appv.state === 'paused' && appv.canServe && !appv.openFailed)) && appv.state !== 'working') openApp(run)
+    // an app made before: start its server again. (A big game waiting after a slice is not started by looking at
+    // the room: that can mean an install and a build. Its Live option, Play it live or "show the game" start it.)
+    if (!appv.url && appv.hasApp && appv.state !== 'working') openApp(run)
   } catch (err) { appv.message = err.message }
   renderApp()
 }
 // Start the app's server again (POST …/app/open): the stage shows the "Starting" skeleton meanwhile. A try the
-// person asked for (Play it live, "show the game") says in the chat why it failed; the room's own try stays quiet.
+// person asked for (the Live option, Play it live, "show the game") says in the chat why it failed; the room's
+// own try stays quiet.
 function openApp(run) {
   if (appv.opening || appv.run !== run) return
   Object.assign(appv, { opening: true, openFailed: false })
@@ -101,9 +103,9 @@ export async function playLive() {
   if (!shownRun()) return
   if (view !== 'app') setView('app')
   if (appv.run !== shownRun()) resetApp(shownRun())
-  Object.assign(appv, { openSay: true, openFailed: false })
+  appv.openFailed = false
   await loadApp()
-  if (!stageOf().offers.includes('live')) { appv.openSay = false; return botMsg(stageNone('live', stageBuild())) }
+  if (!stageOf().offers.includes('live')) return botMsg(stageNone('live', stageBuild()))
   stageSet('live')
 }
 
@@ -252,7 +254,7 @@ function renderApp() {
   // what fills the stage: it follows the build, or holds the view pinned in the bar's switch (web/canvas/stage.js)
   const now = stageOf(), empty = now.empty, sheet = now.sheet && !!shownRun()
   stageSwitch($('#app-stageview'), now, v => stageSet(stagePick(stagePin.v, v)))
-  if (now.open && shownRun()) return openApp(shownRun())
+  if (now.open && shownRun() && !document.hidden) return openApp(shownRun())
   appEls.empty.hidden = !empty
   if (appv.kind === 'game' && shownRun()) sheetLoad(shownRun(), working || sheet)
   if (!sheet) { appEls.empty.classList.remove('sheet'); for (const a of ['tabindex', 'role', 'aria-label']) appEls.empty.removeAttribute(a) }
@@ -320,6 +322,8 @@ function appMode(m) {
 /** Pin a view (or null: follow the build again) and show it.  @param {import('./stage.js').StageView | null} v */
 function stageSet(v) {
   stagePin.v = v
+  // Live, asked for: if the app has to be started and cannot be, the chat says why
+  if (v === 'live' && !appv.url) appv.openSay = true
   if (appv.mode !== 'preview') appMode('preview')
   renderApp()
 }
