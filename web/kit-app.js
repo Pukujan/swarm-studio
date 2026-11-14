@@ -67,8 +67,7 @@ async function appKitApi(ctx, path, body, method = 'POST') {
   return j
 }
 // the project's id: the Studio passes the project ({ id, name, … }), an older caller its id (web/kit-video.js pidOf)
-const appKitPid = ctx => (typeof ctx.project === 'string' ? ctx.project : ctx.project?.id) || ''
-const appKitOf = ctx => appKitState.get(appKitPid(ctx)) || appKitState.set(appKitPid(ctx), { kit: null, connects: [], left: [], spec: null, sel: null }).get(appKitPid(ctx))
+const appKitPid = ctx => (typeof ctx.project === 'string' ? ctx.project : ctx.project?.id) || '', appKitOf = ctx => appKitState.get(appKitPid(ctx)) || appKitState.set(appKitPid(ctx), { kit: null, connects: [], left: [], spec: null, sel: null }).get(appKitPid(ctx))
 // a new kit from the server: keep it, save it to the project, and fetch the words, plan and proposal
 async function appKitTake(ctx, out) {
   const st = appKitOf(ctx)

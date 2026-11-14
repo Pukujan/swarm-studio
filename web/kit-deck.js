@@ -56,8 +56,7 @@ async function deckKitApi(ctx, path, body, method = 'POST') {
   return j
 }
 // the project's id: the Studio passes the project ({ id, name, … }), an older caller its id (web/kit-video.js pidOf)
-const deckKitPid = ctx => (typeof ctx.project === 'string' ? ctx.project : ctx.project?.id) || ''
-const deckKitKey = ctx => deckKitPid(ctx) || 'draft'
+const deckKitPid = ctx => (typeof ctx.project === 'string' ? ctx.project : ctx.project?.id) || '', deckKitKey = ctx => deckKitPid(ctx) || 'draft'
 const deckKitOf = ctx => deckKitState.get(deckKitKey(ctx)) || deckKitState.set(deckKitKey(ctx), { deck: null, looks: [], all: [], sel: null, shots: new Map(), saving: null, asked: new Set() }).get(deckKitKey(ctx))
 const deckKitWho = ctx => ({ project: deckKitPid(ctx) || undefined, chat: ctx.chat?.id || undefined })
 
