@@ -5,6 +5,7 @@
 // follow, and until then the current Studio has them at the same address.
 import { classicHref } from '../shell/classic'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { takeOpening } from '../nav/opening'
 import { Button, LinkButton } from '../primitives/Button'
 import { Icon } from '../primitives/Icon'
 import { search } from '../nav/address'
@@ -59,6 +60,15 @@ export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   }, [sel, part, select, edits, view.player])
   const pickedLayer = sel ? model.layers[sel.key] : undefined
   useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
+  // opened on a page (the Overview's Open): that page is picked and the camera goes to it, once it is in the build
+  const opening = useRef(takeOpening())
+  useEffect(() => {
+    const want = opening.current
+    if (!want || !model.pages.some(p => p.id === want)) return
+    opening.current = null
+    setPicked(want); setFollow(false)
+    requestAnimationFrame(() => stage.current?.focusPage(want))
+  }, [model.pages, model.run])
   const working = model.state === 'planning' || model.state === 'building'
   const play = () => go({ type: 'play', page: page ?? undefined, pages: model.pages.length })
   const canPlay = !loading && model.pages.some(p => model.order.some(k => model.layers[k].text && (model.layers[k].page === p.id || model.layers[k].page === '*')))

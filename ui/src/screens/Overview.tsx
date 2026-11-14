@@ -11,6 +11,7 @@
 // else its plan; the chat is the current Studio's (the Dock says how).
 import { useCallback, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { search } from '../nav/address'
+import { openOn } from '../nav/opening'
 import { useNav } from '../nav/NavProvider'
 import { MenuAt, MenuRow, MenuSeparator } from '../primitives/Menu'
 import { ToastProvider, useToast } from '../primitives/Toast'
@@ -82,6 +83,8 @@ function OverviewScreen() {
     const to = opening(it, o.run)
     if (!to) return
     if ('tab' in to) { window.open(to.tab, '_blank', 'noopener'); return }
+    // the deck opens on this page (src/nav/opening.ts)
+    openOn(to.page)
     go(to.event)
   }
 
