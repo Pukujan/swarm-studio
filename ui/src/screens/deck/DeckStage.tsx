@@ -19,6 +19,16 @@ type Cam = { x: number, y: number, k: number }
 const LABEL = 28
 const MIN_K = 0.04, MAX_K = 2
 
+// a section's box in the world's coordinates, on the first page that shows it
+function sectionBox(m: DeckModel, geo: Record<string, FrameGeo>, key: string) {
+  const l = m.layers[key]
+  const page = l && (l.page === '*' ? m.pages[0] : m.pages.find(p => p.id === l.page))
+  const g = page && geo[page.id]?.slots[key]
+  if (!page || !g) return null
+  const [x, y, w, h] = g.box
+  return { x: frameX(page) + x, y: LABEL + y, w, h: Math.max(h, l.height) }
+}
+
 // where an agent's cursor goes, in the world's coordinates (web/canvas/deck.js agentTarget)
 function target(m: DeckModel, geo: Record<string, FrameGeo>, a: DeckAgent): { x: number, y: number } | null {
   const l = a.layer ? m.layers[a.layer] : null
@@ -250,7 +260,7 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
         ))}
       </div>
       {pick && pickExtra && <div data-ui className="absolute z-20 flex justify-end" style={{ left: Math.max(8, pick.left + pick.width - 328), top: Math.max(8, pick.top + 8), width: 320 }}>{pickExtra}</div>}
-      <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} />
+      <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} box={k => sectionBox(model, geo, k)} />
       <div aria-hidden className="pointer-events-none absolute inset-0">
         {pick && <div data-picked className="absolute border-[1.5px] border-text" style={pick} />}
         {flags.map(f => (
