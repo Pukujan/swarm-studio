@@ -6,16 +6,14 @@
 //   import { studio } from './walkthrough-fixtures.mjs'   → { BASE, ids, api, stop }
 //
 // It never touches the 4319 server or the real data folder.
-import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { startStudio } from './studio-child.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
-const wait = ms => new Promise(r => setTimeout(r, ms))
-const freePort = () => new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
 
 const T0 = Date.parse('2026-11-01T10:00:00Z')
 const rid = n => new Date(T0 + n * 3600e3).toISOString().replace(/[:.]/g, '-')
@@ -73,16 +71,16 @@ export async function studio({ quiet = true, noHermes = false, root = ROOT, setu
 
   setup?.({ runs, site, T0, rid })
   const fake = createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"no model here"}')) })
-  const fakePort = await freePort()
-  await new Promise(r => fake.listen(fakePort, '127.0.0.1', r))
-  const port = (!noHermes && Number(process.env.WALK_PORT)) || await freePort(), TOKEN = 'walkthrough'
-  const BASE = `http://127.0.0.1:${port}`
-  const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
+  // on a port the system picks and it keeps (asked for and let go, another process could take it first)
+  await new Promise(r => fake.listen(0, '127.0.0.1', r))
+  const fakePort = fake.address().port
+  const TOKEN = 'walkthrough'
+  const env = { ...process.env, SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runs, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
   if (noHermes) { delete env.SWARM_BASE_URL; delete env.SWARM_API_KEY; env.HERMES_HOME = join(data, 'hermes'); mkdirSync(env.HERMES_HOME) }
-  for (const k of ['SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
-  const server = spawn(process.execPath, [join(root, 'server/server.mjs')], { env, stdio: ['ignore', quiet ? 'ignore' : 'inherit', quiet ? 'ignore' : 'inherit'] })
+  for (const k of ['SWARM_PORT', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
+  // on WALK_PORT when asked, else on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+  const { child: server, base: BASE } = await startStudio({ root, env, port: (!noHermes && Number(process.env.WALK_PORT)) || 0, show: !quiet })
   const api = (path, body) => fetch(`${BASE}${path}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json())
-  for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r.ok, () => false)) break; await wait(150) }
   const stop = () => { server.kill(); fake.close(); rmSync(data, { recursive: true, force: true }) }
   return { BASE, ids, api, stop, data }
 }

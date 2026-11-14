@@ -113,8 +113,9 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
   }
 
   // ---------- the model picker (hermes_models.py): Hermes's own provider and model list, a pick sets the
-  // planner and builder slots in Hermes, a key goes to Hermes's own key store, a browser sign-in is
-  // `hermes auth add <provider>` with its link and code shown in the sheet
+  // planner and builder slots in Hermes, a browser sign-in is `hermes auth add <provider> --type oauth` with its
+  // link and code shown in the sheet. A provider key never reaches the studio: the sheet shows
+  // `hermes auth add <provider> --type api-key` for the person to run, and Hermes asks for the key itself
   let options = null // { at, value }: Hermes's list, kept a minute
   async function modelOptions(refresh = false) {
     if (!hermesModels) return { ok: false, message: 'Start Swarm Studio from Hermes to pick a model.', providers: [] }
@@ -152,18 +153,6 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
     if (state.modelsOk !== lastTest.ok) { state.modelsOk = lastTest.ok; save() }
     const slots = Object.fromEntries(Object.keys(now.slots).map(role => [role, { provider, model }]))
     return { ok: true, slots, test: lastTest }
-  }
-  async function saveKey(input) {
-    if (!hermesModels) return { ok: false, message: 'Start Swarm Studio from Hermes to sign in.' }
-    const slug = String(input.slug || ''), key = String(input.key || '').trim()
-    if (!key) return { ok: false, message: 'Paste the key.' }
-    if (/\s/.test(key) || key.length > 500 || key.startsWith('-')) return { ok: false, message: 'That is not a key.' }
-    // the name it is kept under comes from Hermes's own list, never from the page
-    const row = (await modelOptions()).providers?.find(p => p.slug === slug && p.sign === 'key')
-    if (!row || !/^[A-Z][A-Z0-9_]{1,63}$/.test(row.keyEnv || '')) return { ok: false, message: 'This provider signs in another way.' }
-    const r = await hermesCli(['config', 'set', row.keyEnv, key])
-    options = null
-    return r.ok ? { ok: true, options: await modelOptions(true) } : { ok: false, message: r.message || 'Hermes did not save the key.' }
   }
   // one browser sign-in at a time: its provider, link and code, and how it ended
   let signing = null
@@ -225,7 +214,8 @@ export function setupRoutes({ dataDir, roles, call, image, media = async () => n
     if (url.pathname === '/api/setup/models/signin' && req.method === 'POST') {
       body(req).then(async input => {
         if (input.cancel) { if (signing?.child && signing.done === undefined) signing.child.kill(); signing = null; return json(res, 200, signState()) }
-        if (input.key) return json(res, 200, await saveKey(input))
+        // no key is ever taken here: the person gives it to Hermes in their own terminal
+        if ('key' in input) return json(res, 400, { error: 'keys go to Hermes, not here' })
         if (!SLUG.test(String(input.slug || ''))) return json(res, 400, { error: 'bad provider' })
         json(res, 200, { ok: true, ...(await signInBrowser(String(input.slug))) })
       })

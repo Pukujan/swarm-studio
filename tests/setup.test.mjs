@@ -178,7 +178,7 @@ test('Let Hermes set this up opens a console on Windows, and a failed check is k
   assert.equal((await make({})('GET', '/api/setup')).data.modelsOk, true)
 })
 
-test('the model picker: Hermes\'s own list; a pick and a key go through Hermes\'s CLI; the browser signs in', async () => {
+test('the model picker: Hermes\'s own list; a pick goes through Hermes\'s CLI; no key is ever taken; the browser signs in', async () => {
   const { setupRoutes } = await import('../server/setup.mjs')
   const { mkdtempSync } = await import('node:fs')
   const { tmpdir } = await import('node:os')
@@ -188,7 +188,7 @@ test('the model picker: Hermes\'s own list; a pick and a key go through Hermes\'
   let cleared = 0
   const hermesModels = async call => {
     calls.push(call)
-    if (call.startsWith('options_json')) return { ok: true, main: { provider: 'inferhub', model: 'cb/flash' }, slots: {}, providers: [{ slug: 'nous', signedIn: true, models: ['a'] }, { slug: 'anthropic', signedIn: false, sign: 'key', keyEnv: 'ANTHROPIC_API_KEY', models: [] }] }
+    if (call.startsWith('options_json')) return { ok: true, main: { provider: 'inferhub', model: 'cb/flash' }, slots: {}, providers: [{ slug: 'nous', signedIn: true, models: ['a'] }, { slug: 'anthropic', signedIn: false, sign: 'key', models: [] }] }
     if (call === 'slots_json()') return { ok: true, slots: { planner: { slot: 'swarm_studio_planner', provider: 'nous', model: 'b', keep: {}, base_url: '' }, worker: { slot: 'swarm_studio_builder', provider: 'custom', model: 'm', keep: { timeout: 45 }, base_url: 'https://own' } } }
   }
   const run = (cmd, args, o, cb) => { cli.push([cmd, args]); cb(null, '', '') }
@@ -221,10 +221,14 @@ test('the model picker: Hermes\'s own list; a pick and a key go through Hermes\'
   for (const model of ['--force', 'a b', 'a"b', '']) assert.equal((await ask('POST', '/api/setup/models/pick', { provider: 'nous', model })).data.ok, false, model)
   assert.equal((await ask('POST', '/api/setup/models/pick', { provider: '../x', model: 'a' })).data.ok, false)
   assert.equal(cli.length, 2)
-  // a key: saved under the name Hermes's list gives, never one from the page
-  assert.equal((await ask('POST', '/api/setup/models/signin', { slug: 'anthropic', key: 'sk-x', keyEnv: 'PATH' })).data.ok, true)
-  assert.deepEqual(cli.at(-1), ['/h/hermes', ['config', 'set', 'ANTHROPIC_API_KEY', 'sk-x']])
-  assert.equal((await ask('POST', '/api/setup/models/signin', { slug: 'nous', key: 'sk-x' })).data.ok, false, 'nous signs in another way')
+  // a key is never taken: the person gives it to Hermes in their own terminal (`hermes auth add <slug> --type api-key`)
+  for (const body of [{ slug: 'anthropic', key: 'sk-x' }, { slug: 'nous', key: 'sk-x' }, { key: '' }]) {
+    const r = await ask('POST', '/api/setup/models/signin', body)
+    assert.equal(r.code, 400, JSON.stringify(body))
+    assert.ok(!JSON.stringify(r.data).includes('sk-x'))
+  }
+  assert.equal(cli.length, 2, 'no CLI call for a key')
+  assert.equal(started.length, 0, 'no sign-in started for a key')
   assert.equal((await ask('POST', '/api/setup/models/signin', { slug: '../x; rm' })).code, 400)
   // the browser: Hermes's own sign-in, its link and code read from what it prints
   const s = (await ask('POST', '/api/setup/models/signin', { slug: 'minimax-oauth' })).data.signing
