@@ -194,7 +194,7 @@ async function measure(out, { root, runs: N, only, cold }) {
   // The fixture's pictures carry the server's address, so the port is picked before the server starts; when
   // another process took it in between, the fixture is written and the server started again on another
   // (scripts/studio-child.mjs)
-  const { child: server, base: BASE } = await onFreePort(port => { fixture(runsDir, `http://127.0.0.1:${port}`, film); return startStudio({ root, env, port, show: !!process.env.GAUGE_SHOW }) })
+  const { child: server, base: BASE, log: serverLog } = await onFreePort(port => { fixture(runsDir, `http://127.0.0.1:${port}`, film); return startStudio({ root, env, port, show: !!process.env.GAUGE_SHOW }) })
   studio = server
   const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1, filmBytes: film.length }, scenes: {} }
   try {
@@ -221,7 +221,7 @@ async function measure(out, { root, runs: N, only, cold }) {
         // what it is waiting on: the commands of its children
         try { ps += `; children: ${execFileSync('ps', ['-A', '-o', 'ppid=,pid=,etime=,command='], { encoding: 'utf8', timeout: 5000, maxBuffer: 2e7 }).split('\n').filter(l => l.trim().split(/\s+/)[0] === String(server.pid)).map(l => l.trim().slice(0, 220)).join(' | ') || 'none'}` } catch {}
         if (process.env.GAUGE_DIAG) try { console.log(execFileSync('sample', [String(server.pid), '1'], { encoding: 'utf8', timeout: 20000, maxBuffer: 2e7 }).split('\n').filter(l => /Thread_|uv_|node::|Call graph|main|fs_|read|wait/.test(l)).slice(0, 40).join('\n')) } catch {}
-        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps }
+        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps, log: serverLog().trim().split('\n').slice(-8).map(l => l.slice(0, 160)) }
       } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
       console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify({ ...m, ft: undefined })}`)
