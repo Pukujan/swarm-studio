@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 
 // the canvas's shared ground (web/canvas/core.js) reads the page as it loads: an empty one is enough here
 globalThis.window ??= /** @type {any} */ ({})
-globalThis.document ??= /** @type {any} */ ({ querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, documentElement: { classList: { add() {} } } })
+globalThis.document ??= /** @type {any} */ ({ body: { classList: { contains: () => false } }, querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, documentElement: { classList: { add() {} } } })
 globalThis.location ??= /** @type {any} */ ({ search: '' })
 const { CARRY, carryEase, carryStack, carryDrop, carryAt, carryZoom, carryOff, carryNth, carryStandin, carryEnd, carryStart, carryCards, carryMoving } = await import('../web/canvas/carry.js')
 

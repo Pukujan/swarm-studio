@@ -84,6 +84,8 @@ export function carryStandin(html, gen) {
 
 const carryCalm = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 const carrySrc = (/** @type {string} */ src) => (/^(https?:|data:|blob:)/.test(src) ? src : BASE + src)
+// the deck is behind the Overview or Projects: nobody sees a card travel, and the Overview photographs the pages
+const carryUnseen = () => document.body.classList.contains('cosmos-project') || document.body.classList.contains('cosmos-home')
 /** A card is on its way to its slot: the loop keeps its full rate. */
 export const carryMoving = () => [...carryCards.values()].some(c => c.land)
 
@@ -114,9 +116,10 @@ export function carryStart(e, nth, now = performance.now()) {
   if (!ghosts) return
   const had = carryCards.get(key)
   if (had?.el.isConnected && !had.land) { had.t0 = now; return }
+  // painted again while the last one is still on its way: that one is put in its slot now
+  if (had?.land) { had.land.fill(); carryGone(had) }
   const el = document.createElement('div')
   el.className = 'carry'
-  el.setAttribute('aria-busy', 'true')
   el.hidden = true
   ghosts.append(el)
   carryCards.set(key, { key, page: e.page, layer: e.layer, gen: e.gen, nth, who: painterOf(`${e.page}/${e.layer}/${e.gen}`), el, t0: now, x: 0, y: 0, placed: false, peek: 0, shown: '', land: null })
@@ -130,11 +133,10 @@ export function carryStart(e, nth, now = performance.now()) {
  */
 export function carryEnd(key, src, fill, now = performance.now()) {
   const c = carryCards.get(key)
-  if (!c || !c.el.isConnected || !c.placed || !src) { if (c) carryGone(c); return fill() }
+  if (!c || !c.el.isConnected || !c.placed || !src || carryUnseen()) { if (c) carryGone(c); return fill() }
   let filled = false
   const once = () => { if (!filled) { filled = true; fill() } }
   carryShow(c, src)
-  c.el.removeAttribute('aria-busy')
   c.el.classList.add('got')
   if (carryCalm()) {
     // no drag: the card is on its slot at once, and goes as the slot shows the picture
@@ -147,10 +149,11 @@ export function carryEnd(key, src, fill, now = performance.now()) {
   setTimeout(once, CARRY.ms + 250)
 }
 
+// the card leaves: at once, or after it has been seen on its slot for `wait` ms
 function carryGone(/** @type {CarryCard} */ c, wait = 0) {
   if (carryCards.get(c.key) === c) carryCards.delete(c.key)
-  c.el.classList.add('gone')
-  setTimeout(() => c.el.remove(), wait + 300)
+  const fade = () => { c.el.classList.add('gone'); setTimeout(() => c.el.remove(), 300) }
+  if (wait) setTimeout(fade, wait); else fade()
 }
 
 /** Every frame (web/canvas/loop.js): the cards beside their pages, the one being dragged, and the painters' cursors. */
