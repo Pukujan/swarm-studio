@@ -21,13 +21,13 @@
 // docs/perf/board-gauge.json keeps a baseline to read.
 // It starts its own throwaway Studio and never touches the 4319 server or the real data folder.
 import { createRequire } from 'node:module'
-import { spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deflateSync, crc32 } from 'node:zlib'
+import { startStudio, onFreePort } from './studio-child.mjs'
 
 const [cmd, ...rest] = process.argv.slice(2)
 const flag = (k, d) => { const i = rest.indexOf(`--${k}`); return i >= 0 ? rest[i + 1] : d }
@@ -47,7 +47,6 @@ async function loadPlaywright() {
 // every wait on the browser is bounded: a page or a CDP call that never answers fails its scene, named, instead
 // of holding the machine's job queue (a run hung for half an hour on Windows with nothing bounded)
 const within = (what, ms, p) => { let t; return Promise.race([p, new Promise((_, no) => { t = setTimeout(() => no(new Error(`${what}: no answer in ${ms / 1000} s`)), ms) })]).finally(() => clearTimeout(t)) }
-const freePort = () => new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
 
 // ---------- the fixture: one seeded build
 const RUN = '2026-11-03T09-00-00-000Z'
@@ -150,16 +149,19 @@ async function measure(out, { root, runs: N, only }) {
   const runsDir = join(data, 'runs')
   mkdirSync(runsDir)
   const fake = createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"no model here"}')) })
-  const fakePort = await freePort()
-  await new Promise(r => fake.listen(fakePort, '127.0.0.1', r))
-  const port = await freePort(), TOKEN = 'gauge', BASE = `http://127.0.0.1:${port}`
-  fixture(runsDir, BASE, film)
-  const env = { ...process.env, SWARM_PORT: String(port), SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runsDir, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
-  for (const k of ['SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
-  const server = studio = spawn(process.execPath, [join(root, 'server/server.mjs')], { env, stdio: ['ignore', 'ignore', 'ignore'] })
+  // on a port the system picks and the fake keeps (asked for and let go, another process could take it first)
+  await new Promise(r => fake.listen(0, '127.0.0.1', r))
+  const fakePort = fake.address().port
+  const TOKEN = 'gauge'
+  const env = { ...process.env, SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runsDir, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
+  for (const k of ['SWARM_PORT', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
+  // The fixture's pictures carry the server's address, so the port is picked before the server starts; when
+  // another process took it in between, the fixture is written and the server started again on another
+  // (scripts/studio-child.mjs)
+  const { child: server, base: BASE } = await onFreePort(port => { fixture(runsDir, `http://127.0.0.1:${port}`, film); return startStudio({ root, env, port }) })
+  studio = server
   const result = { root, runs: N, fixture: { pages: PAGES, live: LIVE, pictures: PICTURES, films: 1, filmBytes: film.length }, scenes: {} }
   try {
-    for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r.ok, () => false)) break; await wait(150) }
     await fetch(`${BASE}/api/setup`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': TOKEN }, body: JSON.stringify({ seen: true }) }).catch(() => {})
     for (let r = 0; r < N; r++) for (const sc of SCENES.filter(s => !only.length || only.includes(s.id))) {
       // a fresh browser and no saved pictures each time: every run starts from the same place

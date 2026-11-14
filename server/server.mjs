@@ -2,7 +2,7 @@
 // Swarm Studio local server: serves the canvas, starts runs, and streams every
 // engine event to the canvas over Server-Sent Events. Binds to 127.0.0.1 only.
 //
-//   node server/server.mjs [--port 4319]
+//   node server/server.mjs [--port 4319]   (--port 0: a port the system picks; the first line it prints says which)
 //   Model calls go to Hermes through its bridge (engine/hermesllm.mjs). Without Hermes:
 //   env: SWARM_STUDIO_API_KEY or SWARM_API_KEY, SWARM_BASE_URL,
 //        SWARM_PLANNER_MODEL, SWARM_WORKER_MODEL, SWARM_AGENTS
@@ -106,7 +106,9 @@ const uiDist = join(root, 'ui', 'dist')
 const runsDir = process.env.SWARM_RUNS_DIR || join(root, 'runs')
 const dataDir = process.env.SWARM_DATA_DIR || root
 const argPort = process.argv.indexOf('--port')
-const port = Number(argPort >= 0 ? process.argv[argPort + 1] : process.env.SWARM_PORT || 4319)
+// 0: the system picks a free one when the server listens (tests and check scripts: a port picked beforehand and
+// let go can be taken by another process before this one binds it); `port` is the real one from then on
+let port = Number(argPort >= 0 ? process.argv[argPort + 1] : process.env.SWARM_PORT || 4319)
 
 // Endpoint and model per role (Nous catalog review, point 2). By default every model call goes to Hermes:
 // the studio's own loopback endpoint /llm/v1 (engine/hermesllm.mjs) forwards it to the Hermes bridge, and
@@ -4431,6 +4433,14 @@ function closeStoppedVideos() {
 closeStoppedVideos()
 
 server.listen(port, '127.0.0.1', () => {
+  // --port 0: the port the system picked is the server's own from here on, for its Host check and for the
+  // roles that call the model through this server's /llm/v1 (their address was made before it was known)
+  if (!port) {
+    port = server.address().port
+    hosts.clear()
+    hosts.add(`127.0.0.1:${port}`).add(`localhost:${port}`)
+    for (const r of ROLES) if (viaHermes(r)) models[r].baseUrl = llm.provider().baseUrl
+  }
   console.log(`swarm studio on http://127.0.0.1:${port}/  (planner ${models.planner.model}, workers ${models.worker.model})`)
 })
 

@@ -5,7 +5,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
-import { spawn as rawSpawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +12,7 @@ import { idleWatch, previewPool, serialQueue } from '../engine/lifecycle.mjs'
 import { start, stopTree } from '../engine/proc.mjs'
 import { appJobs, sourceSig, hasServer, corsFront } from '../engine/appjob.mjs'
 import { serveStatic } from '../engine/godotfirst.mjs'
+import { startStudio, onFreePort } from '../scripts/studio-child.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const wait = ms => new Promise(r => setTimeout(r, ms))
@@ -213,13 +213,14 @@ test('a finished app is built again only when its files change; an app with serv
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
-const freePort = () => new Promise(done => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => done(p)) }) })
-
+// serveStatic and corsFront take the port they listen on. A port asked of the system and let go can be taken by
+// another test's server before it is bound here, so starting on one is tried again when it is (onFreePort: only
+// the start; what the test then asserts is not tried again)
 test('a built app\'s files: client-side routes get index.html, and the types a page needs', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dist-'))
   writeFileSync(join(dir, 'index.html'), '<!doctype html><div id=root></div>')
   writeFileSync(join(dir, 'logo.svg'), '<svg/>')
-  const srv = await serveStatic(dir, await freePort(), { spa: true })
+  const srv = await onFreePort(port => serveStatic(dir, port, { spa: true }))
   try {
     const route = await fetch(`${srv.url}dashboard/orders`)
     assert.equal(route.status, 200)
@@ -233,9 +234,8 @@ test('a built app\'s files: client-side routes get index.html, and the types a p
 
 test('a built server sits behind a front that adds CORS (the sandboxed frame loads its module scripts)', async () => {
   const inner = createServer((req, res) => res.writeHead(200, { 'content-type': 'text/plain' }).end(`hello ${req.url}`))
-  const innerPort = await freePort()
-  await new Promise(r => inner.listen(innerPort, '127.0.0.1', r))
-  const front = await corsFront(await freePort(), innerPort)
+  await new Promise(r => inner.listen(0, '127.0.0.1', r))
+  const front = await onFreePort(port => corsFront(port, inner.address().port))
   try {
     const r = await fetch(`${front.url}api/hello`)
     assert.equal(await r.text(), 'hello /api/hello')
@@ -246,12 +246,9 @@ test('a built server sits behind a front that adds CORS (the sandboxed frame loa
 test('the server exits by itself after its idle time with nothing open, and not while a pane is open', async () => {
   const run = async extra => {
     const dir = mkdtempSync(join(tmpdir(), 'idle-srv-'))
-    const port = await freePort()
     const env = { ...process.env, SWARM_TOKEN: 't', SWARM_DATA_DIR: join(dir, 'data'), SWARM_RUNS_DIR: join(dir, 'data', 'runs'), SWARM_OUTPUT_DIR: join(dir, 'out'), HERMES_HOME: join(dir, 'hermes'), SWARM_SERVER_IDLE_MIN: '0.03', ...extra }
-    const child = rawSpawn(process.execPath, [join(root, 'server', 'server.mjs'), '--port', String(port)], { env, stdio: 'ignore' })
-    const exited = new Promise(r => child.once('exit', code => r(code)))
-    const base = `http://127.0.0.1:${port}`
-    for (let i = 0; i < 80; i++) { if (await fetch(base + '/api/state').then(() => true, () => false)) break; await wait(100) }
+    // on a port of its own, which it says once it listens (scripts/studio-child.mjs)
+    const { child, exited, base } = await startStudio({ env })
     return { child, exited, base, dir }
   }
   const quiet = await run()
