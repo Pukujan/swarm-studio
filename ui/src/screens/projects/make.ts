@@ -31,8 +31,6 @@ export const KIT_STEPS: Record<Kind, string[]> = {
 
 // what a build of this kind runs: a website builds live (/api/run); the rest run their steps (/api/auto)
 export const runOf = (m: Make) => (m.k === 'site' ? null : { games: m.games, only: m.only })
-// the guided prompt's and the talk's word for the kind
-export const guideKind = (k: Kind) => (({ site: 'site', app: 'app', video: 'film', game: 'game' } as Record<string, string>)[k] || 'site')
 
 // the Studio fits a game, a vague idea, or one where the look matters (spec 37)
 const LOOKS = /\b(look|feel|vibe|mood|brand(ing)?|style|aesthetic|colou?rs?|logo|palette|typography|font|premium|elegant|beautiful|moody|minimal|bold)\b/i

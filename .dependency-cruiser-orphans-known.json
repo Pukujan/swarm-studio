@@ -1,0 +1,12 @@
+[
+  {
+    "comment": "Known when the check arrived (2026-11-14), for the owner to decide. Its own header says it is joined into the studio's one script (server/page.mjs) to reopen a project's brand sheet after a reload or Back, and #473 said so too, but it was never put in the list (studioModules), so it has never run. Add 'next.js' to that list, or delete the file; then take this entry out.",
+    "type": "module",
+    "from": "web/next.js",
+    "to": "web/next.js",
+    "rule": {
+      "severity": "error",
+      "name": "no-orphans"
+    }
+  }
+]

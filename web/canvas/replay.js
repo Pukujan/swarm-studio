@@ -314,7 +314,7 @@ function endReplay() { replayAsked = false; setReplayId(Q.get('replay') || ''); 
 // This pass keeps the pill's number moving between the room's own renders, and says "Replay" once, politely, to
 // a screen reader (the number is not announced as it ticks).
 const markLive = $('#replay-live')
-export function paintMark() {
+function paintMark() {
   if (markLive) setText(markLive, rec.on ? REPLAY_WORD : '')
   if (!rec.on || view !== 'app') return
   appEls.state.classList.add('replay')

@@ -1,11 +1,13 @@
 {
   "name": "swarm-studio-dev",
   "private": true,
-  "description": "Development checks only (the type check, the dependency rules, the design-token build, the UI audit gates, the property tests in tests/property/ (fast-check, decision 0019), the metamorphic relations in tests/metamorphic/ and the OpenSpec scenarios in tests/bdd/ (playwright-bdd, decision 0019); the :ui scripts run the next UI's own, from ui/package.json). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
+  "description": "Development checks only (the type check, the dependency rules, the orphan checks (dependency-cruiser for the studio's own code, knip for the next UI), the design-token build, the UI audit gates, the property tests in tests/property/ (fast-check, decision 0019), the metamorphic relations in tests/metamorphic/ and the OpenSpec scenarios in tests/bdd/ (playwright-bdd, decision 0019); the :ui scripts run the next UI's own, from ui/package.json). It lives here, not at the plugin's root, so `hermes plugins install` finds no package.json to offer to install: the plugin installs nothing from it.",
   "type": "module",
   "scripts": {
     "typecheck": "cd ../.. && tsc -p tsconfig.json",
     "deps": "cd ../.. && depcruise web --config .dependency-cruiser.cjs --ignore-known .dependency-cruiser-known-violations.json",
+    "orphans": "cd ../.. && depcruise web engine server tests scripts bench packs desktop tools/dev/audit tools/dev/bdd tools/dev/tokens.mjs tools/dev/playwright.config.mjs tools/dev/bdd.config.mjs docs/ux/frames/src docs/ux/statechart --config .dependency-cruiser-orphans.mjs --ignore-known .dependency-cruiser-orphans-known.json",
+    "orphans:ui": "knip --directory ../../ui --treat-config-hints-as-errors",
     "property": "cd ../.. && node --test \"tests/property/*.property.mjs\"",
     "metamorphic": "cd ../.. && node --test \"tests/metamorphic/*.test.mjs\"",
     "tokens": "node tokens.mjs",
@@ -22,6 +24,7 @@
     "@playwright/test": "1.64.1",
     "dependency-cruiser": "18.7.2",
     "fast-check": "4.10.2",
+    "knip": "6.44.1",
     "playwright-bdd": "9.2.1",
     "style-dictionary": "5.8.0",
     "typescript": "7.0.2",
