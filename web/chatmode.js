@@ -126,7 +126,8 @@ function modeMenuMake() {
     modeMenuClose(true)
   })
   menu.addEventListener('keydown', e => {
-    if (e.key === 'Tab') return modeMenuClose()
+    // Tab leaves the menu: it closes, and the focus goes on from the button
+    if (e.key === 'Tab') return modeMenuClose(true)
     const all = /** @type {HTMLElement[]} */ ([...menu.querySelectorAll('[data-mode]')])
     const to = modeMenuKey(e.key, all.indexOf(/** @type {HTMLElement} */ (document.activeElement)), all.length)
     if (to < 0) return
