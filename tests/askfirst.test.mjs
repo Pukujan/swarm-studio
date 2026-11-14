@@ -276,9 +276,16 @@ test('a skipped Plan forces no pages on the Studio build (web/kit-site.js)', asy
   assert.deepEqual(siteKit.lock(ctx('skipped')), {})
   await siteKit.build({}, ctx('skipped'))
   assert.equal(sent.at(-1), 'a tea shop', 'the planner picks the pages')
-  assert.deepEqual(siteKit.lock(ctx('todo')).pages, ['Home', 'About', 'Contact'])
+  // no pages are filled in by default (#487): with none named, the crew decides, Plan skipped or not
+  assert.deepEqual(siteKit.lock(ctx('todo')).pages, [])
   await siteKit.build({}, ctx('todo'))
-  assert.match(sent.at(-1), /Pages: Home, About, Contact\.$/)
+  assert.equal(sent.at(-1), 'a tea shop')
+  // the brand story's pages are a suggestion: they go unless the Plan was skipped
+  const story = plan => ({ ...ctx(plan), brand: { story: { pages: ['Home', 'Menu'] } } })
+  await siteKit.build({}, story('todo'))
+  assert.match(sent.at(-1), /Pages: Home, Menu\.$/)
+  await siteKit.build({}, story('skipped'))
+  assert.equal(sent.at(-1), 'a tea shop')
   const picked = { ...ctx('skipped'), state: { pages: ['Menu'] } }
   assert.deepEqual(siteKit.lock(picked).pages, ['Menu'], 'pages the person named still go')
 })
