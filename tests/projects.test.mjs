@@ -3,7 +3,7 @@
 // the brand from the brief, never a screen; a run joins its brand's project as a piece.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { brandOf, deployName, isScreenName, packageName, pieceKind, projectName } from '../engine/naming.mjs'
@@ -64,7 +64,7 @@ test('an app export is named after the project, not its first screen', () => {
 })
 
 // ---------- joining: a stand-in run list, as the server's runCard and runMeta give it
-function world() {
+function world(opts = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'swarm-projects-'))
   const runsDir = join(dir, 'runs'), cards = {}, metas = {}
   mkdirSync(runsDir, { recursive: true })
@@ -75,7 +75,7 @@ function world() {
     cards[id].autoTitle = cards[id].title
     metas[id] = meta
   }
-  const p = makeProjects({ runsDir, dataDir: join(dir, 'data'), runCard: id => cards[id] || null, runMeta: id => metas[id] || {}, isLive: () => false })
+  const p = makeProjects({ runsDir, dataDir: join(dir, 'data'), runCard: id => cards[id] || null, runMeta: id => metas[id] || {}, isLive: () => false, ...opts })
   return { p, add, runsDir, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
 }
 
@@ -190,5 +190,28 @@ test('the version being built leads the card, even when a newer try exists', () 
     assert.equal(p.head, '2026-11-11T12-45-22-265Z')
     assert.equal(p.state.status, 'Building · stage 1 of 4')
     assert.equal(p.cover, '/img/a/game-title.webp')
+  } finally { w.cleanup() }
+})
+
+test('Empty Trash says how many went, and a held file keeps only its project in Trash', () => {
+  // a run folder that cannot be removed, as Windows refuses a file another program has open
+  const held = new Set(['2026-11-11T02-00-00-000Z'])
+  const w = world({ removeDir: path => { if ([...held].some(r => path.endsWith(r))) throw Object.assign(new Error(`EBUSY: resource busy or locked, rmdir '${path}'`), { code: 'EBUSY' }); rmSync(path, { recursive: true, force: true }) } })
+  try {
+    w.add('2026-11-11T01-00-00-000Z', { title: 'Tempo', brief: 'Tempo, a focus timer for remote teams' })
+    w.add('2026-11-11T02-00-00-000Z', { title: 'Harbor', brief: 'Harbor, a ferry timetable for an island' })
+    w.add('2026-11-11T03-00-00-000Z', { title: 'Kiln', brief: 'Kiln, a pottery class booking site' })
+    for (const p of w.p.list().projects) if (p.title !== 'Kiln') w.p.op({ op: 'trash', id: p.id })
+    const out = w.p.op({ op: 'empty' })
+    assert.equal(out.removed, 1)
+    assert.deepEqual(out.failed.map(f => [f.title, f.code]), [['Harbor', 'EBUSY']])
+    assert.deepEqual(out.projects.map(p => [p.title, !!p.trashed]).sort(), [['Harbor', true], ['Kiln', false]])
+    assert.equal(existsSync(join(w.runsDir, '2026-11-11T01-00-00-000Z')), false)
+    // once the file is let go, Delete forever finishes it
+    held.clear()
+    const again = w.p.op({ op: 'purge', ids: [out.failed[0].id] })
+    assert.equal(again.removed, 1)
+    assert.deepEqual(again.failed, [])
+    assert.deepEqual(again.projects.map(p => p.title), ['Kiln'])
   } finally { w.cleanup() }
 })

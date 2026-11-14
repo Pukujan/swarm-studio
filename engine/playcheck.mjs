@@ -11,7 +11,7 @@
 // behave differently because it is being tested.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { companionOf, sideView } from './game.mjs'
 
 const slug = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -78,7 +78,7 @@ export function testDodges(dir, { godot = false } = {}) {
       let st
       try { st = statSync(p) } catch { continue }
       if (st.isDirectory()) { if (f !== 'node_modules' && !f.startsWith('.')) walk(p, depth + 1) } else if (/\.(gd|ts|tsx|js|jsx|mjs)$/.test(f) && st.size < 400000) {
-        try { if (DODGE.test(readFileSync(p, 'utf8'))) hits.push(p.slice(dir.length + 1)) } catch {}
+        try { if (DODGE.test(readFileSync(p, 'utf8'))) hits.push(p.slice(dir.length + 1).split(sep).join('/')) } catch {}
       }
     }
   }

@@ -89,7 +89,8 @@ for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r
 
 // the third build: started elsewhere before the page opens, so the server replays it to the canvas
 const elsewhere = async brief => {
-  const out = await api('/api/run', { brief, agents: 2 }).catch(() => ({}))
+  // a script's build says it is sure: no question in the chat first (docs/decisions/0020-ask-before-build.md)
+  const out = await api('/api/run', { brief, agents: 2, sure: true }).catch(() => ({}))
   for (let i = 0; i < 40; i++) { const st = await api('/api/state').catch(() => ({})); if (st.run === out.run && !st.working) break; await wait(250) }
   return out.run
 }
@@ -135,8 +136,9 @@ try {
   console.log('open A, play, home, open B')
   await page.click('.home .card[aria-label="Alpha Tea"]')
   // before its picture, a page is a block per planned section: never a title card or a thin strip
-  await page.waitForSelector('.pj-stage[aria-label="Overview"] .ab.page', { timeout: 5000 }).catch(() => {})
-  const tiles = await page.evaluate(() => [...document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page')].map(a => ({ sk: a.querySelectorAll('.sk:not(.over) i').length, img: !!a.querySelector(':scope > img'), tc: !!a.querySelector('.tc'), ratio: a.offsetHeight / a.offsetWidth })))
+  // (its pages, once the board has come: until then the stage holds three loading cards, .wait-in)
+  await page.waitForSelector('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)', { timeout: 5000 }).catch(() => {})
+  const tiles = await page.evaluate(() => [...document.querySelectorAll('.pj-stage[aria-label="Overview"] .ab.page:not(.wait-in)')].map(a => ({ sk: a.querySelectorAll('.sk:not(.over) i').length, img: !!a.querySelector(':scope > img'), tc: !!a.querySelector('.tc'), ratio: a.offsetHeight / a.offsetWidth })))
   ok(tiles.length === 2 && tiles.every(t => (t.sk || t.img) && !t.tc && t.ratio >= 1.2), `before their pictures, pages are skeletons from the plan (${JSON.stringify(tiles)})`)
   await settle(A1)
   await shows(A1, 'Alpha Tea', 'Alpha opened')
@@ -161,7 +163,8 @@ try {
   // opened again, the pages paint from the saved files
   await home()
   await page.click('.home .card[aria-label="Alpha Tea"]')
-  await page.waitForFunction(() => document.querySelectorAll('.pj-stage .ab.page img').length >= 2, null, { timeout: 5000 }).catch(() => {})
+  // (Alpha's pages: right after the click the stage can still hold Bravo's, with Bravo's saved pictures)
+  await page.waitForFunction(run => { const ims = [...document.querySelectorAll('.pj-stage .ab.page img')]; return ims.length >= 2 && ims.every(im => !im.getAttribute('src').includes('/snaps/') || im.getAttribute('src').includes(`/snaps/${run}/`)) }, A1, { timeout: 5000 }).catch(() => {})
   const srcs = await page.evaluate(() => [...document.querySelectorAll('.pj-stage .ab.page img')].map(im => im.getAttribute('src')))
   ok(srcs.length === 2 && srcs.every(x => x.includes(`/snaps/`)), `opened again, Alpha's pages paint from their saved snapshots (${srcs.map(x => x.split('/').pop()).join(', ')})`)
   // the small picture first, the full one for when the camera comes close
@@ -362,13 +365,26 @@ try {
   console.log('Make, then another project')
   await home()
   // what Projects' Make box does once the person says Build (web/home.js start): the canvas submits the
-  // brief and the studio is told the build the person started
-  const made = await page.evaluate(async () => { const run = await window.swarm.submit('Cedar Cafe, a small cafe by the river'); window.swarmCosmos.started(run); return run })
+  // brief, the chat asks first (decision 0020) and the person answers Skip all; then the build starts and the
+  // studio is told the build the person started
+  const made = await page.evaluate(async () => {
+    const brief = 'Cedar Cafe, a small cafe by the river'
+    const asked = await window.swarm.submit(brief)
+    if (!asked?.ask || !asked.chat) return null
+    await window.swarm.api(`/api/talk/${asked.chat}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pick: 'go:all' }) })
+    await new Promise(r => setTimeout(r, 800))
+    const run = await window.swarm.submit(brief, false, null, null, { chat: asked.chat })
+    window.swarmCosmos.started(run)
+    return run
+  })
   await page.waitForFunction(r => window.swarm.S?.run === r, made, { timeout: 10000 }).catch(() => {})
   await page.waitForFunction(() => !window.swarmCosmos.nav.view.pending, null, { timeout: 10000 }).catch(() => {})
   at = await where()
   ok(typeof made === 'string' && at.room === 'deck' && at.version === made && at.run === made, `Make opens the new build in the Design deck (${at.room}, ${at.run === made ? 'the new build' : at.run})`)
   ok(!(await page.evaluate(() => window.swarmCosmos.nav.view.pending)), 'its start on the stream clears the wait')
+  // the question's chat is open with the caret in its box (decision 0020), and Esc in a text box stays there
+  // (web/studio.js escUp): leave the box first, as a click on the deck does, then Esc goes up to the Overview
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() })
   await page.keyboard.press('Escape'); await wait(400)
   await home()
   await page.click('.home .card[aria-label="Alpha Tea"]')

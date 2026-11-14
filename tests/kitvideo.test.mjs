@@ -91,3 +91,16 @@ test('the kit file keeps the UI rules: no tooltips, no helpers outside its closu
   const top = src.split('\n').filter(l => /^(const|let|function|export) /.test(l))
   assert.deepEqual(top, ['export const videoKit = (() => {'], 'only `videoKit` at the top level, since the modules are joined into one script')
 })
+
+test('with no story passed, a new draft starts from the newest build\'s story', async () => {
+  const asked = []
+  const c = ctx({ project: { id: 'pstory', head: 'run-7' }, sw: { base: '', api: async path => {
+    asked.push(path)
+    if (path === '/api/kit/video/pstory') return { ok: true, json: async () => ({ kit: null }) }
+    if (path === '/api/runs/run-7/story') return { ok: true, json: async () => ({ story: { beats: [{ headline: 'Lanterns wake' }, { headline: 'Come down to the water' }] } }) }
+    return { ok: false, status: 404, json: async () => ({}) }
+  } } })
+  const d = await kit.prepare(c)
+  assert.deepEqual(asked, ['/api/kit/video/pstory', '/api/runs/run-7/story'])
+  assert.deepEqual(d.beats.map(b => b.text), ['Lanterns wake', 'Come down to the water'])
+})

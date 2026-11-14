@@ -5,6 +5,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { canvasFiles } from './canvas-source.mjs'
 import { join } from 'node:path'
 import { checkSeo, fixSeo, reviewSeo, honestFacts, cleanSeo, fixHtml, seoFromEvents, jsonLd, composeTitle, seoStatic, thumbOf, TITLE_MAX, DESC_MAX, DESC_MIN } from '../engine/seo.mjs'
 import { createServer } from 'node:http'
@@ -256,6 +257,15 @@ test('the thumbnail: the person\'s pick for the home page, else its hero, else t
 test('the canvas page joins every module canvas.js imports (seo.js among them)', () => {
   const page = readFileSync(new URL('../server/page.mjs', import.meta.url), 'utf8')
   const list = page.match(/\[([^\]]*'canvas\.js')\]/)[1]
-  const imports = [...readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8').matchAll(/^import .* from '\.\/([\w.-]+)'$/gm)].map(m => m[1])
-  for (const f of imports) assert.ok(list.includes(`'${f}'`), `${f} is joined into the canvas page`)
+  // canvas.js and its area modules (web/canvas/): every local file they import is joined, before its user
+  const order = [...list.matchAll(/'([^']+)'/g)].map(m => m[1])
+  for (const file of canvasFiles) {
+    const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/') + 1) : ''
+    const src = readFileSync(new URL(`../web/${file}`, import.meta.url), 'utf8')
+    for (const m of src.matchAll(/^import (?:.* from )?'(\.\.?\/[\w./-]+)'$/gm)) {
+      const f = new URL(m[1], `file:///${dir}`).pathname.slice(1)
+      assert.ok(order.includes(f), `${f} (imported by ${file}) is joined into the canvas page`)
+      if (file !== 'canvas.js' && !f.startsWith('canvas/')) assert.ok(order.indexOf(f) < order.indexOf(file), `${f} is joined before ${file}`)
+    }
+  }
 })

@@ -1,3 +1,4 @@
+// @ts-check
 // The game kit (docs/specs/37-studio-first.md, "The kit contract"): today's Plan board (web/plan.js,
 // spec 21) behind the contract, unchanged. Its cards are the Plan step, its price is the proposal's cost,
 // and its lock is the plan's lock (the board's own gate, with the same price the server checks again).
@@ -43,6 +44,12 @@ export const gameKit = {
     const p = gameKitPlan(ctx)
     return p?.gate?.locked ? { plan: p.id, gate: { lockedAt: p.gate.lockedAt, phase: p.gate.phase, credits: p.gate.credits }, starter: p.gate.starter || null } : null
   },
-  // the Build press: the board's own gate (Lock with the price first, then Build)
-  build: async (spec, ctx) => { await ctx.C.planView.gate(); return { run: gameKitPlan(ctx)?.build?.run || null } }
+  // the studio's Lock: the board's own Lock dialog, with the price the server checks again
+  gate: ctx => ctx.C.planView.gate(),
+  // the Build press, once locked: the board's gate builds a locked plan
+  build: async (spec, ctx) => {
+    if (!gameKitPlan(ctx)?.gate?.locked) throw new Error('lock the plan first')
+    await ctx.C.planView.gate()
+    return { run: gameKitPlan(ctx)?.build?.run || null }
+  }
 }

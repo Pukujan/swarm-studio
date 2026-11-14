@@ -1,0 +1,53 @@
+<!doctype html>
+<!-- The catalog banner (docs/catalog/README.md): 1200×600, rendered by `node scripts/catalog-shots.mjs --banner`.
+     The picture is the real Design deck (crew.png, taken by the same script); the brand is docs/brand/BRAND.md. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Swarm Studio banner</title>
+<style>
+  @font-face { font-family: 'Big Shoulders Display'; src: url(../../web/fonts/big-shoulders-display-latin-800-normal.woff2) format('woff2'); font-weight: 800; }
+  @font-face { font-family: 'Barlow Condensed'; src: url(../../web/fonts/barlow-condensed-latin-600-normal.woff2) format('woff2'); font-weight: 600; }
+  @font-face { font-family: 'EB Garamond'; src: url(../../web/fonts/eb-garamond-latin-500-italic.woff2) format('woff2'); font-weight: 500; font-style: italic; }
+  @font-face { font-family: 'JetBrains Mono'; src: url(../../web/fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2'); font-weight: 400; }
+  :root { --void: #0b0b0c; --edge: #2a2a2e; --text: #f4f4f5; --muted: #8e8e93; }
+  html, body { margin: 0; width: 1200px; height: 600px; overflow: hidden; background: var(--void); color: var(--text); }
+  body { position: relative; }
+  #stars { position: absolute; inset: 0; }
+  .copy { position: absolute; left: 64px; top: 0; bottom: 0; width: 420px; display: flex; flex-direction: column; justify-content: center; }
+  .lockup { display: flex; align-items: center; gap: 14px; margin-bottom: 44px; }
+  .lockup img { width: 56px; height: 56px; }
+  .lockup .swarm { font: 800 44px/1 'Big Shoulders Display', sans-serif; letter-spacing: .01em; }
+  .lockup .studio { font: italic 500 40px/1 'EB Garamond', serif; margin-left: 6px; }
+  h1 { font: 800 76px/.92 'Big Shoulders Display', sans-serif; text-transform: uppercase; margin: 0 0 24px; }
+  h1 em { font: italic 500 80px/.92 'EB Garamond', serif; text-transform: none; }
+  .line { font: 600 21px/1.3 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
+  .credit { position: absolute; left: 64px; bottom: 36px; font: 400 14px 'JetBrains Mono', monospace; color: var(--muted); }
+  /* the real deck, bleeding off the right and bottom edges, in the 1 px graphite frame */
+  .shot { position: absolute; left: 508px; top: 64px; width: 760px; height: 600px; overflow: hidden; border: 1px solid var(--edge); border-radius: 14px; background: var(--void); }
+  .shot img { position: absolute; width: 1152px; left: -384px; top: -116px; }
+</style>
+</head>
+<body>
+<svg id="stars" width="1200" height="600" aria-hidden="true"></svg>
+<div class="copy">
+  <div class="lockup"><img src="../../web/brand/hermia-mark.svg" alt=""><span class="swarm">SWARM</span><span class="studio">Studio</span></div>
+  <h1>One prompt.<br>The <em>whole</em> launch.</h1>
+  <p class="line">Watch your crew build it.</p>
+</div>
+<div class="credit">Built for Hermes Agent.</div>
+<div class="shot"><img src="crew.png" alt="The crew's cursors building a page on the Design deck"></div>
+<script>
+  // a fixed sky: the same stars on every render
+  let s = 7
+  const r = () => (s = (s * 16807) % 2147483647) / 2147483647
+  const svg = document.getElementById('stars')
+  for (let i = 0; i < 90; i++) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    c.setAttribute('cx', (r() * 1200).toFixed(1)); c.setAttribute('cy', (r() * 600).toFixed(1))
+    c.setAttribute('r', (0.4 + r() * 0.9).toFixed(2)); c.setAttribute('fill', '#f4f4f5'); c.setAttribute('opacity', (0.15 + r() * 0.5).toFixed(2))
+    svg.appendChild(c)
+  }
+</script>
+</body>
+</html>

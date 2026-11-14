@@ -1,0 +1,39 @@
+{
+  "about": "The briefs the crew relations are recorded from (tests/metamorphic/record.mjs). Each is worded three ways that ask for the same site; `named` lists the pages each wording asks for, a page's first word being its name. The brand is a locked brand sheet (engine/brand.mjs), so the look is the same for every wording and the colour can be changed alone.",
+  "briefs": [
+    {
+      "id": "ferry",
+      "pageType": "tool",
+      "named": [["home", "start", "index"], ["timetable", "schedule", "times", "sailings", "departures"], ["fares", "tickets", "prices", "pricing"], ["contact", "help", "support"]],
+      "wordings": [
+        "Tern Ferries, a small island ferry company. Four pages: a home page, the timetable, fares and tickets, and contact.",
+        "A website for Tern Ferries, which runs boats between three small islands. It needs a home page, a page with the sailing timetable, a page for fares and tickets, and a contact page.",
+        "Make the site for Tern Ferries (island-hopping ferries). Pages: home, timetable, fares, contact."
+      ],
+      "brand": {
+        "palettes": [{ "id": "k-sea", "name": "Harbour Blue", "bg": "#F4F7F9", "text": "#14202B", "accent": "#0B5FA5", "link": "#C2410C" }],
+        "types": [{ "id": "t-1", "heading": "Archivo", "body": "Inter" }],
+        "pick": { "palette": "k-sea", "type": "t-1" },
+        "story": { "what": "Island ferries between three small islands" }
+      },
+      "accent": "#B91C1C"
+    },
+    {
+      "id": "bakery",
+      "pageType": "editorial",
+      "named": [["home", "start", "index"], ["menu", "breads", "bakes"], ["about", "story"], ["visit", "find", "location", "hours", "contact"]],
+      "wordings": [
+        "Crumb & Co, a neighbourhood sourdough bakery. Four pages: home, menu, our story, and visit us.",
+        "The website for Crumb & Co, a sourdough bakery on a corner in town: a home page, the menu of breads and bakes, a page about the bakers' story, and a page on how to visit.",
+        "Crumb & Co bakery site. Pages: home, menu, about, visit."
+      ],
+      "brand": {
+        "palettes": [{ "id": "k-crust", "name": "Crust", "bg": "#1C1612", "text": "#F5EDE3", "accent": "#E0A44A", "link": "#9FD3C7" }],
+        "types": [{ "id": "t-2", "heading": "Fraunces", "body": "Work Sans" }],
+        "pick": { "palette": "k-crust", "type": "t-2" },
+        "story": { "what": "A neighbourhood sourdough bakery" }
+      },
+      "accent": "#3B82F6"
+    }
+  ]
+}

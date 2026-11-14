@@ -36,7 +36,7 @@ Run 1, 2026-11-09, made with the `human-stories` skill. Five picks, then the oth
 <details>
 <summary>Private scene</summary>
 
-Teodor's drawings are in other people's games: doors, birds, a city under the sea. His name sits low in credits that scroll past too fast to read. His own game lives in a folder called "someday": a mole who carries letters through tunnels under a sleeping town. The indie festival closes submissions on Friday, and it wants a link a judge can click and play.
+Teodor's drawings are in other people's games: doors, birds, a city under the sea. His name sits low in end titles that scroll past too fast to read. His own game lives in a folder called "someday": a mole who carries letters through tunnels under a sleeping town. The indie festival closes submissions on Friday, and it wants a link a judge can click and play.
 
 He followed a tutorial series until the lesson on collisions, where his mole, still a gray square, fell through the floor and kept falling. He tried a game-making app, and everything he built came out looking like its sample game. He asked Bogdan, who coded their game jams years ago. Bogdan said "send me the sprites this weekend," and then his son was born, and Teodor is not going to ask a man with a newborn again.
 

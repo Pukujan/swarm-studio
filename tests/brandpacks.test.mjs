@@ -89,8 +89,8 @@ test('the routes: the view carries the pack cards, a pack is picked whole or in 
     const routes = brandRoutes({ chats })
     const made = await call(routes, 'POST', '/api/brand', { brief: RATS, kind: 'site' })
     const id = made.body.chat
-    // our own five, plus the imported looks the planner suggested (never all of them)
-    assert.ok(made.body.packs.length >= 5 && made.body.packs.length <= 8, `${made.body.packs.length}`)
+    // three options, no more (decision 0015), the planner's suggested ones first
+    assert.equal(made.body.packs.length, 3, `${made.body.packs.length}`)
     assert.ok(made.body.brand.suggest.length >= 2)
     assert.equal((await call(routes, 'POST', `/api/brand/${id}/pick`, { part: 'pack', id: 'no-such' })).code, 400)
     const all = await call(routes, 'POST', `/api/brand/${id}/pick`, { part: 'pack', id: 'playful-community' })
@@ -115,14 +115,14 @@ const OD = JSON.parse(readOd(new URL('../engine/opendesign/packs.json', import.m
 const GOOGLE_FONT = /^[A-Z][A-Za-z0-9 ]{1,38}$/
 const BRANDS = /\b(stripe|apple|linear|vercel|notion|airbnb|tesla|ferrari|nike|spotify|openai|claude|figma|pacman|tetris|google|microsoft|meta|slack|shopify|uber)\b/i
 
-test('the imported packs are whole, credited, never a real brand, and our own five stay first', () => {
-  assert.ok(OD_PACKS.length >= 40 && OD_PACKS.length <= 70, `${OD_PACKS.length}`)
+// every system, the ones named after a real brand too (decision 0016: the owner, "I want these")
+test('the imported packs are whole and credited, all of them, and our own five stay first', () => {
+  assert.ok(OD_PACKS.length >= 151, `${OD_PACKS.length}`)
   assert.deepEqual(BRAND_PACKS.slice(0, OWN_PACKS.length).map(p => p.slug), OWN_PACKS.map(p => p.slug))
-  assert.equal(OD.source.commit, 'bc06128813c99fa63f5af53ad2c903c27db057f2')
+  assert.equal(OD.source.commit, '59e4f2ae85de7e7318a5e6bdcf3a34584c4b7582')
   const slugs = new Set()
   for (const p of OD_PACKS) {
     assert.match(p.slug, PACK_SLUG); assert.ok(!slugs.has(p.slug)); slugs.add(p.slug)
-    assert.ok(!BRANDS.test(`${p.slug} ${p.name}`), p.slug)
     assert.match(p.source.path, /^design-systems\/[a-z0-9-]+\/$/)
     assert.match(p.type.heading, GOOGLE_FONT); assert.match(p.type.body, GOOGLE_FONT)
     assert.ok(p.voice.lines.length >= 2 && p.storyboard.length >= 3 && p.for && p.words instanceof RegExp, p.slug)
@@ -130,15 +130,15 @@ test('the imported packs are whole, credited, never a real brand, and our own fi
   }
 })
 
-test('the board shows our five plus only the suggested looks, never sixty', () => {
+test('the board shows three options, the suggested looks first, never sixty (decision 0015)', () => {
   const s = suggestByWords('A website for a small café and bakery in Lisbon, with a tea corner')
   assert.ok(s.some(x => x.slug === 'od-cafe'))
   const cards = packCards('café', s)
-  assert.ok(cards.length <= OWN_PACKS.length + 3)
+  assert.equal(cards.length, 3)
   assert.ok(cards.some(k => k.slug === 'od-cafe'))
   for (const k of cards) assert.ok(contrast(k.palette.bg, k.palette.text) >= 7, k.slug)
-  // with nothing suggested, only our own five
-  assert.equal(packCards('café').length, OWN_PACKS.length)
+  // with nothing suggested, the first three of our own
+  assert.deepEqual(packCards('café').map(k => k.slug), OWN_PACKS.slice(0, 3).map(p => p.slug))
   // a picked imported pack stays on the board
   assert.ok(packCards('', [], 'od-hud').some(k => k.slug === 'od-hud'))
 })

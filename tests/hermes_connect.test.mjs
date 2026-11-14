@@ -4,6 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { canvasFiles } from './canvas-source.mjs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -65,7 +66,7 @@ test('a call goes through the bridge; a refused grant says how to allow it', asy
 
 test('no Hermes internals are run from Node, and nothing writes the allowlist', () => {
   assert.equal(existsSync(`${root}engine/hermes_mcp.py`), false)
-  for (const f of ['engine/hermes_connect.mjs', 'server/server.mjs', 'engine/media.mjs', 'web/canvas.js']) {
+  for (const f of ['engine/hermes_connect.mjs', 'server/server.mjs', 'engine/media.mjs', ...canvasFiles.map(c => `web/${c}`)]) {
     const src = readFileSync(`${root}${f}`, 'utf8')
     assert.doesNotMatch(src, /hermes_mcp\.py|\/api\/media\/allow/, f)
     assert.doesNotMatch(src, /\[\s*'config'\s*,\s*'set'/, f)

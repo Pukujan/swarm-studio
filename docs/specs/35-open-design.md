@@ -3,6 +3,11 @@
 The owner asked (2026-11-12): why rebuild what Open Design already ships and maintains? This spec answers
 it after reading their code. It is a recommendation only. Nothing is integrated yet; the owner decides.
 
+> **Owner's decision, 2026-11-12 (overrules part of this spec):** use Open Design's editing tools: Edit,
+> Comment, Tweaks, and Draw for Scribble (theirs replaces our Scribble). The "Keep ours" verdict below for
+> Edit / Comment / Tweaks / Draw no longer stands. Taking their data (design systems, deck themes, skills) still
+> stands. Owner: "i already decided to use open design stop asking, and yes use that thing for scribble too".
+
 - Repo read: `nexu-io/open-design` at **`bc06128813c99fa63f5af53ad2c903c27db057f2`** (2026-11-12, root
   `package.json` 0.25.1; latest release 0.27.1 of 2026-11-10). Apache-2.0, about 107k stars, 12k forks,
   1,395 open issues.
@@ -17,8 +22,8 @@ it after reading their code. It is a recommendation only. Nothing is integrated 
 | Driving it from our crew (`od` CLI, MCP) | A daemon on port 7456. The CLI and MCP are thin clients of it. It runs its own agent and makes some model calls itself. | Our server, with model calls through Hermes | **Not now** (at most an "Open in Open Design" hand-off later) |
 | Design systems (151) | `manifest.json` + `DESIGN.md` + `tokens.css` per system. About 85 are named after real brands; about 60 are generic styles. | 5 brand packs, plus the brand sheet board | **Use their data only**: the generic styles, as extra packs |
 | Decks and export | `html-ppt` (MIT): 36 themes and 15 decks, one HTML file per deck. PPTX and PDF export need their Electron app. | None (planned "like Gamma") | **Use their data only** (themes and templates), plus our own small exporter |
-| Edit / Comment / Tweaks / Draw | Edit is an injected bridge plus `source-patches.ts`, inside a 20k-line React host | Manual edit (#309) is already a port of their `source-patches.ts`. We also have comment pins, Variables and Scribble. | **Keep ours**. Re-sync patch kinds from upstream now and then. |
-| HyperFrames video | HeyGen's npm `hyperframes`: HTML + GSAP, rendered with headless Chrome + ffmpeg | Director, storyboard, music cuts, film critic | **Keep ours** |
+| Edit / Comment / Tweaks / Draw | Edit is an injected bridge plus `source-patches.ts`, inside a 20k-line React host | Manual edit (#309) is already a port of their `source-patches.ts`. We also have comment pins, Variables and Scribble. | ~~Keep ours~~ **Overruled 2026-11-12: use Open Design's** (Draw for Scribble too) |
+| HyperFrames video | HeyGen's npm `hyperframes`: HTML + GSAP, rendered with headless Chrome + ffmpeg | Director, storyboard, music cuts, film critic | ~~Keep ours~~ **Overruled 2026-11-12: HyperFrames is the default film engine; the person can pick another** |
 | Skills and templates | 169 skills, 115 design templates, 272 plugin skills | Planner prompts, gameskills | **Use their data only**, picked one at a time with credit (as we already do for 2) |
 | Sharing, collaboration, references, storyboards | Collaboration is cloud-only ("vela"), one writer per project, live cursors were cut. Storyboards are a `storyboard.md` the agent writes. | Many agents with visible cursors, the Feed, References, Story cards | **Keep ours** |
 
@@ -141,7 +146,10 @@ telemetry key.
   rasterises sections. A PPTX of one picture per slide needs only `pptxgenjs` (MIT, 2.6 MB unpacked, depends
   on jszip and image-size), vendored and pinned like `web/vendor/xstate`. PDF is the browser's print.
 
-### Edit, Comment AI, Tweaks, Draw: keep ours
+### Edit, Comment AI, Tweaks, Draw: use Open Design's (owner, 2026-11-12)
+
+The analysis below was written before the owner's decision and argued for keeping ours; it stays as a map of
+their code for the port.
 
 - **How theirs is built:**
   - `apps/web/src/edit-mode/bridge.ts` (1,368 lines) is plain JS injected into the preview's `srcdoc`, and
@@ -168,7 +176,16 @@ telemetry key.
   `packages/contracts/src/prompts/official-system.ts:102`). Our Variables does this from outside the page,
   which is safer in a sandboxed frame.
 
-### HyperFrames video: keep ours
+### HyperFrames video: the default film engine (owner, 2026-11-12)
+
+Owner: "hyperframes of course and or we can use any again give options for configuration and let people
+decide? we just show visuals". HyperFrames renders by default; other engines are options the person picks and
+configures; Swarm shows the visuals (storyboard, previews, crew, Draw on frames) whichever engine renders.
+Owner, same day: "hyperframe as default let others decide if they wanna use another engine and what they have
+to download for it and connect": for any other engine the person is shown what it needs downloaded and how to
+connect it, and chooses. Our
+director, music cuts and critic decide the film and feed the engine. The notes below predate the decision and
+stay as a map of the package.
 
 - HyperFrames is HeyGen's npm package `hyperframes`, not Open Design's: their daemon pins 0.8.1, and npm's
   latest is 0.9.39, 25 MB unpacked. The npm licence field says Apache-2.0.

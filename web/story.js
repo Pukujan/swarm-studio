@@ -1,3 +1,4 @@
+// @ts-check
 // The Story lane on the Overview (docs/specs/39-story.md): the build's story as cards, one artboard per
 // beat, in the shape picked (Phone, Desktop, Square). A card opens in the inspector: its words, its
 // picture (the build's own art and pages), earlier or later, the story's type. Every change goes to
@@ -5,9 +6,12 @@
 import { ic } from './icons.js'
 
 export const STORY_SHAPES = [['tall', 'Phone'], ['wide', 'Desktop'], ['square', 'Square']]
+// how long the Overview rests on a build before a story is written for it without a press
+const STORY_REST = 4000
 const STORY_ROLE = { hook: 'Hook', what: 'What it is', who: 'Who it is for', moment: 'Moment', making: 'How it was made', next: 'Next' }
 
 // the lane's artboards: one per beat; while it is being written, one working card
+/** @param {any} view @param {string} run @param {string} shape */
 export function storyItems(view, run, shape, { writing = false } = {}) {
   if (writing && !view?.story) return [{ key: 'story:new', kind: 'story', name: 'Story', shape, pending: true }]
   if (!view?.story) return []
@@ -19,6 +23,7 @@ export function storyItems(view, run, shape, { writing = false } = {}) {
 }
 
 // the inspector for one card
+/** @param {any} x @param {any} view @param {(s: any) => string} esc @param {string} base */
 export function storyInspHtml(x, view, esc, base) {
   const s = view?.story
   if (!s || !x.beat) return `<h3><span>Story</span><button class="ib sm pj-x" aria-label="Close">${ic('x', 16)}</button></h3><div class="pv st-pv st-${x.shape}"><span class="blank">${ic('film', 26)}</span></div>`
@@ -41,15 +46,18 @@ export function storyInspHtml(x, view, esc, base) {
     <div class="btns"><button class="btn ghost" data-st="earlier"${i === 0 ? ' disabled' : ''}>${ic('chl', 15)}Earlier</button><button class="btn ghost" data-st="later"${i === s.beats.length - 1 ? ' disabled' : ''}>Later${ic('chr', 15)}</button><button class="btn ghost" data-st="again">${ic('restore', 15)}Again</button></div>`
 }
 
+/** @typedef {{ op?: string, beat?: string, by?: number, picture?: any, type?: string, write?: boolean, shape?: string, kicker?: string, headline?: string, line?: string }} StoryWant */
+
 // what an inspector event asks for, as an edit for the server (or a shape or a fresh write)
+/** @param {Event} e @param {any} x @param {any} view @returns {StoryWant | null} */
 export function storyIntent(e, x, view) {
-  const t = e.target
+  const t = /** @type {HTMLInputElement} */ (e.target)
   if (e.type === 'click') {
-    const sh = t.closest('[data-shape]')
+    const sh = /** @type {HTMLElement | null} */ (t.closest('[data-shape]'))
     if (sh) return { shape: sh.dataset.shape }
-    const pic = t.closest('[data-pic]')
+    const pic = /** @type {HTMLElement | null} */ (t.closest('[data-pic]'))
     if (pic) return { op: 'picture', beat: x.beat.id, picture: pic.dataset.pic === 'none' ? null : view.pictures[Number(pic.dataset.pic)] || null }
-    const st = t.closest('[data-st]')?.dataset.st
+    const st = /** @type {HTMLElement | null} */ (t.closest('[data-st]'))?.dataset.st
     if (st === 'earlier' || st === 'later') return { op: 'move', beat: x.beat.id, by: st === 'earlier' ? -1 : 1 }
     if (st === 'again') return { write: true, type: view.story.type }
     return null
@@ -60,4 +68,121 @@ export function storyIntent(e, x, view) {
     return { op: 'reword', beat: x.beat.id, [t.name]: t.value }
   }
   return null
+}
+
+/**
+ * What the lane needs from the Overview (web/project.js), which owns the stage, the Files panel and the
+ * inspector's frame.
+ * @typedef {object} StoryHost
+ * @property {(path: string) => Promise<any>} api
+ * @property {(path: string, body: any) => Promise<any>} post
+ * @property {(html: string) => void} toast
+ * @property {(s: any) => string} esc
+ * @property {{ get: (k: string, d?: any) => any, set: (k: string, v: any) => void }} store
+ * @property {HTMLElement} insp the inspector
+ * @property {() => boolean} hosted
+ * @property {() => string} base
+ * @property {() => boolean} on the Overview is showing
+ * @property {() => string | null} run the build it shows
+ * @property {() => any} selected the artboard selected
+ * @property {(key: string) => void} pick selects an artboard, drawn at the next render
+ * @property {() => void} render
+ * @property {() => void} renderStage
+ * @property {() => void} renderInsp
+ */
+
+// The lane itself: the story of the build shown, written once a build with pages is finished, without a
+// press (it only draws cards here; nothing is posted), and every change a card's inspector asks for.
+/** @param {StoryHost} d */
+export function storyLane(d) {
+  /** @type {{ view: any, run: string | null, shape: string, writing: Set<string>, asked: Set<string>, soon: any }} */
+  const S = { view: null, run: null, shape: d.store.get('story.shape', 'tall'), writing: new Set(), asked: new Set(), soon: 0 }
+  const here = (/** @type {string} */ run) => d.on() && d.run() === run
+  const url = (/** @type {string} */ run, path = '') => `/api/runs/${encodeURIComponent(run)}/story${path}`
+
+  // the Overview draws its pages first and never waits for the story: its cards come in when it is read
+  /** @param {string} run @param {any} board */
+  async function load(run, board) {
+    if (d.hosted() || !board?.pages?.length) { S.view = null; S.run = run; return }
+    if (S.run !== run || !S.view) {
+      const got = await d.api(url(run)).catch(() => null)
+      if (d.run() !== run) return
+      S.view = got; S.run = run
+      if (got && d.on()) d.render()
+    }
+    clearTimeout(S.soon)
+    if (!S.view && !board.busy && !S.asked.has(run)) S.soon = setTimeout(() => auto(run, board.pages, 0), STORY_REST)
+  }
+  // The story nobody asked for waits its turn: the Overview has rested on this build, and its pages have
+  // their saved pictures in both sizes (spec 36). Writing it exports the site and draws every card, which
+  // slowed the photographs of the pages when the two ran together. After ten looks it is written anyway.
+  /** @param {string} run @param {{ id: string }[]} pages @param {number} n */
+  async function auto(run, pages, n) {
+    if (!here(run) || S.view || S.asked.has(run)) return
+    const disk = n < 10 ? await d.api(`/api/runs/${encodeURIComponent(run)}/snaps`).catch(() => null) : null
+    if (!here(run) || S.view || S.asked.has(run)) return
+    if (n < 10 && !pages.every(p => disk?.pages?.[p.id]?.s && disk.pages[p.id].f)) { clearTimeout(S.soon); S.soon = setTimeout(() => auto(run, pages, n + 1), STORY_REST); return }
+    S.asked.add(run)
+    write(run, { auto: true })
+  }
+  /** @param {string} run @param {any} body */
+  function write(run, body, path = '') {
+    S.writing.add(run)
+    d.insp.classList.add('st-busy')
+    if (here(run)) d.renderStage()
+    return d.post(url(run, path), body)
+      .then(v => { if (d.run() === run) { S.view = v; S.run = run } return v })
+      .catch(err => { d.toast(`<span>${d.esc(err.message || 'The story could not be written')}</span>`); return null })
+      .finally(() => { S.writing.delete(run); d.insp.classList.remove('st-busy'); if (here(run)) d.render() })
+  }
+  // an inspector event on a story card: true when it was the lane's
+  /** @param {Event} e */
+  function act(e) {
+    const x = d.selected()
+    if (x?.kind !== 'story' || !S.view?.story) return false
+    const want = storyIntent(e, x, S.view)
+    if (!want) return false
+    if (want.shape) {
+      S.shape = want.shape; d.store.set('story.shape', want.shape)
+      d.renderStage(); d.renderInsp()
+      return true
+    }
+    const run = d.run()
+    if (!run) return false
+    const keep = x.beat?.id
+    // a new type rewrites every beat, so the inspector must redraw when it lands
+    if (want.op === 'type' || want.write) /** @type {HTMLElement} */ (e.target).blur?.()
+    ;(want.write ? write(run, { type: want.type }) : write(run, want, '/edit')).then(v => {
+      // the card stays selected where it went (a move), or the first card after a new type
+      if (!v) return
+      const at = want.op === 'move' ? v.story.beats.findIndex((/** @type {any} */ b) => b.headline === x.beat.headline) : v.story.beats.findIndex((/** @type {any} */ b) => b.id === keep)
+      d.pick(`story:${(v.story.beats[at] || v.story.beats[0]).id}`)
+      d.render()
+    })
+    return true
+  }
+  // the lane hears the inspector before the Overview does (it is made first), and keeps what is its own
+  for (const type of ['change', 'click']) d.insp.addEventListener(type, e => { if (act(e)) e.stopImmediatePropagation() })
+  d.insp.addEventListener('keydown', e => {
+    // a story card's words: Enter keeps them (the change saves), Shift+Enter is a new line in Line
+    const t = /** @type {HTMLElement} */ (e.target)
+    if (e.key === 'Enter' && !e.shiftKey && t.closest('.st-words')) { e.preventDefault(); e.stopImmediatePropagation(); t.blur() }
+  })
+
+  return {
+    load,
+    writing: () => S.writing.has(d.run() || ''),
+    // the lane's artboards, into the Overview's groups
+    into(/** @type {Record<string, any[]>} */ g) {
+      const run = d.run()
+      const items = run && S.run === run ? storyItems(S.view, run, S.shape, { writing: S.writing.has(run) }) : []
+      if (items.length) g.story = items
+    },
+    // a story card's inspector: true when the artboard was one
+    inspect(/** @type {any} */ x) {
+      if (x.kind !== 'story') return false
+      d.insp.innerHTML = storyInspHtml(x, S.view, d.esc, d.base())
+      return true
+    }
+  }
 }

@@ -3,7 +3,7 @@
 // one brand, a Studio project with nothing built yet, and the Studio's place in the navigation machine.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assetStore } from '../engine/assetstore.mjs'
@@ -77,6 +77,30 @@ test('a studio record: its steps, its depth, the kit\'s own state merged, and on
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 
+test('a studio record keeps how it was begun; a step can be removed and put back in its place (spec 42)', () => {
+  const dir = tmp()
+  try {
+    assert.equal(newStudio({}).mode, 'studio'); assert.equal(newStudio({ mode: 'nope' }).mode, 'studio')
+    const s = studioStore({ projectsDir: dir })
+    // a Scaffold: only its Plan step
+    assert.deepEqual(s.make('p1', { kind: 'deck', mode: 'scaffold', steps: ['plan'] }).steps, { plan: 'empty' })
+    assert.equal(s.get('p1').mode, 'scaffold')
+    // + Brand puts it back first, in the steps' own order
+    assert.deepEqual(Object.keys(s.step('p1', 'brand', 'empty').steps), ['brand', 'plan'])
+    s.step('p1', 'plan', 'done')
+    assert.deepEqual(s.step('p1', 'assets', 'empty').steps, { brand: 'empty', assets: 'empty', plan: 'done' })
+    // Remove takes it off the record, and the start moves on
+    s.make('p2', { kind: 'site', mode: 'takes' })
+    assert.equal(s.get('p2').start, 'brand')
+    const r = s.step('p2', 'brand', 'removed')
+    assert.deepEqual(Object.keys(r.steps), ['references', 'assets', 'plan']); assert.equal(r.start, 'references')
+    assert.throws(() => s.step('p2', 'brand', 'skipped'), /no such step/)
+    assert.throws(() => s.step('p2', 'proposal', 'empty'), /no such step/)
+    assert.equal(s.mode('p2', 'studio').mode, 'studio')
+    assert.throws(() => s.mode('p2', 'wizard'), /studio, scaffold or takes/)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
 test('a Studio project with nothing built is kept, and reads Studio', () => {
   const dir = tmp()
   try {
@@ -102,7 +126,8 @@ const v = (...events) => view(at(...events).getSnapshot())
 const S = { type: 'studio', project: 's-1' }
 
 test('the Studio is a room with one step in view; the brand sheet comes back to it', () => {
-  assert.deepEqual([v(S).room, v(S).project, v(S).step], ['studio', 's-1', 'brand'])
+  // with no step named, the whole board is in view and no step is current
+  assert.deepEqual([v(S).room, v(S).project, v(S).step], ['studio', 's-1', null])
   assert.equal(v({ type: 'studio', project: 's-1', step: 'plan' }).step, 'plan')
   assert.equal(v(S, { type: 'studio.step', step: 'assets' }).step, 'assets')
   assert.equal(v(S, { type: 'studio.step', step: 'proposal' }).step, 'proposal')
@@ -120,4 +145,18 @@ test('a Studio address goes round: room, project and step', () => {
   assert.match(q, /room=studio/); assert.match(q, /project=s-1/); assert.match(q, /step=assets/)
   const back = view(at(...fromAddress(q)).getSnapshot())
   assert.deepEqual([back.room, back.project, back.step], ['studio', 's-1', 'assets'])
+})
+
+test('Make offers the ways to begin in one menu; an empty Studio asks for the idea in its chat', () => {
+  const src = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+  const home = src('web/home.js'), scaffold = src('web/scaffold.js'), studio = src('server/studio.mjs')
+  // the menu is the kind's ways (web/makeways.js); one way goes straight there; the Studio opens on the way's step
+  assert.match(home, /const ways = makeWays\(make\.k, !!text\)\s+if \(ways\.length === 1\) return begin\(ways\[0\], text\)/)
+  assert.match(home, /return studioFirst\(text, way\)/)
+  assert.match(home, /return C\.studio\(j\.project\.id, way\.step \|\| makeStudioStep\(make\.k\)\)/)
+  assert.doesNotMatch(home, /label: 'Brand sheet'/)
+  assert.doesNotMatch(home, /Studio first\?/)
+  assert.match(scaffold, /What are you making\?/)
+  assert.match(studio, /'New project'/)
+  assert.doesNotMatch(studio, /if \(!idea\) throw bad\('say what it is'\)\n    const pid/)
 })

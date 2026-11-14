@@ -1,3 +1,4 @@
+// @ts-check
 // The page's search title, description and share picture: the Design panel's page
 // settings, shown with nothing selected (docs/ux/SITEMAP.md, "Nothing selected: page
 // and variables"). The crew writes them (engine/seo.mjs); the person can change them
@@ -7,6 +8,7 @@ const seoEsc = t => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const seoName = src => String(src || '').split(/[?#]/)[0].split('/').pop()
 
 // page: { id, title }; seo: what the crew and person set; pictures: [src] on the page
+/** @param {{ page: { id: string, title: string }, seo?: { title?: string, description?: string, image?: string }, brand?: string, pictures?: string[] }} o */
 export function pageSeoHtml({ page, seo = {}, brand = '', pictures = [] }) {
   const title = seo.title || '', desc = seo.description || ''
   const chosen = seo.image || ''
@@ -21,6 +23,7 @@ ${pics ? `<div class="dseo-f"><span>Share picture</span><div class="dseo-pics" r
 </div>`
 }
 
+/** @param {any} root @param {{ run: string, api: Function, onError?: (msg: string) => void }} o */
 export function wirePageSeo(root, { run, api, onError = () => {} }) {
   const box = root.querySelector('.dseo')
   if (!box || !run) return

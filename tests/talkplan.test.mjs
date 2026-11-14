@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { canvasSource } from './canvas-source.mjs'
 import { wordsRead, readIntent, discuss, writeBrief, buildOf, toMessages } from '../engine/talkplan.mjs'
 
 // the owner's own words (run 2026-11-12T03-08-56-302Z): the prompt, then the brief that reached the build
@@ -73,13 +74,13 @@ test('helpers: the JSON build reply and the message list', () => {
 
 test('the web side: Make box, answers, the brief step and both docks go through the talk check', () => {
   const home = readFileSync(new URL('../web/home.js', import.meta.url), 'utf8')
-  const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
+  const canvas = canvasSource()
   const project = readFileSync(new URL('../web/project.js', import.meta.url), 'utf8')
-  // the Make box reads the prompt before the question (spec 37), and the reading pre-selects Studio first
-  // or Build now: "let's talk first" or a vague idea leans Studio
-  assert.match(home, /const read = [^\n]*sw\.readTalk\(text, '', guideKind\(\)\)[^\n]*\n\s*askStart\(text, modeOf\(make\.k\) \|\| \(studioFits\(text, read\) \? 'studio' : 'now'\)\)/)
-  assert.match(home, /if \(make\.k === 'game' \|\| read === 'talk'\) return true/)
-  assert.match(home, /<span>Studio first<\/span>[\s\S]*<span>Build now<\/span>/)
+  // Make opens its menu at once (spec 42): the last way picked for the kind, else the words, pre-select;
+  // a vague idea or one about the look leans Studio, a clear ask Just make it, a game its Plan board (Studio)
+  assert.match(home, /const fit = make\.k === 'game' \? 'studio' : text && !studioFits\(text\) \? 'now' : 'studio'/)
+  assert.match(home, /const pick = \[makeModeOf\(modeOf\(make\.k\)\), fit\]\.find\(k => ways\.some\(w => w\.k === k\)\) \|\| ways\[0\]\.k/)
+  assert.match(home, /const ways = makeWays\(make\.k, !!text\)/)
   // an answer typed in your own words is checked before it becomes brief text (Next and Just build)
   assert.equal((home.match(/if \(await answerTalks\(v, q\)\) return/g) || []).length, 2)
   // the brief step has Keep talking beside Build
@@ -316,9 +317,9 @@ test('nothing changed: a question after the spec gets an answer, not the spec ag
 
 test('the web side: a game idea opens the talk beside a draft board, and Lock is the chat\'s', () => {
   const read = f => readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8')
-  assert.match(read('home.js'), /make\.k === 'game' && !hosted\(\)\) \{ closePop\(\); input\.value = ''; return C\.talkGame\(\{ text \}\) \}/)
+  assert.match(read('home.js'), /if \(make\.k === 'game'\) \{ input\.value = ''; return C\.talkGame\(\{ text \}\) \}/)
   assert.match(read('home.js'), /chat\.kind === 'game'\) return C\.talkGame\(/)
-  const canvas = read('canvas.js')
+  const canvas = canvasSource()
   assert.match(canvas, /if \(talk\.kind === 'game'\) return gameSay\(\{ said: text \}\)/)
   assert.match(canvas, /talkPost\('\/api\/talk', \{ kind: 'game', said \}\)/)
   assert.match(canvas, /\/lock`\)/)
@@ -351,7 +352,7 @@ test('where to start: the parts fit the game, each with a reason, and what is pa
   assert.equal(chat.turns.at(-1), turn)
   assert.equal(turn.who, 'planner')
   assert.equal(turn.options[0].id, 'start:units')
-  const canvas = readFileSync(new URL('../web/canvas.js', import.meta.url), 'utf8')
+  const canvas = canvasSource()
   const studio = readFileSync(new URL('../web/studio.js', import.meta.url), 'utf8')
   assert.match(canvas, /o\.id\.startsWith\('start:'\)\) return gameStart/)
   assert.match(studio, /C\.planView\.select\(select\)/)
