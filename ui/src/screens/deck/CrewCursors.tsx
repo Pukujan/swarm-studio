@@ -3,7 +3,7 @@
 // speaks. Each frame a cursor eases a fifth of the way (0.22) toward where its agent is writing, so it glides; a new
 // one starts from its seat in the break room's corner. Only agents at work are drawn. Positions are written straight
 // to the elements, so React draws nothing per frame.
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { crew } from './crew'
 import type { DeckAgent, DeckLayer, DeckModel } from './model'
 import './deck.css'
@@ -76,12 +76,27 @@ export function CrewCursors({ model, cam, stage, target }: {
     return () => cancelAnimationFrame(raf)
   }, [stage])
 
+  // An agent that stops writing: its cursor fades out where it was (the current deck's .cursor opacity .6s) and goes
+  const working = model.agents.filter(a => a.layer && target(a)).map(a => a.id)
+  const key = working.join('|')
+  const was = useRef<string[]>([])
+  const [leaving, setLeaving] = useState<string[]>([])
+  useEffect(() => {
+    const gone = was.current.filter(id => !working.includes(id))
+    was.current = working
+    if (!gone.length) return
+    setLeaving(l => [...new Set([...l, ...gone])])
+    // each fade ends on its own clock: another agent stopping meanwhile does not hold this one
+    setTimeout(() => setLeaving(l => l.filter(id => !gone.includes(id))), 600)
+  }, [key])
+  const shown = model.agents.filter(a => working.includes(a.id) || leaving.includes(a.id))
+
   return (
     <div ref={layer} aria-hidden className="deck-crew pointer-events-none absolute inset-0">
-      {model.agents.filter(a => a.layer && target(a)).map(a => {
+      {shown.map(a => {
         const c = crew().color(a.name)
         return (
-          <div key={a.id} data-agent={a.name} className="cursor" ref={el => { if (el) els.current.set(a.id, el); else els.current.delete(a.id) }}>
+          <div key={a.id} data-agent={a.name} className={`cursor ${working.includes(a.id) ? '' : 'leaving'}`} ref={el => { if (el) els.current.set(a.id, el); else els.current.delete(a.id) }}>
             <svg className="nib" viewBox="0 0 10 10" width="14" height="14"><path d="M.6.6L9.2 4 5 5 4 9.2z" fill={c} stroke="#0b0b0c" strokeWidth="1" strokeLinejoin="round" /></svg>
             <div className="tag" style={{ background: c, color: crew().ink(c) }}><span>{a.name}</span><em className="doing" /></div>
             <div className="bubble" style={{ color: c }}><span>{a.said?.text}</span></div>

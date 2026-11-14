@@ -14,6 +14,7 @@
   opacity: 0; transform: translateY(-4px); transition: opacity .25s, transform .25s; }
 .deck-crew .cursor .bubble span { color: var(--text); }
 .deck-crew .cursor.talking { z-index: 2; }
+.deck-crew .cursor.leaving { opacity: 0; }
 .deck-crew .cursor.talking .bubble { opacity: 1; transform: none; }
 
 /* letters that fly off a cursor as its agent types */

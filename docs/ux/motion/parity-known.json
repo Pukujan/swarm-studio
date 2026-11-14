@@ -271,8 +271,8 @@
   },
   {
     "key": "publish cursor Hermia: apart",
-    "label": "drift",
-    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+    "label": "intended (PR #NEW)",
+    "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
   },
   {
     "key": "publish only in /: page @pop 200ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
@@ -346,8 +346,8 @@
   },
   {
     "key": "publish reduced cursor Hermia: apart",
-    "label": "drift",
-    "why": "On / Hermia steps away while the crew's own Hermia cursor is drawn during a build (web/pet.js away()); the /next/ deck does not draw the crew's Hermia yet (intended in #432), so she stays and works on its loading cards."
+    "label": "intended (PR #NEW)",
+    "why": "Layout: after the click Hermia rests beside where Publish was pressed (web/pet.js). / has Publish in its top bar; the next deck follows PATTERNS.md (\"The Design deck follows Figma\": Play and Share in the right panel's top row), so its Publish, and she, sit lower."
   },
   {
     "key": "publish: the flow broke",
