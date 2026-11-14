@@ -192,6 +192,8 @@ export function fileInfo(f) {
 }
 
 let openSeq = 0
+// the builds this page just started (showRun, started): one of them can be read before its end is written
+export const startedRuns = new Set()
 export async function openRun(id) {
   const seq = ++openSeq
   claimed = id
@@ -217,10 +219,10 @@ export async function openRun(id) {
     // a build that stopped for a reason (the model, Hermes, a timeout) says that reason, with what to do: never
     // that the file is old (#541)
     const stop = events.findLast(e => e.type === 'run:stopped' && e.reason && e.reason.code !== 'person')
-    // a build that has not ended yet (one that fails at once can be read before its end is written) is not an old
-    // file: it is read again a moment later
+    // a build this page just started that has not ended yet (one that fails at once can be read before its end is
+    // written) is not an old file: it is read again once, a moment later. A build caught half way stays as it is
     const ended = events.some(e => e.type === 'run:done' || e.type === 'run:stopped')
-    if (!ended && Date.now() - (events[0]?.t || 0) < 60000) { setTimeout(() => { if (seq === openSeq) openRun(id) }, 1500); return }
+    if (!ended && startedRuns.delete(id)) { setTimeout(() => { if (seq === openSeq) openRun(id) }, 1500); return }
     if (S.kind === 'game') setView('app')
     else if (stop) stoppedMsg(stop)
     else if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
