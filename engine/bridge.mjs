@@ -23,6 +23,7 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
   // {ok:false, error, absent:true} when no bridge answers; otherwise the bridge's own JSON answer.
   // `next(answer)` true: that bridge could not do it (an MCP server it has not connected), ask the next.
   async function call(path, body, timeoutMs = 300000, { next = () => false } = {}) {
+    console.error('DBG call start', path, live().length, Date.now())
     let passed = null
     for (const b of live().slice()) {
       try {
@@ -33,10 +34,12 @@ export function hermesBridge({ fetcher = fetch, now = () => Date.now() } = {}) {
           signal: AbortSignal.timeout(timeoutMs + 15000)
         })
         if (res.status === 403) { drop(b); continue } // a bridge from a process that has gone and been replaced
+        console.error('DBG call got headers', path, Date.now())
         const answer = await res.json()
         if (next(answer)) { passed = answer; continue }
         return answer
       } catch (err) {
+        console.error('DBG call err', path, String(err?.cause?.code || err?.code || err?.message), Date.now())
         if (refused(err)) { drop(b); continue }
         return { ok: false, error: String(err?.message || err).slice(0, 200) }
       }

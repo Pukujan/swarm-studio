@@ -225,7 +225,7 @@ test('a Hermes that disappears mid-build stops the build with the reason; when o
     for (const r of held) r.socket?.destroy()
     bridge.closeAllConnections?.()
     await within(closed, 'the bridge closing')
-    const stopped = await within(hear(e => e.type === 'run:stopped' && e.run === run), 'run:stopped')
+    const stopped = await within(hear(e => e.type === 'run:stopped' && e.run === run), 'run:stopped').catch(e => { console.log('SERVERLOG', Date.now(), s.log().replace(/\n/g, ' | ')); throw e })
     assert.ok(!events.some(e => e.type === 'run:done' && e.run === run), 'a build that planned nothing did not "finish"')
     assert.equal(stopped.reason.code, 'hermes')
     assert.match(stopped.reason.message, /Hermes closed during the build/)

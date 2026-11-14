@@ -284,8 +284,11 @@ const setup = setupRoutes({
 })
 // What one build does for pictures: its own `pictures`, else the Setup pick, else the default
 async function picturesFor(own) {
+  console.error('DBG picturesFor start', Date.now())
   const choice = await imageChoice()
+  console.error('DBG imageChoice done', Date.now())
   const mode = isPictures(own) ? own : (await setup.pictures()).mode
+  console.error('DBG setup.pictures done', Date.now())
   return { choice, mode, ...pictureRun(mode, choice) }
 }
 
