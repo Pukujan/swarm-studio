@@ -85,6 +85,10 @@ export function stateOf(card, cards = [card]) {
   const status = out ? 'Live'
     : g?.art ? `Painting art · ${g.art[0]} of ${g.art[1]}`
     : g?.stage ? `Building · stage ${g.stage[0]} of ${g.stage[1]}`
+    // a project being brought in (docs/specs/45-intake.md) is not being built
+    : card.intake && (card.work || busy) ? 'Coming in'
+    : card.intake && card.build === 'built' ? 'Brought in'
+    : card.intake && card.build ? 'Did not come in'
     : card.live || card.work ? 'Building'
     // a game build that was stopped (or whose server went away) keeps app:start as its last word
     : busy ? 'Building'

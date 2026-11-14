@@ -48,6 +48,11 @@ Dyad is a local AI app builder (dyad/README.md:3). Swarm vendors its agent engin
   - Either server stops after 2 minutes with no viewer and no build (the App view's heartbeat, `POST /api/runs/<id>/app/seen`; Settings › Background), and at most 2 run, the least recently viewed stopped first (engine/lifecycle.mjs `previewPool`). A stop kills the whole process tree (`stopTree`, tree-kill). Opening it again serves it cold, with the App view's skeleton while it starts.
   - Unchecked: a real `vite build` of a Nitro app here; the Nitro start command and `.output/` come from Dyad's code, not from a run.
 
+- A project brought in from outside ([spec 45](../specs/45-intake.md), engine/bringin.mjs, engine/appjob.mjs `bring`) is never seeded or built over: `start` refuses a first build or a start over on it. What a follow-up does depends on its shape:
+  - Plain files (no `package.json`): refused before the engine is called. The runner's gate reports a workspace with no `package.json` as `"no package.json: the workspace is not an ABA app"`, origin `foreign`, `ok: false` (dyad/src/aba/headless_cli.ts `runGates` and the `workspaceOrigin` block below it), and `serve` would then run `pnpm install` and Vite on it. Read from the code, not from a run. The runner's `--adopt-reason <text>` records such a workspace as `adopted` with `ok: true` (dyad/src/aba/headless_cli.ts:16, 476-488); Swarm does not pass it yet.
+  - A Vite project: the ask goes to `runEngine` with a prompt of its own ("made outside this tool … keep its structure, tools and style"), not `KEEP` or `BACKEND`. Unchecked: no real engine turn has been run on a brought-in project; one run on a small Vite project would settle it.
+  - It is installed with `pnpm install --prefer-offline --ignore-scripts` (engine/appjob.mjs `installArgs`). Measured 2026-11-13 with pnpm 12.14.0 on a bare Vite 5 project: without `--ignore-scripts` the install fails with `ERR_PNPM_IGNORED_BUILDS` (esbuild's build script); with it, `vite build` runs and `dist/` is served.
+
 ## What the person connects
 
 - Models: nothing for Dyad itself. The gateway is the studio's `/llm/v1`, forwarded to Hermes (engine/hermesllm.mjs:1-6). Or `SWARM_STUDIO_API_KEY` / `SWARM_STUDIO_BASE_URL` when set (server/server.mjs:115-128, plugin.yaml:12-13).
@@ -83,6 +88,7 @@ Dyad is a local AI app builder (dyad/README.md:3). Swarm vendors its agent engin
 - dyad/src/aba/headless_cli.ts, headless.ts, headless_env.ts; dyad/src/lib/aba_model_config.ts; dyad/src/ipc/utils/dyad_engine_url.ts
 - dyad/src/pro/main/ipc/handlers/local_agent/tool_definitions.ts and tools/: web_crawl, web_fetch, web_search, engine_fetch, add_integration, enable_nitro, execute_sql, get_database_table_schema, get_supabase_project_info, get_neon_project_info, add_dependency, generate_image, planning_questionnaire, write_plan, write_app_blueprint, search_mcp_tools, get_mcp_tool_schema, suggest_plugin, view_render, run_shell, execute_sandbox_script, types.ts
 - dyad/src/db/schema.ts, dyad/src/prompts/system_prompt.ts, dyad/src/neon_admin/neon_context.ts
+- engine/bringin.mjs, server/bringin.mjs, tests/bringin.test.mjs, docs/specs/45-intake.md
 - engine/appbuild.mjs, appjob.mjs, export.mjs, auto.mjs, appkit.mjs, systems.mjs, advisor.mjs, proc.mjs, hermesllm.mjs; server/server.mjs; plugin.yaml; README.md
 - AGENTS.md, docs/PRODUCT.md, docs/PLANS.md, docs/decisions/README.md, 0002, 0003, 0010, 0011
 - docs/specs/18-projects.md, 21-plan-before-spend.md, 25-connections.md, 29-chats-references-marks.md, 37-studio-first.md

@@ -64,6 +64,7 @@ import { studioRoutes } from './studio.mjs'
 import { studioStore } from '../engine/studio.mjs'
 import { assetStore } from '../engine/assetstore.mjs'
 import { chatMediaRoutes } from './chatmedia.mjs'
+import { bringInRoutes } from './bringin.mjs'
 import { pictureMessages, linksIn, readPage, pageRead, withRefs } from '../engine/chatmedia.mjs'
 import { refStore } from '../engine/refs.mjs'
 import { workshopRoutes } from './workshops.mjs'
@@ -723,6 +724,8 @@ function runCard(id) {
       kind: start.kind || (isApp ? 'app' : 'site'),
       // a game made from a site: that site's run, so the game joins its version
       from: start.from || null,
+      // brought in from outside (docs/specs/45-intake.md), not built here
+      intake: !!start.intake,
       brief: start.brief,
       t: start.t,
       updated: events.at(-1)?.t || start.t,
@@ -1694,6 +1697,8 @@ async function readClip(file, kind) {
     return { ...r, says: readSays(r) }
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 }
+// Bring a game or app in (docs/specs/45-intake.md): POST /api/intake
+const bringInRoute = bringInRoutes({ runsDir, projects, apps: () => apps(), record, readEvents, broadcast })
 const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
 const brands = brandRoutes({
   chats,
@@ -3624,6 +3629,7 @@ const server = createServer((req, res) => {
   if (studioRoute(req, res, url)) return
   if (filmRoute(req, res, url)) return
   if (chatMediaRoute(req, res, url)) return
+  if (bringInRoute(req, res, url)) return
   if (workshops(req, res, url)) return
   if (setup(req, res, url)) return
 
@@ -3839,7 +3845,7 @@ const server = createServer((req, res) => {
         if (sub === 'stop') return a.stop(id)
         if (sub === 'idle') return idleAnswer(id, input)
         if (sub === 'tell') return tellBuilder(a, id, input.text, { who: input.who, on: input.on, confirm: typeof input.confirm === 'string' ? input.confirm.slice(0, 1200) : '', now: input.now === true })
-        if (sub === 'open') return a.open(id)
+        if (sub === 'open') return a.open(id, input)
         if (sub === 'seen') return a.seen(id)
         if (sub === 'deploy') {
           const creds = await credentials(dataDir, 'vercel')
