@@ -125,7 +125,12 @@ export function StudioFirst() {
     requestAnimationFrame(() => {
       board.current?.frameAll(false)
       if (d.studio.mode === 'takes' && takes) { board.current?.focus('takes', false); return }
-      const first = view.step || kit.suggest?.(ctx()) || d.studio.start || kit.starts[0]?.id
+      // where the planner says to start, as the current Studio picks it (web/scaffold.js startOf): the kit's word or
+      // the record's, only when it is one of the kit's own starts. A kit whose starts are its Plan's own cards (a
+      // deck's title slide, an app's main screen) opens on its Plan step, never on the record's first step (#397)
+      const own = kit.starts.map(s => s.id)
+      const start = view.step || [kit.suggest?.(ctx()), d.studio.start].find(id => !!id && own.includes(id)) || own[0]
+      const first = start && start !== 'proposal' && !(start in d.studio.steps) && 'plan' in d.studio.steps ? 'plan' : start
       if (!first) return
       if (!view.step) { placed.current = first; go({ type: 'studio.step', step: first }) }
       board.current?.focus(first, false)
