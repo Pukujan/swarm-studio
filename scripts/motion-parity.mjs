@@ -189,6 +189,9 @@ async function record(out, { root, app, reduced, scenes }) {
       const settle = async () => {
         for (let i = 0; i < 500 && pending > 0; i++) await wait(20)
         await wait(120)
+        // a resting page's picture being taken (lite mode, window.swarm.photographing) is work on the real clock too:
+        // which pages were pictures by a given step was otherwise how fast the machine took them (docs/ux/MOTION.md)
+        for (let i = 0; i < 250 && await page.evaluate(() => !!window.swarm?.photographing).catch(() => false); i++) await wait(20)
         for (const f of page.frames()) await f.evaluate(() => document.fonts?.ready.then(() => 0)).catch(() => {})
       }
       await page.goto(s.BASE + address(app, sc.at(ids)), { waitUntil: 'load' })

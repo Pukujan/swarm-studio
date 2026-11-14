@@ -490,7 +490,7 @@ export function makeHome({ sw, C, root }) {
       { k: 'dup', icon: 'layers', label: 'Duplicate', run: () => act('duplicate', [id]) },
       { k: 'move', icon: 'folder', label: 'Move to', sub: b => subMenu(b, moveItems(ids)) },
       { k: 'dl', icon: 'download', label: 'Download', run: () => download(p.head) },
-      { k: 'show', icon: 'file', label: 'Show in Finder', run: () => post(`/api/projects/${encodeURIComponent(id)}/reveal`, {}).catch(() => {}) },
+      { k: 'show', icon: 'file', label: 'Show in Finder', run: () => post(`/api/projects/${encodeURIComponent(id)}/reveal`, {}).catch(() => {}) }, ...(sw.github ? [{ k: 'github', icon: 'branch', label: 'GitHub', run: () => sw.github.open(id) }] : []),
       '-',
       { k: 'trash', icon: 'trash', label: 'Delete', red: true, run: () => act('trash', ids) }
     ]

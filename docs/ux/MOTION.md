@@ -4,7 +4,7 @@ Everything in the Studio web UI that moves, with the code that owns it. It exist
 
 ## How a change is shown to keep the motion
 
-1. **The motion check** (`scripts/motion-check.mjs`, run by CI on every pull request as `motion-check`). It plays eleven scenes (Projects, with Setup already seen so the first-run sheet does not cover it; an Overview, a replay of a crew of four building, reviewing and taking a comment, a half-done build, the deck, Play, a visitor's tour, and the App, Video, Game and Studio rooms) on Playwright's clock, paused so only the checker moves it, with `Math.random` seeded in the page and every frame. It logs every animation that starts (CSS animations and transitions by their start events, `element.animate` by wrapping it: name, target, duration) and the endless ones running, and keeps the picture each scene ends on. An animation already cancelled when its start event is heard (a spinner shown for one frame) is not logged: whether a frame was drawn in between is the machine's timing, and it logged as `@spin 0s 1` in some runs and not others. For the same reason the Studio starts on the tick its script runs (`web/studio.js`, `web/pet.js`), not on a timer that raced the server's first replies, and Hermia starts away on a replay address instead of fading out when its `run:start` arrives. The deck scene runs 4 s, not 3, so its last picture is taken after the camera has come to rest: while the camera glides the world keeps the pixels it has (`.world.moving`, `will-change`), and a picture taken mid-glide differed by about 12,000 pixels between two trees whose page, camera position and classes were identical. The page frames still draw on the real clock, so each side is recorded twice and a difference counts only when both runs agree: an animation that ran in both runs before and in neither after (or the reverse), or an end picture that matches neither run before. Recording the same code four times passes; turning off the reviewer's scan and the crew's speech bubbles fails with `frame @scan … #scan` and `page ~transform div.bubble` listed as "ran before, not after".
+1. **The motion check** (`scripts/motion-check.mjs`, run by CI on every pull request as `motion-check`). It plays eleven scenes (Projects, with Setup already seen so the first-run sheet does not cover it; an Overview, a replay of a crew of four building, reviewing and taking a comment, a half-done build, the deck, Play, a visitor's tour, and the App, Video, Game and Studio rooms) on Playwright's clock, paused so only the checker moves it, with `Math.random` seeded in the page and every frame. It logs every animation that starts (CSS animations and transitions by their start events, `element.animate` by wrapping it: name, target, duration) and the endless ones running, and keeps the picture each scene ends on. An animation already cancelled when its start event is heard (a spinner shown for one frame) is not logged: whether a frame was drawn in between is the machine's timing, and it logged as `@spin 0s 1` in some runs and not others. For the same reason the Studio starts on the tick its script runs (`web/studio.js`, `web/pet.js`), not on a timer that raced the server's first replies, and Hermia starts away on a replay address instead of fading out when its `run:start` arrives. Every scene's last picture is taken at rest (below); the deck scene also runs 4 s, not 3, so its camera has come to rest by then: while the camera glides the world keeps the pixels it has (`.world.moving`, `will-change`), and a picture taken mid-glide differed by about 12,000 pixels between two trees whose page, camera position and classes were identical. The page frames still draw on the real clock, so each side is recorded twice and a difference counts only when both runs agree: an animation that ran in both runs before and in neither after (or the reverse), or an end picture that matches neither run before. Recording the same code four times passes; turning off the reviewer's scan and the crew's speech bubbles fails with `frame @scan … #scan` and `page ~transform div.bubble` listed as "ran before, not after".
 2. **The split itself is a move.** The split moved code without changing it. The few lines that had to change are listed in its pull request: an import, an export, and an assignment to a `let` that another file owns, which now calls that file's setter. Since the split, the `file:line` references here point into `web/canvas/` ([web/canvas/README.md](../../web/canvas/README.md)).
 3. **Clips to watch** (`docs/ux/motion/clips/`): Projects, the replay, a half-done build, Play and a visitor's tour, 640 wide, recorded from this commit with `node scripts/motion-check.mjs clips <dir>`. Record them again after a split to compare by eye.
 
@@ -13,6 +13,42 @@ A pull request that means to change how a scene looks (a new panel on the Studio
 The motion check does not see the speed of JS-driven movement (a cursor gliding a little faster ends in the same place), so a split must not touch the numbers in the JS clocks and gestures below; the move-only rule is what covers them.
 
 How to read the tables. "Owned by" gives the keyframes or rule first, then the JS that triggers it (`css | js`). Reduced motion: "global" means the blanket rule at `web/canvas.css:1403` (`*` gets `animation-duration .01ms`, `animation-iteration-count 1`, `transition-duration .01ms`, all `!important`). It covers the whole app page but not the page frames, which are separate documents (`web/frame.html`, the Play frame, the exports). "none" means nothing is done for it beyond that. JS-driven movement (camera glide, cursor travel, tours, loops) is not touched by any reduced-motion rule unless a row says so.
+
+## The end picture is taken at rest
+
+A scene's end picture used to be taken at a fixed time on the page's clock (the deck at 4 s, the replay at 16 s, a
+visitor's tour at 10 s, the rest at 3 s), whatever the scene was doing then. Three of them were not at rest at that
+instant, so two recordings of the same tree gave different pictures and unrelated pull requests failed, then passed
+on a rerun (issue #491). Measured on main in Linux, the same tree recorded six times:
+
+| Scene | What was still going on | Distinct end pictures in 6 runs | Largest difference |
+|---|---|---|---|
+| replay | lite mode kept resting one page and waking another, for good: the page it keeps live is "the most visible one", and at the fit all three pages show the same width, so the 13th decimal of a camera still creeping to its target picked a different page every few seconds. Which pages were pictures when the photo was taken depended on how fast the machine took their screenshots | 4 | 2,251 px (the ring round pages 2 and 3: a resting page's picture against the live page) |
+| mid-build | the camera was still gliding at 3 s (it rests at 3.5 to 4.5 s), at a scale that differed between runs (0.4760 and 0.4759) | 2 | 5,597 px |
+| visitor | the tour's last change lands on the 10 s step itself; one late step is a different picture (14,655 px, seen once in CI) | 1 | 0 here |
+| deck | at rest since #479 gave it 4 s | 2 | 111 px |
+
+It was never a sub-pixel shift of the text, and the camera and every page frame were at the same place in every
+run of the replay: the pictures differed because the pages themselves were in different states. What is done about it:
+
+- **The product.** A page is kept live over the others only when it shows a whole pixel more than they do
+  (`web/canvas/settings.js` `litePass`). At the fit the first page stays live and the others rest once; a finished
+  build no longer reloads a page and photographs another every few seconds.
+- **Real-clock work is waited for.** Taking a resting page's picture runs on the real clock, not the page's. The
+  check now waits for it before it moves the clock again (`window.swarm.photographing`), as it already waits for
+  requests and fonts, so a page becomes a picture at the same step in every run. `motion-parity` waits the same way.
+- **The rest step.** Past its time a scene's clock runs on, 500 ms at a time, while the deck's camera is still
+  gliding (`.world.moving`) or the picture is not yet the one of the step before, for at most 5 s more
+  (`REST_MS`). The picture kept is the first one at rest. A scene that has not come to rest by then says so in the
+  record's log (`still moving at … ms`), and a failed comparison says the picture was not taken at rest.
+- **A picture that never holds still is named.** Each step's picture is taken until two in a row agree; after thirty
+  tries the check used to keep whatever it had, silently. The record's log now counts those steps.
+
+After: the same six recordings give end pictures that differ by at most 111 pixels (a one-pixel column at a page's
+edge on the deck and the replay; mid-build 0, the tour identical), against the limit of 2,000, which did not
+change. No tolerance was added to the comparison: one that passed the old false alarms also passed a real small
+change (issue #491). The scene list and its times are the same in both scripts, word for word; the rest step
+belongs to `motion-check` only, since `motion-parity` keeps no pictures.
 
 ## The next UI moves the same
 

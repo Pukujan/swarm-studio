@@ -1329,7 +1329,7 @@ export function makeProject({ sw, C, root }) {
     const text = input.value.trim()
     const marked = P.marks.filter(m => m.run === P.run)
     if (marked.length) return sendMarks(text, marked)
-    if (!text) return input.focus()
+    if (!text) return input.focus(); if (sw.github?.say(text)) return void (input.value = '', C.chat(true))
     const x = P.sel && find(P.sel)
     if (x?.kind === 'art') return replace(x)
     input.value = ''
