@@ -212,7 +212,8 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 // A static server for the export, with CORS (the Studio shows games in a sandboxed frame,
 // origin null, and the engine fetches its .pck and .wasm). → { url, close }
 // spa: an address with no file of its own is the app's index.html (a built app's client-side routes)
-export function serveStatic(root, port, { spa = false } = {}) {
+// html: what an HTML page becomes on its way out (a built app's pages get the App room's picker: engine/apppick.mjs)
+export function serveStatic(root, port, { spa = false, html = null } = {}) {
   const srv = createServer((req, res) => {
     const path = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^([/\\])+/, '')
     let file = join(root, path || 'index.html')
@@ -221,7 +222,7 @@ export function serveStatic(root, port, { spa = false } = {}) {
     try { if (file.startsWith(root) && statSync(file).isDirectory()) file = join(file, 'index.html') } catch {}
     if (!file.startsWith(root) || !existsSync(file)) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end('not found') }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-store' })
-    res.end(readFileSync(file))
+    res.end(html && extname(file) === '.html' ? html(readFileSync(file, 'utf8')) : readFileSync(file))
   })
   return new Promise((ok, fail) => {
     srv.once('error', fail)
