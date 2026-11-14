@@ -1513,11 +1513,13 @@ async function askApp(a, id, text) {
   if (a.state(id).state === 'working') return { ...(await tellBuilder(a, id, t)), by: 'crew' }
   const gate = await hermesGate()
   if (gate) throw new Error(`${gate.message} ${gate.action}`)
-  const { honestly } = await import('../engine/honest.mjs')
+  const { honestly, asksStudio } = await import('../engine/honest.mjs')
   let r = { answer: '', by: '', why: '' }
   try { r = await a.ask(id, t) } catch (err) { if (err.busy) throw err; r = { answer: '', by: '', why: String(err.message || err).slice(0, 200) } }
   if (r.changed) console.warn(`ask: the app of ${id} changed during an Ask turn`)
-  if (r.answer) return { answer: `${await honestly({ answer: r.answer, text: t })}${r.changed ? ' (The app\'s files changed while this was answered, which Ask is not meant to do: look at the Code view.)' : ''}`, by: 'dyad' }
+  // (dyad's answer cannot be asked again here, so it is checked only when the person asked for what nobody in the
+  // chat can do: an answer about code may well say "restarting the dev server picks up the change")
+  if (r.answer) return { answer: `${asksStudio(t) ? await honestly({ answer: r.answer, text: t }) : r.answer}${r.changed ? ' (The app\'s files changed while this was answered, which Ask is not meant to do: look at the Code view.)' : ''}`, by: 'dyad' }
   if (!modelFor('planner')) throw new Error('No planner model yet: pick one in Models.')
   const said = await tellBuilder(a, id, t)
   // Talk's own fallback line is about a build in progress: not an answer to a question

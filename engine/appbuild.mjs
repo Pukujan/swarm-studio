@@ -125,14 +125,15 @@ export function installNode(list = nodes(), versionOf = n => execFileSync(n, ['-
   return null
 }
 
-let setting = null
+let setting = null, updateFailed = false
 // Install and bundle the engine once. The install exits non-zero when dugite's
 // git download fails; the modules are still there, so only the bundle decides.
 export function setupEngine(onStage = () => {}) {
   if (engineFresh()) return Promise.resolve()
   // a stale bundle is still a working engine: it is left alone while a build runs on it
   const had = engineReady()
-  if (had && running) return Promise.resolve()
+  // ...and an update that failed is not tried again on every turn: once per run of the Studio
+  if (had && (running || updateFailed)) return Promise.resolve()
   return setting ??= (async () => {
     // the install and the bundle run on a Node the engine accepts (its native modules have no build
     // for a newer one, and pnpm refuses it): Hermes may put its own, newer Node first on PATH
@@ -145,12 +146,16 @@ export function setupEngine(onStage = () => {}) {
     const b = await run('npx', ['vite', 'build', '--config', 'vite.aba-headless.config.mts'], { cwd: dyadDir, env })
     // the install's own words when it is what failed (a bundle that cannot find its packages says less)
     if (!engineReady()) throw new Error(`engine build failed: ${(i.code ? i.tail : b.tail).slice(-400)}`)
-    // stamped only when the bundle was really built from this source. An update that could not be
-    // bundled keeps the engine it had (builds go on; a mode the old runner lacks says so itself)
-    // and is tried again next time.
-    if (b.code === 0) { try { writeFileSync(stampFile, (stampNow ||= sourceStamp())) } catch {} }
-    else if (had) onStage('the app engine could not be updated; going on with the one installed')
-  })().finally(() => { setting = null })
+    // stamped only when the bundle was really built from this source
+    if (b.code !== 0) throw new Error(`engine build failed: ${b.tail.slice(-400)}`)
+    try { writeFileSync(stampFile, (stampNow ||= sourceStamp())) } catch {}
+  })().catch(err => {
+    // An update that could not be made (no fitting Node, no pnpm, a bundle error) keeps the engine it had:
+    // builds go on as before, and a mode the old runner lacks says so itself. Tried again when the Studio next starts.
+    if (!had) throw err
+    updateFailed = true
+    onStage('the app engine could not be updated; going on with the one installed')
+  }).finally(() => { setting = null })
 }
 
 // One engine log line → a step for the App tab, or nothing.
