@@ -10,6 +10,7 @@
 // watched in the current Studio's Design deck, where it runs.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Chat, type ChatKind, type ChatLine, type ChatTalk } from '../chat'
+import { WALK_SAYS, moodLine, nextStep, walkLine } from '@studio/walkline'
 import { Button } from '../primitives/Button'
 import { Layers, StepDot, type LayerGroup } from '../shared/Layers'
 import { startPet, type KitCard as KitCardDef } from '../legacy'
@@ -30,6 +31,9 @@ import type { StoreItem } from '../legacy'
 const FILE_ICON: Record<string, string> = { link: '🔗', video: '🎞', audio: '♪', font: 'Aa' }
 // the talk's kind for each Studio kind (web/scaffold.js CHAT_KIND)
 const CHAT_KIND: Record<string, ChatKind> = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
+// each project's steps and mood as Hermia last saw them, kept while the page is open, so a step done on another screen
+// (the brand sheet's Lock) is said when the Studio is back
+const SEEN = new Map<string, { states: Record<string, string>, pack: string | null }>()
 
 export function StudioFirst() {
   const { view, go } = useNav()
@@ -105,7 +109,10 @@ export function StudioFirst() {
   const lines = useMemo<ChatLine[]>(() => {
     if (!d) return []
     const st = kit.prepare ? null : (kit.starts.find(s => s.id === (kit.suggest?.(ctx()) || d.studio.start)) || kit.starts[0])
-    const text = !d.studio.idea ? 'What are you making?' : st ? (st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`) : ''
+    // a kit whose starts are the walk's own steps starts on the first open one, in decision 0015's order (What you
+    // have first), with Skip; a kit whose starts are its Plan's cards keeps its own start
+    const first = kit.starts.every(s => s.id in d.studio.steps) ? nextStep(walkOf(steps), stateOf) : null
+    const text = !d.studio.idea ? 'What are you making?' : first && WALK_SAYS[first] ? `Start with ${STEP_NAME[first]}: ${WALK_SAYS[first].next}. Or skip it.` : st ? (st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`) : ''
     // it follows the idea the talk starts with (its turns are stamped as the chat draws them, just after this)
     return text ? [{ id: `start:${d.project.id}`, at: Date.now() + 1000, who: 'hermia', text }] : []
   }, [d?.project.id, !!d?.studio.idea]) // the start line, once per project
@@ -125,7 +132,25 @@ export function StudioFirst() {
     look()
     return () => { on = false; clearTimeout(timer) }
   }, [pid])
-  const said = useMemo(() => (hermesOff ? [...lines, hermesOff] : lines), [lines, hermesOff])
+  // ---------- Hermia walks the steps (#541, decision 0015): one line when a step is done or skipped, saying what it
+  // meant and which step is next; a mood picked gets its own. The same words as the current Studio's (web/walkline.js)
+  const order = walkOf(steps)
+  const [walked, setWalked] = useState<ChatLine[]>([])
+  useEffect(() => {
+    if (!d) return
+    const states = Object.fromEntries(order.map(s => [s, stateOf(s)]))
+    const pack = d.brand?.pack ?? null
+    const was = SEEN.get(d.project.id)
+    SEEN.set(d.project.id, { states, pack })
+    if (!was) return
+    const say = (text: string) => setWalked(w => [...w, { id: `walk:${d.project.id}:${w.length}`, at: Date.now(), who: 'hermia', text }])
+    const now = (s: string) => states[s] ?? 'empty'
+    const at = order.filter(s => now(s) !== (was.states[s] ?? 'empty') && (now(s) === 'done' || now(s) === 'skipped')).at(-1)
+    if (at) return say(walkLine({ step: at, how: now(at) as 'done' | 'skipped', next: nextStep(order, now, at) ?? nextStep(order, now), names: STEP_NAME }))
+    if (pack && pack !== was.pack) say(moodLine(moods?.packs?.find(p => p.slug === pack)?.name || 'That mood', nextStep(order, now, 'brand'), STEP_NAME))
+  })
+  useEffect(() => { setWalked([]) }, [pid])
+  const said = useMemo(() => [...lines, ...walked, ...(hermesOff ? [hermesOff] : [])], [lines, walked, hermesOff])
   const heard = useCallback((text: string) => {
     if (!pid || d?.studio.idea) return
     fetch(`${window.SWARM?.base || ''}/api/studio/${encodeURIComponent(pid)}/idea`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': window.SWARM?.token ?? '' }, body: JSON.stringify({ idea: text }) })
@@ -180,7 +205,7 @@ export function StudioFirst() {
   const skip = (step: string) => { actions.setStep(step, stateOf(step) === 'skipped' ? 'empty' : 'skipped').catch(S.fail) }
   const head = (step: string) => (
     <span className="al flex items-center gap-2"><StepDot state={stateOf(step)} />{STEP_NAME[step]}
-      {step === walk[0] && step !== 'proposal' && <Button role="ghost" className="ml-2 min-h-8 px-3 text-xs" onPress={() => skip(step)}>{stateOf(step) === 'skipped' ? 'Undo skip' : 'Skip'}</Button>}
+      {(step === walk[0] || step === nextStep(walk, stateOf)) && step !== 'proposal' && <Button role="ghost" className="ml-2 min-h-8 px-3 text-xs" onPress={() => skip(step)}>{stateOf(step) === 'skipped' ? 'Undo skip' : 'Skip'}</Button>}
     </span>
   )
   const card = (key: string, name: string, cls: string, inner: React.ReactNode, def?: KitCardDef) =>

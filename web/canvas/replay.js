@@ -2,7 +2,7 @@
 // web/canvas.js, split by area (web/canvas/README.md): saved runs (files) and traces, replay.
 import { REPLAY_WORD, REPLAY_SAYS, replayAsk, appPill } from '../replaytalk.js'
 import { api, S, els, ico, setReplayId, Q, WALL, $, replayId, BOOT } from './core.js'
-import { feed, botMsg, setText, push } from './panels.js'
+import { feed, botMsg, setText, push, stoppedMsg } from './panels.js'
 import { esc } from './design.js'
 import { talkEnd } from './talk.js'
 import { connect } from './start.js'
@@ -192,6 +192,8 @@ export function fileInfo(f) {
 }
 
 let openSeq = 0
+// the builds this page just started (showRun, started): one of them can be read before its end is written
+export const startedRuns = new Set()
 export async function openRun(id) {
   const seq = ++openSeq
   claimed = id
@@ -214,7 +216,15 @@ export async function openRun(id) {
     if (!S.tEnd && events.length) S.tEnd = events.at(-1).t
     if (S.t0) els.timer.textContent = `${((S.tEnd - S.t0) / 1000).toFixed(1)}s`
     if (S.progress) { S.progress.classList.remove('working'); S.progress.querySelector('.txt').textContent = 'This run stopped before it finished.' }
+    // a build that stopped for a reason (the model, Hermes, a timeout) says that reason, with what to do: never
+    // that the file is old (#541)
+    const stop = events.findLast(e => e.type === 'run:stopped' && e.reason && e.reason.code !== 'person')
+    // a build this page just started that has not ended yet (one that fails at once can be read before its end is
+    // written) is not an old file: it is read again once, a moment later. A build caught half way stays as it is
+    const ended = events.some(e => e.type === 'run:done' || e.type === 'run:stopped')
+    if (!ended && startedRuns.delete(id)) { setTimeout(() => { if (seq === openSeq) openRun(id) }, 1500); return }
     if (S.kind === 'game') setView('app')
+    else if (stop) stoppedMsg(stop)
     else if (!events.some(e => e.type === 'layer:done' && e.html)) botMsg('This file was saved before Swarm Studio kept finished sections, so only its plan is shown.')
   }
   setAuto(true)
