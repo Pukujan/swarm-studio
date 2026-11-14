@@ -199,8 +199,25 @@ export function makeScaffold({ sw, C, root }) {
         parts.push(sec('plan', cards.map(x => card(x.key, x.name, look(x), x.render ? '' : `<b>${esc(x.name)}</b>`)).join(''), `sc-plan-${k.kind}`))
       }
     }
-    parts.push(sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', `<b>Idea</b><span>${esc(d.studio.idea)}</span>`)))
-    world.innerHTML = `<div class="col">${parts.join('')}</div>`
+    // The board (the owner, on the game's Plan board: "it looks better and much easy to track"): the idea and
+    // what is set so far as fact cards at the top left, the pages under them, and the look, references and
+    // assets in a second column. A fact card goes to its step.
+    const on = s => s in d.studio.steps
+    const fact = (step, name, value, extra = '') => `<div class="ab pcard sc-fact" data-key="fact:${step}:${name}" tabindex="0" role="button" aria-label="${name}"><b>${name}</b><span>${esc(value)}</span>${extra}</div>`
+    const L = look(d.brand), seen = d.refs.find(r => r.look?.state === 'ready')?.look
+    const nPlan = [...A.cards.values()].filter(x => !x.add && x.cls !== 'sc-add').length
+    const facts = [
+      on('plan') && k.plan && fact('plan', k.kind === 'site' ? 'Pages' : 'Plan', String(nPlan)),
+      on('brand') && fact('brand', 'Type', L?.heading || 'Not set'),
+      on('brand') && fact('brand', 'Accent', L?.accent || 'Not set', L?.accent ? `<i class="sc-fsw" style="background:${esc(L.accent)}"></i>` : ''),
+      on('references') && fact('references', 'References', String(d.refs.length)),
+      on('assets') && fact('assets', 'Assets', String(d.assets.length)),
+      seen?.words?.motion && fact('references', 'Motion', seen.words.motion),
+      seen?.words?.threeD && fact('references', '3D', 'Flat stand-in'),
+    ].filter(Boolean).join('')
+    const idea = sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', `<b>Idea</b><span>${esc(d.studio.idea)}</span>`) + facts, 'sc-facts')
+    const left = parts.filter(p => /data-sec="(plan|takes)"/.test(p.slice(0, 120))), right = parts.filter(p => !left.includes(p))
+    world.innerHTML = `<div class="col">${idea}${left.join('')}</div>${right.length ? `<div class="col">${right.join('')}</div>` : ''}`
     // the kit draws its own cards
     for (const [key, x] of A.cards) { const el = world.querySelector(`.ab[data-key="${CSS.escape(key)}"]`); if (el) { x.render?.(el, c); if (A.sel === key) el.insertAdjacentHTML('beforeend', sel(key)) } }
     bd.applyCam()
@@ -391,6 +408,7 @@ export function makeScaffold({ sw, C, root }) {
     const key = el.dataset.key
     const x = A.cards.get(key)
     if (x?.press) return x.press(ctx())
+    if (key?.startsWith('fact:')) { const step = key.split(':')[1]; bd.focus(step); if (C.nav.view.step !== step) C.nav.go({ type: 'studio.step', step }); return }
     if (key === 'brand:open') return openBrand()
     if (key === 'ref:add' || key === 'asset:add') { picker.dataset.to = key.split(':')[0]; return picker.click() }
     select(key)
@@ -462,11 +480,13 @@ export function makeScaffold({ sw, C, root }) {
   }
 
   addEventListener('resize', () => { if (A.on && A.d) bd.frameAll(false) })
+  // the stage also changes size when the chat column folds or opens: the board is framed again
+  if (typeof ResizeObserver === 'function') { let w0 = 0; new ResizeObserver(() => { const w = bd.stage.clientWidth; if (A.on && A.d && w && w0 && Math.abs(w - w0) > 40) bd.frameAll(); w0 = w || w0 }).observe(bd.stage) }
 
   return {
     el: root,
     get project() { return A.pid },
-    // open the scaffold on a project, with one step in view (the planner's start when none is named)
+    // open the scaffold on a project: the whole board, or the step the address names
     async show(pid, step = null) {
       A.on = true
       root.hidden = false
@@ -478,11 +498,10 @@ export function makeScaffold({ sw, C, root }) {
       talk()
       // Three takes: its looks first
       if (A.d.studio.mode === 'takes' && A.takes) return bd.focus('takes', false)
-      // the step named (the address, Back), else the planner's start, which the address then names
-      const to = step || startOf()?.id
-      if (!to) return
-      if (!step && C.nav.view.room === 'studio') C.nav.go({ type: 'studio.step', step: to })
-      bd.focus(to, false)
+      // the step named (the address, Back) is brought into view; with none, the whole board, so everything
+      // that is set and everything still empty is seen at once
+      if (!step) return bd.frameAll(false)
+      bd.focus(step, false)
     },
     hide() { A.on = false; root.hidden = true },
     focus: (target, animate = true) => bd.focus(target, animate)

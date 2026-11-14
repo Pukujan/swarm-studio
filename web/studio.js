@@ -153,7 +153,8 @@ function draw(planId) {
     C.homeView.hide()
     C.projectView.hide()
     C.chat(true)
-    C.scaffoldView.show(project, nav.actor.getSnapshot().context.step)
+    // the step the address names is brought into view; with none in the address, the whole board
+    C.scaffoldView.show(project, new URLSearchParams(location.search).get('step') ? nav.actor.getSnapshot().context.step : null)
   } else if (room === 'brand') {
     // a website's or app's brand sheet (spec 31), beside the chat it came from
     C.homeView.hide()
