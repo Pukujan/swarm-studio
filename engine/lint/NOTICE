@@ -8,6 +8,8 @@ License: Apache-2.0 (see LICENSE in this folder)
 
 Changes made for Swarm Studio: the TypeScript types were removed and the finding type is described in
 a comment instead of imported from @open-design/contracts. The rules, their thresholds and their
-messages are unchanged. engine/lint/index.mjs leaves out four upstream rules that judge a whole page
+messages are unchanged. One rule is read differently: upstream's display-face expression (sans-display) read on from
+every h1, h2 and h3 to the next brace, so the time grew with the square of the document; displaySans() finds the same
+first match in one pass (tests/lint.test.mjs holds the two against each other). engine/lint/index.mjs leaves out four upstream rules that judge a whole page
 or a deck rather than one section (missing-section-anchor, slide-theme-missing, slide-rhythm,
 sans-display). engine/lint/rules.mjs and engine/lint/index.mjs are Swarm Studio's own.

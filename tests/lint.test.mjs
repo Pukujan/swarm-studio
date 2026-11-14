@@ -1,6 +1,6 @@
 // The slop linter (engine/lint, decision 0016, issue #448): each rule fires on the look it names and not on a
 // clean section, copy the planner gave is not flagged, the Studio's own CSS has no blue, purple or green,
-// and even a long section is linted in milliseconds.
+// and the time to lint a section grows in step with its size.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -107,10 +107,44 @@ test("the Studio's own CSS has no blue, purple or green", () => {
   assert.equal(chromeFindings('.x{color:#71717a;background:#f59e0b}').length, 0)
 })
 
-test('a big section is linted in a few milliseconds', () => {
-  const big = `<section class="py-24">${Array.from({ length: 200 }, (_, i) => `<div class="rounded-[var(--radius)] p-4 bg-[var(--card)]"><h3 style="font-family:var(--font-heading)">Item ${i}</h3><p class="text-[var(--muted-foreground)]">Leaves at ${i % 12 + 6}:00.</p></div>`).join('')}</section>`
-  lintSection(big)
-  const t = performance.now()
-  for (let i = 0; i < 20; i++) lintSection(big)
-  assert.ok((performance.now() - t) / 20 < 50, `${((performance.now() - t) / 20).toFixed(1)} ms`)
+// How long a lint takes is not asked of the clock: on a busy machine the same work took 1.7 s against a 50 ms
+// limit (the owner's MacBook Air, 2026-11-14). What is asked is how the work grows: four times the section,
+// about four times the CPU time of this process (process.cpuUsage, the least of several runs, so a pause for
+// someone else's work is not counted). One rule used to read the rest of the document from every heading, so
+// four times the section cost sixteen times the time (measured: 800 cards 390 ms, 3,200 cards 5,837 ms; now
+// 3 ms and 12 ms). The line between the two is drawn at eight.
+const cards = n => `<section class="py-24">${Array.from({ length: n }, (_, i) => `<div class="rounded-[var(--radius)] p-4 bg-[var(--card)]"><h3 style="font-family:var(--font-heading)">Item ${i}</h3><p class="text-[var(--muted-foreground)]">Leaves at ${i % 12 + 6}:00.</p></div>`).join('')}</section>`
+const cpuMs = fn => { const from = process.cpuUsage(); fn(); const used = process.cpuUsage(from); return (used.user + used.system) / 1000 }
+const least = (fn, runs = 7) => Math.min(...Array.from({ length: runs }, () => cpuMs(fn)))
+test('four times the section takes about four times the work to lint, not sixteen', () => {
+  const small = cards(800), big = cards(3200)
+  lintSection(small); lintSection(big)
+  const a = least(() => lintSection(small)), b = least(() => lintSection(big))
+  assert.ok(b / a < 8, `800 cards ${a.toFixed(2)} ms of CPU, 3,200 cards ${b.toFixed(2)} ms: ${(b / a).toFixed(1)} times, where in step with the size is 4 and with its square 16`)
+})
+
+// the display-face rule reads the document once (engine/lint/artifact.mjs displaySans); upstream's one
+// expression is kept here to say the two agree, on the cases the rule is for and on shuffled pieces of them
+test('the display-face rule finds what upstream\'s expression finds, and the same words', () => {
+  const upstream = /(?:h1|h2|h3|\.h-?(?:hero|xl|lg|md))[^{}]*\{[^}]*font-family\s*:\s*["']?(?:Inter|Roboto|Arial|-apple-system|system-ui|SF\s+Pro)/i
+  const clip = s => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > 200 ? t.slice(0, 197) + '…' : t }
+  const same = html => {
+    const want = upstream.exec(html), got = lintArtifact(html).find(f => f.id === 'sans-display')
+    assert.equal(got ? got.snippet : null, want ? clip(want[0]) : null, html.slice(0, 300))
+  }
+  for (const html of [
+    '<style>h1{font-family:Inter,sans-serif}</style>',
+    '<style>h1, h2 , .h-hero { color: red; font-family: "Roboto" }</style>',
+    '<style>.hxl{font-family:system-ui}</style><h1>x</h1>',
+    '<style>h1{font-family:Georgia} p{font-family:Inter}</style>',
+    '<style>p{font-family:Inter} h2{color:red}</style><h2>a</h2>{font-family:Arial}',
+    '<h3>Title</h3><style>.x{font-family:Inter}</style>',
+    '<style>h3{font-family:Georgia;} h3 b{font-family: SF  Pro}</style>',
+    '<h1>only words</h1>', 'h1 { font-family: Inter', '}h2{font-family:arial}', ''
+  ]) same(html)
+  // a few thousand documents put together from the pieces that matter, in an order a seed fixes
+  let seed = 0x5eed
+  const rnd = n => { seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; return (seed >>> 8) % n }
+  const bits = ['h1', 'h2', 'H3', '.h-hero', '.hxl', '.h-md', 'p', ' ', ',', '{', '}', '{', '}', 'font-family:', 'font-family : "', 'Inter', 'Georgia', 'system-ui', 'SF  Pro', 'color:red;', '<b>', '\n']
+  for (let i = 0; i < 4000; i++) same(Array.from({ length: 1 + rnd(14) }, () => bits[rnd(bits.length)]).join(''))
 })

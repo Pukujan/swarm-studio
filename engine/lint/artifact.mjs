@@ -94,8 +94,34 @@ const FILLER_PATTERNS = [
 // Display-face check: an h1 / h2 / h3 element whose `font-family` lands on
 // Inter / Roboto / Arial / -apple-system without an actual serif before it.
 // We check the `<style>` block specifically; inline styles are checked too.
-const DISPLAY_SANS_RE =
-  /(?:h1|h2|h3|\.h-?(?:hero|xl|lg|md))[^{}]*\{[^}]*font-family\s*:\s*["']?(?:Inter|Roboto|Arial|-apple-system|system-ui|SF\s+Pro)/i;
+// Upstream tests one expression,
+//   /(?:h1|h2|h3|\.h-?(?:hero|xl|lg|md))[^{}]*\{[^}]*font-family\s*:\s*["']?(?:Inter|…|SF\s+Pro)/i
+// which reads on from every "h1", "h2" or "h3" to the next brace: in a section with no <style> that is the
+// rest of the document each time, so the time grew with the square of the size (200 cards: 24 ms of CPU,
+// 3,200 cards: 5.8 s, all of it here). Same rule, same first match, read once: each selector start looks up
+// the next brace (found once and kept while it is still ahead), and a block is tried once.
+const DISPLAY_HEAD_RE = /h1|h2|h3|\.h-?(?:hero|xl|lg|md)/gi;
+const DISPLAY_FACE_RE =
+  /[^}]*font-family\s*:\s*["']?(?:Inter|Roboto|Arial|-apple-system|system-ui|SF\s+Pro)/iy;
+function displaySans(html) {
+  const braces = /[{}]/g;
+  let brace = -1;
+  let tried = -1;
+  for (const m of html.matchAll(DISPLAY_HEAD_RE)) {
+    const from = m.index + m[0].length;
+    if (brace < from) {
+      braces.lastIndex = from;
+      const b = braces.exec(html);
+      if (!b) return null;
+      brace = b.index;
+    }
+    if (html[brace] !== '{' || brace === tried) continue;
+    tried = brace;
+    DISPLAY_FACE_RE.lastIndex = brace + 1;
+    if (DISPLAY_FACE_RE.test(html)) return html.slice(m.index, DISPLAY_FACE_RE.lastIndex);
+  }
+  return null;
+}
 
 /**
  * Run all checks against an HTML artifact body. Returns an array of
@@ -240,14 +266,14 @@ export function lintArtifact(rawHtml) {
   // ── P0-4: sans-serif display face ─────────────────────────────────
   // Skill seeds bind --font-display to a serif. Catch the case where a
   // generated artifact reverts this on h1/h2/h3 to system-sans.
-  const dm = DISPLAY_SANS_RE.exec(html);
+  const dm = displaySans(html);
   if (dm) {
     out.push({
       severity: 'P0',
       id: 'sans-display',
       message: 'A heading rule uses Inter / Roboto / system-sans as the display face — not the serif the seed binds.',
       fix: 'Use `font-family: var(--font-display)` on h1/h2/h3 and let the active design system pick the serif. Override only if the active direction is "tech / utility" or "modern minimal".',
-      snippet: clip(dm[0]),
+      snippet: clip(dm),
     });
   }
 
