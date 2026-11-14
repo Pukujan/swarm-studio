@@ -38,7 +38,7 @@ import { speak, mix, VOICES } from '../engine/sound.mjs'
 import { layoutSource, swarmLayout } from '../engine/layout.mjs'
 import { traced, readTrace } from '../engine/trace.mjs'
 import { canvasPage as sharedCanvasPage, webVersion as pageVersion } from './page.mjs'
-import { nextPage } from './next.mjs'
+import { nextPage, nextVendor } from './next.mjs'
 import { makeProjects, stateOf, gameProgress } from './projects.mjs'
 import { CHAT_ID } from '../engine/chats.mjs'
 import { askTurn, askedOf, askOptions, ASK_TEXT } from '../engine/askfirst.mjs'
@@ -2904,6 +2904,16 @@ const server = createServer((req, res) => {
     res.writeHead(302, { location: `/next/${url.search}` }).end()
     return
   }
+  // a classic script the next UI loads beside its page (Mermaid, for the app build wall's Map; spec 44). Classic, not a
+  // module, and open to any origin, as the vendored files are, so the Desktop pane's frame can load it
+  const nv = url.pathname.match(/^\/next\/vendor\/([\w.-]+)$/)
+  if (nv) {
+    const file = nextVendor(uiDist, nv[1])
+    if (!file) return void res.writeHead(404).end('not found')
+    res.writeHead(200, { 'content-type': nv[1].endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/plain; charset=utf-8', 'access-control-allow-origin': '*', 'cache-control': 'max-age=86400' })
+    res.end(readFileSync(file))
+    return
+  }
   if (url.pathname === '/next/' || url.pathname === '/next/index.html') {
     const page = nextPage(uiDist, { token })
     if (!page) return void res.writeHead(404).end('not found')
@@ -3997,13 +4007,16 @@ const server = createServer((req, res) => {
     return
   }
 
-  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|stop|open|seen|deploy|tell|idle|ask))?$/)
+  const runApp = url.pathname.match(/^\/api\/runs\/([^/]+)\/app(?:\/(files|map|stop|open|seen|deploy|tell|idle|ask))?$/)
   if (runApp && RUN_ID.test(runApp[1])) {
     const [, id, sub] = runApp
     const reply = (code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
     const fail = err => reply(400, { error: String(err.message || err) })
     if (req.method === 'GET') {
-      apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : a.state(id))).catch(fail)
+      // map: the plan as diagrams for the app build wall (spec 44); null when the run kept no plan, which is not an error
+      if (sub === 'map') return void apps().then(a => reply(200, a.map(id))).catch(fail)
+      // the app's state carries its project's name, for the app build wall's breadcrumb (spec 44)
+      apps().then(a => reply(200, sub === 'files' ? a.files(id, url.searchParams.get('path')) : { ...a.state(id), name: nameFor(id)?.name || null })).catch(fail)
       return
     }
     let body = ''
