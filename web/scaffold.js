@@ -394,7 +394,7 @@ export function makeScaffold({ sw, C, root }) {
     const key = A.sel
     bd.inspector(!!(A.d && key))
     if (insp.hidden) return
-    if (insp.contains(document.activeElement) && document.activeElement.matches('input, select')) return
+    if (insp.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return
     const [part, id] = key.split(':')
     const x = A.cards.get(key)
     const pack = part === 'take' ? A.takes?.packs.find(p => p.slug === id) : null
