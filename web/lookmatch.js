@@ -5,7 +5,7 @@
 // (web/project.js). Names only at rest, no tooltips (docs/ux/RULES.md).
 import { ic } from './icons.js'
 
-const esc = (/** @type {unknown} */ s) => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
+const lmEsc = (/** @type {unknown} */ s) => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`)
 
 /** A link whose look is ready and can be compared.  @param {any} ref */
 export const canMatch = ref => ref?.kind === 'link' && ref.look?.state === 'ready'
@@ -21,13 +21,13 @@ export function matchHtml(ref, { base = '', built = false } = {}) {
   const m = ref.look.match || null
   const busy = m?.state === 'checking'
   const pair = m?.state === 'ready' && m.ours?.[0] && ref.look.shots?.[0]
-    ? `<div class="lm-pair"><figure><img src="${esc(base + ref.look.shots[0])}" alt="" loading="lazy"><figcaption>Reference</figcaption></figure><figure><img src="${esc(base + m.ours[0])}" alt="" loading="lazy"><figcaption>Yours</figcaption></figure></div>` : ''
-  const diffs = m?.state === 'ready' ? (m.diffs || []).map((/** @type {any} */ d, /** @type {number} */ i) => `<div class="lm-diff"><p><b>${esc(d.part)}</b>${esc(d.say)}</p><button class="btn ghost" data-lm="fix" data-i="${i}">${ic('check', 15)}Fix</button></div>`).join('') : ''
-  const state = busy ? '<p class="lm-state">Comparing…</p>' : m?.state === 'failed' ? `<p class="lm-state">${esc(m.note || 'Could not compare')}</p>` : m?.state === 'ready' && !(m.diffs || []).length ? '<p class="lm-state">The style matches.</p>' : ''
+    ? `<div class="lm-pair"><figure><img src="${lmEsc(base + ref.look.shots[0])}" alt="" loading="lazy"><figcaption>Reference</figcaption></figure><figure><img src="${lmEsc(base + m.ours[0])}" alt="" loading="lazy"><figcaption>Yours</figcaption></figure></div>` : ''
+  const diffs = m?.state === 'ready' ? (m.diffs || []).map((/** @type {any} */ d, /** @type {number} */ i) => `<div class="lm-diff"><p><b>${lmEsc(d.part)}</b>${lmEsc(d.say)}</p><button class="btn ghost" data-lm="fix" data-i="${i}">${ic('check', 15)}Fix</button></div>`).join('') : ''
+  const state = busy ? '<p class="lm-state">Comparing…</p>' : m?.state === 'failed' ? `<p class="lm-state">${lmEsc(m.note || 'Could not compare')}</p>` : m?.state === 'ready' && !(m.diffs || []).length ? '<p class="lm-state">The style matches.</p>' : ''
   const score = m?.state === 'ready' && Number.isFinite(m.score) ? `<p class="lm-score"><b>${Math.round(m.score)}</b><span>of 100</span></p>` : ''
   const btn = built ? `<button class="btn ghost" data-lm="match"${busy ? ' disabled' : ''}>${ic('search', 15)}${m?.state === 'ready' ? 'Compare again' : 'Compare with build'}</button>` : ''
   if (!btn && !m) return ''
-  return `<div class="lm" data-ref="${esc(ref.id)}">${state}${pair}${score}${diffs}${btn ? `<div class="lm-acts">${btn}</div>` : ''}</div>`
+  return `<div class="lm" data-ref="${lmEsc(ref.id)}">${state}${pair}${score}${diffs}${btn ? `<div class="lm-acts">${btn}</div>` : ''}</div>`
 }
 
 /**
