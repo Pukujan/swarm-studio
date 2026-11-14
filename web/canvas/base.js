@@ -1,6 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the build on the canvas (fresh, setTitle, navBrand), the frame sandbox, and media dragged into the chat.
 import { layerLink } from '../layerlink.js'
+import { refDrop } from '../refdrop.js'
 import { els, api, BASE, S, cam, setS, history } from './core.js'
 import { talk } from './talk.js'
 import { shownRun } from './film.js'
@@ -33,6 +34,10 @@ async function chatFiles(list) {
     links.add({ kind: 'ref', key: j.ref.id, name: j.ref.name, thumb: j.ref.kind === 'image' ? `${BASE}${j.ref.src}` : null, data: { kind: j.ref.kind, src: j.ref.src, read: j.ref.read || null } })
   }
 }
+// a file dropped on the Design deck goes to the build's project References, and Hermia asks once: like this, or
+// use as is (web/refdrop.js, issue #543). The build's own address: the server files it in the build's project.
+refDrop({ root: els.viewport, at: () => (shownRun() ? `/api/runs/${encodeURIComponent(shownRun())}` : null), api, said: text => { botMsg(text) },
+  hosted: () => document.body.classList.contains('hosted') })
 // a project message's attached references, named for the crew (the brief lists the store with its links)
 export const refLines = (text, media) => media.length ? `${text}\n${media.map(m => `Use the reference ${m.data?.kind === 'image' ? 'picture' : 'file'} "${m.name}" (${m.data?.src || ''}).`).join('\n')}` : text
 // where a layer is on screen: the Overview's artboard or the Studio scaffold's card when one shows, else

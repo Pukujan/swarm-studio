@@ -12,6 +12,7 @@
 //   look, save(data), select(key), say(text) }. state is the kit's own saved state; look the brand's
 //   picked colours and fonts ({ bg, text, accent, link, heading, body }) or null.
 import { ic } from './icons.js'
+import { refDrop } from './refdrop.js'
 import { matchHtml, matchClick, lookBusy, lookWorker, workLine, workHtml, lookPhase, lookSays, LOOK_POLL } from './lookmatch.js'
 import { makeBoard } from './board.js'
 import { KITS } from './kits.js'
@@ -498,14 +499,18 @@ export function makeScaffold({ sw, C, root }) {
   }
   world.addEventListener('click', e => { const a = e.target.closest('.ab[data-key]'); if (a) press(a) })
   world.addEventListener('keydown', e => { const a = e.target.closest('.ab[data-key]'); if (a && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); press(a) } })
-  // files dropped on References or Assets go to that store
-  root.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files') && e.target.closest?.('[data-sec="references"], [data-sec="assets"]')) e.preventDefault() })
+  // a file dropped anywhere on the board goes to References, and Hermia asks once: like this, or use as is
+  // (web/refdrop.js, issue #543); one dropped on the Assets section is already "use as is"
+  const onAssets = e => !!e.target.closest?.('[data-sec="assets"]')
+  root.addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files') && onAssets(e)) e.preventDefault() })
   root.addEventListener('drop', e => {
-    const s = e.target.closest?.('[data-sec="references"], [data-sec="assets"]')
-    if (!s || !e.dataTransfer?.files?.length) return
+    if (!onAssets(e) || !e.dataTransfer?.files?.length) return
     e.preventDefault()
-    upload(s.dataset.sec === 'assets' ? 'asset' : 'ref', [...e.dataTransfer.files])
+    upload('asset', [...e.dataTransfer.files])
   })
+  refDrop({ root, at: () => (A.on && A.pid ? `/api/projects/${encodeURIComponent(A.pid)}` : null), api: (path, opts) => sw.api(path, opts), skip: onAssets, said: text => sw.say?.(text),
+    done: (refs, added) => { A.d.refs = refs; render(); select(`ref:${added[0].id}`); watchLooks() },
+    asset: (refs, assets) => { A.d.refs = refs; A.d.assets = assets; render() } })
 
   async function upload(to, files) {
     for (const f of files.slice(0, 12)) {

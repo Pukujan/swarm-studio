@@ -1917,7 +1917,8 @@ async function readClip(file, kind) {
 const bringInRoute = bringInRoutes({ runsDir, projects, apps: () => apps(), record, readEvents, broadcast, join: joinHistory })
 // A project's source on GitHub (the same spec): GET and POST /api/projects/<id>/github
 const sourceRoute = sourceRoutes({ runsDir, dataDir, projects, readEvents, record, broadcast, bringIn: bringInRoute.bringIn, working: async id => (await apps()).state(id)?.state === 'working' })
-const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip })
+const chatMediaRoute = chatMediaRoutes({ chats, projectOf: run => RUN_ID.test(String(run || '')) ? projects.projectOf(run) : null, see: seePicture, read: readClip,
+  toProject: (pid, { name, buf, chat }) => projects.get(pid) ? refs.addFile(pid, { name, source: 'chat', from: chat }, buf) : null })
 const brands = brandRoutes({
   chats,
   projectBrands: studios.brands,
@@ -3295,6 +3296,17 @@ const server = createServer((req, res) => {
         }
         const before = had.filter(r => !now.includes(r)).slice(-6)
         const told = now.length || before.length ? said.map((t, i) => i === said.length - 1 && t.who !== 'hermia' ? { ...t, text: withRefs(t.text, now) + (before.length ? `\n[Attached earlier in this talk]\n${before.map(r => `- ${r.kind === 'link' ? r.url : r.name}: ${r.read?.by === 'none' ? 'not read' : (r.read?.text || '').slice(0, 200)}`).join('\n')}` : '') } : t) : said
+        // a link given in a project's talk goes to its References with what the person wrote around it, and its look
+        // is walked (decision 0022), before the planner is asked: a planner that fails or is slow never loses it (#543)
+        {
+          const lp = typeof input.project === 'string' ? input.project : inPid || (typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? chats.get(input.chat)?.project ?? null : null)
+          const from = typeof input.chat === 'string' && CHAT_ID.test(input.chat) ? input.chat : null
+          if (lp && projects.get(lp)) for (const r of fresh.filter(r => r.kind === 'link')) {
+            if (refs.list(lp).some(x => x.kind === 'link' && x.url === r.url)) continue
+            const note = String(last.text || '').replace(/\bhttps?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim()
+            try { walkLook(lp, refs.addLink(lp, { url: r.url, use: note, source: 'chat', from })) } catch (err) { console.warn('look:', err.message) }
+          }
+        }
         const out = await (input.brief ? d.writeBrief : d.discuss)({ said: told, kind, chat: talk, project: projectState(inPid || (chats.get(input.chat)?.project ?? null)) })
         // the talk is kept in its chat (spec 29): made on the first turn, inside the project when it
         // started in one; the person's newest words and Hermia's answer are added, a brief is the spec's
@@ -3303,14 +3315,6 @@ const server = createServer((req, res) => {
           const pid = typeof input.project === 'string' ? input.project : typeof input.from === 'string' && RUN_ID.test(input.from) ? projects.projectOf(input.from) : null
           if (!id) id = chats.create({ kind, project: pid }).id
           if (fresh.length) await chats.update(id, c => { c.refs = [...(c.refs || []), ...fresh].slice(-60) })
-          // a link given in a project's talk goes to its References with what the person wrote around it, and
-          // its look is walked (decision 0022); the chat and the turn are kept so the look traces back to them
-          const lp = pid || inPid
-          if (lp && projects.get(lp)) for (const r of fresh.filter(r => r.kind === 'link')) {
-            if (refs.list(lp).some(x => x.kind === 'link' && x.url === r.url)) continue
-            const note = String(last.text || '').replace(/\bhttps?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim()
-            try { walkLook(lp, refs.addLink(lp, { url: r.url, use: note, source: 'chat', from: id })) } catch (err) { console.warn('look:', err.message) }
-          }
           if (!input.brief && last && last.who !== 'hermia') await chats.say(id, { who: 'person', text: last.text, refs: now.map(r => r.id) })
           if (out.reply) await chats.say(id, { who: 'planner', text: out.reply })
           if (out.brief) await chats.update(id, c => { c.spec = { brief: String(out.brief).slice(0, 8000), open: [], art: [], engine: null, time: null, cost: null, lockedAt: null, ...(c.spec || {}), ...{ brief: String(out.brief).slice(0, 8000) } } })
@@ -3957,6 +3961,14 @@ const server = createServer((req, res) => {
   if (/^\/api\/runs\/[^/]+\/story(\/|$)/.test(url.pathname)) { storyRoute.handle(req, res, url); return }
   if (url.pathname.startsWith('/story/') && storyRoute.file(req, res, url)) return
   if (decks(req, res, url)) return
+  // a build's own address for its project's References and Assets: the Design deck knows its build, not always its
+  // project (web/refdrop.js, issue #543); the request goes on as the project's own
+  const byRun = url.pathname.match(/^\/api\/runs\/([^/]+)\/(refs|assets)(\/[^?]*)?$/)
+  if (byRun && RUN_ID.test(byRun[1])) {
+    const pid = projects.projectOf(byRun[1])
+    if (!pid) return void res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'this build is not in a project yet' }))
+    url.pathname = `/api/projects/${pid}/${byRun[2]}${byRun[3] || ''}`
+  }
   if (refsRoute(req, res, url)) return
   if (studioRoute(req, res, url)) return
   if (filmRoute(req, res, url)) return

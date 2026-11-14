@@ -15,6 +15,7 @@
 import { ic, cursor, CREW, PAINTERS, REVIEWER, painterOf } from './icons.js'
 import { routeMessage, toApp, askBox } from './route.js'
 import { swEdit } from './edit/patches.js'
+import { refDrop } from './refdrop.js'
 import { setVideoHtml } from './video.js'
 import { layerSheet } from './layers.js'
 import { matchHtml, matchWire, lookBusy } from './lookmatch.js'
@@ -59,7 +60,6 @@ export function makeProject({ sw, C, root }) {
     <div class="pj-stage" tabindex="-1" aria-label="Overview">
       <div class="pj-world"></div>
       <div class="pj-cursors" aria-hidden="true"></div>
-      <div class="pj-drop" hidden><span>${ic('upload', 22)}</span></div>
     </div>
     <aside class="pj-insp" hidden aria-label="Inspector"></aside>
     <div class="pj-dock">
@@ -1215,13 +1215,10 @@ export function makeProject({ sw, C, root }) {
     render()
   }
   fileIn.onchange = () => { const fs = [...fileIn.files]; if (fs.length) upload(fs, P.replacing && fs.length === 1 ? P.replacing : null); P.replacing = null; fileIn.multiple = true; fileIn.value = '' }
-  const dropEl = $('.pj-drop')
-  let dragDepth = 0
-  const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files')
-  root.addEventListener('dragenter', e => { if (!hasFiles(e) || hosted()) return; e.preventDefault(); dragDepth++; dropEl.hidden = false })
-  root.addEventListener('dragover', e => { if (!hasFiles(e) || hosted()) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy' })
-  root.addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; dropEl.hidden = true } })
-  root.addEventListener('drop', e => { if (!hasFiles(e) || hosted()) return; e.preventDefault(); dragDepth = 0; dropEl.hidden = true; upload([...e.dataTransfer.files]) })
+  // a file dropped anywhere on the project goes to its References, the one place the crew reads, and Hermia asks
+  // once: like this, or use as is (web/refdrop.js, issue #543). + › Upload files still adds any other file.
+  refDrop({ root, at: () => (P.on && P.pid ? `/api/projects/${encodeURIComponent(P.pid)}` : null), api: (path, opts) => sw.api(path, opts), hosted, said: text => sw.say?.(text),
+    done: refs => { P.refs = refs; load() }, asset: refs => { P.refs = refs; load() } })
 
   // ---------- the panel's tabs, search and + menu
   $('.pj-tabs').addEventListener('click', e => {

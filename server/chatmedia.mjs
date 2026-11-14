@@ -10,7 +10,9 @@ import { MEDIA_TYPES, MEDIA_MAX, MEDIA_FILE, mediaKind, mediaName } from '../eng
 
 // chats: the chat store; projectOf(run): a build's project; see(dataUrl): the vision model's words for a
 // picture, or null when there is none; read(file, kind): the media reader's read of a clip or a sound
-export function chatMediaRoutes({ chats, projectOf = () => null, see = null, read: readClip = null }) {
+// toProject(pid, { name, buf, chat }): a chat that belongs to a project also files what it was given in that
+// project's References, the one place the crew's brief reads (issue #543); its answer is the reference, or null
+export function chatMediaRoutes({ chats, projectOf = () => null, see = null, read: readClip = null, toProject = null }) {
   const json = (res, code, data) => res.writeHead(code, { 'content-type': 'application/json' }).end(JSON.stringify(data))
   const body = (req, max) => new Promise((resolve, reject) => {
     const chunks = []
@@ -66,7 +68,10 @@ export function chatMediaRoutes({ chats, projectOf = () => null, see = null, rea
       } else read = { by: 'none', text: '', says: 'not read: nothing here can watch or listen' }
       const ref = { id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, kind, name: f, file: f, url: null, src: `/chatmedia/${id}/${encodeURIComponent(f)}`, read, at: Date.now() }
       await chats.update(id, c => { c.refs = [...(c.refs || []), ref].slice(-60) })
-      json(res, 200, { chat: id, ref })
+      const pid = chats.get(id)?.project
+      let project = null
+      if (pid && toProject) try { project = toProject(pid, { name: f, buf, chat: id }) } catch {}
+      json(res, 200, { chat: id, ref, ...(project ? { project: { id: pid, ref: project } } : {}) })
     }).catch(err => json(res, err.status || 400, { error: String(err.message || err) }))
     return true
   }
