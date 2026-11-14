@@ -89,12 +89,13 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     Object.assign(shown.current, cam)
     if (world.current) world.current.style.transform = `translate(${cam.x.toFixed(1)}px, ${cam.y.toFixed(1)}px) scale(${cam.k.toFixed(4)})`
   }, [cam, follow])
+  // the glide runs only while following: a board that is not followed draws no frame of its own (board gauge)
   useEffect(() => {
+    if (!follow || matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let raf = 0, last = 0
-    const still = matchMedia('(prefers-reduced-motion: reduce)')
     const tick = () => {
       const { cam: to, follow: ease } = want.current, s = shown.current
-      if (ease && !still.matches) {
+      if (ease) {
         // the same glide at any frame rate: 0.06 a frame at 60 fps, raised to the frames that passed
         const t0 = performance.now(), f = 1 - Math.pow(1 - 0.06, Math.min(100, t0 - (last || t0 - 16.7)) / 16.7)
         last = t0
@@ -107,7 +108,7 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [])
+  }, [follow])
   const [geo, setGeo] = useState<Record<string, FrameGeo>>({})
   const [panning, setPanning] = useState(false)
   const onGeo = useCallback((page: string, g: FrameGeo) => setGeo(all => ({ ...all, [page]: g })), [])
