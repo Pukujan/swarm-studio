@@ -9,7 +9,8 @@ import { lite, litePass, frameBusy, togglePanel, toggleModels } from './settings
 import { renderAgents, setText, renderToolbar, treeSel, renderTree, renderStatus, botMsg, feed, hermesReady, hermesSays, resumeRun } from './panels.js'
 import { renderDesign, drawSelBox, exp, design, selectAt, exportRunNow, undo, redo, esc } from './design.js'
 import { drawComment, review, cmt, reviewRun, sendLayers } from './marks.js'
-import { paintReplay, viewing, files, loadFiles, fileMatch, fileInfo, saveMeta, traceView, fileInto } from './replay.js'
+import { paintReplay, viewing, files, loadFiles, fileMatch, fileInfo, saveMeta, traceView, fileInto, rec, replaySay } from './replay.js'
+import { progressLine } from '../replaytalk.js'
 import { pub, liveUrl, publishNow } from './publish.js'
 import { shownRun, video, VIDEO_STYLES, makeVideo, showRun, runNow } from './film.js'
 import { appv, appAsk, setView, buildApp, openGame, openCastOnly, sliceGo, view, stageSay, mediaBlock } from './rooms.js'
@@ -147,9 +148,7 @@ export function frameLoop(now) {
     setLabel(els.videoBtn, mine && video.busy ? `Video ${video.pct ? `${video.pct | 0}%` : 'writing…'}` : 'Video')
     if (S.progress) {
       const done = [...S.layers.values()].filter(l => l.status === 'done').length
-      setText(S.progress.querySelector('.txt'), S.layers.size
-        ? `${S.planText ? `${S.planText} ` : ''}${working} agents building · ${done}/${S.layers.size} sections across ${S.frames.length} pages`
-        : 'Planning the pages…')
+      setText(S.progress.querySelector('.txt'), progressLine({ replay: rec.on, plan: S.planText, working, done, total: S.layers.size, pages: S.frames.length }))
       if (!S.progress.querySelector('.pbar')) S.progress.insertAdjacentHTML('beforeend', '<span class="pbar"><i></i></span>')
       S.progress.querySelector('.pbar i').style.width = `${S.layers.size ? (done / S.layers.size * 100).toFixed(1) : 4}%`
     }
@@ -399,6 +398,8 @@ const modeHelp = {
 }
 mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, off: !!BOOT.hosted })
 async function sendDock() {
+  // a replay comes first (web/replaytalk.js): "stop", "is this building?", "replay"; anything else ends it, then goes on
+  if (!nextRoute && await replaySay(els.brief.value)) return
   if (!nextRoute && await modeSend(modeHelp)) return
   const brief = els.brief.value.trim()
   if (!brief) return

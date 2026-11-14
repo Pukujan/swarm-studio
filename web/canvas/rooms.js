@@ -12,7 +12,8 @@ import { cw, CW_CODE, wallNames, paintv, artPhase } from './auto.js'
 import { setText, botMsg, feed, push } from './panels.js'
 import { esc } from './design.js'
 import { saveModel, modelsInfo, loadModels, showTab } from './settings.js'
-import { loadFiles, openRun } from './replay.js'
+import { loadFiles, openRun, rec, stopReplay } from './replay.js'
+import { appPill } from '../replaytalk.js'
 import { HOSTS } from './publish.js'
 import { adoptVideos, boardVideo } from '../video.js'
 
@@ -84,9 +85,11 @@ async function loadApp() {
   const run = shownRun()
   if (!run) { resetApp(null); return renderApp() }
   if (appv.run !== run) resetApp(run)
+  // a replay draws the room from its saved events only: the real app is not read, and never started, while it plays
+  if (rec.on) return renderApp()
   try {
     const st = await appApi()
-    if (appv.run !== run) return
+    if (appv.run !== run || rec.on) return
     Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, canServe: !!st.canServe, loaded: true, engineReady: st.engineReady, intake: st.intake || null })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
@@ -105,7 +108,8 @@ async function loadApp() {
 // person asked for (the Live option, Play it live, "show the game") says in the chat why it failed; the room's
 // own try stays quiet.
 function openApp(run) {
-  if (appv.opening || appv.run !== run) return
+  // never for a replay: starting the app writes app:ready and a new photo into the very run being replayed
+  if (appv.opening || appv.run !== run || rec.on) return
   Object.assign(appv, { opening: true, openFailed: false })
   renderApp()
   let again = false
@@ -254,13 +258,15 @@ function renderApp() {
   if (view !== 'app') return
   // a build another Studio drives comes from the shared run log: the server says so
   const st = appv.state, working = st === 'working', elsewhere = !!appv.elsewhere
-  appEls.state.className = `app-state pill ${st}`
-  appEls.state.textContent = working ? 'building' : st === 'done' ? (appv.url ? 'running' : 'built') : st === 'failed' ? 'failed' : st === 'stopped' ? 'stopped' : st === 'paused' ? 'your turn' : appv.hasApp ? 'built' : 'no app yet'
+  // a replay's pill reads Replay and how far along it is, never "building" or "running" (web/replaytalk.js)
+  appEls.state.className = `app-state pill ${st}${rec.on ? ' replay' : ''}`
+  appEls.state.textContent = appPill({ replay: rec.on, at: rec.at, state: st, url: appv.url, hasApp: appv.hasApp })
   setText(appEls.stage, working ? appv.stage : appv.result ? `${appv.result.turns} turn${appv.result.turns === 1 ? '' : 's'} · ${appv.result.files} files · checks ${appv.result.gatesPassed ? 'passed' : 'not passed'}${appv.deployed ? ` · live at ${appv.deployed}` : ''}` : '')
   const stick = appEls.steps.scrollHeight - appEls.steps.scrollTop - appEls.steps.clientHeight < 60
   appEls.steps.innerHTML = stepsHtml()
   if (stick) appEls.steps.scrollTop = appEls.steps.scrollHeight
-  appEls.stop.hidden = !working || elsewhere
+  // Stop ends the build; while a replay plays it is there throughout and ends the replay
+  appEls.stop.hidden = rec.on ? false : !working || elsewhere
   if (appv.url) appEls.open.href = appv.url; else appEls.open.removeAttribute('href')
   // the same game as a Godot, Unity or Unreal project, when the job wrote one
   const port = appv.result?.port
@@ -285,6 +291,9 @@ function renderApp() {
     const run = shownRun()
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
+      // a replay: the recording's build, never "Building the app…" or "Starting the app…" (nothing is being started)
+      : rec.on
+        ? `<h2>The ${appv.kind === 'game' ? 'game' : 'app'} ${working ? 'being' : 'is'} <em>built</em></h2>${working ? `<p>${esc(appv.stage || '')}</p>` : ''}`
       // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
       : (appv.opening || (appv.hasApp && !appv.message && st !== 'failed' && st !== 'stopped' && (appv.tries || 0) < 10)) && !working
         ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span><em class="as-bot" aria-hidden="true">${cursor(painterOf('app'))}</em></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
@@ -445,10 +454,12 @@ const stepsMin = on => {
 }
 try { if (localStorage.getItem('swarm-steps-min')) stepsMin(true) } catch {}
 $('#app-steps-btn').onclick = () => stepsMin(!appEls.view.classList.contains('steps-min'))
-appEls.stop.onclick = () => appApi('/stop', {}).catch(() => {})
+appEls.stop.onclick = () => (rec.on ? void stopReplay({ any: true }) : appApi('/stop', {}).catch(() => {}))
 
 // The first build of the app, or one more change to it.
 export async function appAsk(ask, extra = {}) {
+  // a replay is only a recording: it ends before anything is asked of the real crew
+  if (rec.on) await stopReplay({ any: true, stay: true })
   const run = shownRun()
   if (!run) return botMsg('Open a build first: the app is made from its design.')
   if (appv.run !== run) resetApp(run)
@@ -800,6 +811,8 @@ export function appEvent(e) {
   if (e.type === 'autoplay') return aiPlayer.event(e)
   if (appv.run !== e.run) resetApp(e.run)
   const fresh_ = !e.t || Date.now() - e.t < 8000
+  // a replayed event is stamped now, but its address is the recording's: a server long gone, never shown
+  const real = fresh_ && !rec.on
   if (e.type === 'app:start') {
     Object.assign(appv, { state: 'working', kind: e.kind || appv.kind, stage: 'starting', message: '' })
     stagePin.v = null // a new build: the stage follows it again
@@ -815,9 +828,9 @@ export function appEvent(e) {
     if (e.step.kind === 'write') appv.files = null
   } else if (e.type === 'app:ready') {
     // only a live event: an old one from the log names a dev server that may be gone
-    if (fresh_) appv.url = e.url
+    if (real) appv.url = e.url
     // served built now, on the same address: the frame loads it again
-    if (fresh_ && e.built) appEls.frame.dataset.src = ''
+    if (real && e.built) appEls.frame.dataset.src = ''
   } else if (e.type === 'app:parked') {
     // its server stopped (no viewer for a while, or room for another app): open again when it is looked at
     appv.url = null
@@ -825,7 +838,7 @@ export function appEvent(e) {
     if (view === 'app' && !document.hidden) loadApp()
   } else if (e.type === 'app:done') {
     Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
-    if (e.url && fresh_) appv.url = e.url
+    if (e.url && real) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
     // brought in: no engine turned, so nothing to count; the room reads what came (its shape, its page)
     if (e.intake) { if (fresh_ && view === 'app') loadApp() } else
@@ -833,7 +846,7 @@ export function appEvent(e) {
   } else if (e.type === 'app:paused') {
     // a big game stops after each slice and asks in the chat (sliceCard)
     Object.assign(appv, { state: 'paused', result: e.result, slice: e.slice, stage: '' })
-    if (e.url && fresh_) appv.url = e.url
+    if (e.url && real) appv.url = e.url
     sliceCard(e.slice, e.run)
   } else if (e.type === 'app:failed') {
     Object.assign(appv, { state: 'failed', message: e.message })

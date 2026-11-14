@@ -425,7 +425,7 @@ flowchart LR
   CV --> CU[Crew cursors]
   CV --> PIN[Comment pins]
   CU --> FO[Follow one agent]
-  CV --> RPL["Replay (☰): the saved build plays again, Follow on; Stop replay puts the finished build back"]
+  CV --> RPL["Replay (☰, or typed): a recording of the build plays, marked Replay with Stop, through the deck and the App room; nothing is built; the end or Stop puts the finished build back"]
   FO --> TR[What it did]
   PIN --> YT["Yours: the crew replies"]
   PIN --> CI["The Critic's issues (3 at most)"]

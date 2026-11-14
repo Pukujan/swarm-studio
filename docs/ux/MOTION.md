@@ -195,10 +195,11 @@ those kinds run before as well.
 
 | What moves | When | How long / how often | Owned by | Reduced motion |
 |---|---|---|---|---|
-| Replayed build: sections type back in | `withTyping` splits a saved layer into 6-40 deltas spread over its build time | event clock `(t - prev)/speed`, quiet gaps capped at 1500 ms; ☰ Replay uses speed 1, the wall `?speed=` (default 8, 1-60) | `web/canvas/replay.js:222-238`, `web/canvas/replay.js:243-270` | not handled |
-| Replay button label | `paintReplay` in the 150 ms pass | text swap, no animation | `web/canvas/replay.js:273-279` | n/a |
-| Camera follows the replay | `startReplay` | `setAuto(true)` now and at +700 ms | `web/canvas/replay.js:281-292` | not handled |
-| Wall tile progress bar | `wall:tick` message every 25 events | `width` transition .4 s linear; clock text updated | `web/wall.html:20`, `67-73` ; `web/canvas/replay.js:267` | none (no media rule in `wall.html`) |
+| Replayed build: sections type back in | `withTyping` splits a saved layer into 6-40 deltas spread over its build time | event clock `(t - prev)/speed`, quiet gaps capped at 1500 ms; ☰ Replay uses speed 1, the wall `?speed=` (default 8, 1-60) | `web/canvas/replay.js:228-244`, `web/canvas/replay.js:256-294` | not handled |
+| Replay button label | `paintReplay` in the 150 ms pass | text swap, no animation | `web/canvas/replay.js:302-309` | n/a |
+| Camera follows the replay | `startReplay` | `setAuto(true)` now and at +700 ms | `web/canvas/replay.js:337-348` | not handled |
+| Wall tile progress bar | `wall:tick` message every 25 events | `width` transition .4 s linear; clock text updated | `web/wall.html:20`, `67-73` ; `web/canvas/replay.js:283` | none (no media rule in `wall.html`) |
+| The Replay mark: the strip and the App room's pill read Replay and how far along | `paintMark` and `renderStatus` in the 150 ms pass, for the whole replay | text and fill swap, no animation of its own (the strip's dot and bar move as they do for a build; Stop has `transition: none`) | `web/canvas/replay.js:311-322`, `web/canvas/panels.js` (`renderStatus`), `web/canvas.css` (`.status[data-replay]`, `.app-state.replay`) | n/a |
 
 ## Models, settings and Setup
 

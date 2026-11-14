@@ -23,7 +23,7 @@ loads them. **Edit the area's file, not `web/canvas.js`.** The table says which 
 | `marks.js` | Comments, generated images, visual review, Scribble. |
 | `film.js` | The promo video and the film's outside services. |
 | `settings.js` | Lite mode, the models menu, side tabs and floating panels. |
-| `replay.js` | Saved runs (files), traces and replay. |
+| `replay.js` | Saved runs (files), traces and replay: a recording, marked Replay for its whole length (`rec`, `paintMark`; its words and the chat's routes are `web/replaytalk.js`). |
 | `rooms.js` | The views (Canvas, Video, App), the big game, the app advisor, game mode, cast, the project's art, the bench. |
 | `start.js` | Starting a build, resizable panels, crews, the Publish button, pictures in the Design panel. |
 | `auto.js` | Auto mode and the Auto show, the code wall, crew radio, the art wall. |
