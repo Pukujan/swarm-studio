@@ -26,6 +26,7 @@
     "@xstate/react": "6.1.0",
     "dependency-cruiser": "18.7.2",
     "fast-check": "4.10.2",
+    "mermaid": "12.2.0",
     "pixi-viewport": "7.0.2",
     "pixi.js": "8.22.0",
     "rbush": "4.0.1",
