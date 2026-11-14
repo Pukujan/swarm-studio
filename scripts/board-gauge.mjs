@@ -25,8 +25,8 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { deflateSync, crc32 } from 'node:zlib'
 import { startStudio, onFreePort } from './studio-child.mjs'
 
@@ -190,6 +190,8 @@ async function measure(out, { root, runs: N, only, cold }) {
   const fakePort = fake.address().port
   const TOKEN = 'gauge'
   const env = { ...process.env, SWARM_TOKEN: TOKEN, SWARM_DATA_DIR: data, SWARM_RUNS_DIR: runsDir, SWARM_OUTPUT_DIR: join(data, 'out'), SWARM_BASE_URL: `http://127.0.0.1:${fakePort}/v1`, SWARM_API_KEY: 'none', SWARM_FEED_URL: 'http://127.0.0.1:9' }
+  // GAUGE_REQLOG: the server says each request as it arrives (scripts/gauge-reqlog.mjs), for finding what hung it
+  if (process.env.GAUGE_REQLOG) env.NODE_OPTIONS = `${env.NODE_OPTIONS || ''} --import=${pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), 'gauge-reqlog.mjs')).href}`.trim()
   for (const k of ['SWARM_PORT', 'SWARM_HERMES_PY', 'SWARM_HERMES_PYTHONPATH', 'HERMES_CUSTOM_INFERHUB_API_KEY', 'SWARM_ELEVENLABS_KEY', 'SWARM_TTS_URL']) delete env[k]
   // The fixture's pictures carry the server's address, so the port is picked before the server starts; when
   // another process took it in between, the fixture is written and the server started again on another
@@ -221,7 +223,7 @@ async function measure(out, { root, runs: N, only, cold }) {
         // what it is waiting on: the commands of its children
         try { ps += `; children: ${execFileSync('ps', ['-A', '-o', 'ppid=,pid=,etime=,command='], { encoding: 'utf8', timeout: 5000, maxBuffer: 2e7 }).split('\n').filter(l => l.trim().split(/\s+/)[0] === String(server.pid)).map(l => l.trim().slice(0, 220)).join(' | ') || 'none'}` } catch {}
         if (process.env.GAUGE_DIAG) try { console.log(execFileSync('sample', [String(server.pid), '1'], { encoding: 'utf8', timeout: 20000, maxBuffer: 2e7 }).split('\n').filter(l => /Thread_|uv_|node::|Call graph|main|fs_|read|wait/.test(l)).slice(0, 40).join('\n')) } catch {}
-        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps, log: serverLog().trim().split('\n').slice(-8).map(l => l.slice(0, 160)) }
+        m = { crashed: true, error: String(e?.message || e).split(/\r?\n/)[0].slice(0, 200), server: `${alive}; ${answer}`, ps, log: serverLog().trim().split('\n').slice(-14).map(l => l.slice(0, 160)) }
       } finally { await within('closing Chromium', 30000, browser.close()).catch(() => {}) }
       ;(result.scenes[sc.id] ||= { runs: [] }).runs.push(m)
       console.log(`· ${sc.id} run ${r + 1}: ${JSON.stringify({ ...m, ft: undefined })}`)
