@@ -117,8 +117,14 @@ export interface ChatProps {
   onPlanAt?: (plan: string, at: { focus?: string, select?: string }) => void
   // a loose chat that is not a website, picked in Chats: Projects knows how each kind builds
   onOpenChat?: (chat: { id: string, kind: ChatKind }) => void
+  // the person answered the question before a website's build (docs/decisions/0020-ask-before-build.md): all builds
+  // the brief now (the chat is answered); the others open the Studio walk from it with `skip` marked skipped
+  onGo?: (e: ChatGo) => void
   // each line the person sends in a talk (the Studio takes its idea from the first)
   onHeard?: (text: string) => void
   // the build model picker's Other…: the screen opens the models panel
   onMoreModels?: () => void
 }
+
+// the answer to the question before a website's build (engine/askfirst.mjs): what the screen does next
+export interface ChatGo { path: 'all' | 'steps' | 'skip-brand' | 'skip-plan', skip: string[], brief: string, chat: string }

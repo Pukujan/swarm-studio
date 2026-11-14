@@ -89,7 +89,8 @@ for (let i = 0; i < 100; i++) { if (await fetch(`${BASE}/api/state`).then(r => r
 
 // the third build: started elsewhere before the page opens, so the server replays it to the canvas
 const elsewhere = async brief => {
-  const out = await api('/api/run', { brief, agents: 2 }).catch(() => ({}))
+  // a script's build says it is sure: no question in the chat first (docs/decisions/0020-ask-before-build.md)
+  const out = await api('/api/run', { brief, agents: 2, sure: true }).catch(() => ({}))
   for (let i = 0; i < 40; i++) { const st = await api('/api/state').catch(() => ({})); if (st.run === out.run && !st.working) break; await wait(250) }
   return out.run
 }
@@ -364,13 +365,26 @@ try {
   console.log('Make, then another project')
   await home()
   // what Projects' Make box does once the person says Build (web/home.js start): the canvas submits the
-  // brief and the studio is told the build the person started
-  const made = await page.evaluate(async () => { const run = await window.swarm.submit('Cedar Cafe, a small cafe by the river'); window.swarmCosmos.started(run); return run })
+  // brief, the chat asks first (decision 0020) and the person answers Skip all; then the build starts and the
+  // studio is told the build the person started
+  const made = await page.evaluate(async () => {
+    const brief = 'Cedar Cafe, a small cafe by the river'
+    const asked = await window.swarm.submit(brief)
+    if (!asked?.ask || !asked.chat) return null
+    await window.swarm.api(`/api/talk/${asked.chat}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pick: 'go:all' }) })
+    await new Promise(r => setTimeout(r, 800))
+    const run = await window.swarm.submit(brief, false, null, null, { chat: asked.chat })
+    window.swarmCosmos.started(run)
+    return run
+  })
   await page.waitForFunction(r => window.swarm.S?.run === r, made, { timeout: 10000 }).catch(() => {})
   await page.waitForFunction(() => !window.swarmCosmos.nav.view.pending, null, { timeout: 10000 }).catch(() => {})
   at = await where()
   ok(typeof made === 'string' && at.room === 'deck' && at.version === made && at.run === made, `Make opens the new build in the Design deck (${at.room}, ${at.run === made ? 'the new build' : at.run})`)
   ok(!(await page.evaluate(() => window.swarmCosmos.nav.view.pending)), 'its start on the stream clears the wait')
+  // the question's chat is open with the caret in its box (decision 0020), and Esc in a text box stays there
+  // (web/studio.js escUp): leave the box first, as a click on the deck does, then Esc goes up to the Overview
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur() })
   await page.keyboard.press('Escape'); await wait(400)
   await home()
   await page.click('.home .card[aria-label="Alpha Tea"]')

@@ -35,7 +35,7 @@ line. These are follow-ups, not changes made here.
 | Screen | Breadboard | Spec | Statechart state |
 |---|---|---|---|
 | Projects (Recent, All projects, Chats, Assets, Trash, folders) | [projects.md](projects.md) | [projects](../../../openspec/specs/projects/spec.md) | `projects.browser` |
-| Make (the Make box, the kind menu, the five ways) | [make.md](make.md) | [make](../../../openspec/specs/make/spec.md) | `projects.make` and the ways |
+| Make (the Make box, the kind menu, the two ways) | [make.md](make.md) | [make](../../../openspec/specs/make/spec.md) | `projects.make` and the ways |
 | The Studio scaffold (step path, Layers) | [studio.md](studio.md) | [studio](../../../openspec/specs/studio/spec.md) | `scaffold` |
 | The brand sheet | [brand-sheet.md](brand-sheet.md) | [brand-sheet](../../../openspec/specs/brand-sheet/spec.md) | `brandSheet` |
 | The Plan board | [plan-board.md](plan-board.md) | [plan-board](../../../openspec/specs/plan-board/spec.md) | `planBoard` |

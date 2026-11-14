@@ -209,7 +209,7 @@ test('a Hermes that disappears mid-build stops the build with the reason; when o
   try {
     const at = await s.call('/api/hermes/attach', { method: 'POST', body: JSON.stringify({ url: `http://127.0.0.1:${bridge.address().port}`, token: 'bridge-token-0123456789', pid: 4242, code: 1e10 }) })
     assert.equal(at.status, 200)
-    const res = await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A one-page site for a plant shop' }) })
+    const res = await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A one-page site for a plant shop', sure: true }) })
     assert.equal(res.status, 200)
     const { run } = await res.json()
     await firstCall
@@ -242,9 +242,9 @@ test('the person\'s Stop and a newer build are named as such', async () => {
   await new Promise(r => bridge.listen(0, '127.0.0.1', r))
   try {
     await s.call('/api/hermes/attach', { method: 'POST', body: JSON.stringify({ url: `http://127.0.0.1:${bridge.address().port}`, token: 'bridge-token-0123456789', pid: 4244, code: 1e10 }) })
-    const first = (await (await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A site for a plant shop' }) })).json()).run
+    const first = (await (await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A site for a plant shop', sure: true }) })).json()).run
     await new Promise(r => setTimeout(r, 300))
-    const second = (await (await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A site for a bakery' }) })).json()).run
+    const second = (await (await s.call('/api/run', { method: 'POST', body: JSON.stringify({ brief: 'A site for a bakery', sure: true }) })).json()).run
     await new Promise(r => setTimeout(r, 300))
     await s.call('/api/stop', { method: 'POST', body: JSON.stringify({ run: second }) })
     const stopOf = id => runEvents(s, id).find(e => e.type === 'run:stopped') || null

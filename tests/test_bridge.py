@@ -301,6 +301,34 @@ class Bridge(unittest.TestCase):
         self.assertEqual(got["code"], "hermes_closed")
         self.assertIn("hermes swarm", got["action"])
 
+    def test_a_new_site_waits_for_the_person_to_answer(self):
+        # docs/decisions/0020-ask-before-build.md: the server asks; the chat opens on the canvas and nothing builds
+        import io
+        launcher = load_package().launcher
+        body = {"error": "ask", "ask": "skips", "chat": "c-1", "text": "Before I build: skip the steps, or go through them?",
+                "options": [{"id": "go:pick", "label": "Pick steps to skip"}, {"id": "go:all", "label": "Skip all, build now"}], "recommended": "pick"}
+        asked = urllib.error.HTTPError("http://127.0.0.1:1/api/run", 409, "Conflict", {}, io.BytesIO(json.dumps(body).encode()))
+        sent = []
+
+        def request(path, **kw):
+            sent.append((path, kw.get("body")))
+            if path == "/api/run":
+                raise asked
+            return {}
+        with mock.patch.object(launcher, "ensure_server", return_value={"running": True, "url": "http://127.0.0.1:1/"}), \
+                mock.patch.object(launcher, "talk_first", return_value=False), \
+                mock.patch.object(launcher, "_request", side_effect=request):
+            got = launcher.start_run("a site for a plant shop")
+            self.assertTrue(got["ask"])
+            self.assertEqual(got["chat"], "c-1")
+            self.assertNotIn("run", got)
+            self.assertEqual(got["options"][0], "Pick steps to skip")
+            self.assertEqual(sent[0], ("/api/run", {"brief": "a site for a plant shop"}), "the tool never sends sure")
+            self.assertEqual(sent[1], ("/api/cmd", {"op": "chat", "target": "c-1"}))
+            sent.clear()
+            launcher.start_run("a site for a plant shop", sure=True)
+            self.assertTrue(sent[0][1]["sure"])
+
     def test_register_wires_the_bridge(self):
         src = (ROOT / "__init__.py").read_text("utf-8")
         self.assertIn("bridge.CTX = ctx", src)
