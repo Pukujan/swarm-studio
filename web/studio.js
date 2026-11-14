@@ -8,6 +8,7 @@ import { makePlan } from './plan.js'
 import { makeBrand } from './brand.js'
 import { makeScaffold } from './scaffold.js'
 import { makeNav, toAddress } from './nav.js'
+import { MODES, modeOf, studioMode, modesShown } from './modes.js'
 const sw = window.swarm
 const W = window
 const body = document.body
@@ -153,8 +154,8 @@ function draw(planId) {
     C.homeView.hide()
     C.projectView.hide()
     C.chat(true)
-    // the step the address names is brought into view; with none in the address, the whole board
-    C.scaffoldView.show(project, new URLSearchParams(location.search).get('step') ? nav.actor.getSnapshot().context.step : null)
+    // the step named is brought into view; with none, the whole board
+    C.scaffoldView.show(project, nav.actor.getSnapshot().context.step)
   } else if (room === 'brand') {
     // a website's or app's brand sheet (spec 31), beside the chat it came from
     C.homeView.hide()
@@ -315,11 +316,9 @@ function chrome() {
 // The mode: one menu button in a build's top bar, Overview, Canvas, Video, App or Game. Overview is the
 // project's pages and files (web/project.js); Canvas, Video and App open that room; Game opens the
 // game's room, or the wizard that makes one.
-const MODES = [['overview', 'Overview'], ['canvas', 'Canvas'], ['video', 'Video'], ['app', 'App'], ['game', 'Game']]
 // the game's own room is the App view on the game's run: the menu calls it Game
 const onGame = () => nav.view.room === 'game'
-const PILL = { overview: 'overview', deck: 'canvas', draft: 'canvas', video: 'video', app: 'app', game: 'game' }
-const modeNow = () => PILL[nav.view.room] || 'overview'
+const modeNow = () => modeOf(nav.view.room)
 // the game's room: the App view on the game's run (the label says Game once that run is open)
 C.toGame = (run = C.pair.game) => {
   C.go('game', run)
@@ -349,6 +348,7 @@ function modeMenu() {
     const r = btn.getBoundingClientRect()
     list.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 158))}px`
     list.style.top = `${r.bottom + 6}px`
+    modesShown(opts(), C)
     list.hidden = false
     btn.setAttribute('aria-expanded', 'true')
     for (const o of opts()) o.setAttribute('aria-selected', String(o.dataset.mode === modeNow()))
@@ -357,6 +357,7 @@ function modeMenu() {
   }
   const pick = id => {
     close()
+    if (studioMode(id, C)) return renderMode()
     if (id === 'overview') return C.go('project')
     // Game: the project's game, when it has one; else the wizard that makes one
     if (id === 'game') {

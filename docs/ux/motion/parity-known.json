@@ -515,16 +515,6 @@
     "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
   },
   {
-    "key": "studio only in /: page @sk-wait endless 1600ms ease-in-out",
-    "label": "drift",
-    "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
-  },
-  {
-    "key": "studio only in /next/: page @pet-bob endless 2600ms ease-in-out",
-    "label": "drift",
-    "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
-  },
-  {
     "key": "studio reduced cursor Hermia: apart",
     "label": "drift",
     "why": "The Studio scaffold moved in #423; this differs from / and #423 does not leave it for later."
@@ -598,5 +588,35 @@
     "key": "visitor reduced cursor Bo: only in /",
     "label": "drift",
     "why": "The current deck keeps each crew cursor on screen (docked when idle); /next/ draws one only while it writes a section."
+  },
+  {
+    "key": "studio only in /: page @in 300ms x1 ease-out",
+    "label": "drift",
+    "why": "The current Studio now ends its scene with the board loaded and the planner's first line fading into the chat (@in, 300 ms); the /next/ Studio screen has no chat line in this scene."
+  },
+  {
+    "key": "studio only in /: page ~border-bottom-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
+  },
+  {
+    "key": "studio only in /: page ~border-left-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
+  },
+  {
+    "key": "studio only in /: page ~border-right-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
+  },
+  {
+    "key": "studio only in /: page ~border-top-color 160ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
+  },
+  {
+    "key": "studio only in /next/: page ~transform 300ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
+    "label": "drift",
+    "why": "The /next/ Studio eases its board into view (transform, 300 ms); the current Studio now frames its whole board at once when it opens, with no step zoomed in."
   }
 ]
