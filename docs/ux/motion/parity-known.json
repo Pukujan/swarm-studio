@@ -52,12 +52,12 @@
   {
     "key": "brand only in /: page @pet-tap endless 700ms ease-in-out",
     "label": "drift",
-    "why": "On / Hermia taps the sheet's loading cards while the options are made; on /next/ the options come before her first look, so she has nothing to tap."
+    "why": "On opening, the next UI draws Hermia, then the sheet's skeleton with her crew-cursor stand-in, so she fades out over 300 ms (web/pet.js away()); the current Studio has the stand-in up before she is first drawn, so she starts hidden and works (pet-tap). Same code, a different order at load."
   },
   {
     "key": "brand only in /next/: page ~opacity 300ms x1 ease",
     "label": "drift",
-    "why": "Hermia fades in (300 ms, web/pet.css .pet) the first time she shows on the /next/ brand sheet; on / she is already on screen from the Studio scaffold it opened from."
+    "why": "On opening, the next UI draws Hermia, then the sheet's skeleton with her crew-cursor stand-in, so she fades out over 300 ms (web/pet.js away()); the current Studio has the stand-in up before she is first drawn, so she starts hidden and works (pet-tap). Same code, a different order at load."
   },
   {
     "key": "brand reduced cursor Hermia: apart",
@@ -111,18 +111,13 @@
   },
   {
     "key": "game only in /: page @in 250ms x1 ease-out",
-    "label": "drift",
-    "why": "The current Game room fades its panel in (@in, 250 ms) when a version opens from the Overview; at /next/ the Game room is still the stand-in, so nothing fades."
+    "label": "intended (PR #473)",
+    "why": "The current Studio draws the game's App room step list (div.st in #app-steps, @in .25s) in its canvas behind the Overview at this address, where no one sees it; the next UI draws only the Overview."
   },
   {
     "key": "game reduced cursor Hermia: apart",
-    "label": "drift",
-    "why": "With reduced motion asked for, Hermia in the current Studio works on another page skeleton (665,176) than the next UI's (365,179); in normal motion the two now match."
-  },
-  {
-    "key": "make only in /next/: page ~filter 150ms x1 cubic-bezier(0.4, 0, 0.2, 1)",
-    "label": "drift",
-    "why": "The kit's Button brightens on hover in 150 ms (ui/src/primitives/Button.tsx); the current Make box's button changes at once. Reduced motion turns it off."
+    "label": "intended (PR #524)",
+    "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
   {
     "key": "mid-build cursor Ada: only in /",
@@ -201,8 +196,8 @@
   },
   {
     "key": "overview reduced cursor Hermia: apart",
-    "label": "drift",
-    "why": "With reduced motion asked for, Hermia in the current Studio works on another page skeleton (665,176) than the next UI's (365,179); in normal motion the two now match."
+    "label": "intended (PR #524)",
+    "why": "With reduced motion the current Studio puts Hermia 300 px further right (665,176) than it does in normal motion (365,176), on another page skeleton; the next UI keeps her normal-motion spot (365,179) in both. The current Studio's reduced-motion spot is the odd one out."
   },
   {
     "key": "play cursor Ada: only in /",
