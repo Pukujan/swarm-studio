@@ -172,6 +172,40 @@ try {
     live = false
     await wait(2000)
   }
+  // One page's pictures, timed page by page: its small and full picture as two captures (window.swarm.thumb, the
+  // path every checkout has), and, where the checkout has it, both from one capture (window.swarm.capture). Each way
+  // starts on a fresh load of the Overview, so neither finds the other's caches warm; a page whose frame has not
+  // drawn yet is asked again, and only an answer with a picture is timed. The main thread's long tasks are summed.
+  // 0.26, not 0.25: thumb hands back a resting page's frozen picture at 0.25 and under, without photographing it.
+  const timed = async way => {
+    await page.goto(address)
+    await pictures()
+    await wait(2000)
+    return page.evaluate(async ([ids, way]) => {
+      const sw = window.swarm
+      let long = 0
+      const po = new PerformanceObserver(l => { for (const e of l.getEntries()) long += e.duration })
+      po.observe({ type: 'longtask' })
+      const shoot = way === 'one' ? id => sw.capture(id, [0.25, 0.6]) : async id => { const s = await sw.thumb(id, 0.26); return s && await sw.thumb(id, 0.6) }
+      // the library loads once, before anything is timed
+      await shoot(ids[0]).catch(() => null)
+      long = 0
+      const ms = [], parts = []
+      for (const id of ids) {
+        for (let tries = 0; tries < 20; tries++) {
+          const t = performance.now()
+          const got = await shoot(id).catch(() => null)
+          if (got) { ms.push(performance.now() - t); if (got.ms) parts.push(got.ms); break }
+          await new Promise(r => setTimeout(r, 300))
+        }
+      }
+      await new Promise(r => setTimeout(r, 500))
+      po.disconnect()
+      return { ms, parts, long }
+    }, [ids, way])
+  }
+  out.each = { pair: await timed('pair') }
+  if (await page.evaluate(() => !!window.swarm.capture)) out.each.one = await timed('one')
 } finally {
   await browser.close()
   server.kill()
@@ -187,4 +221,12 @@ console.log(`  main thread busy during a build ${median(out.cpu)}%   pictures se
 console.log(`  frame rate panning, at rest     ${median(out.fpsRest)} fps`)
 console.log(`  frame rate panning, building    ${median(out.fpsBuild)} fps   pictures sent while panning: ${median(out.panShots)}`)
 console.log(`  each cursor's moves a second, panning during a build  ${median(out.curHz)}`)
+const span = xs => `${ms(median(xs))} (${ms(Math.min(...xs))} to ${ms(Math.max(...xs))}, ${xs.length} pages)`
+if (out.each?.pair) console.log(`  one page, small + full as two captures  ${span(out.each.pair.ms)}   long tasks: ${ms(out.each.pair.long)}`)
+if (out.each?.one) {
+  const { ms: each, parts, long } = out.each.one
+  console.log(`  one page, both from one capture         ${span(each)}   long tasks: ${ms(long)}`)
+  if (parts.length) console.log(`    of which in the page ${ms(median(parts.map(p => p.page)))}, in the worker ${ms(median(parts.map(p => p.resize)))}`)
+}
+if (process.env.BENCH_JSON) console.log(JSON.stringify(out))
 console.log(JSON.stringify(out))

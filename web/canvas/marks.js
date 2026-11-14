@@ -11,6 +11,7 @@ import { modelsInfo, thaw, toggleModels } from './settings.js'
 import { post } from './deck.js'
 import { pageDoc } from './player.js'
 import { key } from './events.js'
+import { makeCapture, dataUrl } from '../capture.js'
 import { ladder } from '../ladder.js'
 
 // ---------- comments: tell an agent what to change
@@ -247,7 +248,7 @@ export function fillImages(l) {
 // After a build, each page is photographed in its own frame and sent to the
 // reviewer (a vision model). Its notes go to builders, who rewrite those sections live.
 
-export const review = { busy: false, seq: 0, waits: new Map(), auto: null }
+export const review = { busy: false, seq: 0, auto: null }
 export const frameTitle = id => S.frames.find(f => f.id === id)?.title || id
 const reviewerOn = () => !!modelsInfo.roles?.reviewer?.model
 
@@ -256,13 +257,17 @@ export function scanFrame(page, on) {
   if (f?.ready) post(f, { type: 'scan', on })
 }
 
-export function snapFrame(f, scale) {
-  return new Promise((resolve, reject) => {
-    const seq = ++review.seq
-    review.waits.set(seq, { resolve, reject })
-    post(f, { type: 'snap', seq, scale })
-    setTimeout(() => { if (review.waits.delete(seq)) reject(new Error('the screenshot timed out')) }, 30000)
-  })
+// A page's pictures, taken inside the page (web/capture.js): one capture, a JPEG at each scale. Every caller here
+// goes through it: the Overview's snapshots (window.swarm.capture), and snapFrame's single picture for the reviewer,
+// Scribble and the hosted studio's cover.
+export const pageCapture = makeCapture({ base: BASE })
+
+// One picture of the whole page as a JPEG data URL and the scale it was taken at: at most `scale` (0.625 without
+// one), lowered so the picture is at most 5000 px tall (3000 without a scale), as the reviewer has always had it.
+export async function snapFrame(f, scale) {
+  const s = scale || 0.625
+  const out = await pageCapture.shoot(f.iframe.contentWindow, { scales: [s], maxHeight: 0, fit: scale ? 5000 : 3000 })
+  return { image: await dataUrl(out.jpegs.get(s)), r: out.scale }
 }
 
 // A page measured the way a visitor sees it, at a given width: a hidden copy of

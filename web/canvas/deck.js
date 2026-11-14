@@ -4,7 +4,7 @@ import { clean } from '../clean.js'
 import { Crew, ARROW, TOOL, els, S, cam, FRAME_W, GAP, BOOT, replayId, $, TOOLS } from './core.js'
 import { FRAME_SANDBOX } from './base.js'
 import { playerMessage } from './player.js'
-import { checks, review } from './marks.js'
+import { checks } from './marks.js'
 import { key } from './events.js'
 import { viewing } from './replay.js'
 import { Chatter } from './auto.js'
@@ -151,11 +151,8 @@ window.addEventListener('message', e => {
   } else if (m.type === 'geo') {
     f.geo = m
     linkWires(f)
-  } else if (m.type === 'snap') {
-    const w = review.waits.get(m.seq)
-    review.waits.delete(m.seq)
-    if (w) m.ok ? w.resolve(m) : w.reject(new Error(m.error))
   }
+  // a page's pictures (`capture`) are answered to web/capture.js, which listens for its own requests
 })
 
 export function addLayer(e) {

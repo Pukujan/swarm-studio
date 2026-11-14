@@ -211,47 +211,62 @@
     return true
   }
 
-  function fontEmbedCSS() {
-    // html-to-image can't read a stylesheet from another origin (Google Fonts), so a
-    // snapshot fell back to system fonts and a resting page seemed to change font.
-    // Fetch the faces ourselves (latin only, each file once) and hand them over inlined.
-    const href = document.querySelector('link[href*="fonts.googleapis.com"]')?.href || ''
-    if (!href) return Promise.resolve('')
-    if (fontEmbedCSS.href !== href) {
-      fontEmbedCSS.href = href
-      const files = new Map()
-      const inline = u => files.get(u) || files.set(u, fetch(u).then(r => r.blob()).then(b => new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(b) }))).get(u)
-      fontEmbedCSS.css = fetch(href).then(r => r.text()).then(async css => {
-        const blocks = css.split(/(?=\/\* [\w-]+ \*\/)/).filter(b => !/^\/\* /.test(b) || /^\/\* latin(-ext)? \*\//.test(b))
-        const out = await Promise.all(blocks.map(async b => {
-          for (const u of new Set([...b.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))) b = b.split(u).join(await inline(u))
-          return b
-        }))
-        return out.join('\n')
-      }).catch(() => '')
-    }
-    return fontEmbedCSS.css
+  // The page photographs itself (web/capture.js): { scale, maxHeight, fit, lib? } in, one ImageBitmap of the page
+  // at `scale` (less, when `fit` caps the picture's height), its top `maxHeight` px, transferred out. The library (snapDOM, web/vendor/snapdom/) comes in the first
+  // request that finds none here; a page never photographed never loads it. The painters' marks and the review's
+  // scan line are left out of the picture.
+  // snapDOM's copy of the page (an SVG) drawn at its size: the part asked for, x y w h in the SVG's own units, at
+  // `scale`. snapDOM's own toCanvas does the same, and leaves its image behind: Chromium keeps an image loaded
+  // from a data: address in its memory cache, and an SVG image is a second document with a copy of every node of
+  // the page, held in the frame long after the picture is out (the board gauge: about 30 more nodes in each
+  // photographed page, in one run of three). Drawn here, its address is known, and asking for that address
+  // again past the cache makes Chromium drop the image. A blob: address would not be kept at all, but it taints
+  // the canvas in a sandboxed frame. A canvas that cannot be read back is refused, and snapDOM draws the picture.
+  async function paint(shot, x, y, w, h, scale) {
+    const raw = await shot.toRaw()
+    const cut = raw.indexOf(',') + 1, svg = decodeURIComponent(raw.slice(cut))
+    const head = svg.match(/<svg\b[^>]*>/)?.[0] || ''
+    if (!/^data:image\/svg\+xml/.test(raw) || !/\bwidth="[^"]*"/.test(head) || !/\bheight="[^"]*"/.test(head) || !/\bviewBox="[^"]*"/.test(head)) throw new Error('not an SVG to draw')
+    const W = Math.max(1, Math.round(w * scale)), H = Math.max(1, Math.round(h * scale))
+    const sized = head.replace(/\bwidth="[^"]*"/, `width="${W}"`).replace(/\bheight="[^"]*"/, `height="${H}"`).replace(/\bviewBox="[^"]*"/, `viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="none"`)
+    const url = raw.slice(0, cut) + encodeURIComponent(svg.replace(head, () => sized))
+    try {
+      const im = new Image()
+      im.decoding = 'sync'
+      im.src = url
+      await im.decode()
+      const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H })
+      const g = canvas.getContext('2d')
+      g.fillStyle = getComputedStyle(document.body).backgroundColor
+      g.fillRect(0, 0, W, H)
+      g.drawImage(im, 0, 0, W, H)
+      g.getImageData(0, 0, 1, 1)
+      return canvas
+    } finally { await fetch(url, { cache: 'no-store' }).then(r => r.body?.cancel(), () => {}) }
   }
 
-  // A screenshot of the page for the visual reviewer, scaled to at most 800 x 3000.
-  let lib = null
-  function snap(m) {
-    lib ||= new Promise((ok, fail) => {
-      const s = document.createElement('script')
-      s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js'
-      s.onload = () => ok(window.htmlToImage)
-      s.onerror = () => { lib = null; fail(new Error('could not load the screenshot library')) }
-      document.head.append(s)
-    })
-    // a half-written tag leaves attributes no XML parser takes, and the whole photo fails
-    for (const el of document.body.querySelectorAll('*')) for (const at of [...el.attributes]) if (!/^[A-Za-z_:][\w.:-]*$/.test(at.name)) el.removeAttribute(at.name)
-    const h = document.body.scrollHeight, r = Math.min(m.scale || 0.625, (m.scale ? 5000 : 3000) / h)
-    const bg = getComputedStyle(document.body).backgroundColor
-    const opts = { width: 1280, height: h, pixelRatio: r, quality: 0.72, backgroundColor: bg, filter: n => n.id !== 'scan' && !n.classList?.contains('pt-mark') }
-    Promise.all([lib, fontEmbedCSS(), document.fonts?.ready])
-      .then(([h2i, css]) => h2i.toJpeg(document.body, css ? { ...opts, fontEmbedCSS: css } : opts).catch(() => h2i.toJpeg(document.body, { ...opts, skipFonts: true })))
-      .then(image => parent.postMessage({ type: 'snap', seq: m.seq, ok: true, image, r }, '*'))
-      .catch(err => parent.postMessage({ type: 'snap', seq: m.seq, ok: false, error: String(err.message || err) }, '*'))
+  async function capture(m) {
+    const say = msg => parent.postMessage({ type: 'capture', seq: m.seq, ...msg }, '*', msg.bitmap ? [msg.bitmap] : [])
+    try {
+      if (m.lib && !window.snapdom) { const s = document.createElement('script'); s.textContent = m.lib; document.head.append(s) }
+      if (!window.snapdom) return say({ need: 'lib' })
+      const t0 = performance.now()
+      // a half-written tag leaves attributes no XML parser takes, and the whole photo fails
+      for (const el of document.body.querySelectorAll('*')) for (const at of [...el.attributes]) if (!/^[A-Za-z_:][\w.:-]*$/.test(at.name)) el.removeAttribute(at.name)
+      await document.fonts?.ready
+      // burst: false: snapDOM otherwise keeps a session per photographed element (its copy of the page, a map of
+      // every node, observers on the body) to answer the next capture sooner. A page is photographed once per
+      // version, so that copy only weighs: about 33 more nodes in each photographed page of the board gauge
+      const shot = await window.snapdom(document.body, { dpr: 1, backgroundColor: getComputedStyle(document.body).backgroundColor, exclude: ['#scan', '.pt-mark'], excludeMode: 'remove', fast: false, burst: false })
+      const { contentX, contentY, w0, h0 } = shot.meta
+      const height = Math.min(h0, m.maxHeight || h0)
+      const scale = Math.min(m.scale || 0.25, m.fit ? m.fit / height : Infinity)
+      const canvas = await paint(shot, contentX, contentY, w0, height, scale).catch(() => shot.toCanvas({ scale, dpr: 1, crop: { x: contentX, y: contentY, width: w0, height } }))
+      const bitmap = await createImageBitmap(canvas)
+      // the canvas's pixels go now, not when the collector gets to them
+      canvas.width = canvas.height = 0
+      say({ ok: true, bitmap, width: w0, height, scale, ms: performance.now() - t0 })
+    } catch (err) { say({ ok: false, error: String(err && err.message || err) }) }
   }
 
   function scan(on) {
@@ -273,7 +288,7 @@
     const m = e.data || {}
     if (m.type === 'theme') theme(m.theme)
     else if (m.type === 'slot') slot(m)
-    else if (m.type === 'snap') snap(m)
+    else if (m.type === 'capture') capture(m)
     else if (m.type === 'scan') scan(m.on)
   })
   addEventListener('DOMContentLoaded', () => {

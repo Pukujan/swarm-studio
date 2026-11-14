@@ -776,14 +776,16 @@ export function makeProject({ sw, C, root }) {
   // A picture can take seconds (the frame fetches its fonts first): one asked for before the person went
   // elsewhere and came back to this build is not drawn over, or kept instead of, what this view painted
   const current = (run, visit) => run === P.run && visit === P.visit && P.on
+  // A page is photographed inside its own frame once (web/capture.js): that one picture makes both the small and
+  // the full JPEG, in a worker. A page whose version is not known yet gets its small one only.
   async function shootSmall(run, id, v, visit) {
     P.stale.delete(id)
-    const src = await sw.thumb(id).catch(() => null)
+    const out = await sw.capture?.(id, v ? [0.25, 0.6] : [0.25])
     // a snapshot of a frame still being laid out is a thin strip: wait for a page-shaped one
-    const ok = src && await new Promise(r => { const im = new Image(); im.onload = () => r(im.naturalHeight > im.naturalWidth * 0.6); im.onerror = () => r(false); im.src = src })
+    const src = out && out.height > out.width * 0.6 && out.urls.get(0.25)
     if (!current(run, visit)) return
     // a page that changed keeps its last picture until a new one comes (no blank artboard meanwhile)
-    if (!ok) { if (P.thumbs.has(id)) P.stale.add(id); P.failed.add(id); return }
+    if (!src) { if (P.thumbs.has(id)) P.stale.add(id); P.failed.add(id); return }
     const had = P.thumbs.has(id)
     P.thumbs.set(id, src); P.sharp.delete(id)
     const im = had && world.querySelector(`.ab[data-key="${CSS.escape(`page:${id}`)}"] img[data-full]`)
@@ -791,10 +793,13 @@ export function makeProject({ sw, C, root }) {
     if (!v) return
     P.shot.set(id, v)
     keep(run, id, v, 's', src)
-    P.want.f.set(id, v)
+    // the full picture came from the same capture: kept and drawn in idle time, after the small one is on screen
+    idle(() => shootFull(run, id, v, visit, out.urls.get(0.6)))
   }
-  async function shootFull(run, id, v, visit) {
-    const full = await sw.thumb(id, 0.6).catch(() => null)
+  // the full picture; photographed for it alone when it does not come with the small one (a page whose small picture
+  // is saved but not its full one)
+  async function shootFull(run, id, v, visit, given) {
+    const full = given || (await sw.capture?.(id, [0.6]))?.urls.get(0.6)
     if (!full || !current(run, visit)) return
     await keep(run, id, v, 'f', full)
     // the page changed again meanwhile: its new small picture comes first
