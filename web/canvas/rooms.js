@@ -76,7 +76,7 @@ async function loadApp() {
     if (!appv.url && appv.hasApp && appv.state !== 'working' && !appv.opening) {
       appv.opening = true
       renderApp()
-      appApi('/open', {}).then(o => { if (appv.run === run && o.url) appv.url = o.url }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
+      appApi('/open', {}).then(o => { if (appv.run !== run) return; if (o.url) { appv.url = o.url; appv.tries = 0 } else if ((appv.tries = (appv.tries || 0) + 1) < 10) setTimeout(() => { if (appv.run === run && !appv.url) loadApp() }, 2500) }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
     }
   } catch (err) { appv.message = err.message }
   renderApp()
@@ -234,7 +234,7 @@ function renderApp() {
     appEls.empty.innerHTML = !run
       ? `<h2>No build open</h2><p>Make a site on the canvas, open one from Files, or start a 🎮 Game.</p>`
       // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
-      : appv.opening && !working
+      : (appv.opening || (appv.hasApp && !appv.message && st !== 'failed')) && !working
         ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
       : working
         ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
