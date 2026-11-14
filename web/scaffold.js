@@ -204,7 +204,7 @@ export function makeScaffold({ sw, C, root }) {
     // The board (the owner, on the game's Plan board: "it looks better and much easy to track"): each step a
     // section, in rows; Lock, last, holds the idea and what is set so far as fact cards. A fact card goes to its step.
     const on = s => s in d.studio.steps
-    const fact = (step, name, value, extra = '') => `<div class="ab pcard sc-fact" data-key="fact:${step}:${name}" tabindex="0" role="button" aria-label="${name}"><b>${name}</b><span>${esc(value)}</span>${extra}</div>`
+    const fact = (step, name, value, extra = '') => `<div class="ab pcard sc-fact" data-key="fact:${step}:${name}" tabindex="0" role="button" aria-label="${esc(`${name}: ${value}`)}"><b>${name}</b><span>${esc(value)}</span>${extra}</div>`
     // with no brand sheet yet, a built project shows the type and accent its newest version has
     const was = d.built?.theme || null
     const L = look(d.brand), seen = d.refs.find(r => r.look?.state === 'ready')?.look
@@ -221,7 +221,8 @@ export function makeScaffold({ sw, C, root }) {
     ].filter(Boolean).join('')
     // an empty idea says what to do (the chat asks the same); pressing it goes to the chat box
     const ideaText = d.studio.idea ? `<span>${esc(d.studio.idea)}</span>` : '<span class="sc-none">Tell Hermia what you are making</span>'
-    const lock = sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', `<b>Idea</b>${ideaText}`) + facts, 'sc-facts')
+    // a card's accessible name holds the words it shows (axe label-content-name-mismatch)
+    const lock = sec('proposal', card('lock:idea', `Idea: ${d.studio.idea || 'Tell Hermia what you are making'}`.slice(0, 160), 'pcard sc-idea', `<b>Idea</b>${ideaText}`) + facts, 'sc-facts')
     // Read like the steps: left to right, then the next row (the owner: "shouldnt things go from left to right
     // and then row to row?"). Row 1: Brand, References, Assets. Row 2: Plan, then Lock, the summary, last.
     const is = (/** @type {string} */ p, /** @type {string} */ re) => new RegExp(`data-sec="(${re})"`).test(p.slice(0, 120))
