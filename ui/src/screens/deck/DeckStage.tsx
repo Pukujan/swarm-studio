@@ -31,6 +31,16 @@ function activeBox(m: DeckModel, geo: Record<string, FrameGeo>) {
   return x0 === Infinity ? null : { x0, y0: y0 - 160, x1, y1: y1 + 80 }
 }
 
+// where the reviewer looks on a page under review (web/canvas/auto.js rvSpot): a section, a little way in
+function reviewSpot(m: DeckModel, geo: Record<string, FrameGeo>, id: string, n: number) {
+  const page = m.pages.find(p => p.id === id)
+  if (!page) return null
+  const keys = Object.keys(geo[id]?.slots ?? {})
+  if (!keys.length) return { x: frameX(page) + 640, y: LABEL + 300 }
+  const [left, top, width, height] = geo[id].slots[keys[n % keys.length]].box
+  return { x: frameX(page) + left + width * (0.25 + ((n * 37) % 50) / 100), y: LABEL + top + Math.min(height, 600) * 0.45 }
+}
+
 // a section's box in the world's coordinates, on the first page that shows it
 function sectionBox(m: DeckModel, geo: Record<string, FrameGeo>, key: string) {
   const l = m.layers[key]
@@ -64,7 +74,8 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
   pickExtra?: ReactNode
 }) {
   const stage = useRef<HTMLDivElement>(null)
-  const [cam, setCam] = useState<Cam>({ x: 40, y: 40, k: 0.16 })
+  // where the camera starts (web/canvas/core.js cam): Follow glides from here to the crew
+  const [cam, setCam] = useState<Cam>({ x: 40, y: 140, k: 0.16 })
   // The camera on screen: while Follow moves it, it eases a little each frame toward `cam` (web/canvas/loop.js), else
   // it is `cam` at once. Written straight to the world element, so React draws nothing per frame; the crew's cursors
   // read the same, so they stay on their sections while it moves.
@@ -146,11 +157,12 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
 
   // the first look fits every page; a page added later is fitted in until the person moves the camera
   const moved = useRef(false)
-  useEffect(() => { if (!moved.current) fit() }, [fit, model.pages.length])
+  // (while Follow is on, it is Follow that frames the crew)
+  useEffect(() => { if (!moved.current && !follow) fit() }, [fit, model.pages.length, follow])
   useEffect(() => {
     const s = stage.current
     if (!s) return
-    const o = new ResizeObserver(() => { if (!moved.current) fit() })
+    const o = new ResizeObserver(() => { if (!moved.current && !want.current.follow) fit() })
     o.observe(s)
     return () => o.disconnect()
   }, [fit])
@@ -284,7 +296,7 @@ export function DeckStage({ ref, model, onZoom, follow = false, onFollow, select
         ))}
       </div>
       {pick && pickExtra && <div data-ui className="absolute z-20 flex justify-end" style={{ left: Math.max(8, pick.left + pick.width - 328), top: Math.max(8, pick.top + 8), width: 320 }}>{pickExtra}</div>}
-      <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} box={k => sectionBox(model, geo, k)} />
+      <CrewCursors model={model} cam={shown} stage={stage} target={a => target(model, geo, a)} box={k => sectionBox(model, geo, k)} spot={(p, n) => reviewSpot(model, geo, p, n)} />
       <div aria-hidden className="pointer-events-none absolute inset-0">
         {pick && <div data-picked className="absolute border-[1.5px] border-text" style={pick} />}
         {flags.map(f => (
