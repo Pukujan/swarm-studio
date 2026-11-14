@@ -46,12 +46,12 @@
   },
   {
     "key": "deck cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "deck cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -61,27 +61,27 @@
   },
   {
     "key": "deck only in /next/: page @pet-dot endless 1000ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "deck only in /next/: page @pet-tap endless 700ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "deck only in /next/: page ~opacity 200ms x1 ease",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "deck reduced cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "deck reduced cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -116,17 +116,17 @@
   },
   {
     "key": "mid-build cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "mid-build cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "mid-build only in /: page @pulse endless 1200ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "A saved build that stopped half way: /next/'s status pill says it stopped before it finished and keeps still; / pulses and shimmers as if the crew still worked."
   },
   {
@@ -136,32 +136,32 @@
   },
   {
     "key": "mid-build only in /: page @shimmer endless 1400ms linear",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "A saved build that stopped half way: /next/'s status pill says it stopped before it finished and keeps still; / pulses and shimmers as if the crew still worked."
   },
   {
     "key": "mid-build only in /next/: page @pet-dot endless 1000ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "mid-build only in /next/: page @pet-tap endless 700ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "mid-build only in /next/: page ~opacity 200ms x1 ease",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "mid-build reduced cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "mid-build reduced cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -196,12 +196,12 @@
   },
   {
     "key": "play cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "play cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -221,27 +221,27 @@
   },
   {
     "key": "play only in /next/: page @pet-dot endless 1000ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "play only in /next/: page @pet-tap endless 700ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "play only in /next/: page ~opacity 200ms x1 ease",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "play reduced cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "play reduced cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -306,12 +306,12 @@
   },
   {
     "key": "publish only in /next/: page @pet-dot endless 1000ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "publish only in /next/: page @pet-tap endless 700ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
@@ -321,7 +321,7 @@
   },
   {
     "key": "publish only in /next/: page ~opacity 200ms x1 ease",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
@@ -346,22 +346,22 @@
   },
   {
     "key": "replay cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "replay cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "replay cursor Cy: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "replay cursor Di: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -371,7 +371,7 @@
   },
   {
     "key": "replay cursor Reviewer: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -396,22 +396,22 @@
   },
   {
     "key": "replay reduced cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "replay reduced cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "replay reduced cursor Cy: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "replay reduced cursor Di: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -421,7 +421,7 @@
   },
   {
     "key": "replay reduced cursor Reviewer: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -436,12 +436,12 @@
   },
   {
     "key": "visitor cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "visitor cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
@@ -461,12 +461,12 @@
   },
   {
     "key": "visitor only in /next/: page @pet-dot endless 1000ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "visitor only in /next/: page @pet-tap endless 700ms ease-in-out",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
@@ -476,17 +476,17 @@
   },
   {
     "key": "visitor only in /next/: page ~opacity 200ms x1 ease",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "The deck spec asks for a loading skeleton with Hermia's cursor on it (openspec/specs/design-deck/spec.md, Loading); / shows nothing while the build loads (its known 'deck loading' audit violation)."
   },
   {
     "key": "visitor reduced cursor Ada: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
     "key": "visitor reduced cursor Bo: only in /",
-    "label": "intended (PR #DECKMOTION)",
+    "label": "intended (PR #523)",
     "why": "At 0 ms / creates each crew cursor at the canvas's top-left corner before it places it; /next/ is still reading the build then. From the next step both draw the crew on the sections they write (deck/CrewCursors.tsx moves them as / does); where they are on screen follows each app's layout."
   },
   {
