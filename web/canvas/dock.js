@@ -1,12 +1,12 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): Hermia's dock and sign-in connectors.
 import { $, HERMIA, ico, Crew, api } from './core.js'
-import { workSpot, wallBack } from './wander.js'
+import { workSpot } from './wander.js'
 import { radioOn, radio, cw, CW_FRESH, cwZoom, artPhase, CW_CODE, autoM, setAutoMin, CW_TILES, wallNames, cwZoomShow, cwHighlight, cwPlan, heardIn, clock, kTokens, paintv, ART_STATE, artEvent } from './auto.js'
 import { crewQuiet } from './deck.js'
 import { setText, feed } from './panels.js'
 import { esc } from './design.js'
-import { playClip, view, appv, appEls, appApi } from './rooms.js'
+import { playClip, view, appv, appEls, appApi, stageOf } from './rooms.js'
 import { shownRun, allowBox, allowWire } from './film.js'
 import { nextFrame } from './loop.js'
 
@@ -54,15 +54,14 @@ function codeWall() {
   const on = view === 'app' && appv.state === 'working' && appv.run === shownRun()
   if (!on) {
     cw.shown = false
-    if (cw.el) { cw.el.hidden = true; wallBack(cw.el.parentElement, false) }
+    if (cw.el) cw.el.hidden = true
     if (appv.state !== 'working') Object.assign(cw, { run: null, seen: 0, queue: [], tiles: [], ...CW_FRESH })
     return
   }
   if (!cw.el) {
     cw.el = document.createElement('div')
     cw.el.className = 'codewall'
-    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span><button class="cw-peek" aria-label="Hide the code and look at the app">${ico('eye')}Preview</button></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
-    cw.el.querySelector('.cw-peek').onclick = () => { cw.hide = true; cw.el.hidden = true }
+    cw.el.innerHTML = `<div class="cw-head"><b class="pop-title">${appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'}</b><span class="cw-count"></span></div><div class="cw-plan" hidden></div><div class="cw-grid"></div>`
     // a click on a tile makes it big, the others line up beside it; a second click (or Esc) puts it back
     const g = cw.el.querySelector('.cw-grid')
     g.onclick = ev => { const t = ev.target.closest('.cw-tile'); if (t) cwZoom([...g.children].indexOf(t)) }
@@ -83,7 +82,9 @@ function codeWall() {
     cw.el.querySelector('.cw-head .pop-title').innerHTML = mode === 'art' ? 'Painting the <em>art</em>' : appv.kind === 'game' ? 'Writing the <em>game</em>' : 'Writing the <em>app</em>'
   }
   const codeTile = i => i === CW_CODE
-  cw.el.hidden = cw.hide; wallBack(cw.el.parentElement, cw.hide, () => { cw.hide = false })
+  // the wall shows while the stage shows the crew: by itself, or pinned in the bar's switch (web/canvas/stage.js)
+  cw.hide = stageOf().shown !== 'crew'
+  cw.el.hidden = cw.hide
   // the wall just came up while Auto is running: fold the Auto panel to its pill so it does not cover the code
   if (!cw.hide && !cw.shown) {
     cw.shown = true
