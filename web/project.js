@@ -439,6 +439,7 @@ export function makeProject({ sw, C, root }) {
     drawMarks()
   }
   function renderInsp() {
+    askHint()
     const x = P.sel && find(P.sel)
     insp.hidden = !x
     root.classList.toggle('insp-on', !!x)
@@ -1334,6 +1335,9 @@ export function makeProject({ sw, C, root }) {
     if (x?.kind === 'art') return replace(x)
     input.value = ''
     if (x?.kind === 'page' && P.layer && sw.layers?.get(P.layer)?.done) { sw.layers.fix(P.layer, text); toast(`${ic('msg', 15)}<span>On it</span>`); return }
+    // an app project (issue #542): the words change the app, in its App room with the chat open, the same as its
+    // chat there. Only a selected page still takes a change to its design (/fix above and below).
+    if (P.board?.app && x?.kind !== 'page' && sw.appAsk) { C.go('station', 'app'); C.chat(true); sw.appAsk(text); return }
     const route = routeMessage({ text, run: P.run, site: !P.board?.game && P.board?.pages?.length > 0, selected: x?.kind === 'page', hosted: hosted() })
     if (route === 'fix') { sw.focusPage(x.page); sw.submit(`/fix ${text}`); toast(`${ic('msg', 15)}<span>On it</span>`); setTimeout(load, 1500); return }
     // the project's next version: every page kept, the crew builds what was asked. A version with
@@ -1362,6 +1366,12 @@ export function makeProject({ sw, C, root }) {
 
   // the section the dock is talking about; its × goes back to the whole project
   const scopeEl = $('.pj-scope')
+  // an app project's box changes the app (issue #542); with a page selected, that page. Drawn with the inspector, so
+  // it follows the board and the selection.
+  function askHint() {
+    const box = /** @type {HTMLInputElement | null} */ (document.querySelector('.pj-ask:not(.pj-lask) input'))
+    if (box) box.placeholder = P.board?.app && find(P.sel)?.kind !== 'page' ? 'Change the app…' : 'Tell the crew…'
+  }
   function scope() {
     const l = P.layer && sw.layers?.get(P.layer)
     scopeEl.hidden = !l
