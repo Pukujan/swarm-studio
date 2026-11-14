@@ -615,11 +615,6 @@
     "why": "The current Studio's chat box shows its focus ring easing in (border colours, 160 ms) once the board has loaded and the planner has asked; the /next/ Studio screen draws no chat box in this scene."
   },
   {
-    "key": "studio only in /next/: page ~transform 300ms x1 cubic-bezier(0.2, 0.7, 0.2, 1)",
-    "label": "drift",
-    "why": "The /next/ Studio eases its board into view (transform, 300 ms); the current Studio now frames its whole board at once when it opens, with no step zoomed in."
-  },
-  {
     "key": "app cursor Ada: only in /",
     "label": "intended (PR #477)",
     "why": "The current Studio keeps the build crew's cursors in the page in the App room (docked, out of sight); the /next/ wall draws no crew cursor yet: spec 44 leaves each crew member's cursor in their own window for a later slice."

@@ -68,6 +68,7 @@ export function StudioFirst() {
   }, [sheet])
   // the step the address names comes into view when it changes from outside (Back, Esc), not under a selection
   useEffect(() => {
+    if (view.step && view.step === placed.current) { placed.current = null; return }
     if (view.step && !sel && framed.current === pid) board.current?.focus(view.step)
   }, [view.step]) // only a change of step moves the board
 
@@ -114,6 +115,8 @@ export function StudioFirst() {
 
   // the step named in the address is in view (the planner's start when none is named), once the board is drawn
   const framed = useRef<string | null>(null)
+  // the step the first framing put in the address itself, already in view: not a change from outside to slide to
+  const placed = useRef<string | null>(null)
   useEffect(() => {
     if (!d || framed.current === d.project.id) return
     framed.current = d.project.id
@@ -122,7 +125,7 @@ export function StudioFirst() {
       if (d.studio.mode === 'takes' && takes) { board.current?.focus('takes', false); return }
       const first = view.step || kit.suggest?.(ctx()) || d.studio.start || kit.starts[0]?.id
       if (!first) return
-      if (!view.step) go({ type: 'studio.step', step: first })
+      if (!view.step) { placed.current = first; go({ type: 'studio.step', step: first }) }
       board.current?.focus(first, false)
     })
   }, [d, takes, view.step, kit, ctx, go, board])
