@@ -136,3 +136,15 @@ test('the build\'s lines for the chat: the ask, the crew, the news, and nothing 
   m = apply(m, { type: 'agent:say', run: 'other', t: Date.now(), agent: 'a0', text: 'not here' })
   assert.equal(m.lines.length, before + 1)
 })
+
+test('a build stopped for a reason says why in the chat and keeps its brief; the person\'s own Stop goes to the Log', () => {
+  const start = { type: 'run:start', t: 1, run: RUN, brief: 'A bakery site' }
+  const failed = fold([start, { type: 'run:stopped', t: 2, run: RUN, reason: { code: 'model', message: "Stopped: the model didn't answer.", action: 'Try again, or pick another model in `hermes model`.' } }], RUN)
+  assert.equal(failed.state, 'stopped')
+  assert.equal(failed.brief, 'A bakery site')
+  assert.deepEqual(failed.stopped, { message: "Stopped: the model didn't answer.", action: 'Try again, or pick another model in `hermes model`.' })
+  assert.deepEqual(failed.lines.at(-1), { id: failed.lines.at(-1).id, at: 2, who: 'hermia', text: "Stopped: the model didn't answer. Try again, or pick another model in hermes model." })
+  const mine = fold([start, { type: 'run:stopped', t: 2, run: RUN, reason: { code: 'person', message: 'Stopped.' } }], RUN)
+  assert.equal(mine.stopped, null)
+  assert.equal(mine.lines.at(-1).who, 'sys')
+})
