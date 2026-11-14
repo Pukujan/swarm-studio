@@ -522,14 +522,6 @@ body.side-min .dock { left: auto; }
 #agents.chip { flex: none; }
 .composer select.chip.model { flex: 1 1 0; width: 0; max-width: 220px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .composer .row .grow { min-width: 0; }
-/* the chat's mode (web/chatmode.js): a small chip beside the send button, whose word follows it. The button
-   keeps one width whatever it says (Ask, Plan, Build, Fix, Send), so nothing beside it moves (rule 29). In a
-   narrow chat the pair takes the row's second line, so the model's name stays readable */
-.composer .row { flex-wrap: wrap; }
-.composer .send-set { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.composer select.chip.mode { flex: none; }
-.composer select.chip.model { flex: 1 1 96px; min-width: 96px; }
-.composer button[type=submit] { min-width: 62px; text-align: center; }
 /* a wait in the chat: the crew member's cursor and name beside what they are doing */
 .feed .item.bot.crew-wait .cur { position: relative; display: inline-flex; align-items: center; vertical-align: -3px; margin-right: 6px; transition: none; }
 .feed .item.bot.crew-wait .cur svg { width: 14px; height: 14px; }
@@ -1073,6 +1065,39 @@ em { font-style: italic; }
 .composer button[type=submit] { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 8px 16px; font: 600 13px/1 var(--label); letter-spacing: .08em; text-transform: uppercase; transition: transform .16s var(--ease), box-shadow .16s var(--ease); }
 .composer button[type=submit]:hover { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
 .composer button[type=submit]:active { transform: scale(.96); }
+/* The chat box's one row (web/composer.js, web/chatmode.js; docs/specs/46-chat-modes.md "The row"): the mode
+   (what sending does), then the two quieter pickers (how many builders, their model), and the send arrow at
+   the right. One height, one radius, never a second line: the model's name gives way first, then the word
+   "agents". Every control keeps its place and size whatever it says (rule 29). */
+.composer { container-type: inline-size; }
+.composer .row { flex-wrap: nowrap; gap: 6px; }
+.composer .chip { flex: none; height: 28px; min-width: 0; display: inline-flex; align-items: center; appearance: none; -webkit-appearance: none; border: 1px solid rgb(var(--glass-rgb) / .2); border-radius: 999px; padding: 0 22px 0 11px; font: 600 12px/1 var(--label); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; color: var(--text); cursor: pointer;
+  background: linear-gradient(45deg, transparent 50%, var(--muted) 50%) no-repeat calc(100% - 12px) 50% / 5px 5px, linear-gradient(-45deg, transparent 50%, var(--muted) 50%) no-repeat calc(100% - 8px) 50% / 5px 5px, rgb(var(--glass-rgb) / .04); }
+.composer .chip[hidden] { display: none; }
+.composer .chip .t { overflow: hidden; text-overflow: ellipsis; }
+.composer .chip.mode { width: 63px; }
+.composer .chip.quiet { border-color: transparent; background-color: transparent; color: var(--muted); padding-left: 6px; }
+.composer .chip.quiet:hover:not(:disabled), .composer .chip.quiet[aria-expanded="true"] { color: var(--text); }
+.composer .chip:hover:not(:disabled), .composer .chip[aria-expanded="true"] { border-color: var(--line-2); }
+.composer .chip:focus-visible { outline: none; border-color: var(--accent); }
+.composer .chip:disabled { opacity: .4; cursor: default; }
+.composer .chip.agents .w { white-space: pre; }
+.composer .chip.agents .ico { width: 13px; height: 13px; margin-right: 5px; flex: none; }
+.composer .chip.model { flex: 0 1 auto; }
+.composer button[type=submit] { flex: none; margin-left: auto; width: 34px; min-width: 0; height: 28px; padding: 0; display: inline-grid; place-items: center; }
+.composer button[type=submit] .ico { width: 16px; height: 16px; }
+/* in the 300 px chat column the agents chip is the crew icon and the number; its word stays for a screen reader */
+@container (max-width: 320px) { .composer .chip.agents .w { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } }
+/* A chip's open menu: one line saying what the chip picks, then the choices; a mode's own line sits under its
+   name. The only place the lines show: no hover hint anywhere. Fixed above the chip; nothing animates */
+.chip-pop { position: fixed; z-index: 320; width: 250px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; padding: 6px; background: rgb(var(--deep-rgb) / .97); backdrop-filter: blur(16px); border: 1px solid var(--panel-edge); border-radius: 12px; box-shadow: 0 18px 50px rgb(var(--shade-rgb) / .55); }
+.chip-pop p { margin: 0; padding: 6px 10px 8px; font: 12px/1.35 var(--font); color: var(--muted); }
+.chip-pop [role=menu] { display: flex; flex-direction: column; gap: 2px; }
+.chip-pop button { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; width: 100%; min-height: 36px; padding: 8px 26px 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.chip-pop button b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px/1 var(--label); letter-spacing: .05em; text-transform: uppercase; }
+.chip-pop button span { font: 12px/1.35 var(--font); color: var(--muted); }
+.chip-pop button:hover, .chip-pop button:focus-visible { background: rgb(var(--glass-rgb) / .08); outline: none; }
+.chip-pop button[aria-checked="true"]::after { content: ''; position: absolute; right: 10px; top: 50%; margin-top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 /* the quiet footer line */
 .built-for { padding: 0 16px 10px; font: 500 11px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .tree .pg-title { font-family: var(--label); font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }

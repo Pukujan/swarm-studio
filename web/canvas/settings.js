@@ -1,6 +1,7 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): lite mode, the models menu, side tabs and floating panels.
 import { S, BOOT, els, cam, FRAME_W, api, store, $, ico } from './core.js'
+import { chipMenu, builderModels } from '../composer.js'
 import { belongs } from './deck.js'
 import { FRAME_SANDBOX } from './base.js'
 import { review, snapFrame } from './marks.js'
@@ -339,20 +340,26 @@ if (store.get('sideMin')) sideMin(true)
 
 // The builders' model, right where a build starts (the rest live in Models)
 const buildModel = $('#build-model')
-// a short list: the pick, the ones picked lately and the planner's; "Other…" opens the full search in Models
+// A short list (web/composer.js builderModels): what Hermes uses, the pick, the ones picked lately and the
+// planner's when it is another model; "Other…" opens the full search in Models. The names are real model
+// names: under Hermes the slot's, from the list Setup shows (GET /api/setup/models/options,
+// docs/engines/hermes-and-connections.md "The Setup model picker"), never a role's name.
+let buildModelNow = builderModels()
 async function fillBuildModel() {
   const info = await loadModels()
-  const s = info.roles?.worker || {}
-  const recent = store.get('recentModels') || []
-  const list = [...new Set([s.picked, ...recent, info.roles?.planner?.picked, info.roles?.planner?.hermes].filter(m => m && m !== 'off' && m !== s.hermes))].slice(0, 8)
-  const short = m => m.split('/').pop()
-  buildModel.innerHTML = `<option value="">${esc(s.hermes ? short(s.hermes) : 'Hermes default')}</option>${list.map(m => `<option value="${esc(m)}" ${m === s.picked ? 'selected' : ''}>${esc(short(m))}</option>`).join('')}<option value="__other">Other… (${(info.text || []).length} models)</option>`
+  const w = info.roles?.worker || {}, p = info.roles?.planner || {}
+  buildModelNow = builderModels({ picked: w.picked, slot: hermesUses('worker')?.model, base: w.hermes, plannerPicked: p.picked, plannerSlot: hermesUses('planner')?.model, plannerBase: p.hermes, recent: store.get('recentModels') || [] })
+  const word = buildModel.querySelector('.t')
+  if (word) word.textContent = buildModelNow.name
+  buildModel.setAttribute('aria-label', `Model: ${buildModelNow.name}`)
 }
-buildModel.onchange = async () => {
-  if (buildModel.value === '__other') { fillBuildModel(); return toggleModels(true) }
-  if (buildModel.value) store.set('recentModels', [buildModel.value, ...(store.get('recentModels') || []).filter(m => m !== buildModel.value)].slice(0, 6))
-  await saveModel({ role: 'worker', model: buildModel.value || null })
+async function pickBuildModel(m) {
+  if (m === '__other') return toggleModels(true)
+  if (m) store.set('recentModels', [m, ...(store.get('recentModels') || []).filter(x => x !== m)].slice(0, 6))
+  await saveModel({ role: 'worker', model: m || null })
 }
+// @ts-ignore
+chipMenu(buildModel, { label: 'Model', head: 'The model the builders use', items: () => buildModelNow.items, value: () => buildModelNow.now, pick: pickBuildModel })
 fillBuildModel()
 // @ts-ignore
 for (const b of document.querySelectorAll('.dtabs button')) b.onclick = () => { design.tabPinned = true; showDtab(b.dataset.dtab) }

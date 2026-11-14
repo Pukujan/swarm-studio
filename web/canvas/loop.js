@@ -1,7 +1,8 @@
 // @ts-check
 // web/canvas.js, split by area (web/canvas/README.md): the animation loop and keyboard and pointer input.
 import { routeMessage } from '../route.js'
-import { modeSend, mountChatMode } from '../chatmode.js'
+import { modeSend, mountChatMode, MODE_LINE } from '../chatmode.js'
+import { mountAgentsChip } from '../composer.js'
 import { githubDoor } from '../github.js'
 import { zoomToSection } from './zoom.js'
 import { cam, S, els, setLabel, FRAME_W, commandOps, api, $, BOOT } from './core.js'
@@ -256,10 +257,11 @@ const SLASH = [
   ['help', '', 'what you can type here'],
   ['play', '', 'click through the prototype'],
   ['review', '', 'a vision model checks every page; agents fix what it finds'],
-  ['ask', '[question]', 'Ask mode: an answer, and nothing changes'],
-  ['plan', '[idea]', 'Plan mode: talk it through; nothing is built until you say'],
-  ['build', '[brief]', 'Build mode: the crew builds what you type'],
-  ['fix', '[what to change]', 'alone, Fix mode: what is wrong with the Studio. With words, an agent rewrites the selected section, or the page'],
+  // the modes say here what their menu says (web/chatmode.js MODE_LINE)
+  ['ask', '[question]', MODE_LINE.ask],
+  ['plan', '[idea]', MODE_LINE.plan],
+  ['build', '[brief]', MODE_LINE.build],
+  ['fix', '[what to change]', `${MODE_LINE.fix} With words: an agent rewrites the selected section, or the page.`],
   ['video', '[prompt]', 'cut a film from a prompt, e.g. a fast trailer, scary but cute'],
   ['app', '[change]', 'the App view: make this design a working app, or change it'],
   ['game', '[idea]', 'make an original browser game: a few questions, then it builds'],
@@ -398,7 +400,9 @@ const modeHelp = {
   // @ts-ignore
   setup: a => window.SwarmSetup?.open(...a)
 }
-mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, off: !!BOOT.hosted })
+mountChatMode({ select: $('#chat-mode'), button: els.form.querySelector('button[type="submit"]'), talking: () => talk.on, box: els.brief, agents: $('#agents-btn'), built: () => !!shownRun(), off: !!BOOT.hosted })
+// @ts-ignore
+mountAgentsChip({ select: els.agentsSel, button: $('#agents-btn') })
 // A project's source on GitHub (web/github.js): ☰ › GitHub opens its sheet, and the same moves typed here
 // ("push to github", "pull from github", "link owner/name", "where is this on github") are answered in the chat.
 // The project is the one open in the Studio, else the run on screen (the server finds its project).

@@ -1,14 +1,15 @@
 // @ts-check
-// The chat's modes (docs/specs/46-chat-modes.md): Ask, Plan, Build, Fix. One select in the chat box, and the
-// same switch typed (/ask, /plan, /build, /fix, or "switch to ask mode"). The mode lasts for this browser
+// The chat's modes (docs/specs/46-chat-modes.md): Ask, Plan, Build, Fix. One chip in the chat box (its open
+// menu says what each mode does: web/composer.js chipMenu), and the same switch typed (/ask, /plan, /build, /fix, or "switch to ask mode"). The mode lasts for this browser
 // session and is not saved with the project.
 //   Ask    an answer, and nothing changes: a built app or game is asked through dyad's own ask mode (the crew
 //          answers while it builds), a website or an empty chat through the planner
 //   Plan   the planner's talk: nothing is built until the person presses Build under the brief
 //   Build  what the chat always did (web/canvas/loop.js): this file does not touch it
 //   Fix    the Studio's own working parts: what failed, whose fault, the one next step (engine/doctor.mjs)
-// This file imports only the icons, so node can test the pure parts; the canvas hands it what it needs (h).
+// This file imports only the icons and the chip menu, so node can test the pure parts; the canvas hands it what it needs (h).
 import { cursor } from './icons.js'
+import { chipMenu } from './composer.js'
 
 export const CHAT_MODES = ['ask', 'plan', 'build', 'fix']
 const MODE_WORD = { ask: 'Ask', plan: 'Plan', build: 'Build', fix: 'Fix' }
@@ -44,28 +45,81 @@ export function modeRoute({ mode = 'build', text = '', run = null, app = false, 
   return 'build'
 }
 
+// What sending does in each mode, one plain line: shown under the mode's name in the open menu and beside
+// /ask, /plan, /build and /fix in the slash list. Nowhere else: closed, the control says the name only, and
+// there is no hover hint (docs/ux/RULES.md, standing rule 1; an explanation goes one layer down, rule 9).
+export const MODE_LINE = {
+  ask: 'Answers your question. Changes nothing.',
+  plan: 'Talks it through. Nothing is built until you say.',
+  build: 'The crew builds or changes what you describe.',
+  fix: 'Checks the Studio itself: what failed, what to do.'
+}
+// What the box says while empty, per mode (Build keeps the room's own words: "Describe a product…", "Change
+// the app…"); the cheapest way to say what sending will do.
+export const MODE_PLACEHOLDER = { ask: 'Ask the crew…', plan: 'Say what to plan…', fix: 'Say what went wrong…' }
+// Build with a build open: sending changes it, so the box does not say "Describe a product" over a built site
+export const CHANGE_PLACEHOLDER = 'Say what to change…'
+const MODE_PLACEHOLDERS = [...Object.values(MODE_PLACEHOLDER), CHANGE_PLACEHOLDER]
+// The agents count does nothing in these modes: nothing is built
+const NO_BUILDERS = ['ask', 'fix']
+
 // ---------- the switch (the browser from here on)
-/** @type {{ now: string, asked: { who: string, text: string }[], offer: any[], select: any, button: any, talking: () => boolean }} */
-export const chatMode = { now: 'build', asked: [], offer: [], select: null, button: null, talking: () => false }
-// The send button has one writer: its word is the mode's, or Send while a talk has the box.
+// select: the mode chip (it keeps the old select's name: its value is the mode); button: the send button;
+// box: the text box; agents: the agents chip; roomPh: the room's own placeholder, kept while a mode's shows
+/** @type {{ now: string, asked: { who: string, text: string }[], offer: any[], select: any, button: any, box: any, agents: any, roomPh: string, talking: () => boolean, built: () => boolean }} */
+export const chatMode = { now: 'build', asked: [], offer: [], select: null, button: null, box: null, agents: null, roomPh: '', talking: () => false, built: () => false }
+// The send button is an arrow, like the "Tell the crew…" bar's; its name says what it sends to (the mode, or
+// plain Send while a talk has the box). One writer.
 export function paintSend() {
-  if (chatMode.button) chatMode.button.textContent = chatMode.talking() ? 'Send' : modeWord(chatMode.now)
+  chatMode.button?.setAttribute?.('aria-label', chatMode.talking() ? 'Send' : `Send: ${modeWord(chatMode.now)}`)
+  paintPlaceholder()
+}
+// The box's placeholder follows the mode. Rooms and the talk write it too (web/canvas/rooms.js, talk.js):
+// theirs is remembered and comes back in Build; a talk's own ("Tell Hermia…") is left alone.
+function paintPlaceholder() {
+  const box = chatMode.box
+  if (!box || chatMode.select?.hidden) return
+  const has = String(box.placeholder || ''), ours = MODE_PLACEHOLDERS.includes(has)
+  if (chatMode.talking() || /^Tell Hermia/.test(has)) return
+  if (!ours) chatMode.roomPh = has
+  const room = chatMode.built() && /^Describe a product/.test(chatMode.roomPh) ? CHANGE_PLACEHOLDER : chatMode.roomPh
+  const want = MODE_PLACEHOLDER[/** @type {keyof typeof MODE_PLACEHOLDER} */ (chatMode.now)] || room
+  if (want && want !== has) box.placeholder = want
+}
+// the mode chip says the mode's name; the agents chip is off where nothing is built
+function paintModeButton() {
+  const b = chatMode.select
+  if (!b) return
+  if (b.value !== chatMode.now) b.value = chatMode.now
+  const word = b.querySelector?.('.t')
+  if (word) word.textContent = modeWord(chatMode.now)
+  b.setAttribute?.('aria-label', `Mode: ${modeWord(chatMode.now)}`)
+  if (chatMode.agents) chatMode.agents.disabled = NO_BUILDERS.includes(chatMode.now)
 }
 export function setChatMode(mode) {
   if (!CHAT_MODES.includes(mode)) return
   chatMode.now = mode
   chatMode.offer = []
-  if (chatMode.select && chatMode.select.value !== mode) chatMode.select.value = mode
+  paintModeButton()
   paintSend()
 }
-// select: the mode select; button: the form's send button; talking(): a talk has the box (web/canvas/talk.js)
-export function mountChatMode({ select, button, talking, off = false }) {
-  Object.assign(chatMode, { select, button, talking })
+// select: the mode chip; button: the form's send button; talking(): a talk has the box (web/canvas/talk.js);
+// box: the text box; agents: the agents chip; built(): a build is open
+export function mountChatMode({ select, button, talking, box = null, agents = null, built = () => false, off = false }) {
+  Object.assign(chatMode, { select, button, talking, box, agents, built, roomPh: '' })
   if (!select) return
   if (off) { select.hidden = true; return }
-  select.value = chatMode.now
-  // (the button already carries the first mode's word; talking() is not asked while the page is still loading)
-  select.addEventListener('change', () => setChatMode(select.value))
+  // (talking() is not asked while the page is still loading: the button already carries the first mode's name)
+  paintModeButton()
+  if (!select.addEventListener || typeof document === 'undefined') return
+  // its open menu: each mode's name and, under it, its line
+  chipMenu(select, { label: 'Mode', items: () => CHAT_MODES.map(m => ({ value: m, name: modeWord(m), line: MODE_LINE[/** @type {keyof typeof MODE_LINE} */ (m)] })), value: () => chatMode.now, pick: setChatMode })
+  // a room that writes its placeholder while Ask, Plan or Fix is on: the mode's comes back over it
+  if (!box) return
+  new MutationObserver(() => paintPlaceholder()).observe(box, { attributes: true, attributeFilter: ['placeholder'] })
+  // and when the chat comes into view or takes the focus: a build may have opened since (built())
+  new IntersectionObserver(() => paintPlaceholder()).observe(box)
+  box.addEventListener('focus', () => paintPlaceholder())
 }
 
 // A wait in the chat is a crew member at work (owner, 2026-11-13): their cursor, their name and what they
