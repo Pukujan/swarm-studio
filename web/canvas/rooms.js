@@ -20,7 +20,7 @@ import { adoptVideos, boardVideo } from '../video.js'
 // change; on Video, an idea for a new cut.
 export let view = 'canvas'
 // the App view's state (web/data.js): reset when another run is shown, keeping the preview mode and width
-const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null }, { keep: ['mode', 'w'] })
+const appStore = dataStore('app', { run: null, state: 'idle', kind: 'site', steps: [], asks: [], url: null, stage: '', message: '', result: null, deployed: null, mode: 'preview', w: 0, files: null, file: '', hasApp: false, opening: false, loaded: false, plan: null, slice: null, intake: null }, { keep: ['mode', 'w'] })
 /** @type {any} */
 export const appv = appStore.state
 export const appEls = { view: $('#appview'), state: $('#app-state'), stage: $('#app-stage'), steps: $('#app-steps'), frame: $('#app-frame'), shell: $('#app-shell'), empty: $('#app-empty'), preview: $('#app-preview'), code: $('#app-code'), tree: $('#app-tree'), file: $('#app-file'), open: $('#app-open'), port: $('#app-port'), stop: $('#app-stop') }
@@ -59,6 +59,11 @@ export function resetApp(run) {
   appEls.frame.removeAttribute('src')
 }
 
+// brought in (docs/specs/45-intake.md): a Vite project nobody has pressed Install and run for yet
+const needsRun = () => appv.intake?.done && appv.intake.shape === 'vite' && !appv.intake.ran
+// brought in as plain files: the crew cannot change it yet, and the room does not offer to
+const fixedIn = () => !!appv.intake?.fixed
+
 async function loadApp() {
   const run = shownRun()
   if (!run) { resetApp(null); return renderApp() }
@@ -66,7 +71,7 @@ async function loadApp() {
   try {
     const st = await appApi()
     if (appv.run !== run) return
-    Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady })
+    Object.assign(appv, { at: st.at || null, state: st.state, elsewhere: !!st.elsewhere, kind: st.kind || appv.kind, stage: st.stage || '', message: st.message || '', result: st.result, deployed: st.deployed || appv.deployed, hasApp: !!st.hasApp, loaded: true, engineReady: st.engineReady, intake: st.intake || null })
     if (st.steps?.length >= appv.steps.length) appv.steps = st.steps
     if (st.asks?.length) appv.asks = st.asks
     if (st.state === 'paused' && st.slice) { appv.slice = st.slice; sliceCard(st.slice, run) }
@@ -74,7 +79,8 @@ async function loadApp() {
     // that stopped with a restart, so it opens again rather than showing a dead page
     appv.url = st.url || null
     // an app made before: start its dev server again
-    if (!appv.url && appv.hasApp && appv.state !== 'working' && !appv.opening) {
+    // (a Vite project brought in waits for the person's press: its install and build are code from outside)
+    if (!appv.url && appv.hasApp && appv.state !== 'working' && !appv.opening && !needsRun()) {
       appv.opening = true
       renderApp()
       appApi('/open', {}).then(o => { if (appv.run === run && o.url) appv.url = o.url }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
@@ -200,7 +206,7 @@ function frameLoad(e) { if (e.target === appEls.frame && appEls.frame.src && app
 
 function renderApp() {
   // while the crew builds the box talks to it; a game's own examples are a game's
-  if (view === 'app') els.brief.placeholder = appv.state === 'working' ? 'Ask the crew, or say what to change…' : appv.kind === 'game' ? 'Change the game: “make the jump higher”, “add a boss”…' : PLACEHOLDER.app
+  if (view === 'app') els.brief.placeholder = fixedIn() ? 'Brought in: the crew cannot change it yet' : appv.state === 'working' ? 'Ask the crew, or say what to change…' : appv.kind === 'game' ? 'Change the game: “make the jump higher”, “add a boss”…' : PLACEHOLDER.app
   renderAppLink()
   renderBadges()
   if (view !== 'app') return
@@ -237,8 +243,16 @@ function renderApp() {
       // an app opened again after its server stopped (decision 0017, issue #450): the shape of a page while it starts, cold
       : appv.opening && !working
         ? `<div class="app-skel" role="status" aria-busy="true" aria-label="Starting the ${appv.kind === 'game' ? 'game' : 'app'}"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span></div><p>Starting the ${appv.kind === 'game' ? 'game' : 'app'}…</p>`
+      // being brought in: the shape of a page with a crew cursor on it, and the step it is on (no engine works here)
+      : working && appv.intake
+        ? `<div class="app-skel bring-skel" role="status" aria-busy="true" aria-label="Bringing it in"><i class="bar"></i><i class="hero"></i><span><i></i><i></i><i></i></span>${cursor('Pip')}</div><p>${esc(appv.stage || 'bringing it in')}</p>`
+      : needsRun() && !appv.message
+        ? `<h2>Brought in</h2><button class="big" data-run>${ico('play')}Install and run</button>`
       : working
         ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+        // it did not come in: why, and no Try again (it is brought in again from Projects)
+        : st === 'failed' && appv.intake && !appv.intake.done
+          ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>It did not <em>come in</em></h2><p class="fail-msg">${esc(String(appv.message || '').split('\n')[0].slice(0, 260))}</p></div>`
         : st === 'failed' && appv.result?.artStop
           ? artStopCard(appv.result.artStop)
         : st === 'stopped' || (st === 'failed' && appv.message === 'stopped')
@@ -255,6 +269,12 @@ function renderApp() {
     for (const b of appEls.empty.querySelectorAll('[data-image]')) b.addEventListener('click', async () => { b.disabled = true; await saveModel({ role: 'image', provider: b.dataset.image, model: b.dataset.model || '' }); buildApp() })
     appEls.empty.querySelector('[data-incode]')?.addEventListener('click', () => appAsk('', { art: false }))
     appEls.empty.querySelector('[data-reopen]')?.addEventListener('click', () => { appv.message = ''; loadApp() })
+    // the person's own press: the project's packages are installed and its build runs, then it opens
+    appEls.empty.querySelector('[data-run]')?.addEventListener('click', () => {
+      appv.opening = true
+      renderApp()
+      appApi('/open', { run: true }).then(o => { if (o.url) appv.url = o.url; if (appv.intake) appv.intake.ran = true }).catch(err => { appv.message = err.message }).finally(() => { appv.opening = false; renderApp() })
+    })
     appEls.empty.querySelector('[data-game]')?.addEventListener('click', () => openGame())
   }
   playClip()
@@ -347,6 +367,8 @@ export async function appAsk(ask, extra = {}) {
   // while it builds, the crew still listens: a question gets an answer from what it is doing,
   // a change is queued for the start of the next stage
   if (appv.state === 'working') return tellCrew(ask)
+  if (fixedIn()) return botMsg('This one was brought in as plain files. It plays here and its code is in Code; the crew cannot change it yet.')
+  if (appv.intake && !ask) return
   // the chat works for a stopped build too: "go on", "continue", "resume" pick it up again; anything else gets a true answer
   if (ask && !appv.hasApp) { if (!goOnAsk(ask, appv)) return botMsg(noAppYet(appv)); ask = '' }
   const sections = [...S.layers.values()].filter(l => l.status === 'done' && l.text?.trim()).map(l => ({ key: l.key, html: l.text }))
@@ -714,6 +736,8 @@ export function appEvent(e) {
     Object.assign(appv, { state: 'done', result: e.result, hasApp: true, stage: 'ready' })
     if (e.url && fresh_) appv.url = e.url
     appEls.frame.dataset.src = '' // reload to the new build
+    // brought in: no engine turned, so nothing to count; the room reads what came (its shape, its page)
+    if (e.intake) { if (fresh_ && view === 'app') loadApp() } else
     if (fresh_) feed(null, `🧩 the ${appv.kind === 'game' ? 'game' : 'app'} is ready (${e.result?.turns || 1} turn${e.result?.turns === 1 ? '' : 's'}, checks ${e.result?.gatesPassed ? 'passed' : 'not passed'}, ${Math.round((e.ms || 0) / 1000)}s). Open the App view to try it, or chat to change it.`, 'sys')
   } else if (e.type === 'app:paused') {
     // a big game stops after each slice and asks in the chat (sliceCard)

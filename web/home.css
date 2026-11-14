@@ -285,3 +285,9 @@ svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-widt
 .chat-row .more { opacity: 0; }
 .chat-row:hover .more, .chat-row:focus-within .more { opacity: 1; }
 @media (hover: none) { .chat-row .more { opacity: 1; } }
+
+/* Bring in a project (web/bringin.js, docs/specs/45-intake.md): the sheet, and the card that waits */
+.bring-form { display: grid; gap: 14px; min-width: min(420px, 78vw); }
+.bring-err { margin: 0; color: var(--red); font: 500 13px/1.4 var(--body, inherit); }
+.bring-go[aria-busy="true"] { opacity: .6; }
+.home .card.bring-wait .cur { left: 46%; top: 44%; }

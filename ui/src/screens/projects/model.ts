@@ -29,8 +29,8 @@ export type Layout = 'grid' | 'list'
 
 export const SORTS: [Sort, string][] = [['edited', 'Last edited'], ['name', 'Name'], ['created', 'Created']]
 export const KINDS = ['Website', 'App', 'Game', 'Video']
-export const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Live']
-export const STATUS_ICON: Record<string, string> = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', Live: 'globe' }
+export const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Brought in', 'Live']
+export const STATUS_ICON: Record<string, string> = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', 'Brought in': 'download', Live: 'globe' }
 export const KIND_ICON: Record<string, string> = { Website: 'site', App: 'code', Game: 'game', Video: 'film' }
 export const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' } as Record<string, string>
 export const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' } as Record<string, string>

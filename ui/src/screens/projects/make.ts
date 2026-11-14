@@ -43,7 +43,7 @@ export function studioFits(k: Kind, text: string) {
 
 // the way Make's menu pre-selects: the last one picked for this kind, else what the words suggest
 export function pickWay(k: Kind, ways: MakeWay[], text: string, remembered: MakeMode | null): MakeMode {
-  const fit: MakeMode = k === 'game' ? 'guided' : text && !studioFits(k, text) ? 'now' : 'studio'
+  const fit: MakeMode = k === 'game' ? 'studio' : text && !studioFits(k, text) ? 'now' : 'studio'
   return [remembered, fit].find(x => ways.some(w => w.k === x)) || ways[0].k
 }
 
