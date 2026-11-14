@@ -249,6 +249,9 @@ function renderApp() {
         ? `<h2>Brought in</h2><button class="big" data-run>${ico('play')}Install and run</button>`
       : working
         ? `<div class="spin"></div><h2>${appv.kind === 'game' ? 'Building the game…' : 'Building the app…'}</h2><p>${esc(appv.stage || 'starting')}</p><p>${appv.engineReady === false ? 'First time: the app engine installs itself once (about a minute, ~1.5 GB). ' : ''}dyad's engine writes the code, runs the typecheck and build after every turn, and fixes what fails. You can go back to the Canvas or Video meanwhile.</p>`
+        // it did not come in: why, and no Try again (it is brought in again from Projects)
+        : st === 'failed' && appv.intake && !appv.intake.done
+          ? `<div class="fail-card"><span class="fail-ico">${ico('x')}</span><h2>It did not <em>come in</em></h2><p class="fail-msg">${esc(String(appv.message || '').split('\n')[0].slice(0, 260))}</p></div>`
         : st === 'failed' && appv.result?.artStop
           ? artStopCard(appv.result.artStop)
         : st === 'failed' && appv.message === 'stopped'

@@ -725,7 +725,7 @@ function runCard(id) {
       // a game made from a site: that site's run, so the game joins its version
       from: start.from || null,
       // brought in from outside (docs/specs/45-intake.md), not built here
-      intake: !!start.intake,
+      intake: start.intake ? (events.some(e => e.type === 'intake') ? 'in' : 'coming') : null,
       brief: start.brief,
       t: start.t,
       updated: events.at(-1)?.t || start.t,

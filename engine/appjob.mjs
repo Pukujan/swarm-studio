@@ -368,7 +368,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         for (let i = chain.indexOf(used); ; i++) {
           try {
             used = chain[i]
-            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal })
+            return await runEngine({ workspace: dir, prompt: text, provider: provider('worker'), model: chain[i], turns, onStep: step, signal, appKeys: !brought })
           } catch (err) {
             if (i + 1 >= chain.length || signal.aborted || !BUSY.test(err.message)) throw err
             step({ kind: 'setup', text: `${chain[i]} is busy at the provider; going on with ${chain[i + 1]}`, ok: false })
@@ -678,7 +678,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     const problems = [t.ok ? '' : `A play test of this game failed. ${t.problem}`, dodged, links || ''].filter(Boolean).join('\n\n')
     try {
       const finish = j.godot ? 'The game is the Godot 4 project in ports/godot/ (its Web export is what was played); fix it there and touch nothing outside ports/godot/. Finish with the project opening in Godot with no errors.' : 'Finish with a working build: the typecheck and build must pass.'
-      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal })
+      await runEngine({ workspace: dir, prompt: `${problems}\n\nKeep everything else as it is. ${finish}`, provider: provider('worker'), model, turns: 2, onStep: step, signal: j.controller.signal, appKeys: !intakeOf(readEvents(j.id) || []) })
       if (j.godot) await exportWeb(dir)
     } catch (err) {
       step({ kind: 'test', text: `the fix turn stopped: ${String(err.message).slice(0, 160)}`, ok: false })
@@ -698,6 +698,10 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
   // Kept running between turns: Vite picks up the engine's next edits itself.
   // Vite does not pick up a new plugin or package (a turn that adds Nitro, say):
   // when these files change the dev server starts over, on the same port.
+  // What an app's own processes are given (its dev server, its build, its built server): its database, a Stripe
+  // test key and its kit's keys (engine/proc.mjs appEnv). A project brought in gets none of them: its vite.config
+  // and its server are code from outside, running outside the engine's egress guard.
+  const appEnvFor = (id, j) => (intakeOf(readEvents(id) || []) ? {} : appEnv(process.env, keysOf(id, j)))
   // a project brought in is installed without its packages' own scripts: code from outside runs only as the
   // person's build and the app itself, never as an install hook
   const installArgs = id => ['install', '--prefer-offline', ...(intakeOf(readEvents(id) || []) ? ['--ignore-scripts'] : [])]
@@ -720,7 +724,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     step({ kind: 'serve', text: `starting the app on port ${j.port}` })
     // --cors: Hermes shows the Studio in a sandboxed frame (origin null), and the app's module scripts need CORS to load there
     // vite's own script under this Node: .bin/vite is a shell shim (vite.cmd on Windows)
-    const p = startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { BROWSER: 'none', ...appEnv(process.env, keysOf(id, j)) } })
+    const p = startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(j.port), '--strictPort', '--host', '127.0.0.1', '--cors'], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { BROWSER: 'none', ...appEnvFor(id, j) } })
     j.url = await answers(id, j, p, `http://127.0.0.1:${j.port}/`, 'dev')
     send(id, 'app:ready', { url: j.url })
   }
@@ -777,7 +781,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
         if (!inst.ok) throw new Error(`pnpm install failed: ${inst.out.slice(-300)}`)
       }
       step({ kind: 'serve', text: 'building the app to serve it' })
-      const b = await startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), 'build'], { cwd: dir, buffer: true, all: true, timeout: 300000, env: { CI: '1', ...appEnv(process.env, keysOf(id, j)) } })
+      const b = await startProc(process.execPath, [join(dir, 'node_modules', 'vite', 'bin', 'vite.js'), 'build'], { cwd: dir, buffer: true, all: true, timeout: 300000, env: { CI: '1', ...appEnvFor(id, j) } })
       if (b.exitCode !== 0 || !existsSync(out)) throw new Error(`the app's build failed: ${String(b.all || '').slice(-300)}`)
       writeFileSync(join(dir, '.swarm-built.json'), JSON.stringify({ sig, server, t: Date.now() }))
     }
@@ -786,7 +790,7 @@ export function appJobs({ runsDir, record, broadcast, readEvents, provider, mode
     if (server) {
       await pool.admit(id)
       const inner = await freePort()
-      const p = startProc(process.execPath, [out], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { PORT: String(inner), HOST: '127.0.0.1', NITRO_PORT: String(inner), NITRO_HOST: '127.0.0.1', NODE_ENV: 'production', ...appEnv(process.env, keysOf(id, j)) } })
+      const p = startProc(process.execPath, [out], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { PORT: String(inner), HOST: '127.0.0.1', NITRO_PORT: String(inner), NITRO_HOST: '127.0.0.1', NODE_ENV: 'production', ...appEnvFor(id, j) } })
       await answers(id, j, p, `http://127.0.0.1:${inner}/`, 'built')
       j.front = await corsFront(j.port, inner)
       j.url = j.front.url

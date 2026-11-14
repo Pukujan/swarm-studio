@@ -338,3 +338,34 @@ test('POST /api/intake: a repository is fetched then copied; a game joins the pr
     assert.equal(logs.get(app.run)[0].from, undefined); assert.equal(logs.get('site1').length, 1)
   } finally { jobs.close() }
 })
+
+test('code from outside is never handed the person\'s keys: a brought-in project builds with none of them', async () => {
+  const runsDir = tmp()
+  const { jobs, logs } = jobsFor(runsDir)
+  // a stand-in for the project's own vite: it writes down the keys it can see, then "builds"
+  const FAKE = `import { writeFileSync, mkdirSync } from 'node:fs'
+mkdirSync('dist', { recursive: true })
+writeFileSync('dist/index.html', 'built')
+writeFileSync('saw.json', JSON.stringify(Object.keys(process.env).filter(k => /SUPABASE|STRIPE|RESEND|API_KEY/.test(k))))`
+  const pkg = '{"type":"module","devDependencies":{"vite":"^5"},"scripts":{"build":"vite build"}}'
+  const source = { repo: 'a/b', path: '' }
+  put(join(runsDir, 'in', 'app'), { 'package.json': pkg, 'index.html': 'x', 'node_modules/vite/bin/vite.js': FAKE })
+  logs.set('in', [...startEvents({ id: 'in', kind: 'app', name: 'Hub', source }), { type: 'app:start', kind: 'app', intake: true }, doneEvent({ id: 'in', source, shape: 'vite', page: '', files: 2, bytes: 2, left: 0, links: 0 }), { type: 'app:done', intake: true }])
+  // the same files as an app the Studio built: its own build does get its database
+  put(join(runsDir, 'own', 'app'), { 'package.json': pkg, 'index.html': 'x', 'node_modules/vite/bin/vite.js': FAKE })
+  logs.set('own', [{ type: 'run:start', kind: 'app', brief: 'Hub', agents: [] }, { type: 'app:start', kind: 'site' }, { type: 'app:done', result: {} }])
+  const had = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY }
+  Object.assign(process.env, { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'service-key', STRIPE_SECRET_KEY: 'sk_test_x' })
+  try {
+    await assert.rejects(jobs.open('in'), /Install and run/)
+    const view = await jobs.open('in', { run: true })
+    assert.equal(view.served, 'files'); assert.equal(await (await fetch(view.url)).text(), 'built')
+    assert.deepEqual(JSON.parse(readFileSync(join(runsDir, 'in', 'app', 'saw.json'), 'utf8')), [])
+    assert.ok(logs.get('in').some(e => e.type === 'intake:run'), 'the press is on record')
+    await jobs.open('own')
+    assert.deepEqual(JSON.parse(readFileSync(join(runsDir, 'own', 'app', 'saw.json'), 'utf8')).sort(), ['STRIPE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL'])
+  } finally {
+    for (const [k, v] of Object.entries(had)) { if (v === undefined) delete process.env[k]; else process.env[k] = v }
+    jobs.close()
+  }
+})

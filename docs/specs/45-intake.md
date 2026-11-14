@@ -110,6 +110,11 @@ spec already handles a game without one.
   and run** first. Its packages and its build are code from outside, so they run only on that press (recorded
   as `intake:run`), with `pnpm install --ignore-scripts` (no package's install hook runs), then `vite build`,
   then served the way the Studio serves its own finished apps (spec 44).
+- **No keys for outside code.** A Studio app's own processes are given the person's database and Stripe test
+  key (`engine/proc.mjs` `appEnv`). A brought-in project's install, build, dev server and built server get
+  none of them (`engine/appjob.mjs` `appEnvFor`), and neither does the engine when it runs that project's build
+  (`runEngine` `appKeys: false`). The engine still holds the Studio's own local model key while it works, as
+  for every app. So a brought-in app that needs a database key will not find one yet: an owner question.
 
 ## What the crew can do with it afterwards
 
