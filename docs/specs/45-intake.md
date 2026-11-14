@@ -98,6 +98,9 @@ The run's log, the minimum the rooms read plus where it came from:
 reads (`C.pair.game`), so the project's Game opens it. The mark keeps a later app build from wiring reward
 links to a game that was never told about them.
 
+A game's `run:start` is of kind `game`, which is what names its room **Game** in the mode menu (the canvas
+hook's `kind`, `web/modes.js` `modeOf(room, kind)`).
+
 There is no `game:spec`: the Studio did not plan this game, and nothing pretends it did. Every reader of the
 spec already handles a game without one.
 
@@ -156,9 +159,13 @@ along as files and is not opened. What it would take ([docs/engines/godot.md](..
 - **Open in Godot** (spec 38, not built) as the way to edit by hand.
 A project with `project.godot` and no page of its own is refused today, in words.
 
-**Crew changes to plain files.** The engine has an `--adopt-reason` flag that records a workspace it cannot
-gate as adopted instead of failed (`dyad/src/aba/headless_cli.ts`). With it, a turn on plain files could pass;
-the Studio would then skip its install and dev server and reload the files. Needs a real run to prove.
+**Crew changes to plain files.** The route is already in the engine. Its runner works on a folder it did not
+make: `--workspace <dir>` is "iterate mode: used as-is, never wiped" (`dyad/src/aba/headless_cli.ts:14`, the
+flag Swarm passes for every turn), and its result says where the workspace is from: `workspaceOrigin` is
+`aba-app` when it could run the build, `foreign` when it could not (`ok: false`), and `adopted` (`ok: true`,
+with the `adoptReason`) when `--adopt-reason <text>` was given (`headless_cli.ts:476-500`). So the next slice
+is: pass `--adopt-reason` for a brought-in plain-file run, skip the Studio's own install and dev server after
+the turn, and reload the files. Read from the code; it needs one real turn on ARES to prove.
 
 **The Plan board reading `plan.json`**, and **projects built by other tools** (Next.js, webpack: refused
 today: "built by a tool the Studio does not run yet").
