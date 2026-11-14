@@ -1928,7 +1928,10 @@ const OUT_OF_QUOTA = /\b(429|402)\b|usage limit|quota|insufficient|no capacity|r
 // goes to the reviewer on dark and on magenta. → { ok, path, problems, report }
 async function cutAndCheck(src, it, guide) {
   const cut = join(dirname(src), `${it.id}-cut.png`), view = join(dirname(src), `${it.id}-check.png`)
-  const c = await new Promise(ok => execFile(process.platform === 'win32' ? 'python' : 'python3', [join(root, 'scripts', 'cutout.py'), src, cut, '--preview', view], { timeout: 90000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
+  // the Python that has the image libraries (cutPy below), not whichever python3 is first on the PATH: under
+  // Hermes that is Hermes's own bare Python, and the cut failed with "No module named 'PIL'" (2026-11-13)
+  const py = (await cutPy()) || (process.platform === 'win32' ? 'python' : 'python3')
+  const c = await new Promise(ok => execFile(py, [join(root, 'scripts', 'cutout.py'), src, cut, '--preview', view], { timeout: 90000 }, (err, out, errOut) => ok({ ok: !err, out: String(out || ''), why: String(errOut || err?.message || '').trim() })))
   if (!c.ok || !existsSync(cut)) return { ok: false, cutFailed: true, problems: [c.why.split('\n').pop().slice(0, 120) || 'the cut failed'] }
   let report = {}
   try { report = JSON.parse(c.out.trim().split('\n').pop()) } catch {}
@@ -1943,8 +1946,9 @@ async function cutAndCheck(src, it, guide) {
     : check.problems), ...(clash ? [clash.problem] : [])]
   return { ok: (check.skipped ? !looksOff : check.ok) && !clash, path: cut, view, problems, report, clash }
 }
-// The sheet cutter needs numpy and scipy, which the Python first on the PATH may lack (a
-// venv's): the first of SWARM_CUT_PY, python3 and the system Python that has them.
+// The cutters (sheets, single sprites, the key-colour measure) need numpy, scipy and Pillow, which the Python
+// first on the PATH may lack (a venv's, or Hermes's own): the first of SWARM_CUT_PY, python3, the system
+// Python and Hermes's Python that has them.
 let cutPyP = null
 const cutPy = () => (cutPyP ||= (async () => {
   const win = process.platform === 'win32'
@@ -2219,7 +2223,7 @@ async function paintGame(runId, spec, items, appDir, step, signal = null, { have
     const pick = art.tierFor(choice, { hero: true })
     // the key the sheet is painted on comes from the figure's own picture: the key colour
     // furthest from its colours (the layout's key, guessed from the words, is the fallback)
-    const measured = kit ? null : await art.measureKey(ref)
+    const measured = kit ? null : await art.measureKey(ref, { py: (await cutPy()) || undefined })
     let layout = measured && measured.pick !== art.keyOf(it.layout) ? art.swapKey(it.layout, measured.pick) : it.layout
     if (layout !== it.layout) step({ kind: 'setup', text: `the ${it.what} is painted on ${art.keyOf(layout)}: the furthest key from the figure's colours` })
     // a sheet is painted over the figure's own picture, so a refusal is tried once more on the same provider
