@@ -9,6 +9,7 @@ import { renderAppLink, idleCard, appEvent } from './rooms.js'
 import { loadThemeFonts, design, showDtab, restyle, remember, CLIENT, applyEdit, showExport } from './design.js'
 import { radioEvent, artEvent, autoEvent, reviewShow, deployShow, chatterHear } from './auto.js'
 import { fillImages, autoReview, scanFrame, frameTitle } from './marks.js'
+import { carryStart, carryEnd, carryNth } from './carry.js'
 import { pics } from './start.js'
 import { publishEvent } from './publish.js'
 import { videoEvent } from './film.js'
@@ -233,6 +234,8 @@ export function on(e) {
       const l = S.layers.get(key(e.page, e.layer))
       const a = (e.agent && S.agents.get(e.agent)) || (l && S.agents.get(l.agent))
       if (a && live(e)) { a.painting = { gen: e.gen, key: `${key(e.page, e.layer)}|${e.gen}`, from: performance.now(), until: performance.now() + 180000 }; say(a, `🖼 asking ${e.provider === 'openai-codex' ? 'Codex' : e.provider} for “${e.gen.slice(0, 40)}…”`) }
+      // its card waits beside the page, held by its painter (web/canvas/carry.js)
+      if (l && live(e)) carryStart(e, carryNth(l.text, e.gen))
       if (!S.imgQueued++) feed(null, `🎨 Painting images with ${e.provider}${e.model ? ` · ${e.model}` : ''}`, 'sys')
       break
     }
@@ -242,7 +245,8 @@ export function on(e) {
       S.images.set(`${key(e.page, e.layer)}|${e.gen}`, e.type === 'image' ? e.src : '')
       pics.pending.delete(`${key(e.page, e.layer)}|${e.gen}`); design.last = ''
       const l = S.layers.get(key(e.page, e.layer))
-      if (l) fillImages(l)
+      // the slot shows it when its card is dropped there; at once when no card was waiting (web/canvas/carry.js)
+      carryEnd(`${key(e.page, e.layer)}|${e.gen}`, e.type === 'image' && live(e) ? e.src : '', () => { if (l) fillImages(l) })
       // a picture the person asked for in a comment: the chat says when it is in (or could not be painted)
       if (e.asked && live(e)) chatAgent(S.agents.get(e.agent), e.type === 'image' ? 'Done: the new picture is in.' : `Couldn't paint that picture: ${e.message || 'no image'}.`, e.layer)
       // the agent who asked for it stops painting

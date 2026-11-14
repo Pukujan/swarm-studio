@@ -64,9 +64,12 @@ body.cosmos-studio .crew-layer, body.cosmos-studio .cbox { display: none; }
 
 /* a link's look (decision 0022) */
 .ab.sc-thumb img { object-fit: cover; object-position: top; }
-.ab.sc-walking { animation: lk-pulse 1.6s ease-in-out infinite; }
-@keyframes lk-pulse { 50% { opacity: .55; } }
-@media (prefers-reduced-motion: reduce) { .ab.sc-walking { animation: none; opacity: .7; } }
+/* the crew reading it or comparing it (web/lookmatch.js workHtml): the Plan board's sheen (.pl-work) and the
+   worker's named cursor, going between a few spots on the card */
+.ab.sc-walking .pl-work { border-radius: inherit; }
+.ab.sc-walking .cur { left: 62%; top: 58%; transition: none; animation: lk-roam 9s cubic-bezier(.4, 0, .2, 1) infinite; }
+@keyframes lk-roam { 0%, 14% { left: 62%; top: 58%; } 25%, 39% { left: 16%; top: 24%; } 50%, 64% { left: 68%; top: 18%; } 75%, 89% { left: 28%; top: 64%; } 100% { left: 62%; top: 58%; } }
+@media (prefers-reduced-motion: reduce) { .ab.sc-walking .cur { animation: none; } }
 .lk-shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .lk-shots img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
 .br-sw.lk-sw { grid-template-columns: repeat(6, 1fr); height: 24px; }
