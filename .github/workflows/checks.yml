@@ -26,6 +26,9 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
@@ -64,6 +67,9 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
@@ -87,6 +93,9 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
@@ -139,6 +148,9 @@ jobs:
       # their SHA-256 for this Mac, and the other Mac's (arm64 / x64) fetched and checked too
       - if: ${{ !cancelled() }}
         run: node scripts/macos-check.mjs ffmpeg
+      # the image service's libraries installed on first use into the data folder, as a Dock-opened studio does
+      - if: ${{ !cancelled() }}
+        run: node scripts/macos-check.mjs images
       # Godot as a Mac has it: the app, found without Homebrew on PATH
       - id: godot
         if: ${{ !cancelled() }}

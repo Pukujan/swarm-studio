@@ -6,7 +6,9 @@ import * as art from '../engine/artdirect.mjs'
 
 const snapAt = (runsDir, id) => { try { return `/img/${id}/snap.jpg?v=${Math.round(statSync(join(runsDir, id, 'img', 'snap.jpg')).mtimeMs)}` } catch { return null } }
 
-export function runBoard(id, events, runsDir, live = false) {
+// `thumb` gives a picture's ThumbHash from its address once the image service has it (engine/images.mjs), so each
+// tile can show a blurred preview before the picture comes; without one, none is sent
+export function runBoard(id, events, runsDir, live = false, thumb = () => null) {
   const start = events.find(e => e.type === 'run:start') || {}
   const pages = events.filter(e => e.type === 'page').map(p => ({ id: p.id, title: p.title }))
   const titleOf = pid => pages.find(p => p.id === pid)?.title || ''
@@ -14,7 +16,12 @@ export function runBoard(id, events, runsDir, live = false) {
   for (const e of events) if (e.type === 'image' && e.src) latest.set(`${e.page}/${e.layer}/${e.gen}`, e)
   const style = events.findLast(e => e.type === 'art')?.name || [...latest.values()].find(e => e.style)?.style || null
   const pics = [...latest.values()].map(e => ({ src: e.src, page: e.page, layer: e.layer, gen: e.gen, name: String(e.layer || 'picture').replace(new RegExp(`^${String(e.page || '').replace(/[^\w-]/g, '')}-`), '').replace(/[-_]+/g, ' '), used: titleOf(e.page), hero: art.isHero({ layer: e.layer }), style: e.style || style }))
-  for (const p of pages) p.cover = pics.find(a => a.page === p.id && a.hero)?.src || pics.find(a => a.page === p.id)?.src || null
+  for (const a of pics) { const th = thumb(a.src); if (th) a.th = th }
+  for (const p of pages) {
+    const c = pics.find(a => a.page === p.id && a.hero) || pics.find(a => a.page === p.id)
+    p.cover = c?.src || null
+    if (c?.th) p.coverTh = c.th
+  }
   // each page's planned sections in order, with their planned height and whether each is built yet:
   // the Overview draws a page from these until its picture comes (spec 36)
   const plan = new Map()
