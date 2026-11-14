@@ -5,6 +5,11 @@ on:
     branches: [main]
 permissions:
   contents: read
+# a new push to a pull request stops the run of the push before it (thirteen jobs, one a Mac, were queueing behind
+# runs nobody would read); a run on main is never stopped, so every merge has its own result
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -21,6 +26,9 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
@@ -31,6 +39,8 @@ jobs:
       - run: npm run --prefix tools/dev tokens:check
       # the next UI (ui/, docs/decisions/0013-react-ui-coexists.md): its type check and dependency rules, and its
       # build makes the one-document /next/ page (development only: the plugin installs none of it)
+      # ui/'s own tests (the boards' tier manager, its fast-check properties): they import ui/'s dependencies
+      - run: npm test --prefix ui
       - run: npm run --prefix tools/dev typecheck:ui
       - run: npm run --prefix tools/dev deps:ui
       - run: npm run --prefix tools/dev ui:check
@@ -57,6 +67,9 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
@@ -80,14 +93,19 @@ jobs:
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       # does (docs/decisions/0018-next-ui-build-on-release.md); SWARM_NEED_UI makes the checks fail without it
       - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      # the image service's libraries (engine/imagetools): its prebuilt binary for this system, nothing compiled;
+      # tests/images.test.mjs then runs against the real binary
+      - run: npm ci --prefix engine/imagetools --ignore-scripts --no-audit --no-fund
       - run: bash scripts/check.sh
         env:
           SWARM_NEED_UI: '1'
       # what a release does before the catalog pins it: the build committed in this runner's own checkout, so the
       # copy Hermes installs below carries ui/dist/ exactly as a release's does (scripts/release-ui.mjs)
       # it runs even when check.sh failed, like the sections below, so the install is still checked
+      # a push to main checks out the branch main, where the script refuses to commit; a pull request's checkout
+      # is already detached. Detached here too, so main's own run installs the plugin as a pull request's does
       - if: ${{ !cancelled() }}
-        run: node scripts/release-ui.mjs
+        run: git checkout --detach && node scripts/release-ui.mjs
       # the sections below each run even when one before them failed, so one run shows every Mac failure
       # Hermes as a person installs it on a Mac (its install.sh), at the release the plugin asks for
       # (plugin.yaml requires_hermes: v0.23.1, commit 3b42157), without its setup questions, browser or
@@ -130,6 +148,9 @@ jobs:
       # their SHA-256 for this Mac, and the other Mac's (arm64 / x64) fetched and checked too
       - if: ${{ !cancelled() }}
         run: node scripts/macos-check.mjs ffmpeg
+      # the image service's libraries installed on first use into the data folder, as a Dock-opened studio does
+      - if: ${{ !cancelled() }}
+        run: node scripts/macos-check.mjs images
       # Godot as a Mac has it: the app, found without Homebrew on PATH
       - id: godot
         if: ${{ !cancelled() }}
@@ -167,6 +188,18 @@ jobs:
           node-version: 24
       - run: npm ci --prefix tools/dev --no-audit --no-fund
       - run: npm run --prefix tools/dev property
+  # metamorphic relations (decision 0019 point 3, tests/metamorphic/README.md): what must hold between two builds
+  # when no output is the one right answer, checked on the crew's recorded output; the nightly workflow
+  # (metamorphic-nightly.yml) checks the same on live models
+  metamorphic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test "tests/metamorphic/*.test.mjs"
   # the next UI's stories build (ui/, its Storybook mock-ups); nothing of it is kept
   storybook:
     runs-on: ubuntu-latest
@@ -228,6 +261,35 @@ jobs:
           name: ui-audit
           path: test-results
           retention-days: 7
+  # the OpenSpec scenarios run (decision 0019 point 2, tests/bdd/gen.mjs, tools/dev/bdd.config.mjs): each one has a
+  # bound test or is marked pending #N in tests/bdd/pending.json, else bddgen fails here; they run in the current
+  # Studio at / and, for a screen that has moved, in the next UI at /next/
+  bdd:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --no-audit --no-fund
+        working-directory: tools/dev
+      - run: npx playwright install --with-deps chromium-headless-shell
+        working-directory: tools/dev
+      # /next/ is served from ui/dist/, built here (main and pull requests carry none)
+      - run: npm ci --prefix ui --no-audit --no-fund && npm run --prefix ui build
+      - run: npm run bdd
+        working-directory: tools/dev
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdd
+          path: test-results/bdd
+          retention-days: 7
+  # The base a pull request is compared with is the main it is merged with for the run (the first parent of
+  # the merge commit that is checked out), not `pull_request.base.sha`, which is main as it was when the pull
+  # request was last pushed: with that, whatever landed on main since read as this pull request's change
+  # (2026-11-13: a Studio layout change on main failed three later pull requests' motion checks).
   # the Studio moves the same before and after (docs/ux/MOTION.md, scripts/motion-check.mjs): the base
   # and the head are each recorded twice in this runner and compared; skipped when web/, server/ and the check itself are untouched
   motion-check:
@@ -243,7 +305,7 @@ jobs:
           node-version: 24
       - id: touched
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if git diff --quiet "$base" HEAD -- web server scripts/motion-check.mjs scripts/walkthrough-fixtures.mjs; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'web/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
       - if: steps.touched.outputs.run == 'yes'
         run: npm install --no-save --no-package-lock playwright@1.64.1 && npx playwright install --with-deps chromium-headless-shell
@@ -256,7 +318,8 @@ jobs:
         run: |
           looks=$(printf '%s\n' "$BODY" | tr -d '\r' | sed -n 's/^Motion: looks change in \([a-z, -]*\)$/\1/p' | head -1 | tr -d ' ')
           echo "looks change in: ${looks:-none}"
-          git worktree add "$RUNNER_TEMP/base" ${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
+          git worktree add "$RUNNER_TEMP/base" "$base"
           m=$RUNNER_TEMP/motion
           node scripts/motion-check.mjs record $m/before1 --root "$RUNNER_TEMP/base"
           node scripts/motion-check.mjs record $m/after1
@@ -286,7 +349,7 @@ jobs:
           node-version: 24
       - id: touched
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if git diff --quiet "$base" HEAD -- engine/prompts.mjs engine/review.mjs engine/pagetype.mjs engine/lint bench/evals; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'no crew prompt changed'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
       - if: steps.touched.outputs.run == 'yes'
         run: npm ci --prefix tools/dev --no-audit --no-fund && npx --prefix tools/dev playwright install --with-deps chromium-headless-shell
@@ -294,7 +357,7 @@ jobs:
         env:
           SWARM_API_KEY: ${{ secrets.SWARM_EVAL_API_KEY }}
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if [ -n "$SWARM_API_KEY" ]; then node bench/evals/run.mjs gate --base "$base"; else node bench/evals/run.mjs check --base "$base"; fi
       - if: steps.touched.outputs.run == 'yes' && (success() || failure())
         uses: actions/upload-artifact@v4
@@ -319,7 +382,7 @@ jobs:
           node-version: 24
       - id: touched
         run: |
-          base=${{ github.event.pull_request.base.sha }}
+          base=$(git rev-parse -q --verify HEAD^2 >/dev/null && git rev-parse HEAD^1 || echo ${{ github.event.pull_request.base.sha }})
           if git diff --quiet "$base" HEAD -- ui web server scripts/motion-check.mjs scripts/motion-parity.mjs scripts/walkthrough-fixtures.mjs; then echo "run=no" >> "$GITHUB_OUTPUT"; echo 'ui/, web/ and server/ are untouched'; else echo "run=yes" >> "$GITHUB_OUTPUT"; fi
       # the next UI's build, made here as on every branch: main and pull requests carry no ui/dist/, only a release
       - if: steps.touched.outputs.run == 'yes'

@@ -7,14 +7,16 @@ import { ic, cursor, logo, CREW } from './icons.js'
 import { makeSetup } from './setup.js'
 import { openSettings } from './settings.js'
 import { makeWays, makeModeOf, makeStudioStep } from './makeways.js'
+import { templatePicker } from './templatepick.js'
+import { bringEntry } from './bringin.js'
 
 const KIND = { site: 'site', app: 'code', game: 'game', film: 'film' }
 const KIND_NAME = { site: 'Site', app: 'App', game: 'Game', film: 'Film' }
 const SORTS = [['edited', 'Last edited'], ['name', 'Name'], ['created', 'Created']]
 // the filter beside sort: what a build is, or how far it got (the server's own words in project.state)
 const KINDS = ['Website', 'App', 'Game', 'Video']
-const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Live']
-const STATUS_ICON = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', Live: 'globe' }
+const STATUSES = ['Draft', 'Building', 'Designed', 'App built', 'App failed', 'Game built', 'Game failed', 'Brought in', 'Live']
+const STATUS_ICON = { Draft: 'pencil', Building: 'clock', Designed: 'frame', 'App built': 'code', 'App failed': 'x', 'Game built': 'game', 'Game failed': 'x', 'Brought in': 'download', Live: 'globe' }
 const KIND_ICON = { Website: 'site', App: 'code', Game: 'game', Video: 'film' }
 
 export function makeHome({ sw, C, root }) {
@@ -722,7 +724,7 @@ export function makeHome({ sw, C, root }) {
   kindBtn.onclick = () => { showKind(); return showMenu([
     // only things to make (how pictures are made is Setup's, not a kind)
     ...offered().map(m => ({ k: m.k, icon: m.icon, label: m.label, on: m === make, run: () => { make = m; store.set('home.make', m.k); showKind(); closePop(); showIdeas(); input.focus() } })),
-  ], kindBtn) }
+  ...bringEntry({ api: (path, body) => (body ? post(path, body) : api(path)), esc, refresh, toast, kind: () => make.k, atHome: () => H.on, open: (kind, run, pid) => { C.open(run, pid); return kind === 'game' ? C.toGame(run) : C.go('station', 'app') } })], kindBtn) }
 
   // what the Make box asks the server for once: the showcases and the interview (engine/intake.mjs)
   let intakeP = null
@@ -736,15 +738,17 @@ export function makeHome({ sw, C, root }) {
       // The project opens on the build this box started. The canvas may still hold the build before
       // it (the server replays its last run to every canvas), and a project never lets a run that
       // started elsewhere take it over, so the new run is handed to it by id.
-      const made = await sw.submit(text, false, null, null, chat ? { ...sets, chat } : sets)
+      // with the design template the person picked in Examples, for a website (web/templatepick.js)
+      const made = await sw.submit(text, false, null, null, { ...sets, ...(run ? {} : tpl.take()), ...(chat ? { chat } : {}) })
       if (made === null && hosted()) return // refused (a limit, the name dialog closed): its dialog says why
       // A website the crew has just started opens in the Design deck, the one room where the swarm
       // can be watched at work (its Follow camera is on for a new build). Back shows the project's
       // Overview, as from any room. The hosted studio keeps its Overview.
       if (typeof made === 'string') return C.started(made)
       // Not started: Projects stays, with the words back in the box. Another build running is
-      // shown on the deck on request; anything else has said why in the chat (Hermes, a talk)
-      if (!input.value) input.value = text
+      // shown on the deck on request; anything else has said why in the chat (Hermes, a talk, the question
+      // before a new website: web/canvas/loop.js opens it, decision 0020)
+      if (!input.value && !made?.ask) input.value = text
       if (made?.busy) toast('<span>A build is running. Yours can start when it ends.</span>', made.run ? 'Watch it' : null, made.run ? () => C.started(made.run, { room: 'deck' }) : null)
       return
     }
@@ -761,8 +765,8 @@ export function makeHome({ sw, C, root }) {
     } catch (err) { toast(`<span>${esc(err.body?.error || err.message)}</span>`) }
   }
 
-  // Make: one small menu of the kind's ways to make it (web/makeways.js, docs/specs/42-ways-to-make.md): Just
-  // build, Guided, Three takes, Scaffold, Studio, as the kind offers them; a kind with one way goes straight
+  // Make: one small menu of the kind's two ways to make it (web/makeways.js, decision 0020): Just make it and
+  // Studio, as the kind offers them (a game's Studio is its Plan board); a kind with one way goes straight
   // there. The last way picked for this kind, else what the words suggest, is pre-selected, quietly.
   const makeBtn = $('.hm-make')
   form.onsubmit = e => {
@@ -773,7 +777,7 @@ export function makeHome({ sw, C, root }) {
     if (hosted()) return text ? confirmBuild(text) : input.focus()
     const ways = makeWays(make.k, !!text)
     if (ways.length === 1) return begin(ways[0], text)
-    const fit = make.k === 'game' ? 'guided' : text && !studioFits(text) ? 'now' : 'studio'
+    const fit = make.k === 'game' ? 'studio' : text && !studioFits(text) ? 'now' : 'studio'
     const pick = [makeModeOf(modeOf(make.k)), fit].find(k => ways.some(w => w.k === k)) || ways[0].k
     showMenu(ways.map(w => ({ k: w.k, icon: w.icon, label: w.label, on: w.k === pick, run: () => begin(w, text) })), makeBtn)
     document.querySelector('.hm-menu button.on, .hm-menu button')?.focus({ preventScroll: true })
@@ -785,9 +789,6 @@ export function makeHome({ sw, C, root }) {
     G.sheet = false
     store.set(`home.mode.${make.k}`, way.k)
     if (way.k === 'now') return buildNow(text)
-    // a game's questions are its Plan board's talk (spec 27); the rest ask in Make's pop, then the brief
-    if (way.k === 'guided' && make.k === 'game') { input.value = ''; return C.talkGame({ text }) }
-    if (way.k === 'guided') return guide(text)
     return studioFirst(text, way)
   }
 
@@ -804,9 +805,8 @@ export function makeHome({ sw, C, root }) {
     // a game skipped its Plan board; the talk's Build still starts it (nothing builds without a press)
     confirmBuild(text)
   }
-  // Three takes, Scaffold or Studio (spec 42): a Studio project made in that mode, opened beside its chat (an
-  // empty box's chat asks what it is first). Three takes opens on its looks (web/scaffold.js); Scaffold has
-  // only its Plan step. A game's is its Plan board. Without a kit (the hosted studio):
+  // Studio (decision 0020): a Studio project, opened beside its chat (an empty box's chat asks what it is
+  // first). A game's is its Plan board, where its talk asks. Without a kit (the hosted studio):
   // the brand sheet, the talk, or Thorough's questions first
   async function studioFirst(text, way = { k: 'studio' }) {
     closePop()
@@ -833,7 +833,8 @@ export function makeHome({ sw, C, root }) {
   // talking (the deck's chat, engine/talkplan.mjs for the talk). Nothing starts until Build.
   // The hosted studio's guests are limited already, and build as they always did.
   function confirmBuild(text, run = make.k === 'site' ? null : { games: make.games, only: make.only }, sets = {}, steps = null, sheet = false) {
-    if (hosted() || !sw.talk) return start(text, run, sets)
+    // a website goes straight to the question before its build (decision 0020): it is the press, so no brief first
+    if (hosted() || !sw.talk || (!run && !sheet)) return start(text, run, sets)
     closePop()
     input.value = ''
     C.project = null
@@ -865,7 +866,8 @@ export function makeHome({ sw, C, root }) {
 
   // ---------- the pop under the Make box: the showcases, or the interview. One at a time;
   // it closes with ×, Esc and a click outside, and the prompt stays in the box.
-  const pop = $('.hm-pop'), ideasBtn = $('.hm-ideas')
+  // and Open Design's design templates, for the person to pick one for a website under the examples
+  const pop = $('.hm-pop'), ideasBtn = $('.hm-ideas'), tpl = templatePicker({ api, esc, form, input })
   let popOff = null
   function openPop(cls, html) {
     pop.className = `hm-pop ${cls}`
@@ -889,10 +891,10 @@ export function makeHome({ sw, C, root }) {
     const key = exampleKey()
     const list = key ? ((await intake()).starters?.[key] || []).slice(0, 4) : []
     if (!list.length) return input.focus()
-    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>`)
+    openPop('show', `<h3>Examples</h3><div class="hm-show" role="list" aria-label="Examples">${list.map((p, i) => `<button type="button" class="hm-sc hm-st" role="listitem" data-st="${i}">${ic('idea', 18)}<span class="nm">${esc(p)}</span>${ic('chr', 15)}</button>`).join('')}</div>${hosted() || make.k !== 'site' ? '' : await tpl.html()}`); tpl.bind(pop, closePop)
     ideasBtn.classList.add('on')
     pop.querySelector('.hm-sc')?.focus({ preventScroll: true })
-    for (const b of pop.querySelectorAll('.hm-sc')) b.onclick = () => {
+    for (const b of pop.querySelectorAll('.hm-st')) b.onclick = () => {
       input.value = list[Number(b.dataset.st)]
       closePop()
       input.focus()

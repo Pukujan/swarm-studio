@@ -12,6 +12,7 @@ import { post } from './deck.js'
 import { pageDoc } from './player.js'
 import { key } from './events.js'
 import { makeCapture, dataUrl } from '../capture.js'
+import { ladder } from '../ladder.js'
 
 // ---------- comments: tell an agent what to change
 // A 💬 pin sits on the selected section; open, it is a little composer. The
@@ -234,11 +235,11 @@ export function fillImages(l) {
         if (img.getAttribute('data-pt') !== state) { img.setAttribute('data-pt', state); changed = true }
       }
       const hold = standinFor(gen)
-      if (hold) { if (img.getAttribute('src') !== hold) { img.setAttribute('src', hold); img.setAttribute('data-sketch', 'photo'); changed = true } }
+      if (hold) { if (img.getAttribute('src') !== hold) { img.setAttribute('src', hold); ladder(img, hold); img.setAttribute('data-sketch', 'photo'); changed = true } }
       else if (!img.getAttribute('src')) { img.setAttribute('src', sketch(gen)); img.setAttribute('data-sketch', ''); changed = true }
       continue
     }
-    if (img.getAttribute('src') !== src || img.hasAttribute('data-pt')) { img.setAttribute('src', src); for (const a of ['data-sketch', 'data-painter', 'data-pt']) img.removeAttribute(a); changed = true }
+    if (img.getAttribute('src') !== src || img.hasAttribute('data-pt')) { img.setAttribute('src', src); ladder(img, src); for (const a of ['data-sketch', 'data-painter', 'data-pt']) img.removeAttribute(a); changed = true }
   }
   if (changed) { l.text = doc.body.innerHTML; l.ver++ }
 }

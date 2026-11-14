@@ -3,6 +3,10 @@
 // current Studio at the same address. Moving one screen is ui/README.md's recipe.
 import type { ComponentType } from 'react'
 import type { Room } from '../nav/nav'
+import { BrandSheet } from './BrandSheet'
+import { Overview } from './Overview'
+import { Projects } from './Projects'
+import { PlanBoard } from './PlanBoard'
 import { StudioFirst } from './StudioFirst'
 import { DesignDeck } from './DesignDeck'
 
@@ -19,8 +23,28 @@ export const SCREEN_NAMES: Record<Room, string> = {
   studio: 'Studio scaffold'
 }
 
-// the Design deck's shell is slice 1 of its port (issue #404); `draft`, a new project's deck, has not moved
+// the room as the breadcrumb's last part names it (RULES.md rule 7; the audit gates read these, docs/ux/AUDIT.md)
+export const CRUMB_NAMES: Record<Room, string> = {
+  home: 'Projects',
+  draft: 'Design deck',
+  overview: 'Overview',
+  deck: 'Design deck',
+  app: 'App',
+  game: 'Game',
+  video: 'Film',
+  plan: 'Plan',
+  brand: 'Brand sheet',
+  studio: 'Studio'
+}
+
+// Projects, the Overview, the Plan board, the brand sheet, the Studio scaffold and the Design deck's shell (slice 1)
+// have moved (issue #404); `draft`, a new project's deck, has not
 export const SCREENS: Partial<Record<Room, ComponentType>> = {
+  // a project's brand sheet, opened from its Studio; one opened from a chat has no address and stays behind
+  brand: BrandSheet,
   deck: DesignDeck,
+  home: Projects,
+  overview: Overview,
+  plan: PlanBoard,
   studio: StudioFirst
 }

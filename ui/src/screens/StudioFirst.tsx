@@ -5,34 +5,45 @@
 // any order, and Build is the person's press.
 //
 // Name: "Studio first" is proposed in docs/ux/OBJECTS.md and provisional, pending the owner's review (2026-11-13).
-// Not here yet: the planner's talk on the left (web/canvas/talk.js) has not moved, so the left panel offers it in
-// the current Studio at the same address, and Build is pressed there too (it starts the build in the Design deck).
+// The chat is the shared dock along the bottom (src/chat/, decision 0015): the talk on the project's chat, its first
+// words the idea when there is none. Build (the brief's, or the top bar's) runs the kit's build, and the build is
+// watched in the current Studio's Design deck, where it runs.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LinkButton, Button } from '../primitives/Button'
+import { Chat, type ChatKind, type ChatLine, type ChatTalk } from '../chat'
+import { Button } from '../primitives/Button'
 import { Layers, StepDot, type LayerGroup } from '../shared/Layers'
 import { startPet, type KitCard as KitCardDef } from '../legacy'
-import { search } from '../nav/address'
 import { useNav, useNavMachine } from '../nav/NavProvider'
 import { useTrail } from '../shell/Trail'
 import { KitCard } from './studio/KitCard'
 import { StepPath } from './studio/StepPath'
+import './studio/brand-step.css'
 import { StudioBoard } from './studio/StudioBoard'
+import { useCardTiers } from './studio/useCardTiers'
+import { createCamera } from '../board/camera'
+import { boardMode } from '../board/flag'
 import { StudioInspector } from './studio/StudioInspector'
-import { STEP_NAME, TAKES, lookOf, useStudio, type Pack } from './studio/useStudio'
+import { STEP_NAME, TAKES, lookOf, useStudio, walkOf, type Pack } from './studio/useStudio'
 
 const FILE_ICON: Record<string, string> = { link: '🔗', video: '🎞', audio: '♪', font: 'Aa' }
+// the talk's kind for each Studio kind (web/scaffold.js CHAT_KIND)
+const CHAT_KIND: Record<string, ChatKind> = { site: 'site', app: 'app', game: 'game', video: 'film', deck: 'site', brand: 'site' }
 
 export function StudioFirst() {
   const { view, go } = useNav()
   const nav = useNavMachine()
   const pid = view.room === 'studio' ? view.project : null
   const S = useStudio(pid)
-  const { d, error, takes, sel, select, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick } = S
+  const { fail, reload } = S
+  const { d, error, takes, moods, sel, select, kit, ctx, stateOf, steps, gone, planSections, cards, board, actions, tick } = S
   const root = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const pickTo = useRef<'ref' | 'asset'>('ref')
   const [sheet, setSheet] = useState(false)
-  const here = search(view, typeof location === 'undefined' ? '' : location.search)
+  // the tier manager on the board's cards, behind ?board= (spec 43 §4)
+  const camera = useMemo(() => createCamera(), [])
+  const [tiered] = useState(() => boardMode() !== 'dom')
+  useCardTiers(root, camera, `${tick}|${d?.refs.length}|${d?.assets.length}|${steps.join()}|${takes?.packs.length}`, tiered)
 
   // Hermia's cursor (web/pet.js), started as it is with this machine and this screen
   useEffect(() => { startPet(nav, root.current) }, [nav])
@@ -60,9 +71,46 @@ export function StudioFirst() {
     if (view.step && !sel && framed.current === pid) board.current?.focus(view.step)
   }, [view.step]) // only a change of step moves the board
 
-  // the top bar: Projects › the project's name, and Build (pressed in the current Studio, where the build runs)
-  const build = useMemo(() => (kit.build ? <LinkButton role="primary" href={`/${here}`}>Build<span className="max-[760px]:sr-only"> in the Studio</span></LinkButton> : undefined), [kit.build, here])
+  // ---------- Build: the person's press, through the kit (web/scaffold.js build); the build runs in the current
+  // Studio's Design deck, so that is where it opens
+  const [building, setBuilding] = useState(false)
+  const runBuild = useCallback(async (idea?: string) => {
+    if (!d || !kit.build || building) return
+    setBuilding(true)
+    try {
+      const c = ctx()
+      const spec = { idea: idea || c.studio.idea, brand: d.brand, refs: d.refs.map(r => r.id), assets: d.assets.map(a => a.id), kits: { [kit.kind]: kit.lock?.(c) || {} } }
+      const out = await kit.build(spec, c)
+      if (out?.run) location.assign(`${window.SWARM?.base || ''}/?project=${encodeURIComponent(d.project.id)}&version=${encodeURIComponent(out.run)}&room=deck`)
+    } catch (err) { fail(err) } finally { setBuilding(false) }
+  }, [d, kit, building, ctx, fail])
+
+  // the top bar: Projects › the project's name, and Build
+  // the button changes only when its look does (a new element each render would redraw the top bar each render)
+  const runRef = useRef(runBuild)
+  runRef.current = runBuild
+  const ready = !!d
+  const build = useMemo(() => (kit.build ? <Button role="primary" isDisabled={building || !ready} onPress={() => void runRef.current()}>Build</Button> : undefined), [kit.build, building, ready])
   useTrail(d?.project.title || d?.project.name, build)
+
+  // ---------- the chat: the talk on the project's chat, started once per project; its first words are the idea
+  const talk = useMemo<ChatTalk | null>(() => (!d ? null : {
+    id: `studio:${d.project.id}`, kind: CHAT_KIND[d.studio.kind] || 'site', chat: d.studio.chat || null, blank: true,
+    said: d.studio.idea ? [{ who: 'you', text: d.studio.idea }] : []
+  }), [d?.project.id]) // one talk per project
+  // the planner's start, once the project is open: what to make, or where to begin
+  const lines = useMemo<ChatLine[]>(() => {
+    if (!d) return []
+    const st = kit.prepare ? null : (kit.starts.find(s => s.id === (kit.suggest?.(ctx()) || d.studio.start)) || kit.starts[0])
+    const text = !d.studio.idea ? 'What are you making?' : st ? (st.why ? `Start with ${st.name}: ${st.why}.` : `Start with ${st.name}.`) : ''
+    // it follows the idea the talk starts with (its turns are stamped as the chat draws them, just after this)
+    return text ? [{ id: `start:${d.project.id}`, at: Date.now() + 1000, who: 'hermia', text }] : []
+  }, [d?.project.id, !!d?.studio.idea]) // the start line, once per project
+  const heard = useCallback((text: string) => {
+    if (!pid || d?.studio.idea) return
+    fetch(`${window.SWARM?.base || ''}/api/studio/${encodeURIComponent(pid)}/idea`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-swarm-token': window.SWARM?.token ?? '' }, body: JSON.stringify({ idea: text }) })
+      .then(() => reload()).catch(fail)
+  }, [pid, d?.studio.idea, reload, fail])
 
   // the step named in the address is in view (the planner's start when none is named), once the board is drawn
   const framed = useRef<string | null>(null)
@@ -83,6 +131,7 @@ export function StudioFirst() {
     const x = cards.get(key)
     if (x?.press) return x.press(ctx())
     if (key === 'brand:open') return void go({ type: 'brand' })
+    if (key.startsWith('mood:')) return void actions.pickMood(key.slice(5)).catch(S.fail)
     if (key === 'ref:add' || key === 'asset:add') { pickTo.current = key === 'ref:add' ? 'ref' : 'asset'; return picker.current?.click() }
     select(key)
   }, [cards, ctx, go, select])
@@ -99,7 +148,13 @@ export function StudioFirst() {
   )
 
   // ---------- the board's sections
-  const head = (step: string) => <span className="al"><StepDot state={stateOf(step)} />{STEP_NAME[step]}</span>
+  const walk = walkOf(steps)
+  const skip = (step: string) => { actions.setStep(step, stateOf(step) === 'skipped' ? 'empty' : 'skipped').catch(S.fail) }
+  const head = (step: string) => (
+    <span className="al flex items-center gap-2"><StepDot state={stateOf(step)} />{STEP_NAME[step]}
+      {step === walk[0] && step !== 'proposal' && <Button role="ghost" className="ml-2 min-h-8 px-3 text-xs" onPress={() => skip(step)}>{stateOf(step) === 'skipped' ? 'Undo skip' : 'Skip'}</Button>}
+    </span>
+  )
   const card = (key: string, name: string, cls: string, inner: React.ReactNode, def?: KitCardDef) =>
     <KitCard key={key} id={key} name={name} cls={cls} selected={sel === key} onPress={() => press(key)} draw={def?.render} ctx={ctx} version={tick + (d ? 0 : 1)}>{inner}</KitCard>
   const thumb = (kind: 'ref' | 'asset', x: { id: string, name: string, kind?: string, src?: string, role?: string }) => card(`${kind}:${x.id}`, x.name, 'sc-thumb', <>
@@ -114,6 +169,24 @@ export function StudioFirst() {
       <div className="sc-type" style={{ background: L.bg, color: L.text }}><b style={{ fontFamily: `'${L.heading}'` }}>Aa</b><span style={{ fontFamily: `'${L.body}'` }}>{L.heading} · {L.body}</span></div>
       <em>{b.lockedAt ? 'Locked' : 'Open'}</em></>)
   }
+  // the Brand step (decision 0015): choices first, the three options to pick a mood from; then the moodboard, and
+  // the story, colours, type and voice that follow from it; the sheet itself for the detail
+  const brandStep = () => {
+    if (!d?.studio.idea) return brandCard()
+    if (!moods) return <>{Array.from({ length: TAKES }, (_, i) => <div key={i} className="ab sc-take wait-in" aria-busy="true" aria-label="An option on its way" />)}{brandCard()}</>
+    const b = moods.brand, picked = (moods.packs || []).find(p => p.slug === b?.pack), L = lookOf(b ?? null)
+    const photos = (b?.pictures?.photos || picked?.pictures?.photos || []).slice(0, 6)
+    const voice = b?.voice?.lines?.[0] || picked?.voice?.lines?.[0]
+    return <>
+      <div className="sc-moods basis-full"><span className="al">Mood · pick one</span><div className="abs">{(moods.packs || []).slice(0, TAKES).map(p => moodCard(p, p.slug === b?.pack))}</div></div>
+      {photos.length > 0 && card('brand:board', 'Moodboard', 'sc-moodboard', <><div className="sc-mb">{photos.map(x => <img key={x.url} src={x.url} alt="" draggable={false} loading="lazy" />)}</div><em>Moodboard</em></>)}
+      {b?.story?.what && card('brand:story', 'Story', 'pcard', <><b>Story</b><span>{b.story.what}</span></>)}
+      {L && card('brand:colours', 'Colours', 'pcard sc-colours', <><b>Colours</b><div className="br-sw">{(['bg', 'text', 'accent', 'link'] as const).map(k => <i key={k} style={{ background: L[k] }} />)}</div></>)}
+      {L && card('brand:type', 'Type', 'pcard', <><b>Type</b><span style={{ fontFamily: `'${L.heading}'` }}>Aa <i style={{ fontFamily: `'${L.body}'` }}>Aa</i></span></>)}
+      {voice && card('brand:voice', 'Voice', 'pcard', <><b>Voice</b><span>{voice}</span></>)}
+      {brandCard()}
+    </>
+  }
   const takeCard = (p: Pack) => card(`take:${p.slug}`, p.name, 'sc-take', <>
     <div className="sc-take-page" style={{ background: p.palette.bg, color: p.palette.text }}>
       {p.pictures?.photos?.[0]?.url && <img src={p.pictures.photos[0].url} alt="" draggable={false} loading="lazy" />}
@@ -121,6 +194,13 @@ export function StudioFirst() {
       <span style={{ fontFamily: `'${p.type.body}'` }}>{p.voice?.lines?.[0] || p.for}</span><i style={{ background: p.palette.accent }} />
     </div>
     <div className="br-sw">{(['bg', 'text', 'accent', 'link'] as const).map(k => <i key={k} style={{ background: p.palette[k] }} />)}</div><em>{p.name}</em></>)
+  const moodCard = (p: Pack, on: boolean) => card(`mood:${p.slug}`, p.name, `sc-take${on ? ' on' : ''}`, <>
+    <div className="sc-take-page" style={{ background: p.palette.bg, color: p.palette.text }}>
+      {p.pictures?.photos?.[0]?.url && <img src={p.pictures.photos[0].url} alt="" draggable={false} loading="lazy" />}
+      <b style={{ fontFamily: `'${p.type.heading}'` }}>{p.name}</b>
+      <span style={{ fontFamily: `'${p.type.body}'` }}>{p.why || p.voice?.lines?.[0] || p.for}</span><i style={{ background: p.palette.accent }} />
+    </div>
+    <em>{on ? `${p.name} · picked` : p.name}</em></>)
   const kitLook = (x: KitCardDef) => `${x.cls || (x.add ? 'sc-add' : 'pcard')}${x.wide ? ' sc-wide' : ''}`
   const sec = (step: string, inner: React.ReactNode, cls = '') => <section key={step} className={`pj-sec sc-step ${cls}`} data-sec={step}>{head(step)}<div className="abs">{inner}</div></section>
 
@@ -130,21 +210,22 @@ export function StudioFirst() {
     {d.studio.mode === 'takes' && takes && <section className="pj-sec sc-step sc-takes" data-sec="takes"><span className="al">Three takes</span><div className="abs">
       {takes.packs.length ? takes.packs.map(takeCard) : Array.from({ length: TAKES }, (_, i) => <div key={i} className="ab sc-take wait-in" aria-busy="true" />)}
     </div></section>}
-    {steps.map(step => {
-      if (step === 'brand') return sec('brand', brandCard())
+    {walk.map(step => {
+      if (step === 'brand') return sec('brand', brandStep())
       if (step === 'references') return sec('references', <>{d.refs.map(r => thumb('ref', r))}{add('ref:add', 'Add reference')}</>)
       if (step === 'assets') return sec('assets', <>{d.assets.map(a => thumb('asset', a))}{add('asset:add', 'Add asset')}</>)
       if (step === 'plan' && kit.plan) return sec('plan', planSections.flatMap(s => s.cards).map(x => card(x.key, x.name, kitLook(x), x.render ? null : <b>{x.name}</b>, x)), `sc-plan-${kit.kind}`)
+      if (step === 'proposal') return sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', <><b>Idea</b><span>{d.studio.idea}</span></>))
       return null
     })}
-    {sec('proposal', card('lock:idea', 'Idea', 'pcard sc-idea', <><b>Idea</b><span>{d.studio.idea}</span></>))}
   </>
 
   // ---------- Layers: a group per section on the board, its cards as rows ("Add" cards are not layers)
   const groups: LayerGroup[] = []
   if (d) {
     if (d.studio.mode === 'takes' && takes?.packs.length) groups.push({ id: 'takes', title: 'Three takes', rows: takes.packs.map(p => ({ key: `take:${p.slug}`, name: p.name })) })
-    for (const step of steps) {
+    for (const step of walk) {
+      if (step === 'proposal') groups.push({ id: 'proposal', title: STEP_NAME.proposal, state: stateOf('proposal'), rows: [{ key: 'lock:idea', name: 'Idea' }] })
       if (step === 'brand') groups.push({ id: 'brand', title: STEP_NAME.brand, state: stateOf('brand'), rows: [{ key: 'brand:open', name: 'Brand sheet' }] })
       if (step === 'references') groups.push({ id: 'references', title: STEP_NAME.references, state: stateOf('references'), rows: d.refs.map(r => ({ key: `ref:${r.id}`, name: r.name })) })
       if (step === 'assets') groups.push({ id: 'assets', title: STEP_NAME.assets, state: stateOf('assets'), rows: d.assets.map(a => ({ key: `asset:${a.id}`, name: a.name })) })
@@ -157,16 +238,14 @@ export function StudioFirst() {
         else for (const s of secs) groups.push({ id: `plan:${s.sec}`, title: s.sec || STEP_NAME.plan, state: stateOf('plan'), busy: s.cards.some(x => x.busy), rows: rows(s.cards) })
       }
     }
-    groups.push({ id: 'proposal', title: STEP_NAME.proposal, state: stateOf('proposal'), rows: [{ key: 'lock:idea', name: 'Idea' }] })
   }
 
   const x = sel ? cards.get(sel) : undefined
   const pack = sel?.startsWith('take:') ? takes?.packs.find(p => `take:${p.slug}` === sel) : undefined
-  const fail = S.fail
   const insp = !!(d && sel && (x || pack || /^(step|ref|asset|lock):/.test(sel)))
 
   return (
-    <div ref={root} className={`project plan scaffold min-h-0 flex-1${insp ? ' insp-on' : ''}${sheet ? ' files-on' : ''}`} style={{ minHeight: 'calc(100dvh - 3.5rem)' }}>
+    <div ref={root} className={`project plan scaffold min-h-0 flex-1${insp ? ' insp-on' : ''}${sheet ? ' files-on' : ''}`} style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))', minHeight: 0 }}>
       <aside className="pj-side" aria-label="Layers" onKeyDown={e => { if (e.key === 'Escape' && sheet) { e.stopPropagation(); setSheet(false) } }}>
         <div className="flex items-center gap-2 px-3 pt-2.5 pb-2"><span className="rounded-[8px] bg-surface-2 px-2.5 py-1.5 font-label text-[13px] font-semibold uppercase tracking-[.1em] text-text">Layers</span><Button role="ghost" aria-label="Close Layers" onPress={() => setSheet(false)} className="ml-auto hidden min-h-9 min-w-9 px-0 max-[760px]:inline-flex">×</Button></div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -185,10 +264,9 @@ export function StudioFirst() {
               if (k.startsWith('asset:')) actions.removeAsset(id).then(done).catch(fail)
             }} />}
         </div>
-        <div className="border-t border-line p-3"><LinkButton role="secondary" href={`/${here}`} className="w-full">Chat in the Studio</LinkButton></div>
       </aside>
 
-      <StudioBoard ref={board} inspector={insp} onEmptyClick={() => { if (sel) select(null) }} onDropFiles={(to, files) => void actions.upload(to, files)}>
+      <StudioBoard ref={board} camera={tiered ? camera : undefined} inspector={insp} onEmptyClick={() => { if (sel) select(null) }} onDropFiles={(to, files) => void actions.upload(to, files)}>
         <div className="col">{sections}</div>
       </StudioBoard>
 
@@ -211,6 +289,9 @@ export function StudioFirst() {
       <button type="button" className="ib pj-files-btn sc-layers-btn" aria-label="Layers" aria-expanded={sheet} onClick={() => setSheet(v => !v)}><svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5z" /><path d="m3 13 9 5 9-5" /></svg></button>
       <input ref={picker} type="file" multiple hidden onChange={e => { const f = [...(e.currentTarget.files || [])]; e.currentTarget.value = ''; void actions.upload(pickTo.current, f) }} />
       {S.toast && <div className="hm-toast" role="status">{S.toast}</div>}
+      {d && <Chat talk={talk} project={pid} lines={lines} onHeard={heard}
+        onBuild={({ brief }) => { if (kit.build) void runBuild(brief); else go({ type: 'brand' }) }}
+        onBrandSheet={() => { go({ type: 'brand' }) }} />}
     </div>
   )
 }

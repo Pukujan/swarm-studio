@@ -8,18 +8,26 @@ import { Button, LinkButton } from '../primitives/Button'
 import { Icon } from '../primitives/Icon'
 import { search } from '../nav/address'
 import { useNav } from '../nav/NavProvider'
-import { DeckStage, type StageHandle } from './deck/DeckStage'
+import { DeckStage, type Picked, type StageHandle } from './deck/DeckStage'
+import { CommentPin } from './deck/Comment'
+import { DeckChat } from './deck/DeckChat'
+import { DesignTab } from './deck/DesignTab'
+import { useEdits } from './deck/edit'
+import { DeckBoard } from './deck/DeckBoard'
+import { boardMode, type BoardMode } from '../board/flag'
 import { LeftPanel, RightPanel, Toolbar } from './deck/DeckPanels'
 import { ExportDialog } from './deck/ExportDialog'
 import { Player } from './deck/Player'
 import { PublishDialog } from './deck/PublishDialog'
 import { useDeckRun } from './deck/source'
 
-export function DesignDeck() {
+// `board` forces the board's mode (a story); otherwise the address's ?board= says (src/board/flag.ts)
+export function DesignDeck({ board: forced }: { board?: BoardMode }) {
   const { view, go } = useNav()
   // ☰ → Replay (the machine's `replay`): the saved build plays again, and ends on the finished build
   const { model, loading, error } = useDeckRun(view.run ?? view.version, view.replay, useCallback(() => go({ type: 'replay', on: false }), [go]))
   const stage = useRef<StageHandle>(null)
+  const [board] = useState(() => forced ?? boardMode())
   const [zoom, setZoom] = useState(1)
   // the page Layers lists: the one the person picked, else the address's page, else the first
   const [picked, setPicked] = useState<string | null>(null)
@@ -30,6 +38,25 @@ export function DesignDeck() {
   const [sheet, setSheet] = useState(false)
   const closeSheet = useCallback(() => setSheet(false), [])
   const [dialog, setDialog] = useState<'publish' | 'export' | null>(null)
+  // the picked section (and the part of it the Design tab shows); hand edits, with Undo and Redo
+  const [sel, setSel] = useState<Picked | null>(null)
+  const [part, setPart] = useState<string | null>(null)
+  const edits = useEdits(model.run, model.layers)
+  const select = useCallback((p: Picked | null) => { setSel(p); setPart(null); if (p) setFollow(false) }, [])
+  useEffect(() => { select(null) }, [model.run, select])
+  // Esc lets go of the part, then the section, before the frame's Esc (which goes up a level); ⌘Z and ⇧⌘Z undo
+  // and redo, never inside a field
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || view.player !== 'closed') return
+      const field = e.target instanceof Element && !!e.target.closest('input, textarea, select, [contenteditable], [role="dialog"]')
+      if (e.key === 'Escape' && sel && !field) { e.preventDefault(); if (part) setPart(null); else select(null) }
+      if (e.key.toLowerCase() === 'z' && (e.metaKey || e.ctrlKey) && !field) { e.preventDefault(); if (e.shiftKey) edits.redo(); else edits.undo() }
+    }
+    addEventListener('keydown', key, true)
+    return () => removeEventListener('keydown', key, true)
+  }, [sel, part, select, edits, view.player])
+  const pickedLayer = sel ? model.layers[sel.key] : undefined
   useEffect(() => { setPicked(null); setFollow(true) }, [model.run, view.replay])
   const working = model.state === 'planning' || model.state === 'building'
   const play = () => go({ type: 'play', page: page ?? undefined, pages: model.pages.length })
@@ -47,8 +74,12 @@ export function DesignDeck() {
   }
 
   return (
-    <div className="relative flex h-[calc(100dvh-3.5rem)] min-w-0 overflow-hidden">
-      <LeftPanel id="deck-layers-panel" model={model} page={page} sheet={sheet} onClose={closeSheet} onPage={id => { setPicked(id); setFollow(false); setSheet(false); stage.current?.focusPage(id) }} />
+    <>
+    {/* the chat docks along the bottom (decision 0015); the deck takes the height above it */}
+    <div className="relative flex min-w-0 overflow-hidden" style={{ height: 'calc(100dvh - 3.5rem - var(--chat-h, 0px))' }}>
+      <LeftPanel id="deck-layers-panel" model={model} page={page} sheet={sheet} onClose={closeSheet} selected={sel?.key ?? null}
+        onPage={id => { setPicked(id); setFollow(false); setSheet(false); stage.current?.focusPage(id) }}
+        onLayer={k => { const l = model.layers[k]; const on = l && l.page !== '*' ? l.page : page ?? model.pages[0]?.id; if (!on) return; select({ key: k, page: on }); setPicked(on); setSheet(false); stage.current?.focusPage(on) }} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div className="absolute top-3 left-3 z-20 flex gap-2">
           <Button role="secondary" aria-expanded={sheet} aria-controls="deck-layers-panel" onPress={() => setSheet(s => !s)} className="md:hidden">
@@ -70,14 +101,23 @@ export function DesignDeck() {
                 <p className="font-monospace text-muted">This version has nothing on its pages yet.</p>
                 {studio}
               </div>
-            : <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} />}
+            : board === 'dom'
+              ? <DeckStage ref={stage} model={model} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel} onSelect={select}
+                pickExtra={sel && model.run ? <CommentPin model={model} target={sel.key} /> : null} />
+              // the image-first board, behind ?board=tiers until the gauge says (src/board/flag.ts); a picked section's page is live
+              : <DeckBoard ref={stage} model={model} mode={board} onZoom={setZoom} follow={follow && working} onFollow={setFollow} selected={sel?.page ?? picked ?? null} />}
         {!loading && model.state !== 'empty' && <Toolbar model={model} />}
       </div>
       <RightPanel model={model} zoom={zoom} onFit={() => stage.current?.fit()} canPlay={canPlay} onPlay={play} replay={replay}
-        onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} />
+        onPublish={() => setDialog('publish')} onExport={() => setDialog('export')} history={edits}
+        design={pickedLayer && <DesignTab layer={pickedLayer} issue={model.issues[pickedLayer.key]?.problem} part={part} onPart={setPart} onClose={() => select(null)}
+          onEdit={(patch, why) => { edits.edit(pickedLayer.key, patch, why).then(id => { if (id !== undefined) setPart(id) }) }} />} />
       {view.player !== 'closed' && model.pages.length > 0 && <Player model={model} />}
       {model.run && <PublishDialog model={model} isOpen={dialog === 'publish'} onOpenChange={o => setDialog(o ? 'publish' : null)} />}
       {model.run && <ExportDialog model={model} isOpen={dialog === 'export'} onOpenChange={o => setDialog(o ? 'export' : null)} />}
     </div>
+    {model.run && <DeckChat model={model} picked={sel?.key ?? null}
+      onCommand={c => { if (c === 'play') play(); else if (c === 'replay') replay.toggle(); else setDialog(c) }} />}
+    </>
   )
 }

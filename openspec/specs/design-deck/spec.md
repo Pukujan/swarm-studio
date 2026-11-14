@@ -85,6 +85,12 @@ Before a build, the chat SHALL hold the talk with Hermia and end in the brief, e
 - **THEN** the brief shows as an editable text with Build and Keep talking, and no agent is working
 - Gate: `manual`
 
+#### Scenario: The skip question
+- **WHEN** Build is pressed on a brief for a new website
+- **THEN** the chat asks to skip the steps or go through them, its answers in Suggestions, and no agent is working
+  until the person answers
+- Gate: `manual`
+
 #### Scenario: A different product
 - **WHEN** the brief describes a different product than the open project's
 - **THEN** the chat offers New project and Add here instead of Build
