@@ -194,7 +194,17 @@ test('a Hermes that disappears mid-build stops the build with the reason; when o
   const held = []
   let called
   const firstCall = new Promise(r => { called = r })
-  const bridge = createServer((req, res) => { held.push(res); req.resume(); called() })
+  // It answers what it offers for pictures (none) as a Hermes does, and holds the model calls; "the first call" is
+  // the build's first model call (a POST), not the check before a build (GET /v1/models) or the pictures question
+  // (GET /media). Closed on one of those, the build had not started, and on the Mac runner it sometimes did not
+  // start for the rest of the test (heard: "hermes:back reset" and nothing after). Why the pictures question was
+  // not refused at once there is not proven; the bridge's /media call gives up after 25 s (engine/bridge.mjs)
+  const bridge = createServer((req, res) => {
+    req.resume()
+    if (!req.url.includes('/v1/')) return res.writeHead(200, { 'content-type': 'application/json' }).end('{"image":false,"video":false}')
+    held.push(res)
+    if (req.method === 'POST') called()
+  })
   await new Promise(r => bridge.listen(0, '127.0.0.1', r))
   // the canvas's stream, as it arrives; hear(…) resolves with the first event that matches
   const events = [], waiting = new Set()
